@@ -6,6 +6,7 @@ import {
   ARTIFACT_SCHEMA_VERSION,
   assertFullArtifact,
   buildArtifact,
+  carriesValues,
   measuredViews,
   parseSnapshotArtifact,
   serializeArtifact,
@@ -470,5 +471,30 @@ describe("legacy artifacts (written before pages had an id)", () => {
         "base.json",
       ),
     ).toThrow(/share the id "\/"/);
+  });
+});
+
+describe("meta.values — the views carry field values (opt-in)", () => {
+  const meta = { toolName: "@real-a11y-dev/cli", toolVersion: "0.0.1" };
+
+  it("is absent by default, so an artifact without values is unchanged", () => {
+    const artifact = buildArtifact([page()], meta);
+    expect("values" in artifact.meta).toBe(false);
+    expect(carriesValues(artifact)).toBe(false);
+    expect(serializeArtifact(artifact)).not.toContain('"values"');
+  });
+
+  it("records an opt-in and survives the round-trip", () => {
+    const withValues = buildArtifact(
+      [page({ tree: 'textbox "Email" = "jane@x.com"' })],
+      { ...meta, values: true },
+    );
+    expect(withValues.meta.values).toBe(true);
+    const parsed = parseSnapshotArtifact(serializeArtifact(withValues));
+    expect(carriesValues(parsed)).toBe(true);
+  });
+
+  it("reads a hand-made artifact with no meta as carrying none", () => {
+    expect(carriesValues({ meta: undefined as never })).toBe(false);
   });
 });

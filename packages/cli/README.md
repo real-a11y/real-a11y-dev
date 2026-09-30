@@ -208,8 +208,28 @@ on a later tick and a dialog mounts on the next frame. Raise it for a slow app;
 The actions are real — they submit forms, toggle state, and can navigate. A step
 that loads a new document leaves the tree captured before it describing a page
 that's gone, so no diff is possible; the run says where it landed and still
-exits `0`. A typed value is never echoed back in any output format, and `type`
-is not a login mechanism: use `real-a11y login` for that.
+exits `0`. The text a step types is never echoed — the step prints as
+`= ‹hidden›` in every output format — and `type` is not a login mechanism: use
+`real-a11y login` for that.
+
+### Field values
+
+A field prints what it holds, the way a screen reader announces it, in every
+live view (`tree`, `tabs`, `list`, `inspect`, the `interact` diff, and their
+`--format json`). So after a `type` step the diff confirms what landed:
+
+```
+~ textbox "Email": a11y.value (unset) → "someone@example.com"
+~ textbox "Password": a11y.value (unset) → "[redacted]"
+```
+
+Only a field whose markup marks it secret — `type="password"`, or a credential
+or payment `autocomplete` token — is withheld, and it reads `[redacted]`: never
+its text, never its length. A `snapshot` artifact is committed and posted, so
+it leaves values out unless you pass `--values`. `--redact-input` (config
+`defaults.redactInput`) is the strict mode: no field value and no rich-text
+editor content in any output — inside an editor, a name computed from the typed
+text reads `[redacted]`.
 
 ## Configure once
 
@@ -290,6 +310,11 @@ Pages come from positional URLs, else `A11Y_PAGES`, else the `urls` list in
 copy-pasted script. The diff is
 finding-identity-aware: a renumbered `:nth-of-type` locator or a re-indented
 subtree is not a change — only an actual new/changed/fixed violation is.
+
+An artifact's tree view leaves field values out by default — it gets committed
+and posted into PR comments. `snapshot --values` (config `defaults.values`)
+puts them in and records `meta.values: true`; capture both sides the same way,
+or `diff` warns that every filled field reads as changed.
 
 **Which views an artifact measured.** An artifact records its measured views in
 `meta.views`. Snapshots read the whole-document accessibility tree, which

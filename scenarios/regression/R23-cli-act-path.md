@@ -49,7 +49,9 @@ page.
 - **1** — exit `0`; a diff naming the change (`~ heading: "closed" → "open"`), not just
   "something changed"
 - **2** — both effects in **one** diff; steps run in the order given and stop at the
-  first failure
+  first failure. From cli 0.1.0-beta.7 the diff also reports what the field now holds —
+  `~ textbox "Email": a11y.value (unset) → "hi"` — while the step echo stays
+  `= ‹hidden›`
 - **3** — exit `2`, listing `nth=1 · button "Save"` / `nth=2 · button "Save"` —
   copy-pasteable, and **no** action dispatched
 - **4** — exit `0`, acting on the second one specifically

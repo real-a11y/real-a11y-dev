@@ -11,6 +11,7 @@
 
 import type {
   BrowserSession,
+  NativeTreeOptions,
   OpenOptions,
   SnapshotOptions,
 } from "@real-a11y-dev/browser";
@@ -296,15 +297,19 @@ export async function openPage(
  */
 export async function nativeSnapshot(
   session: BrowserSession,
-  options: SnapshotOptions = {},
+  options: SnapshotOptions & NativeTreeOptions = {},
 ): Promise<CleanSnapshot> {
   try {
-    return projectNativeTree(await session.nativeTree(), {
-      // `parseRules` already validated these against the rule set; the engine
-      // types them loosely as `string[]` across the browser boundary.
-      rules: options.rules as NativeSnapshotOptions["rules"],
-      includeGeneric: options.includeGeneric,
-    });
+    return projectNativeTree(
+      await session.nativeTree({ redactInput: options.redactInput === true }),
+      {
+        // `parseRules` already validated these against the rule set; the
+        // engine types them loosely as `string[]` across the browser boundary.
+        rules: options.rules as NativeSnapshotOptions["rules"],
+        includeGeneric: options.includeGeneric,
+        values: options.values,
+      },
+    );
   } catch (err) {
     throw mapPageError(err, "body");
   }
@@ -314,9 +319,10 @@ export async function nativeSnapshot(
  *  the tree itself rather than a projected snapshot. Same error mapping. */
 export async function nativeTree(
   session: BrowserSession,
+  options: NativeTreeOptions = {},
 ): Promise<Awaited<ReturnType<BrowserSession["nativeTree"]>>> {
   try {
-    return await session.nativeTree();
+    return await session.nativeTree(options);
   } catch (err) {
     throw mapPageError(err, "body");
   }

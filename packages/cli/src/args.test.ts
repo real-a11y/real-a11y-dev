@@ -9,6 +9,7 @@ import {
   parseOnly,
   parseOpenOptions,
   parseStepSettle,
+  inputPolicy,
   DEFAULT_STEP_SETTLE_MS,
   parseRules,
   isNativeCommand,
@@ -264,5 +265,42 @@ describe("FlagValue covers what parseArgs can actually produce", () => {
     // Guard the guard: if the options tables stop being reachable this way, the
     // loop above would pass by iterating nothing.
     expect(repeatable.length).toBeGreaterThan(0);
+  });
+});
+
+describe("field values (ADR-0001)", () => {
+  it("every command that reads a page takes --redact-input; diff and install don't", () => {
+    for (const [name, spec] of Object.entries(COMMANDS)) {
+      const reads = spec.producers.length > 0;
+      expect(
+        "redact-input" in spec.options,
+        `${name} ${reads ? "should" : "should not"} take --redact-input`,
+      ).toBe(reads);
+    }
+  });
+
+  it("--values is snapshot's alone: the live views always show values", () => {
+    const withValues = Object.entries(COMMANDS)
+      .filter(([, spec]) => "values" in spec.options)
+      .map(([name]) => name);
+    expect(withValues).toEqual(["snapshot"]);
+  });
+
+  it("inputPolicy: live values unless strict mode", () => {
+    expect(inputPolicy({})).toEqual({ redactInput: false, liveValues: true });
+    expect(inputPolicy({ "redact-input": true })).toEqual({
+      redactInput: true,
+      liveValues: false,
+    });
+  });
+
+  it("the help says the typed text is hidden and the diff shows the field", () => {
+    for (const name of ["interact", "type"]) {
+      expect(COMMANDS[name].help).toMatch(/never echoed/);
+      expect(COMMANDS[name].help).toContain("[redacted]");
+      expect(COMMANDS[name].help).toContain("--redact-input");
+    }
+    expect(COMMANDS.tree.help).toContain('textbox "Email" = "jane@x.com"');
+    expect(COMMANDS.snapshot.help).toContain("--values");
   });
 });

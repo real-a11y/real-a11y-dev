@@ -271,3 +271,51 @@ describe("diffNativeCheckpoint", () => {
     expect(cp.url).toBe(URL_A);
   });
 });
+
+describe("diffNativeCheckpoint — field values (ADR-0001)", () => {
+  const before = tree([node("ax-dom-10", "textbox", "Search")]);
+  const typed = tree([
+    node("ax-dom-10", "textbox", "Search", { value: "hello" }),
+  ]);
+  const password = (value?: string) =>
+    tree([node("ax-dom-20", "textbox", "Password", value ? { value } : {})]);
+
+  it("reports what a field now holds when asked — the live surfaces ask", () => {
+    const outcome = diffNativeCheckpoint(
+      captureNativeCheckpoint(before, URL_A),
+      typed,
+      URL_A,
+      { values: true },
+    );
+    expect(outcome).toEqual({
+      kind: "diff",
+      rendered: '~ textbox "Search": a11y.value (unset) → "hello"',
+      changed: true,
+    });
+  });
+
+  it("reports a sensitive field only as withheld", () => {
+    const outcome = diffNativeCheckpoint(
+      captureNativeCheckpoint(password(), URL_A),
+      password("[redacted]"),
+      URL_A,
+      { values: true },
+    );
+    expect(outcome.kind === "diff" && outcome.rendered).toBe(
+      '~ textbox "Password": a11y.value (unset) → "[redacted]"',
+    );
+  });
+
+  it("leaves a value-only change out by default, as before values existed", () => {
+    const outcome = diffNativeCheckpoint(
+      captureNativeCheckpoint(before, URL_A),
+      typed,
+      URL_A,
+    );
+    expect(outcome).toEqual({
+      kind: "diff",
+      rendered: "(no changes)",
+      changed: false,
+    });
+  });
+});

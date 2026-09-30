@@ -34,12 +34,15 @@ export type {
 // Extraction
 export {
   extractDomTree,
+  finishAnnouncedValue,
   getAnnouncedValue,
   getElementRefs,
   isSensitiveField,
   isSensitiveFieldAttributes,
+  RANGE_VALUE_ROLES,
   REDACTED_VALUE,
   SENSITIVE_AUTOCOMPLETE_TOKENS,
+  STATE_ONLY_ROLES,
   PANEL_HOST_ATTRIBUTE,
 } from "./extraction/dom-extractor.js";
 export { extractA11yTree } from "./extraction/a11y-extractor.js";

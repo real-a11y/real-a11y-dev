@@ -12,6 +12,7 @@
 import { fingerprintFindings, redactUrl } from "@real-a11y-dev/snapshot";
 
 import {
+  inputPolicy,
   parseFailOn,
   parseFormat,
   parseOpenOptions,
@@ -97,8 +98,11 @@ export async function runAuditOnSession(
           isAuthenticated(flags),
         ));
       }
+      // Findings print names, never values; strict mode still withholds a
+      // name computed from what was typed into an editor.
       const snapshot = await nativeSnapshot(session, {
         ...(rules ? { rules } : {}),
+        redactInput: inputPolicy(flags).redactInput,
       });
       // Fingerprint under the page's IDENTITY, through the one shared
       // derivation — keyed on the label instead, a finding carried a different

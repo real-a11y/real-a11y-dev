@@ -16,6 +16,26 @@ ship — [`install`](#install), [`audit`](#audit-url), [`inspect`](#inspect-url)
 own flags.
 
 <!-- surface:begin cli-unreleased -->
+
+::: info Not in the published release yet
+Some of what this page documents is on `main` but not in `@real-a11y-dev/cli` 0.1.0-beta.6, so
+installing from npm today will not have it:
+
+- `audit --redact-input`
+- `click --redact-input`
+- `focus --redact-input`
+- `inspect --redact-input`
+- `interact --redact-input`
+- `list --redact-input`
+- `outline --redact-input`
+- `snapshot --redact-input`
+- `snapshot --values`
+- `tabs --redact-input`
+- `tree --redact-input`
+- `type --redact-input`
+
+:::
+
 <!-- surface:end cli-unreleased -->
 
 Findings and reports go to **stdout**; progress, warnings, and errors go to
@@ -218,7 +238,51 @@ real-a11y tree https://example.com
 real-a11y tree https://example.com/player   # reaches user-agent-shadow media controls
 ```
 
-**Flags:** [Browser & page](#browser-page) · [Output](#output) (`pretty | json`)
+A field prints what it holds, the way a screen reader announces it — a text
+field's text, a `<select>`'s chosen option, a slider's `aria-valuetext` (else
+its number), a file input's file names, a rich-text editor's content. A field
+that holds a secret — `type="password"`, or an `autocomplete` of
+`current-password`, `new-password`, `one-time-code`, `cc-number`, `cc-csc`,
+`cc-exp`, `cc-exp-month` or `cc-exp-year` — prints `[redacted]` when it holds
+anything, never the text and never its length. An empty field prints no value:
+
+```
+textbox "Email" = "jane@example.com"
+textbox "Password" = "[redacted]"
+combobox "Country" = "France"
+slider "Volume" = "3"
+```
+
+The same values appear in [`tabs`](#tabs-url), [`list`](#list-category-url),
+[`inspect`](#inspect-url) and the [`interact`](#interact-url-step-step) diff, and
+in `--format json`. A committed [`snapshot`](#snapshot-url) artifact leaves them
+out unless you pass [`--values`](#values).
+
+[`--redact-input`](#redact-input) withholds every value, sensitive or not, and
+all rich-text editor content (a `contenteditable` message box, a `designMode`
+document). Inside an editor the structure is kept, but a name Chromium computed
+from the typed text prints as `[redacted]`, and a text-only node such as a
+paragraph prints unnamed:
+
+```
+textbox "Message"
+  paragraph
+    link "[redacted]"
+  heading "[redacted]" (level 3)
+  paragraph
+    link "Mention Alice"
+```
+
+A name from the page's own markup inside the editor — an `aria-label`, an
+image's `alt` — is kept. The same holds in `outline`, `list`, `audit`,
+`snapshot` and the `interact` diff, which all read this tree. [`tabs`](#tabs-url)
+is the in-page walk: under `--redact-input` it prints no values. A link typed
+into an editor is not a Tab stop, so it never appears there; a
+`contenteditable="false"` island such as a mention chip is, and keeps its
+name.
+
+**Flags:** [Browser & page](#browser-page) (including
+[`--redact-input`](#redact-input)) · [Output](#output) (`pretty | json`)
 · [Config](#config) · [`--include-generic`](#include-generic) · no `--root`.
 
 ### `outline <url>`
@@ -353,10 +417,21 @@ over CDP. A node you aim at by one name therefore can't come back in the report
 under another. That tree is whole-document, which is why these commands take
 no [`--root`](#root-selector).
 
-A typed value is **never echoed** — not in progress output, not in
-[`--format json`](#f-format-fmt), where the step renders as `= ‹hidden›`. Don't
-use `type` to log in: a password on the command line is visible to other
-processes and lands in your shell history. Use [`login`](#login-url-save-file).
+The text a step types is **never echoed** — not in progress output, not in
+[`--format json`](#f-format-fmt), where the step renders as `= ‹hidden›`. The
+diff then shows what the field holds, the way a screen reader announces it, so
+you can confirm the text landed:
+
+```
+~ textbox "Email": a11y.value (unset) → "someone@example.com"
+~ textbox "Password": a11y.value (unset) → "[redacted]"
+```
+
+A password, one-time code or payment field only ever reads `[redacted]`.
+[`--redact-input`](#redact-input) keeps every value — and everything typed into
+a rich-text editor — out of the diff. Don't use `type` to log in: a password on
+the command line is visible to other processes and lands in your shell history.
+Use [`login`](#login-url-save-file).
 
 Under [`--format json`](#f-format-fmt) the page object carries `steps` (the
 steps that ran, rendered and redacted), `diff`, and `navigated` — the last so a
@@ -401,7 +476,9 @@ inputs (React et al.) register it.
 real-a11y type http://localhost:3000 --role textbox --name "Email" --text you@example.com
 ```
 
-The value is never echoed back, in any format. Don't use it to log in — see
+The `--text` you pass is never echoed back, in any format; the diff shows what
+the field then holds, as [`interact`](#interact-url-step-step) describes (a
+password field as `[redacted]`). Don't use it to log in — see
 [`login`](#login-url-save-file).
 
 **Flags:** `--role` (required) · `--text` (required) · `--name` · `--nth` ·
@@ -443,6 +520,16 @@ Pages, in precedence order: positional URLs, else `A11Y_PAGES`, else the config'
 gates, [`--fail-on`](#fail-on-level) defaults to `never` here — snapshot just
 writes the artifact unless you ask it to gate.
 
+The artifact's tree view leaves field values out: it gets committed, uploaded
+and posted into PR comments. [`--values`](#values) puts them in (a sensitive
+field still reads `[redacted]`) and records `meta.values: true`, so a
+[`diff`](#diff-base-json-pr-json) against an artifact without them can say why
+every filled field changed. The opt-in covers each field's own value; a *name*
+Chromium builds from what a field or editor holds — a heading typed into a
+rich-text editor, a button wrapped around a filled input — is part of the
+page's names and stays (a sensitive field's value never reaches one).
+[`--redact-input`](#redact-input) withholds those too.
+
 ```sh
 real-a11y snapshot https://example.com -o base.json
 real-a11y snapshot --config a11y.config.json --md -o report.md
@@ -453,7 +540,7 @@ real-a11y snapshot --config a11y.config.json --baseline .a11y-baseline.json --fa
 
 **Flags:** [Browser & page](#browser-page) · [Config](#config) ·
 [`--rules`](#rules-ids) · [`--fail-on`](#fail-on-level) (default `never`) ·
-[`--include-generic`](#include-generic) ·
+[`--values`](#values) · [`--include-generic`](#include-generic) ·
 [`-f, --format`](#f-format-fmt) (`json | md | sarif | junit | jsonl`) ·
 [`--md`](#md) · [`--only`](#only-axis) (`findings | views`, md-report-only) ·
 [`--baseline`](#baseline-file) ·
@@ -489,6 +576,12 @@ means the two runs really did capture different routes, so check each entry's
 To override the derived identity — to separate two sites that share a route, or
 join two the path keeps apart — set an explicit `id` on the entry (config `urls`,
 or `A11Y_PAGES` as `[{ id, name, url }]`).
+
+The structural diff shows field values only when the artifacts carry them — it
+follows whatever [`snapshot --values`](#values) captured. When just one side
+does, every filled field reads as a changed line, so `diff` warns on stderr that
+only the base (or the PR) snapshot carries field values. Findings are
+unaffected: they never hold a value.
 
 ```sh
 real-a11y diff base.json pr.json
@@ -598,6 +691,7 @@ Throughout this table, **browser commands** is the eleven that drive a page:
 | [`--audit-origin`](#audit-origin-origin) | origin (repeatable) | the target's own | browser commands |
 | [`--session`](#session-name) | string | cwd hash | browser commands |
 | [`--session-idle-timeout`](#session-idle-timeout-ms) | ms | `900000` | browser commands |
+| [`--redact-input`](#redact-input) | boolean | `false` | browser commands |
 | [`--include-generic`](#include-generic) | boolean | `false` | `inspect`, `tree`, `outline`, `tabs`, `list`, `snapshot` |
 
 <sup>†</sup> Every other browser command reads Chromium's whole-document
@@ -645,6 +739,7 @@ there is nothing to choose.
 | [`--force`](#force) | boolean | `false` | `install` |
 | [`--save`](#save-file) | path | — | `login` (**required**) |
 | [`--md`](#md) | boolean | `false` | `snapshot` |
+| [`--values`](#values) | boolean | `false` | `snapshot` |
 | [`--only`](#only-axis) | `findings \| views` | both | `snapshot`, `diff` |
 | [`--baseline`](#baseline-file) | path | none | `snapshot`, `diff` |
 | [`--update-baseline`](#update-baseline) | boolean | `false` | `snapshot` |
@@ -893,6 +988,43 @@ alive indefinitely. `0` is not accepted.
 real-a11y tree https://app.example.com --session checkout --session-idle-timeout 600000
 ```
 
+### `--redact-input`
+
+- **Type:** boolean · **Default:** `false` · **Config:**
+  [`defaults.redactInput`](/packages/cli/configuration#redactinput) ·
+  **Commands:** audit, inspect, tree, outline, tabs, list, interact, click,
+  type, focus, snapshot
+
+The strict mode: withhold **every** field value — not only the sensitive ones —
+and all rich-text editor content. By default a field prints what it holds, the
+way a screen reader announces it, and only a password, one-time code or payment
+field reads `[redacted]`; see [`tree`](#tree-url).
+
+Under `--redact-input` no field prints a value, in any view or format, and the
+[`interact`](#interact-url-step-step) diff never reports one. Inside a
+`contenteditable` region or a `designMode` document, a name Chromium computed
+from the typed text reads `[redacted]` and a text-only node reads unnamed; a
+link or image there loses its `href` / `src`, and a locator anchors on an id
+outside the editor. Outside an editor, a name Chromium builds from what any
+field holds reads `[redacted]` too — a cell around a filled input or a chosen
+`<select>` option, a checkbox whose `<label>` wraps another field, a region
+labelled by an editable heading — and no `<select>` option says it is the
+selected one. [`tabs`](#tabs-url) is the in-page walk and has no strict
+mode of its own: it prints no values. A link typed into an editor is not a Tab
+stop, so it never appears there; a `contenteditable="false"` island such as a
+mention chip is one, and keeps its name.
+
+Use it when output goes somewhere field contents must not: a shared CI log, a
+ticket, a page whose plain text fields hold secrets the markup doesn't mark
+(an "API key" box with no `autocomplete`). It is per run, not per
+[`--session`](#session-name): a reused browser never carries it from one
+invocation into the next.
+
+```sh
+real-a11y tree https://app.example.com/compose --redact-input
+real-a11y interact https://app.example.com --redact-input --step 'type textbox "Message" = hello'
+```
+
 ### `--strict`
 
 - **Type:** boolean · **Default:** `false` · **Commands:** `session stop-all`
@@ -1084,6 +1216,25 @@ tree, which are collapsed away by default. Only the commands that print a full
 tree honor it. [`snapshot`](#snapshot-url), [`outline`](#outline-url),
 [`tabs`](#tabs-url), and [`list`](#list-category-url) accept the flag but ignore
 it — snapshot's artifact tree always collapses generics.
+
+### `--values`
+
+- **Type:** boolean · **Default:** `false` · **Config:**
+  [`defaults.values`](/packages/cli/configuration#values) · **Commands:**
+  snapshot
+
+Put field values into the artifact's tree view — `textbox "Email" =
+"jane@example.com"`, a sensitive field as `"[redacted]"` — and record
+`meta.values: true`. Off by default because an artifact is a **persisted**
+output: it is committed, uploaded as a CI artifact and posted into PR comments,
+so what users typed stays out of it unless you ask. The live views
+([`tree`](#tree-url), [`tabs`](#tabs-url), [`list`](#list-category-url),
+[`inspect`](#inspect-url), the [`interact`](#interact-url-step-step) diff) always
+show values; [`--redact-input`](#redact-input) overrides both.
+
+Capture both sides of a [`diff`](#diff-base-json-pr-json) the same way: an
+artifact with values against one without reads every filled field as changed,
+and `diff` warns when it sees that.
 
 ### `--md`
 
@@ -1286,6 +1437,22 @@ feature makes the trust boundary explicit:
 - The per-run origin pin is re-applied on every command, including the
   reused-page fast path, so a command cannot silently read from a page the
   previous run redirected to outside the allowed set.
+
+### Field values
+
+- The live views print what each field holds, as a screen reader announces it.
+  Only a field whose markup marks it secret — `type="password"`, or a
+  credential or payment `autocomplete` token — is withheld, and it reads
+  `[redacted]`: never its text, never its length. The classification happens
+  before a value leaves the tree builder.
+- Persisted outputs — `snapshot` artifacts and everything `diff` builds from
+  them — carry no values unless a run passes [`--values`](#values).
+- The text given to `type` / an `interact` step is never echoed, on success or
+  failure; the step prints as `= ‹hidden›`.
+- A secret in a field its markup doesn't mark (a plain text "API key" box) is
+  shown like any other value. Mark it up (`autocomplete="off"` does **not** —
+  use `type="password"` or the right `autocomplete` token, which password
+  managers read too), or run with [`--redact-input`](#redact-input).
 
 ### Redaction
 

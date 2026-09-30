@@ -86,7 +86,7 @@ a text field labelled "Email", and a link to a second page:
 - **2** — exits `0`; contains `paragraph "off"`.
 - **3** — exits `0`; the diff names the change (`paragraph "off"` → `paragraph "on"`).
 - **4** — exits `0`; contains `paragraph "on"` (the click from step 3 is still in effect).
-- **5** — exits `0`; the command succeeds and the typed value is intentionally redacted from the diff (do not assert a visible value change).
+- **5** — exits `0`; the diff shows `~ textbox "Email": a11y.value (unset) → "hello"` — the field's value, as a screen reader announces it — while the step echo on stderr reads `= ‹hidden›`. (Through cli 0.1.0-beta.6 the diff withheld every value; there, assert no value line.)
 - **6** — exits `0`; the diff shows focus moved to the textbox.
 - **7** — exits `0`; produces findings + tree + outline from the same page (`inspect` takes only a URL, not `--role`/`--name`).
 - **8** — exits `0`; prints `h1` in document order.

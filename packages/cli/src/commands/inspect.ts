@@ -14,6 +14,7 @@
 import { fingerprintFindings, redactUrl } from "@real-a11y-dev/snapshot";
 
 import {
+  inputPolicy,
   parseFailOn,
   parseFormat,
   parseOpenOptions,
@@ -60,9 +61,13 @@ export async function runInspectOnSession(
 
   progress(`inspecting ${target.name} …`, { quiet });
   const { url: finalUrl } = await ensurePageOpen(session, target, flags);
+  // A live report, so its tree shows what each field holds (ADR-0001).
+  const { redactInput, liveValues } = inputPolicy(flags);
   const snapshot = await nativeSnapshot(session, {
     ...(rules ? { rules } : {}),
     includeGeneric: flags["include-generic"] === true,
+    values: liveValues,
+    redactInput,
   });
   const page: PageReport = {
     name: target.name,

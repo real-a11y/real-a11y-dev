@@ -17,30 +17,55 @@
  * Vocabulary (which AX nodes survive, sibling order, role map, name promotion)
  * comes from core's shared `normalizeNativeAX` — this file does NOT re-implement
  * it (that was the drift bug RFC finding R4 consolidated away). It only adds
- * the transport (CDP), the richer AX→a11y mapping (states/properties), the DOM
- * enrichment, and the redaction gate.
+ * the transport (CDP), the richer AX→a11y mapping (states/properties/value),
+ * the DOM enrichment, and the redaction gates.
  *
- * ## Redaction (RFC finding R1 — the ship gate)
- * A native tree must never carry a user's field values. This producer enforces
- * that by construction: it **never reads any element's live `.value`**, drops
- * the AX `value` field, excludes the value-carrying AX properties
- * (`valuenow` / `valuetext`, which for a spinbutton/slider *are* the input),
- * takes names from core's normalizer, which never promotes a node's value into
- * its name (an unlabeled field's, or an editor's typed text — the extension's
- * native path shares the same rule), and the `dom` facet copies only an
- * allowlist of structural / a11y attributes (never `value`). An allowlist is
- * strictly safer than redacting after the fact. (Caveat, documented not
- * hand-waved: `getFullAXTree` / `getDocument` responses may themselves contain
- * field values in their CDP payload — Chromium masks passwords but not, e.g.,
- * an email field. That is Chromium's wire content, outside this code's control;
- * what this code controls, it never persists. When live field values are
- * genuinely needed later, capture MUST classify sensitivity in-page.)
+ * ## Field values (ADR-0001)
+ * A field's value is page content: `a11y.value` holds what a screen reader
+ * announces, taken from Chromium's own AX value — a text field's text, a
+ * `<select>`'s selected option, a range widget's `aria-valuetext` else its
+ * number, a file input's names, an editor's text. What is **sensitive** is
+ * withheld: a field whose markup says `type="password"` or carries a
+ * credential or payment `autocomplete` token (core's
+ * {@link isSensitiveFieldAttributes}, read off the `type` / `autocomplete`
+ * attributes this producer's DOM walk already records) reads `[redacted]` when
+ * it holds anything — never Chromium's masking bullets, which give away the
+ * length. So does anything inside such a field (a month input's UA-shadow
+ * spinbuttons) or around it, and a container Chromium named from contents that
+ * include one: see {@link fieldSensitivity}.
+ *
+ * Nothing here reads an element's live `.value`, and the `dom` facet still
+ * copies only an allowlist of structural / a11y attributes (never `value`): the
+ * value reaches the tree through `a11y.value` alone, classified first. Core's
+ * normalizer never promotes a node's value into its NAME (an unlabeled
+ * field's, or an editor's typed text — the extension's native path shares that
+ * rule): a value belongs in `a11y.value` and nowhere else.
+ *
+ * ## Strict mode — `redactInput` (RFC finding R1's blanket rule)
+ * {@link NativeTreeOptions.redactInput} withholds every field value, sensitive
+ * or not, and every rich-text editor's content. What a user typed into an
+ * editor is its value — but Chromium also names the nodes inside the editor
+ * from it (a paragraph's text, a link's, a heading's), so the same text reaches
+ * the tree a second way. The strict mode closes that path at the source,
+ * before normalization can promote anything: see {@link redactEditableContent}.
+ *
+ * (Caveat, documented not hand-waved: `getFullAXTree` / `getDocument`
+ * responses themselves carry field values in their CDP payload — Chromium masks
+ * passwords, but not, e.g., a `cc-number` on a plain text input. That is
+ * Chromium's wire content, received in this process; what this code controls,
+ * it classifies before anything leaves `buildNativeTree`.)
  */
 
 import {
   normalizeNativeAX,
   serializeNativeAX,
   buildCssPath,
+  finishAnnouncedValue,
+  isSensitiveFieldAttributes,
+  NATIVE_AX_NAME_SOURCE_ROLES,
+  RANGE_VALUE_ROLES,
+  REDACTED_VALUE,
+  STATE_ONLY_ROLES,
   type CssPathAdapter,
   type RawNativeAXNode,
   type SemanticNode,
@@ -53,7 +78,32 @@ import type { CDPSession, Page } from "playwright";
 /** The full CDP `Accessibility.AXNode` shape this producer consumes — a
  *  superset of core's structural {@link RawNativeAXNode}. */
 interface RawAXNode extends RawNativeAXNode {
+  /** `sources` is Chromium's accname trace — see {@link winningNameSource}. */
+  name?: { value?: string; sources?: AXNameSource[] };
   description?: { value?: string };
+  properties?: Array<{ name: string; value?: AXPropertyValue }>;
+}
+
+/** A CDP `AXValue` on a property; `relatedNodes` for idref ones
+ *  (`labelledby`, `describedby`). */
+interface AXPropertyValue {
+  value?: unknown;
+  relatedNodes?: Array<{ backendDOMNodeId?: number }>;
+}
+
+/**
+ * How {@link nativeTree} / {@link buildNativeTree} treat what users entered.
+ */
+export interface NativeTreeOptions {
+  /**
+   * Strict mode (ADR-0001's `redactInput`): withhold every field value — not
+   * just the sensitive ones — and all rich-text editor content. No node
+   * carries `a11y.value`, and inside a `contenteditable` / `designMode` region
+   * a name Chromium computed from the typed text reads `[redacted]`. Default
+   * `false`: values are shown the way a screen reader announces them, and only
+   * sensitive fields are withheld.
+   */
+  redactInput?: boolean;
 }
 
 /** Structural / accessibility attributes we surface on the `dom` facet.
@@ -122,10 +172,10 @@ const STATE_PROPS = new Set([
 /**
  * AX property names that map to descriptive `a11y.properties` (strings).
  *
- * R1: `valuenow` / `valuetext` are deliberately EXCLUDED. For a value-bearing
- * control (`spinbutton`, `slider`, a numeric `<input>`) those ARE the user's
- * current input — surfacing them would carry a field value into the model, the
- * exact thing the redaction gate forbids. `valuemin` / `valuemax` are authored
+ * `valuenow` / `valuetext` are deliberately NOT here. For a range widget they
+ * ARE its value, and a value has one home — `a11y.value`, where the
+ * sensitivity policy and `redactInput` both apply ({@link announcedValue}). A
+ * copy here would route around both. `valuemin` / `valuemax` are authored
  * bounds (min/max attributes), not user data, so they stay.
  */
 const DETAIL_PROPS = new Set([
@@ -152,6 +202,646 @@ function cleanText(text: string): string {
   return text.replace(/\s+/g, " ").trim();
 }
 
+/** Walk `raw` and its ancestors by `parentId`, stopping on a cycle. */
+function* ancestry(
+  raw: RawAXNode | undefined,
+  byId: ReadonlyMap<string, RawAXNode>,
+): Generator<RawAXNode> {
+  const seen = new Set<string>();
+  for (
+    let cur = raw;
+    cur && !seen.has(cur.nodeId);
+    cur = cur.parentId ? byId.get(cur.parentId) : undefined
+  ) {
+    seen.add(cur.nodeId);
+    yield cur;
+  }
+}
+
+// ── Field values (ADR-0001) ─────────────────────────────────────────────────
+
+/**
+ * Chromium's password mask: a value made only of these is a password field
+ * whose markup this producer could not read. Treated as sensitive, so the
+ * length the bullets encode never reaches the tree.
+ */
+const MASKED_VALUE = /^[•●]+$/;
+
+function isMasked(value: unknown): boolean {
+  return (
+    typeof value === "string" && MASKED_VALUE.test(value.replace(/\s/g, ""))
+  );
+}
+
+/**
+ * A CDP value, as text. Chromium keeps range values as 32-bit floats, so a
+ * `<meter value="0.6">` arrives as `0.6000000238418579`; print the shortest
+ * decimal that is the same float, which is what the page wrote.
+ */
+function axValueText(value: unknown): string | undefined {
+  if (typeof value === "string") return value;
+  if (typeof value !== "number" || !Number.isFinite(value)) return undefined;
+  if (Math.fround(value) === value) {
+    for (let digits = 1; digits <= 9; digits++) {
+      const shortest = Number(value.toPrecision(digits));
+      if (Math.fround(shortest) === value) return String(shortest);
+    }
+  }
+  return String(value);
+}
+
+function propertyOf(raw: RawAXNode, name: string): AXPropertyValue | undefined {
+  return raw.properties?.find((p) => p.name === name)?.value;
+}
+
+function nonEmpty(value: unknown): string | undefined {
+  const text = axValueText(value);
+  return text !== undefined && text.trim() !== "" ? text : undefined;
+}
+
+/** A DOM-backed AX node's value is only as classifiable as its DOM record. */
+function carriesValue(raw: RawAXNode): boolean {
+  return nonEmpty(raw.value?.value) !== undefined;
+}
+
+/**
+ * True when `raw` or anything beneath it holds content a name could borrow: a
+ * value (a filled field, or a card-expiry input's month and year parts), and
+ * with `text`, a text run that has text (what was typed into an editor). A
+ * placeholder isn't content — a native field's is never counted, since only
+ * values are for one. An EMPTY field or editor contributes nothing to a name
+ * built around it, so it must not withhold one (a cell labelled "Card number"
+ * around an empty card field keeps its name).
+ */
+function holdsContent(
+  raw: RawAXNode,
+  byId: ReadonlyMap<string, RawAXNode>,
+  text: boolean,
+): boolean {
+  const stack = [raw];
+  const seen = new Set<string>();
+  while (stack.length > 0) {
+    const cur = stack.pop()!;
+    if (seen.has(cur.nodeId)) continue;
+    seen.add(cur.nodeId);
+    if (carriesValue(cur)) return true;
+    if (
+      text &&
+      NATIVE_AX_NAME_SOURCE_ROLES.has(cur.role?.value ?? "") &&
+      cleanText(String(cur.name?.value ?? "")) !== ""
+    ) {
+      return true;
+    }
+    for (const id of cur.childIds ?? []) {
+      const child = byId.get(id);
+      if (child) stack.push(child);
+    }
+  }
+  return false;
+}
+
+/**
+ * The value a screen reader announces for `raw`, before sensitivity. Chromium's
+ * AX `value` is the source: a text field's text, a `<select>`'s (and an ARIA
+ * combobox's) selected text, a file input's names, a date input's value, an
+ * editor's text. A range widget reads its `aria-valuetext` first (Chromium 151
+ * does not report it over CDP, so it comes from the DOM walk), then Chromium's
+ * `valuetext`, then its number. A checkbox or radio has none: its state says
+ * it. The roles are core's, so both producers read the same kinds of field.
+ */
+function rawAnnouncedValue(
+  raw: RawAXNode,
+  role: string,
+  enriched: NativeDomInfo | undefined,
+): string | undefined {
+  if (STATE_ONLY_ROLES.has(role)) return undefined;
+  if (RANGE_VALUE_ROLES.has(role)) {
+    return (
+      nonEmpty(enriched?.ariaValueText) ??
+      nonEmpty(propertyOf(raw, "valuetext")?.value) ??
+      nonEmpty(raw.value?.value) ??
+      nonEmpty(propertyOf(raw, "valuenow")?.value)
+    );
+  }
+  return nonEmpty(raw.value?.value);
+}
+
+/**
+ * {@link rawAnnouncedValue}, finished by core's {@link finishAnnouncedValue} —
+ * whitespace collapsed, capped at 240 characters with `…`, and
+ * {@link REDACTED_VALUE} for a sensitive field that holds anything (or a value
+ * that is Chromium's password mask). Empty reads as no value, so an agent can
+ * tell "password entered" from "empty" but never the length.
+ */
+function announcedValue(
+  raw: RawAXNode,
+  role: string,
+  enriched: NativeDomInfo | undefined,
+  sensitive: boolean,
+): string | undefined {
+  const text = rawAnnouncedValue(raw, role, enriched);
+  return finishAnnouncedValue(text, () => sensitive || isMasked(text));
+}
+
+/** The raw nodes, indexed the two ways the classifiers look them up. */
+interface RawIndex {
+  byId: ReadonlyMap<string, RawAXNode>;
+  byBackendId: ReadonlyMap<number, RawAXNode>;
+}
+
+function indexRaw(rawNodes: RawAXNode[]): RawIndex {
+  const byId = new Map<string, RawAXNode>();
+  const byBackendId = new Map<number, RawAXNode>();
+  for (const raw of rawNodes) {
+    byId.set(raw.nodeId, raw);
+    if (typeof raw.backendDOMNodeId === "number") {
+      byBackendId.set(raw.backendDOMNodeId, raw);
+    }
+  }
+  return { byId, byBackendId };
+}
+
+/**
+ * A set of fields whose values are withheld ("roots"), and every place
+ * Chromium carries those values besides the field itself.
+ */
+interface ValueRegions {
+  roots: ReadonlySet<string>;
+  /** Raw ids of the strict AX ancestors of a root. */
+  containing: ReadonlySet<string>;
+  /** `raw` is a root or sits inside one. */
+  inside(raw: RawAXNode): boolean;
+  /**
+   * `raw` takes its label or description by reference — `aria-labelledby` /
+   * `aria-describedby`, and the `labelledby` Chromium reports for a `<label>` —
+   * from a root other than its own: the referenced node is, is inside, or
+   * contains one. A field wrapped in its own `<label>` references that label,
+   * but the label's only root is the field itself, whose value never names
+   * it; that is no reference to a value.
+   */
+  references(raw: RawAXNode, property: "labelledby" | "describedby"): boolean;
+}
+
+function valueRegions(
+  index: RawIndex,
+  roots: ReadonlySet<string>,
+): ValueRegions {
+  const { byId, byBackendId } = index;
+  const containing = new Set<string>();
+  const rootsUnder = new Map<string, string[]>();
+  for (const id of roots) {
+    for (const cur of ancestry(byId.get(id), byId)) {
+      if (cur.nodeId === id) continue;
+      containing.add(cur.nodeId);
+      const under = rootsUnder.get(cur.nodeId);
+      if (under) under.push(id);
+      else rootsUnder.set(cur.nodeId, [id]);
+    }
+  }
+
+  // nodeId → the nearest root at or above it, or null. Memoized along each
+  // walk, so classifying every node costs one pass, not one per depth.
+  const rootMemo = new Map<string, string | null>();
+  const rootOf = (raw: RawAXNode): string | null => {
+    const chain: string[] = [];
+    let result: string | null = null;
+    for (const cur of ancestry(raw, byId)) {
+      const known = rootMemo.get(cur.nodeId);
+      if (known !== undefined) {
+        result = known;
+        break;
+      }
+      chain.push(cur.nodeId);
+      if (roots.has(cur.nodeId)) {
+        result = cur.nodeId;
+        break;
+      }
+    }
+    for (const id of chain) rootMemo.set(id, result);
+    return result;
+  };
+
+  /**
+   * `root` is part of `raw` itself: `raw` is a field (a root) and `root` is
+   * it or sits inside it — a date input's own spinbuttons. A field's name
+   * never includes its own value, so its own label pointing back around it
+   * carries nothing. A node that is NOT a field — a region labelled by the
+   * editable heading inside it — gets no such pass: its name IS the text.
+   */
+  const ownRoot = (root: string, raw: RawAXNode): boolean => {
+    if (!roots.has(raw.nodeId)) return false;
+    for (const cur of ancestry(byId.get(root), byId)) {
+      if (cur.nodeId === raw.nodeId) return true;
+    }
+    return false;
+  };
+
+  return {
+    roots,
+    containing,
+    inside: (raw) => rootOf(raw) !== null,
+    references: (raw, property) =>
+      (propertyOf(raw, property)?.relatedNodes ?? []).some((related) => {
+        const target =
+          typeof related.backendDOMNodeId === "number"
+            ? byBackendId.get(related.backendDOMNodeId)
+            : undefined;
+        if (target === undefined) return false;
+        const around = rootOf(target);
+        const reached = [
+          ...(around !== null ? [around] : []),
+          ...(rootsUnder.get(target.nodeId) ?? []),
+        ];
+        return reached.some((root) => !ownRoot(root, raw));
+      }),
+  };
+}
+
+/**
+ * Keep the roots' values out of every NAME and description, where Chromium
+ * puts them on its own:
+ *
+ * - **Named from contents.** Chromium names a cell, a link or a button from
+ *   its contents, and an embedded field's value is part of them:
+ *   `<td><input autocomplete="cc-number"></td>` is `cell "4111…"`, and a
+ *   password field in a cell is `cell "••••••••"`. A node that CONTAINS a root
+ *   and was named from its contents reads `[redacted]` (a text run is blanked
+ *   instead, so no promotion can carry it); so does one whose name trace is
+ *   missing or has no winning step, since nothing then says where the name
+ *   came from. A root named from its own contents reads `[redacted]` too. A
+ *   name from anywhere else — `aria-label`, a `<legend>`, a `<label for>` — is
+ *   the page's and is kept, and so is a root's own name with no trace (how a
+ *   field's label arrives in an older recording; a field is never named after
+ *   its own value).
+ * - **Named or described by reference** to a root that isn't the node's own
+ *   ({@link ValueRegions.references}). Such a name reads `[redacted]`; such a
+ *   description is dropped.
+ *
+ * Returns copies; never mutates.
+ */
+function withholdRegionNames(
+  rawNodes: RawAXNode[],
+  regions: ValueRegions,
+): RawAXNode[] {
+  if (regions.roots.size === 0) return rawNodes;
+  return rawNodes.map((raw) => {
+    let out = raw;
+    if (cleanText(String(raw.name?.value ?? "")) !== "") {
+      const winner = winningNameSource(raw);
+      const redact =
+        (regions.containing.has(raw.nodeId) &&
+          (winner === undefined || winner.type === "contents")) ||
+        (regions.roots.has(raw.nodeId) && winner?.type === "contents") ||
+        regions.references(raw, "labelledby");
+      if (redact) {
+        const textRun = NATIVE_AX_NAME_SOURCE_ROLES.has(raw.role?.value ?? "");
+        out = { ...out, name: { value: textRun ? "" : REDACTED_VALUE } };
+      }
+    }
+    if (raw.description?.value && regions.references(raw, "describedby")) {
+      const { description: _dropped, ...rest } = out;
+      out = rest;
+    }
+    return out;
+  });
+}
+
+/** Where the sensitive fields are, and what their values reach. */
+interface FieldSensitivity {
+  regions: ValueRegions;
+  /** A value on this node must read `[redacted]`. */
+  withholdsValue(raw: RawAXNode): boolean;
+}
+
+/**
+ * Classify every node against the sensitivity policy — core's
+ * {@link isSensitiveFieldAttributes}, over the tag and the `type` /
+ * `autocomplete` attributes the DOM walk recorded. A field counts as sensitive
+ * when its markup says so, when it holds Chromium's password mask, or when it
+ * is DOM-backed, holds a value, and the DOM walk never saw it — a node the
+ * page added between the two reads, or a caller that passed no enrichment:
+ * unclassified is withheld, for its value and for every name built from it.
+ *
+ * A value is then withheld when its node IS such a field; is INSIDE one (a
+ * `<input type="month" autocomplete="cc-exp">` exposes its month and year as
+ * UA-shadow `spinbutton`s backed by a `<div>`: their own markup says nothing,
+ * their ancestor says everything); or CONTAINS one (an editor or ARIA combobox
+ * around a credential field may build its value from it).
+ */
+function fieldSensitivity(
+  rawNodes: RawAXNode[],
+  index: RawIndex,
+  enrichment: ReadonlyMap<number, NativeDomInfo>,
+): FieldSensitivity {
+  const fields = new Set<string>();
+  for (const raw of rawNodes) {
+    const enriched =
+      typeof raw.backendDOMNodeId === "number"
+        ? enrichment.get(raw.backendDOMNodeId)
+        : undefined;
+    const unclassified =
+      typeof raw.backendDOMNodeId === "number" &&
+      enriched === undefined &&
+      carriesValue(raw);
+    if (
+      unclassified ||
+      isMasked(raw.value?.value) ||
+      (enriched !== undefined &&
+        isSensitiveFieldAttributes(enriched.tagName, {
+          type: enriched.attributes.type,
+          autocomplete: enriched.attributes.autocomplete,
+        }))
+    ) {
+      fields.add(raw.nodeId);
+    }
+  }
+  // Only a field that holds something withholds names around it: an empty
+  // one has nothing to give away (see holdsContent). Its own value is empty.
+  for (const id of fields) {
+    const field = index.byId.get(id);
+    if (!field || !holdsContent(field, index.byId, false)) fields.delete(id);
+  }
+  const regions = valueRegions(index, fields);
+  return {
+    regions,
+    withholdsValue: (raw) =>
+      regions.inside(raw) ||
+      regions.containing.has(raw.nodeId) ||
+      (typeof raw.backendDOMNodeId === "number" &&
+        !enrichment.has(raw.backendDOMNodeId)),
+  };
+}
+
+// ── Strict mode: rich-text editor content (`redactInput`) ──────────────────
+
+/** One step of Chromium's accessible-name computation, as `getFullAXTree`
+ *  reports it on `name.sources`, in accname order. */
+interface AXNameSource {
+  type?: string;
+  attribute?: string;
+  value?: { value?: unknown };
+  superseded?: boolean;
+}
+
+/**
+ * The attributes allowed to name a node INSIDE an editable region. They are
+ * the page's markup — an `aria-label` on a mention chip, an inserted image's
+ * `alt`, a `title` — rather than the editor's text, and Chromium leaves them
+ * out of the host's `value` too. Every other name source there (the node's
+ * contents, a `<figcaption>` / `<caption>` / `<legend>`, an `aria-labelledby`
+ * target) is, or can point at, what the user typed. An allowlist, so a source
+ * Chromium adds later is withheld until someone decides otherwise.
+ */
+const MARKUP_NAME_ATTRIBUTES = new Set(["aria-label", "alt", "title"]);
+
+/**
+ * The `dom` attributes dropped inside an editable region: a URL the user typed
+ * or pasted into a link or an image (an auto-linked `?token=` is the likeliest
+ * secret in a message box), and an `id`, which some editors derive from a
+ * heading's text. No sink prints these today; the strict mode holds by
+ * construction rather than by that coincidence.
+ */
+const EDITABLE_CONTENT_ATTRIBUTES = new Set(["href", "src", "poster", "id"]);
+
+/**
+ * What a node inside an editable region is named when Chromium computed its
+ * name from the editor's text. Constant, and deliberately not empty: an empty
+ * name reads as UNLABELED, and a link or a cell in a message box is labeled —
+ * `no-unlabeled-interactive` would report an error that isn't there. The same
+ * literal the sensitivity policy substitutes for a withheld field value.
+ */
+const REDACTED_NAME = REDACTED_VALUE;
+
+function isEditable(raw: RawAXNode): boolean {
+  return (raw.properties ?? []).some((p) => p.name === "editable");
+}
+
+/** The step of Chromium's name trace that produced `raw`'s name: the first
+ *  one with text that wasn't superseded. */
+function winningNameSource(raw: RawAXNode): AXNameSource | undefined {
+  return raw.name?.sources?.find(
+    (s) =>
+      s.superseded !== true && cleanText(String(s.value?.value ?? "")) !== "",
+  );
+}
+
+/** Roles whose value is the page's own state, never something a user entered. */
+const PAGE_STATE_VALUE_ROLES: ReadonlySet<string> = new Set([
+  "progressbar",
+  "meter",
+  "scrollbar",
+]);
+
+/**
+ * Strict mode's value roots: every field whose value it withholds. That is
+ * every node Chromium reports a value for — a text field, a `<select>`, a
+ * slider, a file input, an editor — plus the root of every rich-text editing
+ * region that holds text, since what is typed there reaches names as well as
+ * the host's value.
+ *
+ * An EMPTY field or editor is not a root (see {@link holdsContent}): it
+ * contributes nothing to a name built around it, and counting it would
+ * withhold every row and cell name in a table of empty inputs.
+ */
+function strictValueRoots(rawNodes: RawAXNode[], index: RawIndex): Set<string> {
+  // What a user entered, not what the page reports: a progress bar, a meter
+  // and a scrollbar hold the page's own state, and a media element's timeline
+  // and volume are playback, not input. Counting them would withhold a
+  // `<video>`'s name for containing its scrubber.
+  const inMedia = (raw: RawAXNode): boolean => {
+    for (const cur of ancestry(raw, index.byId)) {
+      const role = cur.role?.value;
+      if (role === "Video" || role === "Audio") return true;
+    }
+    return false;
+  };
+  const roots = new Set<string>();
+  for (const raw of rawNodes) {
+    if (
+      carriesValue(raw) &&
+      !PAGE_STATE_VALUE_ROLES.has(raw.role?.value ?? "") &&
+      !inMedia(raw)
+    ) {
+      roots.add(raw.nodeId);
+    }
+    if (!isEditable(raw)) continue;
+    let root = raw;
+    for (const cur of ancestry(raw, index.byId)) {
+      if (!isEditable(cur)) break;
+      root = cur;
+    }
+    // An editing root counts only once something was typed into it: an empty
+    // editor, like an empty text field, has nothing a name could borrow.
+    if (holdsContent(root, index.byId, true)) roots.add(root.nodeId);
+  }
+  return roots;
+}
+
+/**
+ * True when `raw`'s name is exactly the text of one of the
+ * {@link MARKUP_NAME_ATTRIBUTES}. The winning source is the first one in the
+ * trace that produced text and wasn't superseded; requiring its text to equal
+ * the computed name means a trace that disagrees with its own result — or is
+ * missing, as in a payload recorded without it — fails closed.
+ */
+function authoredByMarkup(raw: RawAXNode): boolean {
+  const name = cleanText(String(raw.name?.value ?? ""));
+  const winner = winningNameSource(raw);
+  return (
+    winner?.type === "attribute" &&
+    MARKUP_NAME_ATTRIBUTES.has(winner.attribute ?? "") &&
+    cleanText(String(winner.value?.value)) === name
+  );
+}
+
+/**
+ * The raw nodes strictly INSIDE an editable region — below a node Chromium
+ * marks `editable` (a contenteditable host, a `designMode` document, a native
+ * text field). The region's own root is not inside it: that is the field
+ * itself, whose authored label is kept and whose value is already withheld.
+ *
+ * Decided by ancestry rather than by each node's own `editable` flag, because
+ * a `contenteditable="false"` island (a mention chip, an embedded link) carries
+ * no flag of its own but is still part of what the user wrote.
+ */
+function nodesInsideEditable(rawNodes: RawAXNode[]): Set<RawAXNode> {
+  const byId = new Map(rawNodes.map((n) => [n.nodeId, n]));
+  // nodeId → "this node, or one of its ancestors, is editable".
+  const covered = new Map<string, boolean>();
+  const isCovered = (start: RawAXNode | undefined): boolean => {
+    const chain: string[] = [];
+    let result = false;
+    for (
+      let cur = start;
+      cur;
+      cur = cur.parentId ? byId.get(cur.parentId) : undefined
+    ) {
+      const known = covered.get(cur.nodeId);
+      if (known !== undefined) {
+        result = known;
+        break;
+      }
+      chain.push(cur.nodeId);
+      if (isEditable(cur)) {
+        result = true;
+        break;
+      }
+      // A parent cycle is malformed input with no root to reach; treat what
+      // it holds as inside rather than prove a negative about it.
+      if (chain.length > rawNodes.length) {
+        result = true;
+        break;
+      }
+    }
+    for (const id of chain) covered.set(id, result);
+    return result;
+  };
+
+  const inside = new Set<RawAXNode>();
+  for (const raw of rawNodes) {
+    if (raw.parentId && isCovered(byId.get(raw.parentId))) inside.add(raw);
+  }
+  return inside;
+}
+
+/**
+ * Strict mode (`redactInput`) for what a user typed into an editor. Returns a
+ * copy of `rawNodes` (the input is never mutated) in which every node inside
+ * an editable region ({@link nodesInsideEditable}) has lost the editor's text:
+ *
+ * - a text run (`StaticText` / `LabelText`) loses its name outright, so no
+ *   later step — core's leaf promotion, or anything that reads a node's own
+ *   text runs — can promote it into another node's name.
+ * - any other node keeps a name only if the page's markup supplied it
+ *   ({@link authoredByMarkup}); a name Chromium computed from the content
+ *   becomes {@link REDACTED_NAME}.
+ * - its description is dropped: with no trace of where it came from, it could
+ *   be an `aria-describedby` pointing at typed text.
+ *
+ * Names OUTSIDE a region that carry what is in it — a node around an editor or
+ * a filled field, named from its contents or by reference — are
+ * {@link withholdRegionNames}' job, over {@link strictValueRoots}.
+ *
+ * Doing this before normalization, not after, is the point: after
+ * normalization a promoted name no longer says which node it came from. The
+ * AX `value` itself is left on each raw node, because core reads it to keep a
+ * value out of names ({@link normalizeNativeAX}); strict mode withholds it by
+ * never copying it to `a11y.value`.
+ */
+function redactEditableContent(rawNodes: RawAXNode[]): {
+  nodes: RawAXNode[];
+  inside: Set<RawAXNode>;
+} {
+  const inside = nodesInsideEditable(rawNodes);
+  if (inside.size === 0) return { nodes: rawNodes, inside };
+  const redactedInside = new Set<RawAXNode>();
+  const nodes = rawNodes.map((raw) => {
+    if (!inside.has(raw)) return raw;
+    const textRun = NATIVE_AX_NAME_SOURCE_ROLES.has(raw.role?.value ?? "");
+    const computed = cleanText(String(raw.name?.value ?? ""));
+    const name = textRun
+      ? ""
+      : computed === "" || authoredByMarkup(raw)
+        ? computed
+        : REDACTED_NAME;
+    const { description: _dropped, ...rest } = raw;
+    const redacted: RawAXNode = { ...rest, name: { value: name } };
+    redactedInside.add(redacted);
+    return redacted;
+  });
+  return { nodes, inside: redactedInside };
+}
+
+/** The editable roots' backend DOM ids — where {@link enrichFromDom} starts
+ *  treating a subtree as the user's content (strict mode only). */
+function editableRootBackendIds(rawNodes: RawAXNode[]): Set<number> {
+  const inside = nodesInsideEditable(rawNodes);
+  const roots = new Set<number>();
+  for (const raw of rawNodes) {
+    if (
+      isEditable(raw) &&
+      !inside.has(raw) &&
+      typeof raw.backendDOMNodeId === "number"
+    ) {
+      roots.add(raw.backendDOMNodeId);
+    }
+  }
+  return roots;
+}
+
+// ── Assembly ────────────────────────────────────────────────────────────────
+
+/**
+ * Every name-level redaction, applied to the raw nodes before core normalizes
+ * them — the only point at which a name still says which node it came from.
+ * Sensitive fields always ({@link withholdRegionNames} over
+ * {@link fieldSensitivity}); in strict mode, every field value and all editor
+ * content too ({@link withholdRegionNames} over {@link strictValueRoots}, then
+ * {@link redactEditableContent}).
+ */
+function prepareRawNodes(
+  rawNodes: RawAXNode[],
+  enrichment: ReadonlyMap<number, NativeDomInfo>,
+  options: NativeTreeOptions,
+): {
+  nodes: RawAXNode[];
+  sensitivity: FieldSensitivity;
+  insideEditor: Set<RawAXNode>;
+} {
+  const index = indexRaw(rawNodes);
+  const sensitivity = fieldSensitivity(rawNodes, index, enrichment);
+  const named = withholdRegionNames(rawNodes, sensitivity.regions);
+  if (options.redactInput !== true) {
+    return { nodes: named, sensitivity, insideEditor: new Set() };
+  }
+  const strict = withholdRegionNames(
+    named,
+    valueRegions(index, strictValueRoots(rawNodes, index)),
+  );
+  const { nodes, inside } = redactEditableContent(strict);
+  return { nodes, sensitivity, insideEditor: inside };
+}
+
 /**
  * The flat, text-only view of Chromium's native tree that
  * `BrowserSession.nativeAX()` returns: indented `role "name"` lines (the same
@@ -159,15 +849,20 @@ function cleanText(text: string): string {
  * the same lines as a flat list of role+name pairs, for order- and
  * indent-insensitive diffing.
  *
- * Vocabulary and names both come from core's shared `normalizeNativeAX`, as
- * they do for {@link buildNativeTree} — so this view and the
+ * Vocabulary and names both come from core's shared `normalizeNativeAX`, after
+ * the same name redactions as {@link buildNativeTree} — so this view and the
  * `ExtractionResult` one can never disagree about what is on a page.
  */
-export function nativeAXView(rawNodes: RawAXNode[]): {
+export function nativeAXView(
+  rawNodes: RawAXNode[],
+  enrichment: ReadonlyMap<number, NativeDomInfo> = new Map(),
+  options: NativeTreeOptions = {},
+): {
   tree: string;
   pairs: string[];
 } {
-  const nodes = normalizeNativeAX(rawNodes);
+  const { nodes: prepared } = prepareRawNodes(rawNodes, enrichment, options);
+  const nodes = normalizeNativeAX(prepared);
   return {
     tree: serializeNativeAX(nodes),
     pairs: nodes.map((n) => (n.name ? `${n.role} "${n.name}"` : n.role)),
@@ -178,7 +873,8 @@ export function nativeAXView(rawNodes: RawAXNode[]): {
  * Filter a CDP flat attribute list (`[name, value, name, value, …]`) down to
  * {@link DOM_ATTR_ALLOWLIST}. This is the R1 redaction gate: any attribute not
  * on the allowlist — most importantly `value` — is dropped, so no field value
- * ever reaches a node. Exported so the redaction is directly unit-testable.
+ * ever reaches a node's `dom` facet. Exported so the gate is directly
+ * unit-testable.
  */
 export function allowlistAttributes(flat: string[]): Record<string, string> {
   const attributes: Record<string, string> = {};
@@ -187,6 +883,30 @@ export function allowlistAttributes(flat: string[]): Record<string, string> {
     if (DOM_ATTR_ALLOWLIST.has(key)) attributes[key] = flat[i + 1];
   }
   return attributes;
+}
+
+/** {@link allowlistAttributes}' output minus what an editor's user supplied —
+ *  see {@link EDITABLE_CONTENT_ATTRIBUTES}. */
+function withoutEditableContent(
+  attributes: Record<string, string>,
+): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(attributes).filter(
+      ([key]) => !EDITABLE_CONTENT_ATTRIBUTES.has(key),
+    ),
+  );
+}
+
+/** `attributes` without the markup `selected` flag when the option's selection
+ *  is withheld — an `<option selected>` would otherwise say what a sensitive
+ *  `<select>` holds even with its AX state dropped. */
+function withoutSelection(
+  attributes: Record<string, string>,
+  withhold: boolean,
+): Record<string, string> {
+  if (!withhold || !("selected" in attributes)) return attributes;
+  const { selected: _dropped, ...rest } = attributes;
+  return rest;
 }
 
 /** Split an AX node's `properties` into `states` (bool/stateful) and
@@ -228,9 +948,15 @@ function axFacets(raw: RawAXNode): Pick<A11yInfo, "states" | "properties"> {
  * Node with no live element, so without this they carry no "where" at all —
  * and `audit` is documented as rule · severity · locator. Computing it here
  * costs nothing extra: the parent/child links are already in hand.
+ *
+ * Below an `editableRoots` element the walk ignores `id`s, so a locator inside
+ * an editor anchors on the nearest id outside it (typically the host's own):
+ * an editor may derive a heading's `id` from its typed text. Only strict mode
+ * passes any.
  */
 async function enrichFromDom(
   client: CDPSession,
+  editableRoots: ReadonlySet<number> = new Set(),
 ): Promise<Map<number, NativeDomInfo>> {
   const out = new Map<number, NativeDomInfo>();
   const { root } = (await client.send("DOM.getDocument", {
@@ -241,13 +967,15 @@ async function enrichFromDom(
   // Parent links aren't in the payload — record them on the way down so the
   // locator walk can go back up.
   const parents = new Map<DomNode, DomNode>();
+  // Everything strictly below an editable root — the user's content.
+  const insideEditable = new Set<DomNode>();
   const ELEMENT_NODE = 1;
   const elementChildren = (node: DomNode): DomNode[] =>
     (node.children ?? []).filter((c) => c.nodeType === ELEMENT_NODE);
 
   const adapter: CssPathAdapter<DomNode> = {
     tagName: (n) => (n.nodeName ?? "").toLowerCase(),
-    id: (n) => attributeOf(n, "id"),
+    id: (n) => (insideEditable.has(n) ? null : attributeOf(n, "id")),
     parent: (n) => parents.get(n) ?? null,
     children: (n) => elementChildren(n),
     // Two kinds of stop. `<html>` is the document element — the path stops
@@ -263,20 +991,27 @@ async function enrichFromDom(
       (n.nodeName ?? "").toLowerCase() === "html",
   };
 
-  const walk = (node: DomNode): void => {
+  const walk = (node: DomNode, inside: boolean): void => {
+    if (inside) insideEditable.add(node);
     for (const child of elementChildren(node)) parents.set(child, node);
     if (typeof node.backendNodeId === "number" && node.nodeName) {
+      const ariaValueText = attributeOf(node, "aria-valuetext");
       out.set(node.backendNodeId, {
         tagName: node.nodeName.toLowerCase(),
         attributes: allowlistAttributes(node.attributes ?? []),
         locator: buildCssPath(node, adapter),
+        ...(ariaValueText !== null ? { ariaValueText } : {}),
       });
     }
-    for (const child of node.children ?? []) walk(child);
-    if (node.contentDocument) walk(node.contentDocument);
-    for (const sub of node.shadowRoots ?? []) walk(sub);
+    const below =
+      inside ||
+      (typeof node.backendNodeId === "number" &&
+        editableRoots.has(node.backendNodeId));
+    for (const child of node.children ?? []) walk(child, below);
+    if (node.contentDocument) walk(node.contentDocument, below);
+    for (const sub of node.shadowRoots ?? []) walk(sub, below);
   };
-  walk(root);
+  walk(root, false);
   return out;
 }
 
@@ -299,6 +1034,13 @@ export interface NativeDomInfo {
   tagName: string;
   attributes: Record<string, string>;
   locator?: string;
+  /**
+   * The element's `aria-valuetext`, which a range widget announces instead of
+   * its number — and which Chromium does not report over CDP. Read only into
+   * `a11y.value` (so the value policy and strict mode govern it), never onto
+   * the `dom` facet.
+   */
+  ariaValueText?: string;
 }
 
 interface DomNode {
@@ -311,25 +1053,60 @@ interface DomNode {
   shadowRoots?: DomNode[];
 }
 
+/** Both CDP reads a native tree is built from, over one session. */
+async function readNative(
+  client: CDPSession,
+  options: NativeTreeOptions,
+): Promise<{
+  rawNodes: RawAXNode[];
+  enrichment: Map<number, NativeDomInfo>;
+}> {
+  await client.send("Accessibility.enable");
+  const { nodes: rawNodes } = (await client.send(
+    "Accessibility.getFullAXTree",
+  )) as { nodes: RawAXNode[] };
+  const enrichment = await enrichFromDom(
+    client,
+    options.redactInput === true ? editableRootBackendIds(rawNodes) : new Set(),
+  );
+  return { rawNodes, enrichment };
+}
+
 /**
  * Read Chromium's native accessibility tree for `page` and normalize it into
  * an {@link ExtractionResult} stamped `source.producer === "native"`.
  *
  * Uses its own CDP session (created and detached here), so it composes with the
  * page-bundle DOM path without interfering. Read-only: nodes carry `a11y` and
- * (when resolvable) `dom`, never `interaction` or `ui`.
+ * (when resolvable) `dom`, never `interaction` or `ui`. Field values follow
+ * ADR-0001 unless `options.redactInput` is set — see {@link NativeTreeOptions}.
  */
-export async function nativeTree(page: Page): Promise<ExtractionResult> {
+export async function nativeTree(
+  page: Page,
+  options: NativeTreeOptions = {},
+): Promise<ExtractionResult> {
   const client = await page.context().newCDPSession(page);
   try {
-    await client.send("Accessibility.enable");
-    const { nodes: rawNodes } = (await client.send(
-      "Accessibility.getFullAXTree",
-    )) as { nodes: RawAXNode[] };
-
-    const enrichment = await enrichFromDom(client);
+    const { rawNodes, enrichment } = await readNative(client, options);
     const chrome = page.context().browser()?.version();
-    return buildNativeTree(rawNodes, enrichment, chrome);
+    return buildNativeTree(rawNodes, enrichment, chrome, options);
+  } finally {
+    await client.detach().catch(() => {});
+  }
+}
+
+/**
+ * {@link nativeAXView} for a live page — both CDP reads, so the view's names
+ * pass the same sensitivity classification as {@link nativeTree}'s.
+ */
+export async function nativeAXViewOf(
+  page: Page,
+  options: NativeTreeOptions = {},
+): Promise<{ tree: string; pairs: string[] }> {
+  const client = await page.context().newCDPSession(page);
+  try {
+    const { rawNodes, enrichment } = await readNative(client, options);
+    return nativeAXView(rawNodes, enrichment, options);
   } finally {
     await client.detach().catch(() => {});
   }
@@ -338,18 +1115,44 @@ export async function nativeTree(page: Page): Promise<ExtractionResult> {
 /**
  * Pure AX→`ExtractionResult` assembly, split out so it can be unit-tested on a
  * recorded `getFullAXTree` payload with no browser. `enrichment` maps a backend
- * DOM node id to its (already allowlist-filtered) tag + attributes.
+ * DOM node id to its (already allowlist-filtered) tag + attributes; a
+ * DOM-backed node missing from it has any value withheld, since there is
+ * nothing to classify it by.
  */
 export function buildNativeTree(
   rawNodes: RawAXNode[],
   enrichment: Map<number, NativeDomInfo> = new Map(),
   chrome?: string,
+  options: NativeTreeOptions = {},
 ): ExtractionResult {
+  const redactInput = options.redactInput === true;
   // Core owns the vocabulary: which nodes survive, sibling order, role map,
-  // name promotion, id derivation. We only decorate the survivors.
-  const skeleton = normalizeNativeAX(rawNodes);
+  // name promotion, id derivation. We only decorate the survivors — after the
+  // name-level redactions, so nothing core promotes can carry what they
+  // withhold.
+  const {
+    nodes: prepared,
+    sensitivity,
+    insideEditor,
+  } = prepareRawNodes(rawNodes, enrichment, options);
+  const skeleton = normalizeNativeAX(prepared);
   const rawById = new Map<string, RawAXNode>();
-  for (const raw of rawNodes) rawById.set(nativeIdOf(raw), raw);
+  for (const raw of prepared) rawById.set(nativeIdOf(raw), raw);
+  const rawByNodeId = new Map(prepared.map((raw) => [raw.nodeId, raw]));
+
+  // A `<select>`'s value is also which of its options is `selected`: an
+  // option's state would say what a withheld value is. Dropped for an option
+  // inside a sensitive field, and in strict mode for one inside any choice
+  // field (a combobox or listbox).
+  const inChoiceField = (raw: RawAXNode): boolean => {
+    for (const cur of ancestry(raw, rawByNodeId)) {
+      const role = cur.role?.value;
+      if (cur !== raw && (role === "combobox" || role === "listbox")) {
+        return true;
+      }
+    }
+    return false;
+  };
 
   const nodes = new Map<string, SemanticNode>();
   for (const nn of skeleton) {
@@ -357,28 +1160,53 @@ export function buildNativeTree(
     const { states, properties } = raw
       ? axFacets(raw)
       : { states: {}, properties: {} };
-
-    const a11y: A11yInfo = {
-      role: nn.role,
-      // Core never promotes a node's value into its name (R1), so this is
-      // safe to take as-is.
-      name: nn.name,
-      description: raw?.description?.value
-        ? cleanText(String(raw.description.value))
-        : "",
-      states,
-      properties,
-      isExposedToAT: true,
-    };
+    // One decision for both places the selection shows: the AX state and the
+    // option's markup `selected` attribute on the `dom` facet.
+    const withholdSelection =
+      !!raw &&
+      (sensitivity.regions.inside(raw) || (redactInput && inChoiceField(raw)));
+    if (withholdSelection) delete states.selected;
 
     const enriched =
       nn.backendDOMNodeId !== null
         ? enrichment.get(nn.backendDOMNodeId)
         : undefined;
+
+    // What a screen reader announces — never in strict mode, and `[redacted]`
+    // for anything the sensitivity policy covers.
+    const value =
+      raw && !redactInput
+        ? announcedValue(
+            raw,
+            nn.role,
+            enriched,
+            sensitivity.withholdsValue(raw),
+          )
+        : undefined;
+
+    const a11y: A11yInfo = {
+      role: nn.role,
+      // Core never promotes a node's value into its name, so this is safe to
+      // take as-is: a value lives in `value`, below, or nowhere.
+      name: nn.name,
+      description: raw?.description?.value
+        ? cleanText(String(raw.description.value))
+        : "",
+      ...(value !== undefined ? { value } : {}),
+      states,
+      properties,
+      isExposedToAT: true,
+    };
+
     const dom: DomInfo | undefined = enriched
       ? {
           tagName: enriched.tagName,
-          attributes: enriched.attributes,
+          attributes: withoutSelection(
+            raw && insideEditor.has(raw)
+              ? withoutEditableContent(enriched.attributes)
+              : enriched.attributes,
+            withholdSelection,
+          ),
           textContent: null,
           descendantText: "",
           isHidden: false,

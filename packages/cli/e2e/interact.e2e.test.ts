@@ -68,6 +68,15 @@ const PAGE = dataUrl(`<main>
 
 const SECRET = "hunter2-lives-here"; // 18 chars — the page echoes the length
 
+// A plain field beside a password field, each echoing only the LENGTH of what
+// reached it — proof of delivery that carries no text of its own.
+const FIELDS_PAGE = dataUrl(`<main>
+  <input aria-label="Email" oninput="document.getElementById('e-len').textContent='email '+this.value.length">
+  <h3 id="e-len">email 0</h3>
+  <input type="password" aria-label="Password" oninput="document.getElementById('p-len').textContent='password '+this.value.length">
+  <h3 id="p-len">password 0</h3>
+</main>`);
+
 describe("real-a11y interact", () => {
   it("runs a step and reports what it changed for a screen reader", async () => {
     const res = await runCli([
@@ -96,23 +105,113 @@ describe("real-a11y interact", () => {
     expect(res.stdout).toContain("typed 18 chars");
   });
 
-  it("delivers the typed value to the page but never echoes it (R1)", async () => {
+  it("the diff shows what the field now holds; the step echo never repeats it (ADR-0001)", async () => {
     const res = await runCli([
       "interact",
-      PAGE,
+      FIELDS_PAGE,
+      "--step",
+      `type textbox "Email" = hello`,
+    ]);
+    expect(res.code).toBe(0);
+    // Page content, the way a screen reader announces the field now …
+    expect(res.stdout).toContain(
+      '~ textbox "Email": a11y.value (unset) → "hello"',
+    );
+    // … while the argument itself is masked wherever the step is echoed.
+    expect(res.stderr).toContain('type textbox "Email" = ‹hidden›');
+    expect(res.stderr).not.toContain("hello");
+  });
+
+  it("a password field reads only as [redacted] — the typed text reaches no stream, not even its length", async () => {
+    for (const format of [[], ["-q", "-f", "json"]]) {
+      const res = await runCli([
+        "interact",
+        FIELDS_PAGE,
+        ...format,
+        "--step",
+        `type textbox "Password" = ${SECRET}`,
+      ]);
+      expect(res.code).toBe(0);
+      const diff =
+        format.length > 0
+          ? (JSON.parse(res.stdout) as { pages: { diff: string }[] }).pages[0]
+              .diff
+          : res.stdout;
+      // It reached the page — the input handler counted 18 characters …
+      expect(diff).toContain("password 18");
+      // … and the tree says a value is there, without saying what.
+      expect(diff).toContain(
+        '~ textbox "Password": a11y.value (unset) → "[redacted]"',
+      );
+      for (const stream of [res.stdout, res.stderr]) {
+        expect(stream).not.toContain("hunter2");
+        expect(stream).not.toContain("•");
+      }
+    }
+  });
+
+  it("--redact-input withholds every value from the diff, as before values were shown", async () => {
+    const res = await runCli([
+      "interact",
+      FIELDS_PAGE,
+      "--redact-input",
       "--step",
       `type textbox "Email" = ${SECRET}`,
     ]);
     expect(res.code).toBe(0);
-    // It reached the page — the input handler counted 18 characters …
-    expect(res.stdout).toContain("typed 18 chars");
-    // … but the value itself appears in NO stream, and the step echo is masked.
+    expect(res.stdout).toContain("email 18"); // delivered
+    expect(res.stdout).not.toContain("a11y.value");
     expect(res.stdout).not.toContain("hunter2");
     expect(res.stderr).not.toContain("hunter2");
-    expect(res.stderr).toContain("‹hidden›");
   });
 
-  it("keeps the typed value out of --format json too", async () => {
+  it("shows what was typed into a rich-text editor, and --redact-input withholds it", async () => {
+    // A model-driven editor (the ProseMirror / Lexical shape) writes the text
+    // into its own paragraph. A screen reader reads that text, so the diff
+    // shows it by default; the strict mode keeps it out of every stream. The
+    // page echoes only the length, as proof of delivery.
+    const EDITOR_SECRET = "api_key=sk-editor-9f2b==";
+    const EDITOR_PAGE = dataUrl(`<main>
+      <div id="ed" contenteditable="true" role="textbox" aria-label="Composer"><p><br></p></div>
+      <h3 id="len">length 0</h3>
+      <script>
+        document.getElementById("ed").addEventListener("beforeinput", (e) => {
+          e.preventDefault();
+          e.currentTarget.querySelector("p").textContent = e.data;
+          document.getElementById("len").textContent = "length " + e.data.length;
+        });
+      </script>
+    </main>`);
+    const shown = await runCli([
+      "interact",
+      EDITOR_PAGE,
+      "--step",
+      `type textbox "Composer" = ${EDITOR_SECRET}`,
+    ]);
+    expect(shown.code).toBe(0);
+    expect(shown.stdout).toContain(
+      `~ textbox "Composer": a11y.value (unset) → "${EDITOR_SECRET}"`,
+    );
+    // The step echo is masked either way.
+    expect(shown.stderr).not.toContain("sk-editor");
+
+    for (const format of [[], ["-q", "-f", "json"]]) {
+      const res = await runCli([
+        "interact",
+        EDITOR_PAGE,
+        "--redact-input",
+        ...format,
+        "--step",
+        `type textbox "Composer" = ${EDITOR_SECRET}`,
+      ]);
+      expect(res.code).toBe(0);
+      expect(res.stdout).toContain(`length ${EDITOR_SECRET.length}`);
+      expect(res.stdout).not.toContain("sk-editor");
+      expect(res.stderr).not.toContain("sk-editor");
+    }
+  });
+
+  it("masks the step echo in --format json too", async () => {
     const res = await runCli([
       "interact",
       PAGE,
@@ -123,14 +222,16 @@ describe("real-a11y interact", () => {
       `type textbox "Email" = ${SECRET}`,
     ]);
     expect(res.code).toBe(0);
-    expect(res.stdout).not.toContain("hunter2");
     const payload = JSON.parse(res.stdout) as {
       command: string;
       pages: { steps: string[]; diff: string }[];
     };
     expect(payload.command).toBe("interact");
     expect(payload.pages[0].steps).toEqual(['type textbox "Email" = ‹hidden›']);
+    expect(JSON.stringify(payload.pages[0].steps)).not.toContain("hunter2");
     expect(payload.pages[0].diff).toContain("typed 18 chars");
+    // The field's own value is page content in the diff (ADR-0001).
+    expect(payload.pages[0].diff).toContain(`a11y.value (unset) → "${SECRET}"`);
   });
 
   it("lists nth= candidates when a target is ambiguous", async () => {
@@ -340,21 +441,24 @@ describe("real-a11y click / type / focus", () => {
     expect(res.stdout).toContain('textbox "Email"');
   });
 
-  it("type delivers the value without echoing it", async () => {
+  it("type delivers the value without echoing it; a password shows only as [redacted]", async () => {
     const res = await runCli([
       "type",
-      PAGE,
-      "-q",
+      FIELDS_PAGE,
       "--role",
       "textbox",
       "--name",
-      "Email",
+      "Password",
       "--text",
       SECRET,
     ]);
     expect(res.code).toBe(0);
-    expect(res.stdout).toContain("typed 18 chars");
+    expect(res.stdout).toContain("password 18");
+    expect(res.stdout).toContain(
+      '~ textbox "Password": a11y.value (unset) → "[redacted]"',
+    );
     expect(res.stdout).not.toContain("hunter2");
+    expect(res.stderr).not.toContain("hunter2");
   });
 
   it("rejects --text on click by name, not with a parser wall", async () => {

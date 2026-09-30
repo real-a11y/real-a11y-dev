@@ -29,6 +29,7 @@ import {
 import { redactUrl } from "@real-a11y-dev/snapshot";
 
 import {
+  inputPolicy,
   parseFormat,
   parseOpenOptions,
   parseStepSettle,
@@ -85,9 +86,15 @@ export function stepsFromFlags(flags: FlagValues): InteractStep[] {
  * page — resolving once up front would act on stale nodes. Node ids never
  * leave this function.
  */
-async function runStep(session: Session, step: InteractStep): Promise<void> {
+async function runStep(
+  session: Session,
+  step: InteractStep,
+  redactInput: boolean,
+): Promise<void> {
   const { resolveTarget } = await import("@real-a11y-dev/browser");
-  const tree = await session.nativeTree();
+  // Targeting reads the same tree the report is written in — strict mode
+  // included, so a step aims at a node by the name the user can see.
+  const tree = await session.nativeTree({ redactInput });
   const resolved = resolveTarget(tree, {
     role: step.role,
     ...(step.name === undefined ? {} : { name: step.name }),
@@ -200,25 +207,31 @@ async function interactOnPage(
   steps: readonly InteractStep[],
   stepSettleMs: number,
   quiet: boolean,
+  policy: ReturnType<typeof inputPolicy>,
 ): Promise<InteractOutcome> {
+  const { redactInput, liveValues } = policy;
   const before = captureNativeCheckpoint(
-    await session.nativeTree(),
+    await session.nativeTree({ redactInput }),
     session.currentUrl() ?? "",
   );
 
   const done: string[] = [];
   for (const step of steps) {
-    await runStep(session, step);
+    await runStep(session, step, redactInput);
     await settle(stepSettleMs);
     const rendered = describeStep(step);
     done.push(rendered);
     progress(`  ✓ ${rendered}`, { quiet });
   }
 
+  // A live report: what a field now holds is part of what changed for a
+  // screen reader (ADR-0001) — `a11y.value (unset) → "…"`, a password field
+  // as "[redacted]". The step echo above never carries the typed text.
   const outcome = diffNativeCheckpoint(
     before,
-    await session.nativeTree(),
+    await session.nativeTree({ redactInput }),
     session.currentUrl() ?? "",
+    { values: liveValues },
   );
 
   // A step that navigates is an expected outcome of a real click, not a failure
@@ -264,7 +277,13 @@ export async function runInteractStepsOnSession(
 
   progress(`opening ${target.name} …`, { quiet });
   const opened = await ensurePageOpen(session, target, flags);
-  const outcome = await interactOnPage(session, steps, stepSettleMs, quiet);
+  const outcome = await interactOnPage(
+    session,
+    steps,
+    stepSettleMs,
+    quiet,
+    inputPolicy(flags),
+  );
   // Re-read AFTER the steps: a click can navigate, and `url` is contracted
   // as the final address. Reading it before acting reports where the run
   // started, which is wrong in exactly the case the report flags as a

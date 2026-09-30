@@ -81,7 +81,7 @@ targeting gap. The loop: `checkpoint_tree` → act → `diff_tree`. Chromium onl
 | Tool | Purpose |
 | --- | --- |
 | `click_element` | Dispatch a real click at the matched node. Can submit and navigate — if it navigates, `diff_tree` says so instead of diffing. |
-| `type_text` | Replace a text field's value (input/change events fire, so framework-controlled inputs register it). The result never echoes the typed text. |
+| `type_text` | Replace a text field's value (input/change events fire, so framework-controlled inputs register it). The result never echoes the typed text; `diff_tree` shows what the field then holds. |
 | `focus_element` | Move real keyboard focus; reports whether the target is a text field so a `type_text` can follow. |
 
 ### One producer per surface
@@ -91,6 +91,20 @@ CDP. It reaches structure no in-page walk can — most visibly a
 `<video controls>`'s play/scrubber/mute controls, which live in a closed
 user-agent shadow root — and it is the same tree the act tools target, so a node
 you click by name can't come back in a report under another one.
+
+A field shows what it holds, the way a screen reader announces it —
+`textbox "Email" = "jane@example.com"` — in `get_semantic_tree`,
+`inspect_page`, `list_elements`, `get_tab_order` and `diff_tree`, so an agent
+can confirm what `type_text` landed. A field whose markup marks it secret
+(`type="password"`, a credential or payment `autocomplete`) reads `[redacted]`:
+never its text, never its length. Findings checkpoints leave values out unless
+`checkpoint_findings` and `export_checkpoint` are both passed `values: true`.
+Start the server with `REAL_A11Y_REDACT_INPUT=1` to keep every field value and
+all rich-text editor content out of every read built on this tree — inside a
+`contenteditable` composer the structure is kept, but a name computed from the
+typed text reads `[redacted]`, as does a name taken from a field or an editor
+by `aria-labelledby` or a `<label>`. (`get_tab_order`, the in-page walk below,
+prints no values then, but still names a control inside an editor by its text.)
 
 That tree is **whole-document**, which is why no tool takes a `rootSelector`
 except the one exception below. There is no `producer` parameter: each surface
@@ -182,6 +196,7 @@ To pin the version instead, add it to your project (`pnpm add -D
 | `REAL_A11Y_MCP_ALLOWED_ORIGINS` | Comma-separated origins that auditing is restricted to when a storage state is loaded (origin pinning). **Strongly recommended** alongside `STORAGE_STATE`: without it, a redirect could audit an unintended site with your session. |
 | `REAL_A11Y_MCP_MAX_SESSIONS` | Cap on concurrently live named sessions (default 4) — each session is its own browser, so this keeps a `session` typo from accumulating Chromiums. |
 | `REAL_A11Y_MCP_SESSION_IDLE_TIMEOUT_MS` | Idle ms before all sessions close (default 900000 = 15 min; 0 disables; capped at 1 hour). The server stays up, the next call relaunches, and saved findings checkpoints survive — only `close_browser` discards those. |
+| `REAL_A11Y_REDACT_INPUT` | `1` is the strict mode: no field value and no rich-text editor content in any tool result. By default fields show what they hold (sensitive ones as `[redacted]`), so ordinary field contents and composer drafts reach the agent's context. Any value other than `1`/`true`/`0`/`false` refuses to start. |
 
 Auth material is always operator-configured, never a tool parameter — the agent
 just benefits from a session you set up. Use a dedicated low-privilege test

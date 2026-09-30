@@ -8,7 +8,7 @@ priority: P0
 status: Active
 validFrom: "mcp ≥ 0.1.0-beta.2 (unreleased). Not runnable until click_element / type_text / focus_element publish — mark N/A for earlier releases"
 validUntil: ""
-expected: "Against the published server via npx: open_page → checkpoint_tree → click_element → diff_tree returns a diff naming the real change. The agent should be able to do this from the tool DESCRIPTIONS alone, without being told the order — if it can't, the descriptions are the bug. Ambiguity must be recoverable from what the error prints (the nth candidates). type_text never echoes its value."
+expected: "Against the published server via npx: open_page → checkpoint_tree → click_element → diff_tree returns a diff naming the real change. The agent should be able to do this from the tool DESCRIPTIONS alone, without being told the order — if it can't, the descriptions are the bug. Ambiguity must be recoverable from what the error prints (the nth candidates). type_text never echoes its value; diff_tree then shows what the field holds (a sensitive field only as [redacted])."
 twin: R25
 covers:
   - mcp.tools.click_element
@@ -45,7 +45,11 @@ counts.
 
 - **4** — the diff names the real change on the live page
 - **5** — recoverable from the printed candidates alone
-- **6** — the value appears in no tool result and no later tree or audit output
+- **6** — the `type_text` result never echoes the value. From mcp 0.1.0-beta.7 a later
+  `diff_tree` / `get_semantic_tree` shows it as the field's value
+  (`a11y.value (unset) → "…"`) — page content, as a screen reader hears it — unless the
+  field is sensitive (then only `"[redacted]"`, see **R24**) or the server runs with
+  `REAL_A11Y_REDACT_INPUT=1` (then nowhere). Through beta.6 it appeared in no later output
 - **7** — the focus move is reported as a focus move
 - **8/9** — the agent finds `checkpoint_tree` → `click_element` → `diff_tree` **on its own**, from
   the descriptions. It should not need to be told the order

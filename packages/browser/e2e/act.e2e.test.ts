@@ -116,6 +116,46 @@ describe("BrowserSession.act (native producer, write side)", () => {
     expect(findId(after, "heading", secret)).toBeDefined();
   });
 
+  it("a typed value is the field's a11y.value; a password's is [redacted]; strict mode has none (ADR-0001)", async () => {
+    await session.open(
+      dataUrl(`<!doctype html><html><head><title>values</title></head><body><main>
+        <label>Email <input id="email" type="email"></label>
+        <label>Password <input id="pw" type="password"></label>
+      </main></body></html>`),
+    );
+    const tree = await session.nativeTree();
+    const valueOf = (t: ExtractionResult, name: string) =>
+      t.nodes.get(findId(t, "textbox", name) ?? "")?.a11y.value;
+    expect(valueOf(tree, "Email")).toBeUndefined(); // empty is no value
+
+    for (const [name, text] of [
+      ["Email", "hello@example.com"],
+      ["Password", "PW-SECRET-typed"],
+    ] as const) {
+      const result = await session.act({
+        nodeId: findId(tree, "textbox", name)!,
+        action: "type",
+        payload: { value: text },
+      });
+      expect(result).toEqual({ success: true });
+    }
+
+    const after = await session.nativeTree();
+    expect(valueOf(after, "Email")).toBe("hello@example.com");
+    expect(valueOf(after, "Password")).toBe("[redacted]");
+    const blob = JSON.stringify([...after.nodes.values()]);
+    expect(blob).not.toContain("PW-SECRET");
+    expect(blob).not.toContain("•"); // not even its length
+
+    const strict = await session.nativeTree({ redactInput: true });
+    for (const node of strict.nodes.values()) {
+      expect(node.a11y.value).toBeUndefined();
+    }
+    expect(JSON.stringify([...strict.nodes.values()])).not.toContain(
+      "hello@example.com",
+    );
+  });
+
   it("refuses a node id with no backing DOM element", async () => {
     await session.open(PAGE);
     // `ax-<n>` form — the id scheme's marker for a node with no DOM element
@@ -196,5 +236,74 @@ describe("BrowserSession.act (native producer, write side)", () => {
     });
     expect(result.success).toBe(false);
     expect(result.error).toMatch(/could not resolve/);
+  });
+});
+
+describe("field values reach names — withheld where they must be (real Chromium)", () => {
+  // Chromium builds names from what fields hold: a cell or a label named from
+  // contents that embed a field, a name taken by aria-labelledby / <label for>.
+  // Each page is filled at runtime from split literals, so no sentinel is in
+  // the URL.
+  const PAGE =
+    dataUrl(`<!doctype html><html><head><title>names</title></head><body><main>
+    <label>Password <input type="password" id="pw"></label>
+    <table><tr><td><input id="cc" aria-label="Card" autocomplete="cc-number"></td></tr></table>
+    <section aria-labelledby="t"><h1 id="t" contenteditable="true"></h1></section>
+    <span id="s">Search for</span><input id="q" aria-label="Query">
+    <button aria-labelledby="s q">Go</button>
+    <table><tr><td><select aria-label="Diagnosis"><option>None</option><option id="pick">PICKED-option</option></select></td></tr></table>
+    <label><input type="checkbox"> Remind me <input id="n" aria-label="Minutes"> minutes before</label>
+    <script>
+      document.getElementById("pw").value = "PW-" + "SENTINEL";
+      document.getElementById("cc").value = "CC-" + "SENTINEL";
+      document.getElementById("t").textContent = "TITLE-" + "typed";
+      document.getElementById("q").value = "QUERY-" + "typed";
+      document.getElementById("pick").selected = true;
+      document.getElementById("n").value = "MIN-" + "typed";
+    </script>
+  </main></body></html>`);
+
+  it("default mode: sensitive values reach no name; a field keeps its own label", async () => {
+    await session.open(PAGE);
+    const tree = await session.nativeTree();
+    const blob = JSON.stringify([...tree.nodes.values()]);
+    expect(blob).not.toContain("SENTINEL");
+    expect(blob).not.toContain("•");
+    const pw = [...tree.nodes.values()].find(
+      (n) =>
+        n.a11y.role === "textbox" &&
+        n.a11y.value === "[redacted]" &&
+        n.a11y.name !== "Card",
+    );
+    // Its own wrapping <label> is no reference to a value: the name stays.
+    expect(pw?.a11y.name).toBe("Password");
+  });
+
+  it("strict mode: no field value or editor text reaches any name", async () => {
+    await session.open(PAGE);
+    const tree = await session.nativeTree({ redactInput: true });
+    const blob = JSON.stringify([...tree.nodes.values()]);
+    for (const typed of [
+      "SENTINEL",
+      "TITLE-typed",
+      "QUERY-typed",
+      "MIN-typed",
+    ]) {
+      expect(blob).not.toContain(typed);
+    }
+    // A <select>'s options are page content and stay listed — but none says
+    // which one is chosen, and nothing else is named after it.
+    for (const node of tree.nodes.values()) {
+      if (node.a11y.role === "option") {
+        expect(node.a11y.states.selected).toBeUndefined();
+      } else {
+        expect(node.a11y.name).not.toContain("PICKED-option");
+      }
+    }
+    // The fields keep their own labels.
+    const names = [...tree.nodes.values()].map((n) => n.a11y.name);
+    for (const label of ["Password", "Card", "Query", "Diagnosis", "Minutes"]) {
+      expect(names).toContain(label);
+    }
   });
 });
