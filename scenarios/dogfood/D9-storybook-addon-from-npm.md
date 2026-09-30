@@ -33,6 +33,7 @@ Then install `@real-a11y-dev/storybook-addon@beta` as a dev dependency.
 6. Check the browser console in both dev and static builds
 7. Try with the **current** Storybook major, and note which version you used
 8. Note anything the docs omit that you needed
+9. `npm ls @real-a11y-dev/testing` — the addon should not have brought it in
 
 ## Expected
 
@@ -42,6 +43,9 @@ Then install `@real-a11y-dev/storybook-addon@beta` as a dev dependency.
   Storybook's production builder
 - No console errors in either mode
 - The docs match the Storybook version people will actually be on
+- Step 9 prints `(empty)`, from the first release after `0.1.0-beta.17`: the addon has no
+  runtime dependency of its own. Up to `0.1.0-beta.17` it listed `@real-a11y-dev/testing`,
+  which it never imported, so there `npm ls` shows it — that is the old behaviour, not a fail
 
 ## Why this exists
 

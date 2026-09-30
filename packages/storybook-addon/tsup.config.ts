@@ -50,9 +50,9 @@ export default defineConfig([
 
   // ── Preview (runs inside the story iframe) ─────────────────────────────────
   // Bundles @real-a11y-dev/core so the iframe doesn't need it as a separate
-  // script tag. The preview extracts and diffs the tree with core alone; it
-  // never imports `@real-a11y-dev/testing`, which is why the addon doesn't
-  // depend on it.
+  // script tag. The preview extracts, observes and acts on the tree with core
+  // alone; it never imports `@real-a11y-dev/testing`, which is why the addon
+  // doesn't depend on it.
   {
     entry: { preview: "src/preview.ts" },
     format: ["esm", "cjs"],
