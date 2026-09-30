@@ -165,7 +165,7 @@ function axFacets(
     const v = p.value?.value;
     if (v === undefined || v === null || typeof v === "object") continue;
     if (STATE_PROPS.has(p.name)) {
-      states[p.name] = nativeAXStateValue(v, p.value?.type);
+      states[p.name] = nativeAXStateValue(p.value!);
     } else if (DETAIL_PROPS.has(p.name)) {
       properties[p.name] = String(v);
     }

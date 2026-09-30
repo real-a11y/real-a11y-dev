@@ -89,23 +89,33 @@ describe("native AX vocabulary", () => {
 
 describe("nativeAXStateValue", () => {
   it("reads a boolean-typed number as a boolean — Chromium sends busy as 1", () => {
-    expect(nativeAXStateValue(1, "boolean")).toBe(true);
-    expect(nativeAXStateValue(0, "boolean")).toBe(false);
-    expect(nativeAXStateValue(1, "booleanOrUndefined")).toBe(true);
+    expect(nativeAXStateValue({ type: "boolean", value: 1 })).toBe(true);
+    expect(nativeAXStateValue({ type: "boolean", value: 0 })).toBe(false);
+    expect(nativeAXStateValue({ type: "booleanOrUndefined", value: 1 })).toBe(
+      true,
+    );
   });
 
   it("keeps a JSON boolean, and reads the tristates' true/false strings", () => {
-    expect(nativeAXStateValue(true, "booleanOrUndefined")).toBe(true);
-    expect(nativeAXStateValue(false, "boolean")).toBe(false);
-    expect(nativeAXStateValue("true", "tristate")).toBe(true);
-    expect(nativeAXStateValue("false", "tristate")).toBe(false);
+    expect(
+      nativeAXStateValue({ type: "booleanOrUndefined", value: true }),
+    ).toBe(true);
+    expect(nativeAXStateValue({ type: "boolean", value: false })).toBe(false);
+    expect(nativeAXStateValue({ type: "tristate", value: "true" })).toBe(true);
+    expect(nativeAXStateValue({ type: "tristate", value: "false" })).toBe(
+      false,
+    );
   });
 
   it("leaves mixed, tokens, and a number of any other type as strings", () => {
-    expect(nativeAXStateValue("mixed", "tristate")).toBe("mixed");
-    expect(nativeAXStateValue("grammar", "token")).toBe("grammar");
-    expect(nativeAXStateValue(1, "integer")).toBe("1");
-    expect(nativeAXStateValue(1)).toBe("1");
+    expect(nativeAXStateValue({ type: "tristate", value: "mixed" })).toBe(
+      "mixed",
+    );
+    expect(nativeAXStateValue({ type: "token", value: "grammar" })).toBe(
+      "grammar",
+    );
+    expect(nativeAXStateValue({ type: "integer", value: 1 })).toBe("1");
+    expect(nativeAXStateValue({ value: 1 })).toBe("1");
   });
 });
 

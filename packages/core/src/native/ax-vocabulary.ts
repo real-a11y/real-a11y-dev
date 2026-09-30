@@ -243,8 +243,9 @@ export const NATIVE_AX_AUTHOR_NAMED_ROLES: ReadonlySet<string> = new Set([
 /**
  * Decode one CDP `AXValue` of a state property (`busy`, `pressed`,
  * `expanded`, …) into what `a11y.states` holds, so a native state reads the
- * way the DOM producer writes the same one. `type` is the value's CDP
- * `AXValueType`.
+ * way the DOM producer writes the same one. It takes the whole `AXValue`
+ * because the decoding depends on its `type` (the CDP `AXValueType`), not only
+ * on its JSON `value`.
  *
  * Chromium's wire encoding is not uniform. Most boolean states arrive as JSON
  * booleans, but `busy` arrives as a NUMBER under a boolean type —
@@ -263,10 +264,11 @@ export const NATIVE_AX_AUTHOR_NAMED_ROLES: ReadonlySet<string> = new Set([
  * producer, the extension's debugger mode). All three are internal packages;
  * no published surface re-exports it.
  */
-export function nativeAXStateValue(
-  value: unknown,
-  type?: string,
-): boolean | string {
+export function nativeAXStateValue(axValue: {
+  type?: string;
+  value?: unknown;
+}): boolean | string {
+  const { type, value } = axValue;
   if (typeof value === "boolean") return value;
   if (
     typeof value === "number" &&
