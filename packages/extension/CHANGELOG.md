@@ -22,6 +22,10 @@
 
 ## Unreleased
 
+## 0.1.14
+
+### Patch Changes
+
 - In DOM mode, the body of a closed `<details>` no longer shows in the tree,
   the Tab Sequence view, its copied export or the keyboard bar's Tab. Chromium
   renders a closed disclosure as its summary alone and never tabs into the
