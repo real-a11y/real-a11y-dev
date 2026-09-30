@@ -11,7 +11,11 @@
   dogfood build (`pnpm build:dogfood`, everything behind the `__DOGFOOD__`
   constant) get NO entry: that code is dead-code-eliminated from the store
   bundle, so an entry here would describe a feature nobody on the listing
-  can reach. Those changes are tracked by their PRs and `DOGFOOD.md`.
+  can reach. Those changes are tracked by their PRs and `DOGFOOD.md` — while
+  native mode is dogfood-only, a change to what NATIVE mode shows goes in its
+  "Native-mode changes not yet in the store" list, even when core's shared
+  code made it. Once native mode ships in the store build, its changes come
+  back here.
   Anything that changes the shipped bundle does need an entry, even if it
   also touches dogfood code.
 -->
@@ -29,6 +33,10 @@
   leaves the tree and the names around it, as `aria-hidden="true"` content
   always did. An `<optgroup>` never shows as disabled, as in Chromium.
   ([#436](https://github.com/real-a11y/real-a11y-dev/pull/436))
+
+## 0.1.14
+
+### Patch Changes
 
 - In DOM mode, the body of a closed `<details>` no longer shows in the tree,
   the Tab Sequence view, its copied export or the keyboard bar's Tab. Chromium
@@ -84,13 +92,7 @@
   reads `[redacted]` in both views; the A11y view used to show it as a row of
   bullets. A `<textarea>` no longer shows the text it was loaded with beside
   its value; for a one-time-code field, that text was the code itself. The
-  copied Markdown report still leaves values out. In NATIVE mode,
-  a `<select>` shows its option label instead of its `value`, a custom slider
-  shows its `aria-valuetext`, and a rich-text editor shows its text. Its edit
-  box opens empty, as a password field's does: submitting it untouched leaves
-  the editor alone, and submitting it after erasing what you typed empties
-  the editor, including an editor that keeps its own document model and
-  would have ignored a plain empty write.
+  copied Markdown report still leaves values out.
   (ADR-0001) ([#431](https://github.com/real-a11y/real-a11y-dev/pull/431))
 
 - In DOM mode, the Tab Sequence view, its copied export and the keyboard bar's
@@ -112,39 +114,13 @@
   the Images filter left it out.
   ([#419](https://github.com/real-a11y/real-a11y-dev/pull/419))
 
-- In NATIVE mode, an indeterminate progress bar and a static separator no
-  longer show their text as their name. `<div role="progressbar">Loading
-  files</div>` read `progressbar "Loading files"` and `<div
-  role="separator">Or</div>` read `separator "Or"`; both now read bare, as
-  Chromium names them. One labelled with `aria-label` keeps its label.
-  ([#424](https://github.com/real-a11y/real-a11y-dev/pull/424))
-
-- In NATIVE mode, a rich-text editor no longer shows what was typed into it as
-  its name. A `<div role="application" contenteditable>` read
-  `application "<everything typed>"`, and so did a `role="document"` or
-  `role="log"` editor and a contenteditable `<p>`. Each now reads bare, as
-  Chromium names it; an editor labelled with `aria-label` keeps its label. A
-  list item or note around a plain `<div contenteditable>` no longer takes
-  its typed text as its name either, and a `role="progressbar"` no longer
-  shows its fallback text as its name.
-  ([#418](https://github.com/real-a11y/real-a11y-dev/pull/418))
-
 - In DOM mode, a contenteditable editor with no role (a ProseMirror-style
   composer) no longer shows what was typed into it as its name. It read
   `generic "draft text"` and now reads a bare `generic` that stays in the tree
   as a field, as Chromium leaves it unnamed. With a diff baseline captured, a
   field you type into is now marked **changed**, because the tree now records
-  each field's value (ADR-0001). The panel's value display is unchanged until
-  the A11y view learns the announced value.
+  each field's value (ADR-0001).
   ([#417](https://github.com/real-a11y/real-a11y-dev/pull/417))
-
-- In NATIVE mode, an image, dialog, landmark or form field that has no label
-  no longer shows its text as its name. `<span role="img">🎉</span>` read
-  `img "🎉"` and now reads a bare `img`, as Chromium names it. The same goes for
-  a text-only dialog or `<footer>`. An unlabeled text field no longer shows what
-  was typed into it as its name either; its value still shows as its value,
-  with sensitive fields masked as before.
-  ([#414](https://github.com/real-a11y/real-a11y-dev/pull/414))
 
 - A dialog, image, landmark or text field no longer shows its loose text as
   its name in DOM mode. `<div role="dialog">Delete this project?
