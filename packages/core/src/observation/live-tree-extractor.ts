@@ -1,6 +1,7 @@
 import { buildA11yTree } from "../extraction/a11y-extractor.js";
 import {
   containsOverlaySignal,
+  controlExpanded,
   extractDomTree,
   getDescendantText,
   fieldValueOwner,
@@ -70,6 +71,9 @@ const SCOPE_ATTRS = new Set([
   "hidden",
   "inert",
   "aria-hidden",
+  // Hides the element until it shows as a popover, and shows it again when
+  // removed from a closed one.
+  "popover",
 ]);
 
 // The rule itself lives in `containsOverlaySignal` (extraction/dom-extractor),
@@ -168,6 +172,14 @@ export class LiveTreeExtractor {
 
     if (change.dirtyRoots) {
       for (const el of change.dirtyRoots) {
+        // A popover that showed or hid, from its `toggle` event. That can move
+        // the scope, like a menu showing outside the root, and one outside the
+        // tree has nothing of its own to re-extract: only its invokers, which
+        // addMovedInvokers finds.
+        if (el.hasAttribute("popover")) {
+          scopeSuspect = true;
+          if (!(this.effectiveRoot ?? this.root).contains(el)) continue;
+        }
         dirty.add(el);
       }
     }
@@ -234,6 +246,7 @@ export class LiveTreeExtractor {
         if (owner && owner !== el) dirty.add(owner);
       }
       this.addMovedNativeStates(dirty);
+      this.addMovedInvokers(dirty);
     }
 
     // At most ONE resolveEffectiveRoot() per refresh regardless of batch size:
@@ -365,6 +378,27 @@ export class LiveTreeExtractor {
           break;
         }
       }
+    }
+  }
+
+  /**
+   * Add every recorded control naming a popover, or something else it may
+   * invoke, whose expanded state no longer matches its node. A popover shows
+   * and hides with no attribute or event on the controls that invoke it, and
+   * one can stop invoking with no mutation of its own: its target removed, or
+   * no longer a popover. It reads a few attributes per such control, far
+   * cheaper than re-extracting them all.
+   */
+  private addMovedInvokers(dirty: Set<Element>): void {
+    const refs = getElementRefs();
+    for (const [id, node] of this.domNodes) {
+      const tag = node.dom?.tagName;
+      if (tag !== "button" && tag !== "input") continue;
+      const el = refs.get(id);
+      if (!el?.hasAttribute("popovertarget") && !el?.hasAttribute("commandfor"))
+        continue;
+      if (controlExpanded(el, node.a11y.role) !== node.a11y.states["expanded"])
+        dirty.add(el);
     }
   }
 

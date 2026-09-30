@@ -22,6 +22,16 @@
 
 ## Unreleased
 
+- In DOM mode, a button that opens a popover (`popovertarget`, or
+  `commandfor` with a popover `command`) now shows `expanded` while the
+  popover shows and `collapsed` otherwise, as it does in NATIVE mode,
+  whatever its `aria-expanded` says. It showed the attribute's badge, or none
+  without one. Opening or closing a popover now also updates the tree: it
+  changes no attribute, so the invoker kept its old badge, and the popover's
+  content neither appeared nor left, until something else on the page
+  changed.
+  ([#PR](https://github.com/real-a11y/real-a11y-dev/pull/PR))
+
 - In DOM mode, a native checkbox, radio, `<select>` or `<summary>` now takes
   its state from what it is, as it does in NATIVE mode, not from an ARIA
   attribute on it. An unchecked `<input type="checkbox" aria-checked="true">`

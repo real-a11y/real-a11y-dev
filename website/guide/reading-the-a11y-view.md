@@ -90,6 +90,8 @@ An `<img>` without an `alt` attribute, or with `alt=""` when the image conveys m
 
 An accordion `<button>` with `aria-expanded` is good. An `aria-expanded` that never changes when the accordion opens is a bug — the A11y tree will say "collapsed" while the panel is visually open. The A11y view will catch this: look at the state and ask whether it matches what you see on screen.
 
+A button that opens a popover with `popovertarget` (or `commandfor` and a popover `command`) needs no `aria-expanded` at all: the browser reports it expanded while the popover shows and collapsed otherwise, and ignores an `aria-expanded` that says something else. The A11y view shows the browser's answer.
+
 ### Elements that should be in the tree but aren't
 
 If a custom widget isn't showing up with the right role — or isn't showing up at all — it may be `aria-hidden`, visually hidden but also hidden from AT, or built with markup that doesn't carry semantic meaning. The A11y view makes absences visible.
