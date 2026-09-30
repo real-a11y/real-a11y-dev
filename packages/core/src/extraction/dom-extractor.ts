@@ -1869,13 +1869,19 @@ const SUMMARY_EXPANDED_ROLES = new Set([
 
 /**
  * The roles Chromium 151 gives an expanded state, measured on a `<button>`
- * across every ARIA role and in context. Any other role has none in its tree,
- * whatever sets one.
+ * across every ARIA role and in context. Chromium 153 agrees, and so does a
+ * `<div>` in each role. Any other role has none in their tree, whatever sets
+ * one: `aria-expanded`, a popover, or a `<details>`' `open`.
  *
  * {@link SUMMARY_EXPANDED_ROLES} also has `form`, `option` and `region`. A
  * button in one of those reports the state only out of context, where Chromium
  * makes it a plain button: an option outside a list box, a region or form with
  * no name. In context it has none.
+ *
+ * Keyed on the role this engine computes. Where that differs from Chromium's,
+ * the state follows the role it disagrees on: a `<td>` in a grid is a `cell`
+ * here and a `gridcell` there, yet Chromium gives it no expanded state either
+ * — only an authored `role="gridcell"` gets one.
  */
 const EXPANDABLE_ROLES = new Set([
   "application",
@@ -2120,6 +2126,7 @@ function getAriaStates(
     // Chromium never marks an optgroup disabled, whatever its role. Its
     // options still inherit the state from it, below.
     if (attr === "aria-disabled" && tag === "optgroup") continue;
+    if (attr === "aria-expanded" && !EXPANDABLE_ROLES.has(role)) continue;
     const value = ariaStateValue(element, attr, role);
     if (value !== null) states[state] = value;
   }
@@ -2148,10 +2155,6 @@ function getAriaStates(
     inheritsDisabled(element)
   ) {
     states["disabled"] = true;
-  }
-
-  if (tag === "details") {
-    states["expanded"] = (element as HTMLDetailsElement).open;
   }
 
   return states;

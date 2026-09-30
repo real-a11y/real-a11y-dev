@@ -22,6 +22,15 @@
 
 ## Unreleased
 
+- In DOM mode, the `expanded` and `collapsed` badges now show only where
+  NATIVE mode shows them: on a button, link, tab, combobox, checkbox, switch,
+  menu item, tree item, row, grid cell, column or row header, list item or
+  application. A list box, radio, heading, text field or plain `<div>` with
+  `aria-expanded` showed a badge Chromium never reports, and a `<details>`
+  showed one from whether it was open. Now a `<details>`' summary alone shows
+  it, as in NATIVE mode.
+  ([#PR](https://github.com/real-a11y/real-a11y-dev/pull/PR))
+
 - In DOM mode, a button that opens a popover (`popovertarget`, or
   `commandfor` with a popover `command`) now shows `expanded` while the
   popover shows and `collapsed` otherwise, as it does in NATIVE mode,
