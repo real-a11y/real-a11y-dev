@@ -621,9 +621,16 @@ test("Escape on the inspected page itself also cancels an armed native pick", as
   await page.bringToFront();
   // No click here — clicking anything while inspect mode is armed IS a pick.
   // Escape alone is what this test is pinning.
-  await page.keyboard.press("Escape");
-
-  await expect(pickButton).toHaveAttribute("aria-pressed", "false");
+  //
+  // The panel flips the button on before the service worker has attached and
+  // turned inspect mode on, so an Escape that lands first reaches a page with
+  // nothing armed and is lost. Press again until one lands after arming.
+  await expect(async () => {
+    await page.keyboard.press("Escape");
+    await expect(pickButton).toHaveAttribute("aria-pressed", "false", {
+      timeout: 1_000,
+    });
+  }).toPass({ timeout: 10_000 });
   await expect(nav.panel.locator("[aria-selected='true']")).toHaveCount(0);
 
   // The tab's per-operation queue isn't stuck behind the (now-resolved)
