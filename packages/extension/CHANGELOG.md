@@ -22,6 +22,14 @@
 
 ## Unreleased
 
+- In DOM mode, focusing a field inside a `<form>` with a control named
+  `nodeType`, such as `<input type="hidden" name="nodeType">`, now highlights
+  the nearest node above it in the tree, and so does hovering or clicking
+  inside one in pick mode. Both highlighted nothing. A form lets a control
+  shadow its own properties, so the form's `nodeType` read as that control
+  rather than an element's, and the walk up from the field stopped below the
+  form.
+
 - In DOM mode, an `<input>` whose `list` names a `<datalist>` now shows as a
   `combobox` in the tree and the Tab Sequence view, as Chromium's own
   accessibility tree reports it. DOM mode showed a `textbox` (or a
