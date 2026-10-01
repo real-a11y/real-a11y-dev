@@ -225,6 +225,24 @@ describe("screen-reader-only content", () => {
     ).toEqual(["Behind a modal", "Shown"]);
   });
 
+  // Chromium 151 hides for any aria-hidden value but `false`, empty or
+  // `undefined`, in any case, and so its descendants too.
+  it("reads an aria-hidden ancestor's value the way Chromium does", () => {
+    using page = attached(`
+      <div aria-hidden="TRUE"><h2>Upper</h2></div>
+      <div aria-hidden="yes"><h2>Other value</h2></div>
+      <div aria-hidden="FALSE"><h2>False</h2></div>
+      <div aria-hidden=""><h2>Empty</h2></div>
+    `);
+    expect(findAllByRole(page.tree, "heading").map((n) => n.a11y.name)).toEqual(
+      ["False", "Empty"],
+    );
+    expect(getOutline(page.tree).map((e) => e.name)).toEqual([
+      "False",
+      "Empty",
+    ]);
+  });
+
   it("still leaves out visibility:hidden and aria-hidden headings", () => {
     using page = attached(`
       <h2 style="visibility:hidden">Invisible</h2>

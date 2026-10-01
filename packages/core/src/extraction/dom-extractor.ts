@@ -3,7 +3,13 @@ import { ElementRefMap, ELEMENT_REF_MAP_SHAPE } from "../utils/element-ref.js";
 import { getNodeId } from "../utils/id-generator.js";
 import { realmSingleton } from "../utils/realm-singleton.js";
 
-import { safeTextContent } from "./clobber-safe.js";
+import {
+  ariaBoolean,
+  ariaCurrent,
+  ariaTristate,
+  isAriaHiddenValue,
+} from "./aria-tokens.js";
+import { safeParentElement, safeTextContent } from "./clobber-safe.js";
 import { isEditable, isEditingHost } from "./editing.js";
 import {
   deepQuerySelectorAll,
@@ -801,7 +807,7 @@ function getAccessibleTextContent(
       text += child.textContent || "";
     } else if (child.nodeType === Node.ELEMENT_NODE) {
       const childEl = child as Element;
-      if (childEl.getAttribute("aria-hidden") === "true") continue;
+      if (isAriaHiddenValue(childEl.getAttribute("aria-hidden"))) continue;
       if (
         isSubtreeHidden(childEl, getCachedComputedStyle(childEl, styleCache))
       ) {
@@ -929,7 +935,7 @@ function computeRawAccessibleName(
           if (childEl === element) continue;
           const childTag = childEl.tagName.toLowerCase();
           if (FORM_CONTROL_TAGS.has(childTag)) continue;
-          if (childEl.getAttribute("aria-hidden") === "true") continue;
+          if (isAriaHiddenValue(childEl.getAttribute("aria-hidden"))) continue;
           if (
             isSubtreeHidden(
               childEl,
@@ -972,7 +978,7 @@ function computeRawAccessibleName(
     const caption = (element as HTMLTableElement).caption;
     if (caption) {
       const hidden =
-        caption.getAttribute("aria-hidden") === "true" ||
+        isAriaHiddenValue(caption.getAttribute("aria-hidden")) ||
         isSubtreeHidden(caption, getCachedComputedStyle(caption, styleCache));
       if (!hidden) {
         const t = getAccessibleTextContent(caption, visited, styleCache).trim();
@@ -1272,7 +1278,7 @@ function getFieldText(element: Element, styleCache?: StyleCache): string {
     const rawTag = el.tagName;
     const tag = typeof rawTag === "string" ? rawTag.toLowerCase() : "";
     if (MEDIA_TAGS.has(tag) || CONTROL_TEXT_TAGS.has(tag)) return false;
-    if (el.getAttribute("aria-hidden") === "true") return false;
+    if (isAriaHiddenValue(el.getAttribute("aria-hidden"))) return false;
     const role = getExplicitRole(el);
     if (role && POPUP_ROLES.has(role)) return false;
     const style = getCachedComputedStyle(el, styleCache);
@@ -1712,17 +1718,33 @@ function isDisabledOption(option: Element): boolean {
 
 /**
  * `aria-disabled` as Chromium reads it: `null` when absent, empty or
- * `undefined`, which leaves the element to inherit; `false` for `false`; and
- * `true` for any other value, `yes` and `" false"` included. Case is ignored.
- *
- * The state loop in `getAriaStates` still copies an element's own value
- * literally, so its `"TRUE"` stays a string. This decides only what it passes
- * down, and whether it inherits.
+ * `undefined`, which leaves the element to inherit. See `ariaBoolean`.
  */
 function explicitAriaDisabled(element: Element): boolean | null {
-  const value = element.getAttribute("aria-disabled")?.toLowerCase();
-  if (value === undefined || value === "" || value === "undefined") return null;
-  return value !== "false";
+  return ariaBoolean(element.getAttribute("aria-disabled"));
+}
+
+/**
+ * One ARIA state attribute's value as Chromium reads it, or `null` when that
+ * leaves the state unset. `role` is the element's computed role, which
+ * decides whether `aria-checked` can be mixed.
+ */
+function ariaStateValue(
+  element: Element,
+  attr: string,
+  role: string,
+): boolean | string | null {
+  const value = element.getAttribute(attr);
+  switch (attr) {
+    case "aria-checked":
+      return ariaTristate(value, role);
+    case "aria-pressed":
+      return ariaTristate(value);
+    case "aria-current":
+      return ariaCurrent(value);
+    default:
+      return ariaBoolean(value);
+  }
 }
 
 /**
@@ -1772,22 +1794,24 @@ function takesInheritedDisabled(
 }
 
 /**
- * Get ARIA states from an element. `focusable` is its `isFocusable()` answer,
- * which the caller already has.
+ * Get ARIA states from an element. `role` is its computed role, and
+ * `focusable` its `isFocusable()` answer, both of which the caller already
+ * has.
  */
 function getAriaStates(
   element: Element,
+  role: string,
   focusable: boolean,
 ): Record<string, string | boolean> {
   const states: Record<string, string | boolean> = {};
   const tag = element.tagName.toLowerCase();
 
   for (const attr of ARIA_STATE_ATTRIBUTES) {
-    const val = element.getAttribute(attr);
-    if (val !== null) {
-      const key = attr.replace("aria-", "");
-      states[key] = val === "true" ? true : val === "false" ? false : val;
-    }
+    // Chromium never marks an optgroup disabled, whatever its role. Its
+    // options still inherit the state from it, below.
+    if (attr === "aria-disabled" && tag === "optgroup") continue;
+    const value = ariaStateValue(element, attr, role);
+    if (value !== null) states[attr.slice("aria-".length)] = value;
   }
 
   // Native HTML states
@@ -2034,10 +2058,24 @@ function findPortalOverlay(doc: Document, root: Element): Element | null {
     // to widen: a closed drawer left mounted as `aria-hidden` (and translated
     // off-screen, so the CSS check passes) turned every component root on the
     // page into a whole-page snapshot.
-    if (el.closest('[aria-hidden="true"], [inert]')) continue;
+    if (isInertOrAriaHidden(el)) continue;
     if (isActuallyVisible(el) && hasOverlayContent(el)) return body;
   }
   return null;
+}
+
+/**
+ * True when `element` or an ancestor is `inert`, or is `aria-hidden` with a
+ * value Chromium hides for. Not `closest('[aria-hidden="true"]')`, which
+ * matches one spelling of it, and not `closest('[aria-hidden]')`, which stops
+ * at an `aria-hidden="false"` below the ancestor that hides.
+ */
+function isInertOrAriaHidden(element: Element): boolean {
+  for (let el: Element | null = element; el; el = safeParentElement(el)) {
+    if (el.hasAttribute("inert")) return true;
+    if (isAriaHiddenValue(el.getAttribute("aria-hidden"))) return true;
+  }
+  return false;
 }
 
 /**
@@ -2335,7 +2373,7 @@ function buildNode(
         name: computeAccessibleName(element, new Set(), styleCache),
         description: computeAccessibleDescription(element, styleCache),
         ...(value !== undefined ? { value } : {}),
-        states: getAriaStates(element, focusable),
+        states: getAriaStates(element, role, focusable),
         properties: {
           ...(getHeadingLevel(element) !== null
             ? { level: String(getHeadingLevel(element)) }
