@@ -227,10 +227,11 @@ describe("an input whose list names a <datalist>", () => {
   });
 });
 
-// Only a drop-down has a picker for `expanded` to describe. On a list box, the
-// combobox role is the author's and reads aria-expanded like any other. The
-// DOM tree's states don't cross `session.call()`, so one page of our own
-// feeds both producers.
+// Only a drop-down has a picker for `expanded` to describe: collapsed while it
+// is closed and expanded while it is open, whatever aria-expanded says. On a
+// list box, the combobox role is the author's and reads aria-expanded like any
+// other. The DOM tree's states don't cross `session.call()`, so one page of
+// our own feeds both producers.
 describe("a combobox <select>'s expanded state follows its picker", () => {
   it("agrees in both producers", async () => {
     const listBox = { absent: undefined, true: true, false: false };
@@ -264,17 +265,33 @@ describe("a combobox <select>'s expanded state follows its picker", () => {
       const page = await browser.newPage();
       await page.setContent(`<main>${selects}</main>`);
       await page.addScriptTag({ content: pageBundleSource() });
-      const dom = await page.evaluate(() => {
-        const ra = (globalThis as Record<string, unknown>).__realA11y__ as {
-          extractA11yTree(root: Element): ExtractionResult;
-        };
-        return [...ra.extractA11yTree(document.body).nodes.values()];
-      });
-      const native = await nativeTree(page);
+      const bothReport = async (expected: typeof want) => {
+        const dom = await page.evaluate(() => {
+          const ra = (globalThis as Record<string, unknown>).__realA11y__ as {
+            extractA11yTree(root: Element): ExtractionResult;
+          };
+          return [...ra.extractA11yTree(document.body).nodes.values()];
+        });
+        const native = await nativeTree(page);
+        // Strict, so a select missing from a tree can't pass as "unset".
+        expect(expandedByName(native.nodes.values())).toStrictEqual(expected);
+        expect(expandedByName(dom)).toStrictEqual(expected);
+      };
 
-      // Strict, so a select missing from a tree can't pass as "unset".
-      expect(expandedByName(native.nodes.values())).toStrictEqual(want);
-      expect(expandedByName(dom)).toStrictEqual(want);
+      // Every picker closed.
+      await bothReport(want);
+
+      // A click opens a drop-down's picker, which expands it even against
+      // aria-expanded="false". A list box has no picker, so it stays as it was.
+      for (const [attrs, states] of shapes) {
+        const name = `${attrs}, aria-expanded false`;
+        await page.click(`select[aria-label="${name}"]`);
+        await bothReport({
+          ...want,
+          [name]: states === dropDown || want[name],
+        });
+        await page.keyboard.press("Escape");
+      }
     } finally {
       await browser.close();
     }
