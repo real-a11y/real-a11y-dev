@@ -40,6 +40,7 @@ const EXTRA_OBSERVED_ATTRIBUTES = [
   "aria-live",
   "aria-modal",
   "scope", // <th scope> selects the columnheader/rowheader role (role-map)
+  "list", // <input list> naming a <datalist> makes it a combobox (role-map)
   "autocomplete", // names credential/payment fields, whose value gets redacted
   // Inputs to a field's announced value (ADR-0001) that nothing else watches:
   // a range widget's spoken text, an <option>'s label (its <select>'s value),

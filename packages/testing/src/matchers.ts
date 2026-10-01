@@ -26,7 +26,11 @@ import {
   A11yAssertionError,
 } from "@real-a11y-dev/audit";
 import type { ExtractionResult } from "@real-a11y-dev/core";
-import { getTabSequence } from "@real-a11y-dev/core";
+import {
+  getElementRefs,
+  getTabSequence,
+  isDatalistCombobox,
+} from "@real-a11y-dev/core";
 import {
   extract,
   foldTypography,
@@ -173,11 +177,22 @@ function toHaveTabSequence(
  * `aria-controls` on a `<select>` is here for the opposite reason: the UA owns
  * the popup and exposes no controls relationship, so there is nothing for an
  * author to write.
+ *
+ * An `<input>` whose `list` names a `<datalist>` is a combobox with the same
+ * kind of popup: the browser draws the suggestions, and Chromium 151 and 153
+ * expose no expanded state or controls relationship for it. The page gets no
+ * event when that popup opens, so an authored `aria-expanded` could only go
+ * stale, and Chromium would expose that stale value as the combobox's state.
+ * Whether the list names a datalist is a question about the live DOM, hence
+ * the element rather than its recorded attributes.
  */
 function uaSuppliedAttrs(
   tag: string | undefined,
   type: string | undefined,
+  element: Element | undefined,
 ): readonly string[] {
+  if (tag === "input" && element && isDatalistCombobox(element))
+    return ["aria-expanded", "aria-controls"];
   if (tag === "input" && (type === "checkbox" || type === "radio"))
     return ["aria-checked"];
   if (tag === "input" && type === "range") return ["aria-valuenow"];
@@ -255,7 +270,7 @@ function toValidatedNodes(tree: Tree): Map<string, ValidatedNode> {
       // still counts: `<select role="combobox"><option>` is a select.
       implicitRole:
         !authored || authored === implicitRoleFor(tag, type, domAttrs),
-      uaSuppliedAttrs: uaSuppliedAttrs(tag, type),
+      uaSuppliedAttrs: uaSuppliedAttrs(tag, type, getElementRefs().get(id)),
     });
   }
   return out;

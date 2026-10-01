@@ -451,10 +451,10 @@ export class LiveTreeExtractor {
 
     const effectiveRoot = this.effectiveRoot ?? this.root;
 
-    // One deep scan serves both passes (see extractDomTree).
+    // One deep scan serves every pass (see extractDomTree).
     const referrers = deepQuerySelectorAll(
       effectiveRoot,
-      "[aria-labelledby], [aria-describedby]",
+      "[aria-labelledby], [aria-describedby], input[list]",
     );
     for (const el of referrers) {
       const ids = (el.getAttribute("aria-labelledby") || "")
@@ -476,6 +476,13 @@ export class LiveTreeExtractor {
         this.descriptionTargetIds.add(id);
         this.addReferrer(id, el);
       }
+    }
+
+    // An input's role follows the <datalist> its `list` names (role-map), so
+    // that datalist appearing or going away has to re-extract the input.
+    for (const el of referrers) {
+      const id = el.matches("input") ? el.getAttribute("list") : null;
+      if (id) this.addReferrer(id, el);
     }
   }
 

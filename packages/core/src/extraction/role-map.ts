@@ -196,6 +196,53 @@ const INPUT_TYPE_ROLE_MAP: Record<string, string> = {
   url: "textbox",
 };
 
+/**
+ * The `<input>` types a `<datalist>` makes a combobox in Chromium's tree, as
+ * measured in Chromium 151 and 153. HTML-AAM names the text types; Chromium
+ * does the same for a number and the date and time types. A range or color
+ * input uses its suggestions inside its own widget and keeps its role, and
+ * `list` doesn't apply to the other types at all.
+ */
+const DATALIST_COMBOBOX_INPUT_TYPES: ReadonlySet<string> = new Set([
+  "text",
+  "search",
+  "email",
+  "tel",
+  "url",
+  "number",
+  "date",
+  "datetime-local",
+  "month",
+  "week",
+  "time",
+]);
+
+/**
+ * True when an `<input>` is a combobox because its `list` names a
+ * `<datalist>`: typing offers the datalist's suggestions in a popup the
+ * browser draws.
+ *
+ * Resolved through the `list` property, which is HTML's own lookup: the first
+ * element with that id in the input's tree, and only if it is a `<datalist>`.
+ * So a `list` naming a missing id, another element, or a datalist across a
+ * shadow boundary leaves the input as it was, as in Chromium. The datalist's
+ * contents don't matter: an empty or hidden one still counts.
+ *
+ * Exported for the testing matcher, which needs to know the popup is the
+ * browser's: an author has no `aria-expanded` or `aria-controls` to write.
+ */
+export function isDatalistCombobox(element: Element): boolean {
+  const input = element as HTMLInputElement;
+  if (!DATALIST_COMBOBOX_INPUT_TYPES.has(input.type)) return false;
+  try {
+    return input.list != null;
+  } catch {
+    // jsdom throws for an input outside any document or shadow root, where
+    // Chromium finds no datalist.
+    return false;
+  }
+}
+
 const ROLE_MAP: Record<string, RoleResolver> = {
   a: (el) => (el.hasAttribute("href") ? "link" : "generic"),
   abbr: "generic",
@@ -266,6 +313,7 @@ const ROLE_MAP: Record<string, RoleResolver> = {
       ? "presentation"
       : "img",
   input: (el) => {
+    if (isDatalistCombobox(el)) return "combobox";
     const type = (el as HTMLInputElement).type || "text";
     return INPUT_TYPE_ROLE_MAP[type] || "textbox";
   },
