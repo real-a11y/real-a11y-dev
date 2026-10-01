@@ -275,6 +275,13 @@ main
       strong "H2"
       code "<iframe>"
       strong "embedded"
+    listitem "A row with shows a chip that jumps to the row it controls (), and the controlled row shows one back (). A jump opens the rows above its target and leaves a scope the target is outside. A target that isn't in the tree, such as a hidden tab panel, gets no chip."
+      code "aria-controls"
+      code "→ tabpanel "Settings""
+      code "← tab "Settings""
+    listitem "A opens the same option picker as in DOM mode, listing its options and starting on the current one. Choosing one selects it on the page. A custom isn't a real select, so it is still clicked."
+      code "<select>"
+      code "role="combobox""
   heading "BETA pill in the panel header" (level 3)
   paragraph "Sets expectations during the pre-1.0 phase. Linked to the GitHub issues page. Goes away at v1.0."
   separator
