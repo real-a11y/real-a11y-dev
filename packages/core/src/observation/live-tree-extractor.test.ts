@@ -1862,4 +1862,143 @@ describe("LiveTreeExtractor", () => {
       expect(result.nodes).toEqual(clean.nodes);
     });
   });
+
+  // `<form>` has [LegacyOverrideBuiltIns], so `<input name="tagName">` makes
+  // `form.tagName` that input, and `.toLowerCase()` on it throws. The full
+  // walk skips such a form through its per-element boundary. A refresh has
+  // none, and every change inside or on the form climbs through it reading
+  // tags — so one throw stopped the live tree for good.
+  describe("a <form> whose control shadows tagName", () => {
+    /** Force the shadowing: jsdom doesn't override a form's own properties. */
+    function shadowTagName(form: Element): void {
+      const control = form.querySelector('[name="tagName"]')!;
+      Object.defineProperty(form, "tagName", {
+        configurable: true,
+        get: () => control,
+      });
+    }
+
+    beforeEach(() => {
+      // The full walk warns about the form it skips.
+      vi.spyOn(console, "warn").mockImplementation(() => {});
+    });
+
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    function page(control = `<input name="tagName" aria-label="Tag" />`) {
+      document.body.innerHTML = `
+        <main id="app">
+          <h1 id="title">Orders</h1>
+          <form aria-label="Search">
+            ${control}
+            <span id="hint">Old hint</span>
+          </form>
+        </main>
+      `;
+      return {
+        root: document.getElementById("app")!,
+        form: document.querySelector("form")!,
+        hint: document.getElementById("hint")!,
+        title: document.getElementById("title")!,
+      };
+    }
+
+    it("keeps updating when text inside the form changes", () => {
+      const { root, form, hint, title } = page();
+      shadowTagName(form);
+      const live = new LiveTreeExtractor(root, { mode: "a11y" });
+
+      // One batch, as the observer delivers it: the form's text, and the
+      // heading's beside it. Losing the batch loses the heading's change too.
+      const hintText = hint.firstChild!;
+      const titleText = title.firstChild!;
+      hintText.textContent = "New hint";
+      titleText.textContent = "Open orders";
+      const result = live.refresh({
+        mutations: [
+          { type: "characterData", target: hintText },
+          { type: "characterData", target: titleText },
+        ] as unknown as MutationRecord[],
+      });
+
+      expect(result.nodes).toEqual(extractA11yTree(root).nodes);
+      const names = [...result.nodes.values()].map((n) => n.a11y.name);
+      expect(names).toContain("Open orders");
+    });
+
+    it("keeps updating when an attribute inside the form changes", () => {
+      const { root, form, hint } = page();
+      shadowTagName(form);
+      const live = new LiveTreeExtractor(root, { mode: "a11y" });
+
+      hint.setAttribute("title", "More");
+      const result = live.refresh({
+        mutations: [
+          { type: "attributes", target: hint, attributeName: "title" },
+        ] as unknown as MutationRecord[],
+      });
+
+      expect(result.nodes).toEqual(extractA11yTree(root).nodes);
+    });
+
+    it("keeps updating when an attribute on the form itself changes", () => {
+      const { root, form } = page();
+      shadowTagName(form);
+      const live = new LiveTreeExtractor(root, { mode: "dom" });
+
+      form.setAttribute("class", "busy");
+      const result = live.refresh({
+        mutations: [
+          { type: "attributes", target: form, attributeName: "class" },
+        ] as unknown as MutationRecord[],
+      });
+
+      expect(result.nodes).toEqual(extractDomTree(root).nodes);
+    });
+
+    it("keeps updating when content inside the form is replaced", () => {
+      const { root, form, hint } = page();
+      shadowTagName(form);
+      const live = new LiveTreeExtractor(root, { mode: "a11y" });
+
+      // `textContent =` swaps the text node: a childList change, not text.
+      hint.textContent = "New hint";
+      const result = live.refresh({
+        mutations: [
+          { type: "childList", target: hint, addedNodes: [], removedNodes: [] },
+        ] as unknown as MutationRecord[],
+      });
+
+      expect(result.nodes).toEqual(extractA11yTree(root).nodes);
+    });
+
+    it("drops the form, as a fresh extraction does, when the control arrives later", () => {
+      const { root, form } = page("");
+      const live = new LiveTreeExtractor(root, { mode: "dom" });
+      const before = [...live.extract().nodes.values()].map((n) => n.a11y.name);
+      expect(before).toContain("Search");
+
+      const control = document.createElement("input");
+      control.name = "tagName";
+      form.prepend(control);
+      shadowTagName(form);
+      const result = live.refresh({
+        mutations: [
+          {
+            type: "childList",
+            target: form,
+            addedNodes: [control],
+            removedNodes: [],
+          },
+        ] as unknown as MutationRecord[],
+      });
+
+      expect(result.nodes).toEqual(extractDomTree(root).nodes);
+      const after = [...result.nodes.values()].map((n) => n.a11y.name);
+      expect(after).not.toContain("Search");
+      expect(after).toContain("Orders");
+    });
+  });
 });

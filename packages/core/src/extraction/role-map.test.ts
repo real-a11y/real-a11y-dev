@@ -555,6 +555,52 @@ describe("getImplicitRole", () => {
       "application",
     );
   });
+
+  // `<form>` has [LegacyOverrideBuiltIns]: `<input name="tagName">` makes
+  // `form.tagName` that input. A role read on the form, or one that climbs to
+  // it, must still answer rather than throw — the live extractor asks it of
+  // every ancestor of a change, with nothing to catch the throw.
+  describe("with a form whose control shadows tagName", () => {
+    function shadowedForm(): HTMLFormElement {
+      const form = document.createElement("form");
+      const control = document.createElement("input");
+      control.name = "tagName";
+      form.append(control);
+      Object.defineProperty(form, "tagName", {
+        configurable: true,
+        get: () => control,
+      });
+      return form;
+    }
+
+    it("resolves the form's own role", () => {
+      const form = shadowedForm();
+      expect(getImplicitRole(form)).toBe("form");
+      expect(isHiddenFromAT(form)).toBe(false);
+    });
+
+    // The parser never puts a <th> or a <tr> straight into a form; a script
+    // can, and the header algorithm reads the cell's row and the row's parent.
+    it("resolves a header cell whose row, or whose row's parent, is the form", () => {
+      const form = shadowedForm();
+      const looseCell = document.createElement("th");
+      form.append(looseCell);
+      expect(getImplicitRole(looseCell)).toBe("rowheader");
+
+      const row = document.createElement("tr");
+      const cell = document.createElement("th");
+      row.append(cell);
+      form.append(row);
+      expect(getImplicitRole(cell)).toBe("rowheader");
+    });
+
+    it("resolves a header inside the form as a banner", () => {
+      const form = shadowedForm();
+      const header = document.createElement("header");
+      form.append(header);
+      expect(getImplicitRole(header)).toBe("banner");
+    });
+  });
 });
 
 describe("isHiddenFromAT", () => {

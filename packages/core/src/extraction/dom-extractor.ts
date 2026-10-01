@@ -18,6 +18,7 @@ import {
   safeQuerySelector,
   safeQuerySelectorAll,
   safeRootNode,
+  safeTagName,
   safeTextContent,
 } from "./clobber-safe.js";
 import { isEditable, isEditingHost } from "./editing.js";
@@ -150,7 +151,7 @@ function getActions(
   element: Element,
   skipTabindexFallback = false,
 ): ActionType[] {
-  const tag = element.tagName.toLowerCase();
+  const tag = safeTagName(element);
   const actions: ActionType[] = [];
   const role = element.getAttribute("role");
 
@@ -330,7 +331,7 @@ function hasInteractiveContent(
   element: Element,
   styleCache: StyleCache,
 ): boolean {
-  const tag = element.tagName.toLowerCase();
+  const tag = safeTagName(element);
   // The walk skips these outright, so nothing inside one is ever emitted.
   if (SKIP_TAGS.has(tag)) return false;
 
@@ -702,7 +703,7 @@ export function isNameFromContentHost(element: Element): boolean {
   if (isEditingHost(element)) return false;
   const explicitRole = getExplicitRole(element);
   if (explicitRole && AUTHOR_NAMED_ROLES.has(explicitRole)) return false;
-  if (NAMES_FROM_CONTENT_TAGS.has(element.tagName.toLowerCase())) return true;
+  if (NAMES_FROM_CONTENT_TAGS.has(safeTagName(element))) return true;
   return !!explicitRole && NAMES_FROM_CONTENT_ROLES.has(explicitRole);
 }
 
@@ -723,11 +724,12 @@ const NAME_SOURCE_CHILD_TO_OWNER: Readonly<Record<string, string>> = {
 
 /** The element whose accessible name is computed from `element`, if any. */
 export function htmlAamNameOwner(element: Element): Element | null {
-  const ownerTag = NAME_SOURCE_CHILD_TO_OWNER[element.tagName.toLowerCase()];
+  const tag = safeTagName(element);
+  const ownerTag = NAME_SOURCE_CHILD_TO_OWNER[tag];
   if (!ownerTag) return null;
   const parent = element.parentElement;
-  if (!parent || parent.tagName.toLowerCase() !== ownerTag) return null;
-  if (element.tagName.toLowerCase() === "caption") {
+  if (!parent || safeTagName(parent) !== ownerTag) return null;
+  if (tag === "caption") {
     return (parent as HTMLTableElement).caption === element ? parent : null;
   }
   return parent;
@@ -780,8 +782,7 @@ const NAMED_WIDGET_ROLES = new Set<string>([
  */
 function isImplicitDetailsGroup(element: Element): boolean {
   return (
-    element.tagName.toLowerCase() === "details" &&
-    !element.getAttribute("role")?.trim()
+    safeTagName(element) === "details" && !element.getAttribute("role")?.trim()
   );
 }
 
@@ -846,8 +847,7 @@ function getAccessibleTextContent(
       const inner = getAccessibleTextContent(childEl, visited, styleCache);
       // A summary renders as its own block, so its text never runs into the
       // disclosure body beside it ("S Body", not "SBody") — Chromium spaces it.
-      text +=
-        childEl.tagName.toLowerCase() === "summary" ? ` ${inner} ` : inner;
+      text += safeTagName(childEl) === "summary" ? ` ${inner} ` : inner;
     }
   }
   return text;
@@ -906,7 +906,7 @@ function computeRawAccessibleName(
   const ariaLabel = element.getAttribute("aria-label");
   if (ariaLabel) return ariaLabel.trim();
 
-  const tag = element.tagName.toLowerCase();
+  const tag = safeTagName(element);
 
   // 3. alt attribute for images. An empty alt is an intentional "no name"
   //    and stops here — EXCEPT when a `title` is also present. HTML-AAM keeps
@@ -943,8 +943,7 @@ function computeRawAccessibleName(
         } else if (child.nodeType === Node.ELEMENT_NODE) {
           const childEl = child as Element;
           if (childEl === element) continue;
-          const childTag = childEl.tagName.toLowerCase();
-          if (FORM_CONTROL_TAGS.has(childTag)) continue;
+          if (FORM_CONTROL_TAGS.has(safeTagName(childEl))) continue;
           if (isAriaHiddenValue(childEl.getAttribute("aria-hidden"))) continue;
           if (
             isSubtreeHidden(
@@ -1495,7 +1494,7 @@ export function fieldValueOwner(el: Element): Element | null {
   // Clobber-safe: through a `<form>` whose control is named `parentElement`,
   // the plain read cycles between the form and that control forever.
   for (let node: Element | null = el; node; node = safeParentElement(node)) {
-    const tag = node.tagName.toLowerCase();
+    const tag = safeTagName(node);
     if (tag === "select" || isEditingHost(node)) {
       owner = node;
       continue;
@@ -1722,7 +1721,7 @@ const DISABLEABLE_TAGS = new Set(["button", "input", "select", "textarea"]);
  * reaches the controls it disables, and through them their content.
  */
 function isDisabledControl(element: Element): boolean {
-  const tag = element.tagName.toLowerCase();
+  const tag = safeTagName(element);
   if (tag === "option") return isDisabledOption(element);
   // Not `.disabled`, which misses a control disabled by its fieldset.
   return DISABLEABLE_TAGS.has(tag) && isActuallyDisabled(element);
@@ -1741,7 +1740,8 @@ function isDisabledOption(option: Element): boolean {
   if (option.hasAttribute("disabled")) return true;
   const parent = option.parentElement;
   return (
-    parent?.tagName.toLowerCase() === "optgroup" &&
+    !!parent &&
+    safeTagName(parent) === "optgroup" &&
     parent.hasAttribute("disabled")
   );
 }
@@ -2319,6 +2319,12 @@ export interface ExtractDomTreeOptions {
  * reads) defuse the plausible cases; this boundary is the catch-all for the
  * rest — including future unknown clobbering — degrading to "skip this node"
  * instead of losing the whole tree.
+ *
+ * It only ever charges the element it is building, so only that element's own
+ * tag is read plainly. A read that can land on another element — an ancestor a
+ * role or state climbs to, a descendant a name walk enters — goes through
+ * `safeTagName`; through a plain one, such a form would cost the element whose
+ * read it was.
  *
  * Nothing here mutates `nodes` / the element ref map; the caller commits the node
  * only on success, so a caught element never leaves a half-built node behind.

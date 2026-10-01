@@ -8,8 +8,12 @@ import { extractA11yTree } from "./a11y-extractor.js";
 import * as clobberSafe from "./clobber-safe.js";
 import {
   extractDomTree,
+  fieldValueOwner,
   getDescendantText,
   getElementRefs,
+  htmlAamNameOwner,
+  isNameBarrierElement,
+  isNameFromContentHost,
   isSensitiveField,
   isSensitiveFieldAttributes,
   SENSITIVE_AUTOCOMPLETE_TOKENS,
@@ -305,6 +309,125 @@ describe("DOM clobbering resilience", () => {
     expect(reachable.size).toBe(result.nodes.size);
 
     expect(warnSpy).toHaveBeenCalled();
+  });
+
+  // The boundary above is what a shadowed `tagName` costs the form itself.
+  // Nothing around the form should pay for it — yet these reads land on the
+  // form while ANOTHER element is being built, so a throw there was charged
+  // to that element: an ancestor whose name walk entered the form, or a
+  // descendant whose role or state climbed through it.
+  describe("around a form whose control shadows `tagName`", () => {
+    /** Force the shadowing: jsdom doesn't override a form's own properties. */
+    function shadowTagName(form: Element): void {
+      const control = form.querySelector('[name="tagName"]')!;
+      Object.defineProperty(form, "tagName", {
+        configurable: true,
+        get: () => control,
+      });
+    }
+
+    function shadowEveryForm(root: Element): void {
+      for (const form of root.querySelectorAll("form")) shadowTagName(form);
+    }
+
+    const TAG_FIELD = `<input name="tagName" aria-label="Tag name" />`;
+
+    beforeEach(() => {
+      // The walk warns about each form it skips.
+      vi.spyOn(console, "warn").mockImplementation(() => {});
+    });
+
+    it("keeps a host whose name walk passes through the form", () => {
+      const root = createPage(`
+        <main>
+          <h2>Orders <form>${TAG_FIELD}</form></h2>
+          <table>
+            <tr><th>Order</th><th>Actions</th></tr>
+            <tr><td>#1001</td><td>Ready <form>${TAG_FIELD}</form></td></tr>
+          </table>
+          <h3>Labels <form role="button">${TAG_FIELD}Edit</form></h3>
+          <label>Owner <form>${TAG_FIELD}</form><input /></label>
+        </main>
+      `);
+      shadowEveryForm(root);
+
+      const nodes = [...extractDomTree(root).nodes.values()];
+      const named = (role: string) =>
+        nodes.filter((n) => n.a11y.role === role).map((n) => n.a11y.name);
+      expect(named("heading")).toEqual(["Orders", "Labels Edit"]);
+      expect(named("cell")).toEqual(["#1001", "Ready"]);
+      expect(named("textbox")).toContain("Owner");
+    });
+
+    it("keeps the help text the form sits in, and the link beside it", () => {
+      const root = createPage(`
+        <main>
+          <input aria-label="Password" aria-describedby="help" />
+          <div id="help">
+            <form>${TAG_FIELD}</form>
+            <a href="/rules">Full rules</a>
+          </div>
+        </main>
+      `);
+      shadowEveryForm(root);
+
+      const names = [...extractDomTree(root).nodes.values()].map(
+        (n) => n.a11y.name,
+      );
+      expect(names).toContain("Full rules");
+    });
+
+    it("keeps what an extraction rooted inside the form holds", () => {
+      const root = createPage(`
+        <form>
+          ${TAG_FIELD}
+          <div id="scope">
+            <header>Filters</header>
+            <button>Apply</button>
+          </div>
+        </form>
+      `);
+      shadowEveryForm(root);
+
+      const nodes = [
+        ...extractDomTree(root.querySelector("#scope")!).nodes.values(),
+      ];
+      // A header outside any sectioning element is a banner; a button nothing
+      // disables is enabled.
+      expect(nodes.map((n) => n.a11y.role)).toContain("banner");
+      const apply = nodes.find((n) => n.a11y.name === "Apply")!;
+      expect(apply.a11y.states?.["disabled"]).toBeUndefined();
+    });
+
+    it("keeps an option whose parent is the form", () => {
+      const root = createPage(
+        `<form>${TAG_FIELD}<option>Small</option></form>`,
+      );
+      shadowEveryForm(root);
+
+      const result = extractDomTree(root.querySelector("option")!);
+      const option = result.nodes.get(result.rootId)!;
+      expect(option.a11y.role).toBe("option");
+      expect(option.a11y.states?.["disabled"]).toBeUndefined();
+    });
+
+    it("answers the live climb's questions about the form", () => {
+      const root = createPage(`
+        <form>${TAG_FIELD}<legend>Search</legend><span>Hint</span></form>
+      `);
+      shadowEveryForm(root);
+      const form = root.querySelector("form")!;
+
+      expect(htmlAamNameOwner(form)).toBeNull();
+      // A legend names a fieldset, and its parent here is a form.
+      expect(htmlAamNameOwner(root.querySelector("legend")!)).toBeNull();
+      expect(isNameFromContentHost(form)).toBe(false);
+      expect(isNameBarrierElement(form)).toBe(false);
+      expect(fieldValueOwner(root.querySelector("span")!)).toBeNull();
+      // A barrier role is where a native <details> is told apart by its tag.
+      form.setAttribute("role", "group");
+      expect(isNameBarrierElement(form)).toBe(true);
+    });
   });
 });
 

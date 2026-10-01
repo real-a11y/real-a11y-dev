@@ -207,4 +207,28 @@ describe("buildCssPath", () => {
     expect(buildCssPath(target, adapter)).toBe("button:nth-of-type(2)");
     expect(buildCssPath(shadowRoot, adapter)).toBe("");
   });
+
+  // `<input name="tagName">` makes a form's `tagName` that input. A path reads
+  // the tag of every ancestor it passes and every sibling it counts, so a form
+  // on either side must still read as a form. (DOM only: the native producer
+  // reads tags off a CDP snapshot, which a page cannot shadow.)
+  it("reads a form whose control shadows tagName as a form", () => {
+    document.body.innerHTML = `
+      <main>
+        <form><span></span><input name="tagName"></form>
+        <img alt="">
+      </main>
+    `;
+    const form = document.querySelector("form")!;
+    const control = form.querySelector("input")!;
+    Object.defineProperty(form, "tagName", {
+      configurable: true,
+      get: () => control,
+    });
+
+    const path = (selector: string) =>
+      buildCssPath(document.querySelector(selector)!, DOM_ELEMENT_ADAPTER);
+    expect(path("img")).toBe("body > main > img");
+    expect(path("span")).toBe("body > main > form > span");
+  });
 });

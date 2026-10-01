@@ -25,6 +25,7 @@
  * still right wherever an area is asked about.
  */
 
+import { safeTagName } from "./clobber-safe.js";
 import { isEditable, isEditingHost } from "./editing.js";
 
 /** Form controls that `disabled` removes from the focus order entirely. */
@@ -77,7 +78,7 @@ export function isActuallyDisabled(element: Element): boolean {
  * element focusable, which is the point of using it.
  */
 function isFocusBarred(element: Element): boolean {
-  const tag = element.tagName.toLowerCase();
+  const tag = safeTagName(element);
   if (!FORM_CONTROL_TAGS.has(tag)) return false;
   if (
     tag === "input" &&
@@ -117,9 +118,9 @@ function isInUsedImageMap(area: Element): boolean {
  */
 function isDetailsSummary(summary: Element): boolean {
   const details = summary.parentElement;
-  if (details?.tagName.toLowerCase() !== "details") return false;
+  if (!details || safeTagName(details) !== "details") return false;
   for (const child of details.children)
-    if (child.tagName.toLowerCase() === "summary") return child === summary;
+    if (safeTagName(child) === "summary") return child === summary;
   return false;
 }
 
@@ -134,7 +135,7 @@ export function isFocusable(element: Element): boolean {
   // inside one is not (Chromium focuses only the host).
   if (isEditingHost(element)) return true;
 
-  const tag = element.tagName.toLowerCase();
+  const tag = safeTagName(element);
   // Without an href, `<a>` is a fragment target or a placeholder, not a link.
   // An SVG `<a>` may still carry the older `xlink:href`, which Chromium honors.
   // Editing takes a link's focusability away: Chromium won't focus one inside

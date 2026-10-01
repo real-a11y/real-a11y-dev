@@ -1,5 +1,8 @@
 import { buildA11yTree } from "../extraction/a11y-extractor.js";
-import { safeParentElement } from "../extraction/clobber-safe.js";
+import {
+  safeParentElement,
+  safeTagName,
+} from "../extraction/clobber-safe.js";
 import {
   containsOverlaySignal,
   extractDomTree,
@@ -602,7 +605,7 @@ export class LiveTreeExtractor {
           ancestor = safeParentElement(ancestor);
         }
 
-        if (el.tagName.toLowerCase() === "label") {
+        if (safeTagName(el) === "label") {
           const forId = el.getAttribute("for");
           if (forId) {
             const input = el.ownerDocument?.getElementById(forId);
