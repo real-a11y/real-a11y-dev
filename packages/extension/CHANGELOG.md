@@ -28,7 +28,7 @@
   inside one in pick mode. Both highlighted nothing. A form lets a control
   shadow its own properties, so the form's `nodeType` read as that control
   rather than an element's, and the walk up from the field stopped below the
-  form.
+  form. ([#464](https://github.com/real-a11y/real-a11y-dev/pull/464))
 
 - In DOM mode, an `<input>` whose `list` names a `<datalist>` now shows as a
   `combobox` in the tree and the Tab Sequence view, as Chromium's own
