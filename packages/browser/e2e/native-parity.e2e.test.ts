@@ -17,8 +17,14 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { BrowserSession } from "@real-a11y-dev/browser";
+import {
+  BrowserSession,
+  nativeTree,
+  pageBundleSource,
+} from "@real-a11y-dev/browser";
+import type { ExtractionResult, SemanticNode } from "@real-a11y-dev/core";
 import { serializeTree } from "@real-a11y-dev/serialize";
+import { chromium } from "playwright";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { computeParity } from "./parity.js";
@@ -217,6 +223,60 @@ describe("an input whose list names a <datalist>", () => {
       expect(roleOf("Range")).toBe("slider");
       expect(roleOf("Authored")).toBe("textbox");
       expect(roleOf("Across a shadow root")).toBe("textbox");
+    }
+  });
+});
+
+// Only a drop-down has a picker for `expanded` to describe. On a list box, the
+// combobox role is the author's and reads aria-expanded like any other. The
+// DOM tree's states don't cross `session.call()`, so one page of our own
+// feeds both producers.
+describe("a combobox <select>'s expanded state follows its picker", () => {
+  it("agrees in both producers", async () => {
+    const listBox = { absent: undefined, true: true, false: false };
+    const dropDown = { absent: false, true: false, false: false };
+    const shapes = [
+      ["multiple", listBox],
+      ["size=3", listBox],
+      ["size=1", dropDown],
+      ["size=0", dropDown],
+      ["multiple size=1", dropDown],
+    ] as const;
+    const want: Record<string, boolean | undefined> = {};
+    let selects = "";
+    for (const [attrs, states] of shapes) {
+      for (const [state, expanded] of Object.entries(states)) {
+        const name = `${attrs}, aria-expanded ${state}`;
+        const aria = state === "absent" ? "" : ` aria-expanded="${state}"`;
+        selects += `<select aria-label="${name}" ${attrs} role="combobox"${aria}><option>o</option></select>`;
+        want[name] = expanded;
+      }
+    }
+
+    const expandedByName = (nodes: Iterable<SemanticNode>) =>
+      Object.fromEntries(
+        [...nodes]
+          .filter((n) => n.a11y.role === "combobox")
+          .map((n) => [n.a11y.name, n.a11y.states.expanded]),
+      );
+    const browser = await chromium.launch();
+    try {
+      const page = await browser.newPage();
+      await page.setContent(`<main>${selects}</main>`);
+      await page.addScriptTag({ content: pageBundleSource() });
+      const dom = await page.evaluate(() => {
+        const ra = (globalThis as Record<string, unknown>).__realA11y__ as {
+          extractA11yTree(root: Element): ExtractionResult;
+        };
+        return [...ra.extractA11yTree(document.body).nodes.values()];
+      });
+      const native = await nativeTree(page);
+
+      // Strict, so a select missing from a tree can't pass as "unset".
+      expect(expandedByName(native.nodes.values())).toStrictEqual(want);
+      expect(expandedByName(dom)).toStrictEqual(want);
+    } finally {
+      await browser.close();
     }
   });
 });
