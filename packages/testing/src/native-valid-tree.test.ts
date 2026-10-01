@@ -382,6 +382,16 @@ describe("a role the browser discards is still reported", () => {
     );
   });
 
+  // Chromium reads `COMBOBOX` as `combobox`, so it is as redundant on a
+  // <select> as the lowercase form: the select's options are its structure.
+  it("nor a redundant role in another case", () => {
+    expect(
+      mount(
+        `<select role="COMBOBOX" aria-label="Status"><option>Open</option></select>`,
+      ),
+    ).toBeValidA11yTree();
+  });
+
   it("but not a role the browser keeps", () => {
     expect(
       mount(

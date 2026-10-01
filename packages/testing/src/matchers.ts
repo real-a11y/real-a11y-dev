@@ -293,9 +293,12 @@ function toValidatedNode(
     name: n.a11y.name,
     attrs,
     // Native structure, for the nesting rule. A redundant authored role
-    // still counts: `<select role="combobox"><option>` is a select.
+    // still counts: `<select role="combobox"><option>` is a select — in any
+    // case, since the browser reads `COMBOBOX` as `combobox` too.
     implicitRole:
-      !authored || authored === implicitRoleFor(tag, type, domAttrs),
+      !authored ||
+      (resolveRoleToken(authored) ?? authored) ===
+        implicitRoleFor(tag, type, domAttrs),
     uaSuppliedAttrs: uaSuppliedAttrs(tag, type, getElementRefs().get(n.id)),
     ...(discardedRole !== undefined ? { discardedRole } : {}),
   };
