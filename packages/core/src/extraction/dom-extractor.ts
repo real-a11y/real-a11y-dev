@@ -1936,8 +1936,11 @@ export function nativeStates(
       ? { pressed: undefined }
       : { expanded: undefined, pressed: undefined };
   }
-  const details = element.parentElement;
-  if (tag === "summary" && details?.tagName.toLowerCase() === "details") {
+  if (tag !== "summary") return {};
+  // Read only for a summary: on a <form>, a field named `parentElement`
+  // shadows the property.
+  const details = safeParentElement(element);
+  if (details?.tagName.toLowerCase() === "details") {
     const disclosure =
       (role === "generic" && getExplicitRole(element) !== "generic") ||
       SUMMARY_EXPANDED_ROLES.has(role);
