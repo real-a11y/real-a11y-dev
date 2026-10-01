@@ -23,9 +23,9 @@ on:
     - cron: "0 6 * * 1" # Mondays 06:00 UTC — re-scan main even without a push
   workflow_dispatch: {}
 
+# Read-only by default; the scan job below escalates to the one write it needs.
 permissions:
   contents: read
-  security-events: write # upload SARIF to code scanning
 
 concurrency:
   group: a11y-semantic-scan-${{ github.ref }}
@@ -35,6 +35,11 @@ jobs:
   scan:
     name: Scan main & upload SARIF
     runs-on: ubuntu-latest
+    # A job-level `permissions` block replaces the top-level one rather than
+    # adding to it, so `contents: read` is restated for the checkout.
+    permissions:
+      contents: read
+      security-events: write # upload SARIF to code scanning
     steps:
       - uses: actions/checkout@v7
 
