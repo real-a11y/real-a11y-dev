@@ -1,10 +1,30 @@
-import { act, cleanup, render } from "@testing-library/react";
+import { act, cleanup, render, waitFor } from "@testing-library/react";
 import { useRef, useState } from "react";
 import { describe, it, expect, afterEach } from "vitest";
 
 import { SemanticNavigator, useSemanticTree, useActiveModal } from "./index.js";
 
 afterEach(() => cleanup());
+
+// Wait on the condition, never on a fixed sleep. The panel's tree renders only
+// after Preact's deferred effect chain (next frame, or its 35ms fallback
+// timer), and the hooks re-extract on a 300ms debounce — so a sleep sized to
+// an idle machine loses the race under a loaded `pnpm verify`. Generous on
+// purpose: `waitFor` returns as soon as the condition holds.
+const WAIT = { timeout: 3000 };
+
+/**
+ * Polls the navigator's shadow root until `selector` matches, and returns the
+ * match. Until the tree has been extracted the panel shows only an
+ * "Extracting tree…" placeholder, so nothing inside the toolbar exists yet.
+ */
+function findInPanel(host: Element, selector: string): Promise<Element> {
+  return waitFor(() => {
+    const el = host.shadowRoot?.querySelector(selector) ?? null;
+    expect(el).not.toBeNull();
+    return el!;
+  }, WAIT);
+}
 
 function Harness({
   html,
@@ -41,15 +61,11 @@ describe("<SemanticNavigator />", () => {
       );
     }
     const { container } = render(<App />);
-    // Wait for the effect to run and the shadow root to be attached.
-    await act(async () => {
-      await new Promise((r) => setTimeout(r, 50));
-    });
     // The host div is the second div in the container.
     const host = container.querySelectorAll("div")[1];
     expect(host).toBeDefined();
     // Shadow DOM should be attached (mode: "shadow" is the default).
-    expect(host.shadowRoot).not.toBeNull();
+    await waitFor(() => expect(host.shadowRoot).not.toBeNull(), WAIT);
   });
 
   it("renders the picker toolbar button only when enablePicker is true", async () => {
@@ -65,25 +81,20 @@ describe("<SemanticNavigator />", () => {
       );
     }
 
-    // enablePicker={false} (default) → no picker button
+    // enablePicker={false} (default) → no picker button. Wait for the toolbar
+    // first: before it renders the button is absent whatever the prop says.
     const off = render(<App enablePicker={false} />);
-    await act(async () => {
-      await new Promise((r) => setTimeout(r, 50));
-    });
     const offHost = off.container.querySelectorAll("div")[1];
-    expect(offHost.shadowRoot?.querySelector(".sn-pick-btn")).toBeNull();
+    const offToolbar = await findInPanel(offHost, ".sn-toolbar");
+    expect(offToolbar.querySelector(".sn-pick-btn")).toBeNull();
     off.unmount();
 
     // enablePicker={true} → picker button rendered with aria-pressed="false"
     const on = render(<App enablePicker={true} />);
-    await act(async () => {
-      await new Promise((r) => setTimeout(r, 50));
-    });
     const onHost = on.container.querySelectorAll("div")[1];
-    const pickBtn = onHost.shadowRoot?.querySelector(".sn-pick-btn");
-    expect(pickBtn).not.toBeNull();
-    expect(pickBtn?.getAttribute("aria-pressed")).toBe("false");
-    expect(pickBtn?.getAttribute("aria-label")).toBe("Pick element in page");
+    const pickBtn = await findInPanel(onHost, ".sn-pick-btn");
+    expect(pickBtn.getAttribute("aria-pressed")).toBe("false");
+    expect(pickBtn.getAttribute("aria-label")).toBe("Pick element in page");
   });
 
   it("picks up enablePicker toggled after mount", async () => {
@@ -107,17 +118,17 @@ describe("<SemanticNavigator />", () => {
     }
 
     const { container, getByText } = render(<App />);
-    await act(async () => {
-      await new Promise((r) => setTimeout(r, 50));
-    });
-    const host = () => container.querySelectorAll("div")[1];
-    expect(host().shadowRoot?.querySelector(".sn-pick-btn")).toBeNull();
+    const host = container.querySelectorAll("div")[1];
+    // Absent from a toolbar that has rendered — not merely from the
+    // "Extracting tree…" placeholder, where it would be absent regardless.
+    const toolbar = await findInPanel(host, ".sn-toolbar");
+    expect(toolbar.querySelector(".sn-pick-btn")).toBeNull();
 
     await act(async () => {
       getByText("enable picker").click();
-      await new Promise((r) => setTimeout(r, 50));
     });
-    expect(host().shadowRoot?.querySelector(".sn-pick-btn")).not.toBeNull();
+    // Rejects if the button never appears, which is what the regression did.
+    await findInPanel(host, ".sn-pick-btn");
   });
 
   it("invokes the latest onNodeSelect after the parent recreates the callback", async () => {
@@ -146,11 +157,9 @@ describe("<SemanticNavigator />", () => {
     }
 
     const { container, getByText } = render(<App />);
-    await act(async () => {
-      await new Promise((r) => setTimeout(r, 50));
-    });
-
     const host = container.querySelectorAll("div")[1];
+    await findInPanel(host, '[role="treeitem"]');
+
     const clickFirstRow = () => {
       const row =
         host.shadowRoot?.querySelector<HTMLElement>('[role="treeitem"]');
@@ -198,15 +207,16 @@ describe("<SemanticNavigator />", () => {
     // First commit populates rootRef; now toggle the navigator on.
     await act(async () => {
       getByText("Open panel").click();
-      await new Promise((r) => setTimeout(r, 50));
     });
 
     // The floating panel portals into document.body — its host div must have a
     // shadow root, i.e. the inspector actually mounted.
-    const mounted = Array.from(document.body.querySelectorAll("div")).some(
-      (d) => d.shadowRoot !== null,
-    );
-    expect(mounted).toBe(true);
+    await waitFor(() => {
+      const mounted = Array.from(document.body.querySelectorAll("div")).some(
+        (d) => d.shadowRoot !== null,
+      );
+      expect(mounted).toBe(true);
+    }, WAIT);
   });
 });
 
@@ -225,11 +235,8 @@ describe("useSemanticTree", () => {
     }
 
     const { container } = render(<Subject />);
-    // Wait a tick for the effect + first flush.
-    await act(async () => {
-      await new Promise((r) => setTimeout(r, 10));
-    });
-    expect(latest).not.toBeNull();
+    // Wait for the effect + first flush.
+    await waitFor(() => expect(latest).not.toBeNull(), WAIT);
     const initialButtons = Array.from(latest!.nodes.values()).filter(
       (n) => n.a11y.role === "button",
     );
@@ -240,13 +247,14 @@ describe("useSemanticTree", () => {
       const newBtn = document.createElement("button");
       newBtn.textContent = "Second";
       container.firstElementChild!.appendChild(newBtn);
-      await new Promise((r) => setTimeout(r, 400));
     });
 
-    const afterButtons = Array.from(latest!.nodes.values()).filter(
-      (n) => n.a11y.role === "button",
-    );
-    expect(afterButtons.length).toBeGreaterThanOrEqual(2);
+    await waitFor(() => {
+      const afterButtons = Array.from(latest!.nodes.values()).filter(
+        (n) => n.a11y.role === "button",
+      );
+      expect(afterButtons.length).toBeGreaterThanOrEqual(2);
+    }, WAIT);
   });
 
   it("attaches to a root that mounts after the first commit", async () => {
@@ -278,11 +286,12 @@ describe("useSemanticTree", () => {
 
     await act(async () => {
       getByText("show").click();
-      await new Promise((r) => setTimeout(r, 50));
     });
-    expect(latest).not.toBeNull();
-    const names = Array.from(latest!.nodes.values()).map((n) => n.a11y.name);
-    expect(names).toContain("Late");
+    await waitFor(() => {
+      expect(latest).not.toBeNull();
+      const names = Array.from(latest!.nodes.values()).map((n) => n.a11y.name);
+      expect(names).toContain("Late");
+    }, WAIT);
   });
 
   it("re-attaches when the root element is replaced", async () => {
@@ -304,20 +313,21 @@ describe("useSemanticTree", () => {
     }
 
     const { getByText } = render(<Subject />);
-    await act(async () => {
-      await new Promise((r) => setTimeout(r, 20));
-    });
-    expect(
-      Array.from(latest!.nodes.values()).map((n) => n.a11y.name),
-    ).toContain("First");
+    await waitFor(() => {
+      expect(latest).not.toBeNull();
+      expect(
+        Array.from(latest!.nodes.values()).map((n) => n.a11y.name),
+      ).toContain("First");
+    }, WAIT);
 
     await act(async () => {
       getByText("swap").click();
-      await new Promise((r) => setTimeout(r, 50));
     });
-    expect(
-      Array.from(latest!.nodes.values()).map((n) => n.a11y.name),
-    ).toContain("Second");
+    await waitFor(() => {
+      expect(
+        Array.from(latest!.nodes.values()).map((n) => n.a11y.name),
+      ).toContain("Second");
+    }, WAIT);
   });
 
   it("clears the tree when the observed root is removed", async () => {
@@ -342,16 +352,12 @@ describe("useSemanticTree", () => {
     }
 
     const { getByText } = render(<Subject />);
-    await act(async () => {
-      await new Promise((r) => setTimeout(r, 20));
-    });
-    expect(latest).not.toBeNull();
+    await waitFor(() => expect(latest).not.toBeNull(), WAIT);
 
     await act(async () => {
       getByText("hide").click();
-      await new Promise((r) => setTimeout(r, 50));
     });
-    expect(latest).toBeNull();
+    await waitFor(() => expect(latest).toBeNull(), WAIT);
   });
 });
 
@@ -374,9 +380,9 @@ describe("useActiveModal", () => {
       dialog.setAttribute("role", "dialog");
       dialog.setAttribute("aria-label", "Confirm");
       container.firstElementChild!.appendChild(dialog);
-      await new Promise((r) => setTimeout(r, 400));
     });
-    expect(latest!.a11y.name).toBe("Confirm");
+    // The observer re-extracts after its 300ms debounce.
+    await waitFor(() => expect(latest?.a11y.name).toBe("Confirm"), WAIT);
   });
 
   it("stops reporting a dialog once its root is removed", async () => {
@@ -400,16 +406,12 @@ describe("useActiveModal", () => {
     }
 
     const { getByText } = render(<Subject />);
-    await act(async () => {
-      await new Promise((r) => setTimeout(r, 20));
-    });
-    expect(latest!.a11y.name).toBe("Confirm");
+    await waitFor(() => expect(latest?.a11y.name).toBe("Confirm"), WAIT);
 
     await act(async () => {
       getByText("hide").click();
-      await new Promise((r) => setTimeout(r, 50));
     });
-    expect(latest).toBeNull();
+    await waitFor(() => expect(latest).toBeNull(), WAIT);
   });
 });
 

@@ -1,5 +1,9 @@
 import { buildA11yTree } from "../extraction/a11y-extractor.js";
-import { safeContains, safeGetAttribute } from "../extraction/clobber-safe.js";
+import {
+  safeContains,
+  safeGetAttribute,
+  safeParentElement,
+} from "../extraction/clobber-safe.js";
 import {
   containsOverlaySignal,
   expandedState,
@@ -254,8 +258,9 @@ export class LiveTreeExtractor {
           // stops at the now-barrier target and never reaches an enclosing
           // host whose name just lost (or gained) this subtree's text. Climb
           // from the parent so that host is still re-extracted.
-          if (attr === "role" && target.parentElement) {
-            dirty.add(this.nameRelevantAncestor(target.parentElement));
+          if (attr === "role") {
+            const parent = safeParentElement(target);
+            if (parent) dirty.add(this.nameRelevantAncestor(parent));
           }
         } else if (m.type === "characterData") {
           const target = m.target as CharacterData;
@@ -621,7 +626,7 @@ export class LiveTreeExtractor {
       // A name-source child is often itself a barrier (`caption`). Don't stop
       // there when its owner still needs the re-extract.
       if (!owner && isNameBarrierElement(node)) break;
-      node = node.parentElement;
+      node = safeParentElement(node);
     }
     return outermostHost ?? el;
   }
@@ -671,7 +676,7 @@ export class LiveTreeExtractor {
             }
           }
           if (ancestor === stopAt) break;
-          ancestor = ancestor.parentElement;
+          ancestor = safeParentElement(ancestor);
         }
 
         if (el.tagName.toLowerCase() === "label") {
@@ -704,7 +709,7 @@ export class LiveTreeExtractor {
    * root is much cheaper than re-extracting the whole page.
    */
   private updateAncestorDescendantText(dirtyRoot: Element): void {
-    let el: Element | null = dirtyRoot.parentElement;
+    let el: Element | null = safeParentElement(dirtyRoot);
     while (el) {
       const id = getNodeId(el);
       const node = this.domNodes.get(id);
@@ -712,7 +717,7 @@ export class LiveTreeExtractor {
         node.dom.descendantText = getDescendantText(el);
       }
       if (el === this.root || el === this.effectiveRoot) break;
-      el = el.parentElement;
+      el = safeParentElement(el);
     }
   }
 

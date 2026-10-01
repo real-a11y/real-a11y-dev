@@ -444,6 +444,22 @@ describe("the native producer is the only producer (built bin)", () => {
     expect(strict.stdout).not.toContain("hunter2");
   });
 
+  it("tabs reads a page whose named image shadows document.querySelector", async () => {
+    // `<img name="querySelector">` IS `document.querySelector` on this page.
+    // The in-page root lookup called it, and its catch reported the TypeError
+    // as `Invalid rootSelector: "body"` — with no --root passed at all.
+    const page = dataUrl(
+      "<!doctype html><title>Shadowed</title><main>" +
+        "<img name='querySelector' alt=''>" +
+        "<label for='email'>Email</label><input id='email' type='email'>" +
+        "</main>",
+    );
+    const { code, stdout, stderr } = await runCli(["tabs", page, "-q"]);
+    expect(stderr).not.toContain("rootSelector");
+    expect(code).toBe(0);
+    expect(stdout.trimEnd()).toBe('01. textbox "Email"');
+  });
+
   it("rejects --producer entirely — the axis is gone", async () => {
     const { code, stderr } = await runCli([
       "tree",

@@ -379,6 +379,47 @@ describe("DomObserver", () => {
 
       expect(onTreeChange).not.toHaveBeenCalled();
     });
+
+    // The sentinel check climbs from a changed text node to the document.
+    // `<form>` and the document both have [LegacyOverrideBuiltIns], so in a
+    // real browser a control or a named `<img>` called `parentNode` shadows
+    // their `parentNode`, and a plain climb cycles through it forever — before
+    // any refresh runs. Forced, because jsdom's override is not guaranteed.
+    it("delivers a text change inside a <form> whose control shadows parentNode", async () => {
+      document.body.innerHTML = `<form><input name="parentNode"><p>before</p></form>`;
+      const form = document.querySelector("form")!;
+      Object.defineProperty(form, "parentNode", {
+        configurable: true,
+        get: () => form.querySelector('[name="parentNode"]'),
+      });
+      observer = new DomObserver(document.body, onTreeChange, 100);
+      observer.start();
+
+      document.querySelector("p")!.firstChild!.textContent = "after";
+      await settleObserver(100);
+
+      expect(onTreeChange).toHaveBeenCalledTimes(1);
+    });
+
+    it("delivers a text change when a named <img> shadows document.parentNode", async () => {
+      document.body.innerHTML = `<img name="parentNode" alt=""><p>before</p>`;
+      const img = document.querySelector("img")!;
+      Object.defineProperty(document, "parentNode", {
+        configurable: true,
+        get: () => img,
+      });
+      try {
+        observer = new DomObserver(document.body, onTreeChange, 100);
+        observer.start();
+
+        document.querySelector("p")!.firstChild!.textContent = "after";
+        await settleObserver(100);
+
+        expect(onTreeChange).toHaveBeenCalledTimes(1);
+      } finally {
+        delete (document as unknown as Record<string, unknown>).parentNode;
+      }
+    });
   });
 
   // ── Form-control value observation ──────────────────────────────────────────────
