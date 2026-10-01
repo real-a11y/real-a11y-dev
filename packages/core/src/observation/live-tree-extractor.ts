@@ -1,8 +1,5 @@
 import { buildA11yTree } from "../extraction/a11y-extractor.js";
-import {
-  safeParentElement,
-  safeTagName,
-} from "../extraction/clobber-safe.js";
+import { safeParentElement, safeTagName } from "../extraction/clobber-safe.js";
 import {
   containsOverlaySignal,
   extractDomTree,
