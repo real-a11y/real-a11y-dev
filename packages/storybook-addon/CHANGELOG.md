@@ -1,5 +1,414 @@
 # @real-a11y-dev/storybook-addon
 
+## 0.1.0-beta.17
+
+### Minor Changes
+
+- b27960e: The DOM extractor now walks what the browser renders, **including open shadow roots**, so web components are no longer empty hosts.
+
+  Before, it read only light-DOM children. Anything inside a custom element's shadow root was invisible: a Lit or Shoelace control, a design-system button, the SkipTo.js button on the W3C APG pages. That affected the panel, the inspector, the React and Storybook panels, and every `testing` matcher and assertion. An unlabeled button inside a component was never seen, so checks like the unlabeled-control assertion passed without looking at it. Chromium's native tree (used by the CLI and MCP) always had these nodes.
+
+  Now:
+
+  - **Shadow content** appears under its host, and **slotted children** appear at their `<slot>`. A slot with nothing assigned shows its fallback content. Light children that no slot takes aren't rendered, so they're left out.
+  - **`aria-labelledby`, `aria-describedby` and `<label for>` resolve inside the component's own shadow root**, not against the document. A same-id element elsewhere on the page no longer supplies the wrong name.
+  - **Name-from-content, text previews and `<header>`/`<footer>` landmark scoping** all follow the rendered tree too.
+  - **Closed shadow roots stay unreadable**, by design; the host remains a leaf.
+
+  **Expect snapshot changes on pages that use web components.** Trees gain the nodes that were missing, and assertions may now report real issues inside components.
+
+  The inspector marks its own `container` with `data-real-a11y-panel`, and extraction skips any element carrying it. The panel mounts in an open shadow root, and in `mount: "light"` its UI was already in the page, so without the marker a panel inside the inspected root would list its own controls.
+
+  Not yet covered: live views (the panel and the extension) don't re-extract when something changes inside a shadow root, because their mutation observer doesn't reach into shadow trees. Refresh picks the change up.
+
+- 4ec846c: feat(core): a node now carries the value a screen reader announces for a field, as `a11y.value`, per ADR-0001 ("Field values: withhold what is sensitive, show what a screen reader reads").
+
+  - **What it holds.** A text field's or rich-text editor's text; a `<select>`'s selected option **label** (`"Spain"`, where the DOM producer's `dom.attributes.value` keeps the raw `"es"`); a range widget's `aria-valuetext`, else `aria-valuenow`; a file input's file names. A checkbox, radio or button has none. Whitespace collapses and a value is capped at 240 characters. An empty field has no value.
+  - **Sensitive fields.** A `type="password"` field, or one whose `autocomplete` names a credential or payment field (`current-password`, `new-password`, `one-time-code`, `cc-number`, `cc-csc`, `cc-exp`, `cc-exp-month`, `cc-exp-year`), reads `"[redacted]"` when it holds anything. The token list is unchanged and is now exported for reuse, with `isSensitiveFieldAttributes` for callers that hold a field's markup but no live element.
+  - **Printing it is opt-in.** The tree, tab-sequence, list and diff serializers gain a `values` option, default **off**, so every existing snapshot is byte-identical. With it on, a field prints as `textbox "Email" = "jane@x.com"`, and a diff reports `~ textbox "Search": a11y.value (unset) → "hello"`. In testing: `treeSnapshot(root, { values: true })`, `boxedTreeSnapshot`, the Playwright adapter's `sn.treeSnapshot({ values: true })`, and `a11yDiff(before, after, { values: true })`.
+  - **`expectChanges({ exact: true })`** now sees field-value changes, since diffs model them, but never counts a change made only of `a11y.value` as unexpected: typing into a field changes that field, which is the step itself. Assert it explicitly with `changes: ["a11y.value"]`.
+
+  - **A role-less editor is no longer named after what was typed into it.** `<div contenteditable>draft</div>` read `generic "draft"` and now reads an unnamed `generic` whose value is `"draft"`. It stays in the accessibility view as a field, and serializers print it as `generic = "draft"` with `values: true`. Chromium leaves it unnamed too.
+  - **Diff views see value changes.** A panel diff (inspector, storybook-addon, extension) now marks a field you typed into as changed.
+
+  A hostile page whose `.value` getter throws no longer costs the field its node; the value is simply absent.
+
+  `cli` and `mcp` re-release the bundled engine; their output is unchanged by this release.
+
+- 3bab2a7: Visually hidden content that screen readers still read (the "sr-only" pattern) now counts: it appears in snapshots, outlines, queries and audits, as it does in Chromium's own tree.
+
+  The DOM extractor flags sr-only elements `dom.isHidden` because they aren't visible, while keeping them exposed to assistive technology. Every query built on the tree walk skipped anything flagged `isHidden`, so content a screen reader announces was silently dropped. For example, GitHub's visually hidden `h2 Navigation Menu` was missing from the DOM heading outline but present in the native one. Now only content that is hidden from sight **and** from AT is skipped.
+
+  What changes on a page with sr-only content:
+
+  - **Tree and outline snapshots** (`toMatchA11ySnapshot`, `treeSnapshot`, `outlineSnapshot`, the extension's export) include the sr-only nodes. **Expect snapshot changes.**
+  - **`findByRole` / `findAllByRole`** return sr-only matches by default, the way Testing Library's `getByRole` does.
+  - **Audit rules** see them too. The heading-order rule no longer reports "Missing <h1>" on a page whose only `h1` is visually hidden.
+
+  Unchanged: `visibility: hidden` and `aria-hidden` content is still left out, and `includeHidden: true` still brings it back. Native form controls, links and anything with a `tabindex` were never flagged sr-only, so the tab sequence is effectively unaffected.
+
+  In a DOM-less runtime (no computed styles), an inline `visibility: hidden` now counts as hidden from AT too, matching how it already counted as not visible. Without that, such an element would have looked like sr-only content and been kept.
+
+  Two related fixes to what counts as hidden from AT when you query a DOM-view tree (`extractDomTree`), which keeps `aria-hidden` subtrees:
+
+  - **Content inside an `aria-hidden` ancestor counts as hidden, too.** The tree walk now inherits `aria-hidden` down the subtree, because no descendant can override it. So an sr-only heading behind an `aria-hidden` wrapper stays out of outlines and snapshots. The a11y view (`extractA11yTree`) already pruned these subtrees.
+  - **`findByRole` / `findAllByRole` now leave out nodes hidden from AT by default,** as `includeHidden`'s docs always said. On a DOM-view tree they used to return `aria-hidden` elements, and anything inside one. Pass `includeHidden: true` to get them back.
+  - **The heading outline leaves out headings AT can't reach.** `getOutline`, `serializeOutline`, the heading-order audit and the extension's outline export no longer list an `aria-hidden` heading, or a heading inside an `aria-hidden` container, when given a DOM-view tree. The a11y view never contained them.
+
+- 8348641: The DOM tree producer now decides modality the way Chromium's own accessibility tree does. Only a `<dialog>` opened with `showModal()` (the `:modal` pseudo-class) scopes the tree **exclusively** to itself. `aria-modal="true"` alone no longer does: the dialog joins the tree as an ordinary overlay, and the page behind it stays.
+
+  `aria-modal` is a claim the author makes to assistive tech, not a state the browser enforces, and Chromium does not prune for it. Treating it as modal made the DOM producer disagree with the native one in two ways seen on a real site:
+
+  - **A closed drawer blanked the whole page.** A mobile nav left mounted while closed, as `role="dialog" aria-modal="true" aria-hidden="true"` and translated off-screen, passed the CSS visibility check and won the modal scope. Everything inside it is `aria-hidden`, so the page extracted as an **empty tree**: the extension showed nothing, `tabs` printed `(nothing focusable)`, and `real-a11y tree` (native) showed the full page.
+  - **A cookie bar took over an interactive page.** A bottom consent bar marked `role="alertdialog" aria-modal="true"`, with the page still fully usable, collapsed the tree and the tab order to the banner's four buttons.
+
+  Relatedly, an overlay that assistive tech cannot reach (inside `aria-hidden="true"` or `inert`) no longer widens a component root to `document.body`. That closed drawer used to turn every component snapshot on the page into a whole-page snapshot, although nothing in it appears in the tree.
+
+  Modal libraries still come out right, because they remove the background themselves: Radix and MUI set `aria-hidden` on the siblings, and Headless UI makes them `inert`. The walk already drops both, the same way Chromium does.
+
+  ### Breaking change
+
+  Tree, tab-order and snapshot output changes wherever an `aria-modal="true"` dialog is open **and** nothing hides the background. That is most common in jsdom tests that fake a modal with the attribute alone. jsdom has no `showModal()`, so it cannot open a native modal at all. Those trees now contain the page as well as the dialog.
+
+  **Migration.** Make the fixture modal the way a real page is: set `inert` (or `aria-hidden="true"`) on the content behind the dialog when it opens. Then re-record your snapshots (`vitest -u`). If the component under test really does leave its background exposed, the new output is what a screen reader on Chrome gets, and that gap is in the component, not the baseline.
+
+- daab90a: Implement ARIA's **Presentational Roles Conflict Resolution** in the DOM tree producer. `role="presentation"` / `role="none"` is now ignored — and the element exposed with its **implicit** role — when the element is focusable or carries a global ARIA state/property, and `<img alt="">` is presentational only when nothing else names it.
+
+  Three elements that were wrong before:
+
+  - `<a href="/about" role="presentation">` reported `role: "presentation"`. It was kept in the tree (a focusable carve-out already existed) but under the decorative role, so every consumer reading `role` saw a presentation node where a screen reader announces a link. It now reports `link` — likewise `<button role="none">`, and anything made focusable by `tabindex`.
+  - `<h2 role="presentation" aria-label="Quarterly results">` dropped out of the tree entirely, taking the heading with it. A global ARIA property voids presentation, so it is a `heading` again — and visible to heading-order checks, which is where its absence actually hurt.
+  - `<img alt="" title="Company logo">` dropped out. Per HTML-AAM an empty `alt` is presentational only absent other naming, so it is now an `img` named `"Company logo"`. The `title` fallback in accessible-name computation was being short-circuited by the empty `alt`, so the name had to be fixed alongside the role or the tree would have gained an exposed but nameless image. A bare `<img alt="">` is still decorative and still drops.
+
+  Three deliberate limits, each one a way this could have gone wrong:
+
+  - **`aria-hidden` does not void presentation.** It removes the element from the tree outright, so letting it restore a role would resurrect something nobody can reach.
+  - **A global attribute counts only when it says something.** `aria-label=""` and `title="   "` state nothing and leave the decorative role alone — honouring them would expose a permanently nameless node.
+  - **`<img alt="">` is gated on the _naming_ attributes** (`title`, `aria-label`, `aria-labelledby`) plus focusability, not on the full global set that voids an explicit `role="presentation"`. `<img alt="" aria-describedby="…">` stays decorative: exposing it would put a nameless `img` in the tree, and every "image has no accessible name" check would then flag markup that is correctly marked decorative.
+
+  Focusability for this purpose is stricter than the `interaction.isFocusable` facet, which is tag-based and counts every `<a>` and `<input>`. An `<a>` without `href`, a `disabled` control and `<input type="hidden">` are not tab stops, so their decorative role stands and they flatten exactly as before. The facet itself is unchanged.
+
+  ### Breaking change
+
+  Tree output changes for pages containing any of the three shapes above, so committed snapshots and assertions that encode the old output will fail.
+
+  **Migration.** Re-record your snapshots (`vitest -u`, or regenerate the CLI/MCP baseline you compare against) and read the diff: each changed line is a place where the tree now matches what assistive tech announces. Two patterns are worth fixing in the page rather than the baseline — a `role="presentation"` on a link or button does nothing and can be deleted, and an `<img alt="">` that turned out to have a `title` was never decorative. Assertions that relied on such a node being **absent** need inverting; assertions that matched `role: "presentation"` on a focusable element should match its implicit role instead.
+
+- a695e13: Map a `<header>` / `<footer>` inside `main` or sectioning content (`article`, `aside`, `nav`, `section`) to the ARIA 1.3 `sectionheader` / `sectionfooter` roles, per HTML-AAM, instead of `generic`. Body-scoped ones are still `banner` / `contentinfo`.
+
+  HTML-AAM lets user agents leave these roles unexposed when the element has no accessible name, isn't focusable and carries no other global ARIA attribute. Both producers now apply that rule the same way. These roles take their name from author attributes only (`aria-label`, `aria-labelledby`, `title`), as they do in Chromium, so a header is no longer named from its loose text (a byline such as `By Ada · <time>…</time>`).
+
+  - **DOM producer** (`testing` matchers, `inspector`, `react`, `storybook-addon`): the a11y view still flattens a bare one, so **most a11y-view snapshots are unchanged**. A named, focusable or ARIA-annotated header/footer now appears as `sectionheader "…"` / `sectionfooter "…"` instead of `generic "…"`. The DOM view and DOM-mode serialization now show every such element as `sectionheader` / `sectionfooter`, where a bare one was previously hidden as `generic`.
+  - **Native producer** (`cli`, `mcp`): Chromium exposes these roles even when bare. The normalizer now drops a bare one and re-parents its children, as the DOM producer does. Native trees and baselines lose a `sectionheader` / `sectionfooter` level on most real pages. `NATIVE_AX_VOCABULARY_VERSION` goes to 3.
+
+- f966427: Add Storybook 11 to the peer range, as `storybook: ^9.0.0 || ^10.0.0 || ^11.0.0-0`.
+
+  The `-0` is load-bearing rather than cosmetic. Storybook 11 is still prerelease — `11.0.0-alpha.0` is the only 11.x published — and npm ranges exclude prereleases unless the range itself names one, so a plain `^11.0.0` would have matched no Storybook 11 that currently exists. Consumers on 11 would have kept getting a peer error from a range that claimed to support them.
+
+  Nothing in the addon's code changed: it registers `types.PANEL` and imports `storybook/manager-api` / `storybook/preview-api`, all of which 11 still serves. The range was previously held back partly because the `TAB` addon type Storybook's release notes describe as removed is still present in the enum — that is accurate, but it does not apply to this addon, which never used `TAB`.
+
+  Support for 11 is verified by type-checking and building against `11.0.0-alpha.0` — `tsc` resolves Storybook 11's own `manager-api`/`preview-api` declarations and checks the addon's usage against them. The package's unit tests mock `storybook/preview-api`, so they pass under 11 without exercising it and are deliberately not cited as evidence. Re-checked by a new advisory CI job that installs `storybook@next`, so a breaking change in 11 shows up as a CI signal rather than in a consumer's install. It remains provisional while 11 is in alpha: verified, not guaranteed.
+
+- f966427: Support Storybook 9 and 10; drop Storybook 8. The manager entry now imports `storybook/manager-api` and the preview entry `storybook/preview-api`, replacing `@storybook/manager-api` and `@storybook/preview-api`. Storybook 9 folded those packages — along with `@storybook/theming` — into the `storybook` package as subpath exports; the standalone packages stopped publishing at 8.6, so the addon was broken on Storybook 9 and 10 as well as unready for 11. `storybook@8` exposes no equivalent subpath, so one build cannot serve both sides of that split: the peer range becomes `storybook: ^9.0.0 || ^10.0.0` and the `@storybook/manager-api`, `@storybook/preview-api` and `@storybook/theming` peers are gone. A single `storybook` dependency is now all a consumer needs — remove those three if a Storybook 8 setup left them behind. Storybook 11 is handled in a separate changeset in this same release, which adds it to the range as `^11.0.0-0`. Projects that must stay on Storybook 8 should pin `@real-a11y-dev/storybook-addon@0.1.0-beta.16`.
+- 36e4f14: Storybook addon: stop re-publishing a tree that has not changed.
+
+  The preview emitted `TREE_UPDATED` on every debounced `DomObserver` fire, shipping every node with its full `dom`/`a11y`/`interaction`/`ui` sub-objects across the iframe boundary and re-rendering the whole panel — even when the mutation extracted to an identical tree. The fires this saves are the high-frequency ones: inline `style`/`transform` churn (a CSS animation, an open menu repositioned every scroll frame) and mutations inside a hidden or `aria-hidden` subtree, which the walk skips entirely.
+
+  The preview now compares each extraction against the last one it published (`mode` included, `extractedAt` excluded) and stays quiet when they are byte-identical. Extraction itself is unchanged and still runs on every fire, so highlight element refs stay fresh. The first publish after the panel opens and after a story renders is always sent, as is one whose `mode` differs from the last published (re-selecting the mode the panel is already in changes nothing, and stays quiet like any other no-op).
+
+  **Breaking change.** `TREE_UPDATED` now fires on changes to the tree rather than on every debounced DOM mutation, so code listening on the channel directly receives strictly fewer events and `payload.extractedAt` no longer advances while a story mutates without semantic effect.
+
+  _Migration:_ if you were using `TREE_UPDATED` as a DOM-mutation heartbeat or as a liveness signal, observe the DOM yourself instead — `DomObserver` from the core engine is what the addon uses. Anything that renders the payload (the normal case, including the bundled manager panel) needs no change: the events you stop receiving are the ones that would have rendered the same thing twice.
+
+  Note the limits, so this is not mistaken for a general mutation filter: `class` is a key attribute and lands in `dom.attributes`, so a class toggle still publishes, and a re-render that replaces elements rather than patching them in place mints fresh node ids and so publishes too.
+
+### Patch Changes
+
+- cb16d62: Bound the `react` / `react-dom` peer ranges to the majors these packages are built against: `^18.0.0 || ^19.0.0`, previously `>=18`.
+
+  `>=18` accepted React 20 and every major after it sight unseen. A consumer landing on such a major would have installed cleanly and met the breakage later, as a runtime fault or a type error with nothing at install time pointing at the cause. The bounded range makes it fail the peer check instead — an `ERESOLVE` error on npm, a warning on pnpm and Yarn — naming the version that isn't supported.
+
+  **No effect on any React release that exists today.** React's newest published major is 19, and neither range matches a pre-release (semver only matches a prerelease when a comparator shares its exact version tuple), so `>=18` and `^18.0.0 || ^19.0.0` resolve identically for every version on npm — including canaries and RCs. The two diverge only at `20.0.0`. Nothing to migrate.
+
+  This brings both packages in line with every other peer the suite publishes (`playwright: ">=1.49.0 <2"`, `@jest/expect: ">=29 <31"`, storybook `^8.0.0`), and `scripts/react-peer-range.test.mjs` now holds the two manifests to one range so they cannot diverge from it — or from each other — without an edit that says so.
+
+- 37e82f8: Leave the body of a closed `<details>` out of the tree built from the page. Chromium renders a closed disclosure as its summary alone: the body sits in a slot the browser hides, so its accessibility tree omits it and Tab never reaches a control in it. The in-page walk read every child anyway, so it listed controls nobody can reach. On this page:
+
+  ```html
+  <main>
+    <details>
+      <summary>S</summary>
+      <a href="/x">Hidden link</a>
+      <button>Hidden button</button>
+    </details>
+    <a href="/y">Visible</a>
+  </main>
+  ```
+
+  `real-a11y tabs` printed
+
+  ```
+  01. link "Hidden link"
+  02. button "Hidden button"
+  03. link "Visible"
+  ```
+
+  and now prints only `01. link "Visible"`, which is where Chromium's Tab goes after the summary.
+
+  What the walk now reads, all checked against Chromium 151's tree and Tab order:
+
+  - **Closed:** a `<details>` without `open` has only its summary: the first `<summary>` child, even after other content. A second summary, the loose text, and a `<details>` nested in the body, summary and all, are left out. The `<details>`' role does not matter, `role="none"` included.
+  - **Shadow DOM:** content slotted into a shadow `<details>` is body, since the summary has to be a real child. A light `<summary>` slotted in is not its summary, and a slot inside the shadow `<details>`' own `<summary>` still renders.
+  - **Descriptions:** an `aria-describedby` from inside a closed body reaches nobody, so the paragraph it points at stays in the tree as ordinary content instead of vanishing with it.
+  - **Live trees:** the body appears when `open` is set, by a click on the summary or by find-in-page, and goes when it is removed.
+
+  Where it shows:
+
+  - **`cli` / `mcp`:** `real-a11y tabs` and `get_tab_order` only. Every other view reads Chromium's own tree, which already left the body out.
+  - **Snapshots, queries and assertions:** `treeSnapshot`, `outlineSnapshot`, `tabSequenceSnapshot`, the `findByRole` queries, the matchers and the audit assertions no longer see a closed body. A heading, button or link in one drops out of them, so re-record those baselines, and open the `<details>` first in a test that reaches for its content.
+  - **Panels:** the tree and the Tab Sequence view in `inspector`, `react` and `storybook-addon` follow the same rule.
+  - **Text previews:** a closed `<details>`' `dom.textContent` and `dom.descendantText` hold only what its summary renders.
+
+- d0cb634: A heading, button or link that contains a `<details>` now includes the disclosure's summary in its accessible name, the way Chromium does.
+
+  The DOM extractor treated `<details>` like any other `group` and skipped everything inside it when naming an ancestor. So a GitHub comment header, `user commented • <details><summary>edited by bot</summary>…</details>`, was named "user commented •", while Chromium (and a screen reader) reads "user commented • edited by bot". Now:
+
+  - **A closed `<details>`** contributes its summary (the first `<summary>`) and nothing else, because the rest is hidden until it opens.
+  - **An open `<details>`** contributes all of its content.
+  - **An explicit `role="group"`** on the `<details>` still blocks it, as it does in Chromium.
+  - **A closed `<details role="none">`** no longer leaks its hidden body into the name. It used to, with the words glued together ("SBody").
+
+  Live views (the inspector, the React and Storybook panels, the extension) keep that name current. Editing the summary, or opening and closing the `<details>`, now updates the enclosing heading or button without a full refresh.
+
+  Descriptions built from `aria-describedby` are now whitespace-collapsed like names, so a description no longer carries a doubled space where the walk padded a link or summary.
+
+  **Expect snapshot changes** where a named element contains a `<details>`: its name gains the summary text.
+
+  One remaining difference: a `<details>` with no `<summary>` gets its name from Chromium's built-in, localized "Details" label. That label isn't reproduced here.
+
+- a6d9e15: Stop naming a dialog, image, landmark or text field from its loose text. The DOM producer's last-resort name step took an element's direct text for every role, so `<div role="dialog">Delete this project? <button>Cancel</button></div>` came out as `dialog "Delete this project?"`. Chromium, and the screen reader reading it, give that dialog no name. Because it looked named, `assertDialogsLabeled` / `dialog-labeled`, `image-alt` and `assertNoUnlabeledInteractive` all passed markup that AT announces unnamed.
+
+  Roles only an author can name now skip that step. They are still named by `aria-label`, `aria-labelledby`, `title`, or a host-language source such as a `<legend>` or `<summary>`, and their loose text no longer names them. The roles covered:
+
+  - the dialogs (`dialog`, `alertdialog`) and `img`
+  - the landmarks, including `form`, which a name would turn into one
+  - `article`, `group`, `figure`, `tabpanel` and the other sectioning roles
+  - the composite widgets (`listbox`, `menu`, `toolbar`, `grid`, …)
+  - widgets whose text is a value, not a label: a `<textarea>`'s contents, a contenteditable `textbox`, a `combobox`'s selected text, `<progress>` / `<meter>` fallback text
+
+  An authored role now also outranks a tag that is normally named by its content. The Radix Select trigger, `<button role="combobox">Apple</button>`, was `combobox "Apple"` and is now an unnamed `combobox`. So are `<a role="img">` and `<h2 role="tabpanel">`.
+
+  Every one matches what Chromium 151 computes for the same markup.
+
+  Unchanged: paragraphs, list items and the other prose roles, plain containers (so the a11y view keeps the same shape), and live regions (`alert`, `status`, `log`, `timer`, `marquee`), whose text is the announcement and whose name no audit reads.
+
+  - **Snapshots:** a DOM-mode a11y snapshot can lose a name where loose text sat directly inside one of these roles. The common case is `<footer>© 2026 Example Inc.</footer>`, which now snapshots as `contentinfo` instead of `contentinfo "© 2026 Example Inc."`. Re-record those baselines. Text inside a child element, such as a `<p>` in the footer, still shows.
+  - **Assertions:** `assertDialogsLabeled`, `assertNoUnlabeledInteractive` and the `image-alt` rule may now fail on pages they used to pass. Each new failure is an element with no accessible name. Fix it with `aria-labelledby` pointing at visible text, or with `aria-label`.
+  - **`cli` / `mcp`:** only the tab sequence changes (`real-a11y tabs`, the `get_tab_order` tool), because it is the one view built by the in-page walk. A tab stop such as an unlabeled `<textarea>` now prints as `textbox` instead of `textbox "<its contents>"`. Native trees are untouched.
+
+- dca8553: Treat `role="image"` as the `img` role. ARIA 1.3 adds `image` as a synonym of `img`, and Chromium exposes both as the same image role, never named by its content. The DOM producer kept the raw token, so `<span role="image">🎉</span>` came out as `image "🎉"` while the native producer reported a bare `img`. Nothing downstream recognised `image`: the `image-alt` rule skipped the element, named or not; `listByRole(root, "image")` and a role query for `img` missed it; and `toBeValidA11yTree` reported `"image" is not a valid ARIA role`.
+
+  An authored `role="image"` now extracts as `img`, and is named the way an `img` is: by `aria-label`, `aria-labelledby` or `title`, never by its text. That includes a tag normally named by its content — `<button role="image">🎊</button>` was `image "🎊"` and is now an unnamed `img`, as Chromium computes it.
+
+  - **Snapshots:** a DOM-mode snapshot containing `role="image"` changes from `image "<text>"` to `img`, or `img "<label>"` when it has one. Re-record those baselines.
+  - **Assertions:** the `image-alt` rule (`collectFindings`) may now report an unlabeled `role="image"` it used to skip, and `toBeValidA11yTree` reports it as `role "img" requires an accessible name` instead of an invalid role. A labeled one now passes both. Fix a new failure with `aria-label`, or with `aria-labelledby` pointing at visible text.
+  - **`cli` / `mcp`:** only the tab sequence changes (`real-a11y tabs`, the `get_tab_order` tool), because it is the one view built by the in-page walk. A focusable `role="image"` now prints as `img` instead of `image "<text>"`. Native trees already reported `img` and are untouched.
+
+- 2aa2c5c: Report a control disabled by its `<fieldset>` as disabled. The DOM producer read a control's `disabled` state from the control's own `disabled` attribute only. In this form, `Save` has no attribute of its own:
+
+  ```html
+  <fieldset disabled>
+    <legend><button>Unlock</button></legend>
+    <button>Save</button>
+  </fieldset>
+  ```
+
+  HTML and Chromium both treat `Save` as disabled. So a screen reader announces it as unavailable, and the tab sequence already skips it. But its node carried no `a11y.states.disabled`, and a `<button aria-disabled="false">` in the same place was reported as explicitly not disabled. Both now read `disabled: true`.
+
+  The exemption stays as HTML defines it: a control in the fieldset's first `<legend>`, like `Unlock`, is not disabled. That covers every `<button>`, `<input>`, `<select>` and `<textarea>`, including one in a nested fieldset, and each case matches the `disabled` property of Chromium 151's own tree.
+
+  - **Queries:** `findByRole` / `findAllByRole` with `{ disabled: true }` now match these controls.
+  - **Tree diffs:** toggling a fieldset's `disabled` now changes the state of every control inside it. `a11yDiff` prints `~ button "Save": a11y.states.disabled (unset) → true` for each one, so a committed diff snapshot around such a toggle gains those lines. Re-record it. `flow().expectChanges` can now assert the change with `changes: ["a11y.states.disabled"]`. A spec that already passed still passes, because it matches changes as a subset.
+  - **Panels:** the tree's `disabled` badge in `inspector`, `react` and `storybook-addon` now shows on these controls.
+  - **Snapshots:** unchanged. An a11y snapshot prints roles and names, not states.
+  - **`cli` / `mcp`:** nothing they print changes. The page walk that ships inside them has the fix, but no output of theirs shows a DOM-produced state.
+
+- 99f4e8c: Stop rebuilding the whole tab sequence on every search keystroke in the tab-sequence view. The tree walk behind `getTabSequence` now sits in its own memo keyed on the nodes, so a keystroke re-runs only this view's filter over the already-computed sequence instead of re-walking the tree. No change to what the view renders.
+- 2aa2c5c: Report an option in a disabled `<select>` or `<optgroup>`, and a control inside an `aria-disabled` container, as disabled. The DOM producer read `disabled` from a form control's own state and from the node's own `aria-disabled`, so none of these had one:
+
+  ```html
+  <select disabled>
+    <option>Red</option>
+  </select>
+  <select>
+    <option disabled>Green</option>
+  </select>
+  <div role="group" aria-label="Shipping" aria-disabled="true">
+    <button>Quote</button>
+  </div>
+  ```
+
+  Chromium reports `Red`, `Green` and `Quote` as disabled, and a screen reader announces them as unavailable. Their nodes now carry `a11y.states.disabled: true`. Each case matches the `disabled` property of Chromium 151's own tree:
+
+  - **Options** are disabled by their own `disabled`, by their `<optgroup disabled>`, or by their select, including a select disabled by its `<fieldset>`. The optgroup itself stays unmarked, as in Chromium.
+  - **Inside a disabled container**, an element inherits the state from the nearest ancestor that is a disabled `button`, `input`, `select` or `textarea`, or that sets `aria-disabled`. An `aria-disabled="false"` on the way stops it. It can't re-enable a disabled control or what that control holds.
+  - **Only focusable elements inherit the state**, as CORE-AAM says: a button, a link with an `href`, a field, a `tabindex` element, a native option, or an editing host such as `<div contenteditable>`. A paragraph, a heading or a `<div role="button">` with no `tabindex` inside an `aria-disabled` group stays as it was. So does a link inside an editor, which Chromium won't focus.
+  - **A disabled `<fieldset>` passes the state to nothing but its form controls.** The fieldset itself, a `<div role="button" tabindex="0">` or an `<a href>` inside it, and a control in its first `<legend>` all stay enabled.
+  - The walk follows the flat tree, so a control in a shadow root, or slotted into one, inherits the state too. An ancestor above the extracted root counts too.
+
+  What this changes for you:
+
+  - **Queries:** `findByRole` / `findAllByRole` with `{ disabled: true }` now match these nodes.
+  - **Tree diffs:** toggling a container's `aria-disabled`, or a select's `disabled`, now changes the state of every focusable element or option inside it. `a11yDiff` prints `~ button "Quote": a11y.states.disabled (unset) → true` for each one, so a committed diff snapshot around such a toggle gains those lines. Re-record it. A spec using `flow().expectChanges` that already passed still passes, because it matches changes as a subset.
+  - **Panels:** the tree's `disabled` badge in `inspector`, `react` and `storybook-addon` now shows on these nodes.
+  - **Snapshots:** unchanged. An a11y snapshot prints roles and names, not states.
+  - **`cli` / `mcp`:** nothing they print changes. The page walk that ships inside them has the fix, but no output of theirs shows a DOM-produced state.
+
+  The page walk also no longer hangs on a `<form>` whose control is named `parentElement` or `assignedSlot`. Such a control shadows the form's own property, so a walk up the tree read the form's parent as that control and looped forever. A `<header>` or `<footer>` inside such a form hung the extraction before this change, and every focusable element in one now walks up the same way.
+
+- 8346959: Count the `<summary>` that toggles a `<details>` as a tab stop. Chromium tabs to it, but the tab sequence never counted one, so every disclosure and FAQ accordion question was missing. On this page:
+
+  ```html
+  <details>
+    <summary>How long does shipping take?</summary>
+    <p>3 to 5 days.</p>
+  </details>
+  <details>
+    <summary>Can I return an item?</summary>
+    <p>Within 30 days.</p>
+  </details>
+  <a href="/contact">Contact us</a>
+  ```
+
+  `real-a11y tabs` printed
+
+  ```
+  01. link "Contact us"
+  ```
+
+  and now prints
+
+  ```
+  01. generic "How long does shipping take?"
+  02. generic "Can I return an item?"
+  03. link "Contact us"
+  ```
+
+  Only the first `<summary>` child of a `<details>` is a stop, as in Chromium 151, even with other content before it. A second summary, a summary nested deeper, or one outside any `<details>` stays plain text. A `<fieldset disabled>` does not disable a summary, since it is no form control.
+
+  Where it shows:
+
+  - **`cli` / `mcp`:** `real-a11y tabs` and `get_tab_order` only. Every other view reads Chromium's own tree and is unchanged.
+  - **Snapshots and assertions:** `tabSequenceSnapshot` and `toHaveTabSequence` gain a stop for each details' summary, and mark one `[focused]` when it has focus. Re-record those baselines.
+  - **Panels:** the Tab Sequence view in `inspector`, `react` and `storybook-addon` lists the same stops, and the tree's "focusable" badge shows on the summary.
+  - **The DOM a11y tree:** a details' summary used to be dropped from it, since its text names the `<details>`. It now stays as a `generic` child of the `<details>` group, with only its interactive descendants under it, as does any other name source Chromium can focus, such as a `<legend tabindex="0">`. `treeSnapshot` hides generics by default, so its default output is unchanged; with `includeGeneric: true` the summary line appears.
+  - **`interaction` facet:** `isFocusable` is `true` for a details' summary.
+  - **`role="none"` / `role="presentation"`:** it no longer applies to a details' summary, which is focusable. Chromium ignores it there too.
+
+- f84f589: Fix the tab sequence around rich-text editors. The DOM producer left out every `contenteditable` editor, although each one is a Tab stop, and it listed every link inside an editor, which Chromium won't focus at all. On a message composer, `real-a11y tabs` printed the reset link someone had pasted into the draft, token and all, and never mentioned the composer:
+
+  ```
+  01. link "https://x.test/reset?token=abc123"
+  02. link "Mention Alice"
+  ```
+
+  It now prints the stops Chromium actually tabs through:
+
+  ```
+  01. textbox "Message"
+  02. link "Mention Alice"
+  03. generic
+  ```
+
+  What counts as a stop, all checked against Chromium 151:
+
+  - **Editor:** the root of each editable region, its _editing host_, is a stop with no `tabindex` needed. `contenteditable` reads the way HTML defines it: `""`, `true` and `plaintext-only` in any case; `false` opts out; any other value inherits. A `contenteditable` nested inside an editor is part of it, not a second stop.
+  - **Link inside an editor:** not a stop, and not focusable at all, unless it has its own `tabindex` or sits in a `contenteditable="false"` island, like the mention chip above. Buttons, inputs and `tabindex` elements inside an editor stay stops.
+  - **Name:** an editor is named only by its author (`aria-label`, `aria-labelledby`, `title`), never by what was typed into it. That applies whatever its role, as in Chromium: `<h3 contenteditable>Draft</h3>` is an unnamed `heading`. A role-less `<div contenteditable>` used to be `generic "<its text>"` and is now `generic`. Its text still names another element that points at it with `aria-labelledby`.
+  - **Actions:** a role-less editor gets `focus` and `type` actions like a `textbox`. The panel can type into it, and the a11y view keeps it when it holds no text. A link inside an editor loses its `click` and `navigate` actions, because Chromium doesn't follow it, not even on a scripted `click()`. A `role="none"` link there now flattens away instead of staying as a bare `presentation` node.
+
+  Where it shows:
+
+  - **`cli` / `mcp`:** `real-a11y tabs` and `get_tab_order` only. Every other view reads Chromium's own tree and is unchanged.
+  - **Snapshots and assertions:** `tabSequenceSnapshot` and `toHaveTabSequence` gain each editor and lose links inside one. A DOM-mode a11y snapshot shows a role-less editor as `generic` instead of `generic "<its text>"`. Re-record those baselines.
+  - **`interaction` facet:** `isFocusable` is now `true` for an editor and `false` for a link inside one. A `role="presentation"` on either follows the same rule.
+
+- 8346959: Fix which elements the tab sequence counts as stops. It counted every `<a>`, with or without an `href`, every `tabindex` attribute whatever its value, and a control disabled by its `<fieldset>`, although Chromium focuses none of them. It also left out an `aria-disabled` control, which Chromium does tab to. On this page:
+
+  ```html
+  <a name="top">Back to top</a>
+  <a role="button">Save draft</a>
+  <a href="/docs">Docs</a>
+  <button aria-disabled="true">Publish</button>
+  <fieldset disabled><button>Save</button></fieldset>
+  <div tabindex="">Card</div>
+  ```
+
+  `real-a11y tabs` printed
+
+  ```
+  01. generic "Back to top"
+  02. button "Save draft"
+  03. link "Docs"
+  04. button "Save"
+  05. generic "Card"
+  ```
+
+  and now prints the two stops Chromium tabs through:
+
+  ```
+  01. link "Docs"
+  02. button "Publish"
+  ```
+
+  The `<a role="button">` is the one that matters. It is a button no keyboard can reach, which is what a tab order is for catching, and it was listed as a stop.
+
+  What counts as a stop, all checked against Chromium 151:
+
+  - **Link:** an `<a>` needs an `href` or a `tabindex`.
+  - **Disabled:** a control disabled directly or by a `<fieldset disabled>` is not a stop, unless it sits in that fieldset's first `<legend>`. `aria-disabled` announces a state and leaves focus alone, so its control stays a stop.
+  - **`tabindex`:** read the way HTML parses an integer. `""` and `"abc"` are ignored, `"1abc"` is 1 and `"0.5"` is 0. Any negative value takes an element out of the order, not just `-1`.
+
+  Where it shows:
+
+  - **`cli` / `mcp`:** `real-a11y tabs` and `get_tab_order` only. Every other view reads Chromium's own tree and is unchanged.
+  - **Snapshots and assertions:** `tabSequenceSnapshot` and `toHaveTabSequence` lose the stops above and gain `aria-disabled` controls. Re-record those baselines.
+  - **Panels:** the Tab Sequence view in `inspector`, `react` and `storybook-addon` follows the same rules, and so does the tree's "focusable" badge.
+  - **`interaction` facet:** `isFocusable` now says what Chromium says for every node, so it is `false` for an `<a>` without `href`, a disabled control and an element whose `tabindex` is not an integer.
+  - **`role="none"` / `role="presentation"`:** it gives way on a focusable element, and focusable now means the same thing here. So the role now applies to a control in a disabled fieldset, and no longer applies to an element with `tabindex="1abc"`. A DOM-mode a11y snapshot can change for either.
+
+- eccb0b8: Stop the tree panel redoing per-row work on every keystroke.
+
+  Keyboard navigation looked the selected row up with a linear `indexOf` over the whole visible list on each keypress, and ArrowRight scanned that list once per child to find the first visible one — so arrow-key cost grew with the size of the expanded tree. Both now read an id→index map built once per visible list.
+
+  The `aria-controls` jump chips were also rebuilt inside the render loop: every rendered row re-resolved each link's target node and reformatted its label on every render, including renders that only moved the selection. They are now resolved once per tree, so an unchanged row is handed the same chip data across re-renders.
+
+  Rendering is unchanged — same rows, same chips, same navigation.
+
+- e41d5cd: Add a `.sn-native-capability-banner` class (with a dark-mode variant) to the shared tree stylesheet (`@real-a11y-dev/semantic-navigator-ui`'s `tree.css`), replacing an inline-styled banner that ignored the theme. Every consumer of that package bundles `tree.css` as a side effect regardless of which classes it actually renders, so this ships as a changeset even though the banner itself is only ever rendered by the extension's dev-only native-tree view — not by anything `inspector` or `storybook-addon` render today. No visible change for either package; recorded because real bytes ship into both bundles.
+- Updated dependencies [b3c3ff2]
+- Updated dependencies [37e82f8]
+- Updated dependencies [d0cb634]
+- Updated dependencies [a6d9e15]
+- Updated dependencies [dca8553]
+- Updated dependencies [b27960e]
+- Updated dependencies [4ec846c]
+- Updated dependencies [2aa2c5c]
+- Updated dependencies [2aa2c5c]
+- Updated dependencies [3bab2a7]
+- Updated dependencies [8348641]
+- Updated dependencies [da7117e]
+- Updated dependencies [ce0ab40]
+- Updated dependencies [ef464bd]
+- Updated dependencies [f9c5c41]
+- Updated dependencies [64cf782]
+- Updated dependencies [daab90a]
+- Updated dependencies [a695e13]
+- Updated dependencies [8346959]
+- Updated dependencies [f84f589]
+- Updated dependencies [8346959]
+  - @real-a11y-dev/testing@0.1.0-beta.17
+
 ## 0.1.0-beta.16
 
 ### Minor Changes

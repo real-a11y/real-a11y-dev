@@ -54,35 +54,6 @@ main
     link "login"
       code "login"
     code "real-a11y <command> --help"
-  paragraph "Not in the published release yet"
-  paragraph "Some of what this page documents is on but not in 0.1.0-beta.6, so installing from npm today will not have it:"
-    code "main"
-    code "@real-a11y-dev/cli"
-  list
-    listitem
-      code "audit --redact-input"
-    listitem
-      code "click --redact-input"
-    listitem
-      code "focus --redact-input"
-    listitem
-      code "inspect --redact-input"
-    listitem
-      code "interact --redact-input"
-    listitem
-      code "list --redact-input"
-    listitem
-      code "outline --redact-input"
-    listitem
-      code "snapshot --redact-input"
-    listitem
-      code "snapshot --values"
-    listitem
-      code "tabs --redact-input"
-    listitem
-      code "tree --redact-input"
-    listitem
-      code "type --redact-input"
   paragraph "Findings and reports go to ; progress, warnings, and errors go to — so / a pipe never mixes the two."
     strong "stdout"
     strong "stderr"
