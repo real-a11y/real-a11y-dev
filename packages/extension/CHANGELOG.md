@@ -65,6 +65,15 @@
   always did. An `<optgroup>` never shows as disabled, as in Chromium.
   ([#436](https://github.com/real-a11y/real-a11y-dev/pull/436))
 
+- In DOM mode, the A11y view shows a rich-text editor's value the way
+  Chromium reports it. `aria-hidden` text inside an editor, or inside any ARIA
+  textbox or searchbox, is part of the value Chromium gives a screen reader,
+  and so is a popup inside it, but the A11y view left both out: an editor
+  holding `Hello <span aria-hidden="true">[x]</span>world` read
+  `= "Hello world"`, and now reads `= "Hello [x]world"`. A combobox you can't
+  type into still leaves them out, as Chromium does.
+  ([#460](https://github.com/real-a11y/real-a11y-dev/pull/460))
+
 ## 0.1.14
 
 ### Patch Changes
