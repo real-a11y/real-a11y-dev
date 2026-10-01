@@ -1824,6 +1824,28 @@ function isPickerOpen(select: Element): boolean {
   }
 }
 
+/** The largest `size` a `<select>` honors. Past it the attribute is ignored. */
+const MAX_SELECT_SIZE = 0xffffffff;
+
+/**
+ * Whether a `<select>` is a drop-down: its display size, as HTML and Chromium
+ * compute it, is 1. That is `size` when it parses to 1 through 2^32-1, and
+ * otherwise 4 for a `multiple` select and 1 for any other. So
+ * `<select multiple size="1">` is a drop-down and `<select multiple
+ * size="0">` a list box. Read from the attributes: the `size` property reads
+ * 0 above 2^31-1. `size` parses by HTML's integer rules, as `tabindex` does.
+ */
+function isDropDownSelect(select: Element): boolean {
+  const size = parseTabindex(select.getAttribute("size")) ?? 0;
+  const displaySize =
+    size > 0 && size <= MAX_SELECT_SIZE
+      ? size
+      : select.hasAttribute("multiple")
+        ? 4
+        : 1;
+  return displaySize <= 1;
+}
+
 /**
  * Roles on which Chromium exposes a native checkbox's or radio's checkedness
  * as `checked`. Its own role is one of them.
@@ -1873,10 +1895,11 @@ const SUMMARY_EXPANDED_ROLES = new Set([
  *   `checked` on a role in {@link CHECKEDNESS_ROLES}, and on an `option` or
  *   `treeitem` while `aria-checked` is set. It is `pressed` instead on a
  *   `button` with `aria-pressed`, a toggle button. Any other role has neither.
- * - A `<select>` in its own role: a drop-down's `expanded` is whether its
- *   picker is open. A list box has none, and neither has a select showing
- *   more than one row, whatever its role. Neither is a toggle button, so
- *   neither has `pressed`. An author role other than those two reads
+ * - A `<select>` as a combobox or list box: a drop-down
+ *   ({@link isDropDownSelect}) in the combobox role is expanded while its
+ *   picker is open. A list box has no expanded state, unless the author gave
+ *   it the combobox role, which reads `aria-expanded` as usual. Neither is a
+ *   toggle button, so neither has `pressed`. Any other author role reads
  *   `aria-expanded` and `aria-pressed` as usual.
  * - Any `<summary>` child of a `<details>`, not only the one that toggles it:
  *   `expanded` is whether the details is open, in its own role or one in
@@ -1901,13 +1924,13 @@ export function nativeStates(
   }
   if (tag === "select") {
     if (role !== "combobox" && role !== "listbox") return {};
-    const select = element as HTMLSelectElement;
-    const dropDown = !select.multiple && select.size <= 1;
-    return {
-      expanded:
-        role === "combobox" && dropDown ? isPickerOpen(element) : undefined,
-      pressed: undefined,
-    };
+    if (role === "combobox" && isDropDownSelect(element))
+      return { expanded: isPickerOpen(element), pressed: undefined };
+    // A list box has no expanded state, unless an author's combobox role
+    // gives it one, read from aria-expanded as usual.
+    return getExplicitRole(element) === "combobox"
+      ? { pressed: undefined }
+      : { expanded: undefined, pressed: undefined };
   }
   const details = element.parentElement;
   if (tag === "summary" && details?.tagName.toLowerCase() === "details") {
