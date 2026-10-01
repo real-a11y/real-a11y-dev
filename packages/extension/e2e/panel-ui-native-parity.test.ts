@@ -29,6 +29,35 @@ async function showNative(
   return page;
 }
 
+/**
+ * Route the panel's `SEND_KEY` to the page's top frame, as the background
+ * does for a real side panel. This harness loads the panel as a tab, so the
+ * background reads its messages as a content script's and never forwards a
+ * key to the page (see the DOM-producer note in `harness.ts`). Only `SEND_KEY`
+ * is rerouted; everything else goes through untouched. Install it after the
+ * panel's last reload, which would drop it.
+ */
+async function routeSendKeyToPage(panel: PanelPage): Promise<void> {
+  await panel.evaluate(() => {
+    const real = chrome.runtime.sendMessage.bind(chrome.runtime) as (
+      message: unknown,
+      ...rest: unknown[]
+    ) => Promise<unknown>;
+    chrome.runtime.sendMessage = ((message: unknown, ...rest: unknown[]) => {
+      const m = message as { type?: unknown; tabId?: unknown } | null;
+      if (m?.type !== "SEND_KEY" || typeof m.tabId !== "number") {
+        return real(message, ...rest);
+      }
+      const callback = rest.find((r) => typeof r === "function") as
+        ((response: unknown) => void) | undefined;
+      chrome.tabs.sendMessage(m.tabId, m, { frameId: 0 }, (response) => {
+        callback?.(chrome.runtime.lastError ? undefined : response);
+      });
+      return undefined;
+    }) as typeof chrome.runtime.sendMessage;
+  });
+}
+
 /** Click a panel button from inside the panel. A Playwright click would bring
  *  the panel's own tab to the front, and `SEND_KEY` goes to the panel's bound
  *  tab — see `field-values.test.ts`'s `press`. */
@@ -53,6 +82,7 @@ test("a modal dialog shows the dialog indicator, and Press ESC closes it", async
   nav,
 }) => {
   const page = await showNative(nav, "dialog-modal.html");
+  await routeSendKeyToPage(nav.panel);
 
   await nav.panel
     .getByRole("treeitem", { name: /^button "Add delivery address"/ })
@@ -84,6 +114,7 @@ test("the keyboard bar sends a key to the page from the native tree", async ({
   nav,
 }) => {
   const page = await showNative(nav, "native-panel.html");
+  await routeSendKeyToPage(nav.panel);
 
   // Selecting a row moves the page's focus to its element (#412).
   await nav.panel.getByRole("treeitem", { name: /^button "Item 2"/ }).click();
