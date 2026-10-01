@@ -2284,10 +2284,14 @@ export function App() {
   // same content-script path. A key can change the page (Escape closing a
   // dialog, Enter submitting a form), and a native tree is read only on
   // request, so read it again once the page has settled, as an action does.
-  // Skipped if the tab or document changed in the meantime. An action still
-  // in flight would make `loadNativeTree` skip the read silently, and that
-  // action's own re-read may land before the key took effect (Escape after a
-  // click that opened a dialog), so wait it out — bounded — then read.
+  // Skipped after a tab switch or with native mode turned off. An action
+  // still in flight would make `loadNativeTree` skip the read silently, and
+  // that action's own re-read may land before the key took effect (Escape
+  // after a click that opened a dialog), so wait it out — bounded — then
+  // read. A key can also navigate (Enter submitting a form): PAGE_NAVIGATED
+  // then clears the tree and bumps `nativeOpToken` but not `tabChangeToken`,
+  // so read the destination through `recoverFromOwnNavigation`, as a native
+  // click that navigates does, rather than leave the tree empty.
   const handleNativeSendKey = useCallback(
     (
       key: string,
@@ -2299,17 +2303,29 @@ export function App() {
       const tabId = nativeTreeTabId;
       if (tabId === undefined) return;
       const token = nativeOpToken.current;
+      const tabChangeAtStart = tabChangeToken.current;
       const reread = (attempt: number) => {
-        if (token !== nativeOpToken.current) return;
-        if (nativeInFlight.current && attempt < MAX_SEND_KEY_REREAD_WAITS) {
-          setTimeout(() => reread(attempt + 1), NATIVE_SETTLE_MS);
+        if (tabChangeToken.current !== tabChangeAtStart) return;
+        if (nativeInFlight.current) {
+          if (attempt < MAX_SEND_KEY_REREAD_WAITS) {
+            setTimeout(() => reread(attempt + 1), NATIVE_SETTLE_MS);
+          }
           return;
         }
-        void loadNativeTree(tabId);
+        if (token === nativeOpToken.current) {
+          void loadNativeTree(tabId);
+          return;
+        }
+        // Held like `dispatchNativeAction` holds it, since the recovery reads
+        // through the unguarded core.
+        nativeInFlight.current = true;
+        void recoverFromOwnNavigation(tabId, tabChangeAtStart).finally(() => {
+          nativeInFlight.current = false;
+        });
       };
       setTimeout(() => reread(0), NATIVE_SETTLE_MS);
     },
-    [handleSendKey, nativeTreeTabId, loadNativeTree],
+    [handleSendKey, nativeTreeTabId, loadNativeTree, recoverFromOwnNavigation],
   );
 
   // Export the selected view(s) as a Markdown report and copy to clipboard.

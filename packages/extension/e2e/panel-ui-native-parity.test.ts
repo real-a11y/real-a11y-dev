@@ -131,6 +131,23 @@ test("the keyboard bar sends a key to the page from the native tree", async ({
   );
 });
 
+test("a sent key that navigates the page re-reads the native tree there", async ({
+  nav,
+}) => {
+  const page = await showNative(nav, "native-nav-key.html");
+  await routeSendKeyToPage(nav.panel);
+
+  await clickInPanel(nav.panel, ".sn-keyboard-bar", "Enter");
+  await page.waitForURL(/tree-view\.html/);
+
+  // No refresh: the navigation clears the native tree, and the key's own
+  // re-read follows the page to its destination, as a native click does.
+  // "Tree View" is the new page's own heading.
+  await expect(
+    nav.panel.getByRole("treeitem", { name: "Tree View" }),
+  ).toBeVisible({ timeout: 10_000 });
+});
+
 test("Enter steps a native slider up and Shift+Enter steps it down", async ({
   nav,
 }) => {
