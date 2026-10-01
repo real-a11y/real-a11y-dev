@@ -22,14 +22,14 @@
 
 ## Unreleased
 
-- In DOM mode, the tree keeps taking in changes on a page with a `<form>`
-  whose field is named `tagName`. Such a field shadows the form's own
-  `tagName`, and the live update read it on every ancestor of a change, so a
-  change inside the form, or to the form, threw and the panel lost that
-  batch of updates, changes elsewhere on the page included. A heading, link,
-  button or table cell that holds such a form, and help text a field's
-  `aria-describedby` points at, are no longer dropped from the tree either.
-  ([#PR](https://github.com/real-a11y/real-a11y-dev/pull/PR))
+- In DOM mode, a heading, link, button or table cell that holds a `<form>`
+  whose field is named `tagName` is no longer dropped from the tree with
+  everything in it, and neither is help text a field's `aria-describedby`
+  points at that holds one. Such a field shadows the form's own `tagName`,
+  and working out the name around the form read it and threw. A change in or
+  around such a form also updates the tree in place again, instead of
+  rebuilding all of it.
+  ([#462](https://github.com/real-a11y/real-a11y-dev/pull/462))
 
 - A page with a `<form>` holding a control named `parentElement`, such as
   `<input type="hidden" name="parentElement">`, no longer freezes the tab when

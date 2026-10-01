@@ -1649,20 +1649,6 @@ describe("LiveTreeExtractor", () => {
       return { mutations };
     };
 
-    /**
-     * Shadow `prop` the way Chromium does: the read returns the control. For an
-     * accessor, which `clobber()` — it throws on the read — models too harshly:
-     * the text walks read `tagName` behind a `typeof` guard and survive the
-     * real thing, so only the control itself tests what a page does.
-     */
-    const shadowWithControl = (form: Element, prop: string): void => {
-      const control = form.querySelector(`[name="${prop}"]`);
-      Object.defineProperty(form, prop, {
-        configurable: true,
-        get: () => control,
-      });
-    };
-
     const buttonName = (result: ExtractionResult) =>
       [...result.nodes.values()].find((n) => n.a11y.role === "button")?.a11y
         .name;
@@ -1674,18 +1660,13 @@ describe("LiveTreeExtractor", () => {
         clobber,
       ],
       [
-        "tagName",
-        "nameRelevantAncestor asks the form for its tag",
-        shadowWithControl,
-      ],
-      [
         "contains",
         "collapseToOutermost asks the form whether it holds the text",
         clobber,
       ],
     ])(
       "keeps the tree right when the form's %s is shadowed (%s)",
-      (prop, _how, shadow) => {
+      (prop, _how, shadowProp) => {
         document.body.innerHTML = `
           <main id="app">
             <h1 id="title">Title</h1>
@@ -1698,7 +1679,7 @@ describe("LiveTreeExtractor", () => {
         `;
         const root = document.getElementById("app")!;
         const form = root.querySelector("form")!;
-        shadow(form, prop);
+        shadowProp(form, prop);
         const live = new LiveTreeExtractor(root, { mode: "a11y" });
 
         const change = observe(root, () => {
@@ -1716,14 +1697,10 @@ describe("LiveTreeExtractor", () => {
     it.each([
       ["matches", "asks the added form whether it is an overlay", clobber],
       ["querySelectorAll", "scans the added form for references", clobber],
-      [
-        "ownerDocument",
-        "resolves the added form's aria-labelledby",
-        shadowWithControl,
-      ],
+      ["ownerDocument", "resolves the added form's aria-labelledby", shadow],
     ])(
       "keeps the tree right when an added form's %s is shadowed (the splice %s)",
-      (prop, _how, shadow) => {
+      (prop, _how, shadowProp) => {
         document.body.innerHTML = `
           <main id="app"><h1 id="title">Title</h1><div id="slot"></div></main>
         `;
@@ -1733,7 +1710,7 @@ describe("LiveTreeExtractor", () => {
         const form = document.createElement("form");
         form.setAttribute("aria-labelledby", "title");
         form.innerHTML = `<input name="${prop}" aria-label="Field" />`;
-        shadow(form, prop);
+        shadowProp(form, prop);
         const change = observe(root, () => {
           document.getElementById("slot")!.append(form);
         });
@@ -1863,17 +1840,35 @@ describe("LiveTreeExtractor", () => {
     });
   });
 
-  // `<form>` has [LegacyOverrideBuiltIns], so `<input name="tagName">` makes
-  // `form.tagName` that input, and `.toLowerCase()` on it throws. The full
-  // walk skips such a form through its per-element boundary. A refresh has
-  // none, and every change inside or on the form climbs through it reading
-  // tags — so the change threw, and the batch it came in was lost with it.
-  // (Forced: jsdom doesn't shadow a form's own members.)
+  // `<input name="tagName">` makes `form.tagName` that input, and
+  // `.toLowerCase()` on it throws. Every change inside or on the form climbs
+  // through it reading tags, so the splice threw. The splice fallback (see "a
+  // method the splice calls" above) keeps the tree right when that happens,
+  // but at a full extraction's cost on every change near the form — and the
+  // tag is a read the splice can make safely, so these must splice without
+  // falling back. (Forced: jsdom doesn't shadow a form's own members.)
   describe("a <form> whose control shadows tagName", () => {
+    let warn: ReturnType<typeof vi.spyOn>;
+
     beforeEach(() => {
-      // The full walk warns about the form it skips.
-      vi.spyOn(console, "warn").mockImplementation(() => {});
+      // The full walk warns about the form it skips; the fallback would too.
+      warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     });
+
+    /**
+     * The refresh spliced: it never had to fall back to a full extraction.
+     * Checked by hand rather than with `not.toHaveBeenCalledWith`, whose
+     * failure message prints every call — and the walk's own warning passes
+     * the shadowed form, which the printer then reads `tagName` on and throws.
+     */
+    const expectSpliced = (): void => {
+      const fellBack = warn.mock.calls.some(([message]) =>
+        String(message).includes("fell back to a full extraction"),
+      );
+      expect(fellBack, "the refresh fell back to a full extraction").toBe(
+        false,
+      );
+    };
 
     afterEach(() => {
       vi.restoreAllMocks();
@@ -1916,6 +1911,7 @@ describe("LiveTreeExtractor", () => {
       });
 
       expect(result.nodes).toEqual(extractA11yTree(root).nodes);
+      expectSpliced();
       const names = [...result.nodes.values()].map((n) => n.a11y.name);
       expect(names).toContain("Open orders");
     });
@@ -1933,6 +1929,7 @@ describe("LiveTreeExtractor", () => {
       });
 
       expect(result.nodes).toEqual(extractA11yTree(root).nodes);
+      expectSpliced();
     });
 
     it("keeps updating when an attribute on the form itself changes", () => {
@@ -1948,6 +1945,7 @@ describe("LiveTreeExtractor", () => {
       });
 
       expect(result.nodes).toEqual(extractDomTree(root).nodes);
+      expectSpliced();
     });
 
     it("keeps updating when content inside the form is replaced", () => {
@@ -1964,6 +1962,7 @@ describe("LiveTreeExtractor", () => {
       });
 
       expect(result.nodes).toEqual(extractA11yTree(root).nodes);
+      expectSpliced();
     });
 
     it("drops the form, as a fresh extraction does, when the control arrives later", () => {
@@ -1988,6 +1987,7 @@ describe("LiveTreeExtractor", () => {
       });
 
       expect(result.nodes).toEqual(extractDomTree(root).nodes);
+      expectSpliced();
       const after = [...result.nodes.values()].map((n) => n.a11y.name);
       expect(after).not.toContain("Search");
       expect(after).toContain("Orders");
