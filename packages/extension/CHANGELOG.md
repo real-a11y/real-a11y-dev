@@ -29,7 +29,7 @@
   and the whole form was skipped. A change in or around a form with a field
   named `contains` or `matches` also updates the tree in place now, rather
   than rebuilding it in full.
-  ([#PR](https://github.com/real-a11y/real-a11y-dev/pull/PR))
+  ([#462](https://github.com/real-a11y/real-a11y-dev/pull/462))
 
 - In DOM mode, a `<form>` with a control named `nodeType`, such as
   `<input type="hidden" name="nodeType">`, now shows in the tree with
