@@ -29,7 +29,7 @@
   and working out the name around the form read it and threw. A change in or
   around such a form also updates the tree in place again, instead of
   rebuilding all of it.
-  ([#462](https://github.com/real-a11y/real-a11y-dev/pull/462))
+  ([#465](https://github.com/real-a11y/real-a11y-dev/pull/465))
 
 - A page with a `<form>` holding a control named `parentElement`, such as
   `<input type="hidden" name="parentElement">`, no longer freezes the tab when
