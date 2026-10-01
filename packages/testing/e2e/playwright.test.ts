@@ -408,6 +408,33 @@ test.describe("a page whose named elements shadow DOM methods", () => {
     const sn = await attach(page, { rootSelector: "#app" });
     expect(await sn.treeSnapshot()).toContain('button "Go"');
   });
+
+  // The adapter resolves the audit root in the page before core ever runs, so
+  // a shadowed `document.querySelector` rejected every call — even with no
+  // rootSelector, since the default is the literal selector "body".
+  const SHADOWED_QUERY_SELECTOR = `<main>
+      <img name="querySelector" alt="">
+      <label for="email">Email</label>
+      <input id="email" type="email">
+    </main>`;
+
+  test("resolves the audit root for treeSnapshot when the document's querySelector is shadowed", async ({
+    page,
+  }) => {
+    await page.setContent(SHADOWED_QUERY_SELECTOR);
+    const sn = await attach(page);
+    expect(await sn.treeSnapshot()).toContain('textbox "Email"');
+  });
+
+  test("resolves the audit root for the other helpers when the document's querySelector is shadowed", async ({
+    page,
+  }) => {
+    // Every helper but treeSnapshot shares one in-page lookup.
+    await page.setContent(SHADOWED_QUERY_SELECTOR);
+    const sn = await attach(page);
+    expect(await sn.tabSequenceSnapshot()).toContain('textbox "Email"');
+    await sn.assertNoUnlabeledInteractive();
+  });
 });
 
 test.describe("rootSelector that matches nothing", () => {

@@ -175,6 +175,86 @@ describe("DOM clobbering resilience", () => {
     expect(a11yNames).toContain("Apply");
   });
 
+  describe("a <form> field that shadows `parentElement`", () => {
+    // A real browser returns the field for `form.parentElement`, and the
+    // field's own parent is the form again. Deciding whether a link or an
+    // editor is inside editable content climbs the ancestors, and a plain climb
+    // cycles between the two forever: the page freezes, and no error boundary
+    // can catch a loop.
+    function clobberParentElement(root: Element): void {
+      const form = root.querySelector("form")!;
+      Object.defineProperty(form, "parentElement", {
+        configurable: true,
+        get: () => form.querySelector('[name="parentElement"]'),
+      });
+    }
+    const byName = (root: Element, name: string) =>
+      [...extractDomTree(root).nodes.values()].find(
+        (n) => n.a11y.name === name,
+      );
+
+    it("keeps a link inside the form live and an editor inside it focusable", () => {
+      const root = createPage(`
+        <main>
+          <form aria-label="Compose">
+            <input name="parentElement" aria-label="Subject" />
+            <div contenteditable="true" role="textbox" aria-label="Body">Hi</div>
+            <a href="/help">Help</a>
+          </form>
+        </main>
+      `);
+      clobberParentElement(root);
+
+      expect(byName(root, "Help")?.interaction?.actions).toEqual(
+        expect.arrayContaining(["click", "navigate"]),
+      );
+      expect(byName(root, "Body")?.interaction?.isFocusable).toBe(true);
+    });
+
+    it("reads the form's real parent, so an editable form is an editing host", () => {
+      // Read through the field, the form's "parent" is editable — the form
+      // itself — so the form looked like an editor's inner element rather
+      // than the host that takes focus.
+      const root = createPage(`
+        <main>
+          <form contenteditable="true" aria-label="Note">
+            <input name="parentElement" aria-label="Title" />
+          </form>
+        </main>
+      `);
+      clobberParentElement(root);
+
+      expect(byName(root, "Note")?.interaction?.isFocusable).toBe(true);
+    });
+
+    it("checks a portal's visibility up through the form", () => {
+      // Without `checkVisibility()` (jsdom, and older browsers) the check
+      // walks the ancestors itself. The portal pivots extraction to <body>, so
+      // use a throwaway one: `resetIdCounter()` keeps the node→id map, and a
+      // shared <body> that kept this test's id would collide with a node a
+      // later test mints.
+      const original = document.body;
+      const body = document.createElement("body");
+      body.innerHTML = `
+        <div id="app"><button>Checkout</button></div>
+        <form>
+          <input type="hidden" name="parentElement" />
+          <div role="dialog" aria-label="Cookies"><button>Accept</button></div>
+        </form>
+      `;
+      document.documentElement.replaceChild(body, original);
+      try {
+        clobberParentElement(body);
+        const app = document.getElementById("app")!;
+        // The visible portal widens the scope to body, as outside a form.
+        expect(byName(app, "Cookies")).toBeTruthy();
+        expect(byName(app, "Checkout")).toBeTruthy();
+      } finally {
+        document.documentElement.replaceChild(original, body);
+      }
+    });
+  });
+
   it("skips only the offending element (and its subtree) when its processing throws, keeping the rest of the tree", () => {
     // The per-element error boundary. If ANY read on ONE element throws — here a
     // clobbered `tagName` (`<input name="tagName">` on a [LegacyOverrideBuiltIns]
@@ -3191,6 +3271,117 @@ describe("a11y.value — what a screen reader announces (ADR-0001)", () => {
         "[role=combobox]",
       ),
     ).toBe("Apple");
+  });
+
+  // Chromium 151 reads an editor's value, and any ARIA textbox's or
+  // searchbox's, as its RENDERED text, which knows nothing of ARIA: the
+  // aria-hidden text and the popup stay in. Only a combobox you can't type
+  // into is read as accessible text, as above. Measured over CDP
+  // `Accessibility.getFullAXTree`.
+  it("keeps aria-hidden text in an editor's value, as Chromium does", () => {
+    expect(
+      valueOf(
+        `<div contenteditable="true" role="textbox" aria-label="C">Hello <span aria-hidden="true">[x]</span>world</div>`,
+        "[contenteditable]",
+      ),
+    ).toBe("Hello [x]world");
+    // A role-less host, a plaintext-only one, and a whole hidden paragraph.
+    expect(
+      valueOf(
+        `<div contenteditable="true">Hello <span aria-hidden="true">[x]</span>world</div>`,
+        "div",
+      ),
+    ).toBe("Hello [x]world");
+    expect(
+      valueOf(
+        `<div contenteditable="plaintext-only" role="textbox" aria-label="C"><p>one</p><p aria-hidden="true">two</p><p>three</p></div>`,
+        "[contenteditable]",
+      ),
+    ).toBe("one two three");
+    // Inside a contenteditable="false" island, and under a nested textbox
+    // whose text the host announces for it.
+    expect(
+      valueOf(
+        `<div contenteditable="true" role="textbox" aria-label="C">a <span contenteditable="false">b <span aria-hidden="true">c</span></span> d</div>`,
+        "[aria-label=C]",
+      ),
+    ).toBe("a b c d");
+    expect(
+      valueOf(
+        `<div contenteditable="true" role="textbox" aria-label="C"><p>intro</p><div role="textbox" aria-label="Cell">cell <span aria-hidden="true">[x]</span>text</div></div>`,
+        "[aria-label=C]",
+      ),
+    ).toBe("intro cell [x]text");
+  });
+
+  it("keeps aria-hidden text in an editable combobox's or searchbox's value", () => {
+    expect(
+      valueOf(
+        `<div contenteditable="true" role="combobox" aria-label="C">Hello <span aria-hidden="true">[x]</span>world</div>`,
+        "[role=combobox]",
+      ),
+    ).toBe("Hello [x]world");
+    expect(
+      valueOf(
+        `<div contenteditable="true" role="searchbox" aria-label="C">Hello <span aria-hidden="true">[x]</span>world</div>`,
+        "[role=searchbox]",
+      ),
+    ).toBe("Hello [x]world");
+  });
+
+  it("keeps aria-hidden text in an ARIA textbox's value even when it isn't editable", () => {
+    expect(
+      valueOf(
+        `<div role="textbox" aria-label="C" tabindex="0">Hello <span aria-hidden="true">[x]</span>world</div>`,
+        "[role=textbox]",
+      ),
+    ).toBe("Hello [x]world");
+    expect(
+      valueOf(
+        `<div role="searchbox" aria-label="C" tabindex="0">Hello <span aria-hidden="true">[x]</span>world</div>`,
+        "[role=searchbox]",
+      ),
+    ).toBe("Hello [x]world");
+  });
+
+  it("keeps a popup's text in an editor's or textbox's value", () => {
+    expect(
+      valueOf(
+        `<div contenteditable="true" role="textbox" aria-label="C">Apple<ul role="listbox"><li role="option">Pear</li></ul></div>`,
+        "[aria-label=C]",
+      ),
+    ).toBe("Apple Pear");
+    expect(
+      valueOf(
+        `<div contenteditable="true" role="combobox" aria-label="C">Apple<ul role="listbox"><li role="option">Pear</li></ul></div>`,
+        "[role=combobox]",
+      ),
+    ).toBe("Apple Pear");
+    expect(
+      valueOf(
+        `<div role="textbox" aria-label="C" tabindex="0">Apple<ul role="listbox"><li role="option">Pear</li></ul></div>`,
+        "[role=textbox]",
+      ),
+    ).toBe("Apple Pear");
+  });
+
+  it("still skips what isn't rendered in an editor, aria-hidden or not", () => {
+    expect(
+      valueOf(
+        `<div contenteditable="true" role="textbox" aria-label="C">Hi <span aria-hidden="true" hidden>[x]</span><span aria-hidden="true" style="visibility:hidden">[v]</span><span aria-hidden="true" style="display:none">[d]</span>there</div>`,
+        "[contenteditable]",
+      ),
+    ).toBe("Hi there");
+  });
+
+  it("never lets a sensitive control's text into an editor's value, even under aria-hidden", () => {
+    const root = createPage(
+      `<div contenteditable="true" role="textbox" aria-label="C">Pay <span aria-hidden="true"><textarea autocomplete="cc-number" aria-label="Card">4111111111111111</textarea><select autocomplete="cc-exp-month" aria-label="Month"><option selected>12</option></select><input type="password" aria-label="PIN" value="hunter2"></span> now</div>`,
+    );
+    expect(nodeFor(root, "[contenteditable]").a11y.value).toBe("Pay now");
+    expect(nodeFor(root, "textarea").a11y.value).toBe("[redacted]");
+    expect(nodeFor(root, "select").a11y.value).toBe("[redacted]");
+    expect(nodeFor(root, "input").a11y.value).toBe("[redacted]");
   });
 
   it("skips visibility:hidden text, but reads a child that sets itself visible again", () => {
