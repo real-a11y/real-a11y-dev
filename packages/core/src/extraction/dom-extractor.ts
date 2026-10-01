@@ -14,6 +14,7 @@ import {
   safeContains,
   safeGetAttribute,
   safeGetElementById,
+  safeNodeType,
   safeOwnerDocument,
   safeParentElement,
   safeQuerySelector,
@@ -829,9 +830,10 @@ function getAccessibleTextContent(
 ): string {
   let text = "";
   for (const child of flatChildNodes(element)) {
-    if (child.nodeType === Node.TEXT_NODE) {
+    const type = safeNodeType(child);
+    if (type === Node.TEXT_NODE) {
       text += child.textContent || "";
-    } else if (child.nodeType === Node.ELEMENT_NODE) {
+    } else if (type === Node.ELEMENT_NODE) {
       const childEl = child as Element;
       const childStyle = getCachedComputedStyle(childEl, styleCache);
       // Checked before aria-hidden so that `display: none` and `[hidden]`,
@@ -1035,10 +1037,11 @@ function computeRawAccessibleName(
       const FORM_CONTROL_TAGS = new Set(["input", "select", "textarea"]);
       const parts: string[] = [];
       for (const child of wrappingLabel.childNodes) {
-        if (child.nodeType === Node.TEXT_NODE) {
+        const type = safeNodeType(child);
+        if (type === Node.TEXT_NODE) {
           const text = child.textContent?.trim();
           if (text) parts.push(text);
-        } else if (child.nodeType === Node.ELEMENT_NODE) {
+        } else if (type === Node.ELEMENT_NODE) {
           const childEl = child as Element;
           if (childEl === element) continue;
           if (FORM_CONTROL_TAGS.has(safeTagName(childEl))) continue;
@@ -1170,7 +1173,7 @@ function computeRawAccessibleName(
 function getDirectTextContent(element: Element): string {
   let text = "";
   for (const child of flatChildNodes(element)) {
-    if (child.nodeType === Node.TEXT_NODE) {
+    if (safeNodeType(child) === Node.TEXT_NODE) {
       text += child.textContent || "";
     }
   }
@@ -1229,10 +1232,11 @@ function collectDescendantTextBounded(
   state: CollapsedTextState,
   moreNodesAfter: () => boolean,
 ): boolean {
-  if (node.nodeType === Node.TEXT_NODE) {
+  const type = safeNodeType(node);
+  if (type === Node.TEXT_NODE) {
     return appendCollapsedTextChunk(state, safeTextContent(node));
   }
-  if (node.nodeType !== Node.ELEMENT_NODE) return false;
+  if (type !== Node.ELEMENT_NODE) return false;
   const rawTag = (node as Element).tagName;
   const tag = typeof rawTag === "string" ? rawTag.toLowerCase() : "";
   if (MEDIA_TAGS.has(tag)) return false;
@@ -1387,12 +1391,13 @@ function getFieldText(
   const isVisible = (style: CSSStyleDeclaration | null): boolean =>
     style?.visibility !== "hidden" && style?.visibility !== "collapse";
   const walk = (node: Node, textVisible: boolean): boolean => {
-    if (node.nodeType === Node.TEXT_NODE) {
+    const type = safeNodeType(node);
+    if (type === Node.TEXT_NODE) {
       return textVisible
         ? appendCollapsedTextChunk(state, safeTextContent(node))
         : false;
     }
-    if (node.nodeType !== Node.ELEMENT_NODE) return false;
+    if (type !== Node.ELEMENT_NODE) return false;
     const el = node as Element;
     const rawTag = el.tagName;
     const tag = typeof rawTag === "string" ? rawTag.toLowerCase() : "";

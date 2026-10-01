@@ -2238,6 +2238,36 @@ describe("LiveTreeExtractor", () => {
       },
     );
 
+    it("refreshes a field described from inside an added form whose nodeType is shadowed", () => {
+      // `form.nodeType` reads as the control, not 1, so the splice took the
+      // added form for no element at all and never collected the ids inside
+      // it: the field it describes kept the description it had before.
+      // (jsdom's own selector engine cannot read such a form either, so here
+      // the splice then falls back to a full extraction; Chromium splices it.)
+      document.body.innerHTML = `
+        <main id="app">
+          <input aria-label="Email" aria-describedby="hint" />
+          <div id="slot"></div>
+        </main>
+      `;
+      const root = document.getElementById("app")!;
+      const live = new LiveTreeExtractor(root, { mode: "a11y" });
+
+      const form = document.createElement("form");
+      form.innerHTML = `<input type="hidden" name="nodeType" /><span id="hint">Use a work email</span>`;
+      shadowWithControl(form, "nodeType");
+      const result = live.refresh(
+        observe(root, () => {
+          document.getElementById("slot")!.append(form);
+        }),
+      );
+
+      const email = [...result.nodes.values()].find(
+        (n) => n.a11y.name === "Email",
+      );
+      expect(email?.a11y.description).toBe("Use a work email");
+    });
+
     it("warns outside production that it fell back to a full extraction", () => {
       // The fallback is silent in its output by design, so a bug that made the
       // splice throw on ordinary pages would pass every equality test here and

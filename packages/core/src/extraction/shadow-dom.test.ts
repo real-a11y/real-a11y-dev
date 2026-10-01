@@ -9,8 +9,12 @@ import type { ExtractionResult, SemanticNode } from "../types.js";
 import { resetIdCounter } from "../utils/id-generator.js";
 
 import { extractA11yTree } from "./a11y-extractor.js";
-import { extractDomTree, getElementRefs } from "./dom-extractor.js";
-import { flatParent, isRenderedInFlatTree } from "./flat-tree.js";
+import {
+  extractDomTree,
+  getDescendantText,
+  getElementRefs,
+} from "./dom-extractor.js";
+import { flatChildren, flatParent, isRenderedInFlatTree } from "./flat-tree.js";
 
 let page: HTMLElement;
 
@@ -338,7 +342,7 @@ describe("description-target folding respects tree scope", () => {
 // control. A walk up the flat tree through such a form must still reach the
 // real ancestors: reading the control instead cycles back into the form, and a
 // loop over ancestors then never ends, hanging the page.
-describe("flat-tree ancestors of a clobbered <form>", () => {
+describe("the flat tree around a clobbered <form>", () => {
   /** Shadow `prop` on `form` with its control, as a browser's form does. */
   function clobber(form: Element, prop: string): void {
     const control = form.querySelector(`[name="${prop}"]`);
@@ -412,6 +416,24 @@ describe("flat-tree ancestors of a clobbered <form>", () => {
       </form>`;
     clobber(page.querySelector("form")!, "parentElement");
     expect(find(extractDomTree(page), "banner")).toBeTruthy();
+  });
+
+  // `form.nodeType` reads as the control, not 1, so a walk that keeps a child
+  // by testing `nodeType === 1` took the form for no element at all and
+  // dropped it with everything inside it. jsdom's own selector engine reads
+  // it too, and throws on it, so these stop short of a full extraction;
+  // packages/testing/e2e pins that in Chromium.
+  it("keeps a form whose control is named nodeType among the flat children", () => {
+    page.innerHTML = `<main><form aria-label="Pay"><input type="hidden" name="nodeType"><label>Card <input></label><button>Pay</button></form></main>`;
+    const form = page.querySelector("form")!;
+    clobber(form, "nodeType");
+    expect(flatChildren(page.querySelector("main")!)).toEqual([form]);
+  });
+
+  it("reads the text inside such a form", () => {
+    page.innerHTML = `<div id="d"><form><input type="hidden" name="nodeType"><span>Hello world</span></form></div>`;
+    clobber(page.querySelector("form")!, "nodeType");
+    expect(getDescendantText(page.querySelector("#d")!)).toBe("Hello world");
   });
 });
 

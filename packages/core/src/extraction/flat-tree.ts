@@ -25,6 +25,7 @@ import {
   safeChildNodes,
   safeChildren,
   safeHidden,
+  safeNodeType,
   safeOwnerDocument,
   safeParentElement,
   safeParentNode,
@@ -39,7 +40,7 @@ const DOCUMENT_FRAGMENT_NODE = 11;
 
 function isSlot(node: Node): node is HTMLSlotElement {
   return (
-    node.nodeType === ELEMENT_NODE &&
+    safeNodeType(node) === ELEMENT_NODE &&
     (node as Element).localName === "slot" &&
     typeof (node as HTMLSlotElement).assignedNodes === "function"
   );
@@ -110,7 +111,7 @@ function detailsSummary(details: Element): Element | null {
  */
 function isClosedDetails(node: Node): boolean {
   return (
-    node.nodeType === ELEMENT_NODE &&
+    safeNodeType(node) === ELEMENT_NODE &&
     (node as Element).localName === "details" &&
     (node as HTMLDetailsElement).open === false
   );
@@ -145,7 +146,9 @@ export function flatChildNodes(node: Node): Node[] {
     return summary ? [summary] : [];
   }
   const shadow =
-    node.nodeType === ELEMENT_NODE ? safeShadowRoot(node as Element) : null;
+    safeNodeType(node) === ELEMENT_NODE
+      ? safeShadowRoot(node as Element)
+      : null;
   const out: Node[] = [];
   for (const child of safeChildNodes(shadow ?? node)) {
     if (isSlot(child)) {
@@ -196,10 +199,16 @@ export function isRenderedInFlatTree(element: Element): boolean {
   return true;
 }
 
-/** Element children in the flat tree. */
+/**
+ * Element children in the flat tree.
+ *
+ * Kept by a clobber-safe type read: `<input name="nodeType">` makes a form's
+ * `nodeType` that input, so a plain `n.nodeType === 1` took the form for no
+ * element at all, and the walk dropped it with everything inside it.
+ */
 export function flatChildren(element: Element): Element[] {
   return flatChildNodes(element).filter(
-    (n): n is Element => n.nodeType === ELEMENT_NODE,
+    (n): n is Element => safeNodeType(n) === ELEMENT_NODE,
   );
 }
 

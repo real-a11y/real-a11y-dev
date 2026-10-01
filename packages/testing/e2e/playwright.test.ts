@@ -460,6 +460,49 @@ test.describe("a page whose named elements shadow DOM methods", () => {
   });
 });
 
+test.describe("a form whose control is named nodeType", () => {
+  // `<input name="nodeType">` makes `form.nodeType` that input, not 1, and the
+  // DOM walk kept a child by testing `nodeType === 1`: it took the form for no
+  // element at all and dropped it with everything inside it. jsdom has no
+  // named-property override, and its own selector engine cannot read such a
+  // form once a test forces one, so core's unit tests stop short of a full
+  // extraction. This is the full one, in Chromium.
+  const PAY_FORM = `<main>
+      <form aria-label="Pay">
+        <input type="hidden" name="nodeType">
+        <label>Card <input></label>
+        <button>Pay</button>
+      </form>
+    </main>`;
+
+  test("treeSnapshot keeps the form and what is inside it", async ({
+    page,
+  }) => {
+    await page.setContent(PAY_FORM);
+    const sn = await attach(page);
+    const snapshot = await sn.treeSnapshot();
+    expect(snapshot).toContain('form "Pay"');
+    expect(snapshot).toContain('textbox "Card"');
+    expect(snapshot).toContain('button "Pay"');
+  });
+
+  test("tabSequenceSnapshot lists the controls inside it", async ({ page }) => {
+    await page.setContent(PAY_FORM);
+    const sn = await attach(page);
+    const tabs = await sn.tabSequenceSnapshot();
+    expect(tabs).toContain('textbox "Card"');
+    expect(tabs).toContain('button "Pay"');
+  });
+
+  test("names a heading from the text inside such a form", async ({ page }) => {
+    await page.setContent(
+      `<main><h2>Checkout <form><input type="hidden" name="nodeType"><span>now</span></form></h2></main>`,
+    );
+    const sn = await attach(page);
+    expect(await sn.treeSnapshot()).toContain('heading "Checkout now"');
+  });
+});
+
 test.describe("rootSelector that matches nothing", () => {
   test.beforeEach(async ({ page }) => {
     await page.goto(fixtureUrl("fixture.html"));

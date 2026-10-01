@@ -267,9 +267,23 @@ const SCOPE_METHODS: Record<number, ScopeMethods | undefined> =
   }));
 
 function scopeMethods(node: Node): ScopeMethods | undefined {
-  return SCOPE_METHODS[
-    nodeTypeGetter ? (nodeTypeGetter.call(node) as number) : node.nodeType
-  ];
+  return SCOPE_METHODS[safeNodeType(node)];
+}
+
+/**
+ * Clobber-immune `node.nodeType`. `<input name="nodeType">` makes a form's
+ * `nodeType` that input, not 1, so a walk that keeps a child by checking
+ * `child.nodeType === 1` takes the form for no element at all and drops it
+ * with everything inside it. A document's `<img name="nodeType">` shadows the
+ * document's the same way.
+ *
+ * Only a test for an element (or a document) is exposed: a shadowed value is
+ * an element, never a number, so a test for a text node already answers
+ * "no" for a form, which is right. Read it through here anyway wherever one
+ * node is asked both, rather than keeping track of which half is safe.
+ */
+export function safeNodeType(node: Node): number {
+  return nodeTypeGetter ? (nodeTypeGetter.call(node) as number) : node.nodeType;
 }
 
 /** Clobber-immune `element.getAttribute(name)` (`<input name="getAttribute">`). */
