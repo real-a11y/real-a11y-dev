@@ -153,6 +153,16 @@
 
   ([#459](https://github.com/real-a11y/real-a11y-dev/pull/459))
 
+- Two more of the DOM tree's controls work in the native tree:
+  - `aria-controls` jump chips. A row shows a chip to each row it controls,
+    and a controlled row shows one back to its controller. A jump opens the
+    rows above its target and leaves a scope the target is outside.
+  - The option picker for a `<select>`: activating its row lists its
+    options, starting on the current one, and choosing one selects it on the
+    page. A custom `role="combobox"` is still clicked.
+
+  ([#PR](https://github.com/real-a11y/real-a11y-dev/pull/PR))
+
 ## 0.1.15
 
 ### Patch Changes
