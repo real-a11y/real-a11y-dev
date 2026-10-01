@@ -2,6 +2,7 @@ import type { SemanticNode, ExtractionResult, ActionType } from "../types.js";
 import { ElementRefMap, ELEMENT_REF_MAP_SHAPE } from "../utils/element-ref.js";
 import { getNodeId } from "../utils/id-generator.js";
 import { realmSingleton } from "../utils/realm-singleton.js";
+import { warnOutsideProduction } from "../utils/warn.js";
 
 import {
   ariaBoolean,
@@ -10,7 +11,12 @@ import {
   isAriaHiddenValue,
 } from "./aria-tokens.js";
 import {
+  safeContains,
+  safeGetElementById,
+  safeOwnerDocument,
   safeParentElement,
+  safeQuerySelector,
+  safeQuerySelectorAll,
   safeRootNode,
   safeTextContent,
 } from "./clobber-safe.js";
@@ -443,7 +449,7 @@ function computeAccessibleDescription(
       .split(/\s+/)
       .filter(Boolean)
       .map((id) => {
-        const target = doc.getElementById(id);
+        const target = safeGetElementById(doc, id);
         return target
           ? getAccessibleTextContent(target, new Set(), styleCache).trim()
           : undefined;
@@ -887,7 +893,7 @@ function computeRawAccessibleName(
     const names = labelledBy
       .split(/\s+/)
       .map((id) => {
-        const target = doc.getElementById(id);
+        const target = safeGetElementById(doc, id);
         return target
           ? getAccessibleTextContent(target, visited, styleCache).trim()
           : "";
@@ -919,7 +925,7 @@ function computeRawAccessibleName(
   if (tag === "input" || tag === "select" || tag === "textarea") {
     const id = element.getAttribute("id");
     if (id) {
-      const label = idScope(element).querySelector(`label[for="${id}"]`);
+      const label = safeQuerySelector(idScope(element), `label[for="${id}"]`);
       if (label)
         return getAccessibleTextContent(label, visited, styleCache).trim();
     }
@@ -2062,7 +2068,7 @@ function focusedNodeId(
   root: Element,
   nodes: Map<string, SemanticNode>,
 ): string | undefined {
-  const el = resolveFocusedElement(root.ownerDocument);
+  const el = resolveFocusedElement(safeOwnerDocument(root));
   if (!el) return undefined;
   const id = getElementRefs().findId(el);
   return id && nodes.has(id) ? id : undefined;
@@ -2140,7 +2146,7 @@ function findActiveModal(doc: Document): Element | null {
   // Per element rather than `querySelectorAll("dialog:modal")`, so an
   // environment that cannot parse `:modal` degrades to "no modal" in one place.
   // Last-to-first so the top-most of a stack of modals wins.
-  const dialogs = doc.querySelectorAll("dialog");
+  const dialogs = safeQuerySelectorAll(doc, "dialog");
   for (let i = dialogs.length - 1; i >= 0; i--) {
     if (isModal(dialogs[i])) return dialogs[i];
   }
@@ -2201,29 +2207,38 @@ function hasOverlayContent(element: Element): boolean {
  */
 function findPortalOverlay(doc: Document, root: Element): Element | null {
   const body = doc.body;
-  if (!body || body === root || root.contains(body)) return null;
+  if (!body || body === root || safeContains(root, body)) return null;
 
   // Portal-mounted overlay roles. MODAL dialogs are handled exclusively by
   // findActiveModal() (which takes precedence). A NON-modal role="dialog"
   // (cookie banner, Radix Popover) is additive like any other overlay — it is
   // included here so it pivots to body and joins the tree, rather than
   // hijacking the scope the way findActiveModal used to.
-  const overlays = doc.querySelectorAll(OVERLAY_CANDIDATE_SELECTOR);
+  const overlays = safeQuerySelectorAll(doc, OVERLAY_CANDIDATE_SELECTOR);
   for (const el of overlays) {
-    // Outside the root means ELSEWHERE, not "above". An ancestor is not a
-    // portal by any definition, and treating it as one made every component
-    // root on an SPA pivot permanently: the route announcers Next.js, Remix
-    // and React Router ship are typically an `aria-live` wrapper around the
-    // whole app, so it matched on every extraction rather than only while a
-    // toast was up.
-    if (root.contains(el) || el.contains(root)) continue;
-    if (!countsAsOverlay(el)) continue;
-    // An overlay AT cannot reach adds nothing to the tree, so it is no reason
-    // to widen: a closed drawer left mounted as `aria-hidden` (and translated
-    // off-screen, so the CSS check passes) turned every component root on the
-    // page into a whole-page snapshot.
-    if (isInertOrAriaHidden(el)) continue;
-    if (isActuallyVisible(el) && hasOverlayContent(el)) return body;
+    // A candidate is read through members its own controls can shadow — a
+    // `<form role="search">` holding `<input name="getAttribute">` is a
+    // candidate like any `[role]` element. One that cannot answer is skipped,
+    // as the walk skips an element it cannot read, rather than aborting every
+    // extraction on the page.
+    try {
+      // Outside the root means ELSEWHERE, not "above". An ancestor is not a
+      // portal by any definition, and treating it as one made every component
+      // root on an SPA pivot permanently: the route announcers Next.js, Remix
+      // and React Router ship are typically an `aria-live` wrapper around the
+      // whole app, so it matched on every extraction rather than only while a
+      // toast was up.
+      if (safeContains(root, el) || el.contains(root)) continue;
+      if (!countsAsOverlay(el)) continue;
+      // An overlay AT cannot reach adds nothing to the tree, so it is no
+      // reason to widen: a closed drawer left mounted as `aria-hidden` (and
+      // translated off-screen, so the CSS check passes) turned every component
+      // root on the page into a whole-page snapshot.
+      if (isInertOrAriaHidden(el)) continue;
+      if (isActuallyVisible(el) && hasOverlayContent(el)) return body;
+    } catch {
+      // Unreadable: not an overlay this scan can pivot to.
+    }
   }
   return null;
 }
@@ -2357,7 +2372,7 @@ export function containsOverlaySignal(el: Element): boolean {
  * mutated element; the incremental path has to re-derive it.
  */
 export function resolveEffectiveRoot(root: Element): Element {
-  const doc = root.ownerDocument;
+  const doc = safeOwnerDocument(root);
   if (!doc) return root;
 
   // A pivot may only ever WIDEN. Both targets — an open modal, or `body` —
@@ -2390,7 +2405,7 @@ export function resolveEffectiveRoot(root: Element): Element {
   // `doc.contains` is not shadow-including, which is what makes it cover the
   // shadow case as well as the detached one.
   const activeModal = findActiveModal(doc);
-  if (activeModal && doc.contains(root)) return activeModal;
+  if (activeModal && safeContains(doc, root)) return activeModal;
 
   const overlayScope = findPortalOverlay(doc, root);
   return overlayScope?.contains(root) ? overlayScope : root;
@@ -2403,21 +2418,14 @@ export function resolveEffectiveRoot(root: Element): Element {
  * clobbering that slipped past the targeted guards) degrades to "skip this
  * node" instead of aborting the whole tree. That silent recovery is the right
  * runtime behavior, but the gap should stay debuggable, so we surface the
- * element and the error for inspection. Gated off in production to avoid
- * console noise; this package has no `@types/node`, so `process` is reached
- * through a `globalThis` cast.
+ * element and the error for inspection.
  */
 function warnSkippedElement(element: Element, error: unknown): void {
-  const proc = (globalThis as { process?: { env?: { NODE_ENV?: string } } })
-    .process;
-  if (proc?.env?.NODE_ENV === "production") return;
-  if (typeof console !== "undefined") {
-    console.warn(
-      "[real-a11y] Skipped an element during extraction to keep the rest of the tree intact:",
-      element,
-      error,
-    );
-  }
+  warnOutsideProduction(
+    "[real-a11y] Skipped an element during extraction to keep the rest of the tree intact:",
+    element,
+    error,
+  );
 }
 
 /**
@@ -2601,13 +2609,15 @@ function isDescribedInOwnTree(element: Element, id: string): boolean {
   // Clobber-safe, as in `idScope`: a description target that is a `<form>`
   // holding `<input name="getRootNode">` would otherwise throw here.
   const scope = safeRootNode(element) as Document | ShadowRoot | Element;
-  if (typeof scope.querySelectorAll !== "function") return true;
   const escaped =
     typeof CSS !== "undefined" && typeof CSS.escape === "function"
       ? CSS.escape(id)
       : id.replace(/["\\]/g, "\\$&");
+  // Through the prototype: the scope is usually the document, which an
+  // `<img name="querySelectorAll">` shadows, and a guess here folds away a
+  // target that labels a control as readily as one that describes nothing.
   const referrers = (attr: string): Element[] =>
-    Array.from(scope.querySelectorAll(`[${attr}~="${escaped}"]`)).filter(
+    Array.from(safeQuerySelectorAll(scope, `[${attr}~="${escaped}"]`)).filter(
       isRenderedInFlatTree,
     );
   return (
