@@ -189,6 +189,43 @@ function isIframeRole(role: string): boolean {
   return role === "Iframe" || role === "IframePresentational";
 }
 
+/** One `aria-controls` jump chip — the DOM tree's `sn-controls-link`, with
+ *  the same wording and truncation. `forward` points at a row this one
+ *  controls, `reverse` back at a row that controls it. Renders nothing for a
+ *  target that isn't in the tree. */
+function ControlsChip({
+  target,
+  direction,
+  onJump,
+}: {
+  target: NativeNode | undefined;
+  direction: "forward" | "reverse";
+  onJump: () => void;
+}) {
+  if (!target) return null;
+  const name = target.name;
+  const reverse = direction === "reverse";
+  return (
+    <button
+      class={`sn-controls-link${reverse ? " sn-controls-link--reverse" : ""}`}
+      tabIndex={-1}
+      onClick={(e) => {
+        e.stopPropagation();
+        onJump();
+      }}
+      title={
+        reverse
+          ? `Jump to the ${target.role} that controls this element`
+          : `Jump to the ${target.role} this element controls`
+      }
+    >
+      {reverse ? "← " : "→ "}
+      {target.role}
+      {name && ` "${name.length > 24 ? name.slice(0, 24) + "…" : name}"`}
+    </button>
+  );
+}
+
 export function NativeTreeView({
   nodes,
   rootId,
@@ -291,12 +328,46 @@ export function NativeTreeView({
     [onScope, scopedRootId],
   );
 
-  // A pick result lands here from App.tsx's own message handler. Expand every
-  // ancestor of the picked node (it may be nested under rows the user never
-  // opened) and select it — clearing any active search/role filter first,
-  // since a filter that doesn't match the picked node would otherwise hide it
-  // and the selection effect below would immediately drop it again (see that
-  // effect's own "gone from the current tree" comment).
+  // Bring a row into view and select it: expand every ancestor (it may be
+  // nested under rows the user never opened), leave a scope it sits outside
+  // of, and clear any active search/role filter first, since a filter that
+  // doesn't match the row would otherwise hide it and the selection effect
+  // below would immediately drop it again (see that effect's own "gone from
+  // the current tree" comment). Shared by a pick result and a jump chip.
+  const revealRow = useCallback(
+    (nodeId: string) => {
+      // A row outside the scope is one the scoped tree never renders.
+      if (
+        scopeRoot &&
+        !isInScope(nodeId, scopeRoot, (id) => parentOf.get(id))
+      ) {
+        scopeTo(null);
+      }
+      setQuery("");
+      setRoleFilter(null);
+      setExpanded((prev) => {
+        const next = new Set(prev);
+        for (let id = parentOf.get(nodeId); id; id = parentOf.get(id)) {
+          next.add(id);
+        }
+        return next;
+      });
+      setSelectedId(nodeId);
+      setFollowNonce((n) => n + 1);
+      // Clearing the role filter above swaps `FilteredListView` back for the
+      // actual tree — an async Preact re-render, not something the
+      // `setRoleFilter(null)` call itself finishes — so `treeRef.current` is
+      // still null (or stale) here when a filter was active a moment ago.
+      // Same double-`requestAnimationFrame` defer `goToTree` above already
+      // uses for the identical filtered-list-to-tree transition.
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => treeRef.current?.focus());
+      });
+    },
+    [scopeRoot, parentOf, scopeTo],
+  );
+
+  // A pick result lands here from App.tsx's own message handler.
   useEffect(() => {
     if (!reveal) return;
     // The exact hit-tested node may not itself be one the AX tree kept — an
@@ -307,34 +378,41 @@ export function NativeTreeView({
       nodes.has(id),
     );
     if (nodeId === undefined) return;
-    // A pick can land anywhere on the page; one outside the scope would
-    // select a row the scoped tree never renders.
-    if (scopeRoot && !isInScope(nodeId, scopeRoot, (id) => parentOf.get(id))) {
-      scopeTo(null);
-    }
-    setQuery("");
-    setRoleFilter(null);
-    setExpanded((prev) => {
-      const next = new Set(prev);
-      for (let id = parentOf.get(nodeId); id; id = parentOf.get(id)) {
-        next.add(id);
-      }
-      return next;
-    });
-    setSelectedId(nodeId);
-    setFollowNonce((n) => n + 1);
-    // Clearing the role filter above swaps `FilteredListView` back for the
-    // actual tree — an async Preact re-render, not something the
-    // `setRoleFilter(null)` call itself finishes — so `treeRef.current` is
-    // still null (or stale) here when a filter was active a moment ago.
-    // Same double-`requestAnimationFrame` defer `goToTree` above already
-    // uses for the identical filtered-list-to-tree transition.
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => treeRef.current?.focus());
-    });
+    revealRow(nodeId);
     // Only re-run on a new pick (`nonce`), not on every `nodes`/`parentOf`
     // change a background refresh causes.
   }, [reveal?.nonce]);
+
+  // `aria-controls`, both ways: a row lists the rows it controls (from
+  // Chromium's own relation, `node.controls`), and a controlled row lists
+  // the rows that control it, as the DOM tree's `buildControlsIndex` does.
+  const controlledBy = useMemo(() => {
+    const reverse = new Map<string, string[]>();
+    for (const node of nodes.values()) {
+      for (const target of node.controls ?? []) {
+        const triggers = reverse.get(target) ?? [];
+        triggers.push(node.id);
+        reverse.set(target, triggers);
+      }
+    }
+    return reverse;
+  }, [nodes]);
+
+  // The row a jump chip just landed on, flashed briefly as the DOM tree's
+  // `handleJumpToNode` does.
+  const [flashingId, setFlashingId] = useState<string | null>(null);
+  const jumpTo = useCallback(
+    (targetId: string) => {
+      if (!nodes.has(targetId)) return;
+      revealRow(targetId);
+      setFlashingId(targetId);
+      setTimeout(
+        () => setFlashingId((cur) => (cur === targetId ? null : cur)),
+        700,
+      );
+    },
+    [nodes, revealRow],
+  );
 
   const hasFilter = query.trim().length > 0 || roleFilter !== null;
 
@@ -931,6 +1009,7 @@ export function NativeTreeView({
                       "sn-node",
                       isSelected && "sn-node--selected",
                       label && "sn-node--interactive",
+                      id === flashingId && "sn-node--flash",
                     ]
                       .filter(Boolean)
                       .join(" ")}
@@ -1070,6 +1149,24 @@ export function NativeTreeView({
                           </span>
                         );
                       })()}
+                      {/* Jump chips: to the rows this one controls, and back
+                          to the rows that control it. */}
+                      {node.controls?.map((targetId) => (
+                        <ControlsChip
+                          key={`controls-${targetId}`}
+                          target={nodes.get(targetId)}
+                          direction="forward"
+                          onJump={() => jumpTo(targetId)}
+                        />
+                      ))}
+                      {controlledBy.get(id)?.map((triggerId) => (
+                        <ControlsChip
+                          key={`controlled-by-${triggerId}`}
+                          target={nodes.get(triggerId)}
+                          direction="reverse"
+                          onJump={() => jumpTo(triggerId)}
+                        />
+                      ))}
                       {label && <span class="sn-action-tag">{label}</span>}
                     </span>
 

@@ -46,6 +46,9 @@ export type NativeNode = {
    *  `aria-describedby`/`aria-description` resolution. Empty string, not
    *  undefined, when there is none (matches `A11yInfo.description`). */
   description?: string;
+  /** Native ids of the rows this node controls (`aria-controls`, as Chromium
+   *  resolves it), each one present in the tree. Absent for none. */
+  controls?: string[];
 };
 
 /**
