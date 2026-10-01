@@ -130,6 +130,20 @@
 
   ([#422](https://github.com/real-a11y/real-a11y-dev/pull/422))
 
+- More of the DOM tree's controls work in the native tree:
+  - The **Send key** bar under the tree, and the **Dialog** indicator with
+    **Press ESC** while a modal dialog is open.
+  - Type-ahead jumps to a row by its first letters, and `*` expands the
+    selected row's siblings.
+  - `Enter` steps a slider or spinbutton up and `Shift`+`Enter` steps it
+    down. `Enter` on a slider used to do nothing.
+  - The feedback line names what you acted on ("Click: Save") instead of an
+    internal node id, and shows a failed action too.
+  - A heading shows its level as an **H2** badge, and an `<iframe>` row is
+    marked **embedded**, since the native tree doesn't read a frame's content.
+
+  ([#PR](https://github.com/real-a11y/real-a11y-dev/pull/PR))
+
 ## 0.1.15
 
 ### Patch Changes
