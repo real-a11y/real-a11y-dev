@@ -143,7 +143,7 @@
   - A heading shows its level as an **H2** badge, and an `<iframe>` row is
     marked **embedded**, since the native tree doesn't read a frame's content.
 
-  ([#PR](https://github.com/real-a11y/real-a11y-dev/pull/PR))
+  ([#459](https://github.com/real-a11y/real-a11y-dev/pull/459))
 
 ## 0.1.15
 
