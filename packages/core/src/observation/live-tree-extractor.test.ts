@@ -7,6 +7,7 @@ import {
   extractDomTree,
   resetIdCounter,
 } from "../index.js";
+import { clobber } from "../test-support/clobber.js";
 import type { ExtractionResult, TreeChange } from "../types.js";
 
 describe("LiveTreeExtractor", () => {
@@ -1618,6 +1619,156 @@ describe("LiveTreeExtractor", () => {
 
       expect(hasHelpNode(after)).toBe(false);
       expect(after.nodes).toEqual(extractDomTree(root).nodes);
+    });
+  });
+
+  describe("a <form> whose control shadows a method the splice calls", () => {
+    // `<form>` has [LegacyOverrideBuiltIns]: `<input name="getAttribute">` makes
+    // `form.getAttribute` that input, so calling it throws. The splice calls a
+    // dozen such members on every dirty element and ancestor it reaches, and a
+    // throw escaped `refresh()` — the caller kept a stale tree, and every later
+    // refresh touching the form threw again. A full extraction survives the
+    // same form (its per-element boundary skips it), and a splice exists only
+    // to reach that same tree faster.
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    /** The records a MutationObserver on `root` gets for `mutate`. */
+    const observe = (root: Element, mutate: () => void): TreeChange => {
+      const observer = new MutationObserver(() => {});
+      observer.observe(root, {
+        subtree: true,
+        childList: true,
+        attributes: true,
+        characterData: true,
+      });
+      mutate();
+      const mutations = observer.takeRecords();
+      observer.disconnect();
+      return { mutations };
+    };
+
+    /**
+     * Shadow `prop` the way Chromium does: the read returns the control. For an
+     * accessor, which `clobber()` — it throws on the read — models too harshly:
+     * the text walks read `tagName` behind a `typeof` guard and survive the
+     * real thing, so only the control itself tests what a page does.
+     */
+    const shadowWithControl = (form: Element, prop: string): void => {
+      const control = form.querySelector(`[name="${prop}"]`);
+      Object.defineProperty(form, prop, {
+        configurable: true,
+        get: () => control,
+      });
+    };
+
+    const buttonName = (result: ExtractionResult) =>
+      [...result.nodes.values()].find((n) => n.a11y.role === "button")?.a11y
+        .name;
+
+    it.each([
+      [
+        "getAttribute",
+        "expandDependencies reads each dirty ancestor's id",
+        clobber,
+      ],
+      [
+        "tagName",
+        "nameRelevantAncestor asks the form for its tag",
+        shadowWithControl,
+      ],
+      [
+        "contains",
+        "collapseToOutermost asks the form whether it holds the text",
+        clobber,
+      ],
+    ])(
+      "keeps the tree right when the form's %s is shadowed (%s)",
+      (prop, _how, shadow) => {
+        document.body.innerHTML = `
+          <main id="app">
+            <h1 id="title">Title</h1>
+            <form aria-label="Signup">
+              <input name="${prop}" aria-label="Field" />
+              <span id="lbl">Old</span>
+            </form>
+            <button aria-labelledby="lbl">x</button>
+          </main>
+        `;
+        const root = document.getElementById("app")!;
+        const form = root.querySelector("form")!;
+        shadow(form, prop);
+        const live = new LiveTreeExtractor(root, { mode: "a11y" });
+
+        const change = observe(root, () => {
+          form.setAttribute("class", "touched");
+          document.getElementById("lbl")!.firstChild!.nodeValue = "New";
+          document.getElementById("title")!.setAttribute("class", "touched");
+        });
+        const result = live.refresh(change);
+
+        expect(buttonName(result)).toBe("New");
+        expect(result.nodes).toEqual(extractA11yTree(root).nodes);
+      },
+    );
+
+    it.each([
+      ["matches", "asks the added form whether it is an overlay", clobber],
+      ["querySelectorAll", "scans the added form for references", clobber],
+      [
+        "ownerDocument",
+        "resolves the added form's aria-labelledby",
+        shadowWithControl,
+      ],
+    ])(
+      "keeps the tree right when an added form's %s is shadowed (the splice %s)",
+      (prop, _how, shadow) => {
+        document.body.innerHTML = `
+          <main id="app"><h1 id="title">Title</h1><div id="slot"></div></main>
+        `;
+        const root = document.getElementById("app")!;
+        const live = new LiveTreeExtractor(root, { mode: "a11y" });
+
+        const form = document.createElement("form");
+        form.setAttribute("aria-labelledby", "title");
+        form.innerHTML = `<input name="${prop}" aria-label="Field" />`;
+        shadow(form, prop);
+        const change = observe(root, () => {
+          document.getElementById("slot")!.append(form);
+        });
+        const result = live.refresh(change);
+
+        expect(result.nodes).toEqual(extractA11yTree(root).nodes);
+      },
+    );
+
+    it("warns outside production that it fell back to a full extraction", () => {
+      // The fallback is silent in its output by design, so a bug that made the
+      // splice throw on ordinary pages would pass every equality test here and
+      // only cost speed. The warning is what keeps that visible.
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      document.body.innerHTML = `
+        <main id="app">
+          <form><input name="getAttribute" /><span>Old</span></form>
+        </main>
+      `;
+      const root = document.getElementById("app")!;
+      const form = root.querySelector("form")!;
+      clobber(form, "getAttribute");
+      const live = new LiveTreeExtractor(root, { mode: "a11y" });
+      warn.mockClear();
+
+      live.refresh(
+        observe(root, () => {
+          form.querySelector("span")!.firstChild!.nodeValue = "New";
+        }),
+      );
+
+      expect(warn).toHaveBeenCalledWith(
+        expect.stringContaining("fell back to a full extraction"),
+        expect.any(Error),
+      );
     });
   });
 });

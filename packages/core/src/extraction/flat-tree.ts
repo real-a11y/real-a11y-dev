@@ -24,8 +24,10 @@ import {
   safeChildNodes,
   safeChildren,
   safeHidden,
+  safeOwnerDocument,
   safeParentElement,
   safeParentNode,
+  safeQuerySelectorAll,
   safeRootNode,
   safeShadowRoot,
 } from "./clobber-safe.js";
@@ -215,13 +217,17 @@ export function flatParent(element: Element): Element | null {
  * The root is read clobber-safely: on a `<form>` holding
  * `<input name="getRootNode">` the method is that input, so calling it throws
  * and the labelled form is dropped from the tree with everything inside it.
+ *
+ * `root.nodeType` needs no clobber-safe read: a shadowed one reads as an
+ * element, matching neither, and the fallback is then right for a detached
+ * form root and for a document whose `<img name="nodeType">` shadows it alike.
  */
 export function idScope(element: Element): Document | ShadowRoot {
   const root = safeRootNode(element);
   return root.nodeType === DOCUMENT_NODE ||
     root.nodeType === DOCUMENT_FRAGMENT_NODE
     ? (root as Document | ShadowRoot)
-    : element.ownerDocument;
+    : safeOwnerDocument(element);
 }
 
 /**
@@ -236,8 +242,8 @@ export function deepQuerySelectorAll(
 ): Element[] {
   const out: Element[] = [];
   const visit = (scope: Element | ShadowRoot): void => {
-    out.push(...scope.querySelectorAll(selector));
-    for (const el of scope.querySelectorAll("*")) {
+    out.push(...safeQuerySelectorAll(scope, selector));
+    for (const el of safeQuerySelectorAll(scope, "*")) {
       const shadow = safeShadowRoot(el);
       if (shadow) visit(shadow);
     }

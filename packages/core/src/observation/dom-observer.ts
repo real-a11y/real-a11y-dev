@@ -1,3 +1,4 @@
+import { safeGetAttribute } from "../extraction/clobber-safe.js";
 import {
   ARIA_STATE_ATTRIBUTES,
   containsOverlaySignal,
@@ -107,7 +108,9 @@ function isInternalNode(node: Node, internalIds: ReadonlySet<string>): boolean {
   const el = node as Element;
   // Read via getAttribute, not `.id`: on a clobbered <form> the `.id` property
   // is a child element, not a string (see dom-extractor's clobbering guards).
-  return internalIds.has(el.getAttribute("id") ?? "");
+  // And through the prototype's getAttribute, since a control named
+  // `getAttribute` shadows that too — and a throw here loses the whole batch.
+  return internalIds.has(safeGetAttribute(el, "id") ?? "");
 }
 
 /**
@@ -480,6 +483,11 @@ export class DomObserver {
  * subtree carries one of the role/attribute signals the extractor
  * uses to scope onto portal content. Skips our own injected overlay
  * sentinels.
+ *
+ * A node that cannot be asked — a `<form>` whose control shadows `matches` or
+ * `getAttribute`, say — counts as one. Guessing "portal" costs a full
+ * re-extraction; guessing "not" misses an overlay, and letting the throw out
+ * loses every other node in the batch.
  */
 function isPortalOverlayContainer(
   node: Node,
@@ -487,6 +495,10 @@ function isPortalOverlayContainer(
 ): boolean {
   if (node.nodeType !== 1 /* ELEMENT_NODE */) return false;
   const el = node as Element;
-  if (internalIds.has(el.getAttribute("id") ?? "")) return false;
-  return containsOverlaySignal(el);
+  if (internalIds.has(safeGetAttribute(el, "id") ?? "")) return false;
+  try {
+    return containsOverlaySignal(el);
+  } catch {
+    return true;
+  }
 }
