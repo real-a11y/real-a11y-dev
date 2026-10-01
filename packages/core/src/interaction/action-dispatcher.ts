@@ -32,20 +32,37 @@ const COMPOSITE_CHILD_ROLES = new Set([
  * sets `event.target = wrapper`, the `closest()` walk goes upward (away
  * from the descendant), the handler returns null, and the click no-ops.
  *
- * `querySelector` returns the first match in document order, which is the
- * outermost interactive descendant — typically the row's primary action,
- * not an inner secondary control like an expand/collapse chevron. If
- * nothing matches (well-formed ARIA where the wrapper itself is
- * interactive — Reach UI, Radix UI, ARIA APG reference impl), return the
- * wrapper unchanged.
+ * The first match in document order is the outermost interactive
+ * descendant — typically the row's primary action, not an inner secondary
+ * control like an expand/collapse chevron. If nothing matches (well-formed
+ * ARIA where the wrapper itself is interactive — Reach UI, Radix UI, ARIA
+ * APG reference impl), return the wrapper unchanged.
  */
 export function resolveClickTarget(element: Element): Element {
   const role = getExplicitRole(element);
   if (!role || !COMPOSITE_CHILD_ROLES.has(role)) return element;
-  const candidate = element.querySelector(
-    '[role="link"], [role="button"], a[href], button',
-  );
-  return candidate ?? element;
+  return firstClickableDescendant(element) ?? element;
+}
+
+/**
+ * The first `<a href>`, `<button>`, or link/button role under `root`, in
+ * document order. A walk rather than a `[role="link"]` selector, so a
+ * descendant role resolves the way the tree resolves it (`LINK`,
+ * `foo link`), and one that stops at the first match: a treeitem can hold
+ * a whole nested group.
+ */
+function firstClickableDescendant(root: Element): Element | null {
+  const walker = root.ownerDocument.createTreeWalker(root, 1 /* ELEMENT */);
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+    const el = node as Element;
+    const tag = el.tagName.toLowerCase();
+    if ((tag === "a" && el.hasAttribute("href")) || tag === "button") {
+      return el;
+    }
+    const descendantRole = getExplicitRole(el);
+    if (descendantRole === "link" || descendantRole === "button") return el;
+  }
+  return null;
 }
 
 /** Input types that accept typed text (mirrors the extractor's "type" action pairing). */

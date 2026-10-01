@@ -159,6 +159,30 @@ describe("ActionDispatcher", () => {
       expect(onClick).toHaveBeenCalledTimes(1);
     });
 
+    // The descendant is found by the same resolved role: `LINK` and
+    // `foo link` are links to the browser, the tree, and this redirect.
+    it("redirects to a descendant whose link role is in another case or follows an unknown token", () => {
+      for (const linkRole of ["LINK", "foo link"]) {
+        document.body.innerHTML = `
+          <div role="tree"><div role="TREEITEM" id="row">
+            <div role="${linkRole}" data-target="node" id="link"><span>Home</span></div>
+          </div></div>
+        `;
+        refs.set("n1", document.getElementById("row")!);
+        const linkClicks = vi.fn();
+        document
+          .getElementById("link")!
+          .addEventListener("click", (e) => linkClicks(e.target));
+
+        dispatcher.dispatch({ nodeId: "n1", action: "click" });
+
+        expect(linkClicks, linkRole).toHaveBeenCalledTimes(1);
+        expect(linkClicks.mock.calls[0]![0], linkRole).toBe(
+          document.getElementById("link"),
+        );
+      }
+    });
+
     it("does not redirect for non-composite-child roles", () => {
       // A regular button containing a span shouldn't have its click
       // redirected to the span — the button is the natural target.
