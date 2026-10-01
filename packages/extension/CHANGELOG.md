@@ -27,7 +27,7 @@
   accessibility tree reports it. DOM mode showed a `textbox` (or a
   `searchbox` or `spinbutton`). Changing the input's `list`, or adding or
   removing the datalist it names, updates the tree.
-  ([#PR](https://github.com/real-a11y/real-a11y-dev/pull/PR))
+  ([#454](https://github.com/real-a11y/real-a11y-dev/pull/454))
 
 - In DOM mode, image map areas are back in the DOM tree, the Tab Sequence
   view, its copied export and the keyboard bar's Tab. Since Chrome 153 every
