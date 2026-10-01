@@ -243,7 +243,11 @@ function SelectPicker({
             id={`sn-select-opt-${i}`}
             class={`sn-select-option ${i === selectedIndex ? "sn-select-option--selected" : ""}`}
             role="option"
-            aria-selected={i === selectedIndex}
+            // The field's own current option, as the dot shows — not the
+            // keyboard position, which `aria-activedescendant` carries. A
+            // sensitive select reports none, and the first option must not
+            // be announced as chosen just because the cursor starts there.
+            aria-selected={opt.selected}
             data-opt-index={i}
             onClick={() => {
               setSelectedIndex(i);

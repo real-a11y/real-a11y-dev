@@ -106,6 +106,8 @@ test("a sensitive select's picker shows no current option", async ({ nav }) => {
   // No filled dot: which option is chosen is the field's value.
   await expect(picker.locator(".sn-select-check")).toHaveText(["○", "○", "○"]);
   await expect(picker).not.toContainText("●");
+  // Nor is any option announced as the chosen one.
+  await expect(picker.getByRole("option", { selected: true })).toHaveCount(0);
 
   // Choosing one still works.
   await picker.getByRole("option", { name: /02/ }).click();
