@@ -683,25 +683,23 @@ export function NativeTreeView({
         case "Enter": {
           e.preventDefault();
           typeAhead.current.clear();
-          // The row's primary action, picked as the DOM tree picks it
-          // (`getPrimaryAction`), so a slider or spinbutton steps up rather
-          // than doing nothing or opening its edit box.
+          // The row's own action. A slider has none but a step, so Enter
+          // steps it up, as in the DOM tree. A spinbutton keeps Enter for its
+          // edit box — the only keyboard way to type a value from the tree —
+          // and steps with Shift+Enter or +/-, handled above.
           //
           // Navigation/expand stay responsive while busy (no dispatch, no
           // conflict with an in-flight NATIVE_ACT) — only the activation
           // itself is held back, same as the action buttons' own `disabled`.
-          const primary = getPrimaryAction(nativeActions(node));
-          if (primary) {
+          if (primaryLabel(node)) {
             if (!busy) {
               onActivate(
                 node,
-                primary === "increment" || primary === "decrement"
-                  ? primary
-                  : isSelectableRole(node.role)
-                    ? "select"
-                    : undefined,
+                isSelectableRole(node.role) ? "select" : undefined,
               );
             }
+          } else if (isSteppableRole(node.role)) {
+            if (!busy) onActivate(node, "increment");
           } else if (hasChildren(node)) {
             toggle(node.id);
           }

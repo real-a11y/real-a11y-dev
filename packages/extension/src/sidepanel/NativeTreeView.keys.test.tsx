@@ -166,13 +166,19 @@ describe("NativeTreeView keyboard and row parity", () => {
     ]);
   });
 
-  it("Enter steps a spinbutton up, as the DOM tree's does", () => {
+  it("Enter on a spinbutton opens its edit box; Shift+Enter steps it down", () => {
+    // Enter is the only keyboard way to type a value from the tree, so a
+    // spinbutton keeps it rather than stepping like a slider.
     const onActivate = mount();
     select("h2");
     press("*");
     select("qty");
     press("Enter");
-    expect(onActivate).toHaveBeenCalledWith(NODES.get("qty"), "increment");
+    press("Enter", { shiftKey: true });
+    expect(onActivate.mock.calls.map(([n, a]) => [n.id, a])).toEqual([
+      ["qty", undefined],
+      ["qty", "decrement"],
+    ]);
   });
 
   it("+ and - still step", () => {

@@ -87,6 +87,11 @@ import { TabSequenceView } from "./TabSequenceView.js";
  *  action — same rationale and value as `DogfoodPanel.tsx`'s `SETTLE_MS`. */
 const NATIVE_SETTLE_MS = 250;
 
+/** How many settle windows (~5s) a sent key's native re-read waits for an
+ *  in-flight action. If one is still running after that, the read is skipped
+ *  as any other would be, and Refresh is the way back. */
+const MAX_SEND_KEY_REREAD_WAITS = 20;
+
 /** Bound on how many additional navigations `recoverFromOwnNavigation` will
  *  wait out (a login page that immediately client-redirects to a dashboard,
  *  say) before giving up and leaving the recovery to a manual refresh. Caps
@@ -2237,7 +2242,10 @@ export function App() {
   // same content-script path. A key can change the page (Escape closing a
   // dialog, Enter submitting a form), and a native tree is read only on
   // request, so read it again once the page has settled, as an action does.
-  // Skipped if the tab or document changed in the meantime.
+  // Skipped if the tab or document changed in the meantime. An action still
+  // in flight would make `loadNativeTree` skip the read silently, and that
+  // action's own re-read may land before the key took effect (Escape after a
+  // click that opened a dialog), so wait it out — bounded — then read.
   const handleNativeSendKey = useCallback(
     (
       key: string,
@@ -2249,10 +2257,15 @@ export function App() {
       const tabId = nativeTreeTabId;
       if (tabId === undefined) return;
       const token = nativeOpToken.current;
-      setTimeout(() => {
+      const reread = (attempt: number) => {
         if (token !== nativeOpToken.current) return;
+        if (nativeInFlight.current && attempt < MAX_SEND_KEY_REREAD_WAITS) {
+          setTimeout(() => reread(attempt + 1), NATIVE_SETTLE_MS);
+          return;
+        }
         void loadNativeTree(tabId);
-      }, NATIVE_SETTLE_MS);
+      };
+      setTimeout(() => reread(0), NATIVE_SETTLE_MS);
     },
     [handleSendKey, nativeTreeTabId, loadNativeTree],
   );

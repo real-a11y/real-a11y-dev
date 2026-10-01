@@ -221,7 +221,7 @@ The rest of the tree's everyday controls carry over as well:
 
 - The **Send key** bar under the tree, and the **Dialog** indicator with **Press ESC** while a modal dialog is open. Both send the key through the page's content script, as in DOM mode, then read the native tree again.
 - Type-ahead: type a row's first letters to jump to it. `*` expands every sibling of the selected row.
-- `Enter` steps a slider or spinbutton up and `Shift`+`Enter` steps it down, as `+` and `-` do.
+- `Enter` steps a slider up, and `Shift`+`Enter` steps a slider or spinbutton down, as `+` and `-` do. On a spinbutton, `Enter` still opens the edit box so you can type a value.
 - The feedback line names what you acted on ("Click: Save", "Checked: Remember me"), and a failed action shows there as well as in the status line.
 - A heading shows its level as an **H2** badge. An `<iframe>` row is marked **embedded**: the native tree reads the top frame only, so a frame's own content isn't in it yet.
 
