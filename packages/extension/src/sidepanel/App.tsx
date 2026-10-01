@@ -64,6 +64,7 @@ import {
   useRestoreFocusOnClose,
 } from "./InputPanel.js";
 import type { InputPanelState } from "./InputPanel.js";
+import { nativeActionFeedback } from "./native-feedback.js";
 import { NativeTreeView } from "./NativeTreeView.js";
 import {
   focusActiveView,
@@ -73,6 +74,7 @@ import {
   scopePath,
   subtreeNodes,
 } from "./ScopeBar.js";
+import { DialogIndicator, SendKeyBar } from "./SendKeyBar.js";
 import { TabSequenceView } from "./TabSequenceView.js";
 
 /** How long to let the page react before re-reading the native tree after an
@@ -462,6 +464,10 @@ export function App() {
   const [nativeNodes, setNativeNodes] = useState<Map<string, NativeNode>>(
     new Map(),
   );
+  // Read by `dispatchNativeAction` for its feedback wording, through a ref so
+  // the callback doesn't change identity on every tree read.
+  const nativeNodesRef = useRef(nativeNodes);
+  nativeNodesRef.current = nativeNodes;
   const [nativeRootId, setNativeRootId] = useState<string>("");
   const [nativeStatus, setNativeStatus] = useState<string>("");
   const [nativeBusy, setNativeBusy] = useState(false);
@@ -1667,6 +1673,12 @@ export function App() {
       try {
         const token = nativeOpToken.current;
         const tabChangeAtStart = tabChangeToken.current;
+        // Worded from the node as it is before the action, so a checked
+        // checkbox reads "Unchecked" — and from its name, never its id.
+        const feedback = nativeActionFeedback(
+          nativeNodesRef.current.get(nodeId),
+          action,
+        );
         if (nativeTreeTabId === undefined) {
           setNativeStatus("load a tree first");
           return;
@@ -1719,8 +1731,15 @@ export function App() {
                 setNativeStatus(
                   `native unavailable — ${explainUnavailable(r.reason)}`,
                 );
+                announce(
+                  `Failed: native unavailable — ${explainUnavailable(r.reason)}`,
+                  3000,
+                );
               } else {
                 setNativeStatus(`act failed: ${r?.error ?? "unknown"}`);
+                // The feedback bar too, where the DOM tree reports its own
+                // failures; the status line alone is easy to miss.
+                announce(`Failed: ${r?.error ?? "unknown"}`, 3000);
               }
             }
             return;
@@ -1729,8 +1748,8 @@ export function App() {
           // the token already moved (a real tab switch racing the round
           // trip) belongs to a tab the panel has since left, and toasting it
           // would name an action for a page no longer on screen.
-          if (token === nativeOpToken.current) {
-            announce(`Native: ${action} on ${nodeId}`, 2000);
+          if (token === nativeOpToken.current && feedback) {
+            announce(feedback, 2000);
           }
           // Always settle before checking staleness or reading again,
           // regardless of the toast above — even when `nativeOpToken`
@@ -2254,6 +2273,30 @@ export function App() {
       setTimeout(reExtract, 300);
     },
     [sendToBoundTab, reExtract],
+  );
+
+  // The native tree's keyboard bar and dialog indicator send through the
+  // same content-script path. A key can change the page (Escape closing a
+  // dialog, Enter submitting a form), and a native tree is read only on
+  // request, so read it again once the page has settled, as an action does.
+  // Skipped if the tab or document changed in the meantime.
+  const handleNativeSendKey = useCallback(
+    (
+      key: string,
+      code: string,
+      keyCode: number,
+      modifiers?: { shift?: boolean },
+    ) => {
+      handleSendKey(key, code, keyCode, modifiers);
+      const tabId = nativeTreeTabId;
+      if (tabId === undefined) return;
+      const token = nativeOpToken.current;
+      setTimeout(() => {
+        if (token !== nativeOpToken.current) return;
+        void loadNativeTree(tabId);
+      }, NATIVE_SETTLE_MS);
+    },
+    [handleSendKey, nativeTreeTabId, loadNativeTree],
   );
 
   // Export the selected view(s) as a Markdown report and copy to clipboard.
@@ -2914,18 +2957,10 @@ export function App() {
 
       {/* Dialog scope indicator — DOM producer only */}
       {producer === "dom" && isDialogScoped && (
-        <div class="sn-dialog-indicator" role="status">
-          <span class="sn-dialog-label">
-            Dialog: {rootNode?.a11y.name || "Modal"}
-          </span>
-          <button
-            class="sn-key-btn"
-            onClick={() => handleSendKey("Escape", "Escape", 27)}
-            title="Send Escape key to close dialog"
-          >
-            Press ESC
-          </button>
-        </div>
+        <DialogIndicator
+          name={rootNode?.a11y.name ?? ""}
+          onSendKey={handleSendKey}
+        />
       )}
 
       {/* Scope breadcrumb (when user scoped to a subtree). Native renders
@@ -2982,6 +3017,7 @@ export function App() {
           scopedRootId={nativeScopedRootId}
           onScope={handleNativeScope}
           pickArmed={pickModeOn}
+          onSendKey={handleNativeSendKey}
         />
       ) : viewMode === "tab" ? (
         /* ---- Tab sequence view ---- */
@@ -3438,62 +3474,7 @@ export function App() {
             </div>
           </div>
 
-          <div
-            class="sn-keyboard-bar"
-            role="toolbar"
-            aria-label="Send keyboard events to page"
-          >
-            <span class="sn-keyboard-label">Send key:</span>
-            <button
-              class="sn-key-btn"
-              onClick={() => handleSendKey("Escape", "Escape", 27)}
-              title="Send Escape key"
-            >
-              Esc
-            </button>
-            <button
-              class="sn-key-btn"
-              onClick={() => handleSendKey("Tab", "Tab", 9)}
-              title="Send Tab key"
-            >
-              Tab
-            </button>
-            <button
-              class="sn-key-btn"
-              onClick={() => handleSendKey("Tab", "Tab", 9, { shift: true })}
-              title="Send Shift+Tab"
-            >
-              Shift+Tab
-            </button>
-            <button
-              class="sn-key-btn"
-              onClick={() => handleSendKey("Enter", "Enter", 13)}
-              title="Send Enter key"
-            >
-              Enter
-            </button>
-            <button
-              class="sn-key-btn"
-              onClick={() => handleSendKey(" ", "Space", 32)}
-              title="Send Space key"
-            >
-              Space
-            </button>
-            <button
-              class="sn-key-btn"
-              onClick={() => handleSendKey("ArrowDown", "ArrowDown", 40)}
-              title="Send Down arrow"
-            >
-              {"\u2193"}
-            </button>
-            <button
-              class="sn-key-btn"
-              onClick={() => handleSendKey("ArrowUp", "ArrowUp", 38)}
-              title="Send Up arrow"
-            >
-              {"\u2191"}
-            </button>
-          </div>
+          <SendKeyBar onSendKey={handleSendKey} />
 
           <div class="sn-hints">
             <kbd>Enter</kbd> activate &middot; <kbd>+/−</kbd> step &middot;{" "}
