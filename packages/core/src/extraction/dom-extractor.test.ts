@@ -1195,6 +1195,35 @@ describe("extractDomTree", () => {
     });
   });
 
+  it("reads a <select>'s shape from its display size, and a list box's author combobox role as ARIA", () => {
+    expect(
+      stateById(
+        `
+        <select id="multiple-one" multiple size="1" role="combobox" aria-label="a" aria-expanded="true"><option>o</option></select>
+        <select id="zero" size="0" aria-label="b" aria-expanded="true"><option>o</option></select>
+        <select id="multiple-zero" multiple size="0" role="combobox" aria-label="c"><option>o</option></select>
+        <select id="multiple-combobox" multiple role="combobox" aria-label="d" aria-expanded="true"><option>o</option></select>
+        <select id="rows-combobox" size="3" role="combobox" aria-label="e" aria-expanded="false"><option>o</option></select>
+      `,
+        "expanded",
+      ),
+    ).toEqual({
+      // One row is a drop-down, multiple or not; size 0 is no size at all.
+      "multiple-one": false,
+      zero: false,
+      // A list box's combobox role is the author's, read as usual: here unset.
+      "multiple-zero": undefined,
+      "multiple-combobox": true,
+      "rows-combobox": false,
+    });
+    expect(
+      stateById(
+        `<select id="s" multiple role="combobox" aria-label="a" aria-pressed="true"><option>o</option></select>`,
+        "pressed",
+      ),
+    ).toEqual({ s: undefined });
+  });
+
   it("ignores aria-pressed on a drop-down <select>", () => {
     expect(
       stateById(
