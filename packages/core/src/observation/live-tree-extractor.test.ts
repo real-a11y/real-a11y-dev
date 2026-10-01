@@ -972,6 +972,34 @@ describe("LiveTreeExtractor", () => {
       expect(result.nodes).toEqual(extractA11yTree(document.body).nodes);
     });
 
+    it.each([
+      ["1", "3", undefined],
+      ["3", "1", false],
+    ])("follows a select's size from %s to %s", async (from, to, expanded) => {
+      document.body.innerHTML = `<main><select id="s" size="${from}" aria-label="Items"><option>A</option><option>B</option></select></main>`;
+      const live = new LiveTreeExtractor(document.body, { mode: "a11y" });
+      let lastChange: TreeChange | undefined;
+      const observer = new DomObserver(
+        document.body,
+        (change) => {
+          lastChange = change;
+        },
+        50,
+      );
+      observer.start();
+      document.getElementById("s")!.setAttribute("size", to);
+      await vi.advanceTimersByTimeAsync(100);
+      observer.stop();
+      // The size change alone has to wake the tree.
+      expect(lastChange).toBeDefined();
+      const result = live.refresh(lastChange);
+      const select = [...result.nodes.values()].find(
+        (n) => n.a11y.name === "Items",
+      );
+      expect(select?.a11y.states["expanded"]).toBe(expanded);
+      expect(result.nodes).toEqual(extractA11yTree(document.body).nodes);
+    });
+
     // Opening a picker changes no attribute and fires no event, so it shows
     // only when something else refreshes the tree. jsdom has no picker: stand
     // one in through `:open`.
