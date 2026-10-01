@@ -90,3 +90,24 @@ test("a custom select-only combobox keeps its click", async ({ nav }) => {
   });
   await expect(combobox.locator(".sn-action-tag")).toHaveText("Click");
 });
+
+test("a sensitive select's picker shows no current option", async ({ nav }) => {
+  const page = await showNative(nav, "select-sensitive.html");
+  await nav.panel.getByRole("button", { name: "Expand all" }).click();
+
+  const month = nav.panel.getByRole("treeitem", {
+    name: /^combobox "Expiry month"/,
+  });
+  await expect(month).toContainText('= "[redacted]"');
+  await month.getByTitle("Select (Enter)").click();
+
+  const picker = nav.panel.getByRole("dialog", { name: "Expiry month" });
+  await expect(picker.getByRole("option")).toHaveCount(3);
+  // No filled dot: which option is chosen is the field's value.
+  await expect(picker.locator(".sn-select-check")).toHaveText(["○", "○", "○"]);
+  await expect(picker).not.toContainText("●");
+
+  // Choosing one still works.
+  await picker.getByRole("option", { name: /02/ }).click();
+  await expect(page.locator("#exp-month")).toHaveValue("02");
+});

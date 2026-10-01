@@ -1922,9 +1922,15 @@ export function App() {
       if (explicitAction === undefined || explicitAction === "select") {
         const options = nativeSelectOptions(node, nativeNodesRef.current);
         if (options.length > 0) {
+          // A sensitive select (`autocomplete="cc-exp-month"`) shows no
+          // current option, as its value is withheld and as the DOM tree's
+          // picker does (`computeFieldState`): which one is chosen is the
+          // value.
           const current =
-            options.find((o) => o.states?.["selected"] === true) ??
-            options.find((o) => o.name === node.value);
+            node.redacted === true
+              ? undefined
+              : (options.find((o) => o.states?.["selected"] === true) ??
+                options.find((o) => o.name === node.value));
           setInputState({
             type: "select",
             nodeId: node.id,
