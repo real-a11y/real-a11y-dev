@@ -206,3 +206,14 @@ test("activating a link that redirects onward still recovers on the final page",
     nav.panel.getByRole("treeitem", { name: "Tree View" }),
   ).toBeVisible({ timeout: 10_000 });
 });
+
+test("a busy region shows a bare busy badge, not busy=1", async ({ nav }) => {
+  await showNative(nav, "native-busy.html");
+
+  // Chromium sends `aria-busy="true"` as `{"type":"boolean","value":1}`.
+  // Read as text, the row's badge said `busy=1`; the DOM tree says `busy`.
+  const badges = nav.panel
+    .getByRole("treeitem", { name: "Results" })
+    .locator(".sn-state-badge");
+  await expect(badges).toHaveText(["busy"]);
+});

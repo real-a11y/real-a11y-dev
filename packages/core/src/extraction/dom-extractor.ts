@@ -2105,8 +2105,15 @@ export function nativeStates(
       ? { pressed: undefined }
       : { expanded: undefined, pressed: undefined };
   }
-  const details = element.parentElement;
-  if (tag === "summary" && details?.tagName.toLowerCase() === "details") {
+  if (tag === "button" || tag === "input") {
+    const expanded = popoverExpanded(element, tag, role);
+    return expanded === null ? {} : { expanded };
+  }
+  if (tag !== "summary") return {};
+  // Read only for a summary: on a <form>, a field named `parentElement`
+  // shadows the property.
+  const details = safeParentElement(element);
+  if (details?.tagName.toLowerCase() === "details") {
     const disclosure =
       (role === "generic" && getExplicitRole(element) !== "generic") ||
       SUMMARY_EXPANDED_ROLES.has(role);
@@ -2114,10 +2121,6 @@ export function nativeStates(
       ? (details as HTMLDetailsElement).open
       : undefined;
     return role === "button" ? { expanded } : { expanded, pressed: undefined };
-  }
-  if (tag === "button" || tag === "input") {
-    const expanded = popoverExpanded(element, tag, role);
-    if (expanded !== null) return { expanded };
   }
   return {};
 }
@@ -2768,7 +2771,9 @@ function buildNode(
  *   text both as a description and as standalone content.
  */
 function isDescribedInOwnTree(element: Element, id: string): boolean {
-  const scope = element.getRootNode() as Document | ShadowRoot | Element;
+  // Clobber-safe, as in `idScope`: a description target that is a `<form>`
+  // holding `<input name="getRootNode">` would otherwise throw here.
+  const scope = safeRootNode(element) as Document | ShadowRoot | Element;
   if (typeof scope.querySelectorAll !== "function") return true;
   const escaped =
     typeof CSS !== "undefined" && typeof CSS.escape === "function"

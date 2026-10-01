@@ -24,6 +24,7 @@ import {
   NATIVE_AX_DROP_WHEN_BARE,
   NATIVE_AX_OWN_TEXT_ROLES,
   NATIVE_AX_VOCABULARY_VERSION,
+  nativeAXStateValue,
 } from "./ax-vocabulary.js";
 
 const rawNodes = fixture.nodes as RawNativeAXNode[];
@@ -83,6 +84,38 @@ describe("native AX vocabulary", () => {
   it("treats generic as drop-unless-named, not an unconditional drop", () => {
     expect(NATIVE_AX_DROP_ROLES.has("generic")).toBe(false);
     expect(NATIVE_AX_DROP_UNLESS_NAMED.has("generic")).toBe(true);
+  });
+});
+
+describe("nativeAXStateValue", () => {
+  it("reads a boolean-typed number as a boolean — Chromium sends busy as 1", () => {
+    expect(nativeAXStateValue({ type: "boolean", value: 1 })).toBe(true);
+    expect(nativeAXStateValue({ type: "boolean", value: 0 })).toBe(false);
+    expect(nativeAXStateValue({ type: "booleanOrUndefined", value: 1 })).toBe(
+      true,
+    );
+  });
+
+  it("keeps a JSON boolean, and reads the tristates' true/false strings", () => {
+    expect(
+      nativeAXStateValue({ type: "booleanOrUndefined", value: true }),
+    ).toBe(true);
+    expect(nativeAXStateValue({ type: "boolean", value: false })).toBe(false);
+    expect(nativeAXStateValue({ type: "tristate", value: "true" })).toBe(true);
+    expect(nativeAXStateValue({ type: "tristate", value: "false" })).toBe(
+      false,
+    );
+  });
+
+  it("leaves mixed, tokens, and a number of any other type as strings", () => {
+    expect(nativeAXStateValue({ type: "tristate", value: "mixed" })).toBe(
+      "mixed",
+    );
+    expect(nativeAXStateValue({ type: "token", value: "grammar" })).toBe(
+      "grammar",
+    );
+    expect(nativeAXStateValue({ type: "integer", value: 1 })).toBe("1");
+    expect(nativeAXStateValue({ value: 1 })).toBe("1");
   });
 });
 

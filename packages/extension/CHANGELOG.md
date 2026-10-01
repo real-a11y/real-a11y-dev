@@ -48,6 +48,13 @@
   `mixed` hides.
   ([#443](https://github.com/real-a11y/real-a11y-dev/pull/443))
 
+- In DOM mode, a `<form>` with a field named `getRootNode` is no longer
+  dropped from the tree, with everything in it, when `aria-labelledby` names
+  it or another field's `aria-describedby` points at it. Such a field shadows
+  the form's own `getRootNode()`, so calling it to resolve the reference
+  threw and the whole form was skipped.
+  ([#439](https://github.com/real-a11y/real-a11y-dev/pull/439))
+
 - In DOM mode, ARIA state values now read the way Chromium, and NATIVE mode,
   read them. `aria-disabled="TRUE"`, `aria-pressed="MIXED"` and
   `aria-checked="yes"` had no `disabled`, `mixed` or `checked` badge because
