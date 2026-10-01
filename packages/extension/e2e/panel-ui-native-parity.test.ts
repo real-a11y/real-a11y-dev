@@ -139,3 +139,14 @@ test("type-ahead moves the native tree's selection", async ({ nav }) => {
     nav.panel.locator('[role="treeitem"][aria-selected="true"]'),
   ).toContainText("Native panel fixture");
 });
+
+test("an iframe row is marked embedded, since the native read skips its content", async ({
+  nav,
+}) => {
+  await showNative(nav, "pick-mode.html");
+  await nav.panel.getByRole("button", { name: "Expand all" }).click();
+  // Whatever Chromium names the frame, its row carries the badge.
+  await expect(
+    nav.panel.locator(".sn-node .sn-iframe-badge", { hasText: "embedded" }),
+  ).toHaveCount(1);
+});
