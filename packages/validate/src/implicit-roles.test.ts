@@ -281,3 +281,62 @@ describe("an exempt native pair does not end the ancestor walk", () => {
     );
   });
 });
+
+// A producer that resolves `role` the way Chromium does exposes the role the
+// browser applies — `generic` for `role="foo"`, `generic` for a listitem
+// outside any list. The authored token is a mistake all the same, and the
+// fallback must not swallow it: `discardedRole` carries it to the rules.
+describe("a role the user agent discarded", () => {
+  it("still reports an unrecognised token, and nothing else", () => {
+    const n = node({
+      id: "n",
+      role: "button",
+      name: "",
+      discardedRole: "foo",
+    });
+    // The early return holds: an unnamed fallback button is not ALSO blamed.
+    expect(errorsFor(n)).toEqual(['"foo" is not a valid ARIA role']);
+  });
+
+  it("reports an orphaned role as an error, naming its context", () => {
+    const n = node({ id: "n", role: "generic", discardedRole: "listitem" });
+    expect(errorsFor(n)).toEqual([
+      'role "listitem" is discarded outside its required context (directory / list)',
+    ]);
+  });
+
+  // aria-query lists no required context for option, so the rule can't
+  // either — but the browser still threw the role away, and an unnamed
+  // orphan option was an error before the role fell back.
+  it("reports one whose context the schema doesn't list", () => {
+    const n = node({ id: "n", role: "generic", discardedRole: "option" });
+    expect(errorsFor(n)).toEqual([
+      'role "option" is discarded outside its required context',
+    ]);
+  });
+
+  it("goes on to judge the role the browser applies", () => {
+    const n = node({ id: "n", role: "button", discardedRole: "option" });
+    expect(errorsFor(n)).toEqual([
+      'role "option" is discarded outside its required context',
+      'role "button" requires an accessible name',
+    ]);
+  });
+
+  it("is the discard, not the parent, that decides", () => {
+    // Inside a listbox as far as the extracted tree shows — but the browser
+    // found something between them that ended the climb.
+    const nodes = mapOf(
+      node({ id: "lb", role: "listbox", name: "Fruit" }),
+      node({
+        id: "n",
+        role: "generic",
+        parentId: "lb",
+        discardedRole: "option",
+      }),
+    );
+    expect(errorsFor(nodes.get("n")!, nodes)).toEqual([
+      'role "option" is discarded outside its required context',
+    ]);
+  });
+});
