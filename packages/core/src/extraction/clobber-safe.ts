@@ -101,15 +101,9 @@ export function safeParentElement(node: Node): Element | null {
  * called `parentNode` hands that element back as the document's parent.
  */
 export function safeParentNode(node: Node): ParentNode | null {
-  const parent = parentNodeGetter
-    ? parentNodeGetter.call(node)
+  return parentNodeGetter
+    ? (parentNodeGetter.call(node) as ParentNode | null)
     : node.parentNode;
-  if (!parent) return null;
-  // Element, document or document fragment: the node kinds that can parent.
-  const type = parent.nodeType;
-  return type === 1 || type === 9 || type === 11
-    ? (parent as ParentNode)
-    : null;
 }
 
 /** Clobber-immune `element.assignedSlot` (`<input name="assignedSlot">`). */
