@@ -12,6 +12,7 @@ import {
   findNative,
   IN_PAGE_ACTION_SOURCE,
   IN_PAGE_READ_VALUE_SOURCE,
+  nativeControls,
   pageClick,
   pageFocus,
   pageReadValue,
@@ -88,6 +89,51 @@ describe("readNativeTree", () => {
     expect(res.rawCount).toBe(3);
     expect(res.serialized).toContain('button "Save"');
     expect(findNative(res.nodes, "button", "Save")?.id).toBe("ax-dom-30");
+  });
+
+  it("attaches the rows a node controls, and nothing when it controls none", async () => {
+    const raw = [
+      {
+        nodeId: "1",
+        backendDOMNodeId: 10,
+        role: { value: "RootWebArea" },
+        childIds: ["2", "3"],
+      },
+      {
+        nodeId: "2",
+        backendDOMNodeId: 20,
+        role: { value: "button" },
+        name: { value: "Billing Address" },
+        properties: [
+          {
+            name: "controls",
+            value: {
+              type: "idrefList",
+              relatedNodes: [
+                { backendDOMNodeId: 30 },
+                { backendDOMNodeId: 99 },
+              ],
+            },
+          },
+        ],
+      },
+      {
+        nodeId: "3",
+        backendDOMNodeId: 30,
+        role: { value: "region" },
+        name: { value: "Billing" },
+      },
+    ];
+    const t = new FakeTransport((method) =>
+      method === "Accessibility.getFullAXTree" ? { nodes: raw } : {},
+    );
+    const res = await readNativeTree(t);
+    expect(
+      findNative(res.nodes, "button", "Billing Address")?.controls,
+    ).toEqual(["ax-dom-30"]);
+    expect(findNative(res.nodes, "region", "Billing")).not.toHaveProperty(
+      "controls",
+    );
   });
 
   it("attaches states/properties — the enrichment normalizeNativeAX doesn't do", async () => {
@@ -662,6 +708,51 @@ function node(
  * same way the DOM producer always has exactly one root. Mirrors
  * `@real-a11y-dev/browser`'s own `native-tree.ts` root-synthesis exactly.
  */
+describe("nativeControls", () => {
+  const controls = (relatedNodes: Array<{ backendDOMNodeId?: number }>) => ({
+    nodeId: "1",
+    backendDOMNodeId: 10,
+    role: { value: "tab" },
+    properties: [
+      { name: "controls", value: { type: "idrefList", relatedNodes } },
+    ],
+  });
+
+  it("maps each target's backendDOMNodeId to its row id", () => {
+    expect(
+      nativeControls(
+        controls([{ backendDOMNodeId: 20 }, { backendDOMNodeId: 30 }]),
+        new Set(["ax-dom-20", "ax-dom-30"]),
+      ),
+    ).toEqual(["ax-dom-20", "ax-dom-30"]);
+  });
+
+  it("drops a target the tree doesn't have, and repeats", () => {
+    // A hidden panel, or an unnamed wrapper the normalizer dropped, has no
+    // row to jump to.
+    expect(
+      nativeControls(
+        controls([
+          { backendDOMNodeId: 20 },
+          { backendDOMNodeId: 40 },
+          { backendDOMNodeId: 20 },
+          {},
+        ]),
+        new Set(["ax-dom-20"]),
+      ),
+    ).toEqual(["ax-dom-20"]);
+  });
+
+  it("is empty for a node with no controls relation", () => {
+    expect(
+      nativeControls(
+        { nodeId: "1", role: { value: "button" }, properties: [] },
+        new Set(["ax-dom-20"]),
+      ),
+    ).toEqual([]);
+  });
+});
+
 describe("fieldFacets", () => {
   const classified = { classified: true };
 
