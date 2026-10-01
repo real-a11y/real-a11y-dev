@@ -29,7 +29,7 @@
   `aria-expanded` showed a badge Chromium never reports, and a `<details>`
   showed one from whether it was open. Now a `<details>`' summary alone shows
   it, as in NATIVE mode.
-  ([#PR](https://github.com/real-a11y/real-a11y-dev/pull/PR))
+  ([#455](https://github.com/real-a11y/real-a11y-dev/pull/455))
 
 - In DOM mode, a button that opens a popover (`popovertarget`, or
   `commandfor` with a popover `command`) now shows `expanded` while the
