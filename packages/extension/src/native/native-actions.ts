@@ -208,3 +208,36 @@ export function isSteppableRole(role: string): boolean {
 export function isSelectableRole(role: string): boolean {
   return role === "option";
 }
+
+/**
+ * The option rows of a native `<select>`, in document order — what the
+ * panel's option picker (`InputPanel`'s `SelectPicker`) lists for it, as the
+ * DOM tree's `GET_FIELD_STATE` does for the same element. Empty for every
+ * other node.
+ *
+ * A real `<select>` is the one `combobox` Chromium gives a `MenuListPopup`
+ * child; a custom `role="combobox"` never has one, so it keeps its click.
+ * The options come from the tree already read, with no round trip, and
+ * include those inside an `<optgroup>`. Choosing one dispatches the existing
+ * `select` action on it, whose in-page `instanceof HTMLOptionElement` check
+ * stays the final word.
+ */
+export function nativeSelectOptions(
+  node: NativeNode,
+  nodes: Map<string, NativeNode>,
+): NativeNode[] {
+  if (node.role !== "combobox" || node.states?.["editable"]) return [];
+  const popup = (node.childIds ?? [])
+    .map((id) => nodes.get(id))
+    .find((child) => child?.role.toLowerCase() === "menulistpopup");
+  if (!popup) return [];
+  const options: NativeNode[] = [];
+  const walk = (id: string) => {
+    const child = nodes.get(id);
+    if (!child) return;
+    if (child.role === "option") options.push(child);
+    else for (const grandchild of child.childIds ?? []) walk(grandchild);
+  };
+  for (const id of popup.childIds ?? []) walk(id);
+  return options;
+}

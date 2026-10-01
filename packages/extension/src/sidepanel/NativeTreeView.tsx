@@ -58,6 +58,7 @@ import {
 import {
   ACTABLE,
   isSelectableRole,
+  nativeSelectOptions,
   isSteppableRole,
   isTypableRole,
   type NativeNode,
@@ -154,33 +155,54 @@ export interface NativeTreeViewProps {
 /** A node is worth a click/Enter action, a select action, or both never — the
  *  same three-way split `DogfoodPanel.tsx` renders from, reused here so a
  *  fix to one never silently diverges from the other. */
-function primaryLabel(node: NativeNode): string | undefined {
+function primaryLabel(
+  node: NativeNode,
+  nodes: Map<string, NativeNode>,
+): string | undefined {
   if (isTypableRole(node.role, node.states)) return "Type";
-  if (isSelectableRole(node.role)) return "Select";
+  // A real `<select>` opens the option picker, as the DOM tree's does.
+  if (isSelectableRole(node.role) || isNativeSelect(node, nodes)) {
+    return "Select";
+  }
   if (ACTABLE.has(node.role)) return "Click";
   return undefined;
+}
+
+/** A combobox backed by a real `<select>`, with option rows to pick from. */
+function isNativeSelect(
+  node: NativeNode,
+  nodes: Map<string, NativeNode>,
+): boolean {
+  return nativeSelectOptions(node, nodes).length > 0;
 }
 
 /** What a native row can do, in `interaction.actions`' vocabulary, so the
  *  shared filtered list can decide Enter/Activate and the stepper keys the
  *  same way it does for a DOM row. Mirrors `primaryLabel`'s precedence. */
-function nativeActions(node: NativeNode): ActionType[] {
+function nativeActions(
+  node: NativeNode,
+  nodes: Map<string, NativeNode>,
+): ActionType[] {
   const actions: ActionType[] = [];
   if (isTypableRole(node.role, node.states)) actions.push("type");
-  else if (isSelectableRole(node.role)) actions.push("select");
-  else if (ACTABLE.has(node.role)) actions.push("click");
+  else if (isSelectableRole(node.role) || isNativeSelect(node, nodes)) {
+    actions.push("select");
+  } else if (ACTABLE.has(node.role)) actions.push("click");
   if (isSteppableRole(node.role)) actions.push("increment", "decrement");
   return actions;
 }
 
-function toListItem(node: NativeNode): FilteredListItem {
+function toListItem(
+  node: NativeNode,
+  nodes: Map<string, NativeNode>,
+): FilteredListItem {
   const level = parseInt(node.properties?.["level"] ?? "", 10);
   return {
     id: node.id,
     label: node.name || `(${node.role})`,
     level: Number.isNaN(level) ? undefined : level,
     states: describeStates(node.states),
-    actions: nativeActions(node),
+    actions: nativeActions(node, nodes),
   };
 }
 
@@ -470,7 +492,7 @@ export function NativeTreeView({
       const id = stack.pop()!;
       const node = nodes.get(id);
       if (!node) continue;
-      if (search.directIds.has(id)) items.push(toListItem(node));
+      if (search.directIds.has(id)) items.push(toListItem(node, nodes));
       const children = node.childIds ?? [];
       for (let i = children.length - 1; i >= 0; i--) stack.push(children[i]!);
     }
@@ -632,7 +654,7 @@ export function NativeTreeView({
    */
   const activateRow = useCallback(
     (node: NativeNode): boolean => {
-      if (primaryLabel(node)) {
+      if (primaryLabel(node, nodes)) {
         onActivate(node, isSelectableRole(node.role) ? "select" : undefined);
         return true;
       }
@@ -642,7 +664,7 @@ export function NativeTreeView({
       }
       return false;
     },
-    [onActivate],
+    [nodes, onActivate],
   );
 
   const activateFromList = useCallback(
@@ -734,7 +756,7 @@ export function NativeTreeView({
       // `+`/`-` and `Shift+Enter` step a slider or spinbutton before Enter or
       // type-ahead see the key: the mapping the DOM tree and the role-filter
       // lists share.
-      const step = resolveStepperKeyAction(e, nativeActions(node));
+      const step = resolveStepperKeyAction(e, nativeActions(node, nodes));
       if (step === "increment" || step === "decrement") {
         e.preventDefault();
         typeAhead.current.clear();
@@ -790,7 +812,7 @@ export function NativeTreeView({
           // (no dispatch, no conflict with an in-flight NATIVE_ACT) — only
           // the activation itself is held back, same as the action buttons'
           // own `disabled`.
-          if (primaryLabel(node) || isSteppableRole(node.role)) {
+          if (primaryLabel(node, nodes) || isSteppableRole(node.role)) {
             if (!busy) activateRow(node);
           } else if (hasChildren(node)) {
             toggle(node.id);
@@ -996,7 +1018,7 @@ export function NativeTreeView({
 
                 const isParent = hasChildren(node);
                 const isSelected = id === selectedId;
-                const label = primaryLabel(node);
+                const label = primaryLabel(node, nodes);
                 const steppable = isSteppableRole(node.role);
                 const selectAction = isSelectableRole(node.role)
                   ? "select"

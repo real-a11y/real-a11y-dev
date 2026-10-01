@@ -135,7 +135,9 @@ describe("NativeTreeView aria-controls jump chips", () => {
     expect(selected()).toBe("panel1");
     expect(row("panel1").classList).toContain("sn-node--flash");
 
-    act(() => vi.advanceTimersByTime(700));
+    act(() => {
+      vi.advanceTimersByTime(700);
+    });
     expect(row("panel1").classList).not.toContain("sn-node--flash");
   });
 
