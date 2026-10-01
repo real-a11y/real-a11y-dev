@@ -1195,6 +1195,15 @@ describe("extractDomTree", () => {
     });
   });
 
+  it("ignores aria-pressed on a drop-down <select>", () => {
+    expect(
+      stateById(
+        `<select id="s" aria-label="a" aria-pressed="true"><option>o</option></select>`,
+        "pressed",
+      ),
+    ).toEqual({ s: undefined });
+  });
+
   it("takes a details' summary's expanded state from the details", () => {
     expect(
       stateById(

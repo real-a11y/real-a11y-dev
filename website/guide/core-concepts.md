@@ -30,11 +30,12 @@ interface SemanticNode {
                                               // true, aria-disabled="" leaves it unset.
                                               // An element's own semantics win over its
                                               // attribute: a native checkbox or radio
-                                              // always has `checked`, true or false
+                                              // reports its checkedness, true or false
                                               // ("mixed" when indeterminate), a drop-down
                                               // <select> is expanded only while its picker
                                               // is open, and a <details>' summary follows
-                                              // the details' `open`
+                                              // the details' `open` — each on a role that
+                                              // has the state, as in Chromium
     properties: Record<string, string>;       // aria-* properties (incl. heading "level")
     isExposedToAT: boolean;      // false when aria-hidden, role="presentation", etc.
   };

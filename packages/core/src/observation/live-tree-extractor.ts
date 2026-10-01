@@ -8,7 +8,7 @@ import {
   htmlAamNameOwner,
   isNameBarrierElement,
   isNameFromContentHost,
-  nativeChecked,
+  nativeStates,
   resolveEffectiveRoot,
   resolveFocusedElement,
 } from "../extraction/dom-extractor.js";
@@ -233,7 +233,7 @@ export class LiveTreeExtractor {
         const owner = fieldValueOwner(el);
         if (owner && owner !== el) dirty.add(owner);
       }
-      this.addMovedCheckables(dirty);
+      this.addMovedNativeStates(dirty);
     }
 
     // At most ONE resolveEffectiveRoot() per refresh regardless of batch size:
@@ -343,20 +343,28 @@ export class LiveTreeExtractor {
   }
 
   /**
-   * Add every recorded checkbox and radio whose checkedness no longer matches
-   * its node. A change can move another control's without an event or an
-   * attribute of its own: a click on one radio unchecks its sibling, and a
-   * handler can make a "select all" box indeterminate. It reads one property
-   * per control, far cheaper than re-extracting them all.
+   * Add every recorded checkbox, radio and `<select>` whose native state no
+   * longer matches its node. Those states move without an attribute, and
+   * often without an event, of their own: a click on one radio unchecks its
+   * sibling, a handler can make a "select all" box indeterminate, and opening
+   * a picker fires nothing at all, so it shows once anything else refreshes.
+   * It reads a property or two per control, far cheaper than re-extracting
+   * them all.
    */
-  private addMovedCheckables(dirty: Set<Element>): void {
+  private addMovedNativeStates(dirty: Set<Element>): void {
     const refs = getElementRefs();
     for (const [id, node] of this.domNodes) {
-      if (node.dom?.tagName !== "input") continue;
+      const tag = node.dom?.tagName;
+      if (tag !== "input" && tag !== "select") continue;
       const el = refs.get(id);
-      const checked = el ? nativeChecked(el) : null;
-      if (checked !== null && checked !== node.a11y.states["checked"])
-        dirty.add(el!);
+      if (!el) continue;
+      const native = nativeStates(el, tag, node.a11y.role);
+      for (const [state, value] of Object.entries(native)) {
+        if (value !== node.a11y.states[state]) {
+          dirty.add(el);
+          break;
+        }
+      }
     }
   }
 

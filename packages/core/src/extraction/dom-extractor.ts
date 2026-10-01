@@ -1794,16 +1794,16 @@ function takesInheritedDisabled(
 }
 
 /**
- * A native checkbox's or radio's `checked` state: its checkedness, and
- * `"mixed"` for an indeterminate checkbox, whatever its role. Chromium reads
- * this in place of `aria-checked`. `null` for any other element, including
- * any other `<input>` type, which reads `aria-checked` as usual.
+ * A native checkbox's or radio's checkedness, and `"mixed"` for an
+ * indeterminate checkbox, which Chromium reads in place of `aria-checked` and
+ * `aria-pressed`. `null` for any other element, including any other `<input>`
+ * type, which reads `aria-checked` as usual.
  *
  * `indeterminate` is a property with no attribute, and script is the only
  * thing that sets it, so no mutation reports the change. `LiveTreeExtractor`
  * re-reads every checkbox and radio on refresh for that reason.
  */
-export function nativeChecked(element: Element): boolean | "mixed" | null {
+function nativeChecked(element: Element): boolean | "mixed" | null {
   if (element.tagName.toLowerCase() !== "input") return null;
   const input = element as HTMLInputElement;
   if (input.type === "checkbox")
@@ -1825,33 +1825,99 @@ function isPickerOpen(select: Element): boolean {
 }
 
 /**
+ * Roles on which Chromium exposes a native checkbox's or radio's checkedness
+ * as `checked`. Its own role is one of them.
+ */
+const CHECKEDNESS_ROLES = new Set([
+  "checkbox",
+  "radio",
+  "switch",
+  "menuitemcheckbox",
+  "menuitemradio",
+]);
+
+/**
+ * Roles under which a `<details>`' summary takes `expanded` from the details,
+ * measured against Chromium 151 across every ARIA role. Its own role, which
+ * the engine calls `generic`, is a disclosure too.
+ */
+const SUMMARY_EXPANDED_ROLES = new Set([
+  "application",
+  "button",
+  "checkbox",
+  "columnheader",
+  "combobox",
+  "form",
+  "gridcell",
+  "link",
+  "listitem",
+  "menuitem",
+  "menuitemcheckbox",
+  "menuitemradio",
+  "option",
+  "region",
+  "row",
+  "rowheader",
+  "switch",
+  "tab",
+  "treeitem",
+]);
+
+/**
  * The states an element's own semantics decide, which Chromium reads in
  * place of the matching ARIA attribute. A state mapped to `undefined` is one
- * the element doesn't have, whatever its attribute says.
+ * the element doesn't have, whatever its attribute says. `role` is its
+ * computed role. Each rule was measured against Chromium 151.
  *
- * - A native checkbox or radio: `checked`, from {@link nativeChecked}.
+ * - A native checkbox or radio: its checkedness ({@link nativeChecked}) is
+ *   `checked` on a role in {@link CHECKEDNESS_ROLES}, and on an `option` or
+ *   `treeitem` while `aria-checked` is set. It is `pressed` instead on a
+ *   `button` with `aria-pressed`, a toggle button. Any other role has neither.
  * - A `<select>` in its own role: a drop-down's `expanded` is whether its
- *   picker is open, and a list box has none. An author role other than those
- *   two reads `aria-expanded` as usual.
+ *   picker is open. A list box has none, and neither has a select showing
+ *   more than one row, whatever its role. Neither is a toggle button, so
+ *   neither has `pressed`. An author role other than those two reads
+ *   `aria-expanded` and `aria-pressed` as usual.
  * - Any `<summary>` child of a `<details>`, not only the one that toggles it:
- *   `expanded` is whether the details is open, whatever its role. In its own
- *   role it is a disclosure, not a toggle button, so it has no `pressed`.
+ *   `expanded` is whether the details is open, in its own role or one in
+ *   {@link SUMMARY_EXPANDED_ROLES}, and nothing under any other role. Only a
+ *   `button` role makes it a toggle button, with a `pressed`.
  */
-function nativeStates(
+export function nativeStates(
   element: Element,
   tag: string,
   role: string,
 ): Record<string, boolean | string | undefined> {
   const checked = nativeChecked(element);
-  if (checked !== null) return { checked };
+  if (checked !== null) {
+    const ariaSet = (attr: string) =>
+      ariaTristate(element.getAttribute(attr)) !== null;
+    if (role === "button" && ariaSet("aria-pressed"))
+      return { checked: undefined, pressed: checked };
+    const exposed =
+      CHECKEDNESS_ROLES.has(role) ||
+      ((role === "option" || role === "treeitem") && ariaSet("aria-checked"));
+    return { checked: exposed ? checked : undefined, pressed: undefined };
+  }
   if (tag === "select") {
-    if (role === "combobox") return { expanded: isPickerOpen(element) };
-    return role === "listbox" ? { expanded: undefined } : {};
+    if (role !== "combobox" && role !== "listbox") return {};
+    const select = element as HTMLSelectElement;
+    const dropDown = !select.multiple && select.size <= 1;
+    return {
+      expanded:
+        role === "combobox" && dropDown ? isPickerOpen(element) : undefined,
+      pressed: undefined,
+    };
   }
   const details = element.parentElement;
   if (tag === "summary" && details?.tagName.toLowerCase() === "details") {
-    const expanded = (details as HTMLDetailsElement).open;
-    return role === "generic" ? { expanded, pressed: undefined } : { expanded };
+    const disclosure =
+      (role === "generic" && getExplicitRole(element) !== "generic") ||
+      SUMMARY_EXPANDED_ROLES.has(role);
+    const expanded = disclosure
+      ? (details as HTMLDetailsElement).open
+      : undefined;
+    return role === "button" ? { expanded } : { expanded, pressed: undefined };
   }
   return {};
 }
