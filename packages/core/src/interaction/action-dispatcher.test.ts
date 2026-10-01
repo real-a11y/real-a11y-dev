@@ -87,14 +87,16 @@ describe("ActionDispatcher", () => {
       // descendant `<div role="link" data-target="node">`. Dispatching on
       // the wrapper made event.target the wrapper, the closest() walk went
       // upward, the handler returned null, and every Drive tree click was
-      // a silent no-op even after the pointer-sequence fix in #21.
+      // a silent no-op even after the pointer-sequence fix in #21. The
+      // `role="tree"` matters: outside one, Chromium discards the treeitem
+      // role, and so does the tree this dispatcher acts on.
       document.body.innerHTML = `
-        <div role="treeitem" id="row">
+        <div role="tree"><div role="treeitem" id="row">
           <div role="link" data-target="node" id="link">
             <div data-target="expander" id="exp">▸</div>
             <span>Home</span>
           </div>
-        </div>
+        </div></div>
       `;
       const row = document.getElementById("row")!;
       const link = document.getElementById("link")!;
@@ -135,6 +137,26 @@ describe("ActionDispatcher", () => {
 
       expect(onClick).toHaveBeenCalledTimes(1);
       expect(onClick.mock.calls[0]![0]).toBe(row);
+    });
+
+    // `TREEITEM` is a treeitem to the browser and the tree; the redirect
+    // reads the same resolved role.
+    it("redirects a composite child whose role is written in another case", () => {
+      document.body.innerHTML = `
+        <div role="tree"><div role="TREEITEM" id="row">
+          <a href="#home" id="link">Home</a>
+        </div></div>
+      `;
+      refs.set("n1", document.getElementById("row")!);
+      const onClick = vi.fn();
+      document.getElementById("link")!.addEventListener("click", (e) => {
+        e.preventDefault();
+        onClick(e.target);
+      });
+
+      dispatcher.dispatch({ nodeId: "n1", action: "click" });
+
+      expect(onClick).toHaveBeenCalledTimes(1);
     });
 
     it("does not redirect for non-composite-child roles", () => {
@@ -591,6 +613,22 @@ describe("ActionDispatcher", () => {
       expect(
         dispatcher.dispatch({ nodeId: "tb", action: "focus" }).requiresInput,
       ).toBe(true);
+    });
+
+    // The extractor gives `role="foo textbox"` a type action, so a focus
+    // dispatch must agree that it takes text: one parse of `role`.
+    it("reads the role the browser resolves, not the raw attribute", () => {
+      for (const role of ["foo textbox", "SEARCHBOX"]) {
+        const el = document.createElement("div");
+        el.setAttribute("role", role);
+        el.tabIndex = 0;
+        document.body.appendChild(el);
+        refs.set(role, el);
+        expect(
+          dispatcher.dispatch({ nodeId: role, action: "focus" }).requiresInput,
+          role,
+        ).toBe(true);
+      }
     });
 
     it("focuses a <video controls> WITHOUT advertising text entry", () => {

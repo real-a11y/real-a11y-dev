@@ -1355,4 +1355,14 @@ describe("getHeadingLevel", () => {
       getHeadingLevel(el('<div role="heading" aria-level="3">Heading</div>')),
     ).toBe(3);
   });
+
+  // Chromium 151 and 153 give both of these their aria-level (CDP).
+  it("returns aria-level for a heading role the browser resolves", () => {
+    expect(
+      getHeadingLevel(el('<div role="foo heading" aria-level="3">N</div>')),
+    ).toBe(3);
+    expect(
+      getHeadingLevel(el('<div role="HEADING" aria-level="4">N</div>')),
+    ).toBe(4);
+  });
 });

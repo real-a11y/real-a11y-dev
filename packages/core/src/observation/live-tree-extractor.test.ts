@@ -1210,6 +1210,25 @@ describe("LiveTreeExtractor", () => {
       expect(result.nodes).toEqual(extractDomTree(document.body).nodes);
     });
 
+    // The owned item sits outside the owner's subtree, so re-extracting the
+    // owner alone would leave the item on its old role, both ways round.
+    it("follows an aria-owns owner that changes role", async () => {
+      const lost = await refreshAfter(
+        `<section><div><div id="owner" role="list" aria-owns="t"></div></div></section><div><div id="t" role="listitem">x</div></div>`,
+        () =>
+          document.getElementById("owner")!.setAttribute("role", "navigation"),
+      );
+      expect(roleOf(lost, "t")).toBe("generic");
+      expect(lost.nodes).toEqual(extractDomTree(document.body).nodes);
+
+      const gained = await refreshAfter(
+        `<section><div><div id="owner" role="navigation" aria-owns="t"></div></div></section><div><div id="t" role="listitem">x</div></div>`,
+        () => document.getElementById("owner")!.setAttribute("role", "list"),
+      );
+      expect(roleOf(gained, "t")).toBe("listitem");
+      expect(gained.nodes).toEqual(extractDomTree(document.body).nodes);
+    });
+
     it("follows an ancestor that stops being a list", async () => {
       const result = await refreshAfter(
         `<div id="list" role="list"><div><div id="t" role="listitem">x</div></div></div>`,

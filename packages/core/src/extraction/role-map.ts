@@ -790,7 +790,7 @@ export function getHeadingLevel(element: Element): number | null {
   if (match) return parseInt(match[1], 10);
 
   const ariaLevel = element.getAttribute("aria-level");
-  if (ariaLevel && element.getAttribute("role") === "heading") {
+  if (ariaLevel && getExplicitRole(element) === "heading") {
     return parseInt(ariaLevel, 10);
   }
 

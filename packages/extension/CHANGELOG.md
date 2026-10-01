@@ -130,8 +130,8 @@
   An unknown or abstract token is skipped for the next one, or the element's
   own role — `role="foo"` was a `foo` row and is now whatever the element is
   (often a `generic` that folds away), and `role="foo button"` is a `button`
-  named by its text. Tokens are read case-insensitively, so `role="BUTTON"`
-  is a button. A `listitem`, `option` or `treeitem` outside the list, listbox
+  named by its text and offers a Click. Tokens are read case-insensitively,
+  so `role="BUTTON"` is a button. A `listitem`, `option` or `treeitem` outside the list, listbox
   or tree it needs loses its role the same way, and the `<li>`s of a
   `<ul role="none">` leave the tree with their list.
   ([#457](https://github.com/real-a11y/real-a11y-dev/pull/457))

@@ -1,4 +1,5 @@
 import { isEditable, isEditingHost } from "../extraction/editing.js";
+import { getExplicitRole } from "../extraction/role-map.js";
 import type { ActionRequest, ActionResult } from "../types.js";
 import { ElementRefMap } from "../utils/element-ref.js";
 
@@ -39,8 +40,8 @@ const COMPOSITE_CHILD_ROLES = new Set([
  * wrapper unchanged.
  */
 export function resolveClickTarget(element: Element): Element {
-  const role = element.getAttribute("role") ?? "";
-  if (!COMPOSITE_CHILD_ROLES.has(role)) return element;
+  const role = getExplicitRole(element);
+  if (!role || !COMPOSITE_CHILD_ROLES.has(role)) return element;
   const candidate = element.querySelector(
     '[role="link"], [role="button"], a[href], button',
   );
@@ -78,7 +79,9 @@ function acceptsTextEntry(element: Element): boolean {
     return TEXT_ENTRY_INPUT_TYPES.has(type);
   }
   if (isEditingHost(element)) return true;
-  const role = element.getAttribute("role");
+  // The extractor's parse, so a focus dispatch agrees with the `type`
+  // action it offered (`role="foo textbox"` takes text).
+  const role = getExplicitRole(element);
   return role === "textbox" || role === "searchbox" || role === "spinbutton";
 }
 

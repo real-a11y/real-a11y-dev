@@ -5094,6 +5094,33 @@ describe("a role Chromium discards decides nothing", () => {
     ).toEqual({ role: "link", name: "Home" });
   });
 
+  // What the panel can do with a node follows the same resolved role: a
+  // fallback button clicks, and an option the browser discarded doesn't.
+  it("gives actions by the role the browser resolves", () => {
+    const actionsOf = (html: string) => {
+      const root = createPage(html);
+      return [...extractDomTree(root).nodes.values()].find(
+        (n) => n.dom?.attributes["id"] === "t",
+      )!.interaction!.actions;
+    };
+    expect(actionsOf(`<div id="t" role="foo button">Save</div>`)).toEqual([
+      "click",
+    ]);
+    expect(actionsOf(`<div id="t" role="BUTTON">Save</div>`)).toEqual([
+      "click",
+    ]);
+    expect(actionsOf(`<div id="t" role="widget textbox">x</div>`)).toEqual([
+      "focus",
+      "type",
+    ]);
+    expect(actionsOf(`<div id="t" role="option">Apple</div>`)).toEqual([]);
+    expect(
+      actionsOf(
+        `<div role="listbox"><div id="t" role="option">Apple</div></div>`,
+      ),
+    ).toEqual(["click"]);
+  });
+
   it("keeps a context-bound role that has its context", () => {
     expect(
       a11yNode(

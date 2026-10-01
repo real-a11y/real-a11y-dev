@@ -239,6 +239,12 @@ export class LiveTreeExtractor {
             needsFull = true;
             break;
           }
+          // An owner's role can be the context that keeps an owned item its
+          // role, and the item is outside the owner's subtree.
+          if (attr === "role" && target.hasAttribute("aria-owns")) {
+            needsFull = true;
+            break;
+          }
           // Arm the scope check but keep going: one recomputation covers the
           // whole batch however many mutations it holds. Deliberately NOT a
           // decision based on `target` alone — see SCOPE_ATTRS.

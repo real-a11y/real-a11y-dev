@@ -154,7 +154,9 @@ function getActions(
 ): ActionType[] {
   const tag = safeTagName(element);
   const actions: ActionType[] = [];
-  const role = element.getAttribute("role");
+  // The role the tree shows, so the actions offered agree with it: a
+  // `role="foo button"` clicks, an option the browser discarded doesn't.
+  const role = getExplicitRole(element);
 
   // Links — live ones. A link inside editable content is not: Chromium
   // won't follow it, not even on a scripted click(), or focus it, so it has
