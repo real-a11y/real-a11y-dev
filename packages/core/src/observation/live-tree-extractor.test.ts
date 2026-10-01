@@ -1957,6 +1957,7 @@ describe("LiveTreeExtractor", () => {
     it.each([
       ["matches", "asks the added form whether it is an overlay", clobber],
       ["querySelectorAll", "scans the added form for references", clobber],
+      ["getAttribute", "indexes the references the added form makes", clobber],
       [
         "ownerDocument",
         "resolves the added form's aria-labelledby",

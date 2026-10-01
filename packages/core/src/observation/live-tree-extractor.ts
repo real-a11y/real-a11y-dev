@@ -1,5 +1,8 @@
 import { buildA11yTree } from "../extraction/a11y-extractor.js";
-import { safeParentElement } from "../extraction/clobber-safe.js";
+import {
+  safeGetAttribute,
+  safeParentElement,
+} from "../extraction/clobber-safe.js";
 import {
   containsOverlaySignal,
   extractDomTree,
@@ -456,8 +459,11 @@ export class LiveTreeExtractor {
       effectiveRoot,
       "[aria-labelledby], [aria-describedby], input[list]",
     );
+    // Read through the prototype: a referrer can be a `<form>` whose control
+    // shadows `getAttribute`, and this runs inside the full extraction a
+    // failed splice falls back to.
     for (const el of referrers) {
-      const ids = (el.getAttribute("aria-labelledby") || "")
+      const ids = (safeGetAttribute(el, "aria-labelledby") || "")
         .split(/\s+/)
         .filter(Boolean);
       for (const id of ids) {
@@ -467,7 +473,7 @@ export class LiveTreeExtractor {
     }
 
     for (const el of referrers) {
-      const ids = (el.getAttribute("aria-describedby") || "")
+      const ids = (safeGetAttribute(el, "aria-describedby") || "")
         .split(/\s+/)
         .filter(Boolean);
       for (const id of ids) {
@@ -479,9 +485,12 @@ export class LiveTreeExtractor {
     }
 
     // An input's role follows the <datalist> its `list` names (role-map), so
-    // that datalist appearing or going away has to re-extract the input.
+    // that datalist appearing or going away has to re-extract the input. Not
+    // narrowed to inputs: asking a referrer `matches()` throws on a form that
+    // shadows it, and another element carrying a `list` only costs a
+    // re-extraction it didn't need.
     for (const el of referrers) {
-      const id = el.matches("input") ? el.getAttribute("list") : null;
+      const id = safeGetAttribute(el, "list");
       if (id) this.addReferrer(id, el);
     }
   }
