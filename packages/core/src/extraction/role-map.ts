@@ -90,7 +90,8 @@ export function isSubtreeHidden(
 /**
  * Whether an image is rendered the way Chromium needs it to be before it
  * focuses the areas of the map it uses: it has a box, it is visible, and it
- * is not inert.
+ * is not inert. `isRenderedInFlatTree` rules out an image no slot takes and
+ * one in the body of a closed `<details>`.
  */
 function isImageRendered(image: Element | null): boolean {
   if (!image || !isRenderedInFlatTree(image)) return false;
@@ -99,13 +100,6 @@ function isImageRendered(image: Element | null): boolean {
     // ask about this image again.
     if (el.localName === "area" || isSubtreeHidden(el)) return false;
   }
-  // A closed <details> around the image hides it through no style of any
-  // element's own, so only checkVisibility() sees it. jsdom has none.
-  if (
-    typeof image.checkVisibility === "function" &&
-    !image.checkVisibility({ checkVisibilityCSS: true })
-  )
-    return false;
   const visibility = getCachedComputedStyle(image)?.visibility;
   return visibility !== "hidden" && visibility !== "collapse";
 }
@@ -121,11 +115,11 @@ function isImageRendered(image: Element | null): boolean {
 function isAreaHiddenFromAT(area: Element): boolean {
   if (area.hasAttribute("inert")) return true;
   const image = imageUsingMap(area);
-  return (
-    !image ||
-    !isImageRendered(image) ||
-    image.closest('[aria-hidden="true"]') !== null
-  );
+  if (!image || !isImageRendered(image)) return true;
+  for (let el: Element | null = image; el; el = flatParent(el)) {
+    if (isAriaHiddenValue(el.getAttribute("aria-hidden"))) return true;
+  }
+  return false;
 }
 
 function hasAccessibleName(el: Element): boolean {

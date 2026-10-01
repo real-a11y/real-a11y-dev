@@ -3315,6 +3315,8 @@ describe.each(["inline", "none"])(
         <map name="g"><area id="in-inert" href="/g" alt="G"></map>
         <div style="visibility: hidden"><img src="x.gif" alt="H" usemap="#h"></div>
         <map name="h"><area id="in-invisible" href="/h" alt="H"></map>
+        <details><summary>More</summary><img src="x.gif" alt="M" usemap="#m"></details>
+        <map name="m"><area id="in-closed-details" href="/m" alt="M"></map>
 
         <div style="visibility: hidden">
           <img src="x.gif" alt="I" usemap="#i" style="visibility: visible">
@@ -3380,8 +3382,15 @@ describe.each(["inline", "none"])(
         <map name="a"><area id="img-aria-hidden" href="/a" alt="A"></map>
         <div aria-hidden="true"><img src="x.gif" alt="B" usemap="#b"></div>
         <map name="b"><area id="in-aria-hidden" href="/b" alt="B"></map>
+        <img src="x.gif" alt="C" usemap="#c" aria-hidden="YES">
+        <map name="c"><area id="img-aria-hidden-yes" href="/c" alt="C"></map>
       `);
-      for (const id of ["img-aria-hidden", "in-aria-hidden"]) {
+      // Any value but false hides, in any case, as Chromium reads it.
+      for (const id of [
+        "img-aria-hidden",
+        "in-aria-hidden",
+        "img-aria-hidden-yes",
+      ]) {
         expect(found[id].a11y.isExposedToAT, id).toBe(false);
         // Still focusable: Chromium tabs to it all the same.
         expect(found[id].interaction!.isFocusable, id).toBe(true);
