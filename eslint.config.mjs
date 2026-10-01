@@ -16,8 +16,9 @@ import tseslint from "typescript-eslint";
  *   4. Browser globals for src/, Node globals for scripts/
  *   5. import-order rules
  *   6. jsx-a11y on .tsx/.jsx
- *   7. Test file relaxations (Vitest fixtures often include broken markup)
- *   8. eslint-config-prettier LAST — disables formatting rules that fight
+ *   7. Source may not import test code or data (`pr:risk` relies on it)
+ *   8. Test file relaxations (Vitest fixtures often include broken markup)
+ *   9. eslint-config-prettier LAST — disables formatting rules that fight
  *      Prettier
  */
 export default [
@@ -112,6 +113,39 @@ export default [
       "jsx-a11y/click-events-have-key-events": "off",
       "jsx-a11y/interactive-supports-focus": "off",
       "jsx-a11y/no-static-element-interactions": "off",
+    },
+  },
+
+  // Source never imports test code or test data. `pnpm pr:risk` grades a
+  // test-only diff 🟢 low — mergeable by an agent — because no test file can
+  // reach a published artifact: each package ships only `dist/`, built from
+  // explicit entry points. A source import of a `__fixtures__` JSON would
+  // bundle it, and every later "test-only" edit to that file would then ship
+  // without a human having looked. (Static imports only — the rule does not
+  // see `import()`.)
+  {
+    files: ["packages/*/src/**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}"],
+    ignores: [
+      "**/*.test.*",
+      "**/*.spec.*",
+      "**/__tests__/**",
+      "**/__fixtures__/**",
+      "**/__snapshots__/**",
+    ],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              regex:
+                "(\\.(test|spec)(\\.[cm]?[jt]sx?)?$|(^|/)__(tests|fixtures|snapshots)__(/|$))",
+              message:
+                "Source must not import test code or test data: it would ship, and `pr:risk` grades test-only diffs as unable to ship. Move what you need out of the test-only path.",
+            },
+          ],
+        },
+      ],
     },
   },
 

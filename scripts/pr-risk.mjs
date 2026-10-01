@@ -149,8 +149,25 @@ const splitZ = (out) => out.split("\0").filter(Boolean);
  */
 const SELF_PATHS = new Set(["scripts/pr-risk.mjs", "scripts/pr-risk.test.mjs"]);
 
-/** The file types a code-reading rule scans — see `touchedCode` below. */
-const CODE_EXTENSIONS = ["ts", "tsx", "mjs", "js", "yml", "yaml"];
+/**
+ * The file types a code-reading rule scans — see `touchedCode` below.
+ *
+ * Every extension `TEST_FILE` accepts has to be here. Without `mts`, `cts`,
+ * `cjs` and `jsx`, a `.skip` added to `x.test.mts` graded 🟢 low because no
+ * rule could read it, while the identical line in `x.test.ts` graded 🟡.
+ */
+const CODE_EXTENSIONS = [
+  "ts",
+  "tsx",
+  "mts",
+  "cts",
+  "mjs",
+  "cjs",
+  "js",
+  "jsx",
+  "yml",
+  "yaml",
+];
 
 /**
  * The path a `diff --git` section is about, or `undefined` if the header is in
@@ -299,6 +316,18 @@ async function collectFacts(base) {
   );
   const files = [...new Set([...tracked, ...untracked])];
 
+  // Which of those this branch DELETED — `files` alone can't tell a deletion
+  // from an edit, and a deleted test is coverage that stopped running. Under
+  // `diffArgs`'s `--no-renames` on purpose: a test moved somewhere its runner
+  // no longer collects is a deletion as far as coverage goes, and rename
+  // detection would report it as a harmless move.
+  const deleted = splitZ(
+    await gitOrDie(
+      diffArgs(["--name-only", "--diff-filter=D", mergeBase]),
+      "the list of deleted files",
+    ),
+  );
+
   // `--numstat` cannot see untracked files, so counting only it made the header
   // contradict itself — a new uncommitted 800-line workflow reported
   // "1 files, 0 lines". The tier was right and the number was a lie, which is
@@ -405,6 +434,7 @@ async function collectFacts(base) {
     base,
     mergeBase,
     files,
+    deleted,
     lines,
     touchedCode,
     touchedCodeExcludingSelf: touchedCode.filter(
@@ -633,6 +663,63 @@ async function surfaceRemovals(mergeBase, files) {
 // ---------------------------------------------------------------------------
 
 const any = (files, re) => files.filter((f) => re.test(f));
+
+/** A file a test runner collects, wherever it sits. */
+const TEST_FILE = /\.(test|spec)\.[cm]?[jt]sx?$/;
+
+/** A test-only directory inside a package's `src`, at any depth. */
+const SRC_TEST_DIR =
+  /^packages\/[^/]+\/src\/(?:.*\/)?__(tests|fixtures|snapshots)__\//;
+
+/**
+ * Test code and test data, which no published artifact can contain.
+ *
+ * That is a fact about the build, checked rather than assumed: every published
+ * package ships `files: ["dist"]` (plus a LICENSE and storybook-addon's two
+ * root shims), every tsup and vite config names its entry points explicitly
+ * rather than globbing `src/`, and `npm pack --dry-run` of all six lists no
+ * test-shaped path. What would break it is a source file importing one — a
+ * `__fixtures__` JSON is the plausible case — and `eslint.config.mjs` refuses
+ * that import, so the fact is a lint gate rather than something somebody once
+ * checked.
+ *
+ * Shipping by being RUN is the other half. Test code executes in the release
+ * workflows, and `publish.yml`'s publish job can mint npm's Trusted Publisher
+ * token — so both release workflows run their tests in a `verify` job that
+ * holds no credential, and build what they release in a separate job, from
+ * source, without the pnpm cache test runs on `main` write to. A release job
+ * that runs a test, or restores that cache, makes this function's premise
+ * false.
+ */
+const isTestShaped = (f) => TEST_FILE.test(f) || SRC_TEST_DIR.test(f);
+
+/**
+ * The ways to stop a test running without failing anything: `it.skip`,
+ * `describe.only`, `test.describe.fixme`, `it.skipIf(…)`, Playwright's
+ * `test.fail()`, the in-body `ctx.skip()`, and the jasmine-style `xit(`.
+ */
+const TEST_DISABLER =
+  /(?<![\w$.])(?:(?:it|test|describe|suite|bench)(?:\.\w+)*\.(?:skip|only|todo|fails?|fixme|skipIf|runIf)\b|[\w$]+(?:\.[\w$]+)*\.skip\s*\(|x(?:it|test|describe)\s*\()/g;
+
+/**
+ * Which test files gained a disabler, one evidence line per file. ADDED lines
+ * only: a `-` line carrying `.skip` is a test being switched back on.
+ */
+function addedTestDisablers(code) {
+  const out = [];
+  for (const [path, text] of code) {
+    if (!isTestShaped(path)) continue;
+    const added = text
+      .split("\n")
+      .filter((l) => l.startsWith("+"))
+      .join("\n");
+    const hits = new Set(
+      [...added.matchAll(TEST_DISABLER)].map((m) => m[0].replace(/\s*\($/, "")),
+    );
+    if (hits.size) out.push(`${path} → ${[...hits].join(", ")}`);
+  }
+  return out;
+}
 
 /**
  * Which of `names` (a regex alternation) the touched code reaches, one evidence
@@ -930,7 +1017,29 @@ const RULES = [
     tier: "medium",
     title: "Published package source",
     why: "Anything under a published package's `src` reaches users at the next release. Covered by the suite, so the tier is medium rather than high — but it is not a change the CI gate alone should be trusted to bless.",
-    match: (f) => any(f.files, /^packages\/[^/]+\/src\//),
+    // Minus test code and test data, which cannot reach users (see
+    // `isTestShaped`). Without this, a co-located `*.test.tsx` graded 🟡 here
+    // before `LOW_SHAPED` was ever consulted: its `tests` entry never got a
+    // say for those paths, and its `test fixtures` entry could only ever match
+    // paths this rule had already graded — dead on arrival. A test-only flake
+    // fix went to a human, while the same edit to an `e2e/*.spec.ts` one
+    // directory over was agent-mergeable.
+    match: (f) =>
+      any(f.files, /^packages\/[^/]+\/src\//).filter((p) => !isTestShaped(p)),
+  },
+  {
+    id: "tests-disabled",
+    tier: "medium",
+    title: "A test switched off or deleted",
+    why: "Test-only changes grade low because nothing in them can ship — but they can stop a test running, and then the suite stays green over whatever that test guarded, with nothing in CI to say so. `.skip`, `.todo`, `.fails`, a `skipIf`, or deleting the file all pass every check by construction, which is the whole problem; and skipping the flaky test is the flake fix an agent is most tempted to merge itself.",
+    match: (f) => [
+      ...f.deleted
+        .filter((p) => TEST_FILE.test(p))
+        .map((p) => `${p} → deleted`),
+      ...addedTestDisablers(f.touchedCode),
+    ],
+    // The rubric's own tests have to write these calls into fixtures.
+    excludeSelf: true,
   },
   {
     id: "surface-addition",
@@ -974,8 +1083,8 @@ const LOW_SHAPED = [
   [/^packages\/[^/]+\/(README|CHANGELOG)\.md$/, "package docs"],
   [/^docs\/(?!surface).*\.md$/, "internal docs"],
   [/^examples\//, "examples"],
-  [/\.(test|spec)\.[cm]?[jt]sx?$/, "tests"],
-  [/^packages\/[^/]+\/src\/__(tests|fixtures|snapshots)__\//, "test fixtures"],
+  [TEST_FILE, "tests"],
+  [SRC_TEST_DIR, "test fixtures"],
   [/^\.changeset\/[^/]+\.md$/, "changeset entries"],
   [/^\.github\/ISSUE_TEMPLATE\//, "issue templates"],
 ];
