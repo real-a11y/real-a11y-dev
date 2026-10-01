@@ -487,6 +487,29 @@ describe("field-value redaction covers the redactInput strict mode", () => {
   });
 });
 
+describe("field-value redaction covers the DOM producer's flat tree", () => {
+  it("grades dropping the <textarea> guard from flatChildNodes 🔴 high", async () => {
+    // A <textarea>'s child text is its markup default, and for a sensitive
+    // field that default is the secret. Every DOM-producer text walk — a
+    // node's text preview, an ancestor's, a name or a description by
+    // reference — reads children through `flatChildNodes`, so this one line
+    // keeps it out of the tree, and deleting it names nothing but the guard.
+    const path = "packages/core/src/extraction/flat-tree.ts";
+    const flatTree = `export function flatChildNodes(node: Node): Node[] {\n  if (isTextarea(node)) return [];\n  if (isClosedDetails(node)) return summaryOf(node);\n  return [...node.childNodes];\n}\n`;
+    const result = await gradeEdit(
+      path,
+      flatTree,
+      `  if (isTextarea(node)) return [];\n`,
+      ``,
+    );
+
+    assert.equal(result.tier, "high");
+    assert.deepEqual(evidenceFor(result, "field-value-redaction"), [
+      `${path} → isTextarea`,
+    ]);
+  });
+});
+
 describe("field-value redaction stays on the gates, not the files", () => {
   it("leaves an unrelated comment edit in native-tree.ts 🟡 medium", async () => {
     // Why this rule matches the gates by name rather than native-tree.ts by
