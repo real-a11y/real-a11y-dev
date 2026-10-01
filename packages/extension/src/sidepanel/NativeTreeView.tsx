@@ -245,8 +245,8 @@ function ControlsChip({
       }}
       title={
         reverse
-          ? `Jump to the ${target.role} that controls this element`
-          : `Jump to the ${target.role} this element controls`
+          ? `Jump to the ${target.role} that controls this element (Alt+Shift+J)`
+          : `Jump to the ${target.role} this element controls (Alt+J)`
       }
     >
       {reverse ? "← " : "→ "}
@@ -721,6 +721,21 @@ export function NativeTreeView({
         return;
       }
 
+      // The jump chips' keyboard path: they sit outside the Tab order like
+      // every row control, so Alt+J follows the selected row's first
+      // `aria-controls` link and Alt+Shift+J goes back to the first row that
+      // controls it. Matched on `code`, since Option+J types a symbol on a
+      // Mac, and Alt keeps it clear of type-ahead.
+      if (e.altKey && !e.ctrlKey && !e.metaKey && e.code === "KeyJ") {
+        e.preventDefault();
+        if (selectedId === null) return;
+        const target = e.shiftKey
+          ? controlledBy.get(selectedId)?.[0]
+          : nodes.get(selectedId)?.controls?.find((id) => nodes.has(id));
+        if (target) jumpTo(target);
+        return;
+      }
+
       if (visibleIds.length === 0) return;
 
       // Type-ahead, as the DOM tree's `useTreeKeyboard` has it: printable
@@ -878,6 +893,8 @@ export function NativeTreeView({
       scopeRoot,
       pickArmed,
       scopeTo,
+      controlledBy,
+      jumpTo,
     ],
   );
 
@@ -1002,7 +1019,7 @@ export function NativeTreeView({
               ref={treeRef}
               class="sn-tree"
               role="tree"
-              aria-label={`Native accessibility tree — press Enter to activate (a slider steps up, a spinbutton opens its edit box), +/− or Shift+Enter to step sliders and spinbuttons, arrows to navigate, ${SCOPE_KEY_HINT}`}
+              aria-label={`Native accessibility tree — press Enter to activate (a slider steps up, a spinbutton opens its edit box), +/− or Shift+Enter to step sliders and spinbuttons, arrows to navigate, ${SCOPE_KEY_HINT}, Alt+J to follow a row's aria-controls link and Alt+Shift+J to go back`}
               tabIndex={0}
               style={{
                 minHeight: totalHeight,
@@ -1284,7 +1301,7 @@ export function NativeTreeView({
           <div class="sn-hints">
             <kbd>Enter</kbd> activate &middot; <kbd>+/−</kbd> step &middot;{" "}
             <kbd>Space</kbd> expand &middot; <kbd>Arrow</kbd> navigate &middot;{" "}
-            <kbd>DblClick</kbd> scope
+            <kbd>DblClick</kbd> scope &middot; <kbd>Alt+J</kbd> jump
           </div>
         </>
       )}

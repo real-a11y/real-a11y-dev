@@ -114,7 +114,9 @@ describe("NativeTreeView aria-controls jump chips", () => {
     mount();
     const [chip] = chips("tab1");
     expect(chip.textContent).toBe('→ tabpanel "Nils Frahm"');
-    expect(chip.title).toBe("Jump to the tabpanel this element controls");
+    expect(chip.title).toBe(
+      "Jump to the tabpanel this element controls (Alt+J)",
+    );
   });
 
   it("skips a target the tree doesn't have", () => {
@@ -150,11 +152,42 @@ describe("NativeTreeView aria-controls jump chips", () => {
       '← tab "Nils Frahm"',
       '← tab "A tab whose name is far …"',
     ]);
-    expect(back[0]!.title).toBe("Jump to the tab that controls this element");
+    expect(back[0]!.title).toBe(
+      "Jump to the tab that controls this element (Alt+Shift+J)",
+    );
     expect(back[0]!.classList).toContain("sn-controls-link--reverse");
 
     act(() => back[1]!.click());
     expect(selected()).toBe("tab2");
+  });
+
+  function press(key: string, init: KeyboardEventInit = {}) {
+    act(() => {
+      container
+        .querySelector('[role="tree"]')!
+        .dispatchEvent(
+          new KeyboardEvent("keydown", { key, bubbles: true, ...init }),
+        );
+    });
+  }
+
+  it("Alt+J follows the selected row's link, and Alt+Shift+J comes back", () => {
+    mount();
+    act(() => row("tab1").click());
+    // Option+J types a symbol on a Mac, so the key is matched on its code.
+    press("∆", { code: "KeyJ", altKey: true });
+    expect(selected()).toBe("panel1");
+    expect(row("panel1").classList).toContain("sn-node--flash");
+
+    press("J", { code: "KeyJ", altKey: true, shiftKey: true });
+    expect(selected()).toBe("tab1");
+  });
+
+  it("Alt+J does nothing on a row with no link, and never types ahead", () => {
+    mount();
+    act(() => row("list").click());
+    press("j", { code: "KeyJ", altKey: true });
+    expect(selected()).toBe("list");
   });
 
   it("leaves a scope the target sits outside of", () => {
