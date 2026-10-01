@@ -155,11 +155,15 @@
 
 - Two more of the DOM tree's controls work in the native tree:
   - `aria-controls` jump chips. A row shows a chip to each row it controls,
-    and a controlled row shows one back to its controller. A jump opens the
-    rows above its target and leaves a scope the target is outside.
+    and a controlled row shows one back to its controller; `Alt`+`J` and
+    `Alt`+`Shift`+`J` do the same from the keyboard. A jump opens the rows
+    above its target and leaves a scope the target is outside.
   - The option picker for a `<select>`: activating its row lists its
     options, starting on the current one, and choosing one selects it on the
     page. A custom `role="combobox"` is still clicked.
+  - In both trees, the option picker no longer announces its first option as
+    selected when the field reports no current option (a sensitive select);
+    only the field's own current option is announced as selected.
 
   ([#463](https://github.com/real-a11y/real-a11y-dev/pull/463))
 
