@@ -108,6 +108,48 @@ describe("the roles with an expanded state, against Chromium", () => {
     expect(dom).toMatchObject(expected);
   });
 
+  it("KNOWN GAP: a role out of its required context keeps aria-expanded", async () => {
+    await page.setContent(`
+      <div role="list"><div id="listitem" role="listitem" aria-expanded="true">In a list</div></div>
+      <div role="tree" aria-label="Tree">
+        <div id="treeitem" role="treeitem" aria-expanded="true">In a tree</div>
+      </div>
+      <div id="listitem-alone" role="listitem" tabindex="0" aria-label="Alone item" aria-expanded="true">x</div>
+      <div id="treeitem-alone" role="treeitem" tabindex="0" aria-label="Alone tree item" aria-expanded="true">x</div>
+    `);
+
+    const { dom, native } = await expandedById();
+    // In its context, each role has the state in both producers.
+    const inContext = { listitem: true, treeitem: true };
+    expect(native).toMatchObject(inContext);
+    expect(dom).toMatchObject(inContext);
+    // Out of it, Chromium makes each a generic, which has none. This engine
+    // keeps the authored role, so the gate keeps the state. The fix is the
+    // role's, not the gate's: once the role falls back, make `dom` match.
+    expect(native).toMatchObject({
+      "listitem-alone": "unset",
+      "treeitem-alone": "unset",
+    });
+    expect(dom).toMatchObject({
+      "listitem-alone": true,
+      "treeitem-alone": true,
+    });
+  });
+
+  it("KNOWN GAP: an <input list> is a textbox here, so it loses aria-expanded", async () => {
+    await page.setContent(`
+      <input id="input-list" list="choices" aria-label="Choice" aria-expanded="true">
+      <datalist id="choices"><option value="A"></option></datalist>
+    `);
+
+    const { dom, native } = await expandedById();
+    // Chromium makes it a combobox, which has the state. This engine still
+    // calls it a textbox, which doesn't, until the role map says combobox
+    // (#454); make `dom` match then.
+    expect(native).toMatchObject({ "input-list": true });
+    expect(dom).toMatchObject({ "input-list": "unset" });
+  });
+
   it("puts a details' state on its summary, in an expandable role", async () => {
     await page.setContent(`
       <details id="details" open aria-label="Details" aria-expanded="false">
