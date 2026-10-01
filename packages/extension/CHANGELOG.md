@@ -29,7 +29,7 @@
   image using the map is rendered, and is a stop at that place in the page,
   which is where Chrome tabs to it. Hiding the image takes its areas out, and
   showing it again brings them back.
-  ([#PR](https://github.com/real-a11y/real-a11y-dev/pull/PR))
+  ([#453](https://github.com/real-a11y/real-a11y-dev/pull/453))
 
 - In DOM mode, ARIA state values now read the way Chromium, and NATIVE mode,
   read them. `aria-disabled="TRUE"`, `aria-pressed="MIXED"` and
