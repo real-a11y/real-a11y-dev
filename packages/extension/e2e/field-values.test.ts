@@ -155,7 +155,17 @@ test("DOM mode: the A11y view shows the announced label, the DOM view the raw va
   nav,
 }) => {
   await showFixture(nav);
-  // The DOM producer connects on its own; a row on screen is the tree landing.
+  // The harness has native mode on, so the panel's once-per-session default
+  // switches it to the NATIVE producer as soon as the page connects. Let that
+  // happen first — it never fires twice — then ask for the DOM producer. It
+  // connects on its own; a row on screen is the tree landing.
+  await expect(
+    nav.panel.getByRole("button", { name: "NATIVE", exact: true }),
+  ).toHaveAttribute("aria-pressed", "true", { timeout: 20_000 });
+  await press(nav.panel, "DOM", '[aria-label="Tree producer"]');
+  await expect(
+    nav.panel.locator('[aria-label="Tree view mode"]'),
+  ).toBeVisible();
   await expect
     .poll(() => nav.panel.locator(".sn-node").count(), { timeout: 20_000 })
     .toBeGreaterThan(0);
