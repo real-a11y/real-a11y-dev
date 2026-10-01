@@ -1117,6 +1117,46 @@ describe("extractDomTree", () => {
     });
   });
 
+  it("exposes a native checkbox's checkedness only on a role that has the state", () => {
+    const root = createPage(`
+      <input id="button" type="checkbox" role="button" checked aria-label="a">
+      <input id="toggle" type="checkbox" role="button" checked aria-pressed="false" aria-label="b">
+      <input id="toggle-indeterminate" type="checkbox" role="button" aria-pressed="true" aria-label="c">
+      <input id="link" type="checkbox" role="link" checked aria-label="d">
+      <input id="pressed" type="checkbox" aria-pressed="true" aria-label="e">
+      <div role="listbox">
+        <input id="option" type="checkbox" role="option" checked aria-label="f">
+        <input id="option-aria" type="checkbox" role="option" checked aria-checked="false" aria-label="g">
+        <input id="option-empty" type="checkbox" role="option" checked aria-checked="" aria-label="h">
+      </div>
+      <div role="tree">
+        <input id="treeitem-aria" type="checkbox" role="treeitem" aria-checked="true" aria-label="i">
+      </div>
+    `);
+    (
+      root.querySelector("#toggle-indeterminate") as HTMLInputElement
+    ).indeterminate = true;
+    const states = (id: string) => {
+      for (const node of extractDomTree(root).nodes.values())
+        if (node.dom?.attributes["id"] === id)
+          return [node.a11y.states["checked"], node.a11y.states["pressed"]];
+    };
+    // [checked, pressed]
+    expect(states("button")).toEqual([undefined, undefined]);
+    // A toggle button presses by the checkedness, aria-pressed aside.
+    expect(states("toggle")).toEqual([undefined, true]);
+    expect(states("toggle-indeterminate")).toEqual([undefined, "mixed"]);
+    expect(states("link")).toEqual([undefined, undefined]);
+    // A checkbox is no toggle button.
+    expect(states("pressed")).toEqual([false, undefined]);
+    // An option or treeitem has the state only while aria-checked is set,
+    // and then reads it from the checkedness.
+    expect(states("option")).toEqual([undefined, undefined]);
+    expect(states("option-aria")).toEqual([true, undefined]);
+    expect(states("option-empty")).toEqual([undefined, undefined]);
+    expect(states("treeitem-aria")).toEqual([false, undefined]);
+  });
+
   it("ignores aria-expanded on a <select> in its own role", () => {
     expect(
       stateById(
@@ -1127,6 +1167,9 @@ describe("extractDomTree", () => {
         <select id="combobox" role="combobox" aria-label="d" aria-expanded="true"><option>o</option></select>
         <select id="multiple" multiple aria-label="e" aria-expanded="true"><option>o</option></select>
         <select id="listbox" role="listbox" aria-label="f" aria-expanded="true"><option>o</option></select>
+        <select id="listbox-plain" role="listbox" aria-label="f2"><option>o</option></select>
+        <select id="rows" size="3" aria-label="f3"><option>o</option></select>
+        <select id="rows-true" size="3" aria-label="f4" aria-expanded="true"><option>o</option></select>
         <select id="button" role="button" aria-label="g" aria-expanded="true"><option>o</option></select>
         <select id="button-false" role="button" aria-label="h" aria-expanded="false"><option>o</option></select>
       `,
@@ -1139,9 +1182,13 @@ describe("extractDomTree", () => {
       true: false,
       upper: false,
       combobox: false,
-      // A list box has no expanded state.
+      // A list box has no expanded state, nor does a select showing more than
+      // one row, which has no picker.
       multiple: undefined,
       listbox: undefined,
+      "listbox-plain": undefined,
+      rows: undefined,
+      "rows-true": undefined,
       // An author role that isn't the select's own reads it as usual.
       button: true,
       "button-false": false,
@@ -1161,6 +1208,11 @@ describe("extractDomTree", () => {
         <details><summary id="button" role="button" aria-expanded="true">h</summary>x</details>
         <details open><summary id="button-open" role="button">i</summary>x</details>
         <details><summary id="none" role="none" aria-expanded="true">j</summary>x</details>
+        <details open><summary id="link" role="link">k</summary>x</details>
+        <details open><summary id="checkbox" role="checkbox">l</summary>x</details>
+        <details open><summary id="heading" role="heading" aria-level="2" aria-expanded="true">m</summary>x</details>
+        <details open><summary id="generic" role="generic" aria-expanded="true">n</summary>x</details>
+        <details open><summary id="radio" role="radio">o</summary>x</details>
       `,
         "expanded",
       ),
@@ -1172,10 +1224,16 @@ describe("extractDomTree", () => {
       // Every summary child of a details, not only the one that toggles it.
       second: true,
       "after-text": true,
-      // An author role doesn't change where the state comes from.
+      // An author role with an expanded state takes it from the details too.
       button: false,
       "button-open": true,
       none: false,
+      link: true,
+      checkbox: true,
+      // A role without one has none, whatever aria-expanded says.
+      heading: undefined,
+      generic: undefined,
+      radio: undefined,
     });
   });
 
@@ -1189,6 +1247,7 @@ describe("extractDomTree", () => {
         <details><summary id="none" role="none" aria-pressed="true">d</summary>x</details>
         <details><summary id="button" role="button" aria-pressed="true">e</summary>x</details>
         <details open><summary id="button-false" role="button" aria-pressed="false">f</summary>x</details>
+        <details open><summary id="link" role="link" aria-pressed="true">g</summary>x</details>
       `,
         "pressed",
       ),
@@ -1200,6 +1259,7 @@ describe("extractDomTree", () => {
       none: undefined,
       button: true,
       "button-false": false,
+      link: undefined,
     });
   });
 

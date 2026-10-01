@@ -971,6 +971,37 @@ describe("LiveTreeExtractor", () => {
       expect(checkedOf(result, "One")).toBe(true);
       expect(result.nodes).toEqual(extractA11yTree(document.body).nodes);
     });
+
+    // Opening a picker changes no attribute and fires no event, so it shows
+    // only when something else refreshes the tree. jsdom has no picker: stand
+    // one in through `:open`.
+    it("re-reads a drop-down's picker when something else refreshes", async () => {
+      const matches = Element.prototype.matches;
+      const spy = vi
+        .spyOn(Element.prototype, "matches")
+        .mockImplementation(function (this: Element, selector: string) {
+          if (selector === ":open")
+            return this.id === "size" && document.body.dataset.open === "1";
+          return matches.call(this, selector);
+        });
+      try {
+        const result = await refreshAfter(
+          `<main><select id="size" aria-label="Size"><option>S</option></select><p id="p">Old</p></main>`,
+          () => {
+            document.body.dataset.open = "1";
+            document.getElementById("p")!.textContent = "New";
+          },
+        );
+        const select = [...result.nodes.values()].find(
+          (n) => n.a11y.name === "Size",
+        );
+        expect(select?.a11y.states["expanded"]).toBe(true);
+        expect(result.nodes).toEqual(extractA11yTree(document.body).nodes);
+      } finally {
+        spy.mockRestore();
+        delete document.body.dataset.open;
+      }
+    });
   });
 
   describe("a heading named through a <details>", () => {
