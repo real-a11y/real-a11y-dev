@@ -12,6 +12,7 @@ import {
 } from "./aria-tokens.js";
 import {
   safeContains,
+  safeGetAttribute,
   safeGetElementById,
   safeOwnerDocument,
   safeParentElement,
@@ -1953,7 +1954,7 @@ function referencedElement(
   if (property in element)
     return (element as unknown as Record<string, Element | null>)[property];
   const id = element.getAttribute(attr);
-  return id ? idScope(element).getElementById(id) : null;
+  return id ? safeGetElementById(idScope(element), id) : null;
 }
 
 /**
@@ -2001,7 +2002,11 @@ function invokedElement(element: Element, tag: string): Element | null {
     "popovertarget",
     "popoverTargetElement",
   );
-  return popover?.hasAttribute("popover") ? popover : null;
+  // Through the prototype: the target can be a <form>, which a field named
+  // `hasAttribute` or `contains` shadows.
+  return popover && safeGetAttribute(popover, "popover") !== null
+    ? popover
+    : null;
 }
 
 /**
@@ -2014,7 +2019,7 @@ function isShadowIncludingDescendant(
 ): boolean {
   if (element === container) return false;
   for (let el: Element | undefined = element; el;) {
-    if (container.contains(el)) return true;
+    if (safeContains(container, el)) return true;
     const root = safeRootNode(el);
     el = root.nodeType === 11 ? (root as ShadowRoot).host : undefined;
   }
@@ -2041,7 +2046,7 @@ function popoverExpanded(
   const invoked = invokedElement(element, tag);
   if (!invoked || isShadowIncludingDescendant(element, invoked)) return null;
   try {
-    return invoked.matches(":popover-open");
+    return Element.prototype.matches.call(invoked, ":popover-open");
   } catch {
     return null;
   }

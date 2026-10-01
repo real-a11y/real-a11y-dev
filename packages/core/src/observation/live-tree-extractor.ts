@@ -1,4 +1,5 @@
 import { buildA11yTree } from "../extraction/a11y-extractor.js";
+import { safeContains, safeGetAttribute } from "../extraction/clobber-safe.js";
 import {
   containsOverlaySignal,
   expandedState,
@@ -208,12 +209,12 @@ export class LiveTreeExtractor {
         // addMovedInvokers finds. One inside re-extracts from its parent, which
         // is in the tree whether or not the popover was: a popover that just
         // showed has no node to splice, and would cost a full extraction.
-        if (el.hasAttribute("popover")) {
+        if (safeGetAttribute(el, "popover") !== null) {
           scopeSuspect = true;
           const tree = this.effectiveRoot ?? this.root;
-          if (!tree.contains(el)) continue;
+          if (!safeContains(tree, el)) continue;
           const parent = flatParent(el);
-          dirty.add(parent && tree.contains(parent) ? parent : el);
+          dirty.add(parent && safeContains(tree, parent) ? parent : el);
           continue;
         }
         dirty.add(el);

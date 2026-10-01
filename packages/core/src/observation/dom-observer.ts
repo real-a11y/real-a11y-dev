@@ -1,4 +1,8 @@
-import { safeGetAttribute, safeRootNode } from "../extraction/clobber-safe.js";
+import {
+  safeContains,
+  safeGetAttribute,
+  safeRootNode,
+} from "../extraction/clobber-safe.js";
 import {
   ARIA_STATE_ATTRIBUTES,
   containsOverlaySignal,
@@ -281,7 +285,10 @@ export class DomObserver {
     // `<details>` or `<dialog>` fires one too, but changes its `open`
     // attribute as well.
     this.toggleListener = (e: Event) => {
-      if (e.target instanceof Element && e.target.hasAttribute("popover")) {
+      if (
+        e.target instanceof Element &&
+        safeGetAttribute(e.target, "popover") !== null
+      ) {
         this.pendingDirtyRoots.push(e.target);
         this.scheduleChange();
       }
@@ -295,7 +302,7 @@ export class DomObserver {
     // observer reports the change; outside it, only this does. That is rare,
     // so it asks for a full re-extraction, which also re-derives the scope.
     this.popoverObserver = new MutationObserver((mutations) => {
-      if (mutations.some((m) => !this.root.contains(m.target))) {
+      if (mutations.some((m) => !safeContains(this.root, m.target))) {
         this.pendingFull = true;
         this.scheduleChange();
       }

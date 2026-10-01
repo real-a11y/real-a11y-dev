@@ -1764,6 +1764,31 @@ describe("extractDomTree", () => {
       });
     });
 
+    it("reads a <form> popover whose fields shadow the methods it is read through", () => {
+      document.body.innerHTML = `
+        <button id="open" popovertarget="f">a</button>
+        <button id="inside-check" popovertarget="g" aria-expanded="true">b</button>
+        <form id="f" popover>
+          <input name="hasAttribute" aria-label="c" />
+          <input name="contains" aria-label="d" />
+          <input name="matches" aria-label="e" />
+        </form>
+      `;
+      try {
+        const form = document.getElementById("f")!;
+        fakeShowPopovers(form);
+        for (const prop of ["hasAttribute", "contains", "matches"])
+          clobber(form, prop);
+        expect(stateById(document.body, "expanded")).toEqual({
+          open: true,
+          // No element named g: aria-expanded decides.
+          "inside-check": true,
+        });
+      } finally {
+        document.body.innerHTML = "";
+      }
+    });
+
     it("resolves the popover in the invoker's own tree", () => {
       document.body.innerHTML = `
         <div id="same-scope"></div>
