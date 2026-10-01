@@ -159,4 +159,30 @@ describe("a popover invoker's expanded state, against Chromium", () => {
     expect(native).toMatchObject(expected);
     expect(dom).toMatchObject(expected);
   });
+
+  // LiveTreeExtractor finds the invokers to re-read by these attributes, so
+  // one linked from script must carry them too.
+  it("sets the attribute when script links an invoker", async () => {
+    await page.setContent(`
+      <button id="target">Target</button>
+      <button id="command" command="toggle-popover">Command</button>
+      <div id="menu" popover>x</div>
+    `);
+    const attrs = await page.evaluate(() => {
+      const menu = document.getElementById("menu")!;
+      const target = document.getElementById("target") as HTMLButtonElement;
+      const command = document.getElementById(
+        "command",
+      ) as HTMLButtonElement & {
+        commandForElement: Element | null;
+      };
+      target.popoverTargetElement = menu;
+      command.commandForElement = menu;
+      return [
+        target.getAttribute("popovertarget"),
+        command.getAttribute("commandfor"),
+      ];
+    });
+    expect(attrs).toEqual(["", ""]);
+  });
 });

@@ -395,6 +395,10 @@ export class LiveTreeExtractor {
    * one can stop invoking with no mutation of its own: its target removed, or
    * no longer a popover. It reads a few attributes per such control, far
    * cheaper than re-extracting them all.
+   *
+   * The attributes find an invoker linked from script too: setting its
+   * `popoverTargetElement` or `commandForElement` sets the attribute to "",
+   * as the browser e2e pins.
    */
   private addMovedInvokers(dirty: Set<Element>): void {
     const refs = getElementRefs();

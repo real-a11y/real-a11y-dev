@@ -195,6 +195,8 @@ export class DomObserver {
   private toggleListener: ((e: Event) => void) | null = null;
   /** The tree `toggleListener` listens on: the document or shadow root holding `root`. */
   private toggleScope: Node | null = null;
+  /** Watches `popover` attributes across `toggleScope`, for those outside `root`. */
+  private popoverObserver: MutationObserver | null = null;
   /** Accumulated MutationRecords across the current debounce window. */
   private pendingMutations: MutationRecord[] = [];
   /** Synthetic dirty roots (e.g. form-control input events). */
@@ -281,6 +283,23 @@ export class DomObserver {
     this.toggleScope = safeRootNode(this.root);
     this.toggleScope.addEventListener("toggle", this.toggleListener, true);
 
+    // Gaining or losing `popover` hides or shows an element, and changes what
+    // an invoker naming it reads. Losing it fires `toggle` only on a showing
+    // popover, and only once the attribute is gone. Inside `root` the primary
+    // observer reports the change; outside it, only this does. That is rare,
+    // so it asks for a full re-extraction, which also re-derives the scope.
+    this.popoverObserver = new MutationObserver((mutations) => {
+      if (mutations.some((m) => !this.root.contains(m.target))) {
+        this.pendingFull = true;
+        this.scheduleChange();
+      }
+    });
+    this.popoverObserver.observe(this.toggleScope, {
+      subtree: true,
+      attributes: true,
+      attributeFilter: ["popover"],
+    });
+
     // Modal dialogs from React Portal, Vue Teleport, etc. mount into
     // `document.body` — *outside* `this.root`, so the primary observer
     // above doesn't see them. Same for non-modal overlays: dropdown
@@ -364,6 +383,10 @@ export class DomObserver {
       this.root.removeEventListener("input", this.inputListener, true);
       this.root.removeEventListener("change", this.inputListener, true);
       this.inputListener = null;
+    }
+    if (this.popoverObserver) {
+      this.popoverObserver.disconnect();
+      this.popoverObserver = null;
     }
     if (this.toggleListener && this.toggleScope) {
       this.toggleScope.removeEventListener("toggle", this.toggleListener, true);
