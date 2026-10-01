@@ -43,6 +43,9 @@ const REFERENCE_ATTRS = new Set([
   // An <img usemap> decides whether the areas of the map it names are
   // rendered, and that map can sit anywhere in the tree.
   "usemap",
+  // An owner can be the required context that keeps an owned listitem,
+  // option or treeitem its role, and the owned element can be anywhere.
+  "aria-owns",
 ]);
 
 /**

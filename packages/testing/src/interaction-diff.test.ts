@@ -34,7 +34,7 @@ describe("capture", () => {
 
 describe("a11yDiff", () => {
   it("boxes the change list; after may be a live Element (captured now)", () => {
-    const root = mount(`<ul role="list"></ul>`);
+    const root = mount(`<ul role="listbox"></ul>`);
     const before = capture(root);
     root
       .querySelector("ul")!
@@ -74,7 +74,7 @@ describe("a11yDiff", () => {
   });
 
   it("produces a box the a11y snapshot serializer renders", () => {
-    const root = mount(`<ul role="list"></ul>`);
+    const root = mount(`<ul role="listbox"></ul>`);
     const before = capture(root);
     root
       .querySelector("ul")!
@@ -85,7 +85,7 @@ describe("a11yDiff", () => {
   });
 
   it("honors redact", () => {
-    const root = mount(`<ul role="list"></ul>`);
+    const root = mount(`<ul role="listbox"></ul>`);
     const before = capture(root);
     root
       .querySelector("ul")!
@@ -109,7 +109,7 @@ describe("flow().expectChanges", () => {
 
   it("ChangeSpec: subset-matches what the interaction added and changed", async () => {
     const root = withClick(
-      `<main><button id="act">Open</button><ul role="list" id="lb"></ul></main>`,
+      `<main><button id="act">Open</button><ul role="listbox" id="lb"></ul></main>`,
       (r) =>
         r
           .querySelector("#lb")!
@@ -133,7 +133,7 @@ describe("flow().expectChanges", () => {
     // The rendered option uses a curly apostrophe + ellipsis; the spec is typed
     // with plain ASCII. Both the string and the RegExp form should still match.
     const root = withClick(
-      `<main><button id="act">Open</button><ul role="list" id="lb"></ul></main>`,
+      `<main><button id="act">Open</button><ul role="listbox" id="lb"></ul></main>`,
       (r) =>
         r
           .querySelector("#lb")!
@@ -150,7 +150,7 @@ describe("flow().expectChanges", () => {
       });
 
     const root2 = withClick(
-      `<main><button id="act">Open</button><ul role="list" id="lb2"></ul></main>`,
+      `<main><button id="act">Open</button><ul role="listbox" id="lb2"></ul></main>`,
       (r) =>
         r
           .querySelector("#lb2")!
@@ -164,7 +164,7 @@ describe("flow().expectChanges", () => {
 
   it("string form is the trim-compared serializeTreeDiff output", async () => {
     const root = withClick(
-      `<main><button id="act">Add</button><ul role="list" id="lb"></ul></main>`,
+      `<main><button id="act">Add</button><ul role="listbox" id="lb"></ul></main>`,
       (r) =>
         r
           .querySelector("#lb")!
@@ -174,7 +174,7 @@ describe("flow().expectChanges", () => {
       .findByRole("button", { name: "Add" })
       .click()
       .expectChanges(
-        ['+ option "Spain"', "~ list: childIds 0 children → 1 child"].join(
+        ['+ option "Spain"', "~ listbox: childIds 0 children → 1 child"].join(
           "\n",
         ),
       );
@@ -182,7 +182,7 @@ describe("flow().expectChanges", () => {
 
   it("predicate form receives the TreeDiff", async () => {
     const root = withClick(
-      `<main><button id="act">Add</button><ul role="list" id="lb"></ul></main>`,
+      `<main><button id="act">Add</button><ul role="listbox" id="lb"></ul></main>`,
       (r) =>
         r
           .querySelector("#lb")!
@@ -200,7 +200,7 @@ describe("flow().expectChanges", () => {
 
   it("exact:true fails on an unexpected extra, with the diff in the message", async () => {
     const root = withClick(
-      `<main><button id="act">Open</button><ul role="list" id="lb"></ul></main>`,
+      `<main><button id="act">Open</button><ul role="listbox" id="lb"></ul></main>`,
       (r) =>
         r
           .querySelector("#lb")!
@@ -229,7 +229,7 @@ describe("flow().expectChanges", () => {
 
   it("resets the window — a second expectChanges covers only the next action", async () => {
     const root = mount(
-      `<main><button id="one">One</button><button id="two">Two</button><ul role="list" id="lb"></ul></main>`,
+      `<main><button id="one">One</button><button id="two">Two</button><ul role="listbox" id="lb"></ul></main>`,
     );
     root
       .querySelector("#one")!
