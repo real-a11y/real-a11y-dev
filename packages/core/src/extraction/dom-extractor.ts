@@ -1740,6 +1740,7 @@ function isDisabledControl(element: Element): boolean {
  */
 function isDisabledOption(option: Element): boolean {
   if (option.hasAttribute("disabled")) return true;
+  // eslint-disable-next-line no-restricted-properties -- one read, and an <option> is never a form
   const parent = option.parentElement;
   return (
     parent?.tagName.toLowerCase() === "optgroup" &&
