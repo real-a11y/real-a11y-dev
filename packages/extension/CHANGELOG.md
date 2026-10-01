@@ -267,7 +267,7 @@
     options, starting on the current one, and choosing one selects it on the
     page. A custom `role="combobox"` is still clicked.
 
-  ([#PR](https://github.com/real-a11y/real-a11y-dev/pull/PR))
+  ([#463](https://github.com/real-a11y/real-a11y-dev/pull/463))
 
 ## 0.1.14
 
