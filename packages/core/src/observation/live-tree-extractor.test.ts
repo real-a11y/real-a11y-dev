@@ -1116,6 +1116,18 @@ describe("LiveTreeExtractor", () => {
       expect(extract).toHaveBeenCalledTimes(1);
     });
 
+    it("falls back to aria-expanded when a popover outside the tree stops being one", async () => {
+      document.body.innerHTML = `<main><button popovertarget="menu" aria-expanded="false">Menu</button></main><div id="menu" popover>x</div>`;
+      const menu = document.getElementById("menu")!;
+      setShowing(menu, true);
+      const main = document.querySelector("main")!;
+      const result = await refreshAfter(main, () =>
+        menu.removeAttribute("popover"),
+      );
+      expect(expandedOf(result, "Menu")).toBe(false);
+      expect(result.nodes).toEqual(extractA11yTree(main).nodes);
+    });
+
     it("follows an invoker re-pointed at a showing popover", async () => {
       document.body.innerHTML = `<main><button popovertarget="a">Menu</button><div id="a" popover>x</div><div id="b" popover>y</div></main>`;
       const b = document.getElementById("b")!;

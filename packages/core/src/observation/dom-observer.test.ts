@@ -1082,14 +1082,48 @@ describe("DomObserver", () => {
       expect(onTreeChange).not.toHaveBeenCalled();
     });
 
-    it("stops listening on stop()", () => {
-      document.body.innerHTML = `<div id="menu" popover>x</div>`;
+    it("asks for a full extraction when a popover outside the root stops being one", async () => {
+      document.body.innerHTML = `<main><button popovertarget="menu">Menu</button></main><div id="menu" popover>x</div>`;
+      observer = new DomObserver(
+        document.querySelector("main")!,
+        onTreeChange,
+        100,
+      );
+      observer.start();
+
+      document.getElementById("menu")!.removeAttribute("popover");
+      await settleObserver(100);
+
+      expect(onTreeChange).toHaveBeenCalledTimes(1);
+      expect(onTreeChange.mock.calls[0][0].full).toBe(true);
+    });
+
+    it("leaves a popover attribute inside the root to the incremental path", async () => {
+      document.body.innerHTML = `<main><div id="menu" popover>x</div></main>`;
       observer = new DomObserver(document.body, onTreeChange, 100);
+      observer.start();
+
+      document.getElementById("menu")!.removeAttribute("popover");
+      await settleObserver(100);
+
+      expect(onTreeChange).toHaveBeenCalledTimes(1);
+      expect(onTreeChange.mock.calls[0][0].full).toBeUndefined();
+    });
+
+    it("stops listening on stop()", async () => {
+      document.body.innerHTML = `<main></main><div id="menu" popover>x</div>`;
+      observer = new DomObserver(
+        document.querySelector("main")!,
+        onTreeChange,
+        100,
+      );
       observer.start();
       observer.stop();
 
-      toggle(document.getElementById("menu")!);
-      vi.advanceTimersByTime(110);
+      const menu = document.getElementById("menu")!;
+      toggle(menu);
+      menu.removeAttribute("popover");
+      await settleObserver(100);
 
       expect(onTreeChange).not.toHaveBeenCalled();
     });
