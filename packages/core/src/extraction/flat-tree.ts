@@ -191,21 +191,24 @@ export function flatChildren(element: Element): Element[] {
  *
  * Each read is clobber-safe: through a `<form>` whose control is named
  * `parentElement` or `assignedSlot`, a plain read cycles back to the form, and
- * every loop over ancestors would spin forever.
+ * every loop over ancestors would spin forever. One named `parentNode` would
+ * end the climb at the top of a shadow root instead, short of the host.
  */
 export function flatParent(element: Element): Element | null {
   // A slotted node's parent is its slot's parent; a forwarded slot recurses.
   const slot = safeAssignedSlot(element);
   if (slot) return flatParent(slot);
-  const parentNode = safeParentNode(element);
-  const parent =
-    safeParentElement(element) ??
-    (parentNode?.nodeType === DOCUMENT_FRAGMENT_NODE
-      ? (parentNode as ShadowRoot).host
-      : null) ??
-    null;
+  const parent = safeParentElement(element) ?? shadowHostAbove(element);
   // Slot fallback content: skip the transparent slot.
   return parent && isSlot(parent) ? flatParent(parent) : parent;
+}
+
+/** The host of the shadow root `element` sits directly in, if it does. */
+function shadowHostAbove(element: Element): Element | null {
+  const parentNode = safeParentNode(element);
+  return parentNode?.nodeType === DOCUMENT_FRAGMENT_NODE
+    ? ((parentNode as ShadowRoot).host ?? null)
+    : null;
 }
 
 /**

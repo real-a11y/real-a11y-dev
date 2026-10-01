@@ -1,4 +1,7 @@
-import { safeGetAttribute } from "../extraction/clobber-safe.js";
+import {
+  safeGetAttribute,
+  safeParentNode,
+} from "../extraction/clobber-safe.js";
 import {
   ARIA_STATE_ATTRIBUTES,
   containsOverlaySignal,
@@ -125,7 +128,7 @@ function hasInternalAncestor(
   let n: Node | null = node;
   while (n) {
     if (isInternalNode(n, internalIds)) return true;
-    n = n.parentNode;
+    n = safeParentNode(n);
   }
   return false;
 }

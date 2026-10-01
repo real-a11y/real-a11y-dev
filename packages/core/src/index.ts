@@ -46,6 +46,9 @@ export {
   PANEL_HOST_ATTRIBUTE,
 } from "./extraction/dom-extractor.js";
 export { extractA11yTree } from "./extraction/a11y-extractor.js";
+// For a walk up the page's own DOM outside core, such as the extension's focus
+// sync: a `<form>` control named `parentElement` makes the plain read cycle.
+export { safeParentElement } from "./extraction/clobber-safe.js";
 export {
   getImplicitRole,
   isHiddenFromAT,

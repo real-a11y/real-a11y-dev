@@ -94,7 +94,12 @@ export function safeParentElement(node: Node): Element | null {
   return parent && parent.nodeType === 1 ? (parent as Element) : null;
 }
 
-/** Clobber-immune `node.parentNode`. See `safeParentElement`. */
+/**
+ * Clobber-immune `node.parentNode`, for a climb that has to reach the
+ * document. It needs no form to cycle: the document shadows its own
+ * properties too, so a named `<img>`, `<form>`, `<embed>` or `<object>`
+ * called `parentNode` hands that element back as the document's parent.
+ */
 export function safeParentNode(node: Node): ParentNode | null {
   return parentNodeGetter
     ? (parentNodeGetter.call(node) as ParentNode | null)
