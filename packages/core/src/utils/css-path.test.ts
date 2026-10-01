@@ -6,6 +6,8 @@
 
 import { describe, it, expect } from "vitest";
 
+import { clobber } from "../test-support/clobber.js";
+
 import {
   buildCssPath,
   isValidCssId,
@@ -158,6 +160,20 @@ describe("buildCssPath", () => {
     // useful "where", and an unbounded one is not.
     expect(path).not.toContain("body");
   });
+
+  // A <form> lets a control named after a DOM property shadow it. Reading the
+  // control as the form's parent walks the path round the form and its control
+  // until the depth cap; reading it as the form's children drops nth-of-type.
+  it.each(["parentElement", "children"])(
+    "reads a form's real shape past a control named %s",
+    (prop) => {
+      document.body.innerHTML = `<div id="app"><section><form><input type="hidden" name="${prop}"><span>Card</span><span>Code</span></form></section></div>`;
+      clobber(document.querySelector("form")!, prop);
+      expect(
+        buildCssPath(document.querySelectorAll("span")[1], DOM_ELEMENT_ADAPTER),
+      ).toBe("#app > section > form > span:nth-of-type(2)");
+    },
+  );
 
   it("stops before the document element", () => {
     document.body.innerHTML = "";

@@ -211,9 +211,13 @@ export function flatParent(element: Element): Element | null {
  * `label[for]` are scoped to the element's own tree, so inside a shadow root
  * they must look in that root, not the document. A detached subtree has no
  * scope and falls back to its owner document, as before.
+ *
+ * The root is read clobber-safely: on a `<form>` holding
+ * `<input name="getRootNode">` the method is that input, so calling it throws
+ * and the labelled form is dropped from the tree with everything inside it.
  */
 export function idScope(element: Element): Document | ShadowRoot {
-  const root = element.getRootNode();
+  const root = safeRootNode(element);
   return root.nodeType === DOCUMENT_NODE ||
     root.nodeType === DOCUMENT_FRAGMENT_NODE
     ? (root as Document | ShadowRoot)
