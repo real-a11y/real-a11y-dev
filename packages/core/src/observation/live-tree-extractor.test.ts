@@ -1771,4 +1771,95 @@ describe("LiveTreeExtractor", () => {
       );
     });
   });
+
+  describe("a <form> whose control shadows parentElement", () => {
+    // `<form>` is the one HTML element with [LegacyOverrideBuiltIns]: in a real
+    // browser `form.parentElement` is the `<input name="parentElement">` inside
+    // it, whose own parent is the form again. A climb that reads it plainly
+    // cycles between the two forever, freezing the page. Forced, because
+    // jsdom's named-property override is not guaranteed.
+    function clobberParentElement(): HTMLFormElement {
+      const form = document.querySelector("form")!;
+      Object.defineProperty(form, "parentElement", {
+        configurable: true,
+        get: () => form.querySelector('[name="parentElement"]'),
+      });
+      return form;
+    }
+
+    async function refreshAfter(
+      html: string,
+      mutate: (form: HTMLFormElement) => void,
+      mode: "a11y" | "dom" = "a11y",
+    ) {
+      document.body.innerHTML = html;
+      const form = clobberParentElement();
+      const live = new LiveTreeExtractor(document.body, { mode });
+      let lastChange: TreeChange | undefined;
+      const observer = new DomObserver(
+        document.body,
+        (change) => {
+          lastChange = change;
+        },
+        50,
+      );
+      observer.start();
+      mutate(form);
+      await vi.advanceTimersByTimeAsync(100);
+      observer.stop();
+      expect(lastChange?.full).toBeFalsy(); // the incremental path, not a rebuild
+      const result = live.refresh(lastChange);
+      const clean =
+        mode === "a11y"
+          ? extractA11yTree(document.body)
+          : extractDomTree(document.body);
+      return { result, clean };
+    }
+    const names = (tree: ExtractionResult) =>
+      [...tree.nodes.values()].map((n) => n.a11y.name);
+
+    it.each(["a11y", "dom"] as const)(
+      "refreshes when text inside the form changes (%s)",
+      async (mode) => {
+        const { result, clean } = await refreshAfter(
+          `<main><form aria-label="Search"><input name="parentElement" aria-label="Query"><button>Old</button></form></main>`,
+          () => {
+            document.querySelector("button")!.firstChild!.textContent = "New";
+          },
+          mode,
+        );
+        expect(names(result)).toContain("New");
+        expect(result.nodes).toEqual(clean.nodes);
+      },
+    );
+
+    it("refreshes when the form's own role changes", async () => {
+      const { result, clean } = await refreshAfter(
+        `<main><form aria-label="Search"><input name="parentElement" aria-label="Query"></form></main>`,
+        (form) => form.setAttribute("role", "search"),
+      );
+      expect([...result.nodes.values()].map((n) => n.a11y.role)).toContain(
+        "search",
+      );
+      expect(result.nodes).toEqual(clean.nodes);
+    });
+
+    it("refreshes an editor's value, and keeps a link live, inside the form", async () => {
+      const { result, clean } = await refreshAfter(
+        `<main><form aria-label="Compose">
+          <input name="parentElement" aria-label="Subject">
+          <div contenteditable="true" role="textbox" aria-label="Body"><p>Old</p></div>
+          <a href="/help">Help</a>
+        </form></main>`,
+        () => {
+          document.querySelector("p")!.firstChild!.textContent = "New";
+        },
+      );
+      const node = (name: string) =>
+        [...result.nodes.values()].find((n) => n.a11y.name === name);
+      expect(node("Body")?.a11y.value).toBe("New");
+      expect(node("Help")?.interaction?.actions).toContain("click");
+      expect(result.nodes).toEqual(clean.nodes);
+    });
+  });
 });

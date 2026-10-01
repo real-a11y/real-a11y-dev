@@ -22,6 +22,19 @@
 
 ## Unreleased
 
+- A page with a `<form>` holding a control named `parentElement`, such as
+  `<input type="hidden" name="parentElement">`, no longer freezes the tab when
+  something inside the form changes. A form lets a control shadow its own
+  properties, so the form's parent read as that control, whose parent is the
+  form again, and every walk up the page that met such a form went round the
+  two forever. DOM mode froze on the first change inside one, hovering inside
+  one in pick mode froze, and so did focusing a field in one before the tree
+  caught up with it. A form with a `parentNode` control, or an `<img>` named
+  `parentNode` anywhere on the page, froze the tab on its next text change.
+  Selecting a `<form contenteditable>` holding such a control now moves page
+  focus to it, as for any other editor.
+  ([#438](https://github.com/real-a11y/real-a11y-dev/pull/438))
+
 - In DOM mode, a page that names an image or a form control after a DOM
   method no longer costs the tree more than that form. An
   `<img name="getElementById">` anywhere on the page dropped every element
