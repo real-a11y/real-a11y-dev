@@ -571,10 +571,19 @@ const PACKAGING_KEYS = [
  * Same idea as the root, different key set: a devDependency bump inside
  * `packages/cli` changes nothing a consumer can observe, while `exports` or
  * `files` decides whether an import resolves at all for everyone who installs it.
+ *
+ * The rest of the workspace — `examples/*` and `website` — publishes nothing,
+ * but its `scripts` still EXECUTE in the release jobs: `pnpm install` runs every
+ * workspace project's install lifecycle, and root `build` is `pnpm -r` with an
+ * exclusion list, so an example nobody excluded has its `build` run too. Both
+ * happen in `publish.yml`'s job holding npm's Trusted Publisher token, and
+ * both directories grade 🟢 low, so a `postinstall` added to an example was
+ * agent-mergeable code with publish rights. Only `scripts` counts there: no
+ * other key of a private, unpublished manifest reaches anyone.
  */
 async function changedPackageManifests(mergeBase, files) {
   const touched = files.filter((f) =>
-    /^packages\/[^/]+\/package\.json$/.test(f),
+    /^((packages|examples)\/[^/]+|website)\/package\.json$/.test(f),
   );
   const out = [];
   for (const file of touched) {
@@ -588,7 +597,8 @@ async function changedPackageManifests(mergeBase, files) {
       out.push({ file, keys: ["<unparseable>"] });
       continue;
     }
-    const keys = PACKAGING_KEYS.filter(
+    const watched = file.startsWith("packages/") ? PACKAGING_KEYS : ["scripts"];
+    const keys = watched.filter(
       (k) => JSON.stringify(a[k]) !== JSON.stringify(b[k]),
     );
     if (keys.length) out.push({ file, keys });
@@ -998,7 +1008,7 @@ const RULES = [
     id: "packaging",
     tier: "high",
     title: "Package publishing shape",
-    why: "`exports`, `files`, `types` and `private` decide whether an import resolves for everyone who installs the package — and a wrong `dts.resolve` half silently degrades published types to `any` rather than failing the build.",
+    why: "`exports`, `files`, `types` and `private` decide whether an import resolves for everyone who installs the package — and a wrong `dts.resolve` half silently degrades published types to `any` rather than failing the build. An example's or the website's `scripts` count too: `pnpm install` and root `build` run them inside the release job that can publish to npm.",
     match: (f) =>
       f.packageManifests.map((m) => `${m.file} → ${m.keys.join(", ")}`),
   },

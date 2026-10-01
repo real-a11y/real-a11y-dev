@@ -849,6 +849,35 @@ describe("a test switched off or deleted grades 🟡 medium", () => {
     assert.deepEqual(reenabled.reasons, []);
   });
 
+  it("grades an example's scripts 🔴 high, though examples/ is low", async () => {
+    // `pnpm install` runs every workspace project's install lifecycle, and
+    // root `build` runs any example it doesn't exclude — both inside the
+    // publish job, which can mint npm's Trusted Publisher token. So a
+    // `postinstall` here is agent-mergeable code with publish rights, and the
+    // `verify` split around the test suite would mean nothing without this.
+    const manifest = "examples/testing-jest/package.json";
+    const base = `${JSON.stringify({ name: "x", private: true, scripts: { test: "jest" } })}\n`;
+    const scripts = await grade(
+      {
+        [manifest]: base.replace(`"jest"`, `"jest","postinstall":"node x.mjs"`),
+      },
+      { base: { [manifest]: base } },
+    );
+    const deps = await grade(
+      {
+        [manifest]: base.replace(`"private"`, `"devDependencies":{},"private"`),
+      },
+      { base: { [manifest]: base } },
+    );
+
+    assert.equal(scripts.tier, "high");
+    assert.deepEqual(evidenceFor(scripts, "packaging"), [
+      `${manifest} → scripts`,
+    ]);
+    // Nothing else in a private manifest reaches anyone.
+    assert.equal(deps.tier, "low");
+  });
+
   it("is not tripped by a property that happens to be called only", async () => {
     // `meta.only` is a real field the snapshot tests assert on. Only a chain
     // that starts at a runner global counts for `only`.
