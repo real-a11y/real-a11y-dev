@@ -126,6 +126,14 @@
   threw and the whole form was skipped.
   ([#439](https://github.com/real-a11y/real-a11y-dev/pull/439))
 
+- In DOM mode, an element's `role` now resolves the way Chromium resolves it.
+  An unknown or abstract token is skipped for the next one, or the element's
+  own role — `role="foo"` was a `foo` row and is now whatever the element is
+  (often a `generic` that folds away), and `role="foo button"` is a `button`
+  named by its text. Tokens are read case-insensitively, so `role="BUTTON"`
+  is a button. A `listitem`, `option` or `treeitem` outside the list, listbox
+  or tree it needs loses its role the same way, and the `<li>`s of a
+  `<ul role="none">` leave the tree with their list.
 - In DOM mode, ARIA state values now read the way Chromium, and NATIVE mode,
   read them. `aria-disabled="TRUE"`, `aria-pressed="MIXED"` and
   `aria-checked="yes"` had no `disabled`, `mixed` or `checked` badge because
