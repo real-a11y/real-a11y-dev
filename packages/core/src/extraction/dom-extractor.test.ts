@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 
+import { getTabSequence } from "../query/tab-sequence.js";
 import { clobber } from "../test-support/clobber.js";
 import type { SemanticNode } from "../types.js";
 import { resetIdCounter } from "../utils/id-generator.js";
@@ -376,6 +377,42 @@ describe("a shadowed method on something every element shares", () => {
     clobberDocument("querySelectorAll");
 
     expect(named(root, "button")?.name).toBe("Go");
+  });
+
+  it("keeps an image map's areas when the document's querySelectorAll is shadowed", () => {
+    // An area looks its image up among the document's images, and a shadowed
+    // search threw, which lost the area and its stop.
+    const root = attach(`
+      <main>
+        <img name="querySelectorAll" alt="" />
+        <img src="x.gif" alt="Site map" usemap="#nav" />
+        <map name="nav"><area href="/home" alt="Home" /></map>
+      </main>
+    `);
+    clobberDocument("querySelectorAll");
+
+    expect(
+      getTabSequence(extractA11yTree(root)).map((n) => n.a11y.name),
+    ).toEqual(["Home"]);
+  });
+
+  it("keeps an image map's areas when a form around the image shadows getAttribute", () => {
+    // Whether an area is hidden from AT reads aria-hidden up its image's
+    // ancestors, and a form among them answered with its control instead.
+    const root = attach(`
+      <main>
+        <form>
+          <input name="getAttribute" aria-label="Query" />
+          <img src="x.gif" alt="Site map" usemap="#nav" />
+        </form>
+        <map name="nav"><area href="/home" alt="Home" /></map>
+      </main>
+    `);
+    clobber(document.querySelector("form")!, "getAttribute");
+
+    expect(
+      nodes(root).find((n) => n.a11y.name === "Home")?.a11y.isExposedToAT,
+    ).toBe(true);
   });
 
   it("keeps a description target that also labels a control when the document's querySelectorAll is shadowed", () => {

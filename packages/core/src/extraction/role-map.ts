@@ -5,7 +5,7 @@
  */
 
 import { isAriaHiddenValue } from "./aria-tokens.js";
-import { safeHidden } from "./clobber-safe.js";
+import { safeGetAttribute, safeHidden } from "./clobber-safe.js";
 import {
   flatParent,
   isRenderedInFlatTree,
@@ -122,7 +122,8 @@ function isAreaHiddenFromAT(area: Element): boolean {
   const image = imageUsingMap(area);
   if (!image || !isImageRendered(image)) return true;
   for (let el: Element | null = image; el; el = renderingParent(el)) {
-    if (isAriaHiddenValue(el.getAttribute("aria-hidden"))) return true;
+    // Clobber-safe: a <form> among them may hold `<input name="getAttribute">`.
+    if (isAriaHiddenValue(safeGetAttribute(el, "aria-hidden"))) return true;
   }
   return false;
 }
