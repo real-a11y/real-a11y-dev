@@ -6,7 +6,7 @@ area: Testing
 type: Automated
 priority: P1
 status: Active
-validFrom: "testing ≥ 0.1.0-beta.15 for the row; the user-agent-supplied-state split ships in the FIRST release after 0.1.0-beta.15. Running steps 1–3 against 0.1.0-beta.15 or earlier reproduces the defect rather than failing the test — there a bare `select` reports six violations, and a correct authored combobox or slider reports a missing required attribute with no markup that clears it. That is the old behaviour, not a fail. `toBeValidA11yTree` is backed by `validate`, which is PRIVATE and bundled — there is no validate version to pin, so assert against `@real-a11y-dev/testing` only. The `<input list>` pair in steps 1 and 2 is testing ≥ 0.1.0-beta.18 (unreleased): on 0.1.0-beta.17 or earlier that input is a `textbox`, so step 1 passes for it without exercising the user-agent split, and step 2 reports the same two violations either way. `toMatchA11yContract` is backed by `verifyContract` in packages/testing/src/contract.ts, deliberately INTERNAL to this package until a second consumer appears. The shipped JSDoc claims it comes from `serialize`; that is stale, and it is what this row was first written from."
+validFrom: "testing ≥ 0.1.0-beta.15 for the row; the user-agent-supplied-state split ships in the FIRST release after 0.1.0-beta.15. Running steps 1–3 against 0.1.0-beta.15 or earlier reproduces the defect rather than failing the test — there a bare `select` reports six violations, and a correct authored combobox or slider reports a missing required attribute with no markup that clears it. That is the old behaviour, not a fail. `toBeValidA11yTree` is backed by `validate`, which is PRIVATE and bundled — there is no validate version to pin, so assert against `@real-a11y-dev/testing` only. The `<input list>` pair in steps 1 and 2 is testing ≥ 0.1.0-beta.18 (unreleased): on 0.1.0-beta.17 or earlier that input is a `textbox`, so step 1 passes for it without exercising the user-agent split, and step 2 reports the same two violations either way. Step 4's discarded role ships in the FIRST release after testing 0.1.0-beta.17: against 0.1.0-beta.17 or earlier a lone `role="listitem"` passes (its missing list was only an advisory warning) and `role="foo"` reports with a `foo` label rather than `generic` — again the old behaviour. `toMatchA11yContract` is backed by `verifyContract` in packages/testing/src/contract.ts, deliberately INTERNAL to this package until a second consumer appears. The shipped JSDoc claims it comes from `serialize`; that is stale, and it is what this row was first written from."
 validUntil: ""
 expected: "toBeValidA11yTree flags authored-ARIA mistakes and NOT native HTML; toMatchA11yContract matches by containment, is strict on demand, and never passes vacuously"
 twin: D5
@@ -28,7 +28,9 @@ notion: ""
    children; `role="checkbox"` with no `aria-checked`; a labelled
    `<input role="combobox">` with no datalist
 3. A page that is genuinely fine — `<button>`, `<a href>`, a labelled text input
-4. An invalid role, and a real relationship violation (interactive nesting)
+4. An invalid role, a role the browser discards — `<div role="foo">x</div>` and a
+   lone `<div role="listitem">x</div>`, both plain generics in the extracted
+   tree — and a real relationship violation (interactive nesting)
 
 **`toMatchA11yContract`** — 5 to 9:
 
@@ -51,6 +53,11 @@ notion: ""
 - **2** — violations, correctly: this is the author who has to supply the state
   themselves. The hand-built combobox input reports exactly
   `missing required aria-controls` and `missing required aria-expanded`
+- **4** — every one reported by message, including the two whose role never
+  reached the tree: `generic "x" — "foo" is not a valid ARIA role` and
+  `generic "x" — role "listitem" is discarded outside its required context
+  (directory / list)`. A validator that only reads the extracted roles loses
+  both, because the browser's fallback hides the author's mistake
 - **1 vs 2** — the whole point. Same reported violations for both means implicit
   roles are being judged by explicit-ARIA rules
 - **5** — containment: extra nodes never break a contract
