@@ -379,6 +379,7 @@ export default defineConfig({
         text: "Introduction",
         items: [
           { text: "Getting Started", link: "/guide/getting-started" },
+          { text: "Agent Skills", link: "/guide/agent-skills" },
           { text: "Core Concepts", link: "/guide/core-concepts" },
           {
             text: "Accessibility Snapshots",

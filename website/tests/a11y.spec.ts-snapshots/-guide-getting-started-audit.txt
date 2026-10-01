@@ -75,6 +75,11 @@ main
         cell "run via npx"
           code "npx"
       row
+        cell "Teach a coding agent Real A11y workflows (Agent Skills)"
+        cell "Agent Skills guide"
+          link "Agent Skills guide"
+        cell "project skills dir"
+      row
         cell "Explore any page in the browser — no code, nothing to install"
         cell "Chrome extension"
           link "Chrome extension"
@@ -275,4 +280,4 @@ contentinfo
   paragraph "Last updated:"
     time "[redacted]"
   navigation "Pager"
-    link "Next pageCore Concepts"
+    link "Next pageAgent Skills"

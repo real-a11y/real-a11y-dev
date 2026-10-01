@@ -1,0 +1,6 @@
+  h2 On this page
+h1 Agent Skills
+  h2 Skills (v1)
+  h2 Install
+  h2 MCP + skills together
+  h2 Keeping skills current

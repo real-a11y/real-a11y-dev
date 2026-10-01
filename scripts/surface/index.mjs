@@ -70,6 +70,7 @@ async function check() {
     { checkCoverage, checkEnvDocumented },
     { checkDocs },
     { checkSamples, checkToolExamples },
+    { checkSkills },
     { validateAgainstSchema },
     { checkScenarios },
     { checkPlanSentinel },
@@ -82,6 +83,7 @@ async function check() {
     import("./check/coverage.mjs"),
     import("./check/docs.mjs"),
     import("./check/samples.mjs"),
+    import("./check/skills.mjs"),
     import("./check/schema.mjs"),
     import("./scenarios/check.mjs"),
     import("./check/sentinel.mjs"),
@@ -123,9 +125,9 @@ async function check() {
     ]);
   }
 
-  // 2. Do the docs agree with it?
+  // 2. Do the docs (and community skills) agree with it?
   const samples = await checkSamples(repoRoot, manifest);
-  const [docs, coverage, env, examples, anchors, duplicates] =
+  const [docs, coverage, env, examples, anchors, duplicates, skills] =
     await Promise.all([
       checkDocs(repoRoot, manifest),
       checkCoverage(repoRoot, manifest),
@@ -133,6 +135,7 @@ async function check() {
       checkToolExamples(repoRoot, manifest, validateAgainstSchema),
       checkAnchors(repoRoot),
       checkDuplicateAnchors(repoRoot),
+      checkSkills(repoRoot, manifest),
     ]);
 
   // A sample checker that stops recognising samples reports a clean run
@@ -164,6 +167,7 @@ async function check() {
 
   const problems = [
     ...docs,
+    ...skills,
     ...samples.problems,
     ...examples,
     ...coverage,
@@ -195,7 +199,7 @@ async function check() {
 
   if (problems.length) {
     console.error(
-      `\nThe docs disagree with the code about the public surface.\n` +
+      `\nThe docs (or community skills) disagree with the code about the public surface.\n` +
         `Code ships ${manifest.cli.commands.length} CLI commands and ` +
         `${manifest.mcp.tools.length} MCP tools.\n`,
     );
@@ -203,9 +207,10 @@ async function check() {
       console.error(`  ${where}\n    ${message}\n`);
     }
     die([
-      "These are objective facts with one source of truth — the docs are what a",
-      "user trusts before installing, so they have to move with the code.",
-      "Test scenarios that cross-check these counts depend on it too.",
+      "These are objective facts with one source of truth — the docs and",
+      "community skills are what a user (or agent) trusts before installing,",
+      "so they have to move with the code. Test scenarios that cross-check",
+      "these counts depend on it too.",
     ]);
   }
 
@@ -215,7 +220,8 @@ async function check() {
       `  ${samples.checked} documented CLI invocations parse, ` +
       `every flag and tool parameter is documented, and every #anchor resolves.\n` +
       `  ${loaded.length} release test scenarios parse, every \`covers\` path is real, ` +
-      `and every\n  shipped capability has one.`,
+      `and every\n  shipped capability has one.\n` +
+      `  Community skills cite only shipped CLI commands and MCP tools.`,
   );
 }
 

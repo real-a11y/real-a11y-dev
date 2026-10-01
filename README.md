@@ -67,7 +67,7 @@ test("the sign-in form is labeled", () => {
 npx -y @real-a11y-dev/mcp
 ```
 
-Serves `audit_page`, `get_semantic_tree`, `inspect_page` and snapshot checkpoints to any MCP client. To audit pages behind a login, point `REAL_A11Y_MCP_STORAGE_STATE` at a saved Playwright session and set `REAL_A11Y_MCP_ALLOWED_ORIGINS` to pin auditing to trusted origins. → [MCP docs](https://real-a11y.dev/packages/mcp)
+Serves `audit_page`, `get_semantic_tree`, `inspect_page` and snapshot checkpoints to any MCP client. To audit pages behind a login, point `REAL_A11Y_MCP_STORAGE_STATE` at a saved Playwright session and set `REAL_A11Y_MCP_ALLOWED_ORIGINS` to pin auditing to trusted origins. Pair with [Agent Skills](https://real-a11y.dev/guide/agent-skills) for the workflows (wire-up, audit, act-then-diff). → [MCP docs](https://real-a11y.dev/packages/mcp)
 
 **Embed a panel** in your own app — DOM, A11y, and TAB views, live-updating, with search, role filters, focus tracking, and keyboard navigation:
 
@@ -91,6 +91,7 @@ createInspector({
 | | |
 |---|---|
 | [Getting started](https://real-a11y.dev/guide/getting-started) | Install and first result, per stack |
+| [Agent Skills](https://real-a11y.dev/guide/agent-skills) | Workflow skills for coding agents (Cursor, Claude, …) |
 | [Core concepts](https://real-a11y.dev/guide/core-concepts) | The semantic tree, and how it's built |
 | [Understanding the views](https://real-a11y.dev/guide/understanding-the-views) | A11y, DOM, headings, and TAB — one page, four perspectives |
 | [Architecture](https://real-a11y.dev/guide/architecture) | What each package owns and why the seams are where they are |

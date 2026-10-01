@@ -22,7 +22,7 @@ link "Audit from the shell and CI: Explore the CLI"
 link "Accessibility for AI agents: Explore the MCP server"
   article
     heading "Accessibility for AI agents" (level 2)
-    paragraph "@real-a11y-dev/mcp — a Model Context Protocol server that hands the semantic tree and audits to AI agents over stdio. Point any MCP client at it and the agent can reason about what assistive tech actually perceives."
+    paragraph "@real-a11y-dev/mcp hands the semantic tree and audits to AI agents. Pair it with Agent Skills for the workflows (wire-up, audit, act-then-diff) so the assistant does not invent the sequence."
     paragraph "Explore the MCP server"
 article
   heading "First-class React support" (level 2)

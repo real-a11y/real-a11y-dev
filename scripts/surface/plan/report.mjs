@@ -130,7 +130,7 @@ export function renderText(report) {
     out.push(`      ${c.what}${c.detail ? ` — ${c.detail}` : ""}`);
   }
 
-  out.push("", "Docs");
+  out.push("", "Docs & community skills");
   for (const d of report.docs) {
     out.push(`  ${d.touched ? "✓" : "!"} ${d.path}`);
     if (!d.touched) out.push(`      ${d.why}`);
@@ -141,12 +141,13 @@ export function renderText(report) {
   // this tool simply has no rule for.
   if (report.docs.length === 0) {
     out.push(
-      "  — no documented page maps to these changes. That may be right, or it",
-      "    may be a gap in the map (scripts/surface/plan/obligations.mjs);",
-      "    check §4's table yourself before concluding there's nothing to write.",
+      "  — no documented page or community skill maps to these changes. That",
+      "    may be right, or it may be a gap in the map",
+      "    (scripts/surface/plan/obligations.mjs); check §4's table yourself",
+      "    before concluding there's nothing to write.",
     );
   } else if (report.missingDocs.length === 0) {
-    out.push("  — every doc in scope was touched on this branch.");
+    out.push("  — every doc / skill in scope was touched on this branch.");
   }
 
   out.push("", "Scenarios");
@@ -415,7 +416,7 @@ export function renderMarkdown(report, base) {
 
   if (report.missingDocs.length) {
     out.push(
-      `**${report.missingDocs.length} doc${report.missingDocs.length === 1 ? "" : "s"} in scope, untouched by this branch:**`,
+      `**${report.missingDocs.length} doc${report.missingDocs.length === 1 ? "" : "s"} / community skill${report.missingDocs.length === 1 ? "" : "s"} in scope, untouched by this branch:**`,
       "",
     );
     for (const d of report.missingDocs) {
@@ -423,10 +424,12 @@ export function renderMarkdown(report, base) {
     }
   } else if (report.docs.length === 0) {
     out.push(
-      "⚠️ **No documented page maps to these changes.** That may be right, or a gap in the map (`scripts/surface/plan/obligations.mjs`) — worth checking §4's table before concluding there's nothing to write.",
+      "⚠️ **No documented page or community skill maps to these changes.** That may be right, or a gap in the map (`scripts/surface/plan/obligations.mjs`) — worth checking §4's table before concluding there's nothing to write.",
     );
   } else {
-    out.push("✅ Every doc in scope was touched on this branch.");
+    out.push(
+      "✅ Every doc / community skill in scope was touched on this branch.",
+    );
   }
   out.push("");
 
