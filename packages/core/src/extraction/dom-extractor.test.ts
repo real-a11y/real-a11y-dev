@@ -229,26 +229,28 @@ describe("DOM clobbering resilience", () => {
 
     it("checks a portal's visibility up through the form", () => {
       // Without `checkVisibility()` (jsdom, and older browsers) the check
-      // walks the ancestors itself.
-      document.body.innerHTML = `
+      // walks the ancestors itself. The portal pivots extraction to <body>, so
+      // use a throwaway one: `resetIdCounter()` keeps the node→id map, and a
+      // shared <body> that kept this test's id would collide with a node a
+      // later test mints.
+      const original = document.body;
+      const body = document.createElement("body");
+      body.innerHTML = `
         <div id="app"><button>Checkout</button></div>
         <form>
           <input type="hidden" name="parentElement" />
           <div role="dialog" aria-label="Cookies"><button>Accept</button></div>
         </form>
       `;
+      document.documentElement.replaceChild(body, original);
       try {
-        clobberParentElement(document.body);
-        // jsdom's `closest()` climbs the forced override too; a browser's is
-        // native and never reads it. Give the answer a browser would.
-        const dialog = document.querySelector('[role="dialog"]')!;
-        vi.spyOn(dialog, "closest").mockReturnValue(null);
+        clobberParentElement(body);
         const app = document.getElementById("app")!;
         // The visible portal widens the scope to body, as outside a form.
         expect(byName(app, "Cookies")).toBeTruthy();
         expect(byName(app, "Checkout")).toBeTruthy();
       } finally {
-        document.body.innerHTML = "";
+        document.documentElement.replaceChild(original, body);
       }
     });
   });
