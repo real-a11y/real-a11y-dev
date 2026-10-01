@@ -249,8 +249,9 @@
     **Press ESC** while a modal dialog is open.
   - Type-ahead jumps to a row by its first letters, and `*` expands the
     selected row's siblings.
-  - `Enter` steps a slider or spinbutton up and `Shift`+`Enter` steps it
-    down. `Enter` on a slider used to do nothing.
+  - `Enter` steps a slider up, and `Shift`+`Enter` steps a slider or
+    spinbutton down. `Enter` on a slider used to do nothing; on a spinbutton
+    it still opens the edit box.
   - The feedback line names what you acted on ("Click: Save") instead of an
     internal node id, and shows a failed action too.
   - A heading shows its level as an **H2** badge, and an `<iframe>` row is
