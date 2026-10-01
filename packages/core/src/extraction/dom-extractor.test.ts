@@ -828,6 +828,16 @@ describe("extractDomTree", () => {
       expect(input.interaction?.actions).toEqual(["focus", "type"]);
     });
 
+    it("still withholds a sensitive one's value", () => {
+      // Redaction keys on tag, type and autocomplete, never the role.
+      const input = field(
+        `<input aria-label="Card" list="fruits" autocomplete="cc-number" value="secret-value">`,
+      );
+      expect(input.a11y.role).toBe("combobox");
+      expect(input.a11y.value).toBe("[redacted]");
+      expect(input.dom?.attributes["value"]).toBe("[redacted]");
+    });
+
     it("keeps a number input's stepping", () => {
       const input = field(
         `<input type="number" aria-label="Count" list="fruits">`,
