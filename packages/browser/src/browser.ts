@@ -409,14 +409,26 @@ export class BrowserSession implements A11ySession {
               `Real A11y bundle has no "${fn}" — the installed @real-a11y-dev/browser is too old; upgrade it.`,
             );
           }
+          // Through the prototype, not `document.querySelector` / `.body`:
+          // `Document` has [LegacyOverrideBuiltIns], so an `<img
+          // name="querySelector">` on the page IS `document.querySelector`,
+          // and the catch below reported the resulting TypeError as an invalid
+          // selector — `Invalid rootSelector: "body"` for a call that passed
+          // none. This runs serialized in the page, so it can't import core's
+          // clobber-safe readers; it reaches the members itself.
+          const docProto = Document.prototype;
           let root: Element | null;
           try {
-            root = document.querySelector(selector);
+            root = docProto.querySelector.call(document, selector);
           } catch {
             throw new Error(`Invalid rootSelector: "${selector}".`);
           }
           if (!root) {
-            if (selector === "body" && document.body) root = document.body;
+            const body = Object.getOwnPropertyDescriptor(
+              docProto,
+              "body",
+            )?.get?.call(document) as HTMLElement | null | undefined;
+            if (selector === "body" && body) root = body;
             else {
               throw new Error(
                 `rootSelector "${selector}" matched no element on the page.`,
@@ -451,14 +463,20 @@ export class BrowserSession implements A11ySession {
               "Real A11y bundle missing/too old — upgrade @real-a11y-dev/browser.",
             );
           }
+          // Same prototype reads as `call`, for the same shadowed members.
+          const docProto = Document.prototype;
           let el: Element | null;
           try {
-            el = document.querySelector(selector);
+            el = docProto.querySelector.call(document, selector);
           } catch {
             throw new Error(`Invalid rootSelector: "${selector}".`);
           }
           if (!el) {
-            if (selector === "body" && document.body) el = document.body;
+            const body = Object.getOwnPropertyDescriptor(
+              docProto,
+              "body",
+            )?.get?.call(document) as HTMLElement | null | undefined;
+            if (selector === "body" && body) el = body;
             else {
               throw new Error(
                 `rootSelector "${selector}" matched no element on the page.`,

@@ -247,6 +247,26 @@ describe("MCP end-to-end against a real browser", () => {
     expect(strictOut).not.toContain("hunter2");
   });
 
+  it("get_tab_order reads a page whose named image shadows document.querySelector", async () => {
+    // `<img name="querySelector">` IS `document.querySelector` on this page.
+    // The in-page root lookup called it, and its catch reported the TypeError
+    // as `Invalid rootSelector: "body"` — with no rootSelector passed at all.
+    const html = `<!doctype html><html><head><title>Shadowed</title></head><body>
+      <main>
+        <img name="querySelector" alt="">
+        <label for="email">Email</label><input id="email" type="email">
+      </main>
+    </body></html>`;
+    await client.callTool({
+      name: "open_page",
+      arguments: { url: dataUrl(html) },
+    });
+    const res = await client.callTool({ name: "get_tab_order", arguments: {} });
+    expect(textOf(res)).not.toContain("rootSelector");
+    expect(res.isError).toBeFalsy();
+    expect(textOf(res)).toMatch(/^01\. textbox "Email"$/m);
+  });
+
   it("the read tools take no rootSelector at all", async () => {
     const tools = (await client.listTools()).tools;
     const props = (name: string) =>
