@@ -909,6 +909,72 @@ describe("buildNativeTree — a range widget's value lives in a11y.value, never 
   });
 });
 
+describe("buildNativeTree — states read like the DOM producer's, whatever Chromium's wire type", () => {
+  // Chromium 151 (and 153) sends `aria-busy="true"` as a NUMBER under a
+  // boolean type — `{"type":"boolean","value":1}` — verbatim from
+  // `getFullAXTree` on `<div role="group" aria-label="g" aria-busy="true">`.
+  // Every other boolean state arrives as a JSON boolean, and the tristates as
+  // "true"/"false"/"mixed" strings; the DOM producer writes `busy: true`.
+  const raw = [
+    { nodeId: "1", childIds: ["2", "3", "4"], role: { value: "RootWebArea" } },
+    {
+      nodeId: "2",
+      parentId: "1",
+      backendDOMNodeId: 20,
+      role: { value: "group" },
+      name: { value: "g" },
+      properties: [{ name: "busy", value: { type: "boolean", value: 1 } }],
+    },
+    {
+      nodeId: "3",
+      parentId: "1",
+      backendDOMNodeId: 30,
+      role: { value: "button" },
+      name: { value: "Bold" },
+      properties: [
+        { name: "pressed", value: { type: "tristate", value: "mixed" } },
+        { name: "disabled", value: { type: "boolean", value: false } },
+        { name: "focusable", value: { type: "booleanOrUndefined", value: 1 } },
+      ],
+    },
+    {
+      nodeId: "4",
+      parentId: "1",
+      backendDOMNodeId: 40,
+      role: { value: "textbox" },
+      name: { value: "Notes" },
+      properties: [
+        { name: "invalid", value: { type: "token", value: "grammar" } },
+        { name: "editable", value: { type: "token", value: "plaintext" } },
+        { name: "busy", value: { type: "boolean", value: 0 } },
+      ],
+    },
+  ] as Parameters<typeof buildNativeTree>[0];
+
+  it("reads busy sent as the number 1 as true", () => {
+    const group = buildNativeTree(raw).nodes.get("ax-dom-20");
+    expect(group?.a11y.states.busy).toBe(true);
+  });
+
+  it("decodes any boolean-typed number, and 0 as false", () => {
+    const tree = buildNativeTree(raw);
+    expect(tree.nodes.get("ax-dom-30")?.a11y.states.focusable).toBe(true);
+    expect(tree.nodes.get("ax-dom-40")?.a11y.states.busy).toBe(false);
+  });
+
+  it("leaves booleans, tristate strings and tokens as they were", () => {
+    const tree = buildNativeTree(raw);
+    expect(tree.nodes.get("ax-dom-30")?.a11y.states).toMatchObject({
+      pressed: "mixed",
+      disabled: false,
+    });
+    expect(tree.nodes.get("ax-dom-40")?.a11y.states).toMatchObject({
+      invalid: "grammar",
+      editable: "plaintext",
+    });
+  });
+});
+
 describe("buildNativeTree — focusedId", () => {
   // Chromium reports focus as a per-node `focused` AX property. Every
   // focus-aware consumer instead reads the tree-level `focusedId`:
