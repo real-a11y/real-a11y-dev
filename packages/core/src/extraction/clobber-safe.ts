@@ -201,13 +201,16 @@ export function safeHidden(element: Element): boolean {
  * `<img name="getElementById">` makes `document.getElementById(…)` throw.
  *
  * Not every call goes through these. A throw on one element costs that element
- * — the walk's per-element boundary skips it, and `LiveTreeExtractor.refresh`
- * falls back to a full extraction — which is the right price for a form that
- * names its controls after DOM methods. These are for the reads that cost more
- * than the element they were made on: the document every id lookup runs
- * against, the extraction root, and the observer's per-mutation filter. A
- * throw there drops every labelled control on the page, aborts the whole
- * extraction, or loses a whole batch of mutations.
+ * and everything inside it — the walk's per-element boundary skips the
+ * subtree, and `LiveTreeExtractor.refresh` falls back to a full extraction —
+ * which is the price of a form whose control shadows `getAttribute`, the read
+ * every attribute goes through. These are for the reads that cost more: the
+ * document every id lookup runs against, the extraction root, and the
+ * observer's per-mutation filter, where a throw drops every labelled control
+ * on the page, aborts the whole extraction, or loses a whole batch of
+ * mutations. And for the `hasAttribute`, `matches` and `contains` questions
+ * asked of every element whatever its tag, which would otherwise cost every
+ * form that names a control after one of them its whole subtree.
  */
 
 /**
@@ -231,6 +234,7 @@ const getAttributeMethod = /* @__PURE__ */ capture(
   () => elementProto?.getAttribute,
 );
 const containsMethod = /* @__PURE__ */ capture(() => nodeProto?.contains);
+const matchesMethod = /* @__PURE__ */ capture(() => elementProto?.matches);
 
 /**
  * `querySelector`, `querySelectorAll` and `getElementById` are defined once per
@@ -301,6 +305,13 @@ export function safeContains(node: Node, other: Node | null): boolean {
   return containsMethod
     ? containsMethod.call(node, other)
     : node.contains(other);
+}
+
+/** Clobber-immune `element.matches(selectors)` (`<input name="matches">`). */
+export function safeMatches(element: Element, selectors: string): boolean {
+  return matchesMethod
+    ? matchesMethod.call(element, selectors)
+    : element.matches(selectors);
 }
 
 /**

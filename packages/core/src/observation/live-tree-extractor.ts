@@ -2,6 +2,7 @@ import { buildA11yTree } from "../extraction/a11y-extractor.js";
 import {
   safeContains,
   safeGetAttribute,
+  safeMatches,
   safeNodeType,
   safeParentElement,
   safeTagName,
@@ -621,7 +622,8 @@ export class LiveTreeExtractor {
 
       // Adding or removing an <img usemap> changes whether a map's areas are
       // rendered, wherever that map is: the same reach as a `usemap` change.
-      if (el.matches("img[usemap]") || el.querySelector("img[usemap]")) {
+      // `matches` through the prototype: an added <form> can shadow it.
+      if (safeMatches(el, "img[usemap]") || el.querySelector("img[usemap]")) {
         return true;
       }
 
@@ -776,9 +778,10 @@ export class LiveTreeExtractor {
   }
 
   private collapseToOutermost(elements: Set<Element>): Element[] {
+    // Any dirty element can be a <form> whose control shadows `contains`.
     const list = Array.from(elements);
     return list.filter(
-      (el) => !list.some((other) => other !== el && other.contains(el)),
+      (el) => !list.some((other) => other !== el && safeContains(other, el)),
     );
   }
 

@@ -1255,17 +1255,68 @@ describe("DomObserver", () => {
 
     it("re-extracts in full when a form it cannot classify mounts into <body>", async () => {
       // The portal observer asks each node mounted into <body> whether it is
-      // an overlay. A form whose control shadows `matches` cannot answer — and
-      // this one holds a dialog, which has to pivot the tree.
+      // an overlay. A form whose control shadows `getAttribute` cannot say
+      // what its role is — and this one holds a dialog, which has to pivot
+      // the tree.
       const appRoot = document.createElement("div");
       document.body.appendChild(appRoot);
       observer = new DomObserver(appRoot, onTreeChange, 100);
       observer.start();
 
       const form = document.createElement("form");
-      form.innerHTML = `<input name="matches" /><div role="dialog" aria-label="Offer">Hi</div>`;
+      form.innerHTML = `<input name="getAttribute" /><div role="dialog" aria-label="Offer">Hi</div>`;
+      clobber(form, "getAttribute");
+      document.body.appendChild(form);
+
+      await settleObserver(100);
+
+      expect(onTreeChange).toHaveBeenCalledTimes(1);
+      expect(onTreeChange.mock.calls[0][0]).toMatchObject({ full: true });
+    });
+
+    it("classifies a plain form mounted into <body> although its control shadows matches", async () => {
+      // `matches` is the first thing the overlay check asks. A form that could
+      // not answer counted as a portal, so every such form mounting outside
+      // the root re-extracted the whole page for nothing.
+      const appRoot = document.createElement("div");
+      document.body.appendChild(appRoot);
+      observer = new DomObserver(appRoot, onTreeChange, 100);
+      observer.start();
+
+      const form = document.createElement("form");
+      form.innerHTML = `<input name="matches" aria-label="Search" />`;
       clobber(form, "matches");
       document.body.appendChild(form);
+
+      await settleObserver(100);
+
+      expect(onTreeChange).not.toHaveBeenCalled();
+    });
+
+    it("starts on a form root whose control shadows contains", () => {
+      // Whether the root already holds <body> decides if the portal observer
+      // is needed at all; asking the form threw out of start().
+      document.body.innerHTML = `<form aria-label="Signup"><input name="contains" /></form>`;
+      const form = document.querySelector("form")!;
+      clobber(form, "contains");
+      observer = new DomObserver(form, onTreeChange, 100);
+
+      expect(() => observer.start()).not.toThrow();
+    });
+
+    it("re-extracts when an overlay mounts beside a form root whose control shadows contains", async () => {
+      // A mounted overlay is watched only when it lies outside the root, and
+      // asking the form threw inside the portal observer, losing the batch.
+      document.body.innerHTML = `<form aria-label="Signup"><input name="contains" /></form>`;
+      const form = document.querySelector("form")!;
+      clobber(form, "contains");
+      observer = new DomObserver(form, onTreeChange, 100);
+      observer.start();
+
+      const menu = document.createElement("div");
+      menu.setAttribute("role", "menu");
+      menu.innerHTML = `<button role="menuitem">Rename</button>`;
+      document.body.appendChild(menu);
 
       await settleObserver(100);
 

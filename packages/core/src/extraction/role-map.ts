@@ -82,8 +82,9 @@ export function isSubtreeHidden(
   if (safeHidden(element)) return true;
 
   // The HTML `inert` attribute hides the element AND its entire subtree
-  // from both AT and keyboard navigation.
-  if ((element as HTMLElement).hasAttribute("inert")) return true;
+  // from both AT and keyboard navigation. Read through the prototype for the
+  // same reason as `hidden`: `<input name="hasAttribute">` shadows the method.
+  if (safeGetAttribute(element, "inert") !== null) return true;
 
   const computed =
     style !== undefined ? style : getCachedComputedStyle(element);

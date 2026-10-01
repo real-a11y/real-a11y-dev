@@ -22,6 +22,15 @@
 
 ## Unreleased
 
+- In DOM mode, a `<form>` with a field named `hasAttribute` is no longer
+  dropped from the tree, the Tab Sequence view and the Buttons and Forms
+  lists, with everything in it. Such a field shadows the form's own
+  `hasAttribute()`, which the walk calls on every element, so the call threw
+  and the whole form was skipped. A change in or around a form with a field
+  named `contains` or `matches` also updates the tree in place now, rather
+  than rebuilding it in full.
+  ([#PR](https://github.com/real-a11y/real-a11y-dev/pull/PR))
+
 - In DOM mode, a `<form>` with a control named `nodeType`, such as
   `<input type="hidden" name="nodeType">`, now shows in the tree with
   everything in it, and its controls in the Tab Sequence view. A form lets a

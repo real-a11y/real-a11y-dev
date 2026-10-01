@@ -2176,11 +2176,6 @@ describe("LiveTreeExtractor", () => {
         "expandDependencies reads each dirty ancestor's id",
         clobber,
       ],
-      [
-        "contains",
-        "collapseToOutermost asks the form whether it holds the text",
-        clobber,
-      ],
     ])(
       "keeps the tree right when the form's %s is shadowed (%s)",
       (prop, _how, shadowProp) => {
@@ -2212,7 +2207,6 @@ describe("LiveTreeExtractor", () => {
     );
 
     it.each([
-      ["matches", "asks the added form whether it is an overlay", clobber],
       ["querySelectorAll", "scans the added form for references", clobber],
       ["getAttribute", "indexes the references the added form makes", clobber],
       ["ownerDocument", "resolves the added form's aria-labelledby", shadow],
@@ -2266,6 +2260,61 @@ describe("LiveTreeExtractor", () => {
         (n) => n.a11y.name === "Email",
       );
       expect(email?.a11y.description).toBe("Use a work email");
+    });
+
+    // These two the splice reads through the prototype, so a form that
+    // shadows them costs it nothing: the tree comes out right, incrementally.
+    it("splices without falling back when a dirty form's contains is shadowed", () => {
+      // collapseToOutermost asks each dirty element whether it holds another.
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      document.body.innerHTML = `
+        <main id="app">
+          <h1 id="title">Title</h1>
+          <form aria-label="Signup">
+            <input name="contains" aria-label="Field" />
+            <span id="lbl">Old</span>
+          </form>
+          <button aria-labelledby="lbl">x</button>
+        </main>
+      `;
+      const root = document.getElementById("app")!;
+      const form = root.querySelector("form")!;
+      clobber(form, "contains");
+      const live = new LiveTreeExtractor(root, { mode: "a11y" });
+
+      const change = observe(root, () => {
+        form.setAttribute("class", "touched");
+        document.getElementById("lbl")!.firstChild!.nodeValue = "New";
+        document.getElementById("title")!.setAttribute("class", "touched");
+      });
+      const result = live.refresh(change);
+
+      expect(buttonName(result)).toBe("New");
+      expect(result.nodes).toEqual(extractA11yTree(root).nodes);
+      expect(warn).not.toHaveBeenCalled();
+    });
+
+    it("splices without falling back when an added form's matches is shadowed", () => {
+      // Each added element is asked whether it is an overlay, then whether it
+      // is an image map's image.
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      document.body.innerHTML = `
+        <main id="app"><h1 id="title">Title</h1><div id="slot"></div></main>
+      `;
+      const root = document.getElementById("app")!;
+      const live = new LiveTreeExtractor(root, { mode: "a11y" });
+
+      const form = document.createElement("form");
+      form.setAttribute("aria-labelledby", "title");
+      form.innerHTML = `<input name="matches" aria-label="Field" />`;
+      clobber(form, "matches");
+      const change = observe(root, () => {
+        document.getElementById("slot")!.append(form);
+      });
+      const result = live.refresh(change);
+
+      expect(result.nodes).toEqual(extractA11yTree(root).nodes);
+      expect(warn).not.toHaveBeenCalled();
     });
 
     it("warns outside production that it fell back to a full extraction", () => {

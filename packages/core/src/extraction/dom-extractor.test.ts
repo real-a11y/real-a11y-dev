@@ -18,6 +18,7 @@ import {
   isSensitiveField,
   isSensitiveFieldAttributes,
   nativeStates,
+  PANEL_HOST_ATTRIBUTE,
   SENSITIVE_AUTOCOMPLETE_TOKENS,
 } from "./dom-extractor.js";
 import { idScope } from "./flat-tree.js";
@@ -745,6 +746,136 @@ describe("a shadowed method on something every element shares", () => {
     clobber(form, "ownerDocument");
 
     expect(idScope(form)).toBe(document);
+  });
+});
+
+describe("a <form> whose control shadows hasAttribute, matches or contains", () => {
+  // `<input name="hasAttribute">` makes `form.hasAttribute` that input, so
+  // calling it throws. The walk asks every element it visits whether it has
+  // a few attributes, and a throw there costs the per-element boundary the
+  // form and every control inside it.
+  afterEach(() => {
+    document.body.innerHTML = "";
+  });
+
+  const rolesAndNames = (root: Element) =>
+    [...extractDomTree(root).nodes.values()].map((n) => [
+      n.a11y.role,
+      n.a11y.name,
+    ]);
+
+  it("keeps a form whose control is named hasAttribute, and everything in it", () => {
+    document.body.innerHTML = `
+      <form aria-label="Signup">
+        <input name="hasAttribute" aria-label="Nickname">
+        <button>Join</button>
+      </form>`;
+    clobber(document.querySelector("form")!, "hasAttribute");
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    expect(rolesAndNames(document.body)).toEqual(
+      expect.arrayContaining([
+        ["form", "Signup"],
+        ["textbox", "Nickname"],
+        ["button", "Join"],
+      ]),
+    );
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  // Each attribute the walk asks every element about, read off such a form and
+  // answered rather than merely survived.
+  it.each([
+    ["inert", "an inert subtree"],
+    [PANEL_HOST_ATTRIBUTE, "the inspector's own panel"],
+  ])(
+    "leaves out a form carrying %s as %s, not as an element it could not read",
+    (attribute) => {
+      document.body.innerHTML = `
+        <main>
+          <form ${attribute} aria-label="Signup">
+            <input name="hasAttribute" aria-label="Nickname">
+          </form>
+          <button>Join</button>
+        </main>`;
+      clobber(document.querySelector("form")!, "hasAttribute");
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+      const names = rolesAndNames(document.body).map(([, name]) => name);
+      expect(names).toContain("Join");
+      expect(names).not.toContain("Signup");
+      expect(names).not.toContain("Nickname");
+      expect(warn).not.toHaveBeenCalled();
+    },
+  );
+
+  it("gives such a form with an onclick handler its click action", () => {
+    document.body.innerHTML = `
+      <form aria-label="Signup" onclick="void 0">
+        <input name="hasAttribute" aria-label="Nickname">
+      </form>`;
+    clobber(document.querySelector("form")!, "hasAttribute");
+
+    const form = [...extractDomTree(document.body).nodes.values()].find(
+      (n) => n.a11y.role === "form",
+    );
+    expect(form?.interaction?.actions).toEqual(["click"]);
+  });
+
+  it("does not read such a form as sr-only once it has a tabindex", () => {
+    // A tabindex exempts an element from the sr-only pattern: it is a focus
+    // target, styled out of sight only until it takes focus.
+    document.body.innerHTML = `
+      <form tabindex="-1" aria-label="Signup"
+        style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)">
+        <input name="hasAttribute" aria-label="Nickname">
+      </form>`;
+    clobber(document.querySelector("form")!, "hasAttribute");
+
+    const form = [...extractDomTree(document.body).nodes.values()].find(
+      (n) => n.a11y.role === "form",
+    );
+    expect(form?.dom?.isHidden).toBe(false);
+  });
+
+  // The overlay scan reads candidates outside the root and their ancestors.
+  // One that throws is skipped, so the root never widens to take the overlay
+  // in: the open menu or dialog is missing from the tree.
+  const namesFrom = (rootId: string): string[] =>
+    [...extractDomTree(document.getElementById(rootId)!).nodes.values()].map(
+      (n) => n.a11y.name,
+    );
+
+  it("takes in an overlay that sits inside a form whose control is named hasAttribute", () => {
+    // The scan climbs from the menu to ask each ancestor whether it is inert.
+    document.body.innerHTML = `
+      <main id="app"><button>Open menu</button></main>
+      <form aria-label="Settings">
+        <input name="hasAttribute" aria-label="Nickname">
+        <div role="menu"><button role="menuitem">Rename</button></div>
+      </form>`;
+    clobber(document.querySelector("form")!, "hasAttribute");
+
+    expect(namesFrom("app")).toEqual(
+      expect.arrayContaining(["Open menu", "Rename"]),
+    );
+  });
+
+  it("takes in a form overlay whose control is named contains", () => {
+    // The scan asks each candidate whether it is an ancestor of the root. An
+    // `<output>` names it rather than an `<input>`: jsdom's selector engine,
+    // unlike Chromium's, calls the form's own `contains` while matching a
+    // control under it, and the scan's content check is such a query.
+    document.body.innerHTML = `
+      <main id="app"><button>Subscribe</button></main>
+      <form role="dialog" aria-label="Newsletter">
+        <output name="contains">You're on the list</output>
+      </form>`;
+    clobber(document.querySelector("form")!, "contains");
+
+    expect(namesFrom("app")).toEqual(
+      expect.arrayContaining(["Subscribe", "Newsletter", "You're on the list"]),
+    );
   });
 });
 

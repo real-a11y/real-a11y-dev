@@ -14,6 +14,7 @@ import {
   safeContains,
   safeGetAttribute,
   safeGetElementById,
+  safeMatches,
   safeNodeType,
   safeOwnerDocument,
   safeParentElement,
@@ -220,8 +221,9 @@ function getActions(
   else if (MEDIA_TAGS.has(tag) && element.hasAttribute("controls")) {
     actions.push("focus");
   }
-  // ARIA role-based actions
-  else if (role === "button" || element.hasAttribute("onclick")) {
+  // ARIA role-based actions. Any element reaches the `onclick` read, so it
+  // goes through the prototype: a <form> can shadow `hasAttribute`.
+  else if (role === "button" || safeGetAttribute(element, "onclick") !== null) {
     actions.push("click");
   } else if (role === "checkbox" || role === "switch") {
     actions.push("click");
@@ -389,7 +391,7 @@ function isSrOnly(
   // Custom form controls hide the native input behind a visual — not sr-only
   const tag = element.tagName.toLowerCase();
   if (INTERACTIVE_TAGS.has(tag)) return false;
-  if (element.hasAttribute("tabindex")) return false;
+  if (safeGetAttribute(element, "tabindex") !== null) return false;
 
   const computed =
     style !== undefined ? style : getCachedComputedStyle(element);
@@ -2545,7 +2547,7 @@ function findPortalOverlay(doc: Document, root: Element): Element | null {
       // and React Router ship are typically an `aria-live` wrapper around the
       // whole app, so it matched on every extraction rather than only while a
       // toast was up.
-      if (safeContains(root, el) || el.contains(root)) continue;
+      if (safeContains(root, el) || safeContains(el, root)) continue;
       if (!countsAsOverlay(el)) continue;
       // An overlay AT cannot reach adds nothing to the tree, so it is no
       // reason to widen: a closed drawer left mounted as `aria-hidden` (and
@@ -2568,7 +2570,8 @@ function findPortalOverlay(doc: Document, root: Element): Element | null {
  */
 function isInertOrAriaHidden(element: Element): boolean {
   for (let el: Element | null = element; el; el = safeParentElement(el)) {
-    if (el.hasAttribute("inert")) return true;
+    // Any ancestor can be a <form> holding `<input name="hasAttribute">`.
+    if (safeGetAttribute(el, "inert") !== null) return true;
     if (isAriaHiddenValue(el.getAttribute("aria-hidden"))) return true;
   }
   return false;
@@ -2636,11 +2639,13 @@ export function countsAsOverlay(el: Element): boolean {
  */
 const OVERLAY_SIGNAL_SELECTOR = `${OVERLAY_CANDIDATE_SELECTOR}, [aria-modal="true"], dialog`;
 
-/** An element that is itself an overlay signal. */
+/**
+ * An element that is itself an overlay signal. Any mounted element is asked,
+ * so `matches` goes through the prototype: `<input name="matches">` shadows it
+ * on a <form>, and an observer that cannot ask has to guess "overlay".
+ */
 function isOverlaySignal(el: Element): boolean {
-  return (
-    el.matches?.('[aria-modal="true"], dialog') === true || countsAsOverlay(el)
-  );
+  return safeMatches(el, '[aria-modal="true"], dialog') || countsAsOverlay(el);
 }
 
 /**
@@ -2798,7 +2803,9 @@ function buildNode(
     // to return that element, so `.id.startsWith(...)` would throw a TypeError
     // and crash the whole extraction. getAttribute always yields a string|null.
     if (element.getAttribute("id")?.startsWith("__sn-")) return null;
-    if (element.hasAttribute(PANEL_HOST_ATTRIBUTE)) return null;
+    // Through the prototype: every element is asked this, and on a <form>
+    // holding `<input name="hasAttribute">` the method is that input.
+    if (safeGetAttribute(element, PANEL_HOST_ATTRIBUTE) !== null) return null;
 
     // Resolve style once for this element — subtree-hidden / visually-hidden /
     // AT-hidden / sr-only all share the declaration via the per-extraction cache.
