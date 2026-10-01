@@ -330,3 +330,51 @@ describe("InputPanel blockEmptySubmit", () => {
     expect(panel.submitted).toEqual([""]);
   });
 });
+
+describe("InputPanel select picker selection state", () => {
+  function selectedLabels(): string[] {
+    return Array.from(
+      container.querySelectorAll<HTMLElement>(
+        '[role="option"][aria-selected="true"]',
+      ),
+    ).map((o) => o.textContent!.replace(/^[●○]/, ""));
+  }
+
+  function activeLabel(): string | undefined {
+    const list = container.querySelector('[role="listbox"]')!;
+    const id = list.getAttribute("aria-activedescendant");
+    return id
+      ? container.querySelector(`#${id}`)!.textContent!.replace(/^[●○]/, "")
+      : undefined;
+  }
+
+  it("announces the field's current option as selected, and starts on it", () => {
+    open(SELECT_STATE);
+    expect(selectedLabels()).toEqual(["France"]);
+    expect(activeLabel()).toBe("France");
+  });
+
+  it("moving the cursor doesn't announce another option as chosen", () => {
+    open(SELECT_STATE);
+    const list = container.querySelector('[role="listbox"]')!;
+    act(() => {
+      list.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }),
+      );
+    });
+    expect(activeLabel()).toBe("Germany");
+    expect(selectedLabels()).toEqual(["France"]);
+  });
+
+  it("announces no option as selected when the current one is withheld", () => {
+    // A sensitive select reports none: the cursor starts on the first
+    // option, but nothing may claim to be the field's value.
+    open({
+      ...SELECT_STATE,
+      value: "",
+      options: SELECT_STATE.options!.map((o) => ({ ...o, selected: false })),
+    });
+    expect(activeLabel()).toBe("France");
+    expect(selectedLabels()).toEqual([]);
+  });
+});
