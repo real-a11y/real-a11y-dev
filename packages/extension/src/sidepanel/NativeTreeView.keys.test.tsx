@@ -265,4 +265,25 @@ describe("NativeTreeView keyboard and row parity", () => {
     mount({ onSendKey: vi.fn() });
     expect(container.querySelector(".sn-dialog-indicator")).toBeNull();
   });
+  it("labels a real select's row Select, and Enter opens it rather than clicking", () => {
+    const nodes = new Map<string, NativeNode>([
+      node("root", "document", "", 0, ["sel", "custom"]),
+      node("sel", "combobox", "Department", 1, ["pop"]),
+      node("pop", "MenuListPopup", "", 2, ["books"]),
+      node("books", "option", "Books", 3),
+      // A custom select-only combobox: no MenuListPopup, so still a click.
+      node("custom", "combobox", "Fruit", 1),
+    ]);
+    const onActivate = mount({ nodes });
+    expect(row("sel").querySelector(".sn-action-tag")?.textContent).toBe(
+      "Select",
+    );
+    expect(row("custom").querySelector(".sn-action-tag")?.textContent).toBe(
+      "Click",
+    );
+    select("sel");
+    press("Enter");
+    // No explicit action: App opens the option picker for it.
+    expect(onActivate).toHaveBeenCalledWith(nodes.get("sel"), undefined);
+  });
 });
