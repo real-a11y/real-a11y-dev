@@ -6,7 +6,11 @@
 
 import { isAriaHiddenValue } from "./aria-tokens.js";
 import { safeHidden } from "./clobber-safe.js";
-import { flatParent, isRenderedInFlatTree } from "./flat-tree.js";
+import {
+  flatParent,
+  isRenderedInFlatTree,
+  renderingParent,
+} from "./flat-tree.js";
 import { isFocusable } from "./focusability.js";
 import { imageUsingMap } from "./image-map.js";
 
@@ -95,7 +99,8 @@ export function isSubtreeHidden(
  */
 function isImageRendered(image: Element | null): boolean {
   if (!image || !isRenderedInFlatTree(image)) return false;
-  for (let el: Element | null = image; el; el = flatParent(el)) {
+  // Slots included: a hidden slot hides the image it renders.
+  for (let el: Element | null = image; el; el = renderingParent(el)) {
     // An area renders no children, and asking whether one is hidden would
     // ask about this image again.
     if (el.localName === "area" || isSubtreeHidden(el)) return false;
@@ -116,7 +121,7 @@ function isAreaHiddenFromAT(area: Element): boolean {
   if (area.hasAttribute("inert")) return true;
   const image = imageUsingMap(area);
   if (!image || !isImageRendered(image)) return true;
-  for (let el: Element | null = image; el; el = flatParent(el)) {
+  for (let el: Element | null = image; el; el = renderingParent(el)) {
     if (isAriaHiddenValue(el.getAttribute("aria-hidden"))) return true;
   }
   return false;

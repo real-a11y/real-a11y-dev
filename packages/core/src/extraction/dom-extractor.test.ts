@@ -3413,6 +3413,41 @@ describe.each(["inline", "none"])(
       expect(found).toEqual({});
     });
 
+    it("follows the slot that renders the image, as Chromium does", () => {
+      // An image slotted into a component renders only through its slot, so
+      // a hidden, display:none or inert slot hides it, and Chromium neither
+      // focuses its areas nor exposes them. An aria-hidden slot leaves it
+      // rendered: Chromium still focuses the area, but hides it from AT.
+      const slots: Record<string, string> = {
+        shown: "<slot></slot>",
+        hidden: "<slot hidden></slot>",
+        "display-none": '<slot style="display: none"></slot>',
+        inert: "<slot inert></slot>",
+        "aria-hidden": '<slot aria-hidden="true"></slot>',
+      };
+      document.body.innerHTML = `<main>${Object.keys(slots)
+        .map(
+          (name) =>
+            `<div id="host-${name}"><img src="x.gif" alt="${name}" usemap="#${name}"></div>` +
+            `<map name="${name}"><area id="${name}" href="/${name}" alt="${name}"></map>`,
+        )
+        .join("")}</main>`;
+      for (const [name, html] of Object.entries(slots)) {
+        document
+          .getElementById(`host-${name}`)!
+          .attachShadow({ mode: "open" }).innerHTML = html;
+      }
+      const byId: Record<string, SemanticNode> = {};
+      for (const node of extractDomTree(document.body).nodes.values()) {
+        if (node.dom?.tagName === "area")
+          byId[node.dom.attributes["id"]] = node;
+      }
+      expect(Object.keys(byId).sort()).toEqual(["aria-hidden", "shown"]);
+      expect(byId.shown.a11y.isExposedToAT).toBe(true);
+      expect(byId["aria-hidden"].a11y.isExposedToAT).toBe(false);
+      expect(byId["aria-hidden"].interaction!.isFocusable).toBe(true);
+    });
+
     it("takes an area's image from the document, as Chromium does", () => {
       document.body.innerHTML = `<main>
         <img src="x.gif" alt="Site map" usemap="#nav">
