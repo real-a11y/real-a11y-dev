@@ -146,6 +146,12 @@ Newest first. If native mode graduates to the store build (#386 proposes it),
 these describe what it does at that point, and its changelog entry can draw
 on them; changes after that go in `CHANGELOG.md`.
 
+- In NATIVE mode, an element with `aria-busy="true"` now shows a `busy`
+  badge in the tree and the filtered lists, as DOM mode does. Chromium sends
+  that state as the number `1`, and the native tree read it as text, so the
+  badge said `busy=1` in the tree and `busy: 1` in the lists.
+  ([#441](https://github.com/real-a11y/real-a11y-dev/pull/441))
+
 - In NATIVE mode, a rich-text editor with no role (a ProseMirror-style
   `<div contenteditable>`) now stays in the tree as a `generic`, empty or
   filled, as DOM mode already shows it, so the A11y view has a node to show
