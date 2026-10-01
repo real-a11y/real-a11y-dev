@@ -326,6 +326,158 @@ describe("tree scope of a clobbered <form>", () => {
   });
 });
 
+describe("a shadowed method on something every element shares", () => {
+  // `Document` has [LegacyOverrideBuiltIns] too: a named `<img>`, `<form>`,
+  // `<embed>` or `<object>` shadows the document member of that name, so
+  // `<img name="getElementById">` makes `document.getElementById` the image. A
+  // `<form>` whose control does the same may lose itself — the per-element
+  // boundary skips it — but a read on something every element depends on (the
+  // document the id lookups run against, the overlay scan, the extraction
+  // root) took the rest of the page with it, silently or all at once.
+  const shadowed: string[] = [];
+  const clobberDocument = (prop: string): void => {
+    clobber(document, prop);
+    shadowed.push(prop);
+  };
+  afterEach(() => {
+    for (const prop of shadowed.splice(0)) {
+      delete (document as unknown as Record<string, unknown>)[prop];
+    }
+    document.body.innerHTML = "";
+  });
+
+  const attach = (html: string): Element => {
+    document.body.innerHTML = html;
+    return document.body.firstElementChild!;
+  };
+  const nodes = (root: Element) => [...extractA11yTree(root).nodes.values()];
+  const named = (root: Element, role: string) =>
+    nodes(root).find((n) => n.a11y.role === role)?.a11y;
+
+  it("names and describes through the id scope when the document's getElementById is shadowed", () => {
+    // Every aria-labelledby / -describedby element on the page was dropped.
+    const root = attach(`
+      <main>
+        <img name="getElementById" alt="" />
+        <span id="lbl">Save</span>
+        <span id="hint">Saves the draft</span>
+        <button aria-labelledby="lbl" aria-describedby="hint">x</button>
+      </main>
+    `);
+    clobberDocument("getElementById");
+
+    expect(named(root, "button")).toMatchObject({
+      name: "Save",
+      description: "Saves the draft",
+    });
+  });
+
+  it("finds a control's <label for> when the document's querySelector is shadowed", () => {
+    // Every control with an id was dropped.
+    const root = attach(`
+      <main>
+        <img name="querySelector" alt="" />
+        <label for="email">Email</label>
+        <input id="email" />
+      </main>
+    `);
+    clobberDocument("querySelector");
+
+    expect(named(root, "textbox")?.name).toBe("Email");
+  });
+
+  it("extracts at all when the document's querySelectorAll is shadowed", () => {
+    // The modal and overlay scans threw before the walk began.
+    const root = attach(`
+      <main><img name="querySelectorAll" alt="" /><button>Go</button></main>
+    `);
+    clobberDocument("querySelectorAll");
+
+    expect(named(root, "button")?.name).toBe("Go");
+  });
+
+  it("keeps a description target that also labels a control when the document's querySelectorAll is shadowed", () => {
+    // Folding a description target away searches its tree for referrers. A
+    // shadowed search read as "described and not labelled", so this visible
+    // span went missing although it names the button.
+    const root = attach(`
+      <main>
+        <img name="querySelectorAll" alt="" />
+        <span id="hint">Save</span>
+        <button aria-labelledby="hint" aria-describedby="hint">x</button>
+      </main>
+    `);
+    clobberDocument("querySelectorAll");
+
+    const ids = [...extractDomTree(root).nodes.values()].map(
+      (n) => n.dom?.attributes?.id,
+    );
+    expect(ids).toContain("hint");
+  });
+
+  it("scopes to an open modal when the document's contains is shadowed", () => {
+    const root = attach(`
+      <main><img name="contains" alt="" /><button>Behind</button></main>
+    `);
+    const dialog = document.createElement("dialog");
+    dialog.innerHTML = "<button>In dialog</button>";
+    document.body.append(dialog);
+    fakeShowModal(dialog);
+    clobberDocument("contains");
+
+    const names = nodes(root).map((n) => n.a11y.name);
+    expect(names).toContain("In dialog");
+    expect(names).not.toContain("Behind");
+  });
+
+  it("skips an overlay candidate it cannot read, and still pivots for the next", () => {
+    // `<form role="search">` is an overlay-scan candidate like any [role]
+    // element; one whose control shadows `getAttribute` threw out of the scan.
+    document.body.innerHTML = `
+      <form role="search"><input name="getAttribute" aria-label="Query" /></form>
+      <main id="app"><button>Open menu</button></main>
+      <div role="menu"><button role="menuitem">Rename</button></div>
+    `;
+    const root = document.getElementById("app")!;
+    clobber(document.querySelector("form")!, "getAttribute");
+
+    const names = nodes(root).map((n) => n.a11y.name);
+    expect(names).toContain("Open menu");
+    expect(names).toContain("Rename");
+  });
+
+  it("extracts a form root whose control shadows querySelectorAll", () => {
+    const root = attach(`
+      <form aria-label="Signup">
+        <input name="querySelectorAll" aria-label="Nickname" />
+        <button aria-describedby="terms">Join</button>
+        <span id="terms">You agree to the terms</span>
+      </form>
+    `);
+    clobber(root, "querySelectorAll");
+
+    expect(named(root, "button")).toMatchObject({
+      name: "Join",
+      description: "You agree to the terms",
+    });
+  });
+
+  it("resolves a detached form root's ids when the form's ownerDocument is shadowed", () => {
+    // A detached subtree has no id scope of its own and falls back to its
+    // owner document — read off the form, where `<input name="ownerDocument">`
+    // answers instead. In Chromium the form's aria-labelledby lookup then threw
+    // and the per-element boundary dropped the root: an empty tree. Pinned at
+    // `idScope` because jsdom cannot extract such a root at all — its selector
+    // engine reads `ownerDocument` off the form in script, which Chromium's
+    // never does.
+    const form = document.createElement("form");
+    form.innerHTML = `<input name="ownerDocument" />`;
+    clobber(form, "ownerDocument");
+
+    expect(idScope(form)).toBe(document);
+  });
+});
+
 describe("extractDomTree", () => {
   it("extracts a simple DOM tree", () => {
     const root = createPage(`

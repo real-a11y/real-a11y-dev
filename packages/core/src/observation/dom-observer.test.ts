@@ -1,5 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 
+import { clobber } from "../test-support/clobber.js";
+import type { TreeChange } from "../types.js";
+
 import { DomObserver } from "./dom-observer.js";
 
 /**
@@ -1147,6 +1150,59 @@ describe("DomObserver", () => {
       await settleObserver(100);
 
       expect(onTreeChange).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("a <form> whose control shadows a method", () => {
+    // `<form>` has [LegacyOverrideBuiltIns], so `<input name="getAttribute">`
+    // makes `form.getAttribute` that input and calling it throws. The throw
+    // escaped the MutationObserver callback, which lost the WHOLE batch — every
+    // other change in it, not just the form's — and the tree went stale until
+    // some later, unrelated mutation.
+    it("keeps a batch that touches a form whose getAttribute is shadowed", async () => {
+      document.body.innerHTML = `
+        <main id="app">
+          <form><input name="getAttribute" /></form>
+          <p id="p">text</p>
+        </main>
+      `;
+      const root = document.getElementById("app")!;
+      const form = root.querySelector("form")!;
+      clobber(form, "getAttribute");
+      observer = new DomObserver(root, onTreeChange, 100);
+      observer.start();
+
+      form.setAttribute("class", "touched");
+      document.getElementById("p")!.setAttribute("class", "touched");
+
+      await settleObserver(100);
+
+      expect(onTreeChange).toHaveBeenCalledTimes(1);
+      const change = onTreeChange.mock.calls[0][0] as TreeChange;
+      expect(change.mutations?.map((m) => m.target)).toEqual([
+        form,
+        document.getElementById("p"),
+      ]);
+    });
+
+    it("re-extracts in full when a form it cannot classify mounts into <body>", async () => {
+      // The portal observer asks each node mounted into <body> whether it is
+      // an overlay. A form whose control shadows `matches` cannot answer — and
+      // this one holds a dialog, which has to pivot the tree.
+      const appRoot = document.createElement("div");
+      document.body.appendChild(appRoot);
+      observer = new DomObserver(appRoot, onTreeChange, 100);
+      observer.start();
+
+      const form = document.createElement("form");
+      form.innerHTML = `<input name="matches" /><div role="dialog" aria-label="Offer">Hi</div>`;
+      clobber(form, "matches");
+      document.body.appendChild(form);
+
+      await settleObserver(100);
+
+      expect(onTreeChange).toHaveBeenCalledTimes(1);
+      expect(onTreeChange.mock.calls[0][0]).toMatchObject({ full: true });
     });
   });
 });
