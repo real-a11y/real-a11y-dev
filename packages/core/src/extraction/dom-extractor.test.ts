@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 
-import { clobber } from "../test-support/clobber.js";
+import { clobber, shadow } from "../test-support/clobber.js";
 import type { SemanticNode } from "../types.js";
 import { resetIdCounter } from "../utils/id-generator.js";
 
@@ -317,17 +317,9 @@ describe("DOM clobbering resilience", () => {
   // to that element: an ancestor whose name walk entered the form, or a
   // descendant whose role or state climbed through it.
   describe("around a form whose control shadows `tagName`", () => {
-    /** Force the shadowing: jsdom doesn't override a form's own properties. */
-    function shadowTagName(form: Element): void {
-      const control = form.querySelector('[name="tagName"]')!;
-      Object.defineProperty(form, "tagName", {
-        configurable: true,
-        get: () => control,
-      });
-    }
-
+    /** Forced: jsdom doesn't shadow a form's own members. */
     function shadowEveryForm(root: Element): void {
-      for (const form of root.querySelectorAll("form")) shadowTagName(form);
+      for (const form of root.querySelectorAll("form")) shadow(form, "tagName");
     }
 
     const TAG_FIELD = `<input name="tagName" aria-label="Tag name" />`;

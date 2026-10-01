@@ -6,7 +6,7 @@
 
 import { describe, it, expect } from "vitest";
 
-import { clobber } from "../test-support/clobber.js";
+import { clobber, shadow } from "../test-support/clobber.js";
 
 import {
   buildCssPath,
@@ -219,12 +219,7 @@ describe("buildCssPath", () => {
         <img alt="">
       </main>
     `;
-    const form = document.querySelector("form")!;
-    const control = form.querySelector("input")!;
-    Object.defineProperty(form, "tagName", {
-      configurable: true,
-      get: () => control,
-    });
+    shadow(document.querySelector("form")!, "tagName");
 
     const path = (selector: string) =>
       buildCssPath(document.querySelector(selector)!, DOM_ELEMENT_ADAPTER);

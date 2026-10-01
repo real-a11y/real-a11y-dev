@@ -34,3 +34,20 @@ export function clobber(owner: Element | Document, prop: string): Element {
   });
   return named;
 }
+
+/**
+ * Shadow `prop` on `owner` the way a browser does: reading it returns the
+ * element named `prop`. Returns that element.
+ *
+ * For a member no walk climbs through, like `tagName`, where the faithful value
+ * is the point and {@link clobber}'s tripwire would mislead. A plain
+ * `tagName.toLowerCase()` throws on it with the browser's own `TypeError`, and
+ * the text walks that read it behind a `typeof` guard read past it, as they do
+ * in a browser — under the tripwire they would throw where no page does.
+ */
+export function shadow(owner: Element | Document, prop: string): Element {
+  const named = owner.querySelector(`[name="${prop}"]`);
+  if (!named) throw new Error(`nothing named "${prop}" to shadow it with`);
+  Object.defineProperty(owner, prop, { configurable: true, get: () => named });
+  return named;
+}

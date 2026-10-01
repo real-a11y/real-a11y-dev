@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { shadow } from "../test-support/clobber.js";
+
 import {
   isActuallyDisabled,
   isFocusable,
@@ -67,13 +69,7 @@ describe("isFocusable", () => {
       <form id="loose"><input name="tagName"><summary>Loose</summary></form>
       <details><form><input name="tagName"></form><summary>More</summary></details>
     `);
-    for (const form of root.querySelectorAll("form")) {
-      const control = form.querySelector('[name="tagName"]')!;
-      Object.defineProperty(form, "tagName", {
-        configurable: true,
-        get: () => control,
-      });
-    }
+    for (const form of root.querySelectorAll("form")) shadow(form, "tagName");
 
     expect(isFocusable(root.querySelector("#loose")!)).toBe(false);
     // Not a details' summary: plain text to Chromium.

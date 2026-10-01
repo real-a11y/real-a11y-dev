@@ -7,7 +7,7 @@ import {
   extractDomTree,
   resetIdCounter,
 } from "../index.js";
-import { clobber } from "../test-support/clobber.js";
+import { clobber, shadow } from "../test-support/clobber.js";
 import type { ExtractionResult, TreeChange } from "../types.js";
 
 describe("LiveTreeExtractor", () => {
@@ -1867,17 +1867,9 @@ describe("LiveTreeExtractor", () => {
   // `form.tagName` that input, and `.toLowerCase()` on it throws. The full
   // walk skips such a form through its per-element boundary. A refresh has
   // none, and every change inside or on the form climbs through it reading
-  // tags — so one throw stopped the live tree for good.
+  // tags — so the change threw, and the batch it came in was lost with it.
+  // (Forced: jsdom doesn't shadow a form's own members.)
   describe("a <form> whose control shadows tagName", () => {
-    /** Force the shadowing: jsdom doesn't override a form's own properties. */
-    function shadowTagName(form: Element): void {
-      const control = form.querySelector('[name="tagName"]')!;
-      Object.defineProperty(form, "tagName", {
-        configurable: true,
-        get: () => control,
-      });
-    }
-
     beforeEach(() => {
       // The full walk warns about the form it skips.
       vi.spyOn(console, "warn").mockImplementation(() => {});
@@ -1907,7 +1899,7 @@ describe("LiveTreeExtractor", () => {
 
     it("keeps updating when text inside the form changes", () => {
       const { root, form, hint, title } = page();
-      shadowTagName(form);
+      shadow(form, "tagName");
       const live = new LiveTreeExtractor(root, { mode: "a11y" });
 
       // One batch, as the observer delivers it: the form's text, and the
@@ -1930,7 +1922,7 @@ describe("LiveTreeExtractor", () => {
 
     it("keeps updating when an attribute inside the form changes", () => {
       const { root, form, hint } = page();
-      shadowTagName(form);
+      shadow(form, "tagName");
       const live = new LiveTreeExtractor(root, { mode: "a11y" });
 
       hint.setAttribute("title", "More");
@@ -1945,7 +1937,7 @@ describe("LiveTreeExtractor", () => {
 
     it("keeps updating when an attribute on the form itself changes", () => {
       const { root, form } = page();
-      shadowTagName(form);
+      shadow(form, "tagName");
       const live = new LiveTreeExtractor(root, { mode: "dom" });
 
       form.setAttribute("class", "busy");
@@ -1960,7 +1952,7 @@ describe("LiveTreeExtractor", () => {
 
     it("keeps updating when content inside the form is replaced", () => {
       const { root, form, hint } = page();
-      shadowTagName(form);
+      shadow(form, "tagName");
       const live = new LiveTreeExtractor(root, { mode: "a11y" });
 
       // `textContent =` swaps the text node: a childList change, not text.
@@ -1983,7 +1975,7 @@ describe("LiveTreeExtractor", () => {
       const control = document.createElement("input");
       control.name = "tagName";
       form.prepend(control);
-      shadowTagName(form);
+      shadow(form, "tagName");
       const result = live.refresh({
         mutations: [
           {

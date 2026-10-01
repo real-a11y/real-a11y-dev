@@ -1,5 +1,7 @@
 import { describe, it, expect } from "vitest";
 
+import { shadow } from "../test-support/clobber.js";
+
 import {
   getImplicitRole,
   isHiddenFromAT,
@@ -562,14 +564,8 @@ describe("getImplicitRole", () => {
   // every ancestor of a change, with nothing to catch the throw.
   describe("with a form whose control shadows tagName", () => {
     function shadowedForm(): HTMLFormElement {
-      const form = document.createElement("form");
-      const control = document.createElement("input");
-      control.name = "tagName";
-      form.append(control);
-      Object.defineProperty(form, "tagName", {
-        configurable: true,
-        get: () => control,
-      });
+      const form = el(`<form><input name="tagName"></form>`) as HTMLFormElement;
+      shadow(form, "tagName");
       return form;
     }
 
