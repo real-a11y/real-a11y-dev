@@ -5032,3 +5032,81 @@ describe("contenteditable editing hosts", () => {
     }
   });
 });
+
+// A role Chromium discards is gone from everything the role decides, not just
+// the `role` field: name-from-content, the a11y view's flattening, and the
+// name walk of an ancestor. Each expectation below is what Chromium 151 and
+// 153 compute for the same markup (CDP `Accessibility.getFullAXTree`).
+describe("a role Chromium discards decides nothing", () => {
+  const a11yNode = (html: string, id = "t") => {
+    const root = createPage(html);
+    document.body.appendChild(root);
+    try {
+      const n = [...extractA11yTree(root).nodes.values()].find(
+        (node) => node.dom?.attributes["id"] === id,
+      );
+      return n ? { role: n.a11y.role, name: n.a11y.name } : undefined;
+    } finally {
+      root.remove();
+    }
+  };
+
+  it("names the fallback role from its content", () => {
+    expect(
+      a11yNode(`<div id="t" role="foo button" tabindex="0">Save</div>`),
+    ).toEqual({ role: "button", name: "Save" });
+    expect(
+      a11yNode(`<div id="t" role="widget link" tabindex="0">Docs</div>`),
+    ).toEqual({ role: "link", name: "Docs" });
+    expect(
+      a11yNode(`<div id="t" role="BUTTON" tabindex="0">Upper</div>`),
+    ).toEqual({ role: "button", name: "Upper" });
+  });
+
+  // Discarded, the role leaves the element as it would be with no role at
+  // all — a text-bearing generic stays in the view the way a plain <div> does.
+  it("extracts a discarded role exactly like no role", () => {
+    for (const [authored, bare] of [
+      [`<div id="t" role="foo">x</div>`, `<div id="t">x</div>`],
+      [`<div id="t" role="widget">x</div>`, `<div id="t">x</div>`],
+      [`<div id="t" role="listitem">Item</div>`, `<div id="t">Item</div>`],
+      [
+        `<div id="t" role="option" tabindex="0">Apple</div>`,
+        `<div id="t" tabindex="0">Apple</div>`,
+      ],
+      [
+        `<details id="t" role="treeitem" open><summary>S</summary>x</details>`,
+        `<details id="t" open><summary>S</summary>x</details>`,
+      ],
+    ]) {
+      expect(a11yNode(authored), authored).toEqual(a11yNode(bare));
+    }
+  });
+
+  it("folds an <li> out of a list that carries a role", () => {
+    expect(
+      a11yNode(`<ul role="none"><li id="t"><a href="#">Home</a></li></ul>`),
+    ).toBeUndefined();
+    expect(
+      a11yNode(
+        `<ul role="none"><li id="u"><a id="t" href="#">Home</a></li></ul>`,
+      ),
+    ).toEqual({ role: "link", name: "Home" });
+  });
+
+  it("keeps a context-bound role that has its context", () => {
+    expect(
+      a11yNode(
+        `<div role="listbox" aria-label="Fruit"><div id="t" role="option">Apple</div></div>`,
+      ),
+    ).toEqual({ role: "option", name: "Apple" });
+  });
+
+  // An option is a name barrier; a generic is not. Discarded, its text names
+  // the button around it: Chromium says "Apple pie".
+  it("lets a discarded option's text into an ancestor's name", () => {
+    expect(
+      a11yNode(`<button id="t"><span role="option">Apple</span> pie</button>`),
+    ).toEqual({ role: "button", name: "Apple pie" });
+  });
+});

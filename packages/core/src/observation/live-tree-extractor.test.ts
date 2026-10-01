@@ -1172,6 +1172,64 @@ describe("LiveTreeExtractor", () => {
     });
   });
 
+  // A listitem, option or treeitem keeps its role only in its required
+  // context, which an ancestor's `role` or another element's `aria-owns`
+  // decides — and an <li>'s role hangs on its parent list's `role`. A refresh
+  // must follow every one of them the way a fresh extraction would.
+  describe("a role that depends on another element", () => {
+    async function refreshAfter(html: string, mutate: () => void) {
+      document.body.innerHTML = `<main>${html}</main>`;
+      const live = new LiveTreeExtractor(document.body, { mode: "dom" });
+      let lastChange: TreeChange | undefined;
+      const observer = new DomObserver(
+        document.body,
+        (change) => {
+          lastChange = change;
+        },
+        50,
+      );
+      observer.start();
+      mutate();
+      await vi.advanceTimersByTimeAsync(100);
+      expect(lastChange).toBeDefined();
+      const result = live.refresh(lastChange);
+      observer.stop();
+      return result;
+    }
+
+    const roleOf = (result: ExtractionResult, id: string) =>
+      [...result.nodes.values()].find((n) => n.dom?.attributes["id"] === id)
+        ?.a11y.role;
+
+    it("follows an aria-owns that adopts an orphan", async () => {
+      const result = await refreshAfter(
+        `<div id="list" role="list"></div><div><div id="t" role="listitem">x</div></div>`,
+        () => document.getElementById("list")!.setAttribute("aria-owns", "t"),
+      );
+      expect(roleOf(result, "t")).toBe("listitem");
+      expect(result.nodes).toEqual(extractDomTree(document.body).nodes);
+    });
+
+    it("follows an ancestor that stops being a list", async () => {
+      const result = await refreshAfter(
+        `<div id="list" role="list"><div><div id="t" role="listitem">x</div></div></div>`,
+        () =>
+          document.getElementById("list")!.setAttribute("role", "navigation"),
+      );
+      expect(roleOf(result, "t")).toBe("generic");
+      expect(result.nodes).toEqual(extractDomTree(document.body).nodes);
+    });
+
+    it("follows a list's role stripping its items", async () => {
+      const result = await refreshAfter(
+        `<ul id="list"><li id="t">x</li></ul>`,
+        () => document.getElementById("list")!.setAttribute("role", "none"),
+      );
+      expect(roleOf(result, "t")).toBe("presentation");
+      expect(result.nodes).toEqual(extractDomTree(document.body).nodes);
+    });
+  });
+
   // Focusability can hang on an element outside the node's own subtree: an
   // <area> is a stop only while an <img usemap> names its map and is rendered,
   // and a control is disabled by an ancestor <fieldset>. Each case must come
