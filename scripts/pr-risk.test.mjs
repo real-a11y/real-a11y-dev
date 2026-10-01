@@ -878,6 +878,39 @@ describe("a test switched off or deleted grades 🟡 medium", () => {
     assert.equal(deps.tier, "low");
   });
 
+  it("catches Vitest's options object, which names no runner method", async () => {
+    // `it("x", { skip: true }, fn)` switches a test off with nothing for a
+    // `.skip` pattern to see. `skip:` counts with any value but `false` (the
+    // platform-conditional skip is the realistic one); `only` with `true` alone,
+    // because `{ only: "findings" }` is real data in the CLI's tests.
+    const result = await grade(
+      {
+        [REACT_TEST_PATH]: REACT_TEST.replace(
+          `  it("renders the tree", async`,
+          `  it("renders the tree", { skip: process.platform === "win32" }, async`,
+        ).replace(
+          `describe("SemanticPanel", ()`,
+          `describe("SemanticPanel", { only: true }, ()`,
+        ),
+      },
+      { base: { [REACT_TEST_PATH]: REACT_TEST } },
+    );
+    const data = await grade(
+      {
+        [REACT_TEST_PATH]: REACT_TEST.replace(
+          `    expect(screen`,
+          `    render({ only: "findings", skip: false });\n    expect(screen`,
+        ),
+      },
+      { base: { [REACT_TEST_PATH]: REACT_TEST } },
+    );
+
+    assert.deepEqual(evidenceFor(result, "tests-disabled"), [
+      `${REACT_TEST_PATH} → { only }, { skip }`,
+    ]);
+    assert.equal(data.tier, "low");
+  });
+
   it("is not tripped by a property that happens to be called only", async () => {
     // `meta.only` is a real field the snapshot tests assert on. Only a chain
     // that starts at a runner global counts for `only`.

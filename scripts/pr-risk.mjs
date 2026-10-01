@@ -702,6 +702,10 @@ const SRC_TEST_DIR =
  * that import, so the fact is a lint gate rather than something somebody once
  * checked.
  *
+ * The `changeset` job in `test.yml` excludes the same set from "published
+ * source" with its own grep, and has to stay in step: a path graded low here
+ * but counted there is a PR an agent may merge that CI won't let merge.
+ *
  * Shipping by being RUN is the other half. Test code executes in the release
  * workflows, and `publish.yml`'s publish job can mint npm's Trusted Publisher
  * token — so both release workflows run their tests in a `verify` job that
@@ -724,16 +728,24 @@ const isTestCode = (f) => TEST_FILE.test(f) || /(^|\/)__tests__\//.test(f);
 /**
  * The ways to stop a test running without failing anything: `it.skip`,
  * `describe.only`, `test.describe.fixme`, `it.skipIf(…)`, Playwright's
- * `test.fail()`, the in-body `ctx.skip()` and its destructured `skip()`, and
- * the jasmine-style `xit(`.
+ * `test.fail()`, the in-body `ctx.skip()` and its destructured `skip()`, the
+ * jasmine-style `xit(`, and Vitest's options object — `it("x", { skip: true },
+ * fn)`, which names no runner method at all.
  *
  * Any `.skip(` counts, not just a runner context's. That over-reads an
  * iterator's `.skip(2)`, and the trade is deliberate: a false 🟡 costs one
  * human look, while a miss is a switched-off test an agent merges unseen —
- * and tests here call no other `.skip` today.
+ * and tests here call no other `.skip` today. The options keys are held
+ * tighter, because `only` is real data here (`{ only: "findings" }` in the CLI
+ * diff tests): `only`/`todo`/`fails` count with a literal `true`, `skip` with
+ * anything but `false` — `skip: process.platform === "win32"` is the shape.
+ *
+ * Nothing for `it.each(cases).skip(…)`: `each` returns a plain function, so
+ * that throws at collection and fails CI by itself. The parameterized forms
+ * that work, `it.skip.each` and `describe.only.each`, match the first branch.
  */
 const TEST_DISABLER =
-  /(?<![\w$.])(?:(?:it|test|describe|suite|bench)(?:\.\w+)*\.(?:skip|only|todo|fails?|fixme|skipIf|runIf)\b|(?:[\w$]+\.)*skip\s*\(|x(?:it|test|describe)\s*\()/g;
+  /(?<![\w$.])(?:(?:it|test|describe|suite|bench)(?:\.\w+)*\.(?:skip|only|todo|fails?|fixme|skipIf|runIf)\b|(?:[\w$]+\.)*skip\s*\(|x(?:it|test|describe)\s*\(|skip\s*:(?!\s*false\b)|(?:only|todo|fails)\s*:\s*true\b)/g;
 
 /**
  * One evidence line per file, `<path> → hit, hit`, for each file whose text
@@ -766,7 +778,7 @@ const addedTestDisablers = (code) =>
           .join("\n"),
       ]),
     TEST_DISABLER,
-    (m) => m[0].replace(/\s*\($/, ""),
+    (m) => m[0].replace(/\s*\($/, "").replace(/^(\w+)\s*:.*$/, "{ $1 }"),
   );
 
 /**
