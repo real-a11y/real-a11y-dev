@@ -70,9 +70,10 @@ jobs:
   # NOT in the `publish` job, which is where they used to run. Trusted
   # Publisher is bound to this workflow FILE, not to a job or an environment,
   # so any code running in a job here with `id-token: write` can mint the OIDC
-  # token npm exchanges for publish rights — and `pnpm test` runs every test
-  # file in the repo, which `pnpm pr:risk` grades 🟢 low: mergeable by an agent
-  # with no human in the loop. Test code is the one thing that job executes
+  # token npm exchanges for publish rights — and `pnpm test` runs every
+  # package's unit tests and `examples/testing-jest`'s, all of which
+  # `pnpm pr:risk` grades 🟢 low: mergeable by an agent with no human in the
+  # loop. Test code is the one thing that job executes
   # which nobody reviewed as a release input, so it runs here, where there is
   # nothing to steal.
   verify:

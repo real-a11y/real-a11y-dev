@@ -295,12 +295,33 @@ async function collectFacts(base) {
   // what this replaced: `files` came from HEAD while `rootPackageKeys` came from
   // disk, so an uncommitted change reported "0 files changed" and a high tier in
   // the same breath.
-  const tracked = splitZ(
+  //
+  // `--name-status` rather than `--name-only`, so the same read also says which
+  // paths this branch DELETED — `files` alone can't tell a deletion from an
+  // edit, and a deleted test is coverage that stopped running. Under
+  // `diffArgs`'s `--no-renames` on purpose: a test moved somewhere its runner
+  // no longer collects is a deletion as far as coverage goes, and rename
+  // detection would report it as a harmless move. It also keeps every entry a
+  // `<status>\0<path>` pair, with no two-path rename rows to misread.
+  const status = splitZ(
     await gitOrDie(
-      diffArgs(["--name-only", mergeBase]),
+      diffArgs(["--name-status", mergeBase]),
       "the list of changed files",
     ),
   );
+  if (status.length % 2) {
+    die([
+      `Can't pair \`git diff --name-status\` output — refusing to grade this diff.`,
+      ``,
+      `  ${JSON.stringify(status.slice(0, 6))}`,
+    ]);
+  }
+  const tracked = [];
+  const deleted = [];
+  for (let i = 0; i < status.length; i += 2) {
+    tracked.push(status[i + 1]);
+    if (status[i] === "D") deleted.push(status[i + 1]);
+  }
   const untracked = splitZ(
     await gitOrDie(
       [
@@ -315,18 +336,6 @@ async function collectFacts(base) {
     ),
   );
   const files = [...new Set([...tracked, ...untracked])];
-
-  // Which of those this branch DELETED — `files` alone can't tell a deletion
-  // from an edit, and a deleted test is coverage that stopped running. Under
-  // `diffArgs`'s `--no-renames` on purpose: a test moved somewhere its runner
-  // no longer collects is a deletion as far as coverage goes, and rename
-  // detection would report it as a harmless move.
-  const deleted = splitZ(
-    await gitOrDie(
-      diffArgs(["--name-only", "--diff-filter=D", mergeBase]),
-      "the list of deleted files",
-    ),
-  );
 
   // `--numstat` cannot see untracked files, so counting only it made the header
   // contradict itself — a new uncommitted 800-line workflow reported
@@ -694,32 +703,61 @@ const SRC_TEST_DIR =
 const isTestShaped = (f) => TEST_FILE.test(f) || SRC_TEST_DIR.test(f);
 
 /**
- * The ways to stop a test running without failing anything: `it.skip`,
- * `describe.only`, `test.describe.fixme`, `it.skipIf(…)`, Playwright's
- * `test.fail()`, the in-body `ctx.skip()`, and the jasmine-style `xit(`.
+ * A file some runner here COLLECTS — wider than `TEST_FILE` by Jest's default
+ * `testMatch`, which takes anything under a `__tests__/` directory, anywhere.
+ * `examples/testing-jest` runs under root `pnpm test`, so a test there needs
+ * no `.test.` in its name to be one. Fixtures are data, not tests, and stay
+ * out: deleting one breaks the test that reads it, loudly.
  */
-const TEST_DISABLER =
-  /(?<![\w$.])(?:(?:it|test|describe|suite|bench)(?:\.\w+)*\.(?:skip|only|todo|fails?|fixme|skipIf|runIf)\b|[\w$]+(?:\.[\w$]+)*\.skip\s*\(|x(?:it|test|describe)\s*\()/g;
+const isTestCode = (f) => TEST_FILE.test(f) || /(^|\/)__tests__\//.test(f);
 
 /**
- * Which test files gained a disabler, one evidence line per file. ADDED lines
- * only: a `-` line carrying `.skip` is a test being switched back on.
+ * The ways to stop a test running without failing anything: `it.skip`,
+ * `describe.only`, `test.describe.fixme`, `it.skipIf(…)`, Playwright's
+ * `test.fail()`, the in-body `ctx.skip()` and its destructured `skip()`, and
+ * the jasmine-style `xit(`.
+ *
+ * Any `.skip(` counts, not just a runner context's. That over-reads an
+ * iterator's `.skip(2)`, and the trade is deliberate: a false 🟡 costs one
+ * human look, while a miss is a switched-off test an agent merges unseen —
+ * and tests here call no other `.skip` today.
  */
-function addedTestDisablers(code) {
+const TEST_DISABLER =
+  /(?<![\w$.])(?:(?:it|test|describe|suite|bench)(?:\.\w+)*\.(?:skip|only|todo|fails?|fixme|skipIf|runIf)\b|(?:[\w$]+\.)*skip\s*\(|x(?:it|test|describe)\s*\()/g;
+
+/**
+ * One evidence line per file, `<path> → hit, hit`, for each file whose text
+ * `re` matches — `hit` picks the part of a match worth printing. `re` must be
+ * global. Shared so every code-reading rule cites a file the same way, which
+ * `cited()` relies on.
+ */
+function hitsPerFile(code, re, hit) {
   const out = [];
   for (const [path, text] of code) {
-    if (!isTestShaped(path)) continue;
-    const added = text
-      .split("\n")
-      .filter((l) => l.startsWith("+"))
-      .join("\n");
-    const hits = new Set(
-      [...added.matchAll(TEST_DISABLER)].map((m) => m[0].replace(/\s*\($/, "")),
-    );
+    const hits = new Set([...text.matchAll(re)].map(hit));
     if (hits.size) out.push(`${path} → ${[...hits].join(", ")}`);
   }
   return out;
 }
+
+/**
+ * Which test files gained a disabler. ADDED lines only: a `-` line carrying
+ * `.skip` is a test being switched back on.
+ */
+const addedTestDisablers = (code) =>
+  hitsPerFile(
+    code
+      .filter(([path]) => isTestCode(path))
+      .map(([path, text]) => [
+        path,
+        text
+          .split("\n")
+          .filter((l) => l.startsWith("+"))
+          .join("\n"),
+      ]),
+    TEST_DISABLER,
+    (m) => m[0].replace(/\s*\($/, ""),
+  );
 
 /**
  * Which of `names` (a regex alternation) the touched code reaches, one evidence
@@ -736,12 +774,7 @@ function addedTestDisablers(code) {
  */
 function touchedNames(code, names) {
   const re = new RegExp(`(?<![A-Za-z0-9])(${names})`, "g");
-  const out = [];
-  for (const [path, text] of code) {
-    const hits = new Set([...text.matchAll(re)].map((m) => m[1]));
-    if (hits.size) out.push(`${path} → ${[...hits].join(", ")}`);
-  }
-  return out;
+  return hitsPerFile(code, re, (m) => m[1]);
 }
 
 /**
@@ -1033,9 +1066,7 @@ const RULES = [
     title: "A test switched off or deleted",
     why: "Test-only changes grade low because nothing in them can ship — but they can stop a test running, and then the suite stays green over whatever that test guarded, with nothing in CI to say so. `.skip`, `.todo`, `.fails`, a `skipIf`, or deleting the file all pass every check by construction, which is the whole problem; and skipping the flaky test is the flake fix an agent is most tempted to merge itself.",
     match: (f) => [
-      ...f.deleted
-        .filter((p) => TEST_FILE.test(p))
-        .map((p) => `${p} → deleted`),
+      ...f.deleted.filter((p) => isTestCode(p)).map((p) => `${p} → deleted`),
       ...addedTestDisablers(f.touchedCode),
     ],
     // The rubric's own tests have to write these calls into fixtures.

@@ -803,6 +803,31 @@ describe("a test switched off or deleted grades 🟡 medium", () => {
     ]);
   });
 
+  it("catches the destructured skip(), and a Jest __tests__ file with no .test. in its name", async () => {
+    // `({ skip }) => skip()` is Vitest's documented in-body form, and has no
+    // receiver for a `ctx.skip(` pattern to see. And Jest collects anything
+    // under `__tests__/` — `examples/testing-jest` runs under root
+    // `pnpm test`, in the `examples/` bucket that grades 🟢 low on its own.
+    const jest = "examples/testing-jest/__tests__/matchers.ts";
+    const body = `it("matches", () => {\n  expect(tree).toHaveRole("tree");\n});\n`;
+    const result = await grade(
+      {
+        [REACT_TEST_PATH]: REACT_TEST.replace(
+          `async () => {\n    await`,
+          `async ({ skip }) => {\n    skip();\n    await`,
+        ),
+        [jest]: body.replace(`it("matches"`, `it.skip("matches"`),
+      },
+      { base: { [REACT_TEST_PATH]: REACT_TEST, [jest]: body } },
+    );
+
+    assert.equal(result.tier, "medium");
+    assert.deepEqual(evidenceFor(result, "tests-disabled"), [
+      `${jest} → it.skip`,
+      `${REACT_TEST_PATH} → skip`,
+    ]);
+  });
+
   it("grades a deleted test 🟡 medium, but switching one back on 🟢 low", async () => {
     const skipped = REACT_TEST.replace(`  it(`, `  it.skip(`);
     const gone = "packages/core/src/flatten.test.ts";
