@@ -69,7 +69,7 @@
   description; and it ran into the text preview of whatever held the field.
   An unlabeled one now lists by its tag, and its value line still shows what
   it holds, `[redacted]` for a sensitive one.
-  ([#465](https://github.com/real-a11y/real-a11y-dev/pull/465))
+  ([#466](https://github.com/real-a11y/real-a11y-dev/pull/466))
 
 - In DOM mode, a page that names an image or a form control after a DOM
   method no longer costs the tree more than that form. An
