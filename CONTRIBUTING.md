@@ -245,6 +245,7 @@ call and the answer is sometimes "none, and here's why".
 ```bash
 pnpm pr:risk                           # vs origin/main
 pnpm pr:risk -- --format markdown      # the PR comment body
+pnpm pr:risk --base origin/<parent>    # a stacked PR's layer: vs the branch below it
 ```
 
 Grades the branch 🟢 low / 🟡 medium / 🔴 high from its diff, and prints which
@@ -272,6 +273,12 @@ Two properties worth knowing before you change it:
   printing `{"tier":"low"}` clears its own required check. The consequence is
   that a PR adding a rule is graded without it; the rule takes effect once it
   lands.
+- **A stacked PR is graded one layer at a time.** Each layer's diff is measured
+  against its parent branch rather than main, so a one-test layer on top of a
+  size-limit bump grades 🟢 rather than inheriting the 🔴. The rubric still
+  comes from `main`, never from the parent — that branch is an unmerged PR.
+  Merging a layer merges every unmerged PR below it, so the merge is as risky as
+  the highest label among them.
 - **It fails closed.** Any git read it needs but can't get is a hard error, not
   an empty diff. An empty diff matches no rule, grades low, and exits 0 — a
   control that reports "nothing to see here" when it cannot see is worse than no
