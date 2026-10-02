@@ -823,6 +823,65 @@ describe("extractDomTree", () => {
     expect(combo.interaction?.actions).not.toContain("click");
   });
 
+  describe("an input whose list names a <datalist>", () => {
+    // The datalist makes it a combobox (see role-map), but it is still a text
+    // field: typed into, valued and named exactly as the textbox it was.
+    function field(html: string) {
+      document.body.innerHTML = `${html}<datalist id="fruits"><option value="Apple"><option value="Pear"></datalist>`;
+      const { nodes } = extractDomTree(document.body);
+      return [...nodes.values()].find((n) => n.dom?.tagName === "input")!;
+    }
+
+    afterEach(() => {
+      document.body.innerHTML = "";
+    });
+
+    it("is a combobox, typed into, valued and named like a textbox", () => {
+      const input = field(
+        `<label>Fruit <input list="fruits" value="Apple"></label>`,
+      );
+      expect(input.a11y.role).toBe("combobox");
+      expect(input.a11y.name).toBe("Fruit");
+      expect(input.a11y.value).toBe("Apple");
+      expect(input.interaction?.actions).toEqual(["focus", "type"]);
+    });
+
+    it("still withholds a sensitive one's value", () => {
+      // Redaction keys on tag, type and autocomplete, never the role.
+      const input = field(
+        `<input aria-label="Card" list="fruits" autocomplete="cc-number" value="secret-value">`,
+      );
+      expect(input.a11y.role).toBe("combobox");
+      expect(input.a11y.value).toBe("[redacted]");
+      expect(input.dom?.attributes["value"]).toBe("[redacted]");
+    });
+
+    it("keeps a number input's stepping", () => {
+      const input = field(
+        `<input type="number" aria-label="Count" list="fruits">`,
+      );
+      expect(input.a11y.role).toBe("combobox");
+      expect(input.interaction?.actions).toEqual([
+        "focus",
+        "type",
+        "increment",
+        "decrement",
+      ]);
+    });
+
+    it("reports the expanded state its author sets", () => {
+      // Chromium gives a combobox an expanded state and a textbox none, so
+      // this rides on the role: `aria-expanded="true"` here is `expanded:
+      // true` in Chromium 151 and 153, and nothing on a list naming no
+      // datalist.
+      const input = field(
+        `<input aria-label="Fruit" list="fruits" aria-expanded="true">`,
+      );
+      expect(input.a11y.role).toBe("combobox");
+      expect(input.a11y.states["expanded"]).toBe(true);
+    });
+  });
+
   it("computes correct roles", () => {
     const root = createPage(`
       <nav aria-label="Main">

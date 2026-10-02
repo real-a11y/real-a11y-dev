@@ -32,6 +32,13 @@
   changed.
   ([#452](https://github.com/real-a11y/real-a11y-dev/pull/452))
 
+- In DOM mode, an `<input>` whose `list` names a `<datalist>` now shows as a
+  `combobox` in the tree and the Tab Sequence view, as Chromium's own
+  accessibility tree reports it. DOM mode showed a `textbox` (or a
+  `searchbox` or `spinbutton`). Changing the input's `list`, or adding or
+  removing the datalist it names, updates the tree.
+  ([#454](https://github.com/real-a11y/real-a11y-dev/pull/454))
+
 - In DOM mode, image map areas are back in the DOM tree, the Tab Sequence
   view, its copied export and the keyboard bar's Tab. Since Chrome 153 every
   `<area>` is `display: none` by default, and the walk skipped it, although

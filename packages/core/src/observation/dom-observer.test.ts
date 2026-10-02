@@ -1054,6 +1054,19 @@ describe("DomObserver", () => {
       expect(onTreeChange).toHaveBeenCalledTimes(1);
     });
 
+    it("fires when an input's list changes (a datalist makes it a combobox)", async () => {
+      document.body.innerHTML =
+        '<input id="fruit"><datalist id="fruits"><option value="Apple"></datalist>';
+      observer = new DomObserver(document.body, onTreeChange, 100);
+      observer.start();
+
+      document.getElementById("fruit")!.setAttribute("list", "fruits");
+
+      await settleObserver(100);
+
+      expect(onTreeChange).toHaveBeenCalledTimes(1);
+    });
+
     it("fires when autocomplete marks a field sensitive", async () => {
       // The field's value is redacted once autocomplete names a credential or
       // payment field — which only takes effect on the next extraction.
