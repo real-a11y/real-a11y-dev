@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 
-import { clobber } from "../test-support/clobber.js";
+import { clobber, shadow } from "../test-support/clobber.js";
 import type { TreeChange } from "../types.js";
 
 import { DomObserver } from "./dom-observer.js";
@@ -1288,11 +1288,7 @@ describe("DomObserver", () => {
       form.setAttribute("role", "dialog");
       form.setAttribute("aria-label", "Sign in");
       form.innerHTML = `<input type="hidden" name="nodeType" /><button>Go</button>`;
-      const control = form.querySelector('[name="nodeType"]');
-      Object.defineProperty(form, "nodeType", {
-        configurable: true,
-        get: () => control,
-      });
+      shadow(form, "nodeType");
       document.body.appendChild(form);
 
       await settleObserver(100);

@@ -458,11 +458,14 @@ describe("the flat tree around a clobbered <form>", () => {
     expect(find(extractDomTree(page), "textbox")?.a11y.name).toBe("Card");
   });
 
-  it("keeps an editor's value when it holds such a form", () => {
-    page.innerHTML = `<div contenteditable="true" role="textbox" aria-label="Notes">Draft <form>${BOTH}</form></div>`;
+  it("keeps a combobox's value when it holds such a form", () => {
+    // A combobox you can't type into is valued by its accessible text, which
+    // asks each element in it for aria-hidden. (An editor's value is its
+    // rendered text, which asks nothing a form can shadow.)
+    page.innerHTML = `<div role="combobox" aria-label="Fruit" aria-expanded="false">Apple <form>${BOTH}</form></div>`;
     shadowBoth();
-    expect(find(extractDomTree(page), "textbox", "Notes")?.a11y.value).toBe(
-      "Draft",
+    expect(find(extractDomTree(page), "combobox", "Fruit")?.a11y.value).toBe(
+      "Apple",
     );
   });
 });

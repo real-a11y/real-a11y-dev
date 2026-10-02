@@ -2255,7 +2255,7 @@ describe("LiveTreeExtractor", () => {
 
       const form = document.createElement("form");
       form.innerHTML = `<input type="hidden" name="nodeType" /><span id="hint">Use a work email</span>`;
-      shadowWithControl(form, "nodeType");
+      shadow(form, "nodeType");
       const result = live.refresh(
         observe(root, () => {
           document.getElementById("slot")!.append(form);
