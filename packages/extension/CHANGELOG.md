@@ -22,6 +22,62 @@
 
 ## Unreleased
 
+- In DOM mode, image map areas are back in the DOM tree, the Tab Sequence
+  view, its copied export and the keyboard bar's Tab. Since Chrome 153 every
+  `<area>` is `display: none` by default, and the walk skipped it, although
+  Chrome still tabs to it. An area now shows where its `<map>` sits while the
+  image using the map is rendered, and is a stop at that place in the page,
+  which is where Chrome tabs to it. Hiding the image takes its areas out, and
+  showing it again brings them back.
+  ([#453](https://github.com/real-a11y/real-a11y-dev/pull/453))
+
+- In DOM mode, a native checkbox, radio, `<select>` or `<summary>` now takes
+  its state from what it is, as it does in NATIVE mode, not from an ARIA
+  attribute on it. An unchecked `<input type="checkbox" aria-checked="true">`
+  showed a `checked` badge, an indeterminate checkbox showed none where
+  NATIVE mode shows `mixed`, and a `<select aria-expanded="true">` showed
+  `expanded`. Now a checkbox or radio shows its checkedness, and `mixed` when
+  indeterminate. A drop-down `<select>` shows `collapsed` until its picker
+  opens, and a `<details>`' summary shows `collapsed` or `expanded` as the
+  details is, never a `pressed` badge unless a role makes it a button. A radio
+  its sibling unchecked, or a "select all" box a script made indeterminate,
+  now updates in the tree instead of keeping its old badge. Activating a
+  `mixed` checkbox from the panel announces "Click", not a guessed "Checked"
+  or "Unchecked", since the click's outcome depends on checkedness that
+  `mixed` hides.
+  ([#443](https://github.com/real-a11y/real-a11y-dev/pull/443))
+
+- A page with a `<form>` holding a control named `parentElement`, such as
+  `<input type="hidden" name="parentElement">`, no longer freezes the tab when
+  something inside the form changes. A form lets a control shadow its own
+  properties, so the form's parent read as that control, whose parent is the
+  form again, and every walk up the page that met such a form went round the
+  two forever. DOM mode froze on the first change inside one, hovering inside
+  one in pick mode froze, and so did focusing a field in one before the tree
+  caught up with it. A form with a `parentNode` control, or an `<img>` named
+  `parentNode` anywhere on the page, froze the tab on its next text change.
+  Selecting a `<form contenteditable>` holding such a control now moves page
+  focus to it, as for any other editor.
+  ([#438](https://github.com/real-a11y/real-a11y-dev/pull/438))
+
+- In DOM mode, a page that names an image or a form control after a DOM
+  method no longer costs the tree more than that form. An
+  `<img name="getElementById">` anywhere on the page dropped every element
+  named through `aria-labelledby` or described through `aria-describedby`, an
+  `<img name="querySelector">` every form control with an `id`, and an
+  `<img name="querySelectorAll">` stopped DOM mode from building a tree at all.
+  A change in or around a `<form>` with a control named `getAttribute`,
+  `tagName`, `contains` or another method the live update calls left the tree
+  stale, since the update threw; it now rebuilds the tree in full instead.
+  ([#437](https://github.com/real-a11y/real-a11y-dev/pull/437))
+
+- In DOM mode, a `<form>` with a field named `getRootNode` is no longer
+  dropped from the tree, with everything in it, when `aria-labelledby` names
+  it or another field's `aria-describedby` points at it. Such a field shadows
+  the form's own `getRootNode()`, so calling it to resolve the reference
+  threw and the whole form was skipped.
+  ([#439](https://github.com/real-a11y/real-a11y-dev/pull/439))
+
 - In DOM mode, ARIA state values now read the way Chromium, and NATIVE mode,
   read them. `aria-disabled="TRUE"`, `aria-pressed="MIXED"` and
   `aria-checked="yes"` had no `disabled`, `mixed` or `checked` badge because
@@ -33,6 +89,15 @@
   leaves the tree and the names around it, as `aria-hidden="true"` content
   always did. An `<optgroup>` never shows as disabled, as in Chromium.
   ([#436](https://github.com/real-a11y/real-a11y-dev/pull/436))
+
+- In DOM mode, the A11y view shows a rich-text editor's value the way
+  Chromium reports it. `aria-hidden` text inside an editor, or inside any ARIA
+  textbox or searchbox, is part of the value Chromium gives a screen reader,
+  and so is a popup inside it, but the A11y view left both out: an editor
+  holding `Hello <span aria-hidden="true">[x]</span>world` read
+  `= "Hello world"`, and now reads `= "Hello [x]world"`. A combobox you can't
+  type into still leaves them out, as Chromium does.
+  ([#460](https://github.com/real-a11y/real-a11y-dev/pull/460))
 
 ## 0.1.14
 

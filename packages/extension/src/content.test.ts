@@ -290,3 +290,96 @@ describe("content: a frame whose panel never connected", () => {
     expect(h.sent).toEqual([]);
   });
 });
+
+/**
+ * Focus sync walks up from the focused element to the nearest node in the
+ * tree. A form rendered since the last extraction isn't in it yet — a dialog's
+ * form that focuses its first field as it opens is focused before the
+ * debounced refresh runs — so the walk has to get past the form.
+ */
+describe("content: focus inside a form whose control shadows parentElement", () => {
+  let h: Harness;
+  const scrollIntoView = Element.prototype.scrollIntoView;
+
+  beforeEach(async () => {
+    vi.useFakeTimers();
+    vi.resetModules();
+    // jsdom has no scrollIntoView, which highlighting the focused node calls.
+    Element.prototype.scrollIntoView = () => {};
+    document.body.innerHTML = `<main id="app"></main>`;
+    h = makeHarness();
+    (globalThis as { chrome?: unknown }).chrome = h.chromeMock;
+    await import("./content.js");
+    h.send({ type: "REQUEST_TREE", payload: { viewMode: "a11y" } });
+    h.send({ type: "SET_FOCUS_TRACKER", payload: { enabled: true } });
+  });
+
+  afterEach(() => {
+    h.send({ type: "SET_FOCUS_TRACKER", payload: { enabled: false } });
+    h.send({ type: "SET_OBSERVING", payload: { enabled: false } });
+    vi.clearAllTimers();
+    vi.useRealTimers();
+    Element.prototype.scrollIntoView = scrollIntoView;
+    delete (globalThis as { chrome?: unknown }).chrome;
+    document.body.innerHTML = "";
+  });
+
+  it("walks past the form to the nearest node in the tree", () => {
+    const mainId = nodeIdByTag(h, "main");
+    document.getElementById("app")!.innerHTML =
+      `<form><input type="hidden" name="parentElement">` +
+      `<input id="inside" aria-label="Inside"></form>`;
+    // In a browser `form.parentElement` is that control, whose parent is the
+    // form again, so a plain walk never ends. Forced, because jsdom doesn't
+    // shadow a form's properties.
+    const form = document.querySelector("form")!;
+    Object.defineProperty(form, "parentElement", {
+      configurable: true,
+      get: () => form.querySelector('[name="parentElement"]'),
+    });
+    h.sent.length = 0;
+
+    document
+      .getElementById("inside")!
+      .dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
+
+    expect(h.sent.filter((m) => m.type === "FOCUS_CHANGED")).toEqual([
+      { type: "FOCUS_CHANGED", payload: { nodeId: mainId } },
+    ]);
+  });
+
+  it("moves focus to an editable form selected in the panel", () => {
+    // The form is the editing host: its parent is not editable. Read through
+    // the control, which inherits the form's editability, it looked like an
+    // element inside an editor, which takes no focus of its own.
+    document.getElementById("app")!.innerHTML =
+      `<form contenteditable="true" aria-label="Note">` +
+      `<input name="parentElement" aria-label="Title"></form>`;
+    const form = document.querySelector("form")!;
+    Object.defineProperty(form, "parentElement", {
+      configurable: true,
+      get: () => form.querySelector('[name="parentElement"]'),
+    });
+    // jsdom has no isContentEditable; give each element Chrome's answer.
+    const editable: Array<[Element, boolean]> = [
+      [document.getElementById("app")!, false],
+      [form, true],
+      [form.querySelector("input")!, true],
+    ];
+    for (const [el, value] of editable) {
+      Object.defineProperty(el, "isContentEditable", {
+        configurable: true,
+        value,
+      });
+    }
+    const focus = vi.spyOn(form, "focus");
+    h.send({ type: "REQUEST_TREE", payload: { viewMode: "a11y" } });
+
+    h.send({
+      type: "HIGHLIGHT_NODE",
+      payload: { nodeId: nodeIdByTag(h, "form") },
+    });
+
+    expect(focus).toHaveBeenCalled();
+  });
+});

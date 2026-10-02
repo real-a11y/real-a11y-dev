@@ -1005,10 +1005,13 @@ export function App() {
         primaryAction === "increment" || primaryAction === "decrement";
 
       if (!isStepper) {
-        // Contextual feedback based on role
+        // Contextual feedback based on role. A mixed box gets the plain
+        // label: a click checks or unchecks it by a checkedness that "mixed"
+        // hides, so the tree can't say which.
         let feedback: string;
-        if (role === "checkbox" || role === "switch") {
-          const wasChecked = node.a11y.states.checked === true;
+        const checked = node.a11y.states.checked;
+        if ((role === "checkbox" || role === "switch") && checked !== "mixed") {
+          const wasChecked = checked === true;
           feedback = wasChecked ? `Unchecked: ${name}` : `Checked: ${name}`;
         } else if (role === "radio") {
           feedback = `Selected: ${name}`;

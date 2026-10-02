@@ -2,6 +2,7 @@ import type { SemanticNode, ExtractionResult, ActionType } from "../types.js";
 import { ElementRefMap, ELEMENT_REF_MAP_SHAPE } from "../utils/element-ref.js";
 import { getNodeId } from "../utils/id-generator.js";
 import { realmSingleton } from "../utils/realm-singleton.js";
+import { warnOutsideProduction } from "../utils/warn.js";
 
 import {
   ariaBoolean,
@@ -9,7 +10,16 @@ import {
   ariaTristate,
   isAriaHiddenValue,
 } from "./aria-tokens.js";
-import { safeParentElement, safeTextContent } from "./clobber-safe.js";
+import {
+  safeContains,
+  safeGetElementById,
+  safeOwnerDocument,
+  safeParentElement,
+  safeQuerySelector,
+  safeQuerySelectorAll,
+  safeRootNode,
+  safeTextContent,
+} from "./clobber-safe.js";
 import { isEditable, isEditingHost } from "./editing.js";
 import {
   deepQuerySelectorAll,
@@ -405,6 +415,8 @@ function isVisuallyHidden(
     style !== undefined ? style : getCachedComputedStyle(element);
 
   if (isSubtreeHidden(element, computed)) return true;
+  // An area is drawn by its image, whose visibility isSubtreeHidden read.
+  if (element.localName === "area") return false;
 
   if (computed) {
     if (computed.visibility === "hidden") return true;
@@ -439,7 +451,7 @@ function computeAccessibleDescription(
       .split(/\s+/)
       .filter(Boolean)
       .map((id) => {
-        const target = doc.getElementById(id);
+        const target = safeGetElementById(doc, id);
         return target
           ? getAccessibleTextContent(target, new Set(), styleCache).trim()
           : undefined;
@@ -715,6 +727,7 @@ const NAME_SOURCE_CHILD_TO_OWNER: Readonly<Record<string, string>> = {
 export function htmlAamNameOwner(element: Element): Element | null {
   const ownerTag = NAME_SOURCE_CHILD_TO_OWNER[element.tagName.toLowerCase()];
   if (!ownerTag) return null;
+  // eslint-disable-next-line no-restricted-properties -- one read, and a <legend>, <summary> or <caption> is never a form
   const parent = element.parentElement;
   if (!parent || parent.tagName.toLowerCase() !== ownerTag) return null;
   if (element.tagName.toLowerCase() === "caption") {
@@ -808,6 +821,9 @@ function getAccessibleTextContent(
     } else if (child.nodeType === Node.ELEMENT_NODE) {
       const childEl = child as Element;
       if (isAriaHiddenValue(childEl.getAttribute("aria-hidden"))) continue;
+      // Chromium's tree puts an area under its image, never under the element
+      // its map sits in, so it adds nothing to that element's name.
+      if (childEl.localName === "area") continue;
       if (
         isSubtreeHidden(childEl, getCachedComputedStyle(childEl, styleCache))
       ) {
@@ -883,7 +899,7 @@ function computeRawAccessibleName(
     const names = labelledBy
       .split(/\s+/)
       .map((id) => {
-        const target = doc.getElementById(id);
+        const target = safeGetElementById(doc, id);
         return target
           ? getAccessibleTextContent(target, visited, styleCache).trim()
           : "";
@@ -915,7 +931,7 @@ function computeRawAccessibleName(
   if (tag === "input" || tag === "select" || tag === "textarea") {
     const id = element.getAttribute("id");
     if (id) {
-      const label = idScope(element).querySelector(`label[for="${id}"]`);
+      const label = safeQuerySelector(idScope(element), `label[for="${id}"]`);
       if (label)
         return getAccessibleTextContent(label, visited, styleCache).trim();
     }
@@ -1245,6 +1261,8 @@ const POPUP_ROLES: ReadonlySet<string> = new Set([
  * option (only the chosen one is displayed, and it is the select's own
  * value), a `<textarea>`'s default value, a `<datalist>`'s suggestions. A
  * field's text walk skips them; the control carries its own `a11y.value`.
+ * Chromium's rendered text of an editor lists a nested `<select>`'s every
+ * option — a knowing divergence, since only the chosen one is on screen.
  */
 const CONTROL_TEXT_TAGS: ReadonlySet<string> = new Set([
   "select",
@@ -1255,12 +1273,22 @@ const CONTROL_TEXT_TAGS: ReadonlySet<string> = new Set([
 /**
  * The text a non-native field holds — a contenteditable editor, an ARIA
  * textbox or combobox — collapsed and capped like {@link getDescendantText},
- * but with block boundaries read as spaces. What a screen reader would not
- * announce is skipped: hidden subtrees (`display:none`, `hidden`,
- * `aria-hidden`), `visibility:hidden` text, a closed `<details>`'s body, and
- * a widget's own popup.
+ * but with block boundaries read as spaces. What isn't rendered is always
+ * skipped: `display:none` and `hidden` subtrees, `visibility:hidden` text,
+ * and a closed `<details>`'s body.
+ *
+ * Chromium reads the rest two ways, and so does this (measured on Chromium
+ * 151 over CDP). An editor's value, and any ARIA textbox's or searchbox's,
+ * is the text it renders (`rendered`), which knows nothing of ARIA:
+ * `aria-hidden` text and a popup inside it are part of the value. A
+ * combobox you can't type into is read as the accessible text of what it
+ * contains, which skips `aria-hidden` subtrees and the widget's own popup.
  */
-function getFieldText(element: Element, styleCache?: StyleCache): string {
+function getFieldText(
+  element: Element,
+  rendered: boolean,
+  styleCache?: StyleCache,
+): string {
   const state: CollapsedTextState = { text: "", phase: "start" };
   // `visibility` is per element and inherited, and a child may set it back to
   // `visible` — so a hidden element's own text is skipped but its children are
@@ -1278,9 +1306,11 @@ function getFieldText(element: Element, styleCache?: StyleCache): string {
     const rawTag = el.tagName;
     const tag = typeof rawTag === "string" ? rawTag.toLowerCase() : "";
     if (MEDIA_TAGS.has(tag) || CONTROL_TEXT_TAGS.has(tag)) return false;
-    if (isAriaHiddenValue(el.getAttribute("aria-hidden"))) return false;
-    const role = getExplicitRole(el);
-    if (role && POPUP_ROLES.has(role)) return false;
+    if (!rendered) {
+      if (isAriaHiddenValue(el.getAttribute("aria-hidden"))) return false;
+      const role = getExplicitRole(el);
+      if (role && POPUP_ROLES.has(role)) return false;
+    }
     const style = getCachedComputedStyle(el, styleCache);
     if (isSubtreeHidden(el, style)) return false;
     const breaks = LINE_BREAKING_TAGS.has(tag);
@@ -1453,7 +1483,7 @@ function wrapsTextControl(element: Element): boolean {
  * the region, so an editor reopened inside one is a field of its own.
  */
 function insideEditable(element: Element): boolean {
-  const parent = element.parentElement;
+  const parent = safeParentElement(element);
   return !!parent && isEditable(parent);
 }
 
@@ -1468,7 +1498,9 @@ function insideEditable(element: Element): boolean {
  */
 export function fieldValueOwner(el: Element): Element | null {
   let owner: Element | null = null;
-  for (let node: Element | null = el; node; node = node.parentElement) {
+  // Clobber-safe: through a `<form>` whose control is named `parentElement`,
+  // the plain read cycles between the form and that control forever.
+  for (let node: Element | null = el; node; node = safeParentElement(node)) {
     const tag = node.tagName.toLowerCase();
     if (tag === "select" || isEditingHost(node)) {
       owner = node;
@@ -1531,7 +1563,11 @@ function readFieldValue(
   if (TEXT_VALUE_ROLES.has(role) || editingHost) {
     if (insideEditable(element)) return undefined;
     if (!editingHost && wrapsTextControl(element)) return undefined;
-    return getFieldText(element, styleCache);
+    return getFieldText(
+      element,
+      editingHost || role !== "combobox",
+      styleCache,
+    );
   }
   return undefined;
 }
@@ -1709,6 +1745,7 @@ function isDisabledControl(element: Element): boolean {
  */
 function isDisabledOption(option: Element): boolean {
   if (option.hasAttribute("disabled")) return true;
+  // eslint-disable-next-line no-restricted-properties -- one read, and an <option> is never a form
   const parent = option.parentElement;
   return (
     parent?.tagName.toLowerCase() === "optgroup" &&
@@ -1794,6 +1831,161 @@ function takesInheritedDisabled(
 }
 
 /**
+ * A native checkbox's or radio's checkedness, and `"mixed"` for an
+ * indeterminate checkbox, which Chromium reads in place of `aria-checked` and
+ * `aria-pressed`. `null` for any other element, including any other `<input>`
+ * type, which reads `aria-checked` as usual.
+ *
+ * `indeterminate` is a property with no attribute, and script is the only
+ * thing that sets it, so no mutation reports the change. `LiveTreeExtractor`
+ * re-reads every checkbox and radio on refresh for that reason.
+ */
+function nativeChecked(element: Element): boolean | "mixed" | null {
+  if (element.tagName.toLowerCase() !== "input") return null;
+  const input = element as HTMLInputElement;
+  if (input.type === "checkbox")
+    return input.indeterminate ? "mixed" : input.checked;
+  return input.type === "radio" ? input.checked : null;
+}
+
+/**
+ * Whether a drop-down `<select>`'s picker is open, which is its expanded
+ * state in Chromium's tree. An engine without the `:open` pseudo-class throws
+ * on it, and has no other way to tell.
+ */
+function isPickerOpen(select: Element): boolean {
+  try {
+    return select.matches(":open");
+  } catch {
+    return false;
+  }
+}
+
+/** The largest `size` a `<select>` honors. Past it the attribute is ignored. */
+const MAX_SELECT_SIZE = 0xffffffff;
+
+/**
+ * Whether a `<select>` is a drop-down: its display size, as HTML and Chromium
+ * compute it, is 1. That is `size` when it parses to 1 through 2^32-1, and
+ * otherwise 4 for a `multiple` select and 1 for any other. So
+ * `<select multiple size="1">` is a drop-down and `<select multiple
+ * size="0">` a list box. Read from the attributes: the `size` property reads
+ * 0 above 2^31-1. `size` parses by HTML's integer rules, as `tabindex` does.
+ */
+function isDropDownSelect(select: Element): boolean {
+  const size = parseTabindex(select.getAttribute("size")) ?? 0;
+  const displaySize =
+    size > 0 && size <= MAX_SELECT_SIZE
+      ? size
+      : select.hasAttribute("multiple")
+        ? 4
+        : 1;
+  return displaySize <= 1;
+}
+
+/**
+ * Roles on which Chromium exposes a native checkbox's or radio's checkedness
+ * as `checked`. Its own role is one of them.
+ */
+const CHECKEDNESS_ROLES = new Set([
+  "checkbox",
+  "radio",
+  "switch",
+  "menuitemcheckbox",
+  "menuitemradio",
+]);
+
+/**
+ * Roles under which a `<details>`' summary takes `expanded` from the details,
+ * measured against Chromium 151 across every ARIA role. Its own role, which
+ * the engine calls `generic`, is a disclosure too.
+ */
+const SUMMARY_EXPANDED_ROLES = new Set([
+  "application",
+  "button",
+  "checkbox",
+  "columnheader",
+  "combobox",
+  "form",
+  "gridcell",
+  "link",
+  "listitem",
+  "menuitem",
+  "menuitemcheckbox",
+  "menuitemradio",
+  "option",
+  "region",
+  "row",
+  "rowheader",
+  "switch",
+  "tab",
+  "treeitem",
+]);
+
+/**
+ * The states an element's own semantics decide, which Chromium reads in
+ * place of the matching ARIA attribute. A state mapped to `undefined` is one
+ * the element doesn't have, whatever its attribute says. `role` is its
+ * computed role. Each rule was measured against Chromium 151.
+ *
+ * - A native checkbox or radio: its checkedness ({@link nativeChecked}) is
+ *   `checked` on a role in {@link CHECKEDNESS_ROLES}, and on an `option` or
+ *   `treeitem` while `aria-checked` is set. It is `pressed` instead on a
+ *   `button` with `aria-pressed`, a toggle button. Any other role has neither.
+ * - A `<select>` as a combobox or list box: a drop-down
+ *   ({@link isDropDownSelect}) in the combobox role is expanded while its
+ *   picker is open. A list box has no expanded state, unless the author gave
+ *   it the combobox role, which reads `aria-expanded` as usual. Neither is a
+ *   toggle button, so neither has `pressed`. Any other author role reads
+ *   `aria-expanded` and `aria-pressed` as usual.
+ * - Any `<summary>` child of a `<details>`, not only the one that toggles it:
+ *   `expanded` is whether the details is open, in its own role or one in
+ *   {@link SUMMARY_EXPANDED_ROLES}, and nothing under any other role. Only a
+ *   `button` role makes it a toggle button, with a `pressed`.
+ */
+export function nativeStates(
+  element: Element,
+  tag: string,
+  role: string,
+): Record<string, boolean | string | undefined> {
+  const checked = nativeChecked(element);
+  if (checked !== null) {
+    const ariaSet = (attr: string) =>
+      ariaTristate(element.getAttribute(attr)) !== null;
+    if (role === "button" && ariaSet("aria-pressed"))
+      return { checked: undefined, pressed: checked };
+    const exposed =
+      CHECKEDNESS_ROLES.has(role) ||
+      ((role === "option" || role === "treeitem") && ariaSet("aria-checked"));
+    return { checked: exposed ? checked : undefined, pressed: undefined };
+  }
+  if (tag === "select") {
+    if (role !== "combobox" && role !== "listbox") return {};
+    if (role === "combobox" && isDropDownSelect(element))
+      return { expanded: isPickerOpen(element), pressed: undefined };
+    // A list box has no expanded state, unless an author's combobox role
+    // gives it one, read from aria-expanded as usual.
+    return getExplicitRole(element) === "combobox"
+      ? { pressed: undefined }
+      : { expanded: undefined, pressed: undefined };
+  }
+  if (tag !== "summary") return {};
+  // Read only for a summary: on a <form>, a field named `parentElement`
+  // shadows the property.
+  const details = safeParentElement(element);
+  if (details?.tagName.toLowerCase() === "details") {
+    const disclosure =
+      (role === "generic" && getExplicitRole(element) !== "generic") ||
+      SUMMARY_EXPANDED_ROLES.has(role);
+    const expanded = disclosure
+      ? (details as HTMLDetailsElement).open
+      : undefined;
+    return role === "button" ? { expanded } : { expanded, pressed: undefined };
+  }
+  return {};
+}
+
+/**
  * Get ARIA states from an element. `role` is its computed role, and
  * `focusable` its `isFocusable()` answer, both of which the caller already
  * has.
@@ -1805,14 +1997,20 @@ function getAriaStates(
 ): Record<string, string | boolean> {
   const states: Record<string, string | boolean> = {};
   const tag = element.tagName.toLowerCase();
+  const native = nativeStates(element, tag, role);
 
   for (const attr of ARIA_STATE_ATTRIBUTES) {
+    const state = attr.slice("aria-".length);
+    // The element's own semantics decide it, below.
+    if (state in native) continue;
     // Chromium never marks an optgroup disabled, whatever its role. Its
     // options still inherit the state from it, below.
     if (attr === "aria-disabled" && tag === "optgroup") continue;
     const value = ariaStateValue(element, attr, role);
-    if (value !== null) states[attr.slice("aria-".length)] = value;
+    if (value !== null) states[state] = value;
   }
+  for (const [state, value] of Object.entries(native))
+    if (value !== undefined) states[state] = value;
 
   // Native HTML states
   const htmlEl = element as HTMLInputElement;
@@ -1822,7 +2020,6 @@ function getAriaStates(
     tag === "select" ||
     tag === "textarea"
   ) {
-    if ("checked" in htmlEl && htmlEl.checked) states["checked"] = true;
     if ("required" in htmlEl && htmlEl.required) states["required"] = true;
   }
 
@@ -1898,7 +2095,7 @@ function focusedNodeId(
   root: Element,
   nodes: Map<string, SemanticNode>,
 ): string | undefined {
-  const el = resolveFocusedElement(root.ownerDocument);
+  const el = resolveFocusedElement(safeOwnerDocument(root));
   if (!el) return undefined;
   const id = getElementRefs().findId(el);
   return id && nodes.has(id) ? id : undefined;
@@ -1931,7 +2128,7 @@ function isActuallyVisible(
   while (el) {
     if (isSubtreeHidden(el, getCachedComputedStyle(el, styleCache)))
       return false;
-    el = el.parentElement;
+    el = safeParentElement(el);
   }
   return true;
 }
@@ -1976,7 +2173,7 @@ function findActiveModal(doc: Document): Element | null {
   // Per element rather than `querySelectorAll("dialog:modal")`, so an
   // environment that cannot parse `:modal` degrades to "no modal" in one place.
   // Last-to-first so the top-most of a stack of modals wins.
-  const dialogs = doc.querySelectorAll("dialog");
+  const dialogs = safeQuerySelectorAll(doc, "dialog");
   for (let i = dialogs.length - 1; i >= 0; i--) {
     if (isModal(dialogs[i])) return dialogs[i];
   }
@@ -2037,29 +2234,38 @@ function hasOverlayContent(element: Element): boolean {
  */
 function findPortalOverlay(doc: Document, root: Element): Element | null {
   const body = doc.body;
-  if (!body || body === root || root.contains(body)) return null;
+  if (!body || body === root || safeContains(root, body)) return null;
 
   // Portal-mounted overlay roles. MODAL dialogs are handled exclusively by
   // findActiveModal() (which takes precedence). A NON-modal role="dialog"
   // (cookie banner, Radix Popover) is additive like any other overlay — it is
   // included here so it pivots to body and joins the tree, rather than
   // hijacking the scope the way findActiveModal used to.
-  const overlays = doc.querySelectorAll(OVERLAY_CANDIDATE_SELECTOR);
+  const overlays = safeQuerySelectorAll(doc, OVERLAY_CANDIDATE_SELECTOR);
   for (const el of overlays) {
-    // Outside the root means ELSEWHERE, not "above". An ancestor is not a
-    // portal by any definition, and treating it as one made every component
-    // root on an SPA pivot permanently: the route announcers Next.js, Remix
-    // and React Router ship are typically an `aria-live` wrapper around the
-    // whole app, so it matched on every extraction rather than only while a
-    // toast was up.
-    if (root.contains(el) || el.contains(root)) continue;
-    if (!countsAsOverlay(el)) continue;
-    // An overlay AT cannot reach adds nothing to the tree, so it is no reason
-    // to widen: a closed drawer left mounted as `aria-hidden` (and translated
-    // off-screen, so the CSS check passes) turned every component root on the
-    // page into a whole-page snapshot.
-    if (isInertOrAriaHidden(el)) continue;
-    if (isActuallyVisible(el) && hasOverlayContent(el)) return body;
+    // A candidate is read through members its own controls can shadow — a
+    // `<form role="search">` holding `<input name="getAttribute">` is a
+    // candidate like any `[role]` element. One that cannot answer is skipped,
+    // as the walk skips an element it cannot read, rather than aborting every
+    // extraction on the page.
+    try {
+      // Outside the root means ELSEWHERE, not "above". An ancestor is not a
+      // portal by any definition, and treating it as one made every component
+      // root on an SPA pivot permanently: the route announcers Next.js, Remix
+      // and React Router ship are typically an `aria-live` wrapper around the
+      // whole app, so it matched on every extraction rather than only while a
+      // toast was up.
+      if (safeContains(root, el) || el.contains(root)) continue;
+      if (!countsAsOverlay(el)) continue;
+      // An overlay AT cannot reach adds nothing to the tree, so it is no
+      // reason to widen: a closed drawer left mounted as `aria-hidden` (and
+      // translated off-screen, so the CSS check passes) turned every component
+      // root on the page into a whole-page snapshot.
+      if (isInertOrAriaHidden(el)) continue;
+      if (isActuallyVisible(el) && hasOverlayContent(el)) return body;
+    } catch {
+      // Unreadable: not an overlay this scan can pivot to.
+    }
   }
   return null;
 }
@@ -2193,7 +2399,7 @@ export function containsOverlaySignal(el: Element): boolean {
  * mutated element; the incremental path has to re-derive it.
  */
 export function resolveEffectiveRoot(root: Element): Element {
-  const doc = root.ownerDocument;
+  const doc = safeOwnerDocument(root);
   if (!doc) return root;
 
   // A pivot may only ever WIDEN. Both targets — an open modal, or `body` —
@@ -2226,7 +2432,7 @@ export function resolveEffectiveRoot(root: Element): Element {
   // `doc.contains` is not shadow-including, which is what makes it cover the
   // shadow case as well as the detached one.
   const activeModal = findActiveModal(doc);
-  if (activeModal && doc.contains(root)) return activeModal;
+  if (activeModal && safeContains(doc, root)) return activeModal;
 
   const overlayScope = findPortalOverlay(doc, root);
   return overlayScope?.contains(root) ? overlayScope : root;
@@ -2239,21 +2445,14 @@ export function resolveEffectiveRoot(root: Element): Element {
  * clobbering that slipped past the targeted guards) degrades to "skip this
  * node" instead of aborting the whole tree. That silent recovery is the right
  * runtime behavior, but the gap should stay debuggable, so we surface the
- * element and the error for inspection. Gated off in production to avoid
- * console noise; this package has no `@types/node`, so `process` is reached
- * through a `globalThis` cast.
+ * element and the error for inspection.
  */
 function warnSkippedElement(element: Element, error: unknown): void {
-  const proc = (globalThis as { process?: { env?: { NODE_ENV?: string } } })
-    .process;
-  if (proc?.env?.NODE_ENV === "production") return;
-  if (typeof console !== "undefined") {
-    console.warn(
-      "[real-a11y] Skipped an element during extraction to keep the rest of the tree intact:",
-      element,
-      error,
-    );
-  }
+  warnOutsideProduction(
+    "[real-a11y] Skipped an element during extraction to keep the rest of the tree intact:",
+    element,
+    error,
+  );
 }
 
 /**
@@ -2434,14 +2633,18 @@ function buildNode(
  *   text both as a description and as standalone content.
  */
 function isDescribedInOwnTree(element: Element, id: string): boolean {
-  const scope = element.getRootNode() as Document | ShadowRoot | Element;
-  if (typeof scope.querySelectorAll !== "function") return true;
+  // Clobber-safe, as in `idScope`: a description target that is a `<form>`
+  // holding `<input name="getRootNode">` would otherwise throw here.
+  const scope = safeRootNode(element) as Document | ShadowRoot | Element;
   const escaped =
     typeof CSS !== "undefined" && typeof CSS.escape === "function"
       ? CSS.escape(id)
       : id.replace(/["\\]/g, "\\$&");
+  // Through the prototype: the scope is usually the document, which an
+  // `<img name="querySelectorAll">` shadows, and a guess here folds away a
+  // target that labels a control as readily as one that describes nothing.
   const referrers = (attr: string): Element[] =>
-    Array.from(scope.querySelectorAll(`[${attr}~="${escaped}"]`)).filter(
+    Array.from(safeQuerySelectorAll(scope, `[${attr}~="${escaped}"]`)).filter(
       isRenderedInFlatTree,
     );
   return (

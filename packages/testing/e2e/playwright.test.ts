@@ -368,6 +368,75 @@ test.describe("strict CSP page", () => {
   });
 });
 
+test.describe("a page whose named elements shadow DOM methods", () => {
+  // `Document` and `<form>` have [LegacyOverrideBuiltIns]: `<img
+  // name="getElementById">` makes `document.getElementById` the image, and
+  // `<input name="getAttribute">` makes `form.getAttribute` the input. jsdom
+  // does not implement that override, so core's unit tests simulate it; this
+  // is Chromium's.
+  test("names a control through aria-labelledby when the document's getElementById is shadowed", async ({
+    page,
+  }) => {
+    // Every aria-labelledby / -describedby element on the page was dropped.
+    await page.setContent(`<main>
+      <img name="getElementById" alt="">
+      <span id="lbl">Save draft</span>
+      <button aria-labelledby="lbl">x</button>
+    </main>`);
+    const sn = await attach(page);
+    expect(await sn.treeSnapshot()).toContain('button "Save draft"');
+  });
+
+  test("extracts at all when the document's querySelectorAll is shadowed", async ({
+    page,
+  }) => {
+    await page.setContent(
+      `<main><img name="querySelectorAll" alt=""><button>Go</button></main>`,
+    );
+    const sn = await attach(page);
+    expect(await sn.treeSnapshot()).toContain('button "Go"');
+  });
+
+  test("extracts a subtree when a form elsewhere shadows its own getAttribute", async ({
+    page,
+  }) => {
+    // A `<form role="search">` is an overlay-scan candidate for any root that
+    // is not the whole page; one that cannot be read aborted the extraction.
+    await page.setContent(`
+      <form role="search"><input name="getAttribute" aria-label="Query"></form>
+      <main id="app"><button>Go</button></main>`);
+    const sn = await attach(page, { rootSelector: "#app" });
+    expect(await sn.treeSnapshot()).toContain('button "Go"');
+  });
+
+  // The adapter resolves the audit root in the page before core ever runs, so
+  // a shadowed `document.querySelector` rejected every call — even with no
+  // rootSelector, since the default is the literal selector "body".
+  const SHADOWED_QUERY_SELECTOR = `<main>
+      <img name="querySelector" alt="">
+      <label for="email">Email</label>
+      <input id="email" type="email">
+    </main>`;
+
+  test("resolves the audit root for treeSnapshot when the document's querySelector is shadowed", async ({
+    page,
+  }) => {
+    await page.setContent(SHADOWED_QUERY_SELECTOR);
+    const sn = await attach(page);
+    expect(await sn.treeSnapshot()).toContain('textbox "Email"');
+  });
+
+  test("resolves the audit root for the other helpers when the document's querySelector is shadowed", async ({
+    page,
+  }) => {
+    // Every helper but treeSnapshot shares one in-page lookup.
+    await page.setContent(SHADOWED_QUERY_SELECTOR);
+    const sn = await attach(page);
+    expect(await sn.tabSequenceSnapshot()).toContain('textbox "Email"');
+    await sn.assertNoUnlabeledInteractive();
+  });
+});
+
 test.describe("rootSelector that matches nothing", () => {
   test.beforeEach(async ({ page }) => {
     await page.goto(fixtureUrl("fixture.html"));

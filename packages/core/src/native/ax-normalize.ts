@@ -40,7 +40,10 @@ export interface RawNativeAXNode {
   name?: { value?: string };
   /** Read only for its property NAMES and the `focusable` flag — see
    *  `NATIVE_AX_DROP_WHEN_BARE`. Values are never inspected otherwise. */
-  properties?: Array<{ name: string; value?: { value?: unknown } }>;
+  properties?: Array<{
+    name: string;
+    value?: { type?: string; value?: unknown };
+  }>;
   /** Read only for whether there is one — see {@link carriesValue}. Never
    *  copied onto a normalized node. */
   value?: { value?: unknown };

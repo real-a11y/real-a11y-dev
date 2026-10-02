@@ -46,6 +46,9 @@ export {
   PANEL_HOST_ATTRIBUTE,
 } from "./extraction/dom-extractor.js";
 export { extractA11yTree } from "./extraction/a11y-extractor.js";
+// For a walk up the page's own DOM outside core, such as the extension's focus
+// sync: a `<form>` control named `parentElement` makes the plain read cycle.
+export { safeParentElement } from "./extraction/clobber-safe.js";
 export {
   getImplicitRole,
   isHiddenFromAT,
@@ -106,6 +109,7 @@ export {
   NATIVE_AX_OWN_TEXT_ROLES,
   NATIVE_AX_AUTHOR_NAMED_ROLES,
   mapNativeAXRole,
+  nativeAXStateValue,
 } from "./native/ax-vocabulary.js";
 export { normalizeNativeAX, serializeNativeAX } from "./native/ax-normalize.js";
 export type { NativeAXNode, RawNativeAXNode } from "./native/ax-normalize.js";

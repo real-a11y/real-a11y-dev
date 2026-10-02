@@ -24,8 +24,10 @@ import {
   safeChildNodes,
   safeChildren,
   safeHidden,
+  safeOwnerDocument,
   safeParentElement,
   safeParentNode,
+  safeQuerySelectorAll,
   safeRootNode,
   safeShadowRoot,
 } from "./clobber-safe.js";
@@ -189,21 +191,42 @@ export function flatChildren(element: Element): Element[] {
  *
  * Each read is clobber-safe: through a `<form>` whose control is named
  * `parentElement` or `assignedSlot`, a plain read cycles back to the form, and
- * every loop over ancestors would spin forever.
+ * every loop over ancestors would spin forever. One named `parentNode` would
+ * end the climb at the top of a shadow root instead, short of the host.
  */
 export function flatParent(element: Element): Element | null {
   // A slotted node's parent is its slot's parent; a forwarded slot recurses.
   const slot = safeAssignedSlot(element);
   if (slot) return flatParent(slot);
+  const parent = safeParentElement(element) ?? shadowHostAbove(element);
+  // Slot fallback content: skip the transparent slot.
+  return parent && isSlot(parent) ? flatParent(parent) : parent;
+}
+
+/** The host of the shadow root `element` sits directly in, if it does. */
+function shadowHostAbove(element: Element): Element | null {
   const parentNode = safeParentNode(element);
-  const parent =
+  return parentNode?.nodeType === DOCUMENT_FRAGMENT_NODE
+    ? ((parentNode as ShadowRoot).host ?? null)
+    : null;
+}
+
+/**
+ * The element that renders `element`: the slot it is assigned to, else its
+ * parent, else the host of its shadow root. Unlike {@link flatParent}, this
+ * stops at slots, because a hidden slot hides everything it renders: a climb
+ * asking whether an element is rendered has to see them.
+ */
+export function renderingParent(element: Element): Element | null {
+  const slot = safeAssignedSlot(element);
+  if (slot) return slot;
+  const parentNode = safeParentNode(element);
+  return (
     safeParentElement(element) ??
     (parentNode?.nodeType === DOCUMENT_FRAGMENT_NODE
       ? (parentNode as ShadowRoot).host
-      : null) ??
-    null;
-  // Slot fallback content: skip the transparent slot.
-  return parent && isSlot(parent) ? flatParent(parent) : parent;
+      : null)
+  );
 }
 
 /**
@@ -211,13 +234,21 @@ export function flatParent(element: Element): Element | null {
  * `label[for]` are scoped to the element's own tree, so inside a shadow root
  * they must look in that root, not the document. A detached subtree has no
  * scope and falls back to its owner document, as before.
+ *
+ * The root is read clobber-safely: on a `<form>` holding
+ * `<input name="getRootNode">` the method is that input, so calling it throws
+ * and the labelled form is dropped from the tree with everything inside it.
+ *
+ * `root.nodeType` needs no clobber-safe read: a shadowed one reads as an
+ * element, matching neither, and the fallback is then right for a detached
+ * form root and for a document whose `<img name="nodeType">` shadows it alike.
  */
 export function idScope(element: Element): Document | ShadowRoot {
-  const root = element.getRootNode();
+  const root = safeRootNode(element);
   return root.nodeType === DOCUMENT_NODE ||
     root.nodeType === DOCUMENT_FRAGMENT_NODE
     ? (root as Document | ShadowRoot)
-    : element.ownerDocument;
+    : safeOwnerDocument(element);
 }
 
 /**
@@ -232,8 +263,8 @@ export function deepQuerySelectorAll(
 ): Element[] {
   const out: Element[] = [];
   const visit = (scope: Element | ShadowRoot): void => {
-    out.push(...scope.querySelectorAll(selector));
-    for (const el of scope.querySelectorAll("*")) {
+    out.push(...safeQuerySelectorAll(scope, selector));
+    for (const el of safeQuerySelectorAll(scope, "*")) {
       const shadow = safeShadowRoot(el);
       if (shadow) visit(shadow);
     }

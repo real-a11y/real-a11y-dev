@@ -7,6 +7,7 @@ import {
   extractDomTree,
   resetIdCounter,
 } from "../index.js";
+import { clobber } from "../test-support/clobber.js";
 import type { ExtractionResult, TreeChange } from "../types.js";
 
 describe("LiveTreeExtractor", () => {
@@ -907,6 +908,131 @@ describe("LiveTreeExtractor", () => {
     });
   });
 
+  // A click on one checkbox or radio fires its events on that one alone, yet
+  // can move other controls' checkedness, which no attribute reflects.
+  describe("checkedness a change moves elsewhere", () => {
+    async function refreshAfter(html: string, mutate: () => void) {
+      document.body.innerHTML = html;
+      const live = new LiveTreeExtractor(document.body, { mode: "a11y" });
+      let lastChange: TreeChange | undefined;
+      const observer = new DomObserver(
+        document.body,
+        (change) => {
+          lastChange = change;
+        },
+        50,
+      );
+      observer.start();
+      mutate();
+      await vi.advanceTimersByTimeAsync(100);
+      const result = live.refresh(lastChange);
+      observer.stop();
+      return result;
+    }
+
+    function checkedOf(result: ExtractionResult, name: string): unknown {
+      const node = [...result.nodes.values()].find((n) => n.a11y.name === name);
+      expect(node).toBeDefined();
+      return node!.a11y.states["checked"];
+    }
+
+    it("unchecks the radio its sibling replaced", async () => {
+      const result = await refreshAfter(
+        `<main><input type="radio" name="size" aria-label="Small" checked><input id="large" type="radio" name="size" aria-label="Large"></main>`,
+        () => document.getElementById("large")!.click(),
+      );
+      expect(checkedOf(result, "Small")).toBe(false);
+      expect(checkedOf(result, "Large")).toBe(true);
+      expect(result.nodes).toEqual(extractA11yTree(document.body).nodes);
+    });
+
+    it("unchecks the radio a sibling's checked attribute replaced", async () => {
+      const result = await refreshAfter(
+        `<main><input type="radio" name="size" aria-label="Small" checked><input id="large" type="radio" name="size" aria-label="Large"></main>`,
+        () => document.getElementById("large")!.setAttribute("checked", ""),
+      );
+      expect(checkedOf(result, "Small")).toBe(false);
+      expect(checkedOf(result, "Large")).toBe(true);
+      expect(result.nodes).toEqual(extractA11yTree(document.body).nodes);
+    });
+
+    it("marks mixed the box a handler made indeterminate", async () => {
+      const result = await refreshAfter(
+        `<main><input id="all" type="checkbox" aria-label="All"><ul><li><input id="one" type="checkbox" aria-label="One"></li><li><input type="checkbox" aria-label="Two"></li></ul></main>`,
+        () => {
+          const all = document.getElementById("all") as HTMLInputElement;
+          const one = document.getElementById("one")!;
+          one.addEventListener("change", () => {
+            all.indeterminate = true;
+          });
+          one.click();
+        },
+      );
+      expect(checkedOf(result, "All")).toBe("mixed");
+      expect(checkedOf(result, "One")).toBe(true);
+      expect(result.nodes).toEqual(extractA11yTree(document.body).nodes);
+    });
+
+    it.each([
+      ["1", "3", undefined],
+      ["3", "1", false],
+    ])("follows a select's size from %s to %s", async (from, to, expanded) => {
+      document.body.innerHTML = `<main><select id="s" size="${from}" aria-label="Items"><option>A</option><option>B</option></select></main>`;
+      const live = new LiveTreeExtractor(document.body, { mode: "a11y" });
+      let lastChange: TreeChange | undefined;
+      const observer = new DomObserver(
+        document.body,
+        (change) => {
+          lastChange = change;
+        },
+        50,
+      );
+      observer.start();
+      document.getElementById("s")!.setAttribute("size", to);
+      await vi.advanceTimersByTimeAsync(100);
+      observer.stop();
+      // The size change alone has to wake the tree.
+      expect(lastChange).toBeDefined();
+      const result = live.refresh(lastChange);
+      const select = [...result.nodes.values()].find(
+        (n) => n.a11y.name === "Items",
+      );
+      expect(select?.a11y.states["expanded"]).toBe(expanded);
+      expect(result.nodes).toEqual(extractA11yTree(document.body).nodes);
+    });
+
+    // Opening a picker changes no attribute and fires no event, so it shows
+    // only when something else refreshes the tree. jsdom has no picker: stand
+    // one in through `:open`.
+    it("re-reads a drop-down's picker when something else refreshes", async () => {
+      const matches = Element.prototype.matches;
+      const spy = vi
+        .spyOn(Element.prototype, "matches")
+        .mockImplementation(function (this: Element, selector: string) {
+          if (selector === ":open")
+            return this.id === "size" && document.body.dataset.open === "1";
+          return matches.call(this, selector);
+        });
+      try {
+        const result = await refreshAfter(
+          `<main><select id="size" aria-label="Size"><option>S</option></select><p id="p">Old</p></main>`,
+          () => {
+            document.body.dataset.open = "1";
+            document.getElementById("p")!.textContent = "New";
+          },
+        );
+        const select = [...result.nodes.values()].find(
+          (n) => n.a11y.name === "Size",
+        );
+        expect(select?.a11y.states["expanded"]).toBe(true);
+        expect(result.nodes).toEqual(extractA11yTree(document.body).nodes);
+      } finally {
+        spy.mockRestore();
+        delete document.body.dataset.open;
+      }
+    });
+  });
+
   describe("a heading named through a <details>", () => {
     async function refreshAfter(mutate: () => void) {
       document.body.innerHTML = `<main><h3>A <details><summary>Old</summary>Body</details></h3></main>`;
@@ -948,17 +1074,17 @@ describe("LiveTreeExtractor", () => {
   });
 
   // Focusability can hang on an element outside the node's own subtree: an
-  // <area> is a stop only while an <img usemap> names its map, and a control
-  // is disabled by an ancestor <fieldset>. Each case must come out of a
-  // refresh the way a fresh extraction would.
+  // <area> is a stop only while an <img usemap> names its map and is rendered,
+  // and a control is disabled by an ancestor <fieldset>. Each case must come
+  // out of a refresh the way a fresh extraction would.
   describe("focusability that depends on another element", () => {
-    // jsdom's UA sheet hides <area>, as the spec's does and Chromium's has
-    // since 153. Chromium 151 rendered one inline; match that here so the
-    // walk reaches the areas and the refresh logic has something to test.
+    // Chromium's UA sheet gives every <area> `display: none` since 153, as
+    // jsdom's does. Say so here rather than lean on jsdom: the walk has to
+    // reach the areas through their image all the same.
     beforeEach(() => {
       const style = document.createElement("style");
       style.id = "render-areas";
-      style.textContent = "area { display: inline }";
+      style.textContent = "area { display: none }";
       document.head.append(style);
     });
     afterEach(() => {
@@ -1035,6 +1161,66 @@ describe("LiveTreeExtractor", () => {
         document.querySelector("img")!.remove(),
       );
       expect(focusableIds(result)).toEqual([]);
+      expect(result.nodes).toEqual(extractDomTree(document.body).nodes);
+    });
+
+    // A map's areas are rendered only while the image using it is, and the
+    // image can be hidden from anywhere above it. The map sits elsewhere, so
+    // re-extracting what changed would leave its areas as they were.
+    it.each([
+      ["the image", "img", "hidden", ""],
+      ["the image", "img", "style", "visibility: hidden"],
+      ["its container", "#figure", "style", "display: none"],
+      ["its container", "#figure", "inert", ""],
+      ["its container", "#figure", "class", "gone"],
+    ])(
+      "drops the areas when %s is hidden (%s[%s])",
+      async (_what, selector, attr, value) => {
+        const html = `<style>.gone { display: none }</style>${MAPS}`;
+        const result = await refreshAfter(html, () =>
+          document.querySelector(selector)!.setAttribute(attr, value),
+        );
+        expect(
+          [...result.nodes.values()].filter((n) => n.dom?.tagName === "area"),
+        ).toEqual([]);
+        expect(result.nodes).toEqual(extractDomTree(document.body).nodes);
+      },
+    );
+
+    it("brings the areas back when the image shows again, splicing in the map", () => {
+      // `visibility` keeps the figure's node, so the refresh can splice: the
+      // figure's subtree, and the map, which is nowhere inside it.
+      document.body.innerHTML = `<main>${MAPS}</main>`;
+      const figure = document.getElementById("figure")!;
+      figure.setAttribute("style", "visibility: hidden");
+      const live = new LiveTreeExtractor(document.body, { mode: "dom" });
+      expect(focusableIds(live.extract())).toEqual([]);
+
+      figure.removeAttribute("style");
+      const full = vi.spyOn(live, "extract");
+      const result = live.refresh({
+        mutations: [
+          {
+            type: "attributes",
+            target: figure,
+            attributeName: "style",
+          } as unknown as MutationRecord,
+        ],
+      });
+
+      expect(full).not.toHaveBeenCalled();
+      expect(focusableIds(result)).toEqual(["in-a"]);
+      expect(result.nodes).toEqual(extractDomTree(document.body).nodes);
+    });
+
+    it("hides the areas from AT when the image turns aria-hidden", async () => {
+      const result = await refreshAfter(MAPS, () =>
+        document.querySelector("img")!.setAttribute("aria-hidden", "true"),
+      );
+      const area = [...result.nodes.values()].find(
+        (n) => n.dom?.attributes["id"] === "in-a",
+      )!;
+      expect(area.a11y.isExposedToAT).toBe(false);
       expect(result.nodes).toEqual(extractDomTree(document.body).nodes);
     });
 
@@ -1618,6 +1804,247 @@ describe("LiveTreeExtractor", () => {
 
       expect(hasHelpNode(after)).toBe(false);
       expect(after.nodes).toEqual(extractDomTree(root).nodes);
+    });
+  });
+
+  describe("a <form> whose control shadows a method the splice calls", () => {
+    // `<form>` has [LegacyOverrideBuiltIns]: `<input name="getAttribute">` makes
+    // `form.getAttribute` that input, so calling it throws. The splice calls a
+    // dozen such members on every dirty element and ancestor it reaches, and a
+    // throw escaped `refresh()` — the caller kept a stale tree, and every later
+    // refresh touching the form threw again. A full extraction survives the
+    // same form (its per-element boundary skips it), and a splice exists only
+    // to reach that same tree faster.
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    /** The records a MutationObserver on `root` gets for `mutate`. */
+    const observe = (root: Element, mutate: () => void): TreeChange => {
+      const observer = new MutationObserver(() => {});
+      observer.observe(root, {
+        subtree: true,
+        childList: true,
+        attributes: true,
+        characterData: true,
+      });
+      mutate();
+      const mutations = observer.takeRecords();
+      observer.disconnect();
+      return { mutations };
+    };
+
+    /**
+     * Shadow `prop` the way Chromium does: the read returns the control. For an
+     * accessor, which `clobber()` — it throws on the read — models too harshly:
+     * the text walks read `tagName` behind a `typeof` guard and survive the
+     * real thing, so only the control itself tests what a page does.
+     */
+    const shadowWithControl = (form: Element, prop: string): void => {
+      const control = form.querySelector(`[name="${prop}"]`);
+      Object.defineProperty(form, prop, {
+        configurable: true,
+        get: () => control,
+      });
+    };
+
+    const buttonName = (result: ExtractionResult) =>
+      [...result.nodes.values()].find((n) => n.a11y.role === "button")?.a11y
+        .name;
+
+    it.each([
+      [
+        "getAttribute",
+        "expandDependencies reads each dirty ancestor's id",
+        clobber,
+      ],
+      [
+        "tagName",
+        "nameRelevantAncestor asks the form for its tag",
+        shadowWithControl,
+      ],
+      [
+        "contains",
+        "collapseToOutermost asks the form whether it holds the text",
+        clobber,
+      ],
+    ])(
+      "keeps the tree right when the form's %s is shadowed (%s)",
+      (prop, _how, shadow) => {
+        document.body.innerHTML = `
+          <main id="app">
+            <h1 id="title">Title</h1>
+            <form aria-label="Signup">
+              <input name="${prop}" aria-label="Field" />
+              <span id="lbl">Old</span>
+            </form>
+            <button aria-labelledby="lbl">x</button>
+          </main>
+        `;
+        const root = document.getElementById("app")!;
+        const form = root.querySelector("form")!;
+        shadow(form, prop);
+        const live = new LiveTreeExtractor(root, { mode: "a11y" });
+
+        const change = observe(root, () => {
+          form.setAttribute("class", "touched");
+          document.getElementById("lbl")!.firstChild!.nodeValue = "New";
+          document.getElementById("title")!.setAttribute("class", "touched");
+        });
+        const result = live.refresh(change);
+
+        expect(buttonName(result)).toBe("New");
+        expect(result.nodes).toEqual(extractA11yTree(root).nodes);
+      },
+    );
+
+    it.each([
+      ["matches", "asks the added form whether it is an overlay", clobber],
+      ["querySelectorAll", "scans the added form for references", clobber],
+      [
+        "ownerDocument",
+        "resolves the added form's aria-labelledby",
+        shadowWithControl,
+      ],
+    ])(
+      "keeps the tree right when an added form's %s is shadowed (the splice %s)",
+      (prop, _how, shadow) => {
+        document.body.innerHTML = `
+          <main id="app"><h1 id="title">Title</h1><div id="slot"></div></main>
+        `;
+        const root = document.getElementById("app")!;
+        const live = new LiveTreeExtractor(root, { mode: "a11y" });
+
+        const form = document.createElement("form");
+        form.setAttribute("aria-labelledby", "title");
+        form.innerHTML = `<input name="${prop}" aria-label="Field" />`;
+        shadow(form, prop);
+        const change = observe(root, () => {
+          document.getElementById("slot")!.append(form);
+        });
+        const result = live.refresh(change);
+
+        expect(result.nodes).toEqual(extractA11yTree(root).nodes);
+      },
+    );
+
+    it("warns outside production that it fell back to a full extraction", () => {
+      // The fallback is silent in its output by design, so a bug that made the
+      // splice throw on ordinary pages would pass every equality test here and
+      // only cost speed. The warning is what keeps that visible.
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      document.body.innerHTML = `
+        <main id="app">
+          <form><input name="getAttribute" /><span>Old</span></form>
+        </main>
+      `;
+      const root = document.getElementById("app")!;
+      const form = root.querySelector("form")!;
+      clobber(form, "getAttribute");
+      const live = new LiveTreeExtractor(root, { mode: "a11y" });
+      warn.mockClear();
+
+      live.refresh(
+        observe(root, () => {
+          form.querySelector("span")!.firstChild!.nodeValue = "New";
+        }),
+      );
+
+      expect(warn).toHaveBeenCalledWith(
+        expect.stringContaining("fell back to a full extraction"),
+        expect.any(Error),
+      );
+    });
+  });
+
+  describe("a <form> whose control shadows parentElement", () => {
+    // `<form>` is the one HTML element with [LegacyOverrideBuiltIns]: in a real
+    // browser `form.parentElement` is the `<input name="parentElement">` inside
+    // it, whose own parent is the form again. A climb that reads it plainly
+    // cycles between the two forever, freezing the page. Forced, because
+    // jsdom's named-property override is not guaranteed.
+    function clobberParentElement(): HTMLFormElement {
+      const form = document.querySelector("form")!;
+      Object.defineProperty(form, "parentElement", {
+        configurable: true,
+        get: () => form.querySelector('[name="parentElement"]'),
+      });
+      return form;
+    }
+
+    async function refreshAfter(
+      html: string,
+      mutate: (form: HTMLFormElement) => void,
+      mode: "a11y" | "dom" = "a11y",
+    ) {
+      document.body.innerHTML = html;
+      const form = clobberParentElement();
+      const live = new LiveTreeExtractor(document.body, { mode });
+      let lastChange: TreeChange | undefined;
+      const observer = new DomObserver(
+        document.body,
+        (change) => {
+          lastChange = change;
+        },
+        50,
+      );
+      observer.start();
+      mutate(form);
+      await vi.advanceTimersByTimeAsync(100);
+      observer.stop();
+      expect(lastChange?.full).toBeFalsy(); // the incremental path, not a rebuild
+      const result = live.refresh(lastChange);
+      const clean =
+        mode === "a11y"
+          ? extractA11yTree(document.body)
+          : extractDomTree(document.body);
+      return { result, clean };
+    }
+    const names = (tree: ExtractionResult) =>
+      [...tree.nodes.values()].map((n) => n.a11y.name);
+
+    it.each(["a11y", "dom"] as const)(
+      "refreshes when text inside the form changes (%s)",
+      async (mode) => {
+        const { result, clean } = await refreshAfter(
+          `<main><form aria-label="Search"><input name="parentElement" aria-label="Query"><button>Old</button></form></main>`,
+          () => {
+            document.querySelector("button")!.firstChild!.textContent = "New";
+          },
+          mode,
+        );
+        expect(names(result)).toContain("New");
+        expect(result.nodes).toEqual(clean.nodes);
+      },
+    );
+
+    it("refreshes when the form's own role changes", async () => {
+      const { result, clean } = await refreshAfter(
+        `<main><form aria-label="Search"><input name="parentElement" aria-label="Query"></form></main>`,
+        (form) => form.setAttribute("role", "search"),
+      );
+      expect([...result.nodes.values()].map((n) => n.a11y.role)).toContain(
+        "search",
+      );
+      expect(result.nodes).toEqual(clean.nodes);
+    });
+
+    it("refreshes an editor's value, and keeps a link live, inside the form", async () => {
+      const { result, clean } = await refreshAfter(
+        `<main><form aria-label="Compose">
+          <input name="parentElement" aria-label="Subject">
+          <div contenteditable="true" role="textbox" aria-label="Body"><p>Old</p></div>
+          <a href="/help">Help</a>
+        </form></main>`,
+        () => {
+          document.querySelector("p")!.firstChild!.textContent = "New";
+        },
+      );
+      const node = (name: string) =>
+        [...result.nodes.values()].find((n) => n.a11y.name === name);
+      expect(node("Body")?.a11y.value).toBe("New");
+      expect(node("Help")?.interaction?.actions).toContain("click");
+      expect(result.nodes).toEqual(clean.nodes);
     });
   });
 });
