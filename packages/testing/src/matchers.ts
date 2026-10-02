@@ -31,8 +31,8 @@ import {
   getElementRefs,
   getTabSequence,
   isDatalistCombobox,
-  selectRoleFromAttributes,
   resolveRoleToken,
+  selectRoleFromAttributes,
 } from "@real-a11y-dev/core";
 import {
   extract,
