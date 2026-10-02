@@ -303,6 +303,9 @@ export class DomObserver {
     // popover, and only once the attribute is gone. Inside `root` the primary
     // observer reports the change; outside it, only this does. That is rare,
     // so it asks for a full re-extraction, which also re-derives the scope.
+    // A target outside `root` removed or renamed is still not heard, short of
+    // watching the whole document's tree: its invoker catches up on the next
+    // refresh anything else causes.
     this.popoverObserver = new MutationObserver((mutations) => {
       if (mutations.some((m) => !safeContains(this.root, m.target))) {
         this.pendingFull = true;

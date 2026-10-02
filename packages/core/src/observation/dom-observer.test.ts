@@ -1121,6 +1121,20 @@ describe("DomObserver", () => {
       el.dispatchEvent(new Event("toggle"));
     }
 
+    it("hears a <form> popover whose field shadows hasAttribute", () => {
+      document.body.innerHTML = `<form id="menu" popover><input name="hasAttribute" /></form>`;
+      observer = new DomObserver(document.body, onTreeChange, 100);
+      observer.start();
+
+      const menu = document.getElementById("menu")!;
+      clobber(menu, "hasAttribute");
+      toggle(menu);
+      vi.advanceTimersByTime(110);
+
+      expect(onTreeChange).toHaveBeenCalledTimes(1);
+      expect(onTreeChange.mock.calls[0][0].dirtyRoots).toEqual([menu]);
+    });
+
     it("fires with the popover as a dirty root", () => {
       document.body.innerHTML = `<main><div id="menu" popover>x</div></main>`;
       observer = new DomObserver(document.body, onTreeChange, 100);
