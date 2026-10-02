@@ -613,6 +613,63 @@ describe("getImplicitRole", () => {
     });
   });
 
+  // Each row measured against Chromium 151 and 153's own tree. A select is a
+  // list box when it shows more than one row: its `size`, parsed the way HTML
+  // parses a non-negative integer, or 4 rows for a `multiple` select without
+  // one. `multiple size="1"` is the drop-down HTML allows for it.
+  describe("<select>", () => {
+    const SIZES: [attrs: string, role: string][] = [
+      ["", "combobox"],
+      ['size="1"', "combobox"],
+      ['size="0"', "combobox"],
+      ['size="-0"', "combobox"],
+      ['size="-1"', "combobox"],
+      ['size="abc"', "combobox"],
+      ['size=""', "combobox"],
+      ['size="1.9"', "combobox"],
+      ['size="&#160;3"', "combobox"],
+      ['size="4294967296"', "combobox"],
+      ['size="99999999999"', "combobox"],
+      ['size="2"', "listbox"],
+      ['size="3"', "listbox"],
+      ['size=" 3"', "listbox"],
+      ['size="&#9;3"', "listbox"],
+      ['size="+3"', "listbox"],
+      ['size="3.5"', "listbox"],
+      ['size="2abc"', "listbox"],
+      // The `size` property reads 0 here; Chromium still counts the rows.
+      ['size="2147483648"', "listbox"],
+      ['size="4294967295"', "listbox"],
+      ["multiple", "listbox"],
+      ['multiple size="0"', "listbox"],
+      ['multiple size="abc"', "listbox"],
+      ['multiple size="2"', "listbox"],
+      ['multiple size="1"', "combobox"],
+      ['multiple size="1.5"', "combobox"],
+    ];
+
+    it.each(SIZES)("<select %s> is a %s", (attrs, role) => {
+      expect(
+        getImplicitRole(el(`<select ${attrs}><option>o</option></select>`)),
+      ).toBe(role);
+    });
+
+    it("keeps an authored role over its size", () => {
+      expect(
+        getImplicitRole(
+          el('<select size="3" role="combobox"><option>o</option></select>'),
+        ),
+      ).toBe("combobox");
+      expect(
+        getImplicitRole(
+          el(
+            '<select multiple size="1" role="listbox"><option>o</option></select>',
+          ),
+        ),
+      ).toBe("listbox");
+    });
+  });
+
   it("returns generic for <span>", () => {
     expect(getImplicitRole(el("<span>Text</span>"))).toBe("generic");
   });

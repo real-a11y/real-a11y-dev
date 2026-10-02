@@ -298,6 +298,45 @@ describe("a combobox <select>'s expanded state follows its picker", () => {
   });
 });
 
+// A <select> showing more than one row is a listbox in Chromium's tree, and
+// one showing a single row is a drop-down combobox, `multiple` or not. The DOM
+// producer once keyed on `multiple` alone, so `size="3"` read as a combobox
+// and `multiple size="1"` as a listbox.
+describe("a <select>'s role follows the rows it shows", () => {
+  it("agrees in both producers", async () => {
+    await session.open(
+      dataUrl(
+        `<main>
+          <select aria-label="Plain"><option>o</option></select>
+          <select aria-label="Three rows" size="3"><option>o</option></select>
+          <select aria-label="Parsed rows" size=" 2abc"><option>o</option></select>
+          <select aria-label="Zero rows" size="0"><option>o</option></select>
+          <select aria-label="Many" multiple><option>o</option></select>
+          <select aria-label="One row of many" multiple size="1"><option>o</option></select>
+        </main>`,
+      ),
+    );
+    const domTree = await session.call<string>("treeSnapshot", "body", [
+      { markFocus: false },
+    ]);
+    const nativeTree = serializeTree(await session.nativeTree(), {
+      markFocus: false,
+    });
+
+    for (const tree of [domTree, nativeTree]) {
+      const lines = tree.split("\n").map((l) => l.trim());
+      const roleOf = (name: string) =>
+        lines.find((l) => l.includes(`"${name}"`))?.split(" ")[0];
+      expect(roleOf("Plain")).toBe("combobox");
+      expect(roleOf("Three rows")).toBe("listbox");
+      expect(roleOf("Parsed rows")).toBe("listbox");
+      expect(roleOf("Zero rows")).toBe("combobox");
+      expect(roleOf("Many")).toBe("listbox");
+      expect(roleOf("One row of many")).toBe("combobox");
+    }
+  });
+});
+
 // The DOM producer walks the flat tree through open shadow roots and slots,
 // as Chromium does. Before that, every node below came from native only.
 describe("web components reach the DOM producer", () => {

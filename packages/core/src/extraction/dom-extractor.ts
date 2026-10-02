@@ -41,6 +41,7 @@ import {
   getHeadingLevel,
   isHiddenFromAT,
   isSubtreeHidden,
+  selectRoleFromAttributes,
   type StyleCache,
 } from "./role-map.js";
 
@@ -1737,6 +1738,12 @@ export const KEY_ATTRIBUTES = [
   "method",
   "placeholder",
   "tabindex",
+  // A <select>'s display size: more than one row makes it a listbox, with no
+  // expanded state. The testing matcher reads them back to tell a redundant
+  // authored role, and the observer must see them flip, or a live tree keeps
+  // the old role and state.
+  "size",
+  "multiple",
   // Media a11y signals (boolean attributes render as "")
   "controls",
   "autoplay",
@@ -1941,26 +1948,19 @@ function isPickerOpen(select: Element): boolean {
   }
 }
 
-/** The largest `size` a `<select>` honors. Past it the attribute is ignored. */
-const MAX_SELECT_SIZE = 0xffffffff;
-
 /**
  * Whether a `<select>` is a drop-down: its display size, as HTML and Chromium
- * compute it, is 1. That is `size` when it parses to 1 through 2^32-1, and
- * otherwise 4 for a `multiple` select and 1 for any other. So
+ * compute it, is 1. That is the rule that gives it the combobox role, so
  * `<select multiple size="1">` is a drop-down and `<select multiple
- * size="0">` a list box. Read from the attributes: the `size` property reads
- * 0 above 2^31-1. `size` parses by HTML's integer rules, as `tabindex` does.
+ * size="0">` a list box. See {@link selectRoleFromAttributes}.
  */
 function isDropDownSelect(select: Element): boolean {
-  const size = parseTabindex(select.getAttribute("size")) ?? 0;
-  const displaySize =
-    size > 0 && size <= MAX_SELECT_SIZE
-      ? size
-      : select.hasAttribute("multiple")
-        ? 4
-        : 1;
-  return displaySize <= 1;
+  return (
+    selectRoleFromAttributes({
+      size: select.getAttribute("size"),
+      multiple: select.getAttribute("multiple"),
+    }) === "combobox"
+  );
 }
 
 /**

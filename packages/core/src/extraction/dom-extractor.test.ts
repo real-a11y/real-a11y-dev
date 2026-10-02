@@ -1774,6 +1774,19 @@ describe("extractDomTree", () => {
     expect(link.dom?.attributes["href"]).toBe("/home");
   });
 
+  // The testing matcher decides a select's role from these alone.
+  it("stores a select's size and multiple", () => {
+    const root = createPage(
+      '<select aria-label="Tags" multiple size="3"><option>A</option></select>',
+    );
+    const { nodes, rootId } = extractDomTree(root);
+    const select = nodes.get(nodes.get(rootId)!.childIds[0])!;
+
+    expect(select.a11y.role).toBe("listbox");
+    expect(select.dom?.attributes["size"]).toBe("3");
+    expect(select.dom?.attributes["multiple"]).toBe("");
+  });
+
   it("computes accessible name from wrapping <label> (implicit association)", () => {
     const root = createPage(`
       <label>Full name<input type="text" /></label>

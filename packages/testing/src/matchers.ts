@@ -30,6 +30,7 @@ import {
   getElementRefs,
   getTabSequence,
   isDatalistCombobox,
+  selectRoleFromAttributes,
 } from "@real-a11y-dev/core";
 import {
   extract,
@@ -217,7 +218,8 @@ function implicitRoleFor(
 ): string | undefined {
   switch (tag) {
     case "select":
-      return attrs.multiple !== undefined ? "listbox" : "combobox";
+      // The DOM producer's own rule, so a select's `size` decides both.
+      return selectRoleFromAttributes(attrs);
     case "option":
       return "option";
     case "button":

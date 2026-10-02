@@ -130,6 +130,8 @@ Note what is *not* exempted: the `<select>` above still needs an accessible name
 
 The distinction is per-attribute rather than per-element, since an element can supply one state and still owe another — `<input type="checkbox" role="switch">` has an authored role *and* browser-supplied checkedness, and passes.
 
+An authored role that repeats the element's own counts as the element's own. A `<select>`'s role depends on how many rows it shows: it is a `listbox` when its `size` is greater than 1, or when it is `multiple` with no `size`. Otherwise it is a `combobox`, and that includes `<select multiple size="1">`, which Chromium renders as a drop-down. So `role="listbox"` on `<select size="3">` is redundant. `role="combobox"` on that select changes its role, and its options are then reported as controls nested inside a combobox.
+
 The same rule is why `<video controls>` no longer fails: its extracted role is engine vocabulary rather than an ARIA role, and only an authored role can be invalid ARIA.
 
 Unlike the four matchers above, this one doesn't wrap an `assert*` function — it runs the semantic tree through `@real-a11y-dev/validate` and fails only on `severity: "error"` issues.
