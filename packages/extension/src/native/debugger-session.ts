@@ -67,6 +67,34 @@ export function isConnectionLost(message: string | undefined): boolean {
   );
 }
 
+/**
+ * Whether a `chrome.debugger.onDetach` reason ends an armed pick as a plain
+ * cancel — the same outcome as Stop or `Escape` — rather than failing it as a
+ * dropped connection.
+ *
+ * These are the only two reasons Chromium defines (`DetachReason` in
+ * `chrome/common/extensions/api/debugger.json`), and attaching again undoes
+ * neither:
+ *
+ *  - `canceled_by_user`: the user pressed Cancel on Chrome's "…started
+ *    debugging this browser" infobar, and only that sends it. Re-attaching
+ *    would put the infobar straight back and re-arm the pick they just
+ *    dismissed.
+ *  - `target_closed`: Chrome closed the session itself, because the tab closed
+ *    or navigated somewhere this extension may not debug. A fresh attach is
+ *    refused for the same reason.
+ *
+ * Opening DevTools on the tab is not a cause. Chromium attaches it as a second
+ * client beside ours.
+ *
+ * A reason outside this list keeps the conservative path: the pick fails as a
+ * dropped connection, so the panel reports it instead of treating it as a
+ * cancel.
+ */
+export function detachEndsPick(reason: string): boolean {
+  return reason === "canceled_by_user" || reason === "target_closed";
+}
+
 export interface AttachOutcome {
   ok: boolean;
   /**
@@ -134,19 +162,18 @@ export class NativeDebuggerSession {
    * — there is nothing in `chrome.storage` to read it back from, unlike
    * every other piece of state this class tracks, because a pick session
    * that outlives an MV3 suspend has nothing left to cancel anyway (see
-   * {@link runPick}'s own comment).
+   * {@link runPick}'s own comment). `chrome.debugger.onDetach` calls it too,
+   * for a detach whose reason {@link detachEndsPick} recognizes.
    */
   private pickCancel = new Map<number, () => void>();
 
   /**
    * Reject callback for an in-flight {@link runPick}, keyed by tab id —
    * distinct from {@link pickCancel}, which *resolves* the pick as a plain
-   * cancel. `chrome.debugger.onDetach` uses this one instead: a detach mid-
-   * pick (DevTools opening on the tab, the SW's own connection dropping) is
-   * a genuine connection loss, not the user cancelling, and `attachAndRun`
-   * only classifies it that way (`connection-lost`, feeding the reattach
-   * metric like every other native op's drop) when `fn` REJECTS rather than
-   * resolves — see the constructor's `onDetach` listener.
+   * cancel. `chrome.debugger.onDetach` uses this one only for a reason
+   * {@link detachEndsPick} does not recognize: the pick then fails as a
+   * dropped connection (`connection-lost`) rather than passing for something
+   * the user did — see the constructor's `onDetach` listener.
    */
   private pickReject = new Map<number, () => void>();
 
@@ -193,11 +220,20 @@ export class NativeDebuggerSession {
       // settled, the queue can't advance until the user happens to click
       // something or explicitly stops picking, exactly the way a genuinely
       // failed read or act never gets to (those always resolve `fn`, one way
-      // or the other). Reject rather than resolve: `attachAndRun`'s own catch
-      // classifies a rejection via `isConnectionLost`, so this reads as the
-      // same kind of drop a mid-read/mid-act disconnect already does, not as
-      // the user pressing Escape.
-      this.pickReject.get(tabId)?.();
+      // or the other).
+      //
+      // The reason decides how it settles. A reason `detachEndsPick`
+      // recognizes, like the user pressing Cancel on Chrome's infobar, ends
+      // the pick as a cancel: it resolves, so `withRecovery` sees a finished
+      // pick, not a drop to retry, and never re-attaches over the user's
+      // Cancel. Any other reason rejects, which `attachAndRun` classifies as
+      // `connection-lost`.
+      //
+      // Either way the drop is still booked as `detach-unsolicited` with this
+      // reason. The recorder below joins the storage queue now, before the
+      // pick's own teardown can claim the attach entry as a deliberate detach.
+      if (detachEndsPick(reason)) this.pickCancel.get(tabId)?.();
+      else this.pickReject.get(tabId)?.();
       void this.enqueue(async () => {
         const attached = await this.readAttached();
         const startedAt = attached[tabId];
@@ -756,12 +792,13 @@ export class NativeDebuggerSession {
         chrome.debugger.onEvent.removeListener(onEvent);
         this.pickCancel.delete(tabId);
         this.pickReject.delete(tabId);
+        // Reached only for an `onDetach` reason `detachEndsPick` does not
+        // recognize — the ones it does end the pick through `pickCancel`.
         // A static, recognized string (R6: never surface a raw
         // chrome.runtime.lastError/onDetach reason verbatim) — matches
         // `isConnectionLost`'s own "Target closed." pattern so
         // `attachAndRun`'s catch classifies this the same way a mid-read or
-        // mid-act disconnect already is, regardless of what `reason` Chrome
-        // actually reported for this detach.
+        // mid-act disconnect already is.
         reject(new Error("Target closed."));
       };
       // A DOM.enable/Overlay.enable/Overlay.setInspectMode rejection below
@@ -776,6 +813,14 @@ export class NativeDebuggerSession {
       // other native op's real command failure. The message itself never
       // surfaces (R6): `attachAndRun` only pattern-matches it, then reduces
       // the whole thing to the fixed `"command-failed"` tag.
+      //
+      // The exception is a detach that lands while one of these commands is
+      // in flight. Chromium answers a pending command ("Detached while
+      // handling command.") before it fires `onDetach`, so this path sees the
+      // drop before its reason exists, and `attachAndRun` books it as
+      // `connection-lost`. That can be the user's own Cancel, which is why
+      // `NATIVE_PICK_START` asks `withRecovery` not to retry a dropped pick
+      // (`retryDrop: false`).
       const rejectSetupFailure = (err: unknown) => {
         if (settled) return;
         settled = true;

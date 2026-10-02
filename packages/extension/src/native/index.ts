@@ -378,6 +378,13 @@ export function registerNativeMode(): void {
                 tabId,
                 (t) => session.runPick(tabId, t),
                 log,
+                // Never re-arm a pick on our own after Chrome detached it. A
+                // detach while the pick is armed already resolves as a cancel
+                // (`detachEndsPick`), but one that lands while the pick is
+                // still being armed reaches `withRecovery` as a plain drop,
+                // before Chrome has said why. That can be the user pressing
+                // Cancel on the infobar, and a retry would re-attach against it.
+                { retryDrop: false },
               );
               // Three distinct outcomes, kept distinct all the way to the
               // panel rather than collapsed into one "it didn't work" —
@@ -385,6 +392,9 @@ export function registerNativeMode(): void {
               // (DevTools already attached, an unattachable navigation
               // mid-arm, a connection drop), not the same thing as the user
               // pressing Escape (`outcome.ok === true`, `picked === null`).
+              // A detach Chrome reports once the pick is armed — the user
+              // cancelling the debugging infobar, the tab closing — is a
+              // cancel too, not a failure.
               const payload = !outcome.ok
                 ? {
                     error: outcome.error ?? "pick failed",
@@ -451,12 +461,18 @@ export function registerNativeMode(): void {
  * `NativeDebuggerSession.attach()`, on the same storage queue the revoke uses,
  * which is the only placement that makes "switched off" and "attached"
  * mutually exclusive rather than merely usually-ordered.
+ *
+ * @param retryDrop retry once after a mid-operation drop (`connection-lost`).
+ *   A read or an action wants that. A pick does not: whatever detached it,
+ *   whether the user's Cancel on Chrome's infobar or the tab closing, a fresh
+ *   attach can't undo it, so `NATIVE_PICK_START` passes `false`.
  */
 export async function withRecovery<T>(
   session: NativeDebuggerSession,
   tabId: number,
   fn: (t: import("./native-core.js").CdpTransport) => Promise<T>,
   log?: DogfoodLog,
+  { retryDrop = true }: { retryDrop?: boolean } = {},
 ): Promise<{
   outcome: { ok: boolean; error?: string; reason?: NativeUnavailableReason };
   value?: T;
@@ -486,6 +502,11 @@ export async function withRecovery<T>(
   ) {
     return await classify(first, log);
   }
+  // The caller declined the retry, so no reattach verdict is booked: nothing
+  // was attempted. The drop is already in the log as `detach-unsolicited`,
+  // and scoring a retry this caller never wanted under the reattach counters
+  // would skew the service-worker recovery numbers they exist to measure.
+  if (first.outcome.error === "connection-lost" && !retryDrop) return first;
 
   const retry = await runGuarded(session, tabId, fn);
   // Only a mid-operation drop (we WERE attached, then lost it) is a lifecycle

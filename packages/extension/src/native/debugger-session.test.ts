@@ -1,7 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { isConnectionLost, NativeDebuggerSession } from "./debugger-session.js";
+import {
+  detachEndsPick,
+  isConnectionLost,
+  NativeDebuggerSession,
+} from "./debugger-session.js";
 import type { DogfoodEvent } from "./dogfood.js";
+
+import { registerNativeMode, withRecovery } from "./index.js";
 
 /** In-memory stand-in for a chrome.storage area. */
 class FakeStorage {
@@ -31,6 +37,11 @@ function stubChrome() {
   const eventListeners: CdpEventListener[] = [];
   const g = globalThis as unknown as { chrome: unknown };
   g.chrome = {
+    // An ordinary page, so `withRecovery`'s capability pre-flight lets the
+    // tests that drive the pick through it attach (capability.test.ts covers
+    // the pre-flight itself).
+    tabs: { get: async () => ({ url: "https://example.test/" }) },
+    extension: { isAllowedFileSchemeAccess: async () => false },
     debugger: {
       attach: vi.fn(async () => {}),
       detach: vi.fn(async () => {}),
@@ -80,6 +91,14 @@ async function settleAttach() {
   for (let i = 0; i < 40; i++) await Promise.resolve();
 }
 
+/** Drain the microtask queue completely. Every stub here settles in
+ *  microtasks, so one macrotask turn is enough for a pick to finish, or for a
+ *  `withRecovery` retry to re-attach and re-arm, however many hops either
+ *  takes. */
+async function drain() {
+  await new Promise((resolve) => setTimeout(resolve, 0));
+}
+
 function kinds(log: FakeStorage): string[] {
   const events = (log.data["dogfood.nativeLog"] ?? []) as DogfoodEvent[];
   return events.map((e) => e.kind);
@@ -113,6 +132,20 @@ describe("isConnectionLost", () => {
     ]) {
       expect(isConnectionLost(msg)).toBe(false);
     }
+  });
+});
+
+describe("detachEndsPick", () => {
+  it("ends a pick on both reasons Chromium reports", () => {
+    // `DetachReason` in chrome/common/extensions/api/debugger.json has exactly
+    // these two values.
+    expect(detachEndsPick("canceled_by_user")).toBe(true);
+    expect(detachEndsPick("target_closed")).toBe(true);
+  });
+
+  it("leaves a reason it does not know on the connection-lost path", () => {
+    expect(detachEndsPick("replaced_with_devtools")).toBe(false);
+    expect(detachEndsPick("")).toBe(false);
   });
 });
 
@@ -814,21 +847,89 @@ describe("NativeDebuggerSession picker", () => {
     expect(value).toBeNull();
   });
 
-  it("a debugger detach mid-pick rejects as connection-lost, not a plain cancel", async () => {
+  it.each(["canceled_by_user", "target_closed"])(
+    "a %s detach mid-pick ends it as a plain cancel, with no retry and no re-attach",
+    async (reason) => {
+      // `canceled_by_user` is the user pressing Cancel on Chrome's "…started
+      // debugging this browser" infobar. This used to reject as
+      // `connection-lost`, which `withRecovery` retries, so the pick re-attached
+      // at once and the infobar came straight back over the user's Cancel.
+      // `target_closed` (the tab closed, or went somewhere the debugger may not
+      // follow) has nothing to retry either.
+      const listeners = stubChrome().listeners;
+      const g = globalThis as unknown as { chrome: typeof chrome };
+      const attach = g.chrome.debugger.attach as ReturnType<typeof vi.fn>;
+      const log = new FakeStorage();
+      const attachStore = new FakeStorage();
+      const session = new NativeDebuggerSession(log, attachStore);
+
+      // Through `withRecovery` with its default retry, so a retry is still
+      // possible here: the reason classification is what has to stop it.
+      const result = withRecovery(
+        session,
+        7,
+        (t) => session.runPick(7, t),
+        session.dogfoodLog(),
+      );
+      await settleAttach();
+      expect(attach).toHaveBeenCalledTimes(1); // armed
+
+      listeners[listeners.length - 1]({ tabId: 7 }, reason);
+      await drain();
+      // A regression re-attaches and re-arms instead. Release that pick so the
+      // assertions below report it rather than the test timing out.
+      session.cancelAllPicks();
+
+      const { outcome, value } = await result;
+      expect(attach).toHaveBeenCalledTimes(1);
+      expect(outcome.ok).toBe(true);
+      expect(value).toBeNull(); // `{ cancelled: true }` at NATIVE_PICK_START
+
+      // Still booked as the unsolicited detach it was, with Chrome's reason,
+      // and never as a deliberate `detach` or a reattach of any kind.
+      await settle();
+      expect(kinds(log)).toEqual(["attach", "detach-unsolicited"]);
+      const events = (log.data["dogfood.nativeLog"] ?? []) as DogfoodEvent[];
+      expect(events[1].reason).toBe(reason);
+      expect(attachStore.data["dogfood.attachedTabs"]).toEqual({});
+    },
+  );
+
+  it("a detach mid-pick with a reason Chrome never sent still rejects as connection-lost", async () => {
+    // The conservative path `detachEndsPick` leaves for a reason it does not
+    // know: report a dropped connection, rather than pass it off as the user
+    // cancelling.
     const listeners = stubChrome().listeners;
     const session = new NativeDebuggerSession(new FakeStorage());
 
     const result = session.withDebugger(7, (t) => session.runPick(7, t));
     await settleAttach();
 
-    // Chrome itself detaches — DevTools opening on the tab, the connection
-    // dropping — not the user pressing Escape or clicking Stop.
-    listeners[listeners.length - 1]({ tabId: 7 }, "target_closed");
+    listeners[listeners.length - 1]({ tabId: 7 }, "replaced_with_devtools");
 
     const { outcome, value } = await result;
     expect(outcome.ok).toBe(false);
     expect(outcome.error).toBe("connection-lost");
     expect(value).toBeUndefined();
+  });
+
+  it("a detach with no pick armed does not cancel the next pick on that tab", async () => {
+    // The listener settles only a pick that is already armed. Recording the
+    // detach as a pending cancel instead (what `cancelPick` does for an early
+    // STOP) would make the user's next pick on this tab end the moment it
+    // armed, long after the Cancel that caused it.
+    const { listeners, eventListeners } = stubChrome();
+    const session = new NativeDebuggerSession(new FakeStorage());
+
+    listeners[listeners.length - 1]({ tabId: 7 }, "canceled_by_user");
+
+    const result = session.withDebugger(7, (t) => session.runPick(7, t));
+    await settleAttach();
+    fireInspectNodeRequested(eventListeners, 7, 123);
+
+    const { outcome, value } = await result;
+    expect(outcome.ok).toBe(true);
+    expect(value).toEqual({ backendNodeId: 123, chainBackendNodeIds: [123] });
   });
 
   it("a setup command failure (Overlay.setInspectMode rejected) reports a real failure, not a cancel", async () => {
@@ -885,5 +986,110 @@ describe("NativeDebuggerSession picker", () => {
     // the test above — what this test actually pins is the listener cleanup.
     expect(session.cancelPick(7)).toBe(true);
     expect(eventListeners.length).toBe(0);
+  });
+});
+
+describe("NATIVE_PICK_START through the real message handler", () => {
+  /**
+   * `registerNativeMode()`'s own handlers over `stubChrome()`, with native mode
+   * switched on. Returns a way to start a pick the way the panel does, and the
+   * `NATIVE_PICK_RESULT` pushes that come back.
+   */
+  function registerHandlers() {
+    const stubs = stubChrome();
+    const local = new FakeStorage();
+    local.data["settings.nativeModeEnabled"] = true;
+    const pushed: unknown[] = [];
+    let onMessage: (
+      message: unknown,
+      sender: { id?: string },
+      sendResponse: (response: unknown) => void,
+    ) => unknown = () => undefined;
+    const g = globalThis as unknown as { chrome: Record<string, unknown> };
+    g.chrome.storage = { local, session: new FakeStorage() };
+    g.chrome.runtime = {
+      id: "ext",
+      onMessage: {
+        addListener: (fn: typeof onMessage) => (onMessage = fn),
+      },
+      sendMessage: async (message: unknown) => {
+        pushed.push(message);
+      },
+    };
+    registerNativeMode();
+    const startPick = (tabId: number) =>
+      onMessage(
+        { type: "NATIVE_PICK_START", tabId, requestId: 1 },
+        { id: "ext" },
+        () => {},
+      );
+    const attach = (g.chrome as unknown as typeof chrome).debugger
+      .attach as ReturnType<typeof vi.fn>;
+    return { ...stubs, attach, pushed, startPick };
+  }
+
+  it("a Cancel on Chrome's debugging infobar releases the panel's pick with a plain cancel", async () => {
+    const { listeners, attach, pushed, startPick } = registerHandlers();
+
+    startPick(7);
+    await drain(); // attached and armed
+    expect(attach).toHaveBeenCalledTimes(1);
+
+    listeners[listeners.length - 1]({ tabId: 7 }, "canceled_by_user");
+    await drain();
+
+    expect(attach).toHaveBeenCalledTimes(1);
+    expect(pushed).toEqual([
+      {
+        type: "NATIVE_PICK_RESULT",
+        tabId: 7,
+        requestId: 1,
+        payload: { cancelled: true },
+      },
+    ]);
+  });
+
+  it("a Cancel that lands while the pick is still arming never re-attaches", async () => {
+    // Chromium answers a command that is still in flight ("Detached while
+    // handling command.") before it fires `onDetach`. So a Cancel that lands
+    // while `runPick` is arming reaches it as a failed command, before any
+    // reason exists, and `detachEndsPick` never gets a say. `retryDrop: false`
+    // at the call site is all that stops this drop from re-attaching.
+    const { listeners, attach, pushed, startPick } = registerHandlers();
+    const g = globalThis as unknown as { chrome: typeof chrome };
+    (
+      g.chrome.debugger.sendCommand as ReturnType<typeof vi.fn>
+    ).mockImplementation(
+      async (_target: unknown, method: string, params?: { mode?: string }) => {
+        if (
+          method === "Overlay.setInspectMode" &&
+          params?.mode === "searchForNode"
+        ) {
+          // Chromium's order: the pending command's answer, then the event,
+          // which arrives as a task of its own, after the answer's handlers.
+          setTimeout(() =>
+            listeners[listeners.length - 1]({ tabId: 7 }, "canceled_by_user"),
+          );
+          throw new Error("Detached while handling command.");
+        }
+        return {};
+      },
+    );
+
+    startPick(7);
+    await drain();
+    await drain(); // the late onDetach
+
+    expect(attach).toHaveBeenCalledTimes(1);
+    // Reported as the drop it looked like when it happened. The panel shows
+    // it, but never re-arms.
+    expect(pushed).toEqual([
+      {
+        type: "NATIVE_PICK_RESULT",
+        tabId: 7,
+        requestId: 1,
+        payload: { error: "connection-lost" },
+      },
+    ]);
   });
 });

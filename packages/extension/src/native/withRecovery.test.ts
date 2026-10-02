@@ -112,6 +112,40 @@ describe("withRecovery reattach accounting", () => {
   });
 });
 
+describe("withRecovery with retryDrop: false (a pick)", () => {
+  const runNoDropRetry = (s: ReturnType<typeof fakeSession>) =>
+    withRecovery(s.session as any, 1, async () => "picked", undefined, {
+      retryDrop: false,
+    });
+
+  it("returns a drop as-is: no second attach, and no reattach verdict", async () => {
+    // A pick that lost its connection is over, whether the user cancelled
+    // Chrome's debugging infobar or the tab went away. A retry would re-attach
+    // against the one and fail against the other. No verdict either: nothing
+    // was attempted, so booking one would skew the recovery counters.
+    const s = fakeSession([
+      { outcome: { ok: false, error: "connection-lost" } },
+      { outcome: { ok: true } },
+    ]);
+    const res = await runNoDropRetry(s);
+    expect(res.outcome.error).toBe("connection-lost");
+    expect(s.calls()).toBe(1);
+    expect(s.records).toHaveLength(0);
+  });
+
+  it("still retries a failure that is not a drop", async () => {
+    // Only the drop changes. A command that failed while the connection held
+    // keeps its single best-effort retry.
+    const s = fakeSession([
+      { outcome: { ok: false, error: "command-failed" } },
+      { outcome: { ok: true } },
+    ]);
+    const res = await runNoDropRetry(s);
+    expect(res.outcome.ok).toBe(true);
+    expect(s.calls()).toBe(2);
+  });
+});
+
 describe("withRecovery as the one funnel", () => {
   it("refuses an unattachable tab without attaching, and records the reason", async () => {
     // The pre-flight used to be hand-copied into NATIVE_READ only, so the same
