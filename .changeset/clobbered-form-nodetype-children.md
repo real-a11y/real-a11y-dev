@@ -30,6 +30,7 @@ Other walks dropped such a form the same way, and now read through it:
 What this changes for you:
 
 - **Pages without such a name** are unaffected.
+- **A form that also shadows what the walk reads on every element** (`getAttribute`, `tagName`) is still left out of the tree with its contents, and out of the names around it, as before.
 - **Snapshots and tree diffs:** a tree from such a page gains the form and its contents. A committed baseline from one changes, so re-record it.
 - **`cli` / `mcp`:** `real-a11y tabs` and `get_tab_order` run the DOM walk in the page, so on such a page they now list the form's controls. Native trees are unaffected.
 - **jsdom:** jsdom doesn't shadow a form's members, so a suite running on jsdom is unaffected. These pages broke in a real browser, which includes the Playwright adapter.

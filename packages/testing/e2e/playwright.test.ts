@@ -501,6 +501,18 @@ test.describe("a form whose control is named nodeType", () => {
     const sn = await attach(page);
     expect(await sn.treeSnapshot()).toContain('heading "Checkout now"');
   });
+
+  test("keeps the heading when such a form also shadows getAttribute", async ({
+    page,
+  }) => {
+    // Inside the form, the name walk calls the form's `getAttribute`, which a
+    // second control shadows. That throw cost the heading, not just the form.
+    await page.setContent(
+      `<main><h2>Checkout <form><input type="hidden" name="nodeType"><input type="hidden" name="getAttribute"><span>now</span></form></h2></main>`,
+    );
+    const sn = await attach(page);
+    expect(await sn.treeSnapshot()).toContain('heading "Checkout"');
+  });
 });
 
 test.describe("rootSelector that matches nothing", () => {

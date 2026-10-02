@@ -435,6 +435,36 @@ describe("the flat tree around a clobbered <form>", () => {
     clobber(page.querySelector("form")!, "nodeType");
     expect(getDescendantText(page.querySelector("#d")!)).toBe("Hello world");
   });
+
+  // Once the walks enter such a form, a second shadowing control can throw on
+  // what they read of it. That costs the form's text, as the boundary costs
+  // the form itself, and never the host whose name or value it was building.
+  const BOTH = `<input type="hidden" name="nodeType"><input type="hidden" name="getAttribute"><span>inside</span>`;
+  const shadowBoth = (): void => {
+    const form = page.querySelector("form")!;
+    clobber(form, "nodeType");
+    clobber(form, "getAttribute");
+  };
+
+  it("keeps a heading named from content that holds a form shadowing getAttribute too", () => {
+    page.innerHTML = `<h2>Checkout <form>${BOTH}</form></h2>`;
+    shadowBoth();
+    expect(find(extractDomTree(page), "heading")?.a11y.name).toBe("Checkout");
+  });
+
+  it("keeps a wrapping label's name when it holds such a form", () => {
+    page.innerHTML = `<label>Card <form>${BOTH}</form><input></label>`;
+    shadowBoth();
+    expect(find(extractDomTree(page), "textbox")?.a11y.name).toBe("Card");
+  });
+
+  it("keeps an editor's value when it holds such a form", () => {
+    page.innerHTML = `<div contenteditable="true" role="textbox" aria-label="Notes">Draft <form>${BOTH}</form></div>`;
+    shadowBoth();
+    expect(find(extractDomTree(page), "textbox", "Notes")?.a11y.value).toBe(
+      "Draft",
+    );
+  });
 });
 
 // A `<details>`' summary is its first `<summary>` DOM child. Content slotted
