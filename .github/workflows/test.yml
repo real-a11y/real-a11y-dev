@@ -554,9 +554,15 @@ jobs:
           # package alone is accepted by changesets and then silently ignored
           # (`privatePackages.version: false`). This grep cannot tell the
           # difference — see the follow-up issue for the check that can.
+          #
+          # Test code and test data are excluded because no published artifact
+          # can contain them — the SAME set `isTestShaped` in
+          # scripts/pr-risk.mjs grades 🟢 low, so keep the two patterns in step.
+          # When they disagreed, a fixture-only PR graded agent-mergeable and
+          # then failed here for want of a changeset that would ship nothing.
           src=$(echo "$changed" \
             | grep -E '^packages/(audit|browser|cli|core|inspector|mcp|react|serialize|session-registry|snapshot|storybook-addon|testing|ui|validate)/src/' \
-            | grep -vE '\.(test|spec)\.[tj]sx?$' || true)
+            | grep -vE '\.(test|spec)\.[cm]?[jt]sx?$|/__(tests|fixtures|snapshots)__/' || true)
           added=$(git diff --name-only --diff-filter=A "$BASE"...HEAD -- .changeset \
             | grep -E '\.md$' | grep -viE 'README' || true)
           if [ -n "$src" ] && [ -z "$added" ]; then

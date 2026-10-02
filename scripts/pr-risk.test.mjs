@@ -146,7 +146,8 @@ let n = 0;
 /**
  * Grade a diff: `files` is what this imaginary pull request writes — an array
  * of paths (each gets placeholder content), or `{ path: content }` when the
- * rule under test reads the code rather than the path.
+ * rule under test reads the code rather than the path. A `null` content
+ * deletes that path from `base`.
  *
  * `base` is committed first and never appears in the answer — the rubric diffs
  * against the merge base, so the base commit's own contents are invisible to it.
@@ -164,6 +165,7 @@ async function grade(files, { base = {}, commit = true, config = {} } = {}) {
 
   const write = async (path, content) => {
     const file = resolve(dir, path);
+    if (content === null) return rm(file);
     await mkdir(dirname(file), { recursive: true });
     await writeFile(file, content);
   };
@@ -716,5 +718,235 @@ describe("a boundary name counts with a prefix or a suffix", () => {
     assert.deepEqual(evidenceFor(result, "field-value-redaction"), [
       "packages/extension/src/native/native-core.ts → REDACTED_VALUE",
     ]);
+  });
+});
+
+const REACT_TEST_PATH = "packages/react/src/react.test.tsx";
+const REACT_TEST = `import { describe, expect, it } from "vitest";
+
+describe("SemanticPanel", () => {
+  it("renders the tree", async () => {
+    await new Promise((r) => setTimeout(r, 50));
+    expect(screen.getByRole("tree")).toBeTruthy();
+  });
+});
+`;
+const FLAKE_FIX = [
+  `await new Promise((r) => setTimeout(r, 50));`,
+  `await waitFor(() => screen.getByRole("tree"));`,
+];
+
+describe("co-located tests grade as tests, not as published source", () => {
+  it("grades a test-only diff inside a published package's src 🟢 low", async () => {
+    // The shape of a real flake fix here: one `react.test.tsx`, sleeps swapped
+    // for a wait. `published-src` matched it before `LOW_SHAPED` was asked,
+    // so it went to a human — while the same edit to a spec under `e2e/`
+    // was agent-mergeable. Neither can reach a published artifact.
+    const fixture = "packages/core/src/native/__fixtures__/ax-media-form.json";
+    const result = await grade(
+      {
+        [REACT_TEST_PATH]: REACT_TEST.replace(...FLAKE_FIX),
+        [fixture]: `{"nodes":[{"role":"slider"}]}\n`,
+      },
+      { base: { [REACT_TEST_PATH]: REACT_TEST, [fixture]: `{"nodes":[]}\n` } },
+    );
+
+    assert.equal(result.tier, "low");
+    assert.deepEqual(result.reasons, []);
+    assert.deepEqual(result.unrecognised, []);
+    // A NESTED `__fixtures__` too — the entry this replaced was anchored to
+    // `src/__fixtures__/` and missed the real one under `core/src/native/`.
+    assert.deepEqual(result.shape.sort(), ["test fixtures", "tests"]);
+    // Low to review is not "skip the suite": a test change has to run.
+    assert.equal(result.ci.code, true);
+  });
+
+  it("still grades the source beside it 🟡 medium, citing only the source", async () => {
+    const result = await grade(
+      {
+        [REACT_TEST_PATH]: REACT_TEST.replace(...FLAKE_FIX),
+        "packages/react/src/index.ts": `export const x = 2;\n`,
+      },
+      { base: { [REACT_TEST_PATH]: REACT_TEST } },
+    );
+
+    assert.equal(result.tier, "medium");
+    assert.deepEqual(ruleIds(result), ["published-src"]);
+    assert.deepEqual(evidenceFor(result, "published-src"), [
+      "packages/react/src/index.ts",
+    ]);
+  });
+
+  it("still reads a test for redaction gates — the exclusion is by path only", async () => {
+    // Dropping the assertion that a password field comes out redacted is a
+    // test-only diff, and it is the one that most needs a human. The redaction
+    // rules read code wherever it lives, so `published-src` stepping aside
+    // leaves them exactly where they were.
+    const test = `it("redacts a password", () => {\n  expect(isSensitiveField(pw)).toBe(true);\n});\n`;
+    const path = "packages/core/src/extraction/dom-extractor.test.ts";
+    const result = await grade(
+      { [path]: test.replace(/ {2}expect\(isSensitiveField.*\n/, "") },
+      { base: { [path]: test } },
+    );
+
+    assert.equal(result.tier, "high");
+    assert.deepEqual(evidenceFor(result, "field-value-redaction"), [
+      `${path} → isSensitiveField`,
+    ]);
+  });
+});
+
+describe("a test switched off or deleted grades 🟡 medium", () => {
+  it("catches a skip marker, in src or e2e, in every extension the tests entry accepts", async () => {
+    // These pass every check by construction — the suite stays green over the
+    // test that stopped running — so CI can't be the review for them.
+    // `.spec.mts` because `TEST_FILE` accepts it: before the code scan read
+    // `mts`, the same marker there graded 🟢 where `.ts` graded 🟡.
+    const e2e = "packages/cli/e2e/tree.spec.mts";
+    const spec = `test("prints a tree", async () => {\n  expect(out).toContain("tree");\n});\n`;
+    const result = await grade(
+      {
+        [REACT_TEST_PATH]: REACT_TEST.replace(
+          `  it("renders the tree"`,
+          `  it.skipIf(process.platform === "win32")("renders the tree"`,
+        ).replace(`describe("SemanticPanel"`, `describe.only("SemanticPanel"`),
+        [e2e]: spec.replace(
+          `  expect(out)`,
+          `  test.fixme();\n  ctx.skip();\n  expect(out)`,
+        ),
+      },
+      { base: { [REACT_TEST_PATH]: REACT_TEST, [e2e]: spec } },
+    );
+
+    assert.equal(result.tier, "medium");
+    assert.deepEqual(ruleIds(result), ["tests-disabled"]);
+    assert.deepEqual(evidenceFor(result, "tests-disabled"), [
+      `${e2e} → test.fixme, ctx.skip`,
+      `${REACT_TEST_PATH} → describe.only, it.skipIf`,
+    ]);
+  });
+
+  it("catches the destructured skip(), and a Jest __tests__ file with no .test. in its name", async () => {
+    // `({ skip }) => skip()` is Vitest's documented in-body form, and has no
+    // receiver for a `ctx.skip(` pattern to see. And Jest collects anything
+    // under `__tests__/` — `examples/testing-jest` runs under root
+    // `pnpm test`, in the `examples/` bucket that grades 🟢 low on its own.
+    const jest = "examples/testing-jest/__tests__/matchers.ts";
+    const body = `it("matches", () => {\n  expect(tree).toHaveRole("tree");\n});\n`;
+    const result = await grade(
+      {
+        [REACT_TEST_PATH]: REACT_TEST.replace(
+          `async () => {\n    await`,
+          `async ({ skip }) => {\n    skip();\n    await`,
+        ),
+        [jest]: body.replace(`it("matches"`, `it.skip("matches"`),
+      },
+      { base: { [REACT_TEST_PATH]: REACT_TEST, [jest]: body } },
+    );
+
+    assert.equal(result.tier, "medium");
+    assert.deepEqual(evidenceFor(result, "tests-disabled"), [
+      `${jest} → it.skip`,
+      `${REACT_TEST_PATH} → skip`,
+    ]);
+  });
+
+  it("grades a deleted test 🟡 medium, but switching one back on 🟢 low", async () => {
+    const skipped = REACT_TEST.replace(`  it(`, `  it.skip(`);
+    const gone = "packages/core/src/flatten.test.ts";
+    const deleted = await grade(
+      { [gone]: null },
+      { base: { [gone]: `it("flattens", () => {});\n` } },
+    );
+    const reenabled = await grade(
+      { [REACT_TEST_PATH]: REACT_TEST },
+      { base: { [REACT_TEST_PATH]: skipped } },
+    );
+
+    assert.equal(deleted.tier, "medium");
+    assert.deepEqual(evidenceFor(deleted, "tests-disabled"), [
+      `${gone} → deleted`,
+    ]);
+    // The `-` side of a skip is a test coming back, not going away.
+    assert.equal(reenabled.tier, "low");
+    assert.deepEqual(reenabled.reasons, []);
+  });
+
+  it("grades an example's scripts 🔴 high, though examples/ is low", async () => {
+    // `pnpm install` runs every workspace project's install lifecycle, and
+    // root `build` runs any example it doesn't exclude — both inside the
+    // publish job, which can mint npm's Trusted Publisher token. So a
+    // `postinstall` here is agent-mergeable code with publish rights, and the
+    // `verify` split around the test suite would mean nothing without this.
+    const manifest = "examples/testing-jest/package.json";
+    const base = `${JSON.stringify({ name: "x", private: true, scripts: { test: "jest" } })}\n`;
+    const scripts = await grade(
+      {
+        [manifest]: base.replace(`"jest"`, `"jest","postinstall":"node x.mjs"`),
+      },
+      { base: { [manifest]: base } },
+    );
+    const deps = await grade(
+      {
+        [manifest]: base.replace(`"private"`, `"devDependencies":{},"private"`),
+      },
+      { base: { [manifest]: base } },
+    );
+
+    assert.equal(scripts.tier, "high");
+    assert.deepEqual(evidenceFor(scripts, "packaging"), [
+      `${manifest} → scripts`,
+    ]);
+    // Nothing else in a private manifest reaches anyone.
+    assert.equal(deps.tier, "low");
+  });
+
+  it("catches Vitest's options object, which names no runner method", async () => {
+    // `it("x", { skip: true }, fn)` switches a test off with nothing for a
+    // `.skip` pattern to see. `skip:` counts with any value but `false` (the
+    // platform-conditional skip is the realistic one); `only` with `true` alone,
+    // because `{ only: "findings" }` is real data in the CLI's tests.
+    const result = await grade(
+      {
+        [REACT_TEST_PATH]: REACT_TEST.replace(
+          `  it("renders the tree", async`,
+          `  it("renders the tree", { skip: process.platform === "win32" }, async`,
+        ).replace(
+          `describe("SemanticPanel", ()`,
+          `describe("SemanticPanel", { only: true }, ()`,
+        ),
+      },
+      { base: { [REACT_TEST_PATH]: REACT_TEST } },
+    );
+    const data = await grade(
+      {
+        [REACT_TEST_PATH]: REACT_TEST.replace(
+          `    expect(screen`,
+          `    render({ only: "findings", skip: false });\n    expect(screen`,
+        ),
+      },
+      { base: { [REACT_TEST_PATH]: REACT_TEST } },
+    );
+
+    assert.deepEqual(evidenceFor(result, "tests-disabled"), [
+      `${REACT_TEST_PATH} → { only }, { skip }`,
+    ]);
+    assert.equal(data.tier, "low");
+  });
+
+  it("is not tripped by a property that happens to be called only", async () => {
+    // `meta.only` is a real field the snapshot tests assert on. Only a chain
+    // that starts at a runner global counts for `only`.
+    const result = await grade(
+      {
+        [REACT_TEST_PATH]: REACT_TEST.replace(
+          `    expect(screen`,
+          `    expect(artifact.meta.only).toBe("views");\n    expect(screen`,
+        ),
+      },
+      { base: { [REACT_TEST_PATH]: REACT_TEST } },
+    );
+
+    assert.equal(result.tier, "low");
   });
 });
