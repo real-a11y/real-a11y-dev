@@ -155,7 +155,9 @@ function getActions(
 ): ActionType[] {
   const tag = safeTagName(element);
   const actions: ActionType[] = [];
-  const role = element.getAttribute("role");
+  // The role the tree shows, so the actions offered agree with it: a
+  // `role="foo button"` clicks, an option the browser discarded doesn't.
+  const role = getExplicitRole(element);
 
   // Links — live ones. A link inside editable content is not: Chromium
   // won't follow it, not even on a scripted click(), or focus it, so it has
@@ -2587,17 +2589,12 @@ const IMPLICIT_LIVE_ROLES = new Set(["status", "alert", "log"]);
  * they are.
  *
  * The role is read with `getExplicitRole`, the parse `getImplicitRole` uses —
- * first token, no case folding — so the pivot and the extracted tree always
- * agree about what an element is. That inherits first-token-not-first-VALID-
- * token (`role="toast status"` resolves to `toast`), which is a real gap but
- * belongs in `getExplicitRole`, where fixing it corrects the whole engine at
- * once instead of adding a second role-parsing convention here.
- *
- * Case matters and is not folded: CSS matches `role` values case-sensitively,
- * so `[role]` candidates arriving here already agree with the tree. Folding
- * made `<div role="MENU" aria-live="off">` an overlay — it hit the container
- * check before the `off` check — so an element got opposite scoping depending
- * on an unrelated attribute.
+ * the first token Chromium recognises, ASCII-case-folded — so the pivot and
+ * the extracted tree always agree about what an element is:
+ * `role="toast status"` is a status, `role="MENU"` a menu. Never fold or skip
+ * tokens here on its own: a pivot that folded while the tree didn't once made
+ * `<div role="MENU" aria-live="off">` an overlay that the tree said was no
+ * menu, so the element's scoping hung on an unrelated attribute.
  */
 export function countsAsOverlay(el: Element): boolean {
   const role = getExplicitRole(el);
