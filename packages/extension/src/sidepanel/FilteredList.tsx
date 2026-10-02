@@ -65,8 +65,9 @@ interface FilteredListViewProps {
   roleFilter: Exclude<RoleFilter, null>;
   query: string;
   /** Highlight the row's element on the page. Omit when the producer can't
-   *  (native has no page highlight yet): selection still moves, and the
-   *  "Move to" button is hidden rather than left doing nothing. */
+   *  (a native tree view with no page follow wired in): selection still
+   *  moves, and the "Move to" button is hidden rather than left doing
+   *  nothing. */
   onHighlight?: (nodeId: string) => void;
   /** Optional action lets stepper keys dispatch increment/decrement. */
   onActivate: (nodeId: string, action?: ActionType) => void;
@@ -155,9 +156,10 @@ export function FilteredListView({
               } else if (onHighlight) {
                 onHighlight(selectedItem.id);
               } else {
-                // Nothing to activate and no page highlight (a native
-                // `listbox`): open its tree row instead, the same place a
-                // double-click already goes, so Enter is never a dead key.
+                // Nothing to activate and no page highlight (a `listbox`
+                // under a producer with no page follow): open its tree row
+                // instead, the same place a double-click already goes, so
+                // Enter is never a dead key.
                 onGoToTree(selectedItem.id);
               }
             } else {

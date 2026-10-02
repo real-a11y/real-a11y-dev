@@ -13,7 +13,9 @@ import {
   IN_PAGE_ACTION_SOURCE,
   IN_PAGE_READ_VALUE_SOURCE,
   pageClick,
+  pageFocus,
   pageReadValue,
+  pageReveal,
   pageSelectOption,
   pageStep,
   pageType,
@@ -1069,6 +1071,85 @@ describe("in-page actions — click", () => {
   });
 });
 
+describe("in-page actions — focus", () => {
+  beforeEach(() => {
+    document.body.innerHTML = "";
+  });
+
+  it("moves real focus without scrolling the page", () => {
+    // Regression: the panel's own selection-follow (App.tsx) is the first
+    // caller of this action ever reached — a default-scroll `.focus()` would
+    // jump the page out from under a user simply arrow-navigating the tree,
+    // the same reason the DOM producer's own `content.ts` focus call always
+    // passes `preventScroll: true`.
+    const el = document.createElement("button");
+    document.body.appendChild(el);
+    const focusSpy = vi.spyOn(el, "focus");
+
+    expect(on(pageFocus, el)).toEqual({ ok: true });
+    expect(focusSpy).toHaveBeenCalledExactlyOnceWith({ preventScroll: true });
+  });
+
+  it("refuses an element with no focus method", () => {
+    const el = { tagName: "svg" } as unknown as Element;
+    expect(on(pageFocus, el)).toEqual({ ok: false, reason: "not-focusable" });
+  });
+
+  it("refuses a heading — it has .focus() like any HTMLElement, but no tabindex means it never actually takes focus", () => {
+    // Regression: a Devin Review finding on the panel's own selection-follow
+    // caught that this used to report { ok: true } here — the native tree
+    // includes plenty of DOM-backed nodes that are headings/landmarks, not
+    // controls, and the old version never checked whether focus() actually
+    // did anything.
+    document.body.innerHTML = "<h2>Shipping</h2>";
+    const el = document.querySelector("h2") as Element;
+    expect(on(pageFocus, el)).toEqual({ ok: false, reason: "not-focusable" });
+    expect(document.activeElement).not.toBe(el);
+  });
+
+  it("reveal asks the content script for its overlay, then focuses without scrolling", () => {
+    // Regression (user report on PR #412): real focus alone showed nothing —
+    // Chromium paints no focus ring while the side panel, not the page, has
+    // window focus. The visible indicator is the content script's overlay,
+    // requested through this DOM event.
+    const el = document.createElement("button");
+    document.body.appendChild(el);
+    const events: Event[] = [];
+    document.addEventListener("real-a11y:native-reveal", (e) => events.push(e));
+    const focusSpy = vi.spyOn(el, "focus");
+
+    expect(on(pageReveal, el)).toEqual({ ok: true });
+    expect(events).toHaveLength(1);
+    expect(events[0]!.target).toBe(el);
+    expect(focusSpy).toHaveBeenCalledExactlyOnceWith({ preventScroll: true });
+  });
+
+  it("reveal still asks for the overlay on a heading that can't take focus", () => {
+    document.body.innerHTML = "<h2>Shipping</h2>";
+    const el = document.querySelector("h2") as Element;
+    const events: Event[] = [];
+    document.addEventListener("real-a11y:native-reveal", (e) => events.push(e));
+
+    expect(on(pageReveal, el)).toEqual({ ok: true });
+    expect(events).toHaveLength(1);
+  });
+
+  it("reports success for a control inside a shadow root", () => {
+    // Regression (Devin Review, second round): inside a shadow tree
+    // `document.activeElement` is the HOST, so checking it reported
+    // `not-focusable` for a focus that had in fact succeeded.
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const shadow = host.attachShadow({ mode: "open" });
+    const button = document.createElement("button");
+    shadow.appendChild(button);
+
+    expect(on(pageFocus, button)).toEqual({ ok: true });
+    expect(shadow.activeElement).toBe(button);
+    expect(document.activeElement).toBe(host);
+  });
+});
+
 describe("in-page actions — type", () => {
   beforeEach(() => {
     document.body.innerHTML = "";
@@ -1853,6 +1934,9 @@ describe("in-page action source", () => {
     }
     // The composite list must live inside the click body, not hoisted.
     expect(IN_PAGE_ACTION_SOURCE.click).toContain("treeitem");
+    // The reveal event name is a literal inside the body — `content.ts`
+    // listens for the identical string.
+    expect(IN_PAGE_ACTION_SOURCE.reveal).toContain("real-a11y:native-reveal");
     // The sensitive-token list must live inside pageReadValue's own body too.
     expect(String(pageReadValue)).toContain("cc-number");
   });

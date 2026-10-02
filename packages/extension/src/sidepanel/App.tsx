@@ -1753,6 +1753,83 @@ export function App() {
     ],
   );
 
+  /**
+   * Best-effort follow: the user settled on a new selection in the native
+   * tree (`NativeTreeView`'s own debounced `onSelectionFocus`) — show where
+   * it is on the page, the same way the DOM tree's `handleSelect` does: the
+   * content script's highlight overlay, scrolled into view, plus real focus.
+   * The native `reveal` action (`pageReveal`) does both; the overlay is the
+   * part the user actually sees, since Chromium paints no focus ring in a
+   * page whose window isn't focused — and while the side panel is being
+   * driven, it never is.
+   *
+   * Deliberately NOT `dispatchNativeAction`: that helper sets `nativeBusy`,
+   * waits `NATIVE_SETTLE_MS` and re-reads the whole tree afterward — right
+   * for a user-initiated act (a click can open a menu, re-render a list),
+   * wrong for a background follow that fires on every settled selection
+   * and must never flash a busy state or reset expand/scroll position over
+   * a plain arrow-key move. Skips while a real action is in flight rather
+   * than queueing behind it: a follow landing AFTER an activation would
+   * steal focus back from whatever that activation opened (a dialog's own
+   * autofocus). `nativeInFlight` is the check that matters — it's a ref set
+   * synchronously at the start of `dispatchNativeAction`, where
+   * `nativeBusy` is state and can still read `false` in this closure for a
+   * render after an activation has already been sent.
+   *
+   * `expectUrl` closes the navigation race: a node id encodes a
+   * `backendDOMNodeId` from the document the tree was read from, and a
+   * follow sent just before a navigation could otherwise resolve that id in
+   * the NEW document. The service worker checks it after the per-tab queue
+   * wait, immediately before dispatching — not only here, where a
+   * navigation landing after the send would slip past.
+   *
+   * A failure (a stale/backendDOMNodeId invalidated by a navigation, an
+   * element that turned out not to be focusable) is silent — this is a
+   * visual aid, not a dispatched action the user is waiting on or would
+   * want an error banner for.
+   *
+   * Skips outright while Screen Curtain is on (`curtainOn`) — the page is
+   * hidden behind it, so there's nothing to visibly focus, and moving real
+   * focus on a covered page would still scroll/jump it underneath the
+   * curtain and fight whatever the curtained page itself had focused.
+   * Matches `content.ts`'s own DOM `HIGHLIGHT_NODE` handler, which skips its
+   * highlight-and-focus for exactly this reason when `curtainVisible`.
+   *
+   * `silent: true` keeps this out of the dogfood log's `act` count
+   * (`native/index.ts`) — that count is how a dogfooder judges how much
+   * native mode was actually USED; an automatic follow firing on every
+   * settled tree selection would inflate it with browsing, not real
+   * dispatches.
+   *
+   * The service worker arms the content script around the dispatch itself
+   * (see the `reveal` branch of NATIVE_ACT in `native/index.ts`), after the
+   * per-tab queue wait — nothing to coordinate from here.
+   */
+  const focusNativeSelectionOnPage = useCallback(
+    (nodeId: string) => {
+      if (
+        !nativeModeEnabled ||
+        nativeTreeTabId === undefined ||
+        nativeBusy ||
+        nativeInFlight.current ||
+        curtainOn
+      ) {
+        return;
+      }
+      void chrome.runtime
+        .sendMessage({
+          type: "NATIVE_ACT",
+          tabId: nativeTreeTabId,
+          nodeId,
+          action: "reveal",
+          silent: true,
+          ...(nativeTreeUrl !== undefined ? { expectUrl: nativeTreeUrl } : {}),
+        })
+        .catch(() => {});
+    },
+    [nativeModeEnabled, nativeTreeTabId, nativeTreeUrl, nativeBusy, curtainOn],
+  );
+
   const handleNativeActivate = useCallback(
     (
       node: NativeNode,
@@ -2842,6 +2919,7 @@ export function App() {
           }}
           onActivate={handleNativeActivate}
           reveal={nativePickReveal}
+          onSelectionFocus={focusNativeSelectionOnPage}
         />
       ) : viewMode === "tab" ? (
         /* ---- Tab sequence view ---- */

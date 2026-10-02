@@ -102,6 +102,14 @@ export interface NativeTreeViewProps {
     ancestorIds?: string[];
     nonce: number;
   };
+  /**
+   * Best-effort: the user settled on this node id as the tree's selection
+   * (click, arrow-key nav, pick-reveal, or the filtered list's "go to
+   * tree") — App.tsx moves real page focus there, mirroring what the DOM
+   * tree's own row selection already does. Optional so a test/host that
+   * doesn't care about page-side effects can omit it.
+   */
+  onSelectionFocus?: (nodeId: string) => void;
 }
 
 /** A node is worth a click/Enter action, a select action, or both never — the
@@ -146,9 +154,14 @@ export function NativeTreeView({
   onRefresh,
   onActivate,
   reveal,
+  onSelectionFocus,
 }: NativeTreeViewProps) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  // Bumped by an explicit gesture that re-selects a row — a click, or a pick
+  // reveal — so the page-focus follow below re-fires even when `selectedId`
+  // is already that row (focus may have moved elsewhere on the page since).
+  const [followNonce, setFollowNonce] = useState(0);
   const [query, setQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState<RoleFilter>(null);
   const treeRef = useRef<HTMLDivElement>(null);
@@ -207,6 +220,7 @@ export function NativeTreeView({
       return next;
     });
     setSelectedId(nodeId);
+    setFollowNonce((n) => n + 1);
     // Clearing the role filter above swaps `FilteredListView` back for the
     // actual tree — an async Preact re-render, not something the
     // `setRoleFilter(null)` call itself finishes — so `treeRef.current` is
@@ -312,6 +326,64 @@ export function NativeTreeView({
     }
     scrollToIndex(index, "nearest");
   }, [selectedId, visibleIds, scrollToIndex]);
+
+  // Best-effort: follow the selection onto the real page, the same visible
+  // indicator the DOM tree's own row selection already gives — a native
+  // node has no light-DOM element this component can call `.focus()` on
+  // directly, so it hands the id up to App.tsx, which dispatches a native
+  // `focus` action over `chrome.debugger` (see that callback's own comment
+  // for why it's a plain fire-and-forget, not the heavier action pipeline).
+  //
+  // Debounced, deliberately: every branch of handleKeyDown below can walk
+  // `selectedId` through several rows within one key-repeat burst, and each
+  // dispatch is a real attach→resolve→focus→detach round trip — firing one
+  // per intermediate row would queue that whole cycle behind a selection the
+  // user has already moved past. Only the row they actually settle on gets
+  // the real page's focus.
+  //
+  // `onSelectionFocus` deliberately stays OUT of the effect's own dependency
+  // array — read through a ref instead. A Devin Review finding caught the
+  // bug this avoids: App.tsx's callback depends on `nativeBusy`/`curtainOn`,
+  // so its identity changes whenever EITHER flips, with `selectedId`
+  // completely unchanged (e.g. a native action settling after dispatch, or
+  // toggling the curtain). Listing it as a dependency re-armed the debounce
+  // on every such change and refired a focus dispatch for the SAME row —
+  // concretely, selecting a button, activating it, and having the resulting
+  // dialog's own autofocus get immediately stolen back once `nativeBusy`
+  // cleared. This effect must fire only when the SELECTION itself changes —
+  // or when `followNonce` says a gesture re-selected the same row.
+  //
+  // One timer shared with the role-filter list's own follow (`followFromList`
+  // below), so a list click and a tree selection can never both land: the
+  // later request always replaces the pending one.
+  const onSelectionFocusRef = useRef(onSelectionFocus);
+  onSelectionFocusRef.current = onSelectionFocus;
+  const followTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
+    undefined,
+  );
+  const scheduleFollow = useCallback((id: string) => {
+    clearTimeout(followTimer.current);
+    followTimer.current = setTimeout(() => {
+      followTimer.current = undefined;
+      onSelectionFocusRef.current?.(id);
+    }, 150);
+  }, []);
+  useEffect(() => {
+    if (!selectedId) return;
+    scheduleFollow(selectedId);
+    return () => clearTimeout(followTimer.current);
+  }, [selectedId, followNonce, scheduleFollow]);
+  // The tree effect's own cleanup doesn't run for a follow the list
+  // scheduled, so an unmount with one pending has to clear it here.
+  useEffect(() => () => clearTimeout(followTimer.current), []);
+
+  // The role-filter list's selection lives in `FilteredListView`, not in
+  // `selectedId`, so it follows onto the page through this instead: every
+  // click, arrow/Home/End/type-ahead move and "Move to" in the list calls
+  // it, the same `onHighlight` hook the DOM producer's list drives its page
+  // highlight with. Absent `onSelectionFocus` it stays undefined, which is
+  // how the list knows to hide "Move to" rather than show a dead button.
+  const followFromList = onSelectionFocus ? scheduleFollow : undefined;
 
   const toggle = useCallback((id: string) => {
     setExpanded((prev) => {
@@ -583,6 +655,7 @@ export function NativeTreeView({
           items={listItems}
           roleFilter={roleFilter}
           query={query}
+          onHighlight={followFromList}
           onActivate={activateFromList}
           onGoToTree={goToTree}
           onFocusSearch={() => searchInputRef.current?.focus()}
@@ -639,6 +712,7 @@ export function NativeTreeView({
                     onClick={(e) => {
                       e.stopPropagation();
                       setSelectedId(id);
+                      setFollowNonce((n) => n + 1);
                       // A mouse click on the row never moves real DOM focus (the
                       // row itself is tabIndex=-1; only the `.sn-tree` container
                       // is focusable, per the roving-focus/aria-activedescendant

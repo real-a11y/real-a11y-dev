@@ -241,6 +241,177 @@ describe("content: panel-driven actions vs. the element picker", () => {
 });
 
 /**
+ * Regression (Devin Review, PR #412): the native tree's own selection-focus
+ * follow (App.tsx's `focusNativeSelectionOnPage`) moves real page focus over
+ * `chrome.debugger` — a real `focusin` event this content script cannot
+ * otherwise tell apart from a genuine user-driven one. Without
+ * `SUPPRESS_NATIVE_FOCUS_TRACK`, the reverse focus-sync listener below (on
+ * by default, independent of which producer the panel is showing) reacted
+ * to it and re-highlighted/scrolled to the element, fighting the
+ * `preventScroll` the native dispatch had already passed.
+ */
+describe("content: native focus-follow suppresses the reverse focus-sync", () => {
+  let h: Harness;
+  let originalScrollIntoView: typeof Element.prototype.scrollIntoView;
+
+  beforeEach(async () => {
+    vi.useFakeTimers();
+    vi.resetModules();
+    // jsdom has no real layout engine, so `highlightElement`'s own
+    // `scrollIntoView` call (the exact behavior these tests exist to
+    // confirm is suppressed) has nothing to call through to.
+    originalScrollIntoView = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = function () {};
+    document.body.innerHTML = `<button id="target">Click me</button>`;
+    h = makeHarness();
+    (globalThis as { chrome?: unknown }).chrome = h.chromeMock;
+    await import("./content.js");
+    h.send({ type: "REQUEST_TREE", payload: { viewMode: "a11y" } });
+    h.send({ type: "SET_FOCUS_TRACKER", payload: { enabled: true } });
+  });
+
+  afterEach(() => {
+    // The focusin listener hangs off `document`, same as every other
+    // listener this module arms — and unlike SET_PICK_MODE/SET_OBSERVING
+    // above, no earlier test in this file ever turned SET_FOCUS_TRACKER on,
+    // so this specific leak had nothing to expose until this describe block.
+    // Left enabled, a stale listener from THIS test still fires (and still
+    // reaches the CURRENT test's `chrome.runtime.sendMessage`, since it's
+    // read off `globalThis` at call time, not captured) once the next test's
+    // `vi.resetModules()` layers a second listener on top of it.
+    h.send({ type: "SET_FOCUS_TRACKER", payload: { enabled: false } });
+    h.send({ type: "SET_OBSERVING", payload: { enabled: false } });
+    // Same leak, other listener: a suppression this test left armed would
+    // let its still-attached reveal listener draw during a later test. One
+    // focusin consumes the one-shot, and the overlay hangs off
+    // `documentElement`, which the `body` reset below doesn't reach.
+    document.body.dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
+    document.getElementById("__sn-highlight")?.remove();
+    vi.clearAllTimers();
+    vi.useRealTimers();
+    delete (globalThis as { chrome?: unknown }).chrome;
+    document.body.innerHTML = "";
+    Element.prototype.scrollIntoView = originalScrollIntoView;
+  });
+
+  function focusTarget(): void {
+    document
+      .getElementById("target")!
+      .dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
+  }
+
+  it("reports a real focus change to the panel when nothing suppressed it", () => {
+    // Baseline: the tracker itself works absent this PR's own new message.
+    h.sent.length = 0;
+    focusTarget();
+    expect(h.sent.filter((m) => m.type === "FOCUS_CHANGED")).toHaveLength(1);
+  });
+
+  function suppress(seq: number, active: boolean): void {
+    h.send({
+      type: "SUPPRESS_NATIVE_FOCUS_TRACK",
+      payload: { seq, active },
+    });
+  }
+
+  function reported(): number {
+    return h.sent.filter((m) => m.type === "FOCUS_CHANGED").length;
+  }
+
+  it("drops the focus change the native dispatch causes while armed", () => {
+    suppress(1, true);
+    h.sent.length = 0;
+
+    focusTarget();
+
+    expect(reported()).toBe(0);
+  });
+
+  it("drops only that ONE focus change, not every one inside the window", () => {
+    // Regression (Devin Review, second round): a blanket window swallowed a
+    // genuine user click or Tab landing in the same 800ms, leaving reverse
+    // focus sync stale until the next focus event.
+    suppress(1, true);
+    h.sent.length = 0;
+
+    focusTarget();
+    focusTarget();
+
+    expect(reported()).toBe(1);
+  });
+
+  it("stops suppressing once the panel releases it", () => {
+    suppress(1, true);
+    suppress(1, false);
+    h.sent.length = 0;
+
+    focusTarget();
+
+    expect(reported()).toBe(1);
+  });
+
+  it("ignores a late release from an older follow", () => {
+    suppress(1, true);
+    suppress(2, true);
+    suppress(1, false);
+    h.sent.length = 0;
+
+    focusTarget();
+
+    expect(reported()).toBe(0);
+  });
+
+  function reveal(): void {
+    document.getElementById("target")!.dispatchEvent(
+      new CustomEvent("real-a11y:native-reveal", {
+        bubbles: true,
+        composed: true,
+      }),
+    );
+  }
+
+  function overlay(): HTMLElement | null {
+    return document.getElementById("__sn-highlight");
+  }
+
+  it("draws the highlight overlay for a native reveal while a follow is armed", () => {
+    // Regression (user report on PR #412): the native follow moved real
+    // focus but showed nothing — no focus ring is painted while the side
+    // panel has window focus. The overlay is the visible indicator, the same
+    // one the DOM tree's own select draws.
+    suppress(1, true);
+    reveal();
+    expect(overlay()).not.toBeNull();
+    expect(overlay()!.style.display).toBe("block");
+  });
+
+  it("ignores a reveal event no native follow asked for", () => {
+    // The page can dispatch this event itself; it must not get to draw over
+    // or scroll the page on the extension's behalf.
+    reveal();
+    expect(overlay()).toBeNull();
+  });
+
+  it("draws no overlay while Screen Curtain is on", () => {
+    h.send({ type: "TOGGLE_CURTAIN", payload: { visible: true } });
+    suppress(1, true);
+    reveal();
+    expect(overlay()).toBeNull();
+    h.send({ type: "TOGGLE_CURTAIN", payload: { visible: false } });
+  });
+
+  it("resumes tracking once the deadline passes with no release", () => {
+    suppress(1, true);
+    vi.advanceTimersByTime(801);
+    h.sent.length = 0;
+
+    focusTarget();
+
+    expect(reported()).toBe(1);
+  });
+});
+
+/**
  * What a frame does before any side panel connects to it.
  *
  * The content script is injected into every frame of every page the user

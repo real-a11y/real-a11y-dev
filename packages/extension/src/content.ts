@@ -54,6 +54,16 @@ function getLiveExtractor(): LiveTreeExtractor {
 // on every tab keystroke, even with no panel to receive the updates.
 let focusTrackerEnabled = false;
 let curtainVisible = false; // whether the screen curtain is currently on
+
+// Armed by SUPPRESS_NATIVE_FOCUS_TRACK (see its comment in types.ts): drops
+// exactly ONE focusin — the one the native dispatch causes — then disarms.
+// The panel releases it explicitly once the dispatch returns (`seq` must
+// match, so a late release from an older dispatch can't disarm a newer one),
+// and the deadline only bounds the case where that release never arrives.
+// Without the one-shot and the release, every genuine user focus change for
+// the whole window would be swallowed too.
+let nativeFocusSuppress: { seq: number; until: number } | null = null;
+const NATIVE_FOCUS_SUPPRESS_MS = 800;
 const elementRefs = getElementRefs();
 const dispatcher = new ActionDispatcher(elementRefs);
 const focusManager = new FocusManager(elementRefs);
@@ -292,6 +302,20 @@ chrome.runtime.onMessage.addListener(
         break;
       }
 
+      case "SUPPRESS_NATIVE_FOCUS_TRACK": {
+        const { seq, active } = message.payload;
+        if (active) {
+          nativeFocusSuppress = {
+            seq,
+            until: Date.now() + NATIVE_FOCUS_SUPPRESS_MS,
+          };
+        } else if (nativeFocusSuppress?.seq === seq) {
+          nativeFocusSuppress = null;
+        }
+        sendResponse({ success: true });
+        break;
+      }
+
       case "SET_OBSERVING": {
         if (message.payload.enabled) startObserving();
         else stopObserving();
@@ -387,6 +411,11 @@ chrome.runtime.onMessage.addListener(
 // Reverse focus sync: page focus → tree selection
 document.addEventListener("focusin", (e) => {
   if (focusingFromTree) return;
+  if (nativeFocusSuppress) {
+    const live = Date.now() < nativeFocusSuppress.until;
+    nativeFocusSuppress = null;
+    if (live) return;
+  }
   if (!focusTrackerEnabled) return;
   if (curtainVisible) return;
 
@@ -405,6 +434,33 @@ document.addEventListener("focusin", (e) => {
       return;
     }
     el = safeParentElement(el);
+  }
+});
+
+// The native tree's selection follow asks for the same overlay the DOM
+// tree's own select draws (HIGHLIGHT_NODE → `highlightElement`, scrolled into
+// view). `pageReveal` in native/native-core.ts fires this from the page's
+// main world; DOM events reach this isolated world with the same target, so
+// the overlay lands on the exact element the native row describes. Honored
+// only while a native follow has armed SUPPRESS_NATIVE_FOCUS_TRACK: the page
+// can dispatch this event itself, and nothing unrequested may draw over or
+// scroll it.
+document.addEventListener("real-a11y:native-reveal", (e) => {
+  if (!nativeFocusSuppress || Date.now() >= nativeFocusSuppress.until) return;
+  if (curtainVisible) return;
+  // `composedPath()[0]` is the real target even inside an open shadow tree,
+  // where `e.target` has been retargeted to the host by the time it bubbles
+  // up to `document`.
+  let el = (e.composedPath()[0] ?? e.target) as Element | null;
+  while (el) {
+    const nodeId = elementRefs.findId(el);
+    if (nodeId) {
+      focusManager.highlightElement(nodeId);
+      return;
+    }
+    const root = el.getRootNode();
+    el =
+      safeParentElement(el) ?? (root instanceof ShadowRoot ? root.host : null);
   }
 });
 

@@ -103,7 +103,8 @@ describe("NativeTreeView role filter", () => {
     expect(container.querySelector(".sn-list-count")?.textContent).toBe(
       "3 items",
     );
-    // Native has no page highlight, so no "Move to" that would do nothing.
+    // Mounted without `onSelectionFocus`, so there is no page follow and no
+    // "Move to" that would do nothing.
     const buttons = [...container.querySelectorAll(".sn-list-action-btn")].map(
       (b) => b.textContent,
     );
@@ -217,5 +218,314 @@ describe("NativeTreeView role filter", () => {
     // "Deep" sits under a collapsed region; going to it must open the way.
     const selected = container.querySelector('[aria-selected="true"]');
     expect(selected?.getAttribute("data-node-id")).toBe("h3");
+  });
+});
+
+describe("NativeTreeView selection-focus follow", () => {
+  let container: HTMLDivElement;
+  let originalScrollIntoView: typeof Element.prototype.scrollIntoView;
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    originalScrollIntoView = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = function () {};
+    container = document.createElement("div");
+    document.body.appendChild(container);
+  });
+
+  afterEach(() => {
+    render(null, container);
+    container.remove();
+    Element.prototype.scrollIntoView = originalScrollIntoView;
+    vi.useRealTimers();
+  });
+
+  function mountWithFocusFollow(onSelectionFocus = vi.fn()) {
+    act(() => {
+      render(
+        <NativeTreeView
+          nodes={NODES}
+          rootId="root"
+          busy={false}
+          capability={undefined}
+          status=""
+          onRefresh={() => {}}
+          onActivate={() => {}}
+          onSelectionFocus={onSelectionFocus}
+        />,
+        container,
+      );
+    });
+    return onSelectionFocus;
+  }
+
+  function row(id: string): HTMLElement {
+    const el = container.querySelector<HTMLElement>(`[data-node-id="${id}"]`);
+    if (!el) throw new Error(`no row for ${id}`);
+    return el;
+  }
+
+  it("calls onSelectionFocus with the clicked row's id, after a debounce", () => {
+    const onSelectionFocus = mountWithFocusFollow();
+    act(() => row("h1").click());
+
+    expect(onSelectionFocus).not.toHaveBeenCalled();
+    act(() => {
+      vi.advanceTimersByTime(150);
+    });
+    expect(onSelectionFocus).toHaveBeenCalledExactlyOnceWith("h1");
+  });
+
+  it("only fires once for the row the selection settles on, not every intermediate one", () => {
+    const onSelectionFocus = mountWithFocusFollow();
+    act(() => row("h1").click());
+    act(() => {
+      vi.advanceTimersByTime(50);
+    });
+    act(() => row("link").click());
+    act(() => {
+      vi.advanceTimersByTime(50);
+    });
+    act(() => row("h-foot").click());
+    act(() => {
+      vi.advanceTimersByTime(150);
+    });
+
+    expect(onSelectionFocus).toHaveBeenCalledExactlyOnceWith("h-foot");
+  });
+
+  it("does not re-fire for the same selection when only the callback's identity changes", () => {
+    // Regression (Devin Review, PR #412): App.tsx's real callback
+    // (focusNativeSelectionOnPage) depends on nativeBusy/curtainOn, so its
+    // identity changes whenever either flips even though the tree's own
+    // selection didn't move — e.g. a native action settling after dispatch.
+    // The effect used to list the callback itself as a dependency, so a
+    // fresh reference re-armed the debounce for the SAME row and fired a
+    // second, unwanted dispatch — concretely, stealing focus back from a
+    // dialog an action had just opened, once nativeBusy cleared.
+    const first = vi.fn();
+    act(() => {
+      render(
+        <NativeTreeView
+          nodes={NODES}
+          rootId="root"
+          busy={false}
+          capability={undefined}
+          status=""
+          onRefresh={() => {}}
+          onActivate={() => {}}
+          onSelectionFocus={first}
+        />,
+        container,
+      );
+    });
+    act(() => row("h1").click());
+    act(() => {
+      vi.advanceTimersByTime(150);
+    });
+    expect(first).toHaveBeenCalledExactlyOnceWith("h1");
+
+    // Re-render with a NEW callback reference — same as App.tsx handing down
+    // a fresh `focusNativeSelectionOnPage` once nativeBusy/curtainOn flips —
+    // with the selection itself untouched.
+    const second = vi.fn();
+    act(() => {
+      render(
+        <NativeTreeView
+          nodes={NODES}
+          rootId="root"
+          busy={false}
+          capability={undefined}
+          status=""
+          onRefresh={() => {}}
+          onActivate={() => {}}
+          onSelectionFocus={second}
+        />,
+        container,
+      );
+    });
+    act(() => {
+      vi.advanceTimersByTime(500);
+    });
+    expect(second).not.toHaveBeenCalled();
+    expect(first).toHaveBeenCalledTimes(1);
+  });
+
+  it("re-fires when a click re-selects the row that's already selected", () => {
+    // Page focus may have moved elsewhere since the first follow; clicking
+    // the same row again is an explicit request to go back to it — the DOM
+    // tree's own `handleSelect` re-highlights on every click, same row or not.
+    const onSelectionFocus = mountWithFocusFollow();
+    act(() => row("h1").click());
+    act(() => {
+      vi.advanceTimersByTime(150);
+    });
+    act(() => row("h1").click());
+    act(() => {
+      vi.advanceTimersByTime(150);
+    });
+    expect(onSelectionFocus).toHaveBeenCalledTimes(2);
+    expect(onSelectionFocus).toHaveBeenLastCalledWith("h1");
+  });
+
+  it("re-fires when a pick reveals the row that's already selected", () => {
+    // Regression (Devin Review, second round): `selectedId` doesn't change
+    // for a repeat pick of the selected row, so keying on it alone skipped
+    // the follow and left page focus wherever it had moved in between.
+    const onSelectionFocus = vi.fn();
+    const mountWith = (nonce: number) =>
+      act(() => {
+        render(
+          <NativeTreeView
+            nodes={NODES}
+            rootId="root"
+            busy={false}
+            capability={undefined}
+            status=""
+            onRefresh={() => {}}
+            onActivate={() => {}}
+            onSelectionFocus={onSelectionFocus}
+            reveal={{ nodeId: "link", nonce }}
+          />,
+          container,
+        );
+      });
+    mountWith(1);
+    act(() => {
+      vi.advanceTimersByTime(150);
+    });
+    mountWith(2);
+    act(() => {
+      vi.advanceTimersByTime(150);
+    });
+    expect(onSelectionFocus).toHaveBeenCalledTimes(2);
+    expect(onSelectionFocus).toHaveBeenLastCalledWith("link");
+  });
+
+  it("never calls onSelectionFocus when nothing is selected", () => {
+    const onSelectionFocus = mountWithFocusFollow();
+    act(() => {
+      vi.advanceTimersByTime(500);
+    });
+    expect(onSelectionFocus).not.toHaveBeenCalled();
+  });
+
+  it("does not throw when onSelectionFocus is omitted", () => {
+    act(() => {
+      render(
+        <NativeTreeView
+          nodes={NODES}
+          rootId="root"
+          busy={false}
+          capability={undefined}
+          status=""
+          onRefresh={() => {}}
+          onActivate={() => {}}
+        />,
+        container,
+      );
+    });
+    expect(() => {
+      act(() => row("h1").click());
+      act(() => {
+        vi.advanceTimersByTime(500);
+      });
+    }).not.toThrow();
+  });
+
+  describe("in the role-filter list", () => {
+    function pill(label: string): HTMLButtonElement {
+      const btn = [
+        ...container.querySelectorAll<HTMLButtonElement>(".sn-filter-btn"),
+      ].find((b) => b.textContent === label);
+      if (!btn) throw new Error(`no ${label} pill`);
+      return btn;
+    }
+
+    function option(label: string): HTMLElement {
+      const el = [
+        ...container.querySelectorAll<HTMLElement>('[role="option"]'),
+      ].find((o) => o.textContent?.includes(label));
+      if (!el) throw new Error(`no option ${label}`);
+      return el;
+    }
+
+    function listbox(): HTMLElement {
+      return container.querySelector<HTMLElement>('[role="listbox"]')!;
+    }
+
+    it("follows a clicked list item onto the page, after the same debounce", () => {
+      // Regression (user report on PR #412): the follow only watched the
+      // tree's own `selectedId`, and the flat list keeps its selection to
+      // itself, so a filter being on silently turned the page indicator off.
+      const onSelectionFocus = mountWithFocusFollow();
+      act(() => pill("Headings").click());
+      act(() => option("Deep").click());
+
+      expect(onSelectionFocus).not.toHaveBeenCalled();
+      act(() => {
+        vi.advanceTimersByTime(150);
+      });
+      expect(onSelectionFocus).toHaveBeenCalledExactlyOnceWith("h3");
+    });
+
+    it("follows the item arrow keys settle on, not every one they pass", () => {
+      const onSelectionFocus = mountWithFocusFollow();
+      act(() => pill("Headings").click());
+      act(() => {
+        listbox().dispatchEvent(
+          new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }),
+        );
+      });
+      act(() => {
+        listbox().dispatchEvent(
+          new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }),
+        );
+      });
+      act(() => {
+        vi.advanceTimersByTime(150);
+      });
+      expect(onSelectionFocus).toHaveBeenCalledExactlyOnceWith("h-foot");
+    });
+
+    it("offers Move to, which re-follows the selected item", () => {
+      const onSelectionFocus = mountWithFocusFollow();
+      act(() => pill("Headings").click());
+      act(() => option("Overview").click());
+      act(() => {
+        vi.advanceTimersByTime(150);
+      });
+
+      const moveTo = [
+        ...container.querySelectorAll<HTMLButtonElement>(".sn-list-action-btn"),
+      ].find((b) => b.textContent === "Move to");
+      expect(moveTo).toBeDefined();
+      act(() => moveTo!.click());
+      act(() => {
+        vi.advanceTimersByTime(150);
+      });
+      expect(onSelectionFocus).toHaveBeenCalledTimes(2);
+      expect(onSelectionFocus).toHaveBeenLastCalledWith("h1");
+    });
+
+    it("does not follow anything just for turning a filter on", () => {
+      const onSelectionFocus = mountWithFocusFollow();
+      act(() => pill("Headings").click());
+      act(() => {
+        vi.advanceTimersByTime(500);
+      });
+      expect(onSelectionFocus).not.toHaveBeenCalled();
+    });
+
+    it("drops a pending list follow on unmount", () => {
+      const onSelectionFocus = mountWithFocusFollow();
+      act(() => pill("Headings").click());
+      act(() => option("Deep").click());
+      act(() => render(null, container));
+      act(() => {
+        vi.advanceTimersByTime(500);
+      });
+      expect(onSelectionFocus).not.toHaveBeenCalled();
+    });
   });
 });

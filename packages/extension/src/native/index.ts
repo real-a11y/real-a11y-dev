@@ -51,6 +51,21 @@ type NativeMessage =
       nodeId: string;
       action: NativeAction;
       value?: string;
+      // A background follow (e.g. the tree's own selection moving real page
+      // focus, App.tsx's `focusNativeSelectionOnPage`), not a user-dispatched
+      // action from the toolbar/row buttons — kept out of the dogfood log's
+      // `act` count. That count (and its success ratio) is how a dogfooder
+      // judges how much native mode was actually USED; counting an automatic
+      // follow that fires on every settled tree selection would silently
+      // inflate it with browsing, not real dispatches.
+      silent?: boolean;
+      // The URL of the document the caller's tree was read from. Checked
+      // after the per-tab queue wait, right before dispatch: a node id
+      // encodes a `backendDOMNodeId`, which the page it came from owns, and
+      // an action sent just before a navigation would otherwise resolve
+      // that id in the NEW document — possibly an unrelated element there.
+      // Optional, so existing callers keep their behavior unchanged.
+      expectUrl?: string;
     }
   | { type: "NATIVE_DOGFOOD_REPORT" }
   | { type: "NATIVE_DOGFOOD_CLEAR" }
@@ -128,6 +143,10 @@ function isNativeMessage(m: unknown): m is NativeMessage {
     (m as { type: string }).type.startsWith("NATIVE_")
   );
 }
+
+// Pairs each `reveal` dispatch's content-script arm with its own release —
+// see the NATIVE_ACT handler.
+let revealSeq = 0;
 
 export function registerNativeMode(): void {
   // The dogfood log is durable (`local` — it persists across restarts, not
@@ -275,13 +294,46 @@ export function registerNativeMode(): void {
             const { outcome, value } = await withRecovery(
               session,
               message.tabId,
-              (t) =>
-                dispatchNative(
-                  t,
-                  message.nodeId,
-                  message.action,
-                  message.value,
-                ),
+              async (t) => {
+                if (
+                  message.expectUrl !== undefined &&
+                  (await tabUrl(message.tabId)) !== message.expectUrl
+                ) {
+                  return {
+                    success: false,
+                    error: "page navigated — reload the native tree",
+                  };
+                }
+                if (message.action !== "reveal") {
+                  return dispatchNative(
+                    t,
+                    message.nodeId,
+                    message.action,
+                    message.value,
+                  );
+                }
+                // `reveal` asks the content script for its overlay and moves
+                // real focus (`pageReveal`). Arm the content script first —
+                // it only honors the reveal event while armed, and it drops
+                // the `focusin` the focus causes rather than re-highlighting
+                // and re-scrolling to it — then release it. Armed HERE, after
+                // the per-tab queue wait, right beside the dispatch it covers:
+                // armed any earlier, a long queue could outlast its deadline.
+                const seq = ++revealSeq;
+                const suppress = (active: boolean) =>
+                  chrome.tabs
+                    .sendMessage(message.tabId, {
+                      type: "SUPPRESS_NATIVE_FOCUS_TRACK",
+                      payload: { seq, active },
+                    })
+                    .catch(() => {});
+                await suppress(true);
+                try {
+                  return await dispatchNative(t, message.nodeId, "reveal");
+                } finally {
+                  await suppress(false);
+                }
+              },
               log,
             );
             if (!outcome.ok) {
@@ -299,12 +351,14 @@ export function registerNativeMode(): void {
               return;
             }
             const result = value ?? { success: false, error: "no result" };
-            await log.record({
-              kind: "act",
-              at: Date.now(),
-              action: message.action,
-              success: result.success,
-            });
+            if (!message.silent) {
+              await log.record({
+                kind: "act",
+                at: Date.now(),
+                action: message.action,
+                success: result.success,
+              });
+            }
             sendResponse(result);
             return;
           }
