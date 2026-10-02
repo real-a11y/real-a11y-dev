@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Native nav — key handler</title>
+  </head>
+  <body>
+    <!--
+      A page whose own Enter handler navigates, the way an app's keyboard
+      shortcut or a form's submit-on-Enter does. The keyboard bar's Enter is
+      a synthetic event, so it reaches this listener and the tab really
+      leaves the page, for panel-ui-native-parity.test.ts's re-read case.
+    -->
+    <h1>Before the key</h1>
+    <p>Press Enter to go to the tree view.</p>
+    <script>
+      document.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") location.href = "tree-view.html";
+      });
+    </script>
+  </body>
+</html>
