@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 
-import { buildExportMarkdown } from "./export.js";
+import { ALL_VIEWS, buildExportMarkdown, NATIVE_VIEWS } from "./export.js";
 
 const META = {
   pageTitle: "Sign in",
@@ -69,5 +69,20 @@ describe("buildExportMarkdown", () => {
       "outline",
     ]);
     expect(md).toMatch(/## Heading outline\n\n```\n\(empty\)\n```/);
+  });
+});
+
+describe("NATIVE_VIEWS", () => {
+  it("omits the tab-sequence view that ALL_VIEWS includes", () => {
+    expect(ALL_VIEWS).toContain("tab");
+    expect(NATIVE_VIEWS).not.toContain("tab");
+    expect(NATIVE_VIEWS).toEqual(["tree", "outline"]);
+  });
+
+  it("never renders a Tab sequence section when used as the selection", () => {
+    const md = buildExportMarkdown(VIEWS, META, NATIVE_VIEWS);
+    expect(md).not.toContain("## Tab sequence");
+    expect(md).toContain("## Accessibility tree");
+    expect(md).toContain("## Heading outline");
   });
 });
