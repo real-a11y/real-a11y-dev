@@ -14,8 +14,9 @@
  * `<input>` internals — are unreachable from page script by design; their
  * hosts stay leaves, as before.
  *
- * One closed UA root still has to be modelled, because it decides what renders:
- * a `<details>`' (see {@link isClosedDetails}).
+ * Two closed UA roots still have to be modelled, because they decide what
+ * renders: a `<details>`' (see {@link isClosedDetails}) and a `<textarea>`'s
+ * (see {@link isTextarea}).
  */
 
 import { isAriaHiddenValue } from "./aria-tokens.js";
@@ -116,13 +117,29 @@ function isClosedDetails(node: Node): boolean {
 }
 
 /**
+ * True if `node` is a `<textarea>`, which renders none of its children. Its UA
+ * shadow root shows the field's current value and slots nothing, so its child
+ * text — the markup DEFAULT value — is not page text: it goes stale once the
+ * user types, and for a sensitive field (ADR-0001) it is the secret itself.
+ * Chromium's accessibility tree has no node for it. The value reaches the tree
+ * through `a11y.value` alone, classified first; no text walk may find it here.
+ */
+function isTextarea(node: Node): boolean {
+  return (
+    node.nodeType === ELEMENT_NODE && (node as Element).localName === "textarea"
+  );
+}
+
+/**
  * Child nodes in the flat tree. A `<slot>` is transparent (it renders like
  * `display: contents`): it is replaced by its flattened assignment, which
  * already falls back to the slot's own children when nothing is assigned and
  * resolves slots nested through several hosts. A closed `<details>` has only
- * its summary (see {@link isClosedDetails}).
+ * its summary (see {@link isClosedDetails}), and a `<textarea>` has none (see
+ * {@link isTextarea}).
  */
 export function flatChildNodes(node: Node): Node[] {
+  if (isTextarea(node)) return [];
   if (isClosedDetails(node)) {
     const summary = detailsSummary(node as Element);
     return summary ? [summary] : [];
@@ -142,8 +159,9 @@ export function flatChildNodes(node: Node): Node[] {
 
 /**
  * True if `element` is rendered at all: every shadow host above it actually
- * distributes it through a slot, and no closed `<details>` above it holds it in
- * its body. Such an element must not act as an IDREF referrer — folding a
+ * distributes it through a slot, no closed `<details>` above it holds it in its
+ * body, and no `<textarea>` holds it at all (only script can put one there).
+ * An unrendered element must not act as an IDREF referrer — folding a
  * visible description target for a reference nobody can reach loses page
  * content.
  *
@@ -165,6 +183,7 @@ export function isRenderedInFlatTree(element: Element): boolean {
       if (isClosedDetails(parent) && detailsSummary(parent) !== node) {
         return false;
       }
+      if (isTextarea(parent)) return false;
       node = parent;
       continue;
     }

@@ -3142,6 +3142,92 @@ describe("sensitive value redaction", () => {
   });
 });
 
+describe("a <textarea>'s markup text is its default value, never text (ADR-0001)", () => {
+  const SECRET = "4111111111111111";
+  const extracted = (root: Element) =>
+    JSON.stringify([...extractDomTree(root).nodes.values()]);
+  /** The node for the element matching `selector`, from one extraction. */
+  function nodeFor(root: Element, selector: string) {
+    const target = root.querySelector(selector)!;
+    const tree = extractDomTree(root);
+    const refs = getElementRefs();
+    return [...tree.nodes.values()].find((n) => refs.get(n.id) === target)!;
+  }
+
+  it("keeps a sensitive textarea's default out of its own text facets", () => {
+    const root = createPage(
+      `<textarea autocomplete="cc-number" aria-label="Card">${SECRET}</textarea>`,
+    );
+    const node = nodeFor(root, "textarea");
+    expect(node.a11y.value).toBe("[redacted]");
+    expect(node.dom?.textContent).toBe("");
+    expect(node.dom?.descendantText).toBe("");
+    expect(extracted(root)).not.toContain(SECRET);
+  });
+
+  it("keeps it out of every ancestor's text preview", () => {
+    const root = createPage(
+      `<div contenteditable="true" role="textbox" aria-label="C">Pay <span aria-hidden="true"><textarea autocomplete="cc-number" aria-label="Card">${SECRET}</textarea></span> now</div>`,
+    );
+    expect(extracted(root)).not.toContain(SECRET);
+    expect(nodeFor(root, "[contenteditable]").dom?.descendantText).toBe(
+      "Pay now",
+    );
+    expect(nodeFor(root, "span").dom?.descendantText).toBe("");
+  });
+
+  it("keeps it out of a name or description that references the field", () => {
+    // In the document, so the IDREFs resolve.
+    const root = createPage(
+      `<input aria-labelledby="otp"><button aria-describedby="otp">Verify</button>` +
+        `<textarea id="otp" autocomplete="one-time-code">${SECRET}</textarea>`,
+    );
+    document.body.appendChild(root);
+    try {
+      expect(nodeFor(root, "input").a11y.name).toBe("");
+      expect(nodeFor(root, "button").a11y.description).toBe("");
+      expect(extracted(root)).not.toContain(SECRET);
+    } finally {
+      root.remove();
+    }
+  });
+
+  it("keeps it out whatever role the author gives the field", () => {
+    const root = createPage(
+      `<h2>Pay <textarea role="generic" autocomplete="cc-number">${SECRET}</textarea></h2>`,
+    );
+    expect(extracted(root)).not.toContain(SECRET);
+  });
+
+  it("reads an ordinary textarea's text as its value alone", () => {
+    // The default is what it holds until edited — then it's stale as well.
+    const root = createPage(
+      `<p>Notes <textarea aria-label="Notes">first draft</textarea></p>`,
+    );
+    (root.querySelector("textarea") as HTMLTextAreaElement).value = "edited";
+    const field = nodeFor(root, "textarea");
+    expect(field.a11y.value).toBe("edited");
+    expect(field.dom?.textContent).toBe("");
+    expect(field.dom?.descendantText).toBe("");
+    expect(nodeFor(root, "p").dom?.descendantText).toBe("Notes");
+    expect(extracted(root)).not.toContain("first draft");
+  });
+
+  it("renders nothing a script puts inside one, so it can't fold a description target", () => {
+    const root = createPage(
+      `<textarea aria-label="Notes"></textarea><p id="help">Help text</p>`,
+    );
+    const ghost = document.createElement("input");
+    ghost.setAttribute("aria-describedby", "help");
+    root.querySelector("textarea")!.appendChild(ghost);
+    const tags = [...extractDomTree(root).nodes.values()].map(
+      (n) => n.dom?.tagName,
+    );
+    expect(tags).toContain("p");
+    expect(tags).not.toContain("input");
+  });
+});
+
 describe("isSensitiveFieldAttributes — the policy over markup alone (ADR-0001)", () => {
   it("flags a password input whatever the attribute's case", () => {
     expect(isSensitiveFieldAttributes("input", { type: "password" })).toBe(

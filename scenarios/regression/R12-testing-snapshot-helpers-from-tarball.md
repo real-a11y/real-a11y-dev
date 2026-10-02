@@ -6,9 +6,9 @@ area: Testing
 type: Automated
 priority: P0
 status: Active
-validFrom: "testing ≥ 0.1.0-beta.11 (installed from the packed tarball, not a workspace link). Step 10 (values): testing ≥ 0.1.0-beta.17 (unreleased)"
+validFrom: "testing ≥ 0.1.0-beta.11 (installed from the packed tarball, not a workspace link). Step 10 (values): testing ≥ 0.1.0-beta.17. Step 10b (a sensitive textarea's text): testing ≥ 0.1.0-beta.18 (unreleased)"
 validUntil: ""
-expected: "all three produce stable deterministic strings; redact masks EVERY occurrence; [focused] appears only when something is focused; values are absent unless asked, and a password never prints"
+expected: "all three produce stable deterministic strings; redact masks EVERY occurrence; [focused] appears only when something is focused; values are absent unless asked, and a sensitive field's value never prints — a password's, or a sensitive textarea's markup text"
 twin: D5
 covers:
   - packages.@real-a11y-dev/testing
@@ -34,6 +34,10 @@ Packaging faults only show from the tarball.
 10. On a form with a filled text field, a filled `type="password"` field and a
     `<select>` whose selected option is `<option value="es">Spain</option>`:
     `treeSnapshot(root)`, then `treeSnapshot(root, { values: true })`
+    - **10b** — add `<input aria-labelledby="otp">` and
+      `<textarea id="otp" autocomplete="one-time-code">OTP-SENTINEL</textarea>`,
+      the code written as the textarea's markup text, and repeat both calls, then
+      `tabSequenceSnapshot(root)`
 
 ## Expected
 
@@ -54,6 +58,10 @@ Packaging faults only show from the tarball.
   prints `= "<its text>"`, the select prints `= "Spain"` (the label, never `"es"`),
   and the password prints `= "[redacted]"`, with its real value nowhere in the
   string
+- **10b** — `OTP-SENTINEL` appears in none of the three strings. The input it
+  labels prints as a bare `textbox`, and with `values: true` the textarea prints
+  `= "[redacted]"`. testing 0.1.0-beta.17 and earlier printed
+  `textbox "OTP-SENTINEL"` in the default snapshot and the tab sequence alike
 
 ## Why this exists
 
@@ -65,3 +73,8 @@ matter more than correctness of any single line:
 - **Redaction completeness** (5) — partial masking is worse than none, because it
   reads as handled. Test with a value appearing in more than one position; a
   single-occurrence fixture passes a broken implementation.
+
+10b is a leak that needed no opt-in. A `<textarea>`'s markup text is its default
+value, and the DOM walk read it as page text, so a sensitive one became the name
+of the field it labelled. Step 10 alone can't catch it: a password `<input>` has
+no text to read, and its value never names anything.
