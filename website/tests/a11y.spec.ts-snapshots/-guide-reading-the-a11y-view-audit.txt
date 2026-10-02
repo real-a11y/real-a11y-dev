@@ -188,5 +188,5 @@ contentinfo
   paragraph "Last updated:"
     time "[redacted]"
   navigation "Pager"
-    link "Previous pageDOM View"
-    link "Next pageHeadings View"
+    link "Previous page DOM View"
+    link "Next page Headings View"

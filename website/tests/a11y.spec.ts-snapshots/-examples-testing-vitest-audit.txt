@@ -77,4 +77,4 @@ contentinfo
   paragraph "Last updated:"
     time "[redacted]"
   navigation "Pager"
-    link "Next pageGetting Started"
+    link "Next page Getting Started"

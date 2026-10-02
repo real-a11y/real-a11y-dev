@@ -30,5 +30,5 @@ generic
 link "Matchers"
 link "Playwright adapter"
 link "Edit this page on GitHub"
-link "Previous pageSnapshots"
-link "Next pageMatchers"
+link "Previous page Snapshots"
+link "Next page Matchers"

@@ -27,4 +27,4 @@ generic
 link "@real-a11y-dev/cli"
 link "@real-a11y-dev/mcp"
 link "Edit this page on GitHub"
-link "Next pageGetting Started"
+link "Next page Getting Started"

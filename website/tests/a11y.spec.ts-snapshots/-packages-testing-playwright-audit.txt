@@ -69,7 +69,7 @@ main
           code ""dom" | "native""
         cell ""dom""
           code ""dom""
-        cell "Which producer builds the tree. See Auditing the native tree ."
+        cell "Which producer builds the tree. See Auditing the native tree."
           link "Auditing the native tree"
       row
         cell "redactInput"
@@ -78,7 +78,7 @@ main
           code "boolean"
         cell "false"
           code "false"
-        cell "Native tree only: withhold every field value and all rich-text editor content. See Strict mode . Throws with tree: "dom"."
+        cell "Native tree only: withhold every field value and all rich-text editor content. See Strict mode. Throws with tree: "dom"."
           link "Strict mode"
           code "tree: "dom""
   heading "Narrowing the root" (level 2)
@@ -216,5 +216,5 @@ contentinfo
   paragraph "Last updated:"
     time "[redacted]"
   navigation "Pager"
-    link "Previous pageFlow API"
-    link "Next page@real-a11y-dev/react"
+    link "Previous page Flow API"
+    link "Next page @real-a11y-dev/react"

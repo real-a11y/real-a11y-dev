@@ -206,5 +206,5 @@ contentinfo
   paragraph "Last updated:"
     time "[redacted]"
   navigation "Pager"
-    link "Previous page@real-a11y-dev/react"
-    link "Next page@real-a11y-dev/mcp"
+    link "Previous page @real-a11y-dev/react"
+    link "Next page @real-a11y-dev/mcp"

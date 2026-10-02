@@ -683,7 +683,17 @@ export class LiveTreeExtractor {
       else if (isNameFromContentHost(node)) outermostHost = node;
       // A name-source child is often itself a barrier (`caption`). Don't stop
       // there when its owner still needs the re-extract.
-      if (!owner && isNameBarrierElement(node)) break;
+      //
+      // Nor stop at a barrier we STARTED from. Its own text still never reaches
+      // an ancestor's name — that is what the break is for, and a mutation
+      // deeper inside it still stops here — but whether it renders a box does:
+      // the box separates the text either side of it (see `needsSpaceAround` in
+      // extraction/dom-extractor), so hiding `<div role="group">` inside
+      // `<h1>Save<div role="group"></div>now</h1>` turns "Save now" into
+      // "Savenow". Climbing past the starting element is what lets that host be
+      // re-extracted; when no host encloses it, the fall back to `el` keeps the
+      // dirty region exactly as narrow as before.
+      if (!owner && node !== el && isNameBarrierElement(node)) break;
       node = safeParentElement(node);
     }
     return outermostHost ?? el;

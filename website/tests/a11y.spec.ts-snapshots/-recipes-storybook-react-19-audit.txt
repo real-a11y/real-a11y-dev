@@ -100,5 +100,5 @@ contentinfo
   paragraph "Last updated:"
     time "[redacted]"
   navigation "Pager"
-    link "Previous pageNext.js (App Router + React 19)"
-    link "Next pagePeer Dependencies"
+    link "Previous page Next.js (App Router + React 19)"
+    link "Next page Peer Dependencies"

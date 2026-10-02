@@ -156,5 +156,5 @@ contentinfo
   paragraph "Last updated:"
     time "[redacted]"
   navigation "Pager"
-    link "Previous pageA11y View"
-    link "Next pageTAB View"
+    link "Previous page A11y View"
+    link "Next page TAB View"

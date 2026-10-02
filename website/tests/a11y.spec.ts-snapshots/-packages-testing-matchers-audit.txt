@@ -265,12 +265,12 @@ main
     rowgroup
       row
         columnheader "Dimension"
-        columnheader "Rule-basedtoBeValidA11yTree, toHaveNoUnlabeledInteractive, …"
+        columnheader "Rule-based toBeValidA11yTree, toHaveNoUnlabeledInteractive, …"
           code "toBeValidA11yTree"
           code "toHaveNoUnlabeledInteractive"
-        columnheader "ContracttoMatchA11yContract"
+        columnheader "Contract toMatchA11yContract"
           code "toMatchA11yContract"
-        columnheader "SnapshotboxedTreeSnapshot + toMatchSnapshot"
+        columnheader "Snapshot boxedTreeSnapshot + toMatchSnapshot"
           code "boxedTreeSnapshot"
           code "toMatchSnapshot"
     rowgroup
@@ -409,5 +409,5 @@ contentinfo
   paragraph "Last updated:"
     time "[redacted]"
   navigation "Pager"
-    link "Previous pageAssertions"
-    link "Next pageFlow API"
+    link "Previous page Assertions"
+    link "Next page Flow API"
