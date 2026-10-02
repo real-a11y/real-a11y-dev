@@ -27,7 +27,15 @@ interface SemanticNode {
                                               // each true/false, "mixed" (checked, pressed)
                                               // or an aria-current token ("page"…), read as
                                               // Chromium reads it: aria-disabled="TRUE" is
-                                              // true, aria-disabled="" leaves it unset
+                                              // true, aria-disabled="" leaves it unset.
+                                              // An element's own semantics win over its
+                                              // attribute: a native checkbox or radio
+                                              // reports its checkedness, true or false
+                                              // ("mixed" when indeterminate), a drop-down
+                                              // <select> is expanded only while its picker
+                                              // is open, and a <details>' summary follows
+                                              // the details' `open` — each on a role that
+                                              // has the state, as in Chromium
     properties: Record<string, string>;       // aria-* properties (incl. heading "level")
     isExposedToAT: boolean;      // false when aria-hidden, role="presentation", etc.
   };
@@ -77,12 +85,15 @@ Examples:
 | `<button>` | `button` |
 | `<a href="…">` | `link` |
 | `<input type="text">` | `textbox` |
+| `<input list="fruits">` with `<datalist id="fruits">` | `combobox` |
 | `<input type="checkbox">` | `checkbox` |
 | `<h1>` – `<h6>` | `heading` (with `level`) |
 | `<nav>` | `navigation` |
 | `<main>` | `main` |
 | `<dialog>` | `dialog` |
 | `<div>` (no role) | `generic` |
+
+An `<input>` whose `list` names a `<datalist>` is a `combobox`, because typing in it offers the datalist's suggestions in a popup. That holds for the text, search, email, tel, url, number, date and time types, as in Chromium's own tree. The datalist has to be in the input's own document or shadow root. A `list` naming anything else leaves the input a `textbox` (or `searchbox`, or `spinbutton`).
 
 `role="presentation"` and `role="none"` strip the element's role from the tree — the element is still present, but its children are re-parented.
 

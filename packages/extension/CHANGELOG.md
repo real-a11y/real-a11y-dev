@@ -31,6 +31,38 @@
   rebuilding all of it.
   ([#465](https://github.com/real-a11y/real-a11y-dev/pull/465))
 
+- In DOM mode, an `<input>` whose `list` names a `<datalist>` now shows as a
+  `combobox` in the tree and the Tab Sequence view, as Chromium's own
+  accessibility tree reports it. DOM mode showed a `textbox` (or a
+  `searchbox` or `spinbutton`). Changing the input's `list`, or adding or
+  removing the datalist it names, updates the tree.
+  ([#454](https://github.com/real-a11y/real-a11y-dev/pull/454))
+
+- In DOM mode, image map areas are back in the DOM tree, the Tab Sequence
+  view, its copied export and the keyboard bar's Tab. Since Chrome 153 every
+  `<area>` is `display: none` by default, and the walk skipped it, although
+  Chrome still tabs to it. An area now shows where its `<map>` sits while the
+  image using the map is rendered, and is a stop at that place in the page,
+  which is where Chrome tabs to it. Hiding the image takes its areas out, and
+  showing it again brings them back.
+  ([#453](https://github.com/real-a11y/real-a11y-dev/pull/453))
+
+- In DOM mode, a native checkbox, radio, `<select>` or `<summary>` now takes
+  its state from what it is, as it does in NATIVE mode, not from an ARIA
+  attribute on it. An unchecked `<input type="checkbox" aria-checked="true">`
+  showed a `checked` badge, an indeterminate checkbox showed none where
+  NATIVE mode shows `mixed`, and a `<select aria-expanded="true">` showed
+  `expanded`. Now a checkbox or radio shows its checkedness, and `mixed` when
+  indeterminate. A drop-down `<select>` shows `collapsed` until its picker
+  opens, and a `<details>`' summary shows `collapsed` or `expanded` as the
+  details is, never a `pressed` badge unless a role makes it a button. A radio
+  its sibling unchecked, or a "select all" box a script made indeterminate,
+  now updates in the tree instead of keeping its old badge. Activating a
+  `mixed` checkbox from the panel announces "Click", not a guessed "Checked"
+  or "Unchecked", since the click's outcome depends on checkedness that
+  `mixed` hides.
+  ([#443](https://github.com/real-a11y/real-a11y-dev/pull/443))
+
 - A page with a `<form>` holding a control named `parentElement`, such as
   `<input type="hidden" name="parentElement">`, no longer freezes the tab when
   something inside the form changes. A form lets a control shadow its own

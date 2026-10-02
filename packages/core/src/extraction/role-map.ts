@@ -5,9 +5,14 @@
  */
 
 import { isAriaHiddenValue } from "./aria-tokens.js";
-import { safeHidden, safeTagName } from "./clobber-safe.js";
-import { flatParent } from "./flat-tree.js";
+import { safeGetAttribute, safeHidden, safeTagName } from "./clobber-safe.js";
+import {
+  flatParent,
+  isRenderedInFlatTree,
+  renderingParent,
+} from "./flat-tree.js";
 import { isFocusable } from "./focusability.js";
+import { imageUsingMap } from "./image-map.js";
 
 type RoleResolver = string | ((el: Element) => string);
 
@@ -46,6 +51,12 @@ export function getCachedComputedStyle(
  * (a child can set `visibility:visible` and become visible again), so the
  * walk must still descend.
  *
+ * An image map's `<area>` is the exception: it is hidden exactly while the
+ * image using its map is not rendered, visibility included, and nothing about
+ * the area itself counts. Every area is `display: none` in Chromium's UA
+ * stylesheet since 153, and Chromium focuses one all the same. See
+ * image-map.ts.
+ *
  * Pass a pre-resolved `style` (from {@link getCachedComputedStyle}) to avoid
  * a second `getComputedStyle` when the caller already has one.
  */
@@ -53,6 +64,10 @@ export function isSubtreeHidden(
   element: Element,
   style?: CSSStyleDeclaration | null,
 ): boolean {
+  // `localName` rather than `tagName`: a clobbered <form> can't throw here.
+  if (element.localName === "area")
+    return !isImageRendered(imageUsingMap(element));
+
   // Clobber-immune read: a `<form>` with `<input name="hidden">` makes
   // `htmlEl.hidden` return that input (truthy), which would drop the whole
   // form subtree. safeHidden() reads the real state via the prototype getter.
@@ -76,6 +91,43 @@ export function isSubtreeHidden(
   return false;
 }
 
+/**
+ * Whether an image is rendered the way Chromium needs it to be before it
+ * focuses the areas of the map it uses: it has a box, it is visible, and it
+ * is not inert. `isRenderedInFlatTree` rules out an image no slot takes and
+ * one in the body of a closed `<details>`.
+ */
+function isImageRendered(image: Element | null): boolean {
+  if (!image || !isRenderedInFlatTree(image)) return false;
+  // Slots included: a hidden slot hides the image it renders.
+  for (let el: Element | null = image; el; el = renderingParent(el)) {
+    // An area renders no children, and asking whether one is hidden would
+    // ask about this image again.
+    if (el.localName === "area" || isSubtreeHidden(el)) return false;
+  }
+  const visibility = getCachedComputedStyle(image)?.visibility;
+  return visibility !== "hidden" && visibility !== "collapse";
+}
+
+/**
+ * Whether an image map's `<area>` is hidden from AT. Chromium's tree puts an
+ * area under its image, so the image being hidden or `aria-hidden` hides it,
+ * and so does the area's own `inert`, though Chromium still tabs to one. Like
+ * an `aria-hidden` button, such an area then leaves the a11y view, and the tab
+ * sequence read from it. Its own visibility counts for nothing, like the rest
+ * of its style.
+ */
+function isAreaHiddenFromAT(area: Element): boolean {
+  if (area.hasAttribute("inert")) return true;
+  const image = imageUsingMap(area);
+  if (!image || !isImageRendered(image)) return true;
+  for (let el: Element | null = image; el; el = renderingParent(el)) {
+    // Clobber-safe: a <form> among them may hold `<input name="getAttribute">`.
+    if (isAriaHiddenValue(safeGetAttribute(el, "aria-hidden"))) return true;
+  }
+  return false;
+}
+
 function hasAccessibleName(el: Element): boolean {
   return !!(
     el.getAttribute("aria-label") ||
@@ -95,9 +147,11 @@ function thHeaderRole(el: Element): string {
   // header row (<thead>, or the table's first row when there is no <thead>)
   // labels columns; anything else labels its row. Ancestor walk only — no
   // layout reads.
+  // eslint-disable-next-line no-restricted-properties -- one read, and a <th> is never a form
   const row = el.parentElement;
   if (!row || safeTagName(row) !== "tr") return "rowheader";
 
+  // eslint-disable-next-line no-restricted-properties -- one read, and `row` is a <tr> by the check above
   const section = row.parentElement;
   if (section && safeTagName(section) === "thead") return "columnheader";
 
@@ -143,6 +197,53 @@ const INPUT_TYPE_ROLE_MAP: Record<string, string> = {
   text: "textbox",
   url: "textbox",
 };
+
+/**
+ * The `<input>` types a `<datalist>` makes a combobox in Chromium's tree, as
+ * measured in Chromium 151 and 153. HTML-AAM names the text types; Chromium
+ * does the same for a number and the date and time types. A range or color
+ * input uses its suggestions inside its own widget and keeps its role, and
+ * `list` doesn't apply to the other types at all.
+ */
+const DATALIST_COMBOBOX_INPUT_TYPES: ReadonlySet<string> = new Set([
+  "text",
+  "search",
+  "email",
+  "tel",
+  "url",
+  "number",
+  "date",
+  "datetime-local",
+  "month",
+  "week",
+  "time",
+]);
+
+/**
+ * True when an `<input>` is a combobox because its `list` names a
+ * `<datalist>`: typing offers the datalist's suggestions in a popup the
+ * browser draws.
+ *
+ * Resolved through the `list` property, which is HTML's own lookup: the first
+ * element with that id in the input's tree, and only if it is a `<datalist>`.
+ * So a `list` naming a missing id, another element, or a datalist across a
+ * shadow boundary leaves the input as it was, as in Chromium. The datalist's
+ * contents don't matter: an empty or hidden one still counts.
+ *
+ * Exported for the testing matcher, which needs to know the popup is the
+ * browser's: an author has no `aria-expanded` or `aria-controls` to write.
+ */
+export function isDatalistCombobox(element: Element): boolean {
+  const input = element as HTMLInputElement;
+  if (!DATALIST_COMBOBOX_INPUT_TYPES.has(input.type)) return false;
+  try {
+    return input.list != null;
+  } catch {
+    // jsdom throws for an input outside any document or shadow root, where
+    // Chromium finds no datalist.
+    return false;
+  }
+}
 
 const ROLE_MAP: Record<string, RoleResolver> = {
   a: (el) => (el.hasAttribute("href") ? "link" : "generic"),
@@ -214,6 +315,7 @@ const ROLE_MAP: Record<string, RoleResolver> = {
       ? "presentation"
       : "img",
   input: (el) => {
+    if (isDatalistCombobox(el)) return "combobox";
     const type = (el as HTMLInputElement).type || "text";
     return INPUT_TYPE_ROLE_MAP[type] || "textbox";
   },
@@ -419,6 +521,8 @@ export function isHiddenFromAT(
   // aria-hidden hides the element AND its entire subtree from AT, for every
   // value Chromium reads as true: "TRUE" and "yes" as well as "true".
   if (isAriaHiddenValue(element.getAttribute("aria-hidden"))) return true;
+
+  if (tag === "area") return isAreaHiddenFromAT(element);
 
   // role=presentation/none are NOT hidden — they map to the "presentation"
   // role in getImplicitRole and the a11y extractor flattens them (the

@@ -521,6 +521,12 @@ main
   paragraph "Nothing in the body of a closed is a stop, not even a nested in it. Chromium renders a closed disclosure as its summary alone, so Tab reaches the body only once it opens."
     code "<details>"
     code "<details>"
+  paragraph "An image map's is a stop while the image using its map is rendered. It is listed at the area's own place in the document, which is where Chromium tabs to it, wherever the image sits. Hiding the image, or making it , takes its map's areas out. So does hiding the or making it : Chromium still tabs to an area there, but leaves it out of its accessibility tree, and follows the tree."
+    code "<area href>"
+    code "inert"
+    code "<map>"
+    code "inert"
+    code "get_tab_order"
   paragraph "Parameters:"
   list
     listitem "— string — optional (default ) — CSS selector for the walk."

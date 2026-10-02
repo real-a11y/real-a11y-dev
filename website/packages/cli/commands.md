@@ -302,6 +302,13 @@ Nothing in the body of a closed `<details>` is a stop, not even a `<details>`
 nested in it. Chromium renders a closed disclosure as its summary alone, so Tab
 reaches the body only once it opens.
 
+An image map's `<area href>` is a stop while the image using its map is
+rendered. It is listed at the area's own place in the document, which is where
+Chromium tabs to it, wherever the image sits. Hiding the image, or making it
+`inert`, takes its map's areas out. So does hiding the `<map>` or making it
+`inert`: Chromium still tabs to an area there, but leaves it out of its
+accessibility tree, and `tabs` follows the tree.
+
 ```sh
 real-a11y tabs https://example.com
 real-a11y tabs https://example.com --root "#app main"

@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { afterEach, describe, it, expect } from "vitest";
 
 import { shadow } from "../test-support/clobber.js";
 
@@ -495,6 +495,123 @@ describe("getImplicitRole", () => {
           ),
         ),
       ).toBe("rowheader");
+    });
+  });
+
+  // Each row measured against Chromium 151 and 153's own tree. A `list` that
+  // names a <datalist> in the input's own tree makes a text-entry input a
+  // combobox: HTML-AAM names text, search, email, tel and url, and Chromium
+  // does the same for a number and the date and time types.
+  describe("<input list>", () => {
+    const DATALIST = `<datalist id="dl"><option value="a"></datalist>`;
+
+    function input(html: string): Element {
+      document.body.innerHTML = `${DATALIST}${html}<div id="adiv">x</div>`;
+      return document.body.querySelector("input")!;
+    }
+
+    afterEach(() => {
+      document.body.innerHTML = "";
+    });
+
+    it.each([
+      'type="text"',
+      'type="search"',
+      'type="email"',
+      'type="tel"',
+      'type="url"',
+      'type="number"',
+      'type="date"',
+      'type="datetime-local"',
+      'type="month"',
+      'type="week"',
+      'type="time"',
+      // An unknown type, in any case, is a text input.
+      'type="bogus"',
+      'type="TEXT"',
+    ])("<input %s list> is a combobox", (type) => {
+      expect(getImplicitRole(input(`<input ${type} list="dl">`))).toBe(
+        "combobox",
+      );
+    });
+
+    // `list` doesn't apply to most of these, and a range or color input uses
+    // its suggestions inside its own widget.
+    it.each([
+      "password",
+      "range",
+      "color",
+      "checkbox",
+      "radio",
+      "button",
+      "submit",
+      "reset",
+      "image",
+      "file",
+      "hidden",
+    ])("<input type=%s list> keeps its own role", (type) => {
+      const without = getImplicitRole(input(`<input type="${type}">`));
+      expect(getImplicitRole(input(`<input type="${type}" list="dl">`))).toBe(
+        without,
+      );
+    });
+
+    it.each([
+      ["a missing id", `list="nope"`],
+      ["an element that isn't a datalist", `list="adiv"`],
+      ["nothing", `list=""`],
+      ["the id in another case", `list="DL"`],
+    ])("stays a textbox when the list names %s", (_label, list) => {
+      expect(getImplicitRole(input(`<input ${list}>`))).toBe("textbox");
+    });
+
+    it("keeps a search input a searchbox when its list names nothing", () => {
+      expect(getImplicitRole(input(`<input type="search" list="nope">`))).toBe(
+        "searchbox",
+      );
+    });
+
+    it("counts a datalist with no options, a hidden one, or one after the input", () => {
+      document.body.innerHTML = `
+        <input aria-label="empty" list="empty"><datalist id="empty"></datalist>
+        <input aria-label="hidden" list="hid"><datalist id="hid" hidden><option value="a"></datalist>
+        <input aria-label="after" list="later">
+        <p>text</p>
+        <datalist id="later"><option value="a"></datalist>`;
+      for (const field of document.body.querySelectorAll("input")) {
+        expect(getImplicitRole(field)).toBe("combobox");
+      }
+    });
+
+    it("keeps an authored role over its list", () => {
+      expect(getImplicitRole(input(`<input list="dl" role="textbox">`))).toBe(
+        "textbox",
+      );
+      expect(
+        getImplicitRole(
+          input(`<input type="search" list="dl" role="searchbox">`),
+        ),
+      ).toBe("searchbox");
+    });
+
+    it("resolves the list in the input's own tree, not across a shadow boundary", () => {
+      document.body.innerHTML = `${DATALIST}<div id="host"></div>`;
+      const shadow = document
+        .getElementById("host")!
+        .attachShadow({ mode: "open" });
+      shadow.innerHTML = `<input id="outer" list="dl"><input id="inner" list="own"><datalist id="own"><option value="b"></datalist>`;
+
+      expect(getImplicitRole(shadow.getElementById("outer")!)).toBe("textbox");
+      expect(getImplicitRole(shadow.getElementById("inner")!)).toBe("combobox");
+    });
+
+    it("stays a textbox, without throwing, outside any document", () => {
+      // Chromium finds no datalist for a detached input; jsdom throws instead.
+      expect(
+        getImplicitRole(
+          el(`<div><input list="dl">${DATALIST}</div>`).firstElementChild!,
+        ),
+      ).toBe("textbox");
     });
   });
 

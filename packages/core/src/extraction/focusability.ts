@@ -17,16 +17,18 @@
  * Editing counts both ways (see editing.ts): an editing host is a stop with no
  * `tabindex`, and a link inside editable content is not one.
  *
- * Two stops Chromium has are not listed yet. One is the default summary
- * Chromium gives a `<details>` that has none of its own, which lives in a UA
- * shadow root the walk has no element for. The other is an image map's
- * `<area>`: since Chromium 153 its UA stylesheet gives one `display: none`,
- * so the walk skips it, although Chromium still tabs to it. The rule below is
- * still right wherever an area is asked about.
+ * An image map's `<area>` is the one element whose rendering the walk does not
+ * read off the element itself. It follows the image using its map, so the
+ * walk emits an area only while that image is rendered (see image-map.ts).
+ *
+ * One stop Chromium has is not listed yet: the default summary Chromium gives
+ * a `<details>` that has none of its own, which lives in a UA shadow root the
+ * walk has no element for.
  */
 
 import { safeTagName } from "./clobber-safe.js";
 import { isEditable, isEditingHost } from "./editing.js";
+import { imageUsingMap } from "./image-map.js";
 
 /** Form controls that `disabled` removes from the focus order entirely. */
 const FORM_CONTROL_TAGS = new Set(["button", "input", "select", "textarea"]);
@@ -89,24 +91,6 @@ function isFocusBarred(element: Element): boolean {
 }
 
 /**
- * Whether an `<img usemap>` points at the `<map>` holding `area`. Chromium
- * focuses a map's areas only while an image uses the map, and matches
- * `usemap="#name"` against the map's `name` or `id`, case-sensitively. An
- * area is a stop at its own place in the document, not at the image's.
- */
-function isInUsedImageMap(area: Element): boolean {
-  const map = area.closest("map");
-  if (!map) return false;
-  const names = [map.getAttribute("name"), map.getAttribute("id")];
-  const root = area.getRootNode() as ParentNode;
-  for (const img of root.querySelectorAll("img[usemap]")) {
-    const usemap = img.getAttribute("usemap") ?? "";
-    if (usemap.startsWith("#") && names.includes(usemap.slice(1))) return true;
-  }
-  return false;
-}
-
-/**
  * Whether a `<summary>` is its `<details>`' summary, the disclosure toggle:
  * the first `<summary>` child, even with other content before it. Any other
  * summary, including one slotted into a details it is not a child of, is
@@ -117,6 +101,7 @@ function isInUsedImageMap(area: Element): boolean {
  * engine misses that match inside a shadow root.
  */
 function isDetailsSummary(summary: Element): boolean {
+  // eslint-disable-next-line no-restricted-properties -- one read, and a <summary> is never a form
   const details = summary.parentElement;
   if (!details || safeTagName(details) !== "details") return false;
   for (const child of details.children)
@@ -128,14 +113,25 @@ function isDetailsSummary(summary: Element): boolean {
 export function isFocusable(element: Element): boolean {
   if (isFocusBarred(element)) return false;
 
+  const tag = safeTagName(element);
+  const tabindex = parseTabindex(element.getAttribute("tabindex"));
+  // An area takes focus only through an image using its map, tabindex or not.
+  // Chromium reads a negative tabindex on one as unfocusable, even from script,
+  // and an href as a stop unless editing takes it away, as for a link below.
+  // Whether the image is rendered is the walk's business: see image-map.ts.
+  if (tag === "area") {
+    if (!imageUsingMap(element)) return false;
+    if (tabindex !== null) return tabindex >= 0;
+    return element.hasAttribute("href") && !isEditable(element);
+  }
+
   // A negative tabindex is still focusable (scripted focus), just not a stop.
-  if (parseTabindex(element.getAttribute("tabindex")) !== null) return true;
+  if (tabindex !== null) return true;
 
   // An editing host is focusable with no tabindex; an editable element nested
   // inside one is not (Chromium focuses only the host).
   if (isEditingHost(element)) return true;
 
-  const tag = safeTagName(element);
   // Without an href, `<a>` is a fragment target or a placeholder, not a link.
   // An SVG `<a>` may still carry the older `xlink:href`, which Chromium honors.
   // Editing takes a link's focusability away: Chromium won't focus one inside
@@ -146,12 +142,6 @@ export function isFocusable(element: Element): boolean {
     return (
       (element.hasAttribute("href") ||
         element.hasAttributeNS(XLINK_NS, "href")) &&
-      !isEditable(element)
-    );
-  if (tag === "area")
-    return (
-      element.hasAttribute("href") &&
-      isInUsedImageMap(element) &&
       !isEditable(element)
     );
   if (FORM_CONTROL_TAGS.has(tag)) return true;

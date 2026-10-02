@@ -212,6 +212,24 @@ function shadowHostAbove(element: Element): Element | null {
 }
 
 /**
+ * The element that renders `element`: the slot it is assigned to, else its
+ * parent, else the host of its shadow root. Unlike {@link flatParent}, this
+ * stops at slots, because a hidden slot hides everything it renders: a climb
+ * asking whether an element is rendered has to see them.
+ */
+export function renderingParent(element: Element): Element | null {
+  const slot = safeAssignedSlot(element);
+  if (slot) return slot;
+  const parentNode = safeParentNode(element);
+  return (
+    safeParentElement(element) ??
+    (parentNode?.nodeType === DOCUMENT_FRAGMENT_NODE
+      ? (parentNode as ShadowRoot).host
+      : null)
+  );
+}
+
+/**
  * The node IDREFs resolve against. `aria-labelledby`, `aria-describedby` and
  * `label[for]` are scoped to the element's own tree, so inside a shadow root
  * they must look in that root, not the document. A detached subtree has no
