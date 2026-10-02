@@ -30,7 +30,7 @@
   out. Text inside such a form now also counts toward the name of a heading,
   link or button holding it, and adding or removing one updates what it names
   or describes through `aria-labelledby` and `aria-describedby`.
-  ([#473](https://github.com/real-a11y/real-a11y-dev/pull/473))
+  ([#475](https://github.com/real-a11y/real-a11y-dev/pull/475))
 
 - In DOM mode, a `<form>` is a `form` landmark only when it has an
   accessible name, as in NATIVE mode — Chromium does not expose an unnamed
