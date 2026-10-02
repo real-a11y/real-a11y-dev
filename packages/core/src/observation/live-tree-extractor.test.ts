@@ -721,6 +721,62 @@ describe("LiveTreeExtractor", () => {
     observer.stop();
   });
 
+  // An input's role follows the <datalist> its `list` names, which can sit
+  // anywhere in the tree and come or go after the input does.
+  it.each([
+    [
+      "its datalist is added",
+      `<input aria-label="Fruit" list="fruits"><section id="host"></section>`,
+      () =>
+        document.getElementById("host")!.append(
+          Object.assign(document.createElement("datalist"), {
+            id: "fruits",
+          }),
+        ),
+      "combobox",
+    ],
+    [
+      "its datalist is removed",
+      `<input aria-label="Fruit" list="fruits"><section><div id="wrap"><datalist id="fruits"></datalist></div></section>`,
+      () => document.getElementById("wrap")!.remove(),
+      "textbox",
+    ],
+    [
+      "its list starts naming a datalist",
+      `<input aria-label="Fruit"><datalist id="fruits"></datalist>`,
+      () => document.querySelector("input")!.setAttribute("list", "fruits"),
+      "combobox",
+    ],
+  ])("re-reads an input's role when %s", async (_label, html, mutate, role) => {
+    document.body.innerHTML = `<main>${html}</main>`;
+
+    const live = new LiveTreeExtractor(document.body, { mode: "a11y" });
+    let lastChange: TreeChange | undefined;
+    const observer = new DomObserver(
+      document.body,
+      (change) => {
+        lastChange = change;
+      },
+      50,
+    );
+    observer.start();
+
+    mutate();
+
+    await vi.advanceTimersByTimeAsync(100);
+
+    const result = live.refresh(lastChange);
+    const expected = extractA11yTree(document.body);
+
+    expect(result.nodes).toEqual(expected.nodes);
+    const input = [...result.nodes.values()].find(
+      (n) => n.a11y.name === "Fruit",
+    );
+    expect(input?.a11y.role).toBe(role);
+
+    observer.stop();
+  });
+
   it("keeps parity when a node is reparented between siblings", async () => {
     document.body.innerHTML = `<main><ul id="a"><li>One</li></ul><ul id="b"></ul></main>`;
 
@@ -1901,6 +1957,7 @@ describe("LiveTreeExtractor", () => {
     it.each([
       ["matches", "asks the added form whether it is an overlay", clobber],
       ["querySelectorAll", "scans the added form for references", clobber],
+      ["getAttribute", "indexes the references the added form makes", clobber],
       [
         "ownerDocument",
         "resolves the added form's aria-labelledby",

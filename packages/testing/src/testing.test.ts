@@ -194,6 +194,18 @@ describe("flow", () => {
     expect(lastChange).toBe("Ada");
   });
 
+  it("an input with a datalist is found and typed into as a combobox", async () => {
+    const root = mount(`
+      <main>
+        <label>Fruit<input list="fruits" /></label>
+        <datalist id="fruits"><option value="Apple"></option></datalist>
+      </main>
+    `);
+    const input = root.querySelector("input")!;
+    await flow(root).findByRole("combobox", { name: "Fruit" }).type("Pear");
+    expect(input.value).toBe("Pear");
+  });
+
   it("select(value) sets a native <select>'s value and fires change", async () => {
     const root = mount(`
       <main>

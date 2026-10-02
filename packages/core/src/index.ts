@@ -51,6 +51,7 @@ export { extractA11yTree } from "./extraction/a11y-extractor.js";
 export { safeParentElement } from "./extraction/clobber-safe.js";
 export {
   getImplicitRole,
+  isDatalistCombobox,
   isHiddenFromAT,
   getHeadingLevel,
 } from "./extraction/role-map.js";

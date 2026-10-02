@@ -147,6 +147,80 @@ describe("the img synonym role=image", () => {
   });
 });
 
+// An input whose `list` names a <datalist> is a combobox in Chromium's tree
+// for the text, number, date and time types. The DOM producer once ignored
+// `list`, so every one of them read as a textbox (or a searchbox, or a
+// spinbutton) there and a combobox in native.
+describe("an input whose list names a <datalist>", () => {
+  it("has the same role in both producers", async () => {
+    const field = (label: string, attrs: string) =>
+      `<input ${attrs} aria-label="${label}">`;
+    await session.open(
+      dataUrl(
+        `<main>
+          <datalist id="dl"><option value="a"></datalist>
+          ${field("Text", 'list="dl"')}
+          ${field("Search", 'type="search" list="dl"')}
+          ${field("Email", 'type="email" list="dl"')}
+          ${field("Tel", 'type="tel" list="dl"')}
+          ${field("Url", 'type="url" list="dl"')}
+          ${field("Number", 'type="number" list="dl"')}
+          ${field("Date", 'type="date" list="dl"')}
+          ${field("Time", 'type="time" list="dl"')}
+          ${field("Later", 'list="later"')}
+          ${field("Missing", 'list="nope"')}
+          ${field("Search missing", 'type="search" list="nope"')}
+          ${field("Not a datalist", 'list="adiv"')}
+          ${field("Password", 'type="password" list="dl"')}
+          ${field("Range", 'type="range" list="dl"')}
+          ${field("Authored", 'list="dl" role="textbox"')}
+          <div id="adiv">x</div>
+          <div id="host"></div>
+          <datalist id="later"></datalist>
+        </main>
+        <script>
+          document.getElementById("host").attachShadow({ mode: "open" }).innerHTML =
+            '<input list="dl" aria-label="Across a shadow root">' +
+            '<input list="own" aria-label="Inside a shadow root"><datalist id="own"></datalist>';
+        </script>`,
+      ),
+    );
+    const domTree = await session.call<string>("treeSnapshot", "body", [
+      { markFocus: false },
+    ]);
+    const nativeTree = serializeTree(await session.nativeTree(), {
+      markFocus: false,
+    });
+
+    for (const tree of [domTree, nativeTree]) {
+      const lines = tree.split("\n").map((l) => l.trim());
+      const roleOf = (name: string) =>
+        lines.find((l) => l.endsWith(`"${name}"`))?.split(" ")[0];
+      for (const name of [
+        "Text",
+        "Search",
+        "Email",
+        "Tel",
+        "Url",
+        "Number",
+        "Date",
+        "Time",
+        "Later",
+        "Inside a shadow root",
+      ]) {
+        expect(roleOf(name), name).toBe("combobox");
+      }
+      expect(roleOf("Missing")).toBe("textbox");
+      expect(roleOf("Search missing")).toBe("searchbox");
+      expect(roleOf("Not a datalist")).toBe("textbox");
+      expect(roleOf("Password")).toBe("textbox");
+      expect(roleOf("Range")).toBe("slider");
+      expect(roleOf("Authored")).toBe("textbox");
+      expect(roleOf("Across a shadow root")).toBe("textbox");
+    }
+  });
+});
+
 // The DOM producer walks the flat tree through open shadow roots and slots,
 // as Chromium does. Before that, every node below came from native only.
 describe("web components reach the DOM producer", () => {
