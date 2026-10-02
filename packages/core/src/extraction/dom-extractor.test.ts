@@ -17,6 +17,7 @@ import {
   isNameFromContentHost,
   isSensitiveField,
   isSensitiveFieldAttributes,
+  nativeStates,
   SENSITIVE_AUTOCOMPLETE_TOKENS,
 } from "./dom-extractor.js";
 import { idScope } from "./flat-tree.js";
@@ -2016,6 +2017,27 @@ describe("extractDomTree", () => {
         "pressed",
       ),
     ).toEqual({ s: undefined });
+  });
+
+  it("asks a <select> for its authored combobox role, not the role it was recorded with", () => {
+    // The live extractor passes the role it recorded, which a since-changed
+    // `size` or `role` leaves stale.
+    const page = createPage(`
+      <select id="rows" size="3"><option>o</option></select>
+      <select id="rows-combobox" size="3" role="combobox"><option>o</option></select>
+    `);
+    const select = (id: string) => page.querySelector(`#${id}`) as Element;
+    // Strict: a state's key, even set to undefined, is what stops its ARIA
+    // attribute being read. Recorded as a drop-down, now a list box: no
+    // expanded state.
+    expect(nativeStates(select("rows"), "select", "combobox")).toStrictEqual({
+      expanded: undefined,
+      pressed: undefined,
+    });
+    // Recorded as a list box, now the author's combobox: aria-expanded reads.
+    expect(
+      nativeStates(select("rows-combobox"), "select", "listbox"),
+    ).toStrictEqual({ pressed: undefined });
   });
 
   it("ignores aria-pressed on a drop-down <select>", () => {
