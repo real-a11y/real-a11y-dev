@@ -657,7 +657,8 @@ export class LiveTreeExtractor {
    * for them.
    */
   private mapsUsedWithin(el: Element): Element[] {
-    const images = el.matches("img[usemap]")
+    // Any restyled element is asked, and a <form> can shadow `matches`.
+    const images = safeMatches(el, "img[usemap]")
       ? [el]
       : Array.from(el.querySelectorAll("img[usemap]"));
     const names = new Set<string>();

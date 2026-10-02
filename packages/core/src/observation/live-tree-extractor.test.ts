@@ -2294,6 +2294,31 @@ describe("LiveTreeExtractor", () => {
       expect(warn).not.toHaveBeenCalled();
     });
 
+    it("splices without falling back when a restyled form's matches is shadowed", () => {
+      // A class change can hide or show an image map's image, so the splice
+      // asks the restyled element whether it is such an image.
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      document.body.innerHTML = `
+        <main id="app">
+          <form aria-label="Signup">
+            <input name="matches" aria-label="Field" />
+          </form>
+        </main>
+      `;
+      const root = document.getElementById("app")!;
+      const form = root.querySelector("form")!;
+      clobber(form, "matches");
+      const live = new LiveTreeExtractor(root, { mode: "a11y" });
+
+      const change = observe(root, () => {
+        form.setAttribute("class", "touched");
+      });
+      const result = live.refresh(change);
+
+      expect(result.nodes).toEqual(extractA11yTree(root).nodes);
+      expect(warn).not.toHaveBeenCalled();
+    });
+
     it("splices without falling back when an added form's matches is shadowed", () => {
       // Each added element is asked whether it is an overlay, then whether it
       // is an image map's image.
