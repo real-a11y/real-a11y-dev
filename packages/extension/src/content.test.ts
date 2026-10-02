@@ -297,7 +297,7 @@ describe("content: a frame whose panel never connected", () => {
  * form that focuses its first field as it opens is focused before the
  * debounced refresh runs — so the walk has to get past the form.
  */
-describe("content: focus inside a form whose control shadows parentElement", () => {
+describe("content: focus inside a form whose control shadows its properties", () => {
   let h: Harness;
   const scrollIntoView = Element.prototype.scrollIntoView;
 
@@ -336,6 +336,30 @@ describe("content: focus inside a form whose control shadows parentElement", () 
     Object.defineProperty(form, "parentElement", {
       configurable: true,
       get: () => form.querySelector('[name="parentElement"]'),
+    });
+    h.sent.length = 0;
+
+    document
+      .getElementById("inside")!
+      .dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
+
+    expect(h.sent.filter((m) => m.type === "FOCUS_CHANGED")).toEqual([
+      { type: "FOCUS_CHANGED", payload: { nodeId: mainId } },
+    ]);
+  });
+
+  it("walks past a form whose control shadows nodeType", () => {
+    // `form.nodeType` is then that control, not 1, so the walk took the form
+    // for no element at all and stopped below it, syncing nothing.
+    const mainId = nodeIdByTag(h, "main");
+    document.getElementById("app")!.innerHTML =
+      `<form><input type="hidden" name="nodeType">` +
+      `<input id="inside" aria-label="Inside"></form>`;
+    const form = document.querySelector("form")!;
+    const control = form.querySelector('[name="nodeType"]');
+    Object.defineProperty(form, "nodeType", {
+      configurable: true,
+      get: () => control,
     });
     h.sent.length = 0;
 

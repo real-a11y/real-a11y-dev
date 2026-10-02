@@ -31,6 +31,14 @@
   updates the tree in place again, instead of rebuilding all of it.
   ([#465](https://github.com/real-a11y/real-a11y-dev/pull/465))
 
+- In DOM mode, focusing a field inside a `<form>` with a control named
+  `nodeType`, such as `<input type="hidden" name="nodeType">`, now highlights
+  the nearest node above it in the tree, and so does hovering or clicking
+  inside one in pick mode. Both highlighted nothing. A form lets a control
+  shadow its own properties, so the form's `nodeType` read as that control
+  rather than an element's, and the walk up from the field stopped below the
+  form. ([#464](https://github.com/real-a11y/real-a11y-dev/pull/464))
+
 - In DOM mode, an `<input>` whose `list` names a `<datalist>` now shows as a
   `combobox` in the tree and the Tab Sequence view, as Chromium's own
   accessibility tree reports it. DOM mode showed a `textbox` (or a
@@ -75,6 +83,17 @@
   Selecting a `<form contenteditable>` holding such a control now moves page
   focus to it, as for any other editor.
   ([#438](https://github.com/real-a11y/real-a11y-dev/pull/438))
+
+- In DOM mode, a `<textarea>`'s markup text no longer shows anywhere but its
+  value. That text is the field's default, not what it holds now, and for a
+  sensitive field (`autocomplete="one-time-code"`, `cc-number`…) it is the
+  secret itself. An unlabeled one was listed by it in the Tab Sequence view
+  and the filtered lists; a field named by `aria-labelledby` pointing at one
+  took it as its name, and one pointing `aria-describedby` at it as its
+  description; and it ran into the text preview of whatever held the field.
+  An unlabeled one now lists by its tag, and its value line still shows what
+  it holds, `[redacted]` for a sensitive one.
+  ([#466](https://github.com/real-a11y/real-a11y-dev/pull/466))
 
 - In DOM mode, a page that names an image or a form control after a DOM
   method no longer costs the tree more than that form. An
