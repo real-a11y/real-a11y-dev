@@ -863,6 +863,13 @@ const FIELD_VALUE_GATES = [
   // `VALUE_BEARING_ROLES`.
   "pageReadValue",
   "VALUE_BEARING_ROLES",
+  // The extension's DOM-mode text reads (`extension/src/page-text.ts`): the
+  // live-region line it sends the panel and an editor's field state. Both
+  // skip a control's child text, which for a `<textarea>` is its markup
+  // default — the secret itself, for a sensitive field. Core's field-text walk
+  // skips the same set when it reads an editor's value.
+  "pageText",
+  "CONTROL_TEXT_TAGS",
   // The act path: `pageType` in `browser` and its in-page mirror in the
   // extension return a marker, never the value; the CLI masks a `type` step.
   "pageType",

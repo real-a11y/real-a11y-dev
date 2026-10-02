@@ -116,6 +116,35 @@ describe("computeFieldState", () => {
         value: "x",
       });
     });
+
+    // A <textarea>'s child text is its markup DEFAULT value, never text the
+    // page shows — and for a sensitive field (ADR-0001) it is the secret. The
+    // host isn't the sensitive one, so its own check can't withhold it.
+    it("leaves a sensitive textarea inside the editor out of its value", () => {
+      const el = mount(
+        `<div contenteditable="true" role="textbox">Pay ` +
+          `<textarea autocomplete="cc-number">4111111111111111</textarea>now</div>`,
+      );
+      expect(computeFieldState(el)).toEqual({
+        success: true,
+        type: "text",
+        value: "Pay now",
+        placeholder: "",
+      });
+    });
+
+    it("reads no control's child text as the editor's", () => {
+      // An ordinary textarea's default is stale once the user types, and a
+      // <select>'s child text is every option, not the one it shows.
+      const el = mount(
+        `<div contenteditable="true" role="textbox">Notes ` +
+          `<textarea>first draft</textarea>` +
+          `<select><option>Apple</option><option>Pear</option></select>` +
+          `<datalist><option>Plum</option></datalist>end</div>`,
+      );
+      el.querySelector("textarea")!.value = "edited";
+      expect(computeFieldState(el)).toMatchObject({ value: "Notes end" });
+    });
   });
 
   describe("non-fillable elements", () => {

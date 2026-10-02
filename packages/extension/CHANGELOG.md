@@ -22,6 +22,20 @@
 
 ## Unreleased
 
+- The live-announcement log no longer shows a `<textarea>`'s markup text,
+  and in DOM mode neither does the inline input panel for a rich-text editor
+  that holds one. That text is the field's default, not what it holds now,
+  and for a sensitive field (`autocomplete="one-time-code"`, `cc-number`…) it
+  is the secret itself: a status message holding a one-time-code field
+  logged the code with it, and an editor around a card-number field opened
+  its input panel with the number in it. The log also shows what a screen
+  reader would announce now, not every character in the region: it leaves
+  out `aria-hidden`, `hidden`, `inert`, `display: none` and
+  `visibility: hidden` content, `<script>` and `<style>` text, a `<select>`'s
+  options and a `<datalist>`'s suggestions, and logs nothing for a region
+  that is itself hidden from assistive technology.
+  ([#469](https://github.com/real-a11y/real-a11y-dev/pull/469))
+
 - In DOM mode, a `<form>` with a field named `hasAttribute` is no longer
   dropped from the tree, the Tab Sequence view and the Buttons and Forms
   lists, with everything in it. Such a field shadows the form's own

@@ -394,6 +394,23 @@ export class NativeHarness {
     });
   }
 
+  /**
+   * What the inline input panel opens with for a node — `GET_FIELD_STATE`,
+   * addressed to the node's frame the way {@link domAct} addresses an action.
+   */
+  async domFieldState(
+    tabId: number,
+    nodeId: string,
+  ): Promise<{ success?: boolean; value?: string; error?: string }> {
+    const match = /^f(\d+)-(.+)$/.exec(nodeId);
+    const frameId = match ? Number(match[1]) : 0;
+    const localId = match ? match[2] : nodeId;
+    return await this.toFrame(tabId, frameId, {
+      type: "GET_FIELD_STATE",
+      payload: { nodeId: localId },
+    });
+  }
+
   /** Send to one frame's content script, from the extension's own service
    *  worker — which is what satisfies the content script's `isTrustedSender`. */
   private async toFrame<T>(

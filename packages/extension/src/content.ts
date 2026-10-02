@@ -12,6 +12,7 @@ import {
 import type { TreeViewMode, TreeChange } from "@real-a11y-dev/core";
 
 import { computeFieldState } from "./field-state.js";
+import { pageText } from "./page-text.js";
 import { isTrustedSender, planHighlight } from "./routing.js";
 import { elementsFromTabSequence, sendKey } from "./send-key.js";
 import type { PanelToContent } from "./types.js";
@@ -420,7 +421,11 @@ if (!isSubFrame) {
         '[role="status"], [role="alert"], [role="log"], [aria-live]',
       );
       for (const region of regions) {
-        const text = (region.textContent || "").trim();
+        // What a screen reader could announce, never raw `textContent`: that
+        // also holds a <textarea>'s markup default — the secret, for a
+        // sensitive field — and hidden, script and style text, none of which
+        // belongs on the message channel.
+        const text = pageText(region, { skipHidden: true }).trim();
         if (!text || text === lastLiveText.get(region)) continue;
         lastLiveText.set(region, text);
 

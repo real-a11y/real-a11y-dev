@@ -407,3 +407,120 @@ describe("content: focus inside a form whose control shadows its properties", ()
     expect(focus).toHaveBeenCalled();
   });
 });
+
+/**
+ * The live-region observer reports what a screen reader would announce when a
+ * `status`/`alert`/`log`/`aria-live` region changes, and sends it over the
+ * extension's message channel to the panel. What the page never shows as
+ * text has no business on that channel — least of all a `<textarea>`'s
+ * markup text, which is its DEFAULT value and, for a sensitive field
+ * (ADR-0001), the secret itself.
+ */
+describe("content: live regions", () => {
+  let h: Harness;
+
+  beforeEach(async () => {
+    vi.useFakeTimers();
+    vi.resetModules();
+    document.body.innerHTML =
+      `<div id="status" role="status"></div>` +
+      `<div id="polite" aria-live="polite"></div>`;
+    h = makeHarness();
+    (globalThis as { chrome?: unknown }).chrome = h.chromeMock;
+    await import("./content.js");
+    // Arms the observers, as a panel opening does.
+    h.send({ type: "REQUEST_TREE", payload: { viewMode: "a11y" } });
+    h.sent.length = 0;
+  });
+
+  afterEach(() => {
+    h.send({ type: "SET_OBSERVING", payload: { enabled: false } });
+    vi.clearAllTimers();
+    vi.useRealTimers();
+    delete (globalThis as { chrome?: unknown }).chrome;
+    document.body.innerHTML = "";
+  });
+
+  /** Replace region `id`'s content and let the observer's debounce run. */
+  async function announce(id: string, html: string): Promise<unknown[]> {
+    document.getElementById(id)!.innerHTML = html;
+    await vi.advanceTimersByTimeAsync(500);
+    return h.sent.filter((m) => m.type === "LIVE_REGION").map((m) => m.payload);
+  }
+
+  it("reports a region's text", async () => {
+    expect(await announce("status", "Saved")).toEqual([
+      { text: "Saved", level: "polite", role: "status" },
+    ]);
+  });
+
+  it("never sends a sensitive textarea's markup text", async () => {
+    const sent = await announce(
+      "status",
+      `Code sent <textarea autocomplete="one-time-code">902114</textarea>`,
+    );
+    expect(sent).toEqual([
+      { text: "Code sent", level: "polite", role: "status" },
+    ]);
+    expect(JSON.stringify(sent)).not.toContain("902114");
+  });
+
+  it("never sends the markup text of a textarea that is the region", async () => {
+    document.body.insertAdjacentHTML(
+      "beforeend",
+      `<textarea id="otp" aria-live="polite" autocomplete="one-time-code"></textarea>`,
+    );
+    const sent = await announce("otp", "902114");
+    expect(JSON.stringify(sent)).not.toContain("902114");
+  });
+
+  it("reads no control's child text as the region's", async () => {
+    const sent = await announce(
+      "polite",
+      `Draft saved<textarea>first draft</textarea>` +
+        `<select><option>Apple</option><option>Pear</option></select>`,
+    );
+    expect(sent).toEqual([
+      { text: "Draft saved", level: "polite", role: "status" },
+    ]);
+  });
+
+  it("leaves out what a screen reader would not announce", async () => {
+    const sent = await announce(
+      "status",
+      `3 results` +
+        `<span aria-hidden="true"> ✓</span>` +
+        `<span hidden> hidden</span>` +
+        `<span style="display: none"> display-none</span>` +
+        `<span style="visibility: hidden"> invisible</span>` +
+        `<span inert> inert</span>` +
+        `<style>.x { color: red }</style>` +
+        `<script>window.leak = 1</script>`,
+    );
+    expect(sent).toEqual([
+      { text: "3 results", level: "polite", role: "status" },
+    ]);
+  });
+
+  it("sends nothing from a region hidden from assistive technology", async () => {
+    document.getElementById("status")!.setAttribute("aria-hidden", "true");
+    expect(await announce("status", "Saved")).toEqual([]);
+  });
+
+  it("still reads a form whose control shadows tagName", async () => {
+    // In a browser `form.tagName` is that control, so a hidden-check that
+    // reads it throws. Forced, because jsdom doesn't shadow a form's
+    // properties. The region still reports the text it shows.
+    const status = document.getElementById("status")!;
+    status.innerHTML = `<form><input name="tagName">Sent</form>`;
+    const form = status.querySelector("form")!;
+    Object.defineProperty(form, "tagName", {
+      configurable: true,
+      get: () => form.querySelector('[name="tagName"]'),
+    });
+    await vi.advanceTimersByTimeAsync(500);
+    expect(
+      h.sent.filter((m) => m.type === "LIVE_REGION").map((m) => m.payload),
+    ).toEqual([{ text: "Sent", level: "polite", role: "status" }]);
+  });
+});
