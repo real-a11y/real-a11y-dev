@@ -77,6 +77,23 @@ describe("findByRole", () => {
     expect(checked.map((n) => n.a11y.name)).toEqual(["b"]);
   });
 
+  it("filters native checkboxes by unchecked and mixed", () => {
+    const root = createPage(`
+      <input type="checkbox" aria-label="a" />
+      <input type="checkbox" checked aria-label="b" />
+      <input type="checkbox" checked aria-label="c" />
+      <div role="checkbox" aria-checked="mixed" tabindex="0">d</div>
+    `);
+    (root.querySelector('[aria-label="c"]') as HTMLInputElement).indeterminate =
+      true;
+    const tree = extractDomTree(root);
+    const names = (checked: boolean | "mixed") =>
+      findAllByRole(tree, "checkbox", { checked }).map((n) => n.a11y.name);
+    expect(names(false)).toEqual(["a"]);
+    expect(names(true)).toEqual(["b"]);
+    expect(names("mixed")).toEqual(["c", "d"]);
+  });
+
   it("returns null when nothing matches", () => {
     const root = createPage(`<p>No buttons here</p>`);
     const tree = extractDomTree(root);

@@ -68,6 +68,27 @@ describe("DomObserver", () => {
     ).toBe(true);
   });
 
+  it.each(["size", "multiple"])(
+    "observes a select's %s, which decides its shape",
+    async (attr) => {
+      document.body.innerHTML = `<select id="s" aria-label="Size"><option>S</option></select>`;
+      observer = new DomObserver(document.body, onTreeChange, 100);
+      observer.start();
+
+      // A drop-down has an expanded state and a list box has none, and the
+      // two attributes decide which a select is.
+      document.getElementById("s")!.setAttribute(attr, "3");
+
+      await settleObserver(100);
+
+      expect(onTreeChange).toHaveBeenCalledTimes(1);
+      const change = onTreeChange.mock.calls[0]![0];
+      expect(
+        change.mutations?.some((m: MutationRecord) => m.attributeName === attr),
+      ).toBe(true);
+    },
+  );
+
   it("debounces rapid mutations into a single callback", async () => {
     observer = new DomObserver(document.body, onTreeChange, 100);
     observer.start();

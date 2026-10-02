@@ -908,6 +908,131 @@ describe("LiveTreeExtractor", () => {
     });
   });
 
+  // A click on one checkbox or radio fires its events on that one alone, yet
+  // can move other controls' checkedness, which no attribute reflects.
+  describe("checkedness a change moves elsewhere", () => {
+    async function refreshAfter(html: string, mutate: () => void) {
+      document.body.innerHTML = html;
+      const live = new LiveTreeExtractor(document.body, { mode: "a11y" });
+      let lastChange: TreeChange | undefined;
+      const observer = new DomObserver(
+        document.body,
+        (change) => {
+          lastChange = change;
+        },
+        50,
+      );
+      observer.start();
+      mutate();
+      await vi.advanceTimersByTimeAsync(100);
+      const result = live.refresh(lastChange);
+      observer.stop();
+      return result;
+    }
+
+    function checkedOf(result: ExtractionResult, name: string): unknown {
+      const node = [...result.nodes.values()].find((n) => n.a11y.name === name);
+      expect(node).toBeDefined();
+      return node!.a11y.states["checked"];
+    }
+
+    it("unchecks the radio its sibling replaced", async () => {
+      const result = await refreshAfter(
+        `<main><input type="radio" name="size" aria-label="Small" checked><input id="large" type="radio" name="size" aria-label="Large"></main>`,
+        () => document.getElementById("large")!.click(),
+      );
+      expect(checkedOf(result, "Small")).toBe(false);
+      expect(checkedOf(result, "Large")).toBe(true);
+      expect(result.nodes).toEqual(extractA11yTree(document.body).nodes);
+    });
+
+    it("unchecks the radio a sibling's checked attribute replaced", async () => {
+      const result = await refreshAfter(
+        `<main><input type="radio" name="size" aria-label="Small" checked><input id="large" type="radio" name="size" aria-label="Large"></main>`,
+        () => document.getElementById("large")!.setAttribute("checked", ""),
+      );
+      expect(checkedOf(result, "Small")).toBe(false);
+      expect(checkedOf(result, "Large")).toBe(true);
+      expect(result.nodes).toEqual(extractA11yTree(document.body).nodes);
+    });
+
+    it("marks mixed the box a handler made indeterminate", async () => {
+      const result = await refreshAfter(
+        `<main><input id="all" type="checkbox" aria-label="All"><ul><li><input id="one" type="checkbox" aria-label="One"></li><li><input type="checkbox" aria-label="Two"></li></ul></main>`,
+        () => {
+          const all = document.getElementById("all") as HTMLInputElement;
+          const one = document.getElementById("one")!;
+          one.addEventListener("change", () => {
+            all.indeterminate = true;
+          });
+          one.click();
+        },
+      );
+      expect(checkedOf(result, "All")).toBe("mixed");
+      expect(checkedOf(result, "One")).toBe(true);
+      expect(result.nodes).toEqual(extractA11yTree(document.body).nodes);
+    });
+
+    it.each([
+      ["1", "3", undefined],
+      ["3", "1", false],
+    ])("follows a select's size from %s to %s", async (from, to, expanded) => {
+      document.body.innerHTML = `<main><select id="s" size="${from}" aria-label="Items"><option>A</option><option>B</option></select></main>`;
+      const live = new LiveTreeExtractor(document.body, { mode: "a11y" });
+      let lastChange: TreeChange | undefined;
+      const observer = new DomObserver(
+        document.body,
+        (change) => {
+          lastChange = change;
+        },
+        50,
+      );
+      observer.start();
+      document.getElementById("s")!.setAttribute("size", to);
+      await vi.advanceTimersByTimeAsync(100);
+      observer.stop();
+      // The size change alone has to wake the tree.
+      expect(lastChange).toBeDefined();
+      const result = live.refresh(lastChange);
+      const select = [...result.nodes.values()].find(
+        (n) => n.a11y.name === "Items",
+      );
+      expect(select?.a11y.states["expanded"]).toBe(expanded);
+      expect(result.nodes).toEqual(extractA11yTree(document.body).nodes);
+    });
+
+    // Opening a picker changes no attribute and fires no event, so it shows
+    // only when something else refreshes the tree. jsdom has no picker: stand
+    // one in through `:open`.
+    it("re-reads a drop-down's picker when something else refreshes", async () => {
+      const matches = Element.prototype.matches;
+      const spy = vi
+        .spyOn(Element.prototype, "matches")
+        .mockImplementation(function (this: Element, selector: string) {
+          if (selector === ":open")
+            return this.id === "size" && document.body.dataset.open === "1";
+          return matches.call(this, selector);
+        });
+      try {
+        const result = await refreshAfter(
+          `<main><select id="size" aria-label="Size"><option>S</option></select><p id="p">Old</p></main>`,
+          () => {
+            document.body.dataset.open = "1";
+            document.getElementById("p")!.textContent = "New";
+          },
+        );
+        const select = [...result.nodes.values()].find(
+          (n) => n.a11y.name === "Size",
+        );
+        expect(select?.a11y.states["expanded"]).toBe(true);
+        expect(result.nodes).toEqual(extractA11yTree(document.body).nodes);
+      } finally {
+        spy.mockRestore();
+        delete document.body.dataset.open;
+      }
+    });
+  });
+
   describe("a heading named through a <details>", () => {
     async function refreshAfter(mutate: () => void) {
       document.body.innerHTML = `<main><h3>A <details><summary>Old</summary>Body</details></h3></main>`;

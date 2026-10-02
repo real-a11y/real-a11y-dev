@@ -15,14 +15,17 @@ export interface FindByRoleOptions {
   name?: string | RegExp;
   /** Heading level (1–6). Only meaningful when role is `"heading"`. */
   level?: number;
-  /** Match only nodes whose `a11y.states.checked` matches. */
-  checked?: boolean;
+  /**
+   * Match only nodes whose `a11y.states.checked` matches. `"mixed"` matches
+   * an indeterminate checkbox and `aria-checked="mixed"`.
+   */
+  checked?: boolean | "mixed";
   /** Match only nodes whose `a11y.states.expanded` matches. */
   expanded?: boolean;
   /** Match only nodes whose `a11y.states.selected` matches. */
   selected?: boolean;
   /** Match only nodes whose `a11y.states.pressed` matches. */
-  pressed?: boolean;
+  pressed?: boolean | "mixed";
   /** Match only nodes whose `a11y.states.disabled` matches. */
   disabled?: boolean;
   /**
