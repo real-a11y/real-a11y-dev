@@ -263,5 +263,5 @@ contentinfo
   paragraph "Last updated:"
     time "[redacted]"
   navigation "Pager"
-    link "Previous pageOverview & Install"
-    link "Next page@real-a11y-dev/testing"
+    link "Previous page Overview & Install"
+    link "Next page @real-a11y-dev/testing"

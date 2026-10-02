@@ -93,7 +93,7 @@ main
       row
         cell "Engine"
         cell "The browser's native AX tree"
-        cell "Real A11y's own extraction — the same tree the extension , React panel , and Storybook addon render"
+        cell "Real A11y's own extraction — the same tree the extension, React panel, and Storybook addon render"
           link "extension"
           link "React panel"
           link "Storybook addon"
@@ -135,5 +135,5 @@ contentinfo
   paragraph "Last updated:"
     time "[redacted]"
   navigation "Pager"
-    link "Previous pageAccessibility Snapshots"
-    link "Next pageWhy Real A11y?"
+    link "Previous page Accessibility Snapshots"
+    link "Next page Why Real A11y?"

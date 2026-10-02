@@ -253,5 +253,5 @@ contentinfo
   paragraph "Last updated:"
     time "[redacted]"
   navigation "Pager"
-    link "Previous pagePanel features"
-    link "Next page@real-a11y-dev/inspector"
+    link "Previous page Panel features"
+    link "Next page @real-a11y-dev/inspector"

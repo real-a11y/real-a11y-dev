@@ -79,5 +79,5 @@ contentinfo
   paragraph "Last updated:"
     time "[redacted]"
   navigation "Pager"
-    link "Previous pageWhy Real A11y?"
-    link "Next pageDOM View"
+    link "Previous page Why Real A11y?"
+    link "Next page DOM View"

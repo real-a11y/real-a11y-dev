@@ -149,5 +149,5 @@ link "close_browser"
 button "Copy Code"
 generic
 link "Edit this page on GitHub"
-link "Previous page@real-a11y-dev/mcp"
-link "Next page@real-a11y-dev/cli"
+link "Previous page @real-a11y-dev/mcp"
+link "Next page @real-a11y-dev/cli"

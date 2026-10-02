@@ -69,7 +69,7 @@ main
       row
         cell "0"
           code "0"
-        cell "Clean — no findings at or above --fail-on ."
+        cell "Clean — no findings at or above --fail-on."
           link "--fail-on"
             code "--fail-on"
       row
@@ -2228,5 +2228,5 @@ contentinfo
   paragraph "Last updated:"
     time "[redacted]"
   navigation "Pager"
-    link "Previous page@real-a11y-dev/cli"
-    link "Next pageConfiguration"
+    link "Previous page @real-a11y-dev/cli"
+    link "Next page Configuration"

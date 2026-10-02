@@ -158,6 +158,25 @@ When `treeSnapshot()` shows a name you didn't expect:
 4. **Check `aria-hidden`** on ancestors — a hidden wrapper removes the element's subtree from name computation.
 5. **Compare against the Chrome extension.** If the extension shows the same name, it's what real AT will announce.
 
+### Spacing between a name's parts
+
+When a name is built from an element's content, each child that renders as a box
+of its own is separated with a space, and a child that flows inline is not — the
+same rule Chromium applies. So `<button><div>Save</div><div>now</div></button>`
+is `"Save now"`, while `<button><span>Sa</span><span>ve</span></button>` is one
+word, `"Save"`. A child that lends no text still separates the text around it if
+it renders: `<h1>Save<input>now</h1>` is `"Save now"`.
+
+Because the rule reads **computed** `display`, the same markup can produce a
+different name in jsdom than in a real browser wherever jsdom's CSS engine
+differs from a browser's. jsdom does not blockify flex or grid items, floats or
+absolutely positioned children, and it treats `<select>` and `<textarea>` as
+inline where a browser makes them `inline-block`. Those cases read as one word
+under a jsdom-based matcher and spaced in a browser. If a name looks glued only
+in jsdom, check the child's computed `display` before treating it as a bug —
+and prefer the Playwright path, which runs in a real browser, when the
+distinction matters to your assertion.
+
 ---
 
 ## Why this matters

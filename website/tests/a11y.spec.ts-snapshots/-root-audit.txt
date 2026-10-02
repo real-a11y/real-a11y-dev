@@ -1,4 +1,4 @@
-heading "Real A11yAccessibility tooling that works in the real world" (level 1)
+heading "Real A11y Accessibility tooling that works in the real world" (level 1)
 paragraph "Beta (v0.1) — Extracts the accessibility tree as plain data. Use it through a Chrome extension, Storybook panel, React component, testing library, CLI, or MCP server — one engine, every surface."
 link "Get Started"
 link "Chrome Extension"

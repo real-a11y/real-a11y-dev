@@ -2075,6 +2075,145 @@ describe("extractDomTree", () => {
     });
   });
 
+  // accname-1.2 §4.3.2 step 2F appends each descendant's contribution "with a
+  // space". The extractor used to concatenate element children with no
+  // separator at all, so a button whose label is split across two blocks came
+  // out as one glued word ("Savenow" where Chromium reads "Save now").
+  // Spacing follows computed `display`, so children that flow inline still read
+  // as one word. Every expectation here is what Chromium 141 computes for the
+  // same markup, read back over CDP.
+  //
+  // Not covered here, because jsdom cannot see it: CSS blockifies a flex or grid
+  // item, a float and an absolutely positioned child, so those arrive at the
+  // check as `block` in a browser and are spaced (Chromium spaces them too).
+  // jsdom reports the authored `inline` instead, so a test would assert the
+  // opposite of the shipped behaviour.
+  describe("name-from-content separates children that render as blocks", () => {
+    function nameOfTag(html: string, tag: string): string {
+      const root = createPage(html);
+      // Attached so getComputedStyle resolves the default display values.
+      document.body.appendChild(root);
+      try {
+        const node = [...extractDomTree(root).nodes.values()].find(
+          (n) => n.dom?.tagName === tag,
+        )!;
+        return node.a11y.name;
+      } finally {
+        document.body.removeChild(root);
+      }
+    }
+
+    it("spaces two block children of a button", () => {
+      expect(
+        nameOfTag("<button><div>Save</div><div>now</div></button>", "button"),
+      ).toBe("Save now");
+    });
+
+    it("spaces block children of a heading", () => {
+      expect(nameOfTag("<h1><p>One</p><p>Two</p></h1>", "h1")).toBe("One Two");
+    });
+
+    it("spaces across a <br>, which ends the line from inside an inline box", () => {
+      expect(nameOfTag('<a href="/">Read<br>more</a>', "a")).toBe("Read more");
+    });
+
+    it("spaces an atomic inline-level box", () => {
+      expect(
+        nameOfTag(
+          '<button><span style="display: inline-block">Sa</span><span style="display: inline-block">ve</span></button>',
+          "button",
+        ),
+      ).toBe("Sa ve");
+    });
+
+    it("lets an empty block separate the text either side of it", () => {
+      expect(nameOfTag("<button>Save<div></div>now</button>", "button")).toBe(
+        "Save now",
+      );
+    });
+
+    it("lets a name-barrier child's box separate the text around it", () => {
+      // <input> lends no text to a name, but Chromium still reads "Save now".
+      expect(nameOfTag("<h1>Save<input>now</h1>", "h1")).toBe("Save now");
+    });
+
+    it("lets a name-barrier container's box separate the text around it", () => {
+      expect(
+        nameOfTag(
+          '<h1>Save<div role="group"><span>x</span></div>now</h1>',
+          "h1",
+        ),
+      ).toBe("Save now");
+    });
+
+    it("lets a rendered aria-hidden child separate the text around it", () => {
+      expect(
+        nameOfTag('<h1>Save<div aria-hidden="true">x</div>now</h1>', "h1"),
+      ).toBe("Save now");
+    });
+
+    it("does not separate across a child with no box at all", () => {
+      expect(
+        nameOfTag('<h1>Save<div style="display: none">x</div>now</h1>', "h1"),
+      ).toBe("Savenow");
+    });
+
+    it("does not space an inline named widget's contributed name", () => {
+      // The link lends the button its computed name; an inline link flows with
+      // the text beside it, so Chromium reads one word.
+      expect(nameOfTag('<button><a href="#">Sa</a>ve</button>', "button")).toBe(
+        "Save",
+      );
+    });
+
+    it("keeps an inline named widget out of the middle of a word", () => {
+      expect(
+        nameOfTag(`<h2>Signed in as <a href="/u">Ada</a>'s profile</h2>`, "h2"),
+      ).toBe("Signed in as Ada's profile");
+    });
+
+    it("spaces a named widget that renders as its own block", () => {
+      expect(
+        nameOfTag(
+          '<button><a href="#" style="display: block">Sa</a>ve</button>',
+          "button",
+        ),
+      ).toBe("Sa ve");
+    });
+
+    it("spaces a <summary> however it is styled", () => {
+      // Chromium separates the disclosure's label whatever its display is:
+      // an author's `display: inline` on it still reads "Note S Body".
+      expect(
+        nameOfTag(
+          '<h3>Note<details open><summary style="display: inline">S</summary>Body</details></h3>',
+          "h3",
+        ),
+      ).toBe("Note S Body");
+    });
+
+    it("does not space inline children, which read as one word", () => {
+      expect(
+        nameOfTag("<button><span>Sa</span><span>ve</span></button>", "button"),
+      ).toBe("Save");
+    });
+
+    it("follows an inline override on a block element", () => {
+      expect(
+        nameOfTag(
+          '<button><div style="display: inline">Sa</div><div style="display: inline">ve</div></button>',
+          "button",
+        ),
+      ).toBe("Save");
+    });
+
+    it("keeps a single space around a nested inline child", () => {
+      expect(
+        nameOfTag('<a href="/"><div>Read <span>more</span></div></a>', "a"),
+      ).toBe("Read more");
+    });
+  });
+
   // accname-1.2 §4.3.2 step 2A: hidden subtrees contribute the empty string
   // to name-from-content. The previous extractor used element.textContent
   // directly and walked into aria-hidden / hidden / display:none descendants,

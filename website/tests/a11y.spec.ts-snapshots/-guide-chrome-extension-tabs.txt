@@ -23,5 +23,5 @@ link "Semantic Navigator"
 button "Copy Code"
 generic
 link "Edit this page on GitHub"
-link "Previous pagePanel features"
-link "Next page@real-a11y-dev/inspector"
+link "Previous page Panel features"
+link "Next page @real-a11y-dev/inspector"

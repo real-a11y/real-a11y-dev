@@ -343,5 +343,5 @@ contentinfo
   paragraph "Last updated:"
     time "[redacted]"
   navigation "Pager"
-    link "Previous pageTools reference"
-    link "Next pageCommands & flags"
+    link "Previous page Tools reference"
+    link "Next page Commands & flags"
