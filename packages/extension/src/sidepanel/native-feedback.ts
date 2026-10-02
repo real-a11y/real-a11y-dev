@@ -29,10 +29,14 @@ export function nativeActionFeedback(
       return `${ACTION_LABELS.focus}: ${name}`;
   }
   const role = node?.role;
-  if (role === "checkbox" || role === "switch" || role === "menuitemcheckbox") {
-    return node?.states?.["checked"] === true
-      ? `Unchecked: ${name}`
-      : `Checked: ${name}`;
+  const checked = node?.states?.["checked"];
+  // A mixed box gets the plain label, as in the DOM tree: a click checks or
+  // unchecks it by a checkedness that "mixed" hides.
+  if (
+    (role === "checkbox" || role === "switch" || role === "menuitemcheckbox") &&
+    checked !== "mixed"
+  ) {
+    return checked === true ? `Unchecked: ${name}` : `Checked: ${name}`;
   }
   if (role === "radio" || role === "menuitemradio") return `Selected: ${name}`;
   return `${ACTION_LABELS.click}: ${name}`;

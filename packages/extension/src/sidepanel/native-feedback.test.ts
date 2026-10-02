@@ -35,6 +35,15 @@ describe("nativeActionFeedback", () => {
     ).toBe("Unchecked: Wi-Fi");
   });
 
+  it("says Click for a mixed checkbox, whose outcome it can't know", () => {
+    expect(
+      nativeActionFeedback(
+        node("checkbox", "Select all", { checked: "mixed" }),
+        "click",
+      ),
+    ).toBe("Click: Select all");
+  });
+
   it("says Selected for a radio and an option", () => {
     expect(nativeActionFeedback(node("radio", "Small"), "click")).toBe(
       "Selected: Small",
