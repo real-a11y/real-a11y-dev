@@ -5,7 +5,14 @@
   "description": "Navigate and interact with web pages through their semantic tree structure. Experience the web the way assistive technology does.",
   "author": "Real A11y",
   "homepage_url": "https://real-a11y.dev",
-  "permissions": ["activeTab", "sidePanel", "webNavigation"],
+  "permissions": [
+    "activeTab",
+    "sidePanel",
+    "webNavigation",
+    "debugger",
+    "tabs",
+    "storage"
+  ],
   "side_panel": {
     "default_path": "src/sidepanel/index.html"
   },

@@ -31,7 +31,7 @@ export const FOCUSABLE_SELECTOR =
  * binding let focus land on the toolbar behind a panel still claiming to be
  * modal. Anything outside the dialog is pulled back to its first control.
  */
-function useFocusTrap(ref: RefObject<HTMLDivElement>) {
+export function useFocusTrap(ref: RefObject<HTMLDivElement>) {
   useEffect(() => {
     const root = ref.current;
     if (!root) return;
@@ -78,7 +78,7 @@ function useFocusTrap(ref: RefObject<HTMLDivElement>) {
  * Must be called before any hook that moves focus into the dialog, so that it
  * captures the opener rather than the dialog's own initial focus target.
  */
-function useRestoreFocusOnClose() {
+export function useRestoreFocusOnClose() {
   useEffect(() => {
     const opener = document.activeElement as HTMLElement | null;
     return () => {

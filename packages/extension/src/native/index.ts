@@ -1,10 +1,13 @@
 /// <reference types="chrome" />
 
 /**
- * Native-mode entry point (RFC PR H dogfood). Registered from the service worker
- * ONLY in the dogfood build (behind the `__DOGFOOD__` build constant, so it is
- * dead-code-eliminated from the store build) AND only while the runtime dev flag
- * is on — defence in depth so the `debugger` capability is never live by default.
+ * Native-mode entry point (RFC PR H). Registered unconditionally from the
+ * service worker (`background.ts`) — the capability ships in every build now
+ * that `public/manifest.json` carries `debugger`/`tabs`/`storage` as required
+ * permissions. What keeps it off by default is the setting below: every
+ * `chrome.debugger` use still refuses until a user explicitly turns native
+ * mode on, enforced inside `NativeDebuggerSession.attach()` itself so "off"
+ * and "attached" stay mutually exclusive.
  *
  * This wires the panel↔SW messages for reading Chromium's native tree over
  * `chrome.debugger`, acting through it, and exporting the dogfood report. All
@@ -27,9 +30,9 @@ import {
   type NativeAction,
 } from "./native-core.js";
 
-const FLAG_KEY = "devFlags.nativeMode";
+const FLAG_KEY = "settings.nativeModeEnabled";
 
-/** Runtime dev flag — off unless a dogfooder explicitly turns it on. */
+/** The user-facing native-mode setting — off unless explicitly turned on. */
 async function nativeModeEnabled(): Promise<boolean> {
   const got = await chrome.storage.local.get(FLAG_KEY);
   return got[FLAG_KEY] === true;
@@ -112,11 +115,11 @@ function isNativeMessage(m: unknown): m is NativeMessage {
 }
 
 export function registerNativeMode(): void {
-  // The dogfood log is durable (`local` — it spans the ~2-week exercise);
-  // attach bookkeeping is per-browser-session (`session`), which outlives a
-  // service-worker suspend but not a browser restart — the exact lifetime of a
-  // debugger attachment. Keeping it out of memory is what lets the unsolicited
-  // detach survive the very suspend it measures.
+  // The dogfood log is durable (`local` — it persists across restarts, not
+  // just one exercise); attach bookkeeping is per-browser-session (`session`),
+  // which outlives a service-worker suspend but not a browser restart — the
+  // exact lifetime of a debugger attachment. Keeping it out of memory is what
+  // lets the unsolicited detach survive the very suspend it measures.
   const session = new NativeDebuggerSession(
     chrome.storage.local,
     chrome.storage.session ?? chrome.storage.local,

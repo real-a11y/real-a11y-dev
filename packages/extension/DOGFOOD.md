@@ -1,34 +1,46 @@
 # Extension native mode — `chrome.debugger` dogfood
 
-**Status:** dev-only · **RFC:** [native-tree RFC (#197)](https://github.com/real-a11y/real-a11y-dev/pull/197) (Revision 2 + PR H) · not for the Chrome Web Store.
+**Status:** graduated to production · **RFC:** [native-tree RFC (#197)](https://github.com/real-a11y/real-a11y-dev/pull/197) (Revision 2 + PR H).
 
-This is the time-boxed dogfood the native-tree RFC gates the desktop decision on.
-Spike 5 already proved the mechanism works (an MV3 service worker reads **and**
-dispatches Chromium's native accessibility tree — UA-shadow media controls
-included — over `chrome.debugger`). What it **could not** answer needs a real,
-headed, human session. This build instruments exactly those three questions.
+This was the time-boxed dogfood the native-tree RFC gated the graduation
+decision on. Spike 5 had already proved the mechanism works (an MV3 service
+worker reads **and** dispatches Chromium's native accessibility tree — UA-shadow
+media controls included — over `chrome.debugger`); what it **couldn't** answer
+needed a real, headed, human session. This build instrumented exactly those
+three questions, and the findings log below is the record of that exercise.
 
-> **It produces a decision, not a feature.** The goal is a verdict written back
-> into the RFC, not shipping native mode to store users.
+> **It produced a decision, not just a feature.** The verdict this exercise
+> reached — logged below, backed by the quantitative report the build
+> exports — is what the graduation PR cites as the reason native mode moved
+> from a dev-only build into the production store build: `chrome.debugger`,
+> `tabs` and `storage` are now required permissions in the shipped
+> `packages/extension/public/manifest.json`, off by default behind a
+> `chrome.storage`-backed runtime setting (`packages/extension/src/native/index.ts`)
+> rather than a build-time constant. Every existing user re-consents on the
+> release that carries that manifest change.
 
-## Why it's a separate build
+## Why there's still a separate dogfood build
 
-`chrome.debugger` is one of Chrome's most sensitive permissions. Requesting it
-in the **published** extension would trigger heightened store review, a scary
-permission warning, and a forced re-consent for every existing user — for a
-feature that's off by default. So the store build never carries it:
+Native mode itself — the `chrome.debugger` capability — no longer needs a
+separate build to stay out of the store listing; it ships in every build now,
+gated at runtime. What `dist-dogfood/` still exists for is narrower:
+**`DogfoodPanel`**, the amber debug widget this exercise used for
+instrumentation (raw event log, capability-refusal counters, the "Copy dogfood
+report" button) — internal diagnostics with no reason to ship to end users,
+still gated behind the build-time `__DOGFOOD__` constant and
+dead-code-eliminated from the store build. The production side panel's own
+**"Enable native mode…" → NATIVE toggle** (`App.tsx`, `NativeTreeView.tsx`) is
+the real, unbranded, shipped way to use native mode — it needs no separate
+build and no unpacked load; see the next section.
 
-- `packages/extension/public/manifest.json` (the **shipped** manifest) stays
-  clean: `activeTab`, `sidePanel`, `webNavigation`.
-- The native code is gated behind a build-time `__DOGFOOD__` constant, so it is
-  **dead-code-eliminated** from the store build (verified: the production
-  `background.js` contains no `chrome.debugger` reference).
-- The dogfood build is a **separate, unpacked** artifact (`dist-dogfood/`) with
-  its own manifest that adds `debugger` + `tabs` + `storage` (the last for the
-  content-free instrumentation log). Unpacked extensions need no store review.
-  It is never submitted.
+If you're here to exercise native mode as a **user of the shipped product**,
+skip straight to that toggle: `pnpm --filter
+@real-a11y-dev/semantic-navigator-extension build` (or `dev`), load
+`packages/extension/dist/` as usual, open the side panel, and click "Enable
+native mode…". Everything below this point is specifically about the
+dogfood-only telemetry build and the exercise it was built for.
 
-## Build & load
+## Build & load the dogfood build
 
 ```sh
 pnpm --filter @real-a11y-dev/semantic-navigator-extension build:dogfood
