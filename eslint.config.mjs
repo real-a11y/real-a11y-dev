@@ -44,10 +44,17 @@ const CLOBBER_SAFE_PARENT_READS = [
  *   5. import-order rules
  *   6. Clobber-safe parent reads in core and the extension
  *   7. jsx-a11y on .tsx/.jsx
- *   8. Test file relaxations (Vitest fixtures often include broken markup)
- *   9. eslint-config-prettier LAST — disables formatting rules that fight
+ *   8. Source may not import test code or data (`pr:risk` relies on it)
+ *   9. Test file relaxations (Vitest fixtures often include broken markup)
+ *  10. eslint-config-prettier LAST — disables formatting rules that fight
  *      Prettier
  */
+/** A module specifier naming test code or test data — see layer 8. */
+const TEST_ONLY_SPECIFIER =
+  "(\\.(test|spec)(\\.[cm]?[jt]sx?)?(\\?.*)?$|(^|\\x2F)__(tests|fixtures|snapshots)__(\\x2F|$))";
+const TEST_ONLY_MESSAGE =
+  "Source must not import test code or test data: it would ship, and `pr:risk` grades test-only diffs as unable to ship. Move what you need out of the test-only path.";
+
 export default [
   {
     ignores: [
@@ -161,6 +168,50 @@ export default [
       "jsx-a11y/click-events-have-key-events": "off",
       "jsx-a11y/interactive-supports-focus": "off",
       "jsx-a11y/no-static-element-interactions": "off",
+    },
+  },
+
+  // Source never imports test code or test data. `pnpm pr:risk` grades a
+  // test-only diff 🟢 low — mergeable by an agent — because no test file can
+  // reach a published artifact: each package ships only `dist/`, built from
+  // explicit entry points. A source import of a `__fixtures__` JSON would
+  // bundle it, and every later "test-only" edit to that file would then ship
+  // without a human having looked.
+  //
+  // `no-restricted-imports` sees only static `import`/`export … from`, so the
+  // same specifier is refused in `import()` and `require()` too. A Vite query
+  // (`?raw`, `?url`) is allowed for after the name: it still bundles the file.
+  // `\x2F` rather than `/` in the pattern because esquery ends a selector regex
+  // at the first slash.
+  {
+    files: ["packages/*/src/**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}"],
+    ignores: [
+      "**/*.test.*",
+      "**/*.spec.*",
+      "**/__tests__/**",
+      "**/__fixtures__/**",
+      "**/__snapshots__/**",
+    ],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            { regex: TEST_ONLY_SPECIFIER, message: TEST_ONLY_MESSAGE },
+          ],
+        },
+      ],
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector: `ImportExpression[source.value=/${TEST_ONLY_SPECIFIER}/]`,
+          message: TEST_ONLY_MESSAGE,
+        },
+        {
+          selector: `CallExpression[callee.name="require"][arguments.0.value=/${TEST_ONLY_SPECIFIER}/]`,
+          message: TEST_ONLY_MESSAGE,
+        },
+      ],
     },
   },
 
