@@ -76,8 +76,9 @@ name: PR risk
 #
 # An unstacked PR, and the bottom of a stack, has the two refs equal and takes
 # exactly the path it always took. Anything unexpected — a parent that differs
-# with no stack to explain it, a name outside the safe set — is graded against
-# the trunk with a warning, the old answer: it over-counts, never under-counts.
+# with no stack to explain it, a name outside the safe set, a parent commit
+# that can't be fetched any more — is graded against the trunk with a warning,
+# the old answer: it over-counts, never under-counts.
 # ---------------------------------------------------------------------------
 #
 # Two more things follow from being REQUIRED, and both are easy to get wrong:
@@ -211,8 +212,8 @@ jobs:
           # What the diff is measured against: the trunk, unless this PR is a
           # layer of a stack — see STACKED PULL REQUESTS in the header. Every
           # guard falls back to the trunk, the old over-counting answer, rather
-          # than failing the required check; only a failed fetch aborts, like
-          # the trunk's own fetch above.
+          # than failing the required check: a re-run reuses the event, so a
+          # red check here could never be cleared by re-running it.
           #
           # The name is checked before it is printed or passed anywhere. It is
           # author-chosen, git allows `$`, backticks and `<` in it, and it lands
@@ -228,25 +229,28 @@ jobs:
                       "$HEAD_SHA" =~ ^([0-9a-f]{40}|[0-9a-f]{64})$ &&
                       "$PARENT_SHA" =~ ^([0-9a-f]{40}|[0-9a-f]{64})$ ]]; then
               echo "::warning::Stack metadata is malformed — graded against $BASE_REF, which counts every layer below this one too."
+            elif ! git merge-base --is-ancestor "$HEAD_SHA" HEAD; then
+              echo "::warning::The event's head $HEAD_SHA isn't in the checked-out merge ref — graded against $BASE_REF, which counts every layer below this one too."
+            # The parent as the EVENT saw it, not the branch's tip now: a parent
+            # rebased since the event would otherwise be diffed against the
+            # wrong head. It is normally here already — the merge ref is built
+            # on it and checkout fetched every branch — so the remote is asked
+            # only when it isn't. A commit nobody can fetch any more (parent
+            # squash-merged and deleted, or force-pushed away) is graded
+            # against the trunk, never against some other parent.
+            elif ! { git cat-file -e "$PARENT_SHA^{commit}" 2>/dev/null ||
+                     git fetch --no-tags --quiet origin "$PARENT_SHA"; }; then
+              echo "::warning::The parent this event names ($PARENT_REF at $PARENT_SHA) can't be fetched any more — graded against $BASE_REF, which counts every layer below this one too."
             else
-              # The parent as the EVENT saw it, fetched by SHA and named like a
-              # branch so the report reads `origin/<parent>`. Not the branch's
-              # tip now: a parent rebased since the event would otherwise be
-              # diffed against an old head, and a re-run after the parent has
-              # merged and its branch is gone would have nothing to fetch.
-              git fetch --no-tags origin "$PARENT_SHA"
+              # Named like a branch so the report reads `origin/<parent>`.
               git update-ref "refs/remotes/origin/$PARENT_REF" "$PARENT_SHA"
-              if git merge-base --is-ancestor "$HEAD_SHA" HEAD; then
-                # The layer's head rather than the merge ref — see the header.
-                # Detached in the workspace itself, so the Gate step grades the
-                # very same tree.
-                git checkout --quiet --detach "$HEAD_SHA"
-                DIFF_REF="$PARENT_REF"
-                STACKED=1
-                echo "Stacked: layer $STACK_POSITION of $STACK_SIZE on $BASE_REF. Grading $HEAD_SHA against origin/$PARENT_REF, with the rubric from origin/$BASE_REF."
-              else
-                echo "::warning::The event's head $HEAD_SHA isn't in the checked-out merge ref — graded against $BASE_REF, which counts every layer below this one too."
-              fi
+              # The layer's head rather than the merge ref — see the header.
+              # Detached in the workspace itself, so the Gate step grades the
+              # very same tree.
+              git checkout --quiet --detach "$HEAD_SHA"
+              DIFF_REF="$PARENT_REF"
+              STACKED=1
+              echo "Stacked: layer $STACK_POSITION of $STACK_SIZE on $BASE_REF. Grading $HEAD_SHA against origin/$PARENT_REF, with the rubric from origin/$BASE_REF."
             fi
           fi
           echo "diff_ref=$DIFF_REF" >> "$GITHUB_OUTPUT"
