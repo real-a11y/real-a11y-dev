@@ -26,6 +26,7 @@
  * walk has no element for.
  */
 
+import { safeTagName } from "./clobber-safe.js";
 import { isEditable, isEditingHost } from "./editing.js";
 import { imageUsingMap } from "./image-map.js";
 
@@ -84,7 +85,7 @@ export function isActuallyDisabled(element: Element): boolean {
  * element focusable, which is the point of using it.
  */
 function isFocusBarred(element: Element): boolean {
-  const tag = element.tagName.toLowerCase();
+  const tag = safeTagName(element);
   if (!FORM_CONTROL_TAGS.has(tag)) return false;
   if (
     tag === "input" &&
@@ -107,9 +108,9 @@ function isFocusBarred(element: Element): boolean {
 function isDetailsSummary(summary: Element): boolean {
   // eslint-disable-next-line no-restricted-properties -- one read, and a <summary> is never a form
   const details = summary.parentElement;
-  if (details?.tagName.toLowerCase() !== "details") return false;
+  if (!details || safeTagName(details) !== "details") return false;
   for (const child of details.children)
-    if (child.tagName.toLowerCase() === "summary") return child === summary;
+    if (safeTagName(child) === "summary") return child === summary;
   return false;
 }
 
@@ -117,7 +118,7 @@ function isDetailsSummary(summary: Element): boolean {
 export function isFocusable(element: Element): boolean {
   if (isFocusBarred(element)) return false;
 
-  const tag = element.tagName.toLowerCase();
+  const tag = safeTagName(element);
   const tabindex = parseTabindex(element.getAttribute("tabindex"));
   // An area takes focus only through an image using its map, tabindex or not.
   // Chromium reads a negative tabindex on one as unfocusable, even from script,

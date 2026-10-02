@@ -52,6 +52,9 @@ const parentNodeGetter = nodeProto
 const assignedSlotGetter = elementProto
   ? Object.getOwnPropertyDescriptor(elementProto, "assignedSlot")?.get
   : undefined;
+const tagNameGetter = elementProto
+  ? Object.getOwnPropertyDescriptor(elementProto, "tagName")?.get
+  : undefined;
 const getRootNodeMethod = nodeProto?.getRootNode;
 
 /** Clobber-immune `element.children` (always an array of the real children). */
@@ -124,6 +127,28 @@ export function safeAssignedSlot(element: Element): HTMLSlotElement | null {
 /** Clobber-immune `node.getRootNode()` (`<input name="getRootNode">`). */
 export function safeRootNode(node: Node): Node {
   return getRootNodeMethod ? getRootNodeMethod.call(node) : node.getRootNode();
+}
+
+/**
+ * Clobber-immune `element.tagName`, lower-cased — `element.tagName
+ * .toLowerCase()`, the form every caller compares against.
+ *
+ * `<input name="tagName">` makes a form's `tagName` that input, so the plain
+ * read throws on `.toLowerCase()`. Read through the `tagName` getter rather
+ * than `localName` (also an `Element.prototype` accessor, and just as
+ * shadowable): it is the same value the plain reads return, so the two agree
+ * on a camel-cased SVG name like `foreignObject` and on a prefixed one.
+ *
+ * Where the element read is the one being built, the walk's per-element
+ * boundary covers a shadowed tag already, by skipping that element. This is
+ * for every other read: an ancestor a climb passes, a descendant a name walk
+ * enters, a sibling a locator counts — and everything `LiveTreeExtractor
+ * .refresh` reads, which has no boundary. A throw there costs an element that
+ * did nothing wrong, or the whole refresh.
+ */
+export function safeTagName(element: Element): string {
+  const tag = tagNameGetter ? tagNameGetter.call(element) : element.tagName;
+  return typeof tag === "string" ? tag.toLowerCase() : "";
 }
 
 /** Clobber-immune `node.textContent`, coerced to a string. */

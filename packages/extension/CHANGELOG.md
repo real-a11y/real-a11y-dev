@@ -22,6 +22,15 @@
 
 ## Unreleased
 
+- In DOM mode, a heading, link, button or table cell that holds a `<form>`
+  whose field is named `tagName` is no longer dropped from the tree with
+  everything in it, and neither is a link in help text a field's
+  `aria-describedby` points at when that help text also holds such a form.
+  Such a field shadows the form's own `tagName`, and working out the name
+  around the form read it and threw. A change in or around such a form also
+  updates the tree in place again, instead of rebuilding all of it.
+  ([#465](https://github.com/real-a11y/real-a11y-dev/pull/465))
+
 - In DOM mode, focusing a field inside a `<form>` with a control named
   `nodeType`, such as `<input type="hidden" name="nodeType">`, now highlights
   the nearest node above it in the tree, and so does hovering or clicking

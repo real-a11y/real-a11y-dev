@@ -5,7 +5,7 @@
  */
 
 import { isAriaHiddenValue } from "./aria-tokens.js";
-import { safeGetAttribute, safeHidden } from "./clobber-safe.js";
+import { safeGetAttribute, safeHidden, safeTagName } from "./clobber-safe.js";
 import {
   flatParent,
   isRenderedInFlatTree,
@@ -149,11 +149,11 @@ function thHeaderRole(el: Element): string {
   // layout reads.
   // eslint-disable-next-line no-restricted-properties -- one read, and a <th> is never a form
   const row = el.parentElement;
-  if (!row || row.tagName.toLowerCase() !== "tr") return "rowheader";
+  if (!row || safeTagName(row) !== "tr") return "rowheader";
 
   // eslint-disable-next-line no-restricted-properties -- one read, and `row` is a <tr> by the check above
-  if (row.parentElement?.tagName.toLowerCase() === "thead")
-    return "columnheader";
+  const section = row.parentElement;
+  if (section && safeTagName(section) === "thead") return "columnheader";
 
   // Otherwise only the table's very first row heads columns. When a <thead>
   // exists its row wins that check, so a <th> leading a body row stays a
@@ -172,7 +172,7 @@ function isLandmarkContext(el: Element): boolean {
   // by that <main>, as the browser scopes it.
   let parent = flatParent(el);
   while (parent) {
-    const tag = parent.tagName.toLowerCase();
+    const tag = safeTagName(parent);
     if (["article", "aside", "main", "nav", "section"].includes(tag)) {
       return false;
     }
@@ -539,7 +539,7 @@ export function getImplicitRole(element: Element): string {
     return explicitRole;
   }
 
-  const tag = element.tagName.toLowerCase();
+  const tag = safeTagName(element);
   const resolver = ROLE_MAP[tag];
 
   if (!resolver) return "generic";
@@ -552,7 +552,7 @@ export function isHiddenFromAT(
   element: Element,
   style?: CSSStyleDeclaration | null,
 ): boolean {
-  const tag = element.tagName.toLowerCase();
+  const tag = safeTagName(element);
   if (HIDDEN_FROM_AT.has(tag)) return true;
 
   // aria-hidden hides the element AND its entire subtree from AT, for every

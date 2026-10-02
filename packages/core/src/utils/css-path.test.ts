@@ -6,7 +6,7 @@
 
 import { describe, it, expect } from "vitest";
 
-import { clobber } from "../test-support/clobber.js";
+import { clobber, shadow } from "../test-support/clobber.js";
 
 import {
   buildCssPath,
@@ -206,5 +206,24 @@ describe("buildCssPath", () => {
     // upward, it doesn't degrade the segment the node itself contributes.
     expect(buildCssPath(target, adapter)).toBe("button:nth-of-type(2)");
     expect(buildCssPath(shadowRoot, adapter)).toBe("");
+  });
+
+  // `<input name="tagName">` makes a form's `tagName` that input. A path reads
+  // the tag of every ancestor it passes and every sibling it counts, so a form
+  // on either side must still read as a form. (DOM only: the native producer
+  // reads tags off a CDP snapshot, which a page cannot shadow.)
+  it("reads a form whose control shadows tagName as a form", () => {
+    document.body.innerHTML = `
+      <main>
+        <form><span></span><input name="tagName"></form>
+        <img alt="">
+      </main>
+    `;
+    shadow(document.querySelector("form")!, "tagName");
+
+    const path = (selector: string) =>
+      buildCssPath(document.querySelector(selector)!, DOM_ELEMENT_ADAPTER);
+    expect(path("img")).toBe("body > main > img");
+    expect(path("span")).toBe("body > main > form > span");
   });
 });
