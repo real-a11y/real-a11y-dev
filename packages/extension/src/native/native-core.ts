@@ -77,7 +77,13 @@ export const NATIVE_REDACTED_VALUE = REDACTED_VALUE;
 interface RawAXNode extends RawNativeAXNode {
   properties?: Array<{
     name: string;
-    value?: { type?: string; value?: unknown };
+    value?: {
+      type?: string;
+      value?: unknown;
+      /** An `idref`/`idrefList` property's targets (`controls`, `owns`, …),
+       *  which carry no scalar `value` at all. */
+      relatedNodes?: Array<{ backendDOMNodeId?: number }>;
+    };
   }>;
   description?: { value?: string };
 }
@@ -177,6 +183,28 @@ function axFacets(
 }
 
 /**
+ * The native ids of the nodes this one controls — Chromium's own resolution
+ * of `aria-controls`, which arrives as an `idrefList` property carrying its
+ * targets' `backendDOMNodeId`s rather than a scalar (so `axFacets` skips it).
+ * Mapped through the same `ax-dom-<id>` rule `nativeIdOf` uses, and kept only
+ * when the target survived normalization: an unnamed wrapper the normalizer
+ * dropped has no row to jump to. Empty for none.
+ */
+export function nativeControls(
+  raw: RawAXNode,
+  keptIds: ReadonlySet<string>,
+): string[] {
+  const prop = raw.properties?.find((p) => p.name === "controls");
+  const ids: string[] = [];
+  for (const related of prop?.value?.relatedNodes ?? []) {
+    if (typeof related.backendDOMNodeId !== "number") continue;
+    const id = `ax-dom-${related.backendDOMNodeId}`;
+    if (keptIds.has(id) && !ids.includes(id)) ids.push(id);
+  }
+  return ids;
+}
+
+/**
  * Roles whose backing DOM element could be an `<input>`/`<textarea>`/
  * `<select>` — the read-side counterpart of DOM producer's own tag check in
  * `getKeyAttributes` (`core/src/extraction/dom-extractor.ts`), approximated
@@ -261,6 +289,10 @@ export type EnrichedNativeNode = NativeAXNode &
      *  redacted. Present only for a value-bearing role that actually has
      *  one set. */
     placeholder?: string;
+    /** Native ids of the nodes this one controls (`aria-controls`, as
+     *  Chromium resolves it) that are themselves in the tree — see
+     *  {@link nativeControls}. Absent when there are none. */
+    controls?: string[];
   };
 
 /** The single capability the native path needs from any CDP transport. */
@@ -542,12 +574,20 @@ export async function readNativeTree(
   // pass over the raw list, keyed by the same id `normalizeNativeAX` assigns,
   // rather than a per-node lookup.
   const rawById = new Map(full.nodes.map((raw) => [nativeIdOf(raw), raw]));
+  const keptIds = new Set(nodes.map((n) => n.id));
   const enriched: EnrichedNativeNode[] = nodes.map((node) => {
     const raw = rawById.get(node.id);
     const { states, properties, description } = raw
       ? axFacets(raw)
       : { states: {}, properties: {}, description: "" };
-    return { ...node, states, properties, description };
+    const controls = raw ? nativeControls(raw, keptIds) : [];
+    return {
+      ...node,
+      states,
+      properties,
+      description,
+      ...(controls.length > 0 ? { controls } : {}),
+    };
   });
 
   // Field values (see `fieldFacets`) — each candidate classified in-page by

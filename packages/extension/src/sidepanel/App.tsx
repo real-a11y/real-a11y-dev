@@ -44,7 +44,11 @@ import {
   type NativeUnavailableReason,
   type TabCapability,
 } from "../native/capability.js";
-import { isTypableRole, type NativeNode } from "../native/native-actions.js";
+import {
+  isTypableRole,
+  nativeSelectOptions,
+  type NativeNode,
+} from "../native/native-actions.js";
 import type { NativeAction } from "../native/native-core.js";
 import { toExtractionResult as nativeToExtractionResult } from "../native/native-export.js";
 import {
@@ -1881,6 +1885,40 @@ export function App() {
       explicitAction?: "increment" | "decrement" | "select",
     ) => {
       if (!nativeModeEnabled) return;
+      // A real `<select>` opens the same option picker the DOM tree's does,
+      // listing its own option rows from the tree already read. Checked
+      // before an explicit `select`, which a role-filter list passes for any
+      // row it offers selection on: dispatched on the `<select>` itself it
+      // would only be refused, since only an option can be selected.
+      if (explicitAction === undefined || explicitAction === "select") {
+        const options = nativeSelectOptions(node, nativeNodesRef.current);
+        if (options.length > 0) {
+          // A sensitive select (`autocomplete="cc-exp-month"`) shows no
+          // current option, as its value is withheld and as the DOM tree's
+          // picker does (`computeFieldState`): which one is chosen is the
+          // value.
+          const current =
+            node.redacted === true
+              ? undefined
+              : (options.find((o) => o.states?.["selected"] === true) ??
+                options.find((o) => o.name === node.value));
+          setInputState({
+            type: "select",
+            nodeId: node.id,
+            label: node.name || node.role,
+            value: current?.name ?? "",
+            // Each option is named by its own row id, which a submit
+            // dispatches `select` on.
+            options: options.map((o) => ({
+              value: o.id,
+              label: o.name || o.role,
+              selected: o === current,
+            })),
+            source: "native",
+          });
+          return;
+        }
+      }
       if (explicitAction) {
         void dispatchNativeAction(node.id, explicitAction);
         return;
@@ -1941,6 +1979,12 @@ export function App() {
     (nodeId: string, value: string) => {
       if (inputState?.source === "native") {
         setInputState(null);
+        // A native option picker's value is the chosen option's row id, and
+        // selecting means acting on that option, not on the `<select>`.
+        if (inputState.type === "select") {
+          void dispatchNativeAction(value, "select");
+          return;
+        }
         // An untouched empty submit never gets here: InputPanel cancels it
         // when `blockEmptySubmit` is set (see its doc). An empty value that
         // does arrive was typed and cleared on purpose — "empty this field".

@@ -223,6 +223,8 @@ The rest of the tree's everyday controls carry over as well:
 - `Enter` steps a slider up, and `Shift`+`Enter` steps a slider or spinbutton down, as `+` and `-` do. On a spinbutton, `Enter` still opens the edit box so you can type a value.
 - The feedback line names what you acted on ("Click: Save", "Checked: Remember me"), and a failed action shows there as well as in the status line.
 - A heading shows its level as an **H2** badge. An `<iframe>` row is marked **embedded**: the native tree reads the top frame only, so a frame's own content isn't in it yet.
+- A row with `aria-controls` shows a chip that jumps to the row it controls (`→ tabpanel "Settings"`), and the controlled row shows one back (`← tab "Settings"`). From the keyboard, `Alt`+`J` follows the selected row's link and `Alt`+`Shift`+`J` goes back. A jump opens the rows above its target and leaves a scope the target is outside. A target that isn't in the tree, such as a hidden tab panel, gets no chip.
+- A `<select>` opens the same option picker as in DOM mode, listing its options and starting on the current one. Choosing one selects it on the page. A custom `role="combobox"` isn't a real select, so it is still clicked.
 
 ### BETA pill in the panel header
 

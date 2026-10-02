@@ -59,6 +59,7 @@ import {
 import {
   ACTABLE,
   isSelectableRole,
+  nativeSelectOptions,
   isSteppableRole,
   isTypableRole,
   nativeParentIndex,
@@ -146,33 +147,54 @@ export interface NativeTreeViewProps {
 /** A node is worth a click/Enter action, a select action, or both never — the
  *  same three-way split `DogfoodPanel.tsx` renders from, reused here so a
  *  fix to one never silently diverges from the other. */
-function primaryLabel(node: NativeNode): string | undefined {
+function primaryLabel(
+  node: NativeNode,
+  nodes: Map<string, NativeNode>,
+): string | undefined {
   if (isTypableRole(node.role, node.states)) return "Type";
-  if (isSelectableRole(node.role)) return "Select";
+  // A real `<select>` opens the option picker, as the DOM tree's does.
+  if (isSelectableRole(node.role) || isNativeSelect(node, nodes)) {
+    return "Select";
+  }
   if (ACTABLE.has(node.role)) return "Click";
   return undefined;
+}
+
+/** A combobox backed by a real `<select>`, with option rows to pick from. */
+function isNativeSelect(
+  node: NativeNode,
+  nodes: Map<string, NativeNode>,
+): boolean {
+  return nativeSelectOptions(node, nodes).length > 0;
 }
 
 /** What a native row can do, in `interaction.actions`' vocabulary, so the
  *  shared filtered list can decide Enter/Activate and the stepper keys the
  *  same way it does for a DOM row. Mirrors `primaryLabel`'s precedence. */
-function nativeActions(node: NativeNode): ActionType[] {
+function nativeActions(
+  node: NativeNode,
+  nodes: Map<string, NativeNode>,
+): ActionType[] {
   const actions: ActionType[] = [];
   if (isTypableRole(node.role, node.states)) actions.push("type");
-  else if (isSelectableRole(node.role)) actions.push("select");
-  else if (ACTABLE.has(node.role)) actions.push("click");
+  else if (isSelectableRole(node.role) || isNativeSelect(node, nodes)) {
+    actions.push("select");
+  } else if (ACTABLE.has(node.role)) actions.push("click");
   if (isSteppableRole(node.role)) actions.push("increment", "decrement");
   return actions;
 }
 
-function toListItem(node: NativeNode): FilteredListItem {
+function toListItem(
+  node: NativeNode,
+  nodes: Map<string, NativeNode>,
+): FilteredListItem {
   const level = parseInt(node.properties?.["level"] ?? "", 10);
   return {
     id: node.id,
     label: node.name || `(${node.role})`,
     level: Number.isNaN(level) ? undefined : level,
     states: describeStates(node.states),
-    actions: nativeActions(node),
+    actions: nativeActions(node, nodes),
   };
 }
 
@@ -187,6 +209,43 @@ function typeAheadLabel(node: NativeNode): string {
  *  only, so the row stands for content the tree doesn't show. */
 function isIframeRole(role: string): boolean {
   return role === "Iframe" || role === "IframePresentational";
+}
+
+/** One `aria-controls` jump chip — the DOM tree's `sn-controls-link`, with
+ *  the same wording and truncation. `forward` points at a row this one
+ *  controls, `reverse` back at a row that controls it. Renders nothing for a
+ *  target that isn't in the tree. */
+function ControlsChip({
+  target,
+  direction,
+  onJump,
+}: {
+  target: NativeNode | undefined;
+  direction: "forward" | "reverse";
+  onJump: () => void;
+}) {
+  if (!target) return null;
+  const name = target.name;
+  const reverse = direction === "reverse";
+  return (
+    <button
+      class={`sn-controls-link${reverse ? " sn-controls-link--reverse" : ""}`}
+      tabIndex={-1}
+      onClick={(e) => {
+        e.stopPropagation();
+        onJump();
+      }}
+      title={
+        reverse
+          ? `Jump to the ${target.role} that controls this element (Alt+Shift+J)`
+          : `Jump to the ${target.role} this element controls (Alt+J)`
+      }
+    >
+      {reverse ? "← " : "→ "}
+      {target.role}
+      {name && ` "${name.length > 24 ? name.slice(0, 24) + "…" : name}"`}
+    </button>
+  );
 }
 
 export function NativeTreeView({
@@ -291,12 +350,46 @@ export function NativeTreeView({
     [onScope, scopedRootId],
   );
 
-  // A pick result lands here from App.tsx's own message handler. Expand every
-  // ancestor of the picked node (it may be nested under rows the user never
-  // opened) and select it — clearing any active search/role filter first,
-  // since a filter that doesn't match the picked node would otherwise hide it
-  // and the selection effect below would immediately drop it again (see that
-  // effect's own "gone from the current tree" comment).
+  // Bring a row into view and select it: expand every ancestor (it may be
+  // nested under rows the user never opened), leave a scope it sits outside
+  // of, and clear any active search/role filter first, since a filter that
+  // doesn't match the row would otherwise hide it and the selection effect
+  // below would immediately drop it again (see that effect's own "gone from
+  // the current tree" comment). Shared by a pick result and a jump chip.
+  const revealRow = useCallback(
+    (nodeId: string) => {
+      // A row outside the scope is one the scoped tree never renders.
+      if (
+        scopeRoot &&
+        !isInScope(nodeId, scopeRoot, (id) => parentOf.get(id))
+      ) {
+        scopeTo(null);
+      }
+      setQuery("");
+      setRoleFilter(null);
+      setExpanded((prev) => {
+        const next = new Set(prev);
+        for (let id = parentOf.get(nodeId); id; id = parentOf.get(id)) {
+          next.add(id);
+        }
+        return next;
+      });
+      setSelectedId(nodeId);
+      setFollowNonce((n) => n + 1);
+      // Clearing the role filter above swaps `FilteredListView` back for the
+      // actual tree — an async Preact re-render, not something the
+      // `setRoleFilter(null)` call itself finishes — so `treeRef.current` is
+      // still null (or stale) here when a filter was active a moment ago.
+      // Same double-`requestAnimationFrame` defer `goToTree` above already
+      // uses for the identical filtered-list-to-tree transition.
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => treeRef.current?.focus());
+      });
+    },
+    [scopeRoot, parentOf, scopeTo],
+  );
+
+  // A pick result lands here from App.tsx's own message handler.
   useEffect(() => {
     if (!reveal) return;
     // The exact hit-tested node may not itself be one the AX tree kept — an
@@ -307,34 +400,41 @@ export function NativeTreeView({
       nodes.has(id),
     );
     if (nodeId === undefined) return;
-    // A pick can land anywhere on the page; one outside the scope would
-    // select a row the scoped tree never renders.
-    if (scopeRoot && !isInScope(nodeId, scopeRoot, (id) => parentOf.get(id))) {
-      scopeTo(null);
-    }
-    setQuery("");
-    setRoleFilter(null);
-    setExpanded((prev) => {
-      const next = new Set(prev);
-      for (let id = parentOf.get(nodeId); id; id = parentOf.get(id)) {
-        next.add(id);
-      }
-      return next;
-    });
-    setSelectedId(nodeId);
-    setFollowNonce((n) => n + 1);
-    // Clearing the role filter above swaps `FilteredListView` back for the
-    // actual tree — an async Preact re-render, not something the
-    // `setRoleFilter(null)` call itself finishes — so `treeRef.current` is
-    // still null (or stale) here when a filter was active a moment ago.
-    // Same double-`requestAnimationFrame` defer `goToTree` above already
-    // uses for the identical filtered-list-to-tree transition.
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => treeRef.current?.focus());
-    });
+    revealRow(nodeId);
     // Only re-run on a new pick (`nonce`), not on every `nodes`/`parentOf`
     // change a background refresh causes.
   }, [reveal?.nonce]);
+
+  // `aria-controls`, both ways: a row lists the rows it controls (from
+  // Chromium's own relation, `node.controls`), and a controlled row lists
+  // the rows that control it, as the DOM tree's `buildControlsIndex` does.
+  const controlledBy = useMemo(() => {
+    const reverse = new Map<string, string[]>();
+    for (const node of nodes.values()) {
+      for (const target of node.controls ?? []) {
+        const triggers = reverse.get(target) ?? [];
+        triggers.push(node.id);
+        reverse.set(target, triggers);
+      }
+    }
+    return reverse;
+  }, [nodes]);
+
+  // The row a jump chip just landed on, flashed briefly as the DOM tree's
+  // `handleJumpToNode` does.
+  const [flashingId, setFlashingId] = useState<string | null>(null);
+  const jumpTo = useCallback(
+    (targetId: string) => {
+      if (!nodes.has(targetId)) return;
+      revealRow(targetId);
+      setFlashingId(targetId);
+      setTimeout(
+        () => setFlashingId((cur) => (cur === targetId ? null : cur)),
+        700,
+      );
+    },
+    [nodes, revealRow],
+  );
 
   const hasFilter = query.trim().length > 0 || roleFilter !== null;
 
@@ -375,7 +475,7 @@ export function NativeTreeView({
       const id = stack.pop()!;
       const node = nodes.get(id);
       if (!node) continue;
-      if (search.directIds.has(id)) items.push(toListItem(node));
+      if (search.directIds.has(id)) items.push(toListItem(node, nodes));
       const children = node.childIds ?? [];
       for (let i = children.length - 1; i >= 0; i--) stack.push(children[i]!);
     }
@@ -556,7 +656,7 @@ export function NativeTreeView({
       // A plain Enter/Activate arrives with no action, and `onActivate`
       // without one clicks — wrong for a slider, which can only step. Resolve
       // the primary here, as `App.tsx`'s `handleActivate` does for DOM rows.
-      const resolved = action ?? getPrimaryAction(nativeActions(node));
+      const resolved = action ?? getPrimaryAction(nativeActions(node, nodes));
       if (resolved === "increment" || resolved === "decrement") {
         onActivate(node, resolved);
       } else {
@@ -605,6 +705,21 @@ export function NativeTreeView({
         return;
       }
 
+      // The jump chips' keyboard path: they sit outside the Tab order like
+      // every row control, so Alt+J follows the selected row's first
+      // `aria-controls` link and Alt+Shift+J goes back to the first row that
+      // controls it. Matched on `code`, since Option+J types a symbol on a
+      // Mac, and Alt keeps it clear of type-ahead.
+      if (e.altKey && !e.ctrlKey && !e.metaKey && e.code === "KeyJ") {
+        e.preventDefault();
+        if (selectedId === null) return;
+        const target = e.shiftKey
+          ? controlledBy.get(selectedId)?.[0]
+          : nodes.get(selectedId)?.controls?.find((id) => nodes.has(id));
+        if (target) jumpTo(target);
+        return;
+      }
+
       if (visibleIds.length === 0) return;
 
       // Type-ahead, as the DOM tree's `useTreeKeyboard` has it: printable
@@ -640,7 +755,7 @@ export function NativeTreeView({
       // `+`/`-` and `Shift+Enter` step a slider or spinbutton before Enter or
       // type-ahead see the key: the mapping the DOM tree and the role-filter
       // lists share.
-      const step = resolveStepperKeyAction(e, nativeActions(node));
+      const step = resolveStepperKeyAction(e, nativeActions(node, nodes));
       if (step === "increment" || step === "decrement") {
         e.preventDefault();
         typeAhead.current.clear();
@@ -701,7 +816,7 @@ export function NativeTreeView({
           // Navigation/expand stay responsive while busy (no dispatch, no
           // conflict with an in-flight NATIVE_ACT) — only the activation
           // itself is held back, same as the action buttons' own `disabled`.
-          if (primaryLabel(node)) {
+          if (primaryLabel(node, nodes)) {
             if (!busy) {
               onActivate(
                 node,
@@ -769,6 +884,8 @@ export function NativeTreeView({
       scopeRoot,
       pickArmed,
       scopeTo,
+      controlledBy,
+      jumpTo,
     ],
   );
 
@@ -893,7 +1010,7 @@ export function NativeTreeView({
               ref={treeRef}
               class="sn-tree"
               role="tree"
-              aria-label="Native accessibility tree — press Enter to activate, +/− or Shift+Enter to step sliders, arrows to navigate, Ctrl+Enter to scope to a row"
+              aria-label="Native accessibility tree — press Enter to activate, +/− or Shift+Enter to step sliders, arrows to navigate, Ctrl+Enter to scope to a row, Alt+J to follow a row's aria-controls link and Alt+Shift+J to go back"
               tabIndex={0}
               style={{
                 minHeight: totalHeight,
@@ -909,7 +1026,7 @@ export function NativeTreeView({
 
                 const hasChildren = (node.childIds?.length ?? 0) > 0;
                 const isSelected = id === selectedId;
-                const label = primaryLabel(node);
+                const label = primaryLabel(node, nodes);
                 const steppable = isSteppableRole(node.role);
                 const selectAction = isSelectableRole(node.role)
                   ? "select"
@@ -931,6 +1048,7 @@ export function NativeTreeView({
                       "sn-node",
                       isSelected && "sn-node--selected",
                       label && "sn-node--interactive",
+                      id === flashingId && "sn-node--flash",
                     ]
                       .filter(Boolean)
                       .join(" ")}
@@ -1070,6 +1188,24 @@ export function NativeTreeView({
                           </span>
                         );
                       })()}
+                      {/* Jump chips: to the rows this one controls, and back
+                          to the rows that control it. */}
+                      {node.controls?.map((targetId) => (
+                        <ControlsChip
+                          key={`controls-${targetId}`}
+                          target={nodes.get(targetId)}
+                          direction="forward"
+                          onJump={() => jumpTo(targetId)}
+                        />
+                      ))}
+                      {controlledBy.get(id)?.map((triggerId) => (
+                        <ControlsChip
+                          key={`controlled-by-${triggerId}`}
+                          target={nodes.get(triggerId)}
+                          direction="reverse"
+                          onJump={() => jumpTo(triggerId)}
+                        />
+                      ))}
                       {label && <span class="sn-action-tag">{label}</span>}
                     </span>
 
@@ -1141,7 +1277,7 @@ export function NativeTreeView({
           <div class="sn-hints">
             <kbd>Enter</kbd> activate &middot; <kbd>+/−</kbd> step &middot;{" "}
             <kbd>Space</kbd> expand &middot; <kbd>Arrow</kbd> navigate &middot;{" "}
-            <kbd>DblClick</kbd> scope
+            <kbd>DblClick</kbd> scope &middot; <kbd>Alt+J</kbd> jump
           </div>
         </>
       )}

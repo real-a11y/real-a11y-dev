@@ -94,6 +94,8 @@ export interface NativeNode {
   value?: string;
   rawValue?: string;
   description?: string;
+  /** Ids of the rows this node controls (`aria-controls`). */
+  controls?: string[];
 }
 
 export interface NativeReadResult {
