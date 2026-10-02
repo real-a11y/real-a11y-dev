@@ -5,9 +5,14 @@
  */
 
 import { isAriaHiddenValue } from "./aria-tokens.js";
-import { safeHidden } from "./clobber-safe.js";
-import { flatParent } from "./flat-tree.js";
+import { safeGetAttribute, safeHidden } from "./clobber-safe.js";
+import {
+  flatParent,
+  isRenderedInFlatTree,
+  renderingParent,
+} from "./flat-tree.js";
 import { isFocusable } from "./focusability.js";
+import { imageUsingMap } from "./image-map.js";
 
 type RoleResolver = string | ((el: Element) => string);
 
@@ -46,6 +51,12 @@ export function getCachedComputedStyle(
  * (a child can set `visibility:visible` and become visible again), so the
  * walk must still descend.
  *
+ * An image map's `<area>` is the exception: it is hidden exactly while the
+ * image using its map is not rendered, visibility included, and nothing about
+ * the area itself counts. Every area is `display: none` in Chromium's UA
+ * stylesheet since 153, and Chromium focuses one all the same. See
+ * image-map.ts.
+ *
  * Pass a pre-resolved `style` (from {@link getCachedComputedStyle}) to avoid
  * a second `getComputedStyle` when the caller already has one.
  */
@@ -53,6 +64,10 @@ export function isSubtreeHidden(
   element: Element,
   style?: CSSStyleDeclaration | null,
 ): boolean {
+  // `localName` rather than `tagName`: a clobbered <form> can't throw here.
+  if (element.localName === "area")
+    return !isImageRendered(imageUsingMap(element));
+
   // Clobber-immune read: a `<form>` with `<input name="hidden">` makes
   // `htmlEl.hidden` return that input (truthy), which would drop the whole
   // form subtree. safeHidden() reads the real state via the prototype getter.
@@ -73,6 +88,43 @@ export function isSubtreeHidden(
     return true;
   }
 
+  return false;
+}
+
+/**
+ * Whether an image is rendered the way Chromium needs it to be before it
+ * focuses the areas of the map it uses: it has a box, it is visible, and it
+ * is not inert. `isRenderedInFlatTree` rules out an image no slot takes and
+ * one in the body of a closed `<details>`.
+ */
+function isImageRendered(image: Element | null): boolean {
+  if (!image || !isRenderedInFlatTree(image)) return false;
+  // Slots included: a hidden slot hides the image it renders.
+  for (let el: Element | null = image; el; el = renderingParent(el)) {
+    // An area renders no children, and asking whether one is hidden would
+    // ask about this image again.
+    if (el.localName === "area" || isSubtreeHidden(el)) return false;
+  }
+  const visibility = getCachedComputedStyle(image)?.visibility;
+  return visibility !== "hidden" && visibility !== "collapse";
+}
+
+/**
+ * Whether an image map's `<area>` is hidden from AT. Chromium's tree puts an
+ * area under its image, so the image being hidden or `aria-hidden` hides it,
+ * and so does the area's own `inert`, though Chromium still tabs to one. Like
+ * an `aria-hidden` button, such an area then leaves the a11y view, and the tab
+ * sequence read from it. Its own visibility counts for nothing, like the rest
+ * of its style.
+ */
+function isAreaHiddenFromAT(area: Element): boolean {
+  if (area.hasAttribute("inert")) return true;
+  const image = imageUsingMap(area);
+  if (!image || !isImageRendered(image)) return true;
+  for (let el: Element | null = image; el; el = renderingParent(el)) {
+    // Clobber-safe: a <form> among them may hold `<input name="getAttribute">`.
+    if (isAriaHiddenValue(safeGetAttribute(el, "aria-hidden"))) return true;
+  }
   return false;
 }
 
@@ -419,6 +471,8 @@ export function isHiddenFromAT(
   // aria-hidden hides the element AND its entire subtree from AT, for every
   // value Chromium reads as true: "TRUE" and "yes" as well as "true".
   if (isAriaHiddenValue(element.getAttribute("aria-hidden"))) return true;
+
+  if (tag === "area") return isAreaHiddenFromAT(element);
 
   // role=presentation/none are NOT hidden — they map to the "presentation"
   // role in getImplicitRole and the a11y extractor flattens them (the

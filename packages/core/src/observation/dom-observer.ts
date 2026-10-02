@@ -55,7 +55,7 @@ const EXTRA_OBSERVED_ATTRIBUTES = [
   "open", // <details open>
   "style", // CSS visibility/display changes (e.g., captcha showing/hiding content)
   "kind", // <track kind> drives the media node's hoisted captions property
-  "usemap", // <img usemap> decides whether its map's <area>s are focusable
+  "usemap", // <img usemap> decides whether its map's <area>s are rendered
   // A <select>'s display size decides whether it is a drop-down, with an
   // expanded state, or a list box with none.
   "size",
