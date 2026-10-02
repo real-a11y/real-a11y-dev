@@ -41,9 +41,9 @@ import {
   getExplicitRole,
   getImplicitRole,
   getHeadingLevel,
+  isDropDownSelect,
   isHiddenFromAT,
   isSubtreeHidden,
-  selectRoleFromAttributes,
   type StyleCache,
 } from "./role-map.js";
 
@@ -1960,21 +1960,6 @@ function isPickerOpen(select: Element): boolean {
 }
 
 /**
- * Whether a `<select>` is a drop-down: its display size, as HTML and Chromium
- * compute it, is 1. That is the rule that gives it the combobox role, so
- * `<select multiple size="1">` is a drop-down and `<select multiple
- * size="0">` a list box. See {@link selectRoleFromAttributes}.
- */
-function isDropDownSelect(select: Element): boolean {
-  return (
-    selectRoleFromAttributes({
-      size: select.getAttribute("size"),
-      multiple: select.getAttribute("multiple"),
-    }) === "combobox"
-  );
-}
-
-/**
  * Roles on which Chromium exposes a native checkbox's or radio's checkedness
  * as `checked`. Its own role is one of them.
  */
@@ -2234,7 +2219,9 @@ export function nativeStates(
     if (role === "combobox" && isDropDownSelect(element))
       return { expanded: isPickerOpen(element), pressed: undefined };
     // A list box has no expanded state, unless an author's combobox role
-    // gives it one, read from aria-expanded as usual.
+    // gives it one, read from aria-expanded as usual. Asked of the authored
+    // role, not `role`: the live extractor passes the role it recorded, which
+    // a since-changed `role`, `size` or `multiple` leaves stale.
     return getExplicitRole(element) === "combobox"
       ? { pressed: undefined }
       : { expanded: undefined, pressed: undefined };
