@@ -5,13 +5,13 @@
  */
 
 import { isAriaHiddenValue } from "./aria-tokens.js";
-import { safeGetAttribute, safeHidden } from "./clobber-safe.js";
+import { safeGetAttribute, safeHidden, safeTagName } from "./clobber-safe.js";
 import {
   flatParent,
   isRenderedInFlatTree,
   renderingParent,
 } from "./flat-tree.js";
-import { isFocusable } from "./focusability.js";
+import { isFocusable, parseHtmlInteger } from "./focusability.js";
 import { imageUsingMap } from "./image-map.js";
 
 type RoleResolver = string | ((el: Element) => string);
@@ -149,11 +149,11 @@ function thHeaderRole(el: Element): string {
   // layout reads.
   // eslint-disable-next-line no-restricted-properties -- one read, and a <th> is never a form
   const row = el.parentElement;
-  if (!row || row.tagName.toLowerCase() !== "tr") return "rowheader";
+  if (!row || safeTagName(row) !== "tr") return "rowheader";
 
   // eslint-disable-next-line no-restricted-properties -- one read, and `row` is a <tr> by the check above
-  if (row.parentElement?.tagName.toLowerCase() === "thead")
-    return "columnheader";
+  const section = row.parentElement;
+  if (section && safeTagName(section) === "thead") return "columnheader";
 
   // Otherwise only the table's very first row heads columns. When a <thead>
   // exists its row wins that check, so a <th> leading a body row stays a
@@ -172,13 +172,46 @@ function isLandmarkContext(el: Element): boolean {
   // by that <main>, as the browser scopes it.
   let parent = flatParent(el);
   while (parent) {
-    const tag = parent.tagName.toLowerCase();
+    const tag = safeTagName(parent);
     if (["article", "aside", "main", "nav", "section"].includes(tag)) {
       return false;
     }
     parent = flatParent(parent);
   }
   return true;
+}
+
+/** Chromium holds a select's size as an unsigned 32-bit integer; a larger value fails to parse. */
+const MAX_SELECT_SIZE = 0xffffffff;
+
+/**
+ * A `<select>`'s implicit role over its markup alone — its `size` and
+ * `multiple` attributes — for callers with no live `Element`, such as the
+ * testing matcher reading a node's recorded `dom.attributes`. The role map
+ * reads an element through this too, so the two cannot disagree.
+ *
+ * A select is a list box when it shows more than one row, and a drop-down
+ * combobox otherwise. HTML calls the row count its display size: `size` when
+ * it parses to a positive integer, otherwise 4 for a `multiple` select and 1
+ * for any other. HTML-AAM maps every `multiple` select to a list box, but
+ * HTML lets one with a display size of 1 render as a drop-down, and Chromium
+ * does — so `<select multiple size="1">` is a combobox in its tree, and here.
+ *
+ * Parsed from the attribute rather than read off the `size` property, which
+ * reads 0 past 2^31 - 1 where Chromium still counts the rows.
+ */
+export function selectRoleFromAttributes(attributes: {
+  size?: string | null;
+  multiple?: string | null;
+}): "listbox" | "combobox" {
+  const size = parseHtmlInteger(attributes.size) ?? 0;
+  const displaySize =
+    size > 0 && size <= MAX_SELECT_SIZE
+      ? size
+      : attributes.multiple != null
+        ? 4
+        : 1;
+  return displaySize > 1 ? "listbox" : "combobox";
 }
 
 const INPUT_TYPE_ROLE_MAP: Record<string, string> = {
@@ -342,7 +375,11 @@ const ROLE_MAP: Record<string, RoleResolver> = {
   samp: "generic",
   search: "search",
   section: (el) => (hasAccessibleName(el) ? "region" : "generic"),
-  select: (el) => ((el as HTMLSelectElement).multiple ? "listbox" : "combobox"),
+  select: (el) =>
+    selectRoleFromAttributes({
+      size: el.getAttribute("size"),
+      multiple: el.getAttribute("multiple"),
+    }),
   slot: "generic",
   small: "generic",
   span: "generic",
@@ -502,7 +539,7 @@ export function getImplicitRole(element: Element): string {
     return explicitRole;
   }
 
-  const tag = element.tagName.toLowerCase();
+  const tag = safeTagName(element);
   const resolver = ROLE_MAP[tag];
 
   if (!resolver) return "generic";
@@ -515,7 +552,7 @@ export function isHiddenFromAT(
   element: Element,
   style?: CSSStyleDeclaration | null,
 ): boolean {
-  const tag = element.tagName.toLowerCase();
+  const tag = safeTagName(element);
   if (HIDDEN_FROM_AT.has(tag)) return true;
 
   // aria-hidden hides the element AND its entire subtree from AT, for every

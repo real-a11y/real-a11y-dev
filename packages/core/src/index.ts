@@ -54,6 +54,7 @@ export {
   isDatalistCombobox,
   isHiddenFromAT,
   getHeadingLevel,
+  selectRoleFromAttributes,
 } from "./extraction/role-map.js";
 
 // Interaction

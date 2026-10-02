@@ -32,6 +32,15 @@
   changed.
   ([#452](https://github.com/real-a11y/real-a11y-dev/pull/452))
 
+- In DOM mode, a heading, link, button or table cell that holds a `<form>`
+  whose field is named `tagName` is no longer dropped from the tree with
+  everything in it, and neither is a link in help text a field's
+  `aria-describedby` points at when that help text also holds such a form.
+  Such a field shadows the form's own `tagName`, and working out the name
+  around the form read it and threw. A change in or around such a form also
+  updates the tree in place again, instead of rebuilding all of it.
+  ([#465](https://github.com/real-a11y/real-a11y-dev/pull/465))
+
 - In DOM mode, focusing a field inside a `<form>` with a control named
   `nodeType`, such as `<input type="hidden" name="nodeType">`, now highlights
   the nearest node above it in the tree, and so does hovering or clicking
@@ -147,6 +156,15 @@
   `= "Hello world"`, and now reads `= "Hello [x]world"`. A combobox you can't
   type into still leaves them out, as Chromium does.
   ([#460](https://github.com/real-a11y/real-a11y-dev/pull/460))
+
+- In DOM mode, a `<select>` that shows more than one row, such as
+  `<select size="3">`, now shows as a `listbox` in the tree and the Tab
+  Sequence view, as Chromium's own accessibility tree reports it. DOM mode
+  called every `<select>` without `multiple` a `combobox`. A
+  `<select multiple size="1">`, which Chromium renders as a drop-down, now
+  shows as a `combobox`. Changing a select's `size` or `multiple` on the page
+  updates the tree.
+  ([#445](https://github.com/real-a11y/real-a11y-dev/pull/445))
 
 ## 0.1.14
 

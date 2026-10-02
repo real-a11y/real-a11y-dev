@@ -19,6 +19,7 @@ import {
   safeQuerySelector,
   safeQuerySelectorAll,
   safeRootNode,
+  safeTagName,
   safeTextContent,
 } from "./clobber-safe.js";
 import { isEditable, isEditingHost } from "./editing.js";
@@ -42,6 +43,7 @@ import {
   getHeadingLevel,
   isHiddenFromAT,
   isSubtreeHidden,
+  selectRoleFromAttributes,
   type StyleCache,
 } from "./role-map.js";
 
@@ -151,7 +153,7 @@ function getActions(
   element: Element,
   skipTabindexFallback = false,
 ): ActionType[] {
-  const tag = element.tagName.toLowerCase();
+  const tag = safeTagName(element);
   const actions: ActionType[] = [];
   const role = element.getAttribute("role");
 
@@ -331,9 +333,14 @@ function hasInteractiveContent(
   element: Element,
   styleCache: StyleCache,
 ): boolean {
-  const tag = element.tagName.toLowerCase();
+  const tag = safeTagName(element);
   // The walk skips these outright, so nothing inside one is ever emitted.
   if (SKIP_TAGS.has(tag)) return false;
+  // Nor anything inside a form whose control shadows its `tagName`: the walk
+  // reads its own element's tag plainly, and its per-element boundary skips
+  // the form, with everything in it, when that read throws. This is the read
+  // that throws there, made to predict it.
+  if (typeof element.tagName !== "string") return false;
 
   const tabindex = element.getAttribute("tabindex");
   if (getActions(element, Number(tabindex) < 0).length > 0) return true;
@@ -704,7 +711,7 @@ export function isNameFromContentHost(element: Element): boolean {
   if (isEditingHost(element)) return false;
   const explicitRole = getExplicitRole(element);
   if (explicitRole && AUTHOR_NAMED_ROLES.has(explicitRole)) return false;
-  if (NAMES_FROM_CONTENT_TAGS.has(element.tagName.toLowerCase())) return true;
+  if (NAMES_FROM_CONTENT_TAGS.has(safeTagName(element))) return true;
   return !!explicitRole && NAMES_FROM_CONTENT_ROLES.has(explicitRole);
 }
 
@@ -725,12 +732,13 @@ const NAME_SOURCE_CHILD_TO_OWNER: Readonly<Record<string, string>> = {
 
 /** The element whose accessible name is computed from `element`, if any. */
 export function htmlAamNameOwner(element: Element): Element | null {
-  const ownerTag = NAME_SOURCE_CHILD_TO_OWNER[element.tagName.toLowerCase()];
+  const tag = safeTagName(element);
+  const ownerTag = NAME_SOURCE_CHILD_TO_OWNER[tag];
   if (!ownerTag) return null;
   // eslint-disable-next-line no-restricted-properties -- one read, and a <legend>, <summary> or <caption> is never a form
   const parent = element.parentElement;
-  if (!parent || parent.tagName.toLowerCase() !== ownerTag) return null;
-  if (element.tagName.toLowerCase() === "caption") {
+  if (!parent || safeTagName(parent) !== ownerTag) return null;
+  if (tag === "caption") {
     return (parent as HTMLTableElement).caption === element ? parent : null;
   }
   return parent;
@@ -783,8 +791,7 @@ const NAMED_WIDGET_ROLES = new Set<string>([
  */
 function isImplicitDetailsGroup(element: Element): boolean {
   return (
-    element.tagName.toLowerCase() === "details" &&
-    !element.getAttribute("role")?.trim()
+    safeTagName(element) === "details" && !element.getAttribute("role")?.trim()
   );
 }
 
@@ -920,7 +927,9 @@ function needsSpaceAround(
   element: Element,
   style: CSSStyleDeclaration | null,
 ): boolean {
-  const tag = element.tagName.toLowerCase();
+  // Clobber-safe: the name walk asks this of each child it enters, and a
+  // `<form>` among them may have a control named `tagName`.
+  const tag = safeTagName(element);
   // `<br>` is an inline box that ends the line. A `<summary>` is its
   // disclosure's label, which Chromium separates however it is styled — an
   // author's `display: inline` on one still reads "Note S Body", not
@@ -993,7 +1002,7 @@ function computeRawAccessibleName(
   const ariaLabel = element.getAttribute("aria-label");
   if (ariaLabel) return ariaLabel.trim();
 
-  const tag = element.tagName.toLowerCase();
+  const tag = safeTagName(element);
 
   // 3. alt attribute for images. An empty alt is an intentional "no name"
   //    and stops here — EXCEPT when a `title` is also present. HTML-AAM keeps
@@ -1030,8 +1039,7 @@ function computeRawAccessibleName(
         } else if (child.nodeType === Node.ELEMENT_NODE) {
           const childEl = child as Element;
           if (childEl === element) continue;
-          const childTag = childEl.tagName.toLowerCase();
-          if (FORM_CONTROL_TAGS.has(childTag)) continue;
+          if (FORM_CONTROL_TAGS.has(safeTagName(childEl))) continue;
           if (isAriaHiddenValue(childEl.getAttribute("aria-hidden"))) continue;
           if (
             isSubtreeHidden(
@@ -1582,7 +1590,7 @@ export function fieldValueOwner(el: Element): Element | null {
   // Clobber-safe: through a `<form>` whose control is named `parentElement`,
   // the plain read cycles between the form and that control forever.
   for (let node: Element | null = el; node; node = safeParentElement(node)) {
-    const tag = node.tagName.toLowerCase();
+    const tag = safeTagName(node);
     if (tag === "select" || isEditingHost(node)) {
       owner = node;
       continue;
@@ -1738,6 +1746,12 @@ export const KEY_ATTRIBUTES = [
   "method",
   "placeholder",
   "tabindex",
+  // A <select>'s display size: more than one row makes it a listbox, with no
+  // expanded state. The testing matcher reads them back to tell a redundant
+  // authored role, and the observer must see them flip, or a live tree keeps
+  // the old role and state.
+  "size",
+  "multiple",
   // Media a11y signals (boolean attributes render as "")
   "controls",
   "autoplay",
@@ -1809,7 +1823,7 @@ const DISABLEABLE_TAGS = new Set(["button", "input", "select", "textarea"]);
  * reaches the controls it disables, and through them their content.
  */
 function isDisabledControl(element: Element): boolean {
-  const tag = element.tagName.toLowerCase();
+  const tag = safeTagName(element);
   if (tag === "option") return isDisabledOption(element);
   // Not `.disabled`, which misses a control disabled by its fieldset.
   return DISABLEABLE_TAGS.has(tag) && isActuallyDisabled(element);
@@ -1829,7 +1843,8 @@ function isDisabledOption(option: Element): boolean {
   // eslint-disable-next-line no-restricted-properties -- one read, and an <option> is never a form
   const parent = option.parentElement;
   return (
-    parent?.tagName.toLowerCase() === "optgroup" &&
+    !!parent &&
+    safeTagName(parent) === "optgroup" &&
     parent.hasAttribute("disabled")
   );
 }
@@ -1942,26 +1957,19 @@ function isPickerOpen(select: Element): boolean {
   }
 }
 
-/** The largest `size` a `<select>` honors. Past it the attribute is ignored. */
-const MAX_SELECT_SIZE = 0xffffffff;
-
 /**
  * Whether a `<select>` is a drop-down: its display size, as HTML and Chromium
- * compute it, is 1. That is `size` when it parses to 1 through 2^32-1, and
- * otherwise 4 for a `multiple` select and 1 for any other. So
+ * compute it, is 1. That is the rule that gives it the combobox role, so
  * `<select multiple size="1">` is a drop-down and `<select multiple
- * size="0">` a list box. Read from the attributes: the `size` property reads
- * 0 above 2^31-1. `size` parses by HTML's integer rules, as `tabindex` does.
+ * size="0">` a list box. See {@link selectRoleFromAttributes}.
  */
 function isDropDownSelect(select: Element): boolean {
-  const size = parseTabindex(select.getAttribute("size")) ?? 0;
-  const displaySize =
-    size > 0 && size <= MAX_SELECT_SIZE
-      ? size
-      : select.hasAttribute("multiple")
-        ? 4
-        : 1;
-  return displaySize <= 1;
+  return (
+    selectRoleFromAttributes({
+      size: select.getAttribute("size"),
+      multiple: select.getAttribute("multiple"),
+    }) === "combobox"
+  );
 }
 
 /**
@@ -2231,7 +2239,7 @@ export function nativeStates(
   // Read only for a summary: on a <form>, a field named `parentElement`
   // shadows the property.
   const details = safeParentElement(element);
-  if (details?.tagName.toLowerCase() === "details") {
+  if (details && safeTagName(details) === "details") {
     const disclosure =
       (role === "generic" && getExplicitRole(element) !== "generic") ||
       SUMMARY_EXPANDED_ROLES.has(role);
@@ -2744,6 +2752,12 @@ export interface ExtractDomTreeOptions {
  * reads) defuse the plausible cases; this boundary is the catch-all for the
  * rest — including future unknown clobbering — degrading to "skip this node"
  * instead of losing the whole tree.
+ *
+ * It only ever charges the element it is building, so only that element's own
+ * tag is read plainly. A read that can land on another element — an ancestor a
+ * role or state climbs to, a descendant a name walk enters — goes through
+ * `safeTagName`; through a plain one, such a form would cost the element whose
+ * read it was.
  *
  * Nothing here mutates `nodes` / the element ref map; the caller commits the node
  * only on success, so a caught element never leaves a half-built node behind.

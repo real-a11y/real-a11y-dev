@@ -26,6 +26,7 @@
  * walk has no element for.
  */
 
+import { safeTagName } from "./clobber-safe.js";
 import { isEditable, isEditingHost } from "./editing.js";
 import { imageUsingMap } from "./image-map.js";
 
@@ -39,16 +40,21 @@ const XLINK_NS = "http://www.w3.org/1999/xlink";
 const HTML_INTEGER = /^[\t\n\f\r ]*([+-]?\d+)/;
 
 /**
- * A `tabindex` value as HTML parses it, and Chromium with it, or `null` when
- * there is none. Parsing stops at the first non-digit, so `"1abc"` is 1 and
- * `"0.5"` is 0. A value with no leading integer, such as `""` or `"abc"`, is
- * ignored as if absent.
+ * An attribute's integer value as HTML parses it, and Chromium with it, or
+ * `null` when there is none. Parsing stops at the first non-digit, so `"1abc"`
+ * is 1 and `"0.5"` is 0. A value with no leading integer, such as `""` or
+ * `"abc"`, is ignored as if absent.
  */
-export function parseTabindex(value: string | null | undefined): number | null {
+export function parseHtmlInteger(
+  value: string | null | undefined,
+): number | null {
   if (value == null) return null;
   const match = HTML_INTEGER.exec(value);
   return match ? Number(match[1]) : null;
 }
+
+/** A `tabindex` value, parsed by {@link parseHtmlInteger}. */
+export const parseTabindex = parseHtmlInteger;
 
 /**
  * True when HTML calls `element` actually disabled: by its own `disabled`
@@ -79,7 +85,7 @@ export function isActuallyDisabled(element: Element): boolean {
  * element focusable, which is the point of using it.
  */
 function isFocusBarred(element: Element): boolean {
-  const tag = element.tagName.toLowerCase();
+  const tag = safeTagName(element);
   if (!FORM_CONTROL_TAGS.has(tag)) return false;
   if (
     tag === "input" &&
@@ -102,9 +108,9 @@ function isFocusBarred(element: Element): boolean {
 function isDetailsSummary(summary: Element): boolean {
   // eslint-disable-next-line no-restricted-properties -- one read, and a <summary> is never a form
   const details = summary.parentElement;
-  if (details?.tagName.toLowerCase() !== "details") return false;
+  if (!details || safeTagName(details) !== "details") return false;
   for (const child of details.children)
-    if (child.tagName.toLowerCase() === "summary") return child === summary;
+    if (safeTagName(child) === "summary") return child === summary;
   return false;
 }
 
@@ -112,7 +118,7 @@ function isDetailsSummary(summary: Element): boolean {
 export function isFocusable(element: Element): boolean {
   if (isFocusBarred(element)) return false;
 
-  const tag = element.tagName.toLowerCase();
+  const tag = safeTagName(element);
   const tabindex = parseTabindex(element.getAttribute("tabindex"));
   // An area takes focus only through an image using its map, tabindex or not.
   // Chromium reads a negative tabindex on one as unfocusable, even from script,
