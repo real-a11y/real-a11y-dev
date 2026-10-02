@@ -43,6 +43,9 @@ const REFERENCE_ATTRS = new Set([
   // An <img usemap> decides whether the areas of the map it names are
   // rendered, and that map can sit anywhere in the tree.
   "usemap",
+  // An owner can be the required context that keeps an owned listitem,
+  // option or treeitem its role, and the owned element can be anywhere.
+  "aria-owns",
 ]);
 
 /**
@@ -233,6 +236,12 @@ export class LiveTreeExtractor {
           const target = m.target as Element;
           const attr = m.attributeName ?? "";
           if (REFERENCE_ATTRS.has(attr)) {
+            needsFull = true;
+            break;
+          }
+          // An owner's role can be the context that keeps an owned item its
+          // role, and the item is outside the owner's subtree.
+          if (attr === "role" && target.hasAttribute("aria-owns")) {
             needsFull = true;
             break;
           }

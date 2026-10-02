@@ -217,9 +217,21 @@ export function flatParent(element: Element): Element | null {
   // A slotted node's parent is its slot's parent; a forwarded slot recurses.
   const slot = safeAssignedSlot(element);
   if (slot) return flatParent(slot);
-  const parent = safeParentElement(element) ?? shadowHostAbove(element);
+  const parent = flatParentElement(element);
   // Slot fallback content: skip the transparent slot.
   return parent && isSlot(parent) ? flatParent(parent) : parent;
+}
+
+/**
+ * The parent in the flat tree with the `<slot>`s still in it — Chromium's
+ * `FlatTreeTraversal::ParentElement`, which is what its role rules read. A
+ * slotted node's parent is its slot, a shadow root's top-level node's parent
+ * is the host. {@link flatParent} skips the slots instead, as a layout would.
+ */
+export function flatParentElement(element: Element): Element | null {
+  const slot = safeAssignedSlot(element);
+  if (slot) return slot;
+  return safeParentElement(element) ?? shadowHostAbove(element);
 }
 
 /** The host of the shadow root `element` sits directly in, if it does. */

@@ -337,6 +337,56 @@ describe("a <select>'s role follows the rows it shows", () => {
   });
 });
 
+// Chromium resolves `role` to the first token it recognises — skipping unknown
+// and abstract ones, folding case — and drops a listitem, option or treeitem
+// outside its required context, for the next token or the element's own role.
+// The DOM producer once kept whatever the first token said: `foo "Save"`,
+// `listitem` outside any list, `option` inside a list.
+describe("roles Chromium discards", () => {
+  it("are discarded by both producers", async () => {
+    await session.open(
+      dataUrl(
+        `<main>` +
+          `<div role="foo button" tabindex="0">Save</div>` +
+          `<div role="widget link" tabindex="0">Docs</div>` +
+          `<div role="BUTTON" tabindex="0">Upper</div>` +
+          `<div role="directory" aria-label="Dir"><div role="listitem">x</div></div>` +
+          `<div role="list" aria-label="Broken"><section><div role="listitem"><a href="#a">A</a></div></section></div>` +
+          `<div role="listbox" aria-label="Fruit"><div role="option" aria-selected="false">Apple</div></div>` +
+          `<ul role="list" aria-label="Not a listbox"><li role="option"><a href="#s">Spain</a></li></ul>` +
+          `<button><span role="option">Apple</span> pie</button>` +
+          `<ul role="none"><li><a href="#h">Home</a></li></ul>` +
+          `</main>`,
+      ),
+    );
+    const domTree = await session.call<string>("treeSnapshot", "body", [
+      { markFocus: false },
+    ]);
+    const nativeTree = serializeTree(await session.nativeTree(), {
+      markFocus: false,
+    });
+
+    for (const [producer, tree] of [
+      ["dom", domTree],
+      ["native", nativeTree],
+    ]) {
+      const lines = tree.split("\n").map((l) => l.trim());
+      const roles = (role: string) =>
+        lines.filter((l) => l === role || l.startsWith(`${role} `));
+      expect(lines, producer).toContain('button "Save"');
+      expect(lines, producer).toContain('link "Docs"');
+      expect(lines, producer).toContain('button "Upper"');
+      expect(lines, producer).toContain('list "Dir"');
+      expect(lines, producer).toContain('option "Apple"');
+      expect(lines, producer).toContain('button "Apple pie"');
+      // The directory's item, and the <li role="option"> back on its own role.
+      expect(roles("listitem"), producer).toHaveLength(2);
+      expect(roles("option"), producer).toHaveLength(1);
+      expect(tree, producer).not.toMatch(/\b(foo|widget|directory|BUTTON)\b/);
+    }
+  });
+});
+
 // The DOM producer walks the flat tree through open shadow roots and slots,
 // as Chromium does. Before that, every node below came from native only.
 describe("web components reach the DOM producer", () => {

@@ -46,6 +46,18 @@ export interface ValidatedNode {
    * UA-supplied checkedness.
    */
   uaSuppliedAttrs?: readonly string[];
+  /**
+   * The role the author wrote that the user agent discarded, when `role` is
+   * the one it applied instead — an unrecognised or abstract token (Chromium
+   * skips it for the next token, or the element's own role), or a role
+   * outside the required context Chromium enforces (`listitem`, `option`,
+   * `treeitem`). Reported as an error either way: what the author asked for
+   * is not what assistive tech gets.
+   *
+   * Absent means `role` is what was authored — a hand-built tree, or a
+   * producer that keeps every authored token.
+   */
+  discardedRole?: string;
 }
 
 export interface NodeIssue {
@@ -102,6 +114,28 @@ export function validateNode(
   nodesById: NodeMap,
 ): NodeIssue[] {
   const issues: NodeIssue[] = [];
+  // A discarded role is judged as written, then the node as exposed. The
+  // discard itself is the evidence: the user agent already checked the
+  // context, and an extracted tree can't show what ended its climb (a
+  // `<section>` between an option and its listbox folds out of the view).
+  if (n.discardedRole !== undefined) {
+    const discarded = n.discardedRole;
+    if (!isValidRole(discarded)) {
+      // As for an invalid role kept as written: nothing else is judged.
+      issues.push({
+        severity: "error",
+        message: `"${discarded}" is not a valid ARIA role`,
+      });
+      return issues;
+    }
+    const context = roleMeta(discarded).requiredContextRole;
+    issues.push({
+      severity: "error",
+      message: `role "${discarded}" is discarded outside its required context${
+        context.length > 0 ? ` (${context.join(" / ")})` : ""
+      }`,
+    });
+  }
   // Only an AUTHORED role can be an invalid ARIA role. An implicit one is
   // engine vocabulary — `<video controls>` extracts as `video`, which is not
   // in the ARIA role set — and reporting it told the user their browser's own

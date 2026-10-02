@@ -304,14 +304,24 @@ describe("aria-live=off declares the element inert", () => {
     );
   });
 
-  it("role case is not folded, so an off announcer stays off", () => {
-    // Folding made `role="MENU"` hit the container check BEFORE the `off`
-    // check, so the shell this rule exists to reject pivoted anyway — and the
-    // same element got opposite scoping depending on an unrelated attribute.
-    // CSS matches `role` case-sensitively, so the tree agrees: `MENU` is not
-    // a menu to either.
+  it("role case is folded the way the tree folds it", () => {
+    // Chromium reads `role` tokens ASCII-case-insensitively, so `MENU` is a
+    // menu — in the tree, and therefore here: a container, an overlay whatever
+    // its `aria-live`, exactly like `menu`. Folding only HERE once made the
+    // same element a menu to the pivot and not to the tree, so its scoping
+    // hung on an unrelated attribute; the one parse in `getExplicitRole` is
+    // what keeps the two from disagreeing again.
+    for (const role of ["menu", "MENU", "Menu"]) {
+      page(
+        `<div id="host"><button>Save</button></div><div role="${role}" aria-live="off">idle</div>`,
+      );
+      expect(resolveEffectiveRoot(document.getElementById("host")!), role).toBe(
+        document.body,
+      );
+    }
+    // An unrecognised token is no menu, so the `off` announcer stays off.
     page(
-      `<div id="host"><button>Save</button></div><div role="MENU" aria-live="off">idle</div>`,
+      `<div id="host"><button>Save</button></div><div role="MENUS" aria-live="off">idle</div>`,
     );
     const host = document.getElementById("host")!;
     expect(resolveEffectiveRoot(host)).toBe(host);
@@ -331,6 +341,16 @@ describe("aria-live=off declares the element inert", () => {
     // `status` first — a live region, pivots.
     page(
       `<div id="host"><button>Save</button></div><div role="status generic">4 tickets</div>`,
+    );
+    expect(resolveEffectiveRoot(document.getElementById("host")!)).toBe(
+      document.body,
+    );
+  });
+
+  it("a token list resolves to its first token the browser RECOGNISES", () => {
+    // `toast` is no role; Chromium skips it and the element is a status.
+    page(
+      `<div id="host"><button>Save</button></div><div role="toast status">4 tickets</div>`,
     );
     expect(resolveEffectiveRoot(document.getElementById("host")!)).toBe(
       document.body,

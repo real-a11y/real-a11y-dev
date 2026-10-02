@@ -103,7 +103,7 @@ main
   code
   heading "toBeValidA11yTree()" (level 2)
     code "toBeValidA11yTree()"
-  paragraph "Asserts the extracted accessibility tree has no ARIA — invalid roles, missing required accessible names, and relationship violations (interactive nesting, presentational-children misuse). Backed by . Advisory don't fail it — only errors do."
+  paragraph "Asserts the extracted accessibility tree has no ARIA — invalid roles, roles the browser discards, missing required accessible names, and relationship violations (interactive nesting, presentational-children misuse). Backed by . Advisory don't fail it — only errors do."
     strong "errors"
     code "@real-a11y-dev/validate"
     strong "warnings"
@@ -135,6 +135,13 @@ main
     code "role="combobox""
   paragraph "The same rule is why no longer fails: its extracted role is engine vocabulary rather than an ARIA role, and only an authored role can be invalid ARIA."
     code "<video controls>"
+  paragraph "The tree shows the role Chromium applies, so an unrecognised token or an item outside its container falls back to the element's own role — often a that folds out of the view. The matcher reports what you wrote all the same:"
+    strong "A role the browser discards is still yours."
+    code "generic"
+  button "Copy Code"
+  code
+  paragraph "A discarded role is an error, not an advisory warning: assistive tech gets a different role from the one you wrote. See for which containers count."
+    link "Roles"
   paragraph "Unlike the four matchers above, this one doesn't wrap an function — it runs the semantic tree through and fails only on issues."
     code "assert*"
     code "@real-a11y-dev/validate"
