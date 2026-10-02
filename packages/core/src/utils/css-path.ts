@@ -12,6 +12,8 @@
  * producer supplies the four accessors for its own node type.
  */
 
+import { safeChildren, safeParentElement } from "../extraction/clobber-safe.js";
+
 /** Valid enough to use as a bare `#id` selector without escaping. */
 export const isValidCssId = (value: string | null | undefined): boolean =>
   typeof value === "string" && /^[A-Za-z][\w-]*$/.test(value);
@@ -77,11 +79,16 @@ export function buildCssPath<T>(node: T, dom: CssPathAdapter<T>): string {
   return parts.join(" > ");
 }
 
-/** Adapter for live DOM elements — what the in-page producer walks. */
+/**
+ * Adapter for live DOM elements — what the in-page producer walks. `parent` and
+ * `children` are clobber-safe: a `<form>` control named `parentElement` walks
+ * the path round the form and that control, and one named `children` drops
+ * the form's `nth-of-type`.
+ */
 export const DOM_ELEMENT_ADAPTER: CssPathAdapter<Element> = {
   tagName: (el) => el.tagName.toLowerCase(),
   id: (el) => el.getAttribute("id"),
-  parent: (el) => el.parentElement,
-  children: (el) => Array.from(el.children),
+  parent: safeParentElement,
+  children: safeChildren,
   isRoot: (el) => el === el.ownerDocument?.documentElement,
 };

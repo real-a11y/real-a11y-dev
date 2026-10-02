@@ -379,4 +379,59 @@ describe("createPicker", () => {
     // Pick mode still exits on click even when no tracked id was found.
     expect(picker.isEnabled()).toBe(false);
   });
+
+  it("climbs past a <form> whose control shadows parentElement", () => {
+    // In a real browser `form.parentElement` is the `<input name=
+    // "parentElement">` inside it ([LegacyOverrideBuiltIns]), whose parent is
+    // the form again: a plain climb from an untracked node never ends, and
+    // the page freezes on the first mousemove. Forced, because jsdom's
+    // override is not guaranteed.
+    const { picker, harness } = makeHarness();
+    harness.trackedDiv.innerHTML = `<form><input name="parentElement"><span>inside</span></form>`;
+    const form = harness.trackedDiv.querySelector("form")!;
+    Object.defineProperty(form, "parentElement", {
+      configurable: true,
+      get: () => form.querySelector('[name="parentElement"]'),
+    });
+    const span = form.querySelector("span")!;
+    picker.setEnabled(true);
+
+    const move = new MouseEvent("mousemove", { bubbles: true });
+    Object.defineProperty(move, "target", { value: span });
+    document.dispatchEvent(move);
+
+    const click = new MouseEvent("click", { bubbles: true, cancelable: true });
+    Object.defineProperty(click, "target", { value: span });
+    document.dispatchEvent(click);
+
+    expect(harness.highlights).toEqual(["n1"]);
+    expect(harness.picks).toEqual(["n1"]);
+  });
+
+  it("climbs past a <form> whose control shadows nodeType", () => {
+    // In a real browser `form.nodeType` is the `<input name="nodeType">`
+    // inside it, not 1, so the climb took the form for no element at all and
+    // stopped below it: nothing under the cursor was highlighted or picked.
+    const { picker, harness } = makeHarness();
+    harness.trackedDiv.innerHTML = `<form><input name="nodeType"><span>inside</span></form>`;
+    const form = harness.trackedDiv.querySelector("form")!;
+    const control = form.querySelector('[name="nodeType"]');
+    const span = form.querySelector("span")!;
+    Object.defineProperty(form, "nodeType", {
+      configurable: true,
+      get: () => control,
+    });
+    picker.setEnabled(true);
+
+    const move = new MouseEvent("mousemove", { bubbles: true });
+    Object.defineProperty(move, "target", { value: span });
+    document.dispatchEvent(move);
+
+    const click = new MouseEvent("click", { bubbles: true, cancelable: true });
+    Object.defineProperty(click, "target", { value: span });
+    document.dispatchEvent(click);
+
+    expect(harness.highlights).toEqual(["n1"]);
+    expect(harness.picks).toEqual(["n1"]);
+  });
 });

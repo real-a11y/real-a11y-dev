@@ -1,5 +1,10 @@
 import { buildA11yTree } from "../extraction/a11y-extractor.js";
 import {
+  safeContains,
+  safeGetAttribute,
+  safeParentElement,
+} from "../extraction/clobber-safe.js";
+import {
   containsOverlaySignal,
   expandedState,
   extractDomTree,
@@ -20,6 +25,7 @@ import {
 } from "../extraction/flat-tree.js";
 import type { ExtractionResult, SemanticNode, TreeChange } from "../types.js";
 import { getNodeId } from "../utils/id-generator.js";
+import { warnOutsideProduction } from "../utils/warn.js";
 
 export interface LiveTreeExtractorOptions {
   /** "a11y" (default) or "dom". */
@@ -37,7 +43,7 @@ const REFERENCE_ATTRS = new Set([
   "aria-describedby",
   "for",
   // An <img usemap> decides whether the areas of the map it names are
-  // focusable, and that map can sit anywhere in the tree.
+  // rendered, and that map can sit anywhere in the tree.
   "usemap",
 ]);
 
@@ -75,6 +81,22 @@ const SCOPE_ATTRS = new Set([
   // Hides the element until it shows as a popover, and shows it again when
   // removed from a closed one.
   "popover",
+]);
+
+/**
+ * Attributes that can change whether an image is rendered, or hidden from AT,
+ * from the image itself or from anywhere above it. An image map's areas are
+ * rendered only while the image using their map is (see image-map.ts), and
+ * that map can sit anywhere in the tree, so re-extracting what changed would
+ * leave its areas as they were.
+ */
+const IMAGE_RENDERING_ATTRS = new Set([
+  "class",
+  "style",
+  "hidden",
+  "inert",
+  "open", // a closed <details> hides the image
+  "aria-hidden",
 ]);
 
 // The rule itself lives in `containsOverlaySignal` (extraction/dom-extractor),
@@ -117,6 +139,8 @@ export class LiveTreeExtractor {
   private descriptionTargetIds = new Set<string>();
   /** id -> elements that reference that id via aria-labelledby/aria-describedby */
   private referrersById = new Map<string, Set<Element>>();
+  /** Whether {@link refresh} has warned about falling back yet. */
+  private warnedFallback = false;
 
   constructor(root: Element, options: LiveTreeExtractorOptions = {}) {
     this.root = root;
@@ -162,7 +186,33 @@ export class LiveTreeExtractor {
     if (!change || change.full) {
       return this.extract();
     }
+    // A splice exists only to reach the tree a full extraction would, faster,
+    // so a splice that cannot finish falls back to that extraction rather than
+    // throwing. What makes one throw is the page: `<form>` has
+    // [LegacyOverrideBuiltIns], so `<input name="getAttribute">` (or `tagName`,
+    // `contains`, `matches`, …) shadows that member on the form, and the splice
+    // calls such members on every element and ancestor it reaches. The full
+    // walk survives the same form through its per-element boundary, and
+    // `extract()` rebuilds every piece of state the splice may have left half
+    // updated.
+    try {
+      return this.splice(change);
+    } catch (error) {
+      // Once per extractor: a page that trips this does so on every refresh
+      // near that form, and the gate cannot tell production apart in a browser.
+      if (!this.warnedFallback) {
+        this.warnedFallback = true;
+        warnOutsideProduction(
+          "[real-a11y] An incremental refresh fell back to a full extraction:",
+          error,
+        );
+      }
+      return this.extract();
+    }
+  }
 
+  /** The incremental half of {@link refresh}. */
+  private splice(change: TreeChange): ExtractionResult {
     // Rebuild reference indexes from the live DOM so we can expand the dirty
     // region to cover accessibility dependencies (aria-labelledby, label[for]).
     this.rebuildIndexes();
@@ -179,12 +229,12 @@ export class LiveTreeExtractor {
         // addMovedInvokers finds. One inside re-extracts from its parent, which
         // is in the tree whether or not the popover was: a popover that just
         // showed has no node to splice, and would cost a full extraction.
-        if (el.hasAttribute("popover")) {
+        if (safeGetAttribute(el, "popover") !== null) {
           scopeSuspect = true;
           const tree = this.effectiveRoot ?? this.root;
-          if (!tree.contains(el)) continue;
+          if (!safeContains(tree, el)) continue;
           const parent = flatParent(el);
-          dirty.add(parent && tree.contains(parent) ? parent : el);
+          dirty.add(parent && safeContains(tree, parent) ? parent : el);
           continue;
         }
         dirty.add(el);
@@ -214,6 +264,9 @@ export class LiveTreeExtractor {
           // Re-extracting the target subtree covers both local attribute
           // updates and visibility-affecting changes like aria-hidden/class.
           dirty.add(target);
+          if (IMAGE_RENDERING_ATTRS.has(attr)) {
+            for (const map of this.mapsUsedWithin(target)) dirty.add(map);
+          }
           // A name-affecting attribute (aria-label, role, alt, title, …) on a
           // descendant also changes the accessible name of an enclosing
           // name-from-content host, which is computed from that descendant's
@@ -224,18 +277,21 @@ export class LiveTreeExtractor {
           // stops at the now-barrier target and never reaches an enclosing
           // host whose name just lost (or gained) this subtree's text. Climb
           // from the parent so that host is still re-extracted.
-          if (attr === "role" && target.parentElement) {
-            dirty.add(this.nameRelevantAncestor(target.parentElement));
+          if (attr === "role") {
+            const parent = safeParentElement(target);
+            if (parent) dirty.add(this.nameRelevantAncestor(parent));
           }
         } else if (m.type === "characterData") {
           const target = m.target as CharacterData;
-          if (target.parentElement) {
+          // eslint-disable-next-line no-restricted-properties -- one read, and a text or comment node is never a form
+          const parent = target.parentElement;
+          if (parent) {
             // Add the direct parent too (not just its name host): it may carry
             // the id an aria-labelledby/-describedby referrer points at, and
             // expandDependencies only discovers referrers from elements in the
             // dirty set. Mirrors the attribute / childList branches.
-            dirty.add(target.parentElement);
-            dirty.add(this.nameRelevantAncestor(target.parentElement));
+            dirty.add(parent);
+            dirty.add(this.nameRelevantAncestor(parent));
           }
         }
       }
@@ -446,13 +502,16 @@ export class LiveTreeExtractor {
 
     const effectiveRoot = this.effectiveRoot ?? this.root;
 
-    // One deep scan serves both passes (see extractDomTree).
+    // One deep scan serves every pass (see extractDomTree).
     const referrers = deepQuerySelectorAll(
       effectiveRoot,
-      "[aria-labelledby], [aria-describedby]",
+      "[aria-labelledby], [aria-describedby], input[list]",
     );
+    // Read through the prototype: a referrer can be a `<form>` whose control
+    // shadows `getAttribute`, and this runs inside the full extraction a
+    // failed splice falls back to.
     for (const el of referrers) {
-      const ids = (el.getAttribute("aria-labelledby") || "")
+      const ids = (safeGetAttribute(el, "aria-labelledby") || "")
         .split(/\s+/)
         .filter(Boolean);
       for (const id of ids) {
@@ -462,7 +521,7 @@ export class LiveTreeExtractor {
     }
 
     for (const el of referrers) {
-      const ids = (el.getAttribute("aria-describedby") || "")
+      const ids = (safeGetAttribute(el, "aria-describedby") || "")
         .split(/\s+/)
         .filter(Boolean);
       for (const id of ids) {
@@ -471,6 +530,16 @@ export class LiveTreeExtractor {
         this.descriptionTargetIds.add(id);
         this.addReferrer(id, el);
       }
+    }
+
+    // An input's role follows the <datalist> its `list` names (role-map), so
+    // that datalist appearing or going away has to re-extract the input. Not
+    // narrowed to inputs: asking a referrer `matches()` throws on a form that
+    // shadows it, and another element carrying a `list` only costs a
+    // re-extraction it didn't need.
+    for (const el of referrers) {
+      const id = safeGetAttribute(el, "list");
+      if (id) this.addReferrer(id, el);
     }
   }
 
@@ -537,7 +606,7 @@ export class LiveTreeExtractor {
       }
 
       // Adding or removing an <img usemap> changes whether a map's areas are
-      // focusable, wherever that map is: the same reach as a `usemap` change.
+      // rendered, wherever that map is: the same reach as a `usemap` change.
       if (el.matches("img[usemap]") || el.querySelector("img[usemap]")) {
         return true;
       }
@@ -566,6 +635,30 @@ export class LiveTreeExtractor {
   }
 
   /**
+   * The `<map>`s used by an `<img usemap>` that is `el` or inside it, wherever
+   * in the extraction scope they sit, shadow roots included. Images inside a
+   * shadow root use no map (see image-map.ts), so a light-DOM search is enough
+   * for them.
+   */
+  private mapsUsedWithin(el: Element): Element[] {
+    const images = el.matches("img[usemap]")
+      ? [el]
+      : Array.from(el.querySelectorAll("img[usemap]"));
+    const names = new Set<string>();
+    for (const img of images) {
+      const usemap = img.getAttribute("usemap") ?? "";
+      if (usemap.startsWith("#")) names.add(usemap.slice(1));
+    }
+    if (names.size === 0) return [];
+    return deepQuerySelectorAll(this.effectiveRoot ?? this.root, "map").filter(
+      (map) =>
+        [map.getAttribute("name"), map.getAttribute("id")].some(
+          (name) => name !== null && names.has(name),
+        ),
+    );
+  }
+
+  /**
    * The outermost name-from-content host whose accessible name is computed from
    * `el`'s content. Nested hosts (`<a><h3>text</h3></a>`) both derive their name
    * from the inner text, so re-extracting only the innermost would leave the
@@ -591,7 +684,7 @@ export class LiveTreeExtractor {
       // A name-source child is often itself a barrier (`caption`). Don't stop
       // there when its owner still needs the re-extract.
       if (!owner && isNameBarrierElement(node)) break;
-      node = node.parentElement;
+      node = safeParentElement(node);
     }
     return outermostHost ?? el;
   }
@@ -641,7 +734,7 @@ export class LiveTreeExtractor {
             }
           }
           if (ancestor === stopAt) break;
-          ancestor = ancestor.parentElement;
+          ancestor = safeParentElement(ancestor);
         }
 
         if (el.tagName.toLowerCase() === "label") {
@@ -674,7 +767,7 @@ export class LiveTreeExtractor {
    * root is much cheaper than re-extracting the whole page.
    */
   private updateAncestorDescendantText(dirtyRoot: Element): void {
-    let el: Element | null = dirtyRoot.parentElement;
+    let el: Element | null = safeParentElement(dirtyRoot);
     while (el) {
       const id = getNodeId(el);
       const node = this.domNodes.get(id);
@@ -682,7 +775,7 @@ export class LiveTreeExtractor {
         node.dom.descendantText = getDescendantText(el);
       }
       if (el === this.root || el === this.effectiveRoot) break;
-      el = el.parentElement;
+      el = safeParentElement(el);
     }
   }
 

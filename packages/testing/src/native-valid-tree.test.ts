@@ -75,6 +75,14 @@ describe("native HTML is valid without author-supplied ARIA", () => {
     ).toBeValidA11yTree();
   });
 
+  it("an input whose list names a <datalist> — the browser's own combobox", () => {
+    expect(
+      mount(
+        `<label>Fruit <input list="fruits"></label><datalist id="fruits"><option value="Apple"></datalist>`,
+      ),
+    ).toBeValidA11yTree();
+  });
+
   it("a REDUNDANT authored role does not bring the wall back", () => {
     // Design systems spread `role` through props, so this shape is common and
     // nothing about the user agent changed. Keying on the attribute reported
@@ -86,6 +94,11 @@ describe("native HTML is valid without author-supplied ARIA", () => {
     ).toBeValidA11yTree();
     expect(
       mount(`<label><input type="checkbox" role="checkbox"> W</label>`),
+    ).toBeValidA11yTree();
+    expect(
+      mount(
+        `<label>F <input list="fruits" role="combobox"></label><datalist id="fruits"></datalist>`,
+      ),
     ).toBeValidA11yTree();
   });
 
@@ -137,6 +150,21 @@ describe("authored ARIA still owes the contract", () => {
   it("role=combobox without aria-expanded / aria-controls is reported", () => {
     const root = mount(`<div role="combobox" aria-label="Status"></div>`);
     expect(root).not.toBeValidA11yTree();
+  });
+
+  it.each([
+    ["no list", `<input role="combobox" aria-label="Fruit">`],
+    [
+      "a list naming no datalist",
+      `<input role="combobox" aria-label="Fruit" list="nope">`,
+    ],
+  ])("role=combobox on an input with %s owes its popup's ARIA", (_l, html) => {
+    // No datalist, so no browser popup: the author built one, and its state
+    // and relationship are theirs to expose.
+    expect(violations(mount(html))).toEqual([
+      'combobox "Fruit" — missing required aria-controls',
+      'combobox "Fruit" — missing required aria-expanded',
+    ]);
   });
 
   it("role=checkbox without aria-checked is reported", () => {

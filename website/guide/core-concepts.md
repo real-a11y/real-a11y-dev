@@ -52,7 +52,9 @@ interface SemanticNode {
     attributes: Record<string, string>;
     textContent: string | null;  // direct text-node children only
     descendantText: string;      // truncated recursive text — useful for elements whose
-                                 // accessible name is empty by spec (<code>, <pre>, <svg>)
+                                 // accessible name is empty by spec (<code>, <pre>, <svg>).
+                                 // Neither reads a <textarea>'s markup text: that is its
+                                 // default value, and a value lives in a11y.value alone
     isHidden: boolean;           // not visible: visibility:hidden, or the visually-hidden
                                  // ("sr-only") pattern, which AT still reads. display:none
                                  // subtrees are never extracted at all.
@@ -93,12 +95,15 @@ Examples:
 | `<button>` | `button` |
 | `<a href="…">` | `link` |
 | `<input type="text">` | `textbox` |
+| `<input list="fruits">` with `<datalist id="fruits">` | `combobox` |
 | `<input type="checkbox">` | `checkbox` |
 | `<h1>` – `<h6>` | `heading` (with `level`) |
 | `<nav>` | `navigation` |
 | `<main>` | `main` |
 | `<dialog>` | `dialog` |
 | `<div>` (no role) | `generic` |
+
+An `<input>` whose `list` names a `<datalist>` is a `combobox`, because typing in it offers the datalist's suggestions in a popup. That holds for the text, search, email, tel, url, number, date and time types, as in Chromium's own tree. The datalist has to be in the input's own document or shadow root. A `list` naming anything else leaves the input a `textbox` (or `searchbox`, or `spinbutton`).
 
 `role="presentation"` and `role="none"` strip the element's role from the tree — the element is still present, but its children are re-parented.
 

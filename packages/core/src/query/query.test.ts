@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
 
 import { extractA11yTree } from "../extraction/a11y-extractor.js";
 import { extractDomTree } from "../extraction/dom-extractor.js";
@@ -381,6 +381,96 @@ describe("getTabSequence", () => {
       expect(names).toEqual(["Shipping", "Returns", "Warranty"]);
     }
   });
+
+  // Chromium 151's UA sheet rendered an <area> inline, and 153's gives it
+  // `display: none`. Chromium tabs to an area of a map an image uses under
+  // both, at the area's own place in the document rather than the image's:
+  // each order here is a Tab walk in both versions.
+  describe.each(["inline", "none"])(
+    "image map areas, with `area { display: %s }`",
+    (display) => {
+      let sheet: HTMLStyleElement;
+      beforeEach(() => {
+        sheet = document.createElement("style");
+        sheet.textContent = `area { display: ${display} }`;
+        document.head.append(sheet);
+      });
+      afterEach(() => {
+        sheet.remove();
+        document.body.innerHTML = "";
+      });
+
+      function stops(html: string): string[][] {
+        document.body.innerHTML = `<main>${html}</main>`;
+        // Every shipped reader takes the sequence from the a11y view, so the
+        // area has to come through that as well as the DOM view.
+        return [
+          extractDomTree(document.body),
+          extractA11yTree(document.body),
+        ].map((tree) => getTabSequence(tree).map((n) => n.a11y.name));
+      }
+
+      it("lists an area where its map sits, before or after the image", () => {
+        for (const names of stops(`
+          <button>Before</button>
+          <map name="nav"><area href="/home" alt="Home"></map>
+          <button>Middle</button>
+          <img src="x.gif" alt="Site map" usemap="#nav">
+          <img src="x.gif" alt="Floor plan" usemap="#floor">
+          <button>Later</button>
+          <map name="floor"><area href="/a" alt="Room A"><area href="/b" alt="Room B"></map>
+          <button>After</button>
+        `)) {
+          expect(names).toEqual([
+            "Before",
+            "Home",
+            "Middle",
+            "Later",
+            "Room A",
+            "Room B",
+            "After",
+          ]);
+        }
+      });
+
+      it("lists no area of a map no rendered image uses", () => {
+        for (const names of stops(`
+          <button>Before</button>
+          <img src="x.gif" alt="Hidden map" usemap="#hidden" hidden>
+          <map name="hidden"><area href="/a" alt="Behind a hidden image"></map>
+          <map name="unused"><area href="/b" alt="Unused"></map>
+          <img src="x.gif" alt="Site map" usemap="#nav">
+          <map name="nav"><area href="/c" alt="Scripted" tabindex="-1"></map>
+          <button>After</button>
+        `)) {
+          expect(names).toEqual(["Before", "After"]);
+        }
+      });
+
+      it("lists an area hidden from AT in the DOM view only, like an aria-hidden button", () => {
+        // Chromium tabs to all three but leaves them out of its accessibility
+        // tree. The a11y view drops what AT can't reach, focusable or not,
+        // and every shipped reader takes its sequence from that view.
+        const [dom, a11y] = stops(`
+          <button>Before</button>
+          <button aria-hidden="true">Hidden button</button>
+          <img src="x.gif" alt="Site map" usemap="#nav" aria-hidden="true">
+          <map name="nav"><area href="/a" alt="Hidden image's area"></map>
+          <img src="x.gif" alt="Floor plan" usemap="#floor">
+          <map name="floor"><area href="/b" alt="Inert area" inert></map>
+          <button>After</button>
+        `);
+        expect(dom).toEqual([
+          "Before",
+          "Hidden button",
+          "Hidden image's area",
+          "Inert area",
+          "After",
+        ]);
+        expect(a11y).toEqual(["Before", "After"]);
+      });
+    },
+  );
 
   it("skips tabindex=-1 and disabled nodes", () => {
     const root = createPage(`

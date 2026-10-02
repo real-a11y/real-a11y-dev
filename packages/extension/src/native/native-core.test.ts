@@ -131,6 +131,33 @@ describe("readNativeTree", () => {
     expect(heading?.properties).toEqual({ level: "2" });
   });
 
+  it("reads busy as true — Chromium sends it as the number 1", async () => {
+    // Verbatim from Chromium 151's getFullAXTree on
+    // `<div role="group" aria-label="g" aria-busy="true">`. Read raw, it was
+    // `busy: "1"`, and the side panel's `states.busy === true` badge never lit.
+    const raw = [
+      {
+        nodeId: "1",
+        backendDOMNodeId: 10,
+        role: { value: "RootWebArea" },
+        childIds: ["2"],
+      },
+      {
+        nodeId: "2",
+        backendDOMNodeId: 20,
+        role: { value: "group" },
+        name: { value: "g" },
+        properties: [{ name: "busy", value: { type: "boolean", value: 1 } }],
+      },
+    ];
+    const t = new FakeTransport((method) =>
+      method === "Accessibility.getFullAXTree" ? { nodes: raw } : {},
+    );
+    const res = await readNativeTree(t);
+
+    expect(findNative(res.nodes, "group", "g")?.states).toEqual({ busy: true });
+  });
+
   /**
    * Live dogfood finding: "error messages not visible on native tree" — an
    * invalid form field's `aria-describedby`-linked error text ("Ingresa tu

@@ -14,8 +14,9 @@
  * `<input>` internals — are unreachable from page script by design; their
  * hosts stay leaves, as before.
  *
- * One closed UA root still has to be modelled, because it decides what renders:
- * a `<details>`' (see {@link isClosedDetails}).
+ * Two closed UA roots still have to be modelled, because they decide what
+ * renders: a `<details>`' (see {@link isClosedDetails}) and a `<textarea>`'s
+ * (see {@link isTextarea}).
  */
 
 import { isAriaHiddenValue } from "./aria-tokens.js";
@@ -24,8 +25,10 @@ import {
   safeChildNodes,
   safeChildren,
   safeHidden,
+  safeOwnerDocument,
   safeParentElement,
   safeParentNode,
+  safeQuerySelectorAll,
   safeRootNode,
   safeShadowRoot,
 } from "./clobber-safe.js";
@@ -114,13 +117,29 @@ function isClosedDetails(node: Node): boolean {
 }
 
 /**
+ * True if `node` is a `<textarea>`, which renders none of its children. Its UA
+ * shadow root shows the field's current value and slots nothing, so its child
+ * text — the markup DEFAULT value — is not page text: it goes stale once the
+ * user types, and for a sensitive field (ADR-0001) it is the secret itself.
+ * Chromium's accessibility tree has no node for it. The value reaches the tree
+ * through `a11y.value` alone, classified first; no text walk may find it here.
+ */
+function isTextarea(node: Node): boolean {
+  return (
+    node.nodeType === ELEMENT_NODE && (node as Element).localName === "textarea"
+  );
+}
+
+/**
  * Child nodes in the flat tree. A `<slot>` is transparent (it renders like
  * `display: contents`): it is replaced by its flattened assignment, which
  * already falls back to the slot's own children when nothing is assigned and
  * resolves slots nested through several hosts. A closed `<details>` has only
- * its summary (see {@link isClosedDetails}).
+ * its summary (see {@link isClosedDetails}), and a `<textarea>` has none (see
+ * {@link isTextarea}).
  */
 export function flatChildNodes(node: Node): Node[] {
+  if (isTextarea(node)) return [];
   if (isClosedDetails(node)) {
     const summary = detailsSummary(node as Element);
     return summary ? [summary] : [];
@@ -140,8 +159,9 @@ export function flatChildNodes(node: Node): Node[] {
 
 /**
  * True if `element` is rendered at all: every shadow host above it actually
- * distributes it through a slot, and no closed `<details>` above it holds it in
- * its body. Such an element must not act as an IDREF referrer — folding a
+ * distributes it through a slot, no closed `<details>` above it holds it in its
+ * body, and no `<textarea>` holds it at all (only script can put one there).
+ * An unrendered element must not act as an IDREF referrer — folding a
  * visible description target for a reference nobody can reach loses page
  * content.
  *
@@ -163,6 +183,7 @@ export function isRenderedInFlatTree(element: Element): boolean {
       if (isClosedDetails(parent) && detailsSummary(parent) !== node) {
         return false;
       }
+      if (isTextarea(parent)) return false;
       node = parent;
       continue;
     }
@@ -189,21 +210,42 @@ export function flatChildren(element: Element): Element[] {
  *
  * Each read is clobber-safe: through a `<form>` whose control is named
  * `parentElement` or `assignedSlot`, a plain read cycles back to the form, and
- * every loop over ancestors would spin forever.
+ * every loop over ancestors would spin forever. One named `parentNode` would
+ * end the climb at the top of a shadow root instead, short of the host.
  */
 export function flatParent(element: Element): Element | null {
   // A slotted node's parent is its slot's parent; a forwarded slot recurses.
   const slot = safeAssignedSlot(element);
   if (slot) return flatParent(slot);
+  const parent = safeParentElement(element) ?? shadowHostAbove(element);
+  // Slot fallback content: skip the transparent slot.
+  return parent && isSlot(parent) ? flatParent(parent) : parent;
+}
+
+/** The host of the shadow root `element` sits directly in, if it does. */
+function shadowHostAbove(element: Element): Element | null {
   const parentNode = safeParentNode(element);
-  const parent =
+  return parentNode?.nodeType === DOCUMENT_FRAGMENT_NODE
+    ? ((parentNode as ShadowRoot).host ?? null)
+    : null;
+}
+
+/**
+ * The element that renders `element`: the slot it is assigned to, else its
+ * parent, else the host of its shadow root. Unlike {@link flatParent}, this
+ * stops at slots, because a hidden slot hides everything it renders: a climb
+ * asking whether an element is rendered has to see them.
+ */
+export function renderingParent(element: Element): Element | null {
+  const slot = safeAssignedSlot(element);
+  if (slot) return slot;
+  const parentNode = safeParentNode(element);
+  return (
     safeParentElement(element) ??
     (parentNode?.nodeType === DOCUMENT_FRAGMENT_NODE
       ? (parentNode as ShadowRoot).host
-      : null) ??
-    null;
-  // Slot fallback content: skip the transparent slot.
-  return parent && isSlot(parent) ? flatParent(parent) : parent;
+      : null)
+  );
 }
 
 /**
@@ -211,13 +253,21 @@ export function flatParent(element: Element): Element | null {
  * `label[for]` are scoped to the element's own tree, so inside a shadow root
  * they must look in that root, not the document. A detached subtree has no
  * scope and falls back to its owner document, as before.
+ *
+ * The root is read clobber-safely: on a `<form>` holding
+ * `<input name="getRootNode">` the method is that input, so calling it throws
+ * and the labelled form is dropped from the tree with everything inside it.
+ *
+ * `root.nodeType` needs no clobber-safe read: a shadowed one reads as an
+ * element, matching neither, and the fallback is then right for a detached
+ * form root and for a document whose `<img name="nodeType">` shadows it alike.
  */
 export function idScope(element: Element): Document | ShadowRoot {
-  const root = element.getRootNode();
+  const root = safeRootNode(element);
   return root.nodeType === DOCUMENT_NODE ||
     root.nodeType === DOCUMENT_FRAGMENT_NODE
     ? (root as Document | ShadowRoot)
-    : element.ownerDocument;
+    : safeOwnerDocument(element);
 }
 
 /**
@@ -232,8 +282,8 @@ export function deepQuerySelectorAll(
 ): Element[] {
   const out: Element[] = [];
   const visit = (scope: Element | ShadowRoot): void => {
-    out.push(...scope.querySelectorAll(selector));
-    for (const el of scope.querySelectorAll("*")) {
+    out.push(...safeQuerySelectorAll(scope, selector));
+    for (const el of safeQuerySelectorAll(scope, "*")) {
       const shadow = safeShadowRoot(el);
       if (shadow) visit(shadow);
     }

@@ -1,5 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 
+import { clobber } from "../test-support/clobber.js";
+import type { TreeChange } from "../types.js";
+
 import { DomObserver } from "./dom-observer.js";
 
 /**
@@ -64,6 +67,27 @@ describe("DomObserver", () => {
       change.mutations?.some((m: MutationRecord) => m.attributeName === "for"),
     ).toBe(true);
   });
+
+  it.each(["size", "multiple"])(
+    "observes a select's %s, which decides its shape",
+    async (attr) => {
+      document.body.innerHTML = `<select id="s" aria-label="Size"><option>S</option></select>`;
+      observer = new DomObserver(document.body, onTreeChange, 100);
+      observer.start();
+
+      // A drop-down has an expanded state and a list box has none, and the
+      // two attributes decide which a select is.
+      document.getElementById("s")!.setAttribute(attr, "3");
+
+      await settleObserver(100);
+
+      expect(onTreeChange).toHaveBeenCalledTimes(1);
+      const change = onTreeChange.mock.calls[0]![0];
+      expect(
+        change.mutations?.some((m: MutationRecord) => m.attributeName === attr),
+      ).toBe(true);
+    },
+  );
 
   it("debounces rapid mutations into a single callback", async () => {
     observer = new DomObserver(document.body, onTreeChange, 100);
@@ -354,6 +378,47 @@ describe("DomObserver", () => {
       await settleObserver(100);
 
       expect(onTreeChange).not.toHaveBeenCalled();
+    });
+
+    // The sentinel check climbs from a changed text node to the document.
+    // `<form>` and the document both have [LegacyOverrideBuiltIns], so in a
+    // real browser a control or a named `<img>` called `parentNode` shadows
+    // their `parentNode`, and a plain climb cycles through it forever — before
+    // any refresh runs. Forced, because jsdom's override is not guaranteed.
+    it("delivers a text change inside a <form> whose control shadows parentNode", async () => {
+      document.body.innerHTML = `<form><input name="parentNode"><p>before</p></form>`;
+      const form = document.querySelector("form")!;
+      Object.defineProperty(form, "parentNode", {
+        configurable: true,
+        get: () => form.querySelector('[name="parentNode"]'),
+      });
+      observer = new DomObserver(document.body, onTreeChange, 100);
+      observer.start();
+
+      document.querySelector("p")!.firstChild!.textContent = "after";
+      await settleObserver(100);
+
+      expect(onTreeChange).toHaveBeenCalledTimes(1);
+    });
+
+    it("delivers a text change when a named <img> shadows document.parentNode", async () => {
+      document.body.innerHTML = `<img name="parentNode" alt=""><p>before</p>`;
+      const img = document.querySelector("img")!;
+      Object.defineProperty(document, "parentNode", {
+        configurable: true,
+        get: () => img,
+      });
+      try {
+        observer = new DomObserver(document.body, onTreeChange, 100);
+        observer.start();
+
+        document.querySelector("p")!.firstChild!.textContent = "after";
+        await settleObserver(100);
+
+        expect(onTreeChange).toHaveBeenCalledTimes(1);
+      } finally {
+        delete (document as unknown as Record<string, unknown>).parentNode;
+      }
     });
   });
 
@@ -989,6 +1054,19 @@ describe("DomObserver", () => {
       expect(onTreeChange).toHaveBeenCalledTimes(1);
     });
 
+    it("fires when an input's list changes (a datalist makes it a combobox)", async () => {
+      document.body.innerHTML =
+        '<input id="fruit"><datalist id="fruits"><option value="Apple"></datalist>';
+      observer = new DomObserver(document.body, onTreeChange, 100);
+      observer.start();
+
+      document.getElementById("fruit")!.setAttribute("list", "fruits");
+
+      await settleObserver(100);
+
+      expect(onTreeChange).toHaveBeenCalledTimes(1);
+    });
+
     it("fires when autocomplete marks a field sensitive", async () => {
       // The field's value is redacted once autocomplete names a credential or
       // payment field — which only takes effect on the next extraction.
@@ -1042,6 +1120,20 @@ describe("DomObserver", () => {
     function toggle(el: Element): void {
       el.dispatchEvent(new Event("toggle"));
     }
+
+    it("hears a <form> popover whose field shadows hasAttribute", () => {
+      document.body.innerHTML = `<form id="menu" popover><input name="hasAttribute" /></form>`;
+      observer = new DomObserver(document.body, onTreeChange, 100);
+      observer.start();
+
+      const menu = document.getElementById("menu")!;
+      clobber(menu, "hasAttribute");
+      toggle(menu);
+      vi.advanceTimersByTime(110);
+
+      expect(onTreeChange).toHaveBeenCalledTimes(1);
+      expect(onTreeChange.mock.calls[0][0].dirtyRoots).toEqual([menu]);
+    });
 
     it("fires with the popover as a dirty root", () => {
       document.body.innerHTML = `<main><div id="menu" popover>x</div></main>`;
@@ -1126,6 +1218,59 @@ describe("DomObserver", () => {
       await settleObserver(100);
 
       expect(onTreeChange).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("a <form> whose control shadows a method", () => {
+    // `<form>` has [LegacyOverrideBuiltIns], so `<input name="getAttribute">`
+    // makes `form.getAttribute` that input and calling it throws. The throw
+    // escaped the MutationObserver callback, which lost the WHOLE batch — every
+    // other change in it, not just the form's — and the tree went stale until
+    // some later, unrelated mutation.
+    it("keeps a batch that touches a form whose getAttribute is shadowed", async () => {
+      document.body.innerHTML = `
+        <main id="app">
+          <form><input name="getAttribute" /></form>
+          <p id="p">text</p>
+        </main>
+      `;
+      const root = document.getElementById("app")!;
+      const form = root.querySelector("form")!;
+      clobber(form, "getAttribute");
+      observer = new DomObserver(root, onTreeChange, 100);
+      observer.start();
+
+      form.setAttribute("class", "touched");
+      document.getElementById("p")!.setAttribute("class", "touched");
+
+      await settleObserver(100);
+
+      expect(onTreeChange).toHaveBeenCalledTimes(1);
+      const change = onTreeChange.mock.calls[0][0] as TreeChange;
+      expect(change.mutations?.map((m) => m.target)).toEqual([
+        form,
+        document.getElementById("p"),
+      ]);
+    });
+
+    it("re-extracts in full when a form it cannot classify mounts into <body>", async () => {
+      // The portal observer asks each node mounted into <body> whether it is
+      // an overlay. A form whose control shadows `matches` cannot answer — and
+      // this one holds a dialog, which has to pivot the tree.
+      const appRoot = document.createElement("div");
+      document.body.appendChild(appRoot);
+      observer = new DomObserver(appRoot, onTreeChange, 100);
+      observer.start();
+
+      const form = document.createElement("form");
+      form.innerHTML = `<input name="matches" /><div role="dialog" aria-label="Offer">Hi</div>`;
+      clobber(form, "matches");
+      document.body.appendChild(form);
+
+      await settleObserver(100);
+
+      expect(onTreeChange).toHaveBeenCalledTimes(1);
+      expect(onTreeChange.mock.calls[0][0]).toMatchObject({ full: true });
     });
   });
 });

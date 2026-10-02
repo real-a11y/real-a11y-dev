@@ -1,5 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 
+import { getTabSequence } from "../query/tab-sequence.js";
+import { clobber } from "../test-support/clobber.js";
+import type { SemanticNode } from "../types.js";
 import { resetIdCounter } from "../utils/id-generator.js";
 
 import { extractA11yTree } from "./a11y-extractor.js";
@@ -12,6 +15,7 @@ import {
   isSensitiveFieldAttributes,
   SENSITIVE_AUTOCOMPLETE_TOKENS,
 } from "./dom-extractor.js";
+import { idScope } from "./flat-tree.js";
 
 beforeEach(() => {
   resetIdCounter();
@@ -190,6 +194,86 @@ describe("DOM clobbering resilience", () => {
     expect(a11yNames).toContain("Apply");
   });
 
+  describe("a <form> field that shadows `parentElement`", () => {
+    // A real browser returns the field for `form.parentElement`, and the
+    // field's own parent is the form again. Deciding whether a link or an
+    // editor is inside editable content climbs the ancestors, and a plain climb
+    // cycles between the two forever: the page freezes, and no error boundary
+    // can catch a loop.
+    function clobberParentElement(root: Element): void {
+      const form = root.querySelector("form")!;
+      Object.defineProperty(form, "parentElement", {
+        configurable: true,
+        get: () => form.querySelector('[name="parentElement"]'),
+      });
+    }
+    const byName = (root: Element, name: string) =>
+      [...extractDomTree(root).nodes.values()].find(
+        (n) => n.a11y.name === name,
+      );
+
+    it("keeps a link inside the form live and an editor inside it focusable", () => {
+      const root = createPage(`
+        <main>
+          <form aria-label="Compose">
+            <input name="parentElement" aria-label="Subject" />
+            <div contenteditable="true" role="textbox" aria-label="Body">Hi</div>
+            <a href="/help">Help</a>
+          </form>
+        </main>
+      `);
+      clobberParentElement(root);
+
+      expect(byName(root, "Help")?.interaction?.actions).toEqual(
+        expect.arrayContaining(["click", "navigate"]),
+      );
+      expect(byName(root, "Body")?.interaction?.isFocusable).toBe(true);
+    });
+
+    it("reads the form's real parent, so an editable form is an editing host", () => {
+      // Read through the field, the form's "parent" is editable — the form
+      // itself — so the form looked like an editor's inner element rather
+      // than the host that takes focus.
+      const root = createPage(`
+        <main>
+          <form contenteditable="true" aria-label="Note">
+            <input name="parentElement" aria-label="Title" />
+          </form>
+        </main>
+      `);
+      clobberParentElement(root);
+
+      expect(byName(root, "Note")?.interaction?.isFocusable).toBe(true);
+    });
+
+    it("checks a portal's visibility up through the form", () => {
+      // Without `checkVisibility()` (jsdom, and older browsers) the check
+      // walks the ancestors itself. The portal pivots extraction to <body>, so
+      // use a throwaway one: `resetIdCounter()` keeps the node→id map, and a
+      // shared <body> that kept this test's id would collide with a node a
+      // later test mints.
+      const original = document.body;
+      const body = document.createElement("body");
+      body.innerHTML = `
+        <div id="app"><button>Checkout</button></div>
+        <form>
+          <input type="hidden" name="parentElement" />
+          <div role="dialog" aria-label="Cookies"><button>Accept</button></div>
+        </form>
+      `;
+      document.documentElement.replaceChild(body, original);
+      try {
+        clobberParentElement(body);
+        const app = document.getElementById("app")!;
+        // The visible portal widens the scope to body, as outside a form.
+        expect(byName(app, "Cookies")).toBeTruthy();
+        expect(byName(app, "Checkout")).toBeTruthy();
+      } finally {
+        document.documentElement.replaceChild(original, body);
+      }
+    });
+  });
+
   it("skips only the offending element (and its subtree) when its processing throws, keeping the rest of the tree", () => {
     // The per-element error boundary. If ANY read on ONE element throws — here a
     // clobbered `tagName` (`<input name="tagName">` on a [LegacyOverrideBuiltIns]
@@ -240,6 +324,274 @@ describe("DOM clobbering resilience", () => {
     expect(reachable.size).toBe(result.nodes.size);
 
     expect(warnSpy).toHaveBeenCalled();
+  });
+});
+
+// A <form> lets a control named after one of its members shadow it, and that
+// includes methods: with `<input name="getRootNode">`, `form.getRootNode()`
+// throws, because the input is not a function. Finding the tree an IDREF
+// resolves in must still work for such a form, or the per-element boundary
+// drops it with everything inside it.
+describe("tree scope of a clobbered <form>", () => {
+  let page: HTMLElement;
+
+  beforeEach(() => {
+    page = document.createElement("div");
+    document.body.appendChild(page);
+  });
+
+  afterEach(() => {
+    page.remove();
+  });
+
+  const nodeNamed = (
+    root: Element,
+    role: string,
+    name: string,
+  ): SemanticNode | undefined =>
+    [...extractDomTree(root).nodes.values()].find(
+      (n) => n.a11y.role === role && n.a11y.name === name,
+    );
+
+  it("resolves the scope of a form in a shadow root", () => {
+    const host = document.createElement("x-checkout");
+    page.appendChild(host);
+    const root = host.attachShadow({ mode: "open" });
+    root.innerHTML = `<form aria-label="Pay"><input type="hidden" name="getRootNode"></form>`;
+    const form = root.querySelector("form")!;
+    clobber(form, "getRootNode");
+    expect(idScope(form)).toBe(root);
+  });
+
+  it("names a form labelled by a heading", () => {
+    page.innerHTML = `
+      <h2 id="pay-title">Payment</h2>
+      <form aria-labelledby="pay-title">
+        <input type="hidden" name="getRootNode">
+        <button>Pay</button>
+      </form>`;
+    clobber(page.querySelector("form")!, "getRootNode");
+    expect(nodeNamed(page, "form", "Payment")).toBeTruthy();
+    expect(nodeNamed(page, "button", "Pay")).toBeTruthy();
+  });
+
+  it("keeps a description target that is itself such a form", () => {
+    page.innerHTML = `
+      <input aria-label="Email" aria-describedby="terms">
+      <form id="terms">
+        <input type="hidden" name="getRootNode">
+        We never share it. <button>Read the terms</button>
+      </form>`;
+    clobber(page.querySelector("form")!, "getRootNode");
+    // Its button keeps it in the tree: folding it would lose a control.
+    expect(nodeNamed(page, "button", "Read the terms")).toBeTruthy();
+  });
+
+  it("folds a description whose referrer sits in a form with a control named parentElement", () => {
+    page.innerHTML = `
+      <form aria-label="Pay">
+        <input type="hidden" name="parentElement">
+        <input aria-label="Code" aria-describedby="hint">
+      </form>
+      <p id="hint">Six digits</p>`;
+    clobber(page.querySelector("form")!, "parentElement");
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const nodes = [...extractDomTree(page).nodes.values()];
+    expect(nodes.find((n) => n.a11y.name === "Code")?.a11y.description).toBe(
+      "Six digits",
+    );
+    expect(nodes.some((n) => n.a11y.role === "paragraph")).toBe(false);
+    // Folded because the referrer was found rendered, not skipped because
+    // a walk up from it threw.
+    expect(warn).not.toHaveBeenCalled();
+  });
+});
+
+describe("a shadowed method on something every element shares", () => {
+  // `Document` has [LegacyOverrideBuiltIns] too: a named `<img>`, `<form>`,
+  // `<embed>` or `<object>` shadows the document member of that name, so
+  // `<img name="getElementById">` makes `document.getElementById` the image. A
+  // `<form>` whose control does the same may lose itself — the per-element
+  // boundary skips it — but a read on something every element depends on (the
+  // document the id lookups run against, the overlay scan, the extraction
+  // root) took the rest of the page with it, silently or all at once.
+  const shadowed: string[] = [];
+  const clobberDocument = (prop: string): void => {
+    clobber(document, prop);
+    shadowed.push(prop);
+  };
+  afterEach(() => {
+    for (const prop of shadowed.splice(0)) {
+      delete (document as unknown as Record<string, unknown>)[prop];
+    }
+    document.body.innerHTML = "";
+  });
+
+  const attach = (html: string): Element => {
+    document.body.innerHTML = html;
+    return document.body.firstElementChild!;
+  };
+  const nodes = (root: Element) => [...extractA11yTree(root).nodes.values()];
+  const named = (root: Element, role: string) =>
+    nodes(root).find((n) => n.a11y.role === role)?.a11y;
+
+  it("names and describes through the id scope when the document's getElementById is shadowed", () => {
+    // Every aria-labelledby / -describedby element on the page was dropped.
+    const root = attach(`
+      <main>
+        <img name="getElementById" alt="" />
+        <span id="lbl">Save</span>
+        <span id="hint">Saves the draft</span>
+        <button aria-labelledby="lbl" aria-describedby="hint">x</button>
+      </main>
+    `);
+    clobberDocument("getElementById");
+
+    expect(named(root, "button")).toMatchObject({
+      name: "Save",
+      description: "Saves the draft",
+    });
+  });
+
+  it("finds a control's <label for> when the document's querySelector is shadowed", () => {
+    // Every control with an id was dropped.
+    const root = attach(`
+      <main>
+        <img name="querySelector" alt="" />
+        <label for="email">Email</label>
+        <input id="email" />
+      </main>
+    `);
+    clobberDocument("querySelector");
+
+    expect(named(root, "textbox")?.name).toBe("Email");
+  });
+
+  it("extracts at all when the document's querySelectorAll is shadowed", () => {
+    // The modal and overlay scans threw before the walk began.
+    const root = attach(`
+      <main><img name="querySelectorAll" alt="" /><button>Go</button></main>
+    `);
+    clobberDocument("querySelectorAll");
+
+    expect(named(root, "button")?.name).toBe("Go");
+  });
+
+  it("keeps an image map's areas when the document's querySelectorAll is shadowed", () => {
+    // An area looks its image up among the document's images, and a shadowed
+    // search threw, which lost the area and its stop.
+    const root = attach(`
+      <main>
+        <img name="querySelectorAll" alt="" />
+        <img src="x.gif" alt="Site map" usemap="#nav" />
+        <map name="nav"><area href="/home" alt="Home" /></map>
+      </main>
+    `);
+    clobberDocument("querySelectorAll");
+
+    expect(
+      getTabSequence(extractA11yTree(root)).map((n) => n.a11y.name),
+    ).toEqual(["Home"]);
+  });
+
+  it("keeps an image map's areas when a form around the image shadows getAttribute", () => {
+    // Whether an area is hidden from AT reads aria-hidden up its image's
+    // ancestors, and a form among them answered with its control instead.
+    const root = attach(`
+      <main>
+        <form>
+          <input name="getAttribute" aria-label="Query" />
+          <img src="x.gif" alt="Site map" usemap="#nav" />
+        </form>
+        <map name="nav"><area href="/home" alt="Home" /></map>
+      </main>
+    `);
+    clobber(document.querySelector("form")!, "getAttribute");
+
+    expect(
+      nodes(root).find((n) => n.a11y.name === "Home")?.a11y.isExposedToAT,
+    ).toBe(true);
+  });
+
+  it("keeps a description target that also labels a control when the document's querySelectorAll is shadowed", () => {
+    // Folding a description target away searches its tree for referrers. A
+    // shadowed search read as "described and not labelled", so this visible
+    // span went missing although it names the button.
+    const root = attach(`
+      <main>
+        <img name="querySelectorAll" alt="" />
+        <span id="hint">Save</span>
+        <button aria-labelledby="hint" aria-describedby="hint">x</button>
+      </main>
+    `);
+    clobberDocument("querySelectorAll");
+
+    const ids = [...extractDomTree(root).nodes.values()].map(
+      (n) => n.dom?.attributes?.id,
+    );
+    expect(ids).toContain("hint");
+  });
+
+  it("scopes to an open modal when the document's contains is shadowed", () => {
+    const root = attach(`
+      <main><img name="contains" alt="" /><button>Behind</button></main>
+    `);
+    const dialog = document.createElement("dialog");
+    dialog.innerHTML = "<button>In dialog</button>";
+    document.body.append(dialog);
+    fakeShowModal(dialog);
+    clobberDocument("contains");
+
+    const names = nodes(root).map((n) => n.a11y.name);
+    expect(names).toContain("In dialog");
+    expect(names).not.toContain("Behind");
+  });
+
+  it("skips an overlay candidate it cannot read, and still pivots for the next", () => {
+    // `<form role="search">` is an overlay-scan candidate like any [role]
+    // element; one whose control shadows `getAttribute` threw out of the scan.
+    document.body.innerHTML = `
+      <form role="search"><input name="getAttribute" aria-label="Query" /></form>
+      <main id="app"><button>Open menu</button></main>
+      <div role="menu"><button role="menuitem">Rename</button></div>
+    `;
+    const root = document.getElementById("app")!;
+    clobber(document.querySelector("form")!, "getAttribute");
+
+    const names = nodes(root).map((n) => n.a11y.name);
+    expect(names).toContain("Open menu");
+    expect(names).toContain("Rename");
+  });
+
+  it("extracts a form root whose control shadows querySelectorAll", () => {
+    const root = attach(`
+      <form aria-label="Signup">
+        <input name="querySelectorAll" aria-label="Nickname" />
+        <button aria-describedby="terms">Join</button>
+        <span id="terms">You agree to the terms</span>
+      </form>
+    `);
+    clobber(root, "querySelectorAll");
+
+    expect(named(root, "button")).toMatchObject({
+      name: "Join",
+      description: "You agree to the terms",
+    });
+  });
+
+  it("resolves a detached form root's ids when the form's ownerDocument is shadowed", () => {
+    // A detached subtree has no id scope of its own and falls back to its
+    // owner document — read off the form, where `<input name="ownerDocument">`
+    // answers instead. In Chromium the form's aria-labelledby lookup then threw
+    // and the per-element boundary dropped the root: an empty tree. Pinned at
+    // `idScope` because jsdom cannot extract such a root at all — its selector
+    // engine reads `ownerDocument` off the form in script, which Chromium's
+    // never does.
+    const form = document.createElement("form");
+    form.innerHTML = `<input name="ownerDocument" />`;
+    clobber(form, "ownerDocument");
+
+    expect(idScope(form)).toBe(document);
   });
 });
 
@@ -469,6 +821,65 @@ describe("extractDomTree", () => {
     const combo = nodes.get(nodes.get(rootId)!.childIds[0])!;
     expect(combo.interaction?.actions).toContain("type");
     expect(combo.interaction?.actions).not.toContain("click");
+  });
+
+  describe("an input whose list names a <datalist>", () => {
+    // The datalist makes it a combobox (see role-map), but it is still a text
+    // field: typed into, valued and named exactly as the textbox it was.
+    function field(html: string) {
+      document.body.innerHTML = `${html}<datalist id="fruits"><option value="Apple"><option value="Pear"></datalist>`;
+      const { nodes } = extractDomTree(document.body);
+      return [...nodes.values()].find((n) => n.dom?.tagName === "input")!;
+    }
+
+    afterEach(() => {
+      document.body.innerHTML = "";
+    });
+
+    it("is a combobox, typed into, valued and named like a textbox", () => {
+      const input = field(
+        `<label>Fruit <input list="fruits" value="Apple"></label>`,
+      );
+      expect(input.a11y.role).toBe("combobox");
+      expect(input.a11y.name).toBe("Fruit");
+      expect(input.a11y.value).toBe("Apple");
+      expect(input.interaction?.actions).toEqual(["focus", "type"]);
+    });
+
+    it("still withholds a sensitive one's value", () => {
+      // Redaction keys on tag, type and autocomplete, never the role.
+      const input = field(
+        `<input aria-label="Card" list="fruits" autocomplete="cc-number" value="secret-value">`,
+      );
+      expect(input.a11y.role).toBe("combobox");
+      expect(input.a11y.value).toBe("[redacted]");
+      expect(input.dom?.attributes["value"]).toBe("[redacted]");
+    });
+
+    it("keeps a number input's stepping", () => {
+      const input = field(
+        `<input type="number" aria-label="Count" list="fruits">`,
+      );
+      expect(input.a11y.role).toBe("combobox");
+      expect(input.interaction?.actions).toEqual([
+        "focus",
+        "type",
+        "increment",
+        "decrement",
+      ]);
+    });
+
+    it("reports the expanded state its author sets", () => {
+      // Chromium gives a combobox an expanded state and a textbox none, so
+      // this rides on the role: `aria-expanded="true"` here is `expanded:
+      // true` in Chromium 151 and 153, and nothing on a list naming no
+      // datalist.
+      const input = field(
+        `<input aria-label="Fruit" list="fruits" aria-expanded="true">`,
+      );
+      expect(input.a11y.role).toBe("combobox");
+      expect(input.a11y.states["expanded"]).toBe(true);
+    });
   });
 
   it("computes correct roles", () => {
@@ -1767,6 +2178,31 @@ describe("extractDomTree", () => {
         other: false,
         self: true,
       });
+    });
+
+    it("reads a <form> popover whose fields shadow the methods it is read through", () => {
+      document.body.innerHTML = `
+        <button id="open" popovertarget="f">a</button>
+        <button id="inside-check" popovertarget="g" aria-expanded="true">b</button>
+        <form id="f" popover>
+          <input name="hasAttribute" aria-label="c" />
+          <input name="contains" aria-label="d" />
+          <input name="matches" aria-label="e" />
+        </form>
+      `;
+      try {
+        const form = document.getElementById("f")!;
+        fakeShowPopovers(form);
+        for (const prop of ["hasAttribute", "contains", "matches"])
+          clobber(form, prop);
+        expect(stateById(document.body, "expanded")).toEqual({
+          open: true,
+          // No element named g: aria-expanded decides.
+          "inside-check": true,
+        });
+      } finally {
+        document.body.innerHTML = "";
+      }
     });
 
     it("resolves the popover in the invoker's own tree", () => {
@@ -3271,6 +3707,92 @@ describe("sensitive value redaction", () => {
   });
 });
 
+describe("a <textarea>'s markup text is its default value, never text (ADR-0001)", () => {
+  const SECRET = "4111111111111111";
+  const extracted = (root: Element) =>
+    JSON.stringify([...extractDomTree(root).nodes.values()]);
+  /** The node for the element matching `selector`, from one extraction. */
+  function nodeFor(root: Element, selector: string) {
+    const target = root.querySelector(selector)!;
+    const tree = extractDomTree(root);
+    const refs = getElementRefs();
+    return [...tree.nodes.values()].find((n) => refs.get(n.id) === target)!;
+  }
+
+  it("keeps a sensitive textarea's default out of its own text facets", () => {
+    const root = createPage(
+      `<textarea autocomplete="cc-number" aria-label="Card">${SECRET}</textarea>`,
+    );
+    const node = nodeFor(root, "textarea");
+    expect(node.a11y.value).toBe("[redacted]");
+    expect(node.dom?.textContent).toBe("");
+    expect(node.dom?.descendantText).toBe("");
+    expect(extracted(root)).not.toContain(SECRET);
+  });
+
+  it("keeps it out of every ancestor's text preview", () => {
+    const root = createPage(
+      `<div contenteditable="true" role="textbox" aria-label="C">Pay <span aria-hidden="true"><textarea autocomplete="cc-number" aria-label="Card">${SECRET}</textarea></span> now</div>`,
+    );
+    expect(extracted(root)).not.toContain(SECRET);
+    expect(nodeFor(root, "[contenteditable]").dom?.descendantText).toBe(
+      "Pay now",
+    );
+    expect(nodeFor(root, "span").dom?.descendantText).toBe("");
+  });
+
+  it("keeps it out of a name or description that references the field", () => {
+    // In the document, so the IDREFs resolve.
+    const root = createPage(
+      `<input aria-labelledby="otp"><button aria-describedby="otp">Verify</button>` +
+        `<textarea id="otp" autocomplete="one-time-code">${SECRET}</textarea>`,
+    );
+    document.body.appendChild(root);
+    try {
+      expect(nodeFor(root, "input").a11y.name).toBe("");
+      expect(nodeFor(root, "button").a11y.description).toBe("");
+      expect(extracted(root)).not.toContain(SECRET);
+    } finally {
+      root.remove();
+    }
+  });
+
+  it("keeps it out whatever role the author gives the field", () => {
+    const root = createPage(
+      `<h2>Pay <textarea role="generic" autocomplete="cc-number">${SECRET}</textarea></h2>`,
+    );
+    expect(extracted(root)).not.toContain(SECRET);
+  });
+
+  it("reads an ordinary textarea's text as its value alone", () => {
+    // The default is what it holds until edited — then it's stale as well.
+    const root = createPage(
+      `<p>Notes <textarea aria-label="Notes">first draft</textarea></p>`,
+    );
+    (root.querySelector("textarea") as HTMLTextAreaElement).value = "edited";
+    const field = nodeFor(root, "textarea");
+    expect(field.a11y.value).toBe("edited");
+    expect(field.dom?.textContent).toBe("");
+    expect(field.dom?.descendantText).toBe("");
+    expect(nodeFor(root, "p").dom?.descendantText).toBe("Notes");
+    expect(extracted(root)).not.toContain("first draft");
+  });
+
+  it("renders nothing a script puts inside one, so it can't fold a description target", () => {
+    const root = createPage(
+      `<textarea aria-label="Notes"></textarea><p id="help">Help text</p>`,
+    );
+    const ghost = document.createElement("input");
+    ghost.setAttribute("aria-describedby", "help");
+    root.querySelector("textarea")!.appendChild(ghost);
+    const tags = [...extractDomTree(root).nodes.values()].map(
+      (n) => n.dom?.tagName,
+    );
+    expect(tags).toContain("p");
+    expect(tags).not.toContain("input");
+  });
+});
+
 describe("isSensitiveFieldAttributes — the policy over markup alone (ADR-0001)", () => {
   it("flags a password input whatever the attribute's case", () => {
     expect(isSensitiveFieldAttributes("input", { type: "password" })).toBe(
@@ -3496,6 +4018,117 @@ describe("a11y.value — what a screen reader announces (ADR-0001)", () => {
         "[role=combobox]",
       ),
     ).toBe("Apple");
+  });
+
+  // Chromium 151 reads an editor's value, and any ARIA textbox's or
+  // searchbox's, as its RENDERED text, which knows nothing of ARIA: the
+  // aria-hidden text and the popup stay in. Only a combobox you can't type
+  // into is read as accessible text, as above. Measured over CDP
+  // `Accessibility.getFullAXTree`.
+  it("keeps aria-hidden text in an editor's value, as Chromium does", () => {
+    expect(
+      valueOf(
+        `<div contenteditable="true" role="textbox" aria-label="C">Hello <span aria-hidden="true">[x]</span>world</div>`,
+        "[contenteditable]",
+      ),
+    ).toBe("Hello [x]world");
+    // A role-less host, a plaintext-only one, and a whole hidden paragraph.
+    expect(
+      valueOf(
+        `<div contenteditable="true">Hello <span aria-hidden="true">[x]</span>world</div>`,
+        "div",
+      ),
+    ).toBe("Hello [x]world");
+    expect(
+      valueOf(
+        `<div contenteditable="plaintext-only" role="textbox" aria-label="C"><p>one</p><p aria-hidden="true">two</p><p>three</p></div>`,
+        "[contenteditable]",
+      ),
+    ).toBe("one two three");
+    // Inside a contenteditable="false" island, and under a nested textbox
+    // whose text the host announces for it.
+    expect(
+      valueOf(
+        `<div contenteditable="true" role="textbox" aria-label="C">a <span contenteditable="false">b <span aria-hidden="true">c</span></span> d</div>`,
+        "[aria-label=C]",
+      ),
+    ).toBe("a b c d");
+    expect(
+      valueOf(
+        `<div contenteditable="true" role="textbox" aria-label="C"><p>intro</p><div role="textbox" aria-label="Cell">cell <span aria-hidden="true">[x]</span>text</div></div>`,
+        "[aria-label=C]",
+      ),
+    ).toBe("intro cell [x]text");
+  });
+
+  it("keeps aria-hidden text in an editable combobox's or searchbox's value", () => {
+    expect(
+      valueOf(
+        `<div contenteditable="true" role="combobox" aria-label="C">Hello <span aria-hidden="true">[x]</span>world</div>`,
+        "[role=combobox]",
+      ),
+    ).toBe("Hello [x]world");
+    expect(
+      valueOf(
+        `<div contenteditable="true" role="searchbox" aria-label="C">Hello <span aria-hidden="true">[x]</span>world</div>`,
+        "[role=searchbox]",
+      ),
+    ).toBe("Hello [x]world");
+  });
+
+  it("keeps aria-hidden text in an ARIA textbox's value even when it isn't editable", () => {
+    expect(
+      valueOf(
+        `<div role="textbox" aria-label="C" tabindex="0">Hello <span aria-hidden="true">[x]</span>world</div>`,
+        "[role=textbox]",
+      ),
+    ).toBe("Hello [x]world");
+    expect(
+      valueOf(
+        `<div role="searchbox" aria-label="C" tabindex="0">Hello <span aria-hidden="true">[x]</span>world</div>`,
+        "[role=searchbox]",
+      ),
+    ).toBe("Hello [x]world");
+  });
+
+  it("keeps a popup's text in an editor's or textbox's value", () => {
+    expect(
+      valueOf(
+        `<div contenteditable="true" role="textbox" aria-label="C">Apple<ul role="listbox"><li role="option">Pear</li></ul></div>`,
+        "[aria-label=C]",
+      ),
+    ).toBe("Apple Pear");
+    expect(
+      valueOf(
+        `<div contenteditable="true" role="combobox" aria-label="C">Apple<ul role="listbox"><li role="option">Pear</li></ul></div>`,
+        "[role=combobox]",
+      ),
+    ).toBe("Apple Pear");
+    expect(
+      valueOf(
+        `<div role="textbox" aria-label="C" tabindex="0">Apple<ul role="listbox"><li role="option">Pear</li></ul></div>`,
+        "[role=textbox]",
+      ),
+    ).toBe("Apple Pear");
+  });
+
+  it("still skips what isn't rendered in an editor, aria-hidden or not", () => {
+    expect(
+      valueOf(
+        `<div contenteditable="true" role="textbox" aria-label="C">Hi <span aria-hidden="true" hidden>[x]</span><span aria-hidden="true" style="visibility:hidden">[v]</span><span aria-hidden="true" style="display:none">[d]</span>there</div>`,
+        "[contenteditable]",
+      ),
+    ).toBe("Hi there");
+  });
+
+  it("never lets a sensitive control's text into an editor's value, even under aria-hidden", () => {
+    const root = createPage(
+      `<div contenteditable="true" role="textbox" aria-label="C">Pay <span aria-hidden="true"><textarea autocomplete="cc-number" aria-label="Card">4111111111111111</textarea><select autocomplete="cc-exp-month" aria-label="Month"><option selected>12</option></select><input type="password" aria-label="PIN" value="hunter2"></span> now</div>`,
+    );
+    expect(nodeFor(root, "[contenteditable]").a11y.value).toBe("Pay now");
+    expect(nodeFor(root, "textarea").a11y.value).toBe("[redacted]");
+    expect(nodeFor(root, "select").a11y.value).toBe("[redacted]");
+    expect(nodeFor(root, "input").a11y.value).toBe("[redacted]");
   });
 
   it("skips visibility:hidden text, but reads a child that sets itself visible again", () => {
@@ -4030,6 +4663,247 @@ describe("interaction.isFocusable follows Chromium", () => {
     expect(byId).toMatchObject({ "in-shadow": true, slotted: false });
   });
 });
+
+// An <area> has no box of its own. Chromium's UA sheet rendered one inline up
+// to 151 and gives it `display: none` since 153, and neither decides anything:
+// Chromium focuses an area, and its accessibility tree exposes one, while the
+// image using its map is rendered. So every case runs under both sheets, and
+// each was checked in Chromium 151 and 153 with a Tab walk, scripted focus()
+// and CDP's accessibility tree. jsdom's own sheet hides areas too; the style
+// below says so on purpose rather than leaning on it.
+describe.each(["inline", "none"])(
+  "image map areas, with `area { display: %s }`",
+  (display) => {
+    let sheet: HTMLStyleElement;
+    beforeEach(() => {
+      sheet = document.createElement("style");
+      sheet.textContent = `area { display: ${display} }`;
+      document.head.append(sheet);
+    });
+    afterEach(() => {
+      sheet.remove();
+      document.body.innerHTML = "";
+    });
+
+    /** The area nodes of `html`, rendered in the document, by id. */
+    function areas(html: string): Record<string, SemanticNode> {
+      document.body.innerHTML = `<main>${html}</main>`;
+      const byId: Record<string, SemanticNode> = {};
+      for (const node of extractDomTree(document.body).nodes.values()) {
+        if (node.dom?.tagName === "area")
+          byId[node.dom.attributes["id"]] = node;
+      }
+      return byId;
+    }
+
+    it("emits an area where its map sits, as a link its image renders", () => {
+      const { home } = areas(`
+        <img src="x.gif" alt="Site map" usemap="#nav">
+        <map name="nav"><area id="home" href="/home" alt="Home"></map>
+      `);
+      expect(home).toBeDefined();
+      expect(home.a11y).toMatchObject({
+        role: "link",
+        name: "Home",
+        isExposedToAT: true,
+      });
+      expect(home.dom!.isHidden).toBe(false);
+      expect(home.interaction!.isFocusable).toBe(true);
+    });
+
+    it("leaves an area out while the image using its map is not rendered", () => {
+      const found = areas(`
+        <img src="x.gif" alt="A" usemap="#shown">
+        <map name="shown"><area id="shown" href="/a" alt="A"></map>
+
+        <img src="x.gif" alt="B" usemap="#b" style="display: none">
+        <map name="b"><area id="img-display-none" href="/b" alt="B"></map>
+        <img src="x.gif" alt="C" usemap="#c" hidden>
+        <map name="c"><area id="img-hidden" href="/c" alt="C"></map>
+        <img src="x.gif" alt="D" usemap="#d" style="visibility: hidden">
+        <map name="d"><area id="img-invisible" href="/d" alt="D"></map>
+        <img src="x.gif" alt="E" usemap="#e" inert>
+        <map name="e"><area id="img-inert" href="/e" alt="E"></map>
+        <div style="display: none"><img src="x.gif" alt="F" usemap="#f"></div>
+        <map name="f"><area id="in-display-none" href="/f" alt="F"></map>
+        <div inert><img src="x.gif" alt="G" usemap="#g"></div>
+        <map name="g"><area id="in-inert" href="/g" alt="G"></map>
+        <div style="visibility: hidden"><img src="x.gif" alt="H" usemap="#h"></div>
+        <map name="h"><area id="in-invisible" href="/h" alt="H"></map>
+        <details><summary>More</summary><img src="x.gif" alt="M" usemap="#m"></details>
+        <map name="m"><area id="in-closed-details" href="/m" alt="M"></map>
+
+        <div style="visibility: hidden">
+          <img src="x.gif" alt="I" usemap="#i" style="visibility: visible">
+        </div>
+        <map name="i"><area id="made-visible" href="/i" alt="I"></map>
+
+        <map name="unused"><area id="unused" href="/j" alt="J"></map>
+        <area id="no-map" href="/k" alt="K">
+
+        <img src="x.gif" alt="L1" usemap="#l" style="display: none">
+        <img src="x.gif" alt="L2" usemap="#l">
+        <map name="l"><area id="first-image-hidden" href="/l" alt="L"></map>
+      `);
+      // Only the first image using a map counts, so a second, rendered one
+      // doesn't bring back the areas of a map whose first image is hidden.
+      expect(Object.keys(found).sort()).toEqual(["made-visible", "shown"]);
+    });
+
+    it("keeps an area whatever its own style says, as Chromium does", () => {
+      const found = areas(`
+        <img src="x.gif" alt="Site map" usemap="#nav">
+        <map name="nav">
+          <area id="hidden" href="/a" alt="A" hidden>
+          <area id="display-none" href="/b" alt="B" style="display: none">
+          <area id="invisible" href="/c" alt="C" style="visibility: hidden">
+          <area id="skipped" href="/d" alt="D" style="content-visibility: hidden">
+        </map>
+        <img src="x.gif" alt="Floor plan" usemap="#floor">
+        <div style="visibility: hidden">
+          <map name="floor"><area id="in-invisible-map" href="/e" alt="E"></map>
+        </div>
+      `);
+      for (const id of [
+        "hidden",
+        "display-none",
+        "invisible",
+        "skipped",
+        "in-invisible-map",
+      ]) {
+        expect(found[id], id).toBeDefined();
+        expect(found[id].a11y.isExposedToAT, id).toBe(true);
+        expect(found[id].dom!.isHidden, id).toBe(false);
+        expect(found[id].interaction!.isFocusable, id).toBe(true);
+      }
+    });
+
+    it("hides an inert area from AT, where Chromium still focuses it", () => {
+      const { inert } = areas(`
+        <img src="x.gif" alt="Site map" usemap="#nav">
+        <map name="nav"><area id="inert" href="/a" alt="A" inert></map>
+      `);
+      // Chromium tabs to it, and leaves it out of its accessibility tree. So
+      // it stays focusable here, and hidden from AT like an aria-hidden
+      // button (query.test.ts pins what that does to the tab sequence).
+      expect(inert.a11y.isExposedToAT).toBe(false);
+      expect(inert.dom!.isHidden).toBe(false);
+      expect(inert.interaction!.isFocusable).toBe(true);
+    });
+
+    it("hides an area from AT with its image, which it belongs to in Chromium's tree", () => {
+      const found = areas(`
+        <img src="x.gif" alt="A" usemap="#a" aria-hidden="true">
+        <map name="a"><area id="img-aria-hidden" href="/a" alt="A"></map>
+        <div aria-hidden="true"><img src="x.gif" alt="B" usemap="#b"></div>
+        <map name="b"><area id="in-aria-hidden" href="/b" alt="B"></map>
+        <img src="x.gif" alt="C" usemap="#c" aria-hidden="YES">
+        <map name="c"><area id="img-aria-hidden-yes" href="/c" alt="C"></map>
+      `);
+      // Any value but false hides, in any case, as Chromium reads it.
+      for (const id of [
+        "img-aria-hidden",
+        "in-aria-hidden",
+        "img-aria-hidden-yes",
+      ]) {
+        expect(found[id].a11y.isExposedToAT, id).toBe(false);
+        // Still focusable: Chromium tabs to it all the same.
+        expect(found[id].interaction!.isFocusable, id).toBe(true);
+      }
+    });
+
+    it("follows the accessibility tree for an area in a hidden or inert map", () => {
+      // Chromium still tabs to these, but its accessibility tree leaves them
+      // out, and the walk never enters a hidden or inert subtree.
+      const found = areas(`
+        <img src="x.gif" alt="Site map" usemap="#a">
+        <map name="a" hidden><area id="map-hidden" href="/a" alt="A"></map>
+        <img src="x.gif" alt="Site map" usemap="#b">
+        <div style="display: none">
+          <map name="b"><area id="in-hidden" href="/b" alt="B"></map>
+        </div>
+        <img src="x.gif" alt="Site map" usemap="#c">
+        <map name="c" inert><area id="map-inert" href="/c" alt="C"></map>
+      `);
+      expect(found).toEqual({});
+    });
+
+    it("follows the slot that renders the image, as Chromium does", () => {
+      // An image slotted into a component renders only through its slot, so
+      // a hidden, display:none or inert slot hides it, and Chromium neither
+      // focuses its areas nor exposes them. An aria-hidden slot leaves it
+      // rendered: Chromium still focuses the area, but hides it from AT.
+      const slots: Record<string, string> = {
+        shown: "<slot></slot>",
+        hidden: "<slot hidden></slot>",
+        "display-none": '<slot style="display: none"></slot>',
+        inert: "<slot inert></slot>",
+        "aria-hidden": '<slot aria-hidden="true"></slot>',
+      };
+      document.body.innerHTML = `<main>${Object.keys(slots)
+        .map(
+          (name) =>
+            `<div id="host-${name}"><img src="x.gif" alt="${name}" usemap="#${name}"></div>` +
+            `<map name="${name}"><area id="${name}" href="/${name}" alt="${name}"></map>`,
+        )
+        .join("")}</main>`;
+      for (const [name, html] of Object.entries(slots)) {
+        document
+          .getElementById(`host-${name}`)!
+          .attachShadow({ mode: "open" }).innerHTML = html;
+      }
+      const byId: Record<string, SemanticNode> = {};
+      for (const node of extractDomTree(document.body).nodes.values()) {
+        if (node.dom?.tagName === "area")
+          byId[node.dom.attributes["id"]] = node;
+      }
+      expect(Object.keys(byId).sort()).toEqual(["aria-hidden", "shown"]);
+      expect(byId.shown.a11y.isExposedToAT).toBe(true);
+      expect(byId["aria-hidden"].a11y.isExposedToAT).toBe(false);
+      expect(byId["aria-hidden"].interaction!.isFocusable).toBe(true);
+    });
+
+    it("takes an area's image from the document, as Chromium does", () => {
+      document.body.innerHTML = `<main>
+        <img src="x.gif" alt="Site map" usemap="#nav">
+        <div id="map-host"></div>
+        <div id="image-host"></div>
+      </main>`;
+      const mapHost = document.getElementById("map-host")!;
+      mapHost.attachShadow({ mode: "open" }).innerHTML =
+        `<map name="nav"><area id="map-in-shadow" href="/a" alt="A"></map>`;
+      document
+        .getElementById("image-host")!
+        .attachShadow({ mode: "open" }).innerHTML =
+        `<img src="x.gif" alt="Plan" usemap="#floor">` +
+        `<map name="floor"><area id="image-in-shadow" href="/b" alt="B"></map>`;
+      const ids = [...extractDomTree(document.body).nodes.values()]
+        .filter((n) => n.dom?.tagName === "area")
+        .map((n) => [n.dom!.attributes["id"], n.interaction!.isFocusable]);
+      // An image inside a shadow root lends its map's areas nothing, while a
+      // map inside one still takes its image from the document.
+      expect(ids).toEqual([["map-in-shadow", true]]);
+    });
+
+    it("keeps an area out of the name of the element its map sits in", () => {
+      document.body.innerHTML = `<main>
+        <h2>Title <map name="m"><area href="/h" alt="Home"></map>end</h2>
+        <div role="button" tabindex="0">Go <map name="n"><area href="/x" alt="Away"></map>now</div>
+        <img src="x.gif" alt="Site map" usemap="#m">
+        <img src="x.gif" alt="Plan" usemap="#n">
+      </main>`;
+      const names = Object.fromEntries(
+        [...extractDomTree(document.body).nodes.values()].map((n) => [
+          n.a11y.role,
+          n.a11y.name,
+        ]),
+      );
+      // Chromium's tree puts an area under its image, never under its map's
+      // parent, so no ancestor of the map takes its text.
+      expect(names).toMatchObject({ heading: "Title end", button: "Go now" });
+    });
+  },
+);
 
 describe("computed-style cache during extraction", () => {
   afterEach(() => {

@@ -114,6 +114,10 @@ expect(brokenContainer).not.toBeValidA11yTree();
 // aria-expanded / aria-controls that an authored combobox would owe.
 <select aria-label="Status"><option>One</option></select>
 
+// Passes. The datalist makes the input a combobox, and its popup is the
+// browser's own, so there is no aria-expanded / aria-controls for you to write.
+<input aria-label="Fruit" list="fruits"><datalist id="fruits">…</datalist>
+
 // Passes. Browser-supplied checkedness, so no aria-checked needed.
 <input type="checkbox" aria-label="Agree">
 

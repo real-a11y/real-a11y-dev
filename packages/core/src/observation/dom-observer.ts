@@ -1,4 +1,9 @@
-import { safeRootNode } from "../extraction/clobber-safe.js";
+import {
+  safeContains,
+  safeGetAttribute,
+  safeParentNode,
+  safeRootNode,
+} from "../extraction/clobber-safe.js";
 import {
   ARIA_STATE_ATTRIBUTES,
   containsOverlaySignal,
@@ -37,6 +42,7 @@ const EXTRA_OBSERVED_ATTRIBUTES = [
   "aria-live",
   "aria-modal",
   "scope", // <th scope> selects the columnheader/rowheader role (role-map)
+  "list", // <input list> naming a <datalist> makes it a combobox (role-map)
   "autocomplete", // names credential/payment fields, whose value gets redacted
   // Inputs to a field's announced value (ADR-0001) that nothing else watches:
   // a range widget's spoken text, an <option>'s label (its <select>'s value),
@@ -52,7 +58,11 @@ const EXTRA_OBSERVED_ATTRIBUTES = [
   "open", // <details open>
   "style", // CSS visibility/display changes (e.g., captcha showing/hiding content)
   "kind", // <track kind> drives the media node's hoisted captions property
-  "usemap", // <img usemap> decides whether its map's <area>s are focusable
+  "usemap", // <img usemap> decides whether its map's <area>s are rendered
+  // A <select>'s display size decides whether it is a drop-down, with an
+  // expanded state, or a list box with none.
+  "size",
+  "multiple",
   // What a control invokes, which decides its expanded state: what it names,
   // whether that is a popover (which also hides it), and a form it would
   // submit instead.
@@ -116,7 +126,9 @@ function isInternalNode(node: Node, internalIds: ReadonlySet<string>): boolean {
   const el = node as Element;
   // Read via getAttribute, not `.id`: on a clobbered <form> the `.id` property
   // is a child element, not a string (see dom-extractor's clobbering guards).
-  return internalIds.has(el.getAttribute("id") ?? "");
+  // And through the prototype's getAttribute, since a control named
+  // `getAttribute` shadows that too — and a throw here loses the whole batch.
+  return internalIds.has(safeGetAttribute(el, "id") ?? "");
 }
 
 /**
@@ -131,7 +143,7 @@ function hasInternalAncestor(
   let n: Node | null = node;
   while (n) {
     if (isInternalNode(n, internalIds)) return true;
-    n = n.parentNode;
+    n = safeParentNode(n);
   }
   return false;
 }
@@ -275,7 +287,10 @@ export class DomObserver {
     // `<details>` or `<dialog>` fires one too, but changes its `open`
     // attribute as well.
     this.toggleListener = (e: Event) => {
-      if (e.target instanceof Element && e.target.hasAttribute("popover")) {
+      if (
+        e.target instanceof Element &&
+        safeGetAttribute(e.target, "popover") !== null
+      ) {
         this.pendingDirtyRoots.push(e.target);
         this.scheduleChange();
       }
@@ -288,8 +303,11 @@ export class DomObserver {
     // popover, and only once the attribute is gone. Inside `root` the primary
     // observer reports the change; outside it, only this does. That is rare,
     // so it asks for a full re-extraction, which also re-derives the scope.
+    // A target outside `root` removed or renamed is still not heard, short of
+    // watching the whole document's tree: its invoker catches up on the next
+    // refresh anything else causes.
     this.popoverObserver = new MutationObserver((mutations) => {
-      if (mutations.some((m) => !this.root.contains(m.target))) {
+      if (mutations.some((m) => !safeContains(this.root, m.target))) {
         this.pendingFull = true;
         this.scheduleChange();
       }
@@ -538,6 +556,11 @@ export class DomObserver {
  * subtree carries one of the role/attribute signals the extractor
  * uses to scope onto portal content. Skips our own injected overlay
  * sentinels.
+ *
+ * A node that cannot be asked — a `<form>` whose control shadows `matches` or
+ * `getAttribute`, say — counts as one. Guessing "portal" costs a full
+ * re-extraction; guessing "not" misses an overlay, and letting the throw out
+ * loses every other node in the batch.
  */
 function isPortalOverlayContainer(
   node: Node,
@@ -545,6 +568,10 @@ function isPortalOverlayContainer(
 ): boolean {
   if (node.nodeType !== 1 /* ELEMENT_NODE */) return false;
   const el = node as Element;
-  if (internalIds.has(el.getAttribute("id") ?? "")) return false;
-  return containsOverlaySignal(el);
+  if (internalIds.has(safeGetAttribute(el, "id") ?? "")) return false;
+  try {
+    return containsOverlaySignal(el);
+  } catch {
+    return true;
+  }
 }
