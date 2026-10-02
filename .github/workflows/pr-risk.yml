@@ -64,6 +64,11 @@ name: PR risk
 #     also counts whatever main gained since the stack was last rebased — the
 #     "merely behind reads as high" problem, back again.
 #
+# One over-count remains, and it is the honest one: a layer whose parent was
+# rebased without restacking it shares only the stack's fork point with the
+# parent, so its diff counts the parent's commits too until the stack is
+# restacked — which GitHub demands before it will merge anyway.
+#
 # Grading a layer alone does not wave the layers below it through. Merging a
 # stacked PR lands every unmerged PR below it, and GitHub first requires each of
 # them to pass its own required checks — this one among them. The report says so
@@ -153,10 +158,11 @@ jobs:
           # name is author-chosen text too, so the parent arrives the same way.
           BASE_REF: ${{ github.base_ref }}
           # Only differ from the above for a layer of a stack — see the header.
-          # From the event payload rather than a REST read: the same snapshot as
-          # HEAD_SHA, so the parent and the commit graded against it always
-          # belong together, and no API call sits in a required check's path.
+          # From the event payload rather than a REST read: the parent's tip
+          # and the head graded against it are one snapshot, and no API call
+          # sits in a required check's path.
           PARENT_REF: ${{ github.event.pull_request.base.ref }}
+          PARENT_SHA: ${{ github.event.pull_request.base.sha }}
           STACK_BASE_REF: ${{ github.event.pull_request.stack.base.ref }}
           STACK_POSITION: ${{ github.event.pull_request.stack.position }}
           STACK_SIZE: ${{ github.event.pull_request.stack.size }}
@@ -218,10 +224,18 @@ jobs:
               echo "::warning::This PR's base branch name has characters outside [A-Za-z0-9._/-], so it is graded against $BASE_REF instead — which counts every layer below it too."
             elif [ "$STACK_BASE_REF" != "$BASE_REF" ]; then
               echo "::warning::This PR's base is $PARENT_REF, not $BASE_REF, but it reports no stack on $BASE_REF — graded against $BASE_REF, which can over-count."
-            elif ! [[ "$STACK_POSITION" =~ ^[0-9]+$ && "$STACK_SIZE" =~ ^[0-9]+$ && "$HEAD_SHA" =~ ^[0-9a-f]{40,64}$ ]]; then
+            elif ! [[ "$STACK_POSITION" =~ ^[0-9]+$ && "$STACK_SIZE" =~ ^[0-9]+$ &&
+                      "$HEAD_SHA" =~ ^([0-9a-f]{40}|[0-9a-f]{64})$ &&
+                      "$PARENT_SHA" =~ ^([0-9a-f]{40}|[0-9a-f]{64})$ ]]; then
               echo "::warning::Stack metadata is malformed — graded against $BASE_REF, which counts every layer below this one too."
             else
-              git fetch --no-tags origin "+refs/heads/$PARENT_REF:refs/remotes/origin/$PARENT_REF"
+              # The parent as the EVENT saw it, fetched by SHA and named like a
+              # branch so the report reads `origin/<parent>`. Not the branch's
+              # tip now: a parent rebased since the event would otherwise be
+              # diffed against an old head, and a re-run after the parent has
+              # merged and its branch is gone would have nothing to fetch.
+              git fetch --no-tags origin "$PARENT_SHA"
+              git update-ref "refs/remotes/origin/$PARENT_REF" "$PARENT_SHA"
               if git merge-base --is-ancestor "$HEAD_SHA" HEAD; then
                 # The layer's head rather than the merge ref — see the header.
                 # Detached in the workspace itself, so the Gate step grades the
@@ -250,8 +264,8 @@ jobs:
           # unmerged PR below it — so the comment people decide a merge from has
           # to say that, and how to reproduce this grade locally.
           if [ -n "$STACKED" ]; then
-            printf '\n> **Stacked PR, layer %s of %s on `%s`.** Graded against its parent, `%s`, so this tier covers this layer alone; `pnpm pr:risk --base origin/%s` reproduces it. Merging this PR also merges every unmerged pull request below it, each under its own `risk:*` label, so that merge is as risky as the highest of them.\n' \
-              "$STACK_POSITION" "$STACK_SIZE" "$BASE_REF" "$PARENT_REF" "$PARENT_REF" >> "$RUNNER_TEMP/risk.md"
+            printf '\n> **Stacked PR, layer %s of %s on `%s`.** Graded against its parent, `%s`, so this tier covers this layer alone; `pnpm pr:risk --base origin/%s` reproduces it, where plain `pnpm pr:risk` grades against `%s`. Merging this PR also merges every unmerged pull request below it, each under its own `risk:*` label, so that merge is as risky as the highest of them.\n' \
+              "$STACK_POSITION" "$STACK_SIZE" "$BASE_REF" "$PARENT_REF" "$PARENT_REF" "$BASE_REF" >> "$RUNNER_TEMP/risk.md"
           fi
 
           # Validated, not trusted. `echo "x=$(cmd)"` does NOT abort under
