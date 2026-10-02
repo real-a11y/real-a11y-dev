@@ -100,6 +100,7 @@ function isFocusBarred(element: Element): boolean {
  * engine misses that match inside a shadow root.
  */
 function isDetailsSummary(summary: Element): boolean {
+  // eslint-disable-next-line no-restricted-properties -- one read, and a <summary> is never a form
   const details = summary.parentElement;
   if (details?.tagName.toLowerCase() !== "details") return false;
   for (const child of details.children)

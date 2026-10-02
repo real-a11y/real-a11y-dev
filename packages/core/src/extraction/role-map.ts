@@ -147,9 +147,11 @@ function thHeaderRole(el: Element): string {
   // header row (<thead>, or the table's first row when there is no <thead>)
   // labels columns; anything else labels its row. Ancestor walk only — no
   // layout reads.
+  // eslint-disable-next-line no-restricted-properties -- one read, and a <th> is never a form
   const row = el.parentElement;
   if (!row || row.tagName.toLowerCase() !== "tr") return "rowheader";
 
+  // eslint-disable-next-line no-restricted-properties -- one read, and `row` is a <tr> by the check above
   if (row.parentElement?.tagName.toLowerCase() === "thead")
     return "columnheader";
 

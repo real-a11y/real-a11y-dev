@@ -727,6 +727,7 @@ const NAME_SOURCE_CHILD_TO_OWNER: Readonly<Record<string, string>> = {
 export function htmlAamNameOwner(element: Element): Element | null {
   const ownerTag = NAME_SOURCE_CHILD_TO_OWNER[element.tagName.toLowerCase()];
   if (!ownerTag) return null;
+  // eslint-disable-next-line no-restricted-properties -- one read, and a <legend>, <summary> or <caption> is never a form
   const parent = element.parentElement;
   if (!parent || parent.tagName.toLowerCase() !== ownerTag) return null;
   if (element.tagName.toLowerCase() === "caption") {
@@ -1744,6 +1745,7 @@ function isDisabledControl(element: Element): boolean {
  */
 function isDisabledOption(option: Element): boolean {
   if (option.hasAttribute("disabled")) return true;
+  // eslint-disable-next-line no-restricted-properties -- one read, and an <option> is never a form
   const parent = option.parentElement;
   return (
     parent?.tagName.toLowerCase() === "optgroup" &&
