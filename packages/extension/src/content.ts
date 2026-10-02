@@ -459,7 +459,8 @@ document.addEventListener("real-a11y:native-reveal", (e) => {
       return;
     }
     const root = el.getRootNode();
-    el = el.parentElement ?? (root instanceof ShadowRoot ? root.host : null);
+    el =
+      safeParentElement(el) ?? (root instanceof ShadowRoot ? root.host : null);
   }
 });
 
