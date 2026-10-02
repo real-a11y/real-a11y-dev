@@ -118,6 +118,27 @@ jobs:
         with:
           node-version-file: .nvmrc
 
+      # THROWAWAY verification step — never merged. Dumps every candidate base
+      # so the stacked-PR fix can be checked against a real payload.
+      - name: Stack diagnostics (throwaway)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EV_ACTION: ${{ github.event.action }}
+          EV_BASE_REF: ${{ github.base_ref }}
+          EV_PR_BASE_REF: ${{ github.event.pull_request.base.ref }}
+          EV_PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          EV_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          EV_STACK: ${{ toJSON(github.event.pull_request.stack) }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          echo "event.action                        = $EV_ACTION"
+          echo "github.base_ref                     = $EV_BASE_REF"
+          echo "github.event.pull_request.base.ref  = $EV_PR_BASE_REF @ $EV_PR_BASE_SHA"
+          echo "github.event.pull_request.head.sha  = $EV_HEAD_SHA"
+          echo "github.event.pull_request.stack     = $EV_STACK"
+          echo "REST pulls/$PR_NUMBER .base.ref       = $(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER" --jq .base.ref)"
+          echo "checked-out merge ref               = $(git log -1 --format='%H parents=%P %s')"
+
       # Runs FIRST, before anything can grade the diff: a review recorded
       # against one tree must not carry over to a different one.
       #
