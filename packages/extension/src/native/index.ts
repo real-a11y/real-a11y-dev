@@ -379,11 +379,12 @@ export function registerNativeMode(): void {
                 (t) => session.runPick(tabId, t),
                 log,
                 // Never re-arm a pick on our own after Chrome detached it. A
-                // detach while the pick is armed already resolves as a cancel
-                // (`detachEndsPick`), but one that lands while the pick is
-                // still being armed reaches `withRecovery` as a plain drop,
-                // before Chrome has said why. That can be the user pressing
-                // Cancel on the infobar, and a retry would re-attach against it.
+                // detach whose reason `detachEndsPick` knows already ends the
+                // pick as a cancel, whether it was armed or still being armed.
+                // What still arrives here as a drop is an unknown reason, or a
+                // setup the session dropped under that no reason ever came for.
+                // Attaching again undoes neither, and it could re-attach over
+                // the user's Cancel on the infobar.
                 { retryDrop: false },
               );
               // Three distinct outcomes, kept distinct all the way to the
