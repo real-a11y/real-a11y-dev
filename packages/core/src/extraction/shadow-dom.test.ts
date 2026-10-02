@@ -370,6 +370,21 @@ describe("flat-tree ancestors of a clobbered <form>", () => {
     expect(flatParent(form)).toBe(host);
   });
 
+  it("climbs from inside a form whose control is named nodeType", () => {
+    // `form.nodeType` reads as the control, not 1, so a check of the parent's
+    // type that read it plainly took the form for no element at all and
+    // ended the climb below it.
+    page.innerHTML = `<div id="outer"><form aria-label="Pay"><input name="nodeType" aria-label="Card"><span>Total</span></form></div>`;
+    const form = page.querySelector("form")!;
+    const span = form.querySelector("span")!;
+    clobber(form, "nodeType");
+    const ancestors: string[] = [];
+    for (let el = flatParent(span); el; el = flatParent(el)) {
+      ancestors.push(el.id ? `${el.localName}#${el.id}` : el.localName);
+    }
+    expect(ancestors).toEqual(["form", "div#outer", "div", "body", "html"]);
+  });
+
   it("passes aria-disabled down through such a form", () => {
     page.innerHTML = `
       <div role="group" aria-label="Checkout" aria-disabled="true">

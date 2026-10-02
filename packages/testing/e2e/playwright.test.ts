@@ -435,6 +435,29 @@ test.describe("a page whose named elements shadow DOM methods", () => {
     expect(await sn.tabSequenceSnapshot()).toContain('textbox "Email"');
     await sn.assertNoUnlabeledInteractive();
   });
+
+  test("reads above a root inside a form whose control shadows nodeType", async ({
+    page,
+  }) => {
+    // `form.nodeType` is the hidden input, not 1, so every walk up from the
+    // root took the form for no element and stopped below it: the header read
+    // as the page's banner, and a link in the editable form as a tab stop.
+    await page.setContent(`<main>
+      <form contenteditable="true" aria-label="Note">
+        <input type="hidden" name="nodeType">
+        <div id="panel">
+          <header>Order summary</header>
+          <a href="/help">Help</a>
+          <button>Save</button>
+        </div>
+      </form>
+    </main>`);
+    const sn = await attach(page, { rootSelector: "#panel" });
+    expect(await sn.treeSnapshot()).not.toContain("banner");
+    const tabs = await sn.tabSequenceSnapshot();
+    expect(tabs).toContain('button "Save"');
+    expect(tabs).not.toContain('link "Help"');
+  });
 });
 
 test.describe("rootSelector that matches nothing", () => {
