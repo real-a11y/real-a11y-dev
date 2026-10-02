@@ -538,6 +538,29 @@ describe("content: live regions", () => {
     expect(await announce("backdrop", "Loading")).toEqual([]);
   });
 
+  it("sends nothing from a region slotted into something hidden", async () => {
+    // Its light-DOM parents are all visible; what renders it is not.
+    document.body.insertAdjacentHTML(
+      "beforeend",
+      `<div id="card"><div id="slotted" role="status"></div></div>`,
+    );
+    document.getElementById("card")!.attachShadow({ mode: "open" }).innerHTML =
+      `<div style="display: none"><slot></slot></div>`;
+    await vi.advanceTimersByTimeAsync(500);
+    expect(await announce("slotted", "Saved")).toEqual([]);
+  });
+
+  it("logs no region whose aria-live is off, whatever its role", async () => {
+    document.body.insertAdjacentHTML(
+      "beforeend",
+      `<div id="off" role="status" aria-live="off"></div>` +
+        `<div id="bare" aria-live></div>`,
+    );
+    await vi.advanceTimersByTimeAsync(500);
+    expect(await announce("off", "3 unread")).toEqual([]);
+    expect(await announce("bare", "Typing")).toEqual([]);
+  });
+
   it("reads text a child shows again under visibility: hidden", async () => {
     // `visibility` is inherited but overridable: the child is on screen and
     // announced, while its parent's own text is not.

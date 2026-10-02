@@ -59,9 +59,13 @@ function textVisible(style: CSSStyleDeclaration | null): boolean {
  * flat tree (assigned to a slot, not in a closed `<details>`' body), and
  * neither it nor anything rendering it is hidden or `aria-hidden`.
  */
-function announceable(element: Element): boolean {
+function announceable(
+  element: Element,
+  style: CSSStyleDeclaration | null,
+): boolean {
   if (!isRenderedInFlatTree(element)) return false;
-  for (let el: Element | null = element; el; el = renderingParent(el)) {
+  if (unread(element, style, true)) return false;
+  for (let el = renderingParent(element); el; el = renderingParent(el)) {
     if (unread(el, getComputedStyle(el), true)) return false;
   }
   return true;
@@ -84,7 +88,9 @@ export function pageText(
   { announced = false }: { announced?: boolean } = {},
 ): string {
   const rootStyle = getComputedStyle(root);
-  if (announced ? !announceable(root) : unread(root, rootStyle, false)) {
+  if (
+    announced ? !announceable(root, rootStyle) : unread(root, rootStyle, false)
+  ) {
     return "";
   }
 

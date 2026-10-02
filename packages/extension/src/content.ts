@@ -423,18 +423,20 @@ if (!isSubFrame) {
     "isConnected",
   )!.get!;
   const getAttribute = Element.prototype.getAttribute;
-  const hasAttribute = Element.prototype.hasAttribute;
   const createTreeWalker = Document.prototype.createTreeWalker;
 
-  /** `[role="status"], [role="alert"], [role="log"], [aria-live]`. */
+  /**
+   * Core's rule for a live region (`countsAsOverlay`): `aria-live` of
+   * `polite` or `assertive` is one, `off` is not whatever the role, and any
+   * other value — `<div aria-live>` included — leaves it to the role:
+   * `status`, `alert` or `log`, read as the first token, case kept.
+   */
   const isLiveRegion = (element: Element): boolean => {
-    const role = getAttribute.call(element, "role");
-    return (
-      role === "status" ||
-      role === "alert" ||
-      role === "log" ||
-      hasAttribute.call(element, "aria-live")
-    );
+    const live = getAttribute.call(element, "aria-live")?.trim().toLowerCase();
+    if (live === "polite" || live === "assertive") return true;
+    if (live === "off") return false;
+    const role = getAttribute.call(element, "role")?.trim().split(/\s+/)[0];
+    return role === "status" || role === "alert" || role === "log";
   };
 
   let liveDebounce: ReturnType<typeof setTimeout> | null = null;

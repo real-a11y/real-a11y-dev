@@ -37,7 +37,9 @@
   `<select>`'s options, a `<datalist>`'s suggestions and a closed
   `<details>`' body; it reads a region's shadow tree as it renders, slotted
   content included; and it logs nothing for a region that is hidden, or sits
-  inside something hidden. It also logs a region only when something in it
+  inside something hidden. A region marked `aria-live="off"` is not one,
+  whatever its role, and neither is a bare `aria-live` without a live role.
+  It also logs a region only when something in it
   changes: a region's existing text was logged the first time anything on
   the page changed after the panel opened. The input panel likewise opens
   with only the text the editor renders.
