@@ -370,6 +370,30 @@ describe("DOM clobbering resilience", () => {
       expect(names).toContain("Full rules");
     });
 
+    // The walk skips the form, its field with it, so the field reaches no one.
+    // Help text holding nothing else is then text-only, and shows once, as the
+    // input's description, rather than also as a node of its own.
+    it("folds help text whose only control is in the form", () => {
+      const root = createPage(`
+        <main>
+          <input aria-label="Password" aria-describedby="help" />
+          <div id="help">Must be 8+ chars. <form>${TAG_FIELD}</form></div>
+        </main>
+      `);
+      shadowEveryForm(root);
+      // In the document, so `aria-describedby` resolves.
+      document.body.appendChild(root);
+
+      try {
+        const nodes = [...extractDomTree(root).nodes.values()];
+        expect(nodes.some((n) => n.dom?.attributes?.id === "help")).toBe(false);
+        const password = nodes.find((n) => n.a11y.name === "Password")!;
+        expect(password.a11y.description).toBe("Must be 8+ chars.");
+      } finally {
+        root.remove();
+      }
+    });
+
     it("keeps what an extraction rooted inside the form holds", () => {
       const root = createPage(`
         <form>

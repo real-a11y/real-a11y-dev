@@ -334,6 +334,11 @@ function hasInteractiveContent(
   const tag = safeTagName(element);
   // The walk skips these outright, so nothing inside one is ever emitted.
   if (SKIP_TAGS.has(tag)) return false;
+  // Nor anything inside a form whose control shadows its `tagName`: the walk
+  // reads its own element's tag plainly, and its per-element boundary skips
+  // the form, with everything in it, when that read throws. This is the read
+  // that throws there, made to predict it.
+  if (typeof element.tagName !== "string") return false;
 
   const tabindex = element.getAttribute("tabindex");
   if (getActions(element, Number(tabindex) < 0).length > 0) return true;

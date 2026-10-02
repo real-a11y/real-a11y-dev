@@ -24,11 +24,11 @@
 
 - In DOM mode, a heading, link, button or table cell that holds a `<form>`
   whose field is named `tagName` is no longer dropped from the tree with
-  everything in it, and neither is help text a field's `aria-describedby`
-  points at that holds one. Such a field shadows the form's own `tagName`,
-  and working out the name around the form read it and threw. A change in or
-  around such a form also updates the tree in place again, instead of
-  rebuilding all of it.
+  everything in it, and neither is a link in help text a field's
+  `aria-describedby` points at when that help text also holds such a form.
+  Such a field shadows the form's own `tagName`, and working out the name
+  around the form read it and threw. A change in or around such a form also
+  updates the tree in place again, instead of rebuilding all of it.
   ([#465](https://github.com/real-a11y/real-a11y-dev/pull/465))
 
 - In DOM mode, an `<input>` whose `list` names a `<datalist>` now shows as a
