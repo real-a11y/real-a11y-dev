@@ -1,6 +1,6 @@
 import { afterEach, describe, it, expect } from "vitest";
 
-import { shadow } from "../test-support/clobber.js";
+import { clobber, shadow } from "../test-support/clobber.js";
 
 import {
   getExplicitRole,
@@ -1175,6 +1175,39 @@ describe("required context: listitem, option, treeitem", () => {
     expect(getImplicitRole(host.shadowRoot!.querySelector("#t")!)).toBe(
       "listitem",
     );
+  });
+});
+
+// The context climb reads OTHER elements — ancestors, an owner — and a
+// <form> among them can shadow `getAttribute`, `tagName` and `localName` with
+// a control named after one. A plain read returns that control (or throws on
+// the tripwire), and the item would drop from the tree with its subtree.
+describe("required context through a clobbered <form>", () => {
+  for (const prop of ["getAttribute", "tagName"]) {
+    it(`climbs past a form whose ${prop} is shadowed`, () => {
+      const div = document.createElement("div");
+      div.innerHTML = `<div role="list"><form><input name="${prop}"><div id="t" role="listitem">x</div></form></div>`;
+      clobber(div.querySelector("form")!, prop);
+      // A form is no wrapper, so the climb stops there — without throwing.
+      expect(getImplicitRole(div.querySelector("#t")!)).toBe("generic");
+    });
+  }
+
+  it("reads a clobbered form's role when it is the context", () => {
+    const div = document.createElement("div");
+    div.innerHTML = `<form role="list"><input name="getAttribute"><div id="t" role="listitem">x</div></form>`;
+    clobber(div.querySelector("form")!, "getAttribute");
+    expect(getImplicitRole(div.querySelector("#t")!)).toBe("listitem");
+  });
+
+  it("reads a clobbered form as an aria-owns owner", () => {
+    document.body.innerHTML = `<form role="list" aria-owns="t"><input name="getAttribute"></form><div id="t" role="listitem">x</div>`;
+    try {
+      clobber(document.querySelector("form")!, "getAttribute");
+      expect(getImplicitRole(document.getElementById("t")!)).toBe("listitem");
+    } finally {
+      document.body.innerHTML = "";
+    }
   });
 });
 

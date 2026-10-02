@@ -5,7 +5,12 @@
  */
 
 import { isAriaHiddenValue } from "./aria-tokens.js";
-import { safeGetAttribute, safeHidden, safeTagName } from "./clobber-safe.js";
+import {
+  safeGetAttribute,
+  safeHidden,
+  safeQuerySelectorAll,
+  safeTagName,
+} from "./clobber-safe.js";
 import {
   flatParent,
   flatParentElement,
@@ -231,8 +236,8 @@ const NATIVE_LIST_TAGS = new Set(["ul", "ol", "menu"]);
  */
 function listItemRole(el: Element): string {
   const parent = flatParentElement(el);
-  if (parent && NATIVE_LIST_TAGS.has(parent.tagName.toLowerCase())) {
-    const role = parent.getAttribute("role");
+  if (parent && NATIVE_LIST_TAGS.has(safeTagName(parent))) {
+    const role = safeGetAttribute(parent, "role");
     if (role && role !== "list" && role !== "directory") return "presentation";
   }
   return "listitem";
@@ -651,7 +656,7 @@ const REQUIRED_CONTEXT: ReadonlyMap<string, RequiredContext> = new Map([
  */
 function isGenericWrapper(element: Element, roleAttr: string | null): boolean {
   if (roleAttr) return false;
-  const tag = element.tagName.toLowerCase();
+  const tag = safeTagName(element);
   return tag === "div" || tag === "span" || tag === "slot" || tag.includes("-");
 }
 
@@ -659,8 +664,9 @@ function isGenericWrapper(element: Element, roleAttr: string | null): boolean {
 function ariaOwner(element: Element): Element | null {
   const id = element.getAttribute("id");
   if (!id) return null;
-  for (const owner of idScope(element).querySelectorAll("[aria-owns]")) {
-    if (owner.getAttribute("aria-owns")!.trim().split(/\s+/).includes(id)) {
+  for (const owner of safeQuerySelectorAll(idScope(element), "[aria-owns]")) {
+    const owns = safeGetAttribute(owner, "aria-owns") ?? "";
+    if (owns.trim().split(/\s+/).includes(id)) {
       return owner;
     }
   }
@@ -672,13 +678,16 @@ function ariaOwner(element: Element): Element | null {
  * climb runs over flat-tree parents; an `aria-owns` owner with a context role
  * counts too, and is looked for only when the climb fails, since orphans are
  * rare and the lookup scans the document.
+ *
+ * Every read here is of ANOTHER element, so every read is clobber-safe: a
+ * `<form>` on the way up may hold a control named `getAttribute`.
  */
 function hasRequiredContext(element: Element, role: string): boolean {
   const context = REQUIRED_CONTEXT.get(role);
   if (!context) return true;
   for (let p = flatParentElement(element); p; p = flatParentElement(p)) {
-    if (context.tags.has(p.tagName.toLowerCase())) return true;
-    const roleAttr = p.getAttribute("role");
+    if (context.tags.has(safeTagName(p))) return true;
+    const roleAttr = safeGetAttribute(p, "role");
     const parentRole = roleAttr ? roleFromAttribute(roleAttr) : undefined;
     if (parentRole && context.roles.has(parentRole)) return true;
     if (parentRole && context.through.has(parentRole)) continue;
@@ -706,7 +715,8 @@ function explicitRoleOf(
   element: Element,
   checkContext: boolean,
 ): string | undefined {
-  const value = element.getAttribute("role");
+  // Safe: this also reads an `aria-owns` owner's role (see hasRequiredContext).
+  const value = safeGetAttribute(element, "role");
   if (!value) return undefined;
   return roleFromAttribute(
     value,
