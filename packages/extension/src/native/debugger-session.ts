@@ -27,6 +27,16 @@ const PROTOCOL = "1.3";
  */
 const PROBE_TIMEOUT_MS = 2000;
 
+/**
+ * Bound on how long a pick being armed waits for `onDetach` to say why its
+ * session dropped, after a setup command already failed because of it (see
+ * `runPick`'s `rejectSetupFailure`). Chromium answers the pending command
+ * and fires the event in the same step, so the event is normally only
+ * milliseconds behind. The bound matters only if it never comes, and then the
+ * pick fails as a dropped connection, as it did before it waited.
+ */
+const PICK_DETACH_REASON_WAIT_MS = 1000;
+
 /** "Another debugger is already attached…" — the DevTools-conflict class. */
 export function isDebuggerConflict(message: string | undefined): boolean {
   return /already attached/i.test(message ?? "");
@@ -65,6 +75,34 @@ export function isConnectionLost(message: string | undefined): boolean {
   return /detached|not attached|target closed|no (?:target|tab) with given id|tab was closed/i.test(
     message ?? "",
   );
+}
+
+/**
+ * Whether a `chrome.debugger.onDetach` reason ends an armed pick as a plain
+ * cancel — the same outcome as Stop or `Escape` — rather than failing it as a
+ * dropped connection.
+ *
+ * These are the only two reasons Chromium defines (`DetachReason` in
+ * `chrome/common/extensions/api/debugger.json`), and attaching again undoes
+ * neither:
+ *
+ *  - `canceled_by_user`: the user pressed Cancel on Chrome's "…started
+ *    debugging this browser" infobar, and only that sends it. Re-attaching
+ *    would put the infobar straight back and re-arm the pick they just
+ *    dismissed.
+ *  - `target_closed`: Chrome closed the session itself, because the tab closed
+ *    or navigated somewhere this extension may not debug. A fresh attach is
+ *    refused for the same reason.
+ *
+ * Opening DevTools on the tab is not a cause. Chromium attaches it as a second
+ * client beside ours.
+ *
+ * A reason outside this list keeps the conservative path: the pick fails as a
+ * dropped connection, so the panel reports it instead of treating it as a
+ * cancel.
+ */
+export function detachEndsPick(reason: string): boolean {
+  return reason === "canceled_by_user" || reason === "target_closed";
 }
 
 export interface AttachOutcome {
@@ -134,19 +172,18 @@ export class NativeDebuggerSession {
    * — there is nothing in `chrome.storage` to read it back from, unlike
    * every other piece of state this class tracks, because a pick session
    * that outlives an MV3 suspend has nothing left to cancel anyway (see
-   * {@link runPick}'s own comment).
+   * {@link runPick}'s own comment). `chrome.debugger.onDetach` calls it too,
+   * for a detach whose reason {@link detachEndsPick} recognizes.
    */
   private pickCancel = new Map<number, () => void>();
 
   /**
    * Reject callback for an in-flight {@link runPick}, keyed by tab id —
    * distinct from {@link pickCancel}, which *resolves* the pick as a plain
-   * cancel. `chrome.debugger.onDetach` uses this one instead: a detach mid-
-   * pick (DevTools opening on the tab, the SW's own connection dropping) is
-   * a genuine connection loss, not the user cancelling, and `attachAndRun`
-   * only classifies it that way (`connection-lost`, feeding the reattach
-   * metric like every other native op's drop) when `fn` REJECTS rather than
-   * resolves — see the constructor's `onDetach` listener.
+   * cancel. `chrome.debugger.onDetach` uses this one only for a reason
+   * {@link detachEndsPick} does not recognize: the pick then fails as a
+   * dropped connection (`connection-lost`) rather than passing for something
+   * the user did — see the constructor's `onDetach` listener.
    */
   private pickReject = new Map<number, () => void>();
 
@@ -166,6 +203,16 @@ export class NativeDebuggerSession {
    * silently resolving as cancelled — never a hang.
    */
   private pendingPickCancel = new Set<number>();
+
+  /**
+   * The reason Chrome gave for each tab's latest `onDetach`, forgotten when
+   * we start attaching to that tab again. A detach can land after a pick's
+   * attach but before {@link runPick} registers its callbacks, so the listener
+   * has no pick to settle, and the pick's first command then fails with no
+   * event left to come. This is how the pick still learns why. In memory only:
+   * it matters for milliseconds, within one worker's life.
+   */
+  private lastDetachReason = new Map<number, string>();
 
   /**
    * @param storage        durable area for the dogfood log (chrome.storage.local).
@@ -193,11 +240,21 @@ export class NativeDebuggerSession {
       // settled, the queue can't advance until the user happens to click
       // something or explicitly stops picking, exactly the way a genuinely
       // failed read or act never gets to (those always resolve `fn`, one way
-      // or the other). Reject rather than resolve: `attachAndRun`'s own catch
-      // classifies a rejection via `isConnectionLost`, so this reads as the
-      // same kind of drop a mid-read/mid-act disconnect already does, not as
-      // the user pressing Escape.
-      this.pickReject.get(tabId)?.();
+      // or the other).
+      //
+      // The reason decides how it settles. A reason `detachEndsPick`
+      // recognizes, like the user pressing Cancel on Chrome's infobar, ends
+      // the pick as a cancel: it resolves, so `withRecovery` sees a finished
+      // pick, not a drop to retry, and never re-attaches over the user's
+      // Cancel. Any other reason rejects, which `attachAndRun` classifies as
+      // `connection-lost`.
+      //
+      // Either way the drop is still booked as `detach-unsolicited` with this
+      // reason. The recorder below joins the storage queue now, before the
+      // pick's own teardown can claim the attach entry as a deliberate detach.
+      this.lastDetachReason.set(tabId, reason);
+      if (detachEndsPick(reason)) this.pickCancel.get(tabId)?.();
+      else this.pickReject.get(tabId)?.();
       void this.enqueue(async () => {
         const attached = await this.readAttached();
         const startedAt = attached[tabId];
@@ -345,6 +402,10 @@ export class NativeDebuggerSession {
   }
 
   private async attachTracked(tabId: number): Promise<AttachOutcome> {
+    // Forgotten before the attach, not after it: a detach that lands while
+    // this attach is still being recorded belongs to the new session, and a
+    // pick armed on it needs to see that reason (see `lastDetachReason`).
+    this.lastDetachReason.delete(tabId);
     // Cheap pre-check, outside the mutex — the authoritative one is below.
     if (!(await this.isEnabled())) return { ok: false, error: "disabled" };
     // True when Chrome refused because WE already hold the tab, so the existing
@@ -674,6 +735,8 @@ export class NativeDebuggerSession {
       chainBackendNodeIds: number[];
     } | null>((resolve, reject) => {
       let settled = false;
+      /** Pending while a dropped setup waits for `onDetach`'s reason. */
+      let detachWait: ReturnType<typeof setTimeout> | undefined;
       const onEvent = (
         source: { tabId?: number },
         method: string,
@@ -745,6 +808,7 @@ export class NativeDebuggerSession {
       ) => {
         if (settled) return;
         settled = true;
+        clearTimeout(detachWait);
         chrome.debugger.onEvent.removeListener(onEvent);
         this.pickCancel.delete(tabId);
         this.pickReject.delete(tabId);
@@ -753,15 +817,18 @@ export class NativeDebuggerSession {
       const rejectWith = () => {
         if (settled) return;
         settled = true;
+        clearTimeout(detachWait);
         chrome.debugger.onEvent.removeListener(onEvent);
         this.pickCancel.delete(tabId);
         this.pickReject.delete(tabId);
+        // Reached for an `onDetach` reason `detachEndsPick` does not
+        // recognize — the ones it does end the pick through `pickCancel` —
+        // and for a dropped setup whose reason never arrived.
         // A static, recognized string (R6: never surface a raw
         // chrome.runtime.lastError/onDetach reason verbatim) — matches
         // `isConnectionLost`'s own "Target closed." pattern so
         // `attachAndRun`'s catch classifies this the same way a mid-read or
-        // mid-act disconnect already is, regardless of what `reason` Chrome
-        // actually reported for this detach.
+        // mid-act disconnect already is.
         reject(new Error("Target closed."));
       };
       // A DOM.enable/Overlay.enable/Overlay.setInspectMode rejection below
@@ -776,13 +843,38 @@ export class NativeDebuggerSession {
       // other native op's real command failure. The message itself never
       // surfaces (R6): `attachAndRun` only pattern-matches it, then reduces
       // the whole thing to the fixed `"command-failed"` tag.
+      //
+      // The exception is a command that failed because the session itself
+      // went away. That is a detach, so `onDetach`'s reason decides, exactly
+      // as it does for an armed pick, and the user's Cancel still ends the
+      // pick as a cancel. The reason can be in either of two places:
+      //
+      //  - Already recorded, when the detach landed before this pick
+      //    registered its callbacks, so the listener had nothing to settle.
+      //  - Still to come, because Chromium answers a pending command
+      //    ("Detached while handling command.") before it fires `onDetach`.
+      //    The pick stays registered for the listener to settle, with a
+      //    bounded fallback to the dropped-connection failure if no event
+      //    arrives.
       const rejectSetupFailure = (err: unknown) => {
         if (settled) return;
+        const error = err instanceof Error ? err : new Error(String(err));
+        if (isConnectionLost(error.message)) {
+          const reason = this.lastDetachReason.get(tabId);
+          if (reason === undefined) {
+            detachWait = setTimeout(rejectWith, PICK_DETACH_REASON_WAIT_MS);
+          } else if (detachEndsPick(reason)) {
+            finish(null);
+          } else {
+            rejectWith();
+          }
+          return;
+        }
         settled = true;
         chrome.debugger.onEvent.removeListener(onEvent);
         this.pickCancel.delete(tabId);
         this.pickReject.delete(tabId);
-        reject(err instanceof Error ? err : new Error(String(err)));
+        reject(error);
       };
       this.pickCancel.set(tabId, () => finish(null));
       this.pickReject.set(tabId, rejectWith);

@@ -273,6 +273,13 @@
 
   ([#463](https://github.com/real-a11y/real-a11y-dev/pull/463))
 
+- **Cancelling Chrome's "…is debugging this browser" notice ends a native
+  pick.** The pick button releases, the same as pressing `Escape`, and
+  nothing re-attaches until you next use native mode, so the notice stays
+  gone. Closing the tab, or navigating it somewhere native mode can't
+  follow, also ends the pick quietly instead of as an error.
+  ([#467](https://github.com/real-a11y/real-a11y-dev/pull/467))
+
 ## 0.1.14
 
 ### Patch Changes
