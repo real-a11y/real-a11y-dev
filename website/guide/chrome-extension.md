@@ -214,6 +214,8 @@ Once you've accepted that consent step, native mode defaults to on for the first
 
 Selecting a row also matches the DOM producer now. Click a row, arrow-navigate to it, or pick it, in the tree or in a role filter's list, and the page's matching element is outlined and scrolled into view, with the same overlay DOM mode draws. Real focus moves there too, so the keyboard carries on from that element when you go back to the page. This happens over `chrome.debugger` a moment after the selection settles, not on every row a fast arrow-key run passes through. One thing DOM mode does that native doesn't yet: an outline while you only hover a row without selecting it.
 
+Scoping works the same as in DOM mode too: double-click a container row, or press `Ctrl`/`Cmd`+`Enter` on a selected row with children, to show only that subtree, and use the breadcrumb, its `×` or `Esc` to leave. See [Scoping](/guide/panel-features#scoping).
+
 ### BETA pill in the panel header
 
 Sets expectations during the pre-1.0 phase. Linked to the GitHub issues page. Goes away at v1.0.

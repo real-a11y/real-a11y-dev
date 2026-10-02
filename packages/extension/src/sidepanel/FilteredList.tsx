@@ -19,6 +19,8 @@ import {
   useEffect,
 } from "preact/hooks";
 
+import { isInScope } from "./ScopeBar.js";
+
 // Filters whose items have meaningful activate actions
 const INTERACTIVE_FILTERS: Set<string> = new Set(["link", "button", "form"]);
 
@@ -76,6 +78,12 @@ interface FilteredListViewProps {
   onFocusSearch?: () => void;
   /** Hold activation back while a previous one is still in flight. */
   activateDisabled?: boolean;
+  /** The items come from a scoped subtree; says so when there are none. */
+  scoped?: boolean;
+  /** The scope root's id, or null when unscoped. A change re-finds the
+   *  selected item by id, since a wider or narrower scope shifts every index
+   *  after the first item it adds or drops. */
+  scopeKey?: string | null;
 }
 
 export function FilteredListView({
@@ -87,6 +95,8 @@ export function FilteredListView({
   onGoToTree,
   onFocusSearch,
   activateDisabled = false,
+  scoped = false,
+  scopeKey = null,
 }: FilteredListViewProps) {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const listRef = useRef<HTMLDivElement>(null);
@@ -99,6 +109,25 @@ export function FilteredListView({
     setSelectedIndex(0);
     typeAhead.current.clear();
   }, [roleFilter, query]);
+
+  // Follow the selected item, not its index, across a scope change: leaving
+  // a scope can add matches ahead of it, and Enter would then act on a row
+  // the user never selected. Falls back to the first item when the selected
+  // one is outside the new scope. `selectedIdRef` still holds the previous
+  // commit's selection here, because it is updated by the effect below.
+  const selectedIdRef = useRef<string | null>(null);
+  const prevScopeKey = useRef(scopeKey);
+  useEffect(() => {
+    if (prevScopeKey.current === scopeKey) return;
+    prevScopeKey.current = scopeKey;
+    const id = selectedIdRef.current;
+    const at = id === null ? -1 : items.findIndex((item) => item.id === id);
+    setSelectedIndex(Math.max(at, 0));
+    typeAhead.current.clear();
+  }, [scopeKey, items]);
+  useEffect(() => {
+    selectedIdRef.current = items[selectedIndex]?.id ?? null;
+  });
 
   const selectedItem = items[selectedIndex] ?? null;
 
@@ -271,6 +300,7 @@ export function FilteredListView({
         {items.length === 0 && (
           <div class="sn-empty">
             No {roleFilter}s found{query ? ` matching "${query}"` : ""}
+            {scoped ? " in this scope" : ""}
           </div>
         )}
       </div>
@@ -305,6 +335,9 @@ export function FilteredListView({
 
 interface FilteredListProps {
   nodes: Map<string, SemanticNode>;
+  /** The scoped subtree's root, if the panel is scoped: only matches inside
+   *  it are listed, the same subtree the tree shows. */
+  scopeRootId?: string | null;
   roleFilter: Exclude<RoleFilter, null>;
   query: string;
   onHighlight: (nodeId: string) => void;
@@ -318,10 +351,12 @@ interface FilteredListProps {
 /** The DOM producer's role-filtered list: maps `nodes` onto `FilteredListView`. */
 export function FilteredList({
   nodes,
+  scopeRootId = null,
   roleFilter,
   query,
   ...rest
 }: FilteredListProps) {
+  const scoped = scopeRootId !== null && nodes.has(scopeRootId);
   // Get direct matches in document order
   const items = useMemo(() => {
     const roles = ROLE_FILTER_GROUPS[roleFilter];
@@ -333,6 +368,12 @@ export function FilteredList({
 
     for (const node of nodes.values() as IterableIterator<DomSemanticNode>) {
       if (!roles.includes(node.a11y.role)) continue;
+      if (
+        scoped &&
+        !isInScope(node.id, scopeRootId!, (id) => nodes.get(id)?.parentId)
+      ) {
+        continue;
+      }
       // Apply text search within results
       if (lowerQuery) {
         const name = (node.a11y.name || "").toLowerCase();
@@ -353,13 +394,15 @@ export function FilteredList({
     }
 
     return result;
-  }, [nodes, roleFilter, query]);
+  }, [nodes, roleFilter, query, scoped, scopeRootId]);
 
   return (
     <FilteredListView
       items={items}
       roleFilter={roleFilter}
       query={query}
+      scoped={scoped}
+      scopeKey={scoped ? scopeRootId : null}
       {...rest}
     />
   );
