@@ -1230,17 +1230,17 @@ describe("LiveTreeExtractor", () => {
   });
 
   // Focusability can hang on an element outside the node's own subtree: an
-  // <area> is a stop only while an <img usemap> names its map, and a control
-  // is disabled by an ancestor <fieldset>. Each case must come out of a
-  // refresh the way a fresh extraction would.
+  // <area> is a stop only while an <img usemap> names its map and is rendered,
+  // and a control is disabled by an ancestor <fieldset>. Each case must come
+  // out of a refresh the way a fresh extraction would.
   describe("focusability that depends on another element", () => {
-    // jsdom's UA sheet hides <area>, as the spec's does and Chromium's has
-    // since 153. Chromium 151 rendered one inline; match that here so the
-    // walk reaches the areas and the refresh logic has something to test.
+    // Chromium's UA sheet gives every <area> `display: none` since 153, as
+    // jsdom's does. Say so here rather than lean on jsdom: the walk has to
+    // reach the areas through their image all the same.
     beforeEach(() => {
       const style = document.createElement("style");
       style.id = "render-areas";
-      style.textContent = "area { display: inline }";
+      style.textContent = "area { display: none }";
       document.head.append(style);
     });
     afterEach(() => {
@@ -1317,6 +1317,66 @@ describe("LiveTreeExtractor", () => {
         document.querySelector("img")!.remove(),
       );
       expect(focusableIds(result)).toEqual([]);
+      expect(result.nodes).toEqual(extractDomTree(document.body).nodes);
+    });
+
+    // A map's areas are rendered only while the image using it is, and the
+    // image can be hidden from anywhere above it. The map sits elsewhere, so
+    // re-extracting what changed would leave its areas as they were.
+    it.each([
+      ["the image", "img", "hidden", ""],
+      ["the image", "img", "style", "visibility: hidden"],
+      ["its container", "#figure", "style", "display: none"],
+      ["its container", "#figure", "inert", ""],
+      ["its container", "#figure", "class", "gone"],
+    ])(
+      "drops the areas when %s is hidden (%s[%s])",
+      async (_what, selector, attr, value) => {
+        const html = `<style>.gone { display: none }</style>${MAPS}`;
+        const result = await refreshAfter(html, () =>
+          document.querySelector(selector)!.setAttribute(attr, value),
+        );
+        expect(
+          [...result.nodes.values()].filter((n) => n.dom?.tagName === "area"),
+        ).toEqual([]);
+        expect(result.nodes).toEqual(extractDomTree(document.body).nodes);
+      },
+    );
+
+    it("brings the areas back when the image shows again, splicing in the map", () => {
+      // `visibility` keeps the figure's node, so the refresh can splice: the
+      // figure's subtree, and the map, which is nowhere inside it.
+      document.body.innerHTML = `<main>${MAPS}</main>`;
+      const figure = document.getElementById("figure")!;
+      figure.setAttribute("style", "visibility: hidden");
+      const live = new LiveTreeExtractor(document.body, { mode: "dom" });
+      expect(focusableIds(live.extract())).toEqual([]);
+
+      figure.removeAttribute("style");
+      const full = vi.spyOn(live, "extract");
+      const result = live.refresh({
+        mutations: [
+          {
+            type: "attributes",
+            target: figure,
+            attributeName: "style",
+          } as unknown as MutationRecord,
+        ],
+      });
+
+      expect(full).not.toHaveBeenCalled();
+      expect(focusableIds(result)).toEqual(["in-a"]);
+      expect(result.nodes).toEqual(extractDomTree(document.body).nodes);
+    });
+
+    it("hides the areas from AT when the image turns aria-hidden", async () => {
+      const result = await refreshAfter(MAPS, () =>
+        document.querySelector("img")!.setAttribute("aria-hidden", "true"),
+      );
+      const area = [...result.nodes.values()].find(
+        (n) => n.dom?.attributes["id"] === "in-a",
+      )!;
+      expect(area.a11y.isExposedToAT).toBe(false);
       expect(result.nodes).toEqual(extractDomTree(document.body).nodes);
     });
 

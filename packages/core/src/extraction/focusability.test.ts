@@ -8,10 +8,10 @@ import {
 
 /**
  * Most of these rules are tested through the walk, in dom-extractor.test.ts
- * and query.test.ts. The ones here are the elements the walk never emits,
- * because the UA stylesheet gives them `display: none`: jsdom's and Chromium's
- * both, for a hidden input, and for an `<area>` since Chromium 153 (151
- * rendered one inline).
+ * and query.test.ts. The ones here are asked of an element directly: a hidden
+ * input, which the walk never emits, since the UA stylesheet gives it
+ * `display: none`, and an `<area>`, whose image decides whether the walk emits
+ * it at all (see image-map.ts).
  */
 function build(html: string): HTMLElement {
   const div = document.createElement("div");
@@ -30,8 +30,8 @@ describe("isFocusable", () => {
     }
   });
 
-  // Checked in Chromium 151: it focuses a map's areas only while an image
-  // uses the map, whichever map the image actually resolves to.
+  // Checked in Chromium 151 and 153: it focuses a map's areas only while an
+  // image uses the map, whichever map the image actually resolves to.
   it("counts an area only while an image uses its map", () => {
     const root = build(`
       <img src="x.gif" alt="Site map" usemap="#nav">
@@ -57,6 +57,31 @@ describe("isFocusable", () => {
     expect(focusable("case")).toBe(false);
     expect(focusable("no-hash")).toBe(false);
     expect(focusable("no-href")).toBe(false);
+  });
+
+  // Also checked in Chromium 151 and 153, with scripted focus() as well as Tab.
+  it("gives an area focus only through its image, tabindex or not", () => {
+    const root = build(`
+      <img src="x.gif" alt="Site map" usemap="#nav">
+      <map name="nav">
+        <area id="tabindexed" tabindex="0" alt="No href">
+        <area id="scripted" tabindex="-1" href="/a" alt="A">
+      </map>
+      <map name="unused"><area id="unused" tabindex="0" href="/b" alt="B"></map>
+      <div contenteditable>
+        <img src="x.gif" alt="Plan" usemap="#floor">
+        <map name="floor"><area id="editable" href="/c" alt="C"></map>
+      </div>
+    `);
+    const focusable = (id: string) =>
+      isFocusable(root.querySelector(`#${id}`)!);
+    // A tabindex makes an area focusable without an href, but not without an
+    // image using its map, and a negative one doesn't leave it focusable
+    // from script, as it would any other element.
+    expect(focusable("tabindexed")).toBe(true);
+    expect(focusable("unused")).toBe(false);
+    expect(focusable("scripted")).toBe(false);
+    expect(focusable("editable")).toBe(false);
   });
 });
 

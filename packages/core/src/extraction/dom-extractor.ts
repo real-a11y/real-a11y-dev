@@ -416,6 +416,8 @@ function isVisuallyHidden(
     style !== undefined ? style : getCachedComputedStyle(element);
 
   if (isSubtreeHidden(element, computed)) return true;
+  // An area is drawn by its image, whose visibility isSubtreeHidden read.
+  if (element.localName === "area") return false;
 
   if (computed) {
     if (computed.visibility === "hidden") return true;
@@ -726,6 +728,7 @@ const NAME_SOURCE_CHILD_TO_OWNER: Readonly<Record<string, string>> = {
 export function htmlAamNameOwner(element: Element): Element | null {
   const ownerTag = NAME_SOURCE_CHILD_TO_OWNER[element.tagName.toLowerCase()];
   if (!ownerTag) return null;
+  // eslint-disable-next-line no-restricted-properties -- one read, and a <legend>, <summary> or <caption> is never a form
   const parent = element.parentElement;
   if (!parent || parent.tagName.toLowerCase() !== ownerTag) return null;
   if (element.tagName.toLowerCase() === "caption") {
@@ -819,6 +822,9 @@ function getAccessibleTextContent(
     } else if (child.nodeType === Node.ELEMENT_NODE) {
       const childEl = child as Element;
       if (isAriaHiddenValue(childEl.getAttribute("aria-hidden"))) continue;
+      // Chromium's tree puts an area under its image, never under the element
+      // its map sits in, so it adds nothing to that element's name.
+      if (childEl.localName === "area") continue;
       if (
         isSubtreeHidden(childEl, getCachedComputedStyle(childEl, styleCache))
       ) {
@@ -1740,6 +1746,7 @@ function isDisabledControl(element: Element): boolean {
  */
 function isDisabledOption(option: Element): boolean {
   if (option.hasAttribute("disabled")) return true;
+  // eslint-disable-next-line no-restricted-properties -- one read, and an <option> is never a form
   const parent = option.parentElement;
   return (
     parent?.tagName.toLowerCase() === "optgroup" &&

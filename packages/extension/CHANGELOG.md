@@ -32,6 +32,15 @@
   changed.
   ([#452](https://github.com/real-a11y/real-a11y-dev/pull/452))
 
+- In DOM mode, image map areas are back in the DOM tree, the Tab Sequence
+  view, its copied export and the keyboard bar's Tab. Since Chrome 153 every
+  `<area>` is `display: none` by default, and the walk skipped it, although
+  Chrome still tabs to it. An area now shows where its `<map>` sits while the
+  image using the map is rendered, and is a stop at that place in the page,
+  which is where Chrome tabs to it. Hiding the image takes its areas out, and
+  showing it again brings them back.
+  ([#453](https://github.com/real-a11y/real-a11y-dev/pull/453))
+
 - In DOM mode, a native checkbox, radio, `<select>` or `<summary>` now takes
   its state from what it is, as it does in NATIVE mode, not from an ARIA
   attribute on it. An unchecked `<input type="checkbox" aria-checked="true">`
