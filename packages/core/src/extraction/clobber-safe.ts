@@ -86,12 +86,19 @@ export function safeShadowRoot(element: Element): ShadowRoot | null {
  * Clobber-immune `node.parentElement`. A climb that reads it plainly never
  * ends on a `<form>` holding `<input name="parentElement">`: the form's parent
  * is the input, whose parent is the form again.
+ *
+ * The getter's answer is a real element or null, so it is not checked again.
+ * That parent is often the very form: `<input name="nodeType">` shadows its
+ * `nodeType` too, and a plain `parent.nodeType === 1` then took the form for
+ * no element at all and ended every climb from inside it below the form. Only
+ * the plain read, which a clobbering control can answer, is checked.
  */
 export function safeParentElement(node: Node): Element | null {
-  const parent = parentElementGetter
-    ? parentElementGetter.call(node)
-    : node.parentElement;
-  return parent && parent.nodeType === 1 ? (parent as Element) : null;
+  if (parentElementGetter) {
+    return parentElementGetter.call(node) as Element | null;
+  }
+  const parent = node.parentElement;
+  return parent && parent.nodeType === 1 ? parent : null;
 }
 
 /**
