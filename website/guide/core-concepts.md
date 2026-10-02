@@ -48,7 +48,9 @@ interface SemanticNode {
     attributes: Record<string, string>;
     textContent: string | null;  // direct text-node children only
     descendantText: string;      // truncated recursive text — useful for elements whose
-                                 // accessible name is empty by spec (<code>, <pre>, <svg>)
+                                 // accessible name is empty by spec (<code>, <pre>, <svg>).
+                                 // Neither reads a <textarea>'s markup text: that is its
+                                 // default value, and a value lives in a11y.value alone
     isHidden: boolean;           // not visible: visibility:hidden, or the visually-hidden
                                  // ("sr-only") pattern, which AT still reads. display:none
                                  // subtrees are never extracted at all.

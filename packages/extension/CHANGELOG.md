@@ -77,6 +77,17 @@
   focus to it, as for any other editor.
   ([#438](https://github.com/real-a11y/real-a11y-dev/pull/438))
 
+- In DOM mode, a `<textarea>`'s markup text no longer shows anywhere but its
+  value. That text is the field's default, not what it holds now, and for a
+  sensitive field (`autocomplete="one-time-code"`, `cc-number`…) it is the
+  secret itself. An unlabeled one was listed by it in the Tab Sequence view
+  and the filtered lists; a field named by `aria-labelledby` pointing at one
+  took it as its name, and one pointing `aria-describedby` at it as its
+  description; and it ran into the text preview of whatever held the field.
+  An unlabeled one now lists by its tag, and its value line still shows what
+  it holds, `[redacted]` for a sensitive one.
+  ([#466](https://github.com/real-a11y/real-a11y-dev/pull/466))
+
 - In DOM mode, a page that names an image or a form control after a DOM
   method no longer costs the tree more than that form. An
   `<img name="getElementById">` anywhere on the page dropped every element

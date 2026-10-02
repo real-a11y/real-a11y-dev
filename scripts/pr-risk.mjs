@@ -690,6 +690,10 @@ const FIELD_VALUE_GATES = [
   "isSensitiveField",
   "SENSITIVE_AUTOCOMPLETE_TOKENS",
   "REDACTED_VALUE",
+  // The DOM producer's flat tree, which every one of its text walks reads: a
+  // `<textarea>` renders no children, so none of them finds its markup
+  // default — which, for a sensitive field, is the secret itself.
+  "isTextarea",
   // Both producers finish a value through `finishAnnouncedValue`, which is
   // where a sensitive field's text becomes `[redacted]`.
   "finishAnnouncedValue",
