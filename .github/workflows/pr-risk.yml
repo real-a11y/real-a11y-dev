@@ -14,7 +14,6 @@ name: PR risk
 # THE RUBRIC COMES FROM THE BASE BRANCH. This is the single most important line
 # in the file.
 #
-# `pull_request` runs the workflow definition from the base, but
 # `actions/checkout` lands the MERGE ref — which contains the pull request's
 # changes. So `node scripts/pr-risk.mjs` out of the workspace is the PR's own
 # copy of the rubric, and a six-line stub printing `{"tier":"low"}` clears its
@@ -34,6 +33,46 @@ name: PR risk
 # The consequence, which is correct and worth stating: a PR that ADDS a rule is
 # graded without it. New rules take effect once they land on the base branch,
 # after a human has reviewed them.
+#
+# What this does NOT cover is this file. `pull_request` takes the workflow
+# definition from the merge ref as well — that is how the bootstrap branch below
+# ever ran — so a PR that edits pr-risk.yml runs its own edit. That case is
+# human review's job, and `.github/workflows` grades 🔴 high so that it gets one.
+# ---------------------------------------------------------------------------
+# STACKED PULL REQUESTS: the rubric from the trunk, the diff against the parent.
+#
+# GitHub runs a stacked PR's workflows "as if it targets the base of the stack".
+# For every layer above the bottom, `github.base_ref` is therefore the TRUNK —
+# `main`, which is why `branches: [main]` matches at all — while
+# `github.event.pull_request.base.ref`, like the REST `pulls/{n}` base, is the
+# PARENT: the branch directly below. Grading against `github.base_ref` made every
+# upper layer inherit the tier of every layer under it: one e2e test file stacked
+# on a size-limit bump graded 🔴 high.
+#
+# So the two refs do different jobs:
+#
+#   - The RUBRIC still comes from the trunk. The parent is an unmerged pull
+#     request — PR-authored, unreviewed — and taking the grader from it is the
+#     hole above, one layer removed: a lower layer that stubs pr-risk.mjs would
+#     clear every layer stacked on it, from inside a job holding
+#     `pull-requests: write`. A layer stacked on a rubric change is graded
+#     without that change, exactly like the rubric change itself.
+#   - The DIFF is the layer's own: its head commit against the parent, the same
+#     diff `pnpm pr:risk --base origin/<parent>` reads on that branch. Not the
+#     merge ref: a stacked layer's merge ref is built on the merge ref of the
+#     layer below, i.e. on main plus every lower layer, so against the parent it
+#     also counts whatever main gained since the stack was last rebased — the
+#     "merely behind reads as high" problem, back again.
+#
+# Grading a layer alone does not wave the layers below it through. Merging a
+# stacked PR lands every unmerged PR below it, and GitHub first requires each of
+# them to pass its own required checks — this one among them. The report says so
+# on every stacked PR, because each label now covers one layer's diff.
+#
+# An unstacked PR, and the bottom of a stack, has the two refs equal and takes
+# exactly the path it always took. Anything unexpected — a parent that differs
+# with no stack to explain it, a name outside the safe set — is graded against
+# the trunk with a warning, the old answer: it over-counts, never under-counts.
 # ---------------------------------------------------------------------------
 #
 # Two more things follow from being REQUIRED, and both are easy to get wrong:
@@ -48,6 +87,8 @@ name: PR risk
 
 on:
   pull_request:
+    # A stacked PR matches through its stack's base, not its own — see
+    # STACKED PULL REQUESTS above.
     branches: [main]
     # `edited` because the title and body feed the rubric (a `!` title, a
     # `BREAKING CHANGE` body, the `risk-override:` reason). `labeled`/`unlabeled`
@@ -108,8 +149,18 @@ jobs:
         env:
           # Via the environment, never `${{ }}` interpolated into the script
           # body: a PR title is attacker-controlled text, and interpolation makes
-          # it shell. This is the single most common Actions injection.
+          # it shell. This is the single most common Actions injection. A branch
+          # name is author-chosen text too, so the parent arrives the same way.
           BASE_REF: ${{ github.base_ref }}
+          # Only differ from the above for a layer of a stack — see the header.
+          # From the event payload rather than a REST read: the same snapshot as
+          # HEAD_SHA, so the parent and the commit graded against it always
+          # belong together, and no API call sits in a required check's path.
+          PARENT_REF: ${{ github.event.pull_request.base.ref }}
+          STACK_BASE_REF: ${{ github.event.pull_request.stack.base.ref }}
+          STACK_POSITION: ${{ github.event.pull_request.stack.position }}
+          STACK_SIZE: ${{ github.event.pull_request.stack.size }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           PR_TITLE: ${{ github.event.pull_request.title }}
           PR_BODY: ${{ github.event.pull_request.body }}
         run: |
@@ -121,7 +172,8 @@ jobs:
           # resolves. It refuses to run rather than guess, so this must be exact.
           git fetch --no-tags origin "+refs/heads/$BASE_REF:refs/remotes/origin/$BASE_REF"
 
-          # The grader, from the BASE branch — see the header.
+          # The grader, from the BASE branch — the trunk, for a stacked PR too.
+          # See the header.
           mkdir -p "$RUNNER_TEMP/base"
           git archive "origin/$BASE_REF" scripts | tar -x -C "$RUNNER_TEMP/base"
           RUBRIC="$RUNNER_TEMP/base/scripts/pr-risk.mjs"
@@ -150,14 +202,57 @@ jobs:
           fi
           echo "rubric=$RUBRIC" >> "$GITHUB_OUTPUT"
 
+          # What the diff is measured against: the trunk, unless this PR is a
+          # layer of a stack — see STACKED PULL REQUESTS in the header. Every
+          # guard falls back to the trunk, the old over-counting answer, rather
+          # than failing the required check; only a failed fetch aborts, like
+          # the trunk's own fetch above.
+          #
+          # The name is checked before it is printed or passed anywhere. It is
+          # author-chosen, git allows `$`, backticks and `<` in it, and it lands
+          # in the sticky comment below.
+          DIFF_REF="$BASE_REF"
+          STACKED=""
+          if [ "$PARENT_REF" != "$BASE_REF" ]; then
+            if ! [[ "$PARENT_REF" =~ ^[A-Za-z0-9._/-]+$ ]]; then
+              echo "::warning::This PR's base branch name has characters outside [A-Za-z0-9._/-], so it is graded against $BASE_REF instead — which counts every layer below it too."
+            elif [ "$STACK_BASE_REF" != "$BASE_REF" ]; then
+              echo "::warning::This PR's base is $PARENT_REF, not $BASE_REF, but it reports no stack on $BASE_REF — graded against $BASE_REF, which can over-count."
+            elif ! [[ "$STACK_POSITION" =~ ^[0-9]+$ && "$STACK_SIZE" =~ ^[0-9]+$ && "$HEAD_SHA" =~ ^[0-9a-f]{40,64}$ ]]; then
+              echo "::warning::Stack metadata is malformed — graded against $BASE_REF, which counts every layer below this one too."
+            else
+              git fetch --no-tags origin "+refs/heads/$PARENT_REF:refs/remotes/origin/$PARENT_REF"
+              if git merge-base --is-ancestor "$HEAD_SHA" HEAD; then
+                # The layer's head rather than the merge ref — see the header.
+                # Detached in the workspace itself, so the Gate step grades the
+                # very same tree.
+                git checkout --quiet --detach "$HEAD_SHA"
+                DIFF_REF="$PARENT_REF"
+                STACKED=1
+                echo "Stacked: layer $STACK_POSITION of $STACK_SIZE on $BASE_REF. Grading $HEAD_SHA against origin/$PARENT_REF, with the rubric from origin/$BASE_REF."
+              else
+                echo "::warning::The event's head $HEAD_SHA isn't in the checked-out merge ref — graded against $BASE_REF, which counts every layer below this one too."
+              fi
+            fi
+          fi
+          echo "diff_ref=$DIFF_REF" >> "$GITHUB_OUTPUT"
+
           run_rubric() {
-            node "$RUBRIC" --repo "$GITHUB_WORKSPACE" --base "origin/$BASE_REF" \
+            node "$RUBRIC" --repo "$GITHUB_WORKSPACE" --base "origin/$DIFF_REF" \
               --title "$PR_TITLE" --body "$PR_BODY" "$@"
           }
 
           run_rubric --format json > "$RUNNER_TEMP/risk.json"
           run_rubric --format markdown > "$RUNNER_TEMP/risk.md"
           cat "$RUNNER_TEMP/risk.json"
+
+          # Each label now covers one layer, but merging a layer merges every
+          # unmerged PR below it — so the comment people decide a merge from has
+          # to say that, and how to reproduce this grade locally.
+          if [ -n "$STACKED" ]; then
+            printf '\n> **Stacked PR, layer %s of %s on `%s`.** Graded against its parent, `%s`, so this tier covers this layer alone; `pnpm pr:risk --base origin/%s` reproduces it. Merging this PR also merges every unmerged pull request below it, each under its own `risk:*` label, so that merge is as risky as the highest of them.\n' \
+              "$STACK_POSITION" "$STACK_SIZE" "$BASE_REF" "$PARENT_REF" "$PARENT_REF" >> "$RUNNER_TEMP/risk.md"
+          fi
 
           # Validated, not trusted. `echo "x=$(cmd)"` does NOT abort under
           # `set -e` when the substitution fails — the `echo` succeeds — so a
@@ -246,11 +341,12 @@ jobs:
       # a red X whose explanation posts afterwards reads as "your PR is broken".
       - name: Gate
         env:
-          BASE_REF: ${{ github.base_ref }}
           PR_TITLE: ${{ github.event.pull_request.title }}
           PR_BODY: ${{ github.event.pull_request.body }}
           LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
           RUBRIC: ${{ steps.classify.outputs.rubric }}
+          # The trunk, or a stacked layer's parent — whichever Classify graded.
+          DIFF_REF: ${{ steps.classify.outputs.diff_ref }}
         run: |
           set -euo pipefail
 
@@ -276,7 +372,9 @@ jobs:
           args=""
           case ",$LABELS," in *,reviewed:deep,*) args="--reviewed" ;; esac
 
-          # Same rubric the Classify step resolved, bootstrap fallback included.
+          # Same rubric the Classify step resolved, bootstrap fallback included,
+          # against the same base and the same tree — for a stacked layer that
+          # is still the detached head Classify left behind.
           node "$RUBRIC" \
-            --repo "$GITHUB_WORKSPACE" --base "origin/$BASE_REF" \
+            --repo "$GITHUB_WORKSPACE" --base "origin/$DIFF_REF" \
             --title "$PR_TITLE" --body "$PR_BODY" --gate $args
