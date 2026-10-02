@@ -81,6 +81,8 @@ describe("the roles with an expanded state, against Chromium", () => {
         <div role="option">Option</div>
       </div>
       <input id="text" type="text" aria-label="Text" aria-expanded="true">
+      <input id="input-list" list="choices" aria-label="Choice" aria-expanded="true">
+      <datalist id="choices"><option value="A"></option></datalist>
       <select id="select-menu" role="menu" aria-label="Menu" aria-expanded="true"><option>a</option></select>
       <select id="select-tab" role="tab" aria-label="Select tab" aria-expanded="true"><option>a</option></select>
     `);
@@ -101,6 +103,8 @@ describe("the roles with an expanded state, against Chromium", () => {
       "button-heading": "unset",
       listbox: "unset",
       text: "unset",
+      // A text input with a list is a combobox, which has the state.
+      "input-list": true,
       "select-menu": "unset",
       "select-tab": true,
     };
@@ -134,20 +138,6 @@ describe("the roles with an expanded state, against Chromium", () => {
       "listitem-alone": true,
       "treeitem-alone": true,
     });
-  });
-
-  it("KNOWN GAP: an <input list> is a textbox here, so it loses aria-expanded", async () => {
-    await page.setContent(`
-      <input id="input-list" list="choices" aria-label="Choice" aria-expanded="true">
-      <datalist id="choices"><option value="A"></option></datalist>
-    `);
-
-    const { dom, native } = await expandedById();
-    // Chromium makes it a combobox, which has the state. This engine still
-    // calls it a textbox, which doesn't, until the role map says combobox
-    // (#454); make `dom` match then.
-    expect(native).toMatchObject({ "input-list": true });
-    expect(dom).toMatchObject({ "input-list": "unset" });
   });
 
   it("puts a details' state on its summary, in an expandable role", async () => {
