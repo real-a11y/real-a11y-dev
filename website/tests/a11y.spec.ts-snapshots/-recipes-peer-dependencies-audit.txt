@@ -199,5 +199,5 @@ contentinfo
   paragraph "Last updated:"
     time "[redacted]"
   navigation "Pager"
-    link "Previous pageStorybook + React 19"
-    link "Next pageCI Diff Bot"
+    link "Previous page Storybook + React 19"
+    link "Next page CI Diff Bot"

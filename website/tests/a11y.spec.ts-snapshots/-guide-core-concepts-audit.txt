@@ -222,5 +222,5 @@ contentinfo
   paragraph "Last updated:"
     time "[redacted]"
   navigation "Pager"
-    link "Previous pageGetting Started"
-    link "Next pageAccessibility Snapshots"
+    link "Previous page Getting Started"
+    link "Next page Accessibility Snapshots"

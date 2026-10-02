@@ -141,5 +141,5 @@ contentinfo
   paragraph "Last updated:"
     time "[redacted]"
   navigation "Pager"
-    link "Previous pageHeadings View"
-    link "Next pagePanel features"
+    link "Previous page Headings View"
+    link "Next page Panel features"

@@ -17,5 +17,5 @@ generic
 button "Copy Code"
 generic
 link "Edit this page on GitHub"
-link "Previous pageNext.js (App Router + React 19)"
-link "Next pagePeer Dependencies"
+link "Previous page Next.js (App Router + React 19)"
+link "Next page Peer Dependencies"

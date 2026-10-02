@@ -8,5 +8,5 @@ link "Read more about the Headings view →"
 link "Read more about the TAB view →"
 table
 link "Edit this page on GitHub"
-link "Previous pageWhy Real A11y?"
-link "Next pageDOM View"
+link "Previous page Why Real A11y?"
+link "Next page DOM View"

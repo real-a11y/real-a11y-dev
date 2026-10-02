@@ -31,5 +31,5 @@ generic
 link "Core Concepts"
 link "Accessible Names"
 link "Edit this page on GitHub"
-link "Previous pageAccessible Names"
-link "Next pageTroubleshooting"
+link "Previous page Accessible Names"
+link "Next page Troubleshooting"

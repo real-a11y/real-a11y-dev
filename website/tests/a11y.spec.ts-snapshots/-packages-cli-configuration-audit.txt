@@ -617,5 +617,5 @@ contentinfo
   paragraph "Last updated:"
     time "[redacted]"
   navigation "Pager"
-    link "Previous pageCommands & flags"
-    link "Next pageNext.js (App Router + React 19)"
+    link "Previous page Commands & flags"
+    link "Next page Next.js (App Router + React 19)"

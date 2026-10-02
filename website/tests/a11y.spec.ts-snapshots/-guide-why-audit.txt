@@ -76,5 +76,5 @@ contentinfo
   paragraph "Last updated:"
     time "[redacted]"
   navigation "Pager"
-    link "Previous pageSnapshots vs. Other Tools"
-    link "Next pageUnderstanding the Views"
+    link "Previous page Snapshots vs. Other Tools"
+    link "Next page Understanding the Views"

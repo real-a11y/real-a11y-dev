@@ -407,5 +407,5 @@ contentinfo
   paragraph "Last updated:"
     time "[redacted]"
   navigation "Pager"
-    link "Previous pageTAB View"
-    link "Next pageOverview & Install"
+    link "Previous page TAB View"
+    link "Next page Overview & Install"
