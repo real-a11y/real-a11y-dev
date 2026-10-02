@@ -428,6 +428,19 @@ describe("DOM clobbering resilience", () => {
       expect(option.a11y.states?.["disabled"]).toBeUndefined();
     });
 
+    it("keeps a summary whose parent is the form", () => {
+      const root = createPage(
+        `<form>${TAG_FIELD}<summary>More</summary></form>`,
+      );
+      shadowEveryForm(root);
+
+      const result = extractDomTree(root.querySelector("summary")!);
+      const summary = result.nodes.get(result.rootId)!;
+      expect(summary.a11y.name).toBe("More");
+      // Not a details' summary, so it discloses nothing.
+      expect(summary.a11y.states?.["expanded"]).toBeUndefined();
+    });
+
     it("answers the live climb's questions about the form", () => {
       const root = createPage(`
         <form>${TAG_FIELD}<legend>Search</legend><span>Hint</span></form>
