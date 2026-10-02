@@ -987,6 +987,41 @@ describe("NativeDebuggerSession picker", () => {
     }
   });
 
+  it("a dropped setup still fails as connection-lost when the reason that arrives is unknown", async () => {
+    // The wait hands the decision to the listener, which treats a reason
+    // `detachEndsPick` doesn't know as a dropped connection, not a cancel.
+    const listeners = stubChrome().listeners;
+    const g = globalThis as unknown as { chrome: typeof chrome };
+    (
+      g.chrome.debugger.sendCommand as ReturnType<typeof vi.fn>
+    ).mockImplementation(
+      async (_target: unknown, method: string, params?: { mode?: string }) => {
+        if (
+          method === "Overlay.setInspectMode" &&
+          params?.mode === "searchForNode"
+        ) {
+          setTimeout(() =>
+            listeners[listeners.length - 1](
+              { tabId: 7 },
+              "replaced_with_devtools",
+            ),
+          );
+          throw new Error("Detached while handling command.");
+        }
+        return {};
+      },
+    );
+    const session = new NativeDebuggerSession(new FakeStorage());
+
+    const { outcome, value } = await session.withDebugger(7, (t) =>
+      session.runPick(7, t),
+    );
+
+    expect(outcome.ok).toBe(false);
+    expect(outcome.error).toBe("connection-lost");
+    expect(value).toBeUndefined();
+  });
+
   it("a detach with no pick armed does not cancel the next pick on that tab", async () => {
     // The listener settles only a pick that is already armed. Recording the
     // detach as a pending cancel instead (what `cancelPick` does for an early
