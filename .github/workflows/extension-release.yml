@@ -24,7 +24,48 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # The zip is produced by `vite`, which does not type-check, and the
+  # extension's unit tests never run in the build — so a type error or a
+  # failing test could ship straight to the Chrome Web Store. Gate the release
+  # on the extension plus the packages it bundles (core, ui, serialize).
+  #
+  # In a job of their own, and NOT in `package`, for the reason `publish.yml`
+  # gives for its own `verify` job: test files grade 🟢 low in `pnpm pr:risk`,
+  # so an agent can merge one with no human in the loop, and `package` holds a
+  # `contents: write` token (persisted into `.git/config` by checkout) and
+  # builds the zip a maintainer uploads to the store. Test code running there
+  # could rewrite that zip or spend that token. Here it can do neither.
+  verify:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      # `^...` selects the extension's upstream deps without running the
+      # extension's own build; their dist/ is what typecheck and the tests
+      # resolve against.
+      - name: Build workspace dependencies
+        run: pnpm --filter "@real-a11y-dev/semantic-navigator-extension^..." build
+
+      - name: Typecheck the extension and its bundled deps
+        run: pnpm --filter "@real-a11y-dev/semantic-navigator-extension..." typecheck
+
+      - name: Test the extension and its bundled deps
+        run: pnpm --filter "@real-a11y-dev/semantic-navigator-extension..." test
+
   package:
+    needs: verify
     runs-on: ubuntu-latest
     permissions:
       # Need write to attach the zip to a GitHub Release.
@@ -38,10 +79,12 @@ jobs:
 
       - uses: pnpm/action-setup@v6
 
+      # No `cache: pnpm`: the cache it would restore is the one `test.yml`
+      # saves on every push to `main` after running the whole test suite
+      # against that store. See the same step in `publish.yml`.
       - uses: actions/setup-node@v7
         with:
           node-version: 20
-          cache: pnpm
 
       - name: Install
         run: pnpm install --frozen-lockfile
@@ -49,20 +92,10 @@ jobs:
       # The extension consumes @real-a11y-dev/core + ui as workspace deps
       # via vite. Their dist/ has to exist before the extension's vite
       # build can resolve the imports — `^...` selects the extension's
-      # upstream deps without running the extension's own build.
+      # upstream deps without running the extension's own build. Built here
+      # rather than downloaded from `verify`, whose dist/ the tests ran over.
       - name: Build workspace dependencies
         run: pnpm --filter "@real-a11y-dev/semantic-navigator-extension^..." build
-
-      # The zip below is produced by `vite`, which does not type-check, and the
-      # extension's unit tests never run here — so a type error or a failing
-      # test could ship straight to the Chrome Web Store. Gate the release on
-      # the extension plus the packages it bundles (core, ui, serialize); the
-      # `^...` build above already produced their dist/.
-      - name: Typecheck the extension and its bundled deps
-        run: pnpm --filter "@real-a11y-dev/semantic-navigator-extension..." typecheck
-
-      - name: Test the extension and its bundled deps
-        run: pnpm --filter "@real-a11y-dev/semantic-navigator-extension..." test
 
       # Builds the extension itself and runs scripts/zip-for-cws.mjs.
       - name: Build + zip

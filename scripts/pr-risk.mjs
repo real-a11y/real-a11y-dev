@@ -149,8 +149,25 @@ const splitZ = (out) => out.split("\0").filter(Boolean);
  */
 const SELF_PATHS = new Set(["scripts/pr-risk.mjs", "scripts/pr-risk.test.mjs"]);
 
-/** The file types a code-reading rule scans — see `touchedCode` below. */
-const CODE_EXTENSIONS = ["ts", "tsx", "mjs", "js", "yml", "yaml"];
+/**
+ * The file types a code-reading rule scans — see `touchedCode` below.
+ *
+ * Every extension `TEST_FILE` accepts has to be here. Without `mts`, `cts`,
+ * `cjs` and `jsx`, a `.skip` added to `x.test.mts` graded 🟢 low because no
+ * rule could read it, while the identical line in `x.test.ts` graded 🟡.
+ */
+const CODE_EXTENSIONS = [
+  "ts",
+  "tsx",
+  "mts",
+  "cts",
+  "mjs",
+  "cjs",
+  "js",
+  "jsx",
+  "yml",
+  "yaml",
+];
 
 /**
  * The path a `diff --git` section is about, or `undefined` if the header is in
@@ -278,12 +295,33 @@ async function collectFacts(base) {
   // what this replaced: `files` came from HEAD while `rootPackageKeys` came from
   // disk, so an uncommitted change reported "0 files changed" and a high tier in
   // the same breath.
-  const tracked = splitZ(
+  //
+  // `--name-status` rather than `--name-only`, so the same read also says which
+  // paths this branch DELETED — `files` alone can't tell a deletion from an
+  // edit, and a deleted test is coverage that stopped running. Under
+  // `diffArgs`'s `--no-renames` on purpose: a test moved somewhere its runner
+  // no longer collects is a deletion as far as coverage goes, and rename
+  // detection would report it as a harmless move. It also keeps every entry a
+  // `<status>\0<path>` pair, with no two-path rename rows to misread.
+  const status = splitZ(
     await gitOrDie(
-      diffArgs(["--name-only", mergeBase]),
+      diffArgs(["--name-status", mergeBase]),
       "the list of changed files",
     ),
   );
+  if (status.length % 2) {
+    die([
+      `Can't pair \`git diff --name-status\` output — refusing to grade this diff.`,
+      ``,
+      `  ${JSON.stringify(status.slice(0, 6))}`,
+    ]);
+  }
+  const tracked = [];
+  const deleted = [];
+  for (let i = 0; i < status.length; i += 2) {
+    tracked.push(status[i + 1]);
+    if (status[i] === "D") deleted.push(status[i + 1]);
+  }
   const untracked = splitZ(
     await gitOrDie(
       [
@@ -405,6 +443,7 @@ async function collectFacts(base) {
     base,
     mergeBase,
     files,
+    deleted,
     lines,
     touchedCode,
     touchedCodeExcludingSelf: touchedCode.filter(
@@ -532,10 +571,19 @@ const PACKAGING_KEYS = [
  * Same idea as the root, different key set: a devDependency bump inside
  * `packages/cli` changes nothing a consumer can observe, while `exports` or
  * `files` decides whether an import resolves at all for everyone who installs it.
+ *
+ * The rest of the workspace — `examples/*` and `website` — publishes nothing,
+ * but its `scripts` still EXECUTE in the release jobs: `pnpm install` runs every
+ * workspace project's install lifecycle, and root `build` is `pnpm -r` with an
+ * exclusion list, so an example nobody excluded has its `build` run too. Both
+ * happen in `publish.yml`'s job holding npm's Trusted Publisher token, and
+ * both directories grade 🟢 low, so a `postinstall` added to an example was
+ * agent-mergeable code with publish rights. Only `scripts` counts there: no
+ * other key of a private, unpublished manifest reaches anyone.
  */
 async function changedPackageManifests(mergeBase, files) {
   const touched = files.filter((f) =>
-    /^packages\/[^/]+\/package\.json$/.test(f),
+    /^((packages|examples)\/[^/]+|website)\/package\.json$/.test(f),
   );
   const out = [];
   for (const file of touched) {
@@ -549,7 +597,8 @@ async function changedPackageManifests(mergeBase, files) {
       out.push({ file, keys: ["<unparseable>"] });
       continue;
     }
-    const keys = PACKAGING_KEYS.filter(
+    const watched = file.startsWith("packages/") ? PACKAGING_KEYS : ["scripts"];
+    const keys = watched.filter(
       (k) => JSON.stringify(a[k]) !== JSON.stringify(b[k]),
     );
     if (keys.length) out.push({ file, keys });
@@ -634,6 +683,104 @@ async function surfaceRemovals(mergeBase, files) {
 
 const any = (files, re) => files.filter((f) => re.test(f));
 
+/** A file a test runner collects, wherever it sits. */
+const TEST_FILE = /\.(test|spec)\.[cm]?[jt]sx?$/;
+
+/** A test-only directory inside a package's `src`, at any depth. */
+const SRC_TEST_DIR =
+  /^packages\/[^/]+\/src\/(?:.*\/)?__(tests|fixtures|snapshots)__\//;
+
+/**
+ * Test code and test data, which no published artifact can contain.
+ *
+ * That is a fact about the build, checked rather than assumed: every published
+ * package ships `files: ["dist"]` (plus a LICENSE and storybook-addon's two
+ * root shims), every tsup and vite config names its entry points explicitly
+ * rather than globbing `src/`, and `npm pack --dry-run` of all six lists no
+ * test-shaped path. What would break it is a source file importing one — a
+ * `__fixtures__` JSON is the plausible case — and `eslint.config.mjs` refuses
+ * that import, so the fact is a lint gate rather than something somebody once
+ * checked.
+ *
+ * The `changeset` job in `test.yml` excludes the same set from "published
+ * source" with its own grep, and has to stay in step: a path graded low here
+ * but counted there is a PR an agent may merge that CI won't let merge.
+ *
+ * Shipping by being RUN is the other half. Test code executes in the release
+ * workflows, and `publish.yml`'s publish job can mint npm's Trusted Publisher
+ * token — so both release workflows run their tests in a `verify` job that
+ * holds no credential, and build what they release in a separate job, from
+ * source, without the pnpm cache test runs on `main` write to. A release job
+ * that runs a test, or restores that cache, makes this function's premise
+ * false.
+ */
+const isTestShaped = (f) => TEST_FILE.test(f) || SRC_TEST_DIR.test(f);
+
+/**
+ * A file some runner here COLLECTS — wider than `TEST_FILE` by Jest's default
+ * `testMatch`, which takes anything under a `__tests__/` directory, anywhere.
+ * `examples/testing-jest` runs under root `pnpm test`, so a test there needs
+ * no `.test.` in its name to be one. Fixtures are data, not tests, and stay
+ * out: deleting one breaks the test that reads it, loudly.
+ */
+const isTestCode = (f) => TEST_FILE.test(f) || /(^|\/)__tests__\//.test(f);
+
+/**
+ * The ways to stop a test running without failing anything: `it.skip`,
+ * `describe.only`, `test.describe.fixme`, `it.skipIf(…)`, Playwright's
+ * `test.fail()`, the in-body `ctx.skip()` and its destructured `skip()`, the
+ * jasmine-style `xit(`, and Vitest's options object — `it("x", { skip: true },
+ * fn)`, which names no runner method at all.
+ *
+ * Any `.skip(` counts, not just a runner context's. That over-reads an
+ * iterator's `.skip(2)`, and the trade is deliberate: a false 🟡 costs one
+ * human look, while a miss is a switched-off test an agent merges unseen —
+ * and tests here call no other `.skip` today. The options keys are held
+ * tighter, because `only` is real data here (`{ only: "findings" }` in the CLI
+ * diff tests): `only`/`todo`/`fails` count with a literal `true`, `skip` with
+ * anything but `false` — `skip: process.platform === "win32"` is the shape.
+ *
+ * Nothing for `it.each(cases).skip(…)`: `each` returns a plain function, so
+ * that throws at collection and fails CI by itself. The parameterized forms
+ * that work, `it.skip.each` and `describe.only.each`, match the first branch.
+ */
+const TEST_DISABLER =
+  /(?<![\w$.])(?:(?:it|test|describe|suite|bench)(?:\.\w+)*\.(?:skip|only|todo|fails?|fixme|skipIf|runIf)\b|(?:[\w$]+\.)*skip\s*\(|x(?:it|test|describe)\s*\(|skip\s*:(?!\s*false\b)|(?:only|todo|fails)\s*:\s*true\b)/g;
+
+/**
+ * One evidence line per file, `<path> → hit, hit`, for each file whose text
+ * `re` matches — `hit` picks the part of a match worth printing. `re` must be
+ * global. Shared so every code-reading rule cites a file the same way, which
+ * `cited()` relies on.
+ */
+function hitsPerFile(code, re, hit) {
+  const out = [];
+  for (const [path, text] of code) {
+    const hits = new Set([...text.matchAll(re)].map(hit));
+    if (hits.size) out.push(`${path} → ${[...hits].join(", ")}`);
+  }
+  return out;
+}
+
+/**
+ * Which test files gained a disabler. ADDED lines only: a `-` line carrying
+ * `.skip` is a test being switched back on.
+ */
+const addedTestDisablers = (code) =>
+  hitsPerFile(
+    code
+      .filter(([path]) => isTestCode(path))
+      .map(([path, text]) => [
+        path,
+        text
+          .split("\n")
+          .filter((l) => l.startsWith("+"))
+          .join("\n"),
+      ]),
+    TEST_DISABLER,
+    (m) => m[0].replace(/\s*\($/, "").replace(/^(\w+)\s*:.*$/, "{ $1 }"),
+  );
+
 /**
  * Which of `names` (a regex alternation) the touched code reaches, one evidence
  * line per file: `<path> → name, name`.
@@ -649,12 +796,7 @@ const any = (files, re) => files.filter((f) => re.test(f));
  */
 function touchedNames(code, names) {
   const re = new RegExp(`(?<![A-Za-z0-9])(${names})`, "g");
-  const out = [];
-  for (const [path, text] of code) {
-    const hits = new Set([...text.matchAll(re)].map((m) => m[1]));
-    if (hits.size) out.push(`${path} → ${[...hits].join(", ")}`);
-  }
-  return out;
+  return hitsPerFile(code, re, (m) => m[1]);
 }
 
 /**
@@ -882,7 +1024,7 @@ const RULES = [
     id: "packaging",
     tier: "high",
     title: "Package publishing shape",
-    why: "`exports`, `files`, `types` and `private` decide whether an import resolves for everyone who installs the package — and a wrong `dts.resolve` half silently degrades published types to `any` rather than failing the build.",
+    why: "`exports`, `files`, `types` and `private` decide whether an import resolves for everyone who installs the package — and a wrong `dts.resolve` half silently degrades published types to `any` rather than failing the build. An example's or the website's `scripts` count too: `pnpm install` and root `build` run them inside the release job that can publish to npm.",
     match: (f) =>
       f.packageManifests.map((m) => `${m.file} → ${m.keys.join(", ")}`),
   },
@@ -934,7 +1076,27 @@ const RULES = [
     tier: "medium",
     title: "Published package source",
     why: "Anything under a published package's `src` reaches users at the next release. Covered by the suite, so the tier is medium rather than high — but it is not a change the CI gate alone should be trusted to bless.",
-    match: (f) => any(f.files, /^packages\/[^/]+\/src\//),
+    // Minus test code and test data, which cannot reach users (see
+    // `isTestShaped`). Without this, a co-located `*.test.tsx` graded 🟡 here
+    // before `LOW_SHAPED` was ever consulted: its `tests` entry never got a
+    // say for those paths, and its `test fixtures` entry could only ever match
+    // paths this rule had already graded — dead on arrival. A test-only flake
+    // fix went to a human, while the same edit to an `e2e/*.spec.ts` one
+    // directory over was agent-mergeable.
+    match: (f) =>
+      any(f.files, /^packages\/[^/]+\/src\//).filter((p) => !isTestShaped(p)),
+  },
+  {
+    id: "tests-disabled",
+    tier: "medium",
+    title: "A test switched off or deleted",
+    why: "Test-only changes grade low because nothing in them can ship — but they can stop a test running, and then the suite stays green over whatever that test guarded, with nothing in CI to say so. `.skip`, `.todo`, `.fails`, a `skipIf`, or deleting the file all pass every check by construction, which is the whole problem; and skipping the flaky test is the flake fix an agent is most tempted to merge itself.",
+    match: (f) => [
+      ...f.deleted.filter((p) => isTestCode(p)).map((p) => `${p} → deleted`),
+      ...addedTestDisablers(f.touchedCode),
+    ],
+    // The rubric's own tests have to write these calls into fixtures.
+    excludeSelf: true,
   },
   {
     id: "surface-addition",
@@ -978,8 +1140,8 @@ const LOW_SHAPED = [
   [/^packages\/[^/]+\/(README|CHANGELOG)\.md$/, "package docs"],
   [/^docs\/(?!surface).*\.md$/, "internal docs"],
   [/^examples\//, "examples"],
-  [/\.(test|spec)\.[cm]?[jt]sx?$/, "tests"],
-  [/^packages\/[^/]+\/src\/__(tests|fixtures|snapshots)__\//, "test fixtures"],
+  [TEST_FILE, "tests"],
+  [SRC_TEST_DIR, "test fixtures"],
   [/^\.changeset\/[^/]+\.md$/, "changeset entries"],
   [/^\.github\/ISSUE_TEMPLATE\//, "issue templates"],
 ];
