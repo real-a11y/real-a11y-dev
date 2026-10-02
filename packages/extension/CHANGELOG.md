@@ -45,7 +45,10 @@
   Sequence view and the copied export. Spacing follows how each child renders, so
   a label built from inline `<span>`s still reads as one word, while a `<br>`, an
   empty block, and a rendered child that lends no text of its own (a form
-  control, an `aria-hidden` block) now keep the text around them apart.
+  control, an `aria-hidden` block) now keep the text around them apart. Spacing
+  moves both ways: an inline link or other nested control no longer forces a
+  space in where the markup has none, so a cell that read `Tree ( treeSnapshot )`
+  now reads `Tree (treeSnapshot)`.
   ([#449](https://github.com/real-a11y/real-a11y-dev/pull/449))
 
 - In DOM mode, a native checkbox, radio, `<select>` or `<summary>` now takes

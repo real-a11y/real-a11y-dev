@@ -834,13 +834,15 @@ function getAccessibleTextContent(
       // Closing it means teaching this check to tell the two kinds of hidden
       // apart — a different question from how a child's box spaces its
       // neighbours, and one that predates this rule, so it is its own change.
+      // Chromium's tree puts an area under its image, never under the element
+      // its map sits in, so it adds nothing to that element's name — and no
+      // separator either: it renders no box of its own. Checked before
+      // `isSubtreeHidden`, which for an `<area>` goes looking for the image
+      // using its map; the answer cannot change the outcome here.
+      if (childEl.localName === "area") continue;
       if (isSubtreeHidden(childEl, childStyle)) {
         continue;
       }
-      // Chromium's tree puts an area under its image, never under the element
-      // its map sits in, so it adds nothing to that element's name — and no
-      // separator either: it renders no box of its own.
-      if (childEl.localName === "area") continue;
       // A child that has a box of its own separates the text either side of it
       // whether or not it contributes any text — Chromium reads
       // `<h1>Save<div aria-hidden="true">x</div>now</h1>` as "Save now".
@@ -906,21 +908,27 @@ function getAccessibleTextContent(
  *
  * Reading computed `display` rather than a tag list means an author's
  * `display: inline` on a `<div>` (or `display: block` on a `<span>`) is honoured
- * the way it renders. `<br>` is the one tag that needs naming: it is an inline
- * box, but it ends the line, and Chromium spaces across it.
+ * the way it renders. Two tags are named instead, because their spacing does not
+ * follow `display`: `<br>`, an inline box that ends the line, and `<summary>`,
+ * which Chromium separates as its disclosure's label however it is styled.
  *
  * With no computed style to read (no `window.getComputedStyle`), keep the
- * unspaced concatenation rather than guessing — except for `<summary>`, which
- * always renders as a block and was spaced before this check existed.
+ * unspaced concatenation rather than guessing.
  */
 function needsSpaceAround(
   element: Element,
   style: CSSStyleDeclaration | null,
 ): boolean {
   const tag = element.tagName.toLowerCase();
-  if (tag === "br") return true;
+  // `<br>` is an inline box that ends the line. A `<summary>` is its
+  // disclosure's label, which Chromium separates however it is styled — an
+  // author's `display: inline` on one still reads "Note S Body", not
+  // "Note SBody" — so neither is decided by `display`.
+  if (tag === "br" || tag === "summary") return true;
   const display = style?.display;
-  if (!display) return tag === "summary";
+  // No computed style to read (no `window.getComputedStyle`): keep the
+  // unspaced concatenation rather than guessing.
+  if (!display) return false;
   // Compared in full, not by prefix: `inline-block` and the other atomic
   // inline-level boxes must NOT match the bare `inline` case.
   return !(

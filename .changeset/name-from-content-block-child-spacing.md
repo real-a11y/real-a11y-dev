@@ -19,7 +19,7 @@ The rule is the one Chromium applies: **a child that has a box of its own separa
 
 The existing whitespace normalization collapses the padding, so no name gains a leading, trailing or doubled space.
 
-**Expect snapshot changes** where a named element's label is split across children with boxes of their own: those names gain the spaces assistive technology announces. Re-record the affected baselines. Names built from inline children are byte-for-byte unchanged.
+**Expect snapshot changes in both directions.** A name whose label is split across children with boxes of their own _gains_ the spaces assistive technology announces. A name with an inline nested widget _loses_ a space it should never have had: `<h2>Signed in as<a href="/u">Ada</a></h2>` was `"Signed in as Ada"` and is now `"Signed in asAda"`, which is what Chromium reads for markup with no space in it. The same goes for an inline name-barrier child. This PR's own website baselines show both: 164 lines gain a space, 13 lose one (`cell "Tree ( treeSnapshot )"` → `cell "Tree (treeSnapshot)"`). Re-record the affected baselines; a `toHaveAccessibleName` that breaks is showing you what a screen reader actually announces.
 
 `cli` and `mcp` only change in the tab sequence (`real-a11y tabs`, the `get_tab_order` tool), the one view built by the in-page walk. Native trees are untouched.
 

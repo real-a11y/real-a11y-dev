@@ -2029,6 +2029,17 @@ describe("extractDomTree", () => {
       ).toBe("Sa ve");
     });
 
+    it("spaces a <summary> however it is styled", () => {
+      // Chromium separates the disclosure's label whatever its display is:
+      // an author's `display: inline` on it still reads "Note S Body".
+      expect(
+        nameOfTag(
+          '<h3>Note<details open><summary style="display: inline">S</summary>Body</details></h3>',
+          "h3",
+        ),
+      ).toBe("Note S Body");
+    });
+
     it("does not space inline children, which read as one word", () => {
       expect(
         nameOfTag("<button><span>Sa</span><span>ve</span></button>", "button"),
