@@ -469,12 +469,12 @@ describe("field-value redaction covers the extension's page-text reads", () => {
     const textPath = "packages/extension/src/page-text.ts";
     const text = `const CONTROL_TEXT_TAGS: ReadonlySet<string> = new Set([\n  "select",\n  "textarea",\n  "datalist",\n]);\n`;
     const contentPath = "packages/extension/src/content.ts";
-    const content = `for (const region of regions) {\n  const text = pageText(region, { skipHidden: true }).trim();\n  send(text);\n}\n`;
+    const content = `for (const region of regions) {\n  const text = pageText(region, { announced: true }).trim();\n  send(text);\n}\n`;
     const result = await grade(
       {
         [textPath]: text.replace(`  "textarea",\n`, ``),
         [contentPath]: content.replace(
-          `pageText(region, { skipHidden: true })`,
+          `pageText(region, { announced: true })`,
           `(region.textContent || "")`,
         ),
       },

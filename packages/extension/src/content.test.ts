@@ -423,8 +423,10 @@ describe("content: live regions", () => {
     vi.useFakeTimers();
     vi.resetModules();
     document.body.innerHTML =
+      `<div id="ready" role="status">Ready</div>` +
       `<div id="status" role="status"></div>` +
-      `<div id="polite" aria-live="polite"></div>`;
+      `<div id="polite" aria-live="polite"></div>` +
+      `<p id="elsewhere">Not a region</p>`;
     h = makeHarness();
     (globalThis as { chrome?: unknown }).chrome = h.chromeMock;
     await import("./content.js");
@@ -452,6 +454,24 @@ describe("content: live regions", () => {
     expect(await announce("status", "Saved")).toEqual([
       { text: "Saved", level: "polite", role: "status" },
     ]);
+  });
+
+  it("announces no region that nothing changed in", async () => {
+    // `#ready` held its text before the panel opened. A screen reader never
+    // announces that, and reading every region on each change used to log it
+    // the first time anything on the page moved.
+    expect(await announce("elsewhere", "Changed")).toEqual([]);
+  });
+
+  it("reads a region added with its text", async () => {
+    document.body.insertAdjacentHTML(
+      "beforeend",
+      `<section><div role="alert">Session expired</div></section>`,
+    );
+    await vi.advanceTimersByTimeAsync(500);
+    expect(
+      h.sent.filter((m) => m.type === "LIVE_REGION").map((m) => m.payload),
+    ).toEqual([{ text: "Session expired", level: "assertive", role: "alert" }]);
   });
 
   it("never sends a sensitive textarea's markup text", async () => {
@@ -507,16 +527,67 @@ describe("content: live regions", () => {
     expect(await announce("status", "Saved")).toEqual([]);
   });
 
-  it("still reads a form whose control shadows tagName", async () => {
-    // In a browser `form.tagName` is that control, so a hidden-check that
-    // reads it throws. Forced, because jsdom doesn't shadow a form's
-    // properties. The region still reports the text it shows.
+  it("sends nothing from a region inside something hidden", async () => {
+    document.body.insertAdjacentHTML(
+      "beforeend",
+      `<div style="display: none"><div id="toast" role="status"></div></div>` +
+        `<div aria-hidden="true"><div id="backdrop" aria-live="polite"></div></div>`,
+    );
+    await vi.advanceTimersByTimeAsync(500);
+    expect(await announce("toast", "Saved")).toEqual([]);
+    expect(await announce("backdrop", "Loading")).toEqual([]);
+  });
+
+  it("reads text a child shows again under visibility: hidden", async () => {
+    // `visibility` is inherited but overridable: the child is on screen and
+    // announced, while its parent's own text is not.
+    const sent = await announce(
+      "status",
+      `<div style="visibility: hidden">Draft saved ` +
+        `<span style="visibility: visible">Card declined</span></div>`,
+    );
+    expect(sent).toEqual([
+      { text: "Card declined", level: "polite", role: "status" },
+    ]);
+  });
+
+  it("reads a closed <details> as its summary", async () => {
+    const sent = await announce(
+      "status",
+      `Saved. <details><summary>Details</summary>debug trace</details>`,
+    );
+    expect(sent).toEqual([
+      { text: "Saved. Details", level: "polite", role: "status" },
+    ]);
+  });
+
+  it("reads a region's shadow tree as rendered", async () => {
+    // The shadow tree renders, with the light DOM slotted into it; light
+    // children no slot takes don't render at all.
     const status = document.getElementById("status")!;
-    status.innerHTML = `<form><input name="tagName">Sent</form>`;
+    status.attachShadow({ mode: "open" }).innerHTML =
+      `<b>Saved</b> <slot name="detail"></slot>`;
+    const sent = await announce(
+      "status",
+      `<span slot="detail">2 files</span><span>unslotted</span>`,
+    );
+    expect(sent).toEqual([
+      { text: "Saved 2 files", level: "polite", role: "status" },
+    ]);
+  });
+
+  it("still reads a form whose control shadows hasAttribute", async () => {
+    // In a browser `form.hasAttribute` is that control, so core's hidden-check
+    // throws calling it. Forced, because jsdom doesn't shadow a form's
+    // properties. (A shadowed `nodeType` can't be modelled here: jsdom's own
+    // getComputedStyle reads it and throws, where Chromium's never does.) The
+    // region still reports the text it shows.
+    const status = document.getElementById("status")!;
+    status.innerHTML = `<form><input name="hasAttribute">Sent</form>`;
     const form = status.querySelector("form")!;
-    Object.defineProperty(form, "tagName", {
+    Object.defineProperty(form, "hasAttribute", {
       configurable: true,
-      get: () => form.querySelector('[name="tagName"]'),
+      get: () => form.querySelector('[name="hasAttribute"]'),
     });
     await vi.advanceTimersByTimeAsync(500);
     expect(

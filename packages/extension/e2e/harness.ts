@@ -223,6 +223,18 @@ export interface FixtureTab {
   tabId: number;
 }
 
+/**
+ * A merged, frame-prefixed node id (`f<frameId>-<localId>`) split into the
+ * frame that owns the node and the id that frame knows it by. An unprefixed id
+ * is the top frame's.
+ */
+function splitNodeId(nodeId: string): { frameId: number; localId: string } {
+  const match = /^f(\d+)-(.+)$/.exec(nodeId);
+  return match
+    ? { frameId: Number(match[1]), localId: match[2]! }
+    : { frameId: 0, localId: nodeId };
+}
+
 /** Per-test API over one launched extension. */
 export class NativeHarness {
   private readonly opened: Page[] = [];
@@ -385,9 +397,7 @@ export class NativeHarness {
     nodeId: string,
     action: string,
   ): Promise<{ success?: boolean; error?: string }> {
-    const match = /^f(\d+)-(.+)$/.exec(nodeId);
-    const frameId = match ? Number(match[1]) : 0;
-    const localId = match ? match[2] : nodeId;
+    const { frameId, localId } = splitNodeId(nodeId);
     return await this.toFrame(tabId, frameId, {
       type: "DISPATCH_ACTION",
       payload: { nodeId: localId, action },
@@ -402,9 +412,7 @@ export class NativeHarness {
     tabId: number,
     nodeId: string,
   ): Promise<{ success?: boolean; value?: string; error?: string }> {
-    const match = /^f(\d+)-(.+)$/.exec(nodeId);
-    const frameId = match ? Number(match[1]) : 0;
-    const localId = match ? match[2] : nodeId;
+    const { frameId, localId } = splitNodeId(nodeId);
     return await this.toFrame(tabId, frameId, {
       type: "GET_FIELD_STATE",
       payload: { nodeId: localId },

@@ -145,6 +145,20 @@ describe("computeFieldState", () => {
       el.querySelector("textarea")!.value = "edited";
       expect(computeFieldState(el)).toMatchObject({ value: "Notes end" });
     });
+
+    it("reads only the text the editor renders", () => {
+      // Never on screen, so never what the user is editing. aria-hidden text
+      // is: an editor's value knows nothing of ARIA, as in Chromium's.
+      const el = mount(
+        `<div contenteditable="true" role="textbox">Hello ` +
+          `<style>.mention { color: blue }</style>` +
+          `<script>window.editorState = {}</script>` +
+          `<span style="display: none">draft-id-42</span>` +
+          `<span style="visibility: hidden">ghost</span>` +
+          `<span aria-hidden="true">@</span>world</div>`,
+      );
+      expect(computeFieldState(el)).toMatchObject({ value: "Hello @world" });
+    });
   });
 
   describe("non-fillable elements", () => {

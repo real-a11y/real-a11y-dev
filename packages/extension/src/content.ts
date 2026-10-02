@@ -411,21 +411,78 @@ document.addEventListener("focusin", (e) => {
 
 // ---- Live region observer (top frame only) ----
 if (!isSubFrame) {
+  // Through the prototypes, not the element: a `<form>` whose control is named
+  // after one of these shadows its own. A selector engine is no help either:
+  // `closest` in jsdom climbs through the shadowed `parentElement`.
+  const nodeTypeOf = Object.getOwnPropertyDescriptor(
+    Node.prototype,
+    "nodeType",
+  )!.get!;
+  const isConnected = Object.getOwnPropertyDescriptor(
+    Node.prototype,
+    "isConnected",
+  )!.get!;
+  const getAttribute = Element.prototype.getAttribute;
+  const hasAttribute = Element.prototype.hasAttribute;
+  const createTreeWalker = Document.prototype.createTreeWalker;
+
+  /** `[role="status"], [role="alert"], [role="log"], [aria-live]`. */
+  const isLiveRegion = (element: Element): boolean => {
+    const role = getAttribute.call(element, "role");
+    return (
+      role === "status" ||
+      role === "alert" ||
+      role === "log" ||
+      hasAttribute.call(element, "aria-live")
+    );
+  };
+
   let liveDebounce: ReturnType<typeof setTimeout> | null = null;
   const lastLiveText = new WeakMap<Element, string>();
+  // The regions a mutation touched since the last read. Only these are read
+  // again: a region nothing changed in has nothing new to announce, and
+  // reading every region on the page each time costs a styled walk of each.
+  const touched = new Set<Element>();
 
-  liveObserver = new MutationObserver(() => {
+  /** Mark every region around `node`, and if `node` was just added, every
+   *  region inside it. */
+  const touch = (node: Node, added: boolean) => {
+    const element =
+      nodeTypeOf.call(node) === Node.ELEMENT_NODE
+        ? (node as Element)
+        : safeParentElement(node);
+    for (let el = element; el; el = safeParentElement(el)) {
+      if (isLiveRegion(el)) touched.add(el);
+    }
+    if (added && element && element === node) {
+      const inside = createTreeWalker.call(
+        document,
+        element,
+        NodeFilter.SHOW_ELEMENT,
+      );
+      while (inside.nextNode()) {
+        const el = inside.currentNode as Element;
+        if (isLiveRegion(el)) touched.add(el);
+      }
+    }
+  };
+
+  liveObserver = new MutationObserver((records) => {
+    for (const record of records) {
+      touch(record.target, false);
+      record.addedNodes.forEach((node) => touch(node, true));
+    }
     if (liveDebounce) clearTimeout(liveDebounce);
     liveDebounce = setTimeout(() => {
-      const regions = document.querySelectorAll(
-        '[role="status"], [role="alert"], [role="log"], [aria-live]',
-      );
+      const regions = [...touched];
+      touched.clear();
       for (const region of regions) {
+        if (!isConnected.call(region)) continue;
         // What a screen reader could announce, never raw `textContent`: that
         // also holds a <textarea>'s markup default — the secret, for a
         // sensitive field — and hidden, script and style text, none of which
         // belongs on the message channel.
-        const text = pageText(region, { skipHidden: true }).trim();
+        const text = pageText(region, { announced: true }).trim();
         if (!text || text === lastLiveText.get(region)) continue;
         lastLiveText.set(region, text);
 

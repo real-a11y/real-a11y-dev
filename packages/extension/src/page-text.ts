@@ -1,77 +1,114 @@
-import { isHiddenFromAT } from "@real-a11y-dev/core";
+import {
+  CONTROL_TEXT_TAGS,
+  flatChildNodes,
+  isAriaHiddenValue,
+  isRenderedInFlatTree,
+  isSubtreeHidden,
+  renderingParent,
+} from "@real-a11y-dev/core";
 
-/**
- * Form controls whose child text is not what they show: a `<textarea>`'s is
- * its markup DEFAULT value — stale once the user types, and for a sensitive
- * field (ADR-0001) the secret itself — a `<select>`'s is every option, not
- * the chosen one, and a `<datalist>`'s are suggestions. Core's field-text
- * walk skips the same set. Each control carries its own value, which a text
- * read never reaches.
- */
-const CONTROL_TEXT_TAGS: ReadonlySet<string> = new Set([
-  "select",
-  "textarea",
-  "datalist",
-]);
+const TEXT_NODE = 3;
+const ELEMENT_NODE = 1;
 
-// Captured once: a `<form>` whose control is named `ownerDocument` shadows the
-// property, and an `<img name="createTreeWalker">` shadows the document's.
-const ownerDocumentGetter = Object.getOwnPropertyDescriptor(
+// Captured once, and read through the prototype: a `<form>` whose control is
+// named `nodeType` or `getAttribute` shadows its own.
+const nodeTypeOf = Object.getOwnPropertyDescriptor(
   Node.prototype,
-  "ownerDocument",
-)?.get;
-const createTreeWalker = Document.prototype.createTreeWalker;
+  "nodeType",
+)!.get!;
+const getAttribute = Element.prototype.getAttribute;
 
 /**
- * Core's `isHiddenFromAT`, read as "not hidden" when it throws — a `<form>`
- * whose control shadows `tagName` makes it — so a hostile form costs a read
- * no text it shows.
+ * True if nothing inside `element` reaches the page's text: it is a control
+ * ({@link CONTROL_TEXT_TAGS} — a `<textarea>`'s child text is its markup
+ * DEFAULT value, and for a sensitive field the secret itself), or it renders
+ * nothing (`hidden`, `inert`, `display: none`, which takes `<script>` and
+ * `<style>` with it), or — when `announced` — it is `aria-hidden`.
+ *
+ * A hostile `<form>` can make core's check throw (a control named
+ * `hasAttribute`). That reads as not hidden, as raw `textContent` would: the
+ * control check above it never throws, so no control's text gets through.
  */
-function hiddenFromAT(element: Element): boolean {
+function unread(
+  element: Element,
+  style: CSSStyleDeclaration | null,
+  announced: boolean,
+): boolean {
+  // `localName` can't throw: only a <form> shadows it, and no form is a control.
+  if (CONTROL_TEXT_TAGS.has(element.localName)) return true;
   try {
-    return isHiddenFromAT(element);
+    if (
+      announced &&
+      isAriaHiddenValue(getAttribute.call(element, "aria-hidden"))
+    ) {
+      return true;
+    }
+    return isSubtreeHidden(element, style);
   } catch {
     return false;
   }
 }
 
+/** `visibility` is inherited and overridable, so it hides text, not subtrees. */
+function textVisible(style: CSSStyleDeclaration | null): boolean {
+  return style?.visibility !== "hidden" && style?.visibility !== "collapse";
+}
+
 /**
- * `root`'s text the way `textContent` reads it, less the text the page never
- * shows as text: a control's children ({@link CONTROL_TEXT_TAGS}), `root`
- * included. With `skipHidden`, also every subtree hidden from assistive
- * technology, `root` included — `aria-hidden`, `hidden`, `inert`,
- * `display: none`, `visibility: hidden`, `<script>` and `<style>` — so the
- * result is what a screen reader could announce.
+ * True if a screen reader could reach `element` at all: it is rendered in the
+ * flat tree (assigned to a slot, not in a closed `<details>`' body), and
+ * neither it nor anything rendering it is hidden or `aria-hidden`.
+ */
+function announceable(element: Element): boolean {
+  if (!isRenderedInFlatTree(element)) return false;
+  for (let el: Element | null = element; el; el = renderingParent(el)) {
+    if (unread(el, getComputedStyle(el), true)) return false;
+  }
+  return true;
+}
+
+/**
+ * The text `root` renders, read like `textContent` but in the flat tree — slots
+ * and open shadow roots as rendered, a closed `<details>` as its summary — and
+ * without what the page never shows as text: a control's child text, a subtree
+ * that renders nothing, and text under `visibility: hidden` (a child that sets
+ * `visible` again still reads). Core's field-text walk reads an editor's
+ * value much the same way, before collapsing and capping it.
  *
- * Walks with a `TreeWalker`, which reads the tree natively: a `<form>` whose
- * control is named `childNodes` can't misdirect it.
+ * With `announced`, also without `aria-hidden` subtrees, and empty unless
+ * `root` itself could be announced (see {@link announceable}): what a screen
+ * reader could say for a live region.
  */
 export function pageText(
   root: Element,
-  { skipHidden = false }: { skipHidden?: boolean } = {},
+  { announced = false }: { announced?: boolean } = {},
 ): string {
-  // `localName` can't throw: only a <form> shadows it, and no form is a control.
-  if (CONTROL_TEXT_TAGS.has(root.localName)) return "";
-  if (skipHidden && hiddenFromAT(root)) return "";
+  const rootStyle = getComputedStyle(root);
+  if (announced ? !announceable(root) : unread(root, rootStyle, false)) {
+    return "";
+  }
 
-  const doc = (ownerDocumentGetter?.call(root) as Document | null) ?? document;
-  const walker = createTreeWalker.call(
-    doc,
-    root,
-    NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT,
-    {
-      acceptNode(node) {
-        if (node.nodeType === Node.TEXT_NODE) return NodeFilter.FILTER_ACCEPT;
-        const el = node as Element;
-        const unread =
-          CONTROL_TEXT_TAGS.has(el.localName) ||
-          (skipHidden && hiddenFromAT(el));
-        // REJECT drops the whole subtree; SKIP walks on into it.
-        return unread ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_SKIP;
-      },
-    },
-  );
   let text = "";
-  while (walker.nextNode()) text += (walker.currentNode as Text).data;
+  // An explicit stack, not recursion: a page's depth is the page's to choose.
+  const stack: Array<{ node: Node; visible: boolean }> = [];
+  const push = (parent: Node, visible: boolean) => {
+    const children = flatChildNodes(parent);
+    for (let i = children.length - 1; i >= 0; i--) {
+      stack.push({ node: children[i]!, visible });
+    }
+  };
+  push(root, textVisible(rootStyle));
+  while (stack.length) {
+    const { node, visible } = stack.pop()!;
+    const type = nodeTypeOf.call(node);
+    if (type === TEXT_NODE) {
+      if (visible) text += (node as Text).data;
+      continue;
+    }
+    if (type !== ELEMENT_NODE) continue;
+    const style = getComputedStyle(node as Element);
+    if (unread(node as Element, style, announced)) continue;
+    push(node, textVisible(style));
+  }
   return text;
 }

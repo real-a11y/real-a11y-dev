@@ -28,13 +28,20 @@
   and for a sensitive field (`autocomplete="one-time-code"`, `cc-number`…) it
   is the secret itself: a status message holding a one-time-code field
   logged the code with it, and an editor around a card-number field opened
-  its input panel with the number in it. The log also shows what a screen
-  reader would announce now, not every character in the region: it leaves
-  out `aria-hidden`, `hidden`, `inert`, `display: none` and
-  `visibility: hidden` content, `<script>` and `<style>` text, a `<select>`'s
-  options and a `<datalist>`'s suggestions, and logs nothing for a region
-  that is itself hidden from assistive technology.
-  ([#469](https://github.com/real-a11y/real-a11y-dev/pull/469))
+  its input panel with the number in it.
+
+  The log also shows what a screen reader would announce now, not every
+  character in the region. It leaves out `aria-hidden`, `hidden`, `inert`,
+  `display: none` and `visibility: hidden` content (a child that is
+  `visibility: visible` again still reads), `<script>` and `<style>` text, a
+  `<select>`'s options, a `<datalist>`'s suggestions and a closed
+  `<details>`' body; it reads a region's shadow tree as it renders, slotted
+  content included; and it logs nothing for a region that is hidden, or sits
+  inside something hidden. It also logs a region only when something in it
+  changes: a region's existing text was logged the first time anything on
+  the page changed after the panel opened. The input panel likewise opens
+  with only the text the editor renders.
+  ([#477](https://github.com/real-a11y/real-a11y-dev/pull/477))
 
 - In DOM mode, a `<form>` with a field named `hasAttribute` is no longer
   dropped from the tree, the Tab Sequence view and the Buttons and Forms

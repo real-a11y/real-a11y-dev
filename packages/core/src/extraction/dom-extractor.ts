@@ -1378,8 +1378,11 @@ const POPUP_ROLES: ReadonlySet<string> = new Set([
  * field's text walk skips them; the control carries its own `a11y.value`.
  * Chromium's rendered text of an editor lists a nested `<select>`'s every
  * option — a knowing divergence, since only the chosen one is on screen.
+ *
+ * Exported so the extension's own text reads skip the same set (ADR-0001: a
+ * sensitive `<textarea>`'s default is the secret itself).
  */
-const CONTROL_TEXT_TAGS: ReadonlySet<string> = new Set([
+export const CONTROL_TEXT_TAGS: ReadonlySet<string> = new Set([
   "select",
   "textarea",
   "datalist",
