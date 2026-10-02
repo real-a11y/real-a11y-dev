@@ -1829,6 +1829,161 @@ function takesInheritedDisabled(
 }
 
 /**
+ * A native checkbox's or radio's checkedness, and `"mixed"` for an
+ * indeterminate checkbox, which Chromium reads in place of `aria-checked` and
+ * `aria-pressed`. `null` for any other element, including any other `<input>`
+ * type, which reads `aria-checked` as usual.
+ *
+ * `indeterminate` is a property with no attribute, and script is the only
+ * thing that sets it, so no mutation reports the change. `LiveTreeExtractor`
+ * re-reads every checkbox and radio on refresh for that reason.
+ */
+function nativeChecked(element: Element): boolean | "mixed" | null {
+  if (element.tagName.toLowerCase() !== "input") return null;
+  const input = element as HTMLInputElement;
+  if (input.type === "checkbox")
+    return input.indeterminate ? "mixed" : input.checked;
+  return input.type === "radio" ? input.checked : null;
+}
+
+/**
+ * Whether a drop-down `<select>`'s picker is open, which is its expanded
+ * state in Chromium's tree. An engine without the `:open` pseudo-class throws
+ * on it, and has no other way to tell.
+ */
+function isPickerOpen(select: Element): boolean {
+  try {
+    return select.matches(":open");
+  } catch {
+    return false;
+  }
+}
+
+/** The largest `size` a `<select>` honors. Past it the attribute is ignored. */
+const MAX_SELECT_SIZE = 0xffffffff;
+
+/**
+ * Whether a `<select>` is a drop-down: its display size, as HTML and Chromium
+ * compute it, is 1. That is `size` when it parses to 1 through 2^32-1, and
+ * otherwise 4 for a `multiple` select and 1 for any other. So
+ * `<select multiple size="1">` is a drop-down and `<select multiple
+ * size="0">` a list box. Read from the attributes: the `size` property reads
+ * 0 above 2^31-1. `size` parses by HTML's integer rules, as `tabindex` does.
+ */
+function isDropDownSelect(select: Element): boolean {
+  const size = parseTabindex(select.getAttribute("size")) ?? 0;
+  const displaySize =
+    size > 0 && size <= MAX_SELECT_SIZE
+      ? size
+      : select.hasAttribute("multiple")
+        ? 4
+        : 1;
+  return displaySize <= 1;
+}
+
+/**
+ * Roles on which Chromium exposes a native checkbox's or radio's checkedness
+ * as `checked`. Its own role is one of them.
+ */
+const CHECKEDNESS_ROLES = new Set([
+  "checkbox",
+  "radio",
+  "switch",
+  "menuitemcheckbox",
+  "menuitemradio",
+]);
+
+/**
+ * Roles under which a `<details>`' summary takes `expanded` from the details,
+ * measured against Chromium 151 across every ARIA role. Its own role, which
+ * the engine calls `generic`, is a disclosure too.
+ */
+const SUMMARY_EXPANDED_ROLES = new Set([
+  "application",
+  "button",
+  "checkbox",
+  "columnheader",
+  "combobox",
+  "form",
+  "gridcell",
+  "link",
+  "listitem",
+  "menuitem",
+  "menuitemcheckbox",
+  "menuitemradio",
+  "option",
+  "region",
+  "row",
+  "rowheader",
+  "switch",
+  "tab",
+  "treeitem",
+]);
+
+/**
+ * The states an element's own semantics decide, which Chromium reads in
+ * place of the matching ARIA attribute. A state mapped to `undefined` is one
+ * the element doesn't have, whatever its attribute says. `role` is its
+ * computed role. Each rule was measured against Chromium 151.
+ *
+ * - A native checkbox or radio: its checkedness ({@link nativeChecked}) is
+ *   `checked` on a role in {@link CHECKEDNESS_ROLES}, and on an `option` or
+ *   `treeitem` while `aria-checked` is set. It is `pressed` instead on a
+ *   `button` with `aria-pressed`, a toggle button. Any other role has neither.
+ * - A `<select>` as a combobox or list box: a drop-down
+ *   ({@link isDropDownSelect}) in the combobox role is expanded while its
+ *   picker is open. A list box has no expanded state, unless the author gave
+ *   it the combobox role, which reads `aria-expanded` as usual. Neither is a
+ *   toggle button, so neither has `pressed`. Any other author role reads
+ *   `aria-expanded` and `aria-pressed` as usual.
+ * - Any `<summary>` child of a `<details>`, not only the one that toggles it:
+ *   `expanded` is whether the details is open, in its own role or one in
+ *   {@link SUMMARY_EXPANDED_ROLES}, and nothing under any other role. Only a
+ *   `button` role makes it a toggle button, with a `pressed`.
+ */
+export function nativeStates(
+  element: Element,
+  tag: string,
+  role: string,
+): Record<string, boolean | string | undefined> {
+  const checked = nativeChecked(element);
+  if (checked !== null) {
+    const ariaSet = (attr: string) =>
+      ariaTristate(element.getAttribute(attr)) !== null;
+    if (role === "button" && ariaSet("aria-pressed"))
+      return { checked: undefined, pressed: checked };
+    const exposed =
+      CHECKEDNESS_ROLES.has(role) ||
+      ((role === "option" || role === "treeitem") && ariaSet("aria-checked"));
+    return { checked: exposed ? checked : undefined, pressed: undefined };
+  }
+  if (tag === "select") {
+    if (role !== "combobox" && role !== "listbox") return {};
+    if (role === "combobox" && isDropDownSelect(element))
+      return { expanded: isPickerOpen(element), pressed: undefined };
+    // A list box has no expanded state, unless an author's combobox role
+    // gives it one, read from aria-expanded as usual.
+    return getExplicitRole(element) === "combobox"
+      ? { pressed: undefined }
+      : { expanded: undefined, pressed: undefined };
+  }
+  if (tag !== "summary") return {};
+  // Read only for a summary: on a <form>, a field named `parentElement`
+  // shadows the property.
+  const details = safeParentElement(element);
+  if (details?.tagName.toLowerCase() === "details") {
+    const disclosure =
+      (role === "generic" && getExplicitRole(element) !== "generic") ||
+      SUMMARY_EXPANDED_ROLES.has(role);
+    const expanded = disclosure
+      ? (details as HTMLDetailsElement).open
+      : undefined;
+    return role === "button" ? { expanded } : { expanded, pressed: undefined };
+  }
+  return {};
+}
+
+/**
  * Get ARIA states from an element. `role` is its computed role, and
  * `focusable` its `isFocusable()` answer, both of which the caller already
  * has.
@@ -1840,14 +1995,20 @@ function getAriaStates(
 ): Record<string, string | boolean> {
   const states: Record<string, string | boolean> = {};
   const tag = element.tagName.toLowerCase();
+  const native = nativeStates(element, tag, role);
 
   for (const attr of ARIA_STATE_ATTRIBUTES) {
+    const state = attr.slice("aria-".length);
+    // The element's own semantics decide it, below.
+    if (state in native) continue;
     // Chromium never marks an optgroup disabled, whatever its role. Its
     // options still inherit the state from it, below.
     if (attr === "aria-disabled" && tag === "optgroup") continue;
     const value = ariaStateValue(element, attr, role);
-    if (value !== null) states[attr.slice("aria-".length)] = value;
+    if (value !== null) states[state] = value;
   }
+  for (const [state, value] of Object.entries(native))
+    if (value !== undefined) states[state] = value;
 
   // Native HTML states
   const htmlEl = element as HTMLInputElement;
@@ -1857,7 +2018,6 @@ function getAriaStates(
     tag === "select" ||
     tag === "textarea"
   ) {
-    if ("checked" in htmlEl && htmlEl.checked) states["checked"] = true;
     if ("required" in htmlEl && htmlEl.required) states["required"] = true;
   }
 

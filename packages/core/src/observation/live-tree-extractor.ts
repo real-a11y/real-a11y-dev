@@ -9,6 +9,7 @@ import {
   htmlAamNameOwner,
   isNameBarrierElement,
   isNameFromContentHost,
+  nativeStates,
   resolveEffectiveRoot,
   resolveFocusedElement,
 } from "../extraction/dom-extractor.js";
@@ -282,6 +283,7 @@ export class LiveTreeExtractor {
         const owner = fieldValueOwner(el);
         if (owner && owner !== el) dirty.add(owner);
       }
+      this.addMovedNativeStates(dirty);
     }
 
     // At most ONE resolveEffectiveRoot() per refresh regardless of batch size:
@@ -388,6 +390,32 @@ export class LiveTreeExtractor {
     }
 
     return this.currentResult();
+  }
+
+  /**
+   * Add every recorded checkbox, radio and `<select>` whose native state no
+   * longer matches its node. Those states move without an attribute, and
+   * often without an event, of their own: a click on one radio unchecks its
+   * sibling, a handler can make a "select all" box indeterminate, and opening
+   * a picker fires nothing at all, so it shows once anything else refreshes.
+   * It reads a property or two per control, far cheaper than re-extracting
+   * them all.
+   */
+  private addMovedNativeStates(dirty: Set<Element>): void {
+    const refs = getElementRefs();
+    for (const [id, node] of this.domNodes) {
+      const tag = node.dom?.tagName;
+      if (tag !== "input" && tag !== "select") continue;
+      const el = refs.get(id);
+      if (!el) continue;
+      const native = nativeStates(el, tag, node.a11y.role);
+      for (const [state, value] of Object.entries(native)) {
+        if (value !== node.a11y.states[state]) {
+          dirty.add(el);
+          break;
+        }
+      }
+    }
   }
 
   private adoptResult(result: ExtractionResult): void {
