@@ -86,13 +86,15 @@ main
     link "the test"
   separator
   heading "What's unique to the Chrome extension" (level 2)
-  paragraph "The extension surfaces the same engine as , , and . Everything is shared across those — see for filters, search, focus tracking, and scoping. The is the exception: only the extension's side panel has one."
+  paragraph "The extension surfaces the same engine as , , and . Everything is shared across those — see for filters, search, focus tracking, and scoping. Two things are exceptions, and only the extension's side panel has them: the , and the bar that names a modal dialog when the tree ."
     code "@real-a11y-dev/inspector"
     code "@real-a11y-dev/react"
     code "@real-a11y-dev/storybook-addon"
     emphasis "about reading the tree"
     link "the panel features guide"
     link "live region log"
+    strong "Dialog: …"
+    link "re-roots to it"
   paragraph "What only an extension can give you is the handful of capabilities that require a browser extension to reach across tabs and frames. The above is one; here are the rest:"
     link "screen curtain"
   heading "Copy the tree as a Markdown report" (level 3)
