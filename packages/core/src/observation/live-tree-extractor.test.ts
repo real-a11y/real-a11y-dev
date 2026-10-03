@@ -2294,6 +2294,31 @@ describe("LiveTreeExtractor", () => {
       expect(warn).not.toHaveBeenCalled();
     });
 
+    it("splices without falling back when a form whose hasAttribute is shadowed changes role", () => {
+      // A role change asks the element whether it owns items elsewhere
+      // through aria-owns, which would need a full extraction.
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      document.body.innerHTML = `
+        <main id="app">
+          <form aria-label="Find">
+            <input name="hasAttribute" aria-label="Query" />
+          </form>
+        </main>
+      `;
+      const root = document.getElementById("app")!;
+      const form = root.querySelector("form")!;
+      clobber(form, "hasAttribute");
+      const live = new LiveTreeExtractor(root, { mode: "a11y" });
+
+      const change = observe(root, () => {
+        form.setAttribute("role", "search");
+      });
+      const result = live.refresh(change);
+
+      expect(result.nodes).toEqual(extractA11yTree(root).nodes);
+      expect(warn).not.toHaveBeenCalled();
+    });
+
     it("splices without falling back when a restyled form's matches is shadowed", () => {
       // A class change can hide or show an image map's image, so the splice
       // asks the restyled element whether it is such an image.
