@@ -215,6 +215,27 @@ export class NativeDebuggerSession {
   private lastDetachReason = new Map<number, string>();
 
   /**
+   * Tabs where the user pressed Cancel on Chrome's "…started debugging this
+   * browser" bar since the panel last read them at the user's request.
+   * Unlike {@link lastDetachReason} it survives the next attach: that Cancel
+   * can land during a pick, an action or a Refresh, and the reads auto-refresh
+   * makes later are refused (see `NATIVE_READ`'s `auto`) until the user reads
+   * the tab again. In memory only, like the attach it answers.
+   */
+  private userCancelled = new Set<number>();
+
+  /** The user cancelled Chrome's debugging bar on this tab since the last
+   *  read they asked for — see {@link userCancelled}. */
+  cancelledByUser(tabId: number): boolean {
+    return this.userCancelled.has(tabId);
+  }
+
+  /** A read the user asked for: their Cancel no longer stands. */
+  clearCancelledByUser(tabId: number): void {
+    this.userCancelled.delete(tabId);
+  }
+
+  /**
    * @param storage        durable area for the dogfood log (chrome.storage.local).
    * @param attachStorage  area for attach bookkeeping; defaults to `storage`.
    *                       Production passes `chrome.storage.session` — it
@@ -253,6 +274,7 @@ export class NativeDebuggerSession {
       // reason. The recorder below joins the storage queue now, before the
       // pick's own teardown can claim the attach entry as a deliberate detach.
       this.lastDetachReason.set(tabId, reason);
+      if (reason === "canceled_by_user") this.userCancelled.add(tabId);
       if (detachEndsPick(reason)) this.pickCancel.get(tabId)?.();
       else this.pickReject.get(tabId)?.();
       void this.enqueue(async () => {

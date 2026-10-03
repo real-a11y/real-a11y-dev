@@ -1098,45 +1098,50 @@ describe("NativeDebuggerSession picker", () => {
   });
 });
 
-describe("NATIVE_PICK_START through the real message handler", () => {
-  /**
-   * `registerNativeMode()`'s own handlers over `stubChrome()`, with native mode
-   * switched on. Returns a way to start a pick the way the panel does, and the
-   * `NATIVE_PICK_RESULT` pushes that come back.
-   */
-  function registerHandlers() {
-    const stubs = stubChrome();
-    const local = new FakeStorage();
-    local.data["settings.nativeModeEnabled"] = true;
-    const pushed: unknown[] = [];
-    let onMessage: (
-      message: unknown,
-      sender: { id?: string },
-      sendResponse: (response: unknown) => void,
-    ) => unknown = () => undefined;
-    const g = globalThis as unknown as { chrome: Record<string, unknown> };
-    g.chrome.storage = { local, session: new FakeStorage() };
-    g.chrome.runtime = {
-      id: "ext",
-      onMessage: {
-        addListener: (fn: typeof onMessage) => (onMessage = fn),
-      },
-      sendMessage: async (message: unknown) => {
-        pushed.push(message);
-      },
-    };
-    registerNativeMode();
-    const startPick = (tabId: number) =>
-      onMessage(
-        { type: "NATIVE_PICK_START", tabId, requestId: 1 },
-        { id: "ext" },
-        () => {},
-      );
-    const attach = (g.chrome as unknown as typeof chrome).debugger
-      .attach as ReturnType<typeof vi.fn>;
-    return { ...stubs, attach, local, pushed, startPick };
-  }
+/**
+ * `registerNativeMode()`'s own handlers over `stubChrome()`, with native mode
+ * switched on. Returns a way to start a pick the way the panel does, a way to
+ * send any other message, and the `NATIVE_PICK_RESULT` pushes that come back.
+ */
+function registerHandlers() {
+  const stubs = stubChrome();
+  const local = new FakeStorage();
+  local.data["settings.nativeModeEnabled"] = true;
+  const pushed: unknown[] = [];
+  let onMessage: (
+    message: unknown,
+    sender: { id?: string },
+    sendResponse: (response: unknown) => void,
+  ) => unknown = () => undefined;
+  const g = globalThis as unknown as { chrome: Record<string, unknown> };
+  g.chrome.storage = { local, session: new FakeStorage() };
+  g.chrome.runtime = {
+    id: "ext",
+    onMessage: {
+      addListener: (fn: typeof onMessage) => (onMessage = fn),
+    },
+    sendMessage: async (message: unknown) => {
+      pushed.push(message);
+    },
+  };
+  registerNativeMode();
+  const startPick = (tabId: number) =>
+    onMessage(
+      { type: "NATIVE_PICK_START", tabId, requestId: 1 },
+      { id: "ext" },
+      () => {},
+    );
+  // Any message, the way the panel sends it, resolving with the reply.
+  const send = (message: unknown) =>
+    new Promise<unknown>((resolve) =>
+      onMessage(message, { id: "ext" }, resolve),
+    );
+  const attach = (g.chrome as unknown as typeof chrome).debugger
+    .attach as ReturnType<typeof vi.fn>;
+  return { ...stubs, attach, local, pushed, startPick, send };
+}
 
+describe("NATIVE_PICK_START through the real message handler", () => {
   it("a Cancel on Chrome's debugging infobar releases the panel's pick with a plain cancel", async () => {
     const { listeners, attach, pushed, startPick } = registerHandlers();
 
@@ -1205,5 +1210,80 @@ describe("NATIVE_PICK_START through the real message handler", () => {
       ["attach", undefined],
       ["detach-unsolicited", "canceled_by_user"],
     ]);
+  });
+});
+
+describe("NATIVE_READ through the real message handler", () => {
+  /** Every command fails the way Chromium answers one in flight when the
+   *  session goes away, so the read reports a dropped connection. */
+  function dropEveryCommand() {
+    const g = globalThis as unknown as { chrome: typeof chrome };
+    (
+      g.chrome.debugger.sendCommand as ReturnType<typeof vi.fn>
+    ).mockImplementation(async () => {
+      throw new Error("Detached while handling command.");
+    });
+  }
+
+  it("an automatic read does not attach again after a dropped connection", async () => {
+    // The drop may be the user's Cancel on Chrome's debugging bar. The panel
+    // pauses its automatic reads on the failure instead.
+    const { attach, send } = registerHandlers();
+    dropEveryCommand();
+
+    const reply = (await send({
+      type: "NATIVE_READ",
+      tabId: 7,
+      auto: true,
+    })) as { ok: boolean; error?: string };
+
+    expect(attach).toHaveBeenCalledTimes(1);
+    expect(reply).toMatchObject({ ok: false, error: "connection-lost" });
+  });
+
+  it("a Refresh still retries a dropped connection once", async () => {
+    const { attach, send } = registerHandlers();
+    dropEveryCommand();
+
+    const reply = (await send({ type: "NATIVE_READ", tabId: 7 })) as {
+      ok: boolean;
+    };
+
+    expect(attach).toHaveBeenCalledTimes(2);
+    expect(reply.ok).toBe(false);
+  });
+
+  it("after the user cancels Chrome's debugging bar, an automatic read never attaches until the user reads", async () => {
+    // The Cancel can land during anything holding the bar up — a pick, an
+    // action, a Refresh — not only during an automatic read.
+    const { listeners, attach, send } = registerHandlers();
+    listeners[listeners.length - 1]({ tabId: 7 }, "canceled_by_user");
+
+    expect(
+      await send({ type: "NATIVE_READ", tabId: 7, auto: true }),
+    ).toMatchObject({ ok: false, error: "cancelled-by-user" });
+    expect(attach).not.toHaveBeenCalled();
+
+    // Only for that tab.
+    const attachedTo = (tabId: number) =>
+      attach.mock.calls.filter(([target]) => target?.tabId === tabId).length;
+    await send({ type: "NATIVE_READ", tabId: 8, auto: true });
+    expect(attachedTo(8)).toBeGreaterThan(0);
+    expect(attachedTo(7)).toBe(0);
+
+    // A read the user asked for lifts it.
+    await send({ type: "NATIVE_READ", tabId: 7 });
+    const afterRefresh = attachedTo(7);
+    expect(afterRefresh).toBeGreaterThan(0);
+    await send({ type: "NATIVE_READ", tabId: 7, auto: true });
+    expect(attachedTo(7)).toBeGreaterThan(afterRefresh);
+  });
+
+  it("another detach reason leaves automatic reads alone", async () => {
+    const { listeners, attach, send } = registerHandlers();
+    listeners[listeners.length - 1]({ tabId: 7 }, "target_closed");
+
+    await send({ type: "NATIVE_READ", tabId: 7, auto: true });
+    expect(attach).toHaveBeenCalled();
   });
 });

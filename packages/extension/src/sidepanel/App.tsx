@@ -68,6 +68,11 @@ import {
   useRestoreFocusOnClose,
 } from "./InputPanel.js";
 import type { InputPanelState } from "./InputPanel.js";
+import {
+  decideAutoRefresh,
+  PAGE_SIGNAL_LAG_MS,
+  quietPeriodOnSignal,
+} from "./native-auto-refresh.js";
 import { nativeActionFeedback } from "./native-feedback.js";
 import { NativeTreeView } from "./NativeTreeView.js";
 import {
@@ -556,8 +561,60 @@ export function App() {
   // Auto-load the native tree once per transition into native mode (mirrors
   // the DOM producer's own `hasRequestedInitial` restraint below — a later
   // tab switch while already in native mode clears the tree and waits for an
-  // explicit refresh rather than re-attaching automatically).
+  // explicit refresh rather than re-attaching automatically). Auto-refresh
+  // below is narrower than that on purpose: it follows changes on the tab a
+  // read already succeeded on, and a tab switch disarms it.
   const hasAutoLoadedNative = useRef(false);
+  // Native auto-refresh: the tree reads itself again once the page has
+  // changed and gone quiet — see `native-auto-refresh.ts` for the policy.
+  // `autoRefreshTab` is the tab a successful read armed it on: a tab switch,
+  // leaving native mode, or a failed read clears it, so nothing but a
+  // user's Refresh attaches to a tab the user hasn't read, and a refusal or
+  // the user's Cancel on Chrome's debugging bar is never answered by
+  // another attach. A same-tab navigation leaves it armed: the new page is
+  // read once its content script reports it.
+  const autoRefreshTab = useRef<number | null>(null);
+  const lastPageChangeAt = useRef(0);
+  const lastNativeReadStartedAt = useRef(0);
+  const lastNativeReadEndedAt = useRef(0);
+  // What the latest successful read returned, and how many automatic reads
+  // in a row have returned exactly that — see `autoRefreshGapMs`.
+  const lastNativeTreeSignature = useRef("");
+  const unchangedAutoReads = useRef(0);
+  const autoRefreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // When the first page-change signal the pending timer answers arrived, or
+  // `null` with no signal pending — the quiet period's ceiling counts from it.
+  const autoRefreshSignalSince = useRef<number | null>(null);
+  // The automatic read in flight, if any. It holds `nativeInFlight` like any
+  // read, but the user didn't start it, so it must never cost them a click:
+  // a Refresh or an action that lands during it waits for it to finish
+  // (`waitOutAutoRead`) instead of being dropped by that guard.
+  const autoReadInFlight = useRef<Promise<boolean> | null>(null);
+  const waitOutAutoRead = useCallback(async () => {
+    const pending = autoReadInFlight.current;
+    if (pending) await pending.catch(() => false);
+  }, []);
+  // Set below, once `loadNativeTree` exists; the message listener calls it
+  // on every page-change signal.
+  const runNativeAutoRefresh = useRef<() => void>(() => {});
+  const cancelNativeAutoRefresh = useCallback(() => {
+    autoRefreshSignalSince.current = null;
+    if (autoRefreshTimer.current !== null) {
+      clearTimeout(autoRefreshTimer.current);
+      autoRefreshTimer.current = null;
+    }
+  }, []);
+  const scheduleNativeAutoRefresh = useCallback((ms: number) => {
+    if (autoRefreshTimer.current !== null) {
+      clearTimeout(autoRefreshTimer.current);
+    }
+    autoRefreshTimer.current = setTimeout(() => {
+      autoRefreshTimer.current = null;
+      autoRefreshSignalSince.current = null;
+      runNativeAutoRefresh.current();
+    }, ms);
+  }, []);
+  useEffect(() => cancelNativeAutoRefresh, [cancelNativeAutoRefresh]);
   // RFC PR H's "native as default on attachable pages" (execution plan PR 5):
   // fires exactly ONCE per panel session, the first time the DOM producer
   // connects while the user already has native mode enabled — never again
@@ -810,6 +867,10 @@ export function App() {
     setNativeStatus("");
     setNativeCapability(undefined);
     setNativeBusy(false);
+    // Auto-refresh follows the tab a read succeeded on, never the one the
+    // panel just moved to — that one waits for Refresh, like the auto-load.
+    autoRefreshTab.current = null;
+    cancelNativeAutoRefresh();
     // Deliberately NOT resetting hasAutoLoadedNative here — this effect fires
     // on EVERY tab change, including a plain tab switch while already in
     // native mode, and resetting it here would immediately re-trigger the
@@ -833,7 +894,7 @@ export function App() {
     setPageUnreachable(false);
     setPageTitle("");
     setPageUrl("");
-  }, [myTabId, requestTree]);
+  }, [myTabId, requestTree, cancelNativeAutoRefresh]);
 
   // Keep a port alive so the background knows when the side panel closes.
   // On disconnect the background clears the highlight overlay AND disables
@@ -930,10 +991,29 @@ export function App() {
         setNativeStatus("");
         setNativeCapability(undefined);
         setNativeBusy(false);
+        // A read pending for the old page would describe a document that
+        // may not exist yet. Auto-refresh stays armed: the new page's
+        // content script reports it with a TREE_DATA, and that reads it. A
+        // read in flight now is discarded by its token check, so it can't
+        // count as having seen the new page's first changes.
+        cancelNativeAutoRefresh();
+        lastNativeReadStartedAt.current = 0;
         return;
       }
 
       if (message.type === "TREE_DATA" || message.type === "TREE_UPDATED") {
+        // The content script sends a tree after every burst of page changes,
+        // whichever producer the panel shows — so it is native auto-refresh's
+        // "the page changed" signal too.
+        if (producerRef.current === "native") {
+          const now = Date.now();
+          lastPageChangeAt.current = now - PAGE_SIGNAL_LAG_MS;
+          const next = quietPeriodOnSignal(autoRefreshSignalSince.current, now);
+          if (next.kind === "restart") {
+            autoRefreshSignalSince.current ??= now;
+            scheduleNativeAutoRefresh(next.ms);
+          }
+        }
         const nodeMap = new Map<string, SemanticNode>(message.payload.nodes);
 
         // Preserve user's expand/collapse state from previous tree
@@ -1440,17 +1520,32 @@ export function App() {
    *  UNGUARDED by `nativeInFlight` — `dispatchNativeAction`'s own re-read
    *  step calls this directly (not the guarded `loadNativeTree` below) so
    *  that its own held guard doesn't make its post-action re-read a silent
-   *  no-op. Never call this one from anywhere else; call `loadNativeTree`. */
+   *  no-op. Never call this one from anywhere else; call `loadNativeTree`.
+   *
+   *  `auto` marks a read auto-refresh started rather than the user: it keeps
+   *  the tree and the status line as they are while it runs, doesn't retry
+   *  a dropped attach (the drop may be the user's Cancel on Chrome's bar),
+   *  and on failure keeps the tree it had rather than clearing it. */
   const loadNativeTreeCore = useCallback(
-    async (tabId: number): Promise<boolean> => {
+    async (
+      tabId: number,
+      { auto = false }: { auto?: boolean } = {},
+    ): Promise<boolean> => {
       if (!nativeModeEnabled) return false;
       const token = nativeOpToken.current;
-      setNativeBusy(true);
-      setNativeStatus("reading native tree…");
+      lastNativeReadStartedAt.current = Date.now();
+      // An automatic read is invisible until it lands: `nativeBusy` would
+      // disable the toolbar and row buttons under the user's focus every
+      // few seconds, and Chrome moves focus off a button that disables.
+      if (!auto) {
+        setNativeBusy(true);
+        setNativeStatus("reading native tree…");
+      }
       try {
         const r = (await chrome.runtime.sendMessage({
           type: "NATIVE_READ",
           tabId,
+          ...(auto ? { auto: true } : {}),
         })) as {
           ok?: boolean;
           error?: string;
@@ -1461,6 +1556,20 @@ export function App() {
         };
         if (token !== nativeOpToken.current) return false; // tab switched mid-flight
         if (!r?.ok) {
+          // Any failed read stops auto-refresh until the next one succeeds:
+          // answering a refusal, or the user's Cancel, with another attach
+          // is exactly what it must not do.
+          autoRefreshTab.current = null;
+          if (auto) {
+            const why = r?.reason
+              ? explainUnavailable(r.reason)
+              : r?.error === "cancelled-by-user"
+                ? "Chrome's debugging notice was cancelled"
+                : `read failed: ${r?.error ?? "unknown"}`;
+            if (r?.reason) setNativeCapability(blockedBy(r.reason));
+            setNativeStatus(`auto-refresh paused — ${why}; Refresh to resume`);
+            return false;
+          }
           setNativeNodes(new Map());
           setNativeRootId("");
           if (r?.reason) {
@@ -1473,7 +1582,17 @@ export function App() {
           }
           return false;
         }
-        setNativeNodes(new Map((r.nodes ?? []).map((n) => [n.id, n])));
+        // An automatic read that found the tree exactly as it was backs the
+        // next one off (`autoRefreshGapMs`) and leaves the view alone; any
+        // other read, or one that found a change, starts the count over.
+        const signature = JSON.stringify([r.rootId, r.url, r.nodes]);
+        const unchanged = signature === lastNativeTreeSignature.current;
+        unchangedAutoReads.current =
+          auto && unchanged ? unchangedAutoReads.current + 1 : 0;
+        lastNativeTreeSignature.current = signature;
+        if (!(auto && unchanged)) {
+          setNativeNodes(new Map((r.nodes ?? []).map((n) => [n.id, n])));
+        }
         setNativeRootId(r.rootId ?? "");
         setNativeTreeTabId(tabId);
         setNativeTreeUrl(r.url);
@@ -1481,9 +1600,11 @@ export function App() {
         // same reasoning as DogfoodPanel's identical line.
         setNativeCapability(undefined);
         setNativeStatus(`${r.nodes?.length ?? 0} nodes`);
+        autoRefreshTab.current = tabId;
         return true;
       } finally {
-        if (token === nativeOpToken.current) setNativeBusy(false);
+        lastNativeReadEndedAt.current = Date.now();
+        if (!auto && token === nativeOpToken.current) setNativeBusy(false);
       }
     },
     [nativeModeEnabled],
@@ -1494,17 +1615,54 @@ export function App() {
    *  see `nativeInFlight`'s own declaration. Propagates `loadNativeTreeCore`'s
    *  success/failure so the native-default effect can tell them apart. */
   const loadNativeTree = useCallback(
-    async (tabId: number): Promise<boolean> => {
+    async (tabId: number, opts?: { auto?: boolean }): Promise<boolean> => {
+      if (!opts?.auto) {
+        // `tabId` is the tab bound when this was asked for. A switch while
+        // it waited out an automatic read makes it the wrong tab.
+        const tabAtCall = tabChangeToken.current;
+        await waitOutAutoRead();
+        if (tabChangeToken.current !== tabAtCall) return false;
+      }
       if (!nativeModeEnabled || nativeInFlight.current) return false;
       nativeInFlight.current = true;
       try {
-        return await loadNativeTreeCore(tabId);
+        return await loadNativeTreeCore(tabId, opts);
       } finally {
         nativeInFlight.current = false;
       }
     },
-    [nativeModeEnabled, loadNativeTreeCore],
+    [nativeModeEnabled, loadNativeTreeCore, waitOutAutoRead],
   );
+
+  // Re-pointed every render so the timer always decides with the current
+  // `loadNativeTree` and mode; everything else it reads is a ref.
+  runNativeAutoRefresh.current = () => {
+    const decision = decideAutoRefresh(
+      {
+        armedTab: autoRefreshTab.current,
+        boundTab: myTabIdRef.current,
+        native: nativeModeEnabled && producerRef.current === "native",
+        lastChangeAt: lastPageChangeAt.current,
+        lastReadStartedAt: lastNativeReadStartedAt.current,
+        lastReadEndedAt: lastNativeReadEndedAt.current,
+        unchangedReads: unchangedAutoReads.current,
+        busy: nativeInFlight.current || pickModeOnRef.current,
+      },
+      Date.now(),
+    );
+    if (decision.kind === "wait") scheduleNativeAutoRefresh(decision.ms);
+    else if (decision.kind === "read") {
+      // A reply that never arrives (an unreachable service worker) attached
+      // nothing, so it leaves auto-refresh armed for the next change.
+      const read = loadNativeTree(decision.tabId, { auto: true }).catch(
+        () => false,
+      );
+      autoReadInFlight.current = read;
+      void read.finally(() => {
+        if (autoReadInFlight.current === read) autoReadInFlight.current = null;
+      });
+    }
+  };
 
   // Auto-load once per transition into native mode — see hasAutoLoadedNative's
   // declaration for why this deliberately does NOT also fire on a later tab
@@ -1516,7 +1674,8 @@ export function App() {
     void loadNativeTree(myTabId);
   }, [nativeModeEnabled, producer, myTabId, loadNativeTree]);
 
-  // The ONLY place hasAutoLoadedNative re-arms: leaving native mode. Neither
+  // The ONLY place hasAutoLoadedNative re-arms: leaving native mode — which
+  // also disarms auto-refresh, so re-entering starts from that one read. Neither
   // the myTabId effect (a tab switch) nor PAGE_NAVIGATED (a same-tab
   // navigation) reset it — both fire while producer can still be "native",
   // and resetting it there would race straight into the effect above,
@@ -1524,8 +1683,11 @@ export function App() {
   // flipping producer back to "dom" and then to "native" again — a real,
   // deliberate re-entry — earns the tree another free auto-load.
   useEffect(() => {
-    if (producer === "dom") hasAutoLoadedNative.current = false;
-  }, [producer]);
+    if (producer !== "dom") return;
+    hasAutoLoadedNative.current = false;
+    autoRefreshTab.current = null;
+    cancelNativeAutoRefresh();
+  }, [producer, cancelNativeAutoRefresh]);
 
   /** Called after a successful action finds `nativeOpToken` bumped out from
    *  under it once the settle wait (below) has passed. `tabChangeAtStart` is
@@ -1677,6 +1839,18 @@ export function App() {
    *  page has already discarded. */
   const dispatchNativeAction = useCallback(
     async (nodeId: string, action: NativeAction, value?: string) => {
+      // The click named a node of the tree as it stood. A tab switch or a
+      // navigation while it waited out an automatic read means that node,
+      // and this closure's tab and URL, may no longer be the page's.
+      const opAtCall = nativeOpToken.current;
+      const tabAtCall = tabChangeToken.current;
+      await waitOutAutoRead();
+      if (
+        nativeOpToken.current !== opAtCall ||
+        tabChangeToken.current !== tabAtCall
+      ) {
+        return;
+      }
       if (!nativeModeEnabled || nativeInFlight.current) return;
       nativeInFlight.current = true;
       try {
@@ -1799,6 +1973,7 @@ export function App() {
       nativeTreeUrl,
       loadNativeTreeCore,
       recoverFromOwnNavigation,
+      waitOutAutoRead,
     ],
   );
 
@@ -1860,7 +2035,9 @@ export function App() {
         !nativeModeEnabled ||
         nativeTreeTabId === undefined ||
         nativeBusy ||
-        nativeInFlight.current ||
+        // An automatic read doesn't change the ids a reveal names (same
+        // document), and the background queues the reveal behind it.
+        (nativeInFlight.current && autoReadInFlight.current === null) ||
         curtainOn
       ) {
         return;
