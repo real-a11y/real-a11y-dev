@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 
 import { getTabSequence } from "../query/tab-sequence.js";
-import { clobber } from "../test-support/clobber.js";
+import { clobber, shadow } from "../test-support/clobber.js";
 import type { SemanticNode } from "../types.js";
 import { resetIdCounter } from "../utils/id-generator.js";
 
@@ -9,8 +9,12 @@ import { extractA11yTree } from "./a11y-extractor.js";
 import * as clobberSafe from "./clobber-safe.js";
 import {
   extractDomTree,
+  fieldValueOwner,
   getDescendantText,
   getElementRefs,
+  htmlAamNameOwner,
+  isNameBarrierElement,
+  isNameFromContentHost,
   isSensitiveField,
   isSensitiveFieldAttributes,
   SENSITIVE_AUTOCOMPLETE_TOKENS,
@@ -324,6 +328,154 @@ describe("DOM clobbering resilience", () => {
     expect(reachable.size).toBe(result.nodes.size);
 
     expect(warnSpy).toHaveBeenCalled();
+  });
+
+  // The boundary above is what a shadowed `tagName` costs the form itself.
+  // Nothing around the form should pay for it — yet these reads land on the
+  // form while ANOTHER element is being built, so a throw there was charged
+  // to that element: an ancestor whose name walk entered the form, or a
+  // descendant whose role or state climbed through it.
+  describe("around a form whose control shadows `tagName`", () => {
+    /** Forced: jsdom doesn't shadow a form's own members. */
+    function shadowEveryForm(root: Element): void {
+      for (const form of root.querySelectorAll("form")) shadow(form, "tagName");
+    }
+
+    const TAG_FIELD = `<input name="tagName" aria-label="Tag name" />`;
+
+    beforeEach(() => {
+      // The walk warns about each form it skips.
+      vi.spyOn(console, "warn").mockImplementation(() => {});
+    });
+
+    it("keeps a host whose name walk passes through the form", () => {
+      const root = createPage(`
+        <main>
+          <h2>Orders <form>${TAG_FIELD}</form></h2>
+          <table>
+            <tr><th>Order</th><th>Actions</th></tr>
+            <tr><td>#1001</td><td>Ready <form>${TAG_FIELD}</form></td></tr>
+          </table>
+          <h3>Labels <form role="button">${TAG_FIELD}Edit</form></h3>
+          <label>Owner <form>${TAG_FIELD}</form><input /></label>
+        </main>
+      `);
+      shadowEveryForm(root);
+
+      const nodes = [...extractDomTree(root).nodes.values()];
+      const named = (role: string) =>
+        nodes.filter((n) => n.a11y.role === role).map((n) => n.a11y.name);
+      expect(named("heading")).toEqual(["Orders", "Labels Edit"]);
+      expect(named("cell")).toEqual(["#1001", "Ready"]);
+      expect(named("textbox")).toContain("Owner");
+    });
+
+    it("keeps the help text the form sits in, and the link beside it", () => {
+      const root = createPage(`
+        <main>
+          <input aria-label="Password" aria-describedby="help" />
+          <div id="help">
+            <form>${TAG_FIELD}</form>
+            <a href="/rules">Full rules</a>
+          </div>
+        </main>
+      `);
+      shadowEveryForm(root);
+
+      const names = [...extractDomTree(root).nodes.values()].map(
+        (n) => n.a11y.name,
+      );
+      expect(names).toContain("Full rules");
+    });
+
+    // The walk skips the form, its field with it, so the field reaches no one.
+    // Help text holding nothing else is then text-only, and shows once, as the
+    // input's description, rather than also as a node of its own.
+    it("folds help text whose only control is in the form", () => {
+      const root = createPage(`
+        <main>
+          <input aria-label="Password" aria-describedby="help" />
+          <div id="help">Must be 8+ chars. <form>${TAG_FIELD}</form></div>
+        </main>
+      `);
+      shadowEveryForm(root);
+      // In the document, so `aria-describedby` resolves.
+      document.body.appendChild(root);
+
+      try {
+        const nodes = [...extractDomTree(root).nodes.values()];
+        expect(nodes.some((n) => n.dom?.attributes?.id === "help")).toBe(false);
+        const password = nodes.find((n) => n.a11y.name === "Password")!;
+        expect(password.a11y.description).toBe("Must be 8+ chars.");
+      } finally {
+        root.remove();
+      }
+    });
+
+    it("keeps what an extraction rooted inside the form holds", () => {
+      const root = createPage(`
+        <form>
+          ${TAG_FIELD}
+          <div id="scope">
+            <header>Filters</header>
+            <button>Apply</button>
+          </div>
+        </form>
+      `);
+      shadowEveryForm(root);
+
+      const nodes = [
+        ...extractDomTree(root.querySelector("#scope")!).nodes.values(),
+      ];
+      // A header outside any sectioning element is a banner; a button nothing
+      // disables is enabled.
+      expect(nodes.map((n) => n.a11y.role)).toContain("banner");
+      const apply = nodes.find((n) => n.a11y.name === "Apply")!;
+      expect(apply.a11y.states?.["disabled"]).toBeUndefined();
+    });
+
+    it("keeps an option whose parent is the form", () => {
+      const root = createPage(
+        `<form>${TAG_FIELD}<option>Small</option></form>`,
+      );
+      shadowEveryForm(root);
+
+      const result = extractDomTree(root.querySelector("option")!);
+      const option = result.nodes.get(result.rootId)!;
+      expect(option.a11y.role).toBe("option");
+      expect(option.a11y.states?.["disabled"]).toBeUndefined();
+    });
+
+    it("keeps a summary whose parent is the form", () => {
+      const root = createPage(
+        `<form>${TAG_FIELD}<summary>More</summary></form>`,
+      );
+      shadowEveryForm(root);
+
+      const result = extractDomTree(root.querySelector("summary")!);
+      const summary = result.nodes.get(result.rootId)!;
+      expect(summary.a11y.name).toBe("More");
+      // Not a details' summary, so it discloses nothing.
+      expect(summary.a11y.states?.["expanded"]).toBeUndefined();
+    });
+
+    it("answers the live climb's questions about the form", () => {
+      const root = createPage(`
+        <form>${TAG_FIELD}<legend>Search</legend><span>Hint</span></form>
+      `);
+      shadowEveryForm(root);
+      const form = root.querySelector("form")!;
+
+      expect(htmlAamNameOwner(form)).toBeNull();
+      // A legend names a fieldset, and its parent here is a form.
+      expect(htmlAamNameOwner(root.querySelector("legend")!)).toBeNull();
+      expect(isNameFromContentHost(form)).toBe(false);
+      expect(isNameBarrierElement(form)).toBe(false);
+      expect(fieldValueOwner(root.querySelector("span")!)).toBeNull();
+      // A barrier role is where a native <details> is told apart by its tag.
+      form.setAttribute("role", "group");
+      expect(isNameBarrierElement(form)).toBe(true);
+    });
   });
 });
 
@@ -2339,6 +2491,19 @@ describe("extractDomTree", () => {
     expect(link.dom?.attributes["href"]).toBe("/home");
   });
 
+  // The testing matcher decides a select's role from these alone.
+  it("stores a select's size and multiple", () => {
+    const root = createPage(
+      '<select aria-label="Tags" multiple size="3"><option>A</option></select>',
+    );
+    const { nodes, rootId } = extractDomTree(root);
+    const select = nodes.get(nodes.get(rootId)!.childIds[0])!;
+
+    expect(select.a11y.role).toBe("listbox");
+    expect(select.dom?.attributes["size"]).toBe("3");
+    expect(select.dom?.attributes["multiple"]).toBe("");
+  });
+
   it("computes accessible name from wrapping <label> (implicit association)", () => {
     const root = createPage(`
       <label>Full name<input type="text" /></label>
@@ -2485,6 +2650,145 @@ describe("extractDomTree", () => {
       expect(preview.endsWith("…")).toBe(true);
       // Full subtree is ~40k chars; a bounded walk must not pull all of it.
       expect(totalCharsRead).toBeLessThan(5000);
+    });
+  });
+
+  // accname-1.2 §4.3.2 step 2F appends each descendant's contribution "with a
+  // space". The extractor used to concatenate element children with no
+  // separator at all, so a button whose label is split across two blocks came
+  // out as one glued word ("Savenow" where Chromium reads "Save now").
+  // Spacing follows computed `display`, so children that flow inline still read
+  // as one word. Every expectation here is what Chromium 141 computes for the
+  // same markup, read back over CDP.
+  //
+  // Not covered here, because jsdom cannot see it: CSS blockifies a flex or grid
+  // item, a float and an absolutely positioned child, so those arrive at the
+  // check as `block` in a browser and are spaced (Chromium spaces them too).
+  // jsdom reports the authored `inline` instead, so a test would assert the
+  // opposite of the shipped behaviour.
+  describe("name-from-content separates children that render as blocks", () => {
+    function nameOfTag(html: string, tag: string): string {
+      const root = createPage(html);
+      // Attached so getComputedStyle resolves the default display values.
+      document.body.appendChild(root);
+      try {
+        const node = [...extractDomTree(root).nodes.values()].find(
+          (n) => n.dom?.tagName === tag,
+        )!;
+        return node.a11y.name;
+      } finally {
+        document.body.removeChild(root);
+      }
+    }
+
+    it("spaces two block children of a button", () => {
+      expect(
+        nameOfTag("<button><div>Save</div><div>now</div></button>", "button"),
+      ).toBe("Save now");
+    });
+
+    it("spaces block children of a heading", () => {
+      expect(nameOfTag("<h1><p>One</p><p>Two</p></h1>", "h1")).toBe("One Two");
+    });
+
+    it("spaces across a <br>, which ends the line from inside an inline box", () => {
+      expect(nameOfTag('<a href="/">Read<br>more</a>', "a")).toBe("Read more");
+    });
+
+    it("spaces an atomic inline-level box", () => {
+      expect(
+        nameOfTag(
+          '<button><span style="display: inline-block">Sa</span><span style="display: inline-block">ve</span></button>',
+          "button",
+        ),
+      ).toBe("Sa ve");
+    });
+
+    it("lets an empty block separate the text either side of it", () => {
+      expect(nameOfTag("<button>Save<div></div>now</button>", "button")).toBe(
+        "Save now",
+      );
+    });
+
+    it("lets a name-barrier child's box separate the text around it", () => {
+      // <input> lends no text to a name, but Chromium still reads "Save now".
+      expect(nameOfTag("<h1>Save<input>now</h1>", "h1")).toBe("Save now");
+    });
+
+    it("lets a name-barrier container's box separate the text around it", () => {
+      expect(
+        nameOfTag(
+          '<h1>Save<div role="group"><span>x</span></div>now</h1>',
+          "h1",
+        ),
+      ).toBe("Save now");
+    });
+
+    it("lets a rendered aria-hidden child separate the text around it", () => {
+      expect(
+        nameOfTag('<h1>Save<div aria-hidden="true">x</div>now</h1>', "h1"),
+      ).toBe("Save now");
+    });
+
+    it("does not separate across a child with no box at all", () => {
+      expect(
+        nameOfTag('<h1>Save<div style="display: none">x</div>now</h1>', "h1"),
+      ).toBe("Savenow");
+    });
+
+    it("does not space an inline named widget's contributed name", () => {
+      // The link lends the button its computed name; an inline link flows with
+      // the text beside it, so Chromium reads one word.
+      expect(nameOfTag('<button><a href="#">Sa</a>ve</button>', "button")).toBe(
+        "Save",
+      );
+    });
+
+    it("keeps an inline named widget out of the middle of a word", () => {
+      expect(
+        nameOfTag(`<h2>Signed in as <a href="/u">Ada</a>'s profile</h2>`, "h2"),
+      ).toBe("Signed in as Ada's profile");
+    });
+
+    it("spaces a named widget that renders as its own block", () => {
+      expect(
+        nameOfTag(
+          '<button><a href="#" style="display: block">Sa</a>ve</button>',
+          "button",
+        ),
+      ).toBe("Sa ve");
+    });
+
+    it("spaces a <summary> however it is styled", () => {
+      // Chromium separates the disclosure's label whatever its display is:
+      // an author's `display: inline` on it still reads "Note S Body".
+      expect(
+        nameOfTag(
+          '<h3>Note<details open><summary style="display: inline">S</summary>Body</details></h3>',
+          "h3",
+        ),
+      ).toBe("Note S Body");
+    });
+
+    it("does not space inline children, which read as one word", () => {
+      expect(
+        nameOfTag("<button><span>Sa</span><span>ve</span></button>", "button"),
+      ).toBe("Save");
+    });
+
+    it("follows an inline override on a block element", () => {
+      expect(
+        nameOfTag(
+          '<button><div style="display: inline">Sa</div><div style="display: inline">ve</div></button>',
+          "button",
+        ),
+      ).toBe("Save");
+    });
+
+    it("keeps a single space around a nested inline child", () => {
+      expect(
+        nameOfTag('<a href="/"><div>Read <span>more</span></div></a>', "a"),
+      ).toBe("Read more");
     });
   });
 
@@ -5291,5 +5595,110 @@ describe("contenteditable editing hosts", () => {
       expect(node.interaction?.isFocusable).toBe(false);
       expect(node.interaction?.actions).toEqual([]);
     }
+  });
+});
+
+// A role Chromium discards is gone from everything the role decides, not just
+// the `role` field: name-from-content, the a11y view's flattening, and the
+// name walk of an ancestor. Each expectation below is what Chromium 151 and
+// 153 compute for the same markup (CDP `Accessibility.getFullAXTree`).
+describe("a role Chromium discards decides nothing", () => {
+  const a11yNode = (html: string, id = "t") => {
+    const root = createPage(html);
+    document.body.appendChild(root);
+    try {
+      const n = [...extractA11yTree(root).nodes.values()].find(
+        (node) => node.dom?.attributes["id"] === id,
+      );
+      return n ? { role: n.a11y.role, name: n.a11y.name } : undefined;
+    } finally {
+      root.remove();
+    }
+  };
+
+  it("names the fallback role from its content", () => {
+    expect(
+      a11yNode(`<div id="t" role="foo button" tabindex="0">Save</div>`),
+    ).toEqual({ role: "button", name: "Save" });
+    expect(
+      a11yNode(`<div id="t" role="widget link" tabindex="0">Docs</div>`),
+    ).toEqual({ role: "link", name: "Docs" });
+    expect(
+      a11yNode(`<div id="t" role="BUTTON" tabindex="0">Upper</div>`),
+    ).toEqual({ role: "button", name: "Upper" });
+  });
+
+  // Discarded, the role leaves the element as it would be with no role at
+  // all — a text-bearing generic stays in the view the way a plain <div> does.
+  it("extracts a discarded role exactly like no role", () => {
+    for (const [authored, bare] of [
+      [`<div id="t" role="foo">x</div>`, `<div id="t">x</div>`],
+      [`<div id="t" role="widget">x</div>`, `<div id="t">x</div>`],
+      [`<div id="t" role="listitem">Item</div>`, `<div id="t">Item</div>`],
+      [
+        `<div id="t" role="option" tabindex="0">Apple</div>`,
+        `<div id="t" tabindex="0">Apple</div>`,
+      ],
+      [
+        `<details id="t" role="treeitem" open><summary>S</summary>x</details>`,
+        `<details id="t" open><summary>S</summary>x</details>`,
+      ],
+    ]) {
+      expect(a11yNode(authored), authored).toEqual(a11yNode(bare));
+    }
+  });
+
+  it("folds an <li> out of a list that carries a role", () => {
+    expect(
+      a11yNode(`<ul role="none"><li id="t"><a href="#">Home</a></li></ul>`),
+    ).toBeUndefined();
+    expect(
+      a11yNode(
+        `<ul role="none"><li id="u"><a id="t" href="#">Home</a></li></ul>`,
+      ),
+    ).toEqual({ role: "link", name: "Home" });
+  });
+
+  // What the panel can do with a node follows the same resolved role: a
+  // fallback button clicks, and an option the browser discarded doesn't.
+  it("gives actions by the role the browser resolves", () => {
+    const actionsOf = (html: string) => {
+      const root = createPage(html);
+      return [...extractDomTree(root).nodes.values()].find(
+        (n) => n.dom?.attributes["id"] === "t",
+      )!.interaction!.actions;
+    };
+    expect(actionsOf(`<div id="t" role="foo button">Save</div>`)).toEqual([
+      "click",
+    ]);
+    expect(actionsOf(`<div id="t" role="BUTTON">Save</div>`)).toEqual([
+      "click",
+    ]);
+    expect(actionsOf(`<div id="t" role="widget textbox">x</div>`)).toEqual([
+      "focus",
+      "type",
+    ]);
+    expect(actionsOf(`<div id="t" role="option">Apple</div>`)).toEqual([]);
+    expect(
+      actionsOf(
+        `<div role="listbox"><div id="t" role="option">Apple</div></div>`,
+      ),
+    ).toEqual(["click"]);
+  });
+
+  it("keeps a context-bound role that has its context", () => {
+    expect(
+      a11yNode(
+        `<div role="listbox" aria-label="Fruit"><div id="t" role="option">Apple</div></div>`,
+      ),
+    ).toEqual({ role: "option", name: "Apple" });
+  });
+
+  // An option is a name barrier; a generic is not. Discarded, its text names
+  // the button around it: Chromium says "Apple pie".
+  it("lets a discarded option's text into an ancestor's name", () => {
+    expect(
+      a11yNode(`<button id="t"><span role="option">Apple</span> pie</button>`),
+    ).toEqual({ role: "button", name: "Apple pie" });
   });
 });

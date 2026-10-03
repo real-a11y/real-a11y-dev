@@ -19,6 +19,7 @@ import {
   safeQuerySelector,
   safeQuerySelectorAll,
   safeRootNode,
+  safeTagName,
   safeTextContent,
 } from "./clobber-safe.js";
 import { isEditable, isEditingHost } from "./editing.js";
@@ -42,6 +43,7 @@ import {
   getHeadingLevel,
   isHiddenFromAT,
   isSubtreeHidden,
+  selectRoleFromAttributes,
   type StyleCache,
 } from "./role-map.js";
 
@@ -151,9 +153,11 @@ function getActions(
   element: Element,
   skipTabindexFallback = false,
 ): ActionType[] {
-  const tag = element.tagName.toLowerCase();
+  const tag = safeTagName(element);
   const actions: ActionType[] = [];
-  const role = element.getAttribute("role");
+  // The role the tree shows, so the actions offered agree with it: a
+  // `role="foo button"` clicks, an option the browser discarded doesn't.
+  const role = getExplicitRole(element);
 
   // Links — live ones. A link inside editable content is not: Chromium
   // won't follow it, not even on a scripted click(), or focus it, so it has
@@ -331,9 +335,14 @@ function hasInteractiveContent(
   element: Element,
   styleCache: StyleCache,
 ): boolean {
-  const tag = element.tagName.toLowerCase();
+  const tag = safeTagName(element);
   // The walk skips these outright, so nothing inside one is ever emitted.
   if (SKIP_TAGS.has(tag)) return false;
+  // Nor anything inside a form whose control shadows its `tagName`: the walk
+  // reads its own element's tag plainly, and its per-element boundary skips
+  // the form, with everything in it, when that read throws. This is the read
+  // that throws there, made to predict it.
+  if (typeof element.tagName !== "string") return false;
 
   const tabindex = element.getAttribute("tabindex");
   if (getActions(element, Number(tabindex) < 0).length > 0) return true;
@@ -458,10 +467,9 @@ function computeAccessibleDescription(
           : undefined;
       })
       .filter((t): t is string => !!t);
-    // Whitespace-normalized like a name (accname §4.3.2 step 4). The walk
-    // pads named widgets and summaries with spaces so their text never glues
-    // to a neighbour; without this a description read "X  S" where Chromium
-    // reads "X S".
+    // Whitespace-normalized like a name (accname §4.3.2 step 4). The walk pads
+    // any child with a box of its own so its text never glues to a neighbour;
+    // without this a description read "X  S" where Chromium reads "X S".
     if (texts.length) return texts.join(" ").replace(/\s+/g, " ").trim();
   }
   // 2. aria-description — inline string (ARIA 1.3+)
@@ -705,7 +713,7 @@ export function isNameFromContentHost(element: Element): boolean {
   if (isEditingHost(element)) return false;
   const explicitRole = getExplicitRole(element);
   if (explicitRole && AUTHOR_NAMED_ROLES.has(explicitRole)) return false;
-  if (NAMES_FROM_CONTENT_TAGS.has(element.tagName.toLowerCase())) return true;
+  if (NAMES_FROM_CONTENT_TAGS.has(safeTagName(element))) return true;
   return !!explicitRole && NAMES_FROM_CONTENT_ROLES.has(explicitRole);
 }
 
@@ -726,12 +734,13 @@ const NAME_SOURCE_CHILD_TO_OWNER: Readonly<Record<string, string>> = {
 
 /** The element whose accessible name is computed from `element`, if any. */
 export function htmlAamNameOwner(element: Element): Element | null {
-  const ownerTag = NAME_SOURCE_CHILD_TO_OWNER[element.tagName.toLowerCase()];
+  const tag = safeTagName(element);
+  const ownerTag = NAME_SOURCE_CHILD_TO_OWNER[tag];
   if (!ownerTag) return null;
   // eslint-disable-next-line no-restricted-properties -- one read, and a <legend>, <summary> or <caption> is never a form
   const parent = element.parentElement;
-  if (!parent || parent.tagName.toLowerCase() !== ownerTag) return null;
-  if (element.tagName.toLowerCase() === "caption") {
+  if (!parent || safeTagName(parent) !== ownerTag) return null;
+  if (tag === "caption") {
     return (parent as HTMLTableElement).caption === element ? parent : null;
   }
   return parent;
@@ -784,8 +793,7 @@ const NAMED_WIDGET_ROLES = new Set<string>([
  */
 function isImplicitDetailsGroup(element: Element): boolean {
   return (
-    element.tagName.toLowerCase() === "details" &&
-    !element.getAttribute("role")?.trim()
+    safeTagName(element) === "details" && !element.getAttribute("role")?.trim()
   );
 }
 
@@ -794,7 +802,11 @@ function isImplicitDetailsGroup(element: Element): boolean {
  *
  * Per WAI-ARIA accname-1.2 §4.3.2 step 2A, hidden subtrees contribute the
  * empty string. Skip element descendants that are aria-hidden, hidden,
- * inert, or display/visibility/content-visibility-hidden.
+ * inert, or display/visibility/content-visibility-hidden. A skipped descendant
+ * that still RENDERS contributes a separator even so, because its box keeps the
+ * text either side of it apart — see {@link needsSpaceAround}. (A skipped child
+ * is not recursed into, so a `display: contents` one whose own children render
+ * blocks contributes no separator; obscure, and left as is.)
  *
  * Also skips descendants whose computed role is in `NAME_BARRIER_ROLES` —
  * see the set's docstring for the reasoning (treeitem-in-group, nested
@@ -821,19 +833,40 @@ function getAccessibleTextContent(
       text += child.textContent || "";
     } else if (child.nodeType === Node.ELEMENT_NODE) {
       const childEl = child as Element;
-      if (isAriaHiddenValue(childEl.getAttribute("aria-hidden"))) continue;
+      const childStyle = getCachedComputedStyle(childEl, styleCache);
+      // Checked before aria-hidden so that `display: none` and `[hidden]`,
+      // which generate no box, contribute no separator either — Chromium reads
+      // `<h1>Save<div style="display:none">x</div>now</h1>` as "Savenow".
+      //
+      // Known gap, left alone deliberately: `inert` and
+      // `content-visibility: hidden` are hidden from AT but still RENDER, so
+      // Chromium spaces across them ("Save now") where this returns "Savenow".
+      // Closing it means teaching this check to tell the two kinds of hidden
+      // apart — a different question from how a child's box spaces its
+      // neighbours, and one that predates this rule, so it is its own change.
       // Chromium's tree puts an area under its image, never under the element
-      // its map sits in, so it adds nothing to that element's name.
+      // its map sits in, so it adds nothing to that element's name — and no
+      // separator either: it renders no box of its own. Checked before
+      // `isSubtreeHidden`, which for an `<area>` goes looking for the image
+      // using its map; the answer cannot change the outcome here.
       if (childEl.localName === "area") continue;
-      if (
-        isSubtreeHidden(childEl, getCachedComputedStyle(childEl, styleCache))
-      ) {
+      if (isSubtreeHidden(childEl, childStyle)) {
+        continue;
+      }
+      // A child that has a box of its own separates the text either side of it
+      // whether or not it contributes any text — Chromium reads
+      // `<h1>Save<div aria-hidden="true">x</div>now</h1>` as "Save now".
+      const spaced = needsSpaceAround(childEl, childStyle);
+      if (isAriaHiddenValue(childEl.getAttribute("aria-hidden"))) {
+        if (spaced) text += " ";
         continue;
       }
       const role = getImplicitRole(childEl);
-      // Named widgets contribute their computed name (accname §2F.iii) —
-      // padded with spaces so adjacent text doesn't glue; the final
-      // whitespace normalization collapses any doubles.
+      // Named widgets contribute their computed name (accname §2F.iii), spaced
+      // by the same box rule as everything else: Chromium reads
+      // `<h2>Signed in as <a href="/u">Ada</a>'s profile</h2>` as
+      // "Signed in as Ada's profile", not "… Ada 's profile", and only spaces
+      // the link when it renders as its own block.
       if (NAMED_WIDGET_ROLES.has(role)) {
         // An editing host takes no name from its own content, but Chromium
         // still reads that text into an ancestor's name:
@@ -844,20 +877,78 @@ function getAccessibleTextContent(
           (isEditingHost(childEl)
             ? getAccessibleTextContent(childEl, visited, styleCache)
             : "");
-        text += ` ${name} `;
+        text += spaced ? ` ${name} ` : name;
         continue;
       }
       if (NAME_BARRIER_ROLES.has(role) && !isImplicitDetailsGroup(childEl)) {
-        continue; // isNameBarrierElement, with the role already in hand
+        // isNameBarrierElement, with the role already in hand. It lends no
+        // text, but its box still keeps the neighbours apart: Chromium reads
+        // `<h1>Save<input>now</h1>` as "Save now".
+        if (spaced) text += " ";
+        continue;
       }
       const inner = getAccessibleTextContent(childEl, visited, styleCache);
-      // A summary renders as its own block, so its text never runs into the
-      // disclosure body beside it ("S Body", not "SBody") — Chromium spaces it.
-      text +=
-        childEl.tagName.toLowerCase() === "summary" ? ` ${inner} ` : inner;
+      // Padded per accname §2F, which appends each descendant's result "with a
+      // space"; the final normalization collapses the doubles. A child that
+      // flows inline is NOT padded, because that is what Chromium reads:
+      // `<button><span>Sa</span><span>ve</span></button>` is one word "Save",
+      // while `<button><div>Save</div><div>now</div></button>` is "Save now".
+      // The pad does not depend on `inner`: an empty block still separates its
+      // neighbours ("Save<div></div>now" is "Save now").
+      text += spaced ? ` ${inner} ` : inner;
     }
   }
   return text;
+}
+
+/**
+ * True when the child has a box of its own, so text beside it can't flow into it
+ * and the two must not read as one word. Chromium's name computation separates
+ * exactly these — whether or not the child lends any text — and this mirrors it
+ * against Chromium 141:
+ *
+ * - **Spaced:** blocks, list items, table parts, and the atomic inline-level
+ *   boxes — `inline-block`, `inline-flex`, `inline-table` — which Chromium
+ *   separates even though they sit on the line. Flex and grid items, floats and
+ *   absolutely positioned children need no special case: CSS blockifies their
+ *   computed `display`, so a `<span>` flex item arrives here as `block`.
+ * - **Not spaced:** the non-atomic inline boxes text really does flow into —
+ *   `inline`, `inline list-item`, and the `ruby` family. `display: contents`
+ *   generates no box at all, so its children decide their own spacing.
+ *
+ * Reading computed `display` rather than a tag list means an author's
+ * `display: inline` on a `<div>` (or `display: block` on a `<span>`) is honoured
+ * the way it renders. Two tags are named instead, because their spacing does not
+ * follow `display`: `<br>`, an inline box that ends the line, and `<summary>`,
+ * which Chromium separates as its disclosure's label however it is styled.
+ *
+ * With no computed style to read (no `window.getComputedStyle`), keep the
+ * unspaced concatenation rather than guessing.
+ */
+function needsSpaceAround(
+  element: Element,
+  style: CSSStyleDeclaration | null,
+): boolean {
+  // Clobber-safe: the name walk asks this of each child it enters, and a
+  // `<form>` among them may have a control named `tagName`.
+  const tag = safeTagName(element);
+  // `<br>` is an inline box that ends the line. A `<summary>` is its
+  // disclosure's label, which Chromium separates however it is styled — an
+  // author's `display: inline` on one still reads "Note S Body", not
+  // "Note SBody" — so neither is decided by `display`.
+  if (tag === "br" || tag === "summary") return true;
+  const display = style?.display;
+  // No computed style to read (no `window.getComputedStyle`): keep the
+  // unspaced concatenation rather than guessing.
+  if (!display) return false;
+  // Compared in full, not by prefix: `inline-block` and the other atomic
+  // inline-level boxes must NOT match the bare `inline` case.
+  return !(
+    display === "inline" ||
+    display === "inline list-item" ||
+    display === "contents" ||
+    display.startsWith("ruby")
+  );
 }
 
 /** Compute the accessible name for an element (simplified) */
@@ -913,7 +1004,7 @@ function computeRawAccessibleName(
   const ariaLabel = element.getAttribute("aria-label");
   if (ariaLabel) return ariaLabel.trim();
 
-  const tag = element.tagName.toLowerCase();
+  const tag = safeTagName(element);
 
   // 3. alt attribute for images. An empty alt is an intentional "no name"
   //    and stops here — EXCEPT when a `title` is also present. HTML-AAM keeps
@@ -950,8 +1041,7 @@ function computeRawAccessibleName(
         } else if (child.nodeType === Node.ELEMENT_NODE) {
           const childEl = child as Element;
           if (childEl === element) continue;
-          const childTag = childEl.tagName.toLowerCase();
-          if (FORM_CONTROL_TAGS.has(childTag)) continue;
+          if (FORM_CONTROL_TAGS.has(safeTagName(childEl))) continue;
           if (isAriaHiddenValue(childEl.getAttribute("aria-hidden"))) continue;
           if (
             isSubtreeHidden(
@@ -1502,7 +1592,7 @@ export function fieldValueOwner(el: Element): Element | null {
   // Clobber-safe: through a `<form>` whose control is named `parentElement`,
   // the plain read cycles between the form and that control forever.
   for (let node: Element | null = el; node; node = safeParentElement(node)) {
-    const tag = node.tagName.toLowerCase();
+    const tag = safeTagName(node);
     if (tag === "select" || isEditingHost(node)) {
       owner = node;
       continue;
@@ -1658,6 +1748,12 @@ export const KEY_ATTRIBUTES = [
   "method",
   "placeholder",
   "tabindex",
+  // A <select>'s display size: more than one row makes it a listbox, with no
+  // expanded state. The testing matcher reads them back to tell a redundant
+  // authored role, and the observer must see them flip, or a live tree keeps
+  // the old role and state.
+  "size",
+  "multiple",
   // Media a11y signals (boolean attributes render as "")
   "controls",
   "autoplay",
@@ -1729,7 +1825,7 @@ const DISABLEABLE_TAGS = new Set(["button", "input", "select", "textarea"]);
  * reaches the controls it disables, and through them their content.
  */
 function isDisabledControl(element: Element): boolean {
-  const tag = element.tagName.toLowerCase();
+  const tag = safeTagName(element);
   if (tag === "option") return isDisabledOption(element);
   // Not `.disabled`, which misses a control disabled by its fieldset.
   return DISABLEABLE_TAGS.has(tag) && isActuallyDisabled(element);
@@ -1749,7 +1845,8 @@ function isDisabledOption(option: Element): boolean {
   // eslint-disable-next-line no-restricted-properties -- one read, and an <option> is never a form
   const parent = option.parentElement;
   return (
-    parent?.tagName.toLowerCase() === "optgroup" &&
+    !!parent &&
+    safeTagName(parent) === "optgroup" &&
     parent.hasAttribute("disabled")
   );
 }
@@ -1862,26 +1959,19 @@ function isPickerOpen(select: Element): boolean {
   }
 }
 
-/** The largest `size` a `<select>` honors. Past it the attribute is ignored. */
-const MAX_SELECT_SIZE = 0xffffffff;
-
 /**
  * Whether a `<select>` is a drop-down: its display size, as HTML and Chromium
- * compute it, is 1. That is `size` when it parses to 1 through 2^32-1, and
- * otherwise 4 for a `multiple` select and 1 for any other. So
+ * compute it, is 1. That is the rule that gives it the combobox role, so
  * `<select multiple size="1">` is a drop-down and `<select multiple
- * size="0">` a list box. Read from the attributes: the `size` property reads
- * 0 above 2^31-1. `size` parses by HTML's integer rules, as `tabindex` does.
+ * size="0">` a list box. See {@link selectRoleFromAttributes}.
  */
 function isDropDownSelect(select: Element): boolean {
-  const size = parseTabindex(select.getAttribute("size")) ?? 0;
-  const displaySize =
-    size > 0 && size <= MAX_SELECT_SIZE
-      ? size
-      : select.hasAttribute("multiple")
-        ? 4
-        : 1;
-  return displaySize <= 1;
+  return (
+    selectRoleFromAttributes({
+      size: select.getAttribute("size"),
+      multiple: select.getAttribute("multiple"),
+    }) === "combobox"
+  );
 }
 
 /**
@@ -2157,7 +2247,7 @@ export function nativeStates(
   // Read only for a summary: on a <form>, a field named `parentElement`
   // shadows the property.
   const details = safeParentElement(element);
-  if (details?.tagName.toLowerCase() === "details") {
+  if (details && safeTagName(details) === "details") {
     const disclosure =
       (role === "generic" && getExplicitRole(element) !== "generic") ||
       SUMMARY_EXPANDED_ROLES.has(role);
@@ -2502,17 +2592,12 @@ const IMPLICIT_LIVE_ROLES = new Set(["status", "alert", "log"]);
  * they are.
  *
  * The role is read with `getExplicitRole`, the parse `getImplicitRole` uses —
- * first token, no case folding — so the pivot and the extracted tree always
- * agree about what an element is. That inherits first-token-not-first-VALID-
- * token (`role="toast status"` resolves to `toast`), which is a real gap but
- * belongs in `getExplicitRole`, where fixing it corrects the whole engine at
- * once instead of adding a second role-parsing convention here.
- *
- * Case matters and is not folded: CSS matches `role` values case-sensitively,
- * so `[role]` candidates arriving here already agree with the tree. Folding
- * made `<div role="MENU" aria-live="off">` an overlay — it hit the container
- * check before the `off` check — so an element got opposite scoping depending
- * on an unrelated attribute.
+ * the first token Chromium recognises, ASCII-case-folded — so the pivot and
+ * the extracted tree always agree about what an element is:
+ * `role="toast status"` is a status, `role="MENU"` a menu. Never fold or skip
+ * tokens here on its own: a pivot that folded while the tree didn't once made
+ * `<div role="MENU" aria-live="off">` an overlay that the tree said was no
+ * menu, so the element's scoping hung on an unrelated attribute.
  */
 export function countsAsOverlay(el: Element): boolean {
   const role = getExplicitRole(el);
@@ -2667,6 +2752,12 @@ export interface ExtractDomTreeOptions {
  * reads) defuse the plausible cases; this boundary is the catch-all for the
  * rest — including future unknown clobbering — degrading to "skip this node"
  * instead of losing the whole tree.
+ *
+ * It only ever charges the element it is building, so only that element's own
+ * tag is read plainly. A read that can land on another element — an ancestor a
+ * role or state climbs to, a descendant a name walk enters — goes through
+ * `safeTagName`; through a plain one, such a form would cost the element whose
+ * read it was.
  *
  * Nothing here mutates `nodes` / the element ref map; the caller commits the node
  * only on success, so a caught element never leaves a half-built node behind.

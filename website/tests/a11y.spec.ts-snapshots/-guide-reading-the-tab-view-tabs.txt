@@ -13,5 +13,5 @@ generic
 button "Copy Code"
 generic
 link "Edit this page on GitHub"
-link "Previous pageHeadings View"
-link "Next pagePanel features"
+link "Previous page Headings View"
+link "Next page Panel features"

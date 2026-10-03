@@ -7,7 +7,7 @@ import {
   extractDomTree,
   resetIdCounter,
 } from "../index.js";
-import { clobber } from "../test-support/clobber.js";
+import { clobber, shadow } from "../test-support/clobber.js";
 import type { ExtractionResult, TreeChange } from "../types.js";
 
 describe("LiveTreeExtractor", () => {
@@ -690,6 +690,49 @@ describe("LiveTreeExtractor", () => {
     observer.stop();
   });
 
+  it("updates a name host when a name-barrier child stops rendering a box", async () => {
+    // The group lends the heading no text, but its box separates "Save" from
+    // "now", so the heading is "Save now". Hiding the group takes that box
+    // away and the heading becomes "Savenow". The ancestor climb stops at the
+    // barrier itself, so the heading is only re-extracted if the refresh
+    // climbs from the barrier's parent as well.
+    document.body.innerHTML = `<main><h1>Save<div role="group" style="display: block"></div>now</h1></main>`;
+
+    const live = new LiveTreeExtractor(document.body, { mode: "a11y" });
+    const before = [...live.extract().nodes.values()].find(
+      (n) => n.a11y.role === "heading",
+    );
+    expect(before?.a11y.name).toBe("Save now");
+
+    let lastChange: TreeChange | undefined;
+    const observer = new DomObserver(
+      document.body,
+      (change) => {
+        lastChange = change;
+      },
+      50,
+    );
+    observer.start();
+
+    document
+      .querySelector('[role="group"]')!
+      .setAttribute("style", "display: none");
+
+    await vi.advanceTimersByTimeAsync(100);
+
+    const result = live.refresh(lastChange);
+    const expected = extractA11yTree(document.body);
+
+    expect(result.nodes).toEqual(expected.nodes);
+
+    const heading = [...result.nodes.values()].find(
+      (n) => n.a11y.role === "heading",
+    );
+    expect(heading?.a11y.name).toBe("Savenow");
+
+    observer.stop();
+  });
+
   it("invalidates an aria-labelledby referrer when its nested target is removed", async () => {
     // The referrer button sits in a different container than the removed
     // wrapper, so re-extracting only the mutation target's subtree would miss
@@ -1282,6 +1325,83 @@ describe("LiveTreeExtractor", () => {
       });
       expect(heading.a11y.name).toBe("A Old Body");
       expect(result.nodes).toEqual(extractA11yTree(document.body).nodes);
+    });
+  });
+
+  // A listitem, option or treeitem keeps its role only in its required
+  // context, which an ancestor's `role` or another element's `aria-owns`
+  // decides — and an <li>'s role hangs on its parent list's `role`. A refresh
+  // must follow every one of them the way a fresh extraction would.
+  describe("a role that depends on another element", () => {
+    async function refreshAfter(html: string, mutate: () => void) {
+      document.body.innerHTML = `<main>${html}</main>`;
+      const live = new LiveTreeExtractor(document.body, { mode: "dom" });
+      let lastChange: TreeChange | undefined;
+      const observer = new DomObserver(
+        document.body,
+        (change) => {
+          lastChange = change;
+        },
+        50,
+      );
+      observer.start();
+      mutate();
+      await vi.advanceTimersByTimeAsync(100);
+      expect(lastChange).toBeDefined();
+      const result = live.refresh(lastChange);
+      observer.stop();
+      return result;
+    }
+
+    const roleOf = (result: ExtractionResult, id: string) =>
+      [...result.nodes.values()].find((n) => n.dom?.attributes["id"] === id)
+        ?.a11y.role;
+
+    it("follows an aria-owns that adopts an orphan", async () => {
+      const result = await refreshAfter(
+        `<div id="list" role="list"></div><div><div id="t" role="listitem">x</div></div>`,
+        () => document.getElementById("list")!.setAttribute("aria-owns", "t"),
+      );
+      expect(roleOf(result, "t")).toBe("listitem");
+      expect(result.nodes).toEqual(extractDomTree(document.body).nodes);
+    });
+
+    // The owned item sits outside the owner's subtree, so re-extracting the
+    // owner alone would leave the item on its old role, both ways round.
+    it("follows an aria-owns owner that changes role", async () => {
+      const lost = await refreshAfter(
+        `<section><div><div id="owner" role="list" aria-owns="t"></div></div></section><div><div id="t" role="listitem">x</div></div>`,
+        () =>
+          document.getElementById("owner")!.setAttribute("role", "navigation"),
+      );
+      expect(roleOf(lost, "t")).toBe("generic");
+      expect(lost.nodes).toEqual(extractDomTree(document.body).nodes);
+
+      const gained = await refreshAfter(
+        `<section><div><div id="owner" role="navigation" aria-owns="t"></div></div></section><div><div id="t" role="listitem">x</div></div>`,
+        () => document.getElementById("owner")!.setAttribute("role", "list"),
+      );
+      expect(roleOf(gained, "t")).toBe("listitem");
+      expect(gained.nodes).toEqual(extractDomTree(document.body).nodes);
+    });
+
+    it("follows an ancestor that stops being a list", async () => {
+      const result = await refreshAfter(
+        `<div id="list" role="list"><div><div id="t" role="listitem">x</div></div></div>`,
+        () =>
+          document.getElementById("list")!.setAttribute("role", "navigation"),
+      );
+      expect(roleOf(result, "t")).toBe("generic");
+      expect(result.nodes).toEqual(extractDomTree(document.body).nodes);
+    });
+
+    it("follows a list's role stripping its items", async () => {
+      const result = await refreshAfter(
+        `<ul id="list"><li id="t">x</li></ul>`,
+        () => document.getElementById("list")!.setAttribute("role", "none"),
+      );
+      expect(roleOf(result, "t")).toBe("presentation");
+      expect(result.nodes).toEqual(extractDomTree(document.body).nodes);
     });
   });
 
@@ -2046,20 +2166,6 @@ describe("LiveTreeExtractor", () => {
       return { mutations };
     };
 
-    /**
-     * Shadow `prop` the way Chromium does: the read returns the control. For an
-     * accessor, which `clobber()` — it throws on the read — models too harshly:
-     * the text walks read `tagName` behind a `typeof` guard and survive the
-     * real thing, so only the control itself tests what a page does.
-     */
-    const shadowWithControl = (form: Element, prop: string): void => {
-      const control = form.querySelector(`[name="${prop}"]`);
-      Object.defineProperty(form, prop, {
-        configurable: true,
-        get: () => control,
-      });
-    };
-
     const buttonName = (result: ExtractionResult) =>
       [...result.nodes.values()].find((n) => n.a11y.role === "button")?.a11y
         .name;
@@ -2071,18 +2177,13 @@ describe("LiveTreeExtractor", () => {
         clobber,
       ],
       [
-        "tagName",
-        "nameRelevantAncestor asks the form for its tag",
-        shadowWithControl,
-      ],
-      [
         "contains",
         "collapseToOutermost asks the form whether it holds the text",
         clobber,
       ],
     ])(
       "keeps the tree right when the form's %s is shadowed (%s)",
-      (prop, _how, shadow) => {
+      (prop, _how, shadowProp) => {
         document.body.innerHTML = `
           <main id="app">
             <h1 id="title">Title</h1>
@@ -2095,7 +2196,7 @@ describe("LiveTreeExtractor", () => {
         `;
         const root = document.getElementById("app")!;
         const form = root.querySelector("form")!;
-        shadow(form, prop);
+        shadowProp(form, prop);
         const live = new LiveTreeExtractor(root, { mode: "a11y" });
 
         const change = observe(root, () => {
@@ -2114,14 +2215,10 @@ describe("LiveTreeExtractor", () => {
       ["matches", "asks the added form whether it is an overlay", clobber],
       ["querySelectorAll", "scans the added form for references", clobber],
       ["getAttribute", "indexes the references the added form makes", clobber],
-      [
-        "ownerDocument",
-        "resolves the added form's aria-labelledby",
-        shadowWithControl,
-      ],
+      ["ownerDocument", "resolves the added form's aria-labelledby", shadow],
     ])(
       "keeps the tree right when an added form's %s is shadowed (the splice %s)",
-      (prop, _how, shadow) => {
+      (prop, _how, shadowProp) => {
         document.body.innerHTML = `
           <main id="app"><h1 id="title">Title</h1><div id="slot"></div></main>
         `;
@@ -2131,7 +2228,7 @@ describe("LiveTreeExtractor", () => {
         const form = document.createElement("form");
         form.setAttribute("aria-labelledby", "title");
         form.innerHTML = `<input name="${prop}" aria-label="Field" />`;
-        shadow(form, prop);
+        shadowProp(form, prop);
         const change = observe(root, () => {
           document.getElementById("slot")!.append(form);
         });
@@ -2258,6 +2355,160 @@ describe("LiveTreeExtractor", () => {
       expect(node("Body")?.a11y.value).toBe("New");
       expect(node("Help")?.interaction?.actions).toContain("click");
       expect(result.nodes).toEqual(clean.nodes);
+    });
+  });
+
+  // `<input name="tagName">` makes `form.tagName` that input, and
+  // `.toLowerCase()` on it throws. Every change inside or on the form climbs
+  // through it reading tags, so the splice threw. The splice fallback (see "a
+  // method the splice calls" above) keeps the tree right when that happens,
+  // but at a full extraction's cost on every change near the form — and the
+  // tag is a read the splice can make safely, so these must splice without
+  // falling back. (Forced: jsdom doesn't shadow a form's own members.)
+  describe("a <form> whose control shadows tagName", () => {
+    let warn: ReturnType<typeof vi.spyOn>;
+
+    beforeEach(() => {
+      // The full walk warns about the form it skips; the fallback would too.
+      warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    });
+
+    /**
+     * The refresh spliced: it never had to fall back to a full extraction.
+     * Checked by hand rather than with `not.toHaveBeenCalledWith`, whose
+     * failure message prints every call — and the walk's own warning passes
+     * the shadowed form, which the printer then reads `tagName` on and throws.
+     */
+    const expectSpliced = (): void => {
+      const fellBack = warn.mock.calls.some(([message]) =>
+        String(message).includes("fell back to a full extraction"),
+      );
+      expect(fellBack, "the refresh fell back to a full extraction").toBe(
+        false,
+      );
+    };
+
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    function page(control = `<input name="tagName" aria-label="Tag" />`) {
+      document.body.innerHTML = `
+        <main id="app">
+          <h1 id="title">Orders</h1>
+          <form aria-label="Search">
+            ${control}
+            <span id="hint">Old hint</span>
+          </form>
+        </main>
+      `;
+      return {
+        root: document.getElementById("app")!,
+        form: document.querySelector("form")!,
+        hint: document.getElementById("hint")!,
+        title: document.getElementById("title")!,
+      };
+    }
+
+    it("keeps updating when text inside the form changes", () => {
+      const { root, form, hint, title } = page();
+      shadow(form, "tagName");
+      const live = new LiveTreeExtractor(root, { mode: "a11y" });
+
+      // One batch, as the observer delivers it: the form's text, and the
+      // heading's beside it. Losing the batch loses the heading's change too.
+      const hintText = hint.firstChild!;
+      const titleText = title.firstChild!;
+      hintText.textContent = "New hint";
+      titleText.textContent = "Open orders";
+      const result = live.refresh({
+        mutations: [
+          { type: "characterData", target: hintText },
+          { type: "characterData", target: titleText },
+        ] as unknown as MutationRecord[],
+      });
+
+      expect(result.nodes).toEqual(extractA11yTree(root).nodes);
+      expectSpliced();
+      const names = [...result.nodes.values()].map((n) => n.a11y.name);
+      expect(names).toContain("Open orders");
+    });
+
+    it("keeps updating when an attribute inside the form changes", () => {
+      const { root, form, hint } = page();
+      shadow(form, "tagName");
+      const live = new LiveTreeExtractor(root, { mode: "a11y" });
+
+      hint.setAttribute("title", "More");
+      const result = live.refresh({
+        mutations: [
+          { type: "attributes", target: hint, attributeName: "title" },
+        ] as unknown as MutationRecord[],
+      });
+
+      expect(result.nodes).toEqual(extractA11yTree(root).nodes);
+      expectSpliced();
+    });
+
+    it("keeps updating when an attribute on the form itself changes", () => {
+      const { root, form } = page();
+      shadow(form, "tagName");
+      const live = new LiveTreeExtractor(root, { mode: "dom" });
+
+      form.setAttribute("class", "busy");
+      const result = live.refresh({
+        mutations: [
+          { type: "attributes", target: form, attributeName: "class" },
+        ] as unknown as MutationRecord[],
+      });
+
+      expect(result.nodes).toEqual(extractDomTree(root).nodes);
+      expectSpliced();
+    });
+
+    it("keeps updating when content inside the form is replaced", () => {
+      const { root, form, hint } = page();
+      shadow(form, "tagName");
+      const live = new LiveTreeExtractor(root, { mode: "a11y" });
+
+      // `textContent =` swaps the text node: a childList change, not text.
+      hint.textContent = "New hint";
+      const result = live.refresh({
+        mutations: [
+          { type: "childList", target: hint, addedNodes: [], removedNodes: [] },
+        ] as unknown as MutationRecord[],
+      });
+
+      expect(result.nodes).toEqual(extractA11yTree(root).nodes);
+      expectSpliced();
+    });
+
+    it("drops the form, as a fresh extraction does, when the control arrives later", () => {
+      const { root, form } = page("");
+      const live = new LiveTreeExtractor(root, { mode: "dom" });
+      const before = [...live.extract().nodes.values()].map((n) => n.a11y.name);
+      expect(before).toContain("Search");
+
+      const control = document.createElement("input");
+      control.name = "tagName";
+      form.prepend(control);
+      shadow(form, "tagName");
+      const result = live.refresh({
+        mutations: [
+          {
+            type: "childList",
+            target: form,
+            addedNodes: [control],
+            removedNodes: [],
+          },
+        ] as unknown as MutationRecord[],
+      });
+
+      expect(result.nodes).toEqual(extractDomTree(root).nodes);
+      expectSpliced();
+      const after = [...result.nodes.values()].map((n) => n.a11y.name);
+      expect(after).not.toContain("Search");
+      expect(after).toContain("Orders");
     });
   });
 });

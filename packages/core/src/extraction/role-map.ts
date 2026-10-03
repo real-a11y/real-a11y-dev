@@ -5,13 +5,20 @@
  */
 
 import { isAriaHiddenValue } from "./aria-tokens.js";
-import { safeGetAttribute, safeHidden } from "./clobber-safe.js";
+import {
+  safeGetAttribute,
+  safeHidden,
+  safeQuerySelectorAll,
+  safeTagName,
+} from "./clobber-safe.js";
 import {
   flatParent,
+  flatParentElement,
+  idScope,
   isRenderedInFlatTree,
   renderingParent,
 } from "./flat-tree.js";
-import { isFocusable } from "./focusability.js";
+import { isFocusable, parseHtmlInteger } from "./focusability.js";
 import { imageUsingMap } from "./image-map.js";
 
 type RoleResolver = string | ((el: Element) => string);
@@ -149,11 +156,11 @@ function thHeaderRole(el: Element): string {
   // layout reads.
   // eslint-disable-next-line no-restricted-properties -- one read, and a <th> is never a form
   const row = el.parentElement;
-  if (!row || row.tagName.toLowerCase() !== "tr") return "rowheader";
+  if (!row || safeTagName(row) !== "tr") return "rowheader";
 
   // eslint-disable-next-line no-restricted-properties -- one read, and `row` is a <tr> by the check above
-  if (row.parentElement?.tagName.toLowerCase() === "thead")
-    return "columnheader";
+  const section = row.parentElement;
+  if (section && safeTagName(section) === "thead") return "columnheader";
 
   // Otherwise only the table's very first row heads columns. When a <thead>
   // exists its row wins that check, so a <th> leading a body row stays a
@@ -172,13 +179,68 @@ function isLandmarkContext(el: Element): boolean {
   // by that <main>, as the browser scopes it.
   let parent = flatParent(el);
   while (parent) {
-    const tag = parent.tagName.toLowerCase();
+    const tag = safeTagName(parent);
     if (["article", "aside", "main", "nav", "section"].includes(tag)) {
       return false;
     }
     parent = flatParent(parent);
   }
   return true;
+}
+
+/** Chromium holds a select's size as an unsigned 32-bit integer; a larger value fails to parse. */
+const MAX_SELECT_SIZE = 0xffffffff;
+
+/**
+ * A `<select>`'s implicit role over its markup alone — its `size` and
+ * `multiple` attributes — for callers with no live `Element`, such as the
+ * testing matcher reading a node's recorded `dom.attributes`. The role map
+ * reads an element through this too, so the two cannot disagree.
+ *
+ * A select is a list box when it shows more than one row, and a drop-down
+ * combobox otherwise. HTML calls the row count its display size: `size` when
+ * it parses to a positive integer, otherwise 4 for a `multiple` select and 1
+ * for any other. HTML-AAM maps every `multiple` select to a list box, but
+ * HTML lets one with a display size of 1 render as a drop-down, and Chromium
+ * does — so `<select multiple size="1">` is a combobox in its tree, and here.
+ *
+ * Parsed from the attribute rather than read off the `size` property, which
+ * reads 0 past 2^31 - 1 where Chromium still counts the rows.
+ */
+export function selectRoleFromAttributes(attributes: {
+  size?: string | null;
+  multiple?: string | null;
+}): "listbox" | "combobox" {
+  const size = parseHtmlInteger(attributes.size) ?? 0;
+  const displaySize =
+    size > 0 && size <= MAX_SELECT_SIZE
+      ? size
+      : attributes.multiple != null
+        ? 4
+        : 1;
+  return displaySize > 1 ? "listbox" : "combobox";
+}
+
+const NATIVE_LIST_TAGS = new Set(["ul", "ol", "menu"]);
+
+/**
+ * Chromium's native `<li>` role (`ShouldIgnoreListItem`): an `<li>` whose
+ * flat-tree parent is a `<ul>`/`<ol>`/`<menu>` carrying any `role` but exactly
+ * `list` or `directory` is presentational — how `<ul role="none">` strips the
+ * list semantics from its items as well as from itself.
+ *
+ * It is the element's own role, not an authored `role="none"`, so focus and
+ * global ARIA attributes don't void it, and the comparison is on the raw
+ * attribute: `role="LIST"` and `role=" list "` strip the items too. An
+ * authored role on the `<li>` itself still wins.
+ */
+function listItemRole(el: Element): string {
+  const parent = flatParentElement(el);
+  if (parent && NATIVE_LIST_TAGS.has(safeTagName(parent))) {
+    const role = safeGetAttribute(parent, "role");
+    if (role && role !== "list" && role !== "directory") return "presentation";
+  }
+  return "listitem";
 }
 
 const INPUT_TYPE_ROLE_MAP: Record<string, string> = {
@@ -323,7 +385,7 @@ const ROLE_MAP: Record<string, RoleResolver> = {
   kbd: "generic",
   label: "generic",
   legend: "generic",
-  li: "listitem",
+  li: listItemRole,
   main: "main",
   mark: "mark",
   math: "math",
@@ -342,7 +404,11 @@ const ROLE_MAP: Record<string, RoleResolver> = {
   samp: "generic",
   search: "search",
   section: (el) => (hasAccessibleName(el) ? "region" : "generic"),
-  select: (el) => ((el as HTMLSelectElement).multiple ? "listbox" : "combobox"),
+  select: (el) =>
+    selectRoleFromAttributes({
+      size: el.getAttribute("size"),
+      multiple: el.getAttribute("multiple"),
+    }),
   slot: "generic",
   small: "generic",
   span: "generic",
@@ -464,27 +530,207 @@ const HIDDEN_FROM_AT = new Set([
 ]);
 
 /**
- * ARIA role synonyms, folded to the token the rest of the engine speaks.
- * ARIA 1.3's `image` is Chromium's same image role as `img`, and the native
- * producer already reports it as `img` (`mapNativeAXRole`). A Map, not an
- * object literal, so an author's `role="constructor"` can't resolve to
- * `Object.prototype`'s.
+ * Every `role` token Chromium recognises: the concrete ARIA roles (with 1.3's
+ * `comment`, `suggestion`, `mark`, `sectionheader`, `sectionfooter`), the DPUB
+ * and Graphics module roles, and the `image`/`directory` synonyms. Measured
+ * rather than transcribed — `role="<token> button"` over CDP in Chromium 151
+ * and 153 resolves to `button` exactly when the token is skipped — and checked
+ * against every role in Chromium's own `aria_properties.json5`. Skipped: the
+ * abstract roles (`widget`, `section`, `landmark`, …), Chromium's internal
+ * names (`disclosuretriangle`, `labeltext`, `video`), and anything misspelled.
  */
-const ROLE_SYNONYMS: ReadonlyMap<string, string> = new Map([["image", "img"]]);
+const RECOGNISED_ROLES: ReadonlySet<string> = new Set([
+  ...`alert alertdialog application article banner blockquote button caption
+    cell checkbox code columnheader combobox comment complementary contentinfo
+    definition deletion dialog directory document emphasis feed figure form
+    generic grid gridcell group heading image img insertion link list listbox
+    listitem log main mark marquee math menu menubar menuitem menuitemcheckbox
+    menuitemradio meter navigation none note option paragraph presentation
+    progressbar radio radiogroup region row rowgroup rowheader scrollbar search
+    searchbox sectionfooter sectionheader separator slider spinbutton status
+    strong subscript suggestion superscript switch tab table tablist tabpanel
+    term textbox time timer toolbar tooltip tree treegrid treeitem`.split(
+    /\s+/,
+  ),
+  ...`abstract acknowledgments afterword appendix backlink biblioentry
+    bibliography biblioref chapter colophon conclusion cover credit credits
+    dedication endnote endnotes epigraph epilogue errata example footnote
+    foreword glossary glossref index introduction noteref notice pagebreak
+    pagefooter pageheader pagelist part preface prologue pullquote qna subtitle
+    tip toc`
+    .split(/\s+/)
+    .map((role) => `doc-${role}`),
+  "graphics-document",
+  "graphics-object",
+  "graphics-symbol",
+]);
 
 /**
- * The author's `role` token, with synonyms folded — the one parse of the
+ * ARIA role synonyms, folded to the token the rest of the engine speaks.
+ * ARIA 1.3's `image` is Chromium's same image role as `img`, and the native
+ * producer already reports it as `img` (`mapNativeAXRole`). ARIA 1.2
+ * deprecated `directory`, and Chromium exposes it as a `list`.
+ */
+const ROLE_SYNONYMS: ReadonlyMap<string, string> = new Map([
+  ["image", "img"],
+  ["directory", "list"],
+]);
+
+/**
+ * The role one `role` token names, as Chromium reads it — ASCII
+ * case-insensitively, synonyms folded — or `undefined` for a token it doesn't
+ * recognise. Set lookups throughout, so `role="constructor"` can't resolve to
+ * `Object.prototype`'s.
+ */
+export function resolveRoleToken(token: string): string | undefined {
+  const lower = token.replace(/[A-Z]+/g, (upper) => upper.toLowerCase());
+  return RECOGNISED_ROLES.has(lower)
+    ? (ROLE_SYNONYMS.get(lower) ?? lower)
+    : undefined;
+}
+
+/** The first token of a `role` value that resolves and that `accepts`. */
+function roleFromAttribute(
+  value: string,
+  accepts?: (role: string) => boolean,
+): string | undefined {
+  for (const token of value.trim().split(/\s+/)) {
+    const role = resolveRoleToken(token);
+    if (role && (!accepts || accepts(role))) return role;
+  }
+  return undefined;
+}
+
+/**
+ * Where Chromium requires a role to sit before it will expose it — and these
+ * three are all it enforces; `menuitem`, `tab`, `row`, `cell` and the rest
+ * keep their role anywhere. From `IsOrphanedListItem` / `IsOrphanedOption` /
+ * `IsOrphanedTreeItem` in Blink's `ax_object.cc`, each rule measured over CDP.
+ *
+ * - `tags`: an element that is a context by its tag, whatever role it carries
+ *   (`<ul role="navigation">` still holds list items).
+ * - `roles`: a context by the first token its `role` resolves to. An implicit
+ *   role doesn't count: a `<fieldset>` is a group but holds no list items.
+ * - `through`: roles the climb passes over rather than stopping at.
+ */
+interface RequiredContext {
+  tags: ReadonlySet<string>;
+  roles: ReadonlySet<string>;
+  through: ReadonlySet<string>;
+}
+
+const PRESENTATIONAL_TOKENS = ["none", "presentation"];
+
+const REQUIRED_CONTEXT: ReadonlyMap<string, RequiredContext> = new Map([
+  [
+    "listitem",
+    {
+      tags: NATIVE_LIST_TAGS,
+      roles: new Set(["list", "group"]),
+      through: new Set(PRESENTATIONAL_TOKENS),
+    },
+  ],
+  [
+    "option",
+    {
+      tags: new Set(["select"]),
+      roles: new Set(["listbox", "group"]),
+      through: new Set(PRESENTATIONAL_TOKENS),
+    },
+  ],
+  [
+    "treeitem",
+    {
+      tags: new Set<string>(),
+      roles: new Set(["tree", "group"]),
+      // A nested tree's items sit inside their parent item.
+      through: new Set([...PRESENTATIONAL_TOKENS, "treeitem"]),
+    },
+  ],
+]);
+
+/**
+ * A wrapper the context climb passes through: a role-less `div`, `span`,
+ * `slot` or custom element. Anything else — a `<section>`, an `<li>`, a
+ * `role="generic"` — ends the climb, even where it extracts as generic.
+ */
+function isGenericWrapper(element: Element, roleAttr: string | null): boolean {
+  if (roleAttr) return false;
+  const tag = safeTagName(element);
+  return tag === "div" || tag === "span" || tag === "slot" || tag.includes("-");
+}
+
+/** The first element whose `aria-owns` names `element`, in its id scope. */
+function ariaOwner(element: Element): Element | null {
+  const id = element.getAttribute("id");
+  if (!id) return null;
+  for (const owner of safeQuerySelectorAll(idScope(element), "[aria-owns]")) {
+    const owns = safeGetAttribute(owner, "aria-owns") ?? "";
+    if (owns.trim().split(/\s+/).includes(id)) {
+      return owner;
+    }
+  }
+  return null;
+}
+
+/**
+ * Whether `role` has the context Chromium requires of it at `element`. The
+ * climb runs over flat-tree parents; an `aria-owns` owner with a context role
+ * counts too, and is looked for only when the climb fails, since orphans are
+ * rare and the lookup scans the document.
+ *
+ * Every read here is of ANOTHER element, so every read is clobber-safe: a
+ * `<form>` on the way up may hold a control named `getAttribute`.
+ */
+function hasRequiredContext(element: Element, role: string): boolean {
+  const context = REQUIRED_CONTEXT.get(role);
+  if (!context) return true;
+  for (let p = flatParentElement(element); p; p = flatParentElement(p)) {
+    if (context.tags.has(safeTagName(p))) return true;
+    const roleAttr = safeGetAttribute(p, "role");
+    const parentRole = roleAttr ? roleFromAttribute(roleAttr) : undefined;
+    if (parentRole && context.roles.has(parentRole)) return true;
+    if (parentRole && context.through.has(parentRole)) continue;
+    if (isGenericWrapper(p, roleAttr)) continue;
+    break;
+  }
+  const owner = ariaOwner(element);
+  // The owner's role is read without its own context check: two orphans that
+  // own each other would otherwise recurse forever, and no role that can
+  // provide a context is one that needs one.
+  return !!owner && context.roles.has(resolveRole(owner, false));
+}
+
+/**
+ * The author's role, as Chromium resolves the `role` attribute: the first
+ * token it recognises and whose required context is present. `undefined` when
+ * no token qualifies — the element then has its own role. The one parse of the
  * attribute, so everything that reads an authored role agrees with the tree.
- * `undefined` when there is no role or it is blank.
  */
 export function getExplicitRole(element: Element): string | undefined {
-  const token = element.getAttribute("role")?.trim().split(/\s+/)[0];
-  return token ? (ROLE_SYNONYMS.get(token) ?? token) : undefined;
+  return explicitRoleOf(element, true);
+}
+
+function explicitRoleOf(
+  element: Element,
+  checkContext: boolean,
+): string | undefined {
+  // Safe: this also reads an `aria-owns` owner's role (see hasRequiredContext).
+  const value = safeGetAttribute(element, "role");
+  if (!value) return undefined;
+  return roleFromAttribute(
+    value,
+    checkContext ? (role) => hasRequiredContext(element, role) : undefined,
+  );
 }
 
 /** Resolve the implicit ARIA role for an element */
 export function getImplicitRole(element: Element): string {
-  const explicitRole = getExplicitRole(element);
+  return resolveRole(element, true);
+}
+
+function resolveRole(element: Element, checkContext: boolean): string {
+  const explicitRole = explicitRoleOf(element, checkContext);
   // role="presentation" and role="none" are synonyms — mark with the
   // canonical "presentation" role so the a11y extractor flattens the
   // element from the tree (children are promoted to the parent). This
@@ -502,7 +748,7 @@ export function getImplicitRole(element: Element): string {
     return explicitRole;
   }
 
-  const tag = element.tagName.toLowerCase();
+  const tag = safeTagName(element);
   const resolver = ROLE_MAP[tag];
 
   if (!resolver) return "generic";
@@ -515,7 +761,7 @@ export function isHiddenFromAT(
   element: Element,
   style?: CSSStyleDeclaration | null,
 ): boolean {
-  const tag = element.tagName.toLowerCase();
+  const tag = safeTagName(element);
   if (HIDDEN_FROM_AT.has(tag)) return true;
 
   // aria-hidden hides the element AND its entire subtree from AT, for every
@@ -554,7 +800,7 @@ export function getHeadingLevel(element: Element): number | null {
   if (match) return parseInt(match[1], 10);
 
   const ariaLevel = element.getAttribute("aria-level");
-  if (ariaLevel && element.getAttribute("role") === "heading") {
+  if (ariaLevel && getExplicitRole(element) === "heading") {
     return parseInt(ariaLevel, 10);
   }
 

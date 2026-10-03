@@ -54,6 +54,22 @@ describe("native HTML is valid without author-supplied ARIA", () => {
     ).toBeValidA11yTree();
   });
 
+  it("a <select> showing more than one row — a listbox", () => {
+    expect(
+      mount(
+        `<label>Status <select size="3"><option>Open</option><option>Done</option></select></label>`,
+      ),
+    ).toBeValidA11yTree();
+  });
+
+  it("a <select multiple size=1> — the drop-down HTML allows for it", () => {
+    expect(
+      mount(
+        `<label>Tags <select multiple size="1"><option>Bug</option><option>UI</option></select></label>`,
+      ),
+    ).toBeValidA11yTree();
+  });
+
   it("checkboxes, checked and unchecked", () => {
     expect(
       mount(`<label><input type="checkbox"> Weekends</label>`),
@@ -98,6 +114,19 @@ describe("native HTML is valid without author-supplied ARIA", () => {
     expect(
       mount(
         `<label>F <input list="fruits" role="combobox"></label><datalist id="fruits"></datalist>`,
+      ),
+    ).toBeValidA11yTree();
+  });
+
+  it("a redundant role follows a select's size, not only its tag", () => {
+    expect(
+      mount(
+        `<label>S <select size="3" role="listbox"><option>A</option></select></label>`,
+      ),
+    ).toBeValidA11yTree();
+    expect(
+      mount(
+        `<label>S <select multiple size="1" role="combobox"><option>A</option></select></label>`,
       ),
     ).toBeValidA11yTree();
   });
@@ -175,14 +204,46 @@ describe("authored ARIA still owes the contract", () => {
   });
 
   it("an authored combobox owning an authored option is still a nesting error", () => {
+    // The option sits in a listbox, the context Chromium requires before it
+    // exposes an option at all; the nesting rule climbs past the listbox to
+    // the combobox, and only a NATIVE pair is exempt.
     const root = mount(
-      `<div role="combobox" aria-label="S" aria-expanded="false" aria-controls="x"><div role="option">A</div></div>`,
+      `<div role="combobox" aria-label="S" aria-expanded="false" aria-controls="x"><div role="listbox"><div role="option">A</div></div></div>`,
     );
     // Named, not just "some error" — the fixture also emits a real
     // `aria-selected` violation, so `.not` alone proves nothing about nesting.
     expect(violations(root)).toContain(
       'option "A" — interactive "option" is nested inside "combobox" — nested controls aren\'t operable by assistive tech',
     );
+  });
+
+  it.each([
+    ["size", `size="3"`],
+    ["multiple", "multiple"],
+  ])(
+    "role=combobox on a list-box select (%s) is authored, not redundant",
+    (_label, attrs) => {
+      // More than one row shows, so the select is a listbox and the author
+      // changed its role. Chromium exposes the combobox, whose options are
+      // nested controls.
+      const root = mount(
+        `<label>S <select ${attrs} role="combobox"><option>A</option></select></label>`,
+      );
+      expect(violations(root)).toContain(
+        'option "A" — interactive "option" is nested inside "combobox" — nested controls aren\'t operable by assistive tech',
+      );
+    },
+  );
+
+  it("an authored option directly in a combobox is no option at all", () => {
+    // Chromium discards the role outside a listbox or group, so there is no
+    // nested control to report — the discarded role is the error.
+    const root = mount(
+      `<div role="combobox" aria-label="S" aria-expanded="false" aria-controls="x"><div role="option">A</div></div>`,
+    );
+    expect(violations(root)).toEqual([
+      'generic "A" — role "option" is discarded outside its required context',
+    ]);
   });
 });
 
@@ -266,5 +327,92 @@ describe("real problems are still caught in native markup", () => {
     expect(
       mount(`<button>Save <a href="/help">Help</a></button>`),
     ).not.toBeValidA11yTree();
+  });
+});
+
+// The DOM producer resolves `role` the way Chromium does: an unknown token is
+// skipped, and a listitem, option or treeitem outside its required context is
+// dropped for the next token or the element's own role. The tree is right to
+// show the fallback — it is what assistive tech gets — but the role the author
+// wrote is still a mistake, and the matcher must still say so. Several of
+// these fold out of the a11y view entirely, as the generic they now are.
+describe("a role the browser discards is still reported", () => {
+  it("an unknown token that leaves a plain generic", () => {
+    expect(violations(mount(`<div role="foo">x</div>`))).toEqual([
+      'generic "x" — "foo" is not a valid ARIA role',
+    ]);
+    expect(violations(mount(`<div role="widget">x</div>`))).toEqual([
+      'generic "x" — "widget" is not a valid ARIA role',
+    ]);
+  });
+
+  it("an unknown token the browser skipped for the next one", () => {
+    expect(
+      violations(mount(`<div role="foo button" tabindex="0">Save</div>`)),
+    ).toEqual(['button "Save" — "foo" is not a valid ARIA role']);
+  });
+
+  it("a listitem outside any list", () => {
+    expect(violations(mount(`<div role="listitem">Item</div>`))).toEqual([
+      'generic "Item" — role "listitem" is discarded outside its required context (directory / list)',
+    ]);
+  });
+
+  it("an option with something between it and its listbox", () => {
+    expect(
+      violations(
+        mount(
+          `<div role="listbox" aria-label="Fruit"><section><div role="option" aria-selected="false">Apple</div></section></div>`,
+        ),
+      ),
+    ).toEqual([
+      'generic "Apple" — role "option" is discarded outside its required context',
+    ]);
+  });
+
+  it("a treeitem that fell back to the element's own role", () => {
+    expect(
+      violations(
+        mount(
+          `<details role="treeitem" open><summary>Docs</summary>x</details>`,
+        ),
+      ).join("\n"),
+    ).toContain(
+      'role "treeitem" is discarded outside its required context (group / tree)',
+    );
+  });
+
+  // Chromium reads `COMBOBOX` as `combobox`, so it is as redundant on a
+  // <select> as the lowercase form: the select's options are its structure.
+  it("nor a redundant role in another case", () => {
+    expect(
+      mount(
+        `<select role="COMBOBOX" aria-label="Status"><option>Open</option></select>`,
+      ),
+    ).toBeValidA11yTree();
+  });
+
+  it("but not a role the browser keeps", () => {
+    expect(
+      mount(
+        `<div role="list"><div role="listitem">x</div></div>` +
+          `<div role="listbox" aria-label="Fruit"><div role="option" aria-selected="false">Apple</div></div>` +
+          `<div role="BUTTON" tabindex="0">Save</div>`,
+      ),
+    ).toBeValidA11yTree();
+  });
+
+  // `<ul role="none">` makes its items presentational too, which is what its
+  // author meant — there is no list item left to be out of context.
+  it("nor the items of a list stripped with role=none", () => {
+    expect(
+      mount(`<ul role="none"><li><a href="/">Home</a></li></ul>`),
+    ).toBeValidA11yTree();
+  });
+
+  it("nor anything assistive tech can't reach", () => {
+    expect(
+      mount(`<div aria-hidden="true"><div role="foo">x</div></div>`),
+    ).toBeValidA11yTree();
   });
 });

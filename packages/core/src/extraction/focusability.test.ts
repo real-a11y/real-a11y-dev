@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { shadow } from "../test-support/clobber.js";
+
 import {
   isActuallyDisabled,
   isFocusable,
@@ -57,6 +59,23 @@ describe("isFocusable", () => {
     expect(focusable("case")).toBe(false);
     expect(focusable("no-hash")).toBe(false);
     expect(focusable("no-href")).toBe(false);
+  });
+
+  // `<input name="tagName">` makes a form's `tagName` that input. Whether a
+  // summary is its details' toggle is read off its parent and its siblings,
+  // either of which can be that form.
+  it("answers for a form whose control shadows tagName, and the summaries beside it", () => {
+    const root = build(`
+      <form id="loose"><input name="tagName"><summary>Loose</summary></form>
+      <details><form><input name="tagName"></form><summary>More</summary></details>
+    `);
+    for (const form of root.querySelectorAll("form")) shadow(form, "tagName");
+
+    expect(isFocusable(root.querySelector("#loose")!)).toBe(false);
+    // Not a details' summary: plain text to Chromium.
+    expect(isFocusable(root.querySelector("#loose summary")!)).toBe(false);
+    // The details' first summary, though a form comes before it.
+    expect(isFocusable(root.querySelector("details summary")!)).toBe(true);
   });
 
   // Also checked in Chromium 151 and 153, with scripted focus() as well as Tab.

@@ -41,6 +41,15 @@
   changed.
   ([#452](https://github.com/real-a11y/real-a11y-dev/pull/452))
 
+- In DOM mode, a heading, link, button or table cell that holds a `<form>`
+  whose field is named `tagName` is no longer dropped from the tree with
+  everything in it, and neither is a link in help text a field's
+  `aria-describedby` points at when that help text also holds such a form.
+  Such a field shadows the form's own `tagName`, and working out the name
+  around the form read it and threw. A change in or around such a form also
+  updates the tree in place again, instead of rebuilding all of it.
+  ([#465](https://github.com/real-a11y/real-a11y-dev/pull/465))
+
 - In DOM mode, focusing a field inside a `<form>` with a control named
   `nodeType`, such as `<input type="hidden" name="nodeType">`, now highlights
   the nearest node above it in the tree, and so does hovering or clicking
@@ -64,6 +73,19 @@
   which is where Chrome tabs to it. Hiding the image takes its areas out, and
   showing it again brings them back.
   ([#453](https://github.com/real-a11y/real-a11y-dev/pull/453))
+
+- In DOM mode, a name split across children that render as their own boxes now
+  reads with the spaces a screen reader announces instead of one glued word.
+  `<button><div>Save</div><div>now</div></button>` shows as `Save now`, where it
+  used to show as `Savenow` — in the tree, the Buttons and Forms lists, the Tab
+  Sequence view and the copied export. Spacing follows how each child renders, so
+  a label built from inline `<span>`s still reads as one word, while a `<br>`, an
+  empty block, and a rendered child that lends no text of its own (a form
+  control, an `aria-hidden` block) now keep the text around them apart. Spacing
+  moves both ways: an inline link or other nested control no longer forces a
+  space in where the markup has none, so a cell that read `Tree ( treeSnapshot )`
+  now reads `Tree (treeSnapshot)`.
+  ([#449](https://github.com/real-a11y/real-a11y-dev/pull/449))
 
 - In DOM mode, a native checkbox, radio, `<select>` or `<summary>` now takes
   its state from what it is, as it does in NATIVE mode, not from an ARIA
@@ -123,6 +145,16 @@
   threw and the whole form was skipped.
   ([#439](https://github.com/real-a11y/real-a11y-dev/pull/439))
 
+- In DOM mode, an element's `role` now resolves the way Chromium resolves it.
+  An unknown or abstract token is skipped for the next one, or the element's
+  own role — `role="foo"` was a `foo` row and is now whatever the element is
+  (often a `generic` that folds away), and `role="foo button"` is a `button`
+  named by its text and offers a Click. Tokens are read case-insensitively,
+  so `role="BUTTON"` is a button. A `listitem`, `option` or `treeitem` outside the list, listbox
+  or tree it needs loses its role the same way, and the `<li>`s of a
+  `<ul role="none">` leave the tree with their list.
+  ([#457](https://github.com/real-a11y/real-a11y-dev/pull/457))
+
 - In DOM mode, ARIA state values now read the way Chromium, and NATIVE mode,
   read them. `aria-disabled="TRUE"`, `aria-pressed="MIXED"` and
   `aria-checked="yes"` had no `disabled`, `mixed` or `checked` badge because
@@ -143,6 +175,15 @@
   `= "Hello world"`, and now reads `= "Hello [x]world"`. A combobox you can't
   type into still leaves them out, as Chromium does.
   ([#460](https://github.com/real-a11y/real-a11y-dev/pull/460))
+
+- In DOM mode, a `<select>` that shows more than one row, such as
+  `<select size="3">`, now shows as a `listbox` in the tree and the Tab
+  Sequence view, as Chromium's own accessibility tree reports it. DOM mode
+  called every `<select>` without `multiple` a `combobox`. A
+  `<select multiple size="1">`, which Chromium renders as a drop-down, now
+  shows as a `combobox`. Changing a select's `size` or `multiple` on the page
+  updates the tree.
+  ([#445](https://github.com/real-a11y/real-a11y-dev/pull/445))
 
 ## 0.1.14
 

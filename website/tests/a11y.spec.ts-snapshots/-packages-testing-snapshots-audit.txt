@@ -80,7 +80,7 @@ main
           code "boolean"
         cell "true"
           code "true"
-        cell "Mark the element focused at extraction time with a trailing [focused]. See Focus marker ."
+        cell "Mark the element focused at extraction time with a trailing [focused]. See Focus marker."
           code "[focused]"
           link "Focus marker"
       row
@@ -90,7 +90,7 @@ main
           code "boolean"
         cell "false"
           code "false"
-        cell "Print each field's announced value: textbox "Email" = "jane@x.com". See Field values ."
+        cell "Print each field's announced value: textbox "Email" = "jane@x.com". See Field values."
           code "textbox "Email" = "jane@x.com""
           link "Field values"
   heading "Field values" (level 3)
@@ -317,5 +317,5 @@ contentinfo
   paragraph "Last updated:"
     time "[redacted]"
   navigation "Pager"
-    link "Previous page@real-a11y-dev/testing"
-    link "Next pageAssertions"
+    link "Previous page @real-a11y-dev/testing"
+    link "Next page Assertions"

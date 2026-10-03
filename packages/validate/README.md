@@ -47,6 +47,14 @@ Two further fields let a producer that knows the underlying element say so. Both
 
 So a tree authored by hand validates as written, while a tree extracted from a live DOM can exempt what the platform already guarantees. `@real-a11y-dev/testing` populates both from the extracted `dom.tagName` / `dom.attributes`.
 
+A third field runs the other way — it carries a mistake the extracted tree can no longer show:
+
+| Field                   | Says                                                                                                         | Absent means                    |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------ | ------------------------------- |
+| `discardedRole?: string` | the role the author wrote that the user agent threw away; `role` is the one it applied instead               | `role` is what was authored     |
+
+An extracted tree shows the role Chromium applies: `<div role="foo">` is a `generic`, and so is a `listitem` outside any list. `validateNode` reports the discarded role as an error — `"foo" is not a valid ARIA role`, or `role "listitem" is discarded outside its required context` — and then judges the node by the role it was given. The discard is the evidence: the user agent already checked the context, and the tree can't show what ended its search (a `<section>` between an option and its listbox folds out of the view).
+
 ## In tests
 
 [`@real-a11y-dev/testing`](https://real-a11y.dev/packages/testing) ships a matcher built on this package:

@@ -86,7 +86,7 @@ Both modes produce the same `SemanticNode` shape; only the `a11y.role` and `a11y
 
 ## Roles
 
-Roles follow the [WAI-ARIA specification](https://www.w3.org/TR/wai-aria-1.2/#role_definitions). Real A11y maps every HTML element to its implicit ARIA role, then overrides with an explicit `role` attribute if present.
+Roles follow the [WAI-ARIA specification](https://www.w3.org/TR/wai-aria-1.2/#role_definitions). Real A11y maps every HTML element to its implicit ARIA role, then overrides it with an explicit `role` attribute — read the way Chromium reads it, so the DOM producer and Chromium's own tree agree on what the element is.
 
 Examples:
 
@@ -105,7 +105,19 @@ Examples:
 
 An `<input>` whose `list` names a `<datalist>` is a `combobox`, because typing in it offers the datalist's suggestions in a popup. That holds for the text, search, email, tel, url, number, date and time types, as in Chromium's own tree. The datalist has to be in the input's own document or shadow root. A `list` naming anything else leaves the input a `textbox` (or `searchbox`, or `spinbutton`).
 
-`role="presentation"` and `role="none"` strip the element's role from the tree — the element is still present, but its children are re-parented.
+**The first token Chromium recognises wins.** `role` is a token list: an unknown or abstract token is skipped for the next one, and with none left the element keeps its own role. `<div role="foo button">Save</div>` is `button "Save"`, `<div role="widget">` is a `generic`, and `<button role="foo">` is still a `button`. Tokens are compared ASCII-case-insensitively (`role="BUTTON"` is a button), and `directory`, deprecated in ARIA 1.2, is a `list`.
+
+**`listitem`, `option` and `treeitem` need their container.** Chromium drops each one outside its required context, for the next token or the element's own role:
+
+| Role | Kept inside | Otherwise, for example |
+|---|---|---|
+| `listitem` | `<ul>`, `<ol>`, `<menu>` (whatever their role), `role="list"`, `role="group"` | `<div role="listitem">` alone is a `generic` |
+| `option` | `<select>`, `role="listbox"`, `role="group"` | `<li role="option">` in a list is a `listitem` |
+| `treeitem` | `role="tree"`, `role="group"`, through parent `treeitem`s | `<details role="treeitem">` alone is a `group` |
+
+The container may sit behind role-less `div`, `span` or custom-element wrappers, or behind presentational elements, and an `aria-owns` owner with one of those roles counts too. Anything else in between ends the search: `<div role="listbox"><section><div role="option">` is no option. No other role is dropped for its context — a `tab` outside a `tablist` is still a `tab`.
+
+`role="presentation"` and `role="none"` strip the element's role from the tree — the element is still present, but its children are re-parented. An `<li>` whose `<ul>`, `<ol>` or `<menu>` carries any role but `list` goes the same way, which is how `<ul role="none">` strips its items as well as itself.
 
 `role="image"`, ARIA 1.3's synonym for `img`, extracts as `img` — the role Chromium's own tree reports for it — so role queries, snapshots and the `image-alt` rule see one role, not two. Like any `img`, it is named only by `aria-label`, `aria-labelledby` or `title`, never by its text.
 

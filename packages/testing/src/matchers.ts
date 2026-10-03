@@ -25,11 +25,14 @@ import {
   assertLandmarkStructure,
   A11yAssertionError,
 } from "@real-a11y-dev/audit";
-import type { ExtractionResult } from "@real-a11y-dev/core";
+import type { ExtractionResult, SemanticNode } from "@real-a11y-dev/core";
 import {
+  buildA11yTree,
   getElementRefs,
   getTabSequence,
   isDatalistCombobox,
+  resolveRoleToken,
+  selectRoleFromAttributes,
 } from "@real-a11y-dev/core";
 import {
   extract,
@@ -217,7 +220,8 @@ function implicitRoleFor(
 ): string | undefined {
   switch (tag) {
     case "select":
-      return attrs.multiple !== undefined ? "listbox" : "combobox";
+      // The DOM producer's own rule, so a select's `size` decides both.
+      return selectRoleFromAttributes(attrs);
     case "option":
       return "option";
     case "button":
@@ -236,59 +240,116 @@ function implicitRoleFor(
   }
 }
 
+/**
+ * The role an author wrote that the extracted tree doesn't show, because the
+ * browser discarded it: the first token of `role` when it names something
+ * other than the node's role — an unrecognised token (returned as written),
+ * or a listitem/option/treeitem outside its required context (returned
+ * resolved, so `LISTITEM` is judged as `listitem`).
+ *
+ * A presentational first token is not a discard: conflict resolution voids
+ * `role="none"` on a focusable element, and the element's own role is then
+ * the right thing to judge.
+ */
+function discardedRoleOf(n: SemanticNode): string | undefined {
+  const authored = n.dom?.attributes.role?.trim().split(/\s+/)[0];
+  if (!authored) return undefined;
+  const resolved = resolveRoleToken(authored);
+  if (resolved === "none" || resolved === "presentation") return undefined;
+  if (resolved === n.a11y.role) return undefined;
+  return resolved ?? authored;
+}
+
+function toValidatedNode(
+  n: SemanticNode,
+  parentId: string | null,
+): ValidatedNode {
+  const attrs: Record<string, string | boolean> = {};
+  for (const [k, v] of Object.entries(n.a11y.states)) attrs[`aria-${k}`] = v;
+  for (const [k, v] of Object.entries(n.a11y.properties))
+    attrs[`aria-${k}`] = v;
+
+  const domAttrs = n.dom?.attributes ?? {};
+  // `states` is a fixed 10-entry set and `properties` is `{level, captions}`,
+  // so required props like `aria-controls` and `aria-valuenow` could NEVER
+  // appear — an authored combobox or slider was unsatisfiable no matter what
+  // the author wrote. Fill from the recorded attributes, without letting them
+  // override a computed state.
+  for (const [k, v] of Object.entries(domAttrs)) {
+    if (k.startsWith("aria-") && attrs[k] === undefined) attrs[k] = v;
+  }
+
+  const tag = n.dom?.tagName?.toLowerCase();
+  const type = domAttrs.type?.toLowerCase();
+  // `role=""` and `role="  "` both fall back to the element's own semantics
+  // in every user agent, and a role list resolves to its first token.
+  const authored = domAttrs.role?.trim().split(/\s+/)[0];
+  const discardedRole = discardedRoleOf(n);
+
+  return {
+    id: n.id,
+    parentId,
+    role: n.a11y.role,
+    name: n.a11y.name,
+    attrs,
+    // Native structure, for the nesting rule. A redundant authored role
+    // still counts: `<select role="combobox"><option>` is a select — in any
+    // case, since the browser reads `COMBOBOX` as `combobox` too.
+    implicitRole:
+      !authored ||
+      (resolveRoleToken(authored) ?? authored) ===
+        implicitRoleFor(tag, type, domAttrs),
+    uaSuppliedAttrs: uaSuppliedAttrs(tag, type, getElementRefs().get(n.id)),
+    ...(discardedRole !== undefined ? { discardedRole } : {}),
+  };
+}
+
 function toValidatedNodes(tree: Tree): Map<string, ValidatedNode> {
   const out = new Map<string, ValidatedNode>();
-  for (const [id, n] of tree.nodes) {
-    const attrs: Record<string, string | boolean> = {};
-    for (const [k, v] of Object.entries(n.a11y.states)) attrs[`aria-${k}`] = v;
-    for (const [k, v] of Object.entries(n.a11y.properties))
-      attrs[`aria-${k}`] = v;
+  for (const [id, n] of tree.nodes) out.set(id, toValidatedNode(n, n.parentId));
+  return out;
+}
 
-    const domAttrs = n.dom?.attributes ?? {};
-    // `states` is a fixed 10-entry set and `properties` is `{level, captions}`,
-    // so required props like `aria-controls` and `aria-valuenow` could NEVER
-    // appear — an authored combobox or slider was unsatisfiable no matter what
-    // the author wrote. Fill from the recorded attributes, without letting them
-    // override a computed state.
-    for (const [k, v] of Object.entries(domAttrs)) {
-      if (k.startsWith("aria-") && attrs[k] === undefined) attrs[k] = v;
+/**
+ * Nodes the a11y view folded away that still owe a finding: a discarded role
+ * leaves a plain generic (`<div role="foo">`, a listitem outside any list),
+ * which folds out of the view like any other — taking the author's mistake
+ * with it. Each comes back parented on its nearest node the view kept. The
+ * walk stops where the view's does, at anything hidden from assistive tech.
+ */
+function foldedDiscards(dom: Tree, a11y: Tree): ValidatedNode[] {
+  const out: ValidatedNode[] = [];
+  const walk = (id: string, keptAncestor: string | null): void => {
+    const n = dom.nodes.get(id);
+    if (!n || !n.a11y.isExposedToAT) return;
+    const kept = a11y.nodes.has(id);
+    if (!kept && discardedRoleOf(n) !== undefined) {
+      out.push(toValidatedNode(n, keptAncestor));
     }
-
-    const tag = n.dom?.tagName?.toLowerCase();
-    const type = domAttrs.type?.toLowerCase();
-    // `role=""` and `role="  "` both fall back to the element's own semantics
-    // in every user agent, and a role list resolves to its first token.
-    const authored = domAttrs.role?.trim().split(/\s+/)[0];
-
-    out.set(id, {
-      id,
-      parentId: n.parentId,
-      role: n.a11y.role,
-      name: n.a11y.name,
-      attrs,
-      // Native structure, for the nesting rule. A redundant authored role
-      // still counts: `<select role="combobox"><option>` is a select.
-      implicitRole:
-        !authored || authored === implicitRoleFor(tag, type, domAttrs),
-      uaSuppliedAttrs: uaSuppliedAttrs(tag, type, getElementRefs().get(id)),
-    });
-  }
+    for (const child of n.childIds) walk(child, kept ? id : keptAncestor);
+  };
+  walk(dom.rootId, null);
   return out;
 }
 
 /**
  * Assert the extracted accessibility tree has no ARIA *errors* — invalid roles,
- * missing required names/attributes, and the relationship violations
- * `@real-a11y-dev/validate` catches (interactive nesting, presentational-children
- * misuse). Advisory warnings don't fail the matcher.
+ * roles the browser discards, missing required names/attributes, and the
+ * relationship violations `@real-a11y-dev/validate` catches (interactive
+ * nesting, presentational-children misuse). Advisory warnings don't fail the
+ * matcher.
  */
 function toBeValidA11yTree(received: unknown): MatcherResult {
   requireElement(received, "toBeValidA11yTree");
-  const nodes = toValidatedNodes(extract(received, "a11y"));
+  // One walk, both views: the a11y view is what gets validated, and the DOM
+  // view still holds the nodes it folded away.
+  const dom = extract(received, "dom");
+  const a11y = buildA11yTree(dom.nodes, dom.rootId, dom.focusedId);
+  const nodes = toValidatedNodes(a11y);
   const label = (n: ValidatedNode) =>
     n.name ? `${n.role} "${n.name}"` : n.role;
   const errors: string[] = [];
-  for (const node of nodes.values()) {
+  for (const node of [...nodes.values(), ...foldedDiscards(dom, a11y)]) {
     for (const issue of validateNode(node, nodes)) {
       if (issue.severity === "error")
         errors.push(`${label(node)} — ${issue.message}`);

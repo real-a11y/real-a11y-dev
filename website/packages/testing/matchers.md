@@ -98,7 +98,7 @@ Found 1 accessibility issue:
 
 ## `toBeValidA11yTree()`
 
-Asserts the extracted accessibility tree has no ARIA **errors** — invalid roles, missing required accessible names, and relationship violations (interactive nesting, presentational-children misuse). Backed by `@real-a11y-dev/validate`. Advisory **warnings** don't fail it — only errors do.
+Asserts the extracted accessibility tree has no ARIA **errors** — invalid roles, roles the browser discards, missing required accessible names, and relationship violations (interactive nesting, presentational-children misuse). Backed by `@real-a11y-dev/validate`. Advisory **warnings** don't fail it — only errors do.
 
 ```ts
 expect(container).toBeValidA11yTree();
@@ -135,7 +135,24 @@ Note what is *not* exempted: the `<select>` above still needs an accessible name
 
 The distinction is per-attribute rather than per-element, since an element can supply one state and still owe another — `<input type="checkbox" role="switch">` has an authored role *and* browser-supplied checkedness, and passes.
 
+An authored role that repeats the element's own counts as the element's own. A `<select>`'s role depends on how many rows it shows: it is a `listbox` when its `size` is greater than 1, or when it is `multiple` with no `size`. Otherwise it is a `combobox`, and that includes `<select multiple size="1">`, which Chromium renders as a drop-down. So `role="listbox"` on `<select size="3">` is redundant. `role="combobox"` on that select changes its role, and its options are then reported as controls nested inside a combobox.
+
 The same rule is why `<video controls>` no longer fails: its extracted role is engine vocabulary rather than an ARIA role, and only an authored role can be invalid ARIA.
+
+**A role the browser discards is still yours.** The tree shows the role Chromium applies, so an unrecognised token or an item outside its container falls back to the element's own role — often a `generic` that folds out of the view. The matcher reports what you wrote all the same:
+
+```ts
+// Fails — generic "Close" — "foo" is not a valid ARIA role
+<div role="foo">Close</div>
+
+// Fails — generic "Item" — role "listitem" is discarded outside its required context (directory / list)
+<div role="listitem">Item</div>
+
+// Fails — the <section> ends the search for a listbox, so this is no option.
+<div role="listbox" aria-label="Fruit"><section><div role="option" aria-selected="false">Apple</div></section></div>
+```
+
+A discarded role is an error, not an advisory warning: assistive tech gets a different role from the one you wrote. See [Roles](/guide/core-concepts#roles) for which containers count.
 
 Unlike the four matchers above, this one doesn't wrap an `assert*` function — it runs the semantic tree through `@real-a11y-dev/validate` and fails only on `severity: "error"` issues.
 

@@ -11,4 +11,4 @@ generic
 button "Copy Code"
 generic
 link "Edit this page on GitHub"
-link "Next pageGetting Started"
+link "Next page Getting Started"

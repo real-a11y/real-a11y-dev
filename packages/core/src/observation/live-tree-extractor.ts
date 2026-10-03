@@ -3,6 +3,7 @@ import {
   safeContains,
   safeGetAttribute,
   safeParentElement,
+  safeTagName,
 } from "../extraction/clobber-safe.js";
 import {
   containsOverlaySignal,
@@ -45,6 +46,9 @@ const REFERENCE_ATTRS = new Set([
   // An <img usemap> decides whether the areas of the map it names are
   // rendered, and that map can sit anywhere in the tree.
   "usemap",
+  // An owner can be the required context that keeps an owned listitem,
+  // option or treeitem its role, and the owned element can be anywhere.
+  "aria-owns",
 ]);
 
 /**
@@ -252,6 +256,12 @@ export class LiveTreeExtractor {
           const target = m.target as Element;
           const attr = m.attributeName ?? "";
           if (REFERENCE_ATTRS.has(attr)) {
+            needsFull = true;
+            break;
+          }
+          // An owner's role can be the context that keeps an owned item its
+          // role, and the item is outside the owner's subtree.
+          if (attr === "role" && target.hasAttribute("aria-owns")) {
             needsFull = true;
             break;
           }
@@ -683,7 +693,17 @@ export class LiveTreeExtractor {
       else if (isNameFromContentHost(node)) outermostHost = node;
       // A name-source child is often itself a barrier (`caption`). Don't stop
       // there when its owner still needs the re-extract.
-      if (!owner && isNameBarrierElement(node)) break;
+      //
+      // Nor stop at a barrier we STARTED from. Its own text still never reaches
+      // an ancestor's name — that is what the break is for, and a mutation
+      // deeper inside it still stops here — but whether it renders a box does:
+      // the box separates the text either side of it (see `needsSpaceAround` in
+      // extraction/dom-extractor), so hiding `<div role="group">` inside
+      // `<h1>Save<div role="group"></div>now</h1>` turns "Save now" into
+      // "Savenow". Climbing past the starting element is what lets that host be
+      // re-extracted; when no host encloses it, the fall back to `el` keeps the
+      // dirty region exactly as narrow as before.
+      if (!owner && node !== el && isNameBarrierElement(node)) break;
       node = safeParentElement(node);
     }
     return outermostHost ?? el;
@@ -737,7 +757,7 @@ export class LiveTreeExtractor {
           ancestor = safeParentElement(ancestor);
         }
 
-        if (el.tagName.toLowerCase() === "label") {
+        if (safeTagName(el) === "label") {
           const forId = el.getAttribute("for");
           if (forId) {
             const input = el.ownerDocument?.getElementById(forId);

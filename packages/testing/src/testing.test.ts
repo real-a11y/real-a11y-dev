@@ -229,6 +229,23 @@ describe("flow", () => {
     expect(changed).toBe(true);
   });
 
+  it("a <select> showing more than one row is found and driven as a listbox", async () => {
+    const root = mount(`
+      <main>
+        <label>
+          Country
+          <select size="3">
+            <option value="es">Spain</option>
+            <option value="pt">Portugal</option>
+          </select>
+        </label>
+      </main>
+    `);
+    const select = root.querySelector("select")!;
+    await flow(root).findByRole("listbox", { name: "Country" }).select("pt");
+    expect(select.value).toBe("pt");
+  });
+
   it("toggle() flips a <details> open/closed", async () => {
     const root = mount(`
       <main>

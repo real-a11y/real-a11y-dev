@@ -17,8 +17,14 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { BrowserSession } from "@real-a11y-dev/browser";
+import {
+  BrowserSession,
+  nativeTree,
+  pageBundleSource,
+} from "@real-a11y-dev/browser";
+import type { ExtractionResult, SemanticNode } from "@real-a11y-dev/core";
 import { serializeTree } from "@real-a11y-dev/serialize";
+import { chromium } from "playwright";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { computeParity } from "./parity.js";
@@ -217,6 +223,166 @@ describe("an input whose list names a <datalist>", () => {
       expect(roleOf("Range")).toBe("slider");
       expect(roleOf("Authored")).toBe("textbox");
       expect(roleOf("Across a shadow root")).toBe("textbox");
+    }
+  });
+});
+
+// Only a drop-down has a picker for `expanded` to describe: collapsed while it
+// is closed and expanded while it is open, whatever aria-expanded says. On a
+// list box, the combobox role is the author's and reads aria-expanded like any
+// other. The DOM tree's states don't cross `session.call()`, so one page of
+// our own feeds both producers.
+describe("a combobox <select>'s expanded state follows its picker", () => {
+  it("agrees in both producers", async () => {
+    const listBox = { absent: undefined, true: true, false: false };
+    const dropDown = { absent: false, true: false, false: false };
+    const shapes = [
+      ["multiple", listBox],
+      ["size=3", listBox],
+      ["size=1", dropDown],
+      ["size=0", dropDown],
+      ["multiple size=1", dropDown],
+    ] as const;
+    const want: Record<string, boolean | undefined> = {};
+    let selects = "";
+    for (const [attrs, states] of shapes) {
+      for (const [state, expanded] of Object.entries(states)) {
+        const name = `${attrs}, aria-expanded ${state}`;
+        const aria = state === "absent" ? "" : ` aria-expanded="${state}"`;
+        selects += `<select aria-label="${name}" ${attrs} role="combobox"${aria}><option>o</option></select>`;
+        want[name] = expanded;
+      }
+    }
+
+    const expandedByName = (nodes: Iterable<SemanticNode>) =>
+      Object.fromEntries(
+        [...nodes]
+          .filter((n) => n.a11y.role === "combobox")
+          .map((n) => [n.a11y.name, n.a11y.states.expanded]),
+      );
+    const browser = await chromium.launch();
+    try {
+      const page = await browser.newPage();
+      await page.setContent(`<main>${selects}</main>`);
+      await page.addScriptTag({ content: pageBundleSource() });
+      const bothReport = async (expected: typeof want) => {
+        const dom = await page.evaluate(() => {
+          const ra = (globalThis as Record<string, unknown>).__realA11y__ as {
+            extractA11yTree(root: Element): ExtractionResult;
+          };
+          return [...ra.extractA11yTree(document.body).nodes.values()];
+        });
+        const native = await nativeTree(page);
+        // Strict, so a select missing from a tree can't pass as "unset".
+        expect(expandedByName(native.nodes.values())).toStrictEqual(expected);
+        expect(expandedByName(dom)).toStrictEqual(expected);
+      };
+
+      // Every picker closed.
+      await bothReport(want);
+
+      // A click opens a drop-down's picker, which expands it even against
+      // aria-expanded="false". A list box has no picker, so it stays as it was.
+      for (const [attrs, states] of shapes) {
+        const name = `${attrs}, aria-expanded false`;
+        await page.click(`select[aria-label="${name}"]`);
+        await bothReport({
+          ...want,
+          [name]: states === dropDown || want[name],
+        });
+        await page.keyboard.press("Escape");
+      }
+    } finally {
+      await browser.close();
+    }
+  });
+});
+
+// A <select> showing more than one row is a listbox in Chromium's tree, and
+// one showing a single row is a drop-down combobox, `multiple` or not. The DOM
+// producer once keyed on `multiple` alone, so `size="3"` read as a combobox
+// and `multiple size="1"` as a listbox.
+describe("a <select>'s role follows the rows it shows", () => {
+  it("agrees in both producers", async () => {
+    await session.open(
+      dataUrl(
+        `<main>
+          <select aria-label="Plain"><option>o</option></select>
+          <select aria-label="Three rows" size="3"><option>o</option></select>
+          <select aria-label="Parsed rows" size=" 2abc"><option>o</option></select>
+          <select aria-label="Zero rows" size="0"><option>o</option></select>
+          <select aria-label="Many" multiple><option>o</option></select>
+          <select aria-label="One row of many" multiple size="1"><option>o</option></select>
+        </main>`,
+      ),
+    );
+    const domTree = await session.call<string>("treeSnapshot", "body", [
+      { markFocus: false },
+    ]);
+    const nativeTree = serializeTree(await session.nativeTree(), {
+      markFocus: false,
+    });
+
+    for (const tree of [domTree, nativeTree]) {
+      const lines = tree.split("\n").map((l) => l.trim());
+      const roleOf = (name: string) =>
+        lines.find((l) => l.includes(`"${name}"`))?.split(" ")[0];
+      expect(roleOf("Plain")).toBe("combobox");
+      expect(roleOf("Three rows")).toBe("listbox");
+      expect(roleOf("Parsed rows")).toBe("listbox");
+      expect(roleOf("Zero rows")).toBe("combobox");
+      expect(roleOf("Many")).toBe("listbox");
+      expect(roleOf("One row of many")).toBe("combobox");
+    }
+  });
+});
+
+// Chromium resolves `role` to the first token it recognises — skipping unknown
+// and abstract ones, folding case — and drops a listitem, option or treeitem
+// outside its required context, for the next token or the element's own role.
+// The DOM producer once kept whatever the first token said: `foo "Save"`,
+// `listitem` outside any list, `option` inside a list.
+describe("roles Chromium discards", () => {
+  it("are discarded by both producers", async () => {
+    await session.open(
+      dataUrl(
+        `<main>` +
+          `<div role="foo button" tabindex="0">Save</div>` +
+          `<div role="widget link" tabindex="0">Docs</div>` +
+          `<div role="BUTTON" tabindex="0">Upper</div>` +
+          `<div role="directory" aria-label="Dir"><div role="listitem">x</div></div>` +
+          `<div role="list" aria-label="Broken"><section><div role="listitem"><a href="#a">A</a></div></section></div>` +
+          `<div role="listbox" aria-label="Fruit"><div role="option" aria-selected="false">Apple</div></div>` +
+          `<ul role="list" aria-label="Not a listbox"><li role="option"><a href="#s">Spain</a></li></ul>` +
+          `<button><span role="option">Apple</span> pie</button>` +
+          `<ul role="none"><li><a href="#h">Home</a></li></ul>` +
+          `</main>`,
+      ),
+    );
+    const domTree = await session.call<string>("treeSnapshot", "body", [
+      { markFocus: false },
+    ]);
+    const nativeTree = serializeTree(await session.nativeTree(), {
+      markFocus: false,
+    });
+
+    for (const [producer, tree] of [
+      ["dom", domTree],
+      ["native", nativeTree],
+    ]) {
+      const lines = tree.split("\n").map((l) => l.trim());
+      const roles = (role: string) =>
+        lines.filter((l) => l === role || l.startsWith(`${role} `));
+      expect(lines, producer).toContain('button "Save"');
+      expect(lines, producer).toContain('link "Docs"');
+      expect(lines, producer).toContain('button "Upper"');
+      expect(lines, producer).toContain('list "Dir"');
+      expect(lines, producer).toContain('option "Apple"');
+      expect(lines, producer).toContain('button "Apple pie"');
+      // The directory's item, and the <li role="option"> back on its own role.
+      expect(roles("listitem"), producer).toHaveLength(2);
+      expect(roles("option"), producer).toHaveLength(1);
+      expect(tree, producer).not.toMatch(/\b(foo|widget|directory|BUTTON)\b/);
     }
   });
 });
