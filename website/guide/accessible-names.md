@@ -78,7 +78,7 @@ If #1 resolves to a non-empty string, #2–#5 are ignored — even if #2 looks "
 </div>
 ```
 
-→ `""` — no name. A dialog's text is its content, not its label: a screen reader announces this dialog unnamed. The same holds for an image, a landmark (`<nav>`, `<form>`, `<footer>`…) and a text field, whose text is the user's value. This fails `assertDialogsLabeled()`. Fix it by pointing `aria-labelledby` at a visible heading:
+→ `""` — no name. A dialog's text is its content, not its label: a screen reader announces this dialog unnamed. The same holds for an image, a landmark (`<nav>`, `<aside>`, `<footer>`…) and a text field, whose text is the user's value. (An unnamed `<form>` is not a landmark at all — it is a generic, and a generic *does* take its loose text.) This fails `assertDialogsLabeled()`. Fix it by pointing `aria-labelledby` at a visible heading:
 
 ```html
 <div role="dialog" aria-labelledby="delete-title">

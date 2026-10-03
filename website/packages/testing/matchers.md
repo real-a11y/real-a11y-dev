@@ -188,7 +188,7 @@ Asserts the tree **satisfies an authored contract** — a partial a11y tree, wri
 expect(container).toMatchA11yContract(`
   main
     heading "Sign in" (level 1)
-    form
+    form "Sign in"
       textbox "Email address"
       textbox "Password"
       button "Sign in"

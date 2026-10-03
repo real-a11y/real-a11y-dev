@@ -3477,7 +3477,7 @@ describe("the direct-text fallback skips author-named roles", () => {
     ["img", `<div id="t" role="img">text img</div>`],
     // ARIA 1.3's `image` is a synonym of `img`: same role, same unnamed text.
     ["img", `<span id="t" role="image">🎉</span>`],
-    ["form", `<form id="t">Search: <input></form>`],
+    ["form", `<div id="t" role="form">Search: <input></div>`],
     ["navigation", `<nav id="t">Menu: <a href="#">Home</a></nav>`],
     ["main", `<main id="t">Welcome <a href="#">x</a></main>`],
     ["banner", `<header id="t">Site <a href="#">x</a></header>`],
@@ -5700,5 +5700,42 @@ describe("a role Chromium discards decides nothing", () => {
     expect(
       a11yNode(`<button id="t"><span role="option">Apple</span> pie</button>`),
     ).toEqual({ role: "button", name: "Apple pie" });
+  });
+});
+
+// A <form>'s implicit role depends on whether it is named, so pin the tree it
+// actually produces — the role-map unit tests alone would stay green if the
+// resolver went back to being unconditional.
+describe("the form landmark in the extracted tree", () => {
+  const roleOf = (root: Element, id: string) =>
+    [...extractDomTree(root).nodes.values()].find(
+      (n) => n.dom?.attributes.id === id,
+    )!.a11y.role;
+
+  it("gives only a named <form> the form landmark", () => {
+    const root = createPage(
+      `<form id="bare"><input aria-label="a"></form>
+       <form id="labelled" aria-label="Payment"><input aria-label="b"></form>
+       <form id="titled" title="Search"><input aria-label="c"></form>`,
+    );
+    expect(roleOf(root, "bare")).toBe("generic");
+    expect(roleOf(root, "labelled")).toBe("form");
+    expect(roleOf(root, "titled")).toBe("form");
+  });
+
+  it("keeps an unnamed <form>'s loose text, the way any generic does", () => {
+    const root = createPage(
+      `<form id="f">Search: <input aria-label="q"></form>`,
+    );
+    document.body.appendChild(root);
+    try {
+      const node = [...extractA11yTree(root).nodes.values()].find(
+        (n) => n.dom?.attributes.id === "f",
+      )!;
+      expect(node.a11y.role).toBe("generic");
+      expect(node.a11y.name).toBe("Search:");
+    } finally {
+      root.remove();
+    }
   });
 });
