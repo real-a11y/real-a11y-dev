@@ -50,8 +50,11 @@ type NativeMessage =
       // The panel reading again on its own because the page changed, not a
       // Refresh, an action's re-read or the first load. A dropped connection
       // is then not retried: the drop may be the user's Cancel on Chrome's
-      // debugging bar, and attaching again would undo it. The panel pauses
-      // its automatic reads after any failed one.
+      // debugging bar, and attaching again would undo it. Nor does one
+      // attach at all after the user cancelled that bar on this tab, during
+      // whatever it interrupted, until they read the tab themselves: it
+      // fails as `cancelled-by-user`. The panel pauses its automatic reads
+      // after any failed one.
       auto?: boolean;
     }
   | {
@@ -228,6 +231,15 @@ export function registerNativeMode(): void {
             sendResponse({ ok: true });
             return;
           case "NATIVE_READ": {
+            // An automatic read never attaches over the user's Cancel on
+            // Chrome's bar, whatever that Cancel interrupted; a read the
+            // user asked for lifts it.
+            if (!message.auto) {
+              session.clearCancelledByUser(message.tabId);
+            } else if (session.cancelledByUser(message.tabId)) {
+              sendResponse({ ok: false, error: "cancelled-by-user" });
+              return;
+            }
             const { outcome, value } = await withRecovery(
               session,
               message.tabId,

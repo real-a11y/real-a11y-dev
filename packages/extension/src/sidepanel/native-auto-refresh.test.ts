@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  AUTO_REFRESH_MAX_GAP_MS,
   AUTO_REFRESH_MAX_WAIT_MS,
   AUTO_REFRESH_MIN_GAP_MS,
   AUTO_REFRESH_QUIET_MS,
+  autoRefreshGapMs,
   decideAutoRefresh,
   PAGE_SIGNAL_LAG_MS,
   quietPeriodOnSignal,
@@ -20,6 +22,7 @@ function state(over: Partial<AutoRefreshState> = {}): AutoRefreshState {
     lastChangeAt: NOW - 5000,
     lastReadStartedAt: NOW - 6000,
     lastReadEndedAt: NOW - AUTO_REFRESH_MIN_GAP_MS - 1,
+    unchangedReads: 0,
     busy: false,
     ...over,
   };
@@ -115,5 +118,26 @@ describe("quietPeriodOnSignal", () => {
     expect(quietPeriodOnSignal(NOW - AUTO_REFRESH_MAX_WAIT_MS, NOW)).toEqual({
       kind: "keep",
     });
+  });
+});
+
+describe("autoRefreshGapMs", () => {
+  it("is the minimum gap while reads keep finding changes", () => {
+    expect(autoRefreshGapMs(0)).toBe(AUTO_REFRESH_MIN_GAP_MS);
+  });
+
+  it("doubles with each read that found nothing new, up to the ceiling", () => {
+    expect(autoRefreshGapMs(1)).toBe(AUTO_REFRESH_MIN_GAP_MS * 2);
+    expect(autoRefreshGapMs(2)).toBe(AUTO_REFRESH_MIN_GAP_MS * 4);
+    expect(autoRefreshGapMs(50)).toBe(AUTO_REFRESH_MAX_GAP_MS);
+  });
+
+  it("spaces the next read by the backed-off gap", () => {
+    expect(
+      decideAutoRefresh(
+        state({ unchangedReads: 2, lastReadEndedAt: NOW - 1000 }),
+        NOW,
+      ),
+    ).toEqual({ kind: "wait", ms: AUTO_REFRESH_MIN_GAP_MS * 4 - 1000 });
   });
 });

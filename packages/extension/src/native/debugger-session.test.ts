@@ -1252,4 +1252,38 @@ describe("NATIVE_READ through the real message handler", () => {
     expect(attach).toHaveBeenCalledTimes(2);
     expect(reply.ok).toBe(false);
   });
+
+  it("after the user cancels Chrome's debugging bar, an automatic read never attaches until the user reads", async () => {
+    // The Cancel can land during anything holding the bar up — a pick, an
+    // action, a Refresh — not only during an automatic read.
+    const { listeners, attach, send } = registerHandlers();
+    listeners[listeners.length - 1]({ tabId: 7 }, "canceled_by_user");
+
+    expect(
+      await send({ type: "NATIVE_READ", tabId: 7, auto: true }),
+    ).toMatchObject({ ok: false, error: "cancelled-by-user" });
+    expect(attach).not.toHaveBeenCalled();
+
+    // Only for that tab.
+    const attachedTo = (tabId: number) =>
+      attach.mock.calls.filter(([target]) => target?.tabId === tabId).length;
+    await send({ type: "NATIVE_READ", tabId: 8, auto: true });
+    expect(attachedTo(8)).toBeGreaterThan(0);
+    expect(attachedTo(7)).toBe(0);
+
+    // A read the user asked for lifts it.
+    await send({ type: "NATIVE_READ", tabId: 7 });
+    const afterRefresh = attachedTo(7);
+    expect(afterRefresh).toBeGreaterThan(0);
+    await send({ type: "NATIVE_READ", tabId: 7, auto: true });
+    expect(attachedTo(7)).toBeGreaterThan(afterRefresh);
+  });
+
+  it("another detach reason leaves automatic reads alone", async () => {
+    const { listeners, attach, send } = registerHandlers();
+    listeners[listeners.length - 1]({ tabId: 7 }, "target_closed");
+
+    await send({ type: "NATIVE_READ", tabId: 7, auto: true });
+    expect(attach).toHaveBeenCalled();
+  });
 });

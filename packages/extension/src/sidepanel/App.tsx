@@ -577,6 +577,10 @@ export function App() {
   const lastPageChangeAt = useRef(0);
   const lastNativeReadStartedAt = useRef(0);
   const lastNativeReadEndedAt = useRef(0);
+  // What the latest successful read returned, and how many automatic reads
+  // in a row have returned exactly that — see `autoRefreshGapMs`.
+  const lastNativeTreeSignature = useRef("");
+  const unchangedAutoReads = useRef(0);
   const autoRefreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // When the first page-change signal the pending timer answers arrived, or
   // `null` with no signal pending — the quiet period's ceiling counts from it.
@@ -989,8 +993,11 @@ export function App() {
         setNativeBusy(false);
         // A read pending for the old page would describe a document that
         // may not exist yet. Auto-refresh stays armed: the new page's
-        // content script reports it with a TREE_DATA, and that reads it.
+        // content script reports it with a TREE_DATA, and that reads it. A
+        // read in flight now is discarded by its token check, so it can't
+        // count as having seen the new page's first changes.
         cancelNativeAutoRefresh();
+        lastNativeReadStartedAt.current = 0;
         return;
       }
 
@@ -1556,7 +1563,9 @@ export function App() {
           if (auto) {
             const why = r?.reason
               ? explainUnavailable(r.reason)
-              : `read failed: ${r?.error ?? "unknown"}`;
+              : r?.error === "cancelled-by-user"
+                ? "Chrome's debugging notice was cancelled"
+                : `read failed: ${r?.error ?? "unknown"}`;
             if (r?.reason) setNativeCapability(blockedBy(r.reason));
             setNativeStatus(`auto-refresh paused — ${why}; Refresh to resume`);
             return false;
@@ -1573,7 +1582,17 @@ export function App() {
           }
           return false;
         }
-        setNativeNodes(new Map((r.nodes ?? []).map((n) => [n.id, n])));
+        // An automatic read that found the tree exactly as it was backs the
+        // next one off (`autoRefreshGapMs`) and leaves the view alone; any
+        // other read, or one that found a change, starts the count over.
+        const signature = JSON.stringify([r.rootId, r.url, r.nodes]);
+        const unchanged = signature === lastNativeTreeSignature.current;
+        unchangedAutoReads.current =
+          auto && unchanged ? unchangedAutoReads.current + 1 : 0;
+        lastNativeTreeSignature.current = signature;
+        if (!(auto && unchanged)) {
+          setNativeNodes(new Map((r.nodes ?? []).map((n) => [n.id, n])));
+        }
         setNativeRootId(r.rootId ?? "");
         setNativeTreeTabId(tabId);
         setNativeTreeUrl(r.url);
@@ -1597,7 +1616,13 @@ export function App() {
    *  success/failure so the native-default effect can tell them apart. */
   const loadNativeTree = useCallback(
     async (tabId: number, opts?: { auto?: boolean }): Promise<boolean> => {
-      if (!opts?.auto) await waitOutAutoRead();
+      if (!opts?.auto) {
+        // `tabId` is the tab bound when this was asked for. A switch while
+        // it waited out an automatic read makes it the wrong tab.
+        const tabAtCall = tabChangeToken.current;
+        await waitOutAutoRead();
+        if (tabChangeToken.current !== tabAtCall) return false;
+      }
       if (!nativeModeEnabled || nativeInFlight.current) return false;
       nativeInFlight.current = true;
       try {
@@ -1620,6 +1645,7 @@ export function App() {
         lastChangeAt: lastPageChangeAt.current,
         lastReadStartedAt: lastNativeReadStartedAt.current,
         lastReadEndedAt: lastNativeReadEndedAt.current,
+        unchangedReads: unchangedAutoReads.current,
         busy: nativeInFlight.current || pickModeOnRef.current,
       },
       Date.now(),
@@ -1813,7 +1839,18 @@ export function App() {
    *  page has already discarded. */
   const dispatchNativeAction = useCallback(
     async (nodeId: string, action: NativeAction, value?: string) => {
+      // The click named a node of the tree as it stood. A tab switch or a
+      // navigation while it waited out an automatic read means that node,
+      // and this closure's tab and URL, may no longer be the page's.
+      const opAtCall = nativeOpToken.current;
+      const tabAtCall = tabChangeToken.current;
       await waitOutAutoRead();
+      if (
+        nativeOpToken.current !== opAtCall ||
+        tabChangeToken.current !== tabAtCall
+      ) {
+        return;
+      }
       if (!nativeModeEnabled || nativeInFlight.current) return;
       nativeInFlight.current = true;
       try {

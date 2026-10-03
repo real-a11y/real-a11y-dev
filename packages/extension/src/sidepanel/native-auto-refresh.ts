@@ -26,9 +26,28 @@ export const AUTO_REFRESH_QUIET_MS = 750;
 export const AUTO_REFRESH_MAX_WAIT_MS = 3000;
 
 /** The least time between the end of one native read and the start of an
- *  automatic one. Counts every read: a manual refresh, an action's own
+ *  automatic one, before any back-off. Counts every read: a manual refresh, an action's own
  *  re-read, and an earlier automatic one. */
 export const AUTO_REFRESH_MIN_GAP_MS = 3000;
+
+/** The longest gap {@link autoRefreshGapMs} backs off to. */
+export const AUTO_REFRESH_MAX_GAP_MS = 48_000;
+
+/**
+ * The gap before the next automatic read, after `unchangedReads` automatic
+ * reads in a row found the tree exactly as it was. It doubles with each one,
+ * up to {@link AUTO_REFRESH_MAX_GAP_MS}, and drops back as soon as a read
+ * finds a change. A page can keep changing in ways the accessibility tree
+ * never shows, and an attach can itself provoke one: Chrome's debugging bar
+ * shrinks the viewport while it shows, and a page that re-renders on resize
+ * answers every read with another change signal.
+ */
+export function autoRefreshGapMs(unchangedReads: number): number {
+  return Math.min(
+    AUTO_REFRESH_MIN_GAP_MS * 2 ** Math.max(0, unchangedReads),
+    AUTO_REFRESH_MAX_GAP_MS,
+  );
+}
 
 /** How far a page-change signal trails the changes it reports: the content
  *  script's `DomObserver` sends `TREE_DATA` once the page has been quiet for
@@ -64,6 +83,9 @@ export interface AutoRefreshState {
   lastReadStartedAt: number;
   /** When the latest native read finished, in ms. */
   lastReadEndedAt: number;
+  /** Automatic reads in a row that found the tree unchanged — see
+   *  {@link autoRefreshGapMs}. */
+  unchangedReads: number;
   /** A native read or action is in flight, or a pick is armed. A pick holds
    *  the tab's debugger queue until the user clicks, so a read queued behind
    *  it would wait that long too. */
@@ -85,7 +107,7 @@ export function decideAutoRefresh(
   // Nothing changed since the latest read began.
   if (s.lastChangeAt <= s.lastReadStartedAt) return { kind: "skip" };
   if (s.busy) return { kind: "wait", ms: AUTO_REFRESH_QUIET_MS };
-  const gap = s.lastReadEndedAt + AUTO_REFRESH_MIN_GAP_MS - now;
+  const gap = s.lastReadEndedAt + autoRefreshGapMs(s.unchangedReads) - now;
   if (gap > 0) return { kind: "wait", ms: gap };
   return { kind: "read", tabId: s.armedTab };
 }
