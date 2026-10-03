@@ -415,45 +415,94 @@ function isSrOnly(
 }
 
 /**
+ * How far an `inset()` component moves its edge in, as a percentage of the
+ * box, or `NaN` when this walk cannot know. Only a percentage proves a
+ * distance without the box's size -- plus a zero, which is zero in any unit.
+ * A length or a `calc()` is unmeasurable, and every comparison against `NaN`
+ * is false, so an unreadable component never answers "collapsed".
+ */
+function insetEdge(value: string): number {
+  const length = parseFloat(value);
+  return length === 0 || value.endsWith("%") ? length : NaN;
+}
+
+/** Do two opposing `inset()` edges leave nothing between them? */
+function insetEdgesCollapse(near: string, far: string): boolean {
+  const a = insetEdge(near);
+  const b = insetEdge(far);
+  // One inset of 100% crosses the whole box on its own; short of that the
+  // pair has to meet.
+  return a >= 100 || b >= 100 || a + b >= 100;
+}
+
+/**
+ * The components of the `inset()` in a `clip-path`, 1 to 4 of them as
+ * written, or `null` if there is no readable one.
+ *
+ * A reference box may sit either side of the shape (`inset(50%) margin-box`),
+ * so the shape is read out of the middle of the value. Parens are matched and
+ * components split only outside them, so a nested `calc(50% + 1px)` stays one
+ * component instead of being cut at its own `)` and shifting every component
+ * after it onto the wrong edge.
+ */
+function insetSides(clipPath: string): string[] | null {
+  const open = clipPath.indexOf("inset(");
+  if (open === -1) return null;
+
+  let depth = 0;
+  let close = -1;
+  for (let i = open + 5; i < clipPath.length; i++) {
+    const char = clipPath[i];
+    if (char === "(") depth++;
+    else if (char === ")" && --depth === 0) {
+      close = i;
+      break;
+    }
+  }
+  if (close === -1) return null;
+
+  const sides: string[] = [];
+  let component = "";
+  depth = 0;
+  for (const char of clipPath.slice(open + 6, close)) {
+    if (char === "(") depth++;
+    else if (char === ")") depth--;
+    else if (depth === 0 && /\s/.test(char)) {
+      if (component) sides.push(component);
+      component = "";
+      continue;
+    }
+    component += char;
+  }
+  if (component) sides.push(component);
+
+  // `round <border-radius>` rounds the corners of the same box, so it says
+  // nothing about whether that box is empty.
+  const round = sides.indexOf("round");
+  const box = round === -1 ? sides : sides.slice(0, round);
+  return box.length === 0 || box.length > 4 ? null : box;
+}
+
+/**
  * Does a `clip-path: inset(...)` provably leave nothing painted?
  *
  * The visually-hidden idiom is `inset(50%)` or `inset(100%)`: insets that meet
- * or cross, so the box clips away to nothing. Only a percentage proves that
- * without knowing the box's size, so a length never counts however large it
- * reads -- `inset(10px)` crops a decorative edge off an element that stays
- * fully visible, and matching it marked that element `dom.isHidden`.
- *
- * The shorthand expands the CSS way: one value is all four sides, two is
- * vertical then horizontal, three adds bottom, four is top/right/bottom/left.
- * A reference box (`inset(50%) margin-box`) sits outside the shape, so it is
- * read out of the middle of the value rather than off the front.
+ * or cross, so the box clips away to nothing. A length never proves that
+ * however large it reads -- `inset(10px)` crops a decorative edge off an
+ * element that stays fully visible, and matching it marked that element
+ * `dom.isHidden`.
  *
  * Only `inset()` is read. Another shape that collapses the box -- `circle(0)`
- * -- answers no, as does a `calc()` in the component being measured: unread is
- * safer here than guessed at, since a wrong yes hides something that is drawn.
+ * -- answers no, as does a `calc()` on an edge the answer depends on: unread
+ * is safer here than guessed at, since a wrong yes hides something drawn.
  */
 function insetCollapsesBox(clipPath: string): boolean {
-  const inset = /inset\(([^)]*)\)/.exec(clipPath);
-  if (!inset) return false;
-
-  // `round <border-radius>` only rounds the corners of the same box.
-  const sides = inset[1]
-    .split(/\s+round\s+/)[0]
-    .trim()
-    .split(/\s+/);
-  if (sides.length > 4) return false;
+  const sides = insetSides(clipPath);
+  if (!sides) return false;
+  // The CSS shorthand: one value is all four sides, two is vertical then
+  // horizontal, three adds bottom, four is top/right/bottom/left.
   const [top, right = top, bottom = top, left = right] = sides;
-
-  // A zero inset is zero in any unit, so it reads alongside a percentage --
-  // without it, `inset(100% 0 0 0)` would answer no over its `0`s.
-  const edge = (value: string): number => {
-    const length = parseFloat(value);
-    return length === 0 || value.endsWith("%") ? length : NaN;
-  };
-  const meetInTheMiddle = (near: string, far: string): boolean =>
-    edge(near) + edge(far) >= 100;
-
-  return meetInTheMiddle(top, bottom) || meetInTheMiddle(left, right);
+  return insetEdgesCollapse(top, bottom) || insetEdgesCollapse(left, right);
 }
 
 /** Check if an element is visually hidden (computed styles) */

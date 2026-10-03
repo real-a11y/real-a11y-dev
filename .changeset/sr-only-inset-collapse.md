@@ -13,7 +13,7 @@ The DOM extractor flags an element `dom.isHidden` when it carries the sr-only si
 
 So a `position: absolute` or `position: fixed` element with a decorative crop — a non-interactive one without a `tabindex`, which is all this signature ever looks at — read as content that is announced but not drawn.
 
-The insets are now parsed, and the element counts as hidden only when they provably meet or cross: `top + bottom >= 100%`, or `left + right >= 100%`. A length can't prove that without the box's size, so it never counts, and a value this walk can't measure (`calc()`, a `var()` that survived) is left alone rather than guessed at. `inset(0 100%)`, which collapses horizontally, is now recognised too — the old prefix match missed it.
+The insets are now parsed, and the element counts as hidden only when they provably clip the box away: one inset of `100%` crosses it on its own, or an opposing pair meets (`top + bottom >= 100%`, `left + right >= 100%`). A length can't prove that without the box's size, so it never counts — while a zero counts in any unit. A `calc()` on an edge the answer depends on is left alone rather than guessed at, and a nested function keeps its own parentheses, so `inset(50% calc(50% + 1px))` is read as the two components it is rather than cut at the `calc`'s own `)`. `inset(0 100%)`, which collapses horizontally, is now recognised too — the old prefix match missed it.
 
 What this changes for you, on a page with such a crop:
 

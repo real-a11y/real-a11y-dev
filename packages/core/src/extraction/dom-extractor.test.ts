@@ -5912,7 +5912,17 @@ describe("the sr-only clip-path signature", () => {
     "inset(100% 0px 0px 0px)",
     "inset(50%) margin-box",
     "border-box inset(100%)",
+    // A single 100% inset crosses the box alone, so the opposing edge need
+    // not be measurable at all.
+    "inset(100% 0 10px 0)",
+    "inset(0 100% 0 1em)",
+    // A nested function keeps its own parens and spaces: cutting the value at
+    // the calc's `)` shifted every later component onto the wrong edge.
     "inset(50% calc(1px))",
+    "inset(50% calc(50% + 1px))",
+    "inset(50% clamp(1px, 2%, 3px))",
+    "inset(100% calc(50% + 1px))",
+    "inset(50% calc(1px) round calc(2px))",
   ])("reads %s as the visually-hidden idiom", (clipPath) => {
     document.body.innerHTML = `
         <main>
@@ -5933,6 +5943,11 @@ describe("the sr-only clip-path signature", () => {
     "inset(5%)",
     "inset(10% 20%)",
     "inset(10px round 5px)",
+    // left=10px and right=60% never meet. Truncating at the calc's `)` used
+    // to slide 60% onto BOTH horizontal edges and call this hidden -- the
+    // very false positive this signature is being narrowed to stop.
+    "inset(0 60% calc(1px) 10px)",
+    "inset(40% calc(50% + 1px) 40% 0)",
   ])("leaves a still-visible %s crop visible", (clipPath) => {
     document.body.innerHTML = `
       <main>
