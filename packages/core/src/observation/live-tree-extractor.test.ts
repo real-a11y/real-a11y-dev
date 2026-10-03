@@ -1132,6 +1132,162 @@ describe("LiveTreeExtractor", () => {
     });
   });
 
+  // A popover shows and hides with no attribute, on it or on the controls
+  // that invoke it. Its non-bubbling `toggle` event is the one signal.
+  describe("a popover showing or hiding", () => {
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    /**
+     * jsdom has no `showPopover()`, and `:popover-open` never matches there,
+     * so show `popover` by answering `:popover-open` for it, or hide it again
+     * by answering as jsdom does. Either way, fire the `toggle` event a
+     * browser would.
+     */
+    let showingSpy: { mockRestore(): void } | undefined;
+    function setShowing(popover: Element, showing: boolean): void {
+      showingSpy?.mockRestore();
+      showingSpy = undefined;
+      if (showing) {
+        const matches = Element.prototype.matches;
+        showingSpy = vi
+          .spyOn(Element.prototype, "matches")
+          .mockImplementation(function (this: Element, selector: string) {
+            return selector === ":popover-open"
+              ? this === popover
+              : matches.call(this, selector);
+          });
+      }
+      popover.dispatchEvent(new Event("toggle"));
+    }
+
+    /** Observe `root`, run `mutate`, and refresh from what was observed. */
+    async function refreshAfter(root: Element, mutate: () => void) {
+      const live = new LiveTreeExtractor(root, { mode: "a11y" });
+      let lastChange: TreeChange | undefined;
+      const observer = new DomObserver(
+        root,
+        (change) => {
+          lastChange = change;
+        },
+        50,
+      );
+      observer.start();
+      mutate();
+      await vi.advanceTimersByTimeAsync(100);
+      observer.stop();
+      // Refreshing with no change re-extracts everything, which would pass
+      // whether or not the observer noticed.
+      expect(lastChange).toBeDefined();
+      return live.refresh(lastChange);
+    }
+
+    function expandedOf(result: ExtractionResult, name: string): unknown {
+      const node = [...result.nodes.values()].find((n) => n.a11y.name === name);
+      expect(node).toBeDefined();
+      return node!.a11y.states["expanded"];
+    }
+
+    it("expands the invoker when its popover opens", async () => {
+      document.body.innerHTML = `<main><button popovertarget="menu" aria-expanded="false">Menu</button><div id="menu" popover>x</div></main>`;
+      const result = await refreshAfter(document.body, () =>
+        setShowing(document.getElementById("menu")!, true),
+      );
+      expect(expandedOf(result, "Menu")).toBe(true);
+      expect(result.nodes).toEqual(extractA11yTree(document.body).nodes);
+    });
+
+    // jsdom styles every popover `display: none`, showing or not. These two
+    // render theirs as a browser would while it shows, so it is in the tree
+    // and re-extracts on its own, leaving the invoker to be found.
+    it("collapses the invoker when its popover closes", async () => {
+      document.body.innerHTML = `<main><button commandfor="menu" command="toggle-popover" aria-expanded="true">Menu</button><div id="menu" popover style="display: block">x</div></main>`;
+      const menu = document.getElementById("menu")!;
+      setShowing(menu, true);
+      const result = await refreshAfter(document.body, () =>
+        setShowing(menu, false),
+      );
+      expect(expandedOf(result, "Menu")).toBe(false);
+      expect(result.nodes).toEqual(extractA11yTree(document.body).nodes);
+    });
+
+    it("expands an invoker inside the root for a popover outside it", async () => {
+      document.body.innerHTML = `<main><button popovertarget="menu">Menu</button></main><div id="menu" popover>x</div>`;
+      const main = document.querySelector("main")!;
+      const result = await refreshAfter(main, () =>
+        setShowing(document.getElementById("menu")!, true),
+      );
+      expect(expandedOf(result, "Menu")).toBe(true);
+      expect(result.nodes).toEqual(extractA11yTree(main).nodes);
+    });
+
+    it("re-extracts the popover's parent and its invokers, not the page", async () => {
+      document.body.innerHTML = `<main><button popovertarget="menu">Menu</button><section><div id="menu" popover>x</div></section></main>`;
+      const extract = vi.spyOn(LiveTreeExtractor.prototype, "extract");
+      const result = await refreshAfter(document.body, () =>
+        setShowing(document.getElementById("menu")!, true),
+      );
+      // Once, from the constructor.
+      expect(extract).toHaveBeenCalledTimes(1);
+      expect(expandedOf(result, "Menu")).toBe(true);
+      expect(result.nodes).toEqual(extractA11yTree(document.body).nodes);
+    });
+
+    it("re-extracts only the invoker for a popover outside the tree", async () => {
+      document.body.innerHTML = `<main><button popovertarget="menu">Menu</button></main><div id="menu" popover>x</div>`;
+      const main = document.querySelector("main")!;
+      const extract = vi.spyOn(LiveTreeExtractor.prototype, "extract");
+      await refreshAfter(main, () =>
+        setShowing(document.getElementById("menu")!, true),
+      );
+      expect(extract).toHaveBeenCalledTimes(1);
+    });
+
+    it("falls back to aria-expanded when a popover outside the tree stops being one", async () => {
+      document.body.innerHTML = `<main><button popovertarget="menu" aria-expanded="false">Menu</button></main><div id="menu" popover>x</div>`;
+      const menu = document.getElementById("menu")!;
+      setShowing(menu, true);
+      const main = document.querySelector("main")!;
+      const result = await refreshAfter(main, () =>
+        menu.removeAttribute("popover"),
+      );
+      expect(expandedOf(result, "Menu")).toBe(false);
+      expect(result.nodes).toEqual(extractA11yTree(main).nodes);
+    });
+
+    it("follows an invoker re-pointed at a showing popover", async () => {
+      document.body.innerHTML = `<main><button popovertarget="a">Menu</button><div id="a" popover>x</div><div id="b" popover>y</div></main>`;
+      const b = document.getElementById("b")!;
+      setShowing(b, true);
+      const result = await refreshAfter(document.body, () =>
+        document.querySelector("button")!.setAttribute("popovertarget", "b"),
+      );
+      expect(expandedOf(result, "Menu")).toBe(true);
+      expect(result.nodes).toEqual(extractA11yTree(document.body).nodes);
+    });
+
+    it("falls back to aria-expanded when the target stops being a popover", async () => {
+      document.body.innerHTML = `<main><button popovertarget="menu" aria-expanded="false">Menu</button><div id="menu" popover style="display: block">x</div></main>`;
+      const menu = document.getElementById("menu")!;
+      setShowing(menu, true);
+      const result = await refreshAfter(document.body, () =>
+        menu.removeAttribute("popover"),
+      );
+      expect(expandedOf(result, "Menu")).toBe(false);
+      expect(result.nodes).toEqual(extractA11yTree(document.body).nodes);
+    });
+
+    it("stops invoking from a form that takes the button over", async () => {
+      document.body.innerHTML = `<main><form id="f"></form><button popovertarget="menu" aria-expanded="true">Menu</button><div id="menu" popover>x</div></main>`;
+      const result = await refreshAfter(document.body, () =>
+        document.querySelector("button")!.setAttribute("form", "f"),
+      );
+      expect(expandedOf(result, "Menu")).toBe(true);
+      expect(result.nodes).toEqual(extractA11yTree(document.body).nodes);
+    });
+  });
+
   describe("a heading named through a <details>", () => {
     async function refreshAfter(mutate: () => void) {
       document.body.innerHTML = `<main><h3>A <details><summary>Old</summary>Body</details></h3></main>`;

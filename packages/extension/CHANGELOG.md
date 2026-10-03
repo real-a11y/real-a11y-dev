@@ -22,6 +22,16 @@
 
 ## Unreleased
 
+- In DOM mode, a button that opens a popover (`popovertarget`, or
+  `commandfor` with a popover `command`) now shows `expanded` while the
+  popover shows and `collapsed` otherwise, as it does in NATIVE mode,
+  whatever its `aria-expanded` says. It showed the attribute's badge, or none
+  without one. Opening or closing a popover now also updates the tree: it
+  changes no attribute, so the invoker kept its old badge, and the popover's
+  content neither appeared nor left, until something else on the page
+  changed.
+  ([#452](https://github.com/real-a11y/real-a11y-dev/pull/452))
+
 - In DOM mode, a heading, link, button or table cell that holds a `<form>`
   whose field is named `tagName` is no longer dropped from the tree with
   everything in it, and neither is a link in help text a field's

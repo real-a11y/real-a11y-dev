@@ -121,6 +121,11 @@ expect(brokenContainer).not.toBeValidA11yTree();
 // Passes. Browser-supplied checkedness, so no aria-checked needed.
 <input type="checkbox" aria-label="Agree">
 
+// Passes. The role is authored, but the browser supplies the expanded
+// state of a button that invokes a popover: whether the popover shows.
+<button role="combobox" popovertarget="sizes" aria-controls="sizes" aria-label="Size"></button>
+<div id="sizes" popover role="listbox" aria-label="Sizes"></div>
+
 // Fails — missing required aria-controls, aria-expanded.
 // The role is authored, so the attributes are yours to supply.
 <div role="combobox">One</div>

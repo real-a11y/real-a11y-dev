@@ -94,6 +94,25 @@ describe("findByRole", () => {
     expect(names("mixed")).toEqual(["c", "d"]);
   });
 
+  it("filters popover invokers by their popover's state, not aria-expanded", () => {
+    // Connected: an invoker finds its popover by id in its own tree.
+    document.body.innerHTML = `
+      <button popovertarget="menu">a</button>
+      <button popovertarget="menu" aria-expanded="true">b</button>
+      <button aria-expanded="true">c</button>
+      <div id="menu" popover>x</div>
+    `;
+    try {
+      const tree = extractDomTree(document.body);
+      const names = (expanded: boolean) =>
+        findAllByRole(tree, "button", { expanded }).map((n) => n.a11y.name);
+      expect(names(false)).toEqual(["a", "b"]);
+      expect(names(true)).toEqual(["c"]);
+    } finally {
+      document.body.innerHTML = "";
+    }
+  });
+
   it("returns null when nothing matches", () => {
     const root = createPage(`<p>No buttons here</p>`);
     const tree = extractDomTree(root);

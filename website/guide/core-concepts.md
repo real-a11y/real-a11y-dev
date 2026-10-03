@@ -33,9 +33,13 @@ interface SemanticNode {
                                               // reports its checkedness, true or false
                                               // ("mixed" when indeterminate), a drop-down
                                               // <select> is expanded only while its picker
-                                              // is open, and a <details>' summary follows
-                                              // the details' `open` — each on a role that
-                                              // has the state, as in Chromium
+                                              // is open, a <details>' summary follows
+                                              // the details' `open`, and a button that
+                                              // invokes a popover (popovertarget, or
+                                              // commandfor with a popover command) is
+                                              // expanded only while the popover shows —
+                                              // each on a role that has the state, as
+                                              // in Chromium
     properties: Record<string, string>;       // aria-* properties (incl. heading "level")
     isExposedToAT: boolean;      // false when aria-hidden, role="presentation", etc.
   };

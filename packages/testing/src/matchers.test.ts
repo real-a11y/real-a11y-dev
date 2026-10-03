@@ -107,6 +107,24 @@ describe("toBeValidA11yTree", () => {
       expect(mount(`<button></button>`)).toBeValidA11yTree(),
     ).toThrow(/ARIA violation/i);
   });
+
+  it("owes no aria-expanded on a combobox that invokes a popover", () => {
+    // The browser supplies the state: whether the popover is showing.
+    expect(
+      mount(`
+        <button role="combobox" popovertarget="list" aria-controls="list" aria-label="Size"></button>
+        <div id="list" popover role="listbox" aria-label="Sizes"></div>
+      `),
+    ).toBeValidA11yTree();
+    expect(() =>
+      expect(
+        mount(`
+          <button role="combobox" popovertarget="nowhere" aria-controls="list" aria-label="Size"></button>
+          <div id="list" role="listbox" aria-label="Sizes"></div>
+        `),
+      ).toBeValidA11yTree(),
+    ).toThrow(/missing required aria-expanded/);
+  });
 });
 
 describe("toHaveTabSequence", () => {

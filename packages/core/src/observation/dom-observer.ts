@@ -1,6 +1,8 @@
 import {
+  safeContains,
   safeGetAttribute,
   safeParentNode,
+  safeRootNode,
 } from "../extraction/clobber-safe.js";
 import {
   ARIA_STATE_ATTRIBUTES,
@@ -57,6 +59,14 @@ const EXTRA_OBSERVED_ATTRIBUTES = [
   "style", // CSS visibility/display changes (e.g., captcha showing/hiding content)
   "kind", // <track kind> drives the media node's hoisted captions property
   "usemap", // <img usemap> decides whether its map's <area>s are rendered
+  // What a control invokes, which decides its expanded state: what it names,
+  // whether that is a popover (which also hides it), and a form it would
+  // submit instead.
+  "popovertarget",
+  "commandfor",
+  "command",
+  "popover",
+  "form",
 
   // Every ARIA global state/property voids role="presentation", so adding or
   // clearing one on a presentational element changes its ROLE — the element
@@ -190,6 +200,11 @@ export class DomObserver {
   // maxWaitMs instead of being starved forever by the resetting debounce.
   private maxWaitTimer: ReturnType<typeof setTimeout> | null = null;
   private inputListener: ((e: Event) => void) | null = null;
+  private toggleListener: ((e: Event) => void) | null = null;
+  /** The tree `toggleListener` listens on: the document or shadow root holding `root`. */
+  private toggleScope: Node | null = null;
+  /** Watches `popover` attributes across `toggleScope`, for those outside `root`. */
+  private popoverObserver: MutationObserver | null = null;
   /** Accumulated MutationRecords across the current debounce window. */
   private pendingMutations: MutationRecord[] = [];
   /** Synthetic dirty roots (e.g. form-control input events). */
@@ -257,6 +272,47 @@ export class DomObserver {
     };
     this.root.addEventListener("input", this.inputListener, true);
     this.root.addEventListener("change", this.inputListener, true);
+
+    // A popover shows and hides without an attribute changing, on it or on the
+    // controls that invoke it, so no MutationRecord ever reports either. Its
+    // `toggle` event is the only signal. That doesn't bubble, hence the capture
+    // phase, and it is heard across `root`'s whole tree: a popover mounted
+    // outside `root` still expands an invoker inside it. The event isn't
+    // composed either, so a popover inside a shadow root below that tree is
+    // not heard: its next refresh comes from whatever else changes. A
+    // `<details>` or `<dialog>` fires one too, but changes its `open`
+    // attribute as well.
+    this.toggleListener = (e: Event) => {
+      if (
+        e.target instanceof Element &&
+        safeGetAttribute(e.target, "popover") !== null
+      ) {
+        this.pendingDirtyRoots.push(e.target);
+        this.scheduleChange();
+      }
+    };
+    this.toggleScope = safeRootNode(this.root);
+    this.toggleScope.addEventListener("toggle", this.toggleListener, true);
+
+    // Gaining or losing `popover` hides or shows an element, and changes what
+    // an invoker naming it reads. Losing it fires `toggle` only on a showing
+    // popover, and only once the attribute is gone. Inside `root` the primary
+    // observer reports the change; outside it, only this does. That is rare,
+    // so it asks for a full re-extraction, which also re-derives the scope.
+    // A target outside `root` removed or renamed is still not heard, short of
+    // watching the whole document's tree: its invoker catches up on the next
+    // refresh anything else causes.
+    this.popoverObserver = new MutationObserver((mutations) => {
+      if (mutations.some((m) => !safeContains(this.root, m.target))) {
+        this.pendingFull = true;
+        this.scheduleChange();
+      }
+    });
+    this.popoverObserver.observe(this.toggleScope, {
+      subtree: true,
+      attributes: true,
+      attributeFilter: ["popover"],
+    });
 
     // Modal dialogs from React Portal, Vue Teleport, etc. mount into
     // `document.body` — *outside* `this.root`, so the primary observer
@@ -341,6 +397,15 @@ export class DomObserver {
       this.root.removeEventListener("input", this.inputListener, true);
       this.root.removeEventListener("change", this.inputListener, true);
       this.inputListener = null;
+    }
+    if (this.popoverObserver) {
+      this.popoverObserver.disconnect();
+      this.popoverObserver = null;
+    }
+    if (this.toggleListener && this.toggleScope) {
+      this.toggleScope.removeEventListener("toggle", this.toggleListener, true);
+      this.toggleListener = null;
+      this.toggleScope = null;
     }
     if (this.debounceTimer) {
       clearTimeout(this.debounceTimer);
