@@ -14,6 +14,7 @@ import {
   safeContains,
   safeGetAttribute,
   safeGetElementById,
+  safeNodeType,
   safeOwnerDocument,
   safeParentElement,
   safeQuerySelector,
@@ -829,73 +830,85 @@ function getAccessibleTextContent(
 ): string {
   let text = "";
   for (const child of flatChildNodes(element)) {
-    if (child.nodeType === Node.TEXT_NODE) {
+    const type = safeNodeType(child);
+    if (type === Node.TEXT_NODE) {
       text += child.textContent || "";
-    } else if (child.nodeType === Node.ELEMENT_NODE) {
+    } else if (type === Node.ELEMENT_NODE) {
       const childEl = child as Element;
-      const childStyle = getCachedComputedStyle(childEl, styleCache);
-      // Checked before aria-hidden so that `display: none` and `[hidden]`,
-      // which generate no box, contribute no separator either — Chromium reads
-      // `<h1>Save<div style="display:none">x</div>now</h1>` as "Savenow".
-      //
-      // Known gap, left alone deliberately: `inert` and
-      // `content-visibility: hidden` are hidden from AT but still RENDER, so
-      // Chromium spaces across them ("Save now") where this returns "Savenow".
-      // Closing it means teaching this check to tell the two kinds of hidden
-      // apart — a different question from how a child's box spaces its
-      // neighbours, and one that predates this rule, so it is its own change.
-      // Chromium's tree puts an area under its image, never under the element
-      // its map sits in, so it adds nothing to that element's name — and no
-      // separator either: it renders no box of its own. Checked before
-      // `isSubtreeHidden`, which for an `<area>` goes looking for the image
-      // using its map; the answer cannot change the outcome here.
-      if (childEl.localName === "area") continue;
-      if (isSubtreeHidden(childEl, childStyle)) {
-        continue;
+      // A child that cannot be read costs its own text, not the host's name.
+      // The walk's per-element boundary skips an element that throws, but a
+      // throw here lands on the HOST being named, so the heading, link or
+      // button went with everything in it. A `<form>` whose controls shadow
+      // what is read of it does that: `<input name="nodeType">` lets the walk
+      // into the form, and a second control named `getAttribute` throws once
+      // it is in. Skip that element, as the boundary would.
+      try {
+        const childStyle = getCachedComputedStyle(childEl, styleCache);
+        // Checked before aria-hidden so that `display: none` and `[hidden]`,
+        // which generate no box, contribute no separator either — Chromium reads
+        // `<h1>Save<div style="display:none">x</div>now</h1>` as "Savenow".
+        //
+        // Known gap, left alone deliberately: `inert` and
+        // `content-visibility: hidden` are hidden from AT but still RENDER, so
+        // Chromium spaces across them ("Save now") where this returns "Savenow".
+        // Closing it means teaching this check to tell the two kinds of hidden
+        // apart — a different question from how a child's box spaces its
+        // neighbours, and one that predates this rule, so it is its own change.
+        // Chromium's tree puts an area under its image, never under the element
+        // its map sits in, so it adds nothing to that element's name — and no
+        // separator either: it renders no box of its own. Checked before
+        // `isSubtreeHidden`, which for an `<area>` goes looking for the image
+        // using its map; the answer cannot change the outcome here.
+        if (childEl.localName === "area") continue;
+        if (isSubtreeHidden(childEl, childStyle)) {
+          continue;
+        }
+        // A child that has a box of its own separates the text either side of it
+        // whether or not it contributes any text — Chromium reads
+        // `<h1>Save<div aria-hidden="true">x</div>now</h1>` as "Save now".
+        const spaced = needsSpaceAround(childEl, childStyle);
+        if (isAriaHiddenValue(childEl.getAttribute("aria-hidden"))) {
+          if (spaced) text += " ";
+          continue;
+        }
+        const role = getImplicitRole(childEl);
+        // Named widgets contribute their computed name (accname §2F.iii), spaced
+        // by the same box rule as everything else: Chromium reads
+        // `<h2>Signed in as <a href="/u">Ada</a>'s profile</h2>` as
+        // "Signed in as Ada's profile", not "… Ada 's profile", and only spaces
+        // the link when it renders as its own block.
+        if (NAMED_WIDGET_ROLES.has(role)) {
+          // An editing host takes no name from its own content, but Chromium
+          // still reads that text into an ancestor's name:
+          // `<h2>Before <button contenteditable>Save</button></h2>` is
+          // heading "Before Save".
+          const name =
+            computeAccessibleName(childEl, visited, styleCache) ||
+            (isEditingHost(childEl)
+              ? getAccessibleTextContent(childEl, visited, styleCache)
+              : "");
+          text += spaced ? ` ${name} ` : name;
+          continue;
+        }
+        if (NAME_BARRIER_ROLES.has(role) && !isImplicitDetailsGroup(childEl)) {
+          // isNameBarrierElement, with the role already in hand. It lends no
+          // text, but its box still keeps the neighbours apart: Chromium reads
+          // `<h1>Save<input>now</h1>` as "Save now".
+          if (spaced) text += " ";
+          continue;
+        }
+        const inner = getAccessibleTextContent(childEl, visited, styleCache);
+        // Padded per accname §2F, which appends each descendant's result "with a
+        // space"; the final normalization collapses the doubles. A child that
+        // flows inline is NOT padded, because that is what Chromium reads:
+        // `<button><span>Sa</span><span>ve</span></button>` is one word "Save",
+        // while `<button><div>Save</div><div>now</div></button>` is "Save now".
+        // The pad does not depend on `inner`: an empty block still separates its
+        // neighbours ("Save<div></div>now" is "Save now").
+        text += spaced ? ` ${inner} ` : inner;
+      } catch (error) {
+        warnSkippedElement(childEl, error);
       }
-      // A child that has a box of its own separates the text either side of it
-      // whether or not it contributes any text — Chromium reads
-      // `<h1>Save<div aria-hidden="true">x</div>now</h1>` as "Save now".
-      const spaced = needsSpaceAround(childEl, childStyle);
-      if (isAriaHiddenValue(childEl.getAttribute("aria-hidden"))) {
-        if (spaced) text += " ";
-        continue;
-      }
-      const role = getImplicitRole(childEl);
-      // Named widgets contribute their computed name (accname §2F.iii), spaced
-      // by the same box rule as everything else: Chromium reads
-      // `<h2>Signed in as <a href="/u">Ada</a>'s profile</h2>` as
-      // "Signed in as Ada's profile", not "… Ada 's profile", and only spaces
-      // the link when it renders as its own block.
-      if (NAMED_WIDGET_ROLES.has(role)) {
-        // An editing host takes no name from its own content, but Chromium
-        // still reads that text into an ancestor's name:
-        // `<h2>Before <button contenteditable>Save</button></h2>` is
-        // heading "Before Save".
-        const name =
-          computeAccessibleName(childEl, visited, styleCache) ||
-          (isEditingHost(childEl)
-            ? getAccessibleTextContent(childEl, visited, styleCache)
-            : "");
-        text += spaced ? ` ${name} ` : name;
-        continue;
-      }
-      if (NAME_BARRIER_ROLES.has(role) && !isImplicitDetailsGroup(childEl)) {
-        // isNameBarrierElement, with the role already in hand. It lends no
-        // text, but its box still keeps the neighbours apart: Chromium reads
-        // `<h1>Save<input>now</h1>` as "Save now".
-        if (spaced) text += " ";
-        continue;
-      }
-      const inner = getAccessibleTextContent(childEl, visited, styleCache);
-      // Padded per accname §2F, which appends each descendant's result "with a
-      // space"; the final normalization collapses the doubles. A child that
-      // flows inline is NOT padded, because that is what Chromium reads:
-      // `<button><span>Sa</span><span>ve</span></button>` is one word "Save",
-      // while `<button><div>Save</div><div>now</div></button>` is "Save now".
-      // The pad does not depend on `inner`: an empty block still separates its
-      // neighbours ("Save<div></div>now" is "Save now").
-      text += spaced ? ` ${inner} ` : inner;
     }
   }
   return text;
@@ -1035,28 +1048,36 @@ function computeRawAccessibleName(
       const FORM_CONTROL_TAGS = new Set(["input", "select", "textarea"]);
       const parts: string[] = [];
       for (const child of wrappingLabel.childNodes) {
-        if (child.nodeType === Node.TEXT_NODE) {
+        const type = safeNodeType(child);
+        if (type === Node.TEXT_NODE) {
           const text = child.textContent?.trim();
           if (text) parts.push(text);
-        } else if (child.nodeType === Node.ELEMENT_NODE) {
+        } else if (type === Node.ELEMENT_NODE) {
           const childEl = child as Element;
           if (childEl === element) continue;
-          if (FORM_CONTROL_TAGS.has(safeTagName(childEl))) continue;
-          if (isAriaHiddenValue(childEl.getAttribute("aria-hidden"))) continue;
-          if (
-            isSubtreeHidden(
+          // An unreadable child costs its own text, not the control's name
+          // (see getAccessibleTextContent).
+          try {
+            if (FORM_CONTROL_TAGS.has(safeTagName(childEl))) continue;
+            if (isAriaHiddenValue(childEl.getAttribute("aria-hidden")))
+              continue;
+            if (
+              isSubtreeHidden(
+                childEl,
+                getCachedComputedStyle(childEl, styleCache),
+              )
+            ) {
+              continue;
+            }
+            const text = getAccessibleTextContent(
               childEl,
-              getCachedComputedStyle(childEl, styleCache),
-            )
-          ) {
-            continue;
+              visited,
+              styleCache,
+            ).trim();
+            if (text) parts.push(text);
+          } catch (error) {
+            warnSkippedElement(childEl, error);
           }
-          const text = getAccessibleTextContent(
-            childEl,
-            visited,
-            styleCache,
-          ).trim();
-          if (text) parts.push(text);
         }
       }
       const labelText = parts.join(" ");
@@ -1170,7 +1191,7 @@ function computeRawAccessibleName(
 function getDirectTextContent(element: Element): string {
   let text = "";
   for (const child of flatChildNodes(element)) {
-    if (child.nodeType === Node.TEXT_NODE) {
+    if (safeNodeType(child) === Node.TEXT_NODE) {
       text += child.textContent || "";
     }
   }
@@ -1229,10 +1250,11 @@ function collectDescendantTextBounded(
   state: CollapsedTextState,
   moreNodesAfter: () => boolean,
 ): boolean {
-  if (node.nodeType === Node.TEXT_NODE) {
+  const type = safeNodeType(node);
+  if (type === Node.TEXT_NODE) {
     return appendCollapsedTextChunk(state, safeTextContent(node));
   }
-  if (node.nodeType !== Node.ELEMENT_NODE) return false;
+  if (type !== Node.ELEMENT_NODE) return false;
   const rawTag = (node as Element).tagName;
   const tag = typeof rawTag === "string" ? rawTag.toLowerCase() : "";
   if (MEDIA_TAGS.has(tag)) return false;
@@ -1387,23 +1409,33 @@ function getFieldText(
   const isVisible = (style: CSSStyleDeclaration | null): boolean =>
     style?.visibility !== "hidden" && style?.visibility !== "collapse";
   const walk = (node: Node, textVisible: boolean): boolean => {
-    if (node.nodeType === Node.TEXT_NODE) {
+    const type = safeNodeType(node);
+    if (type === Node.TEXT_NODE) {
       return textVisible
         ? appendCollapsedTextChunk(state, safeTextContent(node))
         : false;
     }
-    if (node.nodeType !== Node.ELEMENT_NODE) return false;
+    if (type !== Node.ELEMENT_NODE) return false;
     const el = node as Element;
     const rawTag = el.tagName;
     const tag = typeof rawTag === "string" ? rawTag.toLowerCase() : "";
     if (MEDIA_TAGS.has(tag) || CONTROL_TEXT_TAGS.has(tag)) return false;
-    if (!rendered) {
-      if (isAriaHiddenValue(el.getAttribute("aria-hidden"))) return false;
-      const role = getExplicitRole(el);
-      if (role && POPUP_ROLES.has(role)) return false;
+    // An unreadable element costs its own text, not the field's value (see
+    // getAccessibleTextContent). Nothing is appended before these reads, so
+    // skipping it leaves the text so far intact.
+    let style: CSSStyleDeclaration | null;
+    try {
+      if (!rendered) {
+        if (isAriaHiddenValue(el.getAttribute("aria-hidden"))) return false;
+        const role = getExplicitRole(el);
+        if (role && POPUP_ROLES.has(role)) return false;
+      }
+      style = getCachedComputedStyle(el, styleCache);
+      if (isSubtreeHidden(el, style)) return false;
+    } catch (error) {
+      warnSkippedElement(el, error);
+      return false;
     }
-    const style = getCachedComputedStyle(el, styleCache);
-    if (isSubtreeHidden(el, style)) return false;
     const breaks = LINE_BREAKING_TAGS.has(tag);
     // Whitespace never trips the cap, so these two appends can't end the walk.
     if (breaks) appendCollapsedTextChunk(state, " ");

@@ -1,6 +1,7 @@
 import {
   safeContains,
   safeGetAttribute,
+  safeNodeType,
   safeParentNode,
   safeRootNode,
 } from "../extraction/clobber-safe.js";
@@ -118,7 +119,7 @@ const DEFAULT_INTERNAL_IDS: ReadonlySet<string> = new Set([
  * mutations involving it are our own and should be ignored.
  */
 function isInternalNode(node: Node, internalIds: ReadonlySet<string>): boolean {
-  if (node.nodeType !== 1 /* ELEMENT_NODE */) return false;
+  if (safeNodeType(node) !== 1 /* ELEMENT_NODE */) return false;
   const el = node as Element;
   // Read via getAttribute, not `.id`: on a clobbered <form> the `.id` property
   // is a child element, not a string (see dom-extractor's clobbering guards).
@@ -562,7 +563,9 @@ function isPortalOverlayContainer(
   node: Node,
   internalIds: ReadonlySet<string>,
 ): boolean {
-  if (node.nodeType !== 1 /* ELEMENT_NODE */) return false;
+  // Clobber-safe: a `<form>` whose control is named `nodeType` reads as no
+  // element at all, and a form mounted as the portal would go unnoticed.
+  if (safeNodeType(node) !== 1 /* ELEMENT_NODE */) return false;
   const el = node as Element;
   if (internalIds.has(safeGetAttribute(el, "id") ?? "")) return false;
   try {

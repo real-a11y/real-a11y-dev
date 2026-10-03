@@ -22,6 +22,16 @@
 
 ## Unreleased
 
+- In DOM mode, a `<form>` with a control named `nodeType`, such as
+  `<input type="hidden" name="nodeType">`, now shows in the tree with
+  everything in it, and its controls in the Tab Sequence view. A form lets a
+  control shadow its own properties, so the form's `nodeType` read as that
+  control rather than an element's, and the walk down the page left the form
+  out. Text inside such a form now also counts toward the name of a heading,
+  link or button holding it, and adding or removing one updates what it names
+  or describes through `aria-labelledby` and `aria-describedby`.
+  ([#475](https://github.com/real-a11y/real-a11y-dev/pull/475))
+
 - In DOM mode, a `<form>` is a `form` landmark only when it has an
   accessible name, as in NATIVE mode — Chromium does not expose an unnamed
   form at all. An unnamed one is a `generic`, so it leaves the panel's

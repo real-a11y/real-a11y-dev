@@ -9,8 +9,12 @@ import type { ExtractionResult, SemanticNode } from "../types.js";
 import { resetIdCounter } from "../utils/id-generator.js";
 
 import { extractA11yTree } from "./a11y-extractor.js";
-import { extractDomTree, getElementRefs } from "./dom-extractor.js";
-import { flatParent, isRenderedInFlatTree } from "./flat-tree.js";
+import {
+  extractDomTree,
+  getDescendantText,
+  getElementRefs,
+} from "./dom-extractor.js";
+import { flatChildren, flatParent, isRenderedInFlatTree } from "./flat-tree.js";
 
 let page: HTMLElement;
 
@@ -338,7 +342,7 @@ describe("description-target folding respects tree scope", () => {
 // control. A walk up the flat tree through such a form must still reach the
 // real ancestors: reading the control instead cycles back into the form, and a
 // loop over ancestors then never ends, hanging the page.
-describe("flat-tree ancestors of a clobbered <form>", () => {
+describe("the flat tree around a clobbered <form>", () => {
   /** Shadow `prop` on `form` with its control, as a browser's form does. */
   function clobber(form: Element, prop: string): void {
     const control = form.querySelector(`[name="${prop}"]`);
@@ -412,6 +416,57 @@ describe("flat-tree ancestors of a clobbered <form>", () => {
       </form>`;
     clobber(page.querySelector("form")!, "parentElement");
     expect(find(extractDomTree(page), "banner")).toBeTruthy();
+  });
+
+  // `form.nodeType` reads as the control, not 1, so a walk that keeps a child
+  // by testing `nodeType === 1` took the form for no element at all and
+  // dropped it with everything inside it. jsdom's own selector engine reads
+  // it too, and throws on it, so these stop short of a full extraction;
+  // packages/testing/e2e pins that in Chromium.
+  it("keeps a form whose control is named nodeType among the flat children", () => {
+    page.innerHTML = `<main><form aria-label="Pay"><input type="hidden" name="nodeType"><label>Card <input></label><button>Pay</button></form></main>`;
+    const form = page.querySelector("form")!;
+    clobber(form, "nodeType");
+    expect(flatChildren(page.querySelector("main")!)).toEqual([form]);
+  });
+
+  it("reads the text inside such a form", () => {
+    page.innerHTML = `<div id="d"><form><input type="hidden" name="nodeType"><span>Hello world</span></form></div>`;
+    clobber(page.querySelector("form")!, "nodeType");
+    expect(getDescendantText(page.querySelector("#d")!)).toBe("Hello world");
+  });
+
+  // Once the walks enter such a form, a second shadowing control can throw on
+  // what they read of it. That costs the form's text, as the boundary costs
+  // the form itself, and never the host whose name or value it was building.
+  const BOTH = `<input type="hidden" name="nodeType"><input type="hidden" name="getAttribute"><span>inside</span>`;
+  const shadowBoth = (): void => {
+    const form = page.querySelector("form")!;
+    clobber(form, "nodeType");
+    clobber(form, "getAttribute");
+  };
+
+  it("keeps a heading named from content that holds a form shadowing getAttribute too", () => {
+    page.innerHTML = `<h2>Checkout <form>${BOTH}</form></h2>`;
+    shadowBoth();
+    expect(find(extractDomTree(page), "heading")?.a11y.name).toBe("Checkout");
+  });
+
+  it("keeps a wrapping label's name when it holds such a form", () => {
+    page.innerHTML = `<label>Card <form>${BOTH}</form><input></label>`;
+    shadowBoth();
+    expect(find(extractDomTree(page), "textbox")?.a11y.name).toBe("Card");
+  });
+
+  it("keeps a combobox's value when it holds such a form", () => {
+    // A combobox you can't type into is valued by its accessible text, which
+    // asks each element in it for aria-hidden. (An editor's value is its
+    // rendered text, which asks nothing a form can shadow.)
+    page.innerHTML = `<div role="combobox" aria-label="Fruit" aria-expanded="false">Apple <form>${BOTH}</form></div>`;
+    shadowBoth();
+    expect(find(extractDomTree(page), "combobox", "Fruit")?.a11y.value).toBe(
+      "Apple",
+    );
   });
 });
 

@@ -2,6 +2,7 @@ import { buildA11yTree } from "../extraction/a11y-extractor.js";
 import {
   safeContains,
   safeGetAttribute,
+  safeNodeType,
   safeParentElement,
   safeTagName,
 } from "../extraction/clobber-safe.js";
@@ -608,7 +609,10 @@ export class LiveTreeExtractor {
     };
 
     const handleNode = (n: Node): boolean => {
-      if (n.nodeType !== 1 /* ELEMENT_NODE */) return false;
+      // Clobber-safe: a `<form>` whose control is named `nodeType` reads as no
+      // element at all, so an added or removed one was never checked for an
+      // overlay, and the referrers its subtree's ids feed were left stale.
+      if (safeNodeType(n) !== 1 /* ELEMENT_NODE */) return false;
       const el = n as Element;
 
       if (containsOverlaySignal(el)) {

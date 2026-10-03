@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 
-import { clobber } from "../test-support/clobber.js";
+import { clobber, shadow } from "../test-support/clobber.js";
 import type { TreeChange } from "../types.js";
 
 import { DomObserver } from "./dom-observer.js";
@@ -1265,6 +1265,30 @@ describe("DomObserver", () => {
       const form = document.createElement("form");
       form.innerHTML = `<input name="matches" /><div role="dialog" aria-label="Offer">Hi</div>`;
       clobber(form, "matches");
+      document.body.appendChild(form);
+
+      await settleObserver(100);
+
+      expect(onTreeChange).toHaveBeenCalledTimes(1);
+      expect(onTreeChange.mock.calls[0][0]).toMatchObject({ full: true });
+    });
+  });
+
+  describe("a <form> whose control shadows nodeType", () => {
+    // `form.nodeType` reads as the control, not 1, so the portal observer took
+    // a form mounted into <body> for no element at all and never asked whether
+    // it was an overlay: the dialog opened and the tree stayed as it was.
+    it("re-extracts in full when such a form mounts into <body> as a dialog", async () => {
+      const appRoot = document.createElement("div");
+      document.body.appendChild(appRoot);
+      observer = new DomObserver(appRoot, onTreeChange, 100);
+      observer.start();
+
+      const form = document.createElement("form");
+      form.setAttribute("role", "dialog");
+      form.setAttribute("aria-label", "Sign in");
+      form.innerHTML = `<input type="hidden" name="nodeType" /><button>Go</button>`;
+      shadow(form, "nodeType");
       document.body.appendChild(form);
 
       await settleObserver(100);
