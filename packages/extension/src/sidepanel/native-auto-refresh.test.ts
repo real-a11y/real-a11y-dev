@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  AUTO_REFRESH_MAX_WAIT_MS,
   AUTO_REFRESH_MIN_GAP_MS,
   AUTO_REFRESH_QUIET_MS,
   decideAutoRefresh,
   PAGE_SIGNAL_LAG_MS,
+  quietPeriodOnSignal,
   type AutoRefreshState,
 } from "./native-auto-refresh.js";
 
@@ -92,5 +94,26 @@ describe("decideAutoRefresh", () => {
         NOW,
       ),
     ).toEqual({ kind: "read", tabId: 7 });
+  });
+});
+
+describe("quietPeriodOnSignal", () => {
+  it("starts the quiet period when no timer is pending", () => {
+    expect(quietPeriodOnSignal(null, NOW)).toEqual({
+      kind: "restart",
+      ms: AUTO_REFRESH_QUIET_MS,
+    });
+  });
+
+  it("restarts it for a signal inside the ceiling", () => {
+    expect(
+      quietPeriodOnSignal(NOW - AUTO_REFRESH_MAX_WAIT_MS + 1, NOW),
+    ).toEqual({ kind: "restart", ms: AUTO_REFRESH_QUIET_MS });
+  });
+
+  it("lets the pending timer fire once signals have held it off for the ceiling", () => {
+    expect(quietPeriodOnSignal(NOW - AUTO_REFRESH_MAX_WAIT_MS, NOW)).toEqual({
+      kind: "keep",
+    });
   });
 });

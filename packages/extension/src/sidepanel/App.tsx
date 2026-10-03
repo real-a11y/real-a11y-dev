@@ -69,9 +69,9 @@ import {
 } from "./InputPanel.js";
 import type { InputPanelState } from "./InputPanel.js";
 import {
-  AUTO_REFRESH_QUIET_MS,
   decideAutoRefresh,
   PAGE_SIGNAL_LAG_MS,
+  quietPeriodOnSignal,
 } from "./native-auto-refresh.js";
 import { nativeActionFeedback } from "./native-feedback.js";
 import { NativeTreeView } from "./NativeTreeView.js";
@@ -578,6 +578,9 @@ export function App() {
   const lastNativeReadStartedAt = useRef(0);
   const lastNativeReadEndedAt = useRef(0);
   const autoRefreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // When the first page-change signal the pending timer answers arrived, or
+  // `null` with no signal pending — the quiet period's ceiling counts from it.
+  const autoRefreshSignalSince = useRef<number | null>(null);
   // The automatic read in flight, if any. It holds `nativeInFlight` like any
   // read, but the user didn't start it, so it must never cost them a click:
   // a Refresh or an action that lands during it waits for it to finish
@@ -591,21 +594,22 @@ export function App() {
   // on every page-change signal.
   const runNativeAutoRefresh = useRef<() => void>(() => {});
   const cancelNativeAutoRefresh = useCallback(() => {
+    autoRefreshSignalSince.current = null;
     if (autoRefreshTimer.current !== null) {
       clearTimeout(autoRefreshTimer.current);
       autoRefreshTimer.current = null;
     }
   }, []);
-  const scheduleNativeAutoRefresh = useCallback(
-    (ms: number) => {
-      cancelNativeAutoRefresh();
-      autoRefreshTimer.current = setTimeout(() => {
-        autoRefreshTimer.current = null;
-        runNativeAutoRefresh.current();
-      }, ms);
-    },
-    [cancelNativeAutoRefresh],
-  );
+  const scheduleNativeAutoRefresh = useCallback((ms: number) => {
+    if (autoRefreshTimer.current !== null) {
+      clearTimeout(autoRefreshTimer.current);
+    }
+    autoRefreshTimer.current = setTimeout(() => {
+      autoRefreshTimer.current = null;
+      autoRefreshSignalSince.current = null;
+      runNativeAutoRefresh.current();
+    }, ms);
+  }, []);
   useEffect(() => cancelNativeAutoRefresh, [cancelNativeAutoRefresh]);
   // RFC PR H's "native as default on attachable pages" (execution plan PR 5):
   // fires exactly ONCE per panel session, the first time the DOM producer
@@ -995,8 +999,13 @@ export function App() {
         // whichever producer the panel shows — so it is native auto-refresh's
         // "the page changed" signal too.
         if (producerRef.current === "native") {
-          lastPageChangeAt.current = Date.now() - PAGE_SIGNAL_LAG_MS;
-          scheduleNativeAutoRefresh(AUTO_REFRESH_QUIET_MS);
+          const now = Date.now();
+          lastPageChangeAt.current = now - PAGE_SIGNAL_LAG_MS;
+          const next = quietPeriodOnSignal(autoRefreshSignalSince.current, now);
+          if (next.kind === "restart") {
+            autoRefreshSignalSince.current ??= now;
+            scheduleNativeAutoRefresh(next.ms);
+          }
         }
         const nodeMap = new Map<string, SemanticNode>(message.payload.nodes);
 
@@ -1617,7 +1626,11 @@ export function App() {
     );
     if (decision.kind === "wait") scheduleNativeAutoRefresh(decision.ms);
     else if (decision.kind === "read") {
-      const read = loadNativeTree(decision.tabId, { auto: true });
+      // A reply that never arrives (an unreachable service worker) attached
+      // nothing, so it leaves auto-refresh armed for the next change.
+      const read = loadNativeTree(decision.tabId, { auto: true }).catch(
+        () => false,
+      );
       autoReadInFlight.current = read;
       void read.finally(() => {
         if (autoReadInFlight.current === read) autoReadInFlight.current = null;

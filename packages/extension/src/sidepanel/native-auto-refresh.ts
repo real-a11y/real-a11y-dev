@@ -19,6 +19,12 @@
  *  waits out a burst of its `TREE_DATA` messages, not individual mutations. */
 export const AUTO_REFRESH_QUIET_MS = 750;
 
+/** The longest a stream of page-change signals can hold the quiet period
+ *  off. A page that changes more often than {@link AUTO_REFRESH_QUIET_MS}
+ *  (a ticking clock, a progress bar) never goes quiet, and without a
+ *  ceiling would never be read again. */
+export const AUTO_REFRESH_MAX_WAIT_MS = 3000;
+
 /** The least time between the end of one native read and the start of an
  *  automatic one. Counts every read: a manual refresh, an action's own
  *  re-read, and an earlier automatic one. */
@@ -82,4 +88,21 @@ export function decideAutoRefresh(
   const gap = s.lastReadEndedAt + AUTO_REFRESH_MIN_GAP_MS - now;
   if (gap > 0) return { kind: "wait", ms: gap };
   return { kind: "read", tabId: s.armedTab };
+}
+
+/**
+ * What a page-change signal does to the pending timer: restart the quiet
+ * period, or, once signals have held a timer pending for
+ * {@link AUTO_REFRESH_MAX_WAIT_MS}, leave it to fire. `pendingSince` is when
+ * the first signal the pending timer answers arrived, or `null` when no
+ * timer is pending.
+ */
+export function quietPeriodOnSignal(
+  pendingSince: number | null,
+  now: number,
+): { kind: "restart"; ms: number } | { kind: "keep" } {
+  if (pendingSince !== null && now - pendingSince >= AUTO_REFRESH_MAX_WAIT_MS) {
+    return { kind: "keep" };
+  }
+  return { kind: "restart", ms: AUTO_REFRESH_QUIET_MS };
 }

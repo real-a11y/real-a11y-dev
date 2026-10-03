@@ -119,3 +119,88 @@ test("a tab switch disarms it: the new tab's changes wait for Refresh", async ({
     timeout: 15_000,
   });
 });
+
+test("a page that never goes quiet is still read, every few seconds", async ({
+  nav,
+}) => {
+  const page = await showNative(nav, "native-panel.html");
+  // A ticking clock: a change every 400 ms, closer together than the quiet
+  // period, for as long as the test runs.
+  await page.evaluate(() => {
+    const clock = document.createElement("p");
+    document.body.append(clock);
+    let n = 0;
+    setInterval(() => {
+      clock.textContent = `tick ${++n}`;
+    }, 400);
+  });
+  await addButton(page, "Added while ticking");
+  await expect(await findRow(nav.panel, "Added while ticking")).toBeVisible({
+    timeout: 15_000,
+  });
+});
+
+test("a failed automatic read pauses it, keeps the tree, and Refresh resumes it", async ({
+  nav,
+}) => {
+  const page = await showNative(nav, "native-panel.html");
+
+  // Fail every automatic read as a dropped connection — what the user's
+  // Cancel on Chrome's debugging notice looks like — and count them. A read
+  // the user asked for goes through untouched.
+  await nav.panel.evaluate(() => {
+    const w = window as typeof window & {
+      __autoReads?: number;
+      __failAutoReads?: boolean;
+    };
+    w.__autoReads = 0;
+    w.__failAutoReads = true;
+    const real = chrome.runtime.sendMessage.bind(chrome.runtime);
+    chrome.runtime.sendMessage = ((message: unknown, ...rest: unknown[]) => {
+      const m = message as { type?: unknown; auto?: unknown } | null;
+      if (m?.type === "NATIVE_READ" && m.auto === true) {
+        w.__autoReads = (w.__autoReads ?? 0) + 1;
+        if (w.__failAutoReads) {
+          return Promise.resolve({ ok: false, error: "connection-lost" });
+        }
+      }
+      return (
+        real as (message: unknown, ...rest: unknown[]) => Promise<unknown>
+      )(message, ...rest);
+    }) as typeof chrome.runtime.sendMessage;
+  });
+  const autoReads = () =>
+    nav.panel.evaluate(
+      () => (window as typeof window & { __autoReads?: number }).__autoReads,
+    );
+  const status = nav.panel.locator(".sn-page-url[aria-live]");
+  const rows = () => nav.panel.locator(".sn-node").count();
+
+  await addButton(page, "First change");
+  await expect(status).toContainText("auto-refresh paused", {
+    timeout: 15_000,
+  });
+  await expect(status).toContainText("Refresh to resume");
+  expect(await autoReads()).toBe(1);
+  // The tree it had stays up.
+  expect(await rows()).toBeGreaterThan(0);
+
+  // Paused: a later change doesn't try again.
+  await addButton(page, "Second change");
+  await nav.panel.waitForTimeout(5_000);
+  expect(await autoReads()).toBe(1);
+
+  // Refresh reads both changes and arms it again.
+  await nav.panel.evaluate(() => {
+    (window as typeof window & { __failAutoReads?: boolean }).__failAutoReads =
+      false;
+  });
+  await nav.panel.getByRole("button", { name: "Refresh native tree" }).click();
+  await expect(status).toContainText(/^\d+ nodes$/);
+  await expect(await findRow(nav.panel, "Second change")).toBeVisible();
+  await addButton(page, "Third change");
+  await expect(await findRow(nav.panel, "Third change")).toBeVisible({
+    timeout: 15_000,
+  });
+  expect(await autoReads()).toBeGreaterThan(1);
+});
