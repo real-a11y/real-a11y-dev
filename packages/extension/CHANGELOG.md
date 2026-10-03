@@ -22,6 +22,14 @@
 
 ## Unreleased
 
+- In DOM mode, an element with a decorative `clip-path` crop — `inset(10px)`,
+  `inset(1em)`, `inset(50px)`, `inset(15%)` — is no longer marked hidden. The
+  visually-hidden signature matched any crop whose first value began with a 1
+  or a 5, so a positioned element that is fully drawn read as screen-reader-only
+  content, and an unnamed one was left out of the tree entirely. The crop now
+  has to provably collapse the box. Genuinely hidden content is unaffected.
+  ([#479](https://github.com/real-a11y/real-a11y-dev/pull/479))
+
 - The live-announcement log no longer shows a `<textarea>`'s markup text,
   and in DOM mode neither does the inline input panel for a rich-text editor
   that holds one. That text is the field's default, not what it holds now,
