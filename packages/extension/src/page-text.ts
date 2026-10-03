@@ -25,9 +25,8 @@ const getAttribute = Element.prototype.getAttribute;
  * nothing (`hidden`, `inert`, `display: none`, which takes `<script>` and
  * `<style>` with it), or — when `announced` — it is `aria-hidden`.
  *
- * A hostile `<form>` can make core's check throw (a control named
- * `hasAttribute`). That reads as not hidden, as raw `textContent` would: the
- * control check above it never throws, so no control's text gets through.
+ * Every read is clobber-safe, core's included, so a hostile `<form>` can't make
+ * it throw and cost the read a region's text.
  */
 function unread(
   element: Element,
@@ -36,17 +35,13 @@ function unread(
 ): boolean {
   // `localName` can't throw: only a <form> shadows it, and no form is a control.
   if (CONTROL_TEXT_TAGS.has(element.localName)) return true;
-  try {
-    if (
-      announced &&
-      isAriaHiddenValue(getAttribute.call(element, "aria-hidden"))
-    ) {
-      return true;
-    }
-    return isSubtreeHidden(element, style);
-  } catch {
-    return false;
+  if (
+    announced &&
+    isAriaHiddenValue(getAttribute.call(element, "aria-hidden"))
+  ) {
+    return true;
   }
+  return isSubtreeHidden(element, style);
 }
 
 /** `visibility` is inherited and overridable, so it hides text, not subtrees. */

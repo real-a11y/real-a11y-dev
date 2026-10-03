@@ -599,19 +599,23 @@ describe("content: live regions", () => {
     ]);
   });
 
-  it("still reads a form whose control shadows hasAttribute", async () => {
-    // In a browser `form.hasAttribute` is that control, so core's hidden-check
-    // throws calling it. Forced, because jsdom doesn't shadow a form's
+  it("still reads a form whose controls shadow the attribute reads", async () => {
+    // In a browser `form.getAttribute` and `form.hasAttribute` are those
+    // controls, so a hidden-check that calls either throws, and nothing in the
+    // region is logged. Forced, because jsdom doesn't shadow a form's
     // properties. (A shadowed `nodeType` can't be modelled here: jsdom's own
-    // getComputedStyle reads it and throws, where Chromium's never does.) The
-    // region still reports the text it shows.
+    // getComputedStyle reads it and throws, where Chromium's never does.)
     const status = document.getElementById("status")!;
-    status.innerHTML = `<form><input name="hasAttribute">Sent</form>`;
+    status.innerHTML =
+      `<form><input name="getAttribute"><input name="hasAttribute">` +
+      `Sent</form>`;
     const form = status.querySelector("form")!;
-    Object.defineProperty(form, "hasAttribute", {
-      configurable: true,
-      get: () => form.querySelector('[name="hasAttribute"]'),
-    });
+    for (const name of ["getAttribute", "hasAttribute"]) {
+      Object.defineProperty(form, name, {
+        configurable: true,
+        get: () => form.querySelector(`[name="${name}"]`),
+      });
+    }
     await vi.advanceTimersByTimeAsync(500);
     expect(
       h.sent.filter((m) => m.type === "LIVE_REGION").map((m) => m.payload),
