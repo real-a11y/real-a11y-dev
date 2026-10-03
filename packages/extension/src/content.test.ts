@@ -407,3 +407,339 @@ describe("content: focus inside a form whose control shadows its properties", ()
     expect(focus).toHaveBeenCalled();
   });
 });
+
+/**
+ * The live-region observer reports what a screen reader would announce when a
+ * `status`/`alert`/`log`/`aria-live` region changes, and sends it over the
+ * extension's message channel to the panel. What the page never shows as
+ * text has no business on that channel — least of all a `<textarea>`'s
+ * markup text, which is its DEFAULT value and, for a sensitive field
+ * (ADR-0001), the secret itself.
+ */
+describe("content: live regions", () => {
+  let h: Harness;
+
+  beforeEach(async () => {
+    vi.useFakeTimers();
+    vi.resetModules();
+    document.body.innerHTML =
+      `<div id="ready" role="status">Ready</div>` +
+      `<div id="status" role="status"></div>` +
+      `<div id="polite" aria-live="polite"></div>` +
+      `<p id="elsewhere">Not a region</p>`;
+    h = makeHarness();
+    (globalThis as { chrome?: unknown }).chrome = h.chromeMock;
+    await import("./content.js");
+    // Arms the observers, as a panel opening does.
+    h.send({ type: "REQUEST_TREE", payload: { viewMode: "a11y" } });
+    h.sent.length = 0;
+  });
+
+  afterEach(() => {
+    h.send({ type: "SET_OBSERVING", payload: { enabled: false } });
+    vi.clearAllTimers();
+    vi.useRealTimers();
+    delete (globalThis as { chrome?: unknown }).chrome;
+    document.body.innerHTML = "";
+  });
+
+  /** Replace region `id`'s content and let the observer's debounce run. */
+  /** Let the observer's debounce run; then every region logged so far. */
+  async function flush(): Promise<unknown[]> {
+    await vi.advanceTimersByTimeAsync(500);
+    return h.sent.filter((m) => m.type === "LIVE_REGION").map((m) => m.payload);
+  }
+
+  /** Replace region `id`'s content, then {@link flush}. */
+  async function announce(id: string, html: string): Promise<unknown[]> {
+    document.getElementById(id)!.innerHTML = html;
+    return await flush();
+  }
+
+  it("reports a region's text", async () => {
+    expect(await announce("status", "Saved")).toEqual([
+      { text: "Saved", level: "polite", role: "status" },
+    ]);
+  });
+
+  it("announces no region that nothing changed in", async () => {
+    // `#ready` held its text before the panel opened. A screen reader never
+    // announces that, and reading every region on each change used to log it
+    // the first time anything on the page moved.
+    expect(await announce("elsewhere", "Changed")).toEqual([]);
+  });
+
+  it("reads a region added with its text", async () => {
+    document.body.insertAdjacentHTML(
+      "beforeend",
+      `<section><div role="alert">Session expired</div></section>`,
+    );
+    expect(await flush()).toEqual([
+      { text: "Session expired", level: "assertive", role: "alert" },
+    ]);
+  });
+
+  it("never sends a sensitive textarea's markup text", async () => {
+    const sent = await announce(
+      "status",
+      `Code sent <textarea autocomplete="one-time-code">902114</textarea>`,
+    );
+    expect(sent).toEqual([
+      { text: "Code sent", level: "polite", role: "status" },
+    ]);
+    expect(JSON.stringify(sent)).not.toContain("902114");
+  });
+
+  it("never sends the markup text of a textarea that is the region", async () => {
+    document.body.insertAdjacentHTML(
+      "beforeend",
+      `<textarea id="otp" aria-live="polite" autocomplete="one-time-code"></textarea>`,
+    );
+    const sent = await announce("otp", "902114");
+    expect(JSON.stringify(sent)).not.toContain("902114");
+  });
+
+  it("reads no control's child text as the region's", async () => {
+    const sent = await announce(
+      "polite",
+      `Draft saved<textarea>first draft</textarea>` +
+        `<select><option>Apple</option><option>Pear</option></select>`,
+    );
+    expect(sent).toEqual([
+      { text: "Draft saved", level: "polite", role: "status" },
+    ]);
+  });
+
+  it("leaves out what a screen reader would not announce", async () => {
+    const sent = await announce(
+      "status",
+      `3 results` +
+        `<span aria-hidden="true"> ✓</span>` +
+        `<span hidden> hidden</span>` +
+        `<span style="display: none"> display-none</span>` +
+        `<span style="visibility: hidden"> invisible</span>` +
+        `<span inert> inert</span>` +
+        `<style>.x { color: red }</style>` +
+        `<script>window.leak = 1</script>`,
+    );
+    expect(sent).toEqual([
+      { text: "3 results", level: "polite", role: "status" },
+    ]);
+  });
+
+  it("sends nothing from a region hidden from assistive technology", async () => {
+    document.getElementById("status")!.setAttribute("aria-hidden", "true");
+    expect(await announce("status", "Saved")).toEqual([]);
+  });
+
+  it("sends nothing from a region inside something hidden", async () => {
+    document.body.insertAdjacentHTML(
+      "beforeend",
+      `<div style="display: none"><div id="toast" role="status"></div></div>` +
+        `<div aria-hidden="true"><div id="backdrop" aria-live="polite"></div></div>`,
+    );
+    await vi.advanceTimersByTimeAsync(500);
+    expect(await announce("toast", "Saved")).toEqual([]);
+    expect(await announce("backdrop", "Loading")).toEqual([]);
+  });
+
+  it("sends nothing from a region slotted into something hidden", async () => {
+    // Its light-DOM parents are all visible; what renders it is not.
+    document.body.insertAdjacentHTML(
+      "beforeend",
+      `<div id="card"><div id="slotted" role="status"></div></div>`,
+    );
+    document.getElementById("card")!.attachShadow({ mode: "open" }).innerHTML =
+      `<div style="display: none"><slot></slot></div>`;
+    await vi.advanceTimersByTimeAsync(500);
+    expect(await announce("slotted", "Saved")).toEqual([]);
+  });
+
+  it("logs no region whose aria-live is off, whatever its role", async () => {
+    document.body.insertAdjacentHTML(
+      "beforeend",
+      `<div id="off" role="status" aria-live="off"></div>` +
+        `<div id="bare" aria-live></div>`,
+    );
+    await vi.advanceTimersByTimeAsync(500);
+    expect(await announce("off", "3 unread")).toEqual([]);
+    expect(await announce("bare", "Typing")).toEqual([]);
+  });
+
+  it("reads text a child shows again under visibility: hidden", async () => {
+    // `visibility` is inherited but overridable: the child is on screen and
+    // announced, while its parent's own text is not.
+    const sent = await announce(
+      "status",
+      `<div style="visibility: hidden">Draft saved ` +
+        `<span style="visibility: visible">Card declined</span></div>`,
+    );
+    expect(sent).toEqual([
+      { text: "Card declined", level: "polite", role: "status" },
+    ]);
+  });
+
+  it("reads a closed <details> as its summary", async () => {
+    const sent = await announce(
+      "status",
+      `Saved. <details><summary>Details</summary>debug trace</details>`,
+    );
+    expect(sent).toEqual([
+      { text: "Saved. Details", level: "polite", role: "status" },
+    ]);
+  });
+
+  it("reads a region's shadow tree as rendered", async () => {
+    // The shadow tree renders, with the light DOM slotted into it; light
+    // children no slot takes don't render at all.
+    const status = document.getElementById("status")!;
+    status.attachShadow({ mode: "open" }).innerHTML =
+      `<b>Saved</b> <slot name="detail"></slot>`;
+    const sent = await announce(
+      "status",
+      `<span slot="detail">2 files</span><span>unslotted</span>`,
+    );
+    expect(sent).toEqual([
+      { text: "Saved 2 files", level: "polite", role: "status" },
+    ]);
+  });
+
+  it("still reads a form whose controls shadow the attribute reads", async () => {
+    // In a browser `form.getAttribute` and `form.hasAttribute` are those
+    // controls, so a hidden-check that calls either throws, and nothing in the
+    // region is logged. Forced, because jsdom doesn't shadow a form's
+    // properties. (A shadowed `nodeType` can't be modelled here: jsdom's own
+    // getComputedStyle reads it and throws, where Chromium's never does.)
+    const status = document.getElementById("status")!;
+    status.innerHTML =
+      `<form><input name="getAttribute"><input name="hasAttribute">` +
+      `Sent</form>`;
+    const form = status.querySelector("form")!;
+    for (const name of ["getAttribute", "hasAttribute"]) {
+      Object.defineProperty(form, name, {
+        configurable: true,
+        get: () => form.querySelector(`[name="${name}"]`),
+      });
+    }
+    expect(await flush()).toEqual([
+      { text: "Sent", level: "polite", role: "status" },
+    ]);
+  });
+
+  it("still logs a batch when the region itself is such a form", async () => {
+    // Every read of the region goes through a clobber-safe accessor too: one
+    // plain `region.getAttribute` threw, and the batch's other regions went
+    // unlogged with it.
+    document.body.insertAdjacentHTML(
+      "beforeend",
+      `<form id="form" role="status"><input name="getAttribute"></form>`,
+    );
+    await flush();
+    const form = document.getElementById("form")!;
+    Object.defineProperty(form, "getAttribute", {
+      configurable: true,
+      get: () => form.querySelector('[name="getAttribute"]'),
+    });
+    form.append("Sent");
+    document.getElementById("polite")!.textContent = "Saved";
+    expect(await flush()).toEqual([
+      { text: "Sent", level: "polite", role: "status" },
+      { text: "Saved", level: "polite", role: "status" },
+    ]);
+  });
+
+  it("reads a role the way core does", async () => {
+    // The first token core recognises, in any case; an explicit aria-live
+    // decides the level over the role's, in any case too.
+    document.body.insertAdjacentHTML(
+      "beforeend",
+      `<div id="upper" role="Status"></div>` +
+        `<div id="toast" role="toast alert"></div>` +
+        `<div id="loud" aria-live="Assertive"></div>` +
+        `<div id="quiet" role="alert" aria-live="polite"></div>`,
+    );
+    await flush();
+    for (const [id, text] of [
+      ["upper", "One"],
+      ["toast", "Two"],
+      ["loud", "Three"],
+      ["quiet", "Four"],
+    ]) {
+      document.getElementById(id)!.textContent = text!;
+    }
+    expect(await flush()).toEqual([
+      { text: "One", level: "polite", role: "status" },
+      { text: "Two", level: "assertive", role: "alert" },
+      { text: "Three", level: "assertive", role: "status" },
+      { text: "Four", level: "polite", role: "alert" },
+    ]);
+  });
+
+  it("logs an alert the page reveals, each time it does", async () => {
+    // Already filled, and shown by an attribute alone: Chromium announces it.
+    document.body.insertAdjacentHTML(
+      "beforeend",
+      `<div id="declined" role="alert" hidden>Card declined</div>`,
+    );
+    expect(await flush()).toEqual([]);
+    const alert = document.getElementById("declined")!;
+    alert.hidden = false;
+    expect(await flush()).toEqual([
+      { text: "Card declined", level: "assertive", role: "alert" },
+    ]);
+    h.sent.length = 0;
+    alert.hidden = true;
+    await flush();
+    alert.hidden = false;
+    expect(await flush()).toEqual([
+      { text: "Card declined", level: "assertive", role: "alert" },
+    ]);
+  });
+
+  it("logs a region a stylesheet class stops hiding", async () => {
+    document.head.insertAdjacentHTML(
+      "beforeend",
+      `<style id="sheet">.is-hidden { display: none }</style>`,
+    );
+    document.body.insertAdjacentHTML(
+      "beforeend",
+      `<div id="panel" class="is-hidden"><div role="status">Uploaded</div></div>`,
+    );
+    try {
+      expect(await flush()).toEqual([]);
+      document.getElementById("panel")!.className = "";
+      expect(await flush()).toEqual([
+        { text: "Uploaded", level: "polite", role: "status" },
+      ]);
+    } finally {
+      document.getElementById("sheet")!.remove();
+    }
+  });
+
+  it("logs text slotted into a region inside a shadow tree", async () => {
+    document.body.insertAdjacentHTML(
+      "beforeend",
+      `<div id="widget"><span>Idle</span></div>`,
+    );
+    document
+      .getElementById("widget")!
+      .attachShadow({ mode: "open" }).innerHTML =
+      `<div role="status"><slot></slot></div>`;
+    await flush();
+    h.sent.length = 0;
+    document.querySelector("#widget span")!.textContent = "Syncing";
+    expect(await flush()).toEqual([
+      { text: "Syncing", level: "polite", role: "status" },
+    ]);
+  });
+
+  it("reads no media fallback content", async () => {
+    const sent = await announce(
+      "status",
+      `<video>Your browser does not support video</video>Uploaded`,
+    );
+    expect(sent).toEqual([
+      { text: "Uploaded", level: "polite", role: "status" },
+    ]);
+  });
+});

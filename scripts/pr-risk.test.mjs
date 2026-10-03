@@ -459,6 +459,37 @@ describe("field-value redaction covers each producer's own allowlists", () => {
   });
 });
 
+describe("field-value redaction covers the extension's page-text reads", () => {
+  it("grades letting a textarea's text back into a live region or an editor 🔴 high", async () => {
+    // A `<textarea>`'s child text is its markup default — for a sensitive
+    // field, the secret. The live-region observer sends what it reads to the
+    // panel, so either edit puts that secret on the extension's message
+    // channel: dropping the tag from core's set names only the set, through
+    // the hunk header, and going back to raw `textContent` names only the
+    // helper it replaced.
+    const textPath = "packages/core/src/extraction/dom-extractor.ts";
+    const text = `const CONTROL_TEXT_TAGS: ReadonlySet<string> = new Set([\n  "select",\n  "textarea",\n  "datalist",\n]);\n`;
+    const contentPath = "packages/extension/src/content.ts";
+    const content = `for (const region of regions) {\n  const text = pageText(region, { announced: true }).trim();\n  send(text);\n}\n`;
+    const result = await grade(
+      {
+        [textPath]: text.replace(`  "textarea",\n`, ``),
+        [contentPath]: content.replace(
+          `pageText(region, { announced: true })`,
+          `(region.textContent || "")`,
+        ),
+      },
+      { base: { [textPath]: text, [contentPath]: content } },
+    );
+
+    assert.equal(result.tier, "high");
+    assert.deepEqual(evidenceFor(result, "field-value-redaction"), [
+      `${textPath} → CONTROL_TEXT_TAGS`,
+      `${contentPath} → pageText`,
+    ]);
+  });
+});
+
 describe("field-value redaction covers the redactInput strict mode", () => {
   it("grades narrowing strictValueRoots or dropping the switch 🔴 high", async () => {
     // Under `redactInput` the native producer withholds all an editing root

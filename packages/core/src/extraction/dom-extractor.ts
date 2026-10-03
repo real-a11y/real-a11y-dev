@@ -1386,6 +1386,27 @@ const CONTROL_TEXT_TAGS: ReadonlySet<string> = new Set([
 ]);
 
 /**
+ * True if a walk for the text an element renders reads none of a `tag`'s
+ * children: a `<video>`'s or `<audio>`'s are fallback content, and a form
+ * control's ({@link CONTROL_TEXT_TAGS}) are not what it shows — a
+ * `<textarea>`'s are its markup default, for a sensitive field (ADR-0001) the
+ * secret itself. Exported so the extension's own text reads skip exactly what
+ * a field's value does.
+ */
+export function ignoresChildText(tag: string): boolean {
+  return MEDIA_TAGS.has(tag) || CONTROL_TEXT_TAGS.has(tag);
+}
+
+/**
+ * True if text directly inside an element with this computed `style` shows.
+ * `visibility` is inherited and a child may set it back to `visible`, so it
+ * hides an element's own text, not its subtree: a walk still descends.
+ */
+export function isTextVisible(style: CSSStyleDeclaration | null): boolean {
+  return style?.visibility !== "hidden" && style?.visibility !== "collapse";
+}
+
+/**
  * The text a non-native field holds — a contenteditable editor, an ARIA
  * textbox or combobox — collapsed and capped like {@link getDescendantText},
  * but with block boundaries read as spaces. What isn't rendered is always
@@ -1405,11 +1426,6 @@ function getFieldText(
   styleCache?: StyleCache,
 ): string {
   const state: CollapsedTextState = { text: "", phase: "start" };
-  // `visibility` is per element and inherited, and a child may set it back to
-  // `visible` — so a hidden element's own text is skipped but its children are
-  // still walked, each judged by its own computed style.
-  const isVisible = (style: CSSStyleDeclaration | null): boolean =>
-    style?.visibility !== "hidden" && style?.visibility !== "collapse";
   const walk = (node: Node, textVisible: boolean): boolean => {
     const type = safeNodeType(node);
     if (type === Node.TEXT_NODE) {
@@ -1421,7 +1437,7 @@ function getFieldText(
     const el = node as Element;
     const rawTag = el.tagName;
     const tag = typeof rawTag === "string" ? rawTag.toLowerCase() : "";
-    if (MEDIA_TAGS.has(tag) || CONTROL_TEXT_TAGS.has(tag)) return false;
+    if (ignoresChildText(tag)) return false;
     // An unreadable element costs its own text, not the field's value (see
     // getAccessibleTextContent). Nothing is appended before these reads, so
     // skipping it leaves the text so far intact.
@@ -1443,13 +1459,13 @@ function getFieldText(
     if (breaks) appendCollapsedTextChunk(state, " ");
     // flatChildNodes gives a closed <details> only its <summary>.
     for (const child of flatChildNodes(el)) {
-      if (walk(child, isVisible(style))) return true;
+      if (walk(child, isTextVisible(style))) return true;
     }
     if (breaks) appendCollapsedTextChunk(state, " ");
     return false;
   };
   let truncated = false;
-  const ownVisible = isVisible(getCachedComputedStyle(element, styleCache));
+  const ownVisible = isTextVisible(getCachedComputedStyle(element, styleCache));
   for (const child of flatChildNodes(element)) {
     if (walk(child, ownVisible)) {
       truncated = true;

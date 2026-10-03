@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Live region text — DOM producer fixture</title>
+    <style>
+      .is-hidden {
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Live region text</h1>
+
+    <!--
+      About the content script's own text reads, not either producer's tree:
+      the live-announcement log and the inline input panel's starting text.
+      A <textarea>'s markup text is its DEFAULT value, and for a sensitive
+      field (ADR-0001) the secret itself, so neither may read it as text.
+
+      The region starts empty; the test writes into it once the panel has
+      armed the observer, as a page announcing a status would.
+    -->
+    <div id="status" role="status"></div>
+
+    <div id="editor" contenteditable="true" role="textbox" aria-label="Note">
+      Pay <textarea autocomplete="cc-number">CARD-SENTINEL</textarea>now
+    </div>
+  </body>
+</html>

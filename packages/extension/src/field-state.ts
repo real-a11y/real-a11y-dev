@@ -1,5 +1,6 @@
 import { isSensitiveField } from "@real-a11y-dev/core";
 
+import { pageText } from "./page-text.js";
 import type { SelectOption } from "./types.js";
 
 /** The panel's inline-input state for a field element, as returned to the
@@ -80,14 +81,16 @@ export function computeFieldState(el: Element): FieldState {
   }
 
   // Custom text widget (contenteditable). There is no `.value`; the current
-  // text is its `textContent`. Trim to shed the framework whitespace these
-  // editors leave behind (e.g. Quill's trailing newline / an empty
-  // `<p><br></p>`), which would otherwise show as blank-but-not-empty.
+  // text is its text content, less any control's child text — a nested
+  // `<textarea>`'s is its default, the secret for a sensitive one, which the
+  // host's own sensitivity check can't see. Trim to shed the framework
+  // whitespace these editors leave behind (e.g. Quill's trailing newline / an
+  // empty `<p><br></p>`), which would otherwise show as blank-but-not-empty.
   if (isEditableHost(el)) {
     return {
       success: true,
       type: "text",
-      value: isSensitiveField(el) ? "" : (el.textContent ?? "").trim(),
+      value: isSensitiveField(el) ? "" : pageText(el).trim(),
       placeholder: el.getAttribute("aria-placeholder") ?? "",
     };
   }

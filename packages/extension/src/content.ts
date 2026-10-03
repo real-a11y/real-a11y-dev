@@ -7,11 +7,16 @@ import {
   DomObserver,
   createPicker,
   getElementRefs,
+  getExplicitRole,
+  renderingParent,
+  safeGetAttribute,
+  safeNodeType,
   safeParentElement,
 } from "@real-a11y-dev/core";
 import type { TreeViewMode, TreeChange } from "@real-a11y-dev/core";
 
 import { computeFieldState } from "./field-state.js";
+import { pageText } from "./page-text.js";
 import { isTrustedSender, planHighlight } from "./routing.js";
 import { elementsFromTabSequence, sendKey } from "./send-key.js";
 import type { PanelToContent } from "./types.js";
@@ -409,29 +414,125 @@ document.addEventListener("focusin", (e) => {
 });
 
 // ---- Live region observer (top frame only) ----
+
+/**
+ * Attributes that can show or hide a region's content, or make an element a
+ * region at all. Revealing a pre-filled `role="alert"` is an attribute change
+ * and nothing else, and Chromium announces it.
+ */
+const LIVE_REGION_ATTRIBUTES = [
+  "hidden",
+  "inert",
+  "class",
+  "style",
+  "aria-hidden",
+  "open",
+  "role",
+  "aria-live",
+];
+
 if (!isSubFrame) {
+  // Through the prototype: a `<form>` whose control is named `isConnected`
+  // shadows its own. Core's readers cover the rest. A selector engine is no
+  // help: `closest` in jsdom climbs through a form's shadowed `parentElement`.
+  const isConnected = Object.getOwnPropertyDescriptor(
+    Node.prototype,
+    "isConnected",
+  )!.get!;
+  const createTreeWalker = Document.prototype.createTreeWalker;
+
+  /**
+   * How `element` announces, or null if it is no live region. Core's rule
+   * (`countsAsOverlay`), with the role from core's own parse: an `aria-live`
+   * of `polite` or `assertive` decides, `off` means none whatever the role, and
+   * any other value — `<div aria-live>` included — leaves it to the role,
+   * `alert` assertive and `status` or `log` polite.
+   */
+  const liveLevel = (element: Element): "polite" | "assertive" | null => {
+    const live = safeGetAttribute(element, "aria-live")?.trim().toLowerCase();
+    if (live === "polite" || live === "assertive") return live;
+    if (live === "off") return null;
+    const role = getExplicitRole(element);
+    if (role === "alert") return "assertive";
+    return role === "status" || role === "log" ? "polite" : null;
+  };
+
   let liveDebounce: ReturnType<typeof setTimeout> | null = null;
   const lastLiveText = new WeakMap<Element, string>();
+  // The regions a mutation touched since the last read. Only these are read
+  // again: a region nothing changed in has nothing new to announce, and
+  // reading every region on the page each time costs a styled walk of each.
+  const touched = new Set<Element>();
+  // Elements whose attributes changed. Each may have shown or hidden regions
+  // inside it, so each is walked, once per read rather than once per change:
+  // a page can restyle the same container every frame.
+  const restyled = new Set<Element>();
 
-  liveObserver = new MutationObserver(() => {
+  /** Mark every region that renders `node`, and with `inside`, every region
+   *  in its subtree too. */
+  const touch = (node: Node, inside: boolean) => {
+    let element: Element | null;
+    if (safeNodeType(node) === Node.ELEMENT_NODE) element = node as Element;
+    else {
+      // Text a slot renders belongs to the region around the slot.
+      // eslint-disable-next-line no-restricted-properties -- one read, and a text node is never a form
+      const slot = (node as Partial<Text>).assignedSlot;
+      element = slot ?? safeParentElement(node);
+    }
+    // Up the tree that renders it, slots included, into a shadow tree's region.
+    for (let el = element; el; el = renderingParent(el)) {
+      if (liveLevel(el)) touched.add(el);
+    }
+    if (inside && element && element === node) {
+      const walker = createTreeWalker.call(
+        document,
+        element,
+        NodeFilter.SHOW_ELEMENT,
+      );
+      while (walker.nextNode()) {
+        const el = walker.currentNode as Element;
+        if (liveLevel(el)) touched.add(el);
+      }
+    }
+  };
+
+  liveObserver = new MutationObserver((records) => {
+    for (const record of records) {
+      if (record.type === "attributes") {
+        restyled.add(record.target as Element);
+        continue;
+      }
+      touch(record.target, false);
+      record.addedNodes.forEach((node) => touch(node, true));
+    }
     if (liveDebounce) clearTimeout(liveDebounce);
     liveDebounce = setTimeout(() => {
-      const regions = document.querySelectorAll(
-        '[role="status"], [role="alert"], [role="log"], [aria-live]',
-      );
+      for (const element of restyled) {
+        if (isConnected.call(element)) touch(element, true);
+      }
+      restyled.clear();
+      const regions = [...touched];
+      touched.clear();
       for (const region of regions) {
-        const text = (region.textContent || "").trim();
-        if (!text || text === lastLiveText.get(region)) continue;
+        if (!isConnected.call(region)) continue;
+        const level = liveLevel(region);
+        if (!level) continue;
+        // What a screen reader could announce, never raw `textContent`: that
+        // also holds a <textarea>'s markup default — the secret, for a
+        // sensitive field — and hidden, script and style text, none of which
+        // belongs on the message channel.
+        const text = pageText(region, { announced: true }).trim();
+        // Emptied or hidden: the same text shown again is news again.
+        if (!text) {
+          lastLiveText.delete(region);
+          continue;
+        }
+        if (text === lastLiveText.get(region)) continue;
         lastLiveText.set(region, text);
-
-        const role = region.getAttribute("role") || "status";
-        const ariaLive = region.getAttribute("aria-live");
-        const level =
-          ariaLive === "assertive" || role === "alert" ? "assertive" : "polite";
 
         safeSendMessage({
           type: "LIVE_REGION",
-          payload: { text, level, role },
+          payload: { text, level, role: getExplicitRole(region) ?? "status" },
         });
       }
     }, 200);
@@ -452,6 +553,8 @@ function startObserving() {
     childList: true,
     subtree: true,
     characterData: true,
+    attributes: true,
+    attributeFilter: LIVE_REGION_ATTRIBUTES,
   });
   // Emit the current tree the moment we arm. On panel open the panel also
   // drives this via REQUEST_TREE, but a bfcache restore re-arms us through

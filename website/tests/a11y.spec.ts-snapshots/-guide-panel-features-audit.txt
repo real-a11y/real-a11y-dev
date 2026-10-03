@@ -235,12 +235,16 @@ main
     code "[role="dialog"]"
   separator
   heading "Live region monitoring" (level 2)
-  paragraph "Every region update, change, and on the page appears in the panel's live log in real time, labeled or . The order, timing, and content are what a screen reader would announce."
-    code "aria-live"
-    code "role="status""
-    code "role="alert""
+  paragraph "When a live region on the page changes or is shown, its new text appears in the panel's live log in real time, labeled or . A live region is a , or , or anything with or ; silences even an alert. The text is what a screen reader would announce: nothing hidden or , and never a form field's markup text. Text a region already held when the panel opened is not logged until it changes."
     emphasis "polite"
     emphasis "assertive"
+    code "role="status""
+    code "role="log""
+    code "role="alert""
+    code "aria-live="polite""
+    code ""assertive""
+    code "aria-live="off""
+    code "aria-hidden"
   paragraph "Use this to verify:"
   list
     listitem "announce on appearance"

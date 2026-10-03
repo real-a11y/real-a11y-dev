@@ -55,7 +55,7 @@
   {
     "name": "@real-a11y-dev/browser (page-bundle IIFE)",
     "path": "packages/browser/dist/page-bundle.iife.global.js",
-    "limit": "16.1 KB",
+    "limit": "16.2 KB",
     "gzip": true
   }
 ]

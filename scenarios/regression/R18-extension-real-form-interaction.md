@@ -6,9 +6,9 @@ area: Extension
 type: Manual
 priority: P0
 status: Active
-validFrom: "extension ≥ 0.1.8. The dispatch-fidelity expectations mirror core's ActionDispatcher, which the CDP backend also mirrors — a fix in one belongs in both"
+validFrom: "extension ≥ 0.1.8. The dispatch-fidelity expectations mirror core's ActionDispatcher, which the CDP backend also mirrors — a fix in one belongs in both. Step 6b (a sensitive textarea's markup text): extension ≥ 0.1.15 (unreleased)"
 validUntil: ""
-expected: "click/type/select dispatch on the real page; a password value is NEVER shown in the panel; Send-Tab/Esc behave or fail visibly"
+expected: "click/type/select dispatch on the real page; a sensitive field's value is NEVER shown in the panel — a password's, or a sensitive textarea's markup text in the live-announcement log or an editor's input panel; Send-Tab/Esc behave or fail visibly"
 twin: D6
 notion: "https://app.notion.com/p/3aa1c354b0b5819e89f7de2edeb18fcb"
 ---
@@ -27,6 +27,20 @@ point is behaviour against handlers you didn't write.
    state reflects it — not just the DOM value
 5. Type into a rich-text / contenteditable editor (ProseMirror, Lexical, Draft)
 6. Focus a **password** field and type into it
+   - **6b** — a fixture, since no real form puts a field in a live region. With
+     the panel open on any page, run this in the page's DevTools console, then
+     select the `Note` textbox in the tree and open its inline input panel:
+
+     ```js
+     document.body.insertAdjacentHTML(
+       "beforeend",
+       '<div role="status"></div>' +
+         '<div contenteditable="true" role="textbox" aria-label="Note">Pay ' +
+         '<textarea autocomplete="cc-number">CARD-SENTINEL</textarea>now</div>',
+     );
+     document.querySelector('[role="status"]').innerHTML =
+       'Code sent <textarea autocomplete="one-time-code">OTP-SENTINEL</textarea>';
+     ```
 7. Send Tab and Escape through the panel
 8. Toggle a checkbox and change a `<select>`
 
@@ -44,6 +58,10 @@ point is behaviour against handlers you didn't write.
   model-driven editors; a cancelable `beforeinput` must go first
 - **6** — the password value is **NEVER** displayed in the panel, in any view, at any
   time
+- **6b** — neither sentinel shows in the live-announcement log or the input panel:
+  the log reads `status` `Code sent`, and the input panel opens holding `Pay now`.
+  Extension 0.1.14 and earlier logged `Code sent OTP-SENTINEL` and opened the input
+  panel holding `Pay CARD-SENTINELnow`
 - **7** — Tab/Escape either work or fail **visibly**. Silently doing nothing is the
   failure
 - **8** — state changes and is reflected
@@ -58,3 +76,9 @@ The panel writes to pages the user didn't build, which makes both halves risky.
 - **Redaction** (6) is absolute and unconditional. There is no view, no debug mode,
   and no error path where a password value may appear. This is the same invariant the
   act path enforces (**R24**) — same rule, different surface.
+
+6b is the same rule reached through text rather than a value. A `<textarea>`'s
+markup text is its default value, and the panel read two things as raw
+`textContent` — a live region's announcement and an editor's current text — so a
+sensitive textarea inside either one put its secret on the extension's message
+channel. Step 6 can't catch it: a password `<input>` has no text to read.
