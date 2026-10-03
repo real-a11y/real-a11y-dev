@@ -1,11 +1,11 @@
 ---
 title: Panel features — filtering, scoping, focus tracking
-description: Filters, search, focus tracking, scoping, and live region monitoring — the shared interactive behaviors of every Real A11y panel (Chrome extension, inspector, React, Storybook).
+description: Filters, search, focus tracking, and scoping — the shared interactive behaviors of every Real A11y panel (Chrome extension, inspector, React, Storybook) — plus the Chrome extension's live region log.
 ---
 
 # Panel features
 
-> These behaviors are **shared across every Real A11y surface** — the [Chrome extension](/guide/chrome-extension), the [`@real-a11y-dev/inspector`](/packages/inspector) embed, the [React component](/packages/react), and the [Storybook addon](/packages/storybook-addon). If a feature exists in one, it exists in all of them. Where the per-package APIs differ, this page calls out which prop / option to reach for.
+> Most of these behaviors are **shared across every Real A11y surface** — the [Chrome extension](/guide/chrome-extension), the [`@real-a11y-dev/inspector`](/packages/inspector) embed, the [React component](/packages/react), and the [Storybook addon](/packages/storybook-addon). A few exist only in the Chrome extension, and their sections say so — [live region monitoring](#live-region-monitoring) is one. Where the per-package APIs differ, this page calls out which prop / option to reach for.
 
 ---
 
@@ -101,7 +101,9 @@ When the page opens a `<dialog>` or `[role="dialog"]`, the panel automatically s
 
 ## Live region monitoring
 
-When a live region on the page changes or is shown, its new text appears in the panel's live log in real time, labeled *polite* or *assertive*. A live region is a `role="status"`, `role="log"` or `role="alert"`, or anything with `aria-live="polite"` or `"assertive"`; `aria-live="off"` silences even an alert. The text is what a screen reader would announce: nothing hidden or `aria-hidden`, and never a form field's markup text. Text a region already held when the panel opened is not logged until it changes.
+**Chrome extension only.** The `inspector`, React `<SemanticNavigator />` and Storybook addon panels have no live log; nothing in them watches the page's live regions.
+
+While the side panel is open, when a live region on the page changes or is shown, its new text appears in the live log at the bottom of the side panel. A live region is a `role="status"`, `role="log"` or `role="alert"`, or anything with `aria-live="polite"` or `"assertive"`; `aria-live="off"` silences even an alert. Each entry shows the region's role (`status` for an `aria-live` element with no role), then its text. Assertive entries are marked red, polite ones blue. The log holds the last five entries, and each clears after 8 seconds.
 
 Use this to verify:
 - **Toast notifications** announce on appearance
@@ -109,11 +111,13 @@ Use this to verify:
 - **Loading indicators** announce both their start ("Loading…") and completion ("Loaded.")
 - **Search-result counts** announce as you type
 
+An entry's text is what a screen reader could announce: nothing hidden or `aria-hidden`, and never a form field's markup text. Text a region already held when the panel opened is not logged until it changes. Even so, the log approximates a screen reader rather than recording one. Each entry carries the region's whole text after the change, not only the part that changed. Changes within 200 ms collapse into one entry. Only the top frame is watched, so a live region inside an iframe never appears.
+
 | Surface | Where the log appears |
 |---|---|
 | Chrome extension | Bottom of the side panel |
-| `inspector` / React | Bottom of the panel by default |
-| Storybook addon | Inside the panel — same position |
+| `inspector` / React | Not available |
+| Storybook addon | Not available |
 
 ---
 

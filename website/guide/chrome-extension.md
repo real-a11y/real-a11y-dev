@@ -117,7 +117,7 @@ When something is hard to locate, hard to understand, or impossible to complete,
 
 ## What's unique to the Chrome extension
 
-The extension surfaces the same engine as `@real-a11y-dev/inspector`, `@real-a11y-dev/react`, and `@real-a11y-dev/storybook-addon`. Everything *about reading the tree* is shared across those — see [the panel features guide](/guide/panel-features) for filters, search, focus tracking, scoping, and live region monitoring.
+The extension surfaces the same engine as `@real-a11y-dev/inspector`, `@real-a11y-dev/react`, and `@real-a11y-dev/storybook-addon`. Everything *about reading the tree* is shared across those — see [the panel features guide](/guide/panel-features) for filters, search, focus tracking, and scoping. The [live region log](/guide/panel-features#live-region-monitoring) is the exception: only the extension's side panel has one.
 
 What only an extension can give you is the handful of capabilities that require a browser extension to reach across tabs and frames. The [screen curtain](#the-screen-curtain) above is one; here are the rest:
 
@@ -211,7 +211,7 @@ Sets expectations during the pre-1.0 phase. Linked to the GitHub issues page. Go
 These behaviors are shared with `@real-a11y-dev/inspector` (and every package built on it). They work the same way in the extension's panel as they do anywhere else the tree is rendered:
 
 - **[Reading the DOM view](/guide/reading-the-dom-view)** · **[A11y view](/guide/reading-the-a11y-view)** · **[TAB view](/guide/reading-the-tab-view)** — what each view shows
-- **[Panel features](/guide/panel-features)** — filters, search, focus tracking, scoping, live region monitoring, keyboard navigation
+- **[Panel features](/guide/panel-features)** — filters, search, focus tracking, scoping, keyboard navigation, and the [live region log](/guide/panel-features#live-region-monitoring), which only the extension has
 
 ---
 

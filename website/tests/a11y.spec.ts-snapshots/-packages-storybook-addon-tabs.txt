@@ -19,6 +19,7 @@ button "Copy Code"
 generic
 link "examples/storybook/"
 link "Storybook + React 19 recipe"
+link "live region log"
 link "Panel features reference"
 link "Edit this page on GitHub"
 link "Previous page @real-a11y-dev/react"

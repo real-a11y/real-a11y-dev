@@ -348,13 +348,14 @@ main
       link "Next.js recipe"
   separator
   heading "Panel features" (level 2)
-  paragraph "exposes the same in-panel behaviors as the Chrome extension and Storybook addon — search, role filters, focus tracking, scoping, live region monitoring, keyboard navigation. The props on this component (, , , , ) configure them."
+  paragraph "exposes the in-panel behaviors it shares with the Chrome extension and Storybook addon — search, role filters, focus tracking, scoping, keyboard navigation. The props on this component (, , , , ) configure them. The is not one of them: only the Chrome extension has it."
     code "<SemanticNavigator />"
     code "highlightOnHover"
     code "scrollHostOnSelect"
     code "focusHostOnActivate"
     code "mode"
     code "mount"
+    link "live region log"
   paragraph "→"
     link "Panel features reference"
 contentinfo

@@ -198,6 +198,6 @@ The addon listens to `storyRendered` and `storyChanged` events **while the panel
 
 ## Panel features
 
-Inside every story's panel: search, role filters, focus tracking, scoping, live region monitoring, keyboard navigation. Same UI as the Chrome extension and inspector — see the shared reference for what each control does and when to reach for it.
+Inside every story's panel: search, role filters, focus tracking, scoping, keyboard navigation. Same UI as the Chrome extension and inspector — see the shared reference for what each control does and when to reach for it. The addon has no [live region log](/guide/panel-features#live-region-monitoring); only the Chrome extension does.
 
 → [Panel features reference](/guide/panel-features)

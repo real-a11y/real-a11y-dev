@@ -86,12 +86,13 @@ main
     link "the test"
   separator
   heading "What's unique to the Chrome extension" (level 2)
-  paragraph "The extension surfaces the same engine as , , and . Everything is shared across those — see for filters, search, focus tracking, scoping, and live region monitoring."
+  paragraph "The extension surfaces the same engine as , , and . Everything is shared across those — see for filters, search, focus tracking, and scoping. The is the exception: only the extension's side panel has one."
     code "@real-a11y-dev/inspector"
     code "@real-a11y-dev/react"
     code "@real-a11y-dev/storybook-addon"
     emphasis "about reading the tree"
     link "the panel features guide"
+    link "live region log"
   paragraph "What only an extension can give you is the handful of capabilities that require a browser extension to reach across tabs and frames. The above is one; here are the rest:"
     link "screen curtain"
   heading "Copy the tree as a Markdown report" (level 3)
@@ -221,9 +222,10 @@ main
         link "A11y view"
       strong
         link "TAB view"
-    listitem "— filters, search, focus tracking, scoping, live region monitoring, keyboard navigation"
+    listitem "— filters, search, focus tracking, scoping, keyboard navigation, and the , which only the extension has"
       strong
         link "Panel features"
+      link "live region log"
   separator
   heading "Install" (level 2)
   paragraph "— ."

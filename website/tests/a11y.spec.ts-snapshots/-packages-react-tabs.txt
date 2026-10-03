@@ -30,6 +30,7 @@ generic
 link "@real-a11y-dev/testing"
 link "examples/react-app/"
 link "Next.js recipe"
+link "live region log"
 link "Panel features reference"
 link "Edit this page on GitHub"
 link "Previous page Playwright adapter"

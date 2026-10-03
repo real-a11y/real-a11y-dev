@@ -12,6 +12,7 @@ button "Copy Code"
 generic
 link "the test"
 link "the panel features guide"
+link "live region log"
 link "screen curtain"
 button "Copy Code"
 generic
@@ -19,6 +20,7 @@ link "Reading the DOM view"
 link "A11y view"
 link "TAB view"
 link "Panel features"
+link "live region log"
 link "Semantic Navigator"
 button "Copy Code"
 generic
