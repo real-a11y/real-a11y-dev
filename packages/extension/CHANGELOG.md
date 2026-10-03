@@ -285,7 +285,7 @@
   instead of waiting for **Refresh native tree**. It follows the tab it last read: switching tabs still waits for
   Refresh. A read that fails, or pressing **Cancel** on Chrome's debugging
   notice at any point, pauses it; the status line says so, and Refresh
-  resumes it.
+  resumes it. ([#478](https://github.com/real-a11y/real-a11y-dev/pull/478))
 
 ## 0.1.14
 
