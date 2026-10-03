@@ -272,6 +272,21 @@ function listItemRole(el: Element): string {
   return "listitem";
 }
 
+/**
+ * Whether a `<select>` is a drop-down: its display size, as HTML and Chromium
+ * compute it, is 1. That is the rule that gives it the combobox role, so
+ * `<select multiple size="1">` is a drop-down and `<select multiple
+ * size="0">` a list box. See {@link selectRoleFromAttributes}.
+ */
+export function isDropDownSelect(select: Element): boolean {
+  return (
+    selectRoleFromAttributes({
+      size: select.getAttribute("size"),
+      multiple: select.getAttribute("multiple"),
+    }) === "combobox"
+  );
+}
+
 const INPUT_TYPE_ROLE_MAP: Record<string, string> = {
   button: "button",
   checkbox: "checkbox",
@@ -436,11 +451,7 @@ const ROLE_MAP: Record<string, RoleResolver> = {
   samp: "generic",
   search: "search",
   section: (el) => (hasAccessibleName(el) ? "region" : "generic"),
-  select: (el) =>
-    selectRoleFromAttributes({
-      size: el.getAttribute("size"),
-      multiple: el.getAttribute("multiple"),
-    }),
+  select: (el) => (isDropDownSelect(el) ? "combobox" : "listbox"),
   slot: "generic",
   small: "generic",
   span: "generic",
