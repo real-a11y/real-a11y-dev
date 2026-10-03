@@ -199,7 +199,8 @@ describe("two copies of the REGISTRY module", () => {
 // twice, cold — the whole engine, under two `?copy=N` queries. Alone that is
 // ~1–3.5 s on Windows; under `pnpm verify`, with every package's suite running
 // at once, it has crossed vitest's 5 s default (5.0 s, then 5.2 s) and failed
-// the pre-push gate while CI stayed green. The bound guards a hang, not speed.
+// for the contributor running `verify` while CI stayed green. The bound guards
+// a hang, not speed.
 describe("two copies of the engine in one realm", { timeout: 20_000 }, () => {
   beforeEach(() => {
     resetRealmSingletons();
