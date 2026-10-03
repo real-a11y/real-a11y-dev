@@ -3,6 +3,8 @@
 "@real-a11y-dev/inspector": patch
 "@real-a11y-dev/react": patch
 "@real-a11y-dev/storybook-addon": patch
+"@real-a11y-dev/cli": patch
+"@real-a11y-dev/mcp": patch
 ---
 
 Stop reading a decorative `clip-path: inset(...)` as the visually-hidden idiom.
@@ -18,5 +20,7 @@ What this changes for you, on a page with such a crop:
 - **`dom.isHidden` is now `false`** on those elements, and a tree diff reports the change against a tree recorded before this release.
 - **Snapshots and outlines:** such an element that is _not_ exposed to AT on its own — an unnamed `<div>` wrapper, say — was skipped by the tree walk on the strength of `isHidden` alone, and is now included. **A committed baseline from such a page changes, so re-record it.** An AT-exposed element was kept either way, so its presence is unchanged.
 - **Cross-link inference** (`controls` / `controlledBy`) considers those elements as candidates again.
+
+`cli` and `mcp` bundle `core`, so they are released with it and carry the fix in the one DOM-produced surface they have (`tabs` / `get_tab_order`). Nothing there changes in practice: this signature never looks at an interactive element or one with a `tabindex`, which is all a tab stop can be, and the tab sequence does not read `isHidden`.
 
 Unchanged: the genuine idiom still reads as hidden, both halves of it — `clip-path: inset(50%)` / `inset(100%)`, and the classic `clip: rect(0, 0, 0, 0)` on a 1px box. Bootstrap's `.visually-hidden` and Tailwind's `sr-only` use exactly those, so neither is affected.
