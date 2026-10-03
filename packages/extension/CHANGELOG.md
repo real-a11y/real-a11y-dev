@@ -187,9 +187,8 @@
   each time. Now, if native mode is on, the panel attaches automatically the
   first time it connects to an attachable page in that session — no click
   needed. This is deliberately narrower than "every attachable page": a later
-  tab switch or same-tab navigation in that same session still never
-  auto-reattaches, exactly as before, so the "…is debugging this browser"
-  banner never reappears without a gesture you made that session. ([#390])
+  tab switch in that same session still never auto-attaches to the new tab,
+  exactly as before. ([#390])
 
 - **Copy ▾ now works under native mode.** Previously the entire export
   menu disappeared the moment you switched to NATIVE — Everything, tree,
@@ -279,6 +278,14 @@
   gone. Closing the tab, or navigating it somewhere native mode can't
   follow, also ends the pick quietly instead of as an error.
   ([#467](https://github.com/real-a11y/real-a11y-dev/pull/467))
+
+- **The native tree keeps up with the page.** When the page changes, or
+  navigates, the native tree reads itself again once the page goes quiet, at
+  most once every few seconds, instead of waiting for **Refresh native
+  tree**. It follows the tab it last read: switching tabs still waits for
+  Refresh. A read that fails, including pressing **Cancel** on Chrome's
+  debugging notice, pauses it; the status line says so, and Refresh resumes
+  it.
 
 ## 0.1.14
 
