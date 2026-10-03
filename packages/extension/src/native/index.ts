@@ -44,7 +44,16 @@ type NativeMessage =
   | { type: "NATIVE_FLAG_GET" }
   | { type: "NATIVE_FLAG_SET"; enabled: boolean }
   | { type: "NATIVE_CAPABILITY"; tabId: number }
-  | { type: "NATIVE_READ"; tabId: number }
+  | {
+      type: "NATIVE_READ";
+      tabId: number;
+      // The panel reading again on its own because the page changed, not a
+      // Refresh, an action's re-read or the first load. A dropped connection
+      // is then not retried: the drop may be the user's Cancel on Chrome's
+      // debugging bar, and attaching again would undo it. The panel pauses
+      // its automatic reads after any failed one.
+      auto?: boolean;
+    }
   | {
       type: "NATIVE_ACT";
       tabId: number;
@@ -224,6 +233,7 @@ export function registerNativeMode(): void {
               message.tabId,
               (t) => readNativeTree(t),
               log,
+              { retryDrop: !message.auto },
             );
             if (!outcome.ok || !value) {
               sendResponse({
