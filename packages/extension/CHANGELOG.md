@@ -281,11 +281,11 @@
 
 - **The native tree keeps up with the page.** When the page changes, or
   navigates, the native tree reads itself again once the page goes quiet, at
-  most once every few seconds, instead of waiting for **Refresh native
-  tree**. It follows the tab it last read: switching tabs still waits for
-  Refresh. A read that fails, including pressing **Cancel** on Chrome's
-  debugging notice, pauses it; the status line says so, and Refresh resumes
-  it.
+  most once every few seconds and less often while reads find nothing new,
+  instead of waiting for **Refresh native tree**. It follows the tab it last read: switching tabs still waits for
+  Refresh. A read that fails, or pressing **Cancel** on Chrome's debugging
+  notice at any point, pauses it; the status line says so, and Refresh
+  resumes it.
 
 ## 0.1.14
 
