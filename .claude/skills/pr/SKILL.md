@@ -32,6 +32,11 @@ score**: named reasons that either apply or don't, computed from the diff
 against the merge base. So it says the same thing on your machine and in CI —
 where the `pr-risk` workflow applies it as a `risk:*` label and a sticky comment.
 
+**A layer of a stacked PR is graded against its parent, not main** — CI grades
+each layer's own diff, so pass the branch below it to get the same answer:
+`pnpm pr:risk --base origin/<parent-branch>`. The bottom layer targets main and
+needs nothing extra.
+
 Run it early. The tier is an input to how you work the PR, not a verdict issued
 at the end of it.
 
@@ -474,6 +479,10 @@ because each item is something that has actually blocked a merge here:
 - `pnpm pr:risk` says **low**, and the PR carries `risk:low` (CI agreeing with
   you is the point — if it doesn't, the diff you classified isn't the diff that's
   pushed)
+- **in a stack, every unmerged PR below it carries `risk:low` too.** Merging a
+  stacked PR lands all of them in one operation, and each layer's label grades
+  only its own diff — so a 🟢 layer on top of a 🟡 one is a 🟡 merge, and the
+  agent stops. The `pr-risk` comment on a stacked PR says which layer it is
 - not a draft, and the title has no `!`
 - `mergeStateStatus` is **`CLEAN`** — not `BEHIND`, not `BLOCKED`
 - every check has passed, including the non-required ones

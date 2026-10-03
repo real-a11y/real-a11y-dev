@@ -255,6 +255,10 @@ blast radius, not correctness — a one-character typo in `publish.yml` is high.
 - 🟢 **low** — an agent may merge it (`--squash`; `--auto` is unavailable here).
 - 🟡 **medium** / 🔴 **high** — stop and hand it back.
 
+In a GitHub stack, each layer is graded against its parent, but merging a layer
+lands every unmerged PR below it — so the merge counts as the highest label among
+them, and a 🟢 layer on a 🟡 one is not an agent's to merge.
+
 **Run the passes the tier calls for** — `/code-review` on 🟡, plus
 `/security-review` on 🔴. Both are agent-runnable; they look for different things
 and neither substitutes for the other. `/code-review ultra`, the multi-agent
