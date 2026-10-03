@@ -2,6 +2,7 @@ import { buildA11yTree } from "../extraction/a11y-extractor.js";
 import {
   safeContains,
   safeGetAttribute,
+  safeMatches,
   safeNodeType,
   safeParentElement,
   safeTagName,
@@ -261,8 +262,12 @@ export class LiveTreeExtractor {
             break;
           }
           // An owner's role can be the context that keeps an owned item its
-          // role, and the item is outside the owner's subtree.
-          if (attr === "role" && target.hasAttribute("aria-owns")) {
+          // role, and the item is outside the owner's subtree. Through the
+          // prototype: the target can be a <form> that shadows `hasAttribute`.
+          if (
+            attr === "role" &&
+            safeGetAttribute(target, "aria-owns") !== null
+          ) {
             needsFull = true;
             break;
           }
@@ -621,7 +626,8 @@ export class LiveTreeExtractor {
 
       // Adding or removing an <img usemap> changes whether a map's areas are
       // rendered, wherever that map is: the same reach as a `usemap` change.
-      if (el.matches("img[usemap]") || el.querySelector("img[usemap]")) {
+      // `matches` through the prototype: an added <form> can shadow it.
+      if (safeMatches(el, "img[usemap]") || el.querySelector("img[usemap]")) {
         return true;
       }
 
@@ -655,7 +661,8 @@ export class LiveTreeExtractor {
    * for them.
    */
   private mapsUsedWithin(el: Element): Element[] {
-    const images = el.matches("img[usemap]")
+    // Any restyled element is asked, and a <form> can shadow `matches`.
+    const images = safeMatches(el, "img[usemap]")
       ? [el]
       : Array.from(el.querySelectorAll("img[usemap]"));
     const names = new Set<string>();
@@ -776,9 +783,10 @@ export class LiveTreeExtractor {
   }
 
   private collapseToOutermost(elements: Set<Element>): Element[] {
+    // Any dirty element can be a <form> whose control shadows `contains`.
     const list = Array.from(elements);
     return list.filter(
-      (el) => !list.some((other) => other !== el && other.contains(el)),
+      (el) => !list.some((other) => other !== el && safeContains(other, el)),
     );
   }
 

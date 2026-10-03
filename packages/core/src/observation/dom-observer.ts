@@ -331,8 +331,11 @@ export class DomObserver {
     // for portal mounts whose subtree contains an overlay-shaped
     // element. Bounded surface — fires when Radix / Headless UI /
     // Vue Teleport mounts a portal, not on every internal DOM tweak.
+    //
+    // The root is the caller's, and may be a <form> whose control shadows
+    // `contains`, so both questions about it go through the prototype.
     const body = this.root.ownerDocument?.body;
-    if (body && body !== this.root && !this.root.contains(body)) {
+    if (body && body !== this.root && !safeContains(this.root, body)) {
       this.portalObserver = new MutationObserver((mutations) => {
         let sawPortal = false;
         for (const m of mutations) {
@@ -433,7 +436,7 @@ export class DomObserver {
    * covers those) and ones already being watched.
    */
   private observePortalContent(portal: Element): void {
-    if (this.root.contains(portal)) return;
+    if (safeContains(this.root, portal)) return;
     if (this.portalContentObservers.has(portal)) return;
 
     const observer = new MutationObserver((mutations) => {

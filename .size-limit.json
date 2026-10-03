@@ -2,7 +2,7 @@
   {
     "name": "@real-a11y-dev/core (esm)",
     "path": "packages/core/dist/index.js",
-    "limit": "20.4 KB",
+    "limit": "20.5 KB",
     "gzip": true
   },
   {
@@ -16,7 +16,7 @@
   {
     "name": "@real-a11y-dev/inspector (esm)",
     "path": "packages/inspector/dist/index.js",
-    "limit": "39.9 KB",
+    "limit": "40 KB",
     "gzip": true
   },
   {
@@ -35,7 +35,7 @@
   {
     "name": "@real-a11y-dev/testing/matchers (esm)",
     "path": "packages/testing/dist/matchers.js",
-    "limit": "31.5 KB",
+    "limit": "31.6 KB",
     "gzip": true
   },
   {
