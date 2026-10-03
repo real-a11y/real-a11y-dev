@@ -5902,7 +5902,7 @@ describe("the sr-only clip-path signature", () => {
   // Insets that meet or cross leave nothing painted, which is what the
   // visually-hidden idiom relies on. A zero inset counts in any unit, and a
   // reference box or an unreadable sibling component does not get in the way
-  // of a pair that already collapses -- the prefix match caught all of these.
+  // of a pair that already collapses — the prefix match caught all of these.
   it.each([
     "inset(50%)",
     "inset(100%)",
@@ -5911,18 +5911,24 @@ describe("the sr-only clip-path signature", () => {
     "inset(100% 0 0 0)",
     "inset(100% 0px 0px 0px)",
     "inset(50%) margin-box",
-    "border-box inset(100%)",
+    // Chromium's own serialisation of the four-value case above, which drops
+    // the fourth component and so exercises the `left = right` default.
+    "inset(100% 0px 0px)",
     // A single 100% inset crosses the box alone, so the opposing edge need
     // not be measurable at all.
     "inset(100% 0 10px 0)",
     "inset(0 100% 0 1em)",
     // A nested function keeps its own parens and spaces: cutting the value at
     // the calc's `)` shifted every later component onto the wrong edge.
-    "inset(50% calc(1px))",
     "inset(50% calc(50% + 1px))",
     "inset(50% clamp(1px, 2%, 3px))",
     "inset(100% calc(50% + 1px))",
     "inset(50% calc(1px) round calc(2px))",
+    // Parser-only shapes. Chromium reduces these to `inset(100%)` and
+    // `inset(50% 1px)`, so a real page never returns them; they are here to
+    // pin the parse, not a value the extractor meets.
+    "border-box inset(100%)",
+    "inset(50% calc(1px))",
   ])("reads %s as the visually-hidden idiom", (clipPath) => {
     document.body.innerHTML = `
         <main>
@@ -5944,10 +5950,18 @@ describe("the sr-only clip-path signature", () => {
     "inset(10% 20%)",
     "inset(10px round 5px)",
     // left=10px and right=60% never meet. Truncating at the calc's `)` used
-    // to slide 60% onto BOTH horizontal edges and call this hidden -- the
+    // to slide 60% onto BOTH horizontal edges and call this hidden — the
     // very false positive this signature is being narrowed to stop.
     "inset(0 60% calc(1px) 10px)",
     "inset(40% calc(50% + 1px) 40% 0)",
+    // Three-value form, which routes `left` through the `right` default.
+    "inset(10% 0px 10%)",
+    // A negative inset grows the shape, so the 100% edge opposite it does
+    // NOT collapse the box: this clips to a strip below it, where content
+    // overflowing downward is still painted.
+    "inset(100% 0 -50% 0)",
+    "inset(100% 0 -10px 0)",
+    "inset(-10px)",
   ])("leaves a still-visible %s crop visible", (clipPath) => {
     document.body.innerHTML = `
       <main>
