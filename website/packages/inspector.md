@@ -195,6 +195,6 @@ inspector.mount();
 
 ## Panel features
 
-Once the inspector is mounted, all the same in-panel behaviors as the Chrome extension and Storybook addon are available — search, role filters, focus tracking, scoping, live region monitoring, keyboard navigation. They're shared across every Real A11y surface.
+Once the inspector is mounted, the in-panel behaviors it shares with the Chrome extension and Storybook addon are available — search, role filters, focus tracking, scoping, keyboard navigation. The [live region log](/guide/panel-features#live-region-monitoring) is not one of them: only the Chrome extension has it.
 
 → [Panel features reference](/guide/panel-features)

@@ -254,6 +254,6 @@ import type { ExtractionResult, SemanticNode } from "@real-a11y-dev/react";
 
 ## Panel features
 
-`<SemanticNavigator />` exposes the same in-panel behaviors as the Chrome extension and Storybook addon — search, role filters, focus tracking, scoping, live region monitoring, keyboard navigation. The props on this component (`highlightOnHover`, `scrollHostOnSelect`, `focusHostOnActivate`, `mode`, `mount`) configure them.
+`<SemanticNavigator />` exposes the in-panel behaviors it shares with the Chrome extension and Storybook addon — search, role filters, focus tracking, scoping, keyboard navigation. The props on this component (`highlightOnHover`, `scrollHostOnSelect`, `focusHostOnActivate`, `mode`, `mount`) configure them. The [live region log](/guide/panel-features#live-region-monitoring) is not one of them: only the Chrome extension has it.
 
 → [Panel features reference](/guide/panel-features)
