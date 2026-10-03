@@ -112,7 +112,7 @@ describe("the roles with an expanded state, against Chromium", () => {
     expect(dom).toMatchObject(expected);
   });
 
-  it("KNOWN GAP: a role out of its required context keeps aria-expanded", async () => {
+  it("reads aria-expanded on a role only in its required context", async () => {
     await page.setContent(`
       <div role="list"><div id="listitem" role="listitem" aria-expanded="true">In a list</div></div>
       <div role="tree" aria-label="Tree">
@@ -123,21 +123,15 @@ describe("the roles with an expanded state, against Chromium", () => {
     `);
 
     const { dom, native } = await expandedById();
-    // In its context, each role has the state in both producers.
-    const inContext = { listitem: true, treeitem: true };
-    expect(native).toMatchObject(inContext);
-    expect(dom).toMatchObject(inContext);
-    // Out of it, Chromium makes each a generic, which has none. This engine
-    // keeps the authored role, so the gate keeps the state. The fix is the
-    // role's, not the gate's: once the role falls back, make `dom` match.
-    expect(native).toMatchObject({
+    const expected = {
+      listitem: true,
+      treeitem: true,
+      // Out of its context each role falls back to generic, which has none.
       "listitem-alone": "unset",
       "treeitem-alone": "unset",
-    });
-    expect(dom).toMatchObject({
-      "listitem-alone": true,
-      "treeitem-alone": true,
-    });
+    };
+    expect(native).toMatchObject(expected);
+    expect(dom).toMatchObject(expected);
   });
 
   it("puts a details' state on its summary, in an expandable role", async () => {
