@@ -39,7 +39,11 @@ interface SemanticNode {
                                               // commandfor with a popover command) is
                                               // expanded only while the popover shows —
                                               // each on a role that has the state, as
-                                              // in Chromium
+                                              // in Chromium. `expanded` exists only on
+                                              // a role Chromium gives it (button, link,
+                                              // tab, combobox, treeitem, row, listitem…):
+                                              // any other ignores aria-expanded, and a
+                                              // <details> has none, only its summary
     properties: Record<string, string>;       // aria-* properties (incl. heading "level")
     isExposedToAT: boolean;      // false when aria-hidden, role="presentation", etc.
   };

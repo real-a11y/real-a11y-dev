@@ -90,6 +90,8 @@ An `<img>` without an `alt` attribute, or with `alt=""` when the image conveys m
 
 An accordion `<button>` with `aria-expanded` is good. An `aria-expanded` that never changes when the accordion opens is a bug — the A11y tree will say "collapsed" while the panel is visually open. The A11y view will catch this: look at the state and ask whether it matches what you see on screen.
 
+`aria-expanded` belongs on the control that opens something: a button, link, tab, combobox, menu item, tree item, row or grid cell. On a list box, a radio, a heading or a text field the browser ignores it, so the A11y view shows no state there. If a state you set doesn't show, move it to the trigger. A `<details>` has no state of its own either; its `<summary>` reports whether it is open.
+
 A button that opens a popover with `popovertarget` (or `commandfor` and a popover `command`) needs no `aria-expanded` at all: the browser reports it expanded while the popover shows and collapsed otherwise, and ignores an `aria-expanded` that says something else. The A11y view shows the browser's answer.
 
 ### Elements that should be in the tree but aren't

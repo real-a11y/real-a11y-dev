@@ -1529,6 +1529,212 @@ describe("extractDomTree", () => {
     });
   });
 
+  // Chromium 151 and 153 agree on every case in the next three tests.
+  it("reads aria-expanded on each role Chromium gives an expanded state", () => {
+    expect(
+      stateById(
+        `
+        <div id="application" role="application" aria-expanded="true">a</div>
+        <div id="button" role="button" tabindex="0" aria-expanded="true">b</div>
+        <div id="checkbox" role="checkbox" aria-checked="false" tabindex="0" aria-expanded="true">c</div>
+        <div id="combobox" role="combobox" tabindex="0" aria-expanded="false">d</div>
+        <div id="link" role="link" tabindex="0" aria-expanded="true">e</div>
+        <div role="list"><div id="listitem" role="listitem" aria-expanded="true">f</div></div>
+        <div role="menu">
+          <div id="menuitem" role="menuitem" aria-expanded="true">g</div>
+          <div id="menuitemcheckbox" role="menuitemcheckbox" aria-checked="false" aria-expanded="true">h</div>
+          <div id="menuitemradio" role="menuitemradio" aria-checked="false" aria-expanded="true">i</div>
+        </div>
+        <div role="grid">
+          <div id="row" role="row" aria-expanded="true">
+            <div id="columnheader" role="columnheader" aria-expanded="true">j</div>
+            <div id="rowheader" role="rowheader" aria-expanded="true">k</div>
+            <div id="gridcell" role="gridcell" aria-expanded="false">l</div>
+          </div>
+        </div>
+        <div id="switch" role="switch" aria-checked="false" tabindex="0" aria-expanded="true">m</div>
+        <div role="tablist"><div id="tab" role="tab" aria-expanded="true">n</div></div>
+        <div role="tree"><div id="treeitem" role="treeitem" aria-expanded="false">o</div></div>
+      `,
+        "expanded",
+      ),
+    ).toEqual({
+      application: true,
+      button: true,
+      checkbox: true,
+      combobox: false,
+      link: true,
+      listitem: true,
+      menuitem: true,
+      menuitemcheckbox: true,
+      menuitemradio: true,
+      row: true,
+      columnheader: true,
+      rowheader: true,
+      gridcell: false,
+      switch: true,
+      tab: true,
+      treeitem: false,
+    });
+  });
+
+  it("ignores aria-expanded on every other role", () => {
+    const roles = [
+      "alert",
+      "alertdialog",
+      "article",
+      "banner",
+      "blockquote",
+      "caption",
+      "code",
+      "complementary",
+      "contentinfo",
+      "definition",
+      "deletion",
+      "dialog",
+      "document",
+      "emphasis",
+      "feed",
+      "figure",
+      "form",
+      "generic",
+      "grid",
+      "group",
+      "heading",
+      "img",
+      "insertion",
+      "list",
+      "listbox",
+      "log",
+      "main",
+      "mark",
+      "marquee",
+      "math",
+      "menu",
+      "menubar",
+      "meter",
+      "navigation",
+      "note",
+      "paragraph",
+      "progressbar",
+      "radiogroup",
+      "region",
+      "scrollbar",
+      "search",
+      "searchbox",
+      "separator",
+      "slider",
+      "spinbutton",
+      "status",
+      "strong",
+      "subscript",
+      "superscript",
+      "table",
+      "tablist",
+      "tabpanel",
+      "term",
+      "textbox",
+      "time",
+      "timer",
+      "toolbar",
+      "tooltip",
+      "tree",
+      "treegrid",
+    ];
+    const page = `
+      ${roles
+        .map(
+          (role) =>
+            `<div id="${role}" role="${role}" tabindex="0" aria-label="${role}" aria-expanded="true">x</div>`,
+        )
+        .join("")}
+      <div role="table">
+        <div id="rowgroup" role="rowgroup" aria-expanded="true">
+          <div role="row"><div id="cell" role="cell" aria-expanded="true">x</div></div>
+        </div>
+      </div>
+      <div role="listbox"><div id="option" role="option" aria-expanded="true">x</div></div>
+      <div role="radiogroup"><div id="radio" role="radio" aria-checked="false" aria-expanded="true">x</div></div>
+      <button id="button-radio" role="radio" aria-checked="false" aria-expanded="true">x</button>
+      <button id="button-heading" role="heading" aria-expanded="true">x</button>
+    `;
+    expect(stateById(page, "expanded")).toEqual(
+      Object.fromEntries(
+        [
+          ...roles,
+          "rowgroup",
+          "cell",
+          "option",
+          "radio",
+          "button-radio",
+          "button-heading",
+        ].map((id) => [id, undefined]),
+      ),
+    );
+  });
+
+  it("reads aria-expanded on an element with no role by its own role", () => {
+    expect(
+      stateById(
+        `
+        <div id="div" aria-expanded="true">a</div>
+        <span id="span" tabindex="0" aria-expanded="true">b</span>
+        <a id="a-no-href" tabindex="0" aria-expanded="true">c</a>
+        <a id="a-href" href="#x" aria-expanded="true">d</a>
+        <button id="button" aria-expanded="true">e</button>
+        <input id="input-button" type="button" value="f" aria-expanded="true">
+        <input id="checkbox" type="checkbox" aria-label="g" aria-expanded="true">
+        <input id="radio" type="radio" aria-label="h" aria-expanded="true">
+        <input id="text" type="text" aria-label="i" aria-expanded="true">
+        <input id="search" type="search" aria-label="j" aria-expanded="true">
+        <input id="number" type="number" aria-label="k" aria-expanded="true">
+        <input id="range" type="range" aria-label="l" aria-expanded="true">
+        <textarea id="textarea" aria-label="m" aria-expanded="true"></textarea>
+        <ul><li id="li" aria-expanded="true">n</li></ul>
+        <table>
+          <tr><th id="th" aria-expanded="true">o</th><th>p</th></tr>
+          <tr id="tr" aria-expanded="false">
+            <th id="th-row" scope="row" aria-expanded="true">q</th>
+            <td id="td" aria-expanded="true">r</td>
+          </tr>
+        </table>
+        <table role="grid" aria-label="s">
+          <tr><td id="grid-td" aria-expanded="true">t</td></tr>
+        </table>
+        <h2 id="h2" aria-expanded="true">u</h2>
+        <nav id="nav" aria-expanded="true">v</nav>
+        <dialog id="dialog" open aria-expanded="true">w</dialog>
+      `,
+        "expanded",
+      ),
+    ).toEqual({
+      div: undefined,
+      span: undefined,
+      "a-no-href": undefined,
+      "a-href": true,
+      button: true,
+      "input-button": true,
+      checkbox: true,
+      radio: undefined,
+      text: undefined,
+      search: undefined,
+      number: undefined,
+      range: undefined,
+      textarea: undefined,
+      li: true,
+      th: true,
+      tr: false,
+      "th-row": true,
+      td: undefined,
+      // Chromium names a grid's cell a gridcell, but gives it an expanded
+      // state only when the author wrote role="gridcell".
+      "grid-td": undefined,
+      h2: undefined,
+      nav: undefined,
+      dialog: undefined,
+    });
+  });
+
   it("reads aria-checked the way Chromium does, mixed where the role has it", () => {
     expect(
       stateById(
@@ -1753,6 +1959,9 @@ describe("extractDomTree", () => {
         <select id="rows-true" size="3" aria-label="f4" aria-expanded="true"><option>o</option></select>
         <select id="button" role="button" aria-label="g" aria-expanded="true"><option>o</option></select>
         <select id="button-false" role="button" aria-label="h" aria-expanded="false"><option>o</option></select>
+        <select id="tab" role="tab" aria-label="i" aria-expanded="true"><option>o</option></select>
+        <select id="menu" role="menu" aria-label="j" aria-expanded="true"><option>o</option></select>
+        <select id="heading" role="heading" aria-label="k" aria-expanded="true"><option>o</option></select>
       `,
         "expanded",
       ),
@@ -1770,9 +1979,13 @@ describe("extractDomTree", () => {
       "listbox-plain": undefined,
       rows: undefined,
       "rows-true": undefined,
-      // An author role that isn't the select's own reads it as usual.
+      // An author role that isn't the select's own reads it as usual, if
+      // Chromium gives that role an expanded state.
       button: true,
       "button-false": false,
+      tab: true,
+      menu: undefined,
+      heading: undefined,
     });
   });
 
@@ -1832,6 +2045,7 @@ describe("extractDomTree", () => {
         <details open><summary id="heading" role="heading" aria-level="2" aria-expanded="true">m</summary>x</details>
         <details open><summary id="generic" role="generic" aria-expanded="true">n</summary>x</details>
         <details open><summary id="radio" role="radio">o</summary>x</details>
+        <details open><summary>o</summary><summary id="second-heading" role="heading">p</summary></details>
       `,
         "expanded",
       ),
@@ -1853,6 +2067,32 @@ describe("extractDomTree", () => {
       heading: undefined,
       generic: undefined,
       radio: undefined,
+      "second-heading": undefined,
+    });
+  });
+
+  it("gives a <details> no expanded state, unless a role reads aria-expanded", () => {
+    expect(
+      stateById(
+        `
+        <details id="open" open><summary>a</summary>x</details>
+        <details id="closed"><summary>b</summary>x</details>
+        <details id="open-false" open aria-expanded="false"><summary>c</summary>x</details>
+        <details id="button" role="button" aria-expanded="true"><summary>d</summary>x</details>
+        <details id="button-open" role="button" open aria-expanded="false"><summary>e</summary>x</details>
+        <details id="button-unset" role="button" open><summary>f</summary>x</details>
+      `,
+        "expanded",
+      ),
+    ).toEqual({
+      // The summary carries the state, not the group around it.
+      open: undefined,
+      closed: undefined,
+      "open-false": undefined,
+      // In an expandable role, aria-expanded decides and `open` never does.
+      button: true,
+      "button-open": false,
+      "button-unset": undefined,
     });
   });
 
