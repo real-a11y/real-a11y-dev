@@ -198,7 +198,8 @@ main
       code "viteFinal"
   separator
   heading "Panel features" (level 2)
-  paragraph "Inside every story's panel: search, role filters, focus tracking, scoping, live region monitoring, keyboard navigation. Same UI as the Chrome extension and inspector — see the shared reference for what each control does and when to reach for it."
+  paragraph "Inside every story's panel: search, role filters, focus tracking, scoping, keyboard navigation. Same UI as the Chrome extension and inspector — see the shared reference for what each control does and when to reach for it. The addon has no ; only the Chrome extension does."
+    link "live region log"
   paragraph "→"
     link "Panel features reference"
 contentinfo

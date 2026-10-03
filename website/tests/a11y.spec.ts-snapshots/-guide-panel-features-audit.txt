@@ -20,13 +20,14 @@ navigation "On this page"
 main
   heading "Panel features" (level 1)
   blockquote
-    paragraph "These behaviors are — the , the embed, the , and the . If a feature exists in one, it exists in all of them. Where the per-package APIs differ, this page calls out which prop / option to reach for."
+    paragraph "Most of these behaviors are — the , the embed, the , and the . A few exist only in the Chrome extension, and their sections say so — is one. Where the per-package APIs differ, this page calls out which prop / option to reach for."
       strong "shared across every Real A11y surface"
       link "Chrome extension"
       link "@real-a11y-dev/inspector"
         code "@real-a11y-dev/inspector"
       link "React component"
       link "Storybook addon"
+      link "live region monitoring"
   separator
   heading "Search" (level 2)
   paragraph "A live filter over the tree. Matches on , , , , and . Type "email" → every input, label, and heading whose name or content contains "email" stays visible; everything else collapses. Clearing the field restores the full tree."
@@ -235,16 +236,19 @@ main
     code "[role="dialog"]"
   separator
   heading "Live region monitoring" (level 2)
-  paragraph "When a live region on the page changes or is shown, its new text appears in the panel's live log in real time, labeled or . A live region is a , or , or anything with or ; silences even an alert. The text is what a screen reader would announce: nothing hidden or , and never a form field's markup text. Text a region already held when the panel opened is not logged until it changes."
-    emphasis "polite"
-    emphasis "assertive"
+  paragraph "The , React and Storybook addon panels have no live log; nothing in them watches the page's live regions."
+    strong "Chrome extension only."
+    code "inspector"
+    code "<SemanticNavigator />"
+  paragraph "While the side panel is open, when a live region on the page changes or is shown, its new text appears in the live log at the bottom of the side panel. A live region is a , or , or anything with or ; silences even an alert. Each entry shows the region's role ( for an element with no role), then its text. Assertive entries are marked red, polite ones blue. The log holds the last five entries, and each clears after 8 seconds."
     code "role="status""
     code "role="log""
     code "role="alert""
     code "aria-live="polite""
     code ""assertive""
     code "aria-live="off""
-    code "aria-hidden"
+    code "status"
+    code "aria-live"
   paragraph "Use this to verify:"
   list
     listitem "announce on appearance"
@@ -255,6 +259,8 @@ main
       strong "Loading indicators"
     listitem "announce as you type"
       strong "Search-result counts"
+  paragraph "An entry's text is what a screen reader could announce: nothing hidden or , and never a form field's markup text. Text a region already held when the panel opened is not logged until it changes. Even so, the log approximates a screen reader rather than recording one. Each entry carries the region's whole text after the change, not only the part that changed. Changes within 200 ms collapse into one entry. Only the top frame is watched, so a live region inside an iframe never appears."
+    code "aria-hidden"
   table
     rowgroup
       row
@@ -267,10 +273,10 @@ main
       row
         cell "inspector / React"
           code "inspector"
-        cell "Bottom of the panel by default"
+        cell "Not available"
       row
         cell "Storybook addon"
-        cell "Inside the panel — same position"
+        cell "Not available"
   separator
   heading "Keyboard navigation" (level 2)
   paragraph "The panel itself is fully keyboard-operable."

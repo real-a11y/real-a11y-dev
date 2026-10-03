@@ -10,6 +10,7 @@ link "Chrome extension"
 link "@real-a11y-dev/inspector"
 link "React component"
 link "Storybook addon"
+link "live region monitoring"
 table
 table
 table

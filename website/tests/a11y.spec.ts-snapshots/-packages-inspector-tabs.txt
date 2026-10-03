@@ -27,6 +27,7 @@ generic
 button "Copy Code"
 generic
 link "examples/vanilla/"
+link "live region log"
 link "Panel features reference"
 link "Edit this page on GitHub"
 link "Previous page Overview & Install"
