@@ -5892,3 +5892,93 @@ describe("the form landmark in the extracted tree", () => {
     }
   });
 });
+
+describe("the sr-only clip-path signature", () => {
+  const isHiddenOf = (name: string): boolean | undefined =>
+    [...extractDomTree(document.body).nodes.values()].find(
+      (n) => n.a11y.name === name,
+    )?.dom?.isHidden;
+
+  // Insets that meet or cross leave nothing painted, which is what the
+  // visually-hidden idiom relies on. A zero inset counts in any unit, and a
+  // reference box or an unreadable sibling component does not get in the way
+  // of a pair that already collapses -- the prefix match caught all of these.
+  it.each([
+    "inset(50%)",
+    "inset(100%)",
+    "inset(50% 0)",
+    "inset(0 100%)",
+    "inset(100% 0 0 0)",
+    "inset(100% 0px 0px 0px)",
+    "inset(50%) margin-box",
+    "border-box inset(100%)",
+    "inset(50% calc(1px))",
+  ])("reads %s as the visually-hidden idiom", (clipPath) => {
+    document.body.innerHTML = `
+        <main>
+          <p style="position:absolute;clip-path:${clipPath}">Announced only</p>
+        </main>`;
+    expect(isHiddenOf("Announced only")).toBe(true);
+  });
+
+  // A crop that leaves the box painted is decoration, not hiding. Lengths
+  // never prove a collapse, whatever they look like next to a percentage.
+  it.each([
+    "inset(10px)",
+    "inset(1px)",
+    "inset(1em)",
+    "inset(50px)",
+    "inset(15%)",
+    "inset(12%)",
+    "inset(5%)",
+    "inset(10% 20%)",
+    "inset(10px round 5px)",
+  ])("leaves a still-visible %s crop visible", (clipPath) => {
+    document.body.innerHTML = `
+      <main>
+        <p style="position:absolute;clip-path:${clipPath}">Decorative crop</p>
+      </main>`;
+    expect(isHiddenOf("Decorative crop")).toBe(false);
+  });
+
+  // Such a node is not exposed to AT on its own, so `dom.isHidden` alone
+  // decided whether the tree walk kept it.
+  it("keeps an unnamed generic whose crop leaves it visible", () => {
+    document.body.innerHTML = `
+      <main>
+        <div style="position:absolute;clip-path:inset(10px)">
+          <p>Inside a decorative crop</p>
+        </div>
+      </main>`;
+    const generic = [...extractDomTree(document.body).nodes.values()].find(
+      (n) => n.a11y.role === "generic" && n.dom?.tagName === "div",
+    );
+    expect(generic?.dom?.isHidden).toBe(false);
+  });
+
+  // Only `inset()` is read, and only when the measured component is a plain
+  // percentage or zero. Everything else answers no: unread is safer than
+  // guessed at, since a wrong yes hides something that is drawn. `circle(0)`
+  // does collapse the box and is a known gap, not a value this fix changed.
+  it.each(["inset(calc(50% + 1px))", "circle(0)", "none", "inset(50px 50px)"])(
+    "does not read %s as the idiom",
+    (clipPath) => {
+      document.body.innerHTML = `
+        <main>
+          <p style="position:absolute;clip-path:${clipPath}">Unmeasured</p>
+        </main>`;
+      expect(isHiddenOf("Unmeasured")).toBe(false);
+    },
+  );
+
+  // The classic half of the signature is unchanged by any of this.
+  it("still reads clip:rect(0,0,0,0) on a 1px box as the idiom", () => {
+    document.body.innerHTML = `
+      <main>
+        <p style="position:absolute;width:1px;height:1px;clip:rect(0,0,0,0)">
+          Announced only
+        </p>
+      </main>`;
+    expect(isHiddenOf("Announced only")).toBe(true);
+  });
+});

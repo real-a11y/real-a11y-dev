@@ -409,14 +409,51 @@ function isSrOnly(
 
   // Modern: clip-path: inset(50%) or inset(100%)
   const clipPath = computed.clipPath;
-  if (
-    clipPath &&
-    (clipPath.startsWith("inset(5") || clipPath.startsWith("inset(1"))
-  ) {
-    return true;
-  }
+  if (clipPath && insetCollapsesBox(clipPath)) return true;
 
   return false;
+}
+
+/**
+ * Does a `clip-path: inset(...)` provably leave nothing painted?
+ *
+ * The visually-hidden idiom is `inset(50%)` or `inset(100%)`: insets that meet
+ * or cross, so the box clips away to nothing. Only a percentage proves that
+ * without knowing the box's size, so a length never counts however large it
+ * reads -- `inset(10px)` crops a decorative edge off an element that stays
+ * fully visible, and matching it marked that element `dom.isHidden`.
+ *
+ * The shorthand expands the CSS way: one value is all four sides, two is
+ * vertical then horizontal, three adds bottom, four is top/right/bottom/left.
+ * A reference box (`inset(50%) margin-box`) sits outside the shape, so it is
+ * read out of the middle of the value rather than off the front.
+ *
+ * Only `inset()` is read. Another shape that collapses the box -- `circle(0)`
+ * -- answers no, as does a `calc()` in the component being measured: unread is
+ * safer here than guessed at, since a wrong yes hides something that is drawn.
+ */
+function insetCollapsesBox(clipPath: string): boolean {
+  const inset = /inset\(([^)]*)\)/.exec(clipPath);
+  if (!inset) return false;
+
+  // `round <border-radius>` only rounds the corners of the same box.
+  const sides = inset[1]
+    .split(/\s+round\s+/)[0]
+    .trim()
+    .split(/\s+/);
+  if (sides.length > 4) return false;
+  const [top, right = top, bottom = top, left = right] = sides;
+
+  // A zero inset is zero in any unit, so it reads alongside a percentage --
+  // without it, `inset(100% 0 0 0)` would answer no over its `0`s.
+  const edge = (value: string): number => {
+    const length = parseFloat(value);
+    return length === 0 || value.endsWith("%") ? length : NaN;
+  };
+  const meetInTheMiddle = (near: string, far: string): boolean =>
+    edge(near) + edge(far) >= 100;
+
+  return meetInTheMiddle(top, bottom) || meetInTheMiddle(left, right);
 }
 
 /** Check if an element is visually hidden (computed styles) */
