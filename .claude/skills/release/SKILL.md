@@ -163,7 +163,7 @@ Then **inspect before trusting it**:
 ### 4. Gates
 
 ```bash
-pnpm verify              # build + typecheck + format:check + lint + test + website build
+pnpm verify              # build + typecheck + format:check + lint + surface:check + test + test:scripts + website build + surface:check-built
 pnpm packaging:check     # publint + attw on every package — catches broken exports/types
 ```
 

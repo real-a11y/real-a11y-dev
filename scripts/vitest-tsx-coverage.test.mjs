@@ -100,8 +100,8 @@ async function findTestTsx(dir) {
  * The test files vitest would collect in `packageDir`, as paths relative to it.
  *
  * Spawned as `node <vitest.mjs>` rather than through `node_modules/.bin`, which
- * is a shell script on POSIX and a `.CMD` on Windows — this repo's `pre-push`
- * hook runs the whole gate locally, so a Windows contributor runs this too.
+ * is a shell script on POSIX and a `.CMD` on Windows — a Windows contributor
+ * runs `pnpm verify` locally before pushing, so this runs there too.
  */
 async function collectedTestFiles(packageDir) {
   const require = createRequire(join(packageDir, "/"));
