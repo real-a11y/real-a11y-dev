@@ -57,7 +57,7 @@ Example output:
 ```
 main
   heading "Sign in" (level 1)
-  form
+  form "Sign in"
     group "Credentials"
       textbox "Email address"
       textbox "Password"

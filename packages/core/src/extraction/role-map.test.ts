@@ -93,8 +93,11 @@ describe("getImplicitRole", () => {
     expect(getImplicitRole(el("<table></table>"))).toBe("table");
   });
 
-  it("returns form for <form>", () => {
-    expect(getImplicitRole(el("<form></form>"))).toBe("form");
+  it("returns form for <form> with an accessible name", () => {
+    expect(getImplicitRole(el('<form aria-label="Search"></form>'))).toBe(
+      "form",
+    );
+    expect(getImplicitRole(el('<form title="Search"></form>'))).toBe("form");
   });
 
   it("returns img for <img> with alt", () => {
@@ -705,6 +708,64 @@ describe("getImplicitRole", () => {
     expect(getImplicitRole(el("<section></section>"))).toBe("generic");
   });
 
+  it("returns generic for <form> without accessible name", () => {
+    expect(getImplicitRole(el("<form></form>"))).toBe("generic");
+  });
+
+  // A naming attribute only counts when it can produce a name. Chromium
+  // exposes neither a form nor a region for any of these.
+  describe("a naming attribute that names nothing", () => {
+    const named = (html: string) => {
+      const host = document.createElement("div");
+      host.innerHTML = html;
+      document.body.appendChild(host);
+      try {
+        return getImplicitRole(host.querySelector("#t")!);
+      } finally {
+        host.remove();
+      }
+    };
+
+    it.each(["form", "section"])(
+      "leaves a blank-labelled <%s> generic",
+      (tag) => {
+        expect(named(`<${tag} id="t" aria-label="   "></${tag}>`)).toBe(
+          "generic",
+        );
+        expect(named(`<${tag} id="t" title=" "></${tag}>`)).toBe("generic");
+      },
+    );
+
+    it.each(["form", "section"])(
+      "leaves a <%s> whose aria-labelledby resolves to nothing generic",
+      (tag) => {
+        expect(
+          named(`<${tag} id="t" aria-labelledby="missing"></${tag}>`),
+        ).toBe("generic");
+        expect(named(`<${tag} id="t" aria-labelledby="  "></${tag}>`)).toBe(
+          "generic",
+        );
+      },
+    );
+
+    it.each([
+      ["form", "form"],
+      ["section", "region"],
+    ])("still names a <%s> by a reference that resolves", (tag, role) => {
+      expect(
+        named(
+          `<span id="lbl">Payment</span><${tag} id="t" aria-labelledby="lbl"></${tag}>`,
+        ),
+      ).toBe(role);
+      // One resolving IDREF among several is enough, as for the real name.
+      expect(
+        named(
+          `<span id="lbl">Payment</span><${tag} id="t" aria-labelledby="gone lbl"></${tag}>`,
+        ),
+      ).toBe(role);
+    });
+  });
+
   it("uses explicit role attribute when present", () => {
     expect(getImplicitRole(el('<div role="alert">Warning</div>'))).toBe(
       "alert",
@@ -763,9 +824,27 @@ describe("getImplicitRole", () => {
     }
 
     it("resolves the form's own role", () => {
+      // Unnamed, so not a landmark — but still the form's OWN role, read
+      // through the clobber, rather than the input's or a throw.
       const form = shadowedForm();
-      expect(getImplicitRole(form)).toBe("form");
+      expect(getImplicitRole(form)).toBe("generic");
       expect(isHiddenFromAT(form)).toBe(false);
+
+      const named = shadowedForm();
+      named.setAttribute("aria-label", "Payment");
+      expect(getImplicitRole(named)).toBe("form");
+    });
+
+    // The landmark gate reads naming attributes off the form itself, and
+    // `<input name="getAttribute">` shadows the reader those reads go through.
+    it("resolves the form's role when a control shadows getAttribute", () => {
+      const form = el(
+        `<form aria-label="Payment"><input name="getAttribute"></form>`,
+      ) as HTMLFormElement;
+      shadow(form, "getAttribute");
+
+      expect(() => getImplicitRole(form)).not.toThrow();
+      expect(getImplicitRole(form)).toBe("form");
     });
 
     // The parser never puts a <th> or a <tr> straight into a form; a script

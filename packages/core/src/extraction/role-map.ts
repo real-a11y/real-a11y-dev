@@ -7,6 +7,7 @@
 import { isAriaHiddenValue } from "./aria-tokens.js";
 import {
   safeGetAttribute,
+  safeGetElementById,
   safeHidden,
   safeQuerySelectorAll,
   safeTagName,
@@ -135,11 +136,39 @@ function isAreaHiddenFromAT(area: Element): boolean {
   return false;
 }
 
+/**
+ * Whether a naming attribute can actually produce a name — the gate on the
+ * `form` and `region` roles, which exist only when the element is named.
+ *
+ * Presence is not enough, the same way it is not enough for `voidsPresentation`
+ * below: `aria-label="  "` states nothing, and an `aria-labelledby` whose every
+ * IDREF resolves to no element names nothing either. Chromium exposes neither a
+ * form nor a region in those cases, so neither does this.
+ *
+ * `title` counts, which is worth recording because axe-core's default for
+ * these two roles does not count it (it opts in explicitly for `<aside>`).
+ * Chromium does: `<form title="Titled">` comes back as `form "Titled"` in its
+ * own tree, measured over CDP against Chromium 141, so this follows Chromium.
+ *
+ * It stops at whether a target EXISTS. Whether that target contributes any text
+ * is the accessible-name computation, which runs after role resolution and
+ * reads the role — asking it here would be circular. So the one case this still
+ * calls named is a reference to an element that resolves but renders nothing
+ * (`aria-labelledby="x"` with an empty `<span id="x">`).
+ */
 function hasAccessibleName(el: Element): boolean {
-  return !!(
-    el.getAttribute("aria-label") ||
-    el.getAttribute("aria-labelledby") ||
-    el.getAttribute("title")
+  const labelledBy = safeGetAttribute(el, "aria-labelledby")?.trim();
+  if (
+    labelledBy &&
+    labelledBy
+      .split(/\s+/)
+      .some((id) => safeGetElementById(idScope(el), id) !== null)
+  ) {
+    return true;
+  }
+  return (
+    hasMeaningfulAttribute(el, "aria-label") ||
+    hasMeaningfulAttribute(el, "title")
   );
 }
 
@@ -356,7 +385,10 @@ const ROLE_MAP: Record<string, RoleResolver> = {
   // roles (what Chromium exposes too). The a11y view still flattens a bare
   // one — see SECTION_HEADER_FOOTER_ROLES in a11y-extractor.ts.
   footer: (el) => (isLandmarkContext(el) ? "contentinfo" : "sectionfooter"),
-  form: "form",
+  // Per WAI-ARIA in HTML a <form> is the form landmark only when it has an
+  // accessible name; unnamed, it is generic. Chromium agrees — it does not
+  // expose an unnamed form at all (see core/src/native/ax-vocabulary.ts).
+  form: (el) => (hasAccessibleName(el) ? "form" : "generic"),
   h1: "heading",
   h2: "heading",
   h3: "heading",
@@ -470,9 +502,14 @@ export const GLOBAL_ARIA_ATTRIBUTES = [
   "aria-roledescription",
 ];
 
-/** True when `attr` is present on `element` with a non-blank value. */
+/**
+ * True when `attr` is present on `element` with a non-blank value.
+ *
+ * Clobber-safe: its callers run on a `<form>`, which lets `<input name="title">`
+ * shadow the attribute reader itself.
+ */
 function hasMeaningfulAttribute(element: Element, attr: string): boolean {
-  return !!element.getAttribute(attr)?.trim();
+  return !!safeGetAttribute(element, attr)?.trim();
 }
 
 /**

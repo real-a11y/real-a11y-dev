@@ -22,6 +22,15 @@
 
 ## Unreleased
 
+- In DOM mode, a `<form>` is a `form` landmark only when it has an
+  accessible name, as in NATIVE mode — Chromium does not expose an unnamed
+  form at all. An unnamed one is a `generic`, so it leaves the panel's
+  landmark list and, like any generic, shows its own loose text. The naming
+  check behind both this and `<section>` → `region` now also requires a name
+  that can resolve: `aria-label="   "` and an `aria-labelledby` pointing at
+  no element no longer make a landmark.
+  ([#468](https://github.com/real-a11y/real-a11y-dev/pull/468))
+
 - In DOM mode, the `expanded` and `collapsed` badges now show only where
   NATIVE mode shows them: on a button, link, tab, combobox, checkbox, switch,
   menu item, tree item, row, grid cell, column or row header, list item or

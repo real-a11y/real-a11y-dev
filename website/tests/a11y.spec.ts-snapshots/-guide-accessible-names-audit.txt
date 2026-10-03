@@ -76,11 +76,13 @@ main
   heading "Dialog with text but no label" (level 3)
   button "Copy Code"
   code
-  paragraph "→ — no name. A dialog's text is its content, not its label: a screen reader announces this dialog unnamed. The same holds for an image, a landmark (, , …) and a text field, whose text is the user's value. This fails . Fix it by pointing at a visible heading:"
+  paragraph "→ — no name. A dialog's text is its content, not its label: a screen reader announces this dialog unnamed. The same holds for an image, a landmark (, , …) and a text field, whose text is the user's value. (An unnamed is not a landmark at all — it is a generic, and a generic take its loose text.) This fails . Fix it by pointing at a visible heading:"
     code """"
     code "<nav>"
-    code "<form>"
+    code "<aside>"
     code "<footer>"
+    code "<form>"
+    emphasis "does"
     code "assertDialogsLabeled()"
     code "aria-labelledby"
   button "Copy Code"
