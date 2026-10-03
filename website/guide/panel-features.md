@@ -95,7 +95,19 @@ Scoping affects:
 
 ### Dialog auto-scope
 
-When the page opens a `<dialog>` or `[role="dialog"]`, the panel automatically scopes into it. A "Dialog: …" indicator appears with the dialog's accessible name. This is what a screen reader user effectively gets — the rest of the page becomes inert and the dialog is the only thing they can navigate. Verifying that auto-scope works correctly (proper labeling, focus trap, escape to close) is one of the highest-value audits the panel enables.
+When the page opens a `<dialog>` with `showModal()`, the tree re-roots to that dialog: the dialog becomes the root row, and the page behind it drops out. This is what a screen reader user effectively gets. The browser makes the rest of the page inert, and the dialog is the only thing they can navigate.
+
+Only a modal `<dialog>` does this. A `<dialog>` opened with `show()`, or an element with `role="dialog"` or `aria-modal="true"`, does not re-root the tree, and the page stays in the tree around it. Dialog libraries such as Radix, MUI and Headless UI hide the rest of the page with `aria-hidden` or `inert`, so that content drops out of the tree too. The tree then shows the dialog alone, but its root is still the page, not the dialog, so the extension shows no **Dialog: …** bar for it.
+
+The re-rooting is shared: every panel builds its tree with the same extractor. What the panel shows around it differs.
+
+| Surface | When a modal `<dialog>` opens |
+|---|---|
+| Chrome extension | A **Dialog: …** bar appears above the tree with the dialog's accessible name. A dialog with no name reads **Dialog: Modal**. The bar's **Press ESC** button sends Escape to the page and closes the dialog, unless a page handler calls `preventDefault()` |
+| `inspector` / React `<SemanticNavigator />` | No indicator. The dialog is the tree's root row. The panel is part of the page, so it goes inert along with everything else behind the dialog: you can't click, focus or type in it until the dialog closes. In React, [`useActiveModal()`](/packages/react#useactivemodal-rootref) returns the dialog's node if you want to render your own indicator |
+| Storybook addon | No indicator. The dialog is the tree's root row. The panel lives in Storybook's manager, outside the story's iframe, so it stays usable while the dialog is open |
+
+The dialog's name is the first thing to check: it is the root row's name, and in the extension it is also in the bar. The panel doesn't test that focus stays in the dialog or that Escape closes it. Those are the dialog's own behavior, so check them by hand: Tab through the dialog, then press Escape. In the extension, the keyboard bar's `Tab` and `Esc` buttons do both from the side panel.
 
 ---
 

@@ -117,7 +117,7 @@ When something is hard to locate, hard to understand, or impossible to complete,
 
 ## What's unique to the Chrome extension
 
-The extension surfaces the same engine as `@real-a11y-dev/inspector`, `@real-a11y-dev/react`, and `@real-a11y-dev/storybook-addon`. Everything *about reading the tree* is shared across those — see [the panel features guide](/guide/panel-features) for filters, search, focus tracking, and scoping. The [live region log](/guide/panel-features#live-region-monitoring) is the exception: only the extension's side panel has one.
+The extension surfaces the same engine as `@real-a11y-dev/inspector`, `@real-a11y-dev/react`, and `@real-a11y-dev/storybook-addon`. Everything *about reading the tree* is shared across those — see [the panel features guide](/guide/panel-features) for filters, search, focus tracking, and scoping. Two things are exceptions, and only the extension's side panel has them: the [live region log](/guide/panel-features#live-region-monitoring), and the **Dialog: …** bar that names a modal dialog when the tree [re-roots to it](/guide/panel-features#dialog-auto-scope).
 
 What only an extension can give you is the handful of capabilities that require a browser extension to reach across tabs and frames. The [screen curtain](#the-screen-curtain) above is one; here are the rest:
 
