@@ -155,6 +155,7 @@ describe("computeFieldState", () => {
           `<script>window.editorState = {}</script>` +
           `<span style="display: none">draft-id-42</span>` +
           `<span style="visibility: hidden">ghost</span>` +
+          `<video>Your browser does not support video</video>` +
           `<span aria-hidden="true">@</span>world</div>`,
       );
       expect(computeFieldState(el)).toMatchObject({ value: "Hello @world" });

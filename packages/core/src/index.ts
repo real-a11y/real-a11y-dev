@@ -33,7 +33,6 @@ export type {
 
 // Extraction
 export {
-  CONTROL_TEXT_TAGS,
   extractDomTree,
   finishAnnouncedValue,
   getAnnouncedValue,
@@ -52,14 +51,18 @@ export { buildA11yTree, extractA11yTree } from "./extraction/a11y-extractor.js";
 export { safeParentElement } from "./extraction/clobber-safe.js";
 // For the extension's own reads of a page's text — a live region's
 // announcement, an editor's text — which walk the tree the way the DOM
-// producer does: the flat tree, what is rendered, what AT can reach.
+// producer does: the flat tree, what is rendered, what AT can reach, and the
+// same elements skipped, read through the same clobber-safe accessors.
+export { ignoresChildText, isTextVisible } from "./extraction/dom-extractor.js";
 export {
   flatChildNodes,
   isRenderedInFlatTree,
   renderingParent,
 } from "./extraction/flat-tree.js";
 export { isAriaHiddenValue } from "./extraction/aria-tokens.js";
+export { safeGetAttribute, safeNodeType } from "./extraction/clobber-safe.js";
 export {
+  getExplicitRole,
   getImplicitRole,
   isDatalistCombobox,
   isHiddenFromAT,

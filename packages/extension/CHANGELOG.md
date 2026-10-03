@@ -31,18 +31,31 @@
   its input panel with the number in it.
 
   The log also shows what a screen reader would announce now, not every
-  character in the region. It leaves out `aria-hidden`, `hidden`, `inert`,
-  `display: none` and `visibility: hidden` content (a child that is
-  `visibility: visible` again still reads), `<script>` and `<style>` text, a
-  `<select>`'s options, a `<datalist>`'s suggestions and a closed
-  `<details>`' body; it reads a region's shadow tree as it renders, slotted
-  content included; and it logs nothing for a region that is hidden, or sits
-  inside something hidden. A region marked `aria-live="off"` is not one,
-  whatever its role, and neither is a bare `aria-live` without a live role.
-  It also logs a region only when something in it
-  changes: a region's existing text was logged the first time anything on
-  the page changed after the panel opened. The input panel likewise opens
-  with only the text the editor renders.
+  character in the region:
+
+  - It leaves out `aria-hidden`, `hidden`, `inert`, `display: none` and
+    `visibility: hidden` content (a child that is `visibility: visible` again
+    still reads), `<script>` and `<style>` text, a `<select>`'s options, a
+    `<datalist>`'s suggestions, `<video>` and `<audio>` fallback text and a
+    closed `<details>`' body, and reads a region's shadow tree as it renders.
+    The input panel likewise opens with only the text the editor renders.
+  - It logs nothing for a region that is hidden or sits inside something
+    hidden, slots included, and logs one the moment the page shows it, by an
+    attribute, a class or a style, each time it does: an alert already filled
+    in and then revealed was never logged unless something else on the page
+    changed.
+  - It reads a region the way the tree does. `aria-live="off"` silences any
+    role, a bare `aria-live` leaves it to the role, and the role is the first
+    one recognised in any case (`role="Status"`, `role="toast alert"`). An
+    explicit `aria-live` sets the level over the role's own, in any case too:
+    `role="alert" aria-live="polite"` is polite, and `aria-live="Assertive"`
+    is assertive.
+  - It logs a region only when something in it changes, or it is shown. A
+    region's existing text was logged the first time anything on the page
+    changed after the panel opened.
+
+  A change made inside a shadow tree, rather than to content slotted into
+  one, is still not watched.
   ([#477](https://github.com/real-a11y/real-a11y-dev/pull/477))
 
 - In DOM mode, a `<form>` with a field named `hasAttribute` is no longer

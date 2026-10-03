@@ -101,7 +101,7 @@ When the page opens a `<dialog>` or `[role="dialog"]`, the panel automatically s
 
 ## Live region monitoring
 
-Every `aria-live` region update, `role="status"` change, and `role="alert"` on the page appears in the panel's live log in real time, labeled *polite* or *assertive*. The order, timing, and content are what a screen reader would announce.
+When a live region on the page changes or is shown, its new text appears in the panel's live log in real time, labeled *polite* or *assertive*. A live region is a `role="status"`, `role="log"` or `role="alert"`, or anything with `aria-live="polite"` or `"assertive"`; `aria-live="off"` silences even an alert. The text is what a screen reader would announce: nothing hidden or `aria-hidden`, and never a form field's markup text. Text a region already held when the panel opened is not logged until it changes.
 
 Use this to verify:
 - **Toast notifications** announce on appearance

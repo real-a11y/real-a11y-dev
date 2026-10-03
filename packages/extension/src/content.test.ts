@@ -444,10 +444,16 @@ describe("content: live regions", () => {
   });
 
   /** Replace region `id`'s content and let the observer's debounce run. */
-  async function announce(id: string, html: string): Promise<unknown[]> {
-    document.getElementById(id)!.innerHTML = html;
+  /** Let the observer's debounce run; then every region logged so far. */
+  async function flush(): Promise<unknown[]> {
     await vi.advanceTimersByTimeAsync(500);
     return h.sent.filter((m) => m.type === "LIVE_REGION").map((m) => m.payload);
+  }
+
+  /** Replace region `id`'s content, then {@link flush}. */
+  async function announce(id: string, html: string): Promise<unknown[]> {
+    document.getElementById(id)!.innerHTML = html;
+    return await flush();
   }
 
   it("reports a region's text", async () => {
@@ -468,10 +474,9 @@ describe("content: live regions", () => {
       "beforeend",
       `<section><div role="alert">Session expired</div></section>`,
     );
-    await vi.advanceTimersByTimeAsync(500);
-    expect(
-      h.sent.filter((m) => m.type === "LIVE_REGION").map((m) => m.payload),
-    ).toEqual([{ text: "Session expired", level: "assertive", role: "alert" }]);
+    expect(await flush()).toEqual([
+      { text: "Session expired", level: "assertive", role: "alert" },
+    ]);
   });
 
   it("never sends a sensitive textarea's markup text", async () => {
@@ -616,9 +621,125 @@ describe("content: live regions", () => {
         get: () => form.querySelector(`[name="${name}"]`),
       });
     }
-    await vi.advanceTimersByTimeAsync(500);
-    expect(
-      h.sent.filter((m) => m.type === "LIVE_REGION").map((m) => m.payload),
-    ).toEqual([{ text: "Sent", level: "polite", role: "status" }]);
+    expect(await flush()).toEqual([
+      { text: "Sent", level: "polite", role: "status" },
+    ]);
+  });
+
+  it("still logs a batch when the region itself is such a form", async () => {
+    // Every read of the region goes through a clobber-safe accessor too: one
+    // plain `region.getAttribute` threw, and the batch's other regions went
+    // unlogged with it.
+    document.body.insertAdjacentHTML(
+      "beforeend",
+      `<form id="form" role="status"><input name="getAttribute"></form>`,
+    );
+    await flush();
+    const form = document.getElementById("form")!;
+    Object.defineProperty(form, "getAttribute", {
+      configurable: true,
+      get: () => form.querySelector('[name="getAttribute"]'),
+    });
+    form.append("Sent");
+    document.getElementById("polite")!.textContent = "Saved";
+    expect(await flush()).toEqual([
+      { text: "Sent", level: "polite", role: "status" },
+      { text: "Saved", level: "polite", role: "status" },
+    ]);
+  });
+
+  it("reads a role the way core does", async () => {
+    // The first token core recognises, in any case; an explicit aria-live
+    // decides the level over the role's, in any case too.
+    document.body.insertAdjacentHTML(
+      "beforeend",
+      `<div id="upper" role="Status"></div>` +
+        `<div id="toast" role="toast alert"></div>` +
+        `<div id="loud" aria-live="Assertive"></div>` +
+        `<div id="quiet" role="alert" aria-live="polite"></div>`,
+    );
+    await flush();
+    for (const [id, text] of [
+      ["upper", "One"],
+      ["toast", "Two"],
+      ["loud", "Three"],
+      ["quiet", "Four"],
+    ]) {
+      document.getElementById(id)!.textContent = text!;
+    }
+    expect(await flush()).toEqual([
+      { text: "One", level: "polite", role: "status" },
+      { text: "Two", level: "assertive", role: "alert" },
+      { text: "Three", level: "assertive", role: "status" },
+      { text: "Four", level: "polite", role: "alert" },
+    ]);
+  });
+
+  it("logs an alert the page reveals, each time it does", async () => {
+    // Already filled, and shown by an attribute alone: Chromium announces it.
+    document.body.insertAdjacentHTML(
+      "beforeend",
+      `<div id="declined" role="alert" hidden>Card declined</div>`,
+    );
+    expect(await flush()).toEqual([]);
+    const alert = document.getElementById("declined")!;
+    alert.hidden = false;
+    expect(await flush()).toEqual([
+      { text: "Card declined", level: "assertive", role: "alert" },
+    ]);
+    h.sent.length = 0;
+    alert.hidden = true;
+    await flush();
+    alert.hidden = false;
+    expect(await flush()).toEqual([
+      { text: "Card declined", level: "assertive", role: "alert" },
+    ]);
+  });
+
+  it("logs a region a stylesheet class stops hiding", async () => {
+    document.head.insertAdjacentHTML(
+      "beforeend",
+      `<style id="sheet">.is-hidden { display: none }</style>`,
+    );
+    document.body.insertAdjacentHTML(
+      "beforeend",
+      `<div id="panel" class="is-hidden"><div role="status">Uploaded</div></div>`,
+    );
+    try {
+      expect(await flush()).toEqual([]);
+      document.getElementById("panel")!.className = "";
+      expect(await flush()).toEqual([
+        { text: "Uploaded", level: "polite", role: "status" },
+      ]);
+    } finally {
+      document.getElementById("sheet")!.remove();
+    }
+  });
+
+  it("logs text slotted into a region inside a shadow tree", async () => {
+    document.body.insertAdjacentHTML(
+      "beforeend",
+      `<div id="widget"><span>Idle</span></div>`,
+    );
+    document
+      .getElementById("widget")!
+      .attachShadow({ mode: "open" }).innerHTML =
+      `<div role="status"><slot></slot></div>`;
+    await flush();
+    h.sent.length = 0;
+    document.querySelector("#widget span")!.textContent = "Syncing";
+    expect(await flush()).toEqual([
+      { text: "Syncing", level: "polite", role: "status" },
+    ]);
+  });
+
+  it("reads no media fallback content", async () => {
+    const sent = await announce(
+      "status",
+      `<video>Your browser does not support video</video>Uploaded`,
+    );
+    expect(sent).toEqual([
+      { text: "Uploaded", level: "polite", role: "status" },
+    ]);
   });
 });

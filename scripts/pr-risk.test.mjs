@@ -464,9 +464,10 @@ describe("field-value redaction covers the extension's page-text reads", () => {
     // A `<textarea>`'s child text is its markup default — for a sensitive
     // field, the secret. The live-region observer sends what it reads to the
     // panel, so either edit puts that secret on the extension's message
-    // channel: dropping the tag names only the set, through the hunk header,
-    // and going back to raw `textContent` names only the helper it replaced.
-    const textPath = "packages/extension/src/page-text.ts";
+    // channel: dropping the tag from core's set names only the set, through
+    // the hunk header, and going back to raw `textContent` names only the
+    // helper it replaced.
+    const textPath = "packages/core/src/extraction/dom-extractor.ts";
     const text = `const CONTROL_TEXT_TAGS: ReadonlySet<string> = new Set([\n  "select",\n  "textarea",\n  "datalist",\n]);\n`;
     const contentPath = "packages/extension/src/content.ts";
     const content = `for (const region of regions) {\n  const text = pageText(region, { announced: true }).trim();\n  send(text);\n}\n`;
@@ -483,8 +484,8 @@ describe("field-value redaction covers the extension's page-text reads", () => {
 
     assert.equal(result.tier, "high");
     assert.deepEqual(evidenceFor(result, "field-value-redaction"), [
-      `${contentPath} → pageText`,
       `${textPath} → CONTROL_TEXT_TAGS`,
+      `${contentPath} → pageText`,
     ]);
   });
 });
