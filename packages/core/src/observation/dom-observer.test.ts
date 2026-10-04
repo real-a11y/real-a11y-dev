@@ -1239,7 +1239,8 @@ describe("DomObserver", () => {
 
     /**
      * jsdom never matches `:modal`, so make `dialog` match it while it is
-     * open, as one opened with showModal() does until it closes.
+     * open and in the document, as one opened with showModal() does until it
+     * closes or is removed.
      */
     function asModal(dialog: Element): void {
       const matches = Element.prototype.matches;
@@ -1248,7 +1249,7 @@ describe("DomObserver", () => {
         selector: string,
       ) {
         return selector === ":modal"
-          ? this === dialog && this.hasAttribute("open")
+          ? this === dialog && this.isConnected && this.hasAttribute("open")
           : matches.call(this, selector);
       });
     }
@@ -1411,6 +1412,32 @@ describe("DomObserver", () => {
       dlg.appendChild(document.createElement("p"));
       await settleObserver(100);
       expect(onTreeChange).not.toHaveBeenCalled();
+    });
+
+    // Moving it ends its modality, so a modal here was closed and shown again
+    // after the move, in the same task, before any observer callback ran.
+    it("keeps watching one that is a modal again after moving elsewhere outside the root", async () => {
+      document.body.innerHTML = `<main id="app"></main><div id="modal-root"><dialog id="dlg">x</dialog></div><div id="other"></div>`;
+      const dlg = document.getElementById("dlg")!;
+      asModal(dlg);
+      observeApp();
+      dlg.setAttribute("open", "");
+      await settleObserver(100);
+
+      document.getElementById("other")!.appendChild(dlg);
+      await settleObserver(100);
+      onTreeChange.mockClear();
+
+      dlg.appendChild(document.createElement("p"));
+      await settleObserver(100);
+      expect(onTreeChange).toHaveBeenCalledTimes(1);
+
+      // And its next removal, from the new parent, is heard too.
+      onTreeChange.mockClear();
+      dlg.remove();
+      await settleObserver(100);
+      expect(onTreeChange).toHaveBeenCalledTimes(1);
+      expect(onTreeChange.mock.calls[0][0].full).toBe(true);
     });
 
     it("stops watching inside it once it moves into the root", async () => {

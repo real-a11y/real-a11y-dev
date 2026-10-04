@@ -586,6 +586,10 @@ export class DomObserver {
       const observer = new MutationObserver((mutations) => {
         if (mutations.some((m) => [...m.removedNodes].includes(el))) {
           this.unobservePortalContent(el);
+          // Moved, then closed and shown as a modal again in the same task:
+          // the `open` flips were handled before this, while it still looked
+          // watched, so check it afresh under its new parent.
+          this.trackDialog(el);
           this.pendingFull = true;
           this.scheduleChange();
         }
