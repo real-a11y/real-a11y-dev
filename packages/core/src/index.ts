@@ -116,6 +116,28 @@ export {
 } from "./native/ax-vocabulary.js";
 export { normalizeNativeAX, serializeNativeAX } from "./native/ax-normalize.js";
 export type { NativeAXNode, RawNativeAXNode } from "./native/ax-normalize.js";
+// Where a withheld field's value reaches other nodes' names, and the rule that
+// keeps it out — shared by every native transport (@internal).
+export {
+  ancestry,
+  axValueText,
+  carriesAXValue,
+  holdsContent,
+  indexRaw,
+  nonEmptyAXText,
+  propertyOf,
+  valueRegions,
+  winningNameSource,
+  withholdRegionNames,
+  withholdSensitiveFieldNames,
+} from "./native/value-regions.js";
+export type {
+  AXNameSource,
+  AXPropertyValue,
+  RawAXNameNode,
+  RawIndex,
+  ValueRegions,
+} from "./native/value-regions.js";
 
 // Query helpers (for testing / audits / Storybook)
 export {
