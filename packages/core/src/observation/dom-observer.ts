@@ -241,10 +241,13 @@ export class DomObserver {
     // Idempotent: every field below is assigned unconditionally, so a second
     // `start()` on an already-armed observer would strand the first set of
     // observers and listeners with nothing left holding them. They would stay
-    // connected — recording into the same `pendingMutations` buffer, so one
-    // mutation arrives twice, and re-arming the same debounce — while
-    // `stop()` could only ever disconnect the set from the LAST `start()`,
-    // leaving the earlier ones observing for the life of the document.
+    // connected, recording into the same `pendingMutations` buffer, so one
+    // mutation arrives as duplicate entries in `change.mutations` (one
+    // callback per batch, not several — the sets share one debounce timer and
+    // each reset it). Worse, `stop()` could only ever disconnect the set from
+    // the LAST `start()`, so the earlier ones went on firing `onTreeChange`
+    // after the consumer tore the observer down, for the life of the
+    // document.
     //
     // A no-op rather than a `this.stop()` restart, deliberately. There is
     // nothing for a restart to pick up — `root` is fixed at construction —

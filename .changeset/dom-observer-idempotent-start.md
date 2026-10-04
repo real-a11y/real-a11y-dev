@@ -11,9 +11,9 @@
 
 `start()` builds the primary `MutationObserver`, the portal and popover observers, and the `input`/`change`/`toggle` listeners, assigning each to a field it overwrites unconditionally. Calling it again on an already-armed observer therefore left the previous set connected with nothing holding a reference to it:
 
-- Both sets recorded into the same `pendingMutations` buffer, so one DOM mutation reached `onTreeChange` twice, and each re-armed the same debounce.
-- `stop()` could only disconnect the set from the most recent `start()`. The earlier ones kept observing — and kept re-arming the debounce — for the life of the document, unreachable.
+- **`stop()` could not stop it.** It only ever disconnects the set from the most recent `start()`, so the earlier observers kept recording mutations and re-arming the shared debounce — firing `onTreeChange` after the consumer had torn the observer down, for the life of the document, unreachable.
 - The stranded `input`/`change` listeners stayed on the root for the same reason: `stop()` removes the listener identity it currently holds, and the later `start()` had already replaced it.
+- While armed, every stranded set recorded the same mutation into the same `pendingMutations` buffer, so one DOM mutation arrived as **duplicate entries in `change.mutations`**. The callback still fired once per batch — the sets share one debounce timer, and each reset it — so the symptom is a payload describing one change N times, not N callbacks.
 
 `start()` now returns early when it is already armed. A consumer that starts once is unaffected, and re-arming after a real `stop()` behaves as before.
 
