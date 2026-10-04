@@ -543,6 +543,87 @@ describe("DomObserver", () => {
     });
   });
 
+  // `start()` has to be idempotent because it is the arming step of a
+  // lifecycle a consumer drives, and nothing stops it being driven twice —
+  // a re-arm after a root swap, a double-mount, a reconnect. Each call used
+  // to construct a fresh set of observers and listeners over the OLD ones,
+  // which stayed connected with nothing left holding them: they kept
+  // recording mutations into the shared pending buffer and re-arming the
+  // shared debounce, and `stop()` could only ever tear down the last set.
+  describe("restart (start called twice without stop)", () => {
+    it("stop() after a second start() leaves nothing observing", async () => {
+      observer = new DomObserver(document.body, onTreeChange, 100);
+      observer.start();
+      observer.start();
+      observer.stop();
+
+      document.body.appendChild(document.createElement("div"));
+
+      await settleObserver(100);
+
+      expect(onTreeChange).not.toHaveBeenCalled();
+    });
+
+    it("stop() after a second start() removes the input listener", () => {
+      const input = document.createElement("input");
+      document.body.appendChild(input);
+
+      observer = new DomObserver(document.body, onTreeChange, 100);
+      observer.start();
+      observer.start();
+      observer.stop();
+
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      vi.advanceTimersByTime(110);
+
+      expect(onTreeChange).not.toHaveBeenCalled();
+    });
+
+    it("does not record one mutation twice after a second start()", async () => {
+      observer = new DomObserver(document.body, onTreeChange, 100);
+      observer.start();
+      observer.start();
+
+      document.body.appendChild(document.createElement("div"));
+
+      await settleObserver(100);
+
+      expect(onTreeChange).toHaveBeenCalledTimes(1);
+      const change = onTreeChange.mock.calls[0]![0] as TreeChange;
+      expect(change.mutations).toHaveLength(1);
+    });
+
+    // Why the guard is an early return and not a `this.stop()` restart:
+    // `portalObserver` adopts a portal only on the `childList` record that
+    // mounts it, so an overlay that is already open would never be re-adopted
+    // by the second `start()` — its interior would silently stop being
+    // observed, and the emptied-wrapper teardown keyed on
+    // `portalContentObservers` identity would lose its key too.
+    it("keeps observing an open portal's interior across a second start()", async () => {
+      const appRoot = document.createElement("div");
+      document.body.appendChild(appRoot);
+
+      observer = new DomObserver(appRoot, onTreeChange, 100);
+      observer.start();
+
+      const portal = document.createElement("div");
+      const dialog = document.createElement("div");
+      dialog.setAttribute("role", "dialog");
+      dialog.setAttribute("aria-modal", "true");
+      portal.appendChild(dialog);
+      document.body.appendChild(portal);
+      await settleObserver(100); // the mount itself fired
+
+      observer.start();
+      onTreeChange.mockClear();
+
+      dialog.appendChild(document.createElement("button"));
+      await settleObserver(100);
+
+      expect(onTreeChange).toHaveBeenCalledTimes(1);
+    });
+  });
+
   // Modal dialogs from React Portal (Radix, Headless UI), Vue Teleport,
   // etc. mount into `document.body` outside the configured root. Without
   // the secondary `document.body` observer, the extractor never knew the
