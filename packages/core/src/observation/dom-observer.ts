@@ -587,7 +587,8 @@ export class DomObserver {
     }
     // One holding `root` is the tree, but watching all of it would report
     // every change inside `root` twice. Its opening and closing still
-    // refresh in full.
+    // refresh in full; a change inside it but outside `root` waits for the
+    // next refresh something else causes.
     if (safeContains(dialog, this.root)) return;
     const parent = safeParentNode(dialog);
     if (!parent) return;
