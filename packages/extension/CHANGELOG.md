@@ -214,7 +214,9 @@
   is part of them: a filled `<input autocomplete="cc-number">` in a cell read
   `cell "4111111111111111"`. Such a name now reads `[redacted]`, and a
   description pointing at a sensitive field is dropped, as the CLI and MCP
-  native tree already did.
+  native tree already did. That includes a name taken by `aria-labelledby`
+  from a card or password field the tree doesn't show, such as an
+  `aria-hidden` one, which neither tree caught before.
 
 ## 0.1.15
 

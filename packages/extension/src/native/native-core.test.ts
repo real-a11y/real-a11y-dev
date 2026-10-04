@@ -558,6 +558,98 @@ describe("readNativeTree", () => {
     expect(JSON.stringify(res)).not.toContain("4111");
   });
 
+  it("withholds a name taken from a hidden field it reads only for that", async () => {
+    // <input aria-hidden="true" autocomplete="cc-number" value="3782…">
+    // labelling a region: the tree drops the input and Chromium sends no
+    // value for it, so it is read in the page because the region points at it.
+    const raw = [
+      {
+        nodeId: "1",
+        backendDOMNodeId: 1,
+        role: { value: "RootWebArea" },
+        name: { value: "Page" },
+        childIds: ["7", "9"],
+      },
+      {
+        nodeId: "7",
+        parentId: "1",
+        backendDOMNodeId: 7,
+        ignored: true,
+        role: { value: "none" },
+      },
+      {
+        nodeId: "9",
+        parentId: "1",
+        backendDOMNodeId: 9,
+        role: { value: "region" },
+        name: {
+          value: "378282246310005",
+          sources: [
+            { type: "relatedElement", value: { value: "378282246310005" } },
+          ],
+        },
+        properties: [
+          {
+            name: "labelledby",
+            value: { relatedNodes: [{ backendDOMNodeId: 7 }] },
+          },
+        ],
+      },
+    ];
+    const t = new FakeTransport((method, params) => {
+      if (method === "Accessibility.getFullAXTree") return { nodes: raw };
+      if (method === "DOM.resolveNode") {
+        const id = (params as { backendNodeId: number }).backendNodeId;
+        return { object: { objectId: `obj-${id}` } };
+      }
+      if (method === "Runtime.callFunctionOn") {
+        const { objectId } = params as { objectId: string };
+        return {
+          result: {
+            value:
+              objectId === "obj-7"
+                ? { classified: true, sensitive: true, redacted: true }
+                : { classified: true },
+          },
+        };
+      }
+      return {};
+    });
+    const res = await readNativeTree(t);
+    expect(findNative(res.nodes, "region")?.name).toBe("[redacted]");
+    expect(JSON.stringify(res)).not.toContain("3782");
+  });
+
+  it("withholds the name around a field whose read failed", async () => {
+    const raw = [
+      {
+        nodeId: "1",
+        backendDOMNodeId: 10,
+        role: { value: "cell" },
+        name: {
+          value: "4111111111111111",
+          sources: [{ type: "contents", value: { value: "4111111111111111" } }],
+        },
+        childIds: ["2"],
+      },
+      {
+        nodeId: "2",
+        parentId: "1",
+        backendDOMNodeId: 20,
+        role: { value: "textbox" },
+        name: { value: "Card number" },
+        value: { type: "string", value: "4111111111111111" },
+      },
+    ];
+    const t = new FakeTransport((method) => {
+      if (method === "Accessibility.getFullAXTree") return { nodes: raw };
+      return {};
+    });
+    const res = await readNativeTree(t);
+    expect(findNative(res.nodes, "cell")?.name).toBe("[redacted]");
+    expect(JSON.stringify(res)).not.toContain("4111");
+  });
+
   it("withholds the chosen option in a listbox a sensitive combobox controls through a dropped wrapper", async () => {
     // The combobox reads as sensitive and the listbox as not, so only the
     // controls relation can withhold the option. Its `aria-controls` names
