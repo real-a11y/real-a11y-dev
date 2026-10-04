@@ -6,7 +6,7 @@ area: React/Inspector
 type: Manual
 priority: P1
 status: Active
-validFrom: "inspector ≥ the first release after 0.1.0-beta.17 (likewise react, storybook-addon). On 0.1.0-beta.17 or earlier steps 2 and 4 reproduce the defect: the tree moves only when something inside `#app` changes. That is the old behaviour, not a fail. The observer lives in `packages/core/src/observation/dom-observer.ts`, but `core` is PRIVATE and bundled, so run it through a published panel."
+validFrom: "inspector ≥ the first release after 0.1.0-beta.18 (likewise react, storybook-addon). On 0.1.0-beta.18 or earlier steps 2 and 4 reproduce the defect: the tree moves only when something inside `#app` changes. That is the old behaviour, not a fail. The observer lives in `packages/core/src/observation/dom-observer.ts`, but `core` is PRIVATE and bundled, so run it through a published panel."
 validUntil: ""
 expected: "opening the dialog with showModal() re-roots the panel's tree to the dialog, and closing it restores the page, each within about half a second and with no other change on the page; a change inside the open dialog appears in the tree"
 covers:
