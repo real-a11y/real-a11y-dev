@@ -220,3 +220,57 @@ test("an option chosen while a read is running is dropped if the panel leaves th
     (await nav.nativeActs()).filter((a) => a.action === "select"),
   ).toHaveLength(0);
 });
+
+test("the tree doesn't say which option of a sensitive select is chosen", async ({
+  nav,
+}) => {
+  const page = await showNative(nav, "select-sensitive.html");
+  // A plain select next to it, whose chosen option the tree does show.
+  await page.evaluate(() => {
+    document.body.insertAdjacentHTML(
+      "beforeend",
+      `<label for="size">Size</label>
+       <select id="size"><option>S</option><option selected>M</option></select>`,
+    );
+  });
+  await nav.panel.getByRole("button", { name: "Refresh native tree" }).click();
+  await nav.panel.getByRole("button", { name: "Expand all" }).click();
+
+  const row = (name: string) =>
+    nav.panel.getByRole("treeitem", { name: new RegExp(`^option "${name}"`) });
+  await expect(row("M")).toContainText("selected");
+  // "11" is the chosen month; no option row of the month says so.
+  for (const month of ["01", "02", "11"]) {
+    await expect(row(month)).toBeVisible();
+    await expect(row(month)).not.toContainText("selected");
+  }
+});
+
+test("NATIVE_READ carries no chosen option under a sensitive select, in any of its forms", async ({
+  nav,
+}) => {
+  const { page, tabId } = await nav.open("select-sensitive.html");
+  // A list box and a multiple select, sensitive too, beside the drop-down.
+  await page.evaluate(() => {
+    document.body.insertAdjacentHTML(
+      "beforeend",
+      `<label for="exp-year">Expiry year</label>
+       <select id="exp-year" size="3" autocomplete="cc-exp-year">
+         <option>2030</option><option selected>2031</option><option>2032</option>
+       </select>
+       <label for="months">Months</label>
+       <select id="months" multiple autocomplete="cc-exp-month">
+         <option selected>03</option><option>04</option>
+       </select>`,
+    );
+  });
+  const nodes = await nav.readNodes(tabId);
+  const options = nodes.filter((n) => n.role === "option");
+  expect(options.map((n) => n.name).sort()).toEqual(
+    ["01", "02", "03", "04", "11", "2030", "2031", "2032"].sort(),
+  );
+  for (const option of options) {
+    expect(option.states ?? {}).not.toHaveProperty("selected");
+    expect(option.states ?? {}).not.toHaveProperty("checked");
+  }
+});

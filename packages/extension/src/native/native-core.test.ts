@@ -913,6 +913,49 @@ describe("withholdInsideSensitive", () => {
     expect(byId.get("elsewhere")?.value).toBe("Spain");
   });
 
+  it("says which option inside a sensitive field is chosen nowhere", () => {
+    // A redacted `<select autocomplete="cc-exp-month">`, as Chromium reads
+    // it: the combobox, its popup, and options marked selected.
+    const nodes = [
+      n("month", ["popup"], {
+        role: "combobox",
+        value: "[redacted]",
+        redacted: true,
+        states: { focusable: true, expanded: false },
+      }),
+      n("popup", ["jan", "nov"], { role: "MenuListPopup" }),
+      n("jan", [], {
+        role: "option",
+        name: "01",
+        states: { focusable: true, selected: false },
+      }),
+      n("nov", [], {
+        role: "option",
+        name: "11",
+        states: { focusable: true, selected: true },
+      }),
+      n("box", [], { role: "checkbox", states: { checked: "true" } }),
+      n("other", [], {
+        role: "option",
+        name: "Spain",
+        states: { selected: true },
+      }),
+    ];
+    // `box` sits inside a sensitive wrapper too.
+    nodes[1].childIds.push("box");
+    withholdInsideSensitive(nodes, ["month"]);
+    const byId = new Map(nodes.map((x) => [x.id, x]));
+    expect(byId.get("jan")?.states).toEqual({ focusable: true });
+    expect(byId.get("nov")?.states).toEqual({ focusable: true });
+    expect(byId.get("box")?.states).toEqual({});
+    // The field's own states, and anything outside it, stay.
+    expect(byId.get("month")?.states).toEqual({
+      focusable: true,
+      expanded: false,
+    });
+    expect(byId.get("other")?.states).toEqual({ selected: true });
+  });
+
   it("marks every node below a sensitive one as withheld", () => {
     const nodes = [
       n("wrap", ["field"], { valueWithheld: true }),

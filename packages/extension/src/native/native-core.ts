@@ -576,6 +576,12 @@ export function fieldValueWithheld(read: PageFieldRead): boolean {
  * this catches a part the in-page walk could not place. A nested sensitive
  * field's own `[redacted]` stays: it says "entered", never what.
  *
+ * Nor does a node inside one say which of it is chosen. Chromium marks the
+ * chosen `option` of a `<select>` `selected`, so under a redacted
+ * `<select autocomplete="cc-exp-month">` the option rows would name the
+ * month anyway. `selected` and `checked` go from every node inside, as the
+ * DOM tree, which reads neither off a native option, never shows them.
+ *
  * Exported for its tests.
  */
 export function withholdInsideSensitive(
@@ -597,6 +603,8 @@ export function withholdInsideSensitive(
       delete node.rawValue;
     }
     node.valueWithheld = true;
+    delete node.states.selected;
+    delete node.states.checked;
     stack.push(...node.childIds);
   }
 }
