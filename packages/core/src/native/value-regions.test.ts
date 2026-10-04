@@ -93,6 +93,49 @@ describe("withholdSensitiveFieldNames", () => {
     expect(out[1].name?.value).toBe("Show");
   });
 
+  it("withholds a name taken from a field Chromium ignores, value or not", () => {
+    // <input aria-hidden="true" autocomplete="cc-number" value="3782…">
+    // labelling a region: Chromium sends no value for the ignored input,
+    // but the region's name is the card.
+    const nodes = [
+      raw("7", "none", { ignored: true }),
+      raw("9", "region", {
+        name: { value: "378282246310005" },
+        named: "relatedElement",
+        properties: [
+          {
+            name: "labelledby",
+            value: { relatedNodes: [{ backendDOMNodeId: 7 }] },
+          },
+        ],
+      }),
+    ];
+    const out = withholdSensitiveFieldNames(nodes, ["7"]);
+    expect(out[1].name?.value).toBe(REDACTED_VALUE);
+  });
+
+  it("keeps a field's own label, even one wrapped around it", () => {
+    // <label>Card <input autocomplete="cc-number" value="4111…"></label>:
+    // the field is labelled by its own <label>, which holds only it.
+    const nodes = [
+      raw("1", "LabelText", { childIds: ["2"] }),
+      raw("2", "textbox", {
+        parentId: "1",
+        name: { value: "Card" },
+        named: "relatedElement",
+        value: { value: "4111111111111111" },
+        properties: [
+          {
+            name: "labelledby",
+            value: { relatedNodes: [{ backendDOMNodeId: 1 }] },
+          },
+        ],
+      }),
+    ];
+    const out = withholdSensitiveFieldNames(nodes, ["2"]);
+    expect(out[1].name?.value).toBe("Card");
+  });
+
   it("returns the nodes untouched with no sensitive field", () => {
     const nodes = cell();
     expect(withholdSensitiveFieldNames(nodes, [])).toBe(nodes);

@@ -69,6 +69,7 @@ import {
   STATE_ONLY_ROLES,
   ancestry,
   carriesAXValue,
+  givesValueAway,
   holdsContent,
   indexRaw,
   nonEmptyAXText,
@@ -308,11 +309,12 @@ function fieldSensitivity(
       fields.add(raw.nodeId);
     }
   }
-  // Only a field that holds something withholds names around it: an empty
-  // one has nothing to give away (see holdsContent). Its own value is empty.
+  // Only a field that can give its value away withholds names around it: an
+  // empty one has nothing to give (see givesValueAway, which counts an ignored
+  // field, whose value Chromium never sends, as able to).
   for (const id of fields) {
     const field = index.byId.get(id);
-    if (!field || !holdsContent(field, index.byId, false)) fields.delete(id);
+    if (!field || !givesValueAway(field, index.byId)) fields.delete(id);
   }
   const regions = valueRegions(index, fields);
   return {

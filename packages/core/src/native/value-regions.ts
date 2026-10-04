@@ -316,10 +316,24 @@ export function withholdRegionNames<T extends RawAXNameNode>(
 }
 
 /**
+ * Whether a sensitive field can give its value away to a name around it. A
+ * field that holds something can ({@link holdsContent}); an empty one has
+ * nothing to give. A field Chromium IGNORES can too, whatever it holds:
+ * Chromium sends no value for it, so emptiness can't be told, yet
+ * `aria-labelledby` still reads it — an `aria-hidden` card input names the
+ * region labelled by it after the card.
+ */
+export function givesValueAway<T extends RawAXNameNode>(
+  field: T,
+  byId: ReadonlyMap<string, T>,
+): boolean {
+  return field.ignored === true || holdsContent(field, byId, false);
+}
+
+/**
  * {@link withholdRegionNames} for a producer's sensitive fields: `fieldIds` are
  * the raw ids of the fields it classified as sensitive (or could not
- * classify). Only a field that holds something withholds names around it: an
- * empty one has nothing to give away ({@link holdsContent}).
+ * classify). Only a field that {@link givesValueAway} withholds names.
  */
 export function withholdSensitiveFieldNames<T extends RawAXNameNode>(
   rawNodes: T[],
@@ -329,7 +343,7 @@ export function withholdSensitiveFieldNames<T extends RawAXNameNode>(
   const roots = new Set<string>();
   for (const id of fieldIds) {
     const field = index.byId.get(id);
-    if (field && holdsContent(field, index.byId, false)) roots.add(id);
+    if (field && givesValueAway(field, index.byId)) roots.add(id);
   }
   return withholdRegionNames(rawNodes, valueRegions(index, roots));
 }
