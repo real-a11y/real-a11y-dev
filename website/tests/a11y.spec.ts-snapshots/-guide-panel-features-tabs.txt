@@ -23,6 +23,8 @@ link "the package reference"
 table
 link "the testing reference"
 table
+link "useActiveModal()"
+table
 table
 table
 button "Copy Code"

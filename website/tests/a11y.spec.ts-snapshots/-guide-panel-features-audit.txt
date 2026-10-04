@@ -231,9 +231,46 @@ main
           code "treeSnapshot(form, …)"
           link "the testing reference"
   heading "Dialog auto-scope" (level 3)
-  paragraph "When the page opens a or , the panel automatically scopes into it. A "Dialog: …" indicator appears with the dialog's accessible name. This is what a screen reader user effectively gets — the rest of the page becomes inert and the dialog is the only thing they can navigate. Verifying that auto-scope works correctly (proper labeling, focus trap, escape to close) is one of the highest-value audits the panel enables."
+  paragraph "When the page opens a with , the tree re-roots to that dialog: the dialog becomes the root row, and the page behind it drops out. This is what a screen reader user effectively gets. The browser makes the rest of the page inert, and the dialog is the only thing they can navigate."
     code "<dialog>"
-    code "[role="dialog"]"
+    code "showModal()"
+  paragraph "Only a modal does this. A opened with , or an element with or , does not re-root the tree, and the page stays in the tree around it. Dialog libraries such as Radix, MUI and Headless UI hide the rest of the page with or , so that content drops out of the tree too. The tree then shows the dialog alone, but its root is still the page, not the dialog, so the extension shows no bar for it."
+    code "<dialog>"
+    code "<dialog>"
+    code "show()"
+    code "role="dialog""
+    code "aria-modal="true""
+    code "aria-hidden"
+    code "inert"
+    strong "Dialog: …"
+  paragraph "The re-rooting is shared: every panel builds its tree with the same extractor. What the panel shows around it differs."
+  table
+    rowgroup
+      row
+        columnheader "Surface"
+        columnheader "When a modal <dialog> opens"
+          code "<dialog>"
+    rowgroup
+      row
+        cell "Chrome extension"
+        cell "A Dialog: … bar appears above the tree with the dialog's accessible name. A dialog with no name reads Dialog: Modal. The bar's Press ESC button sends Escape to the page and closes the dialog, unless a page handler calls preventDefault()"
+          strong "Dialog: …"
+          strong "Dialog: Modal"
+          strong "Press ESC"
+          code "preventDefault()"
+      row
+        cell "inspector / React <SemanticNavigator />"
+          code "inspector"
+          code "<SemanticNavigator />"
+        cell "No indicator. The dialog is the tree's root row. The panel is part of the page, so it goes inert along with everything else behind the dialog: you can't click, focus or type in it until the dialog closes. In React, useActiveModal() returns the dialog's node if you want to render your own indicator"
+          link "useActiveModal()"
+            code "useActiveModal()"
+      row
+        cell "Storybook addon"
+        cell "No indicator. The dialog is the tree's root row. The panel lives in Storybook's manager, outside the story's iframe, so it stays usable while the dialog is open"
+  paragraph "The dialog's name is the first thing to check: it is the root row's name, and in the extension it is also in the bar. The panel doesn't test that focus stays in the dialog or that Escape closes it. Those are the dialog's own behavior, so check them by hand: Tab through the dialog, then press Escape. In the extension, the keyboard bar's and buttons do both from the side panel."
+    code "Tab"
+    code "Esc"
   separator
   heading "Live region monitoring" (level 2)
   paragraph "The , React and Storybook addon panels have no live log; nothing in them watches the page's live regions."

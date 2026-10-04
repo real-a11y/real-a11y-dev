@@ -13,6 +13,7 @@ generic
 link "the test"
 link "the panel features guide"
 link "live region log"
+link "re-roots to it"
 link "screen curtain"
 button "Copy Code"
 generic
