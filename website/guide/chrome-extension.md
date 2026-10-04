@@ -105,7 +105,7 @@ A11y view:  combobox "Country" = "Spain"
 DOM view:   <select> value="es"
 ```
 
-A slider shows its `aria-valuetext` in the A11y view, and a rich-text editor shows its text. A password, one-time-code or card field shows `[redacted]` in both views, never its contents or length, and a card `<select>`'s options don't say which one is chosen. The **Copy** report leaves values out.
+A slider shows its `aria-valuetext` in the A11y view, and a rich-text editor shows its text. A password, one-time-code or card field shows `[redacted]` in both views, never its contents or length, a card `<select>`'s options don't say which one is chosen, and nothing around such a field, like a table cell or a checkbox whose label holds it, is named after its value. The **Copy** report leaves values out.
 
 **3. Navigate your product**
 Click links, fill forms, submit, expand menus, complete flows. You're using the real product — just through its structure instead of its visual layer.

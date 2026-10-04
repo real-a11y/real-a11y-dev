@@ -1482,6 +1482,49 @@ describe("buildNativeTree — sensitive values in states, references and races",
     expect(JSON.stringify(nodesOf(tree))).not.toContain("4111");
   });
 
+  it("withholds a name taken from a sensitive field Chromium ignores", () => {
+    // <input aria-hidden="true" autocomplete="cc-number" value="3782…">
+    // labelling a region: Chromium sends no value for the ignored input, so
+    // nothing says it holds one, but the region is named after the card.
+    const raw = [
+      { nodeId: "1", childIds: ["2", "3"], role: { value: "RootWebArea" } },
+      {
+        nodeId: "2",
+        parentId: "1",
+        ignored: true,
+        role: { value: "none" },
+        backendDOMNodeId: 40,
+      },
+      {
+        nodeId: "3",
+        parentId: "1",
+        role: { value: "region" },
+        name: {
+          value: "378282246310005",
+          sources: [
+            { type: "relatedElement", value: { value: "378282246310005" } },
+          ],
+        },
+        properties: [
+          {
+            name: "labelledby",
+            value: { relatedNodes: [{ backendDOMNodeId: 40 }] },
+          },
+        ],
+        backendDOMNodeId: 41,
+      },
+    ] as RawNodes;
+    const tree = buildNativeTree(
+      raw,
+      new Map([
+        [40, domOf("input", { autocomplete: "cc-number" })],
+        [41, domOf("div")],
+      ]),
+    );
+    expect(tree.nodes.get("ax-dom-41")?.a11y.name).toBe("[redacted]");
+    expect(JSON.stringify(nodesOf(tree))).not.toContain("3782");
+  });
+
   it("drops a description taken from one by aria-describedby", () => {
     const tree = referencingTree("describedby");
     expect(tree.nodes.get("ax-dom-31")?.a11y).toMatchObject({

@@ -294,6 +294,17 @@
   sensitive field is marked `selected` or `checked` now, as in the DOM tree.
   ([#485](https://github.com/real-a11y/real-a11y-dev/pull/485))
 
+- The native tree no longer puts a card number or password into the name of
+  something around the field. Chromium names a table cell, or a checkbox
+  whose `<label>` wraps a card field, from its contents, and the field's value
+  is part of them: a filled `<input autocomplete="cc-number">` in a cell read
+  `cell "4111111111111111"`. Such a name now reads `[redacted]`, and a
+  description pointing at a sensitive field is dropped, as the CLI and MCP
+  native tree already did. That includes a name taken by `aria-labelledby`
+  from a card or password field the tree doesn't show, such as an
+  `aria-hidden` one, which neither tree caught before.
+  ([#486](https://github.com/real-a11y/real-a11y-dev/pull/486))
+
 ## 0.1.14
 
 ### Patch Changes

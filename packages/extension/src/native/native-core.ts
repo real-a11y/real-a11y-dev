@@ -37,12 +37,15 @@
  */
 
 import {
+  carriesAXValue,
   nativeAXStateValue,
   normalizeNativeAX,
   REDACTED_VALUE,
   serializeNativeAX,
+  withholdSensitiveFieldNames,
   type A11yInfo,
   type NativeAXNode,
+  type RawAXNameNode,
   type RawNativeAXNode,
 } from "@real-a11y-dev/core";
 
@@ -74,7 +77,7 @@ export const NATIVE_REDACTED_VALUE = REDACTED_VALUE;
  * Playwright, no good in an MV3 worker, and core stays a pure structural
  * normalizer by design (R4) rather than growing a second enrichment path.
  */
-interface RawAXNode extends RawNativeAXNode {
+interface RawAXNode extends RawAXNameNode {
   properties?: Array<{
     name: string;
     value?: {
@@ -566,6 +569,79 @@ export function withholdInsideSensitive(
   }
 }
 
+/** The raw nodes some node is labelled or described by that the normalized
+ *  tree doesn't keep. */
+function referencedOutsideTree(
+  rawNodes: RawAXNode[],
+  kept: readonly NativeAXNode[],
+): RawAXNode[] {
+  const keptIds = new Set(kept.map((n) => n.id));
+  const byBackendId = new Map<number, RawAXNode>();
+  for (const raw of rawNodes) {
+    if (typeof raw.backendDOMNodeId === "number") {
+      byBackendId.set(raw.backendDOMNodeId, raw);
+    }
+  }
+  const out = new Map<string, RawAXNode>();
+  for (const raw of rawNodes) {
+    for (const property of raw.properties ?? []) {
+      if (property.name !== "labelledby" && property.name !== "describedby") {
+        continue;
+      }
+      for (const related of property.value?.relatedNodes ?? []) {
+        const target =
+          typeof related.backendDOMNodeId === "number"
+            ? byBackendId.get(related.backendDOMNodeId)
+            : undefined;
+        if (target && !keptIds.has(nativeIdOf(target))) {
+          out.set(target.nodeId, target);
+        }
+      }
+    }
+  }
+  return [...out.values()];
+}
+
+/** Chromium's password mask: a value made only of these is a password field,
+ *  whatever its markup says by the time the page is asked. */
+const MASKED_VALUE = /^[•●]+$/;
+
+/**
+ * The raw ids of every field whose value must stay out of other nodes'
+ * names: the fields the in-page read found sensitive or could not read, and
+ * two kinds it never got to ask about, as `@real-a11y-dev/browser` treats
+ * them:
+ *
+ * - a DOM-backed node that holds a value but that normalization dropped,
+ *   so it was never a read candidate — an `aria-hidden` card input still
+ *   names whatever is labelled by it. Unread is withheld.
+ * - a value that is Chromium's password mask: its length is the password's.
+ */
+function nameWithholdingRoots(
+  rawNodes: RawAXNode[],
+  kept: readonly NativeAXNode[],
+  rawById: ReadonlyMap<string, RawAXNode>,
+  sensitiveIds: readonly string[],
+): string[] {
+  const roots = new Set<string>();
+  for (const id of sensitiveIds) {
+    const raw = rawById.get(id);
+    if (raw) roots.add(raw.nodeId);
+  }
+  const keptIds = new Set(kept.map((n) => n.id));
+  for (const raw of rawNodes) {
+    const value = raw.value?.value;
+    const masked =
+      typeof value === "string" && MASKED_VALUE.test(value.replace(/\s/g, ""));
+    const unread =
+      typeof raw.backendDOMNodeId === "number" &&
+      !keptIds.has(nativeIdOf(raw)) &&
+      carriesAXValue(raw);
+    if (masked || unread) roots.add(raw.nodeId);
+  }
+  return [...roots];
+}
+
 /** Numbers each tree read's remote-object group, so releasing one read's
  *  group never frees objects a concurrent read is still using. */
 let fieldReadCount = 0;
@@ -578,28 +654,16 @@ export async function readNativeTree(
   const full = await transport.send<{ nodes: RawAXNode[] }>(
     "Accessibility.getFullAXTree",
   );
-  const nodes = normalizeNativeAX(full.nodes);
-  // The structural walk (which nodes survive, roles, names, tree shape) is
-  // the genuinely shared part — `normalizeNativeAX` doesn't read `properties`
-  // at all, so this enrichment pass is additive, not a duplicate of it. One
-  // pass over the raw list, keyed by the same id `normalizeNativeAX` assigns,
-  // rather than a per-node lookup.
-  const rawById = new Map(full.nodes.map((raw) => [nativeIdOf(raw), raw]));
-  const keptIds = new Set(nodes.map((n) => n.id));
-  const enriched: EnrichedNativeNode[] = nodes.map((node) => {
-    const raw = rawById.get(node.id);
-    const { states, properties, description } = raw
-      ? axFacets(raw)
-      : { states: {}, properties: {}, description: "" };
-    const controls = raw ? nativeControls(raw, keptIds) : [];
-    return {
-      ...node,
-      states,
-      properties,
-      description,
-      ...(controls.length > 0 ? { controls } : {}),
-    };
-  });
+  // Which fields are sensitive is known only after reading them in the page,
+  // and the reads are chosen from the normalized tree. So: normalize once to
+  // pick and classify the fields, keep their values out of every OTHER
+  // node's name on the raw nodes (core's `withholdSensitiveFieldNames` —
+  // Chromium names a cell or a `<label>`-wrapped checkbox after an embedded
+  // card field's value), then normalize what is left. Names have to be
+  // withheld before normalizing, while each still says which node it came
+  // from; a text run blanked there is never promoted into anything.
+  const firstPass = normalizeNativeAX(full.nodes);
+  const firstRawById = new Map(full.nodes.map((raw) => [nativeIdOf(raw), raw]));
 
   // Field values (see `fieldFacets`) — each candidate classified in-page by
   // `pageReadValue` before any value is used, concurrently, so a form-heavy
@@ -611,11 +675,12 @@ export async function readNativeTree(
   await transport.send("DOM.enable");
   const objectGroup = `sn-field-values-${++fieldReadCount}`;
   const sensitiveIds: string[] = [];
+  const facetsById = new Map<string, Partial<EnrichedNativeNode>>();
   try {
     await Promise.all(
-      enriched.map(async (node) => {
+      firstPass.map(async (node) => {
         if (STATE_ONLY_ROLES.has(node.role)) return;
-        const axValue = announcedAXValue(rawById.get(node.id));
+        const axValue = announcedAXValue(firstRawById.get(node.id));
         if (
           axValue === undefined &&
           !VALUE_BEARING_ROLES.has(node.role) &&
@@ -634,7 +699,26 @@ export async function readNativeTree(
         // no value (`fieldFacets`), and nothing inside it says which of it
         // is chosen either, since it may be sensitive.
         if (!read.classified || read.sensitive) sensitiveIds.push(node.id);
-        Object.assign(node, fieldFacets(node.role, axValue, read));
+        facetsById.set(node.id, fieldFacets(node.role, axValue, read));
+      }),
+    );
+    // A node the tree drops is never a candidate above, but `aria-labelledby`
+    // and `aria-describedby` still read it: an `aria-hidden` card input names
+    // the region labelled by it after the card, and Chromium sends no value
+    // for it to judge by. Classify every such target too.
+    const alreadyRead = new Set(facetsById.keys());
+    await Promise.all(
+      referencedOutsideTree(full.nodes, firstPass).map(async (raw) => {
+        const id = nativeIdOf(raw);
+        if (alreadyRead.has(id) || typeof raw.backendDOMNodeId !== "number") {
+          return;
+        }
+        const verdict = await readFieldValue(
+          transport,
+          raw.backendDOMNodeId,
+          objectGroup,
+        );
+        if (!verdict.classified || verdict.sensitive) sensitiveIds.push(id);
       }),
     );
   } finally {
@@ -642,6 +726,35 @@ export async function readNativeTree(
       .send("Runtime.releaseObjectGroup", { objectGroup })
       .catch(() => {});
   }
+
+  const rawNodes = withholdSensitiveFieldNames(
+    full.nodes,
+    nameWithholdingRoots(full.nodes, firstPass, firstRawById, sensitiveIds),
+  );
+  const nodes =
+    rawNodes === full.nodes ? firstPass : normalizeNativeAX(rawNodes);
+  // The structural walk (which nodes survive, roles, names, tree shape) is
+  // the genuinely shared part — `normalizeNativeAX` doesn't read `properties`
+  // at all, so this enrichment pass is additive, not a duplicate of it. One
+  // pass over the raw list, keyed by the same id `normalizeNativeAX` assigns,
+  // rather than a per-node lookup.
+  const rawById = new Map(rawNodes.map((raw) => [nativeIdOf(raw), raw]));
+  const keptIds = new Set(nodes.map((n) => n.id));
+  const enriched: EnrichedNativeNode[] = nodes.map((node) => {
+    const raw = rawById.get(node.id);
+    const { states, properties, description } = raw
+      ? axFacets(raw)
+      : { states: {}, properties: {}, description: "" };
+    const controls = raw ? nativeControls(raw, keptIds) : [];
+    return {
+      ...node,
+      states,
+      properties,
+      description,
+      ...(controls.length > 0 ? { controls } : {}),
+      ...facetsById.get(node.id),
+    };
+  });
   withholdInsideSensitive(enriched, sensitiveIds);
 
   // `serializeNativeAX(nodes)` runs on the pre-wrap list, matching every

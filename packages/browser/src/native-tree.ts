@@ -67,8 +67,20 @@ import {
   RANGE_VALUE_ROLES,
   REDACTED_VALUE,
   STATE_ONLY_ROLES,
+  ancestry,
+  carriesAXValue,
+  givesValueAway,
+  holdsContent,
+  indexRaw,
+  nonEmptyAXText,
+  propertyOf,
+  valueRegions,
+  winningNameSource,
+  withholdRegionNames,
   type CssPathAdapter,
-  type RawNativeAXNode,
+  type RawAXNameNode,
+  type RawIndex,
+  type ValueRegions,
   type SemanticNode,
   type ExtractionResult,
   type A11yInfo,
@@ -76,21 +88,8 @@ import {
 } from "@real-a11y-dev/core";
 import type { CDPSession, Page } from "playwright";
 
-/** The full CDP `Accessibility.AXNode` shape this producer consumes — a
- *  superset of core's structural {@link RawNativeAXNode}. */
-interface RawAXNode extends RawNativeAXNode {
-  /** `sources` is Chromium's accname trace — see {@link winningNameSource}. */
-  name?: { value?: string; sources?: AXNameSource[] };
-  description?: { value?: string };
-  properties?: Array<{ name: string; value?: AXPropertyValue }>;
-}
-
-/** A CDP `AXValue` on a property; `relatedNodes` for idref ones
- *  (`labelledby`, `describedby`). */
-interface AXPropertyValue {
-  value?: unknown;
-  relatedNodes?: Array<{ backendDOMNodeId?: number }>;
-}
+/** The full CDP `Accessibility.AXNode` shape this producer consumes. */
+type RawAXNode = RawAXNameNode;
 
 /**
  * How {@link nativeTree} / {@link buildNativeTree} treat what users entered.
@@ -203,22 +202,6 @@ function cleanText(text: string): string {
   return text.replace(/\s+/g, " ").trim();
 }
 
-/** Walk `raw` and its ancestors by `parentId`, stopping on a cycle. */
-function* ancestry(
-  raw: RawAXNode | undefined,
-  byId: ReadonlyMap<string, RawAXNode>,
-): Generator<RawAXNode> {
-  const seen = new Set<string>();
-  for (
-    let cur = raw;
-    cur && !seen.has(cur.nodeId);
-    cur = cur.parentId ? byId.get(cur.parentId) : undefined
-  ) {
-    seen.add(cur.nodeId);
-    yield cur;
-  }
-}
-
 // ── Field values (ADR-0001) ─────────────────────────────────────────────────
 
 /**
@@ -232,73 +215,6 @@ function isMasked(value: unknown): boolean {
   return (
     typeof value === "string" && MASKED_VALUE.test(value.replace(/\s/g, ""))
   );
-}
-
-/**
- * A CDP value, as text. Chromium keeps range values as 32-bit floats, so a
- * `<meter value="0.6">` arrives as `0.6000000238418579`; print the shortest
- * decimal that is the same float, which is what the page wrote.
- */
-function axValueText(value: unknown): string | undefined {
-  if (typeof value === "string") return value;
-  if (typeof value !== "number" || !Number.isFinite(value)) return undefined;
-  if (Math.fround(value) === value) {
-    for (let digits = 1; digits <= 9; digits++) {
-      const shortest = Number(value.toPrecision(digits));
-      if (Math.fround(shortest) === value) return String(shortest);
-    }
-  }
-  return String(value);
-}
-
-function propertyOf(raw: RawAXNode, name: string): AXPropertyValue | undefined {
-  return raw.properties?.find((p) => p.name === name)?.value;
-}
-
-function nonEmpty(value: unknown): string | undefined {
-  const text = axValueText(value);
-  return text !== undefined && text.trim() !== "" ? text : undefined;
-}
-
-/** A DOM-backed AX node's value is only as classifiable as its DOM record. */
-function carriesValue(raw: RawAXNode): boolean {
-  return nonEmpty(raw.value?.value) !== undefined;
-}
-
-/**
- * True when `raw` or anything beneath it holds content a name could borrow: a
- * value (a filled field, or a card-expiry input's month and year parts), and
- * with `text`, a text run that has text (what was typed into an editor). A
- * placeholder isn't content — a native field's is never counted, since only
- * values are for one. An EMPTY field or editor contributes nothing to a name
- * built around it, so it must not withhold one (a cell labelled "Card number"
- * around an empty card field keeps its name).
- */
-function holdsContent(
-  raw: RawAXNode,
-  byId: ReadonlyMap<string, RawAXNode>,
-  text: boolean,
-): boolean {
-  const stack = [raw];
-  const seen = new Set<string>();
-  while (stack.length > 0) {
-    const cur = stack.pop()!;
-    if (seen.has(cur.nodeId)) continue;
-    seen.add(cur.nodeId);
-    if (carriesValue(cur)) return true;
-    if (
-      text &&
-      NATIVE_AX_NAME_SOURCE_ROLES.has(cur.role?.value ?? "") &&
-      cleanText(String(cur.name?.value ?? "")) !== ""
-    ) {
-      return true;
-    }
-    for (const id of cur.childIds ?? []) {
-      const child = byId.get(id);
-      if (child) stack.push(child);
-    }
-  }
-  return false;
 }
 
 /**
@@ -318,13 +234,13 @@ function rawAnnouncedValue(
   if (STATE_ONLY_ROLES.has(role)) return undefined;
   if (RANGE_VALUE_ROLES.has(role)) {
     return (
-      nonEmpty(enriched?.ariaValueText) ??
-      nonEmpty(propertyOf(raw, "valuetext")?.value) ??
-      nonEmpty(raw.value?.value) ??
-      nonEmpty(propertyOf(raw, "valuenow")?.value)
+      nonEmptyAXText(enriched?.ariaValueText) ??
+      nonEmptyAXText(propertyOf(raw, "valuetext")?.value) ??
+      nonEmptyAXText(raw.value?.value) ??
+      nonEmptyAXText(propertyOf(raw, "valuenow")?.value)
     );
   }
-  return nonEmpty(raw.value?.value);
+  return nonEmptyAXText(raw.value?.value);
 }
 
 /**
@@ -342,169 +258,6 @@ function announcedValue(
 ): string | undefined {
   const text = rawAnnouncedValue(raw, role, enriched);
   return finishAnnouncedValue(text, () => sensitive || isMasked(text));
-}
-
-/** The raw nodes, indexed the two ways the classifiers look them up. */
-interface RawIndex {
-  byId: ReadonlyMap<string, RawAXNode>;
-  byBackendId: ReadonlyMap<number, RawAXNode>;
-}
-
-function indexRaw(rawNodes: RawAXNode[]): RawIndex {
-  const byId = new Map<string, RawAXNode>();
-  const byBackendId = new Map<number, RawAXNode>();
-  for (const raw of rawNodes) {
-    byId.set(raw.nodeId, raw);
-    if (typeof raw.backendDOMNodeId === "number") {
-      byBackendId.set(raw.backendDOMNodeId, raw);
-    }
-  }
-  return { byId, byBackendId };
-}
-
-/**
- * A set of fields whose values are withheld ("roots"), and every place
- * Chromium carries those values besides the field itself.
- */
-interface ValueRegions {
-  roots: ReadonlySet<string>;
-  /** Raw ids of the strict AX ancestors of a root. */
-  containing: ReadonlySet<string>;
-  /** `raw` is a root or sits inside one. */
-  inside(raw: RawAXNode): boolean;
-  /**
-   * `raw` takes its label or description by reference — `aria-labelledby` /
-   * `aria-describedby`, and the `labelledby` Chromium reports for a `<label>` —
-   * from a root other than its own: the referenced node is, is inside, or
-   * contains one. A field wrapped in its own `<label>` references that label,
-   * but the label's only root is the field itself, whose value never names
-   * it; that is no reference to a value.
-   */
-  references(raw: RawAXNode, property: "labelledby" | "describedby"): boolean;
-}
-
-function valueRegions(
-  index: RawIndex,
-  roots: ReadonlySet<string>,
-): ValueRegions {
-  const { byId, byBackendId } = index;
-  const containing = new Set<string>();
-  const rootsUnder = new Map<string, string[]>();
-  for (const id of roots) {
-    for (const cur of ancestry(byId.get(id), byId)) {
-      if (cur.nodeId === id) continue;
-      containing.add(cur.nodeId);
-      const under = rootsUnder.get(cur.nodeId);
-      if (under) under.push(id);
-      else rootsUnder.set(cur.nodeId, [id]);
-    }
-  }
-
-  // nodeId → the nearest root at or above it, or null. Memoized along each
-  // walk, so classifying every node costs one pass, not one per depth.
-  const rootMemo = new Map<string, string | null>();
-  const rootOf = (raw: RawAXNode): string | null => {
-    const chain: string[] = [];
-    let result: string | null = null;
-    for (const cur of ancestry(raw, byId)) {
-      const known = rootMemo.get(cur.nodeId);
-      if (known !== undefined) {
-        result = known;
-        break;
-      }
-      chain.push(cur.nodeId);
-      if (roots.has(cur.nodeId)) {
-        result = cur.nodeId;
-        break;
-      }
-    }
-    for (const id of chain) rootMemo.set(id, result);
-    return result;
-  };
-
-  /**
-   * `root` is part of `raw` itself: `raw` is a field (a root) and `root` is
-   * it or sits inside it — a date input's own spinbuttons. A field's name
-   * never includes its own value, so its own label pointing back around it
-   * carries nothing. A node that is NOT a field — a region labelled by the
-   * editable heading inside it — gets no such pass: its name IS the text.
-   */
-  const ownRoot = (root: string, raw: RawAXNode): boolean => {
-    if (!roots.has(raw.nodeId)) return false;
-    for (const cur of ancestry(byId.get(root), byId)) {
-      if (cur.nodeId === raw.nodeId) return true;
-    }
-    return false;
-  };
-
-  return {
-    roots,
-    containing,
-    inside: (raw) => rootOf(raw) !== null,
-    references: (raw, property) =>
-      (propertyOf(raw, property)?.relatedNodes ?? []).some((related) => {
-        const target =
-          typeof related.backendDOMNodeId === "number"
-            ? byBackendId.get(related.backendDOMNodeId)
-            : undefined;
-        if (target === undefined) return false;
-        const around = rootOf(target);
-        const reached = [
-          ...(around !== null ? [around] : []),
-          ...(rootsUnder.get(target.nodeId) ?? []),
-        ];
-        return reached.some((root) => !ownRoot(root, raw));
-      }),
-  };
-}
-
-/**
- * Keep the roots' values out of every NAME and description, where Chromium
- * puts them on its own:
- *
- * - **Named from contents.** Chromium names a cell, a link or a button from
- *   its contents, and an embedded field's value is part of them:
- *   `<td><input autocomplete="cc-number"></td>` is `cell "4111…"`, and a
- *   password field in a cell is `cell "••••••••"`. A node that CONTAINS a root
- *   and was named from its contents reads `[redacted]` (a text run is blanked
- *   instead, so no promotion can carry it); so does one whose name trace is
- *   missing or has no winning step, since nothing then says where the name
- *   came from. A root named from its own contents reads `[redacted]` too. A
- *   name from anywhere else — `aria-label`, a `<legend>`, a `<label for>` — is
- *   the page's and is kept, and so is a root's own name with no trace (how a
- *   field's label arrives in an older recording; a field is never named after
- *   its own value).
- * - **Named or described by reference** to a root that isn't the node's own
- *   ({@link ValueRegions.references}). Such a name reads `[redacted]`; such a
- *   description is dropped.
- *
- * Returns copies; never mutates.
- */
-function withholdRegionNames(
-  rawNodes: RawAXNode[],
-  regions: ValueRegions,
-): RawAXNode[] {
-  if (regions.roots.size === 0) return rawNodes;
-  return rawNodes.map((raw) => {
-    let out = raw;
-    if (cleanText(String(raw.name?.value ?? "")) !== "") {
-      const winner = winningNameSource(raw);
-      const redact =
-        (regions.containing.has(raw.nodeId) &&
-          (winner === undefined || winner.type === "contents")) ||
-        (regions.roots.has(raw.nodeId) && winner?.type === "contents") ||
-        regions.references(raw, "labelledby");
-      if (redact) {
-        const textRun = NATIVE_AX_NAME_SOURCE_ROLES.has(raw.role?.value ?? "");
-        out = { ...out, name: { value: textRun ? "" : REDACTED_VALUE } };
-      }
-    }
-    if (raw.description?.value && regions.references(raw, "describedby")) {
-      const { description: _dropped, ...rest } = out;
-      out = rest;
-    }
-    return out;
-  });
 }
 
 /** Where the sensitive fields are, and what their values reach. */
@@ -543,7 +296,7 @@ function fieldSensitivity(
     const unclassified =
       typeof raw.backendDOMNodeId === "number" &&
       enriched === undefined &&
-      carriesValue(raw);
+      carriesAXValue(raw);
     if (
       unclassified ||
       isMasked(raw.value?.value) ||
@@ -556,11 +309,12 @@ function fieldSensitivity(
       fields.add(raw.nodeId);
     }
   }
-  // Only a field that holds something withholds names around it: an empty
-  // one has nothing to give away (see holdsContent). Its own value is empty.
+  // Only a field that can give its value away withholds names around it: an
+  // empty one has nothing to give (see givesValueAway, which counts an ignored
+  // field, whose value Chromium never sends, as able to).
   for (const id of fields) {
     const field = index.byId.get(id);
-    if (!field || !holdsContent(field, index.byId, false)) fields.delete(id);
+    if (!field || !givesValueAway(field, index.byId)) fields.delete(id);
   }
   const regions = valueRegions(index, fields);
   return {
@@ -574,15 +328,6 @@ function fieldSensitivity(
 }
 
 // ── Strict mode: rich-text editor content (`redactInput`) ──────────────────
-
-/** One step of Chromium's accessible-name computation, as `getFullAXTree`
- *  reports it on `name.sources`, in accname order. */
-interface AXNameSource {
-  type?: string;
-  attribute?: string;
-  value?: { value?: unknown };
-  superseded?: boolean;
-}
 
 /**
  * The attributes allowed to name a node INSIDE an editable region. They are
@@ -615,15 +360,6 @@ const REDACTED_NAME = REDACTED_VALUE;
 
 function isEditable(raw: RawAXNode): boolean {
   return (raw.properties ?? []).some((p) => p.name === "editable");
-}
-
-/** The step of Chromium's name trace that produced `raw`'s name: the first
- *  one with text that wasn't superseded. */
-function winningNameSource(raw: RawAXNode): AXNameSource | undefined {
-  return raw.name?.sources?.find(
-    (s) =>
-      s.superseded !== true && cleanText(String(s.value?.value ?? "")) !== "",
-  );
 }
 
 /** Roles whose value is the page's own state, never something a user entered. */
@@ -659,7 +395,7 @@ function strictValueRoots(rawNodes: RawAXNode[], index: RawIndex): Set<string> {
   const roots = new Set<string>();
   for (const raw of rawNodes) {
     if (
-      carriesValue(raw) &&
+      carriesAXValue(raw) &&
       !PAGE_STATE_VALUE_ROLES.has(raw.role?.value ?? "") &&
       !inMedia(raw)
     ) {
