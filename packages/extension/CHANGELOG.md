@@ -292,6 +292,7 @@
   the option rows under it still showed a `selected` badge on the chosen
   month, in the tree and in the role-filter lists. Nothing inside a
   sensitive field is marked `selected` or `checked` now, as in the DOM tree.
+  ([#485](https://github.com/real-a11y/real-a11y-dev/pull/485))
 
 ## 0.1.14
 
