@@ -536,6 +536,9 @@ export function fieldFacets(
  * `<select autocomplete="cc-exp-month">` the option rows would name the
  * month anyway. `selected` and `checked` go from every node inside, as the
  * DOM tree, which reads neither off a native option, never shows them.
+ * That fails closed: a node counts as sensitive when it merely holds a
+ * sensitive control (a rich-text editor around a card input), and then no
+ * checkbox or option anywhere inside it shows its state either.
  *
  * Exported for its tests.
  */
@@ -627,7 +630,10 @@ export async function readNativeTree(
           backendNodeId,
           objectGroup,
         );
-        if (read.classified && read.sensitive) sensitiveIds.push(node.id);
+        // An unclassified field is one whose in-page read failed: it shows
+        // no value (`fieldFacets`), and nothing inside it says which of it
+        // is chosen either, since it may be sensitive.
+        if (!read.classified || read.sensitive) sensitiveIds.push(node.id);
         Object.assign(node, fieldFacets(node.role, axValue, read));
       }),
     );

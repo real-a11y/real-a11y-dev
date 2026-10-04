@@ -154,15 +154,21 @@ test("NATIVE_READ carries no chosen option under a sensitive select, in any of i
        <label for="months">Months</label>
        <select id="months" multiple autocomplete="cc-exp-month">
          <option selected>03</option><option>04</option>
-       </select>`,
+       </select>
+       <label for="plain">Size</label>
+       <select id="plain" size="2"><option>S</option><option selected>M</option></select>`,
     );
   });
   const nodes = await nav.readNodes(tabId);
   const options = nodes.filter((n) => n.role === "option");
-  expect(options.map((n) => n.name).sort()).toEqual(
+  // A plain list box still says which option is chosen, so the check below
+  // is about sensitivity, not about Chromium sending no state at all.
+  expect(options.find((n) => n.name === "M")?.states?.selected).toBe(true);
+  const sensitive = options.filter((n) => n.name !== "S" && n.name !== "M");
+  expect(sensitive.map((n) => n.name).sort()).toEqual(
     ["01", "02", "03", "04", "11", "2030", "2031", "2032"].sort(),
   );
-  for (const option of options) {
+  for (const option of sensitive) {
     expect(option.states ?? {}).not.toHaveProperty("selected");
     expect(option.states ?? {}).not.toHaveProperty("checked");
   }
