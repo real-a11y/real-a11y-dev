@@ -303,6 +303,7 @@
   native tree already did. That includes a name taken by `aria-labelledby`
   from a card or password field the tree doesn't show, such as an
   `aria-hidden` one, which neither tree caught before.
+  ([#486](https://github.com/real-a11y/real-a11y-dev/pull/486))
 
 ## 0.1.14
 
