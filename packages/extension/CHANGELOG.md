@@ -24,7 +24,7 @@
 
 - Hardened the shared mutation observer so that re-arming it can no longer
   strand the previous observers and event listeners
-  ([#PRNUM](https://github.com/real-a11y/real-a11y-dev/pull/PRNUM)). No
+  ([#487](https://github.com/real-a11y/real-a11y-dev/pull/487)). No
   behaviour change in the shipped extension: `startObserving()` is guarded by
   `observingEnabled`, so it never armed the observer twice.
 
