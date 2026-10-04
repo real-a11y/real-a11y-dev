@@ -147,6 +147,7 @@ export {
   ancestry,
   axValueText,
   carriesAXValue,
+  givesValueAway,
   holdsContent,
   indexRaw,
   nonEmptyAXText,
