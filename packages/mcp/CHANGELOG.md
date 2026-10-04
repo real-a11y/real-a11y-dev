@@ -1,5 +1,496 @@
 # @real-a11y-dev/mcp
 
+## 0.1.0-beta.8
+
+### Minor Changes
+
+- d3bcc06: Give the `form` landmark the same naming condition `region` already had, and make that condition mean a name that can actually resolve.
+
+  A `<form>` came out of the in-page walk as the `form` landmark whether or not it had an accessible name. WAI-ARIA in HTML makes it a landmark only when it is named — the condition the walk already applied to `<section>` → `region`. Chromium agrees so firmly that it does not expose an unnamed form at all, so the DOM producer was reporting a landmark the native producer never does, and a landmark list carried an entry assistive technology never announces.
+
+  The shared gate behind both roles asked only whether a naming attribute was _present_. `aria-label="   "` states nothing, and an `aria-labelledby` whose every IDREF resolves to no element names nothing, yet both made a landmark with an empty name. Naming attributes are trimmed now, and `aria-labelledby` has to resolve to at least one element. A reference that resolves still counts even if the element it points at renders no text: that much is the accessible-name computation, which runs after role resolution.
+
+  **Breaking change.** Trees built by the in-page walk change shape for this markup, so a committed baseline or an assertion that names those roles can go red:
+
+  - **Snapshots:** the row for an unnamed `<form>` goes, as does the `region` row for a `<section>` whose only naming attribute is blank or dangling. In a default a11y snapshot it disappears entirely — an unnamed generic is flattened, which is what Chromium's own tree does with that form too — so its children move up one level. With `includeGeneric: true`, or in the DOM view, it reads `generic` and carries the element's own loose text, as any generic does: `<form>Search: <input></form>` snapshots as `generic "Search:"`. Re-record those baselines (`--update-snapshots`, or your snapshot runner's equivalent). A named form's row does not move.
+  - **Queries and assertions:** `findByRole` / `listByRole(root, "form")` and the `landmark` group no longer return an unnamed `<form>`, nor one whose only naming attribute is blank or points at a missing id. Migration: give the form the name it needs to be a landmark — `<form aria-label="Search">` — which is what AT needs to announce it anyway.
+  - **`cli` / `mcp`:** only the tab sequence changes (`real-a11y tabs`, the `get_tab_order` tool), because it is the one view built by the in-page walk. A `<form>` is focusable only when it carries `tabindex`, and such a form prints as `generic "<its text>"` instead of `form` unless it is named. Every other view reads Chromium's own tree, which already withheld the unnamed form.
+  - **Panels:** the tree in `inspector`, `react` and `storybook-addon` follows the same rule.
+
+  **One wrinkle worth knowing.** The role now follows the name, and resolving `aria-labelledby` needs the referenced id to be findable — so a `<form>`/`<section>` named _only_ by `aria-labelledby`, sitting in a container that is not in the document, resolves to `generic` rather than `form`/`region`. Its accessible name is empty in that state too, for the same reason, so role and name agree; what changed is that the role now says so. Rendering into `document.body`, as Testing Library does by default, is unaffected.
+
+### Patch Changes
+
+- 7e425fb: Read every ARIA state value the way Chromium does. The DOM producer copied `aria-disabled`, `aria-checked` and the other states literally: `"true"` became `true`, `"false"` became `false`, and anything else stayed a string. So `aria-disabled="TRUE"` reported `a11y.states.disabled: "TRUE"`, and `aria-disabled=""` reported `""`, where Chromium reports disabled, and not set:
+
+  ```html
+  <div role="group" aria-disabled="TRUE">…</div>
+  <button aria-pressed="MIXED">Bold</button>
+  <a href="/" aria-current="PAGE">Home</a>
+  <span aria-hidden="yes">★</span>
+  ```
+
+  Each rule matches Chromium 151's own tree, value by value. None of them trims whitespace, so `" true"` is not `"true"`:
+
+  - **`disabled`, `hidden`, `busy`, `required`, `readonly`, `expanded`, `selected`:** `false` in any case is `false`. An empty value or `undefined` in any case leaves the state unset. Anything else is `true`, including `TRUE`, `yes`, `0`, `mixed` and `" false"`.
+  - **`checked`, `pressed`:** as above, except that `mixed` in any case is `"mixed"`, and only a lowercase `undefined` leaves the state unset (`UNDEFINED` is `true`). A `radio`, `switch` or `menuitemradio` has no mixed state, so its `aria-checked="mixed"` is `false`.
+  - **`current`:** `page`, `step`, `location`, `date` and `time` in any case come out lowercase. `false` in any case is `false`, an empty value or a lowercase `undefined` leaves it unset, and anything else is `true`.
+  - **`<optgroup>`** is never marked disabled, even with `aria-disabled="true"`, as in Chromium. Its options still inherit the state from it.
+  - **`aria-hidden`** hides for every value that reads as `true` above, not only for `"true"`. `<span aria-hidden="yes">` now leaves the tree, and its text leaves the accessible name of whatever contains it, as `aria-hidden="true"` always did.
+
+  What this changes for you:
+
+  - **Queries:** `findByRole` / `findAllByRole` with `{ checked: true }`, `{ disabled: true }` and the other state options now match `aria-checked="TRUE"`, `aria-disabled="yes"` and the like. A node inside `aria-hidden="TRUE"` is now left out, as one inside `aria-hidden="true"` already was.
+  - **Tree diffs:** `a11yDiff` prints these states as booleans, and `aria-current` in lowercase. A committed diff snapshot that shows one of them as a string, such as `a11y.states.disabled "TRUE"`, needs re-recording. Changing only the case of a value, such as `aria-expanded="true"` to `"TRUE"`, no longer prints a change.
+  - **Panels:** the tree's state badges in `inspector`, `react` and `storybook-addon` show `disabled` for `aria-disabled="TRUE"`, where they showed `disabled=TRUE`, and `current=page` for `aria-current="PAGE"`.
+  - **Snapshots:** an a11y snapshot prints roles and names, not states, so it changes only on a page that uses a value like `aria-hidden="TRUE"`, whose content now leaves the snapshot and the names that included it. A `<header>` or `<footer>` inside a `<section>` that is kept only for an `aria-busy=""` also drops out now, as it does from the native tree.
+  - **`cli` / `mcp`:** the tab order from `real-a11y tabs` and `get_tab_order` now leaves out a control inside `aria-hidden="TRUE"` or `aria-hidden="yes"`, as it already did inside `aria-hidden="true"`. Nothing else they print changes, because their other output reads Chromium's own tree.
+
+- 0b723a9: Keep building the tree on a page that names an image or a form control after a DOM method. A `<form>` lets a control shadow any of the form's own members, methods included, and the document does the same for a named `<img>`, `<form>`, `<embed>` or `<object>`. On this page
+
+  ```html
+  <main>
+    <img name="getElementById" alt="" />
+    <span id="lbl">Save draft</span>
+    <button aria-labelledby="lbl"><svg aria-hidden="true"></svg></button>
+  </main>
+  ```
+
+  `document.getElementById` is the image, so calling it throws. The walk resolves every `aria-labelledby` and `aria-describedby` that way, so it dropped the button, and every other labelled or described element on the page, along with everything inside it. `treeSnapshot()` printed a bare `main`, and now prints `button "Save draft"`.
+
+  What else broke, and now works:
+
+  - **`<label for>`:** an `<img name="querySelector">` dropped every form control with an `id` the same way.
+  - **Whole extractions:** an `<img name="querySelectorAll">`, or an `<img name="contains">` while a modal `<dialog>` is open, made every extraction on the page throw. So did a `<form role="search">` holding a control named `getAttribute` (or after another method the overlay scan calls), when it sits outside a root narrower than `<body>`: a `rootSelector`, or a Storybook story's root.
+  - **Live panels:** in `inspector`, `react` and `storybook-addon`, adding, removing or changing a form with a control named `getAttribute`, `tagName`, `contains`, `matches`, `querySelectorAll` or `ownerDocument`, or changing anything inside it, made the refresh throw, so the panel kept showing the old tree. With `getAttribute`, the mutation observer also lost the whole batch the change arrived in, unrelated changes elsewhere on the page included. Such a refresh now falls back to a full extraction, which gives the tree a fresh extraction would. Outside production it logs a console warning the first time it does, as a skipped element already does.
+  - **Portals:** a form mounted straight into `<body>`, outside the root being watched, whose control is named `matches` or `getAttribute`, hid any dialog or menu inside it from the observer. It now triggers a full re-extraction.
+  - **Form roots:** extracting a `<form>` whose control is named `querySelectorAll`, or a detached one whose control is named `ownerDocument`, now gives its tree instead of throwing or coming back empty.
+
+  What this changes for you:
+
+  - **Pages without such names** are unaffected.
+  - **jsdom** doesn't implement this shadowing, so suites on jsdom never hit it. A real browser does, including through the Playwright adapter.
+  - **A form that shadows what the walk reads on every element** (`getAttribute`, `tagName`) is still left out of the tree with its contents, as before. It just no longer takes anything else with it.
+  - **Snapshots and tree diffs:** a tree that lost labelled controls, or came back empty, now has them, so re-record a baseline taken from such a page.
+  - **`cli` / `mcp`:** only `real-a11y tabs` and `get_tab_order` walk the page themselves, so only they change, and only on such a page.
+
+- 191f363: Keep a `<form>` in the tree when one of its controls is named `hasAttribute`. A form lets a control shadow the form's own members, methods included, so in
+
+  ```html
+  <form aria-label="Signup">
+    <input name="hasAttribute" aria-label="Nickname" />
+    <button>Join</button>
+  </form>
+  ```
+
+  `form.hasAttribute` is the input, and calling it throws. The DOM walk asks every element whether it carries a few attributes (the inspector panel's marker, `inert`, `onclick`, `tabindex`), so the throw dropped the form from the tree along with everything inside it. It now extracts as `form "Signup"` holding `textbox "Nickname"` and `button "Join"`.
+
+  The other questions asked of any element, whatever its tag, now survive such a form too:
+
+  - **Overlays outside the root:** a menu or dialog inside a form whose control is named `hasAttribute`, or a `<form role="dialog">` whose control is named `contains`, never widened the tree to take it in, so a component's or story's tree left it out while it was open.
+  - **Live panels:** in `inspector`, `react` and `storybook-addon`, a change in or around a form whose control is named `contains` or `matches` fell back to a full extraction, with a console warning outside production. It now updates in place. A plain form with a control named `matches`, mounted straight into `<body>`, no longer triggers a full re-extraction, since it can now be asked whether it is an overlay.
+  - **A form as the root:** watching a `<form>` whose control is named `contains`, through `react`'s `useSemanticTree` or `testing`'s `waitForMutations`, threw as the observer started.
+
+  What this changes for you:
+
+  - **Pages without such names** are unaffected.
+  - **Snapshots and tree diffs:** a tree from such a page gains the form and its contents. A committed baseline from one changes, so re-record it.
+  - **`cli` / `mcp`:** `real-a11y tabs` and `get_tab_order` run the DOM walk in the page, so on such a page they now list the form's controls.
+  - **jsdom:** jsdom doesn't shadow a form's members, so a suite running on jsdom is unaffected. These pages broke in a real browser, which includes the Playwright adapter.
+
+- 84392f0: Keep a `<form>` in the tree when one of its controls is named `nodeType`. A form lets a control shadow the form's own members, so in
+
+  ```html
+  <main>
+    <form aria-label="Pay">
+      <input type="hidden" name="nodeType" />
+      <label>Card <input /></label>
+      <button>Pay</button>
+    </form>
+  </main>
+  ```
+
+  `form.nodeType` is the hidden input, not `1`. The DOM walk keeps an element's children by testing that number, so it took the form for something other than an element and dropped it with everything inside it: `treeSnapshot()` printed a bare `main`, and `tabSequenceSnapshot()` printed `(nothing focusable)`. The tree now has `form "Pay"` with `textbox "Card"` and `button "Pay"` in it, and the tab sequence lists both controls.
+
+  Other walks dropped such a form the same way, and now read through it:
+
+  - **Names and text:** a heading, link, button or cell named from its content left out the text inside such a form, so `<h2>Checkout <form>…<span>now</span></form></h2>` was `heading "Checkout"` and is now `heading "Checkout now"`. So did a wrapping `<label>`'s text, the text preview of an element with no name, and the value of a contenteditable editor holding one.
+  - **Live panels:** in `inspector`, `react` and `storybook-addon`, adding or removing such a form left any element named or described through `aria-labelledby` or `aria-describedby` from inside it with its old name or description.
+  - **Portals:** a form mounted straight into `<body>`, outside the root being watched, was never checked for a dialog or menu, so opening one left the tree as it was. It now triggers a full re-extraction.
+
+  What this changes for you:
+
+  - **Pages without such a name** are unaffected.
+  - **A form that also shadows `getAttribute`**, which the walk calls on every element, is still left out of the tree with its contents, and out of the names around it, as before. One that also shadows `tagName` is still left out of the tree, but its text now counts toward the names around it.
+  - **Snapshots and tree diffs:** a tree from such a page gains the form and its contents. A committed baseline from one changes, so re-record it.
+  - **`cli` / `mcp`:** `real-a11y tabs` and `get_tab_order` run the DOM walk in the page, so on such a page they now list the form's controls. Native trees are unaffected.
+  - **jsdom:** jsdom doesn't shadow a form's members, so a suite running on jsdom is unaffected. These pages broke in a real browser, which includes the Playwright adapter.
+
+- 58fcb39: Walk up past a `<form>` with a control named `nodeType`. A form lets a control shadow the form's own properties, so on
+
+  ```html
+  <main>
+    <form>
+      <input type="hidden" name="nodeType" />
+      <fieldset>
+        <header>Order summary</header>
+        <button>Pay</button>
+      </fieldset>
+    </form>
+  </main>
+  ```
+
+  `form.nodeType` is the hidden input rather than `1`. The walks up the page read each parent clobber-safely, then checked that it was an element with a plain `nodeType` read, which took the form for no element at all: a walk from anywhere inside the form stopped below it. Nothing threw; the answers were wrong.
+
+  - **A tree rooted inside such a form**, such as a matcher on the `<fieldset>` above or a panel whose root is inside the form, read as if nothing were above its root, and so did its refreshes. The `<header>` came out a `banner` landmark although `<main>` scopes it, `aria-disabled` on an ancestor of the form no longer disabled the controls in it, and in a `contenteditable` form a link counted as a tab stop.
+  - **Element picker:** hovering or clicking inside such a form highlighted and picked nothing, rather than the nearest node above it.
+  - **Audit locators:** an in-page audit finding inside such a form had its locator cut short at the form's child, such as `fieldset > button`, which can match elsewhere on the page.
+
+  What this changes for you:
+
+  - **Trees, picks and locators inside such a form** now take the form and what is above it into account, so a finding's locator there can get longer. A page with no form control named `nodeType` is unaffected.
+  - **jsdom** doesn't shadow a form's properties, so a suite running on it never hit this, and its output doesn't change.
+  - **`cli` / `mcp`:** their trees are Chromium's own and don't change. Tab order is the one in-page walk they run, and it can: with `tabs --root`, or `get_tab_order`'s `rootSelector`, inside a `contenteditable` form holding such a control, a link in it is no longer listed as a tab stop.
+
+- cda9aef: Stop freezing the page when something changes inside a `<form>` with a control named `parentElement`. A form lets a control shadow the form's own properties, so on
+
+  ```html
+  <form>
+    <input type="hidden" name="parentElement" />
+    <p>Total: <span>$10</span></p>
+  </form>
+  ```
+
+  `form.parentElement` is the hidden input, and the input's parent is the form again. Extracting such a page already works, but the walks that run after it went round that pair forever, freezing the tab with nothing thrown. Each now reads the form's real parent:
+
+  - **Live panels:** a refresh after a change inside such a form froze the `inspector`, `react` and `storybook-addon` panels, walking up from the change for the name, the description and the field value it moved.
+  - **Mutation observer:** the panels' observer, and `testing`'s `waitForMutations`, froze on a text change inside a form with a control named `parentNode` — and on a text change anywhere on a page with an `<img>`, `<form>`, `<embed>` or `<object>` named `parentNode`, which the document lets shadow its own properties the same way.
+  - **Element picker:** with pick mode on, hovering inside such a form froze the page when the form itself was not in the tree.
+  - **Portal visibility:** in browsers without `checkVisibility()`, the check that a portal overlay is visible walked up the same way.
+
+  What this changes for you:
+
+  - **Pages that froze** now refresh, observe and pick. A page with no such form, and nothing named `parentNode`, is unaffected.
+  - **jsdom** doesn't shadow a form's or the document's properties, so a suite running on it never froze, and its output doesn't change. These pages froze in a real browser.
+  - **`cli` / `mcp`:** nothing they print changes. The page walk that ships inside them has the fix, but none of their commands runs the walks above.
+
+- 63e9628: Keep what surrounds a `<form>` whose control is named `tagName`. A form lets a control shadow the form's own members, so in
+
+  ```html
+  <table>
+    <tr>
+      <td>
+        Ready
+        <form><input name="tagName" aria-label="Tag name" /></form>
+      </td>
+    </tr>
+  </table>
+  ```
+
+  `form.tagName` is the input, and `form.tagName.toLowerCase()` throws. The DOM walk skips such a form, with what is inside it, as before. But the walk also read the form's tag while working out _other_ elements, and the throw was charged to them:
+
+  - **Hosts that hold such a form:** a heading, link, button or table cell whose name comes from its content walked into the form and was dropped with everything in it, so the table above lost its `Ready` cell. A field's `aria-describedby` text that held such a form was dropped the same way, along with any link beside it. These now keep their nodes and names. Help text whose only control sits inside such a form folds into the field's description, as any help text with nothing reachable in it does, since that control never makes the tree.
+  - **An extraction rooted inside such a form** dropped everything focusable in it, because whether it is disabled is read up its ancestors, and every `<header>` and `<footer>`, whose landmark role is read the same way. They are now kept.
+  - **Findings:** a finding's locator reads the tag of every sibling it counts on its way up, so a finding with such a form beside it, or beside one of its ancestors, threw and took the whole audit with it. In `testing`'s Playwright adapter, which audits in the page by default, the call failed with a `TypeError` instead of reporting the findings.
+  - **Live panels:** in `inspector`, `react` and `storybook-addon`, a change inside such a form, or to the form itself, now updates the tree in place. It used to make the refresh throw and fall back to a full extraction of the page, with a console warning outside production.
+
+  What this changes for you:
+
+  - **Snapshots and tree diffs:** a tree from such a page gains the hosts above. A committed baseline from one changes, so re-record it.
+  - **`cli` / `mcp`:** `real-a11y tabs` and `get_tab_order` walk the page themselves, so on such a page they now list the stops those hosts hold, and a `--root` inside such a form lists its controls. Native trees are unaffected.
+  - **jsdom:** jsdom doesn't shadow a form's members, so a suite running on jsdom is unaffected. These pages broke in a real browser, which includes the Playwright adapter.
+
+- 5016dd2: Keep a `<form>` in the tree when one of its controls is named `getRootNode`. A form lets a control shadow the form's own members, methods included, so in
+
+  ```html
+  <h2 id="pay-title">Payment</h2>
+  <form aria-labelledby="pay-title">
+    <input type="hidden" name="getRootNode" />
+    <button>Pay</button>
+  </form>
+  ```
+
+  `form.getRootNode` is the hidden input, and calling it throws. The DOM walk calls it to find the tree an ID reference resolves in, so the throw dropped the form from the tree along with everything inside it:
+
+  - **Named by `aria-labelledby`:** the form above and its `Pay` button were missing. They now extract as `form "Payment"` and `button "Pay"`.
+  - **A description target:** a form that another field's `aria-describedby` points at was dropped the same way, even when it held a control. It is now kept, like any other target that holds a control.
+
+  A finding's locator walks up from the element it names, too. It read a control named `parentElement` as the form's parent, and ran round the form and that control until its depth cap, giving a selector like `form > input > form > input > form > button` that matches nothing. It now follows the form's real ancestors, so for an unlabeled button in `<div id="app"><section><form>` it reads `#app > section > form > button`. A control named `children` also cost the path its `nth-of-type`, which it now keeps.
+
+  What this changes for you:
+
+  - **Snapshots and tree diffs:** a tree from such a page gains the form and its contents. A committed baseline from one changes, so re-record it.
+  - **Findings:** a locator inside such a form now matches the element.
+  - **`cli` / `mcp`:** `real-a11y tabs` and `get_tab_order` run the DOM walk in the page, so on such a page they now list the form's controls.
+  - **jsdom:** jsdom doesn't shadow a form's members, so a suite running on jsdom is unaffected. These pages broke in a real browser, which includes the Playwright adapter.
+
+- ffc1ec0: Make an `<input>` whose `list` names a `<datalist>` a `combobox`. Typing in one offers the datalist's suggestions in a popup, and HTML-AAM and Chromium both make it a combobox. The DOM producer ignored `list`, so it reported a `textbox` (or a `searchbox` or `spinbutton`) where Chromium's own tree reports a `combobox`:
+
+  | Markup                                                | Was          | Now        |
+  | ----------------------------------------------------- | ------------ | ---------- |
+  | `<input list="fruits">` with `<datalist id="fruits">` | `textbox`    | `combobox` |
+  | `<input type="search" list="fruits">`                 | `searchbox`  | `combobox` |
+  | `<input type="number" list="fruits">`                 | `spinbutton` | `combobox` |
+
+  The text, search, email, tel and url types become a combobox, and so do number, date, datetime-local, month, week and time, as in Chromium. A password, range or color input keeps its role. The `list` has to name a `<datalist>` in the input's own document or shadow root. A missing id, another element, or a datalist across a shadow boundary leaves the role unchanged. An empty or hidden datalist still counts. Each case matches the role in Chromium 151's and 153's own accessibility trees.
+
+  - **Queries:** `findByRole("textbox")` / `findAllByRole` no longer find such an input. Query it as `combobox`. Its actions are unchanged: `.type(value)` still writes into it, and a number input still steps.
+  - **Snapshots and contracts:** a DOM-mode snapshot, tab sequence or `toMatchA11yContract` contract naming such an input changes from `textbox "Fruit"` to `combobox "Fruit"`. Re-record those baselines.
+  - **`toBeValidA11yTree`:** a combobox requires `aria-expanded` and `aria-controls`, but the browser runs a datalist's popup and tells the page nothing about it. So neither attribute is required on such an input, even under a redundant `role="combobox"`. An `<input role="combobox">` without a datalist is still reported for both.
+  - **Live trees:** panels in `inspector`, `react` and `storybook-addon` re-read an input's role when its `list` changes, or when the datalist it names is added or removed.
+  - **`cli` / `mcp`:** only the tab sequence changes (`real-a11y tabs`, the `get_tab_order` tool), because it is the one view the in-page walk builds. Such an input now prints as `combobox` there, as the native `tree` already did.
+
+- e502e40: Resolve `role` the way Chromium does. The DOM producer took the first token of `role` whatever it said, so it kept roles Chromium's accessibility tree throws away. Each rule below was measured over CDP in Chromium 151 and 153, which agree:
+
+  - **An unknown or abstract token is skipped** for the next token, and with none left the element keeps its own role. `role="foo"` and `role="widget"` on a `<div>` are a `generic`, `<button role="foo">` is a `button`, and `role="foo button"` is a `button` named by its content. Tokens are read ASCII-case-insensitively — `role="BUTTON"` is a button — and the deprecated `directory` is a `list`.
+  - **`listitem`, `option` and `treeitem` need their container.** Outside `<ul>`/`<ol>`/`<menu>` or `role="list"`, `<select>` or `role="listbox"`, `role="tree"` — or a `role="group"` — the role is dropped for the next token or the element's own: a lone `<div role="listitem">` is a `generic`, `<details role="treeitem">` a `group`, `<li role="option">` in a list a `listitem`. Role-less `div`/`span`/custom-element wrappers and presentational elements may sit in between, and an `aria-owns` owner counts; anything else, such as a `<section>`, breaks the context. No other role is dropped for its context.
+  - **An `<li>` whose list carries a role other than `list` is presentational**, so `<ul role="none">` strips its items as well as itself.
+
+  Everything that follows the role follows too: an element's name from content, whether it folds out of the a11y view, the actions offered on it (a `role="foo button"` clicks; an option the browser discarded doesn't), a heading's `aria-level` (`role="HEADING" aria-level="4"` is in the outline at 4), and whether its text reaches an ancestor's name — `<button><span role="option">Apple</span> pie</button>` is now "Apple pie", as Chromium names it.
+
+  - **Snapshots:** a DOM-mode snapshot changes wherever one of these appears. `foo "x"` becomes the element's own role (for a `<div>`, the same `generic` a role-less one gives), an item outside its container loses its role, and the items of a `<ul role="none">` drop out. Re-record those baselines.
+  - **`toBeValidA11yTree`** still reports the role that was written, even once the element has folded out of the view: `"foo" is not a valid ARIA role`. A role the browser drops for its missing container is now an error — `role "listitem" is discarded outside its required context (directory / list)` — where it was at most an advisory warning, so markup like a lone `role="listitem"` or an `option` with a `<section>` between it and its listbox now fails. Put the item in its container, or remove the role. An uppercase role Chromium accepts (`role="BUTTON"`) is no longer reported as invalid. The matcher also checks the nodes the a11y view folds away, so a bad role inside a `<label>`, `<legend>` or `<summary>`, whose text only names its owner, is reported now too. The audits (`collectFindings` and the `assert*` helpers) judge the corrected roles too.
+  - **`cli` / `mcp`:** only the tab sequence (`real-a11y tabs`, the `get_tab_order` tool) changes, as the one view built by the in-page walk. Native trees already reported Chromium's roles and are untouched.
+
+- abb9f8c: Give a `<select>` the role of the widget it renders as. The DOM producer made every `<select>` a `combobox` unless it had `multiple`, but a select's role depends on how many rows it shows. Chromium reports a `listbox` when more than one row shows, and a `combobox` (a drop-down) when one row does:
+
+  | Markup                       | Was        | Now        |
+  | ---------------------------- | ---------- | ---------- |
+  | `<select size="3">`          | `combobox` | `listbox`  |
+  | `<select multiple size="1">` | `listbox`  | `combobox` |
+
+  The row count is the `size` attribute when it parses to a positive integer, as HTML parses one: `" 3"`, `"+3"`, `"3.5"` and `"2abc"` all count, while `"0"`, `"-1"` and `"abc"` do not. Without a usable `size`, a `multiple` select shows 4 rows and any other select shows 1. HTML-AAM maps every `multiple` select to `listbox`, but HTML allows a `multiple` select with one row to render as a drop-down, and Chromium does. Each case matches the role in Chromium 151's and 153's own accessibility trees.
+
+  - **Queries:** `findByRole("combobox")` / `findAllByRole` no longer find a `<select size="3">`. Query it as `listbox`. A `<select multiple size="1">` is now found as `combobox`. The select's actions are unchanged: `.select(value)` works on it under either role.
+  - **Snapshots and contracts:** a DOM-mode snapshot, tab sequence or `toMatchA11yContract` contract naming such a select changes from `combobox "Plan"` to `listbox "Plan"`, or the reverse for `multiple size="1"`. Re-record those baselines.
+  - **`toBeValidA11yTree`:** an authored role counts as redundant only when it matches the select's role, and `size` now decides that role. `role="listbox"` on `<select size="3">` is redundant. `role="combobox"` on that select, or on a `multiple` select with no `size`, is authored, so its options are reported as `option` nested inside `combobox`. The matcher used to count both as redundant, because `multiple` was never recorded on the node.
+  - **`dom.attributes`:** now records `size` and `multiple`. Panels in `inspector`, `react` and `storybook-addon` also re-read the tree when either one changes, so the role updates live.
+  - **`cli` / `mcp`:** only the tab sequence changes (`real-a11y tabs`, the `get_tab_order` tool), because it is the one view the in-page walk builds. A focusable `<select size="3">` now prints as `listbox` there, as the native `tree` already did.
+
+- 78d054e: Read an editor's `a11y.value` the way Chromium does. The DOM producer left `aria-hidden` text and any popup out of every non-native field's value. Chromium does that only for a combobox you can't type into. It reads an editor's value, and any ARIA textbox's or searchbox's, as the text the field renders, which knows nothing of ARIA:
+
+  ```html
+  <div contenteditable="true" role="textbox" aria-label="Message">
+    Hello <span aria-hidden="true">[x]</span>world
+  </div>
+  ```
+
+  The DOM producer read `"Hello world"`, and Chromium's own tree, which the native producer reads, says `"Hello [x]world"`. Both now say `"Hello [x]world"`.
+
+  The same rule covers a role-less or `plaintext-only` editor, an editable combobox or searchbox, a `role="textbox"` or `role="searchbox"` that isn't editable, and a popup inside any of them: `Apple` followed by a `role="listbox"` holding `Pear` reads `"Apple Pear"`. Each case matches the `value` in Chromium 151's tree over CDP. A combobox you can't type into still reads `"Apple"` in both cases, as before.
+
+  What stays out is unchanged: `display:none` and `hidden` text, `visibility:hidden` text, a closed `<details>`'s body, and the text of a nested `<select>`, `<textarea>` or `<datalist>`. So a sensitive control inside an editor still adds nothing to the editor's value, even inside `aria-hidden`, and it still reads `"[redacted]"` itself.
+
+  - **Snapshots and diffs with values on:** `treeSnapshot(root, { values: true })` and `a11yDiff(…, { values: true })` print the longer value for these fields. Re-record a committed snapshot that holds one. Snapshots without values don't change.
+  - **Panels:** a checkpoint diff in the `inspector`, `react` or `storybook-addon` panel now marks such a field as changed when `aria-hidden` text or a popup inside it comes or goes.
+  - **`cli` / `mcp`:** `real-a11y tabs` and `get_tab_order` read the tab order from this page walk, so an editor's tab stop now prints the value that `real-a11y tree` and `get_semantic_tree` already print for it: `textbox "Message" = "Hello [x]world"`. Under `--redact-input` / `REAL_A11Y_REDACT_INPUT=1` they still print no values. Nothing else they print changes, because their other output reads Chromium's own tree.
+
+- 5d498f5: Report `expanded` only on a role Chromium gives the state. The DOM producer copied `aria-expanded` onto an element whatever its role, so each of these reported `a11y.states.expanded: true`, where Chromium's tree, which `cli` and `mcp` read, has no expanded state at all:
+
+  ```html
+  <button role="radio" aria-checked="false" aria-expanded="true">Small</button>
+  <button role="heading" aria-expanded="true">Shipping</button>
+  <div role="listbox" tabindex="0" aria-label="Sizes" aria-expanded="true">
+    …
+  </div>
+  <input type="text" aria-label="Search" aria-expanded="true" />
+  ```
+
+  The rule, as measured against Chromium 151 and 153, which agree on every case:
+
+  - **Roles with the state:** `application`, `button`, `checkbox`, `columnheader`, `combobox`, `gridcell`, `link`, `listitem`, `menuitem`, `menuitemcheckbox`, `menuitemradio`, `row`, `rowheader`, `switch`, `tab` and `treeitem` read `aria-expanded` as before.
+  - **Every other role ignores it**, including `listbox`, `option`, `radio`, `heading`, `textbox`, `searchbox`, `dialog`, `menu`, `tree`, `grid`, `cell` and `generic`. An element with no `role` goes by its own: a `<div>`, a `<span>`, an `<a>` without `href`, a text `<input>` or `<textarea>`, and a table's `<td>` have none. Neither does a `<td>` in a `role="grid"` table, which Chromium calls a gridcell; only an authored `role="gridcell"` has the state.
+  - **`<details>`:** it no longer has an expanded state of its own. The DOM producer set one from `open`, which Chromium never does: the summary carries the state. A `<details>` with one of the roles above, such as `role="button"`, reads `aria-expanded`, and `open` doesn't change it.
+  - **`<select>` under an author role:** reads `aria-expanded` only in one of the roles above, so `role="tab"` does and `role="menu"` doesn't.
+
+  What this changes for you:
+
+  - **Queries:** `findByRole` / `findAllByRole` with `{ expanded: true }` or `{ expanded: false }` no longer match an element whose role has no expanded state, such as a `listbox` with `aria-expanded`, or a `<details>`. Query what carries it: the `combobox` that opens the list box, or the details' `<summary>`.
+  - **Tree diffs:** `a11yDiff` no longer prints `a11y.states.expanded` changes on those elements. Toggling a `<details>` prints a change on its summary only.
+  - **Panels:** the `expanded` badge in `inspector`, `react` and `storybook-addon` no longer shows on those elements.
+  - **`toBeValidA11yTree`:** unaffected. Of the roles ARIA gives `aria-expanded`, only `combobox` requires it, and a combobox keeps the state.
+  - **Snapshots:** unaffected. An a11y snapshot prints roles and names, not states.
+  - **`cli` / `mcp`:** nothing they print changes. `real-a11y tabs` and `get_tab_order` print roles and names, and their other output reads Chromium's own tree.
+
+- 5496d93: Fix image map areas going missing from the tab sequence and the DOM tree. Since Chromium 153, which Playwright 1.63 installs, Chromium's UA stylesheet gives every `<area>` `display: none`, as jsdom's always has. The in-page walk skips anything `display: none`, so it dropped every area, although Chromium still tabs to one. On this page:
+
+  ```html
+  <button>Before</button>
+  <img src="map.png" alt="Site map" usemap="#nav" />
+  <map name="nav"><area href="/home" alt="Home" coords="0,0,10,10" /></map>
+  <button>After</button>
+  ```
+
+  `real-a11y tabs` printed, on Chromium 153:
+
+  ```
+  01. button "Before"
+  02. button "After"
+  ```
+
+  and now prints the stops Chromium tabs through, as it did on 151:
+
+  ```
+  01. button "Before"
+  02. link "Home"
+  03. button "After"
+  ```
+
+  An area now follows its image, the way Chromium decides it. Each rule was checked against Chromium 151 and 153 with a Tab walk, scripted `focus()` and Chromium's accessibility tree:
+
+  - **Rendered:** an area is in the tree while the first image whose `usemap` names its map is rendered: not `display: none` or `hidden`, itself or through an ancestor, and not `visibility: hidden` or `inert`. The area's own `display`, `hidden` and `visibility` don't count. An image inside a shadow root gives a map's areas nothing.
+  - **Order:** an area is a stop at its own place in the document, not at its image's.
+  - **Hidden map:** an area in a hidden or `inert` `<map>` stays out. Chromium tabs to one, but its accessibility tree leaves it out, and the walk follows the tree.
+  - **Accessibility:** an area whose image is `aria-hidden`, or which is `inert` itself, is hidden from AT, as Chromium's accessibility tree has it. Like an `aria-hidden` button, it then stays out of the a11y view and every tab list read from it, although Chromium tabs to it; the DOM view keeps it focusable. An area adds nothing to the name of the element its map sits in.
+  - **`tabindex`:** it makes an area focusable without an `href`, but only while an image uses its map, and a negative one leaves the area unfocusable even from script.
+
+  Where it shows:
+
+  - **`cli` / `mcp`:** `real-a11y tabs` and `get_tab_order` only. Every other view reads Chromium's own tree, which kept the areas.
+  - **Snapshots and assertions:** `tabSequenceSnapshot` and `toHaveTabSequence` list the areas again on Chromium 153, and for the first time in jsdom, whose stylesheet always hid them. Any area whose image isn't rendered stays out, on every version. A DOM-mode a11y snapshot gains a `link` per area. Re-record those baselines.
+  - **Panels:** the Tab Sequence view and the tree in `inspector`, `react` and `storybook-addon` show each area where its `<map>` sits, and drop or restore a map's areas when its image is hidden or shown.
+
+- c8ff10a: Separate a name-from-content child that has a box of its own with a space, instead of gluing it to the text beside it.
+
+  The DOM extractor appended each element child's contribution with no separator at all, so a label split across two blocks came out as one word: `<button><div>Save</div><div>now</div></button>` was named `"Savenow"`, and `<h1><p>One</p><p>Two</p></h1>` `"OneTwo"`. Chromium — and the screen reader reading it — announce "Save now" and "One Two". accname-1.2 §4.3.2 step 2F appends each descendant's result "with a space".
+
+  The rule is the one Chromium applies: **a child that has a box of its own separates the text either side of it, whether or not it lends the name any text.** Spacing therefore follows the child's computed `display`, and every case below matches what Chromium 141 computes for the same markup:
+
+  - **Spaced:** blocks, list items, table parts, and the atomic inline-level boxes (`inline-block`, `inline-flex`, `inline-table`), which Chromium separates even though they sit on the line. Flex and grid items, floats and absolutely positioned children come along with them, because CSS blockifies their computed `display`. A `<br>` now separates the text either side of it (`<a>Read<br>more</a>` is `"Read more"`, not `"Readmore"`), and so does an empty block (`<button>Save<div></div>now</button>`).
+  - **Spaced even though they lend no text:** a child that name-from-content skips but that still renders — a form control or other name-barrier element (`<h1>Save<input>now</h1>` is `"Save now"`), and a rendered `aria-hidden="true"` child.
+  - **Not spaced, so unchanged:** the inline boxes text really does flow into — `display: inline` (including a `<div>` an author styled that way), `inline list-item`, and the `ruby` family. `<button><span>Sa</span><span>ve</span></button>` is still `"Save"`, not `"Sa ve"`. A child with no box at all — `display: none`, `[hidden]` — separates nothing, and `display: contents` generates no box, so its children decide their own spacing.
+
+  The existing whitespace normalization collapses the padding, so no name gains a leading, trailing or doubled space.
+
+  **Expect snapshot changes in both directions.** A name whose label is split across children with boxes of their own _gains_ the spaces assistive technology announces. A name with an inline nested widget _loses_ a space it should never have had: `<h2>Signed in as<a href="/u">Ada</a></h2>` was `"Signed in as Ada"` and is now `"Signed in asAda"`, which is what Chromium reads for markup with no space in it. The same goes for an inline name-barrier child. This PR's own website baselines show both: 164 lines gain a space, 13 lose one (`cell "Tree ( treeSnapshot )"` → `cell "Tree (treeSnapshot)"`). Re-record the affected baselines; a `toHaveAccessibleName` that breaks is showing you what a screen reader actually announces.
+
+  `cli` and `mcp` only change in the tab sequence (`real-a11y tabs`, the `get_tab_order` tool), the one view built by the in-page walk. Native trees are untouched.
+
+  Because the rule reads computed `display`, a name computed in jsdom can differ from the same markup in a browser where jsdom's CSS engine differs: jsdom does not blockify flex or grid items, floats or absolutely positioned children, and it gives `<select>` / `<textarea>` `display: inline` where Chromium gives `inline-block`. Those cases keep their old unspaced names under a jsdom-based matcher while a real browser spaces them.
+
+  Four differences from Chromium remain, all pre-existing and none of them closed here:
+
+  - An `<img alt="…">` and an `<iframe title="…">` inside a name-from-content element still contribute nothing, where Chromium reads the `alt` / `title` and spaces it: `<button>Save<img alt="icon">now</button>` is `"Savenow"` here and `"Save icon now"` there. A replaced element that contributes nothing (`<svg>`, an empty `alt`) already matches Chromium, spacing included.
+  - `inert` and `content-visibility: hidden` hide a child from AT but still **render** it, so Chromium spaces across them where this does not. Telling the two kinds of hidden apart is a different question from how a child's box spaces its neighbours, and it predates this rule, so it is left as its own change.
+  - A `<wbr>`, which Chromium treats as a word separator, does not separate.
+  - `visibility: hidden` descendant text still reaches the name at all (`"Save x now"` where Chromium reads `"Save now"`) — a hidden-text question rather than a spacing one, and untouched here.
+
+- a70ad18: Report `aria-busy="true"` as `busy: true` in a native tree. Chromium sends the `busy` state over CDP as a number under a boolean type, `{"type":"boolean","value":1}`, where every other boolean state arrives as `true` or `false`. The native producer turned that into the string `"1"`, so a native tree carried `a11y.states.busy: "1"` for the same element the DOM producer reports as `busy: true`.
+
+  The native producer now decodes a state by its CDP value type. A boolean-typed value is a boolean whatever its JSON type, and `0` reads as `false`. The tristate strings `"true"` / `"false"` still read as booleans, and `"mixed"` or a token such as `invalid`'s `"grammar"` stays a string. `busy` is the only property that arrives as a number in Chromium 151 and 153, checked across every ARIA state and property.
+
+  - **`cli` / `mcp` tree diffs:** after a step that sets `aria-busy`, `real-a11y interact` (and `click` / `type` / `focus`) and the `diff_tree` tool printed `~ region "Results": a11y.states.busy (unset) → "1"`. They now print `→ true`, the same line `a11yDiff` prints for a DOM tree. The `diff` string in `--format json` changes the same way.
+  - **Queries:** unaffected. `findByRole` has no `busy` filter, and `list` / `list_elements` don't read states.
+  - **Snapshots:** unchanged. An a11y snapshot prints roles and names, not states.
+  - **`testing`:** nothing it prints changes. `attach(page, { tree: "native" })` bundles the fixed producer, but its snapshots and assertions don't read `busy`.
+
+- 5fc5848: Let an element's own semantics decide its `checked`, `expanded` and `pressed` states, as Chromium does, instead of an ARIA attribute on it. The DOM producer copied the attribute, so an unchecked `<input type="checkbox" aria-checked="true">` reported `a11y.states.checked: true`, a `<select aria-expanded="true">` reported `expanded: true`, and an indeterminate checkbox reported no `mixed` at all:
+
+  ```html
+  <input type="checkbox" aria-checked="true" aria-label="Terms" />
+  <select aria-expanded="true" aria-label="Size">
+    …
+  </select>
+  <details>
+    <summary aria-expanded="true">Shipping</summary>
+    …
+  </details>
+  ```
+
+  Each rule matches Chromium 151's own tree:
+
+  - **`<input type="checkbox">` and `<input type="radio">`:** `checked` is the control's checkedness, whatever its `aria-checked` says. An indeterminate checkbox (`.indeterminate = true`) is `"mixed"`, checked or not, even with `role="switch"`. A radio is never mixed. In its own role, or as a `switch`, `radio`, `menuitemcheckbox` or `menuitemradio`, the state is always set: an unchecked one reports `checked: false`, where it reported nothing. As an `option` or `treeitem` it has the state only while `aria-checked` is set. With `role="button"` and `aria-pressed` it is a toggle button, so the checkedness is `pressed` instead, and under any other role it has neither state. Any other `<input>` type with a checkable role, such as `<input type="text" role="checkbox">`, still reads `aria-checked`.
+  - **`<select>`:** a drop-down, one whose display size is 1 (`<select multiple size="1">` included), ignores `aria-expanded`. Its `expanded` is whether its picker is open, so it reports `expanded: false`, where it reported nothing. A list box (`multiple`, `size` above 1, or `role="listbox"`) has no `expanded` state, unless the author gives it `role="combobox"`, which reads `aria-expanded` as before. Neither has `pressed`. A `<select>` with another author role, such as `role="button"`, reads `aria-expanded` and `aria-pressed` as before.
+  - **`<summary>`:** any `<summary>` child of a `<details>` takes `expanded` from whether the details is open, whatever its `aria-expanded` says. It reported nothing, or the attribute's value. That holds in its own role and under a role with an expanded state, such as `button`, `link`, `tab` or `checkbox`. Under a role without one, such as `heading` or an explicit `generic`, it has no `expanded` state at all. It ignores `aria-pressed` too, unless `role="button"` makes it a toggle button.
+
+  A live tree now also re-reads every checkbox, radio and `<select>` when it refreshes. A click on one radio unchecks its sibling, and a change handler can make a "select all" box indeterminate. Neither fires an event or changes an attribute on that other control, so its state went stale in a panel until something else re-extracted it. Opening a `<select>`'s picker fires nothing either, so it shows on the next refresh, whatever causes it. A change to a `<select>`'s `size` or `multiple` now refreshes it too, since they decide whether it is a drop-down.
+
+  What this changes for you:
+
+  - **Queries:** `findByRole` / `findAllByRole` with `{ checked: false }` now match an unchecked native checkbox or radio. They matched none, because the state was unset. The `checked` and `pressed` options now take `"mixed"`, too, so `{ checked: "mixed" }` finds an indeterminate checkbox. An indeterminate checkbox that is also checked no longer matches `{ checked: true }`, and a native checkbox no longer matches through its `aria-checked`. `{ expanded: false }` now matches a closed drop-down `<select>` and the summary of a closed `<details>`.
+  - **Tree diffs:** `a11yDiff` prints a checkbox or radio as `a11y.states.checked false → true` when it is checked, where it printed `(unset) → true`. Toggling a `<details>` now prints a change on its summary.
+  - **Panels:** the state badges in `inspector`, `react` and `storybook-addon` show `checked=mixed` on an indeterminate checkbox. A native checkbox no longer shows `checked` for `aria-checked="true"`, and a summary no longer shows `pressed`. A radio its sibling unchecked, or a box a handler made indeterminate, now updates on the next refresh.
+  - **`toBeValidA11yTree`:** unaffected. It checks that required attributes are present, and a native checkbox or `<select>` never owed them.
+  - **Snapshots:** unaffected. An a11y snapshot prints roles and names, not states.
+  - **`cli` / `mcp`:** nothing they print changes. `real-a11y tabs` and `get_tab_order` print roles and names, and their other output reads Chromium's own tree.
+
+- 6b24b4c: Report a popover invoker's `expanded` state the way Chromium does: whether its popover is showing, whatever its `aria-expanded` says. The DOM producer copied the attribute, so a button whose popover was closed reported `a11y.states.expanded: true` if its `aria-expanded` said so, and one with no `aria-expanded` reported no state at all, open or closed:
+
+  ```html
+  <button popovertarget="menu" aria-expanded="true">Menu</button>
+  <div id="menu" popover>…</div>
+  ```
+
+  The rule, as measured against Chromium 151 and 153:
+
+  - **Which controls:** a `<button>`, or an `<input>` of type `button`, `submit`, `reset` or `image`, with a `popovertarget` that names a popover (any `popover` value), whatever its `popovertargetaction`. A `<button>` with a `commandfor` and a `command` of `toggle-popover`, `show-popover` or `hide-popover` (in any case) takes its state from the element `commandfor` names instead, which outranks `popovertarget`. That element decides even when it isn't a popover, which reports `expanded: false`.
+  - **Which don't:** a disabled control, including one in a disabled `<fieldset>`, and a submit button with a form, which submits it instead. A `<button>` with no `type` or an invalid one is a submit button, unless it has a `commandfor`. An id resolves only in the invoker's own tree, so a button outside a shadow root can't name a popover inside it. Each of these reads `aria-expanded` as before.
+  - **Inside its own popover:** a control inside the popover it invokes, like a close button, reads `aria-expanded` as before. A popover that invokes itself doesn't count as inside.
+  - **Roles:** only a role Chromium gives an expanded state takes the popover's: `button`, `link`, `menuitem`, `menuitemcheckbox`, `menuitemradio`, `tab`, `checkbox`, `switch`, `combobox`, `treeitem`, `row`, `gridcell`, `columnheader`, `rowheader`, `listitem` and `application`. An invoker with another author role, such as `role="radio"`, reads `aria-expanded` as before.
+
+  A live tree now also refreshes when a popover opens or closes. Neither changes an attribute, so nothing re-extracted, and a panel kept the invoker's old state and the popover's old content until something else changed. It now listens for the popover's `toggle` event, including for a popover outside the observed root, and re-reads every invoker on refresh. The event doesn't cross a shadow root, so a popover inside a component's shadow tree still updates only on the next refresh something else triggers. It also watches `popovertarget`, `commandfor`, `command`, `popover` and `form`.
+
+  What this changes for you:
+
+  - **Queries:** `findByRole` / `findAllByRole` with `{ expanded: false }` now match an invoker whose popover is closed, with or without `aria-expanded`, and `{ expanded: true }` one whose popover is showing. An invoker no longer matches through an `aria-expanded` that disagrees with its popover.
+  - **Tree diffs:** `a11yDiff` prints `a11y.states.expanded false → true` on an invoker when its popover opens. It printed nothing, since the attribute never changed.
+  - **Panels:** the `expanded` badge in `inspector`, `react` and `storybook-addon` follows the popover, and updates when it opens or closes.
+  - **`toBeValidA11yTree`:** a `role="combobox"` button that invokes a popover no longer fails with `missing required aria-expanded`. The browser supplies the state, as it does for a `<select>`.
+  - **Snapshots:** unaffected. An a11y snapshot prints roles and names, not states.
+  - **`cli` / `mcp`:** nothing they print changes. `real-a11y tabs` and `get_tab_order` print roles and names, and their other output reads Chromium's own tree.
+
+- 4604812: Find the audit root on a page that names an image `querySelector`. The document lets a named `<img>`, `<form>`, `<embed>` or `<object>` shadow its own members, and the in-page lookup that finds the root called `document.querySelector`. So on a page with `<img name="querySelector">` it threw before the tree was built — even with no `rootSelector`, since the default is the selector `"body"`.
+
+  - **`testing`:** every `attach(page)` call — `treeSnapshot()`, `outlineSnapshot()`, `tabSequenceSnapshot()` and every `assert*` — rejected with `TypeError: document.querySelector is not a function`. They now audit the page.
+  - **`cli` / `mcp`:** `real-a11y tabs` and `get_tab_order` reported the same failure as `Invalid rootSelector: "body"`, naming a selector nobody passed, and `tabs` exited 2. They now list the tab stops.
+
+  Pages without such a name are unaffected, and a `rootSelector` that matches nothing still fails loudly. `attach(page, { tree: "native" })` and the other `cli` / `mcp` commands never ran this lookup.
+
+- 6d3971a: Stop reading a decorative `clip-path: inset(...)` as the visually-hidden idiom.
+
+  The DOM extractor flags an element `dom.isHidden` when it carries the sr-only signature, one half of which is a `clip-path` that clips the box away to nothing. It recognised that by the string the value starts with — `inset(5` or `inset(1` — so it matched `inset(50%)` and `inset(100%)`, but equally `inset(10px)`, `inset(1em)`, `inset(50px)`, `inset(15%)` and anything else whose first component begins with a 1 or a 5. Those crop an edge off an element that stays fully visible.
+
+  So a `position: absolute` or `position: fixed` element with a decorative crop — a non-interactive one without a `tabindex`, which is all this signature ever looks at — read as content that is announced but not drawn.
+
+  The insets are now parsed, and the element counts as hidden only when they provably clip the box away: an opposing pair meets (`top + bottom >= 100%`, `left + right >= 100%`), or one inset of `100%` crosses the box on its own — the latter only when the edge opposite it is not negative, since a negative inset grows the shape instead (`inset(100% 0 -50% 0)` clips to a strip below the box, where overflowing content still paints). A length can't prove a collapse without the box's size, so it never counts — while a zero counts in any unit. A `calc()` on an edge the answer depends on is left alone rather than guessed at, and a nested function keeps its own parentheses, so `inset(50% calc(50% + 1px))` is read as the two components it is rather than cut at the `calc`'s own `)`.
+
+  What this changes for you, on a page with such a crop:
+
+  - **`dom.isHidden` is now `false`** on those elements, and a tree diff reports the change against a tree recorded before this release.
+  - **Snapshots and outlines:** such an element that is _not_ exposed to AT on its own — an unnamed `<div>` wrapper, say — was skipped by the tree walk on the strength of `isHidden` alone, and is now included. **A committed baseline from such a page changes, so re-record it.** An AT-exposed element was kept either way, so its presence is unchanged.
+  - **Cross-link inference** (`controls` / `controlledBy`) considers those elements as candidates again.
+
+  And in the other direction, because the rule now recognises collapses the prefix match missed — `inset(0 100%)`, `inset(60%)`, `inset(0px 40% 0px 60%)`, and in Chromium `rect(0 0 0 0)` / `xywh(0 0 0 0)`, which compute to `inset(0px 100% 100% 0px)`:
+
+  - **`dom.isHidden` is now `true`** on those, all correct per CSS. An unnamed wrapper carrying one **drops out** of snapshots and outlines, the mirror image of the bullet above — so a re-recorded baseline can lose nodes as well as gain them.
+
+  `cli` and `mcp` bundle `core`, so they are released with it and carry the fix in the one DOM-produced surface they have (`tabs` / `get_tab_order`). Nothing there changes in practice: this signature never looks at an interactive element or one with a `tabindex`, which is all a tab stop can be, and the tab sequence does not read `isHidden`.
+
+  Unchanged: the genuine idiom still reads as hidden, both halves of it — `clip-path: inset(50%)` / `inset(100%)`, and the classic `clip: rect(0, 0, 0, 0)` on a 1px box. Bootstrap's `.visually-hidden` and Tailwind's `sr-only` use exactly those, so neither is affected.
+
+- 82e3d40: Keep a `<textarea>`'s markup text out of the tree. That text is the field's default value, not something the page renders — the browser shows what the field holds now — and for a sensitive field (`autocomplete="one-time-code"`, `cc-number`, `cc-csc`…) it is the secret itself. Every text the tree builds read it as page text anyway. On this page
+
+  ```html
+  <input aria-labelledby="otp" />
+  <textarea id="otp" autocomplete="one-time-code">902114</textarea>
+  ```
+
+  `treeSnapshot()` printed `textbox "902114"`, the one-time code as the name of the field it labels, with no option asking for values. It now prints `textbox`.
+
+  Where else the text reached, and no longer does:
+
+  - **Descriptions:** an element whose `aria-describedby` points at a textarea was described with its text.
+  - **Names from content:** a textarea given a role that takes its name from text (`<textarea role="generic">`) was named after it, and so was a heading or button around it: `heading "Pay 737"` is now `heading "Pay"`.
+  - **Panel labels:** the Tab Sequence view and the filtered lists in the `inspector`, `react` and `storybook-addon` panels label an unnamed node with its own text, so an unlabeled textarea was listed as its contents, the secret included. It is now listed by its tag: `<textarea>` in the Tab Sequence view, `(textarea)` in a list.
+  - **The `dom` facet:** the textarea's own `dom.textContent` and `dom.descendantText`, and the `dom.descendantText` of every element around it, carried the text, as did each panel's text previews.
+
+  What this changes for you:
+
+  - **A textarea's value is unaffected.** `a11y.value` still reads what the field holds now, `[redacted]` for a sensitive one, and `treeSnapshot({ values: true })` prints it as before.
+  - **An ordinary textarea's default text is gone from these places too.** It goes stale as soon as the user types, and Chromium's own accessibility tree never has it. A panel search for that text no longer finds the field; search for its label.
+  - **Snapshots and tree diffs:** a baseline that recorded a textarea's text in a name or description changes. Re-record it, and if the text it held was real rather than a fixture's, treat it as exposed.
+  - **`cli` / `mcp`:** only `real-a11y tabs` and `get_tab_order` walk the page themselves, so only they change. Every other command reads Chromium's tree, which never had the text.
+
 ## 0.1.0-beta.7
 
 ### Minor Changes
