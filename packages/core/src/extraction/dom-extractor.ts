@@ -2572,8 +2572,10 @@ function isActuallyVisible(
  * MUI `aria-hidden` the siblings, Headless UI makes them `inert`, and the walk
  * already drops both — the same way Chromium does. An `aria-modal` dialog is an
  * ordinary overlay here, joining the tree through `findPortalOverlay`.
+ *
+ * Exported so `DomObserver` watches inside exactly the dialogs this pivots to.
  */
-function isModal(element: Element): boolean {
+export function isModal(element: Element): boolean {
   try {
     return element.matches(":modal");
   } catch {

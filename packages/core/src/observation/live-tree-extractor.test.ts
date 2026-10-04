@@ -1976,6 +1976,54 @@ describe("LiveTreeExtractor", () => {
       ).toBe(true);
     });
 
+    // Through DomObserver this time: the dialog is outside the root, so the
+    // question is whether anything delivers its opening and closing at all.
+    it("re-scopes when a <dialog> mounted beside the root opens, and back when it closes", async () => {
+      document.body.innerHTML = `
+        <main id="app"><p>Background</p></main>
+        <dialog id="dlg"><button>Confirm</button></dialog>
+      `;
+      const root = document.getElementById("app")!;
+      const live = new LiveTreeExtractor(root, { mode: "a11y" });
+      let result = live.extract();
+      const observer = new DomObserver(
+        root,
+        (change) => {
+          result = live.refresh(change);
+        },
+        50,
+      );
+      observer.start();
+
+      try {
+        const dlg = document.getElementById("dlg")!;
+        fakeShowModal(dlg);
+        await vi.advanceTimersByTimeAsync(100);
+
+        let expected = extractA11yTree(root);
+        expect(result.rootId).toBe(expected.rootId);
+        expect(result.nodes).toEqual(expected.nodes);
+        expect(
+          [...result.nodes.values()].map((n) => n.a11y.name),
+        ).not.toContain("Background");
+
+        vi.restoreAllMocks();
+        dlg.removeAttribute("open");
+        await vi.advanceTimersByTimeAsync(100);
+
+        expected = extractA11yTree(root);
+        expect(result.rootId).toBe(expected.rootId);
+        expect(result.nodes).toEqual(expected.nodes);
+        expect(
+          [...result.nodes.values()].some(
+            (n) => n.dom?.textContent === "Background",
+          ),
+        ).toBe(true);
+      } finally {
+        observer.stop();
+      }
+    });
+
     it("un-pivots when an out-of-root overlay loses its overlay role", () => {
       // The overlay sits inside a portal wrapper rather than directly under
       // <body>: a direct child would make the `role` name-host climb add <body>
