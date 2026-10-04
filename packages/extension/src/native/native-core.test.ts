@@ -488,6 +488,52 @@ describe("readNativeTree", () => {
     expect(wire).not.toContain("November");
   });
 
+  it("treats a field it could not read as sensitive, down to its options", async () => {
+    // The in-page read fails (no objectId), so the select is unclassified:
+    // it may be a card field, and its chosen option must not say so.
+    const raw = [
+      {
+        nodeId: "1",
+        backendDOMNodeId: 10,
+        role: { value: "combobox" },
+        name: { value: "Expiry month" },
+        value: { type: "string", value: "11" },
+        childIds: ["2"],
+      },
+      {
+        nodeId: "2",
+        parentId: "1",
+        backendDOMNodeId: 20,
+        role: { value: "MenuListPopup" },
+        name: { value: "" },
+        childIds: ["3"],
+      },
+      {
+        nodeId: "3",
+        parentId: "2",
+        backendDOMNodeId: 30,
+        role: { value: "option" },
+        name: { value: "11" },
+        properties: [
+          {
+            name: "selected",
+            value: { type: "booleanOrUndefined", value: true },
+          },
+        ],
+      },
+    ];
+    const t = new FakeTransport((method) => {
+      if (method === "Accessibility.getFullAXTree") return { nodes: raw };
+      if (method === "DOM.resolveNode") return {};
+      return {};
+    });
+    const res = await readNativeTree(t);
+    expect(findNative(res.nodes, "combobox")?.value).toBeUndefined();
+    expect(findNative(res.nodes, "option")?.states).not.toHaveProperty(
+      "selected",
+    );
+  });
+
   it("resolves every field into one object group, and releases it", async () => {
     const t = oneField(
       {
@@ -893,6 +939,49 @@ describe("withholdInsideSensitive", () => {
     expect(byId.get("part")?.rawValue).toBeUndefined();
     expect(byId.get("deep")?.value).toBeUndefined();
     expect(byId.get("elsewhere")?.value).toBe("Spain");
+  });
+
+  it("says which option inside a sensitive field is chosen nowhere", () => {
+    // A redacted `<select autocomplete="cc-exp-month">`, as Chromium reads
+    // it: the combobox, its popup, and options marked selected.
+    const nodes = [
+      n("month", ["popup"], {
+        role: "combobox",
+        value: "[redacted]",
+        redacted: true,
+        states: { focusable: true, expanded: false },
+      }),
+      n("popup", ["jan", "nov"], { role: "MenuListPopup" }),
+      n("jan", [], {
+        role: "option",
+        name: "01",
+        states: { focusable: true, selected: false },
+      }),
+      n("nov", [], {
+        role: "option",
+        name: "11",
+        states: { focusable: true, selected: true },
+      }),
+      n("box", [], { role: "checkbox", states: { checked: "true" } }),
+      n("other", [], {
+        role: "option",
+        name: "Spain",
+        states: { selected: true },
+      }),
+    ];
+    // `box` sits inside a sensitive wrapper too.
+    nodes[1].childIds.push("box");
+    withholdInsideSensitive(nodes, ["month"]);
+    const byId = new Map(nodes.map((x) => [x.id, x]));
+    expect(byId.get("jan")?.states).toEqual({ focusable: true });
+    expect(byId.get("nov")?.states).toEqual({ focusable: true });
+    expect(byId.get("box")?.states).toEqual({});
+    // The field's own states, and anything outside it, stay.
+    expect(byId.get("month")?.states).toEqual({
+      focusable: true,
+      expanded: false,
+    });
+    expect(byId.get("other")?.states).toEqual({ selected: true });
   });
 });
 
