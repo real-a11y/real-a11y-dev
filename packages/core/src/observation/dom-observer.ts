@@ -198,6 +198,13 @@ export class DomObserver {
   // open/close re-extracts but changes INSIDE it (typing, aria-* flips,
   // submenu/content swaps) never do — the panel goes stale.
   private portalContentObservers = new Map<Element, MutationObserver>();
+  /**
+   * For each modal `<dialog>` outside `root` watched on its own, an observer of
+   * its parent's children, so it leaving while still open is heard: removal
+   * changes no attribute, and its parent is often a container (`#modal-root`)
+   * rather than `<body>`, which the portal observer watches.
+   */
+  private dialogParentObservers = new Map<Element, MutationObserver>();
   private debounceTimer: ReturnType<typeof setTimeout> | null = null;
   // Non-resetting ceiling timer: armed on the first change of a burst and NOT
   // cleared by later changes, so a continuous stream still flushes every
@@ -337,10 +344,10 @@ export class DomObserver {
     //
     // Only when `root` is in the document's own tree: a modal never takes the
     // scope from a root inside a shadow tree or a detached one (see
-    // resolveEffectiveRoot), so a dialog opening there changes nothing. And
-    // one removed while still open is heard only as, or inside, a child of
-    // `<body>` leaving; from deeper, its next refresh comes from whatever else
-    // changes.
+    // resolveEffectiveRoot), so a dialog opening there changes nothing. A
+    // modal removed while still open is heard leaving its parent, or with a
+    // child of `<body>`; one that leaves with any other ancestor is not, and
+    // its next refresh comes from whatever else changes.
     if (safeNodeType(this.toggleScope) === 9 /* DOCUMENT_NODE */) {
       const doc = this.toggleScope as Document;
       this.dialogObserver = new MutationObserver((mutations) => {
@@ -447,6 +454,10 @@ export class DomObserver {
       }
     }
     this.portalContentObservers.clear();
+    for (const observer of this.dialogParentObservers.values()) {
+      observer.disconnect();
+    }
+    this.dialogParentObservers.clear();
     if (this.inputListener) {
       this.root.removeEventListener("input", this.inputListener, true);
       this.root.removeEventListener("change", this.inputListener, true);
@@ -524,6 +535,8 @@ export class DomObserver {
 
   /** Tear down the observer + input listeners for a portal that unmounted. */
   private unobservePortalContent(portal: Element): void {
+    this.dialogParentObservers.get(portal)?.disconnect();
+    this.dialogParentObservers.delete(portal);
     const observer = this.portalContentObservers.get(portal);
     if (!observer) return;
     observer.disconnect();
@@ -555,8 +568,31 @@ export class DomObserver {
    */
   private trackDialog(el: Element): boolean {
     if (!safeMatches(el, "dialog") || safeContains(this.root, el)) return false;
-    if (isModal(el)) this.observePortalContent(el);
-    else this.unobservePortalContent(el);
+    if (!isModal(el)) {
+      this.unobservePortalContent(el);
+      return true;
+    }
+    this.observePortalContent(el);
+    // Watched on its own (not through an overlay it sits in): hear it leave.
+    // Leaving the document ends its modality, and leaving for anywhere else
+    // (a reparent) moves it out of what this was watching, so either way the
+    // watch ends and the scope is re-derived.
+    const parent = safeParentNode(el);
+    if (
+      parent &&
+      this.portalContentObservers.has(el) &&
+      !this.dialogParentObservers.has(el)
+    ) {
+      const observer = new MutationObserver((mutations) => {
+        if (mutations.some((m) => [...m.removedNodes].includes(el))) {
+          this.unobservePortalContent(el);
+          this.pendingFull = true;
+          this.scheduleChange();
+        }
+      });
+      observer.observe(parent, { childList: true });
+      this.dialogParentObservers.set(el, observer);
+    }
     return true;
   }
 

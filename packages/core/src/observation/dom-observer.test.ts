@@ -1392,6 +1392,44 @@ describe("DomObserver", () => {
       expect(onTreeChange).not.toHaveBeenCalled();
     });
 
+    // `{open && createPortal(<dialog />, modalRoot)}`: the dialog leaves a
+    // container that stays, changing no attribute and not <body>'s children.
+    it("asks for a full extraction when it is removed from a container while open", async () => {
+      document.body.innerHTML = `<main id="app"></main><div id="modal-root"><dialog id="dlg" open>x</dialog></div>`;
+      const dlg = document.getElementById("dlg")!;
+      asModal(dlg);
+      observeApp();
+
+      dlg.remove();
+      await settleObserver(100);
+
+      expect(onTreeChange).toHaveBeenCalledTimes(1);
+      expect(onTreeChange.mock.calls[0][0].full).toBe(true);
+
+      // And it is no longer watched.
+      onTreeChange.mockClear();
+      dlg.appendChild(document.createElement("p"));
+      await settleObserver(100);
+      expect(onTreeChange).not.toHaveBeenCalled();
+    });
+
+    it("stops watching inside it once it moves into the root", async () => {
+      document.body.innerHTML = `<main id="app"></main><div id="modal-root"><dialog id="dlg" open>x</dialog></div>`;
+      const dlg = document.getElementById("dlg")!;
+      asModal(dlg);
+      observeApp();
+
+      document.getElementById("app")!.appendChild(dlg);
+      await settleObserver(100);
+      onTreeChange.mockClear();
+
+      // Only the primary observer reports it now: one batch, one record.
+      dlg.appendChild(document.createElement("p"));
+      await settleObserver(100);
+      expect(onTreeChange).toHaveBeenCalledTimes(1);
+      expect(onTreeChange.mock.calls[0][0].mutations).toHaveLength(1);
+    });
+
     it("leaves a <dialog> inside the root to the incremental path", async () => {
       document.body.innerHTML = `<main id="app"><dialog id="dlg">x</dialog></main>`;
       observeApp();

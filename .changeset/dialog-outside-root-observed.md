@@ -21,6 +21,6 @@ What this changes for you, on a page with such a dialog:
 - **Panels:** `inspector`, `react` and `storybook-addon` show the dialog as the tree's root while it is open, and the page again once it closes.
 - **`useActiveModal()`:** returns the dialog's node while it is open and `null` once it closes. It returned `null` while the dialog was open, and could keep returning it after it closed.
 - **`waitForMutations()` and `flow()`:** a step whose action only opens or closes such a dialog now settles one debounce after it, instead of waiting out its `timeout` / `waitTimeout`.
-- **Still not heard:** a dialog removed while it is open, from anywhere deeper than a child of `<body>`. The tree catches up on the next refresh anything else causes. A dialog inside a shadow tree, beside a root in the same shadow tree, is not watched either, since it never takes the scope.
+- **Unmounting while open:** a modal dialog removed from the page while still open, as `{open && createPortal(<dialog …/>, modalRoot)}` does when `open` turns false, now hands the tree back to the page too. Still not heard: one that leaves with an ancestor other than its parent or a child of `<body>`, which the tree catches up with on the next refresh anything else causes. A dialog inside a shadow tree, beside a root in the same shadow tree, is not watched either, since it never takes the scope.
 
 The Chrome extension observes the whole document, so it already followed these dialogs. `cli` and `mcp` don't keep a live tree, so nothing they print changes.
