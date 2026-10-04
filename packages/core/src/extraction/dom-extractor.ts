@@ -2574,6 +2574,12 @@ function isActuallyVisible(
  * ordinary overlay here, joining the tree through `findPortalOverlay`.
  *
  * Exported so `DomObserver` watches inside exactly the dialogs this pivots to.
+ *
+ * Reads `element.matches` directly rather than through `safeMatches`, which
+ * captures the method when the module loads: jsdom has no `:modal`, so tests
+ * fake it by spying on `Element.prototype.matches`, and would silently stop
+ * faking it. It is only ever asked about a `<dialog>`, which no control can
+ * shadow a member of.
  */
 export function isModal(element: Element): boolean {
   try {

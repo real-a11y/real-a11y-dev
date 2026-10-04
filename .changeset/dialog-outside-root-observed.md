@@ -14,7 +14,7 @@ Follow a `<dialog>` that opens or closes outside the root a live tree observes. 
 
 opens and closes without mounting anything. `showModal()` and `close()` change only its `open` attribute, outside the root, and nothing the live tree watches reported that. So the tree stayed on the page while the modal was open, and on the dialog after it closed, until some unrelated change inside the root refreshed it.
 
-The live tree now watches the `open` attribute of every `<dialog>` outside the root and refreshes in full when one changes, so it follows a modal dialog in and out within one debounce. While such a dialog is open as a modal, a change inside it — content swapped in, a field typed into — refreshes the tree too, as it already did for a dialog mounted into `<body>` after the panel started. One opened with `show()` is not watched inside: it never becomes the tree's root.
+The live tree now watches the `open` attribute of every `<dialog>` outside the root and refreshes in full when one changes, so it follows a modal dialog in and out within one debounce. While such a dialog is open as a modal, a change inside it — content swapped in, a field typed into — refreshes the tree too, as it already did for a dialog mounted into `<body>` after the panel started. One opened with `show()` gets no new watch, since it never becomes the tree's root. One mounted into `<body>` after the panel started keeps the watch it got then, since a `role="dialog"` or `role="alertdialog"` brings it into the tree.
 
 What this changes for you, on a page with such a dialog:
 
