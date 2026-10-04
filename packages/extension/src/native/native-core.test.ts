@@ -514,6 +514,50 @@ describe("readNativeTree", () => {
     expect(wire).not.toContain("November");
   });
 
+  it("keeps a sensitive field's value out of the name of the cell around it", async () => {
+    // <td><input autocomplete="cc-number" value="4111…"></td>: Chromium
+    // names the cell from its contents, the field's value among them.
+    const raw = [
+      {
+        nodeId: "1",
+        backendDOMNodeId: 10,
+        role: { value: "cell" },
+        name: {
+          value: "4111111111111111",
+          sources: [{ type: "contents", value: { value: "4111111111111111" } }],
+        },
+        childIds: ["2"],
+      },
+      {
+        nodeId: "2",
+        parentId: "1",
+        backendDOMNodeId: 20,
+        role: { value: "textbox" },
+        name: { value: "Card number" },
+        value: { type: "string", value: "4111111111111111" },
+      },
+    ];
+    const t = new FakeTransport((method, params) => {
+      if (method === "Accessibility.getFullAXTree") return { nodes: raw };
+      if (method === "DOM.resolveNode") {
+        const id = (params as { backendNodeId: number }).backendNodeId;
+        return { object: { objectId: `obj-${id}` } };
+      }
+      if (method === "Runtime.callFunctionOn") {
+        return {
+          result: {
+            value: { classified: true, sensitive: true, redacted: true },
+          },
+        };
+      }
+      return {};
+    });
+    const res = await readNativeTree(t);
+    expect(findNative(res.nodes, "cell")?.name).toBe("[redacted]");
+    expect(findNative(res.nodes, "textbox")?.name).toBe("Card number");
+    expect(JSON.stringify(res)).not.toContain("4111");
+  });
+
   it("withholds the chosen option in a listbox a sensitive combobox controls through a dropped wrapper", async () => {
     // The combobox reads as sensitive and the listbox as not, so only the
     // controls relation can withhold the option. Its `aria-controls` names
