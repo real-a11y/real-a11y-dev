@@ -22,6 +22,10 @@
 
 ## Unreleased
 
+## 0.1.15
+
+### Patch Changes
+
 - In DOM mode, an element with a decorative `clip-path` crop — `inset(10px)`,
   `inset(1em)`, `inset(50px)`, `inset(15%)` — is no longer marked hidden. The
   visually-hidden signature matched any crop whose first value began with a 1
