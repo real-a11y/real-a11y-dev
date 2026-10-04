@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 
+import { isModal } from "../extraction/dom-extractor.js";
 import { clobber, shadow } from "../test-support/clobber.js";
 import type { TreeChange } from "../types.js";
 
@@ -1215,6 +1216,369 @@ describe("DomObserver", () => {
       const menu = document.getElementById("menu")!;
       toggle(menu);
       menu.removeAttribute("popover");
+      await settleObserver(100);
+
+      expect(onTreeChange).not.toHaveBeenCalled();
+    });
+  });
+
+  // Apps commonly mount a <dialog> once, beside the element the panel observes,
+  // and open it with showModal(). Extraction pivots onto an open modal wherever
+  // it sits, but opening or closing one mounts nothing and changes only its
+  // `open` attribute, outside the root, so nothing reported it: the tree stayed
+  // on the page under an open modal, and on the dialog after it closed.
+  // jsdom has no showModal(), so these flip `open` the way it does.
+  describe("a <dialog> mounted outside the root", () => {
+    function observeApp(): void {
+      observer = new DomObserver(
+        document.getElementById("app")!,
+        onTreeChange,
+        100,
+      );
+      observer.start();
+    }
+
+    /**
+     * jsdom never matches `:modal`, so make `dialog` match it while it is
+     * open and in the document, as one opened with showModal() does until it
+     * closes or is removed.
+     */
+    function asModal(dialog: Element): void {
+      const matches = Element.prototype.matches;
+      vi.spyOn(Element.prototype, "matches").mockImplementation(function (
+        this: Element,
+        selector: string,
+      ) {
+        return selector === ":modal"
+          ? this === dialog && this.isConnected && this.hasAttribute("open")
+          : matches.call(this, selector);
+      });
+    }
+
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    // Every modal test below relies on this: were `isModal` to read `:modal`
+    // through a method captured at load, the stub would stop reaching it and
+    // those tests would check the non-modal path without failing.
+    it("fakes :modal where the extractor reads it", () => {
+      document.body.innerHTML = `<dialog id="dlg" open>x</dialog>`;
+      const dlg = document.getElementById("dlg")!;
+      asModal(dlg);
+
+      expect(isModal(dlg)).toBe(true);
+    });
+
+    it("asks for a full extraction when it opens", async () => {
+      document.body.innerHTML = `<main id="app"><button>Open</button></main><dialog id="dlg"><button>Confirm</button></dialog>`;
+      observeApp();
+
+      document.getElementById("dlg")!.setAttribute("open", "");
+      await settleObserver(100);
+
+      expect(onTreeChange).toHaveBeenCalledTimes(1);
+      expect(onTreeChange.mock.calls[0][0].full).toBe(true);
+    });
+
+    it("asks for a full extraction when it closes", async () => {
+      document.body.innerHTML = `<main id="app"><button>Open</button></main><dialog id="dlg" open><button>Confirm</button></dialog>`;
+      observeApp();
+
+      document.getElementById("dlg")!.removeAttribute("open");
+      await settleObserver(100);
+
+      expect(onTreeChange).toHaveBeenCalledTimes(1);
+      expect(onTreeChange.mock.calls[0][0].full).toBe(true);
+    });
+
+    it("hears one inside a container rather than directly in <body>", async () => {
+      document.body.innerHTML = `<main id="app"></main><div id="modals"><div><dialog id="dlg">x</dialog></div></div>`;
+      observeApp();
+
+      document.getElementById("dlg")!.setAttribute("open", "");
+      await settleObserver(100);
+
+      expect(onTreeChange).toHaveBeenCalledTimes(1);
+      expect(onTreeChange.mock.calls[0][0].full).toBe(true);
+    });
+
+    // An open modal IS the tree, so a change inside it has to refresh it, as
+    // one inside a portal-mounted overlay does.
+    it("watches inside it while it is open as a modal", async () => {
+      document.body.innerHTML = `<main id="app"></main><dialog id="dlg"><p>Initial</p></dialog>`;
+      const dlg = document.getElementById("dlg")!;
+      asModal(dlg);
+      observeApp();
+      dlg.setAttribute("open", "");
+      await settleObserver(100);
+      onTreeChange.mockClear();
+
+      dlg.appendChild(document.createElement("button"));
+      await settleObserver(100);
+
+      expect(onTreeChange).toHaveBeenCalledTimes(1);
+      expect(onTreeChange.mock.calls[0][0].mutations).toHaveLength(1);
+    });
+
+    it("hears typing inside it while it is open as a modal", async () => {
+      document.body.innerHTML = `<main id="app"></main><dialog id="dlg"><input id="name" /></dialog>`;
+      const dlg = document.getElementById("dlg")!;
+      asModal(dlg);
+      observeApp();
+      dlg.setAttribute("open", "");
+      await settleObserver(100);
+      onTreeChange.mockClear();
+
+      const input = document.getElementById("name")!;
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      await settleObserver(100);
+
+      expect(onTreeChange).toHaveBeenCalledTimes(1);
+      expect(onTreeChange.mock.calls[0][0].dirtyRoots).toEqual([input]);
+    });
+
+    it("watches inside one that was already a modal when observing started", async () => {
+      document.body.innerHTML = `<main id="app"></main><dialog id="dlg" open><p>Initial</p></dialog>`;
+      const dlg = document.getElementById("dlg")!;
+      asModal(dlg);
+      observeApp();
+
+      dlg.appendChild(document.createElement("p"));
+      await settleObserver(100);
+
+      expect(onTreeChange).toHaveBeenCalledTimes(1);
+    });
+
+    // A non-modal dialog is never the whole tree, and when it isn't in the
+    // tree at all, each change inside it would cost a full re-extraction.
+    it("does not watch inside one opened without showModal()", async () => {
+      document.body.innerHTML = `<main id="app"></main><dialog id="dlg"><input id="name" /></dialog>`;
+      observeApp();
+      const dlg = document.getElementById("dlg")!;
+      dlg.setAttribute("open", "");
+      await settleObserver(100);
+      // Opening still asks for a full extraction: an explicit role="dialog"
+      // would widen the scope to take it in.
+      expect(onTreeChange).toHaveBeenCalledTimes(1);
+      onTreeChange.mockClear();
+
+      dlg.appendChild(document.createElement("p"));
+      document
+        .getElementById("name")!
+        .dispatchEvent(new Event("input", { bubbles: true }));
+      await settleObserver(100);
+
+      expect(onTreeChange).not.toHaveBeenCalled();
+    });
+
+    it("stops watching inside it once it closes", async () => {
+      document.body.innerHTML = `<main id="app"></main><dialog id="dlg" open><input id="name" /></dialog>`;
+      const dlg = document.getElementById("dlg")!;
+      asModal(dlg);
+      observeApp();
+      dlg.removeAttribute("open");
+      await settleObserver(100);
+      onTreeChange.mockClear();
+
+      dlg.appendChild(document.createElement("p"));
+      document
+        .getElementById("name")!
+        .dispatchEvent(new Event("input", { bubbles: true }));
+      await settleObserver(100);
+
+      expect(onTreeChange).not.toHaveBeenCalled();
+    });
+
+    it("stops watching inside it when its wrapper leaves <body> with it open", async () => {
+      document.body.innerHTML = `<main id="app"></main><div id="wrapper"><dialog id="dlg" open>x</dialog></div>`;
+      const dlg = document.getElementById("dlg")!;
+      asModal(dlg);
+      observeApp();
+      document.getElementById("wrapper")!.remove();
+      await settleObserver(100);
+      onTreeChange.mockClear();
+
+      dlg.appendChild(document.createElement("p"));
+      await settleObserver(100);
+
+      expect(onTreeChange).not.toHaveBeenCalled();
+    });
+
+    // `{open && createPortal(<dialog />, modalRoot)}`: the dialog leaves a
+    // container that stays, changing no attribute and not <body>'s children.
+    it("asks for a full extraction when it is removed from a container while open", async () => {
+      document.body.innerHTML = `<main id="app"></main><div id="modal-root"><dialog id="dlg" open>x</dialog></div>`;
+      const dlg = document.getElementById("dlg")!;
+      asModal(dlg);
+      observeApp();
+
+      dlg.remove();
+      await settleObserver(100);
+
+      expect(onTreeChange).toHaveBeenCalledTimes(1);
+      expect(onTreeChange.mock.calls[0][0].full).toBe(true);
+
+      // And it is no longer watched.
+      onTreeChange.mockClear();
+      dlg.appendChild(document.createElement("p"));
+      await settleObserver(100);
+      expect(onTreeChange).not.toHaveBeenCalled();
+    });
+
+    // Moving it ends its modality, so a modal here was closed and shown again
+    // after the move, in the same task, before any observer callback ran.
+    // Observer callbacks run in the order the observers were made, so which
+    // one hears the move first depends on where the dialog sat and whether it
+    // was open before observing started.
+    it.each([
+      [
+        "from a container, opened after start",
+        `<div id="modal-root"><dialog id="dlg">x</dialog></div>`,
+      ],
+      ["from <body>, opened after start", `<dialog id="dlg">x</dialog>`],
+      ["from <body>, open at start", `<dialog id="dlg" open>x</dialog>`],
+    ])(
+      "keeps watching one that is a modal again after moving elsewhere outside the root (%s)",
+      async (_, markup) => {
+        document.body.innerHTML = `<main id="app"></main>${markup}<div id="other"></div>`;
+        const dlg = document.getElementById("dlg")!;
+        asModal(dlg);
+        observeApp();
+        dlg.setAttribute("open", "");
+        await settleObserver(100);
+
+        document.getElementById("other")!.appendChild(dlg);
+        await settleObserver(100);
+        onTreeChange.mockClear();
+
+        dlg.appendChild(document.createElement("p"));
+        await settleObserver(100);
+        expect(onTreeChange).toHaveBeenCalledTimes(1);
+
+        // And its next removal, from the new parent, is heard too.
+        onTreeChange.mockClear();
+        dlg.remove();
+        await settleObserver(100);
+        expect(onTreeChange).toHaveBeenCalledTimes(1);
+        expect(onTreeChange.mock.calls[0][0].full).toBe(true);
+      },
+    );
+
+    // A <dialog role="alertdialog"> portalled into <body> and opened with
+    // show() widens the tree to take it in, so the watch the portal path
+    // gave it on mounting has to survive its opening.
+    it("keeps the watch a <dialog> mounted into <body> got, when it opens with show()", async () => {
+      document.body.innerHTML = `<main id="app"></main>`;
+      observeApp();
+      const dlg = document.createElement("dialog");
+      dlg.setAttribute("role", "alertdialog");
+      dlg.innerHTML = "<p>Saved</p>";
+      document.body.appendChild(dlg);
+      await settleObserver(100);
+
+      dlg.setAttribute("open", "");
+      await settleObserver(100);
+      onTreeChange.mockClear();
+
+      dlg.appendChild(document.createElement("button"));
+      await settleObserver(100);
+      expect(onTreeChange).toHaveBeenCalledTimes(1);
+    });
+
+    // A root inside a modal: the modal is the tree, but the primary observer
+    // already reports what changes inside the root.
+    it("does not watch inside a modal that holds the root, so nothing is reported twice", async () => {
+      document.body.innerHTML = `<dialog id="dlg" open><div id="app"><p>x</p></div></dialog>`;
+      const dlg = document.getElementById("dlg")!;
+      asModal(dlg);
+      observeApp();
+
+      document.getElementById("app")!.appendChild(document.createElement("p"));
+      await settleObserver(100);
+      expect(onTreeChange).toHaveBeenCalledTimes(1);
+      expect(onTreeChange.mock.calls[0][0].mutations).toHaveLength(1);
+
+      // Its closing still refreshes in full: the scope moves off it.
+      onTreeChange.mockClear();
+      dlg.removeAttribute("open");
+      await settleObserver(100);
+      expect(onTreeChange).toHaveBeenCalledTimes(1);
+      expect(onTreeChange.mock.calls[0][0].full).toBe(true);
+    });
+
+    it("stops watching inside it once it moves into the root", async () => {
+      document.body.innerHTML = `<main id="app"></main><div id="modal-root"><dialog id="dlg" open>x</dialog></div>`;
+      const dlg = document.getElementById("dlg")!;
+      asModal(dlg);
+      observeApp();
+
+      document.getElementById("app")!.appendChild(dlg);
+      await settleObserver(100);
+      onTreeChange.mockClear();
+
+      // Only the primary observer reports it now: one batch, one record.
+      dlg.appendChild(document.createElement("p"));
+      await settleObserver(100);
+      expect(onTreeChange).toHaveBeenCalledTimes(1);
+      expect(onTreeChange.mock.calls[0][0].mutations).toHaveLength(1);
+    });
+
+    it("leaves a <dialog> inside the root to the incremental path", async () => {
+      document.body.innerHTML = `<main id="app"><dialog id="dlg">x</dialog></main>`;
+      observeApp();
+
+      document.getElementById("dlg")!.setAttribute("open", "");
+      await settleObserver(100);
+
+      expect(onTreeChange).toHaveBeenCalledTimes(1);
+      expect(onTreeChange.mock.calls[0][0].full).toBeUndefined();
+    });
+
+    // Bounded: only a <dialog> can take the scope by opening. A <details>
+    // elsewhere on the page opening is not this tree's business.
+    it("ignores a <details> outside the root opening", async () => {
+      document.body.innerHTML = `<main id="app"></main><details id="d"><summary>S</summary>x</details>`;
+      observeApp();
+
+      document.getElementById("d")!.setAttribute("open", "");
+      await settleObserver(100);
+
+      expect(onTreeChange).not.toHaveBeenCalled();
+    });
+
+    // A modal never takes the scope from a root inside a shadow tree.
+    it("ignores one beside a root inside a shadow tree", async () => {
+      const host = document.createElement("div");
+      document.body.appendChild(host);
+      const shadowRoot = host.attachShadow({ mode: "open" });
+      shadowRoot.innerHTML = `<main id="app"></main><dialog id="dlg">x</dialog>`;
+      const dlg = shadowRoot.getElementById("dlg")!;
+      asModal(dlg);
+      observer = new DomObserver(
+        shadowRoot.getElementById("app")!,
+        onTreeChange,
+        100,
+      );
+      observer.start();
+
+      dlg.setAttribute("open", "");
+      await settleObserver(100);
+      dlg.appendChild(document.createElement("p"));
+      await settleObserver(100);
+
+      expect(onTreeChange).not.toHaveBeenCalled();
+    });
+
+    it("stops listening on stop()", async () => {
+      document.body.innerHTML = `<main id="app"></main><dialog id="dlg" open>x</dialog>`;
+      const dlg = document.getElementById("dlg")!;
+      asModal(dlg);
+      observeApp();
+      observer.stop();
+
+      dlg.appendChild(document.createElement("p"));
+      dlg.removeAttribute("open");
       await settleObserver(100);
 
       expect(onTreeChange).not.toHaveBeenCalled();

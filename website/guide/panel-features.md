@@ -97,7 +97,9 @@ Scoping affects:
 
 When the page opens a `<dialog>` with `showModal()`, the tree re-roots to that dialog: the dialog becomes the root row, and the page behind it drops out. This is what a screen reader user effectively gets. The browser makes the rest of the page inert, and the dialog is the only thing they can navigate.
 
-Only a modal `<dialog>` does this. A `<dialog>` opened with `show()`, or an element with `role="dialog"` or `aria-modal="true"`, does not re-root the tree, and the page stays in the tree around it. Dialog libraries such as Radix, MUI and Headless UI hide the rest of the page with `aria-hidden` or `inert`, so that content drops out of the tree too. The tree then shows the dialog alone, but its root is still the page, not the dialog, so the extension shows no **Dialog: …** bar for it.
+It does this wherever the dialog is on the page, including outside the element an in-page panel is scoped to, and it re-roots back when the dialog closes or is removed. The exception is shadow DOM: a dialog inside a shadow root doesn't re-root the tree, and no dialog re-roots a panel whose root is inside a shadow root.
+
+Only a modal `<dialog>` does this. A `<dialog>` opened with `show()`, or an element with `role="dialog"` or `aria-modal="true"`, does not re-root the tree, and the page stays in the tree around it. If one of these is outside an in-page panel's root, it joins the tree only when it has a `role` of `dialog` or `alertdialog`, which widens the tree to the whole page. A plain `<dialog>` opened with `show()` there stays out of the tree. Dialog libraries such as Radix, MUI and Headless UI hide the rest of the page with `aria-hidden` or `inert`, so that content drops out of the tree too. The tree then shows the dialog alone, but its root is still the page, not the dialog, so the extension shows no **Dialog: …** bar for it.
 
 The re-rooting is shared: every panel builds its tree with the same extractor. What the panel shows around it differs.
 

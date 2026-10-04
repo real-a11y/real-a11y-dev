@@ -1,13 +1,16 @@
 import {
   safeContains,
   safeGetAttribute,
+  safeMatches,
   safeNodeType,
   safeParentNode,
+  safeQuerySelectorAll,
   safeRootNode,
 } from "../extraction/clobber-safe.js";
 import {
   ARIA_STATE_ATTRIBUTES,
   containsOverlaySignal,
+  isModal,
   KEY_ATTRIBUTES,
 } from "../extraction/dom-extractor.js";
 import { GLOBAL_ARIA_ATTRIBUTES } from "../extraction/role-map.js";
@@ -195,6 +198,15 @@ export class DomObserver {
   // open/close re-extracts but changes INSIDE it (typing, aria-* flips,
   // submenu/content swaps) never do — the panel goes stale.
   private portalContentObservers = new Map<Element, MutationObserver>();
+  /**
+   * For each modal `<dialog>` outside `root` that `syncDialogWatch` watches, an
+   * observer of its parent's children, so it leaving while still open is
+   * heard: removal changes no attribute, and its parent is often a container
+   * (`#modal-root`) rather than `<body>`, which the portal observer watches.
+   * Its keys are also the record of which watches the dialog path made, as
+   * opposed to the portal path, and only those does a dialog closing end.
+   */
+  private dialogParentObservers = new Map<Element, MutationObserver>();
   private debounceTimer: ReturnType<typeof setTimeout> | null = null;
   // Non-resetting ceiling timer: armed on the first change of a burst and NOT
   // cleared by later changes, so a continuous stream still flushes every
@@ -206,6 +218,8 @@ export class DomObserver {
   private toggleScope: Node | null = null;
   /** Watches `popover` attributes across `toggleScope`, for those outside `root`. */
   private popoverObserver: MutationObserver | null = null;
+  /** Watches `open` attributes across `toggleScope`, for a `<dialog>` outside `root`. */
+  private dialogObserver: MutationObserver | null = null;
   /** Accumulated MutationRecords across the current debounce window. */
   private pendingMutations: MutationRecord[] = [];
   /** Synthetic dirty roots (e.g. form-control input events). */
@@ -282,7 +296,8 @@ export class DomObserver {
     // composed either, so a popover inside a shadow root below that tree is
     // not heard: its next refresh comes from whatever else changes. A
     // `<details>` or `<dialog>` fires one too, but changes its `open`
-    // attribute as well.
+    // attribute as well, which the primary observer reports inside `root` and
+    // `dialogObserver` below reports for a `<dialog>` outside it.
     this.toggleListener = (e: Event) => {
       if (
         e.target instanceof Element &&
@@ -305,8 +320,7 @@ export class DomObserver {
     // refresh anything else causes.
     this.popoverObserver = new MutationObserver((mutations) => {
       if (mutations.some((m) => !safeContains(this.root, m.target))) {
-        this.pendingFull = true;
-        this.scheduleChange();
+        this.scheduleFull();
       }
     });
     this.popoverObserver.observe(this.toggleScope, {
@@ -314,6 +328,50 @@ export class DomObserver {
       attributes: true,
       attributeFilter: ["popover"],
     });
+
+    // A `<dialog>` is commonly mounted once, outside `root` — at body level,
+    // beside the app — and opened with showModal(). Extraction then pivots
+    // onto it wherever it sits, since content behind a modal is inert. But
+    // showModal() and close() mount nothing: they change the dialog's `open`
+    // attribute, which the primary observer reports only inside `root`, so the
+    // tree stayed on the page under an open modal and on the dialog after it
+    // closed. Only a `<dialog>` outside `root` counts here. It asks for a full
+    // re-extraction, which re-derives the scope, and while the dialog is open
+    // as a modal it is watched inside like a portal overlay, since it is then
+    // the whole tree. One opened with show() is not: it is never the whole
+    // tree, and while it isn't in it at all, each change inside it would cost
+    // a full re-extraction. Its `toggle` event is newer than the attribute,
+    // and not every browser this runs in fires it.
+    //
+    // Only when `root` is in the document's own tree: a modal never takes the
+    // scope from a root inside a shadow tree or a detached one (see
+    // resolveEffectiveRoot), so a dialog opening there changes nothing. A
+    // modal removed while still open is heard leaving its parent, or with a
+    // child of `<body>`. One that leaves with any other ancestor is not: its
+    // next refresh comes from whatever else changes, and its watch, with its
+    // `input`/`change` listeners, stays on the detached dialog until stop().
+    if (safeNodeType(this.toggleScope) === 9 /* DOCUMENT_NODE */) {
+      const doc = this.toggleScope as Document;
+      this.dialogObserver = new MutationObserver((mutations) => {
+        let toggled = false;
+        for (const m of mutations) {
+          const el = m.target as Element;
+          if (!this.isDialogOutsideRoot(el)) continue;
+          this.syncDialogWatch(el);
+          toggled = true;
+        }
+        if (toggled) this.scheduleFull();
+      });
+      this.dialogObserver.observe(doc, {
+        subtree: true,
+        attributes: true,
+        attributeFilter: ["open"],
+      });
+      // One already open reports no change, but is watched the same.
+      for (const dialog of safeQuerySelectorAll(doc, "dialog[open]")) {
+        if (this.isDialogOutsideRoot(dialog)) this.syncDialogWatch(dialog);
+      }
+    }
 
     // Modal dialogs from React Portal, Vue Teleport, etc. mount into
     // `document.body` — *outside* `this.root`, so the primary observer
@@ -347,10 +405,21 @@ export class DomObserver {
             // Headless-UI exit animation — before it detaches, so
             // isPortalOverlayContainer would no longer match it. But it is
             // still the Map key we tracked on mount; re-checking the shape
-            // here would leak its observer + listeners.
-            if (this.portalContentObservers.has(node as Element)) {
-              this.unobservePortalContent(node as Element);
+            // here would leak its observer + listeners. Within it, too: an
+            // open <dialog> is watched on its own, and can leave inside a
+            // wrapper.
+            const torn = this.unobservePortalContentWithin(node);
+            if (torn.length > 0) {
               sawPortal = true;
+              // A dialog among them can be moved rather than removed, and
+              // shown as a modal again in the same task: its `open` flips
+              // were handled before this, while it still looked watched, so
+              // look at it afresh where it is now.
+              for (const el of torn) {
+                if (this.dialogObserver && this.isDialogOutsideRoot(el)) {
+                  this.syncDialogWatch(el);
+                }
+              }
             } else if (isPortalOverlayContainer(node, this.internalIds)) {
               // A portal-shaped node we weren't tracking closed (e.g. one that
               // was already open before start()) — still worth a re-extract.
@@ -370,8 +439,7 @@ export class DomObserver {
           // Portal mounts/unmounts happen outside `root`, so they produce no
           // MutationRecord the incremental path can splice. Flag a full
           // re-extraction so the extractor re-evaluates portal/modal scope.
-          this.pendingFull = true;
-          this.scheduleChange();
+          this.scheduleFull();
         }
       });
       this.portalObserver.observe(body, { childList: true });
@@ -397,6 +465,10 @@ export class DomObserver {
       }
     }
     this.portalContentObservers.clear();
+    for (const observer of this.dialogParentObservers.values()) {
+      observer.disconnect();
+    }
+    this.dialogParentObservers.clear();
     if (this.inputListener) {
       this.root.removeEventListener("input", this.inputListener, true);
       this.root.removeEventListener("change", this.inputListener, true);
@@ -405,6 +477,10 @@ export class DomObserver {
     if (this.popoverObserver) {
       this.popoverObserver.disconnect();
       this.popoverObserver = null;
+    }
+    if (this.dialogObserver) {
+      this.dialogObserver.disconnect();
+      this.dialogObserver = null;
     }
     if (this.toggleListener && this.toggleScope) {
       this.toggleScope.removeEventListener("toggle", this.toggleListener, true);
@@ -475,6 +551,76 @@ export class DomObserver {
       portal.removeEventListener("input", this.inputListener, true);
       portal.removeEventListener("change", this.inputListener, true);
     }
+  }
+
+  /** Tear down every watched overlay that is `node` or inside it, and return them. */
+  private unobservePortalContentWithin(node: Node): Element[] {
+    const torn: Element[] = [];
+    for (const watched of [...this.portalContentObservers.keys()]) {
+      if (!safeContains(node, watched)) continue;
+      this.untrackDialog(watched);
+      this.unobservePortalContent(watched);
+      torn.push(watched);
+    }
+    return torn;
+  }
+
+  /** A `<dialog>` outside `root`, whose opening or closing can move the scope. */
+  private isDialogOutsideRoot(el: Element): boolean {
+    return safeMatches(el, "dialog") && !safeContains(this.root, el);
+  }
+
+  /**
+   * Watch inside a `<dialog>` outside `root` while it is a modal, as a portal
+   * overlay is watched, and stop once it isn't. Only a watch made here is
+   * stopped: one the portal path made when the dialog mounted into `<body>`
+   * stays, since a `show()` dialog with an overlay role is still in the tree.
+   */
+  private syncDialogWatch(dialog: Element): void {
+    if (!isModal(dialog)) {
+      this.untrackDialog(dialog);
+      return;
+    }
+    // Watched already, itself or through the overlay it sits in.
+    for (const watched of this.portalContentObservers.keys()) {
+      if (safeContains(watched, dialog)) return;
+    }
+    // One holding `root` is the tree, but watching all of it would report
+    // every change inside `root` twice. Its opening and closing still
+    // refresh in full; a change inside it but outside `root` waits for the
+    // next refresh something else causes.
+    if (safeContains(dialog, this.root)) return;
+    const parent = safeParentNode(dialog);
+    if (!parent) return;
+    this.observePortalContent(dialog);
+    // Leaving its parent ends its modality, or moves it out of what this
+    // watched, so either way the watch ends and the scope is re-derived.
+    const observer = new MutationObserver((mutations) => {
+      if (!mutations.some((m) => [...m.removedNodes].includes(dialog))) return;
+      this.untrackDialog(dialog);
+      // Moved, then closed and shown as a modal again in the same task: the
+      // `open` flips were handled before this, while it still looked watched,
+      // so look at it afresh where it is now.
+      if (this.isDialogOutsideRoot(dialog)) this.syncDialogWatch(dialog);
+      this.scheduleFull();
+    });
+    observer.observe(parent, { childList: true });
+    this.dialogParentObservers.set(dialog, observer);
+  }
+
+  /** End a watch `syncDialogWatch` made: on its parent, then inside it. */
+  private untrackDialog(dialog: Element): void {
+    const observer = this.dialogParentObservers.get(dialog);
+    if (!observer) return;
+    observer.disconnect();
+    this.dialogParentObservers.delete(dialog);
+    this.unobservePortalContent(dialog);
+  }
+
+  /** Ask for a full re-extraction, for a change that can move the scope. */
+  private scheduleFull(): void {
+    this.pendingFull = true;
+    this.scheduleChange();
   }
 
   private scheduleChange(): void {
