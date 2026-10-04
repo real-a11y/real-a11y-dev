@@ -287,6 +287,12 @@
   notice at any point, pauses it; the status line says so, and Refresh
   resumes it. ([#478](https://github.com/real-a11y/real-a11y-dev/pull/478))
 
+- The native tree no longer gives away a card field's value through its
+  options. A `<select autocomplete="cc-exp-month">` read `[redacted]`, but
+  the option rows under it still showed a `selected` badge on the chosen
+  month, in the tree and in the role-filter lists. Nothing inside a
+  sensitive field is marked `selected` or `checked` now, as in the DOM tree.
+
 ## 0.1.14
 
 ### Patch Changes
