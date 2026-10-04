@@ -75,9 +75,10 @@ main
     code "value="es""
   button "Copy Code"
   code
-  paragraph "A slider shows its in the A11y view, and a rich-text editor shows its text. A password, one-time-code or card field shows in both views, never its contents or length. The report leaves values out."
+  paragraph "A slider shows its in the A11y view, and a rich-text editor shows its text. A password, one-time-code or card field shows in both views, never its contents or length, and a card 's options don't say which one is chosen. The report leaves values out."
     code "aria-valuetext"
     code "[redacted]"
+    code "<select>"
     strong "Copy"
   paragraph "Click links, fill forms, submit, expand menus, complete flows. You're using the real product — just through its structure instead of its visual layer."
     strong "3. Navigate your product"
