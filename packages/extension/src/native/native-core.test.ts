@@ -513,6 +513,52 @@ describe("readNativeTree", () => {
     expect(wire).not.toContain("November");
   });
 
+  it("treats a field it could not read as sensitive, down to its options", async () => {
+    // The in-page read fails (no objectId), so the select is unclassified:
+    // it may be a card field, and its chosen option must not say so.
+    const raw = [
+      {
+        nodeId: "1",
+        backendDOMNodeId: 10,
+        role: { value: "combobox" },
+        name: { value: "Expiry month" },
+        value: { type: "string", value: "11" },
+        childIds: ["2"],
+      },
+      {
+        nodeId: "2",
+        parentId: "1",
+        backendDOMNodeId: 20,
+        role: { value: "MenuListPopup" },
+        name: { value: "" },
+        childIds: ["3"],
+      },
+      {
+        nodeId: "3",
+        parentId: "2",
+        backendDOMNodeId: 30,
+        role: { value: "option" },
+        name: { value: "11" },
+        properties: [
+          {
+            name: "selected",
+            value: { type: "booleanOrUndefined", value: true },
+          },
+        ],
+      },
+    ];
+    const t = new FakeTransport((method) => {
+      if (method === "Accessibility.getFullAXTree") return { nodes: raw };
+      if (method === "DOM.resolveNode") return {};
+      return {};
+    });
+    const res = await readNativeTree(t);
+    expect(findNative(res.nodes, "combobox")?.value).toBeUndefined();
+    expect(findNative(res.nodes, "option")?.states).not.toHaveProperty(
+      "selected",
+    );
+  });
+
   it("resolves every field into one object group, and releases it", async () => {
     const t = oneField(
       {
