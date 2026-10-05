@@ -418,14 +418,36 @@ Notes:
   bumping the React wrapper. Read the `linked` array itself for the membership
   rather than a list written here — it moves as packages go internal, and this
   line claiming "all of them" outlived the truth of it by several releases.
-- **A change to a private package still needs a changeset — naming a
-  consumer.** Internal packages are bundled into published ones, so a fix in
+- **A change to a private package still needs a changeset — naming its
+  carriers.** Internal packages are bundled into published ones, so a fix in
   `audit` or `browser` reaches npm inside `testing`, `cli`, and `mcp`: it is
   user-visible and it needs a changelog entry. Changesets cannot version a
-  private package (`privatePackages.version` is `false`), so name the published
-  package(s) that carry the change. A changeset naming only the private package
-  is accepted and then silently ignored — the `changeset` CI job checks that one
-  exists, not that it names the right thing.
+  private package (`privatePackages.version` is `false`), so the changeset names
+  the published packages that carry it instead. A changeset naming only the
+  private package is accepted and then silently ignored — the `changeset` CI
+  job checks that one exists, not that it names the right thing.
+- **Which carriers: every one that imports or runs the code you changed.** A
+  carrier is a published package whose tsup `noExternal` bundles the internal
+  one, or the extension, whose Vite build bundles all its dependencies. The PR
+  template keeps the current list, and `scripts/carriers.test.mjs` fails when it
+  drifts from those configs. A change that releases at all releases in each
+  carrier that reaches it, **including one whose own output doesn't change** —
+  its changelog line says so, as in "`cli` and `mcp` re-release the bundled
+  engine; their output is unchanged by this release." Leave a carrier out only
+  when it never imports or runs that code — `cli` and `mcp` never construct a
+  `DomObserver` — and say which and why in the PR body. The extension's release
+  is a `packages/extension/CHANGELOG.md` `## Unreleased` entry rather than a
+  changeset entry, under the same rule. (A change that alters no behaviour in
+  any carrier — a refactor, a lint fix — still releases nowhere, with an empty
+  changeset that says so.)
+
+  The line is drawn at reach, not at behaviour, because a carrier left out of a
+  release still ships the code on its next one, with no changelog line saying
+  so. That is harmless only when it never runs the code. "Its output won't
+  change" is a prediction nobody can check in review; "it never imports this"
+  is one grep. And each carrier bundles its own copy of the engine, so one left
+  out keeps the old copy: an app that loads two carriers runs two versions of
+  the same engine side by side.
 - The extension, website, and examples are ignored — no changeset is needed for them.
 - Docs-only or tooling-only PRs don't need a changeset.
 

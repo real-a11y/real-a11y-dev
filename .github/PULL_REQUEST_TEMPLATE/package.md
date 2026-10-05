@@ -30,6 +30,6 @@
 - [ ] Dependencies justified — `@real-a11y-dev/core` stays dependency-free
 - [ ] `README.md` + a docs page on the website
 - [ ] Added to the `linked` cohort in `.changeset/config.json` (or `ignore` if private)
-- [ ] Bundles `core`/`ui`? It's covered by `scripts/check-bundlers.mjs` (derived from tsup `noExternal`)
+- [ ] Bundles an internal package? Paired `noExternal` + `dts.resolve` in its tsup config, and it appears in the default template's carrier list (`scripts/carriers.test.mjs` derives that list from `noExternal` and fails until the template matches)
 - [ ] `pnpm packaging:check` green
 - [ ] `minor` changeset for the new package
