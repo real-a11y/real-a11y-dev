@@ -238,6 +238,28 @@ export class DomObserver {
   }
 
   start(): void {
+    // Idempotent: every field below is assigned unconditionally, so a second
+    // `start()` on an already-armed observer would strand the first set of
+    // observers and listeners with nothing left holding them. They would stay
+    // connected, recording into the same `pendingMutations` buffer, so one
+    // mutation arrives as duplicate entries in `change.mutations` (one
+    // callback per batch, not several — the sets share one debounce timer and
+    // each reset it). Worse, `stop()` could only ever disconnect the set from
+    // the LAST `start()`, so the earlier ones went on firing `onTreeChange`
+    // after the consumer tore the observer down, for the life of the
+    // document.
+    //
+    // A no-op rather than a `this.stop()` restart, deliberately. There is
+    // nothing for a restart to pick up — `root` is fixed at construction —
+    // and tearing down first would drop the deep observers for overlays that
+    // are already open: `portalObserver` only ever adopts a portal on the
+    // `childList` record that mounts it, so an open one would never be
+    // re-adopted, and clearing `portalContentObservers` also loses the
+    // identity-keyed teardown that an emptied wrapper depends on (see
+    // `portalObserver`'s removal branch below). Re-arming after a real
+    // `stop()` is unaffected, which is how every consumer drives this.
+    if (this.observer) return;
+
     this.observer = new MutationObserver((mutations) => {
       // If every mutation in this batch came from our own overlay/curtain,
       // skip the re-extract entirely. Mixed batches (one user mutation +
