@@ -24,15 +24,17 @@ Cutting a release or adding a package? There are tailored templates:
 
 ## Packages touched
 
-<!-- Check all that apply -->
+<!-- Check all that apply. An internal package ships inside its carriers — the
+     list under "Changesets & release" says which. -->
 
-- [ ] `@real-a11y-dev/core`
-- [ ] `@real-a11y-dev/serialize` (internal — ships inside `testing` / `browser` / `cli` / `mcp`)
-- [ ] `@real-a11y-dev/audit` (internal — ships inside `testing` / `browser` / `cli` / `mcp`)
-- [ ] `@real-a11y-dev/snapshot` (internal — ships inside `cli` / `mcp`)
-- [ ] `@real-a11y-dev/browser` (internal — ships inside `cli` / `mcp` / `testing`)
-- [ ] `@real-a11y-dev/validate` (internal — ships inside `testing`)
-- [ ] `@real-a11y-dev/semantic-navigator-ui` (internal — ships inside `inspector` / `storybook-addon` / the extension)
+- [ ] `@real-a11y-dev/core` (internal)
+- [ ] `@real-a11y-dev/serialize` (internal)
+- [ ] `@real-a11y-dev/audit` (internal)
+- [ ] `@real-a11y-dev/snapshot` (internal)
+- [ ] `@real-a11y-dev/browser` (internal)
+- [ ] `@real-a11y-dev/session-registry` (internal)
+- [ ] `@real-a11y-dev/validate` (internal)
+- [ ] `@real-a11y-dev/semantic-navigator-ui` (internal)
 - [ ] `@real-a11y-dev/inspector`
 - [ ] `@real-a11y-dev/react`
 - [ ] `@real-a11y-dev/testing`
@@ -124,9 +126,9 @@ Cutting a release or adding a package? There are tailored templates:
 <!-- Skip only for docs / examples / CI-only PRs. -->
 
 - [ ] Changeset added for every published-package change (`pnpm changeset`; confirm with `pnpm changeset:status`)
-- [ ] Changed a **bundled** package? Everything that inlines it is re-released too, so nothing ships a stale engine (confirm with `pnpm changeset:status`). Read the carriers from `noExternal` in each consumer's tsup config rather than from memory — this list grows every time a package goes internal:
-      `core` → `inspector`, `storybook-addon`, the extension · `semantic-navigator-ui` → `inspector`, `storybook-addon`, the extension · `validate` → `testing` · `audit`, `serialize` → `testing`, `cli`, `mcp` · `snapshot` → `cli`, `mcp` · `session-registry` → `cli`, `mcp` · `browser` → `cli`, `mcp`, `testing`
-- [ ] The internal packages — `browser`, `audit`, `serialize`, `snapshot`, `validate`, `semantic-navigator-ui`, `session-registry` — are not published. A changeset names the **consumers** that bundle them, never the packages themselves. Both wrong forms fail quietly in different ways: mixing a private package in with published ones makes `pnpm changeset:status` throw, and naming one _alone_ is accepted and then silently ignored, so the fix ships with no version bump and no changelog line anywhere a user reads
+- [ ] Changed a **bundled** package? Release the change in every carrier that imports or runs the code you changed — **including one whose own output doesn't change**, whose changelog line then says so — so nothing ships a stale engine (confirm with `pnpm changeset:status`). Leave a carrier out only when it never imports or runs that code, and say which and why under _Notes for reviewers_. The extension takes a `packages/extension/CHANGELOG.md` `## Unreleased` entry instead of a changeset. Carriers — what each published package's tsup `noExternal` bundles, directly or through another internal package, plus the extension's dependencies, which Vite bundles whole (`scripts/carriers.test.mjs` fails when this line drifts from them):
+      `core` → `cli`, `inspector`, `mcp`, `react`, `storybook-addon`, `testing`, the extension · `serialize` → `cli`, `mcp`, `testing`, the extension · `audit`, `browser` → `cli`, `mcp`, `testing` · `semantic-navigator-ui` → `inspector`, `storybook-addon`, the extension · `session-registry`, `snapshot` → `cli`, `mcp` · `validate` → `testing`
+- [ ] The internal packages — `audit`, `browser`, `core`, `semantic-navigator-ui`, `serialize`, `session-registry`, `snapshot`, `validate` — are not published. A changeset names the **carriers** that bundle them, never the packages themselves. Both wrong forms fail quietly in different ways: mixing a private package in with published ones makes `pnpm changeset:status` throw, and naming one _alone_ is accepted and then silently ignored, so the fix ships with no version bump and no changelog line anywhere a user reads
 
 ## Test scenarios
 
