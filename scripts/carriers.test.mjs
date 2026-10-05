@@ -74,25 +74,39 @@ const workspaceNames = (deps) =>
     .filter((name) => name.startsWith(SCOPE))
     .map((name) => name.slice(SCOPE.length));
 
-/** A string literal, either quote. */
-const STRING = /(["'])(?:(?!\1).)*\1/g;
+/** A single- or double-quoted string literal, which cannot span lines. */
+const STRING = /(["'])(?:\\.|(?!\1)[^\\\n])*\1/g;
+
+/**
+ * A string literal (template ones too) or a comment — matched in one pass, so
+ * a `//` inside a string is never taken for a comment, nor a quote inside a
+ * comment for the start of a string.
+ */
+const STRING_OR_COMMENT = new RegExp(
+  `${STRING.source}|\`(?:\\\\[\\s\\S]|[^\\\\\`])*\`|//[^\\n]*|/\\*[\\s\\S]*?\\*/`,
+  "g",
+);
+
+/** `source` with every comment removed and every string literal kept. */
+const stripComments = (source) =>
+  source.replace(STRING_OR_COMMENT, (match) =>
+    match.startsWith("/") ? "" : match,
+  );
 
 /**
  * Every workspace name in every `noExternal: [...]` array of a tsup config.
  *
  * Read from source, so it refuses what it cannot read rather than skipping it:
  * an entry that is not a string literal — a RegExp, a spread, a variable —
- * would bundle packages this file never sees, so it throws instead. Line
- * comments are dropped first, so a commented-out list counts for nothing.
+ * would bundle packages this file never sees, so it throws instead. Comments
+ * are dropped first, whole-line or inline, so a commented-out list or entry
+ * counts for nothing, and a `]` in a comment cannot cut a list short.
  */
 function noExternalOf(source, file) {
-  const code = source.replace(/^\s*\/\/.*$/gm, "");
+  const code = stripComments(source);
   const names = new Set();
   for (const [, list] of code.matchAll(/noExternal:\s*\[([^\]]*)\]/g)) {
-    const leftover = list
-      .replace(STRING, "")
-      .replace(/\/\/.*$/gm, "")
-      .replace(/[\s,]/g, "");
+    const leftover = list.replace(STRING, "").replace(/[\s,]/g, "");
     if (leftover !== "") {
       throw new Error(
         `${file}: a \`noExternal\` entry is not a string literal ` +
@@ -234,7 +248,12 @@ const normalize = (text) => text.replace(/\s+/g, " ");
 
 const packages = await workspace();
 const carriers = carrierMap(packages);
-const internals = [...carriers.keys()].sort(compare);
+// Every internal package, not just the ones something bundles yet: a new one
+// still needs its "Packages touched" row and its place in the unpublished list
+// before any carrier picks it up.
+const internals = [...packages.keys()]
+  .filter((name) => isInternal(packages, name))
+  .sort(compare);
 const template = normalize(await readFile(fromRepoRoot(TEMPLATE), "utf8"));
 
 describe("the PR template's carrier list", () => {
