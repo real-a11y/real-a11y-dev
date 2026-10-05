@@ -79,6 +79,13 @@
   which curtains to lift
   ([#250](https://github.com/real-a11y/real-a11y-dev/pull/250)).
 
+- Picked up the shared fix that treats a mutation anywhere inside the panel's
+  own overlay elements as internal, rather than only one on an overlay's root
+  element ([#493](https://github.com/real-a11y/real-a11y-dev/pull/493)). No
+  behaviour change in the shipped extension: it registers no sentinel ids of
+  its own, and although the curtain it injects has inner elements, they are
+  built before it is attached and are never mutated afterwards.
+
 ## 0.1.17
 
 ### Patch Changes
