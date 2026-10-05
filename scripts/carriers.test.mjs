@@ -23,15 +23,17 @@
 //
 //   - `noExternal` in each published package's `tsup.config.ts` — every array
 //     in the file, since `storybook-addon` builds three entries with a list each;
-//   - the extension's `dependencies`, since Vite bundles everything it imports
-//     and there is no `noExternal` to read.
+//   - the extension's workspace dependencies, in either field, since Vite
+//     bundles everything it imports and there is no `noExternal` to read.
 //
 // Then closed over the internal packages' own graph. What a bundled internal
-// package inlines (its own `noExternal`) or imports (its `dependencies`) lands
-// in the carrier too, listed there or not: tsup externalizes only the
-// CARRIER's dependencies, so esbuild walks straight into the rest. A published
-// dependency stays external and does not make a carrier — `react` depends on
-// `inspector` and bundles `core` alone.
+// package inlines (its own `noExternal`) or imports (any workspace dependency)
+// lands in the carrier too, listed there or not: tsup externalizes only the
+// CARRIER's dependencies, so esbuild walks straight into the rest. That errs
+// wide — an internal package's test-only dependency on another would add a
+// carrier — which is the safe direction for a list that decides what gets
+// released. A published dependency stays external and does not make a carrier:
+// `react` depends on `inspector` and bundles `core` alone.
 //
 // EXACT MATCH, as in `pre-push-claims.test.mjs`: each claim is a literal string
 // pinned on both sides after collapsing whitespace, so re-wrapping is free and
@@ -50,6 +52,12 @@ const TEMPLATE = ".github/PULL_REQUEST_TEMPLATE.md";
 /** How the template names the one carrier that is not on npm. */
 const EXTENSION = "the extension";
 
+/**
+ * Private packages that are applications or fixtures, not code a carrier
+ * bundles. Named by directory; a new app under `packages/` belongs here.
+ */
+const APPS = new Set(["extension", "example-patterns"]);
+
 /** `null` for a file that does not exist, so a package without one reads cleanly. */
 async function readOptional(path) {
   try {
@@ -66,12 +74,35 @@ const workspaceNames = (deps) =>
     .filter((name) => name.startsWith(SCOPE))
     .map((name) => name.slice(SCOPE.length));
 
-/** Every workspace name in every `noExternal: [...]` array of a tsup config. */
-function noExternalOf(source) {
+/** A string literal, either quote. */
+const STRING = /(["'])(?:(?!\1).)*\1/g;
+
+/**
+ * Every workspace name in every `noExternal: [...]` array of a tsup config.
+ *
+ * Read from source, so it refuses what it cannot read rather than skipping it:
+ * an entry that is not a string literal — a RegExp, a spread, a variable —
+ * would bundle packages this file never sees, so it throws instead. Line
+ * comments are dropped first, so a commented-out list counts for nothing.
+ */
+function noExternalOf(source, file) {
+  const code = source.replace(/^\s*\/\/.*$/gm, "");
   const names = new Set();
-  for (const [, list] of source.matchAll(/noExternal:\s*\[([^\]]*)\]/g)) {
-    for (const [, name] of list.matchAll(/["']@real-a11y-dev\/([^"']+)["']/g)) {
-      names.add(name);
+  for (const [, list] of code.matchAll(/noExternal:\s*\[([^\]]*)\]/g)) {
+    const leftover = list
+      .replace(STRING, "")
+      .replace(/\/\/.*$/gm, "")
+      .replace(/[\s,]/g, "");
+    if (leftover !== "") {
+      throw new Error(
+        `${file}: a \`noExternal\` entry is not a string literal ` +
+          `(${JSON.stringify(leftover)}), so what it bundles cannot be read ` +
+          `here. Teach noExternalOf() the new shape.`,
+      );
+    }
+    for (const [literal] of list.matchAll(STRING)) {
+      const name = literal.slice(1, -1);
+      if (name.startsWith(SCOPE)) names.add(name.slice(SCOPE.length));
     }
   }
   return [...names];
@@ -79,28 +110,46 @@ function noExternalOf(source) {
 
 /** Every workspace package under `packages/`, keyed by unscoped name. */
 async function workspace() {
-  const packages = new Map();
   const entries = await readdir(fromRepoRoot("packages"), {
     withFileTypes: true,
   });
-  for (const entry of entries.filter((e) => e.isDirectory())) {
-    const manifest = await readOptional(`packages/${entry.name}/package.json`);
-    if (manifest === null) continue;
-    const pkg = JSON.parse(manifest);
-    const tsup = await readOptional(`packages/${entry.name}/tsup.config.ts`);
-    packages.set(pkg.name.slice(SCOPE.length), {
-      dir: entry.name,
-      published: pkg.private !== true,
-      dependencies: workspaceNames(pkg.dependencies),
-      devDependencies: workspaceNames(pkg.devDependencies),
-      noExternal: tsup === null ? null : noExternalOf(tsup),
-    });
-  }
-  return packages;
+  const read = await Promise.all(
+    entries
+      .filter((entry) => entry.isDirectory())
+      .map(async ({ name: dir }) => {
+        const [manifest, tsup] = await Promise.all([
+          readOptional(`packages/${dir}/package.json`),
+          readOptional(`packages/${dir}/tsup.config.ts`),
+        ]);
+        if (manifest === null) return null;
+        const pkg = JSON.parse(manifest);
+        assert.ok(
+          pkg.name?.startsWith(SCOPE),
+          `packages/${dir} is named ${JSON.stringify(pkg.name)}, outside ${SCOPE}`,
+        );
+        return [
+          pkg.name.slice(SCOPE.length),
+          {
+            dir,
+            published: pkg.private !== true,
+            dependencies: workspaceNames(pkg.dependencies),
+            devDependencies: workspaceNames(pkg.devDependencies),
+            noExternal:
+              tsup === null
+                ? null
+                : noExternalOf(tsup, `packages/${dir}/tsup.config.ts`),
+          },
+        ];
+      }),
+  );
+  return new Map(read.filter(Boolean));
 }
 
-/** Whether `name` is a private workspace package. */
-const isInternal = (packages, name) => packages.get(name)?.published === false;
+/** Whether `name` is a private package a carrier can bundle. */
+const isInternal = (packages, name) => {
+  const pkg = packages.get(name);
+  return pkg?.published === false && !APPS.has(pkg.dir);
+};
 
 /** Every internal package a build that names `roots` ends up inlining. */
 function bundled(packages, roots) {
@@ -111,7 +160,11 @@ function bundled(packages, roots) {
     if (seen.has(name) || !isInternal(packages, name)) continue;
     seen.add(name);
     const pkg = packages.get(name);
-    queue.push(...pkg.dependencies, ...(pkg.noExternal ?? []));
+    queue.push(
+      ...pkg.dependencies,
+      ...pkg.devDependencies,
+      ...(pkg.noExternal ?? []),
+    );
   }
   return seen;
 }
@@ -121,7 +174,9 @@ function carrierMap(packages) {
   const builds = [];
   for (const [name, pkg] of packages) {
     if (pkg.published) builds.push([name, pkg.noExternal ?? []]);
-    if (pkg.dir === "extension") builds.push([EXTENSION, pkg.dependencies]);
+    if (pkg.dir === "extension") {
+      builds.push([EXTENSION, [...pkg.dependencies, ...pkg.devDependencies]]);
+    }
   }
 
   const carriers = new Map();
@@ -136,9 +191,15 @@ function carrierMap(packages) {
 
 const code = (name) => `\`${name}\``;
 
+/**
+ * Code-unit order, never `localeCompare`: the result is matched exactly, so it
+ * must not depend on the collation of whichever machine runs the test.
+ */
+const compare = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
+
 /** Alphabetical, with the extension last — it is the one that takes no changeset. */
 const byCarrier = (a, b) =>
-  (a === EXTENSION) - (b === EXTENSION) || a.localeCompare(b);
+  (a === EXTENSION) - (b === EXTENSION) || compare(a, b);
 
 /**
  * The template's carrier line: internal packages that share a carrier set
@@ -147,7 +208,7 @@ const byCarrier = (a, b) =>
 function carrierLine(carriers) {
   const groups = new Map();
   for (const [internal, set] of [...carriers].sort(([a], [b]) =>
-    a.localeCompare(b),
+    compare(a, b),
   )) {
     const ordered = [...set].sort(byCarrier);
     const key = ordered.join();
@@ -158,7 +219,7 @@ function carrierLine(carriers) {
     .sort(
       (a, b) =>
         b.carriers.length - a.carriers.length ||
-        a.internals[0].localeCompare(b.internals[0]),
+        compare(a.internals[0], b.internals[0]),
     )
     .map(
       ({ internals, carriers: names }) =>
@@ -173,7 +234,7 @@ const normalize = (text) => text.replace(/\s+/g, " ");
 
 const packages = await workspace();
 const carriers = carrierMap(packages);
-const internals = [...carriers.keys()].sort();
+const internals = [...carriers.keys()].sort(compare);
 const template = normalize(await readFile(fromRepoRoot(TEMPLATE), "utf8"));
 
 describe("the PR template's carrier list", () => {
@@ -200,11 +261,13 @@ describe("the PR template's carrier list", () => {
   });
 
   it("names every carrier of every internal package", () => {
-    const claim = `drifts from them): ${carrierLine(carriers)} - [ ] The internal packages`;
+    const line = carrierLine(carriers);
     assert.ok(
-      template.includes(claim),
+      template.includes(
+        `drifts from them): ${line} - [ ] The internal packages`,
+      ),
       `${TEMPLATE}'s carrier line no longer matches the build configs. ` +
-        `It should read:\n\n      ${carrierLine(carriers)}\n\n` +
+        `It should read:\n\n      ${line}\n\n` +
         `An author releases a bundled-package change in the carriers listed ` +
         `there, so a missing one keeps shipping the old engine.`,
     );

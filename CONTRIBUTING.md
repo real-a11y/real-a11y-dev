@@ -428,7 +428,8 @@ Notes:
   job checks that one exists, not that it names the right thing.
 - **Which carriers: every one that imports or runs the code you changed.** A
   carrier is a published package whose tsup `noExternal` bundles the internal
-  one, or the extension, whose Vite build bundles all its dependencies. The PR
+  one, directly or through another internal package, or the extension, whose
+  Vite build bundles all its dependencies. The PR
   template keeps the current list, and `scripts/carriers.test.mjs` fails when it
   drifts from those configs. A change that releases at all releases in each
   carrier that reaches it, **including one whose own output doesn't change** —
