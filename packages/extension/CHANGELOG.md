@@ -28,6 +28,14 @@
   behaviour change in the shipped extension: `startObserving()` is guarded by
   `observingEnabled`, so it never armed the observer twice.
 
+- Picked up the shared fix that lets a panel scoped to part of the page follow
+  a `<dialog>` opening or closing outside that part
+  ([#484](https://github.com/real-a11y/real-a11y-dev/pull/484)). No behaviour
+  change in the shipped extension: it observes the whole document from
+  `document.documentElement`, so every dialog is already inside its root. It
+  followed these dialogs before, and the new watch for dialogs outside the
+  root has nothing to watch.
+
 ## 0.1.15
 
 ### Patch Changes
