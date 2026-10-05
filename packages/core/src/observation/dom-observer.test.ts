@@ -341,6 +341,48 @@ describe("DomObserver", () => {
       expect(onTreeChange).toHaveBeenCalledTimes(1);
     });
 
+    // The sentinel subtree is ours in its entirety, not just its root. The
+    // characterData branch has always climbed to find that out; these two pin
+    // the same for `attributes` and `childList`, so that mutating anything
+    // *inside* a mounted overlay cannot re-arm the re-extract loop.
+    it("skips an attribute change on an element inside the curtain subtree", async () => {
+      const curtain = document.createElement("div");
+      curtain.id = "__sn-curtain";
+      const label = document.createElement("div");
+      label.textContent = "Screen Curtain";
+      curtain.appendChild(label);
+      document.documentElement.appendChild(curtain);
+
+      observer = new DomObserver(document.documentElement, onTreeChange, 100);
+      observer.start();
+
+      // A descendant of the sentinel, not the sentinel itself.
+      label.className = "sn-curtain__label--visible";
+
+      await settleObserver(100);
+
+      expect(onTreeChange).not.toHaveBeenCalled();
+    });
+
+    it("skips a child added inside the highlight overlay subtree", async () => {
+      const overlay = document.createElement("div");
+      overlay.id = "__sn-highlight";
+      const frame = document.createElement("div");
+      overlay.appendChild(frame);
+      document.documentElement.appendChild(overlay);
+
+      observer = new DomObserver(document.documentElement, onTreeChange, 100);
+      observer.start();
+
+      // The added node carries no sentinel id of its own — it is internal
+      // only by virtue of where it lands.
+      frame.appendChild(document.createElement("span"));
+
+      await settleObserver(100);
+
+      expect(onTreeChange).not.toHaveBeenCalled();
+    });
+
     it("skips mutations on a caller-supplied custom sentinel id", async () => {
       observer = new DomObserver(
         document.documentElement,
