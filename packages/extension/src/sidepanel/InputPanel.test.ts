@@ -2,7 +2,8 @@ import { render, h } from "preact";
 import { act } from "preact/test-utils";
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 
-import { InputPanel, FOCUSABLE_SELECTOR } from "./InputPanel.js";
+import { FOCUSABLE_SELECTOR } from "./focus-hooks.js";
+import { InputPanel } from "./InputPanel.js";
 import type { InputPanelState } from "./InputPanel.js";
 
 /**
