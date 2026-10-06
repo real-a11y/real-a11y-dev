@@ -16,7 +16,7 @@ link "live region log"
 link "re-roots to it"
 link "screen curtain"
 link "native mode"
-link "CLAUDE.md's "Two producers build the tree""
+link "Two producers"
 button "Copy Code"
 generic
 link "Two producers"
