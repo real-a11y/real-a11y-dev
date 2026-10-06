@@ -68,12 +68,16 @@ import {
 } from "./FilteredList.js";
 import { NATIVE_FOLLOW_DEBOUNCE_MS } from "./native-follow.js";
 import {
-  focusActiveView,
+  arrowLeftStopsAtScopeRoot,
+  describeNode,
+  hasChildren,
   isInScope,
-  ScopeBar,
+  matchCountLabel,
+  SCOPE_KEY_HINT,
   scopeKeyAction,
   scopePath,
-} from "./ScopeBar.js";
+} from "./scope.js";
+import { ScopeBar } from "./ScopeBar.js";
 
 const ROLE_FILTER_KEYS = Object.keys(ROLE_FILTER_LABELS) as Array<
   Exclude<RoleFilter, null>
@@ -189,6 +193,9 @@ export function NativeTreeView({
   const [query, setQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState<RoleFilter>(null);
   const treeRef = useRef<HTMLDivElement>(null);
+  // The role filter's list, when it shows in the tree's place: where focus
+  // goes after leaving the scope from the breadcrumb.
+  const listRef = useRef<HTMLElement | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   // Seed a sensible default the first time THIS root shows up — root plus its
@@ -219,8 +226,9 @@ export function NativeTreeView({
   const parentOf = useMemo(() => nativeParentIndex(nodes), [nodes]);
 
   // A scope this view has just left, until App's prop catches up. Leaving
-  // and selecting happen together (a pick outside the scope), and this view can re-render with its new selection before App
-  // re-renders it with the cleared scope. For that one render the selection
+  // and selecting happen together (a pick outside the scope), and this view
+  // can re-render with its new selection before App re-renders it with the
+  // cleared scope. For that one render the selection
   // sits outside the still-scoped rows, and the selection effect below
   // drops it as gone. Applying the exit here as well keeps both changes in
   // the same render.
@@ -325,13 +333,6 @@ export function NativeTreeView({
     [nodes, parentOf, query, roleFilter],
   );
 
-  // With a role filter on, show the same flat list the DOM producer does
-  // (`FilteredList`) instead of the tree: every direct match, in document
-  // order. A pre-order walk, not `nodes`' own iteration order, because that's
-  // what "document order" means for this tree. It starts from the scope root
-  // when scoped, so the list covers what the scoped tree covers and nothing
-  // outside it. The query still narrows it, through the same `directIds` the
-  // match count reports.
   // What the toolbar's count reports: every direct match, or only those
   // inside the scope while scoped — the same rows the scoped tree can show.
   const matchCount = useMemo(() => {
@@ -343,6 +344,13 @@ export function NativeTreeView({
     return n;
   }, [search, scopeRoot, parentOf]);
 
+  // With a role filter on, show the same flat list the DOM producer does
+  // (`FilteredList`) instead of the tree: every direct match, in document
+  // order. A pre-order walk, not `nodes`' own iteration order, because that's
+  // what "document order" means for this tree. It starts from the scope root
+  // when scoped, so the list covers what the scoped tree covers and nothing
+  // outside it. The query still narrows it, through the same `directIds` the
+  // match count reports.
   const listItems = useMemo(() => {
     if (roleFilter === null) return [];
     const items: FilteredListItem[] = [];
@@ -470,7 +478,7 @@ export function NativeTreeView({
   const expandAll = useCallback(() => {
     const all = new Set<string>();
     for (const node of nodes.values()) {
-      if ((node.childIds?.length ?? 0) > 0) all.add(node.id);
+      if (hasChildren(node)) all.add(node.id);
     }
     setExpanded(all);
   }, [nodes]);
@@ -486,11 +494,8 @@ export function NativeTreeView({
   // effect above scrolls it into view once the tree has rendered.
   const goToTree = useCallback(
     (id: string) => {
-      // The list is built from the scope root, so this only guards a target
-      // that is somehow outside it (a scope that changed under the list).
-      if (scopeRoot && !isInScope(id, scopeRoot, (p) => parentOf.get(p))) {
-        scopeTo(null);
-      }
+      // No scope check: the list is built from the scope root in the same
+      // render as this callback, so every item it offers is inside the scope.
       setRoleFilter(null);
       setExpanded((prev) => {
         const next = new Set(prev);
@@ -502,7 +507,7 @@ export function NativeTreeView({
         requestAnimationFrame(() => treeRef.current?.focus());
       });
     },
-    [parentOf, scopeRoot, scopeTo],
+    [parentOf],
   );
 
   const activateFromList = useCallback(
@@ -542,21 +547,21 @@ export function NativeTreeView({
         return;
       }
 
-      const scopeKey = scopeKeyAction(e, {
+      const scopeAction = scopeKeyAction(e, {
         scoped: scopeRoot !== null,
         pickArmed,
       });
-      if (scopeKey === "exit") {
+      if (scopeAction === "exit") {
         e.preventDefault();
         scopeTo(null);
         return;
       }
-      if (scopeKey === "scope") {
+      if (scopeAction === "scope") {
         // Consumed even with nothing to scope into, so it never falls through
         // to plain Enter and activates the row by surprise.
         e.preventDefault();
         const target = selectedId ? nodes.get(selectedId) : undefined;
-        if (target && (target.childIds?.length ?? 0) > 0) scopeTo(target.id);
+        if (target && hasChildren(target)) scopeTo(target.id);
         return;
       }
 
@@ -590,7 +595,7 @@ export function NativeTreeView({
         }
         case "ArrowRight": {
           e.preventDefault();
-          if ((node.childIds?.length ?? 0) === 0) break;
+          if (!hasChildren(node)) break;
           if (!expanded.has(node.id)) {
             toggle(node.id);
           } else {
@@ -603,11 +608,10 @@ export function NativeTreeView({
         }
         case "ArrowLeft": {
           e.preventDefault();
-          if (expanded.has(node.id) && (node.childIds?.length ?? 0) > 0) {
+          const isOpen = expanded.has(node.id) && hasChildren(node);
+          if (isOpen) {
             toggle(node.id);
-          } else if (node.id !== scopeRoot) {
-            // Never above the scope root: its parent isn't rendered, and
-            // selecting it would drop the selection altogether.
+          } else if (!arrowLeftStopsAtScopeRoot(node.id, scopeRoot, isOpen)) {
             const parentId = parentOf.get(node.id);
             if (parentId) setSelectedId(parentId);
           }
@@ -625,14 +629,14 @@ export function NativeTreeView({
                 isSelectableRole(node.role) ? "select" : undefined,
               );
             }
-          } else if ((node.childIds?.length ?? 0) > 0) {
+          } else if (hasChildren(node)) {
             toggle(node.id);
           }
           break;
         }
         case " ": {
           e.preventDefault();
-          if ((node.childIds?.length ?? 0) > 0) toggle(node.id);
+          if (hasChildren(node)) toggle(node.id);
           break;
         }
         case "+":
@@ -695,8 +699,7 @@ export function NativeTreeView({
             already holding text is not announced by most screen
             reader/browser pairs. */}
         <span class="sn-search-count" aria-live="polite">
-          {hasFilter &&
-            `${matchCount} match${matchCount !== 1 ? "es" : ""}${scopeRoot ? " in this scope" : ""}`}
+          {hasFilter && matchCountLabel(matchCount, scopeRoot !== null)}
         </span>
         <button
           class="sn-toolbar-btn"
@@ -758,16 +761,12 @@ export function NativeTreeView({
             (id) => parentOf.get(id),
             (id) => {
               const n = nodes.get(id);
-              return n ? `${n.role}${n.name ? ` "${n.name}"` : ""}` : undefined;
+              return n ? describeNode(n.role, n.name) : undefined;
             },
           )}
           rootId={rootId}
-          onScope={(id) => {
-            scopeTo(id);
-            // ✕ unmounts the button that had focus; hand it to whichever
-            // view is showing rather than dropping it on <body>.
-            if (id === null) focusActiveView(treeRef.current);
-          }}
+          onScope={scopeTo}
+          focusAfterExit={() => treeRef.current ?? listRef.current}
         />
       )}
 
@@ -781,8 +780,10 @@ export function NativeTreeView({
           onGoToTree={goToTree}
           onFocusSearch={() => searchInputRef.current?.focus()}
           activateDisabled={busy}
-          scoped={scopeRoot !== null}
-          scopeKey={scopeRoot}
+          scopeRootId={scopeRoot}
+          onExitScope={() => scopeTo(null)}
+          pickArmed={pickArmed}
+          listRef={listRef}
         />
       ) : (
         <>
@@ -795,7 +796,7 @@ export function NativeTreeView({
               ref={treeRef}
               class="sn-tree"
               role="tree"
-              aria-label="Native accessibility tree — press Enter to activate, +/- to step, arrows to navigate, Ctrl+Enter to scope to a row"
+              aria-label={`Native accessibility tree — press Enter to activate, +/- to step, arrows to navigate, ${SCOPE_KEY_HINT}`}
               tabIndex={0}
               style={{
                 minHeight: totalHeight,
@@ -809,7 +810,7 @@ export function NativeTreeView({
                 const node = nodes.get(id);
                 if (!node) return null;
 
-                const hasChildren = (node.childIds?.length ?? 0) > 0;
+                const isParent = hasChildren(node);
                 const isSelected = id === selectedId;
                 const label = primaryLabel(node);
                 const steppable = isSteppableRole(node.role);
@@ -830,7 +831,7 @@ export function NativeTreeView({
                       .filter(Boolean)
                       .join(" ")}
                     role="treeitem"
-                    aria-expanded={hasChildren ? expanded.has(id) : undefined}
+                    aria-expanded={isParent ? expanded.has(id) : undefined}
                     aria-selected={isSelected}
                     aria-level={node.depth - depthOffset + 1}
                     aria-posinset={position?.posinset}
@@ -855,9 +856,16 @@ export function NativeTreeView({
                       // Same split as the DOM tree's row: a row with an
                       // action runs it, a container scopes the view to itself
                       // (expanding stays on the chevron and the arrow keys).
+                      // One difference: DOM counts any focusable element as
+                      // having an action (a `tabindex="0"` region focuses),
+                      // native counts only what it can click, select or type
+                      // into. A focusable container scopes here, because
+                      // selecting its row already moved page focus onto it
+                      // (`onSelectionReveal`), which is all DOM's activation
+                      // of it would do.
                       if (label) {
                         if (!busy) onActivate(node, selectAction);
-                      } else if (hasChildren) {
+                      } else if (isParent) {
                         scopeTo(id);
                       }
                     }}
@@ -872,19 +880,19 @@ export function NativeTreeView({
                     </span>
 
                     <button
-                      class={`sn-toggle ${!hasChildren ? "sn-toggle--leaf" : ""}`}
+                      class={`sn-toggle ${!isParent ? "sn-toggle--leaf" : ""}`}
                       tabIndex={-1}
                       aria-hidden="true"
                       onClick={(e) => {
                         e.stopPropagation();
-                        if (hasChildren) toggle(id);
+                        if (isParent) toggle(id);
                       }}
                       // Its two clicks already toggled it; the row's own
                       // double-click must not act on the row as well (toggle
                       // it again, or activate an actionable row on the page).
                       onDblClick={(e) => e.stopPropagation()}
                     >
-                      {hasChildren ? (expanded.has(id) ? "▾" : "▸") : ""}
+                      {isParent ? (expanded.has(id) ? "▾" : "▸") : ""}
                     </button>
 
                     <span class="sn-label">

@@ -11,6 +11,7 @@ import {
   isTypeAheadKey,
   resolveStepperKeyAction,
 } from "@real-a11y-dev/semantic-navigator-ui";
+import type { MutableRef } from "preact/hooks";
 import {
   useMemo,
   useState,
@@ -19,7 +20,7 @@ import {
   useEffect,
 } from "preact/hooks";
 
-import { isInScope } from "./ScopeBar.js";
+import { handleListScopeKey, isInScope } from "./scope.js";
 
 // Filters whose items have meaningful activate actions
 const INTERACTIVE_FILTERS: Set<string> = new Set(["link", "button", "form"]);
@@ -78,12 +79,17 @@ interface FilteredListViewProps {
   onFocusSearch?: () => void;
   /** Hold activation back while a previous one is still in flight. */
   activateDisabled?: boolean;
-  /** The items come from a scoped subtree; says so when there are none. */
-  scoped?: boolean;
-  /** The scope root's id, or null when unscoped. A change re-finds the
-   *  selected item by id, since a wider or narrower scope shifts every index
-   *  after the first item it adds or drops. */
-  scopeKey?: string | null;
+  /** The scope root's id when the items come from a scoped subtree, or
+   *  null. A change re-finds the selected item by id, since a wider or
+   *  narrower scope shifts every index after the first item it adds or drops;
+   *  while set, the empty state says "in this scope". */
+  scopeRootId?: string | null;
+  /** Leave the scope: Escape in the list does what it does in the tree. */
+  onExitScope?: () => void;
+  /** A pick is armed and Escape belongs to cancelling it. */
+  pickArmed?: boolean;
+  /** Receives the listbox element, for a caller that hands it focus. */
+  listRef?: MutableRef<HTMLElement | null>;
 }
 
 export function FilteredListView({
@@ -95,11 +101,21 @@ export function FilteredListView({
   onGoToTree,
   onFocusSearch,
   activateDisabled = false,
-  scoped = false,
-  scopeKey = null,
+  scopeRootId = null,
+  onExitScope,
+  pickArmed = false,
+  listRef: outerListRef,
 }: FilteredListViewProps) {
   const [selectedIndex, setSelectedIndex] = useState(0);
-  const listRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement | null>(null);
+  const setListRef = useCallback(
+    (el: HTMLDivElement | null) => {
+      listRef.current = el;
+      if (outerListRef) outerListRef.current = el;
+    },
+    [outerListRef],
+  );
+  const scoped = scopeRootId !== null;
   const typeAhead = useRef(createTypeAheadBuffer());
 
   const isHeading = roleFilter === "heading";
@@ -116,15 +132,15 @@ export function FilteredListView({
   // one is outside the new scope. `selectedIdRef` still holds the previous
   // commit's selection here, because it is updated by the effect below.
   const selectedIdRef = useRef<string | null>(null);
-  const prevScopeKey = useRef(scopeKey);
+  const prevScopeRootId = useRef(scopeRootId);
   useEffect(() => {
-    if (prevScopeKey.current === scopeKey) return;
-    prevScopeKey.current = scopeKey;
+    if (prevScopeRootId.current === scopeRootId) return;
+    prevScopeRootId.current = scopeRootId;
     const id = selectedIdRef.current;
     const at = id === null ? -1 : items.findIndex((item) => item.id === id);
     setSelectedIndex(Math.max(at, 0));
     typeAhead.current.clear();
-  }, [scopeKey, items]);
+  }, [scopeRootId, items]);
   useEffect(() => {
     selectedIdRef.current = items[selectedIndex]?.id ?? null;
   });
@@ -145,6 +161,11 @@ export function FilteredListView({
         setSelectedIndex(index);
         if (items[index]) onHighlight?.(items[index].id);
       };
+
+      if (handleListScopeKey(e, { scoped, pickArmed, onExitScope })) {
+        typeAhead.current.clear();
+        return;
+      }
 
       switch (e.key) {
         case "ArrowDown": {
@@ -234,13 +255,16 @@ export function FilteredListView({
       onGoToTree,
       onFocusSearch,
       activateDisabled,
+      scoped,
+      pickArmed,
+      onExitScope,
     ],
   );
 
   return (
     <div class="sn-filtered-list-container">
       <div
-        ref={listRef}
+        ref={setListRef}
         class="sn-filtered-list"
         role="listbox"
         aria-label={`${ROLE_FILTER_GROUPS[roleFilter] ? roleFilter : ""} elements`}
@@ -346,6 +370,8 @@ interface FilteredListProps {
   onGoToTree: (nodeId: string) => void;
   /** Focus the panel search input when `/` is pressed. */
   onFocusSearch?: () => void;
+  onExitScope?: () => void;
+  listRef?: MutableRef<HTMLElement | null>;
 }
 
 /** The DOM producer's role-filtered list: maps `nodes` onto `FilteredListView`. */
@@ -401,8 +427,7 @@ export function FilteredList({
       items={items}
       roleFilter={roleFilter}
       query={query}
-      scoped={scoped}
-      scopeKey={scoped ? scopeRootId : null}
+      scopeRootId={scoped ? scopeRootId : null}
       {...rest}
     />
   );

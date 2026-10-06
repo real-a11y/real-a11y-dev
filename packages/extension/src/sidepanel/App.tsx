@@ -68,13 +68,17 @@ import { InputPanel } from "./InputPanel.js";
 import type { InputPanelState } from "./InputPanel.js";
 import { NativeTreeView, type NativeReveal } from "./NativeTreeView.js";
 import {
-  focusActiveView,
+  arrowLeftStopsAtScopeRoot,
+  describeNode,
+  hasChildren,
   isInScope,
-  ScopeBar,
+  matchCountLabel,
+  SCOPE_KEY_HINT,
   scopeKeyAction,
   scopePath,
   subtreeNodes,
-} from "./ScopeBar.js";
+} from "./scope.js";
+import { ScopeBar } from "./ScopeBar.js";
 import { TabSequenceView } from "./TabSequenceView.js";
 
 /** How long to let the page react before re-reading the native tree after an
@@ -584,6 +588,9 @@ export function App() {
   const lastNativeFailure = useRef("");
 
   const treeRef = useRef<HTMLDivElement>(null);
+  // The role filter's list or the Tab view, whichever shows in the tree's
+  // place: where focus goes after leaving the scope from the breadcrumb.
+  const listViewRef = useRef<HTMLElement | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const exportRef = useRef<HTMLDivElement>(null);
   const { query, matchCount, updateQuery, updateMatchCount } = useSearch();
@@ -986,7 +993,13 @@ export function App() {
         }, 8000);
       }
 
-      if (message.type === "FOCUS_CHANGED") {
+      // Only while the DOM tree is the one showing. Focus tracking keeps
+      // reporting while native is on screen (its toggle is hidden there, not
+      // off), and following it would move the hidden DOM selection, and leave
+      // a hidden DOM scope that doesn't hold the focused node: "Showing the
+      // full tree" announced over a native tree that is still scoped, and the
+      // DOM scope gone when the user switches back.
+      if (message.type === "FOCUS_CHANGED" && producerRef.current === "dom") {
         const nodeId = message.payload.nodeId;
         setSelectedId(nodeId);
 
@@ -2142,7 +2155,7 @@ export function App() {
       // bar that shows it sits outside the tree — say what happened.
       announce(
         node
-          ? `Scoped to ${getDisplayRole(node)}${node.a11y.name ? ` "${node.a11y.name}"` : ""}`
+          ? `Scoped to ${describeNode(getDisplayRole(node), node.a11y.name)}`
           : "Showing the full tree",
         2500,
       );
@@ -2161,7 +2174,7 @@ export function App() {
       setNativeScopedRootId(node ? node.id : null);
       announce(
         node
-          ? `Scoped to ${node.role}${node.name ? ` "${node.name}"` : ""}`
+          ? `Scoped to ${describeNode(node.role, node.name)}`
           : "Showing the full tree",
         2500,
       );
@@ -2263,7 +2276,7 @@ export function App() {
             capturedAt: nativeReadAt ?? new Date().toISOString(),
             viewLabel: "Native accessibility tree",
             scope: nativeScope
-              ? `${nativeScope.role}${nativeScope.name ? ` "${nativeScope.name}"` : ""}`
+              ? describeNode(nativeScope.role, nativeScope.name)
               : undefined,
           },
         );
@@ -2296,7 +2309,7 @@ export function App() {
       const scopeNode = scopedRootId ? nodes.get(scopedRootId) : null;
       const treeStr = serializeTree(tree);
       const scopeLabel = scopeNode
-        ? `${scopeNode.a11y.role}${scopeNode.a11y.name ? ` "${scopeNode.a11y.name}"` : ""}`
+        ? describeNode(scopeNode.a11y.role, scopeNode.a11y.name)
         : undefined;
 
       copyReport(
@@ -2515,7 +2528,7 @@ export function App() {
           const current = asDom(nodes.get(id));
           if (!current) return undefined;
           return viewMode === "a11y"
-            ? `${getDisplayRole(current)}${current.a11y.name ? ` "${current.a11y.name}"` : ""}`
+            ? describeNode(getDisplayRole(current), current.a11y.name)
             : `<${current.dom.tagName}>`;
         },
       )
@@ -2573,7 +2586,7 @@ export function App() {
         {producer === "dom" && (
           <span class="sn-search-count" aria-live="polite">
             {(query || roleFilter) &&
-              `${matchCount} match${matchCount !== 1 ? "es" : ""}${scopedRootId ? " in this scope" : ""}`}
+              matchCountLabel(matchCount, scopedRootId !== null)}
           </span>
         )}
 
@@ -2901,13 +2914,8 @@ export function App() {
         <ScopeBar
           path={scopeBreadcrumb}
           rootId={rootId}
-          onScope={(id) => {
-            handleScopeToNode(id);
-            // ✕ unmounts the button that had focus; hand it to whichever
-            // view is showing (tree, role-filter list or Tab view) rather
-            // than dropping it on <body>.
-            if (id === null) focusActiveView(treeRef.current);
-          }}
+          onScope={handleScopeToNode}
+          focusAfterExit={() => treeRef.current ?? listViewRef.current}
         />
       )}
 
@@ -2965,6 +2973,9 @@ export function App() {
           onHighlight={handleSelect}
           onActivate={handleActivate}
           onFocusSearch={focusSearch}
+          scoped={scopedRootId !== null}
+          onExitScope={() => handleScopeToNode(null)}
+          listRef={listViewRef}
         />
       ) : roleFilter ? (
         /* ---- Filtered list view ---- */
@@ -2977,6 +2988,8 @@ export function App() {
           onActivate={handleActivate}
           onGoToTree={handleGoToTree}
           onFocusSearch={focusSearch}
+          onExitScope={() => handleScopeToNode(null)}
+          listRef={listViewRef}
         />
       ) : (
         /* ---- Tree view ---- */
@@ -2990,7 +3003,7 @@ export function App() {
               ref={treeRef}
               class="sn-tree"
               role="tree"
-              aria-label="Semantic tree — press Enter to activate interactive elements; +/− or Shift+Enter to step sliders"
+              aria-label={`Semantic tree — press Enter to activate interactive elements; +/− or Shift+Enter to step sliders; ${SCOPE_KEY_HINT}`}
               tabIndex={0}
               style={{
                 minHeight: totalHeight,
@@ -3006,37 +3019,28 @@ export function App() {
               aria-activedescendant={activeDescendantId}
               onKeyDown={(e) => {
                 markKeyboard();
-                const scopeKey = scopeKeyAction(e, {
+                const scopeAction = scopeKeyAction(e, {
                   scoped: scopedRootId !== null,
                   // A DOM pick is cancelled by Escape on the PAGE (the
                   // content script owns it); the panel's own Escape never
                   // reaches it, so here Escape always leaves the scope.
                   pickArmed: false,
                 });
-                if (scopeKey) {
+                if (scopeAction) {
                   e.preventDefault();
-                  if (scopeKey === "exit") {
+                  if (scopeAction === "exit") {
                     handleScopeToNode(null);
-                  } else if (
-                    selectedId &&
-                    (nodes.get(selectedId)?.childIds.length ?? 0) > 0
-                  ) {
+                  } else if (selectedId && hasChildren(nodes.get(selectedId))) {
                     handleScopeToNode(selectedId);
                   }
                   return;
                 }
-                // ArrowLeft on a collapsed scope root would select its
-                // parent, which the scoped tree doesn't render — leaving no
-                // row selected and every key after it dead. Stop there.
-                if (
-                  e.key === "ArrowLeft" &&
-                  scopedRootId !== null &&
-                  selectedId === scopedRootId
-                ) {
-                  const scopeRoot = asDom(nodes.get(scopedRootId));
+                if (e.key === "ArrowLeft" && selectedId) {
+                  const selected = asDom(nodes.get(selectedId));
+                  const isOpen =
+                    !!selected?.ui.expanded && hasChildren(selected);
                   if (
-                    !scopeRoot?.ui.expanded ||
-                    scopeRoot.childIds.length === 0
+                    arrowLeftStopsAtScopeRoot(selectedId, scopedRootId, isOpen)
                   ) {
                     e.preventDefault();
                     return;
@@ -3049,7 +3053,7 @@ export function App() {
                 const node = asDom(nodes.get(id));
                 if (!node) return null;
 
-                const hasChildren = node.childIds.length > 0;
+                const isParent = hasChildren(node);
                 const actions = node.interaction.actions;
                 // Slider / spinbutton rows surface a paired ▼/▲ stepper
                 // instead of the single primary-action button — works
@@ -3087,7 +3091,7 @@ export function App() {
                       .filter(Boolean)
                       .join(" ")}
                     role="treeitem"
-                    aria-expanded={hasChildren ? node.ui.expanded : undefined}
+                    aria-expanded={isParent ? node.ui.expanded : undefined}
                     aria-selected={isSelected}
                     aria-level={displayDepth + 1}
                     aria-posinset={position?.posinset}
@@ -3099,7 +3103,7 @@ export function App() {
                     }}
                     onDblClick={(e) => {
                       e.stopPropagation();
-                      if (hasChildren && !node.interaction.isInteractive) {
+                      if (isParent && !node.interaction.isInteractive) {
                         handleScopeToNode(id);
                       } else if (node.interaction.isInteractive) {
                         handleActivate(id);
@@ -3115,19 +3119,15 @@ export function App() {
                     </span>
 
                     <button
-                      class={`sn-toggle ${!hasChildren ? "sn-toggle--leaf" : ""}`}
+                      class={`sn-toggle ${!isParent ? "sn-toggle--leaf" : ""}`}
                       tabIndex={-1}
                       aria-hidden="true"
                       onClick={(e) => {
                         e.stopPropagation();
-                        if (hasChildren) handleToggle(id);
+                        if (isParent) handleToggle(id);
                       }}
                     >
-                      {hasChildren
-                        ? node.ui.expanded
-                          ? "\u25BE"
-                          : "\u25B8"
-                        : ""}
+                      {isParent ? (node.ui.expanded ? "\u25BE" : "\u25B8") : ""}
                     </button>
 
                     <span class="sn-label">

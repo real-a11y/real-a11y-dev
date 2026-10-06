@@ -2,117 +2,18 @@ import { render } from "preact";
 import { act } from "preact/test-utils";
 import { describe, it, expect, afterEach, vi } from "vitest";
 
-import {
-  isInScope,
-  ScopeBar,
-  scopeKeyAction,
-  scopePath,
-  subtreeNodes,
-} from "./ScopeBar.js";
-
-const PARENT: Record<string, string | undefined> = {
-  form: "main",
-  main: "root",
-  field: "form",
-};
-const parentOf = (id: string) => PARENT[id];
-
-describe("scopePath", () => {
-  it("walks from the scoped node up to the root, root first", () => {
-    expect(scopePath("form", parentOf, (id) => id.toUpperCase())).toEqual([
-      { id: "root", label: "ROOT" },
-      { id: "main", label: "MAIN" },
-      { id: "form", label: "FORM" },
-    ]);
-  });
-
-  it("stops at the first node it can't label", () => {
-    expect(
-      scopePath("form", parentOf, (id) => (id === "root" ? undefined : id)),
-    ).toEqual([
-      { id: "main", label: "main" },
-      { id: "form", label: "form" },
-    ]);
-  });
-});
-
-describe("isInScope", () => {
-  it("is true for the scope root itself and anything under it", () => {
-    expect(isInScope("form", "form", parentOf)).toBe(true);
-    expect(isInScope("field", "form", parentOf)).toBe(true);
-  });
-
-  it("is false for an ancestor or an unrelated node", () => {
-    expect(isInScope("main", "form", parentOf)).toBe(false);
-    expect(isInScope("other", "form", parentOf)).toBe(false);
-  });
-});
-
-describe("subtreeNodes", () => {
-  it("keeps the root and everything under it, nothing else", () => {
-    const nodes = new Map([
-      ["root", { childIds: ["a", "b"] }],
-      ["a", { childIds: ["a1"] }],
-      ["a1", { childIds: [] }],
-      ["b", {}],
-    ]);
-    expect([...subtreeNodes(nodes, "a").keys()].sort()).toEqual(["a", "a1"]);
-    expect(subtreeNodes(nodes, "gone").size).toBe(0);
-  });
-});
-
-describe("scopeKeyAction", () => {
-  const key = (init: KeyboardEventInit) => new KeyboardEvent("keydown", init);
-
-  it("scopes on Ctrl+Enter and Cmd+Enter", () => {
-    const state = { scoped: false, pickArmed: false };
-    expect(scopeKeyAction(key({ key: "Enter", ctrlKey: true }), state)).toBe(
-      "scope",
-    );
-    expect(scopeKeyAction(key({ key: "Enter", metaKey: true }), state)).toBe(
-      "scope",
-    );
-  });
-
-  it("leaves plain and Shift+Enter alone — they activate and step", () => {
-    const state = { scoped: true, pickArmed: false };
-    expect(scopeKeyAction(key({ key: "Enter" }), state)).toBeNull();
-    expect(
-      scopeKeyAction(key({ key: "Enter", shiftKey: true }), state),
-    ).toBeNull();
-  });
-
-  it("exits on Escape only while scoped", () => {
-    expect(
-      scopeKeyAction(key({ key: "Escape" }), {
-        scoped: true,
-        pickArmed: false,
-      }),
-    ).toBe("exit");
-    expect(
-      scopeKeyAction(key({ key: "Escape" }), {
-        scoped: false,
-        pickArmed: false,
-      }),
-    ).toBeNull();
-  });
-
-  it("leaves Escape to an armed pick", () => {
-    expect(
-      scopeKeyAction(key({ key: "Escape" }), { scoped: true, pickArmed: true }),
-    ).toBeNull();
-  });
-});
+import { ScopeBar } from "./ScopeBar.js";
 
 describe("ScopeBar", () => {
   const container = document.createElement("div");
   document.body.appendChild(container);
   afterEach(() => render(null, container));
 
-  function mount(onScope = vi.fn()) {
+  function mount(onScope = vi.fn(), focusAfterExit?: () => HTMLElement) {
     act(() => {
       render(
         <ScopeBar
+          focusAfterExit={focusAfterExit}
           path={[
             { id: "root", label: "document" },
             { id: "main", label: "main" },
@@ -157,5 +58,29 @@ describe("ScopeBar", () => {
       "location",
     );
     expect(crumb("main").hasAttribute("aria-current")).toBe(false);
+  });
+
+  it("hands focus to the caller's view after leaving the scope", () => {
+    const view = document.createElement("div");
+    view.tabIndex = 0;
+    document.body.appendChild(view);
+    mount(vi.fn(), () => view);
+    act(() =>
+      container.querySelector<HTMLButtonElement>(".sn-scope-exit")!.click(),
+    );
+    expect(document.activeElement).toBe(view);
+    view.blur();
+    act(() => crumb("document").click());
+    expect(document.activeElement).toBe(view);
+    view.remove();
+  });
+
+  it("hides the › separators from screen readers", () => {
+    mount();
+    const seps = container.querySelectorAll(".sn-breadcrumb-sep");
+    expect(seps).toHaveLength(2);
+    for (const sep of seps) {
+      expect(sep.getAttribute("aria-hidden")).toBe("true");
+    }
   });
 });
