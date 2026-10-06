@@ -8,6 +8,7 @@ link "Tree Diffing"
 button "Copy Code"
 generic
 table
+table
 link "WAI-ARIA specification"
 table
 table
