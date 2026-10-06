@@ -92,6 +92,60 @@ function treeSection(markdown: string, heading: string): string[] {
     .filter(Boolean);
 }
 
+/**
+ * How long a key that must NOT activate anything gets to do so before the
+ * test checks. Each such check is followed by a plain Enter that must
+ * activate within the same kind of wait, so the window isn't vacuous.
+ */
+const NO_ACTIVATION_WINDOW_MS = 1_000;
+
+/** Count clicks on Item 16, the button the list test below selects. */
+async function countItem16Clicks(
+  page: PanelPage,
+): Promise<() => Promise<number>> {
+  await page.evaluate(() => {
+    const w = window as typeof window & { __item16Clicks?: number };
+    w.__item16Clicks = 0;
+    document.getElementById("item-16")!.addEventListener("click", () => {
+      w.__item16Clicks = (w.__item16Clicks ?? 0) + 1;
+    });
+  });
+  return () =>
+    page.evaluate(
+      () =>
+        (window as typeof window & { __item16Clicks?: number })
+          .__item16Clicks ?? 0,
+    );
+}
+
+/**
+ * Route the panel's DOM `DISPATCH_ACTION` to the page's top frame, as the
+ * background does for a real side panel. This harness loads the panel as a
+ * tab, so the background reads its messages as a content script's and never
+ * forwards an action to the page (see `harness.ts`). Native actions go over
+ * `chrome.debugger` and need no routing.
+ */
+async function routeDomActionsToPage(panel: PanelPage): Promise<void> {
+  await panel.evaluate(() => {
+    const real = chrome.runtime.sendMessage.bind(chrome.runtime) as (
+      message: unknown,
+      ...rest: unknown[]
+    ) => Promise<unknown>;
+    chrome.runtime.sendMessage = ((message: unknown, ...rest: unknown[]) => {
+      const m = message as { type?: unknown; tabId?: unknown } | null;
+      if (m?.type !== "DISPATCH_ACTION" || typeof m.tabId !== "number") {
+        return real(message, ...rest);
+      }
+      const callback = rest.find((r) => typeof r === "function") as
+        ((response: unknown) => void) | undefined;
+      chrome.tabs.sendMessage(m.tabId, m, { frameId: 0 }, (response) => {
+        callback?.(chrome.runtime.lastError ? undefined : response);
+      });
+      return undefined;
+    }) as typeof chrome.runtime.sendMessage;
+  });
+}
+
 const itemsRow = (panel: PanelPage) =>
   panel.getByRole("treeitem", { name: /region.*"Items"/ });
 const scopeBar = (panel: PanelPage) => panel.locator(".sn-scope-bar");
@@ -214,15 +268,137 @@ for (const producer of ["DOM", "NATIVE"] as const) {
         "No headings found in this scope",
       );
 
-      // Going to the tree from a scoped list keeps the scope.
+      // Going to the tree from a scoped list keeps the scope. Every item the
+      // list offers is inside it, so go-to-tree can't land outside a scope.
       await nav.panel
         .getByRole("button", { name: "Buttons", exact: true })
         .click();
       await nav.panel.getByRole("option", { name: "Item 16" }).dblclick();
       await expect(scopeBar(nav.panel)).toBeVisible();
     });
+
+    test("Escape in a scoped role-filter list leaves the scope", async ({
+      nav,
+    }) => {
+      await show(nav, "native-panel.html", producer);
+      await itemsRow(nav.panel).dblclick({ position: { x: 5, y: 5 } });
+      await nav.panel
+        .getByRole("button", { name: "Headings", exact: true })
+        .click();
+      const list = nav.panel.getByRole("listbox");
+      await expect(nav.panel.getByRole("option")).toHaveCount(0);
+
+      await list.press("Escape");
+      await expect(scopeBar(nav.panel)).toHaveCount(0);
+      // The page's h1 and h2, outside "Items", are listed again, and the
+      // list keeps focus.
+      await expect(nav.panel.getByRole("option")).toHaveCount(2);
+      await expect(list).toBeFocused();
+    });
+
+    test("Ctrl+Enter in a role-filter list activates nothing", async ({
+      nav,
+    }) => {
+      const page = await show(nav, "native-panel.html", producer);
+      const clicks = await countItem16Clicks(page);
+      if (producer === "DOM") await routeDomActionsToPage(nav.panel);
+      await itemsRow(nav.panel).dblclick({ position: { x: 5, y: 5 } });
+      await nav.panel
+        .getByRole("button", { name: "Buttons", exact: true })
+        .click();
+      const list = nav.panel.getByRole("listbox");
+      const item16 = nav.panel.getByRole("option", { name: "Item 16" });
+      await item16.click();
+      await expect(item16).toHaveAttribute("aria-selected", "true");
+
+      // Plain Enter on a list item clicks it; Ctrl+Enter is the tree's scope
+      // key and must not fall through to that.
+      await list.press("Control+Enter");
+      await nav.panel.waitForTimeout(NO_ACTIVATION_WINDOW_MS);
+      expect(await clicks()).toBe(0);
+      await expect(scopeBar(nav.panel)).toBeVisible();
+
+      await list.press("Enter");
+      await expect.poll(clicks).toBe(1);
+    });
   });
 }
+
+test("DOM: Escape in the scoped Tab view leaves the scope", async ({ nav }) => {
+  await show(nav, "native-panel.html", "DOM");
+  await itemsRow(nav.panel).dblclick({ position: { x: 5, y: 5 } });
+  await expect(scopeBar(nav.panel)).toBeVisible();
+  await nav.panel
+    .getByRole("group", { name: "Tree view mode" })
+    .getByRole("button", { name: "TAB", exact: true })
+    .click();
+  const list = nav.panel.getByRole("listbox", { name: "Tab sequence" });
+  // Only the 16 buttons inside "Items"; the password field is outside it.
+  await expect(list.getByRole("option")).toHaveCount(16);
+
+  await list.press("Escape");
+  await expect(scopeBar(nav.panel)).toHaveCount(0);
+  await expect(list.getByRole("option")).toHaveCount(17);
+  await expect(list).toBeFocused();
+});
+
+test("DOM: page focus moving while native shows keeps the hidden DOM scope", async ({
+  nav,
+}) => {
+  const page = await show(nav, "native-panel.html", "DOM");
+  await itemsRow(nav.panel).dblclick({ position: { x: 5, y: 5 } });
+  await expect(scopeBar(nav.panel)).toBeVisible();
+
+  const producers = nav.panel.getByRole("group", { name: "Tree producer" });
+  await producers.getByRole("button", { name: "NATIVE", exact: true }).click();
+  await expect(nav.panel.locator(".sn-scope-bar")).toHaveCount(0);
+  await expect
+    .poll(() => nav.panel.locator(".sn-node").count(), { timeout: 20_000 })
+    .toBeGreaterThan(0);
+
+  // The password field sits outside "Items". With DOM showing, this would
+  // leave the scope (see the focus-tracking test below).
+  await page.locator("#pw").focus();
+  await nav.panel.waitForTimeout(NO_ACTIVATION_WINDOW_MS);
+  await expect(nav.panel.locator(".sn-action-feedback")).not.toContainText(
+    "Showing the full tree",
+  );
+
+  await producers.getByRole("button", { name: "DOM", exact: true }).click();
+  await expect(scopeBar(nav.panel)).toBeVisible();
+  await expect(
+    scopeBar(nav.panel).locator('[aria-current="location"]'),
+  ).toHaveText(/"Items"/);
+});
+
+test("NATIVE: the scope is dropped when a re-read no longer has its node", async ({
+  nav,
+}) => {
+  const page = await show(nav, "native-panel.html", "NATIVE");
+  await itemsRow(nav.panel).dblclick({ position: { x: 5, y: 5 } });
+  await expect(scopeBar(nav.panel)).toBeVisible();
+
+  await page.evaluate(() =>
+    document.querySelector('section[aria-label="Items"]')!.remove(),
+  );
+  await nav.panel.getByRole("button", { name: "Refresh native tree" }).click();
+
+  await expect(scopeBar(nav.panel)).toHaveCount(0);
+  await expect(
+    nav.panel.getByRole("treeitem", { name: /Native panel fixture/ }),
+  ).toBeVisible();
+});
+
+test("NATIVE: the scope is dropped when the page navigates", async ({
+  nav,
+}) => {
+  const page = await show(nav, "native-panel.html", "NATIVE");
+  await itemsRow(nav.panel).dblclick({ position: { x: 5, y: 5 } });
+  await expect(scopeBar(nav.panel)).toBeVisible();
+
+  await page.reload();
+  await expect(scopeBar(nav.panel)).toHaveCount(0);
+});
 
 test("NATIVE: a pick outside the scope leaves it and selects the picked row", async ({
   nav,
