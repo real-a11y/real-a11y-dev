@@ -103,15 +103,20 @@
   - **Native double-click.** Double-clicking a container row (a form, a
     landmark, anything with children and no action of its own) scopes the
     native tree to it, with the same breadcrumb bar as the DOM tree. It used
-    to only expand or collapse the row.
+    to only expand or collapse the row. A focusable container with no other
+    action (a `tabindex="0"` region) scopes in native but still focuses in
+    DOM, since selecting a native row already moves page focus to it.
   - **Keyboard.** In either tree, `Ctrl`/`Cmd`+`Enter` scopes to the selected
     row and `Esc` leaves the scope. Scoping was mouse-only before. In the
-    native tree, `Esc` still cancels an armed pick first.
+    native tree, `Esc` still cancels an armed pick first. Both trees name the
+    shortcut in their accessible name.
   - **Native Copy** exports the scoped subtree, as DOM mode's does.
   - **Role-filter lists follow the scope** in both trees. Headings, Links and
     the rest list only matches inside the scoped subtree, and say "in this
     scope" when there are none. They used to cover the whole page. The
-    search match count does the same ("3 matches in this scope").
+    search match count does the same ("3 matches in this scope"). `Esc` in a
+    list (and in the Tab view) leaves the scope, and `Ctrl`/`Cmd`+`Enter`
+    there does nothing instead of activating the item.
   - Two DOM fixes:
     - Copy on a scoped tree no longer cuts the start off every line of the
       tree section. A region one level below the page root exported as
@@ -120,6 +125,8 @@
       leaves the scope instead of selecting a row the tree
       doesn't show. `←` on the scope root also no longer selects its hidden
       parent and leaves the keyboard stuck.
+    - Focus moving on the page while the native tree is showing no longer
+      clears the DOM tree's scope behind it.
 
   ([#422](https://github.com/real-a11y/real-a11y-dev/pull/422))
 
