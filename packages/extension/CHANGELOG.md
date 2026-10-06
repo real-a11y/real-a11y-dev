@@ -74,16 +74,17 @@
   read itself. No field values are copied, sensitive or not.
   ([#403])
 
-- **Pick element now works under native mode.** Previously the toolbar `⦿`
-  button (and `Ctrl`/`Cmd`+`Shift`+`C`) only appeared for the DOM producer —
-  switching to NATIVE hid it entirely, with no way to jump from a click on
-  the page to the matching tree row. Native has no content script to install
-  a page-side click handler in, so this goes through a different mechanism:
-  arming Chromium's own inspect-element mode (the same one DevTools' "select
-  an element" tool uses) for the length of the pick, over the same
-  `chrome.debugger` connection every other native operation already uses.
-  Clicking an element, or pressing `Escape` to cancel, behaves the same as
-  the DOM producer's own picker. ([#404])
+- **Pick element works on the native tree.** The toolbar `⦿` button and
+  `Ctrl`/`Cmd`+`Shift`+`C` arm Chromium's own inspect-element mode (the one
+  DevTools' "select an element" tool uses) for the length of the pick.
+  Clicking an element selects and reveals its row; `Escape` cancels. The
+  button shows as busy until the page is ready to take the click. A pick
+  ends by itself after a minute with nothing clicked, and when the side
+  panel closes, so the debugger never stays attached waiting for a click
+  nobody can make. If the clicked element isn't in the tree you have (the
+  page changed since it was read), the panel says so. Native row names also
+  show their full text in a tooltip, for names too long for the row.
+  ([#404])
 
 ## 0.1.15
 
