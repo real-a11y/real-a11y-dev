@@ -198,3 +198,203 @@ test("an iframe row is marked embedded, since the native read skips its content"
     nav.panel.locator(".sn-node .sn-iframe-badge", { hasText: "embedded" }),
   ).toHaveCount(1);
 });
+
+/**
+ * How long a test gives the panel to do something it must NOT do (read the
+ * native tree) before checking it didn't. Each such check is preceded by the
+ * same step without the thing under test, which must read within this kind
+ * of wait, so the window isn't vacuous.
+ */
+const NO_READ_WINDOW_MS = 1_500;
+
+/** Make the panel's next NATIVE_ACTs fail: refused by the service worker, or
+ *  never answered (the message rejects, as when the worker can't wake). */
+async function failNativeActs(
+  panel: PanelPage,
+  how: "refuse" | "reject",
+): Promise<void> {
+  await panel.evaluate((how) => {
+    const real = chrome.runtime.sendMessage.bind(chrome.runtime) as (
+      message: unknown,
+      ...rest: unknown[]
+    ) => Promise<unknown>;
+    chrome.runtime.sendMessage = ((message: unknown, ...rest: unknown[]) => {
+      if ((message as { type?: unknown } | null)?.type !== "NATIVE_ACT") {
+        return real(message, ...rest);
+      }
+      return how === "refuse"
+        ? Promise.resolve({ success: false, error: "the page refused" })
+        : Promise.reject(new Error("Receiving end does not exist."));
+    }) as typeof chrome.runtime.sendMessage;
+  }, how);
+}
+
+test("an aria-modal dialog that Escape can't close says so", async ({
+  nav,
+}) => {
+  await showNative(nav, "dialog-aria-modal.html");
+  await routeSendKeyToPage(nav.panel);
+
+  const indicator = nav.panel.locator(".sn-dialog-indicator");
+  await expect(indicator).toContainText("Dialog: Cookie settings");
+  await clickInPanel(nav.panel, ".sn-dialog-indicator", "Press ESC");
+
+  await expect(nav.panel.locator(".sn-action-feedback")).toContainText(
+    "The dialog is still open",
+    { timeout: 10_000 },
+  );
+  await expect(indicator).toContainText("Dialog: Cookie settings");
+});
+
+test("a sent key whose page navigates a second later is followed there", async ({
+  nav,
+}) => {
+  const page = await showNative(nav, "native-nav-key-async.html");
+  await routeSendKeyToPage(nav.panel);
+
+  await clickInPanel(nav.panel, ".sn-keyboard-bar", "Enter");
+  // The key's own re-read reads this page first; the navigation comes after.
+  await page.waitForURL(/tree-view\.html/);
+  await expect(
+    nav.panel.getByRole("treeitem", { name: "Tree View" }),
+  ).toBeVisible({ timeout: 10_000 });
+});
+
+test("switching to DOM right after a sent key reads no native tree", async ({
+  nav,
+}) => {
+  await showNative(nav, "native-panel.html");
+  await routeSendKeyToPage(nav.panel);
+
+  // Without the switch, the key is followed by a native read.
+  let reads = (await nav.nativeReads()).length;
+  await clickInPanel(nav.panel, ".sn-keyboard-bar", "Tab");
+  await expect
+    .poll(async () => (await nav.nativeReads()).length, { timeout: 10_000 })
+    .toBeGreaterThan(reads);
+  await expect(
+    nav.panel.getByRole("button", { name: "Refresh native tree" }),
+  ).toBeEnabled();
+
+  // With it, in the same task as the key, there is none.
+  reads = (await nav.nativeReads()).length;
+  await nav.panel.evaluate(() => {
+    const press = [
+      ...document.querySelectorAll<HTMLButtonElement>(
+        ".sn-keyboard-bar button",
+      ),
+    ].find((b) => b.textContent?.trim() === "Tab")!;
+    const dom = [
+      ...document.querySelectorAll<HTMLButtonElement>(
+        '[aria-label="Tree producer"] button',
+      ),
+    ].find((b) => b.textContent?.trim() === "DOM")!;
+    press.click();
+    dom.click();
+  });
+  await nav.panel.waitForTimeout(NO_READ_WINDOW_MS);
+  expect((await nav.nativeReads()).length).toBe(reads);
+});
+
+test("a refused native action says Failed in the feedback bar", async ({
+  nav,
+}) => {
+  await showNative(nav, "native-parity.html");
+  await nav.panel.getByRole("button", { name: "Expand all" }).click();
+  await failNativeActs(nav.panel, "refuse");
+  await nav.panel
+    .getByRole("treeitem", { name: /^checkbox "Gift wrap"/ })
+    .getByTitle("Click (Enter)")
+    .click();
+  await expect(nav.panel.locator(".sn-action-feedback")).toContainText(
+    "Failed: the page refused",
+  );
+});
+
+test("a native action the extension never answers says Failed too", async ({
+  nav,
+}) => {
+  await showNative(nav, "native-parity.html");
+  await nav.panel.getByRole("button", { name: "Expand all" }).click();
+  await failNativeActs(nav.panel, "reject");
+  await nav.panel
+    .getByRole("treeitem", { name: /^checkbox "Gift wrap"/ })
+    .getByTitle("Click (Enter)")
+    .click();
+  await expect(nav.panel.locator(".sn-action-feedback")).toContainText(
+    "Failed: the extension didn't answer",
+  );
+});
+
+test("a checkbox and a radio word their feedback as the DOM tree does", async ({
+  nav,
+}) => {
+  await showNative(nav, "native-parity.html");
+  await nav.panel.getByRole("button", { name: "Expand all" }).click();
+  const feedback = nav.panel.locator(".sn-action-feedback");
+
+  await nav.panel
+    .getByRole("treeitem", { name: /^checkbox "Gift wrap"/ })
+    .getByTitle("Click (Enter)")
+    .click();
+  await expect(feedback).toContainText("Checked: Gift wrap");
+
+  await expect(
+    nav.panel.getByRole("button", { name: "Refresh native tree" }),
+  ).toBeEnabled();
+  await nav.panel
+    .getByRole("treeitem", { name: /^radio "Small"/ })
+    .getByTitle("Click (Enter)")
+    .click();
+  await expect(feedback).toContainText("Selected: Small");
+});
+
+test("Enter opens a native spinbutton's edit box and Shift+Enter steps it down", async ({
+  nav,
+}) => {
+  const page = await showNative(nav, "native-parity.html");
+  const value = () =>
+    page.evaluate(
+      () => (document.getElementById("qty") as HTMLInputElement).value,
+    );
+  await nav.panel.getByRole("button", { name: "Expand all" }).click();
+  await nav.panel
+    .getByRole("treeitem", { name: /^spinbutton "Quantity"/ })
+    .click();
+  const tree = nav.panel.getByRole("tree");
+
+  await tree.press("Enter");
+  await expect(nav.panel.locator(".sn-input-panel")).toBeVisible();
+  await nav.panel.locator(".sn-input-panel-field").press("Escape");
+  await expect(nav.panel.locator(".sn-input-panel")).toHaveCount(0);
+  expect(await value()).toBe("3");
+
+  await tree.press("Shift+Enter");
+  await expect.poll(value).toBe("2");
+});
+
+test("* opens every sibling group, a heading shows an H badge, and the hints name DblClick", async ({
+  nav,
+}) => {
+  await showNative(nav, "native-parity.html");
+  const heading = nav.panel.getByRole("treeitem", {
+    name: /^heading H2 "Billing"/,
+  });
+  await expect(heading.locator(".sn-level-badge")).toHaveText("H2");
+  await expect(nav.panel.locator(".sn-hints")).toContainText("DblClick scope");
+
+  const gift = nav.panel.getByRole("treeitem", {
+    name: /^checkbox "Gift wrap"/,
+  });
+  const small = nav.panel.getByRole("treeitem", { name: /^radio "Small"/ });
+  // Close everything but the document, so both groups start closed.
+  await nav.panel.getByRole("button", { name: "Collapse all" }).click();
+  await nav.panel.getByRole("treeitem", { name: "document" }).click();
+  await nav.panel.getByRole("tree").press("ArrowRight");
+  await expect(gift).toHaveCount(0);
+  await expect(small).toHaveCount(0);
+  await heading.click();
+  await nav.panel.getByRole("tree").press("*");
+  await expect(gift).toBeVisible();
+  await expect(small).toBeVisible();
+});

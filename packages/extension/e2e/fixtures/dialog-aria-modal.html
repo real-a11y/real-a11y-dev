@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Dialog (aria-modal) — no Escape handler</title>
+  </head>
+  <body>
+    <!--
+      An `aria-modal` dialog that is not a `<dialog>`, and whose page doesn't
+      close it on Escape. Chromium marks it modal, so the native tree shows
+      the dialog indicator, but the indicator's Escape can't close it: the
+      panel has to say so rather than look broken.
+    -->
+    <main>
+      <p>Page behind the dialog.</p>
+    </main>
+    <div role="dialog" aria-modal="true" aria-labelledby="t">
+      <h2 id="t">Cookie settings</h2>
+      <button id="accept">Accept</button>
+    </div>
+  </body>
+</html>
