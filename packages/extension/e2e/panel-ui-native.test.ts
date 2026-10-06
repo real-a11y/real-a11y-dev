@@ -498,17 +498,52 @@ test("Copy → Headings copies the outline alone, still marked native", async ({
 // inspectNodeRequested` fires for real rather than being simulated at the
 // message level.
 
+/** Press Pick and wait until Chromium's inspect mode is on: the button is
+ *  pressed at once, and busy until NATIVE_PICK_ARMED arrives. */
+async function armPick(nav: NativeHarness) {
+  const pickButton = nav.panel.getByRole("button", {
+    name: "Pick element in page",
+  });
+  await pickButton.click();
+  await expect(pickButton).toHaveAttribute("aria-pressed", "true");
+  await expect(pickButton).toHaveAttribute("aria-busy", "false");
+  return pickButton;
+}
+
+/** Count clicks that reach the page itself. A click while inspect mode is on
+ *  is eaten as a pick; once it's off, a click reaches the page again. */
+async function countPageClicks(
+  page: PanelPage,
+): Promise<() => Promise<number>> {
+  await page.evaluate(() => {
+    const w = window as typeof window & { __clicks?: number };
+    w.__clicks = 0;
+    document.addEventListener(
+      "click",
+      () => (w.__clicks = (w.__clicks ?? 0) + 1),
+      true,
+    );
+  });
+  return () =>
+    page.evaluate(
+      () => (window as typeof window & { __clicks?: number }).__clicks ?? 0,
+    );
+}
+
+/** After a pick ended without picking: a page click reaches the page and
+ *  selects nothing in the panel, so inspect mode really is off. */
+async function expectInspectModeOff(nav: NativeHarness, page: PanelPage) {
+  const clicks = await countPageClicks(page);
+  await page.getByRole("heading", { name: "Native panel fixture" }).click();
+  await expect.poll(clicks).toBe(1);
+  await expect(nav.panel.locator("[aria-selected='true']")).toHaveCount(0);
+}
+
 test("picking an element on the page selects and reveals it in the native tree", async ({
   nav,
 }) => {
   const page = await showNative(nav, "native-panel.html");
-
-  const pickButton = nav.panel.getByRole("button", {
-    name: "Pick element in page",
-  });
-  await expect(pickButton).toHaveAttribute("aria-pressed", "false");
-  await pickButton.click();
-  await expect(pickButton).toHaveAttribute("aria-pressed", "true");
+  const pickButton = await armPick(nav);
 
   // The root-level <h1> — visible without "Expand all" (root + its immediate
   // children are seeded open by default), and distinct from the buttons
@@ -535,14 +570,11 @@ test("picking a second time re-fires the reveal even for the same node", async (
   nav,
 }) => {
   const page = await showNative(nav, "native-panel.html");
-  const pickButton = nav.panel.getByRole("button", {
-    name: "Pick element in page",
-  });
   const headingRow = nav.panel.getByRole("treeitem", {
     name: "Native panel fixture",
   });
 
-  await pickButton.click();
+  await armPick(nav);
   await page.getByRole("heading", { name: "Native panel fixture" }).click();
   await expect(headingRow).toHaveAttribute("aria-selected", "true");
 
@@ -550,12 +582,10 @@ test("picking a second time re-fires the reveal even for the same node", async (
   // the selection back FROM — proof this is a fresh reveal, not a
   // no-op-because-unchanged effect (see NativeTreeView's own `reveal.nonce`
   // comment for why a plain `nodeId`-keyed effect would miss this).
-  await nav.panel
-    .getByRole("treeitem", { name: "Sensitive field group" })
-    .click();
+  await nav.panel.getByRole("treeitem", { name: /Sensitive field/ }).click();
   await expect(headingRow).toHaveAttribute("aria-selected", "false");
 
-  await pickButton.click();
+  await armPick(nav);
   await page.getByRole("heading", { name: "Native panel fixture" }).click();
   await expect(headingRow).toHaveAttribute("aria-selected", "true");
 });
@@ -563,35 +593,21 @@ test("picking a second time re-fires the reveal even for the same node", async (
 test("clicking Pick again while armed cancels it without selecting anything", async ({
   nav,
 }) => {
-  await showNative(nav, "native-panel.html");
-  const pickButton = nav.panel.getByRole("button", {
-    name: "Pick element in page",
-  });
-
-  await pickButton.click();
-  await expect(pickButton).toHaveAttribute("aria-pressed", "true");
+  const page = await showNative(nav, "native-panel.html");
+  const pickButton = await armPick(nav);
   await pickButton.click();
   await expect(pickButton).toHaveAttribute("aria-pressed", "false");
-
-  // No row is selected — the cancel never produced a NATIVE_PICK_RESULT with
-  // a node id.
-  await expect(nav.panel.locator("[aria-selected='true']")).toHaveCount(0);
+  await expectInspectModeOff(nav, page);
 });
 
 test("Escape cancels an armed native pick while the panel has focus", async ({
   nav,
 }) => {
-  await showNative(nav, "native-panel.html");
-  const pickButton = nav.panel.getByRole("button", {
-    name: "Pick element in page",
-  });
-
-  await pickButton.click();
-  await expect(pickButton).toHaveAttribute("aria-pressed", "true");
-
+  const page = await showNative(nav, "native-panel.html");
+  const pickButton = await armPick(nav);
   await nav.panel.keyboard.press("Escape");
   await expect(pickButton).toHaveAttribute("aria-pressed", "false");
-  await expect(nav.panel.locator("[aria-selected='true']")).toHaveCount(0);
+  await expectInspectModeOff(nav, page);
 });
 
 test("Escape on the inspected page itself also cancels an armed native pick", async ({
@@ -604,27 +620,14 @@ test("Escape on the inspected page itself also cancels an armed native pick", as
   // against a real browser, not assumed from the CDP spec), which `runPick`
   // now also listens for.
   const page = await showNative(nav, "native-panel.html");
-  const pickButton = nav.panel.getByRole("button", {
-    name: "Pick element in page",
-  });
-
-  await pickButton.click();
-  await expect(pickButton).toHaveAttribute("aria-pressed", "true");
+  const pickButton = await armPick(nav);
 
   await page.bringToFront();
   // No click here — clicking anything while inspect mode is armed IS a pick.
-  // Escape alone is what this test is pinning.
-  //
-  // The panel flips the button on before the service worker has attached and
-  // turned inspect mode on, so an Escape that lands first reaches a page with
-  // nothing armed and is lost. Press again until one lands after arming.
-  await expect(async () => {
-    await page.keyboard.press("Escape");
-    await expect(pickButton).toHaveAttribute("aria-pressed", "false", {
-      timeout: 1_000,
-    });
-  }).toPass({ timeout: 10_000 });
-  await expect(nav.panel.locator("[aria-selected='true']")).toHaveCount(0);
+  // One Escape, once the pick is armed, is what this pins.
+  await page.keyboard.press("Escape");
+  await expect(pickButton).toHaveAttribute("aria-pressed", "false");
+  await expectInspectModeOff(nav, page);
 
   // The tab's per-operation queue isn't stuck behind the (now-resolved)
   // pick — same proof the "picking a second time" test above relies on, just
@@ -639,12 +642,7 @@ test("picking an element the AX tree pruned resolves to its nearest kept ancesto
   nav,
 }) => {
   const page = await showNative(nav, "native-panel.html");
-  const pickButton = nav.panel.getByRole("button", {
-    name: "Pick element in page",
-  });
-
-  await pickButton.click();
-  await expect(pickButton).toHaveAttribute("aria-pressed", "true");
+  const pickButton = await armPick(nav);
 
   // The inner span has no accessible role or name of its own — Chromium's
   // AX tree never kept a node for it (see the fixture's own comment on
@@ -663,19 +661,33 @@ test("picking an element the AX tree pruned resolves to its nearest kept ancesto
 test("switching producer while a native pick is armed resets the button and cancels the pick", async ({
   nav,
 }) => {
-  await showNative(nav, "native-panel.html");
-  const pickButton = nav.panel.getByRole("button", {
-    name: "Pick element in page",
-  });
-
-  await pickButton.click();
-  await expect(pickButton).toHaveAttribute("aria-pressed", "true");
+  const page = await showNative(nav, "native-panel.html");
+  const pickButton = await armPick(nav);
 
   await nav.panel.getByRole("button", { name: "DOM", exact: true }).click();
 
-  // The SAME button now reflects the DOM producer's own (never-armed)
-  // picker state — without the fix, `pickModeOn` stayed true across the
-  // switch and this button rendered "on" for a picker nothing had actually
-  // started.
+  // The same button now shows the DOM producer's own, never-armed picker.
   await expect(pickButton).toHaveAttribute("aria-pressed", "false");
+  // And the native pick really ended: a page click reaches the page.
+  const clicks = await countPageClicks(page);
+  await page.getByRole("heading", { name: "Native panel fixture" }).click();
+  await expect.poll(clicks).toBe(1);
+});
+
+test("a pick that lands on something the tree doesn't have says so", async ({
+  nav,
+}) => {
+  const page = await showNative(nav, "native-panel.html");
+  // Added after the tree was read, outside anything the tree kept.
+  await page.evaluate(() => {
+    const late = document.createElement("button");
+    late.textContent = "Added after the read";
+    document.body.prepend(late);
+  });
+  await armPick(nav);
+  await page.getByRole("button", { name: "Added after the read" }).click();
+  await expect(
+    nav.panel.getByText("The picked element isn't in this tree"),
+  ).toBeVisible();
+  await expect(nav.panel.locator("[aria-selected='true']")).toHaveCount(0);
 });
