@@ -92,7 +92,10 @@
   Clicking a row, arrow-key navigation and a native pick all follow, and so
   do the lists a role filter (Headings, Buttons, …) shows, which now offer
   Move to as well. It is debounced, so a fast arrow-key run through several
-  rows only lands on the row you actually stop at.
+  rows only lands on the row you actually stop at, and a reveal you've
+  already moved past is dropped rather than attaching the debugger for it.
+  The page can't fake or redirect the outline. On a page where the outline
+  can't be drawn, the panel says so.
   ([#412](https://github.com/real-a11y/real-a11y-dev/pull/412))
 
 ## 0.1.15
