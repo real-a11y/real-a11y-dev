@@ -20,6 +20,7 @@ link "Two producers"
 button "Copy Code"
 generic
 link "Two producers"
+link "Scoping"
 link "Reading the DOM view"
 link "A11y view"
 link "TAB view"

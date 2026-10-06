@@ -192,12 +192,13 @@ main
   separator
   heading "Scoping" (level 2)
   paragraph "Narrow the audit root to a subtree. Useful when you want to focus on one form, one dialog, or one widget without the rest of the page in the way."
-  paragraph "In the Chrome extension's panel, double-click a container node — a form, a landmark, a list, anything with children and no action of its own — to scope into it, or select any row with children and press /+. Double-clicking an interactive node still activates it. The tree re-renders showing only that subtree, and a breadcrumb at the top shows the path: click any breadcrumb segment to scope back up, or the (or in the tree) to return to the full tree. Both the DOM and the native tree scope the same way."
+  paragraph "In the Chrome extension's panel, double-click a container node — a form, a landmark, a list, anything with children and no action of its own — to scope into it, or select any row with children and press /+. Double-clicking an interactive node still activates it. The tree re-renders showing only that subtree, and a breadcrumb at the top shows the path: click any breadcrumb segment to scope back up, or (✕), or press in the tree or in a list, to return to the full tree. Both the DOM and the native tree scope the same way, with one difference in what counts as interactive: the DOM tree activates (focuses) any focusable container, such as a region, while the native tree scopes into it, since selecting a native row already moves page focus there."
     code "Ctrl"
     code "Cmd"
     code "Enter"
-    code "×"
+    strong "Exit scope"
     code "Esc"
+    code "tabindex="0""
   paragraph "Scoping affects:"
   list
     listitem "in the tree (only the scoped subtree's descendants)"
@@ -211,7 +212,11 @@ main
     listitem "(the scoped subtree, with a line naming it)"
       strong "What Copy exports"
       code "Scope"
-  paragraph "Picking an element outside the scope, or focus moving to one while focus tracking is on, leaves the scope so the row you land on is actually shown."
+  paragraph "Picking an element outside the scope, or focus moving to one while focus tracking is on, leaves the scope so the row you land on is actually shown. A list can't take you outside the scope, since it only lists what's inside it. In a list, leaves the scope as it does in the tree, and /+ does nothing rather than activating the item."
+    code "Esc"
+    code "Ctrl"
+    code "Cmd"
+    code "Enter"
   table
     rowgroup
       row
@@ -220,11 +225,11 @@ main
     rowgroup
       row
         cell "Chrome extension"
-        cell "Double-click a container node, or Ctrl/Cmd+Enter on any row with children; breadcrumb, × or Esc to exit"
+        cell "Double-click a container node, or Ctrl/Cmd+Enter on any row with children; breadcrumb, Exit scope (✕) or Esc to exit"
           code "Ctrl"
           code "Cmd"
           code "Enter"
-          code "×"
+          strong "Exit scope"
           code "Esc"
       row
         cell "inspector"
@@ -402,7 +407,7 @@ main
       row
         cell "Esc"
           code "Esc"
-        cell "Chrome extension: leave the current scope. In the native tree, while a pick is armed, Esc cancels the pick instead"
+        cell "Chrome extension: leave the current scope, from the tree or from a role-filter or Tab-sequence list. In the native tree, while a pick is armed, Esc cancels the pick instead"
           code "Esc"
   paragraph "Implemented in via (and the same type-ahead + stepper-key helpers on filtered / tab-sequence listboxes) — every package that mounts the tree gets the same keymap. The two scope keys belong to the Chrome extension's panel, the one surface with a scope breadcrumb."
     code "@real-a11y-dev/semantic-navigator-ui"
