@@ -17,7 +17,8 @@
 
 import type { ExtractionResult, SemanticNode } from "@real-a11y-dev/core";
 
-import { nativeParentIndex, type NativeNode } from "./native-actions.js";
+import type { NativeNode } from "./native-actions.js";
+import { nativeParentIndex } from "./native-tree-utils.js";
 
 /**
  * Adapt a native tree (as held by the panel's `nativeNodes`/`nativeRootId`
@@ -27,13 +28,18 @@ import { nativeParentIndex, type NativeNode } from "./native-actions.js";
  * generic/unexposed), a native tree only ever contains nodes Chromium's own
  * AX tree already exposed — there is nothing further to distinguish.
  */
-export function toExtractionResult(
+export function nativeToExtractionResult(
   nodes: Map<string, NativeNode>,
   rootId: string,
 ): ExtractionResult {
   const parentOf = nativeParentIndex(nodes);
   const semanticNodes = new Map<string, SemanticNode>();
 
+  // Only structure, names, descriptions and states cross over. A field's
+  // value (`value`, `rawValue`, `redacted`) and its placeholder deliberately
+  // don't: a copied report is pasted into issues and PRs, and ADR-0001 leaves
+  // values out of anything posted, which also means a sensitive field can't
+  // leak through an export. The DOM producer's export leaves them out too.
   for (const node of nodes.values()) {
     semanticNodes.set(node.id, {
       id: node.id,

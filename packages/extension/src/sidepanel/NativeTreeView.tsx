@@ -55,10 +55,10 @@ import {
   isSelectableRole,
   isSteppableRole,
   isTypableRole,
-  nativeParentIndex,
   type NativeNode,
 } from "../native/native-actions.js";
 import { searchNativeTree } from "../native/native-search.js";
+import { nativeParentIndex } from "../native/native-tree-utils.js";
 
 import { announcedValueLabel } from "./field-value.js";
 import {

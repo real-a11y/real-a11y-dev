@@ -3,7 +3,7 @@ import { serializeOutline, serializeTree } from "@real-a11y-dev/serialize";
 import { describe, expect, it } from "vitest";
 
 import type { NativeNode } from "./native-actions.js";
-import { toExtractionResult } from "./native-export.js";
+import { nativeToExtractionResult } from "./native-export.js";
 
 /** Root > main > [heading "Welcome" (level 1), button "Submit"] — enough to
  *  exercise role/name, an AX property (heading level), a state (checked),
@@ -43,23 +43,47 @@ function buildTree(): Map<string, NativeNode> {
   return new Map(nodes.map((n) => [n.id, n]));
 }
 
-describe("toExtractionResult", () => {
+describe("nativeToExtractionResult", () => {
   it("stamps the native producer", () => {
-    const tree = toExtractionResult(buildTree(), "root");
+    const tree = nativeToExtractionResult(buildTree(), "root");
     expect(tree.source).toEqual({ producer: "native" });
     expect(tree.rootId).toBe("root");
   });
 
   it("derives parentId from childIds, root included", () => {
-    const tree = toExtractionResult(buildTree(), "root");
+    const tree = nativeToExtractionResult(buildTree(), "root");
     expect(tree.nodes.get("root")?.parentId).toBeNull();
     expect(tree.nodes.get("main")?.parentId).toBe("root");
     expect(tree.nodes.get("heading")?.parentId).toBe("main");
     expect(tree.nodes.get("button")?.parentId).toBe("main");
   });
 
+  it("prints what a report shows, and never a field's value", () => {
+    const nodes = buildTree();
+    nodes.get("main")!.childIds = ["heading", "button", "password"];
+    nodes.set("password", {
+      id: "password",
+      role: "textbox",
+      name: "Password",
+      depth: 2,
+      value: "[redacted]",
+      redacted: true,
+      rawValue: "hunter2",
+      placeholder: "Your password",
+    } as NativeNode);
+    const printed = serializeTree(nativeToExtractionResult(nodes, "root"), {
+      includeGeneric: true,
+    });
+    expect(printed).toContain('heading "Welcome" (level 1)');
+    expect(printed).toContain('button "Submit"');
+    expect(printed).toContain('textbox "Password"');
+    for (const leak of ["hunter2", "[redacted]", "Your password"]) {
+      expect(printed).not.toContain(leak);
+    }
+  });
+
   it("carries role/name/description/states/properties into a11y, with safe defaults", () => {
-    const tree = toExtractionResult(buildTree(), "root");
+    const tree = nativeToExtractionResult(buildTree(), "root");
     const heading = tree.nodes.get("heading")!;
     expect(heading.a11y.role).toBe("heading");
     expect(heading.a11y.name).toBe("Welcome");
@@ -73,7 +97,7 @@ describe("toExtractionResult", () => {
   });
 
   it("leaves dom/interaction/ui absent, matching a native SemanticNode elsewhere in the codebase", () => {
-    const tree = toExtractionResult(buildTree(), "root");
+    const tree = nativeToExtractionResult(buildTree(), "root");
     const node = tree.nodes.get("button")!;
     expect(node.dom).toBeUndefined();
     expect(node.interaction).toBeUndefined();
@@ -81,7 +105,7 @@ describe("toExtractionResult", () => {
   });
 
   it("round-trips through @real-a11y-dev/core's own tree walk (linearize)", () => {
-    const tree = toExtractionResult(buildTree(), "root");
+    const tree = nativeToExtractionResult(buildTree(), "root");
     const printed = linearize(tree);
     expect(printed.map((n) => n.id)).toEqual([
       "root",
@@ -92,7 +116,7 @@ describe("toExtractionResult", () => {
   });
 
   it("is consumable by @real-a11y-dev/serialize's serializeTree/serializeOutline", () => {
-    const tree = toExtractionResult(buildTree(), "root");
+    const tree = nativeToExtractionResult(buildTree(), "root");
     expect(serializeTree(tree)).toBe(
       [
         'RootWebArea "Test page"',
@@ -108,7 +132,7 @@ describe("toExtractionResult", () => {
   });
 
   it("handles an empty tree without throwing", () => {
-    const tree = toExtractionResult(new Map(), "root");
+    const tree = nativeToExtractionResult(new Map(), "root");
     expect(tree.nodes.size).toBe(0);
     expect(serializeTree(tree)).toBe("");
   });
@@ -116,13 +140,13 @@ describe("toExtractionResult", () => {
   it("promotes a node with states.focused into the tree-level focusedId, mirroring @real-a11y-dev/browser's native adapter", () => {
     const nodes = buildTree();
     nodes.set("button", { ...nodes.get("button")!, states: { focused: true } });
-    const tree = toExtractionResult(nodes, "root");
+    const tree = nativeToExtractionResult(nodes, "root");
     expect(tree.focusedId).toBe("button");
     expect(serializeTree(tree)).toContain('button "Submit" [focused]');
   });
 
   it("omits focusedId when no node reports focused", () => {
-    const tree = toExtractionResult(buildTree(), "root");
+    const tree = nativeToExtractionResult(buildTree(), "root");
     expect(tree.focusedId).toBeUndefined();
   });
 });
