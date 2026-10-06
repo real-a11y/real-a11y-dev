@@ -11,12 +11,14 @@ pnpm --filter @real-a11y-dev/semantic-navigator-extension test:e2e
 Needs a Chromium binary — `pnpm exec playwright install chromium` if you have
 not run Playwright in this checkout before.
 
-`pretest:e2e` runs `build:dogfood` first — **not** `build`. This suite drives
-`DogfoodPanel`, the internal diagnostics widget, directly — `__DOGFOOD__`
-still gates that widget alone (native mode itself now ships in the store
-build too, behind the runtime `settings.nativeModeEnabled` flag), so a suite
-pointed at `dist/` would silently exercise a build with no `DogfoodPanel` to
-drive at all.
+`pretest:e2e` runs both `build` and `build:dogfood`. Most suites load the
+dogfood build (`dist-dogfood/`) with native mode already on, and drive the real
+panel: its NATIVE toggle, tree and actions. A few also drive `DogfoodPanel`, the
+internal diagnostics widget, which only the dogfood build contains.
+`native-opt-in.test.ts` loads the store build (`dist/`) from a fresh profile, to
+check what the listing ships: the manifest, the absence of the dogfood
+diagnostics, and turning native mode on and off. A suite picks its build and
+starting setting with `test.use({ build, nativeEnabled })`.
 
 Useful switches:
 
