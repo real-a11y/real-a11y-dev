@@ -46,7 +46,7 @@ import {
 } from "../native/capability.js";
 import { isTypableRole, type NativeNode } from "../native/native-actions.js";
 import type { NativeAction } from "../native/native-core.js";
-import { toExtractionResult as nativeToExtractionResult } from "../native/native-export.js";
+import { nativeToExtractionResult } from "../native/native-export.js";
 import {
   isTrustedSender,
   isUnreachablePageResponse,
@@ -54,8 +54,13 @@ import {
 } from "../routing.js";
 import type { ContentToPanel, PanelToContent } from "../types.js";
 
-import { buildExportMarkdown, ALL_VIEWS, NATIVE_VIEWS } from "./export.js";
-import type { ExportView } from "./export.js";
+import {
+  buildExportMarkdown,
+  ALL_VIEWS,
+  NATIVE_VIEWS,
+  VIEW_LABELS,
+} from "./export.js";
+import type { ExportMeta, ExportView, ExportViews } from "./export.js";
 import { announcedValueLabel, rawValueLabel } from "./field-value.js";
 import { FilteredList } from "./FilteredList.js";
 import { useFocusTrap, useRestoreFocusOnClose } from "./focus-hooks.js";
@@ -392,6 +397,10 @@ export function App() {
   const [nativeTreeUrl, setNativeTreeUrl] = useState<string | undefined>(
     undefined,
   );
+  // When the native tree on screen was read (ISO), for the export's header.
+  const [nativeReadAt, setNativeReadAt] = useState<string | undefined>(
+    undefined,
+  );
   // Bumped whenever the bound tab changes (see the myTabId effect below).
   // Read-gates a NATIVE_READ/NATIVE_CAPABILITY reply against a tab switch
   // that happened while it was in flight — same purpose as DogfoodPanel's
@@ -445,6 +454,7 @@ export function App() {
     setNativeRootId("");
     setNativeTreeTabId(undefined);
     setNativeTreeUrl(undefined);
+    setNativeReadAt(undefined);
     setNativeStatus("");
     setNativeCapability(undefined);
     setNativeBusy(false);
@@ -1324,6 +1334,7 @@ export function App() {
         setNativeRootId(r.rootId ?? "");
         setNativeTreeTabId(tabId);
         setNativeTreeUrl(r.url);
+        setNativeReadAt(new Date().toISOString());
         // A successful read is proof any standing refusal no longer holds —
         // same reasoning as DogfoodPanel's identical line.
         setNativeCapability(undefined);
@@ -1839,41 +1850,52 @@ export function App() {
       // the `producer === "dom" && scopedRootId` breadcrumb gate below), so
       // it always exports the whole last-read tree; no scope de-indent, no
       // scope label.
-      if (producer === "native") {
-        if (!nativeRootId || nativeNodes.size === 0) {
-          announce("Nothing to export yet", 2000);
-          return;
-        }
-        const tree = nativeToExtractionResult(nativeNodes, nativeRootId);
+      /** Put the report on the clipboard and say whether it worked. */
+      const copyReport = (
+        views: ExportViews,
+        meta: Omit<ExportMeta, "extensionVersion">,
+      ) => {
         const markdown = buildExportMarkdown(
-          {
-            // `normalizeNativeAX` already drops every UNNAMED generic
-            // wrapper as noise, keeping a bare `role: "generic"` node only
-            // when it's a meaningfully named group (see
-            // `ax-normalize.ts`'s own comment) — so unlike a DOM tree,
-            // every generic node that survives into a native tree is one
-            // the panel actually shows. `serializeTree`'s default
-            // `includeGeneric: false` doesn't know that distinction and
-            // would silently drop it from the export.
-            tree: serializeTree(tree, { includeGeneric: true }),
-            outline: serializeOutline(tree),
-            // Native has no tab-order data at all (see NATIVE_VIEWS) —
-            // never selected, so this value never renders.
-            tabSequence: "",
-          },
-          {
-            pageTitle,
-            pageUrl,
-            capturedAt: new Date().toISOString(),
-            extensionVersion: chrome.runtime.getManifest().version,
-            viewLabel: "Native accessibility tree",
-          },
+          views,
+          { ...meta, extensionVersion: chrome.runtime.getManifest().version },
           selection,
         );
         navigator.clipboard.writeText(markdown).then(
           () => announce("Copied to clipboard", 2500),
           () =>
             announce("Clipboard blocked — click the panel, then retry", 2500),
+        );
+      };
+
+      if (producer === "native") {
+        if (!nativeRootId || nativeNodes.size === 0) {
+          announce("Nothing to export yet", 2000);
+          return;
+        }
+        const tree = nativeToExtractionResult(nativeNodes, nativeRootId);
+        copyReport(
+          {
+            // `normalizeNativeAX` already drops every UNNAMED generic
+            // wrapper, so every generic left in a native tree is a named
+            // group the panel shows. `serializeTree`'s default
+            // `includeGeneric: false` doesn't know that and would drop it.
+            tree: serializeTree(tree, { includeGeneric: true }),
+            outline: serializeOutline(tree),
+          },
+          {
+            producer: tree.source!.producer,
+            // The native read's own page, not the DOM producer's, which can
+            // lag a navigation or never arrive on a page only native reads.
+            // A native tree carries no document title, so the DOM
+            // producer's is used only when it describes the same URL;
+            // otherwise the header falls back to the URL.
+            pageTitle: pageUrl && pageUrl === nativeTreeUrl ? pageTitle : "",
+            pageUrl: nativeTreeUrl ?? "",
+            // When the tree on screen was read: it doesn't follow the page
+            // by itself, so the click's time could describe a stale tree.
+            capturedAt: nativeReadAt ?? new Date().toISOString(),
+            viewLabel: "Native accessibility tree",
+          },
         );
         return;
       }
@@ -1912,7 +1934,7 @@ export function App() {
         ? `${scopeNode.a11y.role}${scopeNode.a11y.name ? ` "${scopeNode.a11y.name}"` : ""}`
         : undefined;
 
-      const markdown = buildExportMarkdown(
+      copyReport(
         {
           tree: treeStr,
           outline: serializeOutline(tree),
@@ -1921,19 +1943,13 @@ export function App() {
           tabSequence: numberTabStops(serializeTabSequence(tree)),
         },
         {
+          producer: tree.source!.producer,
           pageTitle,
           pageUrl,
           capturedAt: new Date().toISOString(),
-          extensionVersion: chrome.runtime.getManifest().version,
           viewLabel: viewMode === "dom" ? "DOM tree" : "Accessibility tree",
           scope: scopeLabel,
         },
-        selection,
-      );
-
-      navigator.clipboard.writeText(markdown).then(
-        () => announce("Copied to clipboard", 2500),
-        () => announce("Clipboard blocked — click the panel, then retry", 2500),
       );
     },
     [
@@ -1946,8 +1962,13 @@ export function App() {
       viewMode,
       pageTitle,
       pageUrl,
+      nativeTreeUrl,
+      nativeReadAt,
+      announce,
     ],
   );
+  // What the Copy menu offers for the tree on screen.
+  const exportViews = producer === "native" ? NATIVE_VIEWS : ALL_VIEWS;
 
   // Close the export menu on outside-click or Escape.
   useEffect(() => {
@@ -2373,36 +2394,25 @@ export function App() {
             <div class="sn-export-menu" aria-label="Copy which view">
               <button
                 class="sn-export-item"
-                onClick={() =>
-                  doExport(producer === "native" ? NATIVE_VIEWS : ALL_VIEWS)
-                }
+                onClick={() => doExport(exportViews)}
               >
                 Everything
               </button>
-              <button
-                class="sn-export-item"
-                onClick={() => doExport(["tree"] as ExportView[])}
-              >
-                {producer === "native"
-                  ? "Native tree"
-                  : viewMode === "dom"
-                    ? "DOM tree"
-                    : "A11y tree"}
-              </button>
-              <button
-                class="sn-export-item"
-                onClick={() => doExport(["outline"] as ExportView[])}
-              >
-                Headings
-              </button>
-              {producer === "dom" && (
+              {exportViews.map((view) => (
                 <button
+                  key={view}
                   class="sn-export-item"
-                  onClick={() => doExport(["tab"] as ExportView[])}
+                  onClick={() => doExport([view])}
                 >
-                  Tab sequence
+                  {view === "tree"
+                    ? producer === "native"
+                      ? "Native tree"
+                      : viewMode === "dom"
+                        ? "DOM tree"
+                        : "A11y tree"
+                    : VIEW_LABELS[view]}
                 </button>
-              )}
+              ))}
             </div>
           )}
         </div>

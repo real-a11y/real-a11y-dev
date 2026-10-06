@@ -2,7 +2,10 @@ import { describe, it, expect } from "vitest";
 
 import { ALL_VIEWS, buildExportMarkdown, NATIVE_VIEWS } from "./export.js";
 
-const META = {
+import type { ExportMeta } from "./export.js";
+
+const META: ExportMeta = {
+  producer: "dom",
   pageTitle: "Sign in",
   pageUrl: "https://example.com/login",
   capturedAt: "2026-06-27T10:00:00.000Z",
@@ -23,6 +26,24 @@ describe("buildExportMarkdown", () => {
     expect(md).toContain("**URL:** https://example.com/login");
     expect(md).toContain("**Captured:** 2026-06-27T10:00:00.000Z");
     expect(md).toContain("Semantic Navigator 0.1.4");
+  });
+
+  it("names the producer that built the tree", () => {
+    expect(buildExportMarkdown(VIEWS, META)).toContain(
+      "**Producer:** dom (the extension's own in-page walk)",
+    );
+    const native = buildExportMarkdown(
+      { tree: VIEWS.tree, outline: VIEWS.outline },
+      { ...META, producer: "native" },
+      NATIVE_VIEWS,
+    );
+    expect(native).toContain(
+      "**Producer:** native (Chromium's own accessibility tree)",
+    );
+    // Even a headings-only export says which producer it came from.
+    expect(
+      buildExportMarkdown(VIEWS, { ...META, producer: "native" }, ["outline"]),
+    ).toContain("**Producer:** native");
   });
 
   it("labels the tree section by the current view", () => {
