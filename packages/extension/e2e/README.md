@@ -22,10 +22,10 @@ starting setting with `test.use({ build, nativeEnabled })`.
 
 Useful switches:
 
-| Variable                 | Effect                                                           |
-| ------------------------ | ---------------------------------------------------------------- |
-| `E2E_HEADED=1`           | Watch it run, instead of `--headless=new`.                       |
-| `REAL_A11Y_CHROME_PATH`  | Use a specific Chromium (the repo's own override convention).    |
+| Variable                | Effect                                                        |
+| ----------------------- | ------------------------------------------------------------- |
+| `E2E_HEADED=1`          | Watch it run, instead of `--headless=new`.                    |
+| `REAL_A11Y_CHROME_PATH` | Use a specific Chromium (the repo's own override convention). |
 
 ## Why this exists
 
@@ -52,7 +52,7 @@ Two rules follow from that, and every test here obeys them:
 2. **Assertions are on the page's own state** — `aria-valuenow`, `select.value`,
    a `change` listener firing — never on `NATIVE_ACT` returning
    `{ success: true }` alone. That marker reporting success while the page
-   ignored the dispatch *is* the bug class this suite exists for.
+   ignored the dispatch _is_ the bug class this suite exists for.
 
 ## Open questions the plan left, now measured
 
@@ -63,7 +63,7 @@ empirically before the architecture was committed to.
 Chromium allows more than one client per target, so the extension attaches to a
 Playwright-controlled tab, dispatches, and Playwright keeps driving that same
 tab afterwards. That is what makes the whole design work: a test dispatches
-*through the extension* and then asserts on live page state *through Playwright*.
+_through the extension_ and then asserts on live page state _through Playwright_.
 No `devtools-conflict` is provoked, and no second non-Playwright window is
 needed.
 
@@ -111,24 +111,24 @@ sidesteps the question entirely.
 
 ### Covered
 
-| Pattern                       | Actions exercised                          |
-| ----------------------------- | ------------------------------------------ |
-| Slider (Multi-Thumb)          | `increment` / `decrement`, both handler shapes |
-| Slider (single-thumb)         | `increment` / `decrement`, custom + native range |
-| Spinbutton                    | `increment` / `decrement` / `type`         |
-| Combobox (Editable)           | `type`, gated on the `editable` state      |
-| Combobox (Select-Only)        | `click`, and `type` refusing               |
-| Listbox (native `<select>`)   | `select`, and the custom-widget refusal    |
-| Listbox (multi-select)        | `select` — limitation documented below     |
-| Menu and Menubar              | `click` on the whole `menuitem` family     |
-| Tabs                          | `click`                                    |
-| Tree View                     | `click`, incl. the composite redirect      |
-| Accordion / Disclosure        | `click`                                    |
-| Checkbox (incl. tri-state)    | `click`                                    |
-| Radio Group                   | `click`                                    |
-| Switch                        | `click`                                    |
-| Grid / Treegrid               | `click` on `gridcell`; the `row` boundary  |
-| Dialog (Modal)                | `click` / `type`, plus modal tree scoping  |
+| Pattern                     | Actions exercised                                |
+| --------------------------- | ------------------------------------------------ |
+| Slider (Multi-Thumb)        | `increment` / `decrement`, both handler shapes   |
+| Slider (single-thumb)       | `increment` / `decrement`, custom + native range |
+| Spinbutton                  | `increment` / `decrement` / `type`               |
+| Combobox (Editable)         | `type`, gated on the `editable` state            |
+| Combobox (Select-Only)      | `click`, and `type` refusing                     |
+| Listbox (native `<select>`) | `select`, and the custom-widget refusal          |
+| Listbox (multi-select)      | `select` — limitation documented below           |
+| Menu and Menubar            | `click` on the whole `menuitem` family           |
+| Tabs                        | `click`                                          |
+| Tree View                   | `click`, incl. the composite redirect            |
+| Accordion / Disclosure      | `click`                                          |
+| Checkbox (incl. tri-state)  | `click`                                          |
+| Radio Group                 | `click`                                          |
+| Switch                      | `click`                                          |
+| Grid / Treegrid             | `click` on `gridcell`; the `row` boundary        |
+| Dialog (Modal)              | `click` / `type`, plus modal tree scoping        |
 
 ### Deliberately not covered
 
@@ -148,7 +148,7 @@ checking there is not the click but whether the tree the dogfooder is reading is
 really the dialog's.
 
 **Closing the deliberately-excluded roles** (`row`, `listbox`- and
-`option`-as-custom-widget, bare `cell`). `grid-treegrid.test.ts` *pins* that
+`option`-as-custom-widget, bare `cell`). `grid-treegrid.test.ts` _pins_ that
 exclusion rather than attempting to close it: a test asserting click-dispatch on
 `row` would be asserting against an already-rejected design decision, not a bug.
 See `ACTABLE`'s docstring in `DogfoodPanel.tsx` and round 7/8 in `DOGFOOD.md`.
@@ -176,11 +176,11 @@ a test suite's. If one is closed, the named test is the one to invert.
    `querySelector('[role="link"], [role="button"], a[href], button')`, reasoning
    that document order gives "the row's primary action". That holds when the
    row's descendants are its own controls. It fails for a collapsible row whose
-   own label is plain text and whose *subtree* contains links — a docs sidebar
+   own label is plain text and whose _subtree_ contains links — a docs sidebar
    or file browser — where the first match is a grandchild's control. Expanding
    "2024" activates "January", and the marker reports success.
-   Pinned by `tree-view.test.ts` → *KNOWN GAP: a collapsible row redirects into
-   a grandchild's link*. The APG's own treeview is unaffected: its folder rows
+   Pinned by `tree-view.test.ts` → _KNOWN GAP: a collapsible row redirects into
+   a grandchild's link_. The APG's own treeview is unaffected: its folder rows
    carry no inner control.
 
 2. **A stale node id dispatches through an open modal.** `pageClick` drives the
@@ -191,8 +191,8 @@ a test suite's. If one is closed, the named test is the one to invert.
    dispatch rather than specific to the native path (`element.click()` behaves
    identically, and the DOM producer dispatches the same way), and the fix would
    be an inertness check in shipped dispatch code.
-   Pinned by `dialog-modal.test.ts` → *KNOWN GAP: a stale background id still
-   dispatches through an open modal*.
+   Pinned by `dialog-modal.test.ts` → _KNOWN GAP: a stale background id still
+   dispatches through an open modal_.
 
 3. **`columnheader` is actionable for the DOM producer but not for the panel.**
    `ACTABLE`'s own docstring says `gridcell`/`columnheader`/`rowheader` are the
@@ -200,8 +200,8 @@ a test suite's. If one is closed, the named test is the one to invert.
    has no role-ambiguity defence — a plain `<th>` computes `columnheader` too,
    so the same argument round 8 used for `row` would apply here. Recorded as an
    asymmetry rather than filed as a bug.
-   Pinned by `grid-treegrid.test.ts` → *columnheader is present on the tree but
-   outside the actionable set*.
+   Pinned by `grid-treegrid.test.ts` → _columnheader is present on the tree but
+   outside the actionable set_.
 
 4. **A custom `role="spinbutton"` is offered a type button it will always
    refuse.** `isTypableRole` returns true for every `spinbutton`, because the DOM
@@ -209,7 +209,7 @@ a test suite's. If one is closed, the named test is the one to invert.
    and the native tree has no tag. `pageType` then refuses in-page with
    `not-a-text-field`. The refusal is correct; the affordance is imprecise. It
    fails safe, so it is recorded rather than asserted to be wrong.
-   Pinned by `spinbutton.test.ts` → *typing into a custom role=spinbutton
-   refuses cleanly*.
+   Pinned by `spinbutton.test.ts` → _typing into a custom role=spinbutton
+   refuses cleanly_.
 
 [apg]: https://www.w3.org/WAI/ARIA/apg/patterns/

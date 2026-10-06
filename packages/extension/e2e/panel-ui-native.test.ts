@@ -48,6 +48,8 @@
  *    `onClick` never did.
  */
 
+import { NATIVE_FOLLOW_DEBOUNCE_MS } from "../src/sidepanel/native-follow.ts";
+
 import { expect, test, type NativeHarness } from "./harness";
 
 type PanelPage = import("@playwright/test").Page;
@@ -294,6 +296,12 @@ async function overlayCovers(page: PanelPage, selector: string) {
   const overlay = await overlayRect(page);
   if (!overlay) return false;
   const target = await rectOf(page, selector);
+  // Scrolled into view too, as the DOM tree's own select does.
+  const inView = await page.evaluate(
+    ({ top, height }) => top >= 0 && top + height <= window.innerHeight,
+    target,
+  );
+  if (!inView) return false;
   const slack = 1;
   return (
     Math.abs(overlay.top - target.top) <= slack &&
@@ -308,12 +316,10 @@ async function overlayCovers(page: PanelPage, selector: string) {
 test("selecting a native tree row highlights and focuses the page's own element", async ({
   nav,
 }) => {
-  // Selecting a native row used to have no effect on the page at all, unlike
-  // the DOM tree's `handleSelect`. This pins both halves of the fix: the
-  // content script's overlay lands on the element (the part the user sees —
-  // a first version only moved real focus, which a user reported showed
-  // nothing, and which the old version of this test couldn't tell apart
-  // from working), and real focus follows so keyboard use resumes there.
+  // Both halves: the content script's outline lands on the element, scrolled
+  // into view (the part the user sees, since focus alone paints no ring while
+  // the panel has window focus), and real focus follows so keyboard use
+  // resumes there.
   const page = await showNative(nav, "native-panel.html");
   await nav.panel.getByRole("button", { name: "Expand all" }).click();
 
@@ -354,9 +360,8 @@ test("selecting a native heading row highlights it even though it can't take foc
 test("clicking an item in a role-filter list highlights and focuses it on the page too", async ({
   nav,
 }) => {
-  // Regression (user report on PR #412): the follow worked from the tree but
-  // not from any filter's flat list, which keeps its own selection — so
-  // turning a filter on silently turned the page indicator off.
+  // A role-filter list keeps its own selection, so it follows onto the page
+  // through its own hook.
   const page = await showNative(nav, "native-panel.html");
 
   await nav.panel
@@ -381,65 +386,140 @@ test("clicking an item in a role-filter list highlights and focuses it on the pa
     .toBe("item-16");
 });
 
+/** Every element on `page` that takes focus from now on, by id. */
+async function recordFocus(page: PanelPage): Promise<() => Promise<string[]>> {
+  await page.evaluate(() => {
+    const w = window as typeof window & { __focused?: string[] };
+    w.__focused = [];
+    document.addEventListener(
+      "focusin",
+      (e) => w.__focused!.push((e.target as Element).id),
+      true,
+    );
+  });
+  return () =>
+    page.evaluate(
+      () =>
+        (window as typeof window & { __focused?: string[] }).__focused ?? [],
+    );
+}
+
 test("selecting a native tree row via the keyboard only focuses the row the selection settles on", async ({
   nav,
 }) => {
-  // Same debounce the unit tests pin directly against `NativeTreeView`'s own
-  // effect — this is the end-to-end proof: arrow-key repeat walking through
-  // several rows must not leave the real page's focus trailing behind on an
-  // intermediate row, or racing multiple concurrent chrome.debugger attaches
-  // for rows the user already navigated past.
+  // A key-repeat burst walks the selection through several rows; only the
+  // row it settles on is revealed, so page focus never trails behind on an
+  // intermediate one.
   const page = await showNative(nav, "native-panel.html");
   await nav.panel.getByRole("button", { name: "Expand all" }).click();
+  const focused = await recordFocus(page);
 
-  // "Item 2", not "Item 1": every "Item 1" role-name query also matches
-  // "Item 10".."Item 16" (substring), same reason the click test above
-  // anchors on "Item 16" rather than "Item 1".
+  // "Item 2", not "Item 1", which also matches "Item 10".."Item 16".
   const start = nav.panel.getByRole("treeitem", { name: "Item 2" });
   await expect(start).toBeVisible();
   await start.click({ position: { x: 5, y: 5 } });
-
-  // Walk down three rows in quick succession, well inside the 150ms debounce
-  // window between each keystroke.
   await nav.panel.locator(".sn-tree").press("ArrowDown");
   await nav.panel.locator(".sn-tree").press("ArrowDown");
   await nav.panel.locator(".sn-tree").press("ArrowDown");
 
-  await expect
-    .poll(() => page.evaluate(() => document.activeElement?.id), {
-      timeout: 5_000,
-    })
-    .toBe("item-5");
-  // Never landed on the starting row along the way.
-  expect(await page.evaluate(() => document.activeElement?.id)).not.toBe(
-    "item-2",
-  );
+  await expect.poll(focused, { timeout: 5_000 }).toContain("item-5");
+  expect(await focused()).toEqual(["item-5"]);
+  expect(
+    (await nav.nativeActs()).filter((a) => a.action === "reveal"),
+  ).toHaveLength(1);
 });
 
-test("selecting a native tree row never moves real focus while Screen Curtain is on", async ({
+test("selecting a native tree row never reveals it while Screen Curtain is on", async ({
   nav,
 }) => {
-  // Regression: a code-review round caught that the new selection-focus
-  // follow above had no curtain guard, unlike `content.ts`'s own DOM
-  // `HIGHLIGHT_NODE` handler (which skips its highlight-and-focus outright
-  // while `curtainVisible`, precisely because moving real focus on a page
-  // hidden behind the curtain would still scroll/jump it underneath.
+  // The page is hidden behind the curtain, and moving focus on it would still
+  // scroll it underneath, so nothing is sent while the curtain is up.
   const page = await showNative(nav, "native-panel.html");
   await nav.panel.getByRole("button", { name: "Expand all" }).click();
-  await nav.panel.getByRole("button", { name: "Curtain", exact: true }).click();
+  const curtain = nav.panel.getByRole("button", {
+    name: "Curtain",
+    exact: true,
+  });
+  await curtain.click();
 
-  const row = nav.panel.getByRole("treeitem", { name: "Item 16" });
-  await expect(row).toBeVisible();
-  await row.click({ position: { x: 5, y: 5 } });
+  await nav.panel
+    .getByRole("treeitem", { name: "Item 16" })
+    .click({ position: { x: 5, y: 5 } });
+  // Then lift the curtain and select another row: its reveal is the first
+  // one sent, so the curtained selection never sent one.
+  await nav.panel.getByRole("button", { name: "Curtain ON" }).click();
+  await nav.panel
+    .getByRole("treeitem", { name: "Item 15" })
+    .click({ position: { x: 5, y: 5 } });
+  await expect
+    .poll(async () =>
+      (await nav.nativeActs())
+        .filter((a) => a.action === "reveal")
+        .map((a) => a.nodeId),
+    )
+    .toHaveLength(1);
+  await expect
+    .poll(() => page.evaluate(() => document.activeElement?.id))
+    .toBe("item-15");
+});
 
-  // No poll-to-success here — this asserts the ABSENCE of an effect, so it
-  // has to wait out the same debounce + dispatch window the positive tests
-  // above poll through, then confirm nothing happened.
-  await page.waitForTimeout(1_000);
-  expect(await page.evaluate(() => document.activeElement?.id)).not.toBe(
-    "item-16",
+test("a reveal the user has already moved past never attaches", async ({
+  nav,
+}) => {
+  // An armed pick holds the tab's queue, so these reveals wait behind it.
+  // When it ends, only the newest is still wanted; the others are dropped
+  // before they attach.
+  const page = await showNative(nav, "native-panel.html");
+  await nav.panel.getByRole("button", { name: "Expand all" }).click();
+  await armPick(nav);
+  for (const name of ["Item 14", "Item 15", "Item 16"]) {
+    await nav.panel
+      .getByRole("treeitem", { name })
+      .click({ position: { x: 5, y: 5 } });
+    await nav.panel.waitForTimeout(NATIVE_FOLLOW_DEBOUNCE_MS * 2);
+  }
+  await nav.panel.keyboard.press("Escape");
+
+  await expect
+    .poll(async () =>
+      (await nav.nativeActs())
+        .filter((a) => a.action === "reveal" && a.answer !== undefined)
+        .map((a) => (a.answer as { error?: string }).error ?? "revealed"),
+    )
+    .toEqual(["superseded", "superseded", "revealed"]);
+  await expect
+    .poll(() => page.evaluate(() => document.activeElement?.id))
+    .toBe("item-16");
+});
+
+test("a reveal event the page fires itself draws nothing", async ({ nav }) => {
+  const page = await showNative(nav, "native-panel.html");
+  await page.evaluate(() =>
+    document.getElementById("item-16")!.dispatchEvent(
+      new CustomEvent("real-a11y:native-reveal", {
+        bubbles: true,
+        composed: true,
+        detail: "forged",
+      }),
+    ),
   );
   expect(await overlayRect(page)).toBeNull();
+});
+
+test("a same-page URL change doesn't stop the selection follow", async ({
+  nav,
+}) => {
+  // The node ids are still good after pushState; the reveal no longer checks
+  // the URL the tree was read at.
+  const page = await showNative(nav, "native-panel.html");
+  await nav.panel.getByRole("button", { name: "Expand all" }).click();
+  await page.evaluate(() => history.pushState({}, "", "#section"));
+  await nav.panel
+    .getByRole("treeitem", { name: "Item 16" })
+    .click({ position: { x: 5, y: 5 } });
+  await expect
+    .poll(() => overlayCovers(page, "#item-16"), { timeout: 5_000 })
+    .toBe(true);
 });
 
 // ---- Native as the default view ----
