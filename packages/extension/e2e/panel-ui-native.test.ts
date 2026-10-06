@@ -427,42 +427,60 @@ test("Copy on the native tree offers no Tab sequence — native has no tab-order
   );
 });
 
-test("Copy → Everything copies a native tree + heading report, correctly labeled", async ({
-  nav,
-}) => {
-  await showNative(nav, "native-panel.html");
+/** Open the export fixture on the native tree and copy one Copy ▾ item. */
+async function copyNative(nav: NativeHarness, item: string): Promise<string> {
+  const page = await showNative(nav, "native-export.html");
   await stubClipboard(nav);
-
   await nav.panel.getByRole("button", { name: "Copy ▾" }).click();
   await nav.panel
     .locator(".sn-export-menu")
-    .getByRole("button", { name: "Everything" })
+    .getByRole("button", { name: item })
     .click();
+  await expect.poll(() => readClipboardStub(nav)).toBeDefined();
+  const markdown = (await readClipboardStub(nav))!;
 
-  const copied = await readClipboardStub(nav);
-  expect(copied).toBeDefined();
-  const markdown = copied!;
+  // Every item says which producer built it, and where it was read from:
+  // the native read's own page, not the DOM producer's.
+  expect(markdown).toContain(
+    "**Producer:** native (Chromium's own accessibility tree)",
+  );
+  expect(markdown).toMatch(
+    /^# Accessibility report — (Native export fixture|http:\/\/127\.0\.0\.1)/,
+  );
+  expect(markdown).toContain(`**URL:** ${page.url()}`);
+  // A field's value never reaches a copied report, redacted or not.
+  expect(markdown).not.toContain("hunter2");
+  expect(markdown).not.toContain("[redacted]");
+  expect(markdown).not.toContain("## Tab sequence");
+  return markdown;
+}
 
-  // Labeled distinctly from the DOM producer's own "DOM tree"/"Accessibility
-  // tree" header — this is the one place a user actually sees which
-  // producer a report came from (the internal `source.producer` stamp isn't
-  // rendered anywhere today; see CLAUDE.md's "Two producers build the tree").
+test("Copy → Everything copies the native tree and its headings", async ({
+  nav,
+}) => {
+  const markdown = await copyNative(nav, "Everything");
   expect(markdown).toContain("## Native accessibility tree");
   expect(markdown).toContain("## Heading outline");
-  expect(markdown).not.toContain("## Tab sequence");
+  expect(markdown).toContain("h1 Native export fixture");
+  expect(markdown).toMatch(/button "Sign in"/);
+  // A named generic group survives into the report (`includeGeneric: true`).
+  expect(markdown).toMatch(/generic "Sign-in group"/);
+});
 
-  // Real content from the native tree, not an empty/placeholder report —
-  // native-panel.html's own headings and a leaf button, proving this came
-  // from `nativeNodes`, not the (empty, never-connected) DOM producer state.
-  expect(markdown).toContain("h1 Native panel fixture");
-  expect(markdown).toContain("h2 Sensitive field");
-  expect(markdown).toMatch(/button "Item 1"/);
+test("Copy → Native tree copies the tree alone", async ({ nav }) => {
+  const markdown = await copyNative(nav, "Native tree");
+  expect(markdown).toContain("## Native accessibility tree");
+  expect(markdown).not.toContain("## Heading outline");
+  expect(markdown).toMatch(/textbox "Password"/);
+  expect(markdown).toMatch(/generic "Sign-in group"/);
+});
 
-  // A named `generic` group ("Sensitive field group") — Chromium keeps a
-  // generic node only when it has a name (unnamed ones are noise), so
-  // unlike a DOM tree, every generic that reaches a native tree is one the
-  // panel actually shows. `serializeTree`'s default `includeGeneric: false`
-  // doesn't know that and would silently drop it; this is what pins
-  // `App.tsx`'s native export call to pass `{ includeGeneric: true }`.
-  expect(markdown).toMatch(/generic "Sensitive field group"/);
+test("Copy → Headings copies the outline alone, still marked native", async ({
+  nav,
+}) => {
+  const markdown = await copyNative(nav, "Headings");
+  expect(markdown).toContain("## Heading outline");
+  expect(markdown).not.toContain("## Native accessibility tree");
+  expect(markdown).toContain("h1 Native export fixture");
+  expect(markdown).toContain("h2 Sign in");
 });
