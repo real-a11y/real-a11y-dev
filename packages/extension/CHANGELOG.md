@@ -44,8 +44,11 @@
   panel, click "Enable native mode…", and accept the one-time in-panel notice
   about what it does and about the bar Chrome shows across every window while
   it's attached, reading “Semantic Navigator” started debugging this browser.
-  The setting persists across restarts; turning it back off detaches as soon
-  as any read or action already under way finishes. Nothing is logged about
+  The setting persists across restarts, and once it's on, the panel opens on
+  the native tree for the first page that connects each time you open it
+  ([#390]); if native mode can't read that page, the panel stays on the DOM
+  tree and says why. Turning it back off detaches as soon as any read or
+  action already under way finishes. Nothing is logged about
   how you use it. It ships with what the dogfood build learned along the way:
   an `aria-busy` element shows a `busy` badge
   ([#441](https://github.com/real-a11y/real-a11y-dev/pull/441)); a rich-text
@@ -62,16 +65,6 @@
   [#424](https://github.com/real-a11y/real-a11y-dev/pull/424)). The dev-only
   dogfood build and its `DogfoodPanel` diagnostics widget continue to exist
   separately for internal telemetry — see `DOGFOOD.md`. ([#386])
-
-- **Native mode now defaults to on for the first page in a session, once
-  you've opted in.** Previously, every fresh side-panel session started on
-  the DOM tree even after enabling native mode, requiring a "NATIVE" click
-  each time. Now, if native mode is on, the panel attaches automatically the
-  first time it connects to an attachable page in that session — no click
-  needed. This is deliberately narrower than "every attachable page": a later
-  tab switch or same-tab navigation in that same session still never
-  auto-reattaches, exactly as before, so the "…is debugging this browser"
-  banner never reappears without a gesture you made that session. ([#390])
 
 ## 0.1.15
 

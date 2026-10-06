@@ -206,7 +206,7 @@ Off by default. Everything above describes the DOM producer — this extension's
 
 The button opens a one-time consent step naming what it does before anything attaches; accepting swaps the toolbar's single tree for a **DOM / NATIVE** toggle, and a **Disable native mode** button next to it turns the setting back off; the debugger detaches as soon as any read or action already under way finishes. The two producers never silently mix — see [Two producers](./core-concepts.md#two-producers) for why they will never agree byte for byte, by design.
 
-Once you've accepted that consent step, native mode defaults to on for the first page the panel connects to in a **later** side-panel session — no click needed. That default applies once per session only: switching tabs or navigating afterward never silently reattaches `chrome.debugger` on its own, so the banner never reappears without a gesture you actually made that session — a manual **NATIVE** click, or **Refresh native tree**.
+Once native mode is on, each time you open the side panel it shows the native tree for the first page that connects, with no click: that first page attaches the debugger by itself. After that, switching tabs or navigating doesn't attach on its own; the native tree's **↻** button or the **NATIVE** toggle reads the new page. If native mode can't read that first page (DevTools already has it open, say), the panel stays on the DOM tree, says why, and tries the next tab you switch to instead.
 
 ### BETA pill in the panel header
 
