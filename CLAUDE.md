@@ -33,11 +33,11 @@ one whose changes reach furthest — reason about consumer impact, not about
 This is the most important thing to know before changing anything about trees,
 and it cuts across packages rather than along them.
 
-|            | **`dom`**                                                                | **`native`**                                     |
-| ---------- | ------------------------------------------------------------------------ | ------------------------------------------------ |
-| What it is | in-page walk, this project's own ARIA/AccName implementation             | Chromium's own accessibility tree, read over CDP |
-| Lives in   | `core/src/extraction/`                                                   | `browser/src/native-tree.ts`                     |
-| Reached by | extension content script, `inspector`, `react`, the injected page bundle | `cli`, `mcp`, over Playwright CDP                |
+|            | **`dom`**                                                                | **`native`**                                                                         |
+| ---------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------ |
+| What it is | in-page walk, this project's own ARIA/AccName implementation             | Chromium's own accessibility tree, read over CDP                                     |
+| Lives in   | `core/src/extraction/`                                                   | `browser/src/native-tree.ts`, `extension/src/native/`                                |
+| Reached by | extension content script, `inspector`, `react`, the injected page bundle | `cli`, `mcp` over Playwright CDP; the extension's native mode over `chrome.debugger` |
 
 Both stamp `source.producer` on every `ExtractionResult`. The intent recorded on
 `TreeSource` in `core/src/types.ts` is that serializers render it into their
@@ -72,28 +72,36 @@ The normalization vocabulary lives in `core/src/native/` (`normalizeNativeAX`,
 native transport stays a thin adapter over shared vocabulary instead of growing
 its own engine. Changing that vocabulary reaches every native transport at once.
 
-**The extension has a native path now, gated by a runtime setting.** Native mode
-(`chrome.debugger`, read Chromium's own accessibility tree over CDP) shipped
-first as a dev-only dogfood build (#229), then graduated into the production
-store build. `packages/extension/public/manifest.json` — the real, published
-manifest — carries `activeTab`, `sidePanel`, `webNavigation`, `debugger`,
-`tabs` and `storage` as required permissions. `chrome.debugger` cannot be an
-optional permission (Chrome enforces `kFlagCannotBeOptional`), so it ships
-required and **every existing user re-consents on the update that carries
-it** — that release is a deliberate, signed-off product decision, not
-something to repeat casually.
+**A new extension permission is a release decision, not a code change.** Every
+permission added to `packages/extension/public/manifest.json` forces every
+existing user to re-consent on the update that carries it, and raises the Chrome
+Web Store review bar. Don't add one without an explicit product sign-off.
 
-What actually keeps native mode off by default is a runtime setting, not a
-build-time constant: `packages/extension/src/native/index.ts` gates
-`registerNativeMode()`'s message handlers behind a `chrome.storage`-backed
-flag (`settings.nativeModeEnabled`), off unless the user explicitly turns it
-on via the side panel's "Enable native mode…" entry point. `__DOGFOOD__` still
-exists as a build-time constant, but it now gates only `DogfoodPanel` — the
-internal telemetry/diagnostics UI for the dogfooding exercise — not the
-native capability itself, which is dead-code-eliminated from nothing and
-compiled into every build. If you touch this area, don't reintroduce a
-build-time gate on `chrome.debugger`; the runtime setting is the one gate
-that matters now.
+**The extension has a native path, gated by a runtime setting.** Native mode
+(`chrome.debugger`, reading Chromium's own accessibility tree over CDP) shipped
+first as a dev-only dogfood build (#229), then moved into the store build
+(#386). The published manifest carries `activeTab`, `sidePanel`,
+`webNavigation`, `debugger`, `tabs` and `storage`, all required:
+`chrome.debugger` cannot be optional (Chrome enforces `kFlagCannotBeOptional`).
+That re-consent was signed off for #386, and the decision is recorded in the
+native-tree execution plan in Notion.
+
+Where the gates actually are:
+
+- **The setting.** `settings.nativeModeEnabled` in `chrome.storage.local`, off
+  unless the user turns it on from the side panel's "Enable native mode…". It
+  is enforced in one place: `NativeDebuggerSession.attach()` re-reads it inside
+  its storage transaction, so turning it off and attaching are mutually
+  exclusive. The message handlers in `native/index.ts` are registered in every
+  build and don't check it themselves; turning it off detaches once any
+  operation in flight finishes.
+- **The senders.** `registerNativeMode()` accepts `NATIVE_*` messages only from
+  the extension's own pages (`isExtensionPageSender`), never from a content
+  script, and keeps `chrome.storage.local` at `TRUSTED_CONTEXTS`.
+- **`__DOGFOOD__`.** A build-time constant that now gates only the dogfood
+  extras: the `DogfoodPanel` diagnostics UI and the durable event log behind
+  it. The store build dead-code-eliminates both and keeps no usage log. Don't
+  reintroduce a build-time gate on `chrome.debugger` itself.
 
 ## Working in this repo
 

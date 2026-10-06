@@ -9,13 +9,10 @@
 
   This file records what reached USERS. Changes confined to the dev-only
   dogfood build (`pnpm build:dogfood`, everything behind the `__DOGFOOD__`
-  constant) get NO entry: that code is dead-code-eliminated from the store
-  bundle, so an entry here would describe a feature nobody on the listing
-  can reach. Those changes are tracked by their PRs and `DOGFOOD.md` — while
-  native mode is dogfood-only, a change to what NATIVE mode shows goes in its
-  "Native-mode changes not yet in the store" list, even when core's shared
-  code made it. Once native mode ships in the store build, its changes come
-  back here.
+  constant, such as `DogfoodPanel`) get NO entry: that code is
+  dead-code-eliminated from the store bundle, so an entry here would describe
+  a feature nobody on the listing can reach. Native mode itself ships in the
+  store build, so its changes go here like any other.
   Anything that changes the shipped bundle does need an entry, even if it
   also touches dogfood code.
 -->
@@ -45,11 +42,26 @@
   update re-prompts every existing user for the extra permissions** — nothing
   changes for anyone who doesn't turn the feature on. To use it: open the side
   panel, click "Enable native mode…", and accept the one-time in-panel notice
-  about what it does and the "…is debugging this browser" banner Chrome shows
-  while it's attached. The setting persists across restarts; turning it back
-  off immediately detaches. The dev-only dogfood build and its `DogfoodPanel`
-  diagnostics widget are unchanged and continue to exist separately for
-  internal telemetry — see `DOGFOOD.md`. ([#386])
+  about what it does and about the bar Chrome shows across every window while
+  it's attached, reading “Semantic Navigator” started debugging this browser.
+  The setting persists across restarts; turning it back off detaches as soon
+  as any read or action already under way finishes. Nothing is logged about
+  how you use it. It ships with what the dogfood build learned along the way:
+  an `aria-busy` element shows a `busy` badge
+  ([#441](https://github.com/real-a11y/real-a11y-dev/pull/441)); a rich-text
+  editor stays in the tree, never shows what was typed into it as its name,
+  and its edit box opens empty like a password field's
+  ([#432](https://github.com/real-a11y/real-a11y-dev/pull/432),
+  [#418](https://github.com/real-a11y/real-a11y-dev/pull/418),
+  [#431](https://github.com/real-a11y/real-a11y-dev/pull/431)); a `<select>`
+  shows its option label and a custom slider its `aria-valuetext`
+  ([#431](https://github.com/real-a11y/real-a11y-dev/pull/431)); and an
+  unlabelled image, dialog, landmark, field, indeterminate progress bar or
+  separator reads bare instead of taking its text as its name
+  ([#414](https://github.com/real-a11y/real-a11y-dev/pull/414),
+  [#424](https://github.com/real-a11y/real-a11y-dev/pull/424)). The dev-only
+  dogfood build and its `DogfoodPanel` diagnostics widget continue to exist
+  separately for internal telemetry — see `DOGFOOD.md`. ([#386])
 
 ## 0.1.15
 

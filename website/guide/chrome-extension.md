@@ -202,9 +202,9 @@ The **Try again** button is still live, because the same signal comes back for a
 
 ### Native mode — Chromium's own accessibility tree
 
-Off by default. Everything above describes the DOM producer — this extension's own in-page ARIA/AccName walk, the same engine `@real-a11y-dev/inspector` uses. Click **Enable native mode…** in the toolbar to instead read **Chromium's own** accessibility tree over `chrome.debugger`, the same protocol DevTools uses: it sees content the DOM walk structurally can't, such as UA-shadow media controls, at the cost of Chrome's own "…is debugging this browser" notice while attached.
+Off by default. Everything above describes the DOM producer — this extension's own in-page ARIA/AccName walk, the same engine `@real-a11y-dev/inspector` uses. Click **Enable native mode…** in the toolbar to instead read **Chromium's own** accessibility tree over `chrome.debugger`, the same protocol DevTools uses: it sees content the DOM walk structurally can't, such as UA-shadow media controls. While it's attached, Chrome shows a bar across every window reading “Semantic Navigator” started debugging this browser; pressing its **Cancel** detaches.
 
-The button opens a one-time consent step naming what it does before anything attaches; accepting swaps the toolbar's single tree for a **DOM / NATIVE** toggle, and a **Disable native mode** button next to it turns the setting back off and detaches immediately. The two producers never silently mix — see [CLAUDE.md's "Two producers build the tree"](https://github.com/real-a11y/real-a11y-dev/blob/main/CLAUDE.md) for why they will never agree byte for byte, by design.
+The button opens a one-time consent step naming what it does before anything attaches; accepting swaps the toolbar's single tree for a **DOM / NATIVE** toggle, and a **Disable native mode** button next to it turns the setting back off; the debugger detaches as soon as any read or action already under way finishes. The two producers never silently mix — see [Two producers](./core-concepts.md#two-producers) for why they will never agree byte for byte, by design.
 
 ### BETA pill in the panel header
 

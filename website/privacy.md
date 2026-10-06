@@ -29,7 +29,7 @@ It also offers an opt-in **native mode**, off by default: reading Chromium's own
 
 - It does not send page content, URLs, DOM snapshots, accessibility-tree data, or any other data to any external server — everything above stays local to your browser, in both DOM and native mode.
 - It does not read from or write to the clipboard.
-- It does not use cookies, local storage, or IndexedDB for any personal data — `chrome.storage.local` is used only to remember whether native mode is on and (while it's actively attached) short-lived, content-free bookkeeping about that attachment.
+- It does not use cookies, local storage, or IndexedDB for any personal data. `chrome.storage.local` holds one value: whether native mode is on. While native mode is attached, `chrome.storage.session` holds content-free bookkeeping about that attachment (which tab, since when), which Chrome clears when the browser closes. No log of how you use native mode is kept.
 - It does not track you across sites or sessions.
 - It contains no analytics, telemetry, advertising, or third-party scripts.
 
@@ -41,8 +41,8 @@ It also offers an opt-in **native mode**, off by default: reading Chromium's own
 | `sidePanel` | The extension's UI is a persistent side panel                                                                                                                       |
 | `webNavigation` | Detect iframe load events to merge subtree data from cross-origin frames                                                                                        |
 | `debugger`  | Powers native mode: reads and acts on Chromium's own accessibility tree over CDP. Requested by every install because `chrome.debugger` cannot be an optional Chrome permission, but native mode itself is off until you explicitly enable it in the side panel. |
-| `tabs`      | Resolves which tab's accessibility tree to attach to when native mode is on. This is a broader grant than that use needs — Chrome does not let an extension request `tabs` scoped to a single tab, and it technically permits reading the URL/title of every open tab, not only the one native mode is attached to. The code only ever reads the tab id the side panel already gave it; it never enumerates other tabs. |
-| `storage`   | Persists the native-mode on/off setting, and short-lived attach bookkeeping while it's on, locally on your device                                                  |
+| `tabs`      | Lets native mode read the URL of the tab the side panel is bound to, to tell whether Chrome lets the debugger attach there (it can't on `chrome://` pages or the Web Store) and whether the page has navigated since the tree was read. This is a broader grant than that use needs — Chrome does not let an extension request `tabs` scoped to a single tab, and it technically permits reading the URL and title of every open tab. The code reads only the bound tab's URL; it never enumerates other tabs. |
+| `storage`   | Persists the native-mode on/off setting locally on your device, and, while native mode is attached, content-free bookkeeping about that attachment for the browser session only |
 
 ## npm packages
 

@@ -71,8 +71,8 @@
   border-color: hsl(28 40% 40%);
 }
 
-/* Native producer's "can't attach here" banner (dev-only dogfood build,
-   NativeTreeView.tsx). Same amber warning hue as .sn-beta-pill above. */
+/* The extension's native-mode "can't attach here" banner (NativeTreeView.tsx).
+   Same amber warning hue as .sn-beta-pill above. */
 .sn-native-capability-banner {
   margin: 6px 8px;
   padding: 4px 6px;

@@ -1,6 +1,6 @@
 /**
- * The native producer's tree view (dev-only dogfood build — RFC PR H/#229's
- * production-panel integration). Renders Chromium's own accessibility tree,
+ * The native producer's tree view (RFC PR H/#229, shipped in the store build
+ * since #386). Renders Chromium's own accessibility tree,
  * read over `chrome.debugger`, as a real expand/collapse `role="tree"` —
  * `DogfoodPanel.tsx`'s flat depth-indented list never needed one, but this
  * is the production panel's tree, so it gets the same tree semantics the DOM
