@@ -285,6 +285,36 @@ export function isTrustedSender(
   return Boolean(ownExtensionId) && sender?.id === ownExtensionId;
 }
 
+/**
+ * True only when a message came from one of THIS extension's own pages — the
+ * side panel or the background — and not from a content script.
+ *
+ * {@link isTrustedSender} accepts content scripts too, because they carry the
+ * extension's id. That is right for the handlers content scripts are meant to
+ * reach, and wrong for anything that drives `chrome.debugger` or flips the
+ * native-mode setting: a content script runs in the page's renderer process,
+ * so a compromised renderer could otherwise turn native mode on without the
+ * consent step and read any tab. Chrome sets `sender.url` from the frame that
+ * sent the message, and a content script never runs in an extension page, so
+ * an extension-origin URL is what tells the two apart. `sender.tab` is not
+ * the test: the panel opened as a tab (the e2e harness does this) has one.
+ *
+ * `extensionOrigin` is `chrome.runtime.getURL("")` at the call site, e.g.
+ * `chrome-extension://<id>/`.
+ */
+export function isExtensionPageSender(
+  sender: { id?: string; url?: string } | undefined,
+  ownExtensionId: string | undefined,
+  extensionOrigin: string | undefined,
+): boolean {
+  return (
+    isTrustedSender(sender, ownExtensionId) &&
+    Boolean(extensionOrigin) &&
+    typeof sender?.url === "string" &&
+    sender.url.startsWith(extensionOrigin!)
+  );
+}
+
 // ---- Side-panel inbound message filtering ----
 
 /**

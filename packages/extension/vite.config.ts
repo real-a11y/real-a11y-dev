@@ -11,9 +11,9 @@ const isContentScript = process.env.BUILD_TARGET === "content";
 // Native mode (`chrome.debugger`) ships in every build now — the store build
 // included — gated at runtime by a user setting, off by default. `DOGFOOD=1`
 // only controls whether the separate `dist-dogfood/` output additionally
-// bundles `DogfoodPanel`, the internal telemetry/diagnostics UI for the
-// dogfooding exercise; `__DOGFOOD__` is inlined at build time so that panel
-// alone is dead-code-eliminated from the store build. It is NOT what keeps
+// bundles the dogfooding exercise's extras: `DogfoodPanel`, the internal
+// diagnostics UI, and the durable event log it reads. `__DOGFOOD__` is inlined
+// at build time so both are dead-code-eliminated from the store build. It is NOT what keeps
 // `chrome.debugger` out of the store build — nothing does, by design; see
 // CLAUDE.md's "Two producers build the tree" section. The dogfood manifest
 // is written by scripts/dogfood-manifest.mjs.
