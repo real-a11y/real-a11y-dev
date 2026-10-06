@@ -70,7 +70,10 @@ test("a fresh profile offers Enable and no NATIVE toggle", async ({ nav }) => {
   await expect(
     nav.panel.getByRole("group", { name: "Tree producer" }),
   ).toHaveCount(0);
-  await expect(nav.panel.locator(".sn-native-tree")).toHaveCount(0);
+  // NativeTreeView, and its refresh button, isn't mounted.
+  await expect(
+    nav.panel.getByRole("button", { name: "Refresh native tree" }),
+  ).toHaveCount(0);
 });
 
 test("accepting the consent step turns native on, moves focus to NATIVE and reads the tree", async ({
@@ -122,8 +125,10 @@ test("Disable returns to DOM, hides the toggle and moves focus to Enable", async
   await expect(
     nav.panel.getByRole("group", { name: "Tree producer" }),
   ).toHaveCount(0);
-  // Back on the DOM tree, which this view always has.
-  await expect(nav.panel.locator(".sn-native-tree")).toHaveCount(0);
+  // Back on the DOM tree: the native tree's view is gone.
+  await expect(
+    nav.panel.getByRole("button", { name: "Refresh native tree" }),
+  ).toHaveCount(0);
   expect(
     await nav.panel.evaluate(() =>
       chrome.storage.local
