@@ -154,58 +154,60 @@ test("NATIVE panel: the tree shows the announced label, and a retype starts from
 test("DOM mode: the A11y view shows the announced label, the DOM view the raw value", async ({
   nav,
 }) => {
-  await showFixture(nav);
-  // The harness has native mode on, so the panel's once-per-session default
-  // switches it to the NATIVE producer as soon as the page connects. Let that
-  // happen first — it never fires twice — then ask for the DOM producer. It
-  // connects on its own; a row on screen is the tree landing.
-  await expect(
-    nav.panel.getByRole("button", { name: "NATIVE", exact: true }),
-  ).toHaveAttribute("aria-pressed", "true", { timeout: 20_000 });
-  await press(nav.panel, "DOM", '[aria-label="Tree producer"]');
-  await expect(
-    nav.panel.locator('[aria-label="Tree view mode"]'),
-  ).toBeVisible();
-  await expect
-    .poll(() => nav.panel.locator(".sn-node").count(), { timeout: 20_000 })
-    .toBeGreaterThan(0);
-  await press(nav.panel, "Expand all");
-
-  const valueOf = (rowText: RegExp) =>
-    nav.panel
-      .locator(".sn-node", { hasText: rowText })
-      .locator(".sn-field-value");
-
-  // A11y view (the default).
-  await expect(valueOf(/combobox\s*Country/)).toHaveText('= "Spain"');
-  await expect(valueOf(/textbox\s*Password/)).toHaveText('= "[redacted]"');
-  await expect(valueOf(/textbox\s*Card number/)).toHaveText('= "[redacted]"');
-  await expect(valueOf(/slider\s*Volume/)).toHaveText('= "Loud"');
-  // An editor's text prints once, as its value — not again as a preview.
-  await expect(valueOf(/textbox\s*Message/)).toHaveText('= "Hello world"');
-  await expect(
-    nav.panel.locator(".sn-node", { hasText: /textbox\s*Message/ }),
-  ).not.toContainText(/Hello world.*Hello world/);
-
-  // DOM view — the view-mode toggle, not the dogfood build's producer one.
-  // Switching re-extracts, and the new tree lands with its own default
-  // expansion at some point after the click, so expand until the row shows.
-  await press(nav.panel, "DOM", '[aria-label="Tree view mode"]');
-  await expect(async () => {
+  // Native mode off for this test, so the native default never switches
+  // the panel away from the DOM tree: what this checks has nothing to do
+  // with native mode. This worker's other tests expect it on again after.
+  await nav.panel.evaluate(() =>
+    chrome.storage.local.set({ "settings.nativeModeEnabled": false }),
+  );
+  try {
+    await showFixture(nav);
+    // The DOM producer connects on its own; a row on screen is the tree landing.
+    await expect
+      .poll(() => nav.panel.locator(".sn-node").count(), { timeout: 20_000 })
+      .toBeGreaterThan(0);
     await press(nav.panel, "Expand all");
-    await expect(valueOf(/<select>/)).toHaveText('value="es"', {
-      timeout: 1_000,
-    });
-  }).toPass({ timeout: 15_000 });
-  await expect(
-    nav.panel.locator(".sn-field-value", { hasText: 'value="[redacted]"' }),
-  ).toHaveCount(3);
-  await expect(
-    nav.panel.locator(".sn-field-value", { hasText: 'value="80"' }),
-  ).toHaveCount(1);
 
-  for (const secret of SECRETS) {
-    await expect(nav.panel.locator(".sn-tree")).not.toContainText(secret);
+    const valueOf = (rowText: RegExp) =>
+      nav.panel
+        .locator(".sn-node", { hasText: rowText })
+        .locator(".sn-field-value");
+
+    // A11y view (the default).
+    await expect(valueOf(/combobox\s*Country/)).toHaveText('= "Spain"');
+    await expect(valueOf(/textbox\s*Password/)).toHaveText('= "[redacted]"');
+    await expect(valueOf(/textbox\s*Card number/)).toHaveText('= "[redacted]"');
+    await expect(valueOf(/slider\s*Volume/)).toHaveText('= "Loud"');
+    // An editor's text prints once, as its value — not again as a preview.
+    await expect(valueOf(/textbox\s*Message/)).toHaveText('= "Hello world"');
+    await expect(
+      nav.panel.locator(".sn-node", { hasText: /textbox\s*Message/ }),
+    ).not.toContainText(/Hello world.*Hello world/);
+
+    // DOM view — the view-mode toggle, not the dogfood build's producer one.
+    // Switching re-extracts, and the new tree lands with its own default
+    // expansion at some point after the click, so expand until the row shows.
+    await press(nav.panel, "DOM", '[aria-label="Tree view mode"]');
+    await expect(async () => {
+      await press(nav.panel, "Expand all");
+      await expect(valueOf(/<select>/)).toHaveText('value="es"', {
+        timeout: 1_000,
+      });
+    }).toPass({ timeout: 15_000 });
+    await expect(
+      nav.panel.locator(".sn-field-value", { hasText: 'value="[redacted]"' }),
+    ).toHaveCount(3);
+    await expect(
+      nav.panel.locator(".sn-field-value", { hasText: 'value="80"' }),
+    ).toHaveCount(1);
+
+    for (const secret of SECRETS) {
+      await expect(nav.panel.locator(".sn-tree")).not.toContainText(secret);
+    }
+    await expect(nav.panel.locator(".sn-tree")).not.toContainText("•");
+  } finally {
+    await nav.panel.evaluate(() =>
+      chrome.storage.local.set({ "settings.nativeModeEnabled": true }),
+    );
   }
-  await expect(nav.panel.locator(".sn-tree")).not.toContainText("•");
 });

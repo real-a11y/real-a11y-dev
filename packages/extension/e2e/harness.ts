@@ -198,6 +198,11 @@ async function launchDogfoodExtension(
   const extensionId = new URL(serviceWorker.url()).host;
 
   const panel = await context.newPage();
+  // Before the panel's own scripts, on every load of this page: count the
+  // NATIVE_READ messages the panel sends, and let a test make them fail or
+  // answer late (`NativeHarness.setNativeReads`). Counting what was sent is
+  // what lets a test assert a read did NOT happen without waiting out a timer.
+  await panel.addInitScript(recordNativeReads);
   await panel.goto(
     `chrome-extension://${extensionId}/src/sidepanel/index.html`,
   );
@@ -227,6 +232,43 @@ async function launchDogfoodExtension(
       await rm(userDataDir, { recursive: true, force: true });
     },
   };
+}
+
+/** How NATIVE_READ behaves for the panel, per `sessionStorage`, which
+ *  survives the panel reloads tests use to remount the App. */
+export type NativeReadMode = "normal" | "fail" | `delay:${number}`;
+const NATIVE_READ_MODE_KEY = "e2e.nativeReadMode";
+
+/** Runs in the panel page before its own scripts (see `addInitScript`). */
+function recordNativeReads(): void {
+  const w = window as typeof window & {
+    __e2eNativeReads?: Array<{ tabId?: number; auto?: boolean }>;
+  };
+  w.__e2eNativeReads = [];
+  const real = chrome.runtime.sendMessage.bind(chrome.runtime) as (
+    message: unknown,
+    ...rest: unknown[]
+  ) => Promise<unknown>;
+  chrome.runtime.sendMessage = ((message: unknown, ...rest: unknown[]) => {
+    const m = message as { type?: unknown; tabId?: number; auto?: boolean };
+    if (m?.type !== "NATIVE_READ") return real(message, ...rest);
+    w.__e2eNativeReads!.push({ tabId: m.tabId, auto: m.auto });
+    const mode = sessionStorage.getItem("e2e.nativeReadMode") ?? "normal";
+    if (mode === "fail") {
+      return Promise.resolve({
+        ok: false,
+        error: "unavailable",
+        reason: "devtools-conflict",
+      });
+    }
+    if (mode.startsWith("delay:")) {
+      const ms = Number(mode.slice("delay:".length));
+      return new Promise((r) => setTimeout(r, ms)).then(() =>
+        real(message, ...rest),
+      );
+    }
+    return real(message, ...rest);
+  }) as typeof chrome.runtime.sendMessage;
 }
 
 /** A fixture page, plus the tab id the native path addresses it by. */
@@ -263,6 +305,27 @@ export class NativeHarness {
    */
   get panel(): Page {
     return this.browser.panel;
+  }
+
+  /** How the panel's next NATIVE_READs behave. Takes effect immediately and
+   *  survives a panel reload; `closeAll` puts it back to normal. */
+  async setNativeReads(mode: NativeReadMode): Promise<void> {
+    await this.panel.evaluate(
+      ([key, value]) => sessionStorage.setItem(key, value),
+      [NATIVE_READ_MODE_KEY, mode] as const,
+    );
+  }
+
+  /** The NATIVE_READs the panel has sent since it last loaded. */
+  async nativeReads(): Promise<Array<{ tabId?: number; auto?: boolean }>> {
+    return this.panel.evaluate(
+      () =>
+        (
+          window as typeof window & {
+            __e2eNativeReads?: Array<{ tabId?: number; auto?: boolean }>;
+          }
+        ).__e2eNativeReads ?? [],
+    );
   }
 
   /**
@@ -522,6 +585,7 @@ export class NativeHarness {
   async closeAll(): Promise<void> {
     for (const page of this.opened) await page.close();
     this.opened.length = 0;
+    await this.setNativeReads("normal");
   }
 }
 
