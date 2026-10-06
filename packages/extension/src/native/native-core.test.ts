@@ -1071,82 +1071,64 @@ describe("in-page actions — click", () => {
   });
 });
 
-describe("in-page actions — focus", () => {
+describe("in-page actions — reveal", () => {
   beforeEach(() => {
     document.body.innerHTML = "";
   });
 
-  it("moves real focus without scrolling the page", () => {
-    // Regression: the panel's own selection-follow (App.tsx) is the first
-    // caller of this action ever reached — a default-scroll `.focus()` would
-    // jump the page out from under a user simply arrow-navigating the tree,
-    // the same reason the DOM producer's own `content.ts` focus call always
-    // passes `preventScroll: true`.
+  /** Reveal events the content script would catch: on the way down. */
+  function captured(): CustomEvent[] {
+    const events: CustomEvent[] = [];
+    document.addEventListener(
+      "real-a11y:native-reveal",
+      (e) => events.push(e as CustomEvent),
+      true,
+    );
+    return events;
+  }
+
+  it("fires the overlay event at the element with the arm's nonce, then focuses without scrolling", () => {
+    // Real focus alone shows nothing while the side panel, not the page, has
+    // window focus; the content script's overlay is the visible indicator.
     const el = document.createElement("button");
     document.body.appendChild(el);
-    const focusSpy = vi.spyOn(el, "focus");
+    const events = captured();
+    const focusSpy = vi.spyOn(HTMLElement.prototype, "focus");
 
-    expect(on(pageFocus, el)).toEqual({ ok: true });
-    expect(focusSpy).toHaveBeenCalledExactlyOnceWith({ preventScroll: true });
-  });
-
-  it("refuses an element with no focus method", () => {
-    const el = { tagName: "svg" } as unknown as Element;
-    expect(on(pageFocus, el)).toEqual({ ok: false, reason: "not-focusable" });
-  });
-
-  it("refuses a heading — it has .focus() like any HTMLElement, but no tabindex means it never actually takes focus", () => {
-    // Regression: a Devin Review finding on the panel's own selection-follow
-    // caught that this used to report { ok: true } here — the native tree
-    // includes plenty of DOM-backed nodes that are headings/landmarks, not
-    // controls, and the old version never checked whether focus() actually
-    // did anything.
-    document.body.innerHTML = "<h2>Shipping</h2>";
-    const el = document.querySelector("h2") as Element;
-    expect(on(pageFocus, el)).toEqual({ ok: false, reason: "not-focusable" });
-    expect(document.activeElement).not.toBe(el);
-  });
-
-  it("reveal asks the content script for its overlay, then focuses without scrolling", () => {
-    // Regression (user report on PR #412): real focus alone showed nothing —
-    // Chromium paints no focus ring while the side panel, not the page, has
-    // window focus. The visible indicator is the content script's overlay,
-    // requested through this DOM event.
-    const el = document.createElement("button");
-    document.body.appendChild(el);
-    const events: Event[] = [];
-    document.addEventListener("real-a11y:native-reveal", (e) => events.push(e));
-    const focusSpy = vi.spyOn(el, "focus");
-
-    expect(on(pageReveal, el)).toEqual({ ok: true });
+    expect(pageReveal.call(el, "n-1")).toEqual({ ok: true });
     expect(events).toHaveLength(1);
     expect(events[0]!.target).toBe(el);
+    expect(events[0]!.detail).toBe("n-1");
     expect(focusSpy).toHaveBeenCalledExactlyOnceWith({ preventScroll: true });
+    focusSpy.mockRestore();
   });
 
-  it("reveal still asks for the overlay on a heading that can't take focus", () => {
-    document.body.innerHTML = "<h2>Shipping</h2>";
-    const el = document.querySelector("h2") as Element;
-    const events: Event[] = [];
-    document.addEventListener("real-a11y:native-reveal", (e) => events.push(e));
+  it("doesn't bubble, so page listeners below the document never see it", () => {
+    document.body.innerHTML = "<main><button>Go</button></main>";
+    const seen: Event[] = [];
+    document
+      .querySelector("main")!
+      .addEventListener("real-a11y:native-reveal", (e) => seen.push(e));
+    pageReveal.call(document.querySelector("button")!, "n-2");
+    expect(seen).toHaveLength(0);
+  });
 
-    expect(on(pageReveal, el)).toEqual({ ok: true });
+  it("still asks for the overlay on a heading that can't take focus", () => {
+    document.body.innerHTML = "<h2>Shipping</h2>";
+    const events = captured();
+    expect(pageReveal.call(document.querySelector("h2")!, "n-3")).toEqual({
+      ok: true,
+    });
     expect(events).toHaveLength(1);
   });
 
-  it("reports success for a control inside a shadow root", () => {
-    // Regression (Devin Review, second round): inside a shadow tree
-    // `document.activeElement` is the HOST, so checking it reported
-    // `not-focusable` for a focus that had in fact succeeded.
-    const host = document.createElement("div");
-    document.body.appendChild(host);
-    const shadow = host.attachShadow({ mode: "open" });
-    const button = document.createElement("button");
-    shadow.appendChild(button);
-
-    expect(on(pageFocus, button)).toEqual({ ok: true });
-    expect(shadow.activeElement).toBe(button);
-    expect(document.activeElement).toBe(host);
+  it("works on a form whose controls shadow dispatchEvent and focus", () => {
+    document.body.innerHTML = `<form tabindex="-1"><input name="dispatchEvent"><input name="focus"></form>`;
+    const form = document.querySelector("form")!;
+    const events = captured();
+    expect(pageReveal.call(form, "n-4")).toEqual({ ok: true });
+    expect(events).toHaveLength(1);
+    expect(document.activeElement).toBe(form);
   });
 });
 

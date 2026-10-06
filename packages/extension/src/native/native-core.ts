@@ -814,17 +814,15 @@ export function pageFocus(this: Element): Marker {
   if (typeof focusable.focus !== "function") {
     return { ok: false, reason: "not-focusable" };
   }
-  focusable.focus({ preventScroll: true });
-  const root = focusable.getRootNode() as Document | ShadowRoot;
-  if (root.activeElement !== focusable) {
-    return { ok: false, reason: "not-focusable" };
-  }
+  focusable.focus();
   return { ok: true };
 }
 
 /**
  * Show the user where a selected native row lives on the page — the native
- * tree's counterpart to the DOM tree's `HIGHLIGHT_NODE` on select.
+ * tree's counterpart to the DOM tree's `HIGHLIGHT_NODE` on select. `nonce` is
+ * the one the content script was armed with; it honours only the event that
+ * carries it.
  *
  * Real focus alone is not a visible indicator: Chromium paints no focus ring
  * in a page whose window isn't focused, and while the user drives the side
@@ -834,6 +832,10 @@ export function pageFocus(this: Element): Marker {
  * from this main-world call into the content script's isolated world, and
  * the content script draws its overlay on the event's own target. Keyed to
  * the element itself, it needs no node-id mapping between the two producers.
+ * For a control inside a closed UA shadow root (a `<video>`'s built-in
+ * buttons), the event reaches the content script retargeted to the host, so
+ * the outline frames the whole `<video>` while focus lands on the control.
+ * A node with no backing DOM element (`ax-<n>`) can't be revealed at all.
  * The event name is repeated in `content.ts` — this function is serialized
  * as source text, so it can't import a shared constant.
  *
@@ -842,19 +844,30 @@ export function pageFocus(this: Element): Marker {
  * the page. A heading or landmark can't take focus; it still gets the
  * overlay, so the row counts as revealed either way.
  */
-export function pageReveal(this: Element): Marker {
+export function pageReveal(this: Element, nonce: string): Marker {
   const el = this;
   if (!el || !el.tagName) return { ok: false, reason: "not-element" };
-  el.dispatchEvent(
+  // Through the prototypes, not `el.dispatchEvent`/`el.focus`: a `<form>`
+  // holding `<input name="dispatchEvent">` shadows the method with the input,
+  // and this runs on every settled selection, form landmarks included. It
+  // doesn't bubble (the content script catches it on the way down), so page
+  // listeners below the document never see it; `composed` lets it leave an
+  // open shadow root.
+  EventTarget.prototype.dispatchEvent.call(
+    el,
     new CustomEvent("real-a11y:native-reveal", {
-      bubbles: true,
+      bubbles: false,
       composed: true,
+      detail: nonce,
     }),
   );
-  const focusable = el as HTMLElement;
-  if (typeof focusable.focus === "function") {
-    focusable.focus({ preventScroll: true });
-  }
+  const proto =
+    el instanceof HTMLElement
+      ? HTMLElement.prototype
+      : el instanceof SVGElement
+        ? SVGElement.prototype
+        : null;
+  proto?.focus.call(el, { preventScroll: true });
   return { ok: true };
 }
 
@@ -1325,7 +1338,9 @@ async function runInPage(
       objectId,
       functionDeclaration: IN_PAGE_ACTION_SOURCE[action],
       returnByValue: true,
-      ...(action === "type" ? { arguments: [{ value }] } : {}),
+      ...(action === "type" || action === "reveal"
+        ? { arguments: [{ value }] }
+        : {}),
       ...(action === "increment" || action === "decrement"
         ? { arguments: [{ value: action === "increment" ? 1 : -1 }] }
         : {}),

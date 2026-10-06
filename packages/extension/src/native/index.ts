@@ -85,13 +85,17 @@ type NativeMessage =
       action: NativeAction;
       value?: string;
       // A background follow (e.g. the tree's own selection moving real page
-      // focus, App.tsx's `focusNativeSelectionOnPage`), not a user-dispatched
+      // focus, App.tsx's `revealNativeSelectionOnPage`), not a user-dispatched
       // action from the toolbar/row buttons — kept out of the dogfood log's
       // `act` count. That count (and its success ratio) is how a dogfooder
       // judges how much native mode was actually USED; counting an automatic
       // follow that fires on every settled tree selection would silently
       // inflate it with browsing, not real dispatches.
       silent?: boolean;
+      // For a `reveal`: the panel's sequence number for it. A queued reveal
+      // that a newer one on the same tab has replaced is dropped before it
+      // attaches.
+      requestId?: number;
       // The URL of the document the caller's tree was read from. Checked
       // after the per-tab queue wait, right before dispatch: a node id
       // encodes a `backendDOMNodeId`, which the page it came from owns, and
@@ -190,6 +194,8 @@ export function cancelNativePicks(): void {
 // Pairs each `reveal` dispatch's content-script arm with its own release —
 // see the NATIVE_ACT handler.
 let revealSeq = 0;
+// The latest reveal the panel asked for, per tab (its `requestId`).
+const latestReveal = new Map<number, number>();
 
 export function registerNativeMode(): void {
   // Content scripts can read and write `chrome.storage.local` by default. They
@@ -364,11 +370,19 @@ export function registerNativeMode(): void {
             return;
           }
           case "NATIVE_ACT": {
+            const isReveal = message.action === "reveal";
+            if (isReveal && message.requestId !== undefined) {
+              latestReveal.set(message.tabId, message.requestId);
+            }
             const { outcome, value } = await withRecovery(
               session,
               message.tabId,
               async (t) => {
+                // A reveal skips the page check: a same-page URL change
+                // (pushState, a hash) leaves the node ids valid, and an id
+                // from a different document fails safely in DOM.resolveNode.
                 if (
+                  !isReveal &&
                   message.expectUrl !== undefined &&
                   (await tabUrl(message.tabId)) !== message.expectUrl
                 ) {
@@ -377,7 +391,7 @@ export function registerNativeMode(): void {
                     error: "page navigated — reload the native tree",
                   };
                 }
-                if (message.action !== "reveal") {
+                if (!isReveal) {
                   return dispatchNative(
                     t,
                     message.nodeId,
@@ -385,29 +399,50 @@ export function registerNativeMode(): void {
                     message.value,
                   );
                 }
-                // `reveal` asks the content script for its overlay and moves
-                // real focus (`pageReveal`). Arm the content script first —
-                // it only honors the reveal event while armed, and it drops
-                // the `focusin` the focus causes rather than re-highlighting
-                // and re-scrolling to it — then release it. Armed HERE, after
-                // the per-tab queue wait, right beside the dispatch it covers:
-                // armed any earlier, a long queue could outlast its deadline.
+                // Arm the content script, reveal, release. Armed here, after
+                // the per-tab queue wait and right beside the dispatch it
+                // covers, so a long queue can't outlast its deadline. Only
+                // the top frame: the native tree reads the top frame alone,
+                // so a reveal target never lives in a subframe, and arming
+                // third-party frames would only widen the window. The nonce
+                // reaches the page only as `pageReveal`'s argument.
                 const seq = ++revealSeq;
-                const suppress = (active: boolean) =>
+                const nonce = crypto.randomUUID();
+                const arm = (active: boolean) =>
                   chrome.tabs
-                    .sendMessage(message.tabId, {
-                      type: "SUPPRESS_NATIVE_FOCUS_TRACK",
-                      payload: { seq, active },
-                    })
-                    .catch(() => {});
-                await suppress(true);
+                    .sendMessage(
+                      message.tabId,
+                      {
+                        type: "ARM_NATIVE_OVERLAY",
+                        payload: { seq, active, ...(active ? { nonce } : {}) },
+                      },
+                      { frameId: 0 },
+                    )
+                    .then(() => true)
+                    .catch(() => false);
+                // No content script answered (one that can't run here, or
+                // one orphaned by an extension reload): focus still moves,
+                // but nothing will draw the outline, and the panel is told.
+                const outlined = await arm(true);
                 try {
-                  return await dispatchNative(t, message.nodeId, "reveal");
+                  const result = await dispatchNative(
+                    t,
+                    message.nodeId,
+                    "reveal",
+                    nonce,
+                  );
+                  return result.success ? { ...result, outlined } : result;
                 } finally {
-                  await suppress(false);
+                  await arm(false);
                 }
               },
               log,
+              isReveal && message.requestId !== undefined
+                ? {
+                    stillWanted: () =>
+                      latestReveal.get(message.tabId) === message.requestId,
+                  }
+                : {},
             );
             if (!outcome.ok) {
               // Nothing was dispatched, so nothing is recorded as an `act`.
@@ -572,7 +607,8 @@ export async function withRecovery<T>(
   // native off — retrying either would be re-attaching against the answer.
   if (
     first.outcome.error === "conflict" ||
-    first.outcome.error === "disabled"
+    first.outcome.error === "disabled" ||
+    first.outcome.error === "superseded"
   ) {
     return await classify(first, log);
   }

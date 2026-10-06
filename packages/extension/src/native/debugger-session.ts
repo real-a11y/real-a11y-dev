@@ -83,7 +83,10 @@ export interface AttachOutcome {
     | "connection-lost"
     | "command-failed"
     /** Native mode was switched off before this attach could happen. */
-    | "disabled";
+    | "disabled"
+    /** A newer request replaced this one while it waited its turn, so it
+     *  never attached (see {@link OperationOptions.stillWanted}). */
+    | "superseded";
 }
 
 interface StorageArea {
@@ -100,6 +103,10 @@ export interface OperationOptions {
    *  click. Its dwell is logged apart from reads and acts, which attach for
    *  milliseconds, so it doesn't skew theirs. */
   pick?: boolean;
+  /** Asked once the operation's turn in the per-tab queue comes, before it
+   *  attaches. `false` drops it as `superseded`: a reveal the user has
+   *  already moved past isn't worth an attach, or a flash of Chrome's bar. */
+  stillWanted?: () => boolean;
 }
 
 /** What a pick resolved to: the DOM node Chromium hit-tested, and its
@@ -326,6 +333,9 @@ export class NativeDebuggerSession {
     fn: (t: CdpTransport) => Promise<T>,
     opts: OperationOptions,
   ): Promise<{ outcome: AttachOutcome; value?: T }> {
+    if (opts.stillWanted && !opts.stillWanted()) {
+      return { outcome: { ok: false, error: "superseded" } };
+    }
     const attach = await this.attach(tabId);
     if (!attach.ok) return { outcome: attach };
     // `finally` runs on paths where neither assignment has happened yet, so it

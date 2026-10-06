@@ -66,6 +66,7 @@ import {
   FilteredListView,
   type FilteredListItem,
 } from "./FilteredList.js";
+import { NATIVE_FOLLOW_DEBOUNCE_MS } from "./native-follow.js";
 
 const ROLE_FILTER_KEYS = Object.keys(ROLE_FILTER_LABELS) as Array<
   Exclude<RoleFilter, null>
@@ -105,13 +106,12 @@ export interface NativeTreeViewProps {
    *  last read, or the element sits where the native read doesn't reach. */
   onRevealMiss?: () => void;
   /**
-   * Best-effort: the user settled on this node id as the tree's selection
-   * (click, arrow-key nav, pick-reveal, or the filtered list's "go to
-   * tree") — App.tsx moves real page focus there, mirroring what the DOM
-   * tree's own row selection already does. Optional so a test/host that
-   * doesn't care about page-side effects can omit it.
+   * The user settled on this node as the selection (a click, arrow keys, a
+   * pick, the role-filter list): App reveals it on the page, with the same
+   * outline the DOM tree's selection draws. Optional, so a host that doesn't
+   * care about the page can leave it out.
    */
-  onSelectionFocus?: (nodeId: string) => void;
+  onSelectionReveal?: (nodeId: string) => void;
 }
 
 /** A node is worth a click/Enter action, a select action, or both never — the
@@ -157,7 +157,7 @@ export function NativeTreeView({
   onActivate,
   reveal,
   onRevealMiss,
-  onSelectionFocus,
+  onSelectionReveal,
 }: NativeTreeViewProps) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -333,37 +333,17 @@ export function NativeTreeView({
     scrollToIndex(index, "nearest");
   }, [selectedId, visibleIds, scrollToIndex]);
 
-  // Best-effort: follow the selection onto the real page, the same visible
-  // indicator the DOM tree's own row selection already gives — a native
-  // node has no light-DOM element this component can call `.focus()` on
-  // directly, so it hands the id up to App.tsx, which dispatches a native
-  // `focus` action over `chrome.debugger` (see that callback's own comment
-  // for why it's a plain fire-and-forget, not the heavier action pipeline).
-  //
-  // Debounced, deliberately: every branch of handleKeyDown below can walk
-  // `selectedId` through several rows within one key-repeat burst, and each
-  // dispatch is a real attach→resolve→focus→detach round trip — firing one
-  // per intermediate row would queue that whole cycle behind a selection the
-  // user has already moved past. Only the row they actually settle on gets
-  // the real page's focus.
-  //
-  // `onSelectionFocus` deliberately stays OUT of the effect's own dependency
-  // array — read through a ref instead. A Devin Review finding caught the
-  // bug this avoids: App.tsx's callback depends on `nativeBusy`/`curtainOn`,
-  // so its identity changes whenever EITHER flips, with `selectedId`
-  // completely unchanged (e.g. a native action settling after dispatch, or
-  // toggling the curtain). Listing it as a dependency re-armed the debounce
-  // on every such change and refired a focus dispatch for the SAME row —
-  // concretely, selecting a button, activating it, and having the resulting
-  // dialog's own autofocus get immediately stolen back once `nativeBusy`
-  // cleared. This effect must fire only when the SELECTION itself changes —
-  // or when `followNonce` says a gesture re-selected the same row.
-  //
-  // One timer shared with the role-filter list's own follow (`followFromList`
-  // below), so a list click and a tree selection can never both land: the
-  // later request always replaces the pending one.
-  const onSelectionFocusRef = useRef(onSelectionFocus);
-  onSelectionFocusRef.current = onSelectionFocus;
+  // Follow the selection onto the page (`onSelectionReveal`). Debounced: a
+  // key-repeat burst walks `selectedId` through several rows, and each
+  // reveal is a full attach → reveal → detach round trip, so only the row the
+  // user settles on is revealed. The callback is read through a ref, not
+  // listed as a dependency: App's callback changes identity when
+  // `nativeBusy` or `curtainOn` flips, and re-running then would reveal the
+  // same row again, stealing focus back from whatever an activation just
+  // opened. One timer is shared with the role-filter list's follow
+  // (`followFromList`), so the later request always replaces the pending one.
+  const onSelectionRevealRef = useRef(onSelectionReveal);
+  onSelectionRevealRef.current = onSelectionReveal;
   const followTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
     undefined,
   );
@@ -371,8 +351,8 @@ export function NativeTreeView({
     clearTimeout(followTimer.current);
     followTimer.current = setTimeout(() => {
       followTimer.current = undefined;
-      onSelectionFocusRef.current?.(id);
-    }, 150);
+      onSelectionRevealRef.current?.(id);
+    }, NATIVE_FOLLOW_DEBOUNCE_MS);
   }, []);
   useEffect(() => {
     if (!selectedId) return;
@@ -387,9 +367,9 @@ export function NativeTreeView({
   // `selectedId`, so it follows onto the page through this instead: every
   // click, arrow/Home/End/type-ahead move and "Move to" in the list calls
   // it, the same `onHighlight` hook the DOM producer's list drives its page
-  // highlight with. Absent `onSelectionFocus` it stays undefined, which is
+  // highlight with. Absent `onSelectionReveal` it stays undefined, which is
   // how the list knows to hide "Move to" rather than show a dead button.
-  const followFromList = onSelectionFocus ? scheduleFollow : undefined;
+  const followFromList = onSelectionReveal ? scheduleFollow : undefined;
 
   const toggle = useCallback((id: string) => {
     setExpanded((prev) => {

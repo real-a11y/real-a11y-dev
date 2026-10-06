@@ -241,16 +241,13 @@ describe("content: panel-driven actions vs. the element picker", () => {
 });
 
 /**
- * Regression (Devin Review, PR #412): the native tree's own selection-focus
- * follow (App.tsx's `focusNativeSelectionOnPage`) moves real page focus over
- * `chrome.debugger` — a real `focusin` event this content script cannot
- * otherwise tell apart from a genuine user-driven one. Without
- * `SUPPRESS_NATIVE_FOCUS_TRACK`, the reverse focus-sync listener below (on
- * by default, independent of which producer the panel is showing) reacted
- * to it and re-highlighted/scrolled to the element, fighting the
- * `preventScroll` the native dispatch had already passed.
+ * The native tree's selection follow (App.tsx's `revealNativeSelectionOnPage`)
+ * moves real page focus over `chrome.debugger`, a `focusin` this script can't
+ * tell from a user's. `ARM_NATIVE_OVERLAY` makes it drop that one, so the
+ * reverse focus-sync listener doesn't re-highlight and re-scroll to it, and
+ * lets exactly one nonce-carrying reveal event draw the outline.
  */
-describe("content: native focus-follow suppresses the reverse focus-sync", () => {
+describe("content: a native reveal's arm", () => {
   let h: Harness;
   let originalScrollIntoView: typeof Element.prototype.scrollIntoView;
 
@@ -307,10 +304,11 @@ describe("content: native focus-follow suppresses the reverse focus-sync", () =>
     expect(h.sent.filter((m) => m.type === "FOCUS_CHANGED")).toHaveLength(1);
   });
 
+  /** Arm (or release) for reveal `seq`, whose nonce is `n-<seq>`. */
   function suppress(seq: number, active: boolean): void {
     h.send({
-      type: "SUPPRESS_NATIVE_FOCUS_TRACK",
-      payload: { seq, active },
+      type: "ARM_NATIVE_OVERLAY",
+      payload: { seq, active, ...(active ? { nonce: `n-${seq}` } : {}) },
     });
   }
 
@@ -328,7 +326,7 @@ describe("content: native focus-follow suppresses the reverse focus-sync", () =>
   });
 
   it("drops only that ONE focus change, not every one inside the window", () => {
-    // Regression (Devin Review, second round): a blanket window swallowed a
+    // A blanket window swallowed a
     // genuine user click or Tab landing in the same 800ms, leaving reverse
     // focus sync stale until the next focus event.
     suppress(1, true);
@@ -361,11 +359,14 @@ describe("content: native focus-follow suppresses the reverse focus-sync", () =>
     expect(reported()).toBe(0);
   });
 
-  function reveal(): void {
+  /** The event `pageReveal` fires: at the element, not bubbling, carrying
+   *  the arm's nonce. */
+  function reveal(nonce = "n-1"): void {
     document.getElementById("target")!.dispatchEvent(
       new CustomEvent("real-a11y:native-reveal", {
-        bubbles: true,
+        bubbles: false,
         composed: true,
+        detail: nonce,
       }),
     );
   }
@@ -375,7 +376,7 @@ describe("content: native focus-follow suppresses the reverse focus-sync", () =>
   }
 
   it("draws the highlight overlay for a native reveal while a follow is armed", () => {
-    // Regression (user report on PR #412): the native follow moved real
+    // The native follow moved real
     // focus but showed nothing — no focus ring is painted while the side
     // panel has window focus. The overlay is the visible indicator, the same
     // one the DOM tree's own select draws.
@@ -388,6 +389,22 @@ describe("content: native focus-follow suppresses the reverse focus-sync", () =>
   it("ignores a reveal event no native follow asked for", () => {
     // The page can dispatch this event itself; it must not get to draw over
     // or scroll the page on the extension's behalf.
+    reveal();
+    expect(overlay()).toBeNull();
+  });
+
+  it("ignores a reveal event without the arm's nonce, even while armed", () => {
+    suppress(1, true);
+    reveal("guessed");
+    expect(overlay()).toBeNull();
+  });
+
+  it("honours the armed reveal once, so the page can't replay it", () => {
+    suppress(1, true);
+    reveal();
+    expect(overlay()!.style.display).toBe("block");
+    overlay()!.remove();
+    // The page saw the nonce on the first event and sends it again.
     reveal();
     expect(overlay()).toBeNull();
   });
