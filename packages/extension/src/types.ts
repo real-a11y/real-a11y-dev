@@ -123,13 +123,18 @@ export type ContentToPanel =
             // Chromium, a torn-down target) — `nodeId` alone is still tried.
             ancestorIds?: string[];
           }
-        | { cancelled: true }
+        // Escape, a STOP, or (with `timedOut`) the pick's time limit.
+        | { cancelled: true; timedOut?: true }
         // A real attach/dispatch failure — DevTools already attached, the
         // tab navigated somewhere unattachable mid-arm, a connection drop —
         // distinct from a user-initiated cancel so the panel can surface it
         // instead of silently mirroring Escape's own quiet exit.
         | { error: string; reason?: NativeUnavailableReason };
-    };
+    }
+  // Inspect mode is on for this pick: a click on the page is now a pick, and
+  // Escape on the page cancels it. Until this arrives the panel shows the
+  // pick as arming.
+  | { type: "NATIVE_PICK_ARMED"; tabId: number; requestId: number };
 
 /** Select option for GET_FIELD_STATE response */
 export interface SelectOption {

@@ -50,6 +50,9 @@ export interface DogfoodEvent {
   success?: boolean;
   /** For attach/detach pairs: how long we stayed attached, ms. */
   attachedMs?: number;
+  /** For a detach: it ended a pick session, which is attached for as long as
+   *  the user takes to click, so its time is counted apart. */
+  pick?: boolean;
 }
 
 const KEY = "dogfood.nativeLog";
@@ -76,8 +79,11 @@ interface DogfoodCounters {
   unavailable: number;
   read: number;
   act: number;
-  /** Total time attached across all detach events, ms. */
+  /** Total time attached across all detach events except picks, ms. */
   attachedMs: number;
+  /** Pick sessions ended, and the time they held the debugger, ms. */
+  pickSessions: number;
+  pickAttachedMs: number;
   /**
    * `unavailable` split by reason code — "how often was native unavailable, and
    * why" is a capability question the raw log can't answer once it rolls past
@@ -102,6 +108,8 @@ const ZERO_COUNTERS: DogfoodCounters = {
   read: 0,
   act: 0,
   attachedMs: 0,
+  pickSessions: 0,
+  pickAttachedMs: 0,
   unavailableByReason: {},
 };
 
@@ -168,7 +176,12 @@ export class DogfoodLog {
         (event.kind === "detach" || event.kind === "detach-unsolicited") &&
         event.attachedMs !== undefined
       ) {
-        counters.attachedMs += event.attachedMs;
+        if (event.pick) {
+          counters.pickSessions += 1;
+          counters.pickAttachedMs += event.attachedMs;
+        } else {
+          counters.attachedMs += event.attachedMs;
+        }
       }
       if (event.kind === "unavailable" && event.reason) {
         counters.unavailableByReason[event.reason] =
@@ -226,7 +239,8 @@ export class DogfoodLog {
       "",
       "— Banner tolerance —",
       `  attach sessions: ${c.attach}`,
-      `  total time attached: ${(c.attachedMs / 1000).toFixed(1)}s`,
+      `  total time attached (reads and actions): ${(c.attachedMs / 1000).toFixed(1)}s`,
+      `  pick sessions: ${c.pickSessions}   time armed: ${(c.pickAttachedMs / 1000).toFixed(1)}s`,
       "",
       "— MV3 service-worker lifecycle —",
       `  unsolicited detaches (SW suspended / target gone): ${c.detachUnsolicited}`,
@@ -259,6 +273,7 @@ export class DogfoodLog {
             e.keptCount !== undefined ? `kept=${e.keptCount}` : "",
             e.action ? `action=${e.action}` : "",
             e.success !== undefined ? `success=${e.success}` : "",
+            e.pick ? "pick" : "",
           ]
             .filter(Boolean)
             .map((s) => `  ${s}`)

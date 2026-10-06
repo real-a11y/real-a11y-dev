@@ -22,10 +22,14 @@ import {
   type NativeUnavailableReason,
   type TabCapability,
 } from "./capability.js";
-import { NativeDebuggerSession } from "./debugger-session.js";
+import {
+  NativeDebuggerSession,
+  type OperationOptions,
+} from "./debugger-session.js";
 import type { DogfoodLog } from "./dogfood.js";
 import {
   dispatchNative,
+  nativeIdForBackendNode,
   readNativeTree,
   type NativeAction,
 } from "./native-core.js";
@@ -65,8 +69,10 @@ async function nativeModeEnabled(): Promise<boolean> {
   return got[FLAG_KEY] === true;
 }
 
-/** Messages the panel sends for native mode (kept out of the main types so this
- *  whole module lifts cleanly if the dogfood verdict is "no"). */
+/** Request/response messages the panel sends for native mode. Pushes the
+ *  other way (`NATIVE_PICK_RESULT`, `NATIVE_PICK_ARMED`) are typed in
+ *  `../types.ts` with the panel's other inbound messages, because the panel's
+ *  one message handler routes them. */
 type NativeMessage =
   | { type: "NATIVE_FLAG_GET" }
   | { type: "NATIVE_FLAG_SET"; enabled: boolean }
@@ -92,10 +98,10 @@ type NativeMessage =
   // so without a per-arm id the old pick's delayed result is
   // indistinguishable from the new one's.
   | { type: "NATIVE_PICK_START"; tabId: number; requestId: number }
-  // Picker: cancel an in-flight pick on `tabId` — explicit toggle-off, or
-  // the panel leaving native mode / switching tabs / disabling native mode
-  // entirely.
-  | { type: "NATIVE_PICK_STOP"; tabId: number };
+  // Picker: cancel the pick `requestId` on `tabId` — explicit toggle-off, or
+  // the panel leaving native mode or switching tabs. Naming the request keeps
+  // a late STOP from cancelling a later pick.
+  | { type: "NATIVE_PICK_STOP"; tabId: number; requestId: number };
 
 /** The tab's current URL, or undefined if it can't be read. Best-effort: it
  *  only drives a staleness check, so a miss degrades to "don't refuse". */
@@ -156,6 +162,17 @@ function isNativeMessage(m: unknown): m is NativeMessage {
   );
 }
 
+/** The session `registerNativeMode` created, for {@link cancelNativePicks}. */
+let activeSession: NativeDebuggerSession | undefined;
+
+/** End every pick in progress. The background calls this when the last side
+ *  panel closes: nobody is left to receive the pick, and an armed pick would
+ *  otherwise keep the debugger attached, and eat the next page click, until
+ *  its time limit. */
+export function cancelNativePicks(): void {
+  activeSession?.cancelAllPicks();
+}
+
 export function registerNativeMode(): void {
   // Content scripts can read and write `chrome.storage.local` by default. They
   // run in the page's renderer, and nothing they do needs storage, so keep
@@ -186,6 +203,7 @@ export function registerNativeMode(): void {
     // message handler re-checks it before dispatching.
     flagEnabled,
   );
+  activeSession = session;
   const log = session.dogfoodLog();
 
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -365,26 +383,44 @@ export function registerNativeMode(): void {
             return;
           }
           case "NATIVE_PICK_START": {
-            // Acknowledge immediately — the pick itself can take as long as
-            // the user needs to click something, so it must not hold this
-            // sendResponse open. The eventual outcome (a node, a cancel, or
-            // an attach failure) arrives later as a NATIVE_PICK_RESULT push.
+            // Acknowledged at once: the pick lasts as long as the user takes
+            // to click. Its outcome (a node, a cancel, a timeout or a failure)
+            // arrives later as a NATIVE_PICK_RESULT push, and a
+            // NATIVE_PICK_ARMED push says when a click on the page becomes a
+            // pick.
             sendResponse({ ok: true });
-            const tabId = message.tabId;
-            const requestId = message.requestId;
+            const { tabId, requestId } = message;
+            // Captured now, so turning native mode off before this pick
+            // registers still cancels it (see `cancelAllPicks`).
+            const generation = session.pickGeneration();
+            let timedOut = false;
             void (async () => {
               const { outcome, value: picked } = await withRecovery(
                 session,
                 tabId,
-                (t) => session.runPick(tabId, t),
+                (t) =>
+                  session.runPick(tabId, t, {
+                    requestId,
+                    generation,
+                    onArmed: () => {
+                      void chrome.runtime
+                        .sendMessage({
+                          type: "NATIVE_PICK_ARMED",
+                          tabId,
+                          requestId,
+                        })
+                        .catch(() => {});
+                    },
+                    onTimeout: () => {
+                      timedOut = true;
+                    },
+                  }),
                 log,
+                { pick: true },
               );
-              // Three distinct outcomes, kept distinct all the way to the
-              // panel rather than collapsed into one "it didn't work" —
-              // `outcome.ok === false` is a real attach/dispatch failure
-              // (DevTools already attached, an unattachable navigation
-              // mid-arm, a connection drop), not the same thing as the user
-              // pressing Escape (`outcome.ok === true`, `picked === null`).
+              // Kept apart all the way to the panel: a failure to attach or
+              // arm (`outcome.ok === false`) is not the user pressing Escape
+              // (`picked === null`), and neither is a timeout.
               const payload = !outcome.ok
                 ? {
                     error: outcome.error ?? "pick failed",
@@ -392,18 +428,14 @@ export function registerNativeMode(): void {
                   }
                 : picked
                   ? {
-                      // Chromium's Overlay.inspectNodeRequested reports a
-                      // DOM backendNodeId — the exact id nativeIdOf's own
-                      // DOM-backed branch encodes into a tree node's id
-                      // (native-core.ts). `chainBackendNodeIds` walks up
-                      // from it (runPick's own `resolveChain`) for when the
-                      // exact hit isn't a node the AX tree kept.
-                      nodeId: `ax-dom-${picked.backendNodeId}`,
+                      // The hit, then its ancestors, for when the hit itself
+                      // isn't a node the AX tree kept.
+                      nodeId: nativeIdForBackendNode(picked.backendNodeId),
                       ancestorIds: picked.chainBackendNodeIds
                         .slice(1)
-                        .map((id) => `ax-dom-${id}`),
+                        .map(nativeIdForBackendNode),
                     }
-                  : { cancelled: true };
+                  : { cancelled: true, ...(timedOut ? { timedOut } : {}) };
               void chrome.runtime
                 .sendMessage({
                   type: "NATIVE_PICK_RESULT",
@@ -418,7 +450,7 @@ export function registerNativeMode(): void {
           case "NATIVE_PICK_STOP": {
             sendResponse({
               ok: true,
-              cancelled: session.cancelPick(message.tabId),
+              cancelled: session.cancelPick(message.tabId, message.requestId),
             });
             return;
           }
@@ -461,6 +493,7 @@ export async function withRecovery<T>(
   tabId: number,
   fn: (t: import("./native-core.js").CdpTransport) => Promise<T>,
   log?: DogfoodLog,
+  opts: OperationOptions = {},
 ): Promise<{
   outcome: { ok: boolean; error?: string; reason?: NativeUnavailableReason };
   value?: T;
@@ -480,7 +513,7 @@ export async function withRecovery<T>(
     };
   }
 
-  const first = await runGuarded(session, tabId, fn);
+  const first = await runGuarded(session, tabId, fn, opts);
   if (first.outcome.ok) return first;
   // A conflict won't clear on its own, and `disabled` means the user switched
   // native off — retrying either would be re-attaching against the answer.
@@ -491,7 +524,7 @@ export async function withRecovery<T>(
     return await classify(first, log);
   }
 
-  const retry = await runGuarded(session, tabId, fn);
+  const retry = await runGuarded(session, tabId, fn, opts);
   // Only a mid-operation drop (we WERE attached, then lost it) is a lifecycle
   // recovery worth measuring. A fresh attach failure is a page/permission
   // problem, not an MV3 suspend/wake, so it must not touch the reattach metric.
@@ -548,9 +581,10 @@ export async function runGuarded<T>(
   session: NativeDebuggerSession,
   tabId: number,
   fn: (t: import("./native-core.js").CdpTransport) => Promise<T>,
+  opts: OperationOptions = {},
 ): Promise<{ outcome: { ok: boolean; error?: string }; value?: T }> {
   try {
-    return await session.withDebugger(tabId, fn);
+    return await session.withDebugger(tabId, fn, opts);
   } catch {
     return { outcome: { ok: false, error: "command-failed" } };
   }

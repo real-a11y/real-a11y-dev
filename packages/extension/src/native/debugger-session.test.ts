@@ -746,21 +746,83 @@ describe("NativeDebuggerSession picker", () => {
     const { outcome, value } = await result;
     expect(outcome.ok).toBe(true);
     expect(value).toBeNull();
-    // Resolved — nothing ARMED left to cancel a second time, but `cancelPick`
-    // still reports `true`: it records a pending cancel for whatever pick
-    // starts next on this tab (see `pendingPickCancel`'s own comment on why
-    // that's the deliberately conservative default rather than a `false`
-    // "no-op").
-    expect(session.cancelPick(7)).toBe(true);
+    // Nothing armed is left, so a second cancel reports it cancelled nothing.
+    expect(session.cancelPick(7)).toBe(false);
   });
 
-  it("cancelPick on a tab with no armed pick records a pending cancel and reports true", () => {
+  it("cancelPick with nothing armed reports false", () => {
     stubChrome();
     const session = new NativeDebuggerSession(new FakeStorage());
-    // Nothing armed at all — a stray stop still reports true (the trade
-    // `pendingPickCancel` documents: at most one future pick resolves as
-    // cancelled unexpectedly, never a hang).
-    expect(session.cancelPick(7)).toBe(true);
+    expect(session.cancelPick(7, 3)).toBe(false);
+  });
+
+  it("a STOP for one request never cancels a later pick", async () => {
+    const { eventListeners } = stubChrome();
+    const session = new NativeDebuggerSession(new FakeStorage());
+    // A STOP for request 1, whose START was refused and never ran.
+    expect(session.cancelPick(7, 1)).toBe(false);
+
+    const result = session.withDebugger(7, (t) =>
+      session.runPick(7, t, { requestId: 2 }),
+    );
+    await settleAttach();
+    // Request 2 armed normally, and a click still picks.
+    fireInspectNodeRequested(eventListeners, 7, 42);
+    const { value } = await result;
+    expect(value).toMatchObject({ backendNodeId: 42 });
+  });
+
+  it("cancelAllPicks also ends a pick that hadn't registered yet", async () => {
+    const { eventListeners } = stubChrome();
+    const session = new NativeDebuggerSession(new FakeStorage());
+    // The generation is captured when the pick is asked for…
+    const generation = session.pickGeneration();
+    // …native mode goes off before the pick reaches runPick…
+    session.cancelAllPicks();
+    const { outcome, value } = await session.withDebugger(7, (t) =>
+      session.runPick(7, t, { requestId: 1, generation }),
+    );
+    // …and it ends at once, without arming.
+    expect(outcome.ok).toBe(true);
+    expect(value).toBeNull();
+    expect(eventListeners.length).toBe(0);
+  });
+
+  it("an armed pick ends by itself after its time limit, and says so", async () => {
+    stubChrome();
+    const session = new NativeDebuggerSession(new FakeStorage());
+    const onTimeout = vi.fn();
+    const result = session.withDebugger(7, (t) =>
+      session.runPick(7, t, { timeoutMs: 20, onTimeout }),
+    );
+    const { outcome, value } = await result;
+    expect(outcome.ok).toBe(true);
+    expect(value).toBeNull();
+    expect(onTimeout).toHaveBeenCalledTimes(1);
+  });
+
+  it("onArmed fires once inspect mode is on, not before", async () => {
+    const sent: string[] = [];
+    stubChrome();
+    const g = globalThis as unknown as { chrome: typeof chrome };
+    (
+      g.chrome.debugger.sendCommand as ReturnType<typeof vi.fn>
+    ).mockImplementation(async (_target: unknown, method: string) => {
+      sent.push(method);
+      return {};
+    });
+    const session = new NativeDebuggerSession(new FakeStorage());
+    let sentWhenArmed: string[] = [];
+    const result = session.withDebugger(7, (t) =>
+      session.runPick(7, t, {
+        requestId: 1,
+        onArmed: () => (sentWhenArmed = [...sent]),
+      }),
+    );
+    await settleAttach();
+    expect(sentWhenArmed).toContain("Overlay.setInspectMode");
+    session.cancelPick(7, 1);
+    await result;
   });
 
   it("a STOP that beats an in-flight START's attach cancels it before it ever arms", async () => {
@@ -784,8 +846,9 @@ describe("NativeDebuggerSession picker", () => {
     const result = session.withDebugger(7, (t) => session.runPick(7, t));
     for (let i = 0; i < 10; i++) await Promise.resolve(); // parked in attach
 
-    // Nothing armed yet — this is the early-cancellation race itself.
-    expect(session.cancelPick(7)).toBe(true);
+    // Nothing armed yet — this is the early-cancellation race itself. It
+    // cancels nothing now, and is recorded for this request.
+    expect(session.cancelPick(7)).toBe(false);
 
     releaseAttach();
     const { outcome, value } = await result;
@@ -872,7 +935,7 @@ describe("NativeDebuggerSession picker", () => {
     expect(rb.value).toBeNull();
   });
 
-  it("a resolved pick removes its cancel listener, so a stale cancelPick no-ops", async () => {
+  it("a resolved pick removes its listener, and a late cancel cancels nothing", async () => {
     const { eventListeners } = stubChrome();
     const session = new NativeDebuggerSession(new FakeStorage());
 
@@ -881,9 +944,7 @@ describe("NativeDebuggerSession picker", () => {
     fireInspectNodeRequested(eventListeners, 7, 42);
     await result;
 
-    // Same "records a pending cancel instead of reporting false" contract as
-    // the test above — what this test actually pins is the listener cleanup.
-    expect(session.cancelPick(7)).toBe(true);
+    expect(session.cancelPick(7)).toBe(false);
     expect(eventListeners.length).toBe(0);
   });
 });

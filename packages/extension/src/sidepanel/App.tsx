@@ -66,7 +66,7 @@ import { FilteredList } from "./FilteredList.js";
 import { useFocusTrap, useRestoreFocusOnClose } from "./focus-hooks.js";
 import { InputPanel } from "./InputPanel.js";
 import type { InputPanelState } from "./InputPanel.js";
-import { NativeTreeView } from "./NativeTreeView.js";
+import { NativeTreeView, type NativeReveal } from "./NativeTreeView.js";
 import { TabSequenceView } from "./TabSequenceView.js";
 
 /** How long to let the page react before re-reading the native tree after an
@@ -330,14 +330,12 @@ export function App() {
   // content script owns the actual click capture — this flag is just the
   // panel's mirror so the button shows the right pressed state.
   const [pickModeOn, setPickModeOn] = useState(false);
-  // Latest `pickModeOn` for the native-pick tab-switch cleanup effect below,
-  // which must not re-arm just because a pick's own ordinary completion
-  // flips this state — see that effect's own comment for why it reads this
-  // via ref instead of depending on the state directly.
+  // Latest `pickModeOn`, for listeners and cleanups that must not re-subscribe
+  // when it changes. Written during render, not from an effect: an effect
+  // runs after the commit, so a click that arms a pick and an Escape right
+  // behind it could read the old value.
   const pickModeOnRef = useRef(pickModeOn);
-  useEffect(() => {
-    pickModeOnRef.current = pickModeOn;
-  }, [pickModeOn]);
+  pickModeOnRef.current = pickModeOn;
   const [inputState, setInputState] = useState<InputPanelState | null>(null);
   const [pageTitle, setPageTitle] = useState<string>("");
   const [pageUrl, setPageUrl] = useState<string>("");
@@ -394,10 +392,9 @@ export function App() {
   // switch — a late DOM `PICK_MODE_CHANGED` must not clear a native pick
   // that's since been armed, and the mirror case (a late `NATIVE_PICK_
   // RESULT`) must not clear a DOM one.
+  // Written during render, like `pickModeOnRef`, for the same reason.
   const producerRef = useRef<"dom" | "native">(producer);
-  useEffect(() => {
-    producerRef.current = producer;
-  }, [producer]);
+  producerRef.current = producer;
   const [nativeNodes, setNativeNodes] = useState<Map<string, NativeNode>>(
     new Map(),
   );
@@ -428,8 +425,11 @@ export function App() {
   // a `reveal` prop instead; `nonce` forces the child's effect to re-fire
   // even when the same node is picked twice in a row.
   const [nativePickReveal, setNativePickReveal] = useState<
-    { nodeId: string; ancestorIds?: string[]; nonce: number } | undefined
+    NativeReveal | undefined
   >(undefined);
+  // The native pick's inspect mode is on (NATIVE_PICK_ARMED arrived). Until
+  // then the Pick button is pressed but busy: a page click isn't a pick yet.
+  const [nativePickArmed, setNativePickArmed] = useState(false);
   // `nativeOpToken.current` at the moment the in-flight pick was armed —
   // compared against its CURRENT value when NATIVE_PICK_RESULT arrives, same
   // pattern `dispatchNativeAction`/`loadNativeTree` already use for a
@@ -1060,6 +1060,7 @@ export function App() {
         // this before anything else below reads the result, including the
         // indicator clear.
         if (message.requestId !== nativePickRequestId.current) return;
+        setNativePickArmed(false);
         // Pick mode is inherently one-shot server-side (`runPick` always
         // resolves and turns Overlay.setInspectMode back off), so the local
         // mirror comes off here whenever the producer is still native — the
@@ -1094,7 +1095,14 @@ export function App() {
           } else {
             setNativeStatus(`pick failed: ${message.payload.error}`);
           }
+        } else if (message.payload.timedOut) {
+          announce("Pick ended: nothing was clicked within a minute.", 4000);
         }
+      }
+
+      if (message.type === "NATIVE_PICK_ARMED") {
+        if (message.requestId !== nativePickRequestId.current) return;
+        if (producerRef.current === "native") setNativePickArmed(true);
       }
     };
 
@@ -1106,7 +1114,7 @@ export function App() {
     return () => {
       chrome.runtime.onMessage.removeListener(handler);
     };
-  }, [resetNativeState]);
+  }, [resetNativeState, announce]);
 
   const handleViewModeChange = useCallback(
     (mode: TreeViewMode) => {
@@ -1422,7 +1430,13 @@ export function App() {
       if (!nativeModeEnabled) return false;
       const token = nativeOpToken.current;
       setNativeBusy(true);
-      setNativeStatus("reading native tree…");
+      // A read on a tab with a pick armed queues behind the pick, which ends
+      // only with a click, Escape or its time limit. Say so.
+      setNativeStatus(
+        pickModeOnRef.current && producerRef.current === "native"
+          ? "waiting for the pick to end — click an element on the page, or press Esc"
+          : "reading native tree…",
+      );
       try {
         const r = (await chrome.runtime.sendMessage({
           type: "NATIVE_READ",
@@ -1878,16 +1892,13 @@ export function App() {
         nativePickRequestId.current++;
       }
       setPickModeOn(next);
+      setNativePickArmed(false);
       void chrome.runtime
-        .sendMessage(
-          next
-            ? {
-                type: "NATIVE_PICK_START",
-                tabId: nativeTreeTabId,
-                requestId: nativePickRequestId.current,
-              }
-            : { type: "NATIVE_PICK_STOP", tabId: nativeTreeTabId },
-        )
+        .sendMessage({
+          type: next ? "NATIVE_PICK_START" : "NATIVE_PICK_STOP",
+          tabId: nativeTreeTabId,
+          requestId: nativePickRequestId.current,
+        })
         .catch(() => {
           // Service worker not reachable — nothing was armed/cancelled
           // server-side, so don't strand the button showing "on".
@@ -1949,31 +1960,16 @@ export function App() {
     return () => document.removeEventListener("keydown", onKey);
   }, [togglePickMode]);
 
-  // Cancel an in-flight native pick if the panel leaves it behind — a tab
-  // switch (including `nativeTreeTabId` resetting to `undefined`, which
-  // covers disabling native mode too) or the panel unmounting entirely.
-  // `runPick` on the background side never leaks past a single pick (it
-  // always resolves and turns `Overlay.setInspectMode` back off), but
-  // without this the OVERLAY stays up on the page and the panel's own
-  // `pickModeOn` stays stuck "on" until a result — which, once the panel
-  // has moved off that tab, may never arrive for it to see.
+  // Cancel an armed native pick when the panel leaves its tab: a tab switch,
+  // or `nativeTreeTabId` resetting to `undefined` (which covers turning
+  // native mode off), or the panel unmounting. Otherwise inspect mode stays
+  // up on the page and the button stays "on" waiting for a result the panel
+  // may never see.
   //
-  // Deliberately depends on `nativeTreeTabId` ALONE, not `[producer,
-  // pickModeOn, nativeTreeTabId]` the way this used to read: `pickModeOn`
-  // flips false on every ORDINARY pick completion too (the NATIVE_PICK_
-  // RESULT handler above sets it), and depending on it re-armed this
-  // effect's cleanup on that transition as well — sending a STOP for a pick
-  // that had already resolved normally. `cancelPick` on the background side
-  // treats a STOP with nothing currently armed as "record a pending cancel
-  // for whatever starts next on this tab" (see its own comment), so that
-  // redundant STOP silently cancelled the NEXT pick the user armed, before
-  // its own click could ever reach it — a real, observed regression this
-  // dependency change fixes. `nativeTreeTabId` itself never changes as part
-  // of an ordinary pick completing, only on a genuine tab switch, so it's
-  // the correct sole trigger; `producer` is dropped too, since
-  // `switchProducer` already sends its own explicit STOP for the producer
-  // being left, and this effect firing a SECOND one for the same pick would
-  // reintroduce the identical poisoning bug one layer up.
+  // It depends on `nativeTreeTabId` alone. `pickModeOn` flips false whenever
+  // a pick finishes normally, and re-running the cleanup then would send a
+  // STOP for a pick that's already over. `producer` is left out because
+  // `switchProducer` sends its own STOP for the producer being left.
   useEffect(() => {
     const tabId = nativeTreeTabId;
     return () => {
@@ -1990,41 +1986,29 @@ export function App() {
       // otherwise leave the toolbar's Pick button stuck showing "on" with
       // no armed pick and no NATIVE_PICK_RESULT ever coming to clear it.
       setPickModeOn(false);
+      setNativePickArmed(false);
       void chrome.runtime
-        .sendMessage({ type: "NATIVE_PICK_STOP", tabId })
+        .sendMessage({
+          type: "NATIVE_PICK_STOP",
+          tabId,
+          requestId: nativePickRequestId.current,
+        })
         .catch(() => {});
     };
   }, [nativeTreeTabId]);
 
-  // Escape cancels an active native pick. The DOM picker's Escape handling
-  // lives in the content script because it owns the page-side click capture;
-  // native has no content script in the loop at all (`runPick` talks to the
-  // page only over CDP), so there's nothing there to listen on. Scoped to
-  // the panel document instead — the inspected page's own keystrokes never
-  // reach here, but a pick is themselves initiated from (and cancelled from)
-  // the panel, so requiring the panel to have focus for Escape to cancel it
-  // matches Ctrl/Cmd+Shift+C above needing the same.
-  //
-  // Mounted once (empty deps) rather than re-subscribed on `[producer,
-  // pickModeOn, togglePickMode]` the way this used to read: attaching the
-  // listener only while `pickModeOn` is true means the very click that turns
-  // picking on has to wait for THIS effect to run before Escape does
-  // anything — and a passive effect is deferred past the same render/commit
-  // an e2e test's `toHaveAttribute` assertion can already observe, so a
-  // script-driven click-then-Escape can race it. That raced for real in
-  // practice, intermittently. Reading current state off a ref kept fresh
-  // during render (not via its own effect, which would have the identical
-  // gap) sidesteps the whole class of race: the listener is already there
-  // before the click that arms it ever happens.
-  const pickEscapeStateRef = useRef({ producer, pickModeOn, togglePickMode });
-  pickEscapeStateRef.current = { producer, pickModeOn, togglePickMode };
+  // Escape in the panel cancels an armed native pick. (Escape on the page is
+  // Chromium's: `runPick` hears `Overlay.inspectModeCanceled`.) Mounted once
+  // and reading refs, so the listener is in place before the click that arms
+  // a pick, rather than subscribing after the commit that turns it on.
+  const togglePickModeRef = useRef(togglePickMode);
+  togglePickModeRef.current = togglePickMode;
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
-      const state = pickEscapeStateRef.current;
-      if (state.producer !== "native" || !state.pickModeOn) return;
+      if (producerRef.current !== "native" || !pickModeOnRef.current) return;
       e.preventDefault();
-      state.togglePickMode();
+      togglePickModeRef.current();
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
@@ -2569,6 +2553,10 @@ export function App() {
           <button
             class="sn-pick-btn"
             aria-pressed={pickModeOn}
+            // A native pick is pressed as soon as it's asked for, but busy
+            // until Chromium's inspect mode is actually on: a page click
+            // before then isn't a pick.
+            aria-busy={producer === "native" && pickModeOn && !nativePickArmed}
             onClick={togglePickMode}
             disabled={
               producer === "native" &&
@@ -2576,7 +2564,9 @@ export function App() {
             }
             title={
               pickModeOn
-                ? "Pick mode ON — click an element in the page to select it in the tree (Esc to cancel)"
+                ? producer === "native" && !nativePickArmed
+                  ? "Arming the picker…"
+                  : "Pick mode ON — click an element in the page to select it in the tree (Esc to cancel)"
                 : producer === "native" && nativeTreeTabId === undefined
                   ? "Load a native tree first"
                   : "Pick an element in the page (Ctrl/Cmd+Shift+C)"
@@ -2837,6 +2827,12 @@ export function App() {
           }}
           onActivate={handleNativeActivate}
           reveal={nativePickReveal}
+          onRevealMiss={() =>
+            announce(
+              "The picked element isn't in this tree — refresh the native tree, then pick again.",
+              5000,
+            )
+          }
         />
       ) : viewMode === "tab" ? (
         /* ---- Tab sequence view ---- */

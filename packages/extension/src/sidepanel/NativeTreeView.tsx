@@ -71,6 +71,21 @@ const ROLE_FILTER_KEYS = Object.keys(ROLE_FILTER_LABELS) as Array<
   Exclude<RoleFilter, null>
 >;
 
+/** A native pick to reveal. `nonce` changes on every pick result, even a
+ *  repeated pick of the same node, so the reveal runs again rather than
+ *  bailing out on an unchanged `nodeId`. */
+export interface NativeReveal {
+  nodeId: string;
+  /**
+   * Nearest-first fallback chain — the picked node's own DOM ancestors — for
+   * when `nodeId` itself was never kept in the AX tree (an unnamed wrapper,
+   * padding inside a labelled group). Tried in order; the first one present
+   * in `nodes` wins.
+   */
+  ancestorIds?: string[];
+  nonce: number;
+}
+
 export interface NativeTreeViewProps {
   nodes: Map<string, NativeNode>;
   rootId: string;
@@ -84,24 +99,11 @@ export interface NativeTreeViewProps {
     node: NativeNode,
     explicitAction?: "increment" | "decrement" | "select",
   ) => void;
-  /**
-   * A native pick just resolved to this node id. `nonce` changes on every
-   * pick result (even a repeated pick of the same node) so the effect below
-   * fires again rather than bailing out on an unchanged `nodeId` — a plain
-   * `useEffect([reveal?.nodeId])` would silently no-op on "pick the same row
-   * twice in a row."
-   */
-  reveal?: {
-    nodeId: string;
-    /**
-     * Nearest-first fallback chain — the picked node's own DOM ancestors —
-     * for when `nodeId` itself was never kept in the AX tree (an unnamed
-     * wrapper, padding inside a labelled group). Tried in order; the first
-     * one present in `nodes` wins.
-     */
-    ancestorIds?: string[];
-    nonce: number;
-  };
+  /** A native pick just resolved: reveal and select that node. */
+  reveal?: NativeReveal;
+  /** The pick resolved to nothing in this tree: the page changed since the
+   *  last read, or the element sits where the native read doesn't reach. */
+  onRevealMiss?: () => void;
 }
 
 /** A node is worth a click/Enter action, a select action, or both never — the
@@ -146,6 +148,7 @@ export function NativeTreeView({
   onRefresh,
   onActivate,
   reveal,
+  onRevealMiss,
 }: NativeTreeViewProps) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -196,7 +199,10 @@ export function NativeTreeView({
     const nodeId = [reveal.nodeId, ...(reveal.ancestorIds ?? [])].find((id) =>
       nodes.has(id),
     );
-    if (nodeId === undefined) return;
+    if (nodeId === undefined) {
+      onRevealMiss?.();
+      return;
+    }
     setQuery("");
     setRoleFilter(null);
     setExpanded((prev) => {

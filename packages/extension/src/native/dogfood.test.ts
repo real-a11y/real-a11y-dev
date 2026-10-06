@@ -31,6 +31,19 @@ class YieldingStorage {
 }
 
 describe("DogfoodLog", () => {
+  it("counts a pick session's time apart from reads and actions", async () => {
+    const log = new DogfoodLog(new FakeStorage());
+    await log.record({ kind: "detach", at: 1, attachedMs: 100 });
+    await log.record({ kind: "detach", at: 2, attachedMs: 9000, pick: true });
+    const c = await log.counters();
+    expect(c.attachedMs).toBe(100);
+    expect(c.pickSessions).toBe(1);
+    expect(c.pickAttachedMs).toBe(9000);
+    expect(await log.report(0)).toContain(
+      "pick sessions: 1   time armed: 9.0s",
+    );
+  });
+
   it("records events and rolls at the cap", async () => {
     const log = new DogfoodLog(new FakeStorage());
     for (let i = 0; i < 600; i++) {
@@ -69,7 +82,7 @@ describe("DogfoodLog", () => {
     const report = await log.report(99_999);
     expect(report).toContain("tree reads: 600");
     expect(report).toContain("attach sessions: 30");
-    expect(report).toContain("total time attached: 30.0s");
+    expect(report).toContain("total time attached (reads and actions): 30.0s");
     expect(report).toContain("events: 660");
   });
 
@@ -103,7 +116,7 @@ describe("DogfoodLog", () => {
 
     const report = await log.report(9999);
     expect(report).toContain("attach sessions: 1");
-    expect(report).toContain("total time attached: 5.0s");
+    expect(report).toContain("total time attached (reads and actions): 5.0s");
     expect(report).toContain("unsolicited detaches");
     expect(report).toMatch(/reattach recovered: 1\s+failed: 0/);
     expect(report).toContain("attach refused (another debugger attached): 1");
