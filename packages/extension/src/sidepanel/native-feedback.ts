@@ -1,45 +1,34 @@
-import { ACTION_LABELS } from "@real-a11y-dev/core";
-
 import type { NativeNode } from "../native/native-actions.js";
 import type { NativeAction } from "../native/native-core.js";
 
+import { describeAction } from "./action-feedback.js";
+
 /**
- * The action-feedback line for a native action that landed, in the words the
- * DOM tree uses for its own (`App.tsx`'s `handleActivate` and
- * `handleInputSubmit`): the node's name, never its id.
+ * The action-feedback line for a native action that landed, worded by the
+ * same `describeAction` as the DOM tree's. A native click on a link is that
+ * link's navigation, which the DOM tree words as "Navigate"; a reveal is a
+ * focus.
  *
  * `node` is the node as it was BEFORE the action, so a checkbox that was
- * checked reads "Unchecked". Null for a slider or spinbutton step: as in the
- * DOM tree, the value changing on the page is the confirmation, and a banner
- * flashing on every rapid step would push the tree around under the pointer.
+ * checked reads "Unchecked". Null for a slider or spinbutton step.
  */
 export function nativeActionFeedback(
   node: NativeNode | undefined,
   action: NativeAction,
 ): string | null {
-  if (action === "increment" || action === "decrement") return null;
-  const name = node?.name || node?.role || "element";
-  switch (action) {
-    case "type":
-      return `Typed in ${name}`;
-    case "select":
-      return `Selected: ${name}`;
-    case "focus":
-    case "reveal":
-      return `${ACTION_LABELS.focus}: ${name}`;
-  }
-  const role = node?.role;
-  const checked = node?.states?.["checked"];
-  // A mixed box gets the plain label, as in the DOM tree: a click checks or
-  // unchecks it by a checkedness that "mixed" hides.
-  if (
-    (role === "checkbox" || role === "switch" || role === "menuitemcheckbox") &&
-    checked !== "mixed"
-  ) {
-    return checked === true ? `Unchecked: ${name}` : `Checked: ${name}`;
-  }
-  if (role === "radio" || role === "menuitemradio") return `Selected: ${name}`;
-  return `${ACTION_LABELS.click}: ${name}`;
+  const role = node?.role ?? "";
+  return describeAction(
+    {
+      role,
+      name: node?.name || node?.role || "element",
+      checked: node?.states?.["checked"],
+    },
+    action === "reveal"
+      ? "focus"
+      : action === "click" && role === "link"
+        ? "navigate"
+        : action,
+  );
 }
 
 /**

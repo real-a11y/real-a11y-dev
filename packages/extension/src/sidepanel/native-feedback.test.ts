@@ -68,6 +68,30 @@ describe("nativeActionFeedback", () => {
     );
   });
 
+  it("words a link's click as the DOM tree does, as a navigation", () => {
+    expect(nativeActionFeedback(node("link", "Home"), "click")).toBe(
+      "Navigate: Home",
+    );
+  });
+
+  it("words a reveal as a focus", () => {
+    expect(nativeActionFeedback(node("textbox", "Email"), "reveal")).toBe(
+      "Focus: Email",
+    );
+  });
+
+  it("says Click for a menu item, as the DOM tree does", () => {
+    expect(
+      nativeActionFeedback(
+        node("menuitemcheckbox", "Bold", { checked: false }),
+        "click",
+      ),
+    ).toBe("Click: Bold");
+    expect(nativeActionFeedback(node("menuitemradio", "Large"), "click")).toBe(
+      "Click: Large",
+    );
+  });
+
   it("falls back to the role for an unnamed node, and copes with none", () => {
     expect(nativeActionFeedback(node("button", ""), "click")).toBe(
       "Click: button",

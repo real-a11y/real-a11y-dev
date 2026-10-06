@@ -62,6 +62,8 @@ describe("NativeTreeView keyboard and row parity", () => {
       nodes?: Map<string, NativeNode>;
       onActivate?: ReturnType<typeof vi.fn>;
       onSendKey?: ReturnType<typeof vi.fn>;
+      onDialogEscape?: ReturnType<typeof vi.fn>;
+      roleFilter?: string;
     } = {},
   ) {
     const onActivate = options.onActivate ?? vi.fn();
@@ -76,6 +78,7 @@ describe("NativeTreeView keyboard and row parity", () => {
           onRefresh={() => {}}
           onActivate={onActivate}
           onSendKey={options.onSendKey}
+          onDialogEscape={options.onDialogEscape}
         />,
         container,
       );
@@ -128,19 +131,39 @@ describe("NativeTreeView keyboard and row parity", () => {
     expect(selected()).toBe("nav"); // "Site", above it
   });
 
-  it("type-ahead takes a prefix typed in quick succession", () => {
-    mount();
-    select("root");
-    press("b");
-    expect(selected()).toBe("h2"); // "Billing"
-    press("i");
-    expect(selected()).toBe("h2"); // "bi" still matches it
+  it("type-ahead takes a prefix typed in quick succession, and forgets it after a pause", () => {
+    // Fake timers: the buffer's reset is a real timeout, and a slow machine
+    // must not turn "quick succession" into a pause.
+    vi.useFakeTimers();
+    try {
+      mount();
+      select("root");
+      press("b");
+      expect(selected()).toBe("h2"); // "Billing"
+      press("i");
+      expect(selected()).toBe("h2"); // "bi" still matches it
+      act(() => {
+        vi.advanceTimersByTime(1_000);
+      });
+      press("s");
+      expect(selected()).toBe("nav"); // a fresh "s", not "bis"
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("type-ahead with nothing selected starts from the top", () => {
     mount();
     press("h");
     expect(selected()).toBe("home");
+  });
+
+  it("* on the tree's own root does nothing, as in the DOM tree", () => {
+    mount();
+    const before = rowIds();
+    select("root");
+    press("*");
+    expect(rowIds()).toEqual(before);
   });
 
   it("* expands every sibling that has children", () => {
@@ -214,9 +237,51 @@ describe("NativeTreeView keyboard and row parity", () => {
 
   it("marks an iframe row as embedded content the tree leaves out", () => {
     mount();
-    expect(row("frame").querySelector(".sn-iframe-badge")?.textContent).toBe(
-      "embedded",
+    const badge = row("frame").querySelector(".sn-iframe-badge")!;
+    // Visible text "embedded"; the explanation is in the text a screen
+    // reader reads too, not only in the tooltip.
+    expect(badge.firstChild?.textContent).toBe("embedded");
+    expect(badge.querySelector(".sn-sr-only")?.textContent).toContain(
+      "doesn't read its contents",
     );
+  });
+
+  it("names the arrow keys in the keyboard bar for a screen reader", () => {
+    mount({ onSendKey: vi.fn() });
+    const names = [
+      ...container.querySelectorAll<HTMLButtonElement>(
+        ".sn-keyboard-bar .sn-key-btn",
+      ),
+    ].map((b) => b.getAttribute("aria-label") ?? b.textContent);
+    expect(names).toEqual([
+      "Esc",
+      "Tab",
+      "Shift+Tab",
+      "Enter",
+      "Space",
+      "Send Down Arrow",
+      "Send Up Arrow",
+    ]);
+  });
+
+  it("Enter in the role-filter list opens a spinbutton's edit box, as in the tree", () => {
+    const onActivate = mount();
+    act(() =>
+      [...container.querySelectorAll<HTMLButtonElement>(".sn-filter-btn")]
+        .find((b) => b.textContent === "Forms")!
+        .click(),
+    );
+    const list = container.querySelector<HTMLElement>('[role="listbox"]')!;
+    const options = [...list.querySelectorAll<HTMLElement>('[role="option"]')];
+    const qty = options.findIndex((o) => o.textContent?.includes("Quantity"));
+    expect(qty).toBeGreaterThanOrEqual(0);
+    act(() => options[qty]!.click());
+    act(() => {
+      list.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Enter", bubbles: true }),
+      );
+    });
+    expect(onActivate).toHaveBeenLastCalledWith(NODES.get("qty"), undefined);
   });
 
   it("names double-click scope in its hints", () => {
@@ -241,8 +306,8 @@ describe("NativeTreeView keyboard and row parity", () => {
     expect(onSendKey).toHaveBeenCalledWith("Tab", "Tab", 9, { shift: true });
   });
 
-  it("shows the dialog indicator for a modal dialog, and Press ESC sends Escape", () => {
-    const onSendKey = vi.fn();
+  it("shows the dialog indicator for a modal dialog, and Press ESC asks to close it", () => {
+    const onDialogEscape = vi.fn();
     const withDialog = new Map(NODES);
     withDialog.set("root", { ...NODES.get("root")!, childIds: ["nav", "dlg"] });
     withDialog.set(
@@ -251,18 +316,22 @@ describe("NativeTreeView keyboard and row parity", () => {
         states: { modal: true },
       })[1],
     );
-    mount({ nodes: withDialog, onSendKey });
+    mount({ nodes: withDialog, onDialogEscape });
 
     const indicator = container.querySelector(".sn-dialog-indicator");
     expect(indicator?.textContent).toContain("Dialog: Confirm payment");
     act(() =>
       indicator!.querySelector<HTMLButtonElement>(".sn-key-btn")!.click(),
     );
-    expect(onSendKey).toHaveBeenCalledWith("Escape", "Escape", 27);
+    expect(onDialogEscape).toHaveBeenCalledWith("dlg");
   });
 
-  it("shows no dialog indicator without a modal dialog", () => {
-    mount({ onSendKey: vi.fn() });
+  it("keeps the indicator's live region mounted while no dialog is open", () => {
+    // A live region that arrives already holding its text is not announced
+    // by most screen readers, so the region waits, empty, for the dialog.
+    mount({ onDialogEscape: vi.fn() });
     expect(container.querySelector(".sn-dialog-indicator")).toBeNull();
+    const regions = [...container.querySelectorAll('[role="status"]')];
+    expect(regions.some((r) => r.textContent === "")).toBe(true);
   });
 });

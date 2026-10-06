@@ -31,7 +31,6 @@
  */
 
 import {
-  getPrimaryAction,
   ROLE_FILTER_LABELS,
   type ActionType,
   type RoleFilter,
@@ -72,8 +71,8 @@ import {
   FilteredListView,
   type FilteredListItem,
 } from "./FilteredList.js";
-import { NATIVE_FOLLOW_DEBOUNCE_MS } from "./native-follow.js";
 import { findNativeModalDialog } from "./native-feedback.js";
+import { NATIVE_FOLLOW_DEBOUNCE_MS } from "./native-follow.js";
 import {
   arrowLeftStopsAtScopeRoot,
   describeNode,
@@ -143,10 +142,13 @@ export interface NativeTreeViewProps {
   /** A pick is armed: Escape belongs to cancelling it, not to leaving scope. */
   pickArmed?: boolean;
   /**
-   * Send a key to the page — the keyboard bar under the tree and the dialog
-   * indicator's **Press ESC**. Both are left out without it.
+   * Send a key to the page — the keyboard bar under the tree. Left out
+   * without it.
    */
   onSendKey?: SendKey;
+  /** The dialog indicator's **Press ESC**, for the open modal dialog with
+   *  this id. The indicator is left out without it. */
+  onDialogEscape?: (dialogId: string) => void;
 }
 
 /** A node is worth a click/Enter action, a select action, or both never — the
@@ -210,6 +212,7 @@ export function NativeTreeView({
   onScope,
   pickArmed = false,
   onSendKey,
+  onDialogEscape,
 }: NativeTreeViewProps) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -540,21 +543,43 @@ export function NativeTreeView({
     [parentOf],
   );
 
+  /**
+   * What plain Enter does to a row, in the tree and in its role-filter list
+   * alike: the row's own action, and for a slider, which has none but a
+   * step, a step up. A spinbutton's own action is its edit box — the only
+   * keyboard way to type a value from the native tree — so Enter opens it,
+   * and Shift+Enter or +/- step it. (The DOM tree's Enter steps a spinbutton
+   * up instead: its primary action comes from core's `getPrimaryAction`,
+   * shared by every surface.) Returns false when the row has nothing to do.
+   */
+  const activateRow = useCallback(
+    (node: NativeNode): boolean => {
+      if (primaryLabel(node)) {
+        onActivate(node, isSelectableRole(node.role) ? "select" : undefined);
+        return true;
+      }
+      if (isSteppableRole(node.role)) {
+        onActivate(node, "increment");
+        return true;
+      }
+      return false;
+    },
+    [onActivate],
+  );
+
   const activateFromList = useCallback(
     (id: string, action?: ActionType) => {
       const node = nodes.get(id);
       if (!node) return;
-      // A plain Enter/Activate arrives with no action, and `onActivate`
-      // without one clicks — wrong for a slider, which can only step. Resolve
-      // the primary here, as `App.tsx`'s `handleActivate` does for DOM rows.
-      const resolved = action ?? getPrimaryAction(nativeActions(node));
-      if (resolved === "increment" || resolved === "decrement") {
-        onActivate(node, resolved);
+      // A stepper key arrives with its step; a plain Enter or Activate with
+      // none, and gets the tree's Enter.
+      if (action === "increment" || action === "decrement") {
+        onActivate(node, action);
       } else {
-        onActivate(node, isSelectableRole(node.role) ? "select" : undefined);
+        activateRow(node);
       }
     },
-    [nodes, onActivate],
+    [nodes, onActivate, activateRow],
   );
 
   const activeDescendantId = (() => {
@@ -683,23 +708,12 @@ export function NativeTreeView({
         case "Enter": {
           e.preventDefault();
           typeAhead.current.clear();
-          // The row's own action. A slider has none but a step, so Enter
-          // steps it up, as in the DOM tree. A spinbutton keeps Enter for its
-          // edit box — the only keyboard way to type a value from the tree —
-          // and steps with Shift+Enter or +/-, handled above.
-          //
-          // Navigation/expand stay responsive while busy (no dispatch, no
-          // conflict with an in-flight NATIVE_ACT) — only the activation
-          // itself is held back, same as the action buttons' own `disabled`.
-          if (primaryLabel(node)) {
-            if (!busy) {
-              onActivate(
-                node,
-                isSelectableRole(node.role) ? "select" : undefined,
-              );
-            }
-          } else if (isSteppableRole(node.role)) {
-            if (!busy) onActivate(node, "increment");
+          // See `activateRow`. Navigation/expand stay responsive while busy
+          // (no dispatch, no conflict with an in-flight NATIVE_ACT) — only
+          // the activation itself is held back, same as the action buttons'
+          // own `disabled`.
+          if (primaryLabel(node) || isSteppableRole(node.role)) {
+            if (!busy) activateRow(node);
           } else if (hasChildren(node)) {
             toggle(node.id);
           }
@@ -725,15 +739,19 @@ export function NativeTreeView({
         }
         case "*": {
           // Expand every sibling that has children (WAI-ARIA TreeView), as
-          // the DOM tree does. The scope root's siblings aren't rendered, so
-          // there it opens just the root.
+          // the DOM tree's `useTreeKeyboard` does: nothing on the tree's own
+          // root, which has no siblings. On the scope root it opens just that
+          // row, the one visible effect of DOM's `*` there — DOM also opens
+          // the scope root's siblings, which the scoped tree doesn't render.
           e.preventDefault();
           typeAhead.current.clear();
-          const parentId =
-            node.id === scopeRoot ? undefined : parentOf.get(node.id);
-          const siblings = parentId
-            ? (nodes.get(parentId)?.childIds ?? [])
-            : [node.id];
+          const parentId = parentOf.get(node.id);
+          const siblings =
+            node.id === scopeRoot
+              ? [node.id]
+              : parentId
+                ? (nodes.get(parentId)?.childIds ?? [])
+                : [];
           setExpanded((prev) => {
             const next = new Set(prev);
             for (const id of siblings) {
@@ -755,6 +773,7 @@ export function NativeTreeView({
       parentOf,
       toggle,
       onActivate,
+      activateRow,
       busy,
       scopeRoot,
       pickArmed,
@@ -827,8 +846,11 @@ export function NativeTreeView({
         ))}
       </div>
 
-      {onSendKey && modalDialog && (
-        <DialogIndicator name={modalDialog.name} onSendKey={onSendKey} />
+      {onDialogEscape && (
+        <DialogIndicator
+          dialog={modalDialog ?? null}
+          onEscape={() => modalDialog && onDialogEscape(modalDialog.id)}
+        />
       )}
 
       {capability && !capability.native && (
@@ -880,7 +902,7 @@ export function NativeTreeView({
               ref={treeRef}
               class="sn-tree"
               role="tree"
-              aria-label={`Native accessibility tree — press Enter to activate, +/− or Shift+Enter to step sliders, arrows to navigate, ${SCOPE_KEY_HINT}`}
+              aria-label={`Native accessibility tree — press Enter to activate (a slider steps up, a spinbutton opens its edit box), +/− or Shift+Enter to step sliders and spinbuttons, arrows to navigate, ${SCOPE_KEY_HINT}`}
               tabIndex={0}
               style={{
                 minHeight: totalHeight,
@@ -999,6 +1021,10 @@ export function NativeTreeView({
                           title="Embedded page — the native tree doesn't read its contents"
                         >
                           embedded
+                          <span class="sn-sr-only">
+                            {" "}
+                            page — the native tree doesn't read its contents
+                          </span>
                         </span>
                       )}
                       {node.name && (
