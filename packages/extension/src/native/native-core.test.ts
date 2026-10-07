@@ -514,6 +514,90 @@ describe("readNativeTree", () => {
     expect(wire).not.toContain("November");
   });
 
+  it("withholds the chosen option in a listbox a sensitive combobox controls through a dropped wrapper", async () => {
+    // The combobox reads as sensitive and the listbox as not, so only the
+    // controls relation can withhold the option. Its `aria-controls` names
+    // an unnamed wrapper the normalizer drops, around the listbox.
+    const raw = [
+      {
+        nodeId: "1",
+        backendDOMNodeId: 5,
+        role: { value: "RootWebArea" },
+        childIds: ["2", "3"],
+      },
+      {
+        nodeId: "2",
+        parentId: "1",
+        backendDOMNodeId: 10,
+        role: { value: "combobox" },
+        name: { value: "Expiry month" },
+        value: { type: "string", value: "07" },
+        properties: [
+          {
+            name: "controls",
+            value: {
+              type: "idrefList",
+              relatedNodes: [{ backendDOMNodeId: 20 }],
+            },
+          },
+        ],
+      },
+      {
+        nodeId: "3",
+        parentId: "1",
+        backendDOMNodeId: 20,
+        role: { value: "generic" },
+        name: { value: "" },
+        childIds: ["4"],
+      },
+      {
+        nodeId: "4",
+        parentId: "3",
+        backendDOMNodeId: 30,
+        role: { value: "listbox" },
+        name: { value: "Months" },
+        childIds: ["5"],
+      },
+      {
+        nodeId: "5",
+        parentId: "4",
+        backendDOMNodeId: 40,
+        role: { value: "option" },
+        name: { value: "07" },
+        properties: [
+          {
+            name: "selected",
+            value: { type: "booleanOrUndefined", value: true },
+          },
+        ],
+      },
+    ];
+    const t = new FakeTransport((method, params) => {
+      if (method === "Accessibility.getFullAXTree") return { nodes: raw };
+      if (method === "DOM.resolveNode") {
+        const id = (params as { backendNodeId: number }).backendNodeId;
+        return { object: { objectId: `obj-${id}` } };
+      }
+      if (method === "Runtime.callFunctionOn") {
+        const { objectId } = params as { objectId: string };
+        return {
+          result: {
+            value:
+              objectId === "obj-10"
+                ? { classified: true, sensitive: true, redacted: true }
+                : { classified: true },
+          },
+        };
+      }
+      return {};
+    });
+    const res = await readNativeTree(t);
+    expect(res.nodes.some((n) => n.id === "ax-dom-20")).toBe(false);
+    expect(findNative(res.nodes, "option")?.states).not.toHaveProperty(
+      "selected",
+    );
+  });
+
   it("treats a field it could not read as sensitive, down to its options", async () => {
     // The in-page read fails (no objectId), so the select is unclassified:
     // it may be a card field, and its chosen option must not say so.
