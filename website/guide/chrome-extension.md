@@ -105,7 +105,7 @@ A11y view:  combobox "Country" = "Spain"
 DOM view:   <select> value="es"
 ```
 
-A slider shows its `aria-valuetext` in the A11y view, and a rich-text editor shows its text. A password, one-time-code or card field shows `[redacted]` in both views, never its contents or length, and a card `<select>`'s options don't say which one is chosen. The **Copy** report leaves values out.
+A slider shows its `aria-valuetext` in the A11y view, and a rich-text editor shows its text. A password, one-time-code or card field shows `[redacted]` in both views, never its contents or length. The **Copy** report leaves values out.
 
 **3. Navigate your product**
 Click links, fill forms, submit, expand menus, complete flows. You're using the real product — just through its structure instead of its visual layer.
@@ -227,7 +227,7 @@ The rest of the tree's everyday controls carry over as well:
 - The feedback line names what you acted on in the DOM tree's words ("Click: Save", "Navigate: Home", "Checked: Remember me"), and any failed action shows there as "Failed: …" as well as in the status line.
 - A heading shows its level as an **H2** badge. An `<iframe>` row is marked **embedded**: the native tree reads the top frame only, so a frame's own content isn't in it yet.
 - A row with `aria-controls` shows a chip that jumps to the row it controls (`→ tabpanel "Settings"`), and the controlled row shows one back (`← tab "Settings"`). An open menu button with no `aria-controls` gets a dashed "likely" chip to the menu after it, as in DOM mode. From the keyboard, `Alt`+`J` follows the selected row's first link, and pressed again moves on to its next one; `Alt`+`Shift`+`J` goes back to the row you jumped from, or to the row that controls this one. The key labelled J works on any keyboard layout. A jump opens the rows above its target and leaves a scope the target is outside. A target that isn't in the tree, such as a hidden tab panel, gets no chip.
-- A drop-down `<select>` opens the same option picker as in DOM mode, listing its options and starting on the current one. Choosing one selects it on the page. A disabled option is listed but can't be chosen, and a disabled select opens no picker. A sensitive select, such as a card's expiry month, shows no current option, and the feedback says "Selected an option in Expiry month" rather than naming it. A `<select multiple>` or `<select size="4">` is a list box, not a drop-down, so it gets no picker in the native tree. A custom `role="combobox"` isn't a real select, so it is still clicked.
+- A drop-down `<select>` opens the same option picker as in DOM mode, listing its options and starting on the current one. Choosing one selects it on the page. A disabled option is listed but can't be chosen, and a disabled select opens no picker. A sensitive select, such as a card's expiry month, shows no current option, its option rows in the tree don't say which is chosen, and the feedback says "Selected an option in Expiry month" rather than naming it. A `<select multiple>` or `<select size="4">` is a list box, not a drop-down, so it gets no picker in the native tree. A custom `role="combobox"` isn't a real select, so it is still clicked.
 
 ### BETA pill in the panel header
 
