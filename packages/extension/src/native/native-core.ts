@@ -629,11 +629,16 @@ export function fieldValueWithheld(read: PageFieldRead): boolean {
  * this catches a part the in-page walk could not place. A nested sensitive
  * field's own `[redacted]` stays: it says "entered", never what.
  *
- * A node the sensitive field controls (`aria-controls`) counts as inside it,
- * with everything below it: an ARIA combobox's listbox is not its
- * descendant, and the option it marks selected is the field's value. Its
- * `controls` names the targets the tree kept; `controlled` adds the kept
- * nodes standing in for one it dropped ({@link controlledRegion}).
+ * What the sensitive field controls (`aria-controls`) is not inside it, but
+ * it says which option is chosen: an ARIA combobox's listbox is not its
+ * descendant, and the option it marks selected is the field's value. So
+ * everything there loses its choice states, and nothing else: a controlled
+ * panel can hold fields of its own (a shipping address beside the card
+ * number), each classified on its own, whose values are theirs to show. A
+ * listbox has no AX value of its own to give the choice away (Chromium 141,
+ * measured). Its `controls` names the targets the tree kept; `controlled`
+ * adds the kept nodes standing in for one it dropped
+ * ({@link controlledRegion}).
  *
  * Nor does a node inside one say which of it is chosen: the states in core's
  * `NATIVE_AX_CHOICE_STATES` (an option's `selected`) go from every node
@@ -651,29 +656,48 @@ export function withholdInsideSensitive(
 ): void {
   if (sensitiveIds.length === 0) return;
   const byId = new Map(nodes.map((n) => [n.id, n]));
-  const seen = new Set<string>();
-  // What a sensitive field controls counts as inside it: an ARIA combobox's
-  // listbox sits elsewhere in the tree, tied to it only by `aria-controls`,
-  // and its chosen option is the field's value all the same.
-  const stack = sensitiveIds.flatMap((id) => {
-    const field = byId.get(id);
-    return field ? [...field.childIds, ...(field.controls ?? [])] : [];
-  });
-  stack.push(...controlled);
-  while (stack.length > 0) {
-    const id = stack.pop()!;
-    if (seen.has(id)) continue;
-    seen.add(id);
-    const node = byId.get(id);
-    if (!node) continue;
-    if (!node.redacted) {
-      delete node.value;
-      delete node.rawValue;
+  // Hands each node at or below `from` to `visit`, once.
+  const walk = (
+    from: readonly string[],
+    visit: (node: EnrichedNativeNode) => void,
+  ) => {
+    const seen = new Set<string>();
+    const stack = [...from];
+    while (stack.length > 0) {
+      const id = stack.pop()!;
+      if (seen.has(id)) continue;
+      seen.add(id);
+      const node = byId.get(id);
+      if (!node) continue;
+      visit(node);
+      stack.push(...node.childIds);
     }
-    node.valueWithheld = true;
-    for (const state of NATIVE_AX_CHOICE_STATES) delete node.states[state];
-    stack.push(...node.childIds);
-  }
+  };
+  const fields = sensitiveIds.flatMap((id) => {
+    const field = byId.get(id);
+    return field ? [field] : [];
+  });
+  walk(
+    fields.flatMap((field) => field.childIds),
+    (node) => {
+      if (!node.redacted) {
+        delete node.value;
+        delete node.rawValue;
+      }
+      node.valueWithheld = true;
+      for (const state of NATIVE_AX_CHOICE_STATES) delete node.states[state];
+    },
+  );
+  // A node also inside the field has lost its value above; one reached only
+  // through `aria-controls` keeps what its own read decided, and a node never
+  // read (an option) reads as withheld, as it would absent.
+  walk(
+    [...fields.flatMap((field) => field.controls ?? []), ...controlled],
+    (node) => {
+      node.valueWithheld ??= true;
+      for (const state of NATIVE_AX_CHOICE_STATES) delete node.states[state];
+    },
+  );
 }
 
 /** Numbers each tree read's remote-object group, so releasing one read's

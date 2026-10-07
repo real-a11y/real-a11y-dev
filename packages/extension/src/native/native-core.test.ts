@@ -1118,6 +1118,54 @@ describe("withholdInsideSensitive", () => {
     expect(byId.get("other")?.states).toStrictEqual({ selected: true });
   });
 
+  it("keeps the values of fields a sensitive one controls, but not which option is chosen", () => {
+    // A card input whose `aria-controls` names a whole panel: its months
+    // listbox, and a shipping address and a country select of their own,
+    // each read as not sensitive. Only which month is chosen is the card's.
+    const nodes = [
+      n("card", ["part"], {
+        role: "combobox",
+        value: "[redacted]",
+        redacted: true,
+        controls: ["panel"],
+      }),
+      n("part", [], { role: "spinbutton", value: "07" }),
+      n("panel", ["list", "addr", "country"]),
+      n("list", ["jul"], { role: "listbox", valueWithheld: false }),
+      n("jul", [], { role: "option", name: "07", states: { selected: true } }),
+      n("addr", [], {
+        role: "textbox",
+        value: "1 Main St",
+        rawValue: "1 Main St",
+        valueWithheld: false,
+      }),
+      n("country", [], {
+        role: "combobox",
+        value: "France",
+        rawValue: "fr",
+        valueWithheld: false,
+      }),
+    ];
+    // `part` is the card's own child and controlled too: inside wins.
+    withholdInsideSensitive(nodes, ["card"], ["part"]);
+    const byId = new Map(nodes.map((x) => [x.id, x]));
+    expect(byId.get("jul")?.states).toStrictEqual({});
+    expect(byId.get("jul")?.valueWithheld).toBe(true);
+    expect(byId.get("addr")).toMatchObject({
+      value: "1 Main St",
+      rawValue: "1 Main St",
+      valueWithheld: false,
+    });
+    expect(byId.get("country")).toMatchObject({
+      value: "France",
+      rawValue: "fr",
+      valueWithheld: false,
+    });
+    expect(byId.get("list")?.valueWithheld).toBe(false);
+    expect(byId.get("part")?.value).toBeUndefined();
+    expect(byId.get("part")?.valueWithheld).toBe(true);
+  });
+
   it("follows a controlled wrapper the tree dropped down to its listbox", () => {
     // `aria-controls` names an unnamed <div> around the listbox, which the
     // normalizer drops: the combobox's own `controls` is empty, and the
