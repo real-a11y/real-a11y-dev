@@ -2049,7 +2049,7 @@ export function App() {
             The "Disable" button alongside it is the only in-panel way back to
             off once enabled — without it, a user who opted in has no way to
             revoke the setting short of chrome://extensions, which contradicts
-            CHANGELOG.md's own "turning it back off immediately detaches".
+            CHANGELOG.md's own "turning it back off detaches".
             No consent step to turn it off: revoking is the safe direction,
             same as DogfoodPanel's own checkbox. */}
         {nativeModeEnabled ? (

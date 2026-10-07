@@ -16,7 +16,7 @@ This policy covers the Real A11y website (`real-a11y.dev`), the Semantic Navigat
 
 By default, the extension reads the DOM of the page you're currently viewing in order to build and display a semantic / accessibility tree in a side panel ("DOM mode"). It acts locally in your browser.
 
-It also offers an opt-in **native mode**, off by default: reading Chromium's own accessibility tree over the `chrome.debugger` API (the same protocol DevTools uses), for fidelity DOM mode can't reach (UA-shadow content like media controls). Turning it on requires an explicit, one-time step in the side panel that names what it does before it activates; while attached, Chrome itself shows its own "…is debugging this browser" notice, independent of anything this extension displays. Turning the setting back off immediately detaches.
+It also offers an opt-in **native mode**, off by default: reading Chromium's own accessibility tree over the `chrome.debugger` API (the same protocol DevTools uses), for fidelity DOM mode can't reach (UA-shadow content like media controls). Turning it on requires an explicit, one-time step in the side panel that names what it does before it activates; while attached, Chrome itself shows its own bar across every window, reading “Semantic Navigator” started debugging this browser, independent of anything this extension displays. Turning the setting back off detaches as soon as any read or action already under way finishes.
 
 **What it does on the page:**
 

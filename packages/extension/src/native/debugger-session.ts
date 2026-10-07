@@ -4,7 +4,7 @@
  * `chrome.debugger` plumbing for native mode — the ENTIRE surface the extension
  * adds over the shared native-core. Wraps `chrome.debugger.sendCommand` as a
  * {@link CdpTransport}, scopes attach→detach around each operation (so the
- * "…is debugging this browser" banner shows only while working), and records
+ * "…started debugging this browser" banner shows only while working), and records
  * the dogfood signals: attach dwell time, unsolicited detaches (MV3 SW suspend),
  * reattach recovery, and DevTools-conflict refusals.
  *

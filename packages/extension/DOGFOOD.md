@@ -62,7 +62,7 @@ is a good test — its media controls are the thing only native mode can see).
 2. Tick **native mode** (this is the runtime flag — the `debugger` capability is
    still inert until you do this).
 3. **Load native tree** — attaches the debugger (you'll see Chrome's
-   "…is debugging this browser" banner), reads the tree, and lists it. Interactive
+   "…started debugging this browser" banner), reads the tree, and lists it. Interactive
    rows are buttons; click one to dispatch a click (or type into a text field).
    The tree **re-reads itself after every successful action**, so the ids stay
    valid for the next one — you should not need to reload by hand between
