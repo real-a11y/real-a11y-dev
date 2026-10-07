@@ -1296,7 +1296,7 @@ describe("NATIVE_PICK_START through the real message handler", () => {
       );
     const attach = (g.chrome as unknown as typeof chrome).debugger
       .attach as ReturnType<typeof vi.fn>;
-    return { ...stubs, attach, local, pushed, startPick };
+    return { ...stubs, attach, pushed, startPick };
   }
 
   it("a Cancel on Chrome's debugging infobar releases the panel's pick with a plain cancel", async () => {
@@ -1327,7 +1327,7 @@ describe("NATIVE_PICK_START through the real message handler", () => {
     // while `runPick` is arming reaches it as a failed command, before any
     // reason exists. The pick waits for that reason instead of failing on
     // the spot, so the user's Cancel never shows as a "pick failed".
-    const { listeners, attach, local, pushed, startPick } = registerHandlers();
+    const { listeners, attach, pushed, startPick } = registerHandlers();
     const g = globalThis as unknown as { chrome: typeof chrome };
     (
       g.chrome.debugger.sendCommand as ReturnType<typeof vi.fn>
