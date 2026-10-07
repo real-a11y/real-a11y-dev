@@ -466,8 +466,11 @@ function findTrackedAncestor(el: Element | null): string | null {
 // `pageReveal` receives as an argument and the page never sees ahead of time.
 // The event doesn't bubble, so page listeners below `document` never see it;
 // this listener catches it on the way down. A page listener that captures it
-// even earlier could still stop it, which is accepted: the outcome is a
-// missing outline, not a misplaced one.
+// even earlier, on `window`, sees the nonce: it can stop the event, or
+// replay that nonce on another element while the arm lasts and put the
+// outline there. That is accepted: the page can draw a lookalike outline of
+// its own anyway, and the arm still lets it draw nothing more than one
+// overlay, nor scroll or focus anything the extension didn't.
 document.addEventListener(
   "real-a11y:native-reveal",
   (e) => {
