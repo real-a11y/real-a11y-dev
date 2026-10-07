@@ -232,6 +232,11 @@ export class NativeDebuggerSession {
       // classifies a rejection via `isConnectionLost`, so this reads as the
       // same kind of drop a mid-read/mid-act disconnect already does, not as
       // the user pressing Escape.
+      //
+      // Whether a pick held the tab is read first: the reject unregisters it,
+      // and this recorder claims the entry before the pick's own teardown can,
+      // so it is the one that has to book the dwell as pick time.
+      const pick = this.pickReject.has(tabId);
       this.pickReject.get(tabId)?.();
       void this.enqueue(async () => {
         const attached = await this.readAttached();
@@ -244,6 +249,7 @@ export class NativeDebuggerSession {
           at: Date.now(),
           reason: String(reason),
           attachedMs: Date.now() - startedAt,
+          ...(pick ? { pick } : {}),
         });
       });
     });
@@ -828,11 +834,18 @@ export class NativeDebuggerSession {
       // failure here is a real protocol failure, not a cancel, so it rejects
       // with the error itself (not "Target closed.", which would read as a
       // connection drop) and `attachAndRun` tags it `command-failed`.
+      //
+      // Each step after the first is sent only while the pick is open. A STOP
+      // or the timeout can end it with a step in flight, and its cleanup's
+      // `mode: none` goes out then; a later step would arm inspect mode
+      // after it, with nothing left to turn it off before the detach.
+      const step = (method: string, params?: object) =>
+        settled ? undefined : t.send(method, params);
       void t
         .send("DOM.enable")
-        .then(() => t.send("Overlay.enable"))
+        .then(() => step("Overlay.enable"))
         .then(() =>
-          t.send("Overlay.setInspectMode", {
+          step("Overlay.setInspectMode", {
             mode: "searchForNode",
             highlightConfig: {
               contentColor: { r: 111, g: 168, b: 220, a: 0.35 },

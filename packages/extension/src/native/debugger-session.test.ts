@@ -911,6 +911,77 @@ describe("NativeDebuggerSession picker", () => {
     expect(value).toBeUndefined();
   });
 
+  it("a debugger detach mid-pick books its time as a pick's, not a read's", async () => {
+    // Chrome's detach is recorded by `onDetach`, which claims the attach
+    // entry before the pick's own teardown can, so it has to say it was a
+    // pick: otherwise the time lands in the reads-and-actions total.
+    const listeners = stubChrome().listeners;
+    const log = new FakeStorage();
+    const session = new NativeDebuggerSession(log, new FakeStorage());
+
+    const result = session.withDebugger(7, (t) => session.runPick(7, t), {
+      pick: true,
+    });
+    await settleAttach();
+    listeners[listeners.length - 1]({ tabId: 7 }, "target_closed");
+    await result;
+    await settle();
+
+    const events = (log.data["dogfood.nativeLog"] ?? []) as DogfoodEvent[];
+    expect(events.filter((e) => e.kind.startsWith("detach"))).toEqual([
+      expect.objectContaining({ kind: "detach-unsolicited", pick: true }),
+    ]);
+    expect(log.data["dogfood.nativeCounters"]).toMatchObject({
+      pickSessions: 1,
+    });
+  });
+
+  /** A pick whose `DOM.enable` waits for `release`, recording every inspect
+   *  mode it sends, in order. */
+  function pickWithSlowSetup() {
+    stubChrome();
+    let release: () => void = () => {};
+    const domEnabled = new Promise<void>((r) => (release = r));
+    const modes: string[] = [];
+    const g = globalThis as unknown as { chrome: typeof chrome };
+    (
+      g.chrome.debugger.sendCommand as ReturnType<typeof vi.fn>
+    ).mockImplementation(
+      async (_target: unknown, method: string, params?: { mode?: string }) => {
+        if (method === "Overlay.setInspectMode") modes.push(params!.mode!);
+        if (method === "DOM.enable") await domEnabled;
+        return {};
+      },
+    );
+    const session = new NativeDebuggerSession(new FakeStorage());
+    return { session, release: () => release(), modes };
+  }
+
+  it("a pick stopped while it is still being set up never arms afterwards", async () => {
+    const { session, release, modes } = pickWithSlowSetup();
+    const result = session.withDebugger(7, (t) =>
+      session.runPick(7, t, { requestId: 1 }),
+    );
+    await settleAttach(); // registered, with `DOM.enable` in flight
+    expect(session.cancelPick(7, 1)).toBe(true);
+    await result;
+    release();
+    await settleAttach();
+    // Only the cleanup's `none`: no `searchForNode` after it.
+    expect(modes).toEqual(["none"]);
+  });
+
+  it("a pick that times out while it is still being set up never arms afterwards", async () => {
+    const { session, release, modes } = pickWithSlowSetup();
+    const { value } = await session.withDebugger(7, (t) =>
+      session.runPick(7, t, { timeoutMs: 20 }),
+    );
+    expect(value).toBeNull();
+    release();
+    await settleAttach();
+    expect(modes).toEqual(["none"]);
+  });
+
   it("a setup command failure (Overlay.setInspectMode rejected) reports a real failure, not a cancel", async () => {
     stubChrome();
     const g = globalThis as unknown as { chrome: typeof chrome };
