@@ -489,11 +489,12 @@ export function App() {
   // read, and by turning native mode on in this session (the consent click is
   // its own gesture, and its own read).
   const hasAppliedNativeDefault = useRef(false);
-  // The tab the default last failed on (DevTools owns it, a blocked URL, the
-  // service worker didn't answer). The default waits for a different tab
-  // rather than retrying this one: every retry would attach again, and flash
-  // Chrome's bar, for as long as the page stays unreadable.
-  const nativeDefaultFailedOn = useRef<number | null>(null);
+  // The tabs the default has failed on (DevTools owns it, a blocked URL, the
+  // service worker didn't answer). The default waits for a tab not in here
+  // rather than retrying one that is: every retry would attach again, and
+  // flash Chrome's bar, for as long as the page stays unreadable. All of
+  // them, not just the last: switching A → B → A would otherwise retry A.
+  const nativeDefaultFailedOn = useRef(new Set<number>());
   // Why the last native read failed, in words for the fallback announcement.
   // A ref because the default's revert runs after the read, in a promise.
   const lastNativeFailure = useRef("");
@@ -1436,7 +1437,7 @@ export function App() {
   useEffect(() => {
     if (!nativeModeEnabled || !connected || myTabId === null) return;
     if (hasAppliedNativeDefault.current) return;
-    if (nativeDefaultFailedOn.current === myTabId) return;
+    if (nativeDefaultFailedOn.current.has(myTabId)) return;
     // Another read is in flight (a refresh, an action's re-read). Reading
     // now would come back `false` because it's busy, not because the page
     // can't be read, so wait: `nativeBusy` is a dependency, and this runs
@@ -1449,7 +1450,7 @@ export function App() {
       if (token !== nativeOpToken.current) return;
       hasAppliedNativeDefault.current = false;
       hasAutoLoadedNative.current = false;
-      nativeDefaultFailedOn.current = tabId;
+      nativeDefaultFailedOn.current.add(tabId);
       setProducer("dom");
       // NativeTreeView, where the reason would otherwise show, unmounts with
       // the switch, so announce it.
