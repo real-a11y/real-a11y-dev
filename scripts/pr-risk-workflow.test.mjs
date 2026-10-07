@@ -393,16 +393,13 @@ describe(
       assert.match(stdout, /::notice::Not counting reviewed:deep/);
     });
 
-    it("counts it on every event but synchronize", async () => {
+    it("counts it on the events that re-run the check without a push", async () => {
       // The other half, and the one a fix could most easily break: `labeled`
       // is how a reviewed:deep applied after the push turns the check green.
-      for (const action of [
-        "labeled",
-        "unlabeled",
-        "edited",
-        "opened",
-        "reopened",
-      ]) {
+      // `reopened` is left out on purpose — a closed PR's branch can move
+      // without a `synchronize`, so whether a label should survive it is an
+      // open question this file has no business answering by accident.
+      for (const action of ["labeled", "unlabeled", "edited", "opened"]) {
         const { flags } = await gate({
           action,
           labels: ["risk:high", "reviewed:deep"],
