@@ -791,7 +791,7 @@ test("picking an element on the page selects and reveals it in the native tree",
 test("switching to DOM and back doesn't apply an old pick again", async ({
   nav,
 }) => {
-  const page = await showNative(nav, "native-panel.html");
+  const page = await nav.showNative("native-panel.html");
   const pickButton = await armPick(nav);
   await page.getByRole("heading", { name: "Native panel fixture" }).click();
   await expect(pickButton).toHaveAttribute("aria-pressed", "false");
