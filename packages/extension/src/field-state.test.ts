@@ -62,6 +62,18 @@ describe("computeFieldState", () => {
       });
     });
 
+    it("marks an option in a disabled optgroup as disabled too", () => {
+      const el = mount(
+        `<select><option value="a">A</option><optgroup label="G" disabled><option value="b">B</option></optgroup></select>`,
+      );
+      expect(computeFieldState(el)).toMatchObject({
+        options: [
+          { value: "a", label: "A", selected: true },
+          { value: "b", label: "B", selected: false, disabled: true },
+        ],
+      });
+    });
+
     it("withholds which option a sensitive select has chosen, and says so", () => {
       const el = mount(
         `<select autocomplete="cc-exp-month"><option value="">MM</option><option value="02" selected>02</option></select>`,

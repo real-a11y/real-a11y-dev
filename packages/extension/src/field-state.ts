@@ -64,7 +64,9 @@ export function computeFieldState(el: Element): FieldState {
       value: opt.value,
       label: opt.textContent?.trim() || opt.value,
       selected: sensitive ? false : opt.selected,
-      ...(opt.disabled ? { disabled: true } : {}),
+      // `:disabled`, not `.disabled`: a disabled `<optgroup>` disables its
+      // options without setting their own attribute.
+      ...(opt.matches(":disabled") ? { disabled: true } : {}),
     }));
     return {
       success: true,
