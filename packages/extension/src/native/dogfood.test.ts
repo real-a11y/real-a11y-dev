@@ -65,7 +65,7 @@ describe("DogfoodLog", () => {
       "of which you cancelled on Chrome's bar (no recovery expected): 1",
     );
     expect(report).toContain(
-      "recovery not attempted (native mode switched off, or a pick or automatic read that ends instead): 0",
+      "recovery not attempted (native mode switched off, the user's Cancel caused the drop, or a pick or automatic read that ends instead): 0",
     );
   });
 
