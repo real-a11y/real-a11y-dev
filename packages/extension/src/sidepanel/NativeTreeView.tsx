@@ -582,9 +582,11 @@ export function NativeTreeView({
   // (`followFromList`), so the later request always replaces the pending one.
   const onSelectionRevealRef = useRef(onSelectionReveal);
   onSelectionRevealRef.current = onSelectionReveal;
-  const { schedule: scheduleFollowTimer, cancel: cancelFollow } = useDwellTimer(
-    NATIVE_FOLLOW_DEBOUNCE_MS,
-  );
+  const {
+    schedule: scheduleFollowTimer,
+    cancel: cancelFollow,
+    flush: flushFollow,
+  } = useDwellTimer(NATIVE_FOLLOW_DEBOUNCE_MS);
   const scheduleFollow = useCallback(
     (id: string) =>
       scheduleFollowTimer(() => onSelectionRevealRef.current?.(id)),
@@ -616,13 +618,23 @@ export function NativeTreeView({
   );
   const hoverRowId = useRef<string | null>(null);
   const hoverShown = useRef(false);
+  // A click on the hovered row outlines it too (the selection's reveal), so
+  // leaving the row clears that as it clears a preview, even before the
+  // dwell showed one. A reveal still waiting is sent first, for the clear to
+  // follow: `useNativeOverlay` clears a reveal that settles after a leave.
+  const hoverClicked = useRef(false);
   const endHover = useCallback(() => {
     cancelHover();
     hoverRowId.current = null;
+    if (hoverClicked.current) {
+      hoverClicked.current = false;
+      hoverShown.current = true;
+      flushFollow();
+    }
     if (!hoverShown.current) return;
     hoverShown.current = false;
     onHoverPreviewRef.current?.(null);
-  }, [cancelHover]);
+  }, [cancelHover, flushFollow]);
   const enterRow = (id: string) => {
     if (!isMouseModality()) return;
     endHover();
@@ -1106,8 +1118,10 @@ export function NativeTreeView({
               aria-activedescendant={activeDescendantId}
               onKeyDown={(e) => {
                 // The keyboard takes over: a preview still waiting is
-                // dropped. One already shown stays until its row is left.
+                // dropped, and a click's selection is the keyboard's now.
+                // An outline already shown stays until its row is left.
                 markKeyboard();
+                hoverClicked.current = false;
                 if (!hoverShown.current) endHover();
                 handleKeyDown(e);
               }}
@@ -1153,6 +1167,7 @@ export function NativeTreeView({
                       e.stopPropagation();
                       setSelectedId(id);
                       setFollowNonce((n) => n + 1);
+                      hoverClicked.current = hoverRowId.current === id;
                       // A mouse click on the row never moves real DOM focus (the
                       // row itself is tabIndex=-1; only the `.sn-tree` container
                       // is focusable, per the roving-focus/aria-activedescendant

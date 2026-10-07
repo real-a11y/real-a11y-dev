@@ -660,6 +660,37 @@ describe("NativeTreeView hover preview", () => {
     expect(onHoverPreview.mock.calls).toEqual([["h1"], [null]]);
   });
 
+  it("clears a clicked row's outline when the pointer leaves before the dwell", () => {
+    // The click's reveal is sent at once rather than after the debounce, so
+    // the clear follows it, as leaving a clicked row does in the DOM tree.
+    const calls: Array<[string, string | null]> = [];
+    act(() => {
+      render(
+        <NativeTreeView
+          nodes={NODES}
+          rootId="root"
+          busy={false}
+          capability={undefined}
+          status=""
+          onRefresh={() => {}}
+          onActivate={() => {}}
+          onHoverPreview={(id) => calls.push(["preview", id])}
+          onSelectionReveal={(id) => calls.push(["reveal", id])}
+        />,
+        container,
+      );
+    });
+    enter("h1");
+    act(() => row("h1").click());
+    wait(50);
+    leave("h1");
+    wait(500);
+    expect(calls).toEqual([
+      ["reveal", "h1"],
+      ["preview", null],
+    ]);
+  });
+
   it("leaves no preview to land after leaving a row early", () => {
     const onHoverPreview = mount();
     enter("h1");

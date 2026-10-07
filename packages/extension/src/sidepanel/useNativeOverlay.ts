@@ -54,9 +54,11 @@ export function useNativeOverlay(inputs: NativeOverlayInputs) {
   // bar back after the user dismissed it, so previews wait for the next
   // successful read (`resumePreviews`).
   const previewsPausedFor = useRef<number | null>(null);
-  // The row under the pointer now, and the tab the last preview was drawn on.
+  // The row under the pointer now, the tab the last outline was asked for
+  // on, and how many times the pointer has left the rows.
   const hovered = useRef<string | null>(null);
-  const previewTab = useRef<number | null>(null);
+  const outlineTab = useRef<number | null>(null);
+  const leaves = useRef(0);
 
   const canDraw = (
     s: NativeOverlayInputs,
@@ -85,10 +87,9 @@ export function useNativeOverlay(inputs: NativeOverlayInputs) {
     return { requestId, answer };
   };
 
-  /** Clear the outline on the tab the last preview was drawn on — not on
+  /** Clear the outline on the tab the last one was asked for on — not on
    *  whichever tab the panel is bound to by then. */
-  const clearOutline = () => {
-    const tabId = previewTab.current;
+  const clearOutline = (tabId = outlineTab.current) => {
     if (tabId === null) return;
     void chrome.runtime
       .sendMessage({ type: "CLEAR_HIGHLIGHT", tabId })
@@ -99,7 +100,19 @@ export function useNativeOverlay(inputs: NativeOverlayInputs) {
     const s = live.current;
     if (!canDraw(s)) return;
     const tabId = s.tabId;
-    void ask(tabId, nodeId, "reveal").answer.then((r) => {
+    outlineTab.current = tabId;
+    const leavesBefore = leaves.current;
+    const { requestId, answer } = ask(tabId, nodeId, "reveal");
+    void answer.then((r) => {
+      // The pointer left the rows while this was on its way (a clicked
+      // row's reveal), so the clear went first: clear what it drew.
+      if (
+        r.success &&
+        leaves.current !== leavesBefore &&
+        lastRequest.current === requestId
+      ) {
+        clearOutline(tabId);
+      }
       if (!r.success || r.outlined !== false) return;
       if (noOutlineAnnouncedFor.current === tabId) return;
       noOutlineAnnouncedFor.current = tabId;
@@ -119,6 +132,7 @@ export function useNativeOverlay(inputs: NativeOverlayInputs) {
   const preview = useCallback((nodeId: string | null) => {
     hovered.current = nodeId;
     if (nodeId === null) {
+      leaves.current++;
       clearOutline();
       return;
     }
@@ -133,7 +147,7 @@ export function useNativeOverlay(inputs: NativeOverlayInputs) {
       return;
     }
     const tabId = s.tabId;
-    previewTab.current = tabId;
+    outlineTab.current = tabId;
     const { requestId, answer } = ask(tabId, nodeId, "preview");
     void answer.then((r) => {
       // An answer from a tab the panel has left says nothing about this one.

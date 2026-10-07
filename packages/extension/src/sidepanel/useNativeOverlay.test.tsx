@@ -111,6 +111,20 @@ describe("useNativeOverlay", () => {
     expect(clears()).toEqual([{ type: "CLEAR_HIGHLIGHT", tabId: 7 }]);
   });
 
+  it("clears a clicked row's reveal that settles after the pointer left", async () => {
+    mount();
+    overlay.preview("ax-dom-5");
+    await answer();
+    overlay.reveal("ax-dom-5"); // the row is clicked
+    overlay.preview(null);
+    expect(clears()).toHaveLength(1);
+    await answer(); // the reveal draws after that clear
+    expect(clears()).toEqual([
+      { type: "CLEAR_HIGHLIGHT", tabId: 7 },
+      { type: "CLEAR_HIGHLIGHT", tabId: 7 },
+    ]);
+  });
+
   it("clears on the tab the preview was drawn on, not the panel's new one", async () => {
     mount();
     overlay.preview("ax-dom-5");
@@ -135,6 +149,8 @@ describe("useNativeOverlay", () => {
     overlay.preview(null);
     overlay.reveal("ax-dom-9"); // a keyboard selection after the pointer left
     await answer();
+    expect(clears()).toHaveLength(1);
+    await answer(); // the reveal stays: asked for after the pointer left
     expect(clears()).toHaveLength(1);
   });
 
