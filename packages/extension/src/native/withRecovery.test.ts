@@ -25,6 +25,7 @@ beforeEach(() => stubTab());
 // are captured so we can assert exactly which reattach events were logged.
 function fakeSession(
   behaviors: Array<{ throw?: true; outcome: { ok: boolean; error?: string } }>,
+  detachReason?: string,
 ) {
   const records: DogfoodEvent[] = [];
   let call = 0;
@@ -34,6 +35,10 @@ function fakeSession(
       call++;
       if (b.throw) throw new Error("connection dropped");
       return { outcome: b.outcome };
+    },
+    // Why Chrome detached, as `onDetach` reported it (none by default).
+    async detachReason() {
+      return detachReason;
     },
     dogfoodLog() {
       return {
@@ -109,6 +114,37 @@ describe("withRecovery reattach accounting", () => {
     await run(s);
     expect(s.records).toHaveLength(0);
     expect(s.calls()).toBe(1); // no retry
+  });
+});
+
+describe("withRecovery after the user's Cancel on Chrome's bar", () => {
+  it("doesn't retry a drop the Cancel caused: no second attach", async () => {
+    // A Refresh or an action the Cancel cut short. Attaching again would put
+    // the bar straight back, and an action would run a second time.
+    const s = fakeSession(
+      [
+        { outcome: { ok: false, error: "connection-lost" } },
+        { outcome: { ok: true } },
+      ],
+      "canceled_by_user",
+    );
+    const { outcome } = await run(s);
+    expect(s.calls()).toBe(1);
+    expect(outcome).toEqual({ ok: false, error: "cancelled-by-user" });
+    expect(s.records.map((r) => r.kind)).toEqual(["reattach-abandoned"]);
+  });
+
+  it("still retries a drop Chrome gave another reason for", async () => {
+    const s = fakeSession(
+      [
+        { outcome: { ok: false, error: "connection-lost" } },
+        { outcome: { ok: true } },
+      ],
+      "target_closed",
+    );
+    const { outcome } = await run(s);
+    expect(s.calls()).toBe(2);
+    expect(outcome.ok).toBe(true);
   });
 });
 

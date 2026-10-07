@@ -681,6 +681,20 @@ export async function withRecovery<T>(
     return await classify(first, log);
   }
 
+  // Nor is a drop the user caused with Cancel on Chrome's bar, whoever asked
+  // for the operation: attaching again would put the bar straight back, and
+  // an action would run a second time. It fails as `cancelled-by-user`.
+  if (
+    first.outcome.error === "connection-lost" &&
+    (await session.detachReason(tabId)) === "canceled_by_user"
+  ) {
+    await session.dogfoodLog().record({
+      kind: "reattach-abandoned",
+      at: Date.now(),
+    });
+    return { outcome: { ok: false, error: "cancelled-by-user" } };
+  }
+
   const retry = await runGuarded(session, tabId, fn, opts);
   // Only a mid-operation drop (we WERE attached, then lost it) is a lifecycle
   // recovery worth measuring. A fresh attach failure is a page/permission

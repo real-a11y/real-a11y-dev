@@ -1711,7 +1711,10 @@ export function App() {
               `native unavailable — ${lastNativeFailure.current}`,
             );
           } else {
-            lastNativeFailure.current = `read failed: ${r?.error ?? "unknown"}`;
+            lastNativeFailure.current =
+              r?.error === "cancelled-by-user"
+                ? "you cancelled Chrome's debugging bar"
+                : `read failed: ${r?.error ?? "unknown"}`;
             setNativeStatus(lastNativeFailure.current);
           }
           return false;
@@ -2089,6 +2092,8 @@ export function App() {
               if (r?.reason) {
                 setNativeCapability(blockedBy(r.reason));
                 fail(`native unavailable — ${explainUnavailable(r.reason)}`);
+              } else if (r?.error === "cancelled-by-user") {
+                fail("you cancelled Chrome's debugging bar");
               } else {
                 fail(r?.error ?? "unknown");
               }
