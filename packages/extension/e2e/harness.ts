@@ -666,6 +666,36 @@ export class NativeHarness {
     );
   }
 
+  /**
+   * Send the panel's messages of these `types` straight to the bound tab's
+   * top frame, the way the background forwards them for a real side panel.
+   * This harness loads the panel in a tab, and the background reads a
+   * message from a tab as a content frame's, so it never forwards these to
+   * the page. Everything else goes through untouched. Install it after the
+   * panel's last reload, which would drop it.
+   */
+  async routeToPage(types: readonly string[]): Promise<void> {
+    await this.panel.evaluate((routed) => {
+      const real = chrome.runtime.sendMessage.bind(chrome.runtime) as (
+        message: unknown,
+        ...rest: unknown[]
+      ) => Promise<unknown>;
+      chrome.runtime.sendMessage = ((message: unknown, ...rest: unknown[]) => {
+        const m = message as { type?: unknown; tabId?: unknown } | null;
+        if (
+          typeof m?.type !== "string" ||
+          !routed.includes(m.type) ||
+          typeof m.tabId !== "number"
+        ) {
+          return real(message, ...rest);
+        }
+        return chrome.tabs
+          .sendMessage(m.tabId, m, { frameId: 0 })
+          .catch(() => undefined);
+      }) as typeof chrome.runtime.sendMessage;
+    }, types);
+  }
+
   private async send<T>(message: object): Promise<T> {
     return (await this.browser.panel.evaluate(
       (m) => chrome.runtime.sendMessage(m),
@@ -688,6 +718,58 @@ export class NativeHarness {
  * missing node means the tree does not describe the widget the test is about,
  * which is a failure worth naming, not an assertion on `undefined`.
  */
+/**
+ * The content script's highlight overlay on `page`, as a rect — or null when
+ * absent or hidden. The overlay is what the user actually SEES: real focus
+ * alone paints no ring while the side panel, not the page, has window focus.
+ */
+export async function overlayRect(page: Page) {
+  return page.evaluate(() => {
+    const el = document.getElementById("__sn-highlight");
+    if (!el || el.style.display === "none") return null;
+    const r = el.getBoundingClientRect();
+    return { top: r.top, left: r.left, width: r.width, height: r.height };
+  });
+}
+
+/**
+ * Whether the overlay sits over `selector`'s element, and, with `inView`,
+ * whether that element was scrolled into view as a select's outline is. The
+ * overlay is `content-box` with a 2px border, so it measures up to 4px wider
+ * and taller than what it frames; it also animates between targets
+ * (`transition: all 0.15s`), so callers poll this rather than read it once.
+ */
+export async function overlayCovers(
+  page: Page,
+  selector: string,
+  { inView = false }: { inView?: boolean } = {},
+) {
+  const overlay = await overlayRect(page);
+  if (!overlay) return false;
+  const target = await page.locator(selector).evaluate((el) => {
+    const r = el.getBoundingClientRect();
+    return { top: r.top, left: r.left, width: r.width, height: r.height };
+  });
+  if (
+    inView &&
+    !(await page.evaluate(
+      ({ top, height }) => top >= 0 && top + height <= window.innerHeight,
+      target,
+    ))
+  ) {
+    return false;
+  }
+  const slack = 1;
+  return (
+    Math.abs(overlay.top - target.top) <= slack &&
+    Math.abs(overlay.left - target.left) <= slack &&
+    overlay.width >= target.width - slack &&
+    overlay.width <= target.width + 4 + slack &&
+    overlay.height >= target.height - slack &&
+    overlay.height <= target.height + 4 + slack
+  );
+}
+
 export function node(
   nodes: NativeNode[],
   role: string,
