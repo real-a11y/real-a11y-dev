@@ -24,6 +24,7 @@ import {
 } from "./capability.js";
 import {
   NativeDebuggerSession,
+  type AttachOutcome,
   type OperationOptions,
 } from "./debugger-session.js";
 import type { DogfoodLog } from "./dogfood.js";
@@ -77,7 +78,20 @@ type NativeMessage =
   | { type: "NATIVE_FLAG_GET" }
   | { type: "NATIVE_FLAG_SET"; enabled: boolean }
   | { type: "NATIVE_CAPABILITY"; tabId: number }
-  | { type: "NATIVE_READ"; tabId: number }
+  | {
+      type: "NATIVE_READ";
+      tabId: number;
+      // The panel reading again on its own (a navigation's new page, or a
+      // page change with "Follow page changes" on), not a Refresh, an
+      // action's re-read or the first load. A dropped connection is then not
+      // retried: the drop may be the user's Cancel on Chrome's debugging
+      // bar, and attaching again would undo it. Nor does one attach at all
+      // after the user cancelled that bar on this tab, during whatever it
+      // interrupted, until they read the tab themselves: it fails as
+      // `cancelled-by-user`. The panel pauses its automatic reads after any
+      // failed one.
+      auto?: boolean;
+    }
   | {
       type: "NATIVE_ACT";
       tabId: number;
@@ -298,16 +312,39 @@ export function registerNativeMode(): void {
             sendResponse(await capabilityOf(message.tabId));
             return;
           case "NATIVE_READ": {
+            // An automatic read never attaches over the user's Cancel on
+            // Chrome's bar, whatever that Cancel interrupted; a read the
+            // user asked for lifts it.
+            if (!message.auto) {
+              session.clearCancelledByUser(message.tabId);
+            } else if (session.cancelledByUser(message.tabId)) {
+              const error: AttachOutcome["error"] = "cancelled-by-user";
+              sendResponse({ ok: false, error });
+              return;
+            }
             const { outcome, value } = await withRecovery(
               session,
               message.tabId,
               (t) => readNativeTree(t),
               log,
+              { retryDrop: !message.auto },
             );
             if (!outcome.ok || !value) {
+              // An automatic read the user's Cancel cut short says so, so the
+              // panel can tell them they paused it, rather than report a
+              // dropped connection they didn't cause.
+              let error: string = outcome.error ?? "read failed";
+              if (
+                message.auto &&
+                outcome.error === "connection-lost" &&
+                (await session.detachReason(message.tabId)) ===
+                  "canceled_by_user"
+              ) {
+                error = "cancelled-by-user" satisfies AttachOutcome["error"];
+              }
               sendResponse({
                 ok: false,
-                error: outcome.error ?? "read failed",
+                error,
                 ...(outcome.reason ? { reason: outcome.reason } : {}),
               });
               return;

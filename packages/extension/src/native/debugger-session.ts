@@ -121,7 +121,10 @@ export interface AttachOutcome {
     | "disabled"
     /** A newer request replaced this one while it waited its turn, so it
      *  never attached (see {@link OperationOptions.stillWanted}). */
-    | "superseded";
+    | "superseded"
+    /** An automatic read refused, or ended, by the user's Cancel on Chrome's
+     *  debugging bar — see {@link NativeDebuggerSession.cancelledByUser}. */
+    | "cancelled-by-user";
 }
 
 interface StorageArea {
@@ -234,6 +237,61 @@ export class NativeDebuggerSession {
    */
   private droppedPick = new Map<number, string>();
 
+  /**
+   * Tabs where the user pressed Cancel on Chrome's "…started debugging this
+   * browser" bar since the panel last read them at the user's request. Unlike
+   * {@link lastDetachReason} it survives the next attach: that Cancel can land
+   * during a pick, an action or a Refresh, and the reads auto-refresh makes
+   * later are refused (see `NATIVE_READ`'s `auto`) until the user reads the
+   * tab again. In memory only, like the attach it answers: a service-worker
+   * restart forgets it, and the guide says a pause can lapse that way. Tab
+   * ids are never reused, so it grows by at most one entry per cancelled tab.
+   */
+  private userCancelled = new Set<number>();
+
+  /** Waiters for the next `onDetach` on a tab — see {@link detachReason}. */
+  private detachWaiters = new Map<number, Array<(reason: string) => void>>();
+
+  /** The user cancelled Chrome's debugging bar on this tab since the last
+   *  read they asked for — see {@link userCancelled}. */
+  cancelledByUser(tabId: number): boolean {
+    return this.userCancelled.has(tabId);
+  }
+
+  /** A read the user asked for: their Cancel no longer stands. */
+  clearCancelledByUser(tabId: number): void {
+    this.userCancelled.delete(tabId);
+  }
+
+  /**
+   * Why Chrome last detached from `tabId`, for an operation that just failed
+   * because its session went away. Chromium answers the pending command
+   * before it fires `onDetach`, so the reason may still be on its way: this
+   * waits for it, up to {@link PICK_DETACH_REASON_WAIT_MS}, and resolves
+   * `undefined` if none comes.
+   */
+  detachReason(tabId: number): Promise<string | undefined> {
+    const known = this.lastDetachReason.get(tabId);
+    if (known !== undefined) return Promise.resolve(known);
+    return new Promise((resolve) => {
+      const waiters = this.detachWaiters.get(tabId) ?? [];
+      const waiter = (reason: string) => {
+        clearTimeout(timer);
+        resolve(reason);
+      };
+      const timer = setTimeout(() => {
+        const list = this.detachWaiters.get(tabId) ?? [];
+        this.detachWaiters.set(
+          tabId,
+          list.filter((w) => w !== waiter),
+        );
+        resolve(undefined);
+      }, PICK_DETACH_REASON_WAIT_MS);
+      waiters.push(waiter);
+      this.detachWaiters.set(tabId, waiters);
+    });
+  }
+
   /** The panel's request id for the pick armed on each tab. */
   private pickRequest = new Map<number, number>();
 
@@ -296,6 +354,10 @@ export class NativeDebuggerSession {
       // to book the dwell as pick time.
       const pick = this.pickDetach.has(tabId);
       this.lastDetachReason.set(tabId, String(reason));
+      if (reason === "canceled_by_user") this.userCancelled.add(tabId);
+      const waiters = this.detachWaiters.get(tabId) ?? [];
+      this.detachWaiters.delete(tabId);
+      for (const waiter of waiters) waiter(String(reason));
       this.pickDetach.get(tabId)?.(String(reason));
       void this.enqueue(async () => {
         const attached = await this.readAttached();
