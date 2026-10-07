@@ -841,9 +841,21 @@ describe("readNativeTree", () => {
       expect(asked).toEqual([10]);
     });
 
-    it("keeps the name around an empty hidden card field", async () => {
+    it("withholds the name around a hidden card field emptied after the snapshot", async () => {
+      // The snapshot named the region after the card; the page cleared the
+      // field before the in-page read, which finds it empty. The name still
+      // holds the number, so emptiness at read time can't release it.
       const res = await readNativeTree(
         hiddenCardTransport({ classified: true, sensitive: true }),
+      );
+      expect(findNative(res.nodes, "region")?.name).toBe("[redacted]");
+      expect(JSON.stringify(res)).not.toContain("4111");
+    });
+
+    it("keeps the name around a hidden field that isn't sensitive", async () => {
+      // Read as no card field, its text is the page's to name the region by.
+      const res = await readNativeTree(
+        hiddenCardTransport({ classified: true, value: "4111111111111111" }),
       );
       expect(findNative(res.nodes, "region")?.name).toBe(
         "Card 4111111111111111",

@@ -917,9 +917,14 @@ export async function readNativeTree(
     // the password, and the label counted as sensitive would withhold the
     // password's own name. Only a target hiding an ignored node is looked
     // into ({@link hidesUnreadNode}), so a plain `<label>` costs nothing. A
-    // hidden field withholds names only if it holds something, as a field in
-    // the tree does; one the DOM agent can't list, or that has no AX node to
-    // withhold by, leaves the target withholding instead — failing closed.
+    // hidden field withholds names unless it reads as not sensitive, empty or
+    // not: the names come from the AX snapshot, the verdict from a read made
+    // after it, and a card field the page cleared in between still has its
+    // number in them. Chromium sends no value for an ignored field to judge
+    // the snapshot by, so core's `givesValueAway` counts one as giving its
+    // value away whatever it holds, as the CLI's native tree does. One the
+    // DOM agent can't list, or that has no AX node to withhold by, leaves the
+    // target withholding instead — failing closed.
     for (const id of facetsById.keys()) read.add(id);
     const index = indexNativeAX(full.nodes);
     await Promise.all(
@@ -945,9 +950,7 @@ export async function readNativeTree(
                 backendNodeId,
                 objectGroup,
               );
-              if (verdict.classified === true && verdict.redacted !== true) {
-                return;
-              }
+              if (!fieldValueWithheld(verdict)) return;
               withheld.add(id ?? nativeIdOf(target));
             }),
           );
