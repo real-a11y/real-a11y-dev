@@ -216,7 +216,10 @@
   description pointing at a sensitive field is dropped, as the CLI and MCP
   native tree already did. That includes a name taken by `aria-labelledby`
   from a card or password field the tree doesn't show, such as an
-  `aria-hidden` one, which neither tree caught before.
+  `aria-hidden` one, which neither tree caught before, and a card month
+  `<select>`'s chosen option. A field's own `<label>` still names it. A
+  description is dropped whole, with no `[redacted]` in its place, so any
+  other text it held goes with it.
   ([#486](https://github.com/real-a11y/real-a11y-dev/pull/486))
 
 ## 0.1.15

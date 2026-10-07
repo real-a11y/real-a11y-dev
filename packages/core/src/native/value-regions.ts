@@ -320,7 +320,10 @@ export function winningNameSource(
  *   its own value).
  * - **Named or described by reference** to a root that isn't the node's own
  *   ({@link ValueRegions.references}). Such a name reads `[redacted]`; such a
- *   description is dropped.
+ *   description is dropped whole. That costs any other text it held
+ *   (`aria-describedby="hint card"` loses the hint too) and leaves no marker
+ *   that anything was removed: Chromium sends no trace of which part of a
+ *   description came from which node, so there is nothing to cut it at.
  *
  * Returns copies; never mutates.
  */
