@@ -299,8 +299,9 @@ test("NATIVE_READ carries no chosen option in the listbox a sensitive combobox c
 }) => {
   const { page, tabId } = await nav.open("select-sensitive.html");
   // An ARIA combobox whose listbox is elsewhere in the page, tied to it only
-  // by aria-controls, so it isn't the field's descendant; and a plain one
-  // beside it, whose chosen option the tree still shows.
+  // by aria-controls (naming an unnamed wrapper around it, which the tree
+  // drops), so it isn't the field's descendant; and a plain one beside it,
+  // whose chosen option the tree still shows.
   await page.evaluate(() => {
     document.body.insertAdjacentHTML(
       "beforeend",
@@ -311,10 +312,12 @@ test("NATIVE_READ carries no chosen option in the listbox a sensitive combobox c
        <input id="colour" role="combobox" aria-expanded="true"
          aria-controls="colour-list" value="Red">
        <div>
-         <ul id="exp-aria-list" role="listbox" aria-label="Months">
-           <li role="option" aria-selected="false">06</li>
-           <li role="option" aria-selected="true">07</li>
-         </ul>
+         <div id="exp-aria-list">
+           <ul role="listbox" aria-label="Months">
+             <li role="option" aria-selected="false">06</li>
+             <li role="option" aria-selected="true">07</li>
+           </ul>
+         </div>
          <ul id="colour-list" role="listbox" aria-label="Colours">
            <li role="option" aria-selected="true">Red</li>
            <li role="option" aria-selected="false">Blue</li>

@@ -536,6 +536,23 @@ describe("field-value redaction covers the extension's option picker", () => {
     ]);
   });
 
+  it("grades narrowing what a sensitive field controls 🔴 high", async () => {
+    // An ARIA combobox's listbox isn't its descendant; the region it
+    // controls is withheld through `controlledRegion`, so stopping that walk
+    // short is the leak.
+    const corePath = "packages/extension/src/native/native-core.ts";
+    const core = `export function controlledRegion(raw, rawNodes, keptIds) {\n  for (const childId of node.childIds ?? []) stack.push(childId);\n}\n`;
+    const result = await grade(
+      { [corePath]: core.replace("stack.push(childId)", "void childId") },
+      { base: { [corePath]: core } },
+    );
+
+    assert.equal(result.tier, "high");
+    assert.deepEqual(evidenceFor(result, "field-value-redaction"), [
+      `${corePath} → controlledRegion`,
+    ]);
+  });
+
   it("grades loosening the native verdict's fail-closed flag 🔴 high", async () => {
     const corePath = "packages/extension/src/native/native-core.ts";
     const core = `export function fieldValueWithheld(read) {\n  return !(read.classified === true && read.sensitive !== true);\n}\n`;

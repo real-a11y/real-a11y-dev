@@ -25,6 +25,7 @@ import {
   rootIdOf,
   SYNTHETIC_ROOT_ID,
   withholdInsideSensitive,
+  controlledRegion,
   type CdpTransport,
   type EnrichedNativeNode,
 } from "./native-core.js";
@@ -1031,6 +1032,59 @@ describe("withholdInsideSensitive", () => {
     expect(byId.get("nov")?.valueWithheld).toBe(true);
     expect(byId.get("jan")?.states).toStrictEqual({});
     expect(byId.get("other")?.states).toStrictEqual({ selected: true });
+  });
+
+  it("follows a controlled wrapper the tree dropped down to its listbox", () => {
+    // `aria-controls` names an unnamed <div> around the listbox, which the
+    // normalizer drops: the combobox's own `controls` is empty, and the
+    // region comes from the raw tree.
+    const raw = [
+      {
+        nodeId: "1",
+        backendDOMNodeId: 10,
+        role: { value: "combobox" },
+        properties: [
+          {
+            name: "controls",
+            value: {
+              type: "idrefList",
+              relatedNodes: [{ backendDOMNodeId: 20 }],
+            },
+          },
+        ],
+      },
+      {
+        nodeId: "2",
+        backendDOMNodeId: 20,
+        role: { value: "generic" },
+        childIds: ["3"],
+      },
+      {
+        nodeId: "3",
+        backendDOMNodeId: 30,
+        role: { value: "listbox" },
+        childIds: ["4"],
+      },
+      { nodeId: "4", backendDOMNodeId: 40, role: { value: "option" } },
+    ];
+    const kept = new Set(["ax-dom-10", "ax-dom-30", "ax-dom-40"]);
+    expect(controlledRegion(raw[0]!, raw, kept)).toEqual(["ax-dom-30"]);
+
+    const nodes = [
+      n("ax-dom-10", [], {
+        role: "combobox",
+        value: "[redacted]",
+        redacted: true,
+      }),
+      n("ax-dom-30", ["ax-dom-40"], { role: "listbox" }),
+      n("ax-dom-40", [], {
+        role: "option",
+        name: "07",
+        states: { selected: true },
+      }),
+    ];
+    withholdInsideSensitive(nodes, ["ax-dom-10"], ["ax-dom-30"]);
+    expect(nodes[2]!.states).toStrictEqual({});
   });
 
   it("marks every node below a sensitive one as withheld", () => {

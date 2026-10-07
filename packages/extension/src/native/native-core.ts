@@ -225,6 +225,58 @@ export function nativeControls(
 }
 
 /**
+ * The kept nodes that stand for what `raw` controls, for withholding: each
+ * `aria-controls` target the tree kept, and for one the normalizer dropped
+ * (an unnamed wrapper around a listbox), its nearest kept descendants. The
+ * jump chips' `nativeControls` keeps only targets that have a row; this
+ * follows a dropped one down, because what sits inside it is controlled all
+ * the same.
+ *
+ * Exported for its tests.
+ */
+export function controlledRegion(
+  raw: RawAXNode,
+  rawNodes: readonly RawAXNode[],
+  keptIds: ReadonlySet<string>,
+): string[] {
+  const prop = raw.properties?.find((p) => p.name === "controls");
+  const targets = prop?.value?.relatedNodes ?? [];
+  if (targets.length === 0) return [];
+  const byBackendId = new Map<number, RawAXNode>();
+  const byNodeId = new Map<string, RawAXNode>();
+  for (const node of rawNodes) {
+    byNodeId.set(node.nodeId, node);
+    if (typeof node.backendDOMNodeId === "number") {
+      byBackendId.set(node.backendDOMNodeId, node);
+    }
+  }
+  const out: string[] = [];
+  const seen = new Set<RawAXNode>();
+  const stack = targets.flatMap((t) => {
+    const node =
+      typeof t.backendDOMNodeId === "number"
+        ? byBackendId.get(t.backendDOMNodeId)
+        : undefined;
+    return node ? [node] : [];
+  });
+  while (stack.length > 0) {
+    const node = stack.pop()!;
+    if (seen.has(node)) continue;
+    seen.add(node);
+    const id = nativeIdOf(node);
+    if (keptIds.has(id)) {
+      out.push(id);
+      continue;
+    }
+    for (const childId of node.childIds ?? []) {
+      const child = byNodeId.get(childId);
+      if (child) stack.push(child);
+    }
+  }
+  return out;
+}
+
+/**
  * Roles whose backing DOM element could be an `<input>`/`<textarea>`/
  * `<select>` — the read-side counterpart of DOM producer's own tag check in
  * `getKeyAttributes` (`core/src/extraction/dom-extractor.ts`), approximated
@@ -579,7 +631,9 @@ export function fieldValueWithheld(read: PageFieldRead): boolean {
  *
  * A node the sensitive field controls (`aria-controls`) counts as inside it,
  * with everything below it: an ARIA combobox's listbox is not its
- * descendant, and the option it marks chosen is the field's value.
+ * descendant, and the option it marks selected is the field's value. Its
+ * `controls` names the targets the tree kept; `controlled` adds the kept
+ * nodes standing in for one it dropped ({@link controlledRegion}).
  *
  * Nor does a node inside one say which of it is chosen: the states in core's
  * `NATIVE_AX_CHOICE_STATES` (an option's `selected`) go from every node
@@ -593,6 +647,7 @@ export function fieldValueWithheld(read: PageFieldRead): boolean {
 export function withholdInsideSensitive(
   nodes: EnrichedNativeNode[],
   sensitiveIds: readonly string[],
+  controlled: readonly string[] = [],
 ): void {
   if (sensitiveIds.length === 0) return;
   const byId = new Map(nodes.map((n) => [n.id, n]));
@@ -604,6 +659,7 @@ export function withholdInsideSensitive(
     const field = byId.get(id);
     return field ? [...field.childIds, ...(field.controls ?? [])] : [];
   });
+  stack.push(...controlled);
   while (stack.length > 0) {
     const id = stack.pop()!;
     if (seen.has(id)) continue;
@@ -707,7 +763,14 @@ export async function readNativeTree(
       .send("Runtime.releaseObjectGroup", { objectGroup })
       .catch(() => {});
   }
-  withholdInsideSensitive(enriched, sensitiveIds);
+  withholdInsideSensitive(
+    enriched,
+    sensitiveIds,
+    sensitiveIds.flatMap((id) => {
+      const raw = rawById.get(id);
+      return raw ? controlledRegion(raw, full.nodes, keptIds) : [];
+    }),
+  );
 
   // `serializeNativeAX(nodes)` runs on the pre-wrap list, matching every
   // other pre-enrichment field it already serializes from (states/
