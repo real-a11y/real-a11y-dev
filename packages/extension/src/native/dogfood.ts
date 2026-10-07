@@ -258,7 +258,7 @@ export class DogfoodLog {
       `    of which you cancelled on Chrome's bar (no recovery expected): ${c.detachCancelledByUser}`,
       `  reattach recovered: ${c.reattachOk}   failed: ${c.reattachFailed}`,
       "",
-      `  recovery not attempted (native mode switched off, or a pick that ends instead): ${c.reattachAbandoned}`,
+      `  recovery not attempted (native mode switched off, or a pick or automatic read that ends instead): ${c.reattachAbandoned}`,
       "",
       "— DevTools conflict —",
       `  attach refused (another debugger attached): ${c.conflict}`,

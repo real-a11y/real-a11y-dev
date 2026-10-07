@@ -555,6 +555,11 @@ export function App() {
   const autoRefresh = useRef<{
     armedTab: number | null;
     navigationPending: boolean;
+    /** The document the last successful read described (its loader id). */
+    readDocument: string | undefined;
+    /** The document a pending navigation is leaving: a read that still finds
+     *  it, before the new page commits, leaves the navigation pending. */
+    leavingDocument: string | undefined;
     lastChangeAt: number;
     lastReadStartedAt: number;
     lastReadEndedAt: number;
@@ -567,6 +572,8 @@ export function App() {
   }>({
     armedTab: null,
     navigationPending: false,
+    readDocument: undefined,
+    leavingDocument: undefined,
     lastChangeAt: 0,
     lastReadStartedAt: 0,
     lastReadEndedAt: 0,
@@ -1081,6 +1088,7 @@ export function App() {
         const a = autoRefresh.current;
         cancelAutoRefreshTimer();
         a.navigationPending = a.armedTab !== null;
+        a.leavingDocument = a.readDocument;
         a.lastReadStartedAt = 0;
         a.lastReadEndedAt = 0;
         a.autoReads = 0;
@@ -1676,6 +1684,7 @@ export function App() {
           nodes?: NativeNode[];
           rootId?: string;
           url?: string;
+          documentId?: string;
         };
         if (token !== nativeOpToken.current) return false; // tab switched mid-flight
         if (!r?.ok) {
@@ -1720,7 +1729,14 @@ export function App() {
         setNativeCapability(undefined);
         if (!auto) setNativeStatus(`${r.nodes?.length ?? 0} nodes`);
         a.armedTab = tabId;
-        a.navigationPending = false;
+        // Only a read of another document answers a pending navigation. The
+        // panel hears of one before the new page commits, and until then the
+        // old page can still change and be read — that read must not stand
+        // for the new page's, or the new page is never read at all.
+        if (r.documentId === undefined || r.documentId !== a.leavingDocument) {
+          a.navigationPending = false;
+        }
+        a.readDocument = r.documentId;
         return true;
       } finally {
         a.lastReadEndedAt = Date.now();

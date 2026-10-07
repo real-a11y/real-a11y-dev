@@ -370,6 +370,11 @@ export function registerNativeMode(): void {
               // collapse tree UI needs to render from, unlike the dogfood
               // panel's flat depth-indented list, which never needed one.
               rootId: value.rootId,
+              // The document read, so the panel can tell a read of the page a
+              // navigation is leaving from one of the page it arrives at.
+              ...(value.documentId !== undefined
+                ? { documentId: value.documentId }
+                : {}),
               // Structural fields plus the state/property enrichment
               // `readNativeTree` attaches (`expanded`, `checked`, `level`, …).
               // `axFacets`'s own allowlist (DETAIL_PROPS) excludes

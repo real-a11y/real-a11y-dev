@@ -139,6 +139,26 @@ async function startFixtureServer(): Promise<{
       res.end();
       return;
     }
+    // A navigation that commits late: `/slow?ms=N&to=<fixture>` answers with
+    // that fixture after N ms, while the page it leaves is still showing.
+    if (path === "/slow") {
+      const query = new URL(req.url ?? "/", "http://x").searchParams;
+      const to = normalize(`/${query.get("to") ?? ""}`);
+      setTimeout(
+        () =>
+          void readFile(join(FIXTURE_DIR, to))
+            .then((body) => {
+              res.writeHead(200, { "content-type": "text/html" });
+              res.end(body);
+            })
+            .catch(() => {
+              res.writeHead(404);
+              res.end();
+            }),
+        Number(query.get("ms") ?? 0),
+      );
+      return;
+    }
     void readFile(join(FIXTURE_DIR, path))
       .then((body) => {
         res.writeHead(200, {

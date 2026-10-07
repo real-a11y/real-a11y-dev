@@ -106,6 +106,41 @@ test.describe("by default", () => {
     expect(await autoReads(nav)).toBe(reads);
   });
 
+  test("a navigation that commits late still shows the new page, though the old one changed meanwhile", async ({
+    nav,
+  }) => {
+    // The panel hears of a navigation when it starts. Until the new page
+    // commits, the old one keeps running: here it shows a spinner, and that
+    // change is read. That read is of the page being left, so it must not
+    // stand for the new page's.
+    const page = await nav.showNative("native-panel.html");
+    await expect(
+      nav.panel.getByRole("treeitem", {
+        name: /^heading H1 "Native panel fixture"/,
+      }),
+    ).toBeVisible();
+    const before = await autoReads(nav);
+    // One script: the old page can't be driven from here once it is leaving.
+    await page.evaluate(() => {
+      setTimeout(() => {
+        location.href = "/slow?ms=3000&to=accordion.html";
+        setTimeout(() => {
+          const spinner = document.createElement("button");
+          spinner.textContent = "Loading…";
+          document.body.append(spinner);
+        }, 100);
+      });
+    });
+    // The old page's change is read while the navigation is pending.
+    await expect
+      .poll(() => autoReads(nav), { timeout: 3000 })
+      .toBeGreaterThan(before);
+
+    await expect(
+      nav.panel.getByRole("treeitem", { name: /^heading H1 "Accordion"/ }),
+    ).toBeVisible({ timeout: 3000 + READ_WINDOW_MS });
+  });
+
   test("a navigation that never commits leaves the same page's tree in place", async ({
     nav,
   }) => {
