@@ -577,6 +577,10 @@ export function fieldValueWithheld(read: PageFieldRead): boolean {
  * this catches a part the in-page walk could not place. A nested sensitive
  * field's own `[redacted]` stays: it says "entered", never what.
  *
+ * A node the sensitive field controls (`aria-controls`) counts as inside it,
+ * with everything below it: an ARIA combobox's listbox is not its
+ * descendant, and the option it marks chosen is the field's value.
+ *
  * Nor does a node inside one say which of it is chosen: the states in core's
  * `NATIVE_AX_CHOICE_STATES` (an option's `selected`) go from every node
  * inside, as the browser producer drops them, so the two native transports
@@ -593,7 +597,13 @@ export function withholdInsideSensitive(
   if (sensitiveIds.length === 0) return;
   const byId = new Map(nodes.map((n) => [n.id, n]));
   const seen = new Set<string>();
-  const stack = sensitiveIds.flatMap((id) => byId.get(id)?.childIds ?? []);
+  // What a sensitive field controls counts as inside it: an ARIA combobox's
+  // listbox sits elsewhere in the tree, tied to it only by `aria-controls`,
+  // and its chosen option is the field's value all the same.
+  const stack = sensitiveIds.flatMap((id) => {
+    const field = byId.get(id);
+    return field ? [...field.childIds, ...(field.controls ?? [])] : [];
+  });
   while (stack.length > 0) {
     const id = stack.pop()!;
     if (seen.has(id)) continue;

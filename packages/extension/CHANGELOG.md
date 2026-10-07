@@ -200,11 +200,12 @@
 - A card `<select>`'s options in the native tree no longer say which one is
   chosen. A `<select autocomplete="cc-exp-month">` read `[redacted]`, but
   the option rows under it still showed a `selected` badge on the chosen
-  month. No option inside a sensitive field is marked `selected` now, and
-  neither is one inside a field whose in-page read failed, which may be
-  sensitive (rare: a read fails only when the page detaches or navigates
-  mid-read). The CLI and MCP native producer already withheld it; both now
-  read the one list of withheld states.
+  month. No option inside a sensitive field is marked `selected` now, nor
+  one in the list box a sensitive ARIA combobox controls, and neither is one
+  inside a field whose in-page read failed, which may be sensitive (rare: a
+  read fails only when the page detaches or navigates mid-read). The CLI and
+  MCP native producer already withheld it inside a field; both now read the
+  one list of withheld states.
   ([#485](https://github.com/real-a11y/real-a11y-dev/pull/485))
 
 ## 0.1.15

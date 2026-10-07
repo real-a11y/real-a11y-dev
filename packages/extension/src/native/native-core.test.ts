@@ -1006,6 +1006,33 @@ describe("withholdInsideSensitive", () => {
     expect(byId.get("other")?.states).toStrictEqual({ selected: true });
   });
 
+  it("treats the listbox a sensitive combobox controls as inside it", () => {
+    // An ARIA combobox (`<input role="combobox" aria-controls="list">`) whose
+    // listbox is a sibling elsewhere in the page, not its descendant.
+    const nodes = [
+      n("exp", [], {
+        role: "combobox",
+        value: "[redacted]",
+        redacted: true,
+        controls: ["list"],
+      }),
+      n("list", ["jan", "nov"], { role: "listbox" }),
+      n("jan", [], { role: "option", name: "01", states: { selected: false } }),
+      n("nov", [], { role: "option", name: "11", states: { selected: true } }),
+      n("other", [], {
+        role: "option",
+        name: "Spain",
+        states: { selected: true },
+      }),
+    ];
+    withholdInsideSensitive(nodes, ["exp"]);
+    const byId = new Map(nodes.map((x) => [x.id, x]));
+    expect(byId.get("nov")?.states).toStrictEqual({});
+    expect(byId.get("nov")?.valueWithheld).toBe(true);
+    expect(byId.get("jan")?.states).toStrictEqual({});
+    expect(byId.get("other")?.states).toStrictEqual({ selected: true });
+  });
+
   it("marks every node below a sensitive one as withheld", () => {
     const nodes = [
       n("wrap", ["field"], { valueWithheld: true }),

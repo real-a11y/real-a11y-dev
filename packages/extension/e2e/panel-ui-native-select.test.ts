@@ -293,3 +293,41 @@ test("NATIVE_READ carries no chosen option under a sensitive select, in any of i
     expect(option.states ?? {}).not.toHaveProperty("selected");
   }
 });
+
+test("NATIVE_READ carries no chosen option in the listbox a sensitive combobox controls", async ({
+  nav,
+}) => {
+  const { page, tabId } = await nav.open("select-sensitive.html");
+  // An ARIA combobox whose listbox is elsewhere in the page, tied to it only
+  // by aria-controls, so it isn't the field's descendant; and a plain one
+  // beside it, whose chosen option the tree still shows.
+  await page.evaluate(() => {
+    document.body.insertAdjacentHTML(
+      "beforeend",
+      `<label for="exp-aria">Expiry month (ARIA)</label>
+       <input id="exp-aria" role="combobox" aria-expanded="true"
+         aria-controls="exp-aria-list" autocomplete="cc-exp-month" value="07">
+       <label for="colour">Colour</label>
+       <input id="colour" role="combobox" aria-expanded="true"
+         aria-controls="colour-list" value="Red">
+       <div>
+         <ul id="exp-aria-list" role="listbox" aria-label="Months">
+           <li role="option" aria-selected="false">06</li>
+           <li role="option" aria-selected="true">07</li>
+         </ul>
+         <ul id="colour-list" role="listbox" aria-label="Colours">
+           <li role="option" aria-selected="true">Red</li>
+           <li role="option" aria-selected="false">Blue</li>
+         </ul>
+       </div>`,
+    );
+  });
+  const nodes = await nav.readNodes(tabId);
+  const option = (name: string) =>
+    nodes.find((n) => n.role === "option" && n.name === name);
+  expect(option("Red")?.states?.selected).toBe(true);
+  for (const month of ["06", "07"]) {
+    expect(option(month)).toBeDefined();
+    expect(option(month)?.states ?? {}).not.toHaveProperty("selected");
+  }
+});
