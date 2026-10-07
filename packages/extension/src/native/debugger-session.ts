@@ -94,7 +94,8 @@ function transportFor(
     send,
     frameSessions: async (until) => {
       frames ??= announceFrames(tabId, sessionId, send);
-      return (await frames)?.sessions(until) ?? [];
+      // None at all when the auto-attach was refused: see the contract.
+      return (await frames)?.sessions(until);
     },
     // Stop listening for this document's frames, and its frames' frames:
     // the operation that asked is over.
@@ -1241,7 +1242,11 @@ export class NativeDebuggerSession {
       // For as long as the pick is open: a frame the page adds meanwhile (a
       // payment dialog's) is announced then, and would take the click
       // straight through to the page if left unarmed. Each round waits for
-      // one more announcement, or the window, and arms what is new.
+      // one more announcement, or the window, and arms what is new. A
+      // document whose frames can't be announced answers at once, every
+      // time: looping on it would never yield to the event loop, and the
+      // STOP, timeout or detach that ends the pick could never run, so it
+      // ends the watch instead.
       let seen = 0;
       while (!ended) {
         let announced = seen;
@@ -1250,9 +1255,9 @@ export class NativeDebuggerSession {
             announced = ids.length;
             return ids.length > seen;
           })
-          .catch(() => [] as FrameSession[]);
+          .catch(() => undefined);
+        if (sessions === undefined || ended) return;
         seen = announced;
-        if (ended) return;
         const fresh = sessions.filter(
           (s) => s.sessionId !== undefined && !frames.has(s.sessionId),
         );

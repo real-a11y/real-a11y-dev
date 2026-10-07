@@ -3044,7 +3044,7 @@ describe("readNativeTree across frames", () => {
 
   it("marks an out-of-process frame's rows with the document they were read from", async () => {
     const top = withOutOfProcessFrame(frameDocument());
-    const [session] = await top.frameSessions!();
+    const [session] = (await top.frameSessions!())!;
     top.frameSessions = async () => [{ ...session!, documentId: "DOC1" }];
     const res = await readNativeTree(top);
     expect(findNative(res.nodes, "button", "Inner save")!.id).toBe(
@@ -3114,7 +3114,7 @@ describe("readNativeTree across frames", () => {
   it("waits for one out-of-process frame per iframe no same-process frame owns", async () => {
     const top = withOutOfProcessFrame(frameDocument());
     let until: ((ids: readonly string[]) => boolean) | undefined;
-    const sessions = await top.frameSessions!();
+    const sessions = (await top.frameSessions!())!;
     top.frameSessions = async (u) => {
       until = u;
       return sessions;
@@ -3140,7 +3140,7 @@ describe("readNativeTree across frames", () => {
     // A hidden ad frame's row is dropped, but it is announced all the same,
     // and can be the one that fills the count first.
     const top = withOutOfProcessFrame(frameDocument());
-    const [visible] = await top.frameSessions!();
+    const [visible] = (await top.frameSessions!())!;
     const hidden: FrameSession = {
       frameId: "HIDDEN",
       transport: new FakeTransport(() => ({})),
@@ -3162,7 +3162,7 @@ describe("readNativeTree across frames", () => {
     // Announced, then gone (the frame navigated): no session comes of it,
     // but it counted. Its replacement is announced next.
     const top = withOutOfProcessFrame(frameDocument());
-    const [visible] = await top.frameSessions!();
+    const [visible] = (await top.frameSessions!())!;
     let calls = 0;
     top.frameSessions = async (until) => {
       if (++calls === 1) {

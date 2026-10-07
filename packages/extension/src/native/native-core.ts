@@ -383,13 +383,16 @@ export interface CdpTransport {
    * `<iframe>` runs in another renderer, which this transport's own session
    * can't read or act in. Frames are announced asynchronously, so `until`
    * says when the caller has the ones it expects: the call waits, briefly,
-   * for that before answering. Optional: a transport that can't reach them
-   * (a test fake) leaves those frames unread, and their rows show as
-   * embedded.
+   * for that before answering. `undefined` — at once, with no wait — when
+   * this document's frames can't be announced at all (Chromium refused the
+   * auto-attach, or the frame went away): no call will ever announce one,
+   * so a caller waiting for more must stop. Optional: a transport that
+   * can't reach them (a test fake) leaves those frames unread, and their
+   * rows show as embedded.
    */
   frameSessions?(
     until?: (frameIds: readonly string[]) => boolean,
-  ): Promise<FrameSession[]>;
+  ): Promise<FrameSession[] | undefined>;
 }
 
 /** An out-of-process frame, and a transport into its own session. */
@@ -1226,7 +1229,7 @@ async function frameSessionsOf(
   until: (frameIds: readonly string[]) => boolean,
 ): Promise<FrameSession[]> {
   if (!transport.frameSessions) return [];
-  return await transport.frameSessions(until).catch(() => []);
+  return (await transport.frameSessions(until).catch(() => [])) ?? [];
 }
 
 /** A node of an out-of-process frame, with every id it holds made the

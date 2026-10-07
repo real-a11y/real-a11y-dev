@@ -1678,7 +1678,7 @@ describe("NativeDebuggerSession: out-of-process frames", () => {
   it("waits for a frame announced just after the auto-attach answers", async () => {
     const { session, sent } = tabWithFrame(5);
     const { value } = await session.withDebugger(5, async (t) => {
-      const frames = await t.frameSessions!((ids) => ids.length >= 1);
+      const frames = (await t.frameSessions!((ids) => ids.length >= 1))!;
       await frames[0]?.transport.send("Accessibility.getFullAXTree");
       return frames.map((f) => f.frameId);
     });
@@ -1770,6 +1770,30 @@ describe("NativeDebuggerSession: out-of-process frames", () => {
         }),
       { timeout: 3_000 },
     );
+    expect(session.cancelPick(5)).toBe(true);
+    expect((await picked).value).toBeNull();
+  });
+
+  it("still settles a pick when the auto-attach for frames is refused", async () => {
+    // What Chrome does to every command once the user presses Cancel on the
+    // debugging bar while a pick is arming. A frame watch that looped on the
+    // refusal never yielded to the event loop, so the STOP below could never
+    // run, and the pick, and this test, hung.
+    stubChrome();
+    const g = globalThis as unknown as { chrome: typeof chrome };
+    (
+      g.chrome.debugger.sendCommand as ReturnType<typeof vi.fn>
+    ).mockImplementation(async (_debuggee: unknown, method: string) => {
+      if (method === "Target.setAutoAttach") throw new Error("Not allowed");
+      return {};
+    });
+    const session = new NativeDebuggerSession(
+      new FakeStorage(),
+      new FakeStorage(),
+    );
+    const picked = session.withDebugger(5, (t) => session.runPick(5, t));
+    await drain();
+    await drain();
     expect(session.cancelPick(5)).toBe(true);
     expect((await picked).value).toBeNull();
   });
