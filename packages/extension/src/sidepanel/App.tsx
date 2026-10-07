@@ -2049,7 +2049,13 @@ export function App() {
             option,
             inputState.valueWithheld === true,
           );
+          // The option's id belongs to the tree it was chosen from. A tab
+          // switch or a navigation while this waits drops that tree, and
+          // the choice with it: `dispatchNativeAction` below is this
+          // render's, still bound to the tab the panel has left.
+          const token = nativeOpToken.current;
           void whenNativeIdle().then((idle) => {
+            if (token !== nativeOpToken.current) return;
             if (!idle) {
               announce(
                 "Failed: the panel is busy — choose the option again",

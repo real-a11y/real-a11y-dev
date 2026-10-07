@@ -186,3 +186,37 @@ test("an option chosen while a read is running is applied once it ends", async (
     "Selected: Music",
   );
 });
+
+test("an option chosen while a read is running is dropped if the panel leaves the tab", async ({
+  nav,
+}) => {
+  const page = await nav.showNative("listbox-select.html");
+  await nav.panel.getByRole("button", { name: "Expand all" }).click();
+  await nav.panel
+    .getByRole("treeitem", { name: /^combobox "Department"/ })
+    .getByTitle("Select (Enter)")
+    .click();
+  const picker = nav.panel.getByRole("dialog", { name: "Department" });
+  await expect(picker.getByRole("option")).toHaveCount(3);
+
+  // As above, but the user moves to another tab while the choice waits.
+  await nav.setNativeReads("delay:3000");
+  await nav.panel.evaluate(() =>
+    document
+      .querySelector<HTMLButtonElement>('[aria-label="Refresh native tree"]')!
+      .click(),
+  );
+  await picker.getByRole("option", { name: /Music/ }).click();
+  const other = await nav.open("tree-view.html");
+  await other.page.bringToFront();
+  await expect
+    .poll(() => nav.panel.locator(".sn-node").count(), { timeout: 5_000 })
+    .toBe(0);
+
+  // Well past the read's end, the tab the panel left is untouched.
+  await nav.panel.waitForTimeout(4_000);
+  await expect(page.locator("#department")).toHaveValue("all");
+  expect(
+    (await nav.nativeActs()).filter((a) => a.action === "select"),
+  ).toHaveLength(0);
+});
