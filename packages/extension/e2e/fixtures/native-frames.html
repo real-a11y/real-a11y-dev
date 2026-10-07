@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Native frames</title>
+  </head>
+  <body>
+    <!--
+      Three frames for the native read: one same-origin (it shares the top
+      frame's renderer and debugger session), one cross-origin (its own
+      renderer, reached through a child session), and an empty one, which
+      has no content to show and keeps its "embedded" mark.
+    -->
+    <h1>Outer heading</h1>
+    <iframe
+      id="same"
+      title="Same origin frame"
+      src="native-frames-child.html?same"
+    ></iframe>
+    <div id="cross-slot"></div>
+    <iframe id="empty" title="Empty frame" src="about:blank"></iframe>
+    <button type="button">Outer button</button>
+    <script>
+      // `localhost` is another site from `127.0.0.1`, on the same server.
+      const frame = document.createElement("iframe");
+      frame.id = "cross";
+      frame.title = "Cross origin frame";
+      frame.src = `http://localhost:${location.port}/native-frames-child.html?cross`;
+      document.getElementById("cross-slot").appendChild(frame);
+    </script>
+  </body>
+</html>

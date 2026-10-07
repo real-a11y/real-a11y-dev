@@ -168,15 +168,18 @@ test("type-ahead moves the native tree's selection", async ({ nav }) => {
   ).toContainText("Native panel fixture");
 });
 
-test("an iframe row is marked embedded, since the native read skips its content", async ({
+test("an iframe row holds its frame's content, with no embedded mark", async ({
   nav,
 }) => {
+  // It used to be a leaf marked embedded: the native read covered the top
+  // frame only. `native-frames.test.ts` covers frames in depth, including
+  // the empty one that keeps its mark.
   await nav.showNative("pick-mode.html");
   await nav.panel.getByRole("button", { name: "Expand all" }).click();
-  // Whatever Chromium names the frame, its row carries the badge.
   await expect(
-    nav.panel.locator(".sn-node .sn-iframe-badge", { hasText: "embedded" }),
-  ).toHaveCount(1);
+    nav.panel.getByRole("treeitem", { name: /Frame button/ }),
+  ).toBeVisible();
+  await expect(nav.panel.locator(".sn-node .sn-iframe-badge")).toHaveCount(0);
 });
 
 /**
