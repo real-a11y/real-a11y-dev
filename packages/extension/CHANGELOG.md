@@ -185,6 +185,18 @@
   comes back.
   ([#467](https://github.com/real-a11y/real-a11y-dev/pull/467))
 
+- **The native tree reads a new page by itself.** When the tab it has read
+  navigates, the native tree reads the new page once it has loaded, instead
+  of staying empty until **Refresh native tree**. Other page changes still
+  wait for Refresh, an action or a key, unless you turn on **Follow page
+  changes** (the native toolbar's ⟳ toggle): then it reads after every burst
+  of changes once the page goes quiet, backing off to once every 48 s the
+  longer it runs without you. It never follows a tab you switch to, and only
+  the top frame's changes count. A failed read, or pressing **Cancel** on
+  Chrome's debugging bar during any read, action or pick, pauses it; the
+  status line says so, and Refresh resumes it.
+  ([#478](https://github.com/real-a11y/real-a11y-dev/pull/478))
+
 ## 0.1.15
 
 ### Patch Changes
