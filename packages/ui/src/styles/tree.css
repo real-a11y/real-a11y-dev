@@ -248,12 +248,13 @@
   cursor: pointer;
 }
 
-.sn-toolbar-btn:hover:not(:disabled) {
+.sn-toolbar-btn:hover:not(:disabled):not([aria-disabled="true"]) {
   background: var(--sn-bg-hover);
   color: var(--sn-text);
 }
 
-.sn-toolbar-btn:disabled {
+.sn-toolbar-btn:disabled,
+.sn-toolbar-btn[aria-disabled="true"] {
   opacity: 0.35;
   cursor: not-allowed;
 }
