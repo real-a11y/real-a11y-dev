@@ -192,7 +192,7 @@ test("Cancel waits while an Enable is on its way, so it can't close over one", a
       if ((message as { type?: unknown } | null)?.type !== "NATIVE_FLAG_SET") {
         return sent;
       }
-      return new Promise((resolve) => {
+      return new Promise<unknown>((resolve) => {
         w.releaseFlagSet = () => resolve(sent);
       });
     }) as typeof chrome.runtime.sendMessage;
