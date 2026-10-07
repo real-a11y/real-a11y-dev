@@ -520,6 +520,22 @@ describe("field-value redaction covers the extension's option picker", () => {
     ]);
   });
 
+  it("grades shortening the states withheld inside a sensitive field 🔴 high", async () => {
+    // An option's `selected` under a sensitive select names the value. Both
+    // native transports read the one list, so trimming it is the leak.
+    const vocabPath = "packages/core/src/native/ax-vocabulary.ts";
+    const vocab = `export const NATIVE_AX_CHOICE_STATES: readonly string[] = ["selected"];\n`;
+    const result = await grade(
+      { [vocabPath]: vocab.replace('["selected"]', "[]") },
+      { base: { [vocabPath]: vocab } },
+    );
+
+    assert.equal(result.tier, "high");
+    assert.deepEqual(evidenceFor(result, "field-value-redaction"), [
+      `${vocabPath} → NATIVE_AX_CHOICE_STATES`,
+    ]);
+  });
+
   it("grades loosening the native verdict's fail-closed flag 🔴 high", async () => {
     const corePath = "packages/extension/src/native/native-core.ts";
     const core = `export function fieldValueWithheld(read) {\n  return !(read.classified === true && read.sensitive !== true);\n}\n`;

@@ -136,6 +136,7 @@ export {
   NATIVE_AX_OWN_TEXT_ROLES,
   NATIVE_AX_AUTHOR_NAMED_ROLES,
   mapNativeAXRole,
+  NATIVE_AX_CHOICE_STATES,
   nativeAXStateValue,
 } from "./native/ax-vocabulary.js";
 export { normalizeNativeAX, serializeNativeAX } from "./native/ax-normalize.js";

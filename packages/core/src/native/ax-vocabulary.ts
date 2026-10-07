@@ -280,3 +280,25 @@ export function nativeAXStateValue(axValue: {
   if (value === "false") return false;
   return String(value);
 }
+
+/**
+ * The AX states that say which choice inside a field is made, dropped from
+ * every node inside a sensitive field by every native transport (the
+ * browser producer's region pass, the extension's `withholdInsideSensitive`)
+ * — one list, so the transports can't disagree. Chromium marks a
+ * `<select>`'s chosen `option` `selected`, so under a redacted
+ * `<select autocomplete="cc-exp-month">` the option rows would name the month
+ * anyway.
+ *
+ * `checked` is not on it: a checkbox or radio is its own control, classified
+ * for sensitivity on its own, so a checked box inside a sensitive wrapper
+ * isn't that field's value, and dropping it would only make the panel's
+ * feedback misread what a click does.
+ *
+ * Not part of normalized output, so changing it doesn't bump
+ * {@link NATIVE_AX_VOCABULARY_VERSION}; it is a redaction gate instead
+ * (`scripts/pr-risk.mjs`).
+ *
+ * @internal Shared with the native transports.
+ */
+export const NATIVE_AX_CHOICE_STATES: readonly string[] = ["selected"];

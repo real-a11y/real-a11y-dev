@@ -871,6 +871,7 @@ const FIELD_VALUE_GATES = [
   // producers' panels, and so does selecting an option row straight from the
   // native tree (`selectFeedback`).
   "withholdInsideSensitive",
+  "NATIVE_AX_CHOICE_STATES",
   "fieldValueWithheld",
   "pickerCurrentOption",
   "describeSelection",
