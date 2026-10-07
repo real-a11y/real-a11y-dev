@@ -47,12 +47,46 @@ export interface RawAXNameNode extends RawNativeAXNode {
   properties?: Array<{ name: string; value?: AXPropertyValue }>;
 }
 
-function cleanText(text: string): string {
+/** Collapse internal whitespace and trim: how every native transport
+ *  compares a name's text. */
+export function cleanAXText(text: string): string {
   return text.replace(/\s+/g, " ").trim();
 }
 
+/** Chromium's password mask: a value made only of these is a password field. */
+const PASSWORD_MASK = /^[•●]+$/;
+
+/**
+ * `value` is Chromium's password mask — the AX value of a password field,
+ * one bullet per character. Treat it as a sensitive field's whatever the
+ * markup said by the time it was asked: the bullets' count is the
+ * password's length.
+ */
+export function isNativePasswordMask(value: unknown): boolean {
+  return (
+    typeof value === "string" && PASSWORD_MASK.test(value.replace(/\s/g, ""))
+  );
+}
+
+/**
+ * `raw` is DOM-backed and holds a value, yet no in-page read classified it
+ * (`classified` false) — a node the page added between the two reads, or one
+ * the transport never asked about. Unclassified is withheld, for its value
+ * and for every name built from it.
+ */
+export function holdsUnclassifiedValue(
+  raw: RawAXNameNode,
+  classified: boolean,
+): boolean {
+  return (
+    !classified &&
+    typeof raw.backendDOMNodeId === "number" &&
+    carriesAXValue(raw)
+  );
+}
+
 /** Walk `raw` and its ancestors by `parentId`, stopping on a cycle. */
-export function* ancestry<T extends RawAXNameNode>(
+export function* nativeAncestry<T extends RawAXNameNode>(
   raw: T | undefined,
   byId: ReadonlyMap<string, T>,
 ): Generator<T> {
@@ -72,7 +106,7 @@ export function* ancestry<T extends RawAXNameNode>(
  * `<meter value="0.6">` arrives as `0.6000000238418579`; print the shortest
  * decimal that is the same float, which is what the page wrote.
  */
-export function axValueText(value: unknown): string | undefined {
+function axValueText(value: unknown): string | undefined {
   if (typeof value === "string") return value;
   if (typeof value !== "number" || !Number.isFinite(value)) return undefined;
   if (Math.fround(value) === value) {
@@ -84,7 +118,7 @@ export function axValueText(value: unknown): string | undefined {
   return String(value);
 }
 
-export function propertyOf(
+export function nativeAXProperty(
   raw: RawAXNameNode,
   name: string,
 ): AXPropertyValue | undefined {
@@ -126,7 +160,7 @@ export function holdsContent<T extends RawAXNameNode>(
     if (
       text &&
       NATIVE_AX_NAME_SOURCE_ROLES.has(cur.role?.value ?? "") &&
-      cleanText(String(cur.name?.value ?? "")) !== ""
+      cleanAXText(String(cur.name?.value ?? "")) !== ""
     ) {
       return true;
     }
@@ -139,12 +173,14 @@ export function holdsContent<T extends RawAXNameNode>(
 }
 
 /** The raw nodes, indexed the two ways the classifiers look them up. */
-export interface RawIndex<T extends RawAXNameNode = RawAXNameNode> {
+export interface NativeAXIndex<T extends RawAXNameNode = RawAXNameNode> {
   byId: ReadonlyMap<string, T>;
   byBackendId: ReadonlyMap<number, T>;
 }
 
-export function indexRaw<T extends RawAXNameNode>(rawNodes: T[]): RawIndex<T> {
+export function indexNativeAX<T extends RawAXNameNode>(
+  rawNodes: T[],
+): NativeAXIndex<T> {
   const byId = new Map<string, T>();
   const byBackendId = new Map<number, T>();
   for (const raw of rawNodes) {
@@ -181,14 +217,14 @@ export interface ValueRegions {
 }
 
 export function valueRegions<T extends RawAXNameNode>(
-  index: RawIndex<T>,
+  index: NativeAXIndex<T>,
   roots: ReadonlySet<string>,
 ): ValueRegions {
   const { byId, byBackendId } = index;
   const containing = new Set<string>();
   const rootsUnder = new Map<string, string[]>();
   for (const id of roots) {
-    for (const cur of ancestry(byId.get(id), byId)) {
+    for (const cur of nativeAncestry(byId.get(id), byId)) {
       if (cur.nodeId === id) continue;
       containing.add(cur.nodeId);
       const under = rootsUnder.get(cur.nodeId);
@@ -203,7 +239,7 @@ export function valueRegions<T extends RawAXNameNode>(
   const rootOf = (raw: RawAXNameNode): string | null => {
     const chain: string[] = [];
     let result: string | null = null;
-    for (const cur of ancestry(raw as T, byId)) {
+    for (const cur of nativeAncestry(raw as T, byId)) {
       const known = rootMemo.get(cur.nodeId);
       if (known !== undefined) {
         result = known;
@@ -228,7 +264,7 @@ export function valueRegions<T extends RawAXNameNode>(
    */
   const ownRoot = (root: string, raw: RawAXNameNode): boolean => {
     if (!roots.has(raw.nodeId)) return false;
-    for (const cur of ancestry(byId.get(root), byId)) {
+    for (const cur of nativeAncestry(byId.get(root), byId)) {
       if (cur.nodeId === raw.nodeId) return true;
     }
     return false;
@@ -239,7 +275,7 @@ export function valueRegions<T extends RawAXNameNode>(
     containing,
     inside: (raw) => rootOf(raw) !== null,
     references: (raw, property) =>
-      (propertyOf(raw, property)?.relatedNodes ?? []).some((related) => {
+      (nativeAXProperty(raw, property)?.relatedNodes ?? []).some((related) => {
         const target =
           typeof related.backendDOMNodeId === "number"
             ? byBackendId.get(related.backendDOMNodeId)
@@ -262,7 +298,7 @@ export function winningNameSource(
 ): AXNameSource | undefined {
   return raw.name?.sources?.find(
     (s) =>
-      s.superseded !== true && cleanText(String(s.value?.value ?? "")) !== "",
+      s.superseded !== true && cleanAXText(String(s.value?.value ?? "")) !== "",
   );
 }
 
@@ -295,7 +331,7 @@ export function withholdRegionNames<T extends RawAXNameNode>(
   if (regions.roots.size === 0) return rawNodes;
   return rawNodes.map((raw) => {
     let out = raw;
-    if (cleanText(String(raw.name?.value ?? "")) !== "") {
+    if (cleanAXText(String(raw.name?.value ?? "")) !== "") {
       const winner = winningNameSource(raw);
       const redact =
         (regions.containing.has(raw.nodeId) &&
@@ -339,7 +375,7 @@ export function withholdSensitiveFieldNames<T extends RawAXNameNode>(
   rawNodes: T[],
   fieldIds: Iterable<string>,
 ): T[] {
-  const index = indexRaw(rawNodes);
+  const index = indexNativeAX(rawNodes);
   const roots = new Set<string>();
   for (const id of fieldIds) {
     const field = index.byId.get(id);

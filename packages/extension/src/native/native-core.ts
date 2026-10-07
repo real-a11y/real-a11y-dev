@@ -37,8 +37,10 @@
  */
 
 import {
-  carriesAXValue,
-  indexRaw,
+  cleanAXText,
+  holdsUnclassifiedValue,
+  indexNativeAX,
+  isNativePasswordMask,
   NATIVE_AX_CHOICE_STATES,
   nativeAXStateValue,
   normalizeNativeAX,
@@ -48,7 +50,7 @@ import {
   type A11yInfo,
   type NativeAXNode,
   type RawAXNameNode,
-  type RawIndex,
+  type NativeAXIndex,
 } from "@real-a11y-dev/core";
 
 /**
@@ -66,8 +68,8 @@ import {
 export const NATIVE_REDACTED_VALUE = REDACTED_VALUE;
 
 /**
- * The full CDP `Accessibility.AXNode` shape, a superset of core's structural
- * {@link RawNativeAXNode} — core only reads `role`/`name`/tree-shape fields,
+ * The full CDP `Accessibility.AXNode` shape, a superset of core's
+ * {@link RawAXNameNode} — core only reads `role`/`name`/tree-shape fields,
  * but Chromium always sends `properties` (`expanded`, `checked`, `level`, …)
  * on the wire regardless of which subset a caller's type asks for.
  *
@@ -159,13 +161,6 @@ export function nativeIdForBackendNode(backendNodeId: number): string {
   return `ax-dom-${backendNodeId}`;
 }
 
-/** Collapse internal whitespace and trim — matches `@real-a11y-dev/browser`'s
- *  own `cleanText`, kept in lockstep by hand for the reason every other
- *  mirrored piece of this file is: `browser` carries Playwright. */
-function cleanText(text: string): string {
-  return text.replace(/\s+/g, " ").trim();
-}
-
 /** Split an AX node's `properties` into `states` (bool/stateful) and
  *  `properties` (descriptive strings), plus the accessible description —
  *  Chromium's own `aria-describedby`/`aria-description` resolution, a
@@ -189,7 +184,7 @@ function axFacets(
     }
   }
   const description = raw.description?.value
-    ? cleanText(String(raw.description.value))
+    ? cleanAXText(String(raw.description.value))
     : "";
   return { states, properties, description };
 }
@@ -524,7 +519,7 @@ function announcedAXValue(
   const value = raw?.value?.value;
   if (typeof value === "number")
     return Number.isFinite(value) ? value : undefined;
-  if (typeof value === "string") return cleanText(value) ? value : undefined;
+  if (typeof value === "string") return cleanAXText(value) ? value : undefined;
   return undefined;
 }
 
@@ -600,14 +595,14 @@ export function fieldFacets(
   if (read.value) facets.rawValue = read.value;
 
   const valuetext = RANGE_VALUE_ROLES.has(role)
-    ? cleanText(read.valuetext ?? "")
+    ? cleanAXText(read.valuetext ?? "")
     : "";
   const source = read.announced ?? axValue;
   const announced =
     valuetext ||
     (typeof source === "number"
       ? formatAXNumber(source)
-      : cleanText(source ?? ""));
+      : cleanAXText(source ?? ""));
   if (announced) facets.value = capText(announced, VALUE_MAX);
   return facets;
 }
@@ -708,7 +703,7 @@ export function withholdInsideSensitive(
  *  tree doesn't keep. */
 function referencedOutsideTree(
   rawNodes: RawAXNode[],
-  index: RawIndex<RawAXNode>,
+  index: NativeAXIndex<RawAXNode>,
   kept: readonly NativeAXNode[],
 ): RawAXNode[] {
   const keptIds = new Set(kept.map((n) => n.id));
@@ -803,10 +798,6 @@ async function fieldsWithin(
   }
 }
 
-/** Chromium's password mask: a value made only of these is a password field,
- *  whatever its markup says by the time the page is asked. */
-const MASKED_VALUE = /^[•●]+$/;
-
 /**
  * The raw ids of every field whose value must stay out of other nodes'
  * names: the fields the in-page read found sensitive or could not read
@@ -830,14 +821,12 @@ function nameWithholdingRoots(
     if (raw) roots.add(raw.nodeId);
   }
   for (const raw of rawNodes) {
-    const value = raw.value?.value;
-    const masked =
-      typeof value === "string" && MASKED_VALUE.test(value.replace(/\s/g, ""));
-    const unread =
-      typeof raw.backendDOMNodeId === "number" &&
-      !read.has(nativeIdOf(raw)) &&
-      carriesAXValue(raw);
-    if (masked || unread) roots.add(raw.nodeId);
+    if (
+      isNativePasswordMask(raw.value?.value) ||
+      holdsUnclassifiedValue(raw, read.has(nativeIdOf(raw)))
+    ) {
+      roots.add(raw.nodeId);
+    }
   }
   return [...roots];
 }
@@ -932,7 +921,7 @@ export async function readNativeTree(
     // the tree does; one the DOM agent can't list, or that has no AX node to
     // withhold by, leaves the target withholding instead — failing closed.
     for (const id of facetsById.keys()) read.add(id);
-    const index = indexRaw(full.nodes);
+    const index = indexNativeAX(full.nodes);
     await Promise.all(
       referencedOutsideTree(full.nodes, index, firstPass)
         .filter((target) => hidesUnreadNode(target, index.byId, read))

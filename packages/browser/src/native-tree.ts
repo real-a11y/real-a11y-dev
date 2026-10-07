@@ -68,19 +68,22 @@ import {
   RANGE_VALUE_ROLES,
   REDACTED_VALUE,
   STATE_ONLY_ROLES,
-  ancestry,
+  nativeAncestry,
   carriesAXValue,
+  cleanAXText,
   givesValueAway,
   holdsContent,
-  indexRaw,
+  holdsUnclassifiedValue,
+  indexNativeAX,
+  isNativePasswordMask,
   nonEmptyAXText,
-  propertyOf,
+  nativeAXProperty,
   valueRegions,
   winningNameSource,
   withholdRegionNames,
   type CssPathAdapter,
-  type RawAXNameNode,
-  type RawIndex,
+  type RawAXNameNode as RawAXNode,
+  type NativeAXIndex,
   type ValueRegions,
   type SemanticNode,
   type ExtractionResult,
@@ -88,9 +91,6 @@ import {
   type DomInfo,
 } from "@real-a11y-dev/core";
 import type { CDPSession, Page } from "playwright";
-
-/** The full CDP `Accessibility.AXNode` shape this producer consumes. */
-type RawAXNode = RawAXNameNode;
 
 /**
  * How {@link nativeTree} / {@link buildNativeTree} treat what users entered.
@@ -199,24 +199,7 @@ function nativeIdOf(raw: RawAXNode): string {
     : `ax-${raw.nodeId}`;
 }
 
-function cleanText(text: string): string {
-  return text.replace(/\s+/g, " ").trim();
-}
-
 // ── Field values (ADR-0001) ─────────────────────────────────────────────────
-
-/**
- * Chromium's password mask: a value made only of these is a password field
- * whose markup this producer could not read. Treated as sensitive, so the
- * length the bullets encode never reaches the tree.
- */
-const MASKED_VALUE = /^[•●]+$/;
-
-function isMasked(value: unknown): boolean {
-  return (
-    typeof value === "string" && MASKED_VALUE.test(value.replace(/\s/g, ""))
-  );
-}
 
 /**
  * The value a screen reader announces for `raw`, before sensitivity. Chromium's
@@ -236,9 +219,9 @@ function rawAnnouncedValue(
   if (RANGE_VALUE_ROLES.has(role)) {
     return (
       nonEmptyAXText(enriched?.ariaValueText) ??
-      nonEmptyAXText(propertyOf(raw, "valuetext")?.value) ??
+      nonEmptyAXText(nativeAXProperty(raw, "valuetext")?.value) ??
       nonEmptyAXText(raw.value?.value) ??
-      nonEmptyAXText(propertyOf(raw, "valuenow")?.value)
+      nonEmptyAXText(nativeAXProperty(raw, "valuenow")?.value)
     );
   }
   return nonEmptyAXText(raw.value?.value);
@@ -258,7 +241,10 @@ function announcedValue(
   sensitive: boolean,
 ): string | undefined {
   const text = rawAnnouncedValue(raw, role, enriched);
-  return finishAnnouncedValue(text, () => sensitive || isMasked(text));
+  return finishAnnouncedValue(
+    text,
+    () => sensitive || isNativePasswordMask(text),
+  );
 }
 
 /** Where the sensitive fields are, and what their values reach. */
@@ -285,7 +271,7 @@ interface FieldSensitivity {
  */
 function fieldSensitivity(
   rawNodes: RawAXNode[],
-  index: RawIndex,
+  index: NativeAXIndex,
   enrichment: ReadonlyMap<number, NativeDomInfo>,
 ): FieldSensitivity {
   const fields = new Set<string>();
@@ -294,13 +280,9 @@ function fieldSensitivity(
       typeof raw.backendDOMNodeId === "number"
         ? enrichment.get(raw.backendDOMNodeId)
         : undefined;
-    const unclassified =
-      typeof raw.backendDOMNodeId === "number" &&
-      enriched === undefined &&
-      carriesAXValue(raw);
     if (
-      unclassified ||
-      isMasked(raw.value?.value) ||
+      holdsUnclassifiedValue(raw, enriched !== undefined) ||
+      isNativePasswordMask(raw.value?.value) ||
       (enriched !== undefined &&
         isSensitiveFieldAttributes(enriched.tagName, {
           type: enriched.attributes.type,
@@ -381,13 +363,16 @@ const PAGE_STATE_VALUE_ROLES: ReadonlySet<string> = new Set([
  * contributes nothing to a name built around it, and counting it would
  * withhold every row and cell name in a table of empty inputs.
  */
-function strictValueRoots(rawNodes: RawAXNode[], index: RawIndex): Set<string> {
+function strictValueRoots(
+  rawNodes: RawAXNode[],
+  index: NativeAXIndex,
+): Set<string> {
   // What a user entered, not what the page reports: a progress bar, a meter
   // and a scrollbar hold the page's own state, and a media element's timeline
   // and volume are playback, not input. Counting them would withhold a
   // `<video>`'s name for containing its scrubber.
   const inMedia = (raw: RawAXNode): boolean => {
-    for (const cur of ancestry(raw, index.byId)) {
+    for (const cur of nativeAncestry(raw, index.byId)) {
       const role = cur.role?.value;
       if (role === "Video" || role === "Audio") return true;
     }
@@ -404,7 +389,7 @@ function strictValueRoots(rawNodes: RawAXNode[], index: RawIndex): Set<string> {
     }
     if (!isEditable(raw)) continue;
     let root = raw;
-    for (const cur of ancestry(raw, index.byId)) {
+    for (const cur of nativeAncestry(raw, index.byId)) {
       if (!isEditable(cur)) break;
       root = cur;
     }
@@ -423,12 +408,12 @@ function strictValueRoots(rawNodes: RawAXNode[], index: RawIndex): Set<string> {
  * missing, as in a payload recorded without it — fails closed.
  */
 function authoredByMarkup(raw: RawAXNode): boolean {
-  const name = cleanText(String(raw.name?.value ?? ""));
+  const name = cleanAXText(String(raw.name?.value ?? ""));
   const winner = winningNameSource(raw);
   return (
     winner?.type === "attribute" &&
     MARKUP_NAME_ATTRIBUTES.has(winner.attribute ?? "") &&
-    cleanText(String(winner.value?.value)) === name
+    cleanAXText(String(winner.value?.value)) === name
   );
 }
 
@@ -438,7 +423,7 @@ function authoredByMarkup(raw: RawAXNode): boolean {
  * text field). The region's own root is not inside it: that is the field
  * itself, whose authored label is kept and whose value is already withheld.
  *
- * Decided by ancestry rather than by each node's own `editable` flag, because
+ * Decided by nativeAncestry rather than by each node's own `editable` flag, because
  * a `contenteditable="false"` island (a mention chip, an embedded link) carries
  * no flag of its own but is still part of what the user wrote.
  */
@@ -516,7 +501,7 @@ function redactEditableContent(rawNodes: RawAXNode[]): {
   const nodes = rawNodes.map((raw) => {
     if (!inside.has(raw)) return raw;
     const textRun = NATIVE_AX_NAME_SOURCE_ROLES.has(raw.role?.value ?? "");
-    const computed = cleanText(String(raw.name?.value ?? ""));
+    const computed = cleanAXText(String(raw.name?.value ?? ""));
     const name = textRun
       ? ""
       : computed === "" || authoredByMarkup(raw)
@@ -566,7 +551,7 @@ function prepareRawNodes(
   sensitivity: FieldSensitivity;
   insideEditor: Set<RawAXNode>;
 } {
-  const index = indexRaw(rawNodes);
+  const index = indexNativeAX(rawNodes);
   const sensitivity = fieldSensitivity(rawNodes, index, enrichment);
   const named = withholdRegionNames(rawNodes, sensitivity.regions);
   if (options.redactInput !== true) {
@@ -873,7 +858,7 @@ export function buildNativeTree(
   // inside a sensitive field, and in strict mode for one inside any choice
   // field (a combobox or listbox).
   const inChoiceField = (raw: RawAXNode): boolean => {
-    for (const cur of ancestry(raw, rawByNodeId)) {
+    for (const cur of nativeAncestry(raw, rawByNodeId)) {
       const role = cur.role?.value;
       if (cur !== raw && (role === "combobox" || role === "listbox")) {
         return true;
@@ -920,7 +905,7 @@ export function buildNativeTree(
       // take as-is: a value lives in `value`, below, or nowhere.
       name: nn.name,
       description: raw?.description?.value
-        ? cleanText(String(raw.description.value))
+        ? cleanAXText(String(raw.description.value))
         : "",
       ...(value !== undefined ? { value } : {}),
       states,
