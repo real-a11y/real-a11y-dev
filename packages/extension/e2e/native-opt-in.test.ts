@@ -174,3 +174,50 @@ test("a failed Enable attempt surfaces its error inline and never flips the sett
     nav.panel.getByRole("button", { name: "NATIVE", exact: true }),
   ).toHaveCount(0);
 });
+
+test("Cancel waits while an Enable is on its way, so it can't close over one", async ({
+  nav,
+}) => {
+  const { enableEntry } = await freshPanel(nav);
+
+  // Hold NATIVE_FLAG_SET's answer until the test lets it through: the
+  // service worker may already have written the setting by then.
+  await nav.panel.evaluate(() => {
+    const real = chrome.runtime.sendMessage.bind(chrome.runtime);
+    const w = window as unknown as { releaseFlagSet?: () => void };
+    chrome.runtime.sendMessage = ((message: unknown, ...rest: unknown[]) => {
+      const sent = (
+        real as (message: unknown, ...rest: unknown[]) => Promise<unknown>
+      )(message, ...rest);
+      if ((message as { type?: unknown } | null)?.type !== "NATIVE_FLAG_SET") {
+        return sent;
+      }
+      return new Promise((resolve) => {
+        w.releaseFlagSet = () => resolve(sent);
+      });
+    }) as typeof chrome.runtime.sendMessage;
+  });
+
+  await enableEntry.click();
+  const banner = nav.panel.getByRole("dialog", { name: "Enable native mode" });
+  await banner.getByRole("button", { name: "Enable" }).click();
+  const enabling = banner.getByRole("button", { name: "Enabling…" });
+  await expect(enabling).toHaveAttribute("aria-disabled", "true");
+
+  // Neither Cancel nor Escape closes the banner over the pending request.
+  // Dispatched, not `click()`: Playwright waits for an aria-disabled button
+  // to enable, but a user's click still reaches its handler.
+  const cancel = banner.getByRole("button", { name: "Cancel" });
+  await expect(cancel).toHaveAttribute("aria-disabled", "true");
+  await cancel.dispatchEvent("click");
+  await nav.panel.keyboard.press("Escape");
+  await expect(banner).toBeVisible();
+
+  await nav.panel.evaluate(() =>
+    (window as unknown as { releaseFlagSet: () => void }).releaseFlagSet(),
+  );
+  await expect(
+    nav.panel.getByRole("button", { name: "NATIVE", exact: true }),
+  ).toHaveAttribute("aria-pressed", "true");
+  await expect(banner).toHaveCount(0);
+});

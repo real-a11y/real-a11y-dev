@@ -198,9 +198,15 @@ function NativeConsentBanner({
   onEnable,
   onCancel,
   error,
+  pending = false,
 }: {
   onEnable: () => void;
   onCancel: () => void;
+  /** An Enable is on its way: the setting may already be written, so neither
+   *  button does anything until it answers — a Cancel then would close the
+   *  banner over a request that still turns native mode on. Marked
+   *  `aria-disabled` rather than `disabled`, so focus stays in the dialog. */
+  pending?: boolean;
   /** Shown inline when a previous Enable attempt failed — the banner stays
    *  open on failure (see App's own `onEnable` handler), so this is the only
    *  place left to surface it; `nativeStatus` renders only inside
@@ -222,10 +228,10 @@ function NativeConsentBanner({
     (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         e.preventDefault();
-        onCancel();
+        if (!pending) onCancel();
       }
     },
-    [onCancel],
+    [onCancel, pending],
   );
 
   return (
@@ -252,14 +258,20 @@ function NativeConsentBanner({
         <button
           ref={enableRef}
           class="sn-toolbar-btn"
-          onClick={onEnable}
+          aria-disabled={pending}
+          onClick={() => {
+            if (!pending) onEnable();
+          }}
           onKeyDown={handleKeyDown}
         >
-          Enable
+          {pending ? "Enabling…" : "Enable"}
         </button>
         <button
           class="sn-toolbar-btn"
-          onClick={onCancel}
+          aria-disabled={pending}
+          onClick={() => {
+            if (!pending) onCancel();
+          }}
           onKeyDown={handleKeyDown}
         >
           Cancel
@@ -340,6 +352,8 @@ export function App() {
   const [nativeConsentError, setNativeConsentError] = useState<
     string | undefined
   >(undefined);
+  // An Enable sent and not yet answered: the banner's buttons wait for it.
+  const [nativeConsentPending, setNativeConsentPending] = useState(false);
 
   useEffect(() => {
     void chrome.runtime
@@ -2267,10 +2281,13 @@ export function App() {
       {showNativeConsent && (
         <NativeConsentBanner
           error={nativeConsentError}
+          pending={nativeConsentPending}
           onEnable={() => {
             setNativeConsentError(undefined);
+            setNativeConsentPending(true);
             pendingNativeFocus.current = "toggle";
             void requestNativeMode(true).then((ok) => {
+              setNativeConsentPending(false);
               // Only a real flip switches the view; on failure the banner
               // stays open with the error, for a retry.
               if (!ok) {
