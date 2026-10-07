@@ -30,6 +30,7 @@ import {
 import type { DogfoodLog } from "./dogfood.js";
 import {
   dispatchNative,
+  frameIdSuffix,
   nativeIdForBackendNode,
   readNativeTree,
   type NativeAction,
@@ -206,6 +207,15 @@ let activeSession: NativeDebuggerSession | undefined;
 export function cancelNativePicks(): void {
   activeSession?.cancelAllPicks();
 }
+
+/** The id suffix of a pick's hit in an out-of-process frame, if it was
+ *  in one — the one that frame's rows carry. */
+function pickSuffix(picked: { frameId?: string; documentId?: string }): string {
+  return picked.frameId === undefined
+    ? ""
+    : frameIdSuffix(picked.frameId, picked.documentId);
+}
+
 // Pairs each `reveal` dispatch's content-script arm with its own release —
 // see the NATIVE_ACT handler.
 let revealSeq = 0;
@@ -467,28 +477,25 @@ export function registerNativeMode(): void {
                 // Arm the content script, reveal or preview, release. Armed
                 // here, after the per-tab queue wait and right beside the
                 // dispatch it covers, so a long queue can't outlast its
-                // deadline. Only the top frame: the native tree reads the top
-                // frame alone, so a target never lives in a subframe, and
-                // arming third-party frames would only widen the window. The
-                // nonce reaches the page only as the page function's argument
-                // (`pageReveal`, `pagePreview`).
+                // deadline. Every frame: the native tree reads frames too, and
+                // a same-process frame's rows carry no sign of which frame
+                // they are in. That opens no frame to a page: an arm honours
+                // only the event carrying its nonce, which reaches the page
+                // only as the page function's argument (`pageReveal`,
+                // `pagePreview`), in the target's own frame.
                 const seq = ++revealSeq;
                 const nonce = crypto.randomUUID();
                 const arm = (active: boolean) =>
                   chrome.tabs
-                    .sendMessage(
-                      message.tabId,
-                      {
-                        type: "ARM_NATIVE_OVERLAY",
-                        payload: {
-                          seq,
-                          active,
-                          kind: message.action as "reveal" | "preview",
-                          ...(active ? { nonce } : {}),
-                        },
+                    .sendMessage(message.tabId, {
+                      type: "ARM_NATIVE_OVERLAY",
+                      payload: {
+                        seq,
+                        active,
+                        kind: message.action as "reveal" | "preview",
+                        ...(active ? { nonce } : {}),
                       },
-                      { frameId: 0 },
-                    )
+                    })
                     .then(() => true)
                     .catch(() => false);
                 // No content script answered (one that can't run here, or
@@ -602,11 +609,16 @@ export function registerNativeMode(): void {
                 : picked
                   ? {
                       // The hit, then its ancestors, for when the hit itself
-                      // isn't a node the AX tree kept.
-                      nodeId: nativeIdForBackendNode(picked.backendNodeId),
+                      // isn't a node the AX tree kept. A hit in an
+                      // out-of-process frame carries that frame, as its rows'
+                      // ids do.
+                      nodeId: `${nativeIdForBackendNode(picked.backendNodeId)}${pickSuffix(picked)}`,
                       ancestorIds: picked.chainBackendNodeIds
                         .slice(1)
-                        .map(nativeIdForBackendNode),
+                        .map(
+                          (id) =>
+                            `${nativeIdForBackendNode(id)}${pickSuffix(picked)}`,
+                        ),
                     }
                   : { cancelled: true, ...(timedOut ? { timedOut } : {}) };
               void chrome.runtime

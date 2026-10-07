@@ -13,7 +13,7 @@
  */
 
 import { DogfoodLog } from "./dogfood.js";
-import type { CdpTransport } from "./native-core.js";
+import type { CdpTransport, FrameSession } from "./native-core.js";
 
 const PROTOCOL = "1.3";
 
@@ -70,15 +70,171 @@ export function isDebuggerConflict(message: string | undefined): boolean {
   return /already attached/i.test(message ?? "");
 }
 
-/** chrome.debugger.sendCommand for one tab, as a transport. */
-function transportFor(tabId: number): CdpTransport {
+/**
+ * chrome.debugger.sendCommand for one tab, as a transport — or, with
+ * `sessionId`, for one of its out-of-process frames' child sessions, which
+ * the tab's own attach reaches (Chrome 125+) without attaching anything else.
+ */
+function transportFor(
+  tabId: number,
+  sessionId?: string,
+): CdpTransport & { dispose(): void } {
+  const debuggee: chrome.debugger.DebuggerSession = sessionId
+    ? { tabId, sessionId }
+    : { tabId };
+  const send = <T>(method: string, params?: object) =>
+    chrome.debugger.sendCommand(
+      debuggee,
+      method,
+      params as Record<string, unknown> | undefined,
+    ) as unknown as Promise<T>;
+  // Auto-attach once per transport: asked again, it announces nothing new.
+  let frames: Promise<FrameAnnouncements | undefined> | undefined;
   return {
-    send: <T>(method: string, params?: object) =>
-      chrome.debugger.sendCommand(
-        { tabId },
-        method,
-        params as Record<string, unknown> | undefined,
-      ) as unknown as Promise<T>,
+    send,
+    frameSessions: async (until) => {
+      frames ??= announceFrames(tabId, sessionId, send);
+      return (await frames)?.sessions(until) ?? [];
+    },
+    // Stop listening for this document's frames, and its frames' frames:
+    // the operation that asked is over.
+    dispose: () => void frames?.then((f) => f?.dispose()),
+  };
+}
+
+/** What a pick resolved to: the element clicked, by backend id, with its
+ *  ancestors for a fallback, and the out-of-process frame it is in, if any —
+ *  whose session that backend id belongs to. */
+export interface PickedNode {
+  backendNodeId: number;
+  chainBackendNodeIds: number[];
+  frameId?: string;
+  /** The document that frame showed when armed: see `FrameSession`. */
+  documentId?: string;
+}
+
+/** How deep a pick arms nested out-of-process frames. */
+const MAX_PICK_FRAME_DEPTH = 5;
+
+/** How long a caller waits for the frames it expects to be announced. */
+const FRAME_ANNOUNCE_WAIT_MS = 300;
+interface FrameAnnouncements {
+  sessions(
+    until?: (frameIds: readonly string[]) => boolean,
+  ): Promise<FrameSession[]>;
+  dispose(): void;
+}
+
+/**
+ * The child sessions of a document's out-of-process frames.
+ * `Target.setAutoAttach` with `flatten` attaches to them inside the tab's
+ * own debugger connection, so they end with it — nothing to detach, and no
+ * second notice. (`Target.getTargets` and `Target.attachToTarget` are
+ * refused over chrome.debugger.)
+ *
+ * Each frame is announced by a `Target.attachedToTarget` event, and over
+ * chrome.debugger an event can arrive just after the command's answer, so
+ * the announcements are collected until the operation ends (`dispose`) and
+ * `sessions(until)` waits, briefly, for the ones its caller expects.
+ *
+ * Each session is checked to be the frame it was announced as before it is
+ * used: on a Chrome too old for child sessions, a command meant for one
+ * would run in the tab's own session instead, where the same backend id
+ * names some other element.
+ */
+async function announceFrames(
+  tabId: number,
+  parentSessionId: string | undefined,
+  send: CdpTransport["send"],
+): Promise<FrameAnnouncements | undefined> {
+  const announced: { frameId: string; sessionId: string }[] = [];
+  const waiters = new Set<() => void>();
+  const onEvent = (
+    source: chrome.debugger.DebuggerSession,
+    method: string,
+    params?: object,
+  ) => {
+    if (method !== "Target.attachedToTarget" || source.tabId !== tabId) return;
+    if (source.sessionId !== parentSessionId) return;
+    const p = params as {
+      sessionId?: string;
+      targetInfo?: { type?: string; targetId?: string };
+    };
+    if (p.targetInfo?.type !== "iframe") return;
+    if (!p.sessionId || !p.targetInfo.targetId) return;
+    announced.push({ frameId: p.targetInfo.targetId, sessionId: p.sessionId });
+    for (const wake of waiters) wake();
+  };
+  chrome.debugger.onEvent.addListener(onEvent);
+  try {
+    await send("Target.setAutoAttach", {
+      autoAttach: true,
+      waitForDebuggerOnStart: false,
+      flatten: true,
+    });
+  } catch {
+    chrome.debugger.onEvent.removeListener(onEvent);
+    return undefined;
+  }
+
+  const frameIds = () => announced.map((a) => a.frameId);
+  const verified = new Map<string, Promise<FrameSession | undefined>>();
+  const children: { dispose(): void }[] = [];
+  const verify = ({
+    frameId,
+    sessionId,
+  }: {
+    frameId: string;
+    sessionId: string;
+  }) => {
+    let session = verified.get(sessionId);
+    if (!session) {
+      const transport = transportFor(tabId, sessionId);
+      children.push(transport);
+      session = transport
+        .send<{ frameTree?: { frame?: { id?: string; loaderId?: string } } }>(
+          "Page.getFrameTree",
+        )
+        .then((tree) => {
+          const frame = tree.frameTree?.frame;
+          return frame?.id === frameId
+            ? {
+                frameId,
+                sessionId,
+                ...(frame.loaderId ? { documentId: frame.loaderId } : {}),
+                transport,
+              }
+            : undefined;
+        })
+        .catch(() => undefined);
+      verified.set(sessionId, session);
+    }
+    return session;
+  };
+
+  return {
+    async sessions(until) {
+      if (until && !until(frameIds())) {
+        await new Promise<void>((resolve) => {
+          const done = () => {
+            clearTimeout(timer);
+            waiters.delete(check);
+            resolve();
+          };
+          const check = () => {
+            if (until(frameIds())) done();
+          };
+          const timer = setTimeout(done, FRAME_ANNOUNCE_WAIT_MS);
+          waiters.add(check);
+        });
+      }
+      const sessions = await Promise.all(announced.map(verify));
+      return sessions.filter((s): s is FrameSession => s !== undefined);
+    },
+    dispose() {
+      chrome.debugger.onEvent.removeListener(onEvent);
+      for (const child of children) child.dispose();
+    },
   };
 }
 
@@ -465,8 +621,9 @@ export class NativeDebuggerSession {
     // teardown as a drop, which is the conservative default.
     let outcome: AttachOutcome | undefined;
     let value: T | undefined;
+    const transport = transportFor(tabId);
     try {
-      value = await fn(transportFor(tabId));
+      value = await fn(transport);
       outcome = { ok: true };
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -475,6 +632,7 @@ export class NativeDebuggerSession {
         error: isConnectionLost(msg) ? "connection-lost" : "command-failed",
       };
     } finally {
+      transport.dispose();
       // A book-keeping failure here must not discard an already-successful
       // result, nor turn it into a spurious retry of a page action. `detach`
       // derives the dwell duration from the map's own timestamp rather than a
@@ -876,6 +1034,10 @@ export class NativeDebuggerSession {
         t.send("Overlay.setInspectMode", { mode: "none" }).catch(() => {}),
       );
     }
+    // Inspect mode armed in out-of-process frames, by the child session the
+    // frame's events arrive under; disarmed with the tab's own.
+    const frames = new Map<string, FrameSession>();
+    let ended = false;
     return new Promise<PickedNode | null>((resolve, reject) => {
       let settled = false;
       /** Pending while a dropped setup waits for `onDetach`'s reason. */
@@ -919,11 +1081,18 @@ export class NativeDebuggerSession {
         else settle({ error: new Error("Target closed.") });
       };
       const onEvent = (
-        source: { tabId?: number },
+        source: chrome.debugger.DebuggerSession,
         method: string,
         params?: object,
       ) => {
         if (source.tabId !== tabId) return;
+        // A frame's own inspect mode reports under its child session; any
+        // other child session's events aren't this pick's.
+        const frame =
+          source.sessionId === undefined
+            ? undefined
+            : frames.get(source.sessionId);
+        if (source.sessionId !== undefined && !frame) return;
         // Escape pressed while the inspected PAGE has focus: Chromium cancels
         // inspect mode and fires this, with no `inspectNodeRequested`. The
         // panel's own Escape listener never sees that key.
@@ -937,8 +1106,14 @@ export class NativeDebuggerSession {
           finish(null);
           return;
         }
-        void resolveChain(picked.backendNodeId).then((chainBackendNodeIds) =>
-          finish({ backendNodeId: picked.backendNodeId, chainBackendNodeIds }),
+        void resolveChain(frame?.transport ?? t, picked.backendNodeId).then(
+          (chainBackendNodeIds) =>
+            finish({
+              backendNodeId: picked.backendNodeId,
+              chainBackendNodeIds,
+              ...(frame ? { frameId: frame.frameId } : {}),
+              ...(frame?.documentId ? { documentId: frame.documentId } : {}),
+            }),
         );
       };
       /**
@@ -956,7 +1131,10 @@ export class NativeDebuggerSession {
        * the raw hit, matching this function's pre-fallback behavior rather
        * than losing the pick entirely.
        */
-      const resolveChain = async (backendNodeId: number): Promise<number[]> => {
+      const resolveChain = async (
+        t: CdpTransport,
+        backendNodeId: number,
+      ): Promise<number[]> => {
         try {
           // `getAXNodeAndAncestors` answers "Accessibility has not been
           // enabled" without this — this `runPick` attach span never enables
@@ -996,25 +1174,7 @@ export class NativeDebuggerSession {
       // since Chromium answers a pending command ("Detached while handling
       // command.") before it fires `onDetach`. Then the pick stays registered
       // for the listener to settle, with a bounded fallback to a drop.
-      //
-      // Each step after the first is sent only while the pick is open. A STOP
-      // or the timeout can end it with a step in flight, and its cleanup's
-      // `mode: none` goes out then; a later step would arm inspect mode
-      // after it, with nothing left to turn it off before the detach.
-      const step = (method: string, params?: object) =>
-        settled ? undefined : t.send(method, params);
-      void t
-        .send("DOM.enable")
-        .then(() => step("Overlay.enable"))
-        .then(() =>
-          step("Overlay.setInspectMode", {
-            mode: "searchForNode",
-            highlightConfig: {
-              contentColor: { r: 111, g: 168, b: 220, a: 0.35 },
-              showInfo: true,
-            },
-          }),
-        )
+      void arm(t)
         .then(() => {
           if (!settled) opts.onArmed?.();
         })
@@ -1033,11 +1193,81 @@ export class NativeDebuggerSession {
             );
           }
         });
-    }).finally(() =>
+      // The tab's inspect mode doesn't reach an out-of-process frame: a
+      // click there would go through to the page. Arm each one in its own
+      // session as well, best-effort, once its announcement is in. Never
+      // after the pick has ended — nothing would disarm it.
+      void armFrames(t, 0);
+    }).finally(() => {
+      ended = true;
       // Best-effort: if the tab or connection is already gone this is a
       // no-op failure, same as every other cleanup call in this file.
-      t.send("Overlay.setInspectMode", { mode: "none" }).catch(() => {}),
-    );
+      void t.send("Overlay.setInspectMode", { mode: "none" }).catch(() => {});
+      for (const frame of frames.values()) {
+        void frame.transport
+          .send("Overlay.setInspectMode", { mode: "none" })
+          .catch(() => {});
+      }
+    });
+
+    /** Turn inspect mode on in `transport`'s document. It needs the DOM
+     *  domain, which nothing else here enables; the detach drops it again. */
+    function arm(transport: CdpTransport): Promise<unknown> {
+      // Each step after the first is sent only while the pick is open. A STOP
+      // or the timeout can end it with a step in flight, and its cleanup's
+      // `mode: none` goes out then; a later step would arm inspect mode
+      // after it, with nothing left to turn it off before the detach.
+      const step = (method: string, params?: object) =>
+        ended ? undefined : transport.send(method, params);
+      return transport
+        .send("DOM.enable")
+        .then(() => step("Overlay.enable"))
+        .then(() =>
+          step("Overlay.setInspectMode", {
+            mode: "searchForNode",
+            highlightConfig: {
+              contentColor: { r: 111, g: 168, b: 220, a: 0.35 },
+              showInfo: true,
+            },
+          }),
+        );
+    }
+
+    async function armFrames(
+      transport: CdpTransport,
+      depth: number,
+    ): Promise<void> {
+      if (depth >= MAX_PICK_FRAME_DEPTH || !transport.frameSessions) return;
+      // For as long as the pick is open: a frame the page adds meanwhile (a
+      // payment dialog's) is announced then, and would take the click
+      // straight through to the page if left unarmed. Each round waits for
+      // one more announcement, or the window, and arms what is new.
+      let seen = 0;
+      while (!ended) {
+        let announced = seen;
+        const sessions = await transport
+          .frameSessions((ids) => {
+            announced = ids.length;
+            return ids.length > seen;
+          })
+          .catch(() => [] as FrameSession[]);
+        seen = announced;
+        if (ended) return;
+        const fresh = sessions.filter(
+          (s) => s.sessionId !== undefined && !frames.has(s.sessionId),
+        );
+        for (const session of fresh) frames.set(session.sessionId!, session);
+        // Every new frame at once; each then watches its own frames. One at
+        // a time, each waiting out its own window, the last would stay
+        // unarmed — clickable through to the page — for a second or more.
+        await Promise.all(
+          fresh.map((session) => arm(session.transport).catch(() => {})),
+        );
+        for (const session of fresh) {
+          void armFrames(session.transport, depth + 1);
+        }
+      }
+    }
   }
 
   /**

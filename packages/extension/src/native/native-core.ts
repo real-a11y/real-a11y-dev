@@ -378,6 +378,33 @@ export type EnrichedNativeNode = NativeAXNode &
 /** The single capability the native path needs from any CDP transport. */
 export interface CdpTransport {
   send<T = unknown>(method: string, params?: object): Promise<T>;
+  /**
+   * The sessions of this document's out-of-process frames — a cross-origin
+   * `<iframe>` runs in another renderer, which this transport's own session
+   * can't read or act in. Frames are announced asynchronously, so `until`
+   * says when the caller has the ones it expects: the call waits, briefly,
+   * for that before answering. Optional: a transport that can't reach them
+   * (a test fake) leaves those frames unread, and their rows show as
+   * embedded.
+   */
+  frameSessions?(
+    until?: (frameIds: readonly string[]) => boolean,
+  ): Promise<FrameSession[]>;
+}
+
+/** An out-of-process frame, and a transport into its own session. */
+export interface FrameSession {
+  /** The frame's id, which is also its target id. Stable while its document
+   *  lives, unlike the session, which lasts only as long as one attach. */
+  frameId: string;
+  /** The child session's own id, which its events arrive under, where the
+   *  transport has one. */
+  sessionId?: string;
+  /** The document the frame shows now (its loader id). Unlike `frameId`, it
+   *  changes when the frame navigates — to another site, into another
+   *  process, where the backend ids read before name other elements. */
+  documentId?: string;
+  transport: CdpTransport;
 }
 
 export interface NativeTreeResult {
@@ -835,7 +862,9 @@ function nameWithholdingRoots(
  *  group never frees objects a concurrent read is still using. */
 let fieldReadCount = 0;
 
-/** Read + normalize the whole native AX tree over any CDP transport. */
+/** Read + normalize the whole native AX tree over any CDP transport: the
+ *  top frame's document, with every frame it can read grafted under its
+ *  `Iframe` row (see {@link readFrames}). */
 export async function readNativeTree(
   transport: CdpTransport,
 ): Promise<NativeTreeResult> {
@@ -853,6 +882,39 @@ export async function readNativeTree(
   const full = await transport.send<{ nodes: RawAXNode[] }>(
     "Accessibility.getFullAXTree",
   );
+  const nodes = await readDocument(transport, full.nodes);
+  let rawCount = full.nodes.length;
+  for (const frame of await readFrames(transport, "", 0, nodes)) {
+    if (graftFrame(nodes, frame)) rawCount += frame.rawCount;
+  }
+
+  // Serialized before `rootIdOf` adds any synthetic root, which is a
+  // rendering/dispatch concern only — the plain-text output never had one.
+  const serialized = serializeNativeAX(nodes);
+  const keptCount = nodes.length;
+  const rootId = rootIdOf(nodes);
+
+  return {
+    nodes,
+    serialized,
+    rawCount,
+    keptCount,
+    rootId,
+    ...(documentId !== undefined ? { documentId } : {}),
+  };
+}
+
+/**
+ * Normalize and enrich one document's raw AX nodes, read over `transport` —
+ * the session that document lives in, which is the one its field values
+ * are read through. Every frame gets the whole of it, so a card field in a
+ * cross-origin payment frame is withheld exactly as one in the top frame.
+ */
+async function readDocument(
+  transport: CdpTransport,
+  rawDocument: RawAXNode[],
+): Promise<EnrichedNativeNode[]> {
+  const full = { nodes: rawDocument };
   // Which fields are sensitive is known only after reading them in the page,
   // and the reads are chosen from the normalized tree. So: normalize once to
   // pick and classify the fields, keep their values out of every OTHER
@@ -1004,22 +1066,212 @@ export async function readNativeTree(
     }),
   );
 
-  // `serializeNativeAX(nodes)` runs on the pre-wrap list, matching every
-  // other pre-enrichment field it already serializes from (states/
-  // properties/value/description never reach the plain-text output either)
-  // — the synthetic root, if any, is a rendering/dispatch concern only.
-  const serialized = serializeNativeAX(nodes);
-  const keptCount = enriched.length;
-  const rootId = rootIdOf(enriched);
+  return enriched;
+}
 
-  return {
-    nodes: enriched,
-    serialized,
-    rawCount: full.nodes.length,
-    keptCount,
-    rootId,
-    ...(documentId !== undefined ? { documentId } : {}),
+/** How deep frames nest before the read stops following them: deep enough
+ *  for any page built by hand, and a bound on one built to recurse. */
+const MAX_FRAME_DEPTH = 5;
+
+/** One frame's document, enriched and with its ids final, and the id of the
+ *  `Iframe` row it belongs under. */
+interface FrameDocument {
+  ownerId: string;
+  nodes: EnrichedNativeNode[];
+  rawCount: number;
+}
+
+interface FrameTreeNode {
+  frame: { id: string };
+  childFrames?: FrameTreeNode[];
+}
+
+/**
+ * Every frame under `transport`'s document that it can read, in document
+ * order of discovery: an owner always comes before the frames inside it.
+ *
+ * - **Same-process frames** (same-site `<iframe>`s) share the session:
+ *   `Page.getFrameTree` lists them, `getFullAXTree({ frameId })` reads each,
+ *   and their backend ids are unique within the process, so their rows keep
+ *   plain ids and act through the same session.
+ * - **Out-of-process frames** have a session of their own
+ *   (`transport.frameSessions`). Backend ids restart in every process, so
+ *   their rows carry the frame's id ({@link splitFrameNodeId}), which is
+ *   how an action finds the session again ({@link transportForFrame}).
+ *
+ * `DOM.getFrameOwner`, asked in the session the `<iframe>` element lives in,
+ * names the row each frame belongs under. A frame that fails to read is
+ * left out, and its row keeps showing as embedded.
+ *
+ * `document` is the session's own document, read already. Every `Iframe`
+ * row in it, or in its same-process frames, that no same-process frame
+ * owns stands for an out-of-process frame: that count is what the session
+ * waits to have announced, and with none the session is never asked.
+ */
+async function readFrames(
+  transport: CdpTransport,
+  suffix: string,
+  depth: number,
+  document: readonly EnrichedNativeNode[],
+): Promise<FrameDocument[]> {
+  if (depth >= MAX_FRAME_DEPTH) return [];
+  const out: FrameDocument[] = [];
+  const owner = async (frameId: string): Promise<string | undefined> => {
+    const res = await transport
+      .send<{ backendNodeId?: number }>("DOM.getFrameOwner", { frameId })
+      .catch(() => undefined);
+    return typeof res?.backendNodeId === "number"
+      ? `ax-dom-${res.backendNodeId}`
+      : undefined;
   };
+  const iframes = new Set(
+    document.filter((n) => isIframeRole(n.role)).map((n) => n.id),
+  );
+  const localOwners = new Set<string>();
+
+  const tree = await transport
+    .send<{ frameTree?: FrameTreeNode }>("Page.getFrameTree")
+    .catch(() => undefined);
+  const local: string[] = [];
+  const walk = (node: FrameTreeNode) => {
+    for (const child of node.childFrames ?? []) {
+      local.push(child.frame.id);
+      walk(child);
+    }
+  };
+  if (tree?.frameTree) walk(tree.frameTree);
+  for (const frameId of local) {
+    const ownerId = await owner(frameId);
+    if (ownerId) localOwners.add(ownerId);
+    const raw = await transport
+      .send<{ nodes?: RawAXNode[] }>("Accessibility.getFullAXTree", {
+        frameId,
+      })
+      .catch(() => undefined);
+    if (!ownerId || !raw?.nodes) continue;
+    // A frame that fails partway (removed, navigated) is left out; the rest
+    // of the tree still reads.
+    const nodes = await readDocument(transport, raw.nodes).catch(() => null);
+    if (!nodes) continue;
+    for (const n of nodes) if (isIframeRole(n.role)) iframes.add(n.id);
+    out.push({
+      ownerId: `${ownerId}${suffix}`,
+      nodes: suffix ? nodes.map((n) => withIdSuffix(n, suffix)) : nodes,
+      rawCount: raw.nodes.length,
+    });
+  }
+
+  // Wait for as many announcements as there are rows to fill, then again,
+  // a little, while a row is still unowned and frames keep being announced.
+  // An announcement can fill the count without filling a row: a frame whose
+  // row the tree drops (a hidden ad frame), or a session gone stale before
+  // it could be checked. So the rounds count announcements, not sessions.
+  const remote = new Set([...iframes].filter((id) => !localOwners.has(id)));
+  if (remote.size === 0) return out;
+  const owners = new Map<string, string | undefined>();
+  let sessions: FrameSession[] = [];
+  let announced = 0;
+  for (let round = 0; round < 3; round++) {
+    const seen = announced;
+    sessions = await frameSessionsOf(transport, (ids) => {
+      announced = ids.length;
+      return ids.length >= Math.max(remote.size, seen + 1);
+    });
+    for (const session of sessions) {
+      if (!owners.has(session.frameId)) {
+        owners.set(session.frameId, await owner(session.frameId));
+      }
+    }
+    const owned = new Set(owners.values());
+    if (announced === seen || [...remote].every((id) => owned.has(id))) {
+      break;
+    }
+  }
+  for (const session of sessions) {
+    const ownerId = owners.get(session.frameId);
+    if (!ownerId) continue;
+    const child = session.transport;
+    const raw = await child
+      .send("Accessibility.enable")
+      .then(() =>
+        child.send<{ nodes?: RawAXNode[] }>("Accessibility.getFullAXTree"),
+      )
+      .catch(() => undefined);
+    if (!raw?.nodes) continue;
+    const childSuffix = frameIdSuffix(session.frameId, session.documentId);
+    const nodes = await readDocument(child, raw.nodes).catch(() => null);
+    if (!nodes) continue;
+    out.push({
+      ownerId: `${ownerId}${suffix}`,
+      nodes: nodes.map((n) => withIdSuffix(n, childSuffix)),
+      rawCount: raw.nodes.length,
+    });
+    out.push(
+      ...(await readFrames(child, childSuffix, depth + 1, nodes).catch(
+        () => [],
+      )),
+    );
+  }
+  return out;
+}
+
+/** Chromium's roles for an `<iframe>`. */
+function isIframeRole(role: string): boolean {
+  return role === "Iframe" || role === "IframePresentational";
+}
+
+/** `transport`'s out-of-process frames, or none when it can't say. */
+async function frameSessionsOf(
+  transport: CdpTransport,
+  until: (frameIds: readonly string[]) => boolean,
+): Promise<FrameSession[]> {
+  if (!transport.frameSessions) return [];
+  return await transport.frameSessions(until).catch(() => []);
+}
+
+/** A node of an out-of-process frame, with every id it holds made the
+ *  frame's own. */
+function withIdSuffix(
+  node: EnrichedNativeNode,
+  suffix: string,
+): EnrichedNativeNode {
+  return {
+    ...node,
+    id: `${node.id}${suffix}`,
+    childIds: node.childIds.map((id) => `${id}${suffix}`),
+    ...(node.controls
+      ? { controls: node.controls.map((id) => `${id}${suffix}`) }
+      : {}),
+  };
+}
+
+/**
+ * Put a frame's nodes under its `Iframe` row: its top-level nodes become the
+ * row's children, every node one level deeper than the row, right after it
+ * in document order. Skipped when the row isn't in the tree, or already has
+ * content; the row then keeps showing as embedded.
+ */
+function graftFrame(
+  nodes: EnrichedNativeNode[],
+  frame: FrameDocument,
+): boolean {
+  const at = nodes.findIndex((n) => n.id === frame.ownerId);
+  const owner = nodes[at];
+  if (!owner || owner.childIds.length > 0 || frame.nodes.length === 0) {
+    return false;
+  }
+  const inFrame = new Set<string>();
+  for (const n of frame.nodes) for (const c of n.childIds) inFrame.add(c);
+  owner.childIds = frame.nodes
+    .filter((n) => !inFrame.has(n.id))
+    .map((n) => n.id);
+  const shift = owner.depth + 1;
+  nodes.splice(
+    at + 1,
+    0,
+    ...frame.nodes.map((n) => ({ ...n, depth: n.depth + shift })),
+  );
+  return true;
 }
 
 /** Actions the native backend can dispatch. Others are refused, not guessed. */
@@ -1062,6 +1314,69 @@ const SUPPORTED = new Set<NativeAction>([
 ]);
 
 /**
+ * The id suffix of a node in an out-of-process frame: the frame, and the
+ * document it showed when read (`ax-dom-8@<frameId>.<documentId>`).
+ */
+export function frameIdSuffix(frameId: string, documentId?: string): string {
+  return documentId === undefined ? `@${frameId}` : `@${frameId}.${documentId}`;
+}
+
+/**
+ * A node of an out-of-process frame carries that frame, and the document it
+ * showed, after an `@` ({@link frameIdSuffix}, see {@link readFrames}):
+ * split them off. Any other id comes back whole, with no frame.
+ */
+export function splitFrameNodeId(nodeId: string): {
+  localId: string;
+  frameId: string | null;
+  documentId: string | null;
+} {
+  const at = nodeId.indexOf("@");
+  if (at < 0) return { localId: nodeId, frameId: null, documentId: null };
+  const frame = nodeId.slice(at + 1);
+  const dot = frame.indexOf(".");
+  return {
+    localId: nodeId.slice(0, at),
+    frameId: dot < 0 ? frame : frame.slice(0, dot),
+    documentId: dot < 0 ? null : frame.slice(dot + 1),
+  };
+}
+
+/**
+ * The session of the out-of-process frame `frameId`, found under
+ * `transport` however deeply it nests; undefined once it is gone, and
+ * `"navigated"` once it shows another document than `documentId`, the one
+ * read. A frame keeps its id across a navigation, and a cross-site one
+ * starts a fresh process whose backend ids name unrelated elements — the
+ * top frame's `expectUrl` check, for a frame.
+ */
+async function transportForFrame(
+  transport: CdpTransport,
+  frameId: string,
+  documentId: string | null,
+  depth = 0,
+): Promise<CdpTransport | "navigated" | undefined> {
+  if (depth >= MAX_FRAME_DEPTH) return undefined;
+  const sessions = await frameSessionsOf(transport, (ids) =>
+    ids.includes(frameId),
+  );
+  const own = sessions.find((s) => s.frameId === frameId);
+  if (own) {
+    return documentId === null || own.documentId === documentId
+      ? own.transport
+      : "navigated";
+  }
+  // Deeper, every branch at once: a branch without the frame waits out its
+  // announcements before it can say so.
+  const found = await Promise.all(
+    sessions.map((session) =>
+      transportForFrame(session.transport, frameId, documentId, depth + 1),
+    ),
+  );
+  return found.find((t) => t !== undefined);
+}
+
+/**
  * Dispatch a click / type / focus against a native node over any CDP transport.
  * Resolves the node's backend id to a live DOM element (`DOM.resolveNode`) and
  * runs the action in-page (`Runtime.callFunctionOn`). The typed value is passed
@@ -1076,7 +1391,8 @@ export async function dispatchNative(
   if (!SUPPORTED.has(action)) {
     return { success: false, error: `unsupported action "${action}"` };
   }
-  const backendNodeId = backendNodeIdFrom(nodeId);
+  const { localId, frameId, documentId } = splitFrameNodeId(nodeId);
+  const backendNodeId = backendNodeIdFrom(localId);
   if (backendNodeId === null) {
     return { success: false, error: "node has no backing DOM element" };
   }
@@ -1086,11 +1402,23 @@ export async function dispatchNative(
       error: 'the "type" action requires a string value',
     };
   }
+  // A node of an out-of-process frame resolves only in that frame's own
+  // session; its backend id means something else, or nothing, in this one.
+  const target =
+    frameId === null
+      ? transport
+      : await transportForFrame(transport, frameId, documentId);
+  if (!target) {
+    return { success: false, error: "the frame is gone — re-read the tree" };
+  }
+  if (target === "navigated") {
+    return { success: false, error: "page navigated — reload the native tree" };
+  }
 
   let objectId: string | undefined;
   try {
-    await transport.send("DOM.enable");
-    const resolved = await transport.send<{ object?: { objectId?: string } }>(
+    await target.send("DOM.enable");
+    const resolved = await target.send<{ object?: { objectId?: string } }>(
       "DOM.resolveNode",
       { backendNodeId },
     );
@@ -1109,7 +1437,7 @@ export async function dispatchNative(
   }
 
   try {
-    const marker = await runInPage(transport, objectId, action, value);
+    const marker = await runInPage(target, objectId, action, value);
     if (marker?.ok) return { success: true };
     return { success: false, error: marker?.reason ?? "action failed" };
   } catch {
