@@ -231,8 +231,24 @@ test("a pick inside either frame selects that frame's row", async ({ nav }) => {
     await pick.click();
     await expect(pick).toHaveAttribute("aria-pressed", "true");
     // An out-of-process frame is armed once its session is announced, a
-    // moment after the tab's own inspect mode.
-    await page.waitForTimeout(500);
+    // moment after the tab's own inspect mode. Armed, Chromium's inspect
+    // tool takes the pointer, so the page stops seeing it: poll for that
+    // rather than wait a fixed time.
+    await expect
+      .poll(async () => {
+        await frame.evaluate(() => {
+          (window as { __seen?: boolean }).__seen = false;
+          document.addEventListener(
+            "mousemove",
+            () => ((window as { __seen?: boolean }).__seen = true),
+            { once: true },
+          );
+        });
+        await frame.locator("#inner").hover({ position: { x: 3, y: 3 } });
+        await frame.locator("#inner").hover({ position: { x: 6, y: 6 } });
+        return frame.evaluate(() => (window as { __seen?: boolean }).__seen);
+      })
+      .toBe(false);
     await frame.locator("#inner").click();
     await expect(pick).toHaveAttribute("aria-pressed", "false");
     // The pick took the click: it never reached the page.
