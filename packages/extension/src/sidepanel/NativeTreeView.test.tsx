@@ -691,6 +691,39 @@ describe("NativeTreeView hover preview", () => {
     ]);
   });
 
+  it("clears a clicked row's outline when the pointer leaves before the click's reveal is scheduled", () => {
+    // The reveal is scheduled by an effect, after paint: a pointer that
+    // leaves within that frame finds nothing pending to send.
+    const calls: Array<[string, string | null]> = [];
+    act(() => {
+      render(
+        <NativeTreeView
+          nodes={NODES}
+          rootId="root"
+          busy={false}
+          capability={undefined}
+          status=""
+          onRefresh={() => {}}
+          onActivate={() => {}}
+          onHoverPreview={(id) => calls.push(["preview", id])}
+          onSelectionReveal={(id) => calls.push(["reveal", id])}
+        />,
+        container,
+      );
+    });
+    enter("h1");
+    act(() => {
+      row("h1").click();
+      row("h1").dispatchEvent(new MouseEvent("mouseleave"));
+    });
+    wait(500);
+    // The last word on the page is a clear that follows the reveal.
+    expect(calls.slice(-2)).toEqual([
+      ["reveal", "h1"],
+      ["preview", null],
+    ]);
+  });
+
   it("leaves no preview to land after leaving a row early", () => {
     const onHoverPreview = mount();
     enter("h1");

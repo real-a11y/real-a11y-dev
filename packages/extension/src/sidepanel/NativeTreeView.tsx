@@ -592,8 +592,19 @@ export function NativeTreeView({
       scheduleFollowTimer(() => onSelectionRevealRef.current?.(id)),
     [scheduleFollowTimer],
   );
+  // Set when the pointer left a clicked row before this effect scheduled
+  // the click's reveal (it runs after paint): see `endHover`.
+  const clickRevealOwesClear = useRef(false);
   useEffect(() => {
     if (!selectedId) return;
+    if (clickRevealOwesClear.current) {
+      // The pointer has already left: reveal now, then clear what it draws,
+      // as `endHover` does for a reveal still pending when it left.
+      clickRevealOwesClear.current = false;
+      onSelectionRevealRef.current?.(selectedId);
+      onHoverPreviewRef.current?.(null);
+      return;
+    }
     scheduleFollow(selectedId);
     return cancelFollow;
   }, [selectedId, followNonce, scheduleFollow, cancelFollow]);
@@ -629,7 +640,9 @@ export function NativeTreeView({
     if (hoverClicked.current) {
       hoverClicked.current = false;
       hoverShown.current = true;
-      flushFollow();
+      // Nothing pending yet: the click's reveal is scheduled after paint,
+      // and the pointer can leave before that.
+      if (!flushFollow()) clickRevealOwesClear.current = true;
     }
     if (!hoverShown.current) return;
     hoverShown.current = false;
