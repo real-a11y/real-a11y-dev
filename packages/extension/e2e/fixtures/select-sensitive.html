@@ -16,5 +16,16 @@
       <option value="02">02</option>
       <option value="11" selected>11</option>
     </select>
+    <!--
+      Empty, as a payment form starts: its placeholder option is chosen, so
+      there's no value to redact, but which option is chosen must still not
+      show.
+    -->
+    <label for="exp-year">Expiry year</label>
+    <select id="exp-year" autocomplete="cc-exp-year">
+      <option value="" selected>YYYY</option>
+      <option value="2030">2030</option>
+      <option value="2031">2031</option>
+    </select>
   </body>
 </html>

@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Select with disabled parts</title>
+  </head>
+  <body>
+    <!--
+      For panel-ui-native-select.test.ts: an option the page won't let a user
+      choose, and a select the page won't let a user change. The picker must
+      not let the tree do either.
+    -->
+    <label for="size">Size</label>
+    <select id="size">
+      <option value="s" selected>Small</option>
+      <option value="m" disabled>Medium (sold out)</option>
+      <option value="l">Large</option>
+    </select>
+    <label for="plan">Plan</label>
+    <select id="plan" disabled>
+      <option value="free" selected>Free</option>
+      <option value="pro">Pro</option>
+    </select>
+  </body>
+</html>

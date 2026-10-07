@@ -7,29 +7,7 @@
  * tree has: a hidden tab panel isn't in the tree, so its tab gets no chip.
  */
 
-import { expect, node, test, type NativeHarness } from "./harness";
-
-type PanelPage = import("@playwright/test").Page;
-
-/** Bring a fixture forward, reload the panel and show the native tree. */
-async function showNative(
-  nav: NativeHarness,
-  fixture: string,
-): Promise<PanelPage> {
-  const { page } = await nav.open(fixture);
-  await page.bringToFront();
-  await nav.panel.reload();
-  const toggle = nav.panel
-    .getByRole("group", { name: "Tree producer" })
-    .getByRole("button", { name: "NATIVE", exact: true });
-  await expect(toggle).toBeVisible({ timeout: 20_000 });
-  await toggle.click();
-  await expect(toggle).toHaveAttribute("aria-pressed", "true");
-  await expect
-    .poll(() => nav.panel.locator(".sn-node").count(), { timeout: 20_000 })
-    .toBeGreaterThan(0);
-  return page;
-}
+import { expect, node, test } from "./harness";
 
 test("NATIVE: a node carries the ids of the rows it controls, over the wire", async ({
   nav,
@@ -47,7 +25,7 @@ test("NATIVE: a node carries the ids of the rows it controls, over the wire", as
 test("a jump chip selects the row it controls, and the reverse chip comes back", async ({
   nav,
 }) => {
-  await showNative(nav, "tabs.html");
+  await nav.showNative("tabs.html");
   await nav.panel.getByRole("button", { name: "Expand all" }).click();
 
   const tab = nav.panel.getByRole("treeitem", { name: /^tab "Nils Frahm"/ });
@@ -73,7 +51,7 @@ test("a jump chip selects the row it controls, and the reverse chip comes back",
 });
 
 test("a jump chip leaves a scope its target sits outside", async ({ nav }) => {
-  await showNative(nav, "tabs.html");
+  await nav.showNative("tabs.html");
   await nav.panel.getByRole("button", { name: "Expand all" }).click();
 
   // Scope to the tablist: the panel the tab controls is outside it.
@@ -90,4 +68,35 @@ test("a jump chip leaves a scope its target sits outside", async ({ nav }) => {
   await expect(
     nav.panel.locator('[role="treeitem"][aria-selected="true"] .sn-role'),
   ).toHaveText("tabpanel");
+});
+
+test("Alt+J cycles through every row a row controls, and Alt+Shift+J goes back", async ({
+  nav,
+}) => {
+  await nav.showNative("controls-multi.html");
+  await nav.panel.getByRole("button", { name: "Expand all" }).click();
+  const selected = nav.panel.locator('[role="treeitem"][aria-selected="true"]');
+  const tree = nav.panel.getByRole("tree");
+
+  await nav.panel.getByRole("treeitem", { name: /^button "Apply"/ }).click();
+  await tree.press("Alt+j");
+  await expect(selected).toContainText("Filters");
+  await tree.press("Alt+j");
+  await expect(selected).toContainText("Results");
+  await tree.press("Alt+j");
+  await expect(selected).toContainText("Filters");
+  await tree.press("Alt+Shift+J");
+  await expect(selected).toContainText("Apply");
+});
+
+test("an open menu button with no aria-controls gets a likely chip, as in DOM", async ({
+  nav,
+}) => {
+  await nav.showNative("controls-multi.html");
+  await nav.panel.getByRole("button", { name: "Expand all" }).click();
+  const chip = nav.panel
+    .getByRole("treeitem", { name: /^button "Actions"/ })
+    .locator(".sn-controls-link--inferred");
+  await expect(chip).toHaveText('→ menu "Actions menu"');
+  await expect(chip).toHaveAttribute("title", /^Likely controls this menu/);
 });

@@ -8,34 +8,12 @@
  * on it. A custom `role="combobox"` has no such popup and keeps its click.
  */
 
-import { expect, test, type NativeHarness } from "./harness";
-
-type PanelPage = import("@playwright/test").Page;
-
-/** Bring a fixture forward, reload the panel and show the native tree. */
-async function showNative(
-  nav: NativeHarness,
-  fixture: string,
-): Promise<PanelPage> {
-  const { page } = await nav.open(fixture);
-  await page.bringToFront();
-  await nav.panel.reload();
-  const toggle = nav.panel
-    .getByRole("group", { name: "Tree producer" })
-    .getByRole("button", { name: "NATIVE", exact: true });
-  await expect(toggle).toBeVisible({ timeout: 20_000 });
-  await toggle.click();
-  await expect(toggle).toHaveAttribute("aria-pressed", "true");
-  await expect
-    .poll(() => nav.panel.locator(".sn-node").count(), { timeout: 20_000 })
-    .toBeGreaterThan(0);
-  return page;
-}
+import { expect, test } from "./harness";
 
 test("a native select opens the option picker, and choosing selects on the page", async ({
   nav,
 }) => {
-  const page = await showNative(nav, "listbox-select.html");
+  const page = await nav.showNative("listbox-select.html");
   await nav.panel.getByRole("button", { name: "Expand all" }).click();
 
   const department = nav.panel.getByRole("treeitem", {
@@ -72,7 +50,7 @@ test("a native select opens the option picker, and choosing selects on the page"
 });
 
 test("Enter on a native select row opens the picker too", async ({ nav }) => {
-  await showNative(nav, "listbox-select.html");
+  await nav.showNative("listbox-select.html");
   await nav.panel.getByRole("button", { name: "Expand all" }).click();
   await nav.panel
     .getByRole("treeitem", { name: /^combobox "Department"/ })
@@ -84,7 +62,7 @@ test("Enter on a native select row opens the picker too", async ({ nav }) => {
 });
 
 test("a custom select-only combobox keeps its click", async ({ nav }) => {
-  await showNative(nav, "combobox-select-only.html");
+  await nav.showNative("combobox-select-only.html");
   const combobox = nav.panel.getByRole("treeitem", {
     name: /^combobox "Favorite Fruit"/,
   });
@@ -92,7 +70,7 @@ test("a custom select-only combobox keeps its click", async ({ nav }) => {
 });
 
 test("a sensitive select's picker shows no current option", async ({ nav }) => {
-  const page = await showNative(nav, "select-sensitive.html");
+  const page = await nav.showNative("select-sensitive.html");
   await nav.panel.getByRole("button", { name: "Expand all" }).click();
 
   const month = nav.panel.getByRole("treeitem", {
@@ -109,7 +87,87 @@ test("a sensitive select's picker shows no current option", async ({ nav }) => {
   // Nor is any option announced as the chosen one.
   await expect(picker.getByRole("option", { selected: true })).toHaveCount(0);
 
-  // Choosing one still works.
+  // Choosing one still works, and the feedback names the field, not the
+  // option chosen.
   await picker.getByRole("option", { name: /02/ }).click();
   await expect(page.locator("#exp-month")).toHaveValue("02");
+  const feedback = nav.panel.locator(".sn-action-feedback");
+  await expect(feedback).toContainText("Selected an option in Expiry month");
+  await expect(feedback).not.toContainText("02");
+});
+
+test("an empty sensitive select's picker shows no current option either", async ({
+  nav,
+}) => {
+  await nav.showNative("select-sensitive.html");
+  await nav.panel.getByRole("button", { name: "Expand all" }).click();
+  await nav.panel
+    .getByRole("treeitem", { name: /^combobox "Expiry year"/ })
+    .getByTitle("Select (Enter)")
+    .click();
+  const picker = nav.panel.getByRole("dialog", { name: "Expiry year" });
+  await expect(picker.getByRole("option")).toHaveCount(3);
+  await expect(picker.getByRole("option", { selected: true })).toHaveCount(0);
+  await expect(picker).not.toContainText("●");
+});
+
+test("a disabled option can't be chosen, and a disabled select opens no picker", async ({
+  nav,
+}) => {
+  const page = await nav.showNative("select-disabled.html");
+  await nav.panel.getByRole("button", { name: "Expand all" }).click();
+
+  await nav.panel
+    .getByRole("treeitem", { name: /^combobox "Size"/ })
+    .getByTitle("Select (Enter)")
+    .click();
+  const picker = nav.panel.getByRole("dialog", { name: "Size" });
+  const medium = picker.getByRole("option", { name: /Medium/ });
+  await expect(medium).toHaveAttribute("aria-disabled", "true");
+  // Forced: Playwright won't click what's marked disabled, and the point is
+  // what the picker does if someone does.
+  await medium.click({ force: true });
+  // Still open, and the page still on Small.
+  await expect(picker).toBeVisible();
+  await expect(page.locator("#size")).toHaveValue("s");
+  await picker.getByRole("button", { name: "Cancel" }).click();
+
+  await nav.panel
+    .getByRole("treeitem", { name: /^combobox "Plan"/ })
+    .getByTitle("Select (Enter)")
+    .click();
+  await expect(nav.panel.locator(".sn-action-feedback")).toContainText(
+    "Plan is disabled",
+  );
+  await expect(nav.panel.getByRole("dialog", { name: "Plan" })).toHaveCount(0);
+});
+
+test("an option chosen while a read is running is applied once it ends", async ({
+  nav,
+}) => {
+  const page = await nav.showNative("listbox-select.html");
+  await nav.panel.getByRole("button", { name: "Expand all" }).click();
+  await nav.panel
+    .getByRole("treeitem", { name: /^combobox "Department"/ })
+    .getByTitle("Select (Enter)")
+    .click();
+  const picker = nav.panel.getByRole("dialog", { name: "Department" });
+  await expect(picker.getByRole("option")).toHaveCount(3);
+
+  // A slow read starts behind the open picker, as a refresh would.
+  await nav.setNativeReads("delay:2000");
+  await nav.panel.evaluate(() =>
+    document
+      .querySelector<HTMLButtonElement>('[aria-label="Refresh native tree"]')!
+      .click(),
+  );
+  await picker.getByRole("option", { name: /Music/ }).click();
+
+  // Dropped before: the pick returned early on the read in flight.
+  await expect(page.locator("#department")).toHaveValue("music", {
+    timeout: 10_000,
+  });
+  await expect(nav.panel.locator(".sn-action-feedback")).toContainText(
+    "Selected: Music",
+  );
 });

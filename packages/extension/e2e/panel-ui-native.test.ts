@@ -54,48 +54,10 @@ import { expect, test, type NativeHarness } from "./harness";
 
 type PanelPage = import("@playwright/test").Page;
 
-/**
- * Bring a fixture to the foreground, switch the panel to NATIVE, and wait
- * for its auto-load to land at least one row.
- *
- * Mirrors `panel-ui.test.ts`'s own `show()`: reload the panel first so every
- * test starts from a clean mount, and bring the fixture to the foreground
- * BEFORE that reload — `myTabId` resolves off `chrome.tabs.query({active:
- * true, currentWindow: true})`, so the ordering matters exactly as it does
- * there.
- */
-async function showNative(
-  nav: NativeHarness,
-  fixture: string,
-): Promise<PanelPage> {
-  const { page } = await nav.open(fixture);
-  await page.bringToFront();
-  await nav.panel.reload();
-
-  // The NATIVE toggle lives past App.tsx's `!connected` early return, so
-  // waiting for it to appear is waiting for the DOM producer's own
-  // auto-connect — the toggle cannot render before that regardless of native
-  // mode itself.
-  const nativeToggle = nav.panel.getByRole("button", {
-    name: "NATIVE",
-    exact: true,
-  });
-  await expect(nativeToggle).toBeVisible({ timeout: 20_000 });
-  await nativeToggle.click();
-
-  // Auto-load fires once `producer` becomes "native" (hasAutoLoadedNative) —
-  // no refresh click needed, just the read to land.
-  await expect
-    .poll(() => nav.panel.locator(".sn-node").count(), { timeout: 20_000 })
-    .toBeGreaterThan(0);
-
-  return page;
-}
-
 test("a row past the virtualization window is reachable and actionable", async ({
   nav,
 }) => {
-  const page = await showNative(nav, "native-panel.html");
+  const page = await nav.showNative("native-panel.html");
 
   // The 16 buttons are nested one level under the fixture's own section, not
   // the tree's root, so they need this regardless of how deep the view's
@@ -129,7 +91,7 @@ test("a row past the virtualization window is reachable and actionable", async (
 test("a redacted field's retype panel never shows the real value, and masks it", async ({
   nav,
 }) => {
-  const page = await showNative(nav, "native-panel.html");
+  const page = await nav.showNative("native-panel.html");
   await nav.panel.getByRole("button", { name: "Expand all" }).click();
 
   const pwRow = nav.panel.getByRole("treeitem", { name: "Password" });
@@ -167,7 +129,7 @@ test("a redacted field's retype panel never shows the real value, and masks it",
 test("activating a link through the native tree re-reads the page it navigated to", async ({
   nav,
 }) => {
-  const page = await showNative(nav, "native-nav-link.html");
+  const page = await nav.showNative("native-nav-link.html");
 
   const linkRow = nav.panel.getByRole("treeitem", { name: "Go to tree view" });
   await expect(linkRow).toBeVisible();
@@ -194,7 +156,7 @@ test("activating a link through the native tree re-reads the page it navigated t
 test("activating a link that redirects onward still recovers on the final page", async ({
   nav,
 }) => {
-  const page = await showNative(nav, "native-nav-redirect.html");
+  const page = await nav.showNative("native-nav-redirect.html");
 
   const linkRow = nav.panel.getByRole("treeitem", { name: "Go via redirect" });
   await expect(linkRow).toBeVisible();
@@ -219,7 +181,7 @@ test("activating a link that redirects onward still recovers on the final page",
 });
 
 test("a busy region shows a bare busy badge, not busy=1", async ({ nav }) => {
-  await showNative(nav, "native-busy.html");
+  await nav.showNative("native-busy.html");
 
   // Chromium sends `aria-busy="true"` as `{"type":"boolean","value":1}`.
   // Read as text, the row's badge said `busy=1`; the DOM tree says `busy`.
@@ -232,7 +194,7 @@ test("a busy region shows a bare busy badge, not busy=1", async ({ nav }) => {
 test("double-clicking a row activates it, same as the DOM tree's own row", async ({
   nav,
 }) => {
-  const page = await showNative(nav, "native-panel.html");
+  const page = await nav.showNative("native-panel.html");
   await nav.panel.getByRole("button", { name: "Expand all" }).click();
 
   const lastRow = nav.panel.getByRole("treeitem", { name: "Item 16" });
@@ -251,7 +213,7 @@ test("double-clicking a row activates it, same as the DOM tree's own row", async
 test("clicking a row gives the tree its own focus-visible outline", async ({
   nav,
 }) => {
-  await showNative(nav, "native-panel.html");
+  await nav.showNative("native-panel.html");
   await nav.panel.getByRole("button", { name: "Expand all" }).click();
 
   const row = nav.panel.getByRole("treeitem", { name: "Item 16" });
@@ -320,7 +282,7 @@ test("selecting a native tree row highlights and focuses the page's own element"
   // into view (the part the user sees, since focus alone paints no ring while
   // the panel has window focus), and real focus follows so keyboard use
   // resumes there.
-  const page = await showNative(nav, "native-panel.html");
+  const page = await nav.showNative("native-panel.html");
   await nav.panel.getByRole("button", { name: "Expand all" }).click();
 
   const row = nav.panel.getByRole("treeitem", { name: "Item 16" });
@@ -343,7 +305,7 @@ test("selecting a native tree row highlights and focuses the page's own element"
 test("selecting a native heading row highlights it even though it can't take focus", async ({
   nav,
 }) => {
-  const page = await showNative(nav, "native-panel.html");
+  const page = await nav.showNative("native-panel.html");
   await nav.panel.getByRole("button", { name: "Expand all" }).click();
 
   const row = nav.panel.getByRole("treeitem", {
@@ -362,7 +324,7 @@ test("clicking an item in a role-filter list highlights and focuses it on the pa
 }) => {
   // A role-filter list keeps its own selection, so it follows onto the page
   // through its own hook.
-  const page = await showNative(nav, "native-panel.html");
+  const page = await nav.showNative("native-panel.html");
 
   await nav.panel
     .getByRole("button", { name: "Headings", exact: true })
@@ -410,7 +372,7 @@ test("selecting a native tree row via the keyboard only focuses the row the sele
   // A key-repeat burst walks the selection through several rows; only the
   // row it settles on is revealed, so page focus never trails behind on an
   // intermediate one.
-  const page = await showNative(nav, "native-panel.html");
+  const page = await nav.showNative("native-panel.html");
   await nav.panel.getByRole("button", { name: "Expand all" }).click();
   const focused = await recordFocus(page);
 
@@ -434,7 +396,7 @@ test("selecting a native tree row never reveals it while Screen Curtain is on", 
 }) => {
   // The page is hidden behind the curtain, and moving focus on it would still
   // scroll it underneath, so nothing is sent while the curtain is up.
-  const page = await showNative(nav, "native-panel.html");
+  const page = await nav.showNative("native-panel.html");
   await nav.panel.getByRole("button", { name: "Expand all" }).click();
   const curtain = nav.panel.getByRole("button", {
     name: "Curtain",
@@ -469,7 +431,7 @@ test("a reveal the user has already moved past never attaches", async ({
   // An armed pick holds the tab's queue, so these reveals wait behind it.
   // When it ends, only the newest is still wanted; the others are dropped
   // before they attach.
-  const page = await showNative(nav, "native-panel.html");
+  const page = await nav.showNative("native-panel.html");
   await nav.panel.getByRole("button", { name: "Expand all" }).click();
   await armPick(nav);
   for (const name of ["Item 14", "Item 15", "Item 16"]) {
@@ -493,7 +455,7 @@ test("a reveal the user has already moved past never attaches", async ({
 });
 
 test("a reveal event the page fires itself draws nothing", async ({ nav }) => {
-  const page = await showNative(nav, "native-panel.html");
+  const page = await nav.showNative("native-panel.html");
   await page.evaluate(() =>
     document.getElementById("item-16")!.dispatchEvent(
       new CustomEvent("real-a11y:native-reveal", {
@@ -511,7 +473,7 @@ test("a same-page URL change doesn't stop the selection follow", async ({
 }) => {
   // The node ids are still good after pushState; the reveal no longer checks
   // the URL the tree was read at.
-  const page = await showNative(nav, "native-panel.html");
+  const page = await nav.showNative("native-panel.html");
   await nav.panel.getByRole("button", { name: "Expand all" }).click();
   await page.evaluate(() => history.pushState({}, "", "#section"));
   await nav.panel
@@ -672,7 +634,7 @@ async function readClipboardStub(
 test("Copy on the native tree offers no Tab sequence — native has no tab-order data", async ({
   nav,
 }) => {
-  await showNative(nav, "native-panel.html");
+  await nav.showNative("native-panel.html");
 
   // The button's accessible name is its text content ("Copy ▾"), not its
   // `title` — accname prefers content over title, so a `title`-shaped
@@ -689,7 +651,7 @@ test("Copy on the native tree offers no Tab sequence — native has no tab-order
 
 /** Open the export fixture on the native tree and copy one Copy ▾ item. */
 async function copyNative(nav: NativeHarness, item: string): Promise<string> {
-  const page = await showNative(nav, "native-export.html");
+  const page = await nav.showNative("native-export.html");
   await stubClipboard(nav);
   await nav.panel.getByRole("button", { name: "Copy ▾" }).click();
   await nav.panel
@@ -802,7 +764,7 @@ async function expectInspectModeOff(nav: NativeHarness, page: PanelPage) {
 test("picking an element on the page selects and reveals it in the native tree", async ({
   nav,
 }) => {
-  const page = await showNative(nav, "native-panel.html");
+  const page = await nav.showNative("native-panel.html");
   const pickButton = await armPick(nav);
 
   // The root-level <h1> — visible without "Expand all" (root + its immediate
@@ -849,7 +811,7 @@ test("switching to DOM and back doesn't apply an old pick again", async ({
 test("picking a second time re-fires the reveal even for the same node", async ({
   nav,
 }) => {
-  const page = await showNative(nav, "native-panel.html");
+  const page = await nav.showNative("native-panel.html");
   const headingRow = nav.panel.getByRole("treeitem", {
     name: "Native panel fixture",
   });
@@ -873,7 +835,7 @@ test("picking a second time re-fires the reveal even for the same node", async (
 test("clicking Pick again while armed cancels it without selecting anything", async ({
   nav,
 }) => {
-  const page = await showNative(nav, "native-panel.html");
+  const page = await nav.showNative("native-panel.html");
   const pickButton = await armPick(nav);
   await pickButton.click();
   await expect(pickButton).toHaveAttribute("aria-pressed", "false");
@@ -883,7 +845,7 @@ test("clicking Pick again while armed cancels it without selecting anything", as
 test("Escape cancels an armed native pick while the panel has focus", async ({
   nav,
 }) => {
-  const page = await showNative(nav, "native-panel.html");
+  const page = await nav.showNative("native-panel.html");
   const pickButton = await armPick(nav);
   await nav.panel.keyboard.press("Escape");
   await expect(pickButton).toHaveAttribute("aria-pressed", "false");
@@ -899,7 +861,7 @@ test("Escape on the inspected page itself also cancels an armed native pick", as
   // fires `Overlay.inspectModeCanceled` for exactly this case (confirmed
   // against a real browser, not assumed from the CDP spec), which `runPick`
   // now also listens for.
-  const page = await showNative(nav, "native-panel.html");
+  const page = await nav.showNative("native-panel.html");
   const pickButton = await armPick(nav);
 
   await page.bringToFront();
@@ -921,7 +883,7 @@ test("Escape on the inspected page itself also cancels an armed native pick", as
 test("picking an element the AX tree pruned resolves to its nearest kept ancestor", async ({
   nav,
 }) => {
-  const page = await showNative(nav, "native-panel.html");
+  const page = await nav.showNative("native-panel.html");
   const pickButton = await armPick(nav);
 
   // The inner span has no accessible role or name of its own — Chromium's
@@ -941,7 +903,7 @@ test("picking an element the AX tree pruned resolves to its nearest kept ancesto
 test("switching producer while a native pick is armed resets the button and cancels the pick", async ({
   nav,
 }) => {
-  const page = await showNative(nav, "native-panel.html");
+  const page = await nav.showNative("native-panel.html");
   const pickButton = await armPick(nav);
 
   await nav.panel.getByRole("button", { name: "DOM", exact: true }).click();
@@ -957,7 +919,7 @@ test("switching producer while a native pick is armed resets the button and canc
 test("a pick that lands on something the tree doesn't have says so", async ({
   nav,
 }) => {
-  const page = await showNative(nav, "native-panel.html");
+  const page = await nav.showNative("native-panel.html");
   // Added after the tree was read, outside anything the tree kept.
   await page.evaluate(() => {
     const late = document.createElement("button");

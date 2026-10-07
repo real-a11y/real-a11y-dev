@@ -11,33 +11,12 @@
  * a dedicated fixture.
  */
 
-import { expect, test, type NativeHarness } from "./harness";
-
-/** Mirrors `panel-ui-native.test.ts`'s own `showNative` — see its comment
- *  for why the reload happens after bringing the fixture to the foreground. */
-async function showNative(nav: NativeHarness, fixture: string) {
-  const { page } = await nav.open(fixture);
-  await page.bringToFront();
-  await nav.panel.reload();
-
-  const nativeToggle = nav.panel.getByRole("button", {
-    name: "NATIVE",
-    exact: true,
-  });
-  await expect(nativeToggle).toBeVisible({ timeout: 20_000 });
-  await nativeToggle.click();
-
-  await expect
-    .poll(() => nav.panel.locator(".sn-node").count(), { timeout: 20_000 })
-    .toBeGreaterThan(0);
-
-  return page;
-}
+import { expect, test } from "./harness";
 
 test("a search query narrows the tree to matches and their ancestors", async ({
   nav,
 }) => {
-  await showNative(nav, "native-panel.html");
+  await nav.showNative("native-panel.html");
   // The buttons sit one level under the "Items" section, collapsed by
   // default — expand everything first so the query alone is what's under
   // test, not the tree's own default-expand seeding.
@@ -69,7 +48,7 @@ test("a search query narrows the tree to matches and their ancestors", async ({
 test("a query with no matches shows an empty state, not a stale tree", async ({
   nav,
 }) => {
-  await showNative(nav, "native-panel.html");
+  await nav.showNative("native-panel.html");
   await nav.panel.getByRole("button", { name: "Expand all" }).click();
 
   const search = nav.panel.getByLabel("Search native tree nodes");
@@ -82,7 +61,7 @@ test("a query with no matches shows an empty state, not a stale tree", async ({
 test("a role-filter pill swaps the tree for a flat list of that role, narrowed by the query", async ({
   nav,
 }) => {
-  await showNative(nav, "native-panel.html");
+  await nav.showNative("native-panel.html");
 
   await nav.panel.getByRole("button", { name: "Buttons", exact: true }).click();
 
@@ -118,7 +97,7 @@ test("a role-filter pill swaps the tree for a flat list of that role, narrowed b
 test("Enter on a heading in the list goes back to the tree with it selected", async ({
   nav,
 }) => {
-  await showNative(nav, "native-panel.html");
+  await nav.showNative("native-panel.html");
 
   await nav.panel
     .getByRole("button", { name: "Headings", exact: true })
@@ -152,7 +131,7 @@ test("Enter on a heading in the list goes back to the tree with it selected", as
  *  through to the native click, which a slider ignores. Asserted on the
  *  page's own state (the APG handler's output), not on the dispatch marker. */
 test("Enter on a slider in the Forms list steps it", async ({ nav }) => {
-  const page = await showNative(nav, "slider-single.html");
+  const page = await nav.showNative("slider-single.html");
 
   await nav.panel.getByRole("button", { name: "Forms", exact: true }).click();
   const list = nav.panel.getByRole("listbox");
@@ -168,7 +147,7 @@ test("Enter on a slider in the Forms list steps it", async ({ nav }) => {
 });
 
 test("pressing / focuses the search box", async ({ nav }) => {
-  await showNative(nav, "native-panel.html");
+  await nav.showNative("native-panel.html");
 
   const tree = nav.panel.locator("[role='tree']");
   await tree.click();

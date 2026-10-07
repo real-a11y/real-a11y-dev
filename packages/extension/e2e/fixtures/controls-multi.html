@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>aria-controls — several targets, and an inferred one</title>
+  </head>
+  <body>
+    <!--
+      For panel-ui-native-relations.test.ts: a button that controls two
+      regions, so Alt+J has more than one link to cycle through, and an open
+      menu button with no aria-controls, which the aria-haspopup heuristic
+      pairs with the menu after it as a "likely" link.
+    -->
+    <button aria-controls="filters results">Apply</button>
+    <section id="filters" aria-label="Filters"><p>Filters body</p></section>
+    <section id="results" aria-label="Results"><p>Results body</p></section>
+
+    <button aria-haspopup="menu" aria-expanded="true">Actions</button>
+    <ul role="menu" aria-label="Actions menu">
+      <li role="menuitem">Rename</li>
+    </ul>
+  </body>
+</html>
