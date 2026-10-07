@@ -427,6 +427,12 @@ export function App() {
   const [nativePickReveal, setNativePickReveal] = useState<
     NativeReveal | undefined
   >(undefined);
+  // A reveal is consumed when the native tree mounts with it, so it must not
+  // outlive that tree: switching to DOM and back would remount the tree and
+  // apply an old pick again, clearing its search and selecting that row.
+  useEffect(() => {
+    if (producer !== "native") setNativePickReveal(undefined);
+  }, [producer]);
   // The native pick's inspect mode is on (NATIVE_PICK_ARMED arrived). Until
   // then the Pick button is pressed but busy: a page click isn't a pick yet.
   const [nativePickArmed, setNativePickArmed] = useState(false);
@@ -510,6 +516,8 @@ export function App() {
     setNativeStatus("");
     setNativeCapability(undefined);
     setNativeBusy(false);
+    // A pick's reveal belongs to the tree it was picked in.
+    setNativePickReveal(undefined);
   }, []);
 
   /** Asks the service worker to persist the setting. A request, not a state

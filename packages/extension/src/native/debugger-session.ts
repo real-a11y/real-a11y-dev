@@ -27,6 +27,9 @@ const PROTOCOL = "1.3";
  */
 const PROBE_TIMEOUT_MS = 2000;
 
+/** How many early STOPs a tab keeps for picks not yet registered. */
+const PENDING_PICK_CANCELS_KEPT = 8;
+
 /** "Another debugger is already attached…" — the DevTools-conflict class. */
 export function isDebuggerConflict(message: string | undefined): boolean {
   return /already attached/i.test(message ?? "");
@@ -181,9 +184,13 @@ export class NativeDebuggerSession {
    * mode behind a button the panel already showed as off. `runPick` consumes
    * the entry only when it is for its own request, so a STOP for a START that
    * never arrived (refused, unavailable, already answered) can't cancel a
-   * later pick.
+   * later pick. Every such STOP is kept, not only the last: a quick
+   * START, STOP, START, STOP (the pick shortcut on key repeat) lands both
+   * STOPs before the first START registers, and a second one overwriting the
+   * first would arm a pick the panel has already turned off. A few per tab;
+   * the oldest goes first.
    */
-  private pendingPickCancel = new Map<number, number>();
+  private pendingPickCancel = new Map<number, Set<number>>();
 
   /**
    * Bumped by {@link cancelAllPicks}. A pick started under an older value is
@@ -713,8 +720,9 @@ export class NativeDebuggerSession {
   ): Promise<PickedNode | null> {
     const requestId = opts.requestId ?? 0;
     const generation = opts.generation ?? this.pickGen;
-    const stoppedEarly = this.pendingPickCancel.get(tabId) === requestId;
-    if (stoppedEarly) this.pendingPickCancel.delete(tabId);
+    const pending = this.pendingPickCancel.get(tabId);
+    const stoppedEarly = pending?.delete(requestId) ?? false;
+    if (pending?.size === 0) this.pendingPickCancel.delete(tabId);
     if (stoppedEarly || generation !== this.pickGen) {
       return Promise.resolve(null).finally(() =>
         t.send("Overlay.setInspectMode", { mode: "none" }).catch(() => {}),
@@ -859,7 +867,12 @@ export class NativeDebuggerSession {
       cancel();
       return true;
     }
-    this.pendingPickCancel.set(tabId, requestId);
+    const pending = this.pendingPickCancel.get(tabId) ?? new Set<number>();
+    pending.add(requestId);
+    if (pending.size > PENDING_PICK_CANCELS_KEPT) {
+      pending.delete(pending.values().next().value!);
+    }
+    this.pendingPickCancel.set(tabId, pending);
     return false;
   }
 

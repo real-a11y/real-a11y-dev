@@ -772,6 +772,23 @@ describe("NativeDebuggerSession picker", () => {
     expect(value).toMatchObject({ backendNodeId: 42 });
   });
 
+  it("two early STOPs both hold, so neither pick arms", async () => {
+    // START 1, STOP 1, START 2, STOP 2, all before START 1's attach
+    // answered: the pick shortcut held down. The second STOP used to
+    // replace the first, and pick 1 armed behind a button showing off.
+    const { eventListeners } = stubChrome();
+    const session = new NativeDebuggerSession(new FakeStorage());
+    expect(session.cancelPick(7, 1)).toBe(false);
+    expect(session.cancelPick(7, 2)).toBe(false);
+    for (const requestId of [1, 2]) {
+      const { value } = await session.withDebugger(7, (t) =>
+        session.runPick(7, t, { requestId }),
+      );
+      expect(value).toBeNull();
+    }
+    expect(eventListeners.length).toBe(0);
+  });
+
   it("cancelAllPicks also ends a pick that hadn't registered yet", async () => {
     const { eventListeners } = stubChrome();
     const session = new NativeDebuggerSession(new FakeStorage());

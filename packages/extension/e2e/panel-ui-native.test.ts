@@ -566,6 +566,26 @@ test("picking an element on the page selects and reveals it in the native tree",
   await expect(nav.panel.locator(".sn-tree")).toBeFocused();
 });
 
+test("switching to DOM and back doesn't apply an old pick again", async ({
+  nav,
+}) => {
+  const page = await showNative(nav, "native-panel.html");
+  const pickButton = await armPick(nav);
+  await page.getByRole("heading", { name: "Native panel fixture" }).click();
+  await expect(pickButton).toHaveAttribute("aria-pressed", "false");
+  const selected = nav.panel.locator('[role="treeitem"][aria-selected="true"]');
+  await expect(selected).toHaveCount(1);
+
+  const producer = nav.panel.getByRole("group", { name: "Tree producer" });
+  await producer.getByRole("button", { name: "DOM", exact: true }).click();
+  await producer.getByRole("button", { name: "NATIVE", exact: true }).click();
+  await expect
+    .poll(() => nav.panel.locator(".sn-node").count(), { timeout: 20_000 })
+    .toBeGreaterThan(0);
+  // A fresh tree, with nothing picked in it.
+  await expect(selected).toHaveCount(0);
+});
+
 test("picking a second time re-fires the reveal even for the same node", async ({
   nav,
 }) => {
