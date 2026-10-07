@@ -74,8 +74,14 @@ export function nextJump(
     return first === undefined ? null : { target: first, cycle: null };
   }
   if (onCycle && cycle.targets.length > 1) {
-    const index = (cycle.index + 1) % cycle.targets.length;
-    return { target: cycle.targets[index]!, cycle: { ...cycle, index } };
+    // The next target that can still take the jump: the tree may have
+    // changed since the cycle began (the DOM tree updates live).
+    for (let step = 1; step < cycle.targets.length; step++) {
+      const index = (cycle.index + step) % cycle.targets.length;
+      if (canLand(cycle.targets[index]!)) {
+        return { target: cycle.targets[index]!, cycle: { ...cycle, index } };
+      }
+    }
   }
   const targets = (links.forward.get(selectedId) ?? []).filter(canLand);
   if (targets.length === 0) return null;

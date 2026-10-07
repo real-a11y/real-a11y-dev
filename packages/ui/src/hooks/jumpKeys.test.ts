@@ -56,6 +56,16 @@ describe("nextJump", () => {
     ).toBeNull();
   });
 
+  it("skips a target removed from the tree while cycling", () => {
+    const first = nextJump("tabs", null, false, links, anywhere)!;
+    // p2 leaves the tree after the cycle began.
+    const gone = (id: string) => id !== "p2";
+    expect(nextJump("p1", first.cycle, false, links, gone)).toEqual({
+      target: "p3",
+      cycle: { origin: "tabs", targets: ["p1", "p2", "p3"], index: 2 },
+    });
+  });
+
   it("skips a row that can't take the jump, either way", () => {
     const gone = (id: string) => id !== "p1" && id !== "tabs";
     expect(nextJump("tabs", null, false, links, gone)?.target).toBe("p2");
