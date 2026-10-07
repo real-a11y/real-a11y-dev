@@ -62,8 +62,23 @@ describe("nextJump", () => {
     const gone = (id: string) => id !== "p2";
     expect(nextJump("p1", first.cycle, false, links, gone)).toEqual({
       target: "p3",
-      cycle: { origin: "tabs", targets: ["p1", "p2", "p3"], index: 2 },
+      cycle: { origin: "tabs", targets: ["p1", "p3"], index: 1 },
     });
+  });
+
+  it("cycles through the origin's current links, not the ones it began with", () => {
+    const first = nextJump("tabs", null, false, links, anywhere)!;
+    // The page changes the origin's aria-controls to p1 and p4; p2 and p3
+    // stay in the tree, no longer controlled by it.
+    const changed = { ...links, forward: new Map([["tabs", ["p1", "p4"]]]) };
+    const second = nextJump("p1", first.cycle, false, changed, anywhere)!;
+    expect(second).toEqual({
+      target: "p4",
+      cycle: { origin: "tabs", targets: ["p1", "p4"], index: 1 },
+    });
+    expect(nextJump("p4", second.cycle, false, changed, anywhere)?.target).toBe(
+      "p1",
+    );
   });
 
   it("skips a row that can't take the jump, either way", () => {

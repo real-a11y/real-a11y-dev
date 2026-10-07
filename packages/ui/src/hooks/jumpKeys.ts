@@ -73,14 +73,18 @@ export function nextJump(
     const first = (links.reverse.get(selectedId) ?? []).find(canLand);
     return first === undefined ? null : { target: first, cycle: null };
   }
-  if (onCycle && cycle.targets.length > 1) {
-    // The next target that can still take the jump: the tree may have
-    // changed since the cycle began (the DOM tree updates live).
-    for (let step = 1; step < cycle.targets.length; step++) {
-      const index = (cycle.index + step) % cycle.targets.length;
-      if (canLand(cycle.targets[index]!)) {
-        return { target: cycle.targets[index]!, cycle: { ...cycle, index } };
-      }
+  if (onCycle) {
+    // The origin's links as they are now, not as the cycle began: the DOM
+    // tree updates live, so a target may have left the tree, or the origin's
+    // `aria-controls` may name different rows.
+    const targets = (links.forward.get(cycle.origin) ?? []).filter(canLand);
+    const at = targets.indexOf(selectedId);
+    if (at !== -1 && targets.length > 1) {
+      const index = (at + 1) % targets.length;
+      return {
+        target: targets[index]!,
+        cycle: { origin: cycle.origin, targets, index },
+      };
     }
   }
   const targets = (links.forward.get(selectedId) ?? []).filter(canLand);
