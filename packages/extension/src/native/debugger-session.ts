@@ -97,10 +97,10 @@ function transportFor(
   let frames: Promise<FrameAnnouncements | undefined> | undefined;
   return {
     send,
-    frameSessions: async (until) => {
+    frameSessions: async (until, waitMs) => {
       frames ??= announceFrames(tabId, sessionId, send);
       // None at all when the auto-attach was refused: see the contract.
-      return (await frames)?.sessions(until);
+      return (await frames)?.sessions(until, waitMs);
     },
     // Stop listening for this document's frames, and its frames' frames:
     // the operation that asked is over.
@@ -123,6 +123,7 @@ const FRAME_ANNOUNCE_WAIT_MS = 300;
 interface FrameAnnouncements {
   sessions(
     until?: (frameIds: readonly string[]) => boolean,
+    waitMs?: number,
   ): Promise<FrameSession[]>;
   dispose(): void;
 }
@@ -215,7 +216,7 @@ async function announceFrames(
   };
 
   return {
-    async sessions(until) {
+    async sessions(until, waitMs = FRAME_ANNOUNCE_WAIT_MS) {
       if (until && !until(frameIds())) {
         await new Promise<void>((resolve) => {
           const done = () => {
@@ -226,7 +227,7 @@ async function announceFrames(
           const check = () => {
             if (until(frameIds())) done();
           };
-          const timer = setTimeout(done, FRAME_ANNOUNCE_WAIT_MS);
+          const timer = setTimeout(done, waitMs);
           waiters.add(check);
         });
       }

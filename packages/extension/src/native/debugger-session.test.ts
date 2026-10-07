@@ -1690,6 +1690,14 @@ describe("NativeDebuggerSession: out-of-process frames", () => {
     });
   });
 
+  it("waits no longer than a caller's shorter wait", async () => {
+    const { session } = tabWithFrame(150);
+    const { value } = await session.withDebugger(5, async (t) =>
+      t.frameSessions!((ids) => ids.length >= 1, 20),
+    );
+    expect(value).toEqual([]);
+  });
+
   it("drops a session that answers as some other frame", async () => {
     // A Chrome too old for child sessions runs a session's commands in the
     // tab's own, where the frame's backend ids name other elements.

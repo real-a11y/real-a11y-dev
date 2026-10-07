@@ -401,10 +401,12 @@ export interface CdpTransport {
    * auto-attach, or the frame went away): no call will ever announce one,
    * so a caller waiting for more must stop. Optional: a transport that
    * can't reach them (a test fake) leaves those frames unread, and their
-   * rows show as embedded.
+   * rows show as embedded. `waitMs` shortens the wait for a caller that
+   * expects little.
    */
   frameSessions?(
     until?: (frameIds: readonly string[]) => boolean,
+    waitMs?: number,
   ): Promise<FrameSession[] | undefined>;
 }
 
@@ -1110,6 +1112,12 @@ const MAX_FRAMES_PER_READ = 20;
  *  missing, while new ones keep being announced. */
 const FRAME_ANNOUNCE_ROUNDS = 3;
 
+/** How long a read gives frames to be announced when every row it could
+ *  fill is one an earlier read of the document waited for in vain: each read
+ *  attaches afresh, and even a frame that is there by now is announced just
+ *  after the attach is answered, so asking at once would never fill it. */
+const FRAME_SETTLE_MS = 50;
+
 /**
  * Frame rows a read waited for and never got a session for, by the document
  * they are in (its loader id): another extension's frame, one a host policy
@@ -1235,7 +1243,11 @@ async function readFrames(
   };
   let sessions: FrameSession[] = [];
   if (waitFor.length === 0) {
-    sessions = await frameSessionsOf(transport, () => true);
+    sessions = await frameSessionsOf(
+      transport,
+      (ids) => ids.length >= remote.size,
+      FRAME_SETTLE_MS,
+    );
     await learnOwners(sessions);
   }
   let announced = 0;
@@ -1300,9 +1312,10 @@ async function readFrames(
 async function frameSessionsOf(
   transport: CdpTransport,
   until: (frameIds: readonly string[]) => boolean,
+  waitMs?: number,
 ): Promise<FrameSession[]> {
   if (!transport.frameSessions) return [];
-  return (await transport.frameSessions(until).catch(() => [])) ?? [];
+  return (await transport.frameSessions(until, waitMs).catch(() => [])) ?? [];
 }
 
 /** Actions the native backend can dispatch. Others are refused, not guessed. */

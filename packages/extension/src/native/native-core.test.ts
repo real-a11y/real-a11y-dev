@@ -3298,7 +3298,7 @@ describe("readNativeTree across frames", () => {
   it("waits for a frame no session fills once per document, and still fills it later", async () => {
     // Another extension's frame, or one that hadn't loaded yet: nothing is
     // announced for it. The first read waits; the next read of the same
-    // document asks without waiting, and fills the frame once it is there.
+    // document waits only briefly, and fills the frame once it is there.
     const top = withOutOfProcessFrame(frameDocument());
     const [frame] = (await top.frameSessions!())!;
     top.send = (async (method: string, params?: object) => {
@@ -3313,26 +3313,29 @@ describe("readNativeTree across frames", () => {
       }
       return {};
     }) as typeof top.send;
-    const asked: boolean[] = [];
+    const asked: [boolean, number | undefined][] = [];
     let announced: FrameSession[] = [];
-    top.frameSessions = async (until) => {
-      // Whether the caller would wait with nothing announced yet.
-      asked.push(until ? !until([]) : false);
+    top.frameSessions = async (until, waitMs) => {
+      // Whether the caller would wait with nothing announced yet, and for
+      // how long at most (`undefined`: the transport's own wait).
+      asked.push([until ? !until([]) : false, waitMs]);
       return announced;
     };
 
     await readNativeTree(top);
-    expect(asked).toEqual([true]);
+    expect(asked).toEqual([[true, undefined]]);
 
+    // Each read attaches afresh, and a frame there by now is announced just
+    // after: asking with no wait at all would never fill it.
     asked.length = 0;
     await readNativeTree(top);
-    expect(asked).toEqual([false]);
+    expect(asked).toEqual([[true, 50]]);
 
     // The frame loads after all.
     announced = [frame!];
     asked.length = 0;
     const res = await readNativeTree(top);
-    expect(asked).toEqual([false]);
+    expect(asked).toEqual([[true, 50]]);
     expect(res.nodes.find((n) => n.id === "ax-dom-8")!.childIds).toHaveLength(
       2,
     );
