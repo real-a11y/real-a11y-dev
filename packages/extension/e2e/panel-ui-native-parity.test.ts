@@ -279,7 +279,7 @@ test("switching to DOM right after a sent key reads no native tree", async ({
 test("Press ESC whose re-read fails doesn't say the dialog is still open", async ({
   nav,
 }) => {
-  const page = await showNative(nav, "dialog-modal.html");
+  const page = await nav.showNative("dialog-modal.html");
   await routeSendKeyToPage(nav.panel);
   await nav.panel
     .getByRole("treeitem", { name: /^button "Add delivery address"/ })
