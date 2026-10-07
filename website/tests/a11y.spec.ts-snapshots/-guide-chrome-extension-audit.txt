@@ -296,6 +296,11 @@ main
       code "<select multiple>"
       code "<select size="4">"
       code "role="combobox""
+    listitem "Nothing around a sensitive field is named after its value. Chromium names a table cell, or a checkbox whose also wraps a card field, from everything inside it, the field's value included. The native tree shows as that name instead, and leaves out a description that points at the field, the rest of that description with it. The field's own label still names it: a password inside reads ."
+      code "<label>"
+      code "[redacted]"
+      code "<label>Password …</label>"
+      code "textbox "Password""
   heading "BETA pill in the panel header" (level 3)
   paragraph "Sets expectations during the pre-1.0 phase. Linked to the GitHub issues page. Goes away at v1.0."
   separator
