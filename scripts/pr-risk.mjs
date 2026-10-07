@@ -817,13 +817,23 @@ const FIELD_VALUE_GATES = [
   "allowlistAttributes",
   "DETAIL_PROPS",
   // Core's shared native normalizer (`core/src/native/`), which every native
-  // transport inherits: a node that `carriesValue` never lends its text to a
-  // name, and the field roles in `NATIVE_AX_AUTHOR_NAMED_ROLES` never take a
+  // transport inherits: a node that `carriesAXValue` never lends its text to
+  // a name, and the field roles in `NATIVE_AX_AUTHOR_NAMED_ROLES` never take a
   // name from the text inside them — a typed value either way. This replaced
   // the browser's own `redactedName` backstop (#418), which is why that name
   // is not here.
-  "carriesValue",
+  "carriesAXValue",
   "NATIVE_AX_AUTHOR_NAMED_ROLES",
+  // Core's rule for a sensitive field's value in OTHER nodes' names
+  // (`core/src/native/value-regions.ts`), shared by both native transports:
+  // the entry point, which fields count (`givesValueAway` — an empty one
+  // withholds nothing), and the two kinds of field a transport counts without
+  // an in-page verdict — Chromium's password mask, and a value nothing
+  // classified.
+  "withholdSensitiveFieldNames",
+  "givesValueAway",
+  "isNativePasswordMask",
+  "holdsUnclassifiedValue",
   // The DOM producer, `core/src/extraction/dom-extractor.ts`: the attributes a
   // node copies verbatim, where the live `.value` is read — and the definition
   // of "sensitive" the extension imports rather than restates.
@@ -875,6 +885,14 @@ const FIELD_VALUE_GATES = [
   "controlledRegion",
   "NATIVE_AX_CHOICE_STATES",
   "fieldValueWithheld",
+  // Which fields the extension hands that name rule: `nameWithholdingRoots`,
+  // and the fields outside the tree it reads because a name points at them —
+  // the targets (`referencedOutsideTree`), which of them may hide one
+  // (`hidesUnreadNode`), and the fields inside each (`fieldsWithin`).
+  "nameWithholdingRoots",
+  "referencedOutsideTree",
+  "hidesUnreadNode",
+  "fieldsWithin",
   "pickerCurrentOption",
   "describeSelection",
   "selectFeedback",
