@@ -231,6 +231,18 @@
   and the Storybook addon get them too, and a jump in the native tree starts
   type-ahead afresh. ([#490](https://github.com/real-a11y/real-a11y-dev/pull/490))
 
+- **Hovering a native tree row outlines its element on the page**, as
+  hovering a DOM tree row does. It is a preview: the page doesn't scroll and
+  focus stays where it was. Moving off the rows clears the outline, a
+  selected row's included, as in the DOM tree. Each outline attaches
+  `chrome.debugger` for a moment, so it waits for the pointer to rest on a
+  row rather than outlining every row a sweep crosses, and a hover that a
+  newer one replaced while it waited is dropped before it attaches. Hovering
+  never brings Chrome's debugging bar back after you press its **Cancel**,
+  until you refresh the tree; nor does it outline anything while a pick is
+  armed or Screen Curtain is on.
+  ([#491](https://github.com/real-a11y/real-a11y-dev/pull/491))
+
 ## 0.1.15
 
 ### Patch Changes
