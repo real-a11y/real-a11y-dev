@@ -243,6 +243,15 @@
   armed or Screen Curtain is on.
   ([#491](https://github.com/real-a11y/real-a11y-dev/pull/491))
 
+- **The native tree reads frames.** An `<iframe>` row used to be a leaf
+  marked **embedded**, because the native read covered the top frame only.
+  Each frame's content now sits under its row, cross-origin frames
+  included, and acting on it, picking in it, and the outline on select and
+  hover all reach into the frame. A card number or password inside a frame
+  is withheld as one in the top frame is. Only a frame with nothing read
+  from it, such as an empty one, keeps the **embedded** mark.
+  ([#492](https://github.com/real-a11y/real-a11y-dev/pull/492))
+
 ## 0.1.15
 
 ### Patch Changes
