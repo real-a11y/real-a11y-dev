@@ -248,8 +248,11 @@
   Each frame's content now sits under its row, cross-origin frames
   included, and acting on it, picking in it, and the outline on select and
   hover all reach into the frame. A card number or password inside a frame
-  is withheld as one in the top frame is. Only a frame with nothing read
-  from it, such as an empty one, keeps the **embedded** mark.
+  is withheld as one in the top frame is. A read follows at most 20 frames
+  and skips any hidden one, so a page full of ad frames doesn't slow every
+  read; a frame the debugger can't attach to (another extension's, say)
+  delays only the first read of its page. A frame with nothing read from
+  it, such as an empty one or one past the 20, keeps the **embedded** mark.
   ([#492](https://github.com/real-a11y/real-a11y-dev/pull/492))
 
 ## 0.1.15
