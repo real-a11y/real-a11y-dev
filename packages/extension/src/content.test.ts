@@ -283,6 +283,9 @@ describe("content: a native reveal's arm", () => {
     // focusin consumes the one-shot, and the overlay hangs off
     // `documentElement`, which the `body` reset below doesn't reach.
     document.body.dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
+    // A preview's arm drops no focusin, so release every arm this test left.
+    for (const seq of armed) suppress(seq, false);
+    armed.clear();
     document.getElementById("__sn-highlight")?.remove();
     vi.clearAllTimers();
     vi.useRealTimers();
@@ -304,11 +307,25 @@ describe("content: a native reveal's arm", () => {
     expect(h.sent.filter((m) => m.type === "FOCUS_CHANGED")).toHaveLength(1);
   });
 
-  /** Arm (or release) for reveal `seq`, whose nonce is `n-<seq>`. */
-  function suppress(seq: number, active: boolean): void {
+  /** The arms a test opened, released after it. */
+  const armed = new Set<number>();
+
+  /** Arm (or release) overlay `seq`, whose nonce is `n-<seq>`: a reveal's
+   *  unless `kind` says otherwise. */
+  function suppress(
+    seq: number,
+    active: boolean,
+    kind?: "reveal" | "preview",
+  ): void {
+    if (active) armed.add(seq);
     h.send({
       type: "ARM_NATIVE_OVERLAY",
-      payload: { seq, active, ...(active ? { nonce: `n-${seq}` } : {}) },
+      payload: {
+        seq,
+        active,
+        ...(kind ? { kind } : {}),
+        ...(active ? { nonce: `n-${seq}` } : {}),
+      },
     });
   }
 
@@ -415,6 +432,67 @@ describe("content: a native reveal's arm", () => {
     reveal();
     expect(overlay()).toBeNull();
     h.send({ type: "TOGGLE_CURTAIN", payload: { visible: false } });
+  });
+
+  /** The event `pagePreview` fires: like the reveal's, under its own name. */
+  function preview(nonce = "n-1"): void {
+    document.getElementById("target")!.dispatchEvent(
+      new CustomEvent("real-a11y:native-preview", {
+        bubbles: false,
+        composed: true,
+        detail: nonce,
+      }),
+    );
+  }
+
+  it("draws a hovered native row's overlay in place, without scrolling", () => {
+    // A hover is a preview, as on the DOM tree: sweeping the pointer down
+    // the native tree must not scroll-jump the page row by row.
+    const scroll = vi.fn();
+    document.getElementById("target")!.scrollIntoView = scroll;
+    suppress(1, true, "preview");
+    preview();
+    expect(overlay()!.style.display).toBe("block");
+    expect(scroll).not.toHaveBeenCalled();
+  });
+
+  it("ignores a preview event no native hover asked for, or past its deadline", () => {
+    preview();
+    expect(overlay()).toBeNull();
+    suppress(1, true, "preview");
+    preview("guessed");
+    expect(overlay()).toBeNull();
+    vi.advanceTimersByTime(801);
+    preview();
+    expect(overlay()).toBeNull();
+  });
+
+  it("draws no preview while Screen Curtain is on", () => {
+    h.send({ type: "TOGGLE_CURTAIN", payload: { visible: true } });
+    suppress(1, true, "preview");
+    preview();
+    expect(overlay()).toBeNull();
+    h.send({ type: "TOGGLE_CURTAIN", payload: { visible: false } });
+  });
+
+  it("lets each arm draw only its own kind", () => {
+    // A preview's arm can't draw a reveal, which scrolls the page, even with
+    // the right nonce; nor a reveal's a preview.
+    suppress(1, true, "preview");
+    reveal();
+    expect(overlay()).toBeNull();
+    suppress(2, true, "reveal");
+    preview("n-2");
+    expect(overlay()).toBeNull();
+  });
+
+  it("drops no real focus change while a preview is armed", () => {
+    // A preview moves no focus, so it has none of its own to drop: a focus
+    // change during it is the user's, or the page's.
+    suppress(1, true, "preview");
+    h.sent.length = 0;
+    focusTarget();
+    expect(reported()).toBe(1);
   });
 
   it("resumes tracking once the deadline passes with no release", () => {

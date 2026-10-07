@@ -21,7 +21,8 @@ import { describeAction, describeSelection } from "./action-feedback.js";
  */
 export function nativeActionFeedback(
   node: NativeNode | undefined,
-  action: NativeAction,
+  // A hover's preview is no action the user took, and never reaches here.
+  action: Exclude<NativeAction, "preview">,
   nodes?: ReadonlyMap<string, NativeNode>,
 ): string | null {
   if (action === "select" && node?.role === "option") {

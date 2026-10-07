@@ -106,9 +106,10 @@ type NativeMessage =
       // follow that fires on every settled tree selection would silently
       // inflate it with browsing, not real dispatches.
       silent?: boolean;
-      // For a `reveal`: the panel's sequence number for it. A queued reveal
-      // that a newer one on the same tab has replaced is dropped before it
-      // attaches.
+      // For a `reveal` or `preview`: the panel's sequence number for it, one
+      // counter for both. A queued reveal that a newer reveal on the same tab
+      // has replaced is dropped before it attaches, and a queued preview that
+      // any newer reveal or preview has replaced.
       requestId?: number;
       // The URL of the document the caller's tree was read from. Checked
       // after the per-tab queue wait, right before dispatch: a node id
@@ -210,6 +211,9 @@ export function cancelNativePicks(): void {
 let revealSeq = 0;
 // The latest reveal the panel asked for, per tab (its `requestId`).
 const latestReveal = new Map<number, number>();
+/** Tab → the newest reveal OR preview the panel asked for: a preview is
+ *  worth its attach only while nothing newer has been asked for. */
+const latestOverlay = new Map<number, number>();
 
 export function registerNativeMode(): void {
   // Content scripts can read and write `chrome.storage.local` by default. They
@@ -418,18 +422,31 @@ export function registerNativeMode(): void {
           }
           case "NATIVE_ACT": {
             const isReveal = message.action === "reveal";
-            if (isReveal && message.requestId !== undefined) {
-              latestReveal.set(message.tabId, message.requestId);
+            const isPreview = message.action === "preview";
+            const isOverlay = isReveal || isPreview;
+            // A hover is the one native operation that attaches with no
+            // gesture behind it, so it respects the user's Cancel on Chrome's
+            // bar at least as strictly as an automatic read: refused, and
+            // never retried after a drop. A Cancel that lands mid-preview
+            // fails that preview; the next one is refused here.
+            if (isPreview && session.cancelledByUser(message.tabId)) {
+              const error: AttachOutcome["error"] = "cancelled-by-user";
+              sendResponse({ success: false, error });
+              return;
+            }
+            if (isOverlay && message.requestId !== undefined) {
+              latestOverlay.set(message.tabId, message.requestId);
+              if (isReveal) latestReveal.set(message.tabId, message.requestId);
             }
             const { outcome, value } = await withRecovery(
               session,
               message.tabId,
               async (t) => {
-                // A reveal skips the page check: a same-page URL change
+                // An overlay skips the page check: a same-page URL change
                 // (pushState, a hash) leaves the node ids valid, and an id
                 // from a different document fails safely in DOM.resolveNode.
                 if (
-                  !isReveal &&
+                  !isOverlay &&
                   message.expectUrl !== undefined &&
                   (await tabUrl(message.tabId)) !== message.expectUrl
                 ) {
@@ -438,7 +455,7 @@ export function registerNativeMode(): void {
                     error: "page navigated — reload the native tree",
                   };
                 }
-                if (!isReveal) {
+                if (!isOverlay) {
                   return dispatchNative(
                     t,
                     message.nodeId,
@@ -446,13 +463,14 @@ export function registerNativeMode(): void {
                     message.value,
                   );
                 }
-                // Arm the content script, reveal, release. Armed here, after
-                // the per-tab queue wait and right beside the dispatch it
-                // covers, so a long queue can't outlast its deadline. Only
-                // the top frame: the native tree reads the top frame alone,
-                // so a reveal target never lives in a subframe, and arming
-                // third-party frames would only widen the window. The nonce
-                // reaches the page only as `pageReveal`'s argument.
+                // Arm the content script, reveal or preview, release. Armed
+                // here, after the per-tab queue wait and right beside the
+                // dispatch it covers, so a long queue can't outlast its
+                // deadline. Only the top frame: the native tree reads the top
+                // frame alone, so a target never lives in a subframe, and
+                // arming third-party frames would only widen the window. The
+                // nonce reaches the page only as the page function's argument
+                // (`pageReveal`, `pagePreview`).
                 const seq = ++revealSeq;
                 const nonce = crypto.randomUUID();
                 const arm = (active: boolean) =>
@@ -461,7 +479,12 @@ export function registerNativeMode(): void {
                       message.tabId,
                       {
                         type: "ARM_NATIVE_OVERLAY",
-                        payload: { seq, active, ...(active ? { nonce } : {}) },
+                        payload: {
+                          seq,
+                          active,
+                          kind: message.action as "reveal" | "preview",
+                          ...(active ? { nonce } : {}),
+                        },
                       },
                       { frameId: 0 },
                     )
@@ -475,7 +498,7 @@ export function registerNativeMode(): void {
                   const result = await dispatchNative(
                     t,
                     message.nodeId,
-                    "reveal",
+                    message.action,
                     nonce,
                   );
                   return result.success ? { ...result, outlined } : result;
@@ -484,12 +507,17 @@ export function registerNativeMode(): void {
                 }
               },
               log,
-              isReveal && message.requestId !== undefined
-                ? {
-                    stillWanted: () =>
-                      latestReveal.get(message.tabId) === message.requestId,
-                  }
-                : {},
+              {
+                ...(isOverlay && message.requestId !== undefined
+                  ? {
+                      stillWanted: () =>
+                        (isReveal ? latestReveal : latestOverlay).get(
+                          message.tabId,
+                        ) === message.requestId,
+                    }
+                  : {}),
+                ...(isPreview ? { retryDrop: false } : {}),
+              },
             );
             if (!outcome.ok) {
               // Nothing was dispatched, so nothing is recorded as an `act`.

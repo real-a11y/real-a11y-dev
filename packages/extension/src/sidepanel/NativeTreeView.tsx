@@ -46,6 +46,7 @@ import {
   JUMP_KEYSHORTCUTS,
   nextJump,
   resolveStepperKeyAction,
+  useInputModality,
   useVirtualTree,
   type JumpCycle,
 } from "@real-a11y-dev/semantic-navigator-ui";
@@ -81,7 +82,10 @@ import {
   type FilteredListItem,
 } from "./FilteredList.js";
 import { findNativeModalDialog } from "./native-feedback.js";
-import { NATIVE_FOLLOW_DEBOUNCE_MS } from "./native-follow.js";
+import {
+  NATIVE_FOLLOW_DEBOUNCE_MS,
+  NATIVE_HOVER_DWELL_MS,
+} from "./native-follow.js";
 import {
   arrowLeftStopsAtScopeRoot,
   describeNode,
@@ -94,6 +98,7 @@ import {
 } from "./scope.js";
 import { ScopeBar } from "./ScopeBar.js";
 import { DialogIndicator, SendKeyBar, type SendKey } from "./SendKeyBar.js";
+import { useDwellTimer } from "./use-dwell-timer.js";
 
 const ROLE_FILTER_KEYS = Object.keys(ROLE_FILTER_LABELS) as Array<
   Exclude<RoleFilter, null>
@@ -139,6 +144,13 @@ export interface NativeTreeViewProps {
    * care about the page can leave it out.
    */
   onSelectionReveal?: (nodeId: string) => void;
+  /**
+   * The pointer is resting on this row (after a short dwell), or `null` once
+   * it has left one — App.tsx outlines the row's element on the page in
+   * place, the DOM tree's hover preview. Optional for the same reason as
+   * `onSelectionReveal`.
+   */
+  onHoverPreview?: (nodeId: string | null) => void;
   /**
    * The subtree the tree is scoped to, or null for the whole tree. Held by
    * App.tsx (Copy exports the same subtree) and changed through `onScope`:
@@ -234,6 +246,7 @@ export function NativeTreeView({
   reveal,
   onRevealMiss,
   onSelectionReveal,
+  onHoverPreview,
   scopedRootId = null,
   onScope,
   pickArmed = false,
@@ -563,31 +576,77 @@ export function NativeTreeView({
   // key-repeat burst walks `selectedId` through several rows, and each
   // reveal is a full attach → reveal → detach round trip, so only the row the
   // user settles on is revealed. The callback is read through a ref, not
-  // listed as a dependency: App's callback changes identity when
-  // `nativeBusy` or `curtainOn` flips, and re-running then would reveal the
-  // same row again, stealing focus back from whatever an activation just
-  // opened. One timer is shared with the role-filter list's follow
+  // listed as a dependency: a host's callback may change identity when its
+  // own state flips, and re-running then would reveal the same row again,
+  // stealing focus back from whatever an activation just opened. One timer is shared with the role-filter list's follow
   // (`followFromList`), so the later request always replaces the pending one.
   const onSelectionRevealRef = useRef(onSelectionReveal);
   onSelectionRevealRef.current = onSelectionReveal;
-  const followTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
-    undefined,
+  const { schedule: scheduleFollowTimer, cancel: cancelFollow } = useDwellTimer(
+    NATIVE_FOLLOW_DEBOUNCE_MS,
   );
-  const scheduleFollow = useCallback((id: string) => {
-    clearTimeout(followTimer.current);
-    followTimer.current = setTimeout(() => {
-      followTimer.current = undefined;
-      onSelectionRevealRef.current?.(id);
-    }, NATIVE_FOLLOW_DEBOUNCE_MS);
-  }, []);
+  const scheduleFollow = useCallback(
+    (id: string) =>
+      scheduleFollowTimer(() => onSelectionRevealRef.current?.(id)),
+    [scheduleFollowTimer],
+  );
   useEffect(() => {
     if (!selectedId) return;
     scheduleFollow(selectedId);
-    return () => clearTimeout(followTimer.current);
-  }, [selectedId, followNonce, scheduleFollow]);
-  // The tree effect's own cleanup doesn't run for a follow the list
-  // scheduled, so an unmount with one pending has to clear it here.
-  useEffect(() => () => clearTimeout(followTimer.current), []);
+    return cancelFollow;
+  }, [selectedId, followNonce, scheduleFollow, cancelFollow]);
+
+  // Hover preview. Each one is a debugger round trip like the follow above,
+  // so it waits for the pointer to rest on a row rather than firing for every
+  // row a sweep crosses. A row that scrolls under a still pointer during
+  // keyboard navigation is not a new hover (`useInputModality`), the same
+  // guard the DOM tree's rows use — but leaving a row always ends its hover,
+  // whatever the modality, or keyboard scrolling would strand an outline
+  // already shown. A row that goes away under a still pointer gets no
+  // `mouseleave` at all — collapsed, dropped by a re-read, out of the
+  // rendered slice, the tree swapped for a role filter's list, or this view
+  // unmounted — so those end its hover too. Only an outline actually asked
+  // for (`hoverShown`) is reported cleared; a preview still waiting is just
+  // cancelled.
+  const { isMouseModality, markKeyboard } = useInputModality();
+  const onHoverPreviewRef = useRef(onHoverPreview);
+  onHoverPreviewRef.current = onHoverPreview;
+  const { schedule: scheduleHover, cancel: cancelHover } = useDwellTimer(
+    NATIVE_HOVER_DWELL_MS,
+  );
+  const hoverRowId = useRef<string | null>(null);
+  const hoverShown = useRef(false);
+  const endHover = useCallback(() => {
+    cancelHover();
+    hoverRowId.current = null;
+    if (!hoverShown.current) return;
+    hoverShown.current = false;
+    onHoverPreviewRef.current?.(null);
+  }, [cancelHover]);
+  const enterRow = (id: string) => {
+    if (!isMouseModality()) return;
+    endHover();
+    hoverRowId.current = id;
+    scheduleHover(() => {
+      hoverShown.current = true;
+      onHoverPreviewRef.current?.(id);
+    });
+  };
+  const leaveRow = (id: string) => {
+    if (hoverRowId.current === id) endHover();
+  };
+  useEffect(() => endHover, [endHover]);
+  // The list a role filter shows replaces the tree's rows outright.
+  useEffect(() => {
+    if (roleFilter !== null) endHover();
+  }, [roleFilter, endHover]);
+  // The hovered row left the rendered rows without a `mouseleave`.
+  useEffect(() => {
+    const id = hoverRowId.current;
+    if (id !== null && !visibleIds.slice(startIndex, endIndex).includes(id)) {
+      endHover();
+    }
+  }, [visibleIds, startIndex, endIndex, endHover]);
 
   // The role-filter list's selection lives in `FilteredListView`, not in
   // `selectedId`, so it follows onto the page through this instead: every
@@ -1045,7 +1104,13 @@ export function NativeTreeView({
                 boxSizing: "border-box",
               }}
               aria-activedescendant={activeDescendantId}
-              onKeyDown={handleKeyDown}
+              onKeyDown={(e) => {
+                // The keyboard takes over: a preview still waiting is
+                // dropped. One already shown stays until its row is left.
+                markKeyboard();
+                if (!hoverShown.current) endHover();
+                handleKeyDown(e);
+              }}
             >
               {visibleIds.slice(startIndex, endIndex).map((id) => {
                 const node = nodes.get(id);
@@ -1116,6 +1181,8 @@ export function NativeTreeView({
                         scopeTo(id);
                       }
                     }}
+                    onMouseEnter={() => enterRow(id)}
+                    onMouseLeave={() => leaveRow(id)}
                   >
                     <span class="sn-indent">
                       {Array.from(

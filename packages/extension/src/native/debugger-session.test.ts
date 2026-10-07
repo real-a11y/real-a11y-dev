@@ -1488,3 +1488,124 @@ describe("NATIVE_READ through the real message handler", () => {
     expect(attach).toHaveBeenCalled();
   });
 });
+
+describe("NATIVE_ACT preview through the real message handler", () => {
+  /** A hover's preview, as `useNativeOverlay` sends it. */
+  const preview = (requestId: number) => ({
+    type: "NATIVE_ACT",
+    tabId: 7,
+    nodeId: "ax-dom-5",
+    action: "preview",
+    silent: true,
+    requestId,
+  });
+
+  /** The handlers, with a content script that answers the overlay's arm and
+   *  commands that answer as a live page does. The first in-page call waits
+   *  for `release`, holding the tab's queue. */
+  function handlers() {
+    const h = registerHandlers();
+    const g = globalThis as unknown as { chrome: typeof chrome };
+    (g.chrome.tabs as unknown as Record<string, unknown>).sendMessage = vi.fn(
+      async () => ({ success: true }),
+    );
+    let release: () => void = () => {};
+    const held = new Promise<void>((resolve) => (release = resolve));
+    let calls = 0;
+    (
+      g.chrome.debugger.sendCommand as ReturnType<typeof vi.fn>
+    ).mockImplementation(async (_target: unknown, method: string) => {
+      if (method === "DOM.resolveNode") return { object: { objectId: "o" } };
+      if (method === "Runtime.callFunctionOn") {
+        if (calls++ === 0) await held;
+        return { result: { value: { ok: true } } };
+      }
+      return {};
+    });
+    return { ...h, release };
+  }
+
+  it("never attaches after the user cancelled Chrome's bar, until the user reads", async () => {
+    // A hover is the one native operation with no gesture behind it.
+    const { listeners, attach, send, release } = handlers();
+    release();
+    listeners[listeners.length - 1]({ tabId: 7 }, "canceled_by_user");
+
+    expect(await send(preview(1))).toMatchObject({
+      success: false,
+      error: "cancelled-by-user",
+    });
+    expect(attach).not.toHaveBeenCalled();
+
+    // A read the user asked for lifts it, as it does for automatic reads.
+    await send({ type: "NATIVE_READ", tabId: 7 });
+    const afterRead = attach.mock.calls.length;
+    await send(preview(2));
+    expect(attach.mock.calls.length).toBeGreaterThan(afterRead);
+  });
+
+  it("never retries a preview the user's Cancel dropped, nor sends the next", async () => {
+    // A Cancel that lands mid-preview fails it without a second attach; the
+    // Cancel is on record, so the next hover is refused before attaching.
+    const { listeners, attach, send } = registerHandlers();
+    const g = globalThis as unknown as { chrome: typeof chrome };
+    (g.chrome.tabs as unknown as Record<string, unknown>).sendMessage = vi.fn(
+      async () => ({ success: true }),
+    );
+    (
+      g.chrome.debugger.sendCommand as ReturnType<typeof vi.fn>
+    ).mockImplementation(async (_target: unknown, method: string) => {
+      if (method === "DOM.resolveNode") {
+        setTimeout(() =>
+          listeners[listeners.length - 1]({ tabId: 7 }, "canceled_by_user"),
+        );
+        throw new Error("Detached while handling command.");
+      }
+      return {};
+    });
+
+    expect(await send(preview(1))).toMatchObject({ success: false });
+    await drain();
+    expect(attach).toHaveBeenCalledTimes(1);
+    expect(await send(preview(2))).toMatchObject({
+      success: false,
+      error: "cancelled-by-user",
+    });
+    expect(attach).toHaveBeenCalledTimes(1);
+  });
+
+  it("drops a queued preview that a newer one replaced, before it attaches", async () => {
+    // A slow scan down the tree queues one preview per row it rests on
+    // while an earlier one holds the tab; only the newest is worth an attach.
+    const { attach, send, release } = handlers();
+    const first = send(preview(1));
+    await drain();
+    const second = send(preview(2));
+    const third = send(preview(3));
+    await drain();
+    release();
+
+    expect(await first).toMatchObject({ success: true });
+    expect(await second).toMatchObject({ success: false, error: "superseded" });
+    expect(await third).toMatchObject({ success: true });
+    expect(attach).toHaveBeenCalledTimes(2);
+  });
+
+  it("drops a queued preview for a newer reveal, but never a reveal for a preview", async () => {
+    // A selection outlines what the user chose: a hover queued before it is
+    // stale, and one after it doesn't take the selection's focus away.
+    const { send, release } = handlers();
+    const first = send(preview(1));
+    await drain();
+    const stalePreview = send(preview(2));
+    const reveal = send({ ...preview(3), action: "reveal" });
+    const laterPreview = send(preview(4));
+    await drain();
+    release();
+
+    await first;
+    expect(await stalePreview).toMatchObject({ error: "superseded" });
+    expect(await reveal).toMatchObject({ success: true });
+    expect(await laterPreview).toMatchObject({ success: true });
+  });
+});

@@ -207,18 +207,26 @@ export type PanelToContent =
       };
     })
   | (BoundTab & { type: "SET_FOCUS_TRACKER"; payload: { enabled: boolean } })
-  // Sent by the SERVICE WORKER (native/index.ts, NATIVE_ACT's `reveal`
-  // branch), not the panel, around a native reveal. Armed (`active: true`)
-  // before the dispatch and released (`active: false`, same `seq`) after, it
-  // does two jobs. It lets the content script honour exactly one
-  // `real-a11y:native-reveal` event, the one carrying `nonce`, and draw its
-  // overlay there. And it drops the one `focusin` the reveal's focus causes,
-  // which the reverse focus-sync listener would otherwise re-highlight and
-  // scroll to: the focus happens in the page over chrome.debugger, so there
-  // is no in-process call to wrap the way HIGHLIGHT_NODE wraps its own.
+  // Sent by the SERVICE WORKER (native/index.ts, NATIVE_ACT's `reveal` and
+  // `preview` branch), not the panel, around a native overlay. Armed
+  // (`active: true`) before the dispatch and released (`active: false`, same
+  // `seq`) after, it lets the content script honour exactly one event of its
+  // `kind` — `real-a11y:native-reveal` or `real-a11y:native-preview` — the
+  // one carrying `nonce`, and draw its overlay there: scrolled into view for
+  // a reveal, in place for a preview. A reveal's arm also drops the one
+  // `focusin` the reveal's focus causes, which the reverse focus-sync
+  // listener would otherwise re-highlight and scroll to: the focus happens in
+  // the page over chrome.debugger, so there is no in-process call to wrap the
+  // way HIGHLIGHT_NODE wraps its own. A preview moves no focus, so its arm
+  // drops none.
   | (BoundTab & {
       type: "ARM_NATIVE_OVERLAY";
-      payload: { seq: number; active: boolean; nonce?: string };
+      payload: {
+        seq: number;
+        active: boolean;
+        nonce?: string;
+        kind?: "reveal" | "preview";
+      };
     })
   // Start/stop the (expensive) live tree observation in the content script.
   // Driven by the panel's connect/disconnect the same way SET_FOCUS_TRACKER
