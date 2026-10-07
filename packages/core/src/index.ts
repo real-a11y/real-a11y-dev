@@ -103,8 +103,14 @@ export {
   type CssPathAdapter,
 } from "./utils/css-path.js";
 export { getNodeId, resetIdCounter } from "./utils/id-generator.js";
-export { buildControlsIndex } from "./utils/controls-index.js";
-export type { ControlsIndex } from "./utils/controls-index.js";
+export {
+  buildControlsIndex,
+  indexControlLinks,
+} from "./utils/controls-index.js";
+export type {
+  ControlLinkSource,
+  ControlsIndex,
+} from "./utils/controls-index.js";
 export {
   isExtractionResult,
   describeTreeInput,

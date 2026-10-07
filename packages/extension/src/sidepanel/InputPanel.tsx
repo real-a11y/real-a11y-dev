@@ -33,6 +33,12 @@ export interface InputPanelState {
    * then deleted, which is how a user deliberately empties the field.
    */
   blockEmptySubmit?: boolean;
+  /**
+   * The field's value is withheld (ADR-0001): a sensitive select marks no
+   * current option, and the feedback after a choice names the field, never
+   * the option chosen.
+   */
+  valueWithheld?: boolean;
 }
 
 interface InputPanelProps {
@@ -200,7 +206,7 @@ function SelectPicker({
           break;
         case "Enter":
           e.preventDefault();
-          if (options[selectedIndex]) {
+          if (options[selectedIndex] && !options[selectedIndex].disabled) {
             onSubmit(options[selectedIndex].value);
           }
           break;
@@ -241,8 +247,11 @@ function SelectPicker({
           <div
             key={opt.value}
             id={`sn-select-opt-${i}`}
-            class={`sn-select-option ${i === selectedIndex ? "sn-select-option--selected" : ""}`}
+            class={`sn-select-option ${i === selectedIndex ? "sn-select-option--selected" : ""}${opt.disabled ? " sn-select-option--disabled" : ""}`}
             role="option"
+            // Listed so the picker matches the page's own, but not choosable:
+            // a user couldn't pick it on the page either.
+            aria-disabled={opt.disabled ? "true" : undefined}
             // The field's own current option, as the dot shows — not the
             // keyboard position, which `aria-activedescendant` carries. A
             // sensitive select reports none, and the first option must not
@@ -251,7 +260,7 @@ function SelectPicker({
             data-opt-index={i}
             onClick={() => {
               setSelectedIndex(i);
-              onSubmit(opt.value);
+              if (!opt.disabled) onSubmit(opt.value);
             }}
           >
             <span class="sn-select-check">
@@ -270,9 +279,13 @@ function SelectPicker({
         </button>
         <button
           class="sn-input-panel-btn sn-input-panel-btn--primary"
-          disabled={options.length === 0}
+          disabled={
+            options.length === 0 || options[selectedIndex]?.disabled === true
+          }
           onClick={() =>
-            options[selectedIndex] && onSubmit(options[selectedIndex].value)
+            options[selectedIndex] &&
+            !options[selectedIndex].disabled &&
+            onSubmit(options[selectedIndex].value)
           }
         >
           Select

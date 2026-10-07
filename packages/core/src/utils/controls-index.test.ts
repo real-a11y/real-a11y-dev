@@ -2,7 +2,11 @@ import { describe, it, expect } from "vitest";
 
 import type { SemanticNode } from "../types.js";
 
-import { buildControlsIndex } from "./controls-index.js";
+import {
+  buildControlsIndex,
+  indexControlLinks,
+  type ControlLinkSource,
+} from "./controls-index.js";
 
 function makeNode(
   treeId: string,
@@ -277,5 +281,42 @@ describe("buildControlsIndex", () => {
       expect(forward.get("t1")).toEqual(["panel"]);
       expect(inferred.size).toBe(0);
     });
+  });
+});
+
+describe("indexControlLinks", () => {
+  // The shape the extension's native tree fills from Chromium's own
+  // resolution, with no DOM ids to resolve.
+  const link = (
+    id: string,
+    role: string,
+    extra: Partial<ControlLinkSource> = {},
+  ): ControlLinkSource => ({
+    id,
+    role,
+    controls: [],
+    expanded: false,
+    hidden: false,
+    ...extra,
+  });
+
+  it("builds forward and reverse maps from resolved ids", () => {
+    const { forward, reverse, inferred } = indexControlLinks([
+      link("tab", "tab", { controls: ["panel"] }),
+      link("panel", "tabpanel"),
+    ]);
+    expect(forward.get("tab")).toEqual(["panel"]);
+    expect(reverse.get("panel")).toEqual(["tab"]);
+    expect(inferred.size).toBe(0);
+  });
+
+  it("infers an expanded popup trigger's menu, in tree order", () => {
+    const { forward, inferred } = indexControlLinks([
+      link("menu-before", "menu"),
+      link("btn", "button", { haspopup: "menu", expanded: true }),
+      link("menu-after", "menu"),
+    ]);
+    expect(forward.get("btn")).toEqual(["menu-after"]);
+    expect(inferred.has("btn")).toBe(true);
   });
 });

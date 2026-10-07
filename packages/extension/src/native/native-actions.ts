@@ -49,6 +49,10 @@ export type NativeNode = {
   /** Native ids of the rows this node controls (`aria-controls`, as Chromium
    *  resolves it), each one present in the tree. Absent for none. */
   controls?: string[];
+  /** The field's value is withheld (sensitive, inside a sensitive field, or
+   *  unclassified); false only for a field classified as not sensitive.
+   *  Absent counts as withheld — see `pickerCurrentOption`. */
+  valueWithheld?: boolean;
 };
 
 /**
@@ -240,4 +244,24 @@ export function nativeSelectOptions(
   };
   for (const id of popup.childIds ?? []) walk(id);
   return options;
+}
+
+/**
+ * The option a native `<select>`'s picker marks as the current one — or
+ * none, when the select's value is withheld (ADR-0001): a sensitive select
+ * (`autocomplete="cc-exp-month"`), one inside a sensitive field, or one the
+ * in-page read couldn't classify, as the DOM tree's picker
+ * (`computeFieldState`) marks none for a sensitive select. Fails closed: only
+ * a select classified as not sensitive (`valueWithheld === false`) shows one.
+ * A redaction gate — `scripts/pr-risk.mjs` grades a change to it as such.
+ */
+export function pickerCurrentOption(
+  select: NativeNode,
+  options: NativeNode[],
+): NativeNode | undefined {
+  if (select.valueWithheld !== false) return undefined;
+  return (
+    options.find((o) => o.states?.["selected"] === true) ??
+    options.find((o) => o.name === select.value)
+  );
 }

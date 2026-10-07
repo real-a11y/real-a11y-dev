@@ -50,6 +50,34 @@ describe("computeFieldState", () => {
       });
     });
 
+    it("marks a disabled option, which the picker lists but won't choose", () => {
+      const el = mount(
+        `<select><option value="a" disabled>A</option><option value="b">B</option></select>`,
+      );
+      expect(computeFieldState(el)).toMatchObject({
+        options: [
+          { value: "a", label: "A", selected: false, disabled: true },
+          { value: "b", label: "B", selected: true },
+        ],
+      });
+    });
+
+    it("withholds which option a sensitive select has chosen, and says so", () => {
+      const el = mount(
+        `<select autocomplete="cc-exp-month"><option value="">MM</option><option value="02" selected>02</option></select>`,
+      );
+      expect(computeFieldState(el)).toEqual({
+        success: true,
+        type: "select",
+        value: "",
+        options: [
+          { value: "", label: "MM", selected: false },
+          { value: "02", label: "02", selected: false },
+        ],
+        valueWithheld: true,
+      });
+    });
+
     it("never reveals a password value (but still allows typing)", () => {
       const el = mount(`<input type="password" value="hunter2" />`);
       expect(computeFieldState(el)).toMatchObject({

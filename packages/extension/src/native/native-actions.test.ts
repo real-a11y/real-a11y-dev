@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { nativeSelectOptions, type NativeNode } from "./native-actions.js";
+import {
+  nativeSelectOptions,
+  pickerCurrentOption,
+  type NativeNode,
+} from "./native-actions.js";
 
 function tree(...list: NativeNode[]): Map<string, NativeNode> {
   return new Map(list.map((n) => [n.id, n]));
@@ -65,5 +69,46 @@ describe("nativeSelectOptions", () => {
     );
     expect(nativeSelectOptions(nodes.get("cb")!, nodes)).toEqual([]);
     expect(nativeSelectOptions(nodes.get("lb")!, nodes)).toEqual([]);
+  });
+});
+
+describe("pickerCurrentOption", () => {
+  const options = [
+    n("mm", "option", "MM"),
+    n("02", "option", "02", [], { states: { selected: true } }),
+  ];
+  const select = (extra: Partial<NativeNode>) =>
+    n("sel", "combobox", "Expiry month", ["pop"], extra);
+
+  it("marks the selected option of a select classified as not sensitive", () => {
+    expect(
+      pickerCurrentOption(select({ valueWithheld: false }), options)?.id,
+    ).toBe("02");
+  });
+
+  it("falls back to the option named like the select's value", () => {
+    const plain = [n("a", "option", "Books"), n("b", "option", "Music")];
+    expect(
+      pickerCurrentOption(
+        select({ valueWithheld: false, value: "Music" }),
+        plain,
+      )?.id,
+    ).toBe("b");
+  });
+
+  it("marks none for a sensitive select, empty or not", () => {
+    expect(
+      pickerCurrentOption(select({ valueWithheld: true }), options),
+    ).toBeUndefined();
+    expect(
+      pickerCurrentOption(
+        select({ valueWithheld: true, value: "[redacted]", redacted: true }),
+        options,
+      ),
+    ).toBeUndefined();
+  });
+
+  it("fails closed on a select the in-page read never classified", () => {
+    expect(pickerCurrentOption(select({}), options)).toBeUndefined();
   });
 });

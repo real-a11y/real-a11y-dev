@@ -24,6 +24,21 @@ export interface FeedbackTarget {
  * the confirmation, and a banner flashing on every rapid step would push the
  * tree around under the pointer.
  */
+/**
+ * The feedback line after an option is chosen in a select: the option, or,
+ * for a field whose value is withheld (a sensitive select, ADR-0001), only
+ * the field — which option was chosen IS the value. Shared by both trees.
+ */
+export function describeSelection(
+  field: string,
+  option: string,
+  valueWithheld: boolean,
+): string {
+  return valueWithheld
+    ? `Selected an option in ${field}`
+    : `Selected: ${option}`;
+}
+
 export function describeAction(
   { role, name, checked }: FeedbackTarget,
   action: ActionType,

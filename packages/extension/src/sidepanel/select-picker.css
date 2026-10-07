@@ -1,0 +1,7 @@
+/* The option picker's own additions to `tree.css`'s `.sn-select-option`. */
+
+/* A disabled `<option>`: listed, as on the page, but it can't be chosen. */
+.sn-select-option--disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}

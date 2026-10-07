@@ -379,3 +379,40 @@ describe("InputPanel select picker selection state", () => {
     expect(selectedLabels()).toEqual([]);
   });
 });
+
+describe("InputPanel select picker disabled options", () => {
+  const STATE: InputPanelState = {
+    ...SELECT_STATE,
+    options: [
+      { value: "fr", label: "France", selected: true },
+      { value: "de", label: "Germany", selected: false, disabled: true },
+    ],
+  };
+
+  function mountWith(onSubmit: (value: string) => void): void {
+    opener.focus();
+    act(() => {
+      render(
+        h(InputPanel, { state: STATE, onSubmit, onCancel: () => {} }),
+        container,
+      );
+    });
+  }
+
+  it("lists a disabled option as disabled, and never submits it", () => {
+    const submitted: string[] = [];
+    mountWith((v) => submitted.push(v));
+    const germany =
+      container.querySelectorAll<HTMLElement>('[role="option"]')[1]!;
+    expect(germany.getAttribute("aria-disabled")).toBe("true");
+
+    act(() => germany.click());
+    const list = container.querySelector('[role="listbox"]')!;
+    act(() => {
+      list.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Enter", bubbles: true }),
+      );
+    });
+    expect(submitted).toEqual([]);
+  });
+});

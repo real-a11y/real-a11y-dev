@@ -141,6 +141,8 @@ export interface SelectOption {
   value: string;
   label: string;
   selected: boolean;
+  /** A disabled `<option>`: listed, but it can't be chosen. */
+  disabled?: boolean;
 }
 
 /**
