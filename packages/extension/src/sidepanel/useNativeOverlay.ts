@@ -11,9 +11,10 @@
  * Curtain hides the page.
  */
 
+import { splitNativeNodeId } from "@real-a11y-dev/core";
 import { useCallback, useRef } from "preact/hooks";
 
-import { backendNodeIdFrom, splitFrameNodeId } from "../native/native-core.js";
+import { backendNodeIdFrom } from "../native/native-core.js";
 
 export interface NativeOverlayInputs {
   enabled: boolean;
@@ -143,7 +144,7 @@ export function useNativeOverlay(inputs: NativeOverlayInputs) {
       previewsPausedFor.current === s.tabId ||
       // A row with no backing element has nothing to outline. One in an
       // out-of-process frame carries its frame after an `@`, and outlines too.
-      backendNodeIdFrom(splitFrameNodeId(nodeId).localId) === null
+      backendNodeIdFrom(splitNativeNodeId(nodeId).localId) === null
     ) {
       return;
     }

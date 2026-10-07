@@ -292,9 +292,10 @@ export function normalizeNativeAX(rawNodes: RawNativeAXNode[]): NativeAXNode[] {
   // Multi-frame note: every raw node without a parentId is treated as a
   // top-level root, so a cross-frame payload (multiple RootWebAreas)
   // serializes child documents as separate top-level subtrees. Nesting them
-  // at their <iframe> location needs frame metadata only a transport-aware
-  // producer has (frameId → DOM.getFrameOwner) — that's
-  // @real-a11y-dev/browser's job, not this pure module's.
+  // at their <iframe> location needs frame metadata only a transport has
+  // (frameId → DOM.getFrameOwner): the transport reads each frame on its own
+  // and grafts it with `graftNativeFrame` (./frames.ts), as the extension's
+  // debugger mode does. This pure module never sees more than one document.
   for (const root of rawNodes.filter((n) => !n.parentId)) {
     visit(root.nodeId, 0, null);
   }

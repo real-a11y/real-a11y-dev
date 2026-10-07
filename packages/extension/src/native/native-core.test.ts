@@ -24,7 +24,6 @@ import {
   readNativeTree,
   fieldValueWithheld,
   rootIdOf,
-  splitFrameNodeId,
   SYNTHETIC_ROOT_ID,
   withholdInsideSensitive,
   controlledRegion,
@@ -3190,24 +3189,6 @@ describe("readNativeTree across frames", () => {
 });
 
 describe("dispatchNative in a frame", () => {
-  it("splits a frame, and the document it showed, off a node id", () => {
-    expect(splitFrameNodeId("ax-dom-8@OOPIF.DOC1")).toEqual({
-      localId: "ax-dom-8",
-      frameId: "OOPIF",
-      documentId: "DOC1",
-    });
-    expect(splitFrameNodeId("ax-dom-8@OOPIF")).toEqual({
-      localId: "ax-dom-8",
-      frameId: "OOPIF",
-      documentId: null,
-    });
-    expect(splitFrameNodeId("ax-dom-8")).toEqual({
-      localId: "ax-dom-8",
-      frameId: null,
-      documentId: null,
-    });
-  });
-
   it("refuses a node whose frame has navigated since the read", async () => {
     // The frame keeps its id across a navigation, and a cross-site one
     // starts a fresh process: backend id 8 there is some other element.

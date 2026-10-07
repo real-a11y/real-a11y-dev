@@ -32,6 +32,7 @@
 
 import {
   indexControlLinks,
+  isNativeIframeRole,
   ROLE_FILTER_LABELS,
   type ActionType,
   type ControlLinkSource,
@@ -227,13 +228,6 @@ function toListItem(node: NativeNode, selects: boolean): FilteredListItem {
  *  (a native node has no text content of its own to fall between them). */
 function typeAheadLabel(node: NativeNode): string {
   return node.name?.trim() || node.role;
-}
-
-/** Chromium's role for an `<iframe>`. The native read puts each frame's
- *  content under its row; one with nothing under it is a frame it couldn't
- *  read, so the row stands for content the tree doesn't show. */
-function isIframeRole(role: string): boolean {
-  return role === "Iframe" || role === "IframePresentational";
 }
 
 export function NativeTreeView({
@@ -1253,7 +1247,7 @@ export function NativeTreeView({
                       )}
                       {/* A frame the read found no content in: one it
                           couldn't reach, or an empty one. */}
-                      {isIframeRole(node.role) && !hasChildren(node) && (
+                      {isNativeIframeRole(node.role) && !hasChildren(node) && (
                         <span
                           class="sn-iframe-badge"
                           title="Embedded page — no content read from it"

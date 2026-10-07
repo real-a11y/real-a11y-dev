@@ -1749,7 +1749,10 @@ describe("NativeDebuggerSession: out-of-process frames", () => {
       });
     }
     const { value } = await picked;
-    expect(value).toMatchObject({ backendNodeId: 8, frameId: "F1" });
+    expect(value).toMatchObject({
+      backendNodeId: 8,
+      frame: { frameId: "F1" },
+    });
     // Disarmed in the frame as well as in the tab.
     expect(
       sent.filter(

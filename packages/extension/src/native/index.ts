@@ -14,6 +14,8 @@
  * AX logic lives in native-core; the debugger plumbing in debugger-session.
  */
 
+import { nativeNodeId } from "@real-a11y-dev/core";
+
 import { isExtensionPageSender } from "../routing.js";
 
 import {
@@ -28,10 +30,9 @@ import {
   type OperationOptions,
 } from "./debugger-session.js";
 import type { DogfoodLog } from "./dogfood.js";
+
 import {
   dispatchNative,
-  frameIdSuffix,
-  nativeIdForBackendNode,
   readNativeTree,
   type NativeAction,
 } from "./native-core.js";
@@ -206,14 +207,6 @@ let activeSession: NativeDebuggerSession | undefined;
  *  its time limit. */
 export function cancelNativePicks(): void {
   activeSession?.cancelAllPicks();
-}
-
-/** The id suffix of a pick's hit in an out-of-process frame, if it was
- *  in one — the one that frame's rows carry. */
-function pickSuffix(picked: { frameId?: string; documentId?: string }): string {
-  return picked.frameId === undefined
-    ? ""
-    : frameIdSuffix(picked.frameId, picked.documentId);
 }
 
 // Pairs each `reveal` dispatch's content-script arm with its own release —
@@ -612,13 +605,10 @@ export function registerNativeMode(): void {
                       // isn't a node the AX tree kept. A hit in an
                       // out-of-process frame carries that frame, as its rows'
                       // ids do.
-                      nodeId: `${nativeIdForBackendNode(picked.backendNodeId)}${pickSuffix(picked)}`,
+                      nodeId: nativeNodeId(picked.backendNodeId, picked.frame),
                       ancestorIds: picked.chainBackendNodeIds
                         .slice(1)
-                        .map(
-                          (id) =>
-                            `${nativeIdForBackendNode(id)}${pickSuffix(picked)}`,
-                        ),
+                        .map((id) => nativeNodeId(id, picked.frame)),
                     }
                   : { cancelled: true, ...(timedOut ? { timedOut } : {}) };
               void chrome.runtime

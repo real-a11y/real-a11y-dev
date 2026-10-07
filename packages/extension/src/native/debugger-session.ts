@@ -12,6 +12,11 @@
  * message can quote page/DevTools state (R6 invariant).
  */
 
+import {
+  NATIVE_MAX_FRAME_DEPTH,
+  type NativeFrameRef,
+} from "@real-a11y-dev/core";
+
 import { DogfoodLog } from "./dogfood.js";
 import type { CdpTransport, FrameSession } from "./native-core.js";
 
@@ -109,13 +114,9 @@ function transportFor(
 export interface PickedNode {
   backendNodeId: number;
   chainBackendNodeIds: number[];
-  frameId?: string;
-  /** The document that frame showed when armed: see `FrameSession`. */
-  documentId?: string;
+  /** With the document it showed when armed: see `FrameSession`. */
+  frame?: NativeFrameRef;
 }
-
-/** How deep a pick arms nested out-of-process frames. */
-const MAX_PICK_FRAME_DEPTH = 5;
 
 /** How long a caller waits for the frames it expects to be announced. */
 const FRAME_ANNOUNCE_WAIT_MS = 300;
@@ -1112,8 +1113,16 @@ export class NativeDebuggerSession {
             finish({
               backendNodeId: picked.backendNodeId,
               chainBackendNodeIds,
-              ...(frame ? { frameId: frame.frameId } : {}),
-              ...(frame?.documentId ? { documentId: frame.documentId } : {}),
+              ...(frame
+                ? {
+                    frame: {
+                      frameId: frame.frameId,
+                      ...(frame.documentId
+                        ? { documentId: frame.documentId }
+                        : {}),
+                    },
+                  }
+                : {}),
             }),
         );
       };
@@ -1238,7 +1247,7 @@ export class NativeDebuggerSession {
       transport: CdpTransport,
       depth: number,
     ): Promise<void> {
-      if (depth >= MAX_PICK_FRAME_DEPTH || !transport.frameSessions) return;
+      if (depth >= NATIVE_MAX_FRAME_DEPTH || !transport.frameSessions) return;
       // For as long as the pick is open: a frame the page adds meanwhile (a
       // payment dialog's) is announced then, and would take the click
       // straight through to the page if left unarmed. Each round waits for

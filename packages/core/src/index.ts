@@ -140,6 +140,18 @@ export {
   nativeAXStateValue,
 } from "./native/ax-vocabulary.js";
 export { normalizeNativeAX, serializeNativeAX } from "./native/ax-normalize.js";
+// Frames in a native tree: the id scheme of a node in an out-of-process frame
+// and the graft of a frame's nodes under its row (@internal).
+export {
+  graftNativeFrame,
+  isNativeIframeRole,
+  NATIVE_MAX_FRAME_DEPTH,
+  nativeFrameSuffix,
+  nativeNodeId,
+  splitNativeNodeId,
+  withNativeIdSuffix,
+} from "./native/frames.js";
+export type { NativeFrameRef, NativeGraftNode } from "./native/frames.js";
 export type { NativeAXNode, RawNativeAXNode } from "./native/ax-normalize.js";
 // Where a withheld field's value reaches other nodes' names, and the rule that
 // keeps it out — shared by every native transport (@internal).
