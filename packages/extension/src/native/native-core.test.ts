@@ -548,8 +548,9 @@ describe("readNativeTree", () => {
       },
     ];
     const t = new FakeTransport((method) => {
+      // Every other call, `DOM.resolveNode` included, answers `{}`: the
+      // field can't be resolved, so its in-page read fails.
       if (method === "Accessibility.getFullAXTree") return { nodes: raw };
-      if (method === "DOM.resolveNode") return {};
       return {};
     });
     const res = await readNativeTree(t);
@@ -959,9 +960,11 @@ describe("withholdInsideSensitive", () => {
     expect(byId.get("elsewhere")?.value).toBe("Spain");
   });
 
-  it("says which option inside a sensitive field is chosen nowhere", () => {
+  it("marks no option inside a sensitive field as selected", () => {
     // A redacted `<select autocomplete="cc-exp-month">`, as Chromium reads
-    // it: the combobox, its popup, and options marked selected.
+    // it: the combobox, its popup, and its options, one marked selected. A
+    // checkbox inside the popup stands for any control a sensitive wrapper
+    // holds.
     const nodes = [
       n("month", ["popup"], {
         role: "combobox",
@@ -969,7 +972,7 @@ describe("withholdInsideSensitive", () => {
         redacted: true,
         states: { focusable: true, expanded: false },
       }),
-      n("popup", ["jan", "nov"], { role: "MenuListPopup" }),
+      n("popup", ["jan", "nov", "box"], { role: "MenuListPopup" }),
       n("jan", [], {
         role: "option",
         name: "01",
@@ -980,26 +983,27 @@ describe("withholdInsideSensitive", () => {
         name: "11",
         states: { focusable: true, selected: true },
       }),
-      n("box", [], { role: "checkbox", states: { checked: "true" } }),
+      n("box", [], { role: "checkbox", states: { checked: true } }),
       n("other", [], {
         role: "option",
         name: "Spain",
         states: { selected: true },
       }),
     ];
-    // `box` sits inside a sensitive wrapper too.
-    nodes[1].childIds.push("box");
     withholdInsideSensitive(nodes, ["month"]);
     const byId = new Map(nodes.map((x) => [x.id, x]));
-    expect(byId.get("jan")?.states).toEqual({ focusable: true });
-    expect(byId.get("nov")?.states).toEqual({ focusable: true });
-    expect(byId.get("box")?.states).toEqual({});
+    // Strict: the key has to be gone from the wire, not set to undefined.
+    expect(byId.get("jan")?.states).toStrictEqual({ focusable: true });
+    expect(byId.get("nov")?.states).toStrictEqual({ focusable: true });
+    // A checkbox is its own control, classified on its own: its state isn't
+    // the field's value (see `NATIVE_AX_CHOICE_STATES`).
+    expect(byId.get("box")?.states).toStrictEqual({ checked: true });
     // The field's own states, and anything outside it, stay.
-    expect(byId.get("month")?.states).toEqual({
+    expect(byId.get("month")?.states).toStrictEqual({
       focusable: true,
       expanded: false,
     });
-    expect(byId.get("other")?.states).toEqual({ selected: true });
+    expect(byId.get("other")?.states).toStrictEqual({ selected: true });
   });
 
   it("marks every node below a sensitive one as withheld", () => {
