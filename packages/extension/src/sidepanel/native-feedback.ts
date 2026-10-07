@@ -1,7 +1,10 @@
-import type { NativeNode } from "../native/native-actions.js";
+import {
+  nativeSelectOptions,
+  type NativeNode,
+} from "../native/native-actions.js";
 import type { NativeAction } from "../native/native-core.js";
 
-import { describeAction } from "./action-feedback.js";
+import { describeAction, describeSelection } from "./action-feedback.js";
 
 /**
  * The action-feedback line for a native action that landed, worded by the
@@ -11,11 +14,19 @@ import { describeAction } from "./action-feedback.js";
  *
  * `node` is the node as it was BEFORE the action, so a checkbox that was
  * checked reads "Unchecked". Null for a slider or spinbutton step.
+ *
+ * Selecting an option row names the option only when its field's value
+ * isn't withheld ({@link selectFeedback}): which option was chosen in a
+ * sensitive select IS its value. `nodes` is the tree, to find that field.
  */
 export function nativeActionFeedback(
   node: NativeNode | undefined,
   action: NativeAction,
+  nodes?: ReadonlyMap<string, NativeNode>,
 ): string | null {
+  if (action === "select" && node?.role === "option") {
+    return selectFeedback(node, nodes);
+  }
   const role = node?.role ?? "";
   return describeAction(
     {
@@ -48,4 +59,39 @@ export function findNativeModalDialog(
     }
   }
   return undefined;
+}
+
+/**
+ * The feedback for selecting `option` straight from its row, worded as the
+ * picker words it (`describeSelection`): the option, or, when the field's
+ * value is withheld, only the field. A drop-down's options take the select's
+ * classification, and fail closed: only a select classified as not
+ * sensitive names its option, as `pickerCurrentOption` marks one. An option
+ * outside any drop-down (a list box's) names itself unless it sits inside a
+ * sensitive field. A redaction gate — `scripts/pr-risk.mjs` lists it.
+ */
+export function selectFeedback(
+  option: NativeNode,
+  nodes?: ReadonlyMap<string, NativeNode>,
+): string {
+  let select: NativeNode | undefined;
+  for (const candidate of nodes?.values() ?? []) {
+    if (
+      candidate.role === "combobox" &&
+      nativeSelectOptions(candidate, nodes as Map<string, NativeNode>).some(
+        (o) => o.id === option.id,
+      )
+    ) {
+      select = candidate;
+      break;
+    }
+  }
+  const withheld = select
+    ? select.valueWithheld !== false
+    : option.valueWithheld === true;
+  return describeSelection(
+    select?.name || select?.role || "this field",
+    option.name || "option",
+    withheld,
+  );
 }

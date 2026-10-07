@@ -868,11 +868,13 @@ const FIELD_VALUE_GATES = [
   // (`fieldValueWithheld`). The option picker marks no current option for a
   // withheld select (`pickerCurrentOption`), and the feedback after a choice
   // names the field rather than the option (`describeSelection`), in both
-  // producers' panels.
+  // producers' panels, and so does selecting an option row straight from the
+  // native tree (`selectFeedback`).
   "withholdInsideSensitive",
   "fieldValueWithheld",
   "pickerCurrentOption",
   "describeSelection",
+  "selectFeedback",
   // The text reads that must skip a control's child text, which for a
   // `<textarea>` is its markup default — the secret itself, for a sensitive
   // field: the extension's `pageText` (the live-region line it sends the panel,

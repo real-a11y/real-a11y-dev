@@ -118,3 +118,60 @@ describe("findNativeModalDialog", () => {
     expect(findNativeModalDialog(nodes)).toBeUndefined();
   });
 });
+
+describe("selecting an option row", () => {
+  /** A drop-down `<select>` as the native tree reads it: the combobox, its
+   *  popup, and two options, "11" chosen. */
+  function select(valueWithheld: boolean | undefined) {
+    const nodes = new Map<string, NativeNode>([
+      [
+        "sel",
+        {
+          ...node("combobox", "Expiry month", {}, "sel"),
+          childIds: ["popup"],
+          ...(valueWithheld === undefined ? {} : { valueWithheld }),
+        },
+      ],
+      [
+        "popup",
+        { ...node("MenuListPopup", "", {}, "popup"), childIds: ["o1", "o2"] },
+      ],
+      ["o1", node("option", "01", {}, "o1")],
+      ["o2", node("option", "11", {}, "o2")],
+    ]);
+    return nodes;
+  }
+
+  it("names only the field of a sensitive select, never the option", () => {
+    const nodes = select(true);
+    expect(nativeActionFeedback(nodes.get("o2"), "select", nodes)).toBe(
+      "Selected an option in Expiry month",
+    );
+  });
+
+  it("fails closed for a select it couldn't classify", () => {
+    const nodes = select(undefined);
+    expect(nativeActionFeedback(nodes.get("o2"), "select", nodes)).toBe(
+      "Selected an option in Expiry month",
+    );
+  });
+
+  it("names the option of a select classified as not sensitive", () => {
+    const nodes = select(false);
+    expect(nativeActionFeedback(nodes.get("o2"), "select", nodes)).toBe(
+      "Selected: 11",
+    );
+  });
+
+  it("names a list box's option unless it sits inside a sensitive field", () => {
+    expect(nativeActionFeedback(node("option", "Books"), "select")).toBe(
+      "Selected: Books",
+    );
+    expect(
+      nativeActionFeedback(
+        { ...node("option", "2041"), valueWithheld: true },
+        "select",
+      ),
+    ).toBe("Selected an option in this field");
+  });
+});

@@ -96,6 +96,21 @@ test("a sensitive select's picker shows no current option", async ({ nav }) => {
   await expect(feedback).not.toContainText("02");
 });
 
+test("selecting a sensitive select's option from its own row names only the field", async ({
+  nav,
+}) => {
+  const page = await nav.showNative("select-sensitive.html");
+  await nav.panel.getByRole("button", { name: "Expand all" }).click();
+  await nav.panel
+    .getByRole("treeitem", { name: /^option "02"/ })
+    .getByTitle("Select (Enter)")
+    .click();
+  await expect(page.locator("#exp-month")).toHaveValue("02");
+  const feedback = nav.panel.locator(".sn-action-feedback");
+  await expect(feedback).toContainText("Selected an option in Expiry month");
+  await expect(feedback).not.toContainText("02");
+});
+
 test("an empty sensitive select's picker shows no current option either", async ({
   nav,
 }) => {

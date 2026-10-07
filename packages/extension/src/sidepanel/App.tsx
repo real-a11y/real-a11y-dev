@@ -1783,7 +1783,11 @@ export function App() {
         // checkbox reads "Unchecked" — and from its name, never its id.
         const feedback =
           opts.feedback ??
-          nativeActionFeedback(nativeNodesRef.current.get(nodeId), action);
+          nativeActionFeedback(
+            nativeNodesRef.current.get(nodeId),
+            action,
+            nativeNodesRef.current,
+          );
         // Every failure is reported where the DOM tree reports its own, in
         // the feedback bar; the status line alone is easy to miss.
         const fail = (why: string) => {

@@ -537,6 +537,28 @@ describe("field-value redaction covers the extension's option picker", () => {
   });
 });
 
+describe("field-value redaction covers selecting an option row", () => {
+  it("grades naming a withheld select's option from its row 🔴 high", async () => {
+    // A sensitive select's chosen option IS its value: the feedback after a
+    // row's own Select must name only the field.
+    const path = "packages/extension/src/sidepanel/native-feedback.ts";
+    const base = `export function selectFeedback(option, nodes) {\n  const withheld = ownerWithholds(option, nodes);\n  return describeSelection(fieldName(option, nodes), option.name, withheld);\n}\n`;
+    const result = await grade(
+      {
+        [path]: base.replace(
+          "const withheld = ownerWithholds(option, nodes);",
+          "const withheld = false;",
+        ),
+      },
+      { base: { [path]: base } },
+    );
+    assert.equal(result.tier, "high");
+    assert.deepEqual(evidenceFor(result, "field-value-redaction"), [
+      `${path} → selectFeedback`,
+    ]);
+  });
+});
+
 describe("field-value redaction covers the redactInput strict mode", () => {
   it("grades narrowing strictValueRoots or dropping the switch 🔴 high", async () => {
     // Under `redactInput` the native producer withholds all an editing root
