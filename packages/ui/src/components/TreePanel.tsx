@@ -34,6 +34,7 @@ import {
 } from "preact/hooks";
 
 import type { TreeDiffView } from "../diff.js";
+import { JUMP_KEYSHORTCUTS } from "../hooks/jumpKeys.js";
 import { useIndexById } from "../hooks/useIndexById.js";
 import { useInputModality } from "../hooks/useInputModality.js";
 import { treeRowDomId, useInstanceId } from "../hooks/useInstanceId.js";
@@ -451,7 +452,16 @@ export function TreePanel({
         cur = parent;
       }
       if (mutated) forceRender();
-      setSelectedId(targetId);
+      // A row a search or role filter hides is not in the visible list, so
+      // the selection would point at nothing a keyboard or screen reader can
+      // reach: clear the filters, as the extension's native tree does.
+      if (asDom(treeData.nodes.get(targetId))?.ui.matchesFilter === false) {
+        updateQuery("");
+        setRoleFilter(null);
+      }
+      // Through the ordinary selection path, so `onSelect` / `onNodeSelect`
+      // hear about a jump as they do about any other selection.
+      handleSelect(targetId);
       setFlashingId(targetId);
       setTimeout(() => setFlashingId(null), 700);
       // Scroll the target into view even when it is already the selection (a
@@ -463,7 +473,11 @@ export function TreePanel({
         if (index !== -1) scrollToIndex(index, "nearest");
       });
     },
-    [treeData, forceRender, scrollToIndex],
+    [treeData, forceRender, scrollToIndex, handleSelect, updateQuery],
+  );
+  const jumpKeys = useMemo(
+    () => ({ links: controlsIndex, onJump: handleJumpToNode }),
+    [controlsIndex, handleJumpToNode],
   );
 
   const { isMouseModality, markKeyboard } = useInputModality();
@@ -502,6 +516,7 @@ export function TreePanel({
     onToggle: handleToggle,
     onActivate: handleActivate,
     onFocusSearch: focusSearch,
+    jump: jumpKeys,
   });
 
   // ── Render ──────────────────────────────────────────────────────────────────
@@ -569,6 +584,7 @@ export function TreePanel({
             class="sn-tree"
             role="tree"
             aria-label="Semantic tree"
+            aria-keyshortcuts={JUMP_KEYSHORTCUTS}
             tabIndex={0}
             style={{
               minHeight: totalHeight,

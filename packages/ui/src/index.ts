@@ -6,6 +6,16 @@ export { preserveExpandedState } from "./preserve-expanded.js";
 export { TreeNode } from "./components/TreeNode.js";
 export { TreeToolbar } from "./components/TreeToolbar.js";
 export { useTreeKeyboard } from "./hooks/useTreeKeyboard.js";
+// @internal — the jump keys, shared with the extension's native tree; not a
+// stability promise.
+export {
+  isJumpKey,
+  JUMP_KEYS,
+  JUMP_KEYSHORTCUTS,
+  nextJump,
+  type JumpCycle,
+  type JumpLinks,
+} from "./hooks/jumpKeys.js";
 export { resolveStepperKeyAction } from "./hooks/stepperKeys.js";
 // @internal — shared with the extension's forked listboxes; not a stability promise.
 export {

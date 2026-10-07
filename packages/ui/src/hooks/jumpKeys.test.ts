@@ -1,15 +1,16 @@
 import { describe, expect, it } from "vitest";
 
-import { isJumpKey, nextJump, type JumpCycle } from "./jump-keys.js";
+import { isJumpKey, nextJump, type JumpCycle } from "./jumpKeys.js";
 
-const CONTROLS: Record<string, string[]> = { tabs: ["p1", "p2", "p3"] };
-const CONTROLLED_BY: Record<string, string[]> = {
-  p1: ["tabs"],
-  p2: ["tabs"],
-  p3: ["tabs"],
+const links = {
+  forward: new Map([["tabs", ["p1", "p2", "p3"]]]),
+  reverse: new Map([
+    ["p1", ["tabs"]],
+    ["p2", ["tabs", "toggle"]],
+    ["p3", ["tabs"]],
+  ]),
 };
-const controlsOf = (id: string) => CONTROLS[id] ?? [];
-const controlledBy = (id: string) => CONTROLLED_BY[id] ?? [];
+const anywhere = () => true;
 
 describe("nextJump", () => {
   it("follows a row's first link, then cycles through the rest, wrapping", () => {
@@ -21,8 +22,8 @@ describe("nextJump", () => {
         at,
         cycle,
         false,
-        controlsOf,
-        controlledBy,
+        links,
+        anywhere,
       )!;
       at = next.target;
       cycle = next.cycle;
@@ -31,32 +32,35 @@ describe("nextJump", () => {
     expect(visited).toEqual(["p1", "p2", "p3", "p1"]);
   });
 
-  it("goes back to the origin from a row a jump landed on", () => {
-    const first = nextJump("tabs", null, false, controlsOf, controlledBy)!;
-    const second = nextJump(
-      "p1",
-      first.cycle,
-      false,
-      controlsOf,
-      controlledBy,
-    )!;
-    expect(
-      nextJump("p2", second.cycle, true, controlsOf, controlledBy),
-    ).toEqual({ target: "tabs", cycle: null });
+  it("goes back to the row the jump came from, not the first controller", () => {
+    // p2 is controlled by "tabs" and "toggle"; jumped to from "toggle", back
+    // returns to "toggle".
+    const cycle: JumpCycle = { origin: "toggle", targets: ["p2"], index: 0 };
+    expect(nextJump("p2", cycle, true, links, anywhere)).toEqual({
+      target: "toggle",
+      cycle: null,
+    });
   });
 
   it("goes to the first controller from anywhere else", () => {
-    expect(nextJump("p3", null, true, controlsOf, controlledBy)).toEqual({
+    expect(nextJump("p3", null, true, links, anywhere)).toEqual({
       target: "tabs",
       cycle: null,
     });
   });
 
   it("starts afresh once the selection has left the cycle", () => {
-    const first = nextJump("tabs", null, false, controlsOf, controlledBy)!;
+    const first = nextJump("tabs", null, false, links, anywhere)!;
     expect(
-      nextJump("elsewhere", first.cycle, false, controlsOf, controlledBy),
+      nextJump("elsewhere", first.cycle, false, links, anywhere),
     ).toBeNull();
+  });
+
+  it("skips a row that can't take the jump, either way", () => {
+    const gone = (id: string) => id !== "p1" && id !== "tabs";
+    expect(nextJump("tabs", null, false, links, gone)?.target).toBe("p2");
+    expect(nextJump("p2", null, true, links, gone)?.target).toBe("toggle");
+    expect(nextJump("p1", null, true, links, gone)).toBeNull();
   });
 });
 
@@ -64,6 +68,7 @@ describe("isJumpKey", () => {
   const key = (init: KeyboardEventInit) => new KeyboardEvent("keydown", init);
 
   it("takes Alt+J by its physical key, and by its character", () => {
+    // macOS Option+J types "∆"; the key is still KeyJ.
     expect(isJumpKey(key({ altKey: true, code: "KeyJ", key: "∆" }))).toBe(true);
     // The key labelled J on Dvorak sits where QWERTY has C.
     expect(isJumpKey(key({ altKey: true, code: "KeyC", key: "j" }))).toBe(true);
@@ -80,5 +85,8 @@ describe("isJumpKey", () => {
     expect(
       isJumpKey(key({ altKey: true, metaKey: true, code: "KeyJ", key: "j" })),
     ).toBe(false);
+    expect(isJumpKey(key({ altKey: true, code: "KeyK", key: "k" }))).toBe(
+      false,
+    );
   });
 });

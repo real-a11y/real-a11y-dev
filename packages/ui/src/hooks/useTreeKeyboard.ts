@@ -1,6 +1,12 @@
 import type { ActionType, SemanticNode } from "@real-a11y-dev/core";
 import { useCallback, useRef } from "preact/hooks";
 
+import {
+  isJumpKey,
+  nextJump,
+  type JumpCycle,
+  type JumpLinks,
+} from "./jumpKeys.js";
 import { resolveStepperKeyAction } from "./stepperKeys.js";
 import {
   createTypeAheadBuffer,
@@ -24,6 +30,14 @@ interface UseTreeKeyboardOptions {
   onActivate: (id: string, action?: ActionType) => void;
   /** Focus the panel search input when `/` is pressed (panel-features keymap). */
   onFocusSearch?: () => void;
+  /**
+   * The rows' `aria-controls` links (`buildControlsIndex`) and what to do on
+   * a jump: with them, `Alt`+`J` and `Alt`+`Shift`+`J` are the keyboard path
+   * to the jump chips, which sit outside the Tab order (see `nextJump`).
+   * `onJump` gets a row in `nodes` that may be collapsed or hidden by a
+   * search; making it visible is the panel's job.
+   */
+  jump?: { links: JumpLinks; onJump: (id: string) => void };
 }
 
 /** Label used for type-ahead — accessible name, else text, else role. */
@@ -47,8 +61,11 @@ export function useTreeKeyboard({
   onToggle,
   onActivate,
   onFocusSearch,
+  jump,
 }: UseTreeKeyboardOptions) {
   const typeAhead = useRef(createTypeAheadBuffer());
+  // The run of Alt+J presses in progress, if any (see `nextJump`).
+  const jumpCycle = useRef<JumpCycle | null>(null);
 
   // Row id → position, so neither the per-keypress index lookup nor
   // ArrowRight's "is this child visible?" check scans the list.
@@ -74,6 +91,23 @@ export function useTreeKeyboard({
         e.preventDefault();
         typeAhead.current.clear();
         onFocusSearch();
+        return;
+      }
+
+      if (jump && isJumpKey(e)) {
+        e.preventDefault();
+        typeAhead.current.clear();
+        if (selectedId === null) return;
+        const next = nextJump(
+          selectedId,
+          jumpCycle.current,
+          e.shiftKey,
+          jump.links,
+          (id) => nodes.has(id),
+        );
+        if (!next) return;
+        jumpCycle.current = next.cycle;
+        jump.onJump(next.target);
         return;
       }
 
@@ -244,6 +278,7 @@ export function useTreeKeyboard({
       onToggle,
       onActivate,
       onFocusSearch,
+      jump,
     ],
   );
 
