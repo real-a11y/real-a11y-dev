@@ -123,26 +123,40 @@ describe("NativeTreeView role filter", () => {
 
   it("leaves a double-click on a row's expander to the expander", () => {
     // The browser fires two clicks and then a dblclick; the clicks already
-    // toggled the row twice, so the dblclick must neither toggle it again
-    // nor act on the page for an actionable row.
-    const onActivate = mount();
-    const row = (name: string) =>
-      [...container.querySelectorAll<HTMLElement>('[role="treeitem"]')].find(
-        (r) => r.textContent?.includes(name),
-      )!;
-    const dblclickToggle = (name: string) =>
-      act(() => {
-        row(name)
-          .querySelector(".sn-toggle")!
-          .dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
-      });
-
-    const before = row("Details").getAttribute("aria-expanded");
-    dblclickToggle("Details");
-    expect(row("Details").getAttribute("aria-expanded")).toBe(before);
-
-    dblclickToggle("Docs");
+    // toggled the row, so the dblclick must not act on the row as well. An
+    // actionable row with children: its row double-click activates it.
+    const onActivate = vi.fn();
+    act(() => {
+      render(
+        <NativeTreeView
+          nodes={
+            new Map<string, NativeNode>([
+              node("root", "document", "", 0, ["menu"]),
+              node("menu", "button", "Menu", 1, ["item"]),
+              node("item", "menuitem", "Open", 2),
+            ])
+          }
+          rootId="root"
+          busy={false}
+          capability={undefined}
+          status=""
+          onRefresh={() => {}}
+          onActivate={onActivate}
+        />,
+        container,
+      );
+    });
+    const row = [
+      ...container.querySelectorAll<HTMLElement>('[role="treeitem"]'),
+    ].find((r) => r.textContent?.includes("Menu"))!;
+    const before = row.getAttribute("aria-expanded");
+    act(() => {
+      row
+        .querySelector(".sn-toggle")!
+        .dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
+    });
     expect(onActivate).not.toHaveBeenCalled();
+    expect(row.getAttribute("aria-expanded")).toBe(before);
   });
 
   it("activates a link through the native onActivate", () => {
