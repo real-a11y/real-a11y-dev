@@ -173,6 +173,16 @@ function isInternalMutation(
   return false;
 }
 
+/** `DomObserver`'s default trailing-edge debounce: a burst of changes is
+ *  reported once the page has been quiet this long.
+ *  @internal Shared with the extension's native auto-refresh. */
+export const DOM_OBSERVER_DEBOUNCE_MS = 300;
+
+/** `DomObserver`'s default ceiling: a stream that never goes quiet is still
+ *  reported at least this often.
+ *  @internal Shared with the extension's native auto-refresh. */
+export const DOM_OBSERVER_MAX_WAIT_MS = 1000;
+
 /**
  * Watches for DOM mutations and triggers a re-extraction callback.
  * Uses a trailing-edge debounce to batch rapid mutations (e.g. SPA
@@ -239,9 +249,9 @@ export class DomObserver {
   constructor(
     private root: Element,
     private onTreeChange: (change?: TreeChange) => void,
-    private debounceMs = 300,
+    private debounceMs = DOM_OBSERVER_DEBOUNCE_MS,
     internalIds: ReadonlySet<string> = DEFAULT_INTERNAL_IDS,
-    maxWaitMs = 1000,
+    maxWaitMs = DOM_OBSERVER_MAX_WAIT_MS,
   ) {
     // The ceiling can't be shorter than one debounce interval, or it would
     // pre-empt normal debouncing and fire on the leading edge of every burst.
