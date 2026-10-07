@@ -34,7 +34,7 @@ main
     listitem "The website may use privacy-respecting aggregate analytics (no cookies, no personal identifiers). If enabled, it's disclosed here."
   heading "Chrome extension — Semantic Navigator" (level 2)
   paragraph "By default, the extension reads the DOM of the page you're currently viewing in order to build and display a semantic / accessibility tree in a side panel ("DOM mode"). It acts locally in your browser."
-  paragraph "It also offers an opt-in , off by default: reading Chromium's own accessibility tree over the API (the same protocol DevTools uses), for fidelity DOM mode can't reach (UA-shadow content like media controls). Turning it on requires an explicit, one-time step in the side panel that names what it does before it activates; while attached, Chrome itself shows its own "…is debugging this browser" notice, independent of anything this extension displays. Turning the setting back off immediately detaches."
+  paragraph "It also offers an opt-in , off by default: reading Chromium's own accessibility tree over the API (the same protocol DevTools uses), for fidelity DOM mode can't reach (UA-shadow content like media controls). Turning it on requires an explicit, one-time step in the side panel that names what it does before it activates; while attached, Chrome itself shows its own bar across every window, reading “Semantic Navigator” started debugging this browser, independent of anything this extension displays. Turning the setting back off detaches as soon as any read or action already under way finishes."
     strong "native mode"
     code "chrome.debugger"
   paragraph
