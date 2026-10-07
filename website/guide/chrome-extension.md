@@ -180,7 +180,7 @@ The panel renders that relationship as paired clickable chips:
 - On the **trigger** row: `→ <role> "<name>"` pointing at the controlled element.
 - On the **controlled** row: `← <role> "<name>"` pointing back at the trigger.
 
-Click either chip and the panel expands every collapsed ancestor of the target, scrolls it to the center of the viewport, and briefly flashes its row.
+Click either chip and the panel expands every collapsed ancestor of the target, scrolls it to the center of the viewport, and briefly flashes its row. The chips sit outside the Tab order, so the keyboard reaches them from the selected row: `Alt`+`J` follows its first link, and pressed again moves on to the next one; `Alt`+`Shift`+`J` goes back to the row you jumped from, or to the row that controls this one. The key labelled J works on any keyboard layout. A jump leaves a scope or a search that would hide its target.
 
 **Two link sources, distinguished visually:**
 

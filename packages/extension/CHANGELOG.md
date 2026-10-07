@@ -222,6 +222,15 @@
   other text it held goes with it.
   ([#486](https://github.com/real-a11y/real-a11y-dev/pull/486))
 
+- **The DOM tree's `aria-controls` jump chips have a keyboard path.**
+  `Alt`+`J` follows the selected row's first link, and pressed again moves on
+  to the next; `Alt`+`Shift`+`J` goes back to the row the jump came from, as
+  the native tree already did. A jump leaves a scope or a search that would
+  hide its target, and the page highlights the target as for any selection.
+  Both trees now read the keys from the shared tree keymap, so the inspector
+  and the Storybook addon get them too, and a jump in the native tree starts
+  type-ahead afresh. ([#490](https://github.com/real-a11y/real-a11y-dev/pull/490))
+
 ## 0.1.15
 
 ### Patch Changes
