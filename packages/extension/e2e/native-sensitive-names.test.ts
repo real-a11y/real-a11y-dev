@@ -21,6 +21,8 @@ test("NATIVE_READ keeps a card number out of every name around it", async ({
     "5555444433332222",
     "378282246310005",
     "hunter2xyz",
+    "hunter2own",
+    "6011000990139424",
   ]) {
     expect(wire).not.toContain(secret);
   }
@@ -33,8 +35,9 @@ test("NATIVE_READ keeps a card number out of every name around it", async ({
         n.role === role &&
         (typeof name === "string" ? n.name === name : name.test(n.name)),
     );
-  // The checkbox wrapped with a filled card field is withheld, not unlabeled.
-  expect(named("checkbox", "[redacted]")).toHaveLength(1);
+  // The checkboxes wrapped with a filled card field and a card month are
+  // withheld, not unlabeled.
+  expect(named("checkbox", "[redacted]")).toHaveLength(2);
   // An empty card field gives nothing away: its checkbox keeps its label.
   expect(named("checkbox", /Remember/)).toHaveLength(1);
   // A value that isn't sensitive still names its cell.
@@ -43,9 +46,33 @@ test("NATIVE_READ keeps a card number out of every name around it", async ({
   const show = named("button", "Show")[0];
   expect(show).toBeDefined();
   expect(show?.description ?? "").toBe("");
-  expect(named("group", "[redacted]")).toHaveLength(1);
   // So is one by reference to a card field the tree never shows.
   expect(named("region", "[redacted]")).toHaveLength(1);
+
+  // A field's own label still names it, its value withheld.
+  for (const name of ["Password", "Card number"]) {
+    const field = named("textbox", name);
+    expect(field).toHaveLength(1);
+    expect(field[0]?.value).toBe("[redacted]");
+  }
+
+  // A card month select's chosen option names nothing around it: not a
+  // description, a group, a label or a cell. The months are on the wire as
+  // the options' own names; which one is chosen is what's withheld.
+  const pay = named("button", "Pay")[0];
+  expect(pay).toBeDefined();
+  expect(pay?.description ?? "").toBe("");
+  expect(named("group", "[redacted]")).toHaveLength(2);
+  const month = /\b0[4-9]\b/;
+  expect(
+    nodes.filter(
+      (n) =>
+        n.role !== "option" &&
+        (month.test(n.name) || month.test(n.description ?? "")),
+    ),
+  ).toEqual([]);
+  // The layout cell holding the month is still in the tree, withheld.
+  expect(named("LayoutTableCell", "[redacted]")).toHaveLength(2);
 });
 
 test("the panel shows no card number in any row", async ({ nav }) => {
@@ -66,6 +93,10 @@ test("the panel shows no card number in any row", async ({ nav }) => {
   // The rows the card numbers would be in are on screen, withheld.
   await expect(
     nav.panel.getByRole("treeitem", { name: /^checkbox "\[redacted\]"/ }),
+  ).toBeVisible();
+  // A filled password still reads its own label.
+  await expect(
+    nav.panel.getByRole("treeitem", { name: /^textbox "Password"/ }),
   ).toBeVisible();
   await expect(tree).not.toContainText("4111");
   await expect(tree).not.toContainText("5555");

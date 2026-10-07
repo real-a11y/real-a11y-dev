@@ -48,5 +48,48 @@
       value="378282246310005"
     />
     <div role="region" aria-labelledby="hidden-card">Saved card</div>
+
+    <!--
+      A field's own label is not another node: it names the field and holds
+      none of its value, filled or not, with something hidden in it or not.
+    -->
+    <label>Password <input type="password" value="hunter2own" /></label>
+    <label
+      >Card number <span aria-hidden="true">*</span>
+      <input autocomplete="cc-number" value="6011000990139424"
+    /></label>
+
+    <!--
+      A card month <select> gives its chosen option away the same ways a text
+      field does: by reference, inside a label, and inside a cell.
+    -->
+    <span id="exp-label">Expires</span>
+    <select
+      id="exp-month"
+      aria-label="Expiry month"
+      autocomplete="cc-exp-month"
+    >
+      <option>01</option>
+      <option selected>07</option>
+    </select>
+    <button aria-describedby="exp-month">Pay</button>
+    <div role="group" aria-labelledby="exp-label exp-month">Expiry</div>
+    <label
+      ><input type="checkbox" /> Bill month
+      <select autocomplete="cc-exp-month">
+        <option>08</option>
+        <option selected>09</option>
+      </select></label
+    >
+    <table>
+      <tr>
+        <td>
+          <select aria-label="Month" autocomplete="cc-exp-month">
+            <option>04</option>
+            <option selected>05</option>
+          </select>
+        </td>
+      </tr>
+    </table>
   </body>
 </html>

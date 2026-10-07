@@ -598,6 +598,9 @@ describe("readNativeTree", () => {
     ];
     const t = new FakeTransport((method, params) => {
       if (method === "Accessibility.getFullAXTree") return { nodes: raw };
+      if (method === "DOM.describeNode") {
+        return { node: { backendNodeId: 7, localName: "input" } };
+      }
       if (method === "DOM.resolveNode") {
         const id = (params as { backendNodeId: number }).backendNodeId;
         return { object: { objectId: `obj-${id}` } };
@@ -618,6 +621,248 @@ describe("readNativeTree", () => {
     const res = await readNativeTree(t);
     expect(findNative(res.nodes, "region")?.name).toBe("[redacted]");
     expect(JSON.stringify(res)).not.toContain("3782");
+  });
+
+  describe("a field's own label, and the targets around it", () => {
+    // <label>Password <input type="password" value="hunter2"></label>, as
+    // Chromium 151 sends it: the label is a `LabelText` the tree drops, and
+    // the field is `labelledby` it.
+    const labelled = (labelChildren: string[] = ["15", "7"]) => [
+      {
+        nodeId: "1",
+        backendDOMNodeId: 1,
+        role: { value: "RootWebArea" },
+        name: { value: "Page" },
+        childIds: ["6"],
+      },
+      {
+        nodeId: "6",
+        parentId: "1",
+        backendDOMNodeId: 6,
+        role: { value: "LabelText" },
+        name: { value: "" },
+        childIds: labelChildren,
+      },
+      {
+        nodeId: "15",
+        parentId: "6",
+        backendDOMNodeId: 15,
+        role: { value: "StaticText" },
+        name: { value: "Password " },
+      },
+      {
+        nodeId: "7",
+        parentId: "6",
+        backendDOMNodeId: 7,
+        role: { value: "textbox" },
+        name: {
+          value: "Password ",
+          sources: [{ type: "relatedElement", value: { value: "Password " } }],
+        },
+        value: { type: "string", value: "•••••••" },
+        properties: [
+          {
+            name: "labelledby",
+            value: { relatedNodes: [{ backendDOMNodeId: 6 }] },
+          },
+        ],
+      },
+    ];
+    const sensitivePassword = (
+      describe?: (backendNodeId: number) => unknown,
+    ): Handler => {
+      return (method, params) => {
+        if (method === "DOM.describeNode") {
+          const { backendNodeId } = params as { backendNodeId: number };
+          if (!describe) throw new Error("no describe expected");
+          return describe(backendNodeId);
+        }
+        if (method === "DOM.resolveNode") {
+          const id = (params as { backendNodeId: number }).backendNodeId;
+          return { object: { objectId: `obj-${id}` } };
+        }
+        if (method === "Runtime.callFunctionOn") {
+          const { objectId } = params as { objectId: string };
+          return {
+            result: {
+              value:
+                objectId === "obj-7"
+                  ? { classified: true, sensitive: true, redacted: true }
+                  : { classified: true },
+            },
+          };
+        }
+        return {};
+      };
+    };
+
+    it("keeps a filled password's own name, and reads nothing more for it", async () => {
+      const raw = labelled();
+      const handler = sensitivePassword();
+      const t = new FakeTransport((method, params) =>
+        method === "Accessibility.getFullAXTree"
+          ? { nodes: raw }
+          : handler(method, params),
+      );
+      const res = await readNativeTree(t);
+      expect(findNative(res.nodes, "textbox")).toMatchObject({
+        name: "Password",
+        value: "[redacted]",
+      });
+      // The label holds nothing Chromium hides, so it costs no extra call.
+      expect(t.calls.some((c) => c.method === "DOM.describeNode")).toBe(false);
+      expect(
+        t.calls.filter((c) => c.method === "Runtime.callFunctionOn"),
+      ).toHaveLength(1);
+    });
+
+    it("keeps it with an aria-hidden node in the label, which is looked into", async () => {
+      // <label>Password <span aria-hidden="true">*</span> <input …></label>
+      const raw = [
+        ...labelled(["15", "12", "7"]),
+        {
+          nodeId: "12",
+          parentId: "6",
+          backendDOMNodeId: 12,
+          ignored: true,
+          role: { value: "none" },
+        },
+      ];
+      const handler = sensitivePassword(() => ({
+        node: {
+          backendNodeId: 6,
+          localName: "label",
+          children: [
+            { backendNodeId: 12, localName: "span" },
+            { backendNodeId: 7, localName: "input" },
+          ],
+        },
+      }));
+      const t = new FakeTransport((method, params) =>
+        method === "Accessibility.getFullAXTree"
+          ? { nodes: raw }
+          : handler(method, params),
+      );
+      const res = await readNativeTree(t);
+      expect(findNative(res.nodes, "textbox")?.name).toBe("Password");
+      // The password was read once, by the tree's own pass.
+      expect(
+        t.calls.filter((c) => c.method === "Runtime.callFunctionOn"),
+      ).toHaveLength(1);
+    });
+
+    // <div id="hint" aria-hidden="true">Card <input autocomplete="cc-number"
+    // value="4111…"></div> labelling a region.
+    const hiddenCard = [
+      {
+        nodeId: "1",
+        backendDOMNodeId: 1,
+        role: { value: "RootWebArea" },
+        name: { value: "Page" },
+        childIds: ["9", "11"],
+      },
+      {
+        nodeId: "9",
+        parentId: "1",
+        backendDOMNodeId: 9,
+        ignored: true,
+        role: { value: "none" },
+        childIds: ["10"],
+      },
+      {
+        nodeId: "10",
+        parentId: "9",
+        backendDOMNodeId: 10,
+        ignored: true,
+        role: { value: "none" },
+      },
+      {
+        nodeId: "11",
+        parentId: "1",
+        backendDOMNodeId: 11,
+        role: { value: "region" },
+        name: {
+          value: "Card 4111111111111111",
+          sources: [
+            {
+              type: "relatedElement",
+              value: { value: "Card 4111111111111111" },
+            },
+          ],
+        },
+        properties: [
+          {
+            name: "labelledby",
+            value: { relatedNodes: [{ backendDOMNodeId: 9 }] },
+          },
+        ],
+      },
+    ];
+    const hiddenCardTransport = (
+      verdict: unknown,
+      describe: () => unknown = () => ({
+        node: {
+          backendNodeId: 9,
+          localName: "div",
+          children: [{ backendNodeId: 10, localName: "input" }],
+        },
+      }),
+    ) =>
+      new FakeTransport((method, params) => {
+        if (method === "Accessibility.getFullAXTree")
+          return { nodes: hiddenCard };
+        if (method === "DOM.describeNode") return describe();
+        if (method === "DOM.resolveNode") {
+          const id = (params as { backendNodeId: number }).backendNodeId;
+          return { object: { objectId: `obj-${id}` } };
+        }
+        if (method === "Runtime.callFunctionOn") {
+          const { objectId } = params as { objectId: string };
+          return {
+            result: { value: objectId === "obj-10" ? verdict : {} },
+          };
+        }
+        return {};
+      });
+
+    it("withholds a name taken from a filled card field inside a hidden label", async () => {
+      const t = hiddenCardTransport({
+        classified: true,
+        sensitive: true,
+        redacted: true,
+      });
+      const res = await readNativeTree(t);
+      expect(findNative(res.nodes, "region")?.name).toBe("[redacted]");
+      expect(JSON.stringify(res)).not.toContain("4111");
+      // The field was asked about, not the label around it.
+      const asked = t.calls
+        .filter((c) => c.method === "DOM.resolveNode")
+        .map((c) => (c.params as { backendNodeId: number }).backendNodeId);
+      expect(asked).toEqual([10]);
+    });
+
+    it("keeps the name around an empty hidden card field", async () => {
+      const res = await readNativeTree(
+        hiddenCardTransport({ classified: true, sensitive: true }),
+      );
+      expect(findNative(res.nodes, "region")?.name).toBe(
+        "Card 4111111111111111",
+      );
+    });
+
+    it("withholds it when the hidden field's read fails", async () => {
+      const res = await readNativeTree(hiddenCardTransport({}));
+      expect(findNative(res.nodes, "region")?.name).toBe("[redacted]");
+    });
+
+    it("withholds it when the label's fields can't be listed", async () => {
+      const res = await readNativeTree(
+        hiddenCardTransport({ classified: true }, () => {
+          throw new Error("No node with given id found");
+        }),
+      );
+      expect(findNative(res.nodes, "region")?.name).toBe("[redacted]");
+    });
   });
 
   it("withholds the name around a field whose read failed", async () => {

@@ -38,6 +38,7 @@
 
 import {
   carriesAXValue,
+  indexRaw,
   NATIVE_AX_CHOICE_STATES,
   nativeAXStateValue,
   normalizeNativeAX,
@@ -47,7 +48,7 @@ import {
   type A11yInfo,
   type NativeAXNode,
   type RawAXNameNode,
-  type RawNativeAXNode,
+  type RawIndex,
 } from "@real-a11y-dev/core";
 
 /**
@@ -707,15 +708,10 @@ export function withholdInsideSensitive(
  *  tree doesn't keep. */
 function referencedOutsideTree(
   rawNodes: RawAXNode[],
+  index: RawIndex<RawAXNode>,
   kept: readonly NativeAXNode[],
 ): RawAXNode[] {
   const keptIds = new Set(kept.map((n) => n.id));
-  const byBackendId = new Map<number, RawAXNode>();
-  for (const raw of rawNodes) {
-    if (typeof raw.backendDOMNodeId === "number") {
-      byBackendId.set(raw.backendDOMNodeId, raw);
-    }
-  }
   const out = new Map<string, RawAXNode>();
   for (const raw of rawNodes) {
     for (const property of raw.properties ?? []) {
@@ -725,7 +721,7 @@ function referencedOutsideTree(
       for (const related of property.value?.relatedNodes ?? []) {
         const target =
           typeof related.backendDOMNodeId === "number"
-            ? byBackendId.get(related.backendDOMNodeId)
+            ? index.byBackendId.get(related.backendDOMNodeId)
             : undefined;
         if (target && !keptIds.has(nativeIdOf(target))) {
           out.set(target.nodeId, target);
@@ -736,40 +732,110 @@ function referencedOutsideTree(
   return [...out.values()];
 }
 
+/**
+ * `target` or something under it is a node Chromium ignores, outside any
+ * field already read (`read`, by normalized id). An ignored node arrives as
+ * role `none` with no value, so it may be a field the tree never classified;
+ * everything else under a target is either such a field, already read, or a
+ * node whose role and value Chromium does send. A plain `<label>` around a
+ * field holds no ignored node and needs no read of its own.
+ */
+function hidesUnreadNode(
+  target: RawAXNode,
+  byId: ReadonlyMap<string, RawAXNode>,
+  read: ReadonlySet<string>,
+): boolean {
+  const stack = [target];
+  const seen = new Set<string>();
+  while (stack.length > 0) {
+    const cur = stack.pop()!;
+    if (seen.has(cur.nodeId) || read.has(nativeIdOf(cur))) continue;
+    seen.add(cur.nodeId);
+    if (cur.ignored === true) return true;
+    for (const id of cur.childIds ?? []) {
+      const child = byId.get(id);
+      if (child) stack.push(child);
+    }
+  }
+  return false;
+}
+
+/** CDP's `DOM.Node`, as far as {@link fieldsWithin} reads it. */
+interface DescribedNode {
+  backendNodeId: number;
+  localName?: string;
+  shadowRootType?: string;
+  children?: DescribedNode[];
+  shadowRoots?: DescribedNode[];
+}
+
+const FIELD_TAGS = new Set(["input", "textarea", "select"]);
+
+/**
+ * The backend ids of the `<input>`, `<textarea>` and `<select>` elements at or
+ * inside element `backendNodeId`, from CDP's DOM agent — through author shadow
+ * roots, whose content names things too, but not into a field's own
+ * user-agent internals or a frame's document. `undefined` when the agent
+ * can't describe it.
+ */
+async function fieldsWithin(
+  transport: CdpTransport,
+  backendNodeId: number,
+): Promise<number[] | undefined> {
+  try {
+    const { node } = await transport.send<{ node: DescribedNode }>(
+      "DOM.describeNode",
+      { backendNodeId, depth: -1, pierce: true },
+    );
+    const fields: number[] = [];
+    const stack = [node];
+    while (stack.length > 0) {
+      const cur = stack.pop()!;
+      if (FIELD_TAGS.has(cur.localName ?? "")) fields.push(cur.backendNodeId);
+      stack.push(...(cur.children ?? []));
+      for (const root of cur.shadowRoots ?? []) {
+        if (root.shadowRootType !== "user-agent") stack.push(root);
+      }
+    }
+    return fields;
+  } catch {
+    return undefined;
+  }
+}
+
 /** Chromium's password mask: a value made only of these is a password field,
  *  whatever its markup says by the time the page is asked. */
 const MASKED_VALUE = /^[•●]+$/;
 
 /**
  * The raw ids of every field whose value must stay out of other nodes'
- * names: the fields the in-page read found sensitive or could not read, and
- * two kinds it never got to ask about, as `@real-a11y-dev/browser` treats
- * them:
+ * names: the fields the in-page read found sensitive or could not read
+ * (`withheld`), and two kinds it never got to ask about (`read` holds every
+ * node it did ask about), as `@real-a11y-dev/browser` treats them:
  *
- * - a DOM-backed node that holds a value but that normalization dropped,
- *   so it was never a read candidate — an `aria-hidden` card input still
- *   names whatever is labelled by it. Unread is withheld.
+ * - a DOM-backed node that holds a value but was never read — normalization
+ *   dropped it, so it was no candidate, and nothing that names another node
+ *   held it. Unread is withheld.
  * - a value that is Chromium's password mask: its length is the password's.
  */
 function nameWithholdingRoots(
   rawNodes: RawAXNode[],
-  kept: readonly NativeAXNode[],
   rawById: ReadonlyMap<string, RawAXNode>,
-  sensitiveIds: readonly string[],
+  withheld: Iterable<string>,
+  read: ReadonlySet<string>,
 ): string[] {
   const roots = new Set<string>();
-  for (const id of sensitiveIds) {
+  for (const id of withheld) {
     const raw = rawById.get(id);
     if (raw) roots.add(raw.nodeId);
   }
-  const keptIds = new Set(kept.map((n) => n.id));
   for (const raw of rawNodes) {
     const value = raw.value?.value;
     const masked =
       typeof value === "string" && MASKED_VALUE.test(value.replace(/\s/g, ""));
     const unread =
       typeof raw.backendDOMNodeId === "number" &&
-      !keptIds.has(nativeIdOf(raw)) &&
+      !read.has(nativeIdOf(raw)) &&
       carriesAXValue(raw);
     if (masked || unread) roots.add(raw.nodeId);
   }
@@ -820,6 +886,10 @@ export async function readNativeTree(
   const objectGroup = `sn-field-values-${++fieldReadCount}`;
   const sensitiveIds: string[] = [];
   const facetsById = new Map<string, Partial<EnrichedNativeNode>>();
+  // Every node the page was asked about, and those outside the tree whose
+  // value must stay out of names around them (see below).
+  const read = new Set<string>();
+  const withheld = new Set<string>();
   try {
     await Promise.all(
       firstPass.map(async (node) => {
@@ -852,21 +922,47 @@ export async function readNativeTree(
     // A node the tree drops is never a candidate above, but `aria-labelledby`
     // and `aria-describedby` still read it: an `aria-hidden` card input names
     // the region labelled by it after the card, and Chromium sends no value
-    // for it to judge by. Classify every such target too.
-    const alreadyRead = new Set(facetsById.keys());
+    // for it to judge by. So the FIELDS at or inside such a target that the
+    // pass above didn't read are read now, and those fields are what withhold
+    // names, never the target: a `<label>` wrapping a password is what names
+    // the password, and the label counted as sensitive would withhold the
+    // password's own name. Only a target hiding an ignored node is looked
+    // into ({@link hidesUnreadNode}), so a plain `<label>` costs nothing. A
+    // hidden field withholds names only if it holds something, as a field in
+    // the tree does; one the DOM agent can't list, or that has no AX node to
+    // withhold by, leaves the target withholding instead — failing closed.
+    for (const id of facetsById.keys()) read.add(id);
+    const index = indexRaw(full.nodes);
     await Promise.all(
-      referencedOutsideTree(full.nodes, firstPass).map(async (raw) => {
-        const id = nativeIdOf(raw);
-        if (alreadyRead.has(id) || typeof raw.backendDOMNodeId !== "number") {
-          return;
-        }
-        const verdict = await readFieldValue(
-          transport,
-          raw.backendDOMNodeId,
-          objectGroup,
-        );
-        if (fieldValueWithheld(verdict)) sensitiveIds.push(id);
-      }),
+      referencedOutsideTree(full.nodes, index, firstPass)
+        .filter((target) => hidesUnreadNode(target, index.byId, read))
+        .map(async (target) => {
+          const fields =
+            typeof target.backendDOMNodeId === "number"
+              ? await fieldsWithin(transport, target.backendDOMNodeId)
+              : undefined;
+          if (fields === undefined) {
+            withheld.add(nativeIdOf(target));
+            return;
+          }
+          await Promise.all(
+            fields.map(async (backendNodeId) => {
+              const raw = index.byBackendId.get(backendNodeId);
+              const id = raw ? nativeIdOf(raw) : undefined;
+              if (id !== undefined && read.has(id)) return;
+              if (id !== undefined) read.add(id);
+              const verdict = await readFieldValue(
+                transport,
+                backendNodeId,
+                objectGroup,
+              );
+              if (verdict.classified === true && verdict.redacted !== true) {
+                return;
+              }
+              withheld.add(id ?? nativeIdOf(target));
+            }),
+          );
+        }),
     );
   } finally {
     await transport
@@ -876,7 +972,12 @@ export async function readNativeTree(
 
   const rawNodes = withholdSensitiveFieldNames(
     full.nodes,
-    nameWithholdingRoots(full.nodes, firstPass, firstRawById, sensitiveIds),
+    nameWithholdingRoots(
+      full.nodes,
+      firstRawById,
+      [...sensitiveIds, ...withheld],
+      read,
+    ),
   );
   const nodes =
     rawNodes === full.nodes ? firstPass : normalizeNativeAX(rawNodes);

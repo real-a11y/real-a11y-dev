@@ -136,6 +136,42 @@ describe("withholdSensitiveFieldNames", () => {
     expect(out[1].name?.value).toBe("Card");
   });
 
+  // <label>Card <input id="card" autocomplete="cc-number" value="4111…">
+  //   <input type="password" value="hunter2"></label>, the password being
+  //   ignored (aria-hidden) and so never in the tree.
+  const sharedLabel = () => [
+    raw("1", "LabelText", { childIds: ["2", "3"] }),
+    raw("2", "textbox", {
+      parentId: "1",
+      name: { value: "Card" },
+      named: "relatedElement",
+      value: { value: "4111111111111111" },
+      properties: [
+        {
+          name: "labelledby",
+          value: { relatedNodes: [{ backendDOMNodeId: 1 }] },
+        },
+      ],
+    }),
+    raw("3", "none", { parentId: "1", ignored: true }),
+  ];
+
+  it("withholds a field's name from a label that also holds another field", () => {
+    const out = withholdSensitiveFieldNames(sharedLabel(), ["2", "3"]);
+    expect(out[1].name?.value).toBe(REDACTED_VALUE);
+  });
+
+  it("withholds a field's own label passed as a root: roots are fields", () => {
+    // Nothing tells a label passed in from a field, so its own field's name
+    // goes with it. The extension passes the fields inside a label, never
+    // the label, for this reason.
+    const out = withholdSensitiveFieldNames(sharedLabel().slice(0, 2), [
+      "1",
+      "2",
+    ]);
+    expect(out[1].name?.value).toBe(REDACTED_VALUE);
+  });
+
   it("returns the nodes untouched with no sensitive field", () => {
     const nodes = cell();
     expect(withholdSensitiveFieldNames(nodes, [])).toBe(nodes);
