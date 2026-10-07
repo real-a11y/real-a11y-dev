@@ -619,6 +619,10 @@ export function NativeTreeView({
                         e.stopPropagation();
                         if (hasChildren) toggle(id);
                       }}
+                      // Its two clicks already toggled it twice; the row's
+                      // double-click would toggle it a third time, or act on
+                      // the page for an actionable row.
+                      onDblClick={(e) => e.stopPropagation()}
                     >
                       {hasChildren ? (expanded.has(id) ? "▾" : "▸") : ""}
                     </button>

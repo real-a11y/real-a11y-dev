@@ -121,6 +121,30 @@ describe("NativeTreeView role filter", () => {
     expect(options().map((o) => o.textContent)).toEqual(["H3Deep"]);
   });
 
+  it("leaves a double-click on a row's expander to the expander", () => {
+    // The browser fires two clicks and then a dblclick; the clicks already
+    // toggled the row twice, so the dblclick must neither toggle it again
+    // nor act on the page for an actionable row.
+    const onActivate = mount();
+    const row = (name: string) =>
+      [...container.querySelectorAll<HTMLElement>('[role="treeitem"]')].find(
+        (r) => r.textContent?.includes(name),
+      )!;
+    const dblclickToggle = (name: string) =>
+      act(() => {
+        row(name)
+          .querySelector(".sn-toggle")!
+          .dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
+      });
+
+    const before = row("Details").getAttribute("aria-expanded");
+    dblclickToggle("Details");
+    expect(row("Details").getAttribute("aria-expanded")).toBe(before);
+
+    dblclickToggle("Docs");
+    expect(onActivate).not.toHaveBeenCalled();
+  });
+
   it("activates a link through the native onActivate", () => {
     const onActivate = mount();
     act(() => pill("Links").click());
