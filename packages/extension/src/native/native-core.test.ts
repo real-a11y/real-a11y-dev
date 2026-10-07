@@ -3186,6 +3186,194 @@ describe("readNativeTree across frames", () => {
     expect(res.nodes.find((n) => n.id === "ax-dom-8")!.childIds).toEqual([]);
     expect(findNative(res.nodes, "button", "Outer button")).toBeDefined();
   });
+  /** The frame ids `getFullAXTree` was asked for, on a fake transport. */
+  const readFrameIds = (t: FakeTransport) =>
+    t.calls
+      .filter((c) => c.method === "Accessibility.getFullAXTree")
+      .map((c) => (c.params as { frameId?: string } | undefined)?.frameId)
+      .filter((id) => id !== undefined);
+
+  it("never reads a same-process frame whose row the tree drops", async () => {
+    // A `display:none` ad frame: DOM.getFrameOwner still names its element,
+    // but no row in the tree stands for it.
+    const t = new FakeTransport((method, params) => {
+      const frameId = (params as { frameId?: string } | undefined)?.frameId;
+      if (method === "Accessibility.getFullAXTree") return { nodes: TOP };
+      if (method === "Page.getFrameTree") {
+        return {
+          frameTree: {
+            frame: { id: "TOP" },
+            childFrames: [{ frame: { id: "HIDDEN" } }],
+          },
+        };
+      }
+      if (method === "DOM.getFrameOwner") {
+        return frameId === "HIDDEN" ? { backendNodeId: 99 } : {};
+      }
+      return {};
+    });
+    await readNativeTree(t);
+    expect(readFrameIds(t)).toEqual([]);
+  });
+
+  it("never reads an out-of-process frame whose row the tree drops", async () => {
+    const hiddenFrame = frameDocument();
+    const top = withOutOfProcessFrame(frameDocument());
+    const [visible] = (await top.frameSessions!())!;
+    top.frameSessions = async () => [
+      visible!,
+      { frameId: "HIDDEN", transport: hiddenFrame },
+    ];
+    // Its element is named, as a `display:none` frame's is, but has no row.
+    const send = top.send.bind(top);
+    top.send = (async (method: string, params?: object) =>
+      method === "DOM.getFrameOwner" &&
+      (params as { frameId?: string }).frameId === "HIDDEN"
+        ? { backendNodeId: 99 }
+        : send(method, params)) as typeof top.send;
+    await readNativeTree(top);
+    expect(
+      hiddenFrame.calls.some((c) => c.method === "Accessibility.getFullAXTree"),
+    ).toBe(false);
+  });
+
+  it("reads at most twenty frames in one read, the rest left embedded", async () => {
+    const count = 25;
+    const rows = Array.from({ length: count }, (_, i) => ({
+      nodeId: `${100 + i}`,
+      backendDOMNodeId: 100 + i,
+      parentId: "1",
+      role: { value: "Iframe" },
+      name: { value: `Frame ${i}` },
+    }));
+    const t = new FakeTransport((method, params) => {
+      const frameId = (params as { frameId?: string } | undefined)?.frameId;
+      if (method === "Accessibility.getFullAXTree") {
+        if (frameId === undefined) {
+          return {
+            nodes: [
+              {
+                nodeId: "1",
+                role: { value: "RootWebArea" },
+                childIds: rows.map((r) => r.nodeId),
+              },
+              ...rows,
+            ],
+          };
+        }
+        return {
+          nodes: [
+            { nodeId: "1", role: { value: "RootWebArea" }, childIds: ["2"] },
+            {
+              nodeId: "2",
+              backendDOMNodeId: 1000 + Number(frameId.slice(1)),
+              parentId: "1",
+              role: { value: "button" },
+              name: { value: `Inside ${frameId}` },
+            },
+          ],
+        };
+      }
+      if (method === "Page.getFrameTree") {
+        return {
+          frameTree: {
+            frame: { id: "TOP" },
+            childFrames: rows.map((_, i) => ({ frame: { id: `F${i}` } })),
+          },
+        };
+      }
+      if (method === "DOM.getFrameOwner") {
+        return { backendNodeId: 100 + Number(frameId!.slice(1)) };
+      }
+      return {};
+    });
+    const res = await readNativeTree(t);
+    expect(readFrameIds(t)).toHaveLength(20);
+    const filled = res.nodes.filter(
+      (n) => n.role === "Iframe" && n.childIds.length > 0,
+    );
+    expect(filled).toHaveLength(20);
+  });
+
+  it("waits for a frame no session fills once per document, and still fills it later", async () => {
+    // Another extension's frame, or one that hadn't loaded yet: nothing is
+    // announced for it. The first read waits; the next read of the same
+    // document asks without waiting, and fills the frame once it is there.
+    const top = withOutOfProcessFrame(frameDocument());
+    const [frame] = (await top.frameSessions!())!;
+    top.send = (async (method: string, params?: object) => {
+      if (method === "Page.getFrameTree") {
+        return { frameTree: { frame: { id: "TOP", loaderId: "DOC-WAIT" } } };
+      }
+      if (method === "Accessibility.getFullAXTree") return { nodes: TOP };
+      if (method === "DOM.getFrameOwner") {
+        return (params as { frameId?: string }).frameId === "OOPIF"
+          ? { backendNodeId: 8 }
+          : {};
+      }
+      return {};
+    }) as typeof top.send;
+    const asked: boolean[] = [];
+    let announced: FrameSession[] = [];
+    top.frameSessions = async (until) => {
+      // Whether the caller would wait with nothing announced yet.
+      asked.push(until ? !until([]) : false);
+      return announced;
+    };
+
+    await readNativeTree(top);
+    expect(asked).toEqual([true]);
+
+    asked.length = 0;
+    await readNativeTree(top);
+    expect(asked).toEqual([false]);
+
+    // The frame loads after all.
+    announced = [frame!];
+    asked.length = 0;
+    const res = await readNativeTree(top);
+    expect(asked).toEqual([false]);
+    expect(res.nodes.find((n) => n.id === "ax-dom-8")!.childIds).toHaveLength(
+      2,
+    );
+  });
+
+  it("reads a cross-origin frame nested in another, with that frame's own ids", async () => {
+    // The outer frame (process 2) holds an <iframe>, backend id 30, whose
+    // frame runs in process 3.
+    const OUTER = [
+      { nodeId: "1", role: { value: "RootWebArea" }, childIds: ["30"] },
+      {
+        nodeId: "30",
+        backendDOMNodeId: 30,
+        parentId: "1",
+        role: { value: "Iframe" },
+        name: { value: "Inner frame" },
+      },
+    ];
+    const inner = frameDocument();
+    const outer = new FakeTransport((method, params) => {
+      if (method === "Accessibility.getFullAXTree") return { nodes: OUTER };
+      if (method === "Page.getFrameTree")
+        return { frameTree: { frame: { id: "OUTER" } } };
+      if (method === "DOM.getFrameOwner") {
+        return (params as { frameId?: string }).frameId === "INNER"
+          ? { backendNodeId: 30 }
+          : {};
+      }
+      return {};
+    }) as FakeTransport & CdpTransport;
+    outer.frameSessions = async () => [{ frameId: "INNER", transport: inner }];
+    const top = withOutOfProcessFrame(outer);
+    top.frameSessions = async () => [{ frameId: "OOPIF", transport: outer }];
+
+    const res = await readNativeTree(top);
+    const row = res.nodes.find((n) => n.id === "ax-dom-30@OOPIF")!;
+    expect(row.childIds).toEqual(["ax-dom-7@INNER", "ax-dom-8@INNER"]);
+    expect(findNative(res.nodes, "button", "Inner save")!.id).toBe(
+      "ax-dom-8@INNER",
+    );
+  });
 });
 
 describe("dispatchNative in a frame", () => {

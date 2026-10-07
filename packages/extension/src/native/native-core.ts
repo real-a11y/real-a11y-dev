@@ -900,7 +900,8 @@ export async function readNativeTree(
   );
   const nodes = await readDocument(transport, full.nodes);
   let rawCount = full.nodes.length;
-  for (const frame of await readFrames(transport, "", 0, nodes)) {
+  const budget = { left: MAX_FRAMES_PER_READ };
+  for (const frame of await readFrames(transport, "", 0, nodes, budget)) {
     if (graftNativeFrame(nodes, frame.ownerId, frame.nodes)) {
       rawCount += frame.rawCount;
     }
@@ -1096,9 +1097,29 @@ interface FrameDocument {
 }
 
 interface FrameTreeNode {
-  frame: { id: string };
+  frame: { id: string; loaderId?: string };
   childFrames?: FrameTreeNode[];
 }
+
+/** The most frames one read follows, however they nest: a page of dozens of
+ *  ad frames costs a full read of each, on every read, automatic ones
+ *  included. Rows past it show as embedded. */
+const MAX_FRAMES_PER_READ = 20;
+
+/** How many times a read asks again for out-of-process frames still
+ *  missing, while new ones keep being announced. */
+const FRAME_ANNOUNCE_ROUNDS = 3;
+
+/**
+ * Frame rows a read waited for and never got a session for, by the document
+ * they are in (its loader id): another extension's frame, one a host policy
+ * blocks, or one that hadn't loaded yet. A later read of that document
+ * doesn't wait for them again, though it still fills any announced by then;
+ * so a frame that can never be attached costs its wait once per document,
+ * not on every read. A few documents' worth, oldest dropped.
+ */
+const unfillableFrames = new Map<string, ReadonlySet<string>>();
+const UNFILLABLE_DOCUMENTS_KEPT = 16;
 
 /**
  * Every frame under `transport`'s document that it can read, in document
@@ -1121,12 +1142,18 @@ interface FrameTreeNode {
  * row in it, or in its same-process frames, that no same-process frame
  * owns stands for an out-of-process frame: that count is what the session
  * waits to have announced, and with none the session is never asked.
+ *
+ * What a read costs is bounded: only a frame whose row the tree keeps is
+ * read (a hidden ad frame has none), at most `budget.left` frames in all and
+ * {@link NATIVE_MAX_FRAME_DEPTH} deep, and a row no session ever filled is
+ * not waited for again while its document lives ({@link unfillableFrames}).
  */
 async function readFrames(
   transport: CdpTransport,
   suffix: string,
   depth: number,
   parentDocument: readonly EnrichedNativeNode[],
+  budget: { left: number },
 ): Promise<FrameDocument[]> {
   if (depth >= NATIVE_MAX_FRAME_DEPTH) return [];
   const out: FrameDocument[] = [];
@@ -1147,22 +1174,28 @@ async function readFrames(
     .send<{ frameTree?: FrameTreeNode }>("Page.getFrameTree")
     .catch(() => undefined);
   const local: string[] = [];
-  const walk = (node: FrameTreeNode) => {
+  const walk = (node: FrameTreeNode, level: number) => {
+    if (depth + level >= NATIVE_MAX_FRAME_DEPTH) return;
     for (const child of node.childFrames ?? []) {
       local.push(child.frame.id);
-      walk(child);
+      walk(child, level + 1);
     }
   };
-  if (tree?.frameTree) walk(tree.frameTree);
+  if (tree?.frameTree) walk(tree.frameTree, 0);
   for (const frameId of local) {
     const ownerId = await owner(frameId);
     if (ownerId) localOwners.add(ownerId);
+    // A frame whose row the tree drops (a hidden ad frame) would be read in
+    // full only to be thrown away: its owner always comes before it, so the
+    // row is known by now if it is kept.
+    if (!ownerId || !iframes.has(ownerId) || budget.left <= 0) continue;
+    budget.left--;
     const raw = await transport
       .send<{ nodes?: RawAXNode[] }>("Accessibility.getFullAXTree", {
         frameId,
       })
       .catch(() => undefined);
-    if (!ownerId || !raw?.nodes) continue;
+    if (!raw?.nodes) continue;
     // A frame that fails partway (removed, navigated) is left out; the rest
     // of the tree still reads.
     const nodes = await readDocument(transport, raw.nodes).catch(() => null);
@@ -1180,30 +1213,64 @@ async function readFrames(
   // An announcement can fill the count without filling a row: a frame whose
   // row the tree drops (a hidden ad frame), or a session gone stale before
   // it could be checked. So the rounds count announcements, not sessions.
+  const documentKey =
+    tree?.frameTree?.frame.loaderId !== undefined
+      ? `${suffix}|${tree.frameTree.frame.loaderId}`
+      : undefined;
+  const unfillable =
+    documentKey !== undefined ? unfillableFrames.get(documentKey) : undefined;
   const remote = new Set([...iframes].filter((id) => !localOwners.has(id)));
-  if (remote.size === 0) return out;
+  if (remote.size === 0 || budget.left <= 0) return out;
+  // The rows worth waiting for. A row no session filled on an earlier read
+  // of this document isn't waited for again, but is still filled if its
+  // frame has been announced by now: a frame that only loaded late.
+  const waitFor = [...remote].filter((id) => !unfillable?.has(id));
   const owners = new Map<string, string | undefined>();
-  let sessions: FrameSession[] = [];
-  let announced = 0;
-  for (let round = 0; round < 3; round++) {
-    const seen = announced;
-    sessions = await frameSessionsOf(transport, (ids) => {
-      announced = ids.length;
-      return ids.length >= Math.max(remote.size, seen + 1);
-    });
-    for (const session of sessions) {
+  const learnOwners = async (found: FrameSession[]) => {
+    for (const session of found) {
       if (!owners.has(session.frameId)) {
         owners.set(session.frameId, await owner(session.frameId));
       }
     }
+  };
+  let sessions: FrameSession[] = [];
+  if (waitFor.length === 0) {
+    sessions = await frameSessionsOf(transport, () => true);
+    await learnOwners(sessions);
+  }
+  let announced = 0;
+  for (
+    let round = 0;
+    waitFor.length > 0 && round < FRAME_ANNOUNCE_ROUNDS;
+    round++
+  ) {
+    const seen = announced;
+    sessions = await frameSessionsOf(transport, (ids) => {
+      announced = ids.length;
+      return ids.length >= Math.max(waitFor.length, seen + 1);
+    });
+    await learnOwners(sessions);
     const owned = new Set(owners.values());
-    if (announced === seen || [...remote].every((id) => owned.has(id))) {
-      break;
+    if (announced === seen || waitFor.every((id) => owned.has(id))) break;
+  }
+  // What this read left unfilled is what the next read of this document
+  // won't wait for; a row filled since drops out.
+  if (documentKey !== undefined) {
+    const owned = new Set(owners.values());
+    const never = new Set([...remote].filter((id) => !owned.has(id)));
+    unfillableFrames.delete(documentKey);
+    if (never.size > 0) {
+      unfillableFrames.set(documentKey, never);
+      if (unfillableFrames.size > UNFILLABLE_DOCUMENTS_KEPT) {
+        unfillableFrames.delete(unfillableFrames.keys().next().value!);
+      }
     }
   }
   for (const session of sessions) {
     const ownerId = owners.get(session.frameId);
-    if (!ownerId) continue;
+    // As above: a frame whose row the tree drops is not read.
+    if (!ownerId || !iframes.has(ownerId) || budget.left <= 0) continue;
+    budget.left--;
     const child = session.transport;
     const raw = await child
       .send("Accessibility.enable")
@@ -1221,7 +1288,7 @@ async function readFrames(
       rawCount: raw.nodes.length,
     });
     out.push(
-      ...(await readFrames(child, childSuffix, depth + 1, nodes).catch(
+      ...(await readFrames(child, childSuffix, depth + 1, nodes, budget).catch(
         () => [],
       )),
     );
