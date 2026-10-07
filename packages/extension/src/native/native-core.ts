@@ -1122,9 +1122,10 @@ const FRAME_SETTLE_MS = 50;
  * Frame rows a read waited for and never got a session for, by the document
  * they are in (its loader id): another extension's frame, one a host policy
  * blocks, or one that hadn't loaded yet. A later read of that document
- * doesn't wait for them again, though it still fills any announced by then;
- * so a frame that can never be attached costs its wait once per document,
- * not on every read. A few documents' worth, oldest dropped.
+ * waits for them only briefly ({@link FRAME_SETTLE_MS}), and still fills any
+ * announced by then; so a frame that can never be attached costs the full
+ * wait once per document, not on every read. A few documents' worth, oldest
+ * dropped.
  */
 const unfillableFrames = new Map<string, ReadonlySet<string>>();
 const UNFILLABLE_DOCUMENTS_KEPT = 16;
@@ -1154,7 +1155,7 @@ const UNFILLABLE_DOCUMENTS_KEPT = 16;
  * What a read costs is bounded: only a frame whose row the tree keeps is
  * read (a hidden ad frame has none), at most `budget.left` frames in all and
  * {@link NATIVE_MAX_FRAME_DEPTH} deep, and a row no session ever filled is
- * not waited for again while its document lives ({@link unfillableFrames}).
+ * waited for only briefly while its document lives ({@link unfillableFrames}).
  */
 async function readFrames(
   transport: CdpTransport,
@@ -1229,9 +1230,10 @@ async function readFrames(
     documentKey !== undefined ? unfillableFrames.get(documentKey) : undefined;
   const remote = new Set([...iframes].filter((id) => !localOwners.has(id)));
   if (remote.size === 0 || budget.left <= 0) return out;
-  // The rows worth waiting for. A row no session filled on an earlier read
-  // of this document isn't waited for again, but is still filled if its
-  // frame has been announced by now: a frame that only loaded late.
+  // The rows worth waiting for in full. A row no session filled on an
+  // earlier read of this document gets only the brief settle below, and is
+  // still filled if its frame has been announced by then: a frame that only
+  // loaded late.
   const waitFor = [...remote].filter((id) => !unfillable?.has(id));
   const owners = new Map<string, string | undefined>();
   const learnOwners = async (found: FrameSession[]) => {
