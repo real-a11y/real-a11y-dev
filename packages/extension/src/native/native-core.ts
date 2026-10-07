@@ -790,22 +790,11 @@ export function pageClick(this: Element): Marker {
 }
 
 /**
- * Move real keyboard focus. `preventScroll` always on, matching the DOM
- * producer's own `content.ts` focus call: its caller has usually already
- * scrolled/centered the element by other means, and a default-scroll
- * `.focus()` on top would re-snap it to a viewport edge or jump the page
- * out from under a user simply arrow-navigating the tree.
- *
- * Verifies the call actually moved focus before reporting success. An
- * ordinary heading or landmark has a `.focus` method like any
- * `HTMLElement`, but calling it without a `tabindex` never changes
- * `document.activeElement` — the native tree includes plenty of DOM-backed
- * nodes like that (headings, landmarks), and reporting `{ ok: true }` for a
- * no-op would silently leave real page focus on whatever it was before.
- *
- * Checked against the element's OWN root, not the document: inside a shadow
- * tree, `document.activeElement` is the shadow host, and the focused control
- * is only visible as its shadow root's `activeElement`.
+ * Move real keyboard focus — the `focus` action, the same plain call as
+ * `browser`'s own `pageFocus`: the browser may scroll to the element, and
+ * success means the call was made, not that focus moved (a heading without
+ * a `tabindex` ignores it). Selecting a row doesn't come through here; that
+ * is {@link pageReveal}, which focuses without scrolling.
  */
 export function pageFocus(this: Element): Marker {
   const el = this;
