@@ -592,10 +592,13 @@ export function NativeTreeView({
       scheduleFollowTimer(() => onSelectionRevealRef.current?.(id)),
     [scheduleFollowTimer],
   );
-  // Set when the pointer left a clicked row before this effect scheduled
-  // the click's reveal (it runs after paint): see `endHover`.
+  // A click whose reveal this effect hasn't scheduled yet (it runs after
+  // paint), and whether the pointer left the clicked row in that time: see
+  // `endHover`. Every run of the effect settles both.
+  const clickAwaitsFollow = useRef(false);
   const clickRevealOwesClear = useRef(false);
   useEffect(() => {
+    clickAwaitsFollow.current = false;
     if (!selectedId) return;
     if (clickRevealOwesClear.current) {
       // The pointer has already left: reveal now, then clear what it draws,
@@ -640,9 +643,13 @@ export function NativeTreeView({
     if (hoverClicked.current) {
       hoverClicked.current = false;
       hoverShown.current = true;
-      // Nothing pending yet: the click's reveal is scheduled after paint,
-      // and the pointer can leave before that.
-      if (!flushFollow()) clickRevealOwesClear.current = true;
+      // Nothing pending: the reveal already went (the clear below follows
+      // it), or the click's reveal isn't scheduled yet, since that happens
+      // after paint and the pointer can leave before it. Only the second
+      // owes a clear once it is sent.
+      if (!flushFollow() && clickAwaitsFollow.current) {
+        clickRevealOwesClear.current = true;
+      }
     }
     if (!hoverShown.current) return;
     hoverShown.current = false;
@@ -1181,6 +1188,7 @@ export function NativeTreeView({
                       setSelectedId(id);
                       setFollowNonce((n) => n + 1);
                       hoverClicked.current = hoverRowId.current === id;
+                      clickAwaitsFollow.current = true;
                       // A mouse click on the row never moves real DOM focus (the
                       // row itself is tabIndex=-1; only the `.sn-tree` container
                       // is focusable, per the roving-focus/aria-activedescendant

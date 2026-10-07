@@ -724,6 +724,41 @@ describe("NativeTreeView hover preview", () => {
     ]);
   });
 
+  it("keeps the next keyboard selection's outline after a clicked row's reveal went and the pointer left", () => {
+    const calls: Array<[string, string | null]> = [];
+    act(() => {
+      render(
+        <NativeTreeView
+          nodes={NODES}
+          rootId="root"
+          busy={false}
+          capability={undefined}
+          status=""
+          onRefresh={() => {}}
+          onActivate={() => {}}
+          onHoverPreview={(id) => calls.push(["preview", id])}
+          onSelectionReveal={(id) => calls.push(["reveal", id])}
+        />,
+        container,
+      );
+    });
+    enter("h1");
+    act(() => row("h1").click());
+    wait(500); // the click's reveal has gone
+    leave("h1");
+    calls.length = 0;
+    act(() => {
+      container
+        .querySelector<HTMLElement>(".sn-tree")!
+        .dispatchEvent(
+          new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }),
+        );
+    });
+    wait(500);
+    // The keyboard's reveal, and no clear after it.
+    expect(calls).toEqual([["reveal", expect.any(String)]]);
+  });
+
   it("leaves no preview to land after leaving a row early", () => {
     const onHoverPreview = mount();
     enter("h1");
