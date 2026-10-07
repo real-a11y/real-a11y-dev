@@ -145,6 +145,11 @@ export interface OperationOptions {
    *  attaches. `false` drops it as `superseded`: a reveal the user has
    *  already moved past isn't worth an attach, or a flash of Chrome's bar. */
   stillWanted?: () => boolean;
+  /** An operation with no gesture behind it (an automatic read, a hover's
+   *  preview): asked, like `stillWanted`, once its turn comes, so a Cancel on
+   *  Chrome's bar while it waited refuses it as `cancelled-by-user` rather
+   *  than putting the bar back. */
+  respectCancel?: boolean;
   /** `withRecovery` only: retry once after a mid-operation drop
    *  (`connection-lost`). A read or an action wants that; a pick passes
    *  `false` — see `NATIVE_PICK_START`. Defaults to `true`. */
@@ -449,6 +454,9 @@ export class NativeDebuggerSession {
   ): Promise<{ outcome: AttachOutcome; value?: T }> {
     if (opts.stillWanted && !opts.stillWanted()) {
       return { outcome: { ok: false, error: "superseded" } };
+    }
+    if (opts.respectCancel && this.userCancelled.has(tabId)) {
+      return { outcome: { ok: false, error: "cancelled-by-user" } };
     }
     const attach = await this.attach(tabId);
     if (!attach.ok) return { outcome: attach };

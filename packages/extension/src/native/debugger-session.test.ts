@@ -1574,6 +1574,31 @@ describe("NATIVE_ACT preview through the real message handler", () => {
     expect(attach).toHaveBeenCalledTimes(1);
   });
 
+  it("refuses a queued preview when the user's Cancel lands while it waits", async () => {
+    // A page operation holds the tab; the Cancel on its bar must not be
+    // undone by the hover waiting behind it.
+    const { listeners, attach, send, release } = handlers();
+    const first = send(preview(1));
+    await drain();
+    const queued = send(preview(2));
+    const autoRead = send({ type: "NATIVE_READ", tabId: 7, auto: true });
+    await drain();
+    listeners[listeners.length - 1]({ tabId: 7 }, "canceled_by_user");
+    release();
+
+    await first;
+    expect(await queued).toMatchObject({
+      success: false,
+      error: "cancelled-by-user",
+    });
+    // An automatic read waiting behind it is refused the same way.
+    expect(await autoRead).toMatchObject({
+      ok: false,
+      error: "cancelled-by-user",
+    });
+    expect(attach).toHaveBeenCalledTimes(1);
+  });
+
   it("drops a queued preview that a newer one replaced, before it attaches", async () => {
     // A slow scan down the tree queues one preview per row it rests on
     // while an earlier one holds the tab; only the newest is worth an attach.

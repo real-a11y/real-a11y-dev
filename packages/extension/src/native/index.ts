@@ -331,7 +331,7 @@ export function registerNativeMode(): void {
               message.tabId,
               (t) => readNativeTree(t),
               log,
-              { retryDrop: !message.auto },
+              { retryDrop: !message.auto, respectCancel: message.auto },
             );
             if (!outcome.ok || !value) {
               // An automatic read the user's Cancel cut short says so, so the
@@ -428,7 +428,8 @@ export function registerNativeMode(): void {
             // gesture behind it, so it respects the user's Cancel on Chrome's
             // bar at least as strictly as an automatic read: refused, and
             // never retried after a drop. A Cancel that lands mid-preview
-            // fails that preview; the next one is refused here.
+            // fails that preview; the next one is refused here, or, if it
+            // was already waiting its turn, once that turn comes.
             if (isPreview && session.cancelledByUser(message.tabId)) {
               const error: AttachOutcome["error"] = "cancelled-by-user";
               sendResponse({ success: false, error });
@@ -516,7 +517,7 @@ export function registerNativeMode(): void {
                         ) === message.requestId,
                     }
                   : {}),
-                ...(isPreview ? { retryDrop: false } : {}),
+                ...(isPreview ? { retryDrop: false, respectCancel: true } : {}),
               },
             );
             if (!outcome.ok) {
@@ -692,7 +693,8 @@ export async function withRecovery<T>(
   if (
     first.outcome.error === "conflict" ||
     first.outcome.error === "disabled" ||
-    first.outcome.error === "superseded"
+    first.outcome.error === "superseded" ||
+    first.outcome.error === "cancelled-by-user"
   ) {
     return await classify(first, log);
   }
