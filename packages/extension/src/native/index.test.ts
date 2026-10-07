@@ -136,6 +136,19 @@ describe("registerNativeMode: the old dogfood flag", () => {
     expect("devFlags.nativeMode" in local.data).toBe(false);
   });
 
+  it("never writes over a Disable sent while it runs", async () => {
+    // The panel's message is what wakes the worker, so a Disable can arrive
+    // while the migration is still between its read and its write.
+    install({ "devFlags.nativeMode": true });
+    vi.resetModules();
+    const { registerNativeMode } = await import("./index.js");
+    registerNativeMode();
+    await send({ type: "NATIVE_FLAG_SET", enabled: false }, PANEL);
+    await new Promise((r) => setTimeout(r, 0));
+    expect(local.data["settings.nativeModeEnabled"]).toBe(false);
+    expect("devFlags.nativeMode" in local.data).toBe(false);
+  });
+
   it("never overrides a setting the user already chose", async () => {
     install({
       "devFlags.nativeMode": true,

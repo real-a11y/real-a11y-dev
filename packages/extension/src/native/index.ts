@@ -148,7 +148,14 @@ export function registerNativeMode(): void {
   void chrome.storage.local
     .setAccessLevel?.({ accessLevel: "TRUSTED_CONTEXTS" })
     .catch(() => {});
-  void migrateFlag().catch(() => {});
+  // Every read and write of the setting waits for the migration: one that
+  // ran alongside a Disable could otherwise write its carried-over `true`
+  // after the user's `false`.
+  const migrated = migrateFlag().catch(() => {});
+  const flagEnabled = async () => {
+    await migrated;
+    return nativeModeEnabled();
+  };
 
   // The dogfood build keeps its event log in `local`, so it survives restarts
   // for the dogfooder's report; the store build keeps none (see
@@ -162,7 +169,7 @@ export function registerNativeMode(): void {
     // The flag is enforced INSIDE the attach transaction, not by the callers.
     // That is what makes it atomic against `detachAll`, and it is why no
     // message handler re-checks it before dispatching.
-    nativeModeEnabled,
+    flagEnabled,
   );
   const log = session.dogfoodLog();
 
@@ -199,9 +206,10 @@ export function registerNativeMode(): void {
         }
         switch (message.type) {
           case "NATIVE_FLAG_GET":
-            sendResponse({ enabled: await nativeModeEnabled() });
+            sendResponse({ enabled: await flagEnabled() });
             return;
           case "NATIVE_FLAG_SET": {
+            await migrated;
             await chrome.storage.local.set({ [FLAG_KEY]: message.enabled });
             // Turning it off must drop the capability, not merely stop offering
             // it. `debugger` cannot be optional, so there is no permission to
