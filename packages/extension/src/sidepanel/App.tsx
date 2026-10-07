@@ -1649,9 +1649,14 @@ export function App() {
    *  navigation that starts while the re-read is under way supersedes the
    *  read, and is followed the same way. Skipped once the panel has left the
    *  tab or native mode. The caller holds `nativeInFlight`: this reads
-   *  through the unguarded core. */
+   *  through the unguarded core. Resolves whether it read the page the
+   *  operation ran on — not when the read failed or the page navigated. */
   const settleThenReread = useCallback(
-    async (tabId: number, token: number, tabChangeAtStart: number) => {
+    async (
+      tabId: number,
+      token: number,
+      tabChangeAtStart: number,
+    ): Promise<boolean> => {
       const abandoned = () =>
         tabChangeToken.current !== tabChangeAtStart ||
         producerRef.current !== "native";
@@ -1664,15 +1669,16 @@ export function App() {
       // a wait-for-load: a destination slower than NATIVE_SETTLE_MS can come
       // back sparse, and Refresh is there either way.
       await sleep(NATIVE_SETTLE_MS);
-      if (abandoned()) return;
+      if (abandoned()) return false;
       if (token !== nativeOpToken.current) {
         await recoverFromOwnNavigation(tabId, tabChangeAtStart);
-        return;
+        return false;
       }
       const ok = await loadNativeTreeCore(tabId);
       if (!ok && token !== nativeOpToken.current && !abandoned()) {
         await recoverFromOwnNavigation(tabId, tabChangeAtStart);
       }
+      return ok;
     },
     [loadNativeTreeCore, recoverFromOwnNavigation],
   );
@@ -2311,7 +2317,7 @@ export function App() {
   // that navigates is followed to its destination, as a native click that
   // navigates is; one that navigates later than that (an async submit
   // handler) is followed by the PAGE_NAVIGATED handler for a few seconds.
-  // `afterRead` runs after a re-read that read this page.
+  // `afterRead` runs only after a re-read that read this page.
   const handleNativeSendKey = useCallback(
     (
       key: string,
@@ -2335,13 +2341,18 @@ export function App() {
             if (wait >= MAX_SEND_KEY_REREAD_WAITS) return;
             await sleep(NATIVE_SETTLE_MS);
           }
+          // Only a re-read of this page says what the key did. A skipped one
+          // leaves the tree from before the key, and a failed one clears it
+          // only once its render lands: neither is for `afterRead` to judge.
           nativeInFlight.current = true;
-          try {
-            await settleThenReread(tabId, token, tabChangeAtStart);
-          } finally {
+          const read = await settleThenReread(
+            tabId,
+            token,
+            tabChangeAtStart,
+          ).finally(() => {
             nativeInFlight.current = false;
-          }
-          if (token === nativeOpToken.current) afterRead?.();
+          });
+          if (read) afterRead?.();
         })();
       });
     },

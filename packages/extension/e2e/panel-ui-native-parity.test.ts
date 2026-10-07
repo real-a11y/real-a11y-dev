@@ -296,6 +296,40 @@ test("switching to DOM right after a sent key reads no native tree", async ({
   expect((await nav.nativeReads()).length).toBe(reads);
 });
 
+test("Press ESC whose re-read fails doesn't say the dialog is still open", async ({
+  nav,
+}) => {
+  const page = await showNative(nav, "dialog-modal.html");
+  await routeSendKeyToPage(nav.panel);
+  await nav.panel
+    .getByRole("treeitem", { name: /^button "Add delivery address"/ })
+    .getByTitle("Click (Enter)")
+    .click();
+  await expect(nav.panel.locator(".sn-dialog-indicator")).toContainText(
+    "Dialog: Add delivery address",
+    { timeout: 10_000 },
+  );
+  await expect(
+    nav.panel.getByRole("button", { name: "Refresh native tree" }),
+  ).toBeEnabled();
+
+  // The re-read after the key fails, so nothing in hand says whether Escape
+  // closed the dialog, and here it did.
+  await nav.setNativeReads("fail");
+  const reads = (await nav.nativeReads()).length;
+  await clickInPanel(nav.panel, ".sn-dialog-indicator", "Press ESC");
+  await expect
+    .poll(() => page.evaluate(() => document.querySelector("dialog")!.open))
+    .toBe(false);
+  await expect
+    .poll(async () => (await nav.nativeReads()).length, { timeout: 10_000 })
+    .toBeGreaterThan(reads);
+  await nav.panel.waitForTimeout(NO_READ_WINDOW_MS);
+  await expect(nav.panel.locator(".sn-action-feedback")).not.toContainText(
+    "The dialog is still open",
+  );
+});
+
 test("a refused native action says Failed in the feedback bar", async ({
   nav,
 }) => {
