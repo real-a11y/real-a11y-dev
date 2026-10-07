@@ -515,6 +515,21 @@ describe("field-value redaction covers the names around a sensitive field", () =
     ]);
   });
 
+  it("still grades loosening the normalizer's own carriesValue 🔴 high", async () => {
+    // A different function from carriesAXValue: the normalizer's rule that a
+    // node holding a value never lends its text to a name.
+    const normPath = "packages/core/src/native/ax-normalize.ts";
+    const norm = `function carriesValue(node) {\n  return nonEmptyAXText(node.value?.value) !== undefined;\n}\n`;
+    const result = await grade(
+      { [normPath]: norm.replace("!== undefined", "=== null") },
+      { base: { [normPath]: norm } },
+    );
+    assert.equal(result.tier, "high");
+    assert.deepEqual(evidenceFor(result, "field-value-redaction"), [
+      `${normPath} → carriesValue`,
+    ]);
+  });
+
   it("grades narrowing which fields the extension hands that rule 🔴 high", async () => {
     // Drop the mask from the extension's roots, or stop looking inside a
     // target that hides an ignored node, and a password's length or a hidden

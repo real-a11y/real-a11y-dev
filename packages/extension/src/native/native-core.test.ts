@@ -855,6 +855,46 @@ describe("readNativeTree", () => {
       expect(findNative(res.nodes, "region")?.name).toBe("[redacted]");
     });
 
+    it("looks into a target's author shadow roots, never a field's own internals", async () => {
+      // The hidden label is a custom element: its card field sits in its
+      // open shadow root (backend id 10). A user-agent root, a field's own
+      // internals (backend id 12), holds nothing to read.
+      const t = hiddenCardTransport(
+        { classified: true, sensitive: true, redacted: true },
+        () => ({
+          node: {
+            backendNodeId: 9,
+            localName: "card-label",
+            shadowRoots: [
+              {
+                backendNodeId: 90,
+                shadowRootType: "open",
+                children: [
+                  {
+                    backendNodeId: 10,
+                    localName: "input",
+                    shadowRoots: [
+                      {
+                        backendNodeId: 100,
+                        shadowRootType: "user-agent",
+                        children: [{ backendNodeId: 12, localName: "input" }],
+                      },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+        }),
+      );
+      const res = await readNativeTree(t);
+      expect(findNative(res.nodes, "region")?.name).toBe("[redacted]");
+      const asked = t.calls
+        .filter((c) => c.method === "DOM.resolveNode")
+        .map((c) => (c.params as { backendNodeId: number }).backendNodeId);
+      expect(asked).toEqual([10]);
+    });
+
     it("withholds it when the label's fields can't be listed", async () => {
       const res = await readNativeTree(
         hiddenCardTransport({ classified: true }, () => {

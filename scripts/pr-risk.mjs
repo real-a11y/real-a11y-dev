@@ -816,12 +816,14 @@ const FIELD_VALUE_GATES = [
   "DOM_ATTR_ALLOWLIST",
   "allowlistAttributes",
   "DETAIL_PROPS",
-  // Core's shared native normalizer (`core/src/native/`), which every native
-  // transport inherits: a node that `carriesAXValue` never lends its text to
-  // a name, and the field roles in `NATIVE_AX_AUTHOR_NAMED_ROLES` never take a
-  // name from the text inside them — a typed value either way. This replaced
-  // the browser's own `redactedName` backstop (#418), which is why that name
-  // is not here.
+  // Core's shared native normalizer (`core/src/native/ax-normalize.ts`), which
+  // every native transport inherits: a node that `carriesValue` never lends
+  // its text to a name, and the field roles in `NATIVE_AX_AUTHOR_NAMED_ROLES`
+  // never take a name from the text inside them — a typed value either way.
+  // This replaced the browser's own `redactedName` backstop (#418), which is
+  // why that name is not here. `carriesAXValue` is the name rule's own test of
+  // the same thing (`value-regions.ts`): two functions, both gates.
+  "carriesValue",
   "carriesAXValue",
   "NATIVE_AX_AUTHOR_NAMED_ROLES",
   // Core's rule for a sensitive field's value in OTHER nodes' names
