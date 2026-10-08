@@ -449,9 +449,9 @@ test("a same-page URL change doesn't stop the selection follow", async ({
 
 // ---- Native as the default view ----
 //
-// The harness turns native mode on before any test runs, as if the user had
-// opted in during an earlier session: the case where the panel opens on the
-// native tree by itself. None of these tests click NATIVE.
+// Native mode is on out of the box, and the harness leaves it that way: the
+// case where the panel opens on the native tree by itself. None of these
+// tests click NATIVE.
 
 /** Bring a fixture forward and remount the panel, which then defaults to the
  *  native tree on its own. */
@@ -535,7 +535,7 @@ test("a default that can't read the page falls back to DOM, says why, and doesn'
   expect(await nav.nativeReads()).toHaveLength(1);
 });
 
-test("Disable while the default's read is in flight leaves the panel on DOM", async ({
+test("turning native mode off while the default's read is in flight leaves the panel on DOM", async ({
   nav,
 }) => {
   await nav.setNativeReads("delay:2000");
@@ -547,22 +547,27 @@ test("Disable while the default's read is in flight leaves the panel on DOM", as
   ).toHaveAttribute("aria-pressed", "true", { timeout: 20_000 });
   expect(await nav.nativeReads()).toHaveLength(1);
 
-  await nav.panel.getByRole("button", { name: "Disable native mode" }).click();
-  const enableEntry = nav.panel.getByRole("button", {
-    name: "Enable native mode…",
+  await nav.panel.getByRole("button", { name: "Settings ▾" }).click();
+  const setting = nav.panel.getByRole("checkbox", {
+    name: "Read pages through Chrome (recommended)",
   });
-  await expect(enableEntry).toBeVisible();
-  // The delayed reply lands after the disable; it must not bring the native
+  await setting.click();
+  await expect(setting).not.toBeChecked();
+  const producerToggle = nav.panel.getByRole("group", {
+    name: "Tree producer",
+  });
+  await expect(producerToggle).toHaveCount(0);
+  // The delayed reply lands after the switch; it must not bring the native
   // tree back or flip the view.
   await nav.panel.waitForTimeout(2_500);
-  await expect(enableEntry).toBeVisible();
+  await expect(producerToggle).toHaveCount(0);
   await expect(
     nav.panel.getByRole("button", { name: "Refresh native tree" }),
   ).toHaveCount(0);
 
-  // This worker's other tests expect native mode on.
+  // This worker's other tests expect native mode on, as it comes.
   await nav.panel.evaluate(() =>
-    chrome.storage.local.set({ "settings.nativeModeEnabled": true }),
+    chrome.storage.local.remove("settings.nativeModeEnabled"),
   );
 });
 

@@ -12,14 +12,14 @@ Needs a Chromium binary — `pnpm exec playwright install chromium` if you have
 not run Playwright in this checkout before.
 
 `pretest:e2e` runs both `build` and `build:dogfood`. Most suites load the
-dogfood build (`dist-dogfood/`) with native mode already on, and drive the real
-panel: its NATIVE toggle, tree and actions. A few also drive `DogfoodPanel`, the
-internal diagnostics widget, which only the dogfood build contains.
-`native-opt-in.test.ts` loads the store build (`dist/`) from a fresh profile, to
+dogfood build (`dist-dogfood/`) with native mode on, as it comes out of the box,
+and drive the real panel: its NATIVE toggle, tree and actions. A few also drive
+`DogfoodPanel`, the internal diagnostics widget, which only the dogfood build
+contains. `native-on-by-default.test.ts` loads the store build (`dist/`), to
 check what the listing ships: the manifest, the absence of the dogfood
-diagnostics, the native-mode question a fresh profile is asked on its first
-connect, and turning native mode on and off. A suite picks its build and
-starting setting with `test.use({ build, nativeEnabled })`.
+diagnostics, a fresh profile's first page read natively, the one-time note
+about Chrome's debugging bar, and turning native mode off and on in Settings. A
+suite picks its build with `test.use({ build })`.
 
 Useful switches:
 

@@ -198,7 +198,6 @@ export interface DogfoodBrowser {
 
 async function launchDogfoodExtension(
   build: ExtensionBuild,
-  nativeEnabled: boolean,
 ): Promise<DogfoodBrowser & { dispose: () => Promise<void> }> {
   const dist = BUILD_DIRS[build];
   const { origin, server } = await startFixtureServer();
@@ -238,20 +237,17 @@ async function launchDogfoodExtension(
   await panel.goto(
     `chrome-extension://${extensionId}/src/sidepanel/index.html`,
   );
-  // Native mode stays off until the user turns it on, gated by the
-  // user-facing runtime setting (`settings.nativeModeEnabled` in
-  // `chrome.storage.local` — `packages/extension/src/native/index.ts`'s
-  // `FLAG_KEY`). Most suites start with it on, as if the user had already
-  // said yes to the native-mode question; `attach()` enforces it inside its
-  // storage transaction, so every later `NATIVE_READ`/`NATIVE_ACT` in this
-  // worker sees it. A suite about the question itself starts with it unset
-  // through `test.use({ nativeEnabled: false })`: a profile that has never
-  // answered, which the panel asks on its first connect.
-  if (nativeEnabled) {
-    await panel.evaluate(() =>
-      chrome.storage.local.set({ "settings.nativeModeEnabled": true }),
-    );
-  }
+  // Native mode is on out of the box: the user-facing runtime setting
+  // (`settings.nativeModeEnabled` in `chrome.storage.local`,
+  // `packages/extension/src/native/setting.ts`) is off only once the user
+  // turns it off in the side panel's Settings, and `attach()` enforces it
+  // inside its storage transaction. Every worker starts as a user who never
+  // touched Settings; a test that needs it off writes `false` itself. The
+  // one-time note about Chrome's debugging bar is marked as acknowledged, so
+  // it shows only in the suite about it, which clears the mark.
+  await panel.evaluate(() =>
+    chrome.storage.local.set({ "settings.nativeNoticeSeen": true }),
+  );
 
   return {
     context,
@@ -801,13 +797,12 @@ export function nodes(all: NativeNode[], role: string): NativeNode[] {
 
 export const test = base.extend<
   { nav: NativeHarness },
-  { dogfood: DogfoodBrowser; build: ExtensionBuild; nativeEnabled: boolean }
+  { dogfood: DogfoodBrowser; build: ExtensionBuild }
 >({
   build: ["dogfood", { scope: "worker", option: true }],
-  nativeEnabled: [true, { scope: "worker", option: true }],
   dogfood: [
-    async ({ build, nativeEnabled }, use) => {
-      const launched = await launchDogfoodExtension(build, nativeEnabled);
+    async ({ build }, use) => {
+      const launched = await launchDogfoodExtension(build);
       await use(launched);
       await launched.dispose();
     },
