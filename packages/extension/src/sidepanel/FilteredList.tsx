@@ -11,6 +11,7 @@ import {
   isTypeAheadKey,
   resolveStepperKeyAction,
 } from "@real-a11y-dev/semantic-navigator-ui";
+import type { MutableRef } from "preact/hooks";
 import {
   useMemo,
   useState,
@@ -18,6 +19,8 @@ import {
   useCallback,
   useEffect,
 } from "preact/hooks";
+
+import { handleListScopeKey, isInScope } from "./scope.js";
 
 // Filters whose items have meaningful activate actions
 const INTERACTIVE_FILTERS: Set<string> = new Set(["link", "button", "form"]);
@@ -76,6 +79,17 @@ interface FilteredListViewProps {
   onFocusSearch?: () => void;
   /** Hold activation back while a previous one is still in flight. */
   activateDisabled?: boolean;
+  /** The scope root's id when the items come from a scoped subtree, or
+   *  null. A change re-finds the selected item by id, since a wider or
+   *  narrower scope shifts every index after the first item it adds or drops;
+   *  while set, the empty state says "in this scope". */
+  scopeRootId?: string | null;
+  /** Leave the scope: Escape in the list does what it does in the tree. */
+  onExitScope?: () => void;
+  /** A pick is armed and Escape belongs to cancelling it. */
+  pickArmed?: boolean;
+  /** Receives the listbox element, for a caller that hands it focus. */
+  listRef?: MutableRef<HTMLElement | null>;
 }
 
 export function FilteredListView({
@@ -87,9 +101,21 @@ export function FilteredListView({
   onGoToTree,
   onFocusSearch,
   activateDisabled = false,
+  scopeRootId = null,
+  onExitScope,
+  pickArmed = false,
+  listRef: outerListRef,
 }: FilteredListViewProps) {
   const [selectedIndex, setSelectedIndex] = useState(0);
-  const listRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement | null>(null);
+  const setListRef = useCallback(
+    (el: HTMLDivElement | null) => {
+      listRef.current = el;
+      if (outerListRef) outerListRef.current = el;
+    },
+    [outerListRef],
+  );
+  const scoped = scopeRootId !== null;
   const typeAhead = useRef(createTypeAheadBuffer());
 
   const isHeading = roleFilter === "heading";
@@ -99,6 +125,25 @@ export function FilteredListView({
     setSelectedIndex(0);
     typeAhead.current.clear();
   }, [roleFilter, query]);
+
+  // Follow the selected item, not its index, across a scope change: leaving
+  // a scope can add matches ahead of it, and Enter would then act on a row
+  // the user never selected. Falls back to the first item when the selected
+  // one is outside the new scope. `selectedIdRef` still holds the previous
+  // commit's selection here, because it is updated by the effect below.
+  const selectedIdRef = useRef<string | null>(null);
+  const prevScopeRootId = useRef(scopeRootId);
+  useEffect(() => {
+    if (prevScopeRootId.current === scopeRootId) return;
+    prevScopeRootId.current = scopeRootId;
+    const id = selectedIdRef.current;
+    const at = id === null ? -1 : items.findIndex((item) => item.id === id);
+    setSelectedIndex(Math.max(at, 0));
+    typeAhead.current.clear();
+  }, [scopeRootId, items]);
+  useEffect(() => {
+    selectedIdRef.current = items[selectedIndex]?.id ?? null;
+  });
 
   const selectedItem = items[selectedIndex] ?? null;
 
@@ -116,6 +161,11 @@ export function FilteredListView({
         setSelectedIndex(index);
         if (items[index]) onHighlight?.(items[index].id);
       };
+
+      if (handleListScopeKey(e, { scoped, pickArmed, onExitScope })) {
+        typeAhead.current.clear();
+        return;
+      }
 
       switch (e.key) {
         case "ArrowDown": {
@@ -205,13 +255,16 @@ export function FilteredListView({
       onGoToTree,
       onFocusSearch,
       activateDisabled,
+      scoped,
+      pickArmed,
+      onExitScope,
     ],
   );
 
   return (
     <div class="sn-filtered-list-container">
       <div
-        ref={listRef}
+        ref={setListRef}
         class="sn-filtered-list"
         role="listbox"
         aria-label={`${ROLE_FILTER_GROUPS[roleFilter] ? roleFilter : ""} elements`}
@@ -271,6 +324,7 @@ export function FilteredListView({
         {items.length === 0 && (
           <div class="sn-empty">
             No {roleFilter}s found{query ? ` matching "${query}"` : ""}
+            {scoped ? " in this scope" : ""}
           </div>
         )}
       </div>
@@ -305,6 +359,9 @@ export function FilteredListView({
 
 interface FilteredListProps {
   nodes: Map<string, SemanticNode>;
+  /** The scoped subtree's root, if the panel is scoped: only matches inside
+   *  it are listed, the same subtree the tree shows. */
+  scopeRootId?: string | null;
   roleFilter: Exclude<RoleFilter, null>;
   query: string;
   onHighlight: (nodeId: string) => void;
@@ -313,15 +370,19 @@ interface FilteredListProps {
   onGoToTree: (nodeId: string) => void;
   /** Focus the panel search input when `/` is pressed. */
   onFocusSearch?: () => void;
+  onExitScope?: () => void;
+  listRef?: MutableRef<HTMLElement | null>;
 }
 
 /** The DOM producer's role-filtered list: maps `nodes` onto `FilteredListView`. */
 export function FilteredList({
   nodes,
+  scopeRootId = null,
   roleFilter,
   query,
   ...rest
 }: FilteredListProps) {
+  const scoped = scopeRootId !== null && nodes.has(scopeRootId);
   // Get direct matches in document order
   const items = useMemo(() => {
     const roles = ROLE_FILTER_GROUPS[roleFilter];
@@ -333,6 +394,12 @@ export function FilteredList({
 
     for (const node of nodes.values() as IterableIterator<DomSemanticNode>) {
       if (!roles.includes(node.a11y.role)) continue;
+      if (
+        scoped &&
+        !isInScope(node.id, scopeRootId!, (id) => nodes.get(id)?.parentId)
+      ) {
+        continue;
+      }
       // Apply text search within results
       if (lowerQuery) {
         const name = (node.a11y.name || "").toLowerCase();
@@ -353,13 +420,14 @@ export function FilteredList({
     }
 
     return result;
-  }, [nodes, roleFilter, query]);
+  }, [nodes, roleFilter, query, scoped, scopeRootId]);
 
   return (
     <FilteredListView
       items={items}
       roleFilter={roleFilter}
       query={query}
+      scopeRootId={scoped ? scopeRootId : null}
       {...rest}
     />
   );

@@ -10,6 +10,7 @@ import {
   isTypeAheadKey,
   resolveStepperKeyAction,
 } from "@real-a11y-dev/semantic-navigator-ui";
+import type { MutableRef } from "preact/hooks";
 import {
   useMemo,
   useState,
@@ -17,6 +18,8 @@ import {
   useCallback,
   useEffect,
 } from "preact/hooks";
+
+import { handleListScopeKey } from "./scope.js";
 
 function tabindexOf(node: DomSemanticNode): number | null {
   const raw = node.dom.attributes?.tabindex;
@@ -34,6 +37,11 @@ interface TabSequenceViewProps {
   onActivate: (nodeId: string, action?: ActionType) => void;
   /** Focus the panel search input when `/` is pressed. */
   onFocusSearch?: () => void;
+  /** `rootId` is a scope root: Escape calls `onExitScope`, as in the tree. */
+  scoped?: boolean;
+  onExitScope?: () => void;
+  /** Receives the listbox element, for a caller that hands it focus. */
+  listRef?: MutableRef<HTMLElement | null>;
 }
 
 export function TabSequenceView({
@@ -43,9 +51,19 @@ export function TabSequenceView({
   onHighlight,
   onActivate,
   onFocusSearch,
+  scoped = false,
+  onExitScope,
+  listRef: outerListRef,
 }: TabSequenceViewProps) {
   const [selectedIndex, setSelectedIndex] = useState(0);
-  const listRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement | null>(null);
+  const setListRef = useCallback(
+    (el: HTMLDivElement | null) => {
+      listRef.current = el;
+      if (outerListRef) outerListRef.current = el;
+    },
+    [outerListRef],
+  );
   const typeAhead = useRef(createTypeAheadBuffer());
 
   const items = useMemo(() => {
@@ -88,6 +106,12 @@ export function TabSequenceView({
         setSelectedIndex(index);
         if (items[index]) onHighlight(items[index].id);
       };
+
+      // A DOM pick is cancelled on the page, never by the panel's Escape.
+      if (handleListScopeKey(e, { scoped, onExitScope })) {
+        typeAhead.current.clear();
+        return;
+      }
 
       switch (e.key) {
         case "ArrowDown": {
@@ -172,13 +196,15 @@ export function TabSequenceView({
       onHighlight,
       onActivate,
       onFocusSearch,
+      scoped,
+      onExitScope,
     ],
   );
 
   return (
     <div class="sn-filtered-list-container">
       <div
-        ref={listRef}
+        ref={setListRef}
         class="sn-filtered-list"
         role="listbox"
         aria-label="Tab sequence"
