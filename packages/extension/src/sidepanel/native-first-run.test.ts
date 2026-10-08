@@ -134,6 +134,10 @@ describe("native mode on first run", () => {
       (b) => b.textContent?.trim() === name && !question()?.contains(b),
     ) ?? null;
 
+  /** What the panel last announced in its feedback bar. */
+  const announced = () =>
+    container.querySelector(".sn-action-feedback-text")?.textContent ?? "";
+
   const sentOfType = (type: string) =>
     chromeMock.sent
       .map((m) => m as unknown as { type: string; enabled?: boolean })
@@ -470,10 +474,79 @@ describe("native mode on first run", () => {
       act(() => toolbarButton("Disable native mode")!.click());
       await flush();
 
-      // The setting is on, and this panel agrees.
+      // The setting is on, and this panel agrees, and says so last.
       expect(chromeMock.stored[SETTING]).toBe(true);
       expect(toolbarButton("Enable native mode…")).toBeNull();
       expect(toolbarButton("NATIVE")).not.toBeNull();
+      expect(announced()).toBe(
+        "Native mode is on — NATIVE in the toolbar reads Chromium's tree.",
+      );
+      // Applied from what storage reported, in order: no second read whose
+      // late reply could overwrite a newer change.
+      expect(sentOfType("NATIVE_FLAG_GET")).toHaveLength(1);
+    });
+
+    it("ends off, on the DOM tree, when another window says no while its own yes is on its way", async () => {
+      mount(
+        { enabled: false, chosen: false },
+        {
+          storage: {},
+          set: (enabled) => {
+            chromeMock.writeStorage({ [SETTING]: enabled });
+            chromeMock.writeStorage({ [SETTING]: false });
+            return { enabled, detached: 0 };
+          },
+        },
+      );
+      await flush();
+      await showTab(7);
+
+      act(() => button("Use native mode").click());
+      await flush();
+
+      expect(chromeMock.stored[SETTING]).toBe(false);
+      expect(toolbarButton("Enable native mode…")).not.toBeNull();
+      expect(toolbarButton("NATIVE")).toBeNull();
+      // The DOM tree's own controls are back, so the view really is DOM.
+      expect(
+        container.querySelector('input[aria-label="Search tree nodes"]'),
+      ).not.toBeNull();
+      expect(announced()).toBe("Native mode off — showing the DOM tree.");
+    });
+
+    it("leaves focus where the user moved it while its own Disable was on its way", async () => {
+      let release = () => {};
+      mount(
+        { enabled: true, chosen: true },
+        {
+          storage: { [SETTING]: true },
+          set: (enabled) => {
+            chromeMock.writeStorage({ [SETTING]: enabled });
+            // The reply waits, as it does behind a native read in flight.
+            return new Promise((resolve) => {
+              release = () => resolve({ enabled, detached: 0 });
+            });
+          },
+        },
+      );
+      await flush();
+      await showTab(7);
+
+      act(() => {
+        toolbarButton("Disable native mode")!.focus();
+        toolbarButton("Disable native mode")!.click();
+      });
+      await flush();
+      const search = container.querySelector<HTMLInputElement>(
+        'input[aria-label="Search tree nodes"]',
+      )!;
+      act(() => search.focus());
+
+      release();
+      await flush();
+
+      expect(toolbarButton("Enable native mode…")).not.toBeNull();
+      expect(document.activeElement).toBe(search);
     });
 
     it("doesn't lose another window's yes that lands while keeping the DOM tree", async () => {

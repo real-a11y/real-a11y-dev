@@ -941,36 +941,39 @@ export function App() {
     if (held) applyNativeSetting(held.value);
   }, [applyNativeSetting]);
   /** Asks the service worker to persist the setting. A request, not a state
-   *  setter: it can fail, and it resolves to whether the setting really
+   *  setter: it can fail, and `answered` hears whether the setting really
    *  changed. `NATIVE_FLAG_SET` replies `{ok: false}` from its outer catch on
-   *  an internal failure rather than rejecting, so a resolved promise alone
-   *  doesn't mean it took. Turning native mode off also drops the native tree
-   *  and returns the view to DOM; the service worker detaches the debugger as
-   *  soon as any operation in flight finishes. */
+   *  an internal failure rather than rejecting, so a reply alone doesn't mean
+   *  it took. Turning native mode off also drops the native tree and returns
+   *  the view to DOM; the service worker detaches the debugger as soon as any
+   *  operation in flight finishes. `answered` runs before a change that
+   *  landed from another window meanwhile is applied (`ownWriteDone`), so
+   *  what the caller does with its own answer can't undo that change. */
   const requestNativeMode = useCallback(
-    async (next: boolean): Promise<boolean> => {
-      let r: { enabled?: boolean; ok?: boolean } | undefined;
+    (next: boolean, answered: (took: boolean) => void): void => {
       ownSettingWrites.current++;
-      try {
-        r = await chrome.runtime.sendMessage({
-          type: "NATIVE_FLAG_SET",
-          enabled: next,
+      void chrome.runtime
+        .sendMessage({ type: "NATIVE_FLAG_SET", enabled: next })
+        .then(
+          (r: { enabled?: boolean; ok?: boolean } | undefined) =>
+            r?.enabled === next,
+          // Never reached the service worker, so nothing was persisted.
+          () => false,
+        )
+        .then((took) => {
+          try {
+            if (took) {
+              settingLearned.current++;
+              setNativeModeChosen(true);
+              setShowNativeConsent(false);
+              if (next) setNativeModeEnabledState(true);
+              else showNativeOff();
+            }
+            answered(took);
+          } finally {
+            ownWriteDone();
+          }
         });
-      } catch {
-        // Never reached the service worker, so nothing was persisted.
-        ownWriteDone();
-        return false;
-      }
-      const took = r?.enabled === next;
-      if (took) {
-        settingLearned.current++;
-        setNativeModeChosen(true);
-        setShowNativeConsent(false);
-        if (next) setNativeModeEnabledState(true);
-        else showNativeOff();
-      }
-      ownWriteDone();
-      return took;
     },
     [
       ownWriteDone,
@@ -3380,12 +3383,12 @@ export function App() {
               class="sn-toolbar-btn"
               onClick={() => {
                 // Set before the request: the toolbar re-renders as soon as
-                // the setting flips, before this promise resolves.
+                // the setting flips, before the answer is handed back.
                 pendingNativeFocus.current = "enable";
-                void requestNativeMode(false).then((ok) => {
+                requestNativeMode(false, (took) => {
                   // A failed disable leaves the setting, and the attached
                   // debugger, as they were, so say the click didn't take.
-                  if (!ok) {
+                  if (!took) {
                     pendingNativeFocus.current = null;
                     announce("Couldn't disable native mode — try again.", 3000);
                     return;
@@ -3587,11 +3590,11 @@ export function App() {
             // default's effect runs as soon as the setting flips.
             const defaultWasApplied = hasAppliedNativeDefault.current;
             hasAppliedNativeDefault.current = true;
-            void requestNativeMode(true).then((ok) => {
+            requestNativeMode(true, (took) => {
               setNativeConsentPending(false);
               // Only a real flip switches the view; on failure the banner
               // stays open with the error, for a retry.
-              if (!ok) {
+              if (!took) {
                 pendingNativeFocus.current = null;
                 hasAppliedNativeDefault.current = defaultWasApplied;
                 setNativeConsentError(

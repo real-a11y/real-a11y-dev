@@ -279,9 +279,11 @@ test("native mode turned off in another window closes a native edit box", async 
     .getByRole("dialog", { name: "Native mode" })
     .getByRole("button", { name: "Use native mode" })
     .click();
-  await nav.panel
-    .getByRole("button", { name: "Expand all" })
-    .click({ timeout: 20_000 });
+  // The native tree, not the DOM one behind it: both have Expand all.
+  await expect(
+    nav.panel.getByRole("button", { name: "Refresh native tree" }),
+  ).toBeVisible({ timeout: 20_000 });
+  await nav.panel.getByRole("button", { name: "Expand all" }).click();
   const pwRow = nav.panel.getByRole("treeitem", { name: "Password" });
   await pwRow.getByTitle("Type (Enter)").click();
   const field = nav.panel.locator(".sn-input-panel-field");
