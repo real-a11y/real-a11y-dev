@@ -238,14 +238,15 @@ async function launchDogfoodExtension(
   await panel.goto(
     `chrome-extension://${extensionId}/src/sidepanel/index.html`,
   );
-  // Native mode is off by default, gated by the user-facing runtime setting
-  // (`settings.nativeModeEnabled` in `chrome.storage.local` —
-  // `packages/extension/src/native/index.ts`'s `FLAG_KEY`). Most suites start
-  // with it on, as if the user had already accepted "Enable native mode…";
-  // `attach()` enforces it inside its storage transaction, so every later
-  // `NATIVE_READ`/`NATIVE_ACT` in this worker sees it. A suite about the
-  // opt-in itself, or one about DOM mode alone, starts with it off through
-  // `test.use({ nativeEnabled: false })`.
+  // Native mode stays off until the user turns it on, gated by the
+  // user-facing runtime setting (`settings.nativeModeEnabled` in
+  // `chrome.storage.local` — `packages/extension/src/native/index.ts`'s
+  // `FLAG_KEY`). Most suites start with it on, as if the user had already
+  // said yes to the native-mode question; `attach()` enforces it inside its
+  // storage transaction, so every later `NATIVE_READ`/`NATIVE_ACT` in this
+  // worker sees it. A suite about the question itself starts with it unset
+  // through `test.use({ nativeEnabled: false })`: a profile that has never
+  // answered, which the panel asks on its first connect.
   if (nativeEnabled) {
     await panel.evaluate(() =>
       chrome.storage.local.set({ "settings.nativeModeEnabled": true }),

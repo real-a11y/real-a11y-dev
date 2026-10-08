@@ -17,7 +17,8 @@ panel: its NATIVE toggle, tree and actions. A few also drive `DogfoodPanel`, the
 internal diagnostics widget, which only the dogfood build contains.
 `native-opt-in.test.ts` loads the store build (`dist/`) from a fresh profile, to
 check what the listing ships: the manifest, the absence of the dogfood
-diagnostics, and turning native mode on and off. A suite picks its build and
+diagnostics, the native-mode question a fresh profile is asked on its first
+connect, and turning native mode on and off. A suite picks its build and
 starting setting with `test.use({ build, nativeEnabled })`.
 
 Useful switches:

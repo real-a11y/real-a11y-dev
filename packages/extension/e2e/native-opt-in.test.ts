@@ -1,10 +1,11 @@
 /**
- * Turning native mode on and off, on the store build (`dist/`), from a fresh
- * profile where it has never been enabled.
+ * Turning native mode on and off, on the store build (`dist/`): the question
+ * a fresh profile is asked on its first connect, and the Enable → Disable
+ * round trip for a user who kept the DOM tree.
  *
  * These are the first things a store user meets, and the only suite that runs
  * the build the listing ships: the manifest it asks Chrome for, the absence of
- * the dogfood-only diagnostics, and the consent → Enable → Disable round trip.
+ * the dogfood-only diagnostics, and the native-mode question itself.
  */
 
 import { readdir, readFile } from "node:fs/promises";
@@ -28,8 +29,9 @@ async function shippedScripts(dir = DIST): Promise<string[]> {
   return out;
 }
 
-/** Open a fixture, bind the panel to it, and start from native mode off. */
-async function freshPanel(nav: NativeHarness) {
+/** Open a fixture, bind the panel to it, and start as a user who answered
+ *  the native-mode question by keeping the DOM tree. */
+async function domChosenPanel(nav: NativeHarness) {
   const { page } = await nav.open("native-panel.html");
   await page.bringToFront();
   await nav.panel.evaluate(() =>
@@ -42,6 +44,92 @@ async function freshPanel(nav: NativeHarness) {
   await expect(enableEntry).toBeVisible({ timeout: 20_000 });
   return { page, enableEntry };
 }
+
+/** Open a fixture, bind the panel to it, and start as a profile that has
+ *  never answered the native-mode question. */
+async function firstRunPanel(nav: NativeHarness) {
+  const { page } = await nav.open("native-panel.html");
+  await page.bringToFront();
+  await nav.panel.evaluate(() =>
+    chrome.storage.local.remove("settings.nativeModeEnabled"),
+  );
+  await nav.panel.reload();
+  const question = nav.panel.getByRole("dialog", { name: "Native mode" });
+  await expect(question).toBeVisible({ timeout: 20_000 });
+  return { page, question };
+}
+
+const storedSetting = (nav: NativeHarness) =>
+  nav.panel.evaluate(() =>
+    chrome.storage.local
+      .get("settings.nativeModeEnabled")
+      .then((r) => r["settings.nativeModeEnabled"]),
+  );
+
+test("a fresh profile is asked on its first connect, before anything attaches", async ({
+  nav,
+}) => {
+  const { question } = await firstRunPanel(nav);
+  await expect(question).toContainText("started debugging this browser");
+  // The fixture page has the window's focus, so read the panel's own
+  // active element rather than asking Playwright whether it is focused.
+  await expect
+    .poll(() =>
+      nav.panel.evaluate(() => document.activeElement?.textContent?.trim()),
+    )
+    .toBe("Use native mode");
+  // The DOM tree shows behind the question; nothing native has been read.
+  await expect
+    .poll(() => nav.panel.locator(".sn-node").count(), { timeout: 20_000 })
+    .toBeGreaterThan(0);
+  expect(await nav.nativeReads()).toHaveLength(0);
+  expect(await storedSetting(nav)).toBeUndefined();
+});
+
+test("using native mode from the first-run question reads the native tree", async ({
+  nav,
+}) => {
+  const { question } = await firstRunPanel(nav);
+  await question.getByRole("button", { name: "Use native mode" }).click();
+
+  await expect(
+    nav.panel.getByRole("button", { name: "NATIVE", exact: true }),
+  ).toHaveAttribute("aria-pressed", "true");
+  await expect(
+    nav.panel.getByRole("button", { name: "Refresh native tree" }),
+  ).toBeVisible();
+  await expect(question).toHaveCount(0);
+  // One read: the answer's own. The once-per-session native default is
+  // spent by turning native mode on, so it doesn't read a second time.
+  await expect
+    .poll(async () => (await nav.nativeReads()).length, { timeout: 20_000 })
+    .toBe(1);
+  await nav.panel.waitForTimeout(1_000);
+  expect(await nav.nativeReads()).toHaveLength(1);
+  expect(await storedSetting(nav)).toBe(true);
+});
+
+test("keeping the DOM tree is remembered, so the next panel doesn't ask", async ({
+  nav,
+}) => {
+  const { question } = await firstRunPanel(nav);
+  await question.getByRole("button", { name: "Keep the DOM tree" }).click();
+  await expect(question).toHaveCount(0);
+  await expect(nav.panel.getByText("Keeping the DOM tree")).toBeVisible();
+  await expect.poll(() => storedSetting(nav)).toBe(false);
+
+  await nav.panel.reload();
+  await expect(
+    nav.panel.getByRole("button", { name: "Enable native mode…" }),
+  ).toBeVisible({ timeout: 20_000 });
+  await expect
+    .poll(() => nav.panel.locator(".sn-node").count(), { timeout: 20_000 })
+    .toBeGreaterThan(0);
+  await expect(
+    nav.panel.getByRole("dialog", { name: "Native mode" }),
+  ).toHaveCount(0);
+  expect(await nav.nativeReads()).toHaveLength(0);
+});
 
 test("the store build asks for native mode's permissions and ships no dogfood diagnostics", async ({
   nav,
@@ -63,8 +151,10 @@ test("the store build asks for native mode's permissions and ships no dogfood di
   expect(bundle).toContain("chrome.debugger");
 });
 
-test("a fresh profile offers Enable and no NATIVE toggle", async ({ nav }) => {
-  const { enableEntry } = await freshPanel(nav);
+test("after keeping the DOM tree, the toolbar offers Enable and no NATIVE toggle", async ({
+  nav,
+}) => {
+  const { enableEntry } = await domChosenPanel(nav);
   await expect(enableEntry).toHaveAttribute("aria-haspopup", "dialog");
   await expect(enableEntry).toHaveAttribute("aria-expanded", "false");
   await expect(
@@ -76,15 +166,15 @@ test("a fresh profile offers Enable and no NATIVE toggle", async ({ nav }) => {
   ).toHaveCount(0);
 });
 
-test("accepting the consent step turns native on, moves focus to NATIVE and reads the tree", async ({
+test("Enable native mode… asks again, and saying yes moves focus to NATIVE and reads the tree", async ({
   nav,
 }) => {
-  const { enableEntry } = await freshPanel(nav);
+  const { enableEntry } = await domChosenPanel(nav);
   await enableEntry.click();
   await expect(enableEntry).toHaveAttribute("aria-expanded", "true");
-  const banner = nav.panel.getByRole("dialog", { name: "Enable native mode" });
+  const banner = nav.panel.getByRole("dialog", { name: "Native mode" });
   await expect(banner).toContainText("started debugging this browser");
-  await banner.getByRole("button", { name: "Enable" }).click();
+  await banner.getByRole("button", { name: "Use native mode" }).click();
 
   const nativeToggle = nav.panel.getByRole("button", {
     name: "NATIVE",
@@ -111,11 +201,11 @@ test("accepting the consent step turns native on, moves focus to NATIVE and read
 test("Disable returns to DOM, hides the toggle and moves focus to Enable", async ({
   nav,
 }) => {
-  const { enableEntry } = await freshPanel(nav);
+  const { enableEntry } = await domChosenPanel(nav);
   await enableEntry.click();
   await nav.panel
-    .getByRole("dialog", { name: "Enable native mode" })
-    .getByRole("button", { name: "Enable" })
+    .getByRole("dialog", { name: "Native mode" })
+    .getByRole("button", { name: "Use native mode" })
     .click();
   await expect
     .poll(() => nav.panel.locator(".sn-node").count(), { timeout: 20_000 })
@@ -141,10 +231,10 @@ test("Disable returns to DOM, hides the toggle and moves focus to Enable", async
   ).toBe(false);
 });
 
-test("a failed Enable attempt surfaces its error inline and never flips the setting", async ({
+test("a failed turn-on surfaces its error inline and never flips the setting", async ({
   nav,
 }) => {
-  const { enableEntry } = await freshPanel(nav);
+  const { enableEntry } = await domChosenPanel(nav);
 
   // NATIVE_FLAG_SET never reaching the service worker: a torn-down extension
   // context, or an MV3 worker that hasn't woken. Only that message is
@@ -164,8 +254,8 @@ test("a failed Enable attempt surfaces its error inline and never flips the sett
   });
 
   await enableEntry.click();
-  const banner = nav.panel.getByRole("dialog", { name: "Enable native mode" });
-  await banner.getByRole("button", { name: "Enable" }).click();
+  const banner = nav.panel.getByRole("dialog", { name: "Native mode" });
+  await banner.getByRole("button", { name: "Use native mode" }).click();
 
   // The banner stays open with the error; the view never switches to a
   // native tree for a setting that was never persisted.
@@ -178,10 +268,10 @@ test("a failed Enable attempt surfaces its error inline and never flips the sett
   ).toHaveCount(0);
 });
 
-test("Cancel waits while an Enable is on its way, so it can't close over one", async ({
+test("Keep the DOM tree waits while a yes is on its way, so it can't close over one", async ({
   nav,
 }) => {
-  const { enableEntry } = await freshPanel(nav);
+  const { enableEntry } = await domChosenPanel(nav);
 
   // Hold NATIVE_FLAG_SET's answer until the test lets it through: the
   // service worker may already have written the setting by then.
@@ -202,17 +292,18 @@ test("Cancel waits while an Enable is on its way, so it can't close over one", a
   });
 
   await enableEntry.click();
-  const banner = nav.panel.getByRole("dialog", { name: "Enable native mode" });
-  await banner.getByRole("button", { name: "Enable" }).click();
-  const enabling = banner.getByRole("button", { name: "Enabling…" });
+  const banner = nav.panel.getByRole("dialog", { name: "Native mode" });
+  await banner.getByRole("button", { name: "Use native mode" }).click();
+  const enabling = banner.getByRole("button", { name: "Turning on…" });
   await expect(enabling).toHaveAttribute("aria-disabled", "true");
 
-  // Neither Cancel nor Escape closes the banner over the pending request.
-  // Dispatched, not `click()`: Playwright waits for an aria-disabled button
-  // to enable, but a user's click still reaches its handler.
-  const cancel = banner.getByRole("button", { name: "Cancel" });
-  await expect(cancel).toHaveAttribute("aria-disabled", "true");
-  await cancel.dispatchEvent("click");
+  // Neither "Keep the DOM tree" nor Escape closes the banner over the
+  // pending request. Dispatched, not `click()`: Playwright waits for an
+  // aria-disabled button to enable, but a user's click still reaches its
+  // handler.
+  const keep = banner.getByRole("button", { name: "Keep the DOM tree" });
+  await expect(keep).toHaveAttribute("aria-disabled", "true");
+  await keep.dispatchEvent("click");
   await nav.panel.keyboard.press("Escape");
   await expect(banner).toBeVisible();
 
