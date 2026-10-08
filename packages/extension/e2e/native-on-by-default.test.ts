@@ -183,6 +183,29 @@ test("Settings turns native mode off and back on, keeping focus on the switch", 
   expect((await focused(nav)).type).toBe("checkbox");
 });
 
+test("Settings stays on screen in a narrow side panel", async ({ nav }) => {
+  await freshPanel(nav);
+  await expect(nativeToggle(nav)).toHaveAttribute("aria-pressed", "true", {
+    timeout: 20_000,
+  });
+  // The DOM tree with the DOM / NATIVE toggle: the widest toolbar there is,
+  // and its controls don't wrap.
+  await nav.panel
+    .getByRole("group", { name: "Tree producer" })
+    .getByRole("button", { name: "DOM", exact: true })
+    .click();
+  const size = nav.panel.viewportSize();
+  await nav.panel.setViewportSize({ width: 320, height: size?.height ?? 720 });
+  try {
+    await expect(
+      nav.panel.getByRole("button", { name: "Settings ▾" }),
+    ).toBeInViewport({ ratio: 1 });
+    await expect(await settingsSwitch(nav)).toBeInViewport({ ratio: 1 });
+  } finally {
+    if (size) await nav.panel.setViewportSize(size);
+  }
+});
+
 test("a change that doesn't reach the service worker says so and leaves the setting", async ({
   nav,
 }) => {

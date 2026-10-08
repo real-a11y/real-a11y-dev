@@ -296,6 +296,13 @@ export function registerNativeMode(): void {
             sendResponse({ enabled: await flagEnabled() });
             return;
           case "NATIVE_FLAG_SET": {
+            // Only `false` turns native mode off, so storing anything but a
+            // boolean would leave it reading as on while this went on to
+            // detach as if turning it off.
+            if (typeof message.enabled !== "boolean") {
+              sendResponse({ ok: false, error: "bad-request" });
+              return;
+            }
             await migrated;
             await chrome.storage.local.set({ [FLAG_KEY]: message.enabled });
             // Cancel any in-flight picker session BEFORE detachAll: a pick

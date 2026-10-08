@@ -1,6 +1,5 @@
 /**
- * Focus management shared by the panel's dialogs (the input panel and the
- * native-mode consent banner).
+ * Focus management for the panel's dialogs (the input panel).
  */
 
 import type { RefObject } from "preact";

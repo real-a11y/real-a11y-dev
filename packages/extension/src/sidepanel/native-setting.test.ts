@@ -61,7 +61,10 @@ describe("native mode on by default", () => {
       storage?: Record<string, unknown>;
       /** The mount-time NATIVE_FLAG_GET reply, without storage. */
       enabled?: boolean;
-      /** What a native read answers. */
+      /** Plays the service worker for NATIVE_FLAG_GET instead (a promise, to
+       *  hold the reply back, or a rejection). */
+      get?: () => unknown;
+      /** What a native read answers, or a function of the tab it reads. */
       read?: unknown;
       /** Plays the service worker for NATIVE_FLAG_SET: what it writes, and
        *  its reply (a promise, to hold the reply back). */
@@ -73,6 +76,7 @@ describe("native mode on by default", () => {
       respond: (message) => {
         const m = message as unknown as { type: string; enabled?: boolean };
         if (m.type === "NATIVE_FLAG_GET") {
+          if (options.get) return options.get();
           if (!options.storage) return { enabled: options.enabled ?? true };
           return { enabled: chromeMock.stored[SETTING] !== false };
         }
@@ -83,7 +87,14 @@ describe("native mode on by default", () => {
           }
           return { enabled: m.enabled, detached: 0 };
         }
-        if (m.type === "NATIVE_READ") return options.read ?? NATIVE_REFUSED;
+        if (m.type === "NATIVE_READ") {
+          const read = options.read ?? NATIVE_REFUSED;
+          return typeof read === "function"
+            ? (read as (tabId: number) => unknown)(
+                (message as unknown as { tabId: number }).tabId,
+              )
+            : read;
+        }
         return undefined;
       },
     });
@@ -249,6 +260,60 @@ describe("native mode on by default", () => {
 
       expect(note()).toBeNull();
     });
+
+    it("waits for a read that succeeds, and is said then", async () => {
+      // DevTools holds the first tab, so its read fails and no bar shows;
+      // the next tab's read succeeds.
+      mount({
+        storage: {},
+        read: (tabId: number) => (tabId === 7 ? NATIVE_REFUSED : NATIVE_TREE),
+      });
+      await flush();
+      await showTab(7);
+      expect(note()).toBeNull();
+      expect(announced()).not.toContain("started debugging this browser");
+
+      await showTab(8);
+
+      expect(note()).not.toBeNull();
+      expect(announced()).toContain("started debugging this browser");
+    });
+
+    it("moves focus to the tree when it closes from another window", async () => {
+      mount({ storage: {}, read: NATIVE_TREE });
+      await flush();
+      await showTab(7);
+      act(() => buttonNamed("Got it")!.focus());
+
+      await writtenElsewhere({ [NOTICE_SEEN]: true });
+
+      expect(note()).toBeNull();
+      expect(document.activeElement?.getAttribute("role")).toBe("tree");
+    });
+
+    it("stays, unacknowledged, when Turn off doesn't take", async () => {
+      mount({ storage: {}, read: NATIVE_TREE, set: () => ({ ok: false }) });
+      await flush();
+      await showTab(7);
+
+      act(() => buttonNamed("Turn off")!.click());
+      await flush();
+
+      expect(announced()).toBe("Couldn't change that setting — try again.");
+      expect(note()).not.toBeNull();
+      expect(chromeMock.stored[NOTICE_SEEN]).toBeUndefined();
+    });
+
+    it("isn't brought back by a read from before it was acknowledged", async () => {
+      mount({ storage: {}, read: NATIVE_TREE });
+      // Acknowledged in another window while this panel's own read of the
+      // flag, taken before, is still on its way.
+      act(() => chromeMock.writeStorage({ [NOTICE_SEEN]: true }));
+      await flush();
+      await showTab(7);
+
+      expect(note()).toBeNull();
+    });
   });
 
   describe("Settings", () => {
@@ -276,7 +341,7 @@ describe("native mode on by default", () => {
       );
     });
 
-    it("moves the checkbox only once the change is stored", async () => {
+    it("shows the change while it is stored, taking no other", async () => {
       let release = () => {};
       mount({
         storage: { [NOTICE_SEEN]: true },
@@ -294,12 +359,61 @@ describe("native mode on by default", () => {
 
       act(() => checkbox.click());
       await flush();
-      expect(settingsCheckbox()!.checked).toBe(true);
+      expect(settingsCheckbox()!.checked).toBe(false);
       expect(settingsCheckbox()!.getAttribute("aria-disabled")).toBe("true");
+      act(() => settingsCheckbox()!.click());
+      await flush();
+      expect(settingsCheckbox()!.checked).toBe(false);
+      expect(sentOfType("NATIVE_FLAG_SET")).toHaveLength(1);
 
       release();
       await flush();
       expect(settingsCheckbox()!.checked).toBe(false);
+      expect(settingsCheckbox()!.getAttribute("aria-disabled")).toBe("false");
+    });
+
+    it("sits in the header, not the toolbar, and opens as a disclosure", async () => {
+      mount({ storage: { [NOTICE_SEEN]: true } });
+      await flush();
+      await showTab(7);
+      const button = buttonNamed("Settings ▾")!;
+
+      // The toolbar's controls don't wrap, and run past a narrow panel's
+      // edge; the header's don't.
+      expect(button.closest(".sn-page-header")).not.toBeNull();
+      expect(button.closest('[role="toolbar"]')).toBeNull();
+      // What it opens is a switch, not a menu.
+      expect(button.hasAttribute("aria-haspopup")).toBe(false);
+      await openSettings();
+      const controls = button.getAttribute("aria-controls");
+      expect(controls).not.toBeNull();
+      expect(
+        document.getElementById(controls!)?.getAttribute("aria-label"),
+      ).toBe("Settings");
+    });
+
+    it("shows the stored setting when the service worker doesn't answer", async () => {
+      mount({
+        storage: { [NOTICE_SEEN]: true },
+        get: () => Promise.reject(new Error("Receiving end does not exist.")),
+      });
+      await flush();
+      await showTab(7);
+
+      // Never touched, so on, as every other window has it.
+      expect((await openSettings()).checked).toBe(true);
+    });
+
+    it("shows an off it can only read from storage", async () => {
+      mount({
+        storage: { [SETTING]: false, [NOTICE_SEEN]: true },
+        get: () => ({ ok: false, error: "native mode error" }),
+      });
+      await flush();
+      await showTab(7);
+
+      expect((await openSettings()).checked).toBe(false);
+      expect(sentOfType("NATIVE_READ")).toEqual([]);
     });
 
     it("says so when a change doesn't take, and leaves the setting", async () => {
@@ -422,6 +536,61 @@ describe("native mode on by default", () => {
       await showTab(7);
 
       expect(sentOfType("NATIVE_READ").length).toBeGreaterThan(0);
+    });
+
+    it("reads a removed or non-boolean setting as on", async () => {
+      mount({ storage: { [SETTING]: false, [NOTICE_SEEN]: true } });
+      await flush();
+      await showTab(7);
+      expect(buttonNamed("NATIVE")).toBeNull();
+
+      await writtenElsewhere({ [SETTING]: undefined });
+      expect(buttonNamed("NATIVE")).not.toBeNull();
+
+      await writtenElsewhere({ [SETTING]: false });
+      await writtenElsewhere({ [SETTING]: "false" });
+      expect(buttonNamed("NATIVE")).not.toBeNull();
+    });
+
+    it("drops its own first read when a newer change has landed", async () => {
+      let answer = () => {};
+      mount({
+        storage: { [NOTICE_SEEN]: true },
+        // The mount-time read is slow, and answers from before the change.
+        get: () =>
+          new Promise((resolve) => {
+            answer = () => resolve({ enabled: true });
+          }),
+      });
+      await flush();
+      await showTab(7);
+
+      await writtenElsewhere({ [SETTING]: false });
+      answer();
+      await flush();
+
+      expect(buttonNamed("NATIVE")).toBeNull();
+      expect((await openSettings()).checked).toBe(false);
+    });
+
+    it("moves focus to the list shown in the tree's place", async () => {
+      mount({ storage: { [NOTICE_SEEN]: true }, read: NATIVE_TREE });
+      await flush();
+      await showTab(7);
+      // The DOM side is left on its Tab view, then the native tree shown.
+      act(() => buttonNamed("DOM")!.click());
+      await flush();
+      act(() => buttonNamed("TAB")!.click());
+      await flush();
+      act(() => buttonNamed("NATIVE")!.click());
+      await flush();
+      const nativeTree = container.querySelector<HTMLElement>('[role="tree"]');
+      act(() => nativeTree!.focus());
+
+      await writtenElsewhere({ [SETTING]: false });
+
+      expect(container.querySelector('[role="tree"]')).toBeNull();
+      expect(document.activeElement?.getAttribute("role")).toBe("listbox");
     });
 
     it("leaves an armed DOM pick alone when native mode is turned off", async () => {

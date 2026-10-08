@@ -154,6 +154,23 @@ describe("registerNativeMode: on by default", () => {
     await send({ type: "NATIVE_READ", tabId: 7 }, PANEL);
     expect(attach).not.toHaveBeenCalled();
   });
+
+  it("reads a stored value that isn't a boolean as on", async () => {
+    install({ "settings.nativeModeEnabled": "false" });
+    await register();
+    expect(await get()).toEqual({ enabled: true });
+  });
+
+  it("refuses a change that isn't a boolean, and changes nothing", async () => {
+    await register();
+    await send({ type: "NATIVE_FLAG_SET", enabled: false }, PANEL);
+
+    const { response } = await send({ type: "NATIVE_FLAG_SET" }, PANEL);
+
+    expect(response).toEqual({ ok: false, error: "bad-request" });
+    expect(local.data["settings.nativeModeEnabled"]).toBe(false);
+    expect(await get()).toEqual({ enabled: false });
+  });
 });
 
 describe("registerNativeMode: the old dogfood flag", () => {
