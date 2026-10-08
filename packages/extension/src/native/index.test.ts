@@ -40,15 +40,17 @@ function storageArea(initial: Record<string, unknown> = {}) {
 
 let listeners: Listener[];
 let local: ReturnType<typeof storageArea>;
+let attach: ReturnType<typeof vi.fn>;
 
 function install(initial: Record<string, unknown> = {}) {
   listeners = [];
   local = storageArea(initial);
+  attach = vi.fn(async () => {});
   vi.stubGlobal("chrome", {
     storage: { local, session: storageArea() },
     debugger: {
       onDetach: { addListener: () => {} },
-      attach: async () => {},
+      attach,
       detach: async () => {},
       sendCommand: async () => ({}),
     },
@@ -121,84 +123,36 @@ describe("registerNativeMode: who may send native messages", () => {
   });
 });
 
-describe("registerNativeMode: whether the user has chosen", () => {
-  // The panel asks on its first connect only while the setting has never
-  // been set either way, so the reply has to tell "never asked" apart from
-  // "chose the DOM tree".
+describe("registerNativeMode: on by default", () => {
+  // Native mode is on unless the user turned it off in the panel's
+  // Settings: a profile that never touched the setting reads natively.
   const get = async () =>
     (await send({ type: "NATIVE_FLAG_GET" }, PANEL)).response;
 
-  it("reads as off and unchosen before any answer", async () => {
+  it("reads as on while the setting was never touched", async () => {
     await register();
-    expect(await get()).toEqual({ enabled: false, chosen: false });
+    expect(await get()).toEqual({ enabled: true });
   });
 
-  it("remembers a choice of the DOM tree as chosen", async () => {
+  it("reads as off once turned off, and on again once turned back on", async () => {
     await register();
     await send({ type: "NATIVE_FLAG_SET", enabled: false }, PANEL);
-    expect(await get()).toEqual({ enabled: false, chosen: true });
-  });
-
-  it("reports native mode turned on", async () => {
-    await register();
+    expect(await get()).toEqual({ enabled: false });
     await send({ type: "NATIVE_FLAG_SET", enabled: true }, PANEL);
-    expect(await get()).toEqual({ enabled: true, chosen: true });
+    expect(await get()).toEqual({ enabled: true });
   });
 
-  it("counts a dogfooder's carried-over flag as their choice", async () => {
-    install({ "devFlags.nativeMode": true });
+  it("attaches for a read while the setting was never touched", async () => {
     await register();
-    expect(await get()).toEqual({ enabled: true, chosen: true });
+    await send({ type: "NATIVE_READ", tabId: 7 }, PANEL);
+    expect(attach).toHaveBeenCalled();
   });
 
-  it("leaves a dropped old 'off' unchosen, so the panel still asks", async () => {
-    install({ "devFlags.nativeMode": false });
+  it("never attaches once the user turned it off", async () => {
     await register();
-    expect(await get()).toEqual({ enabled: false, chosen: false });
-  });
-});
-
-describe("registerNativeMode: keeping the DOM tree", () => {
-  // The other answer to the panel's question. Each window has its own side
-  // panel, so the question can still be open in one window after the user
-  // said yes in another: keeping the DOM tree there must not turn native
-  // mode off, the way a Disable does.
-  const decline = async () =>
-    (await send({ type: "NATIVE_FLAG_DECLINE" }, PANEL)).response;
-
-  it("is remembered when nothing was chosen yet", async () => {
-    await register();
-    expect(await decline()).toEqual({ enabled: false, chosen: true });
-    expect(local.data["settings.nativeModeEnabled"]).toBe(false);
-  });
-
-  it("never turns off a yes from another window", async () => {
-    await register();
-    await send({ type: "NATIVE_FLAG_SET", enabled: true }, PANEL);
-    expect(await decline()).toEqual({ enabled: true, chosen: true });
-    expect(local.data["settings.nativeModeEnabled"]).toBe(true);
-  });
-
-  it("never loses a yes that lands while it is being stored", async () => {
-    await register();
-    // Both sent before either is answered: the "no" is stored first, and
-    // the "yes" after it stands.
-    const answers = Promise.all([
-      decline(),
-      send({ type: "NATIVE_FLAG_SET", enabled: true }, PANEL),
-    ]);
-    await answers;
-    expect(local.data["settings.nativeModeEnabled"]).toBe(true);
-  });
-
-  it("is refused to a content script", async () => {
-    await register();
-    const { answered } = await send(
-      { type: "NATIVE_FLAG_DECLINE" },
-      CONTENT_SCRIPT,
-    );
-    expect(answered).toBe(false);
-    expect(local.data["settings.nativeModeEnabled"]).toBeUndefined();
+    await send({ type: "NATIVE_FLAG_SET", enabled: false }, PANEL);
+    await send({ type: "NATIVE_READ", tabId: 7 }, PANEL);
+    expect(attach).not.toHaveBeenCalled();
   });
 });
 
@@ -210,10 +164,10 @@ describe("registerNativeMode: the old dogfood flag", () => {
     expect("devFlags.nativeMode" in local.data).toBe(false);
   });
 
-  it("drops an old 'off' without turning anything on", async () => {
+  it("carries an old 'off' over, so native mode stays off", async () => {
     install({ "devFlags.nativeMode": false });
     await register();
-    expect(local.data["settings.nativeModeEnabled"]).toBeUndefined();
+    expect(local.data["settings.nativeModeEnabled"]).toBe(false);
     expect("devFlags.nativeMode" in local.data).toBe(false);
   });
 

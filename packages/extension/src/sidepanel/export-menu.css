@@ -1,6 +1,7 @@
-/* Export ("Copy ▾") dropdown — extension-only UI, layered over the shared
- * panel styles from @real-a11y-dev/semantic-navigator-ui. Reuses the panel's
- * theme variables so it follows light/dark automatically. */
+/* Export ("Copy ▾") and Settings ("Settings ▾") dropdowns — extension-only
+ * UI, layered over the shared panel styles from
+ * @real-a11y-dev/semantic-navigator-ui. Reuses the panel's theme variables so
+ * it follows light/dark automatically. */
 
 .sn-export {
   position: relative;
@@ -44,4 +45,32 @@
 /* "Everything" — the common case, given a little weight. */
 .sn-export-item:first-child {
   font-weight: 600;
+}
+
+/* Settings: one switch and the line that explains it. Wider than Copy's
+   menu, and its text wraps. */
+.sn-settings-menu {
+  width: 240px;
+  gap: 4px;
+  padding: 8px;
+}
+
+.sn-settings-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  color: var(--sn-text);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.sn-settings-item input {
+  margin: 1px 0 0;
+}
+
+.sn-settings-hint {
+  margin: 0 0 0 19px;
+  color: var(--sn-text-muted);
+  font-size: 11px;
+  line-height: 1.4;
 }
