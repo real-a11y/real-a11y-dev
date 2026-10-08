@@ -33,15 +33,17 @@ main
       link "Details"
     listitem "The website may use privacy-respecting aggregate analytics (no cookies, no personal identifiers). If enabled, it's disclosed here."
   heading "Chrome extension — Semantic Navigator" (level 2)
-  paragraph "By default, the extension reads the DOM of the page you're currently viewing in order to build and display a semantic / accessibility tree in a side panel ("DOM mode"). It acts locally in your browser."
-  paragraph "It also offers an opt-in , which stays off until you turn it on: reading Chromium's own accessibility tree over the API (the same protocol DevTools uses), for fidelity DOM mode can't reach (UA-shadow content like media controls). The first time the side panel connects to a page, it asks whether to turn native mode on, in a step that names what it does before anything activates, and nothing attaches until you say yes; while attached, Chrome itself shows its own bar across every window, reading “Semantic Navigator” started debugging this browser, independent of anything this extension displays. Turning the setting back off detaches as soon as any read or action already under way finishes."
+  paragraph "The extension builds a semantic / accessibility tree of the page you're currently viewing and shows it in a side panel. It acts locally in your browser."
+  paragraph "By default it reads that tree from Chromium itself (): Chromium's own accessibility tree, read over the API (the same protocol DevTools uses), which includes what the page's DOM alone doesn't show, such as a media player's built-in controls. While the extension reads or acts on a page this way, Chrome itself shows its own bar across every window, reading “Semantic Navigator” started debugging this browser, independent of anything this extension displays. The first time this happens, the side panel shows a note explaining that bar, with a button to turn native mode off."
     strong "native mode"
     code "chrome.debugger"
+  paragraph "You can turn native mode off at any time in the side panel's , and that holds in every window. The extension then reads only the page's DOM ("DOM mode"), and Chrome's bar doesn't appear. Turning it off detaches as soon as any read or action already under way finishes. Where native mode can't read a page (when DevTools is already open on it, for example), the side panel shows the DOM tree instead and says why."
+    strong "Settings"
   paragraph
     strong "What it does on the page:"
   list
     listitem "Reads the page's DOM (including iframes you can access) to extract roles, accessible names, states, and interaction info."
-    listitem "If you've turned on native mode, reads Chromium's accessibility tree for the active tab over instead, while it's attached."
+    listitem "Unless you've turned native mode off, reads Chromium's accessibility tree for the active tab over , while it's attached."
       code "chrome.debugger"
     listitem "On your explicit action (clicking a tree node's action button, pressing , etc.), dispatches the corresponding event on the element — e.g. click a button, focus a field, submit a form."
       code "Enter"
@@ -51,7 +53,7 @@ main
   list
     listitem "It does not send page content, URLs, DOM snapshots, accessibility-tree data, or any other data to any external server — everything above stays local to your browser, in both DOM and native mode."
     listitem "It does not read from or write to the clipboard."
-    listitem "It does not use cookies, local storage, or IndexedDB for any personal data. holds one value: whether native mode is on. While native mode is attached, holds content-free bookkeeping about that attachment (which tab, since when), which Chrome clears when the browser closes. No log of how you use native mode is kept."
+    listitem "It does not use cookies, local storage, or IndexedDB for any personal data. holds only the side panel's settings: whether native mode is on, whether the native tree follows page changes on its own, and whether you've dismissed the note about Chrome's debugging bar. While native mode is attached, holds content-free bookkeeping about that attachment (which tab, since when), which Chrome clears when the browser closes. No log of how you use native mode is kept."
       code "chrome.storage.local"
       code "chrome.storage.session"
     listitem "It does not track you across sites or sessions."
@@ -79,7 +81,7 @@ main
       row
         cell "debugger"
           code "debugger"
-        cell "Powers native mode: reads and acts on Chromium's own accessibility tree over CDP. Requested by every install because chrome.debugger cannot be an optional Chrome permission, but native mode itself is off until you explicitly enable it in the side panel."
+        cell "Powers native mode: reads and acts on Chromium's own accessibility tree over CDP. On by default, and attached only while the side panel reads or acts on the page it shows. Requested by every install because chrome.debugger cannot be an optional Chrome permission; turn native mode off in the side panel's Settings and it is never used."
           code "chrome.debugger"
       row
         cell "tabs"
@@ -90,7 +92,7 @@ main
       row
         cell "storage"
           code "storage"
-        cell "Persists the native-mode on/off setting locally on your device, and, while native mode is attached, content-free bookkeeping about that attachment for the browser session only"
+        cell "Persists the side panel's settings locally on your device, and, while native mode is attached, content-free bookkeeping about that attachment for the browser session only"
   heading "npm packages" (level 2)
   paragraph "The , , , and packages are pure libraries — as is the extraction engine bundled inside each of them. They:"
     code "@real-a11y-dev/inspector"

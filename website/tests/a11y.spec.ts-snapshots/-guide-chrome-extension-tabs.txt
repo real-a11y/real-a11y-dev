@@ -8,6 +8,7 @@ link "Reading the tree, scoping, filtering, focus tracking"
 link "Install"
 link "Add to Chrome"
 link "View on GitHub"
+link "native mode"
 button "Copy Code"
 generic
 link "the test"
