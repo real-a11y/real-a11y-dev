@@ -66,6 +66,7 @@ import {
   FilteredListView,
   type FilteredListItem,
 } from "./FilteredList.js";
+import { NATIVE_FOLLOW_DEBOUNCE_MS } from "./native-follow.js";
 
 const ROLE_FILTER_KEYS = Object.keys(ROLE_FILTER_LABELS) as Array<
   Exclude<RoleFilter, null>
@@ -104,6 +105,13 @@ export interface NativeTreeViewProps {
   /** The pick resolved to nothing in this tree: the page changed since the
    *  last read, or the element sits where the native read doesn't reach. */
   onRevealMiss?: () => void;
+  /**
+   * The user settled on this node as the selection (a click, arrow keys, a
+   * pick, the role-filter list): App reveals it on the page, with the same
+   * outline the DOM tree's selection draws. Optional, so a host that doesn't
+   * care about the page can leave it out.
+   */
+  onSelectionReveal?: (nodeId: string) => void;
 }
 
 /** A node is worth a click/Enter action, a select action, or both never — the
@@ -149,9 +157,14 @@ export function NativeTreeView({
   onActivate,
   reveal,
   onRevealMiss,
+  onSelectionReveal,
 }: NativeTreeViewProps) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  // Bumped by an explicit gesture that re-selects a row — a click, or a pick
+  // reveal — so the page-focus follow below re-fires even when `selectedId`
+  // is already that row (focus may have moved elsewhere on the page since).
+  const [followNonce, setFollowNonce] = useState(0);
   const [query, setQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState<RoleFilter>(null);
   const treeRef = useRef<HTMLDivElement>(null);
@@ -213,6 +226,7 @@ export function NativeTreeView({
       return next;
     });
     setSelectedId(nodeId);
+    setFollowNonce((n) => n + 1);
     // Clearing the role filter above swaps `FilteredListView` back for the
     // actual tree — an async Preact re-render, not something the
     // `setRoleFilter(null)` call itself finishes — so `treeRef.current` is
@@ -318,6 +332,44 @@ export function NativeTreeView({
     }
     scrollToIndex(index, "nearest");
   }, [selectedId, visibleIds, scrollToIndex]);
+
+  // Follow the selection onto the page (`onSelectionReveal`). Debounced: a
+  // key-repeat burst walks `selectedId` through several rows, and each
+  // reveal is a full attach → reveal → detach round trip, so only the row the
+  // user settles on is revealed. The callback is read through a ref, not
+  // listed as a dependency: App's callback changes identity when
+  // `nativeBusy` or `curtainOn` flips, and re-running then would reveal the
+  // same row again, stealing focus back from whatever an activation just
+  // opened. One timer is shared with the role-filter list's follow
+  // (`followFromList`), so the later request always replaces the pending one.
+  const onSelectionRevealRef = useRef(onSelectionReveal);
+  onSelectionRevealRef.current = onSelectionReveal;
+  const followTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
+    undefined,
+  );
+  const scheduleFollow = useCallback((id: string) => {
+    clearTimeout(followTimer.current);
+    followTimer.current = setTimeout(() => {
+      followTimer.current = undefined;
+      onSelectionRevealRef.current?.(id);
+    }, NATIVE_FOLLOW_DEBOUNCE_MS);
+  }, []);
+  useEffect(() => {
+    if (!selectedId) return;
+    scheduleFollow(selectedId);
+    return () => clearTimeout(followTimer.current);
+  }, [selectedId, followNonce, scheduleFollow]);
+  // The tree effect's own cleanup doesn't run for a follow the list
+  // scheduled, so an unmount with one pending has to clear it here.
+  useEffect(() => () => clearTimeout(followTimer.current), []);
+
+  // The role-filter list's selection lives in `FilteredListView`, not in
+  // `selectedId`, so it follows onto the page through this instead: every
+  // click, arrow/Home/End/type-ahead move and "Move to" in the list calls
+  // it, the same `onHighlight` hook the DOM producer's list drives its page
+  // highlight with. Absent `onSelectionReveal` it stays undefined, which is
+  // how the list knows to hide "Move to" rather than show a dead button.
+  const followFromList = onSelectionReveal ? scheduleFollow : undefined;
 
   const toggle = useCallback((id: string) => {
     setExpanded((prev) => {
@@ -589,6 +641,7 @@ export function NativeTreeView({
           items={listItems}
           roleFilter={roleFilter}
           query={query}
+          onHighlight={followFromList}
           onActivate={activateFromList}
           onGoToTree={goToTree}
           onFocusSearch={() => searchInputRef.current?.focus()}
@@ -645,6 +698,7 @@ export function NativeTreeView({
                     onClick={(e) => {
                       e.stopPropagation();
                       setSelectedId(id);
+                      setFollowNonce((n) => n + 1);
                       // A mouse click on the row never moves real DOM focus (the
                       // row itself is tabIndex=-1; only the `.sn-tree` container
                       // is focusable, per the roving-focus/aria-activedescendant

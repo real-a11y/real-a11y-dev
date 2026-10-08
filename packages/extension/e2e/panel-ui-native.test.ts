@@ -48,6 +48,8 @@
  *    `onClick` never did.
  */
 
+import { NATIVE_FOLLOW_DEBOUNCE_MS } from "../src/sidepanel/native-follow.ts";
+
 import { expect, test, type NativeHarness } from "./harness";
 
 type PanelPage = import("@playwright/test").Page;
@@ -260,6 +262,264 @@ test("clicking a row gives the tree its own focus-visible outline", async ({
   // paints the outline — real DOM focus has to land on the container for
   // it to ever apply.
   await expect(nav.panel.locator(".sn-tree")).toBeFocused();
+});
+
+/**
+ * The content script's highlight overlay, as a rect — or null when absent or
+ * hidden. The overlay is what the user actually SEES: real focus alone paints
+ * no ring while the side panel, not the page, has window focus.
+ */
+async function overlayRect(page: PanelPage) {
+  return page.evaluate(() => {
+    const el = document.getElementById("__sn-highlight");
+    if (!el || el.style.display === "none") return null;
+    const r = el.getBoundingClientRect();
+    return { top: r.top, left: r.left, width: r.width, height: r.height };
+  });
+}
+
+/** An element's own rect on the page, for comparing against the overlay. */
+async function rectOf(page: PanelPage, selector: string) {
+  return page.locator(selector).evaluate((el) => {
+    const r = el.getBoundingClientRect();
+    return { top: r.top, left: r.left, width: r.width, height: r.height };
+  });
+}
+
+/**
+ * Whether the content script's overlay sits over `selector`'s element. The
+ * overlay is `content-box` with a 2px border, so it measures up to 4px wider
+ * and taller than what it frames; it also animates between targets
+ * (`transition: all 0.15s`), so callers poll this rather than read it once.
+ */
+async function overlayCovers(page: PanelPage, selector: string) {
+  const overlay = await overlayRect(page);
+  if (!overlay) return false;
+  const target = await rectOf(page, selector);
+  // Scrolled into view too, as the DOM tree's own select does.
+  const inView = await page.evaluate(
+    ({ top, height }) => top >= 0 && top + height <= window.innerHeight,
+    target,
+  );
+  if (!inView) return false;
+  const slack = 1;
+  return (
+    Math.abs(overlay.top - target.top) <= slack &&
+    Math.abs(overlay.left - target.left) <= slack &&
+    overlay.width >= target.width - slack &&
+    overlay.width <= target.width + 4 + slack &&
+    overlay.height >= target.height - slack &&
+    overlay.height <= target.height + 4 + slack
+  );
+}
+
+test("selecting a native tree row highlights and focuses the page's own element", async ({
+  nav,
+}) => {
+  // Both halves: the content script's outline lands on the element, scrolled
+  // into view (the part the user sees, since focus alone paints no ring while
+  // the panel has window focus), and real focus follows so keyboard use
+  // resumes there.
+  const page = await showNative(nav, "native-panel.html");
+  await nav.panel.getByRole("button", { name: "Expand all" }).click();
+
+  const row = nav.panel.getByRole("treeitem", { name: "Item 16" });
+  await expect(row).toBeVisible();
+  await row.click({ position: { x: 5, y: 5 } });
+
+  // Debounced (150ms) on the panel side, then a real chrome.debugger
+  // attach→resolve→reveal→detach round trip — poll rather than assert once.
+  await expect
+    .poll(() => overlayCovers(page, "#item-16"), { timeout: 5_000 })
+    .toBe(true);
+
+  await expect
+    .poll(() => page.evaluate(() => document.activeElement?.id), {
+      timeout: 5_000,
+    })
+    .toBe("item-16");
+});
+
+test("selecting a native heading row highlights it even though it can't take focus", async ({
+  nav,
+}) => {
+  const page = await showNative(nav, "native-panel.html");
+  await nav.panel.getByRole("button", { name: "Expand all" }).click();
+
+  const row = nav.panel.getByRole("treeitem", {
+    name: /Native panel fixture/,
+  });
+  await expect(row).toBeVisible();
+  await row.click({ position: { x: 5, y: 5 } });
+
+  await expect
+    .poll(() => overlayCovers(page, "h1"), { timeout: 5_000 })
+    .toBe(true);
+});
+
+test("clicking an item in a role-filter list highlights and focuses it on the page too", async ({
+  nav,
+}) => {
+  // A role-filter list keeps its own selection, so it follows onto the page
+  // through its own hook.
+  const page = await showNative(nav, "native-panel.html");
+
+  await nav.panel
+    .getByRole("button", { name: "Headings", exact: true })
+    .click();
+  await nav.panel.getByRole("option", { name: /Sensitive field/ }).click();
+  await expect
+    .poll(() => overlayCovers(page, "h2"), { timeout: 5_000 })
+    .toBe(true);
+
+  // A focusable item under another filter: the overlay moves AND real focus
+  // lands on it, same as selecting its tree row.
+  await nav.panel.getByRole("button", { name: "Buttons", exact: true }).click();
+  await nav.panel.getByRole("option", { name: "Item 16" }).click();
+  await expect
+    .poll(() => overlayCovers(page, "#item-16"), { timeout: 5_000 })
+    .toBe(true);
+  await expect
+    .poll(() => page.evaluate(() => document.activeElement?.id), {
+      timeout: 5_000,
+    })
+    .toBe("item-16");
+});
+
+/** Every element on `page` that takes focus from now on, by id. */
+async function recordFocus(page: PanelPage): Promise<() => Promise<string[]>> {
+  await page.evaluate(() => {
+    const w = window as typeof window & { __focused?: string[] };
+    w.__focused = [];
+    document.addEventListener(
+      "focusin",
+      (e) => w.__focused!.push((e.target as Element).id),
+      true,
+    );
+  });
+  return () =>
+    page.evaluate(
+      () =>
+        (window as typeof window & { __focused?: string[] }).__focused ?? [],
+    );
+}
+
+test("selecting a native tree row via the keyboard only focuses the row the selection settles on", async ({
+  nav,
+}) => {
+  // A key-repeat burst walks the selection through several rows; only the
+  // row it settles on is revealed, so page focus never trails behind on an
+  // intermediate one.
+  const page = await showNative(nav, "native-panel.html");
+  await nav.panel.getByRole("button", { name: "Expand all" }).click();
+  const focused = await recordFocus(page);
+
+  // "Item 2", not "Item 1", which also matches "Item 10".."Item 16".
+  const start = nav.panel.getByRole("treeitem", { name: "Item 2" });
+  await expect(start).toBeVisible();
+  await start.click({ position: { x: 5, y: 5 } });
+  await nav.panel.locator(".sn-tree").press("ArrowDown");
+  await nav.panel.locator(".sn-tree").press("ArrowDown");
+  await nav.panel.locator(".sn-tree").press("ArrowDown");
+
+  await expect.poll(focused, { timeout: 5_000 }).toContain("item-5");
+  expect(await focused()).toEqual(["item-5"]);
+  expect(
+    (await nav.nativeActs()).filter((a) => a.action === "reveal"),
+  ).toHaveLength(1);
+});
+
+test("selecting a native tree row never reveals it while Screen Curtain is on", async ({
+  nav,
+}) => {
+  // The page is hidden behind the curtain, and moving focus on it would still
+  // scroll it underneath, so nothing is sent while the curtain is up.
+  const page = await showNative(nav, "native-panel.html");
+  await nav.panel.getByRole("button", { name: "Expand all" }).click();
+  const curtain = nav.panel.getByRole("button", {
+    name: "Curtain",
+    exact: true,
+  });
+  await curtain.click();
+
+  await nav.panel
+    .getByRole("treeitem", { name: "Item 16" })
+    .click({ position: { x: 5, y: 5 } });
+  // Then lift the curtain and select another row: its reveal is the first
+  // one sent, so the curtained selection never sent one.
+  await nav.panel.getByRole("button", { name: "Curtain ON" }).click();
+  await nav.panel
+    .getByRole("treeitem", { name: "Item 15" })
+    .click({ position: { x: 5, y: 5 } });
+  await expect
+    .poll(async () =>
+      (await nav.nativeActs())
+        .filter((a) => a.action === "reveal")
+        .map((a) => a.nodeId),
+    )
+    .toHaveLength(1);
+  await expect
+    .poll(() => page.evaluate(() => document.activeElement?.id))
+    .toBe("item-15");
+});
+
+test("a reveal the user has already moved past never attaches", async ({
+  nav,
+}) => {
+  // An armed pick holds the tab's queue, so these reveals wait behind it.
+  // When it ends, only the newest is still wanted; the others are dropped
+  // before they attach.
+  const page = await showNative(nav, "native-panel.html");
+  await nav.panel.getByRole("button", { name: "Expand all" }).click();
+  await armPick(nav);
+  for (const name of ["Item 14", "Item 15", "Item 16"]) {
+    await nav.panel
+      .getByRole("treeitem", { name })
+      .click({ position: { x: 5, y: 5 } });
+    await nav.panel.waitForTimeout(NATIVE_FOLLOW_DEBOUNCE_MS * 2);
+  }
+  await nav.panel.keyboard.press("Escape");
+
+  await expect
+    .poll(async () =>
+      (await nav.nativeActs())
+        .filter((a) => a.action === "reveal" && a.answer !== undefined)
+        .map((a) => (a.answer as { error?: string }).error ?? "revealed"),
+    )
+    .toEqual(["superseded", "superseded", "revealed"]);
+  await expect
+    .poll(() => page.evaluate(() => document.activeElement?.id))
+    .toBe("item-16");
+});
+
+test("a reveal event the page fires itself draws nothing", async ({ nav }) => {
+  const page = await showNative(nav, "native-panel.html");
+  await page.evaluate(() =>
+    document.getElementById("item-16")!.dispatchEvent(
+      new CustomEvent("real-a11y:native-reveal", {
+        bubbles: true,
+        composed: true,
+        detail: "forged",
+      }),
+    ),
+  );
+  expect(await overlayRect(page)).toBeNull();
+});
+
+test("a same-page URL change doesn't stop the selection follow", async ({
+  nav,
+}) => {
+  // The node ids are still good after pushState; the reveal no longer checks
+  // the URL the tree was read at.
+  const page = await showNative(nav, "native-panel.html");
+  await nav.panel.getByRole("button", { name: "Expand all" }).click();
+  await page.evaluate(() => history.pushState({}, "", "#section"));
+  await nav.panel
+    .getByRole("treeitem", { name: "Item 16" })
+    .click({ position: { x: 5, y: 5 } });
+  await expect
+    .poll(() => overlayCovers(page, "#item-16"), { timeout: 5_000 })
+    .toBe(true);
 });
 
 // ---- Native as the default view ----

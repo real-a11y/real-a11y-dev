@@ -213,6 +213,8 @@ Once native mode is on, each time you open the side panel it shows the native tr
 
 **Pick element** (the toolbar `⦿` button, or `Ctrl`/`Cmd`+`Shift`+`C`) works under native mode too, once a native tree is loaded. It goes through a different mechanism than the DOM producer's own picker — there's no content script in native mode to install a page-side click handler, so this arms Chromium's own inspect-element mode (the same one DevTools' "select an element" tool uses) for the length of the pick, and turns it off again the moment you click something or press `Escape`. The button shows as busy until the page is ready to take the click. A pick ends by itself after a minute with nothing clicked, or when you close the side panel. The rest of the experience matches: a click selects and reveals the corresponding row in the tree, and if the element isn't in the tree you have (the page changed since it was read), the panel says so and asks you to refresh.
 
+Selecting a row also matches the DOM producer now. Click a row, arrow-navigate to it, or pick it, in the tree or in a role filter's list, and the page's matching element is outlined and scrolled into view, with the same overlay DOM mode draws. Real focus moves there too, so the keyboard carries on from that element when you go back to the page. This happens over `chrome.debugger` a moment after the selection settles, not on every row a fast arrow-key run passes through. One thing DOM mode does that native doesn't yet: an outline while you only hover a row without selecting it.
+
 ### BETA pill in the panel header
 
 Sets expectations during the pre-1.0 phase. Linked to the GitHub issues page. Goes away at v1.0.

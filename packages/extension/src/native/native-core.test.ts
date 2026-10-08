@@ -13,7 +13,9 @@ import {
   IN_PAGE_ACTION_SOURCE,
   IN_PAGE_READ_VALUE_SOURCE,
   pageClick,
+  pageFocus,
   pageReadValue,
+  pageReveal,
   pageSelectOption,
   pageStep,
   pageType,
@@ -1069,6 +1071,67 @@ describe("in-page actions — click", () => {
   });
 });
 
+describe("in-page actions — reveal", () => {
+  beforeEach(() => {
+    document.body.innerHTML = "";
+  });
+
+  /** Reveal events the content script would catch: on the way down. */
+  function captured(): CustomEvent[] {
+    const events: CustomEvent[] = [];
+    document.addEventListener(
+      "real-a11y:native-reveal",
+      (e) => events.push(e as CustomEvent),
+      true,
+    );
+    return events;
+  }
+
+  it("fires the overlay event at the element with the arm's nonce, then focuses without scrolling", () => {
+    // Real focus alone shows nothing while the side panel, not the page, has
+    // window focus; the content script's overlay is the visible indicator.
+    const el = document.createElement("button");
+    document.body.appendChild(el);
+    const events = captured();
+    const focusSpy = vi.spyOn(HTMLElement.prototype, "focus");
+
+    expect(pageReveal.call(el, "n-1")).toEqual({ ok: true });
+    expect(events).toHaveLength(1);
+    expect(events[0]!.target).toBe(el);
+    expect(events[0]!.detail).toBe("n-1");
+    expect(focusSpy).toHaveBeenCalledExactlyOnceWith({ preventScroll: true });
+    focusSpy.mockRestore();
+  });
+
+  it("doesn't bubble, so page listeners below the document never see it", () => {
+    document.body.innerHTML = "<main><button>Go</button></main>";
+    const seen: Event[] = [];
+    document
+      .querySelector("main")!
+      .addEventListener("real-a11y:native-reveal", (e) => seen.push(e));
+    pageReveal.call(document.querySelector("button")!, "n-2");
+    expect(seen).toHaveLength(0);
+  });
+
+  it("still asks for the overlay on a heading that can't take focus", () => {
+    document.body.innerHTML = "<h2>Shipping</h2>";
+    const events = captured();
+    expect(pageReveal.call(document.querySelector("h2")!, "n-3")).toEqual({
+      ok: true,
+    });
+    expect(events).toHaveLength(1);
+  });
+
+  it("works on a form whose controls shadow dispatchEvent and focus", () => {
+    document.body.innerHTML = `<form tabindex="-1"><input name="dispatchEvent"><input name="focus"></form>`;
+    const form = document.querySelector("form")!;
+    const events = captured();
+    expect(pageReveal.call(form, "n-4")).toEqual({ ok: true });
+    expect(events).toHaveLength(1);
+    expect(document.activeElement).toBe(form);
+  });
+});
+
 describe("in-page actions — type", () => {
   beforeEach(() => {
     document.body.innerHTML = "";
@@ -1853,6 +1916,9 @@ describe("in-page action source", () => {
     }
     // The composite list must live inside the click body, not hoisted.
     expect(IN_PAGE_ACTION_SOURCE.click).toContain("treeitem");
+    // The reveal event name is a literal inside the body — `content.ts`
+    // listens for the identical string.
+    expect(IN_PAGE_ACTION_SOURCE.reveal).toContain("real-a11y:native-reveal");
     // The sensitive-token list must live inside pageReadValue's own body too.
     expect(String(pageReadValue)).toContain("cc-number");
   });

@@ -59,6 +59,22 @@ function getLiveExtractor(): LiveTreeExtractor {
 // on every tab keystroke, even with no panel to receive the updates.
 let focusTrackerEnabled = false;
 let curtainVisible = false; // whether the screen curtain is currently on
+
+// Armed by ARM_NATIVE_OVERLAY (see its comment in types.ts) around one native
+// reveal. While armed it drops exactly one `focusin`, the one the reveal's
+// focus causes, and honours exactly one `real-a11y:native-reveal` event, the
+// one carrying `nonce`. The service worker releases it once the dispatch
+// returns (`seq` must match, so a late release from an older dispatch can't
+// disarm a newer one); the deadline only bounds a release that never comes.
+let nativeOverlayArm: {
+  seq: number;
+  until: number;
+  /** The one reveal event to honour; cleared once it is. */
+  nonce: string | null;
+  /** Whether the `focusin` the reveal causes has been dropped yet. */
+  focusDropped: boolean;
+} | null = null;
+const NATIVE_OVERLAY_ARM_MS = 800;
 const elementRefs = getElementRefs();
 const dispatcher = new ActionDispatcher(elementRefs);
 const focusManager = new FocusManager(elementRefs);
@@ -297,6 +313,24 @@ chrome.runtime.onMessage.addListener(
         break;
       }
 
+      case "ARM_NATIVE_OVERLAY": {
+        const { seq, active, nonce } = message.payload;
+        if (active) {
+          nativeOverlayArm = {
+            seq,
+            until: Date.now() + NATIVE_OVERLAY_ARM_MS,
+            nonce: nonce ?? null,
+            focusDropped: false,
+          };
+        } else if (nativeOverlayArm?.seq === seq) {
+          nativeOverlayArm = null;
+        }
+        // Answering at all tells the service worker a live listener is here
+        // to draw the overlay.
+        sendResponse({ success: true });
+        break;
+      }
+
       case "SET_OBSERVING": {
         if (message.payload.enabled) startObserving();
         else stopObserving();
@@ -392,26 +426,68 @@ chrome.runtime.onMessage.addListener(
 // Reverse focus sync: page focus → tree selection
 document.addEventListener("focusin", (e) => {
   if (focusingFromTree) return;
+  if (nativeOverlayArm && !nativeOverlayArm.focusDropped) {
+    const live = Date.now() < nativeOverlayArm.until;
+    nativeOverlayArm.focusDropped = true;
+    if (live) return;
+  }
   if (!focusTrackerEnabled) return;
   if (curtainVisible) return;
 
-  // Walk up from focused element to find a tracked node. Clobber-safe: through
-  // a `<form>` whose control is named `parentElement`, the plain read cycles
-  // between the form and that control forever.
-  let el = e.target as Element | null;
-  while (el) {
-    const nodeId = elementRefs.findId(el);
-    if (nodeId) {
-      focusManager.highlightElement(nodeId);
-      safeSendMessage({
-        type: "FOCUS_CHANGED",
-        payload: { nodeId },
-      });
-      return;
-    }
-    el = safeParentElement(el);
-  }
+  const nodeId = findTrackedAncestor(e.target as Element | null);
+  if (!nodeId) return;
+  focusManager.highlightElement(nodeId);
+  safeSendMessage({
+    type: "FOCUS_CHANGED",
+    payload: { nodeId },
+  });
 });
+
+/** The nearest element at or above `el` that the tree tracks, climbing out of
+ *  shadow roots. Clobber-safe (`renderingParent`): through a `<form>` whose
+ *  control is named `parentElement` or `getRootNode`, plain reads cycle or
+ *  throw. */
+function findTrackedAncestor(el: Element | null): string | null {
+  for (; el; el = renderingParent(el)) {
+    const nodeId = elementRefs.findId(el);
+    if (nodeId) return nodeId;
+  }
+  return null;
+}
+
+// The native tree's selection follow asks for the same overlay the DOM tree's
+// own select draws (HIGHLIGHT_NODE → `highlightElement`, scrolled into view).
+// `pageReveal` in native/native-core.ts fires this at the element from the
+// page's main world, and DOM events reach this isolated world with the same
+// target, so the overlay lands on the element the native row describes.
+//
+// The page can dispatch this event too, so it is honoured only while a
+// native reveal has armed us, only once, and only with the arm's nonce, which
+// `pageReveal` receives as an argument and the page never sees ahead of time.
+// The event doesn't bubble, so page listeners below `document` never see it;
+// this listener catches it on the way down. A page listener that captures it
+// even earlier, on `window`, sees the nonce: it can stop the event, or
+// replay that nonce on another element while the arm lasts and put the
+// outline there. That is accepted: the page can draw a lookalike outline of
+// its own anyway, and the arm still lets it draw nothing more than one
+// overlay, nor scroll or focus anything the extension didn't.
+document.addEventListener(
+  "real-a11y:native-reveal",
+  (e) => {
+    const arm = nativeOverlayArm;
+    if (!arm || Date.now() >= arm.until) return;
+    if (arm.nonce === null || (e as CustomEvent).detail !== arm.nonce) return;
+    arm.nonce = null;
+    if (curtainVisible) return;
+    // `composedPath()[0]` is the real target even inside an open shadow tree,
+    // where `e.target` has been retargeted to the host.
+    const nodeId = findTrackedAncestor(
+      (e.composedPath()[0] ?? e.target) as Element | null,
+    );
+    if (nodeId) focusManager.highlightElement(nodeId);
+  },
+  true,
+);
 
 // ---- Live region observer (top frame only) ----
 

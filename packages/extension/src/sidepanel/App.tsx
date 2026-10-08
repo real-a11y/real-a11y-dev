@@ -1754,6 +1754,57 @@ export function App() {
     ],
   );
 
+  // The reveal the panel last asked for, so the service worker can drop one
+  // a newer reveal has replaced before it attaches; and the tab it last told
+  // the user can't show an outline, so it says so once per tab.
+  const nativeRevealRequest = useRef(0);
+  const noOutlineAnnouncedFor = useRef<number | null>(null);
+
+  /**
+   * Show where the settled native selection is on the page, as the DOM tree's
+   * select does: the content script's outline, scrolled into view, plus real
+   * focus (the `reveal` action). Fire-and-forget, and silent on failure: it
+   * is a visual aid, not an action anyone waits on. It skips while a real
+   * action is in flight, so it can't steal focus from what that action
+   * opened, and while Screen Curtain hides the page. Why a page event rather
+   * than focus alone: `pageReveal` in native/native-core.ts.
+   */
+  const revealNativeSelectionOnPage = useCallback(
+    (nodeId: string) => {
+      if (
+        !nativeModeEnabled ||
+        nativeTreeTabId === undefined ||
+        nativeBusy ||
+        nativeInFlight.current ||
+        curtainOn
+      ) {
+        return;
+      }
+      const tabId = nativeTreeTabId;
+      void chrome.runtime
+        .sendMessage({
+          type: "NATIVE_ACT",
+          tabId,
+          nodeId,
+          action: "reveal",
+          silent: true,
+          requestId: ++nativeRevealRequest.current,
+        })
+        .then((r: { success?: boolean; outlined?: boolean } | undefined) => {
+          if (r?.success && r.outlined === false) {
+            if (noOutlineAnnouncedFor.current === tabId) return;
+            noOutlineAnnouncedFor.current = tabId;
+            announce(
+              "This page can't show the outline (the extension's page script isn't running here; reloading the page usually fixes it).",
+              5000,
+            );
+          }
+        })
+        .catch(() => {});
+    },
+    [nativeModeEnabled, nativeTreeTabId, nativeBusy, curtainOn, announce],
+  );
+
   const handleNativeActivate = useCallback(
     (
       node: NativeNode,
@@ -2841,6 +2892,7 @@ export function App() {
               5000,
             )
           }
+          onSelectionReveal={revealNativeSelectionOnPage}
         />
       ) : viewMode === "tab" ? (
         /* ---- Tab sequence view ---- */

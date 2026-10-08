@@ -616,7 +616,7 @@ export async function readNativeTree(
 
 /** Actions the native backend can dispatch. Others are refused, not guessed. */
 export type NativeAction =
-  "click" | "type" | "focus" | "increment" | "decrement" | "select";
+  "click" | "type" | "focus" | "reveal" | "increment" | "decrement" | "select";
 
 export interface NativeDispatchResult {
   success: boolean;
@@ -639,6 +639,7 @@ const SUPPORTED = new Set<NativeAction>([
   "click",
   "type",
   "focus",
+  "reveal",
   "increment",
   "decrement",
   "select",
@@ -788,7 +789,13 @@ export function pageClick(this: Element): Marker {
   return { ok: true };
 }
 
-/** Move real keyboard focus. */
+/**
+ * Move real keyboard focus — the `focus` action, the same plain call as
+ * `browser`'s own `pageFocus`: the browser may scroll to the element, and
+ * success means the call was made, not that focus moved (a heading without
+ * a `tabindex` ignores it). Selecting a row doesn't come through here; that
+ * is {@link pageReveal}, which focuses without scrolling.
+ */
 export function pageFocus(this: Element): Marker {
   const el = this;
   if (!el || !el.tagName) return { ok: false, reason: "not-element" };
@@ -797,6 +804,59 @@ export function pageFocus(this: Element): Marker {
     return { ok: false, reason: "not-focusable" };
   }
   focusable.focus();
+  return { ok: true };
+}
+
+/**
+ * Show the user where a selected native row lives on the page — the native
+ * tree's counterpart to the DOM tree's `HIGHLIGHT_NODE` on select. `nonce` is
+ * the one the content script was armed with; it honours only the event that
+ * carries it.
+ *
+ * Real focus alone is not a visible indicator: Chromium paints no focus ring
+ * in a page whose window isn't focused, and while the user drives the side
+ * panel, the inspected page never is. The DOM producer's visible indicator is
+ * the content script's overlay (`FocusManager.highlightElement`), so this
+ * asks for exactly that: it fires a DOM event on the element, which crosses
+ * from this main-world call into the content script's isolated world, and
+ * the content script draws its overlay on the event's own target. Keyed to
+ * the element itself, it needs no node-id mapping between the two producers.
+ * For a control inside a closed UA shadow root (a `<video>`'s built-in
+ * buttons), the event reaches the content script retargeted to the host, so
+ * the outline frames the whole `<video>` while focus lands on the control.
+ * A node with no backing DOM element (`ax-<n>`) can't be revealed at all.
+ * The event name is repeated in `content.ts` — this function is serialized
+ * as source text, so it can't import a shared constant.
+ *
+ * Then moves real focus too, without scrolling (the overlay already
+ * centered it), so keyboard use resumes from here when the user returns to
+ * the page. A heading or landmark can't take focus; it still gets the
+ * overlay, so the row counts as revealed either way.
+ */
+export function pageReveal(this: Element, nonce: string): Marker {
+  const el = this;
+  if (!el || !el.tagName) return { ok: false, reason: "not-element" };
+  // Through the prototypes, not `el.dispatchEvent`/`el.focus`: a `<form>`
+  // holding `<input name="dispatchEvent">` shadows the method with the input,
+  // and this runs on every settled selection, form landmarks included. It
+  // doesn't bubble (the content script catches it on the way down), so page
+  // listeners below the document never see it; `composed` lets it leave an
+  // open shadow root.
+  EventTarget.prototype.dispatchEvent.call(
+    el,
+    new CustomEvent("real-a11y:native-reveal", {
+      bubbles: false,
+      composed: true,
+      detail: nonce,
+    }),
+  );
+  const proto =
+    el instanceof HTMLElement
+      ? HTMLElement.prototype
+      : el instanceof SVGElement
+        ? SVGElement.prototype
+        : null;
+  proto?.focus.call(el, { preventScroll: true });
   return { ok: true };
 }
 
@@ -1247,6 +1307,7 @@ export function pageSelectOption(this: Element): Marker {
 export const IN_PAGE_ACTION_SOURCE: Record<NativeAction, string> = {
   click: String(pageClick),
   focus: String(pageFocus),
+  reveal: String(pageReveal),
   type: String(pageType),
   increment: String(pageStep),
   decrement: String(pageStep),
@@ -1266,7 +1327,9 @@ async function runInPage(
       objectId,
       functionDeclaration: IN_PAGE_ACTION_SOURCE[action],
       returnByValue: true,
-      ...(action === "type" ? { arguments: [{ value }] } : {}),
+      ...(action === "type" || action === "reveal"
+        ? { arguments: [{ value }] }
+        : {}),
       ...(action === "increment" || action === "decrement"
         ? { arguments: [{ value: action === "increment" ? 1 : -1 }] }
         : {}),

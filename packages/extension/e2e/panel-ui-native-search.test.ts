@@ -94,10 +94,11 @@ test("a role-filter pill swaps the tree for a flat list of that role, narrowed b
   // The password field is a textbox, not a button — excluded by the pill.
   await expect(list.getByRole("option", { name: "Password" })).toHaveCount(0);
   await expect(nav.panel.locator(".sn-list-count")).toHaveText("16 items");
-  // Native can't highlight on the page, so there is no Move to button.
+  // The list follows onto the page like the DOM producer's, so it offers
+  // Move to as well (see panel-ui-native.test.ts for what it does there).
   await expect(
     nav.panel.getByRole("button", { name: "Move to", exact: true }),
-  ).toHaveCount(0);
+  ).toHaveCount(1);
 
   // AND-combines with the query, same as the DOM producer's own filters.
   const search = nav.panel.getByLabel("Search native tree nodes");

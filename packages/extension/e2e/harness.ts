@@ -243,14 +243,37 @@ const NATIVE_READ_MODE_KEY = "e2e.nativeReadMode";
 function recordNativeReads(): void {
   const w = window as typeof window & {
     __e2eNativeReads?: Array<{ tabId?: number; auto?: boolean }>;
+    __e2eNativeActs?: Array<{
+      action?: string;
+      nodeId?: string;
+      answer?: unknown;
+    }>;
   };
   w.__e2eNativeReads = [];
+  w.__e2eNativeActs = [];
   const real = chrome.runtime.sendMessage.bind(chrome.runtime) as (
     message: unknown,
     ...rest: unknown[]
   ) => Promise<unknown>;
   chrome.runtime.sendMessage = ((message: unknown, ...rest: unknown[]) => {
-    const m = message as { type?: unknown; tabId?: number; auto?: boolean };
+    const m = message as {
+      type?: unknown;
+      tabId?: number;
+      auto?: boolean;
+      action?: string;
+      nodeId?: string;
+    };
+    if (m?.type === "NATIVE_ACT") {
+      const entry: { action?: string; nodeId?: string; answer?: unknown } = {
+        action: m.action,
+        nodeId: m.nodeId,
+      };
+      w.__e2eNativeActs!.push(entry);
+      return real(message, ...rest).then((answer) => {
+        entry.answer = answer;
+        return answer;
+      });
+    }
     if (m?.type !== "NATIVE_READ") return real(message, ...rest);
     w.__e2eNativeReads!.push({ tabId: m.tabId, auto: m.auto });
     const mode = sessionStorage.getItem("e2e.nativeReadMode") ?? "normal";
@@ -313,6 +336,25 @@ export class NativeHarness {
     await this.panel.evaluate(
       ([key, value]) => sessionStorage.setItem(key, value),
       [NATIVE_READ_MODE_KEY, mode] as const,
+    );
+  }
+
+  /** The NATIVE_ACTs the panel has sent since it last loaded, each with the
+   *  service worker's answer once it arrives. */
+  async nativeActs(): Promise<
+    Array<{ action?: string; nodeId?: string; answer?: unknown }>
+  > {
+    return this.panel.evaluate(
+      () =>
+        (
+          window as typeof window & {
+            __e2eNativeActs?: Array<{
+              action?: string;
+              nodeId?: string;
+              answer?: unknown;
+            }>;
+          }
+        ).__e2eNativeActs ?? [],
     );
   }
 
