@@ -26,7 +26,7 @@ export type DogfoodEventKind =
   | "detach-stale" // revoke cleanup over bookkeeping Chrome had already dropped
   | "reattach-ok" // recovered after an unsolicited detach
   | "reattach-failed" // could not recover
-  | "reattach-abandoned" // a drop we never retried (native mode went off)
+  | "reattach-abandoned" // a drop we never retried (native mode went off, or a pick or automatic read, which end instead)
   | "conflict" // attach refused — another debugger already attached
   | "unavailable" // native can't run on this tab (see `reason`)
   | "read" // read the native tree (with node counts)
@@ -71,6 +71,9 @@ interface DogfoodCounters {
   attach: number;
   detach: number;
   detachUnsolicited: number;
+  /** Of `detachUnsolicited`, the user's own Cancel on Chrome's bar: a choice,
+   *  not a lifecycle drop, so no recovery is expected for it. */
+  detachCancelledByUser: number;
   detachStale: number;
   reattachOk: number;
   reattachFailed: number;
@@ -99,6 +102,7 @@ const ZERO_COUNTERS: DogfoodCounters = {
   attach: 0,
   detach: 0,
   detachUnsolicited: 0,
+  detachCancelledByUser: 0,
   detachStale: 0,
   reattachOk: 0,
   reattachFailed: 0,
@@ -183,6 +187,12 @@ export class DogfoodLog {
           counters.attachedMs += event.attachedMs;
         }
       }
+      if (
+        event.kind === "detach-unsolicited" &&
+        event.reason === "canceled_by_user"
+      ) {
+        counters.detachCancelledByUser += 1;
+      }
       if (event.kind === "unavailable" && event.reason) {
         counters.unavailableByReason[event.reason] =
           (counters.unavailableByReason[event.reason] ?? 0) + 1;
@@ -210,6 +220,7 @@ export class DogfoodLog {
       // the later object omits entirely. Rebuild it explicitly, and copy rather
       // than alias so a mutation can't write through into the stored object.
       unavailableByReason: { ...(stored?.unavailableByReason ?? {}) },
+      detachCancelledByUser: stored?.detachCancelledByUser ?? 0,
     };
   }
 
@@ -244,9 +255,10 @@ export class DogfoodLog {
       "",
       "— MV3 service-worker lifecycle —",
       `  unsolicited detaches (SW suspended / target gone): ${c.detachUnsolicited}`,
+      `    of which you cancelled on Chrome's bar (no recovery expected): ${c.detachCancelledByUser}`,
       `  reattach recovered: ${c.reattachOk}   failed: ${c.reattachFailed}`,
       "",
-      `  recovery abandoned (native mode switched off mid-drop): ${c.reattachAbandoned}`,
+      `  recovery not attempted (native mode switched off, or a pick that ends instead): ${c.reattachAbandoned}`,
       "",
       "— DevTools conflict —",
       `  attach refused (another debugger attached): ${c.conflict}`,

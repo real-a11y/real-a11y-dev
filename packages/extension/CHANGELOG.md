@@ -176,6 +176,15 @@
 
   ([#463](https://github.com/real-a11y/real-a11y-dev/pull/463))
 
+- **Cancelling Chrome's "…started debugging this browser" bar ends a native
+  pick.** The pick button releases, the same as pressing `Escape`, and the
+  pick isn't re-armed, so the bar stays gone until you next use native mode.
+  Closing the tab, or navigating it somewhere native mode can't follow, also
+  ends the pick quietly instead of as an error. This covers a pick only: a
+  Cancel during a refresh or an action still re-attaches once, and the bar
+  comes back.
+  ([#467](https://github.com/real-a11y/real-a11y-dev/pull/467))
+
 ## 0.1.15
 
 ### Patch Changes

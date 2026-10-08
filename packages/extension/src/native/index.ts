@@ -509,11 +509,20 @@ export function registerNativeMode(): void {
                     },
                   }),
                 log,
-                { pick: true },
+                // Never re-arm a pick on our own after Chrome detached it. A
+                // detach whose reason `detachEndsPick` knows ends the pick as
+                // a cancel, armed or still being armed. What still arrives as
+                // a drop is an unknown reason, or a setup the session dropped
+                // under with no reason ever coming. Attaching again undoes
+                // neither, and could re-attach over the user's Cancel.
+                { pick: true, retryDrop: false },
               );
               // Kept apart all the way to the panel: a failure to attach or
               // arm (`outcome.ok === false`) is not the user pressing Escape
-              // (`picked === null`), and neither is a timeout.
+              // (`picked === null`), and neither is a timeout. A detach
+              // Chrome reports with a reason `detachEndsPick` knows — the
+              // user's Cancel on the debugging bar, the tab closing — is a
+              // cancel too, whether the pick was armed or still arming.
               const payload = !outcome.ok
                 ? {
                     error: outcome.error ?? "pick failed",
@@ -615,6 +624,18 @@ export async function withRecovery<T>(
     first.outcome.error === "disabled" ||
     first.outcome.error === "superseded"
   ) {
+    return await classify(first, log);
+  }
+
+  if (first.outcome.error === "connection-lost" && opts.retryDrop === false) {
+    // The caller declined the retry. The drop is already booked as
+    // `detach-unsolicited`, so it still needs a verdict, or the ledger
+    // carries a debit with no matching credit — and with nothing attempted,
+    // that verdict is `reattach-abandoned`, not a failure.
+    await session.dogfoodLog().record({
+      kind: "reattach-abandoned",
+      at: Date.now(),
+    });
     return await classify(first, log);
   }
 

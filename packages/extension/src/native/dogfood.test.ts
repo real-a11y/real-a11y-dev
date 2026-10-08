@@ -44,6 +44,31 @@ describe("DogfoodLog", () => {
     );
   });
 
+  it("counts the user's own Cancel apart from lifecycle drops", async () => {
+    const log = new DogfoodLog(new FakeStorage());
+    await log.record({
+      kind: "detach-unsolicited",
+      at: 1,
+      reason: "canceled_by_user",
+      pick: true,
+    });
+    await log.record({
+      kind: "detach-unsolicited",
+      at: 2,
+      reason: "target_closed",
+    });
+    const c = await log.counters();
+    expect(c.detachUnsolicited).toBe(2);
+    expect(c.detachCancelledByUser).toBe(1);
+    const report = await log.report(0);
+    expect(report).toContain(
+      "of which you cancelled on Chrome's bar (no recovery expected): 1",
+    );
+    expect(report).toContain(
+      "recovery not attempted (native mode switched off, or a pick that ends instead): 0",
+    );
+  });
+
   it("records events and rolls at the cap", async () => {
     const log = new DogfoodLog(new FakeStorage());
     for (let i = 0; i < 600; i++) {
