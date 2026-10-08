@@ -13,8 +13,9 @@ export interface ExportViews {
   tree: string;
   /** Heading outline (`h1`..`h6`). */
   outline: string;
-  /** Tab sequence (focusable nodes in order). */
-  tabSequence: string;
+  /** Tab sequence (focusable nodes in order). Absent for a producer with no
+   *  tab-order data: a native tree (see `NATIVE_VIEWS`). */
+  tabSequence?: string;
 }
 
 /** A selectable view — what the user chose to copy. */
@@ -22,9 +23,14 @@ export type ExportView = "tree" | "outline" | "tab";
 
 /** Reproducibility context for the report header. */
 export interface ExportMeta {
+  /** Which producer built the tree: the tree's own `source.producer`. Printed
+   *  in the header so a DOM report and a native one are never compared
+   *  without anyone noticing (CLAUDE.md, "Two producers build the tree"). */
+  producer: "dom" | "native";
   pageTitle: string;
   pageUrl: string;
-  /** ISO timestamp of capture. */
+  /** ISO timestamp of when the tree was read: the click, for the DOM tree,
+   *  which follows the page live; the last read, for a native tree. */
   capturedAt: string;
   /** Extension version, from the manifest. */
   extensionVersion: string;
@@ -40,6 +46,27 @@ export interface ExportMeta {
 
 /** Every view, in canonical order — the default "copy everything". */
 export const ALL_VIEWS: ExportView[] = ["tree", "outline", "tab"];
+
+/**
+ * Every view a native tree can actually produce — `tab` (tab sequence)
+ * omitted. `tabindex` never reaches a native node (see `CLAUDE.md`'s "Two
+ * producers build the tree"), so there's no tab-order data to export, not
+ * merely an unimplemented one. `getTabSequence` would return an empty
+ * sequence for a native tree either way, but rendering that as "(nothing
+ * focusable)" would misreport a missing capability as a real finding.
+ */
+export const NATIVE_VIEWS: ExportView[] = ["tree", "outline"];
+
+const PRODUCER_LABELS: Record<ExportMeta["producer"], string> = {
+  dom: "dom (the extension's own in-page walk)",
+  native: "native (Chromium's own accessibility tree)",
+};
+
+/** What the Copy menu calls each view. */
+export const VIEW_LABELS: Record<Exclude<ExportView, "tree">, string> = {
+  outline: "Headings",
+  tab: "Tab sequence",
+};
 
 function fenced(body: string): string {
   // The serialized trees never contain a ``` fence, so a plain triple-fence
@@ -61,7 +88,7 @@ export function buildExportMarkdown(
   const sections: Array<{ view: ExportView; heading: string; body: string }> = [
     { view: "tree", heading: meta.viewLabel, body: views.tree },
     { view: "outline", heading: "Heading outline", body: views.outline },
-    { view: "tab", heading: "Tab sequence", body: views.tabSequence },
+    { view: "tab", heading: "Tab sequence", body: views.tabSequence ?? "" },
   ];
   const chosen = sections.filter((s) => selection.includes(s.view));
   const title = meta.pageTitle?.trim() || meta.pageUrl || "Untitled page";
@@ -71,6 +98,7 @@ export function buildExportMarkdown(
     "",
     `- **URL:** ${meta.pageUrl || "(unknown)"}`,
   ];
+  header.push(`- **Producer:** ${PRODUCER_LABELS[meta.producer]}`);
   if (meta.scope) header.push(`- **Scope:** ${meta.scope}`);
   header.push(
     `- **Captured:** ${meta.capturedAt}`,

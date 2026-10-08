@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Native export fixture</title>
+  </head>
+  <body>
+    <!--
+      What Copy/export from the native tree has to get right:
+      - a named, non-semantic <div>, which Chromium keeps as a NAMED `generic`
+        group (unnamed ones it drops as noise). The export passes
+        `includeGeneric: true`, or this group and its label would vanish from
+        the report while the panel still shows them;
+      - a filled password field, whose value must never reach the clipboard.
+    -->
+    <h1>Native export fixture</h1>
+    <div aria-label="Sign-in group">
+      <h2>Sign in</h2>
+      <label for="pw">Password</label>
+      <input
+        id="pw"
+        type="password"
+        value="hunter2"
+        autocomplete="current-password"
+      />
+      <button type="button">Sign in</button>
+    </div>
+  </body>
+</html>

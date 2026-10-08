@@ -380,3 +380,107 @@ test("Disable while the default's read is in flight leaves the panel on DOM", as
     chrome.storage.local.set({ "settings.nativeModeEnabled": true }),
   );
 });
+
+// ---- Copy/export for the native tree ----
+//
+// `doExport` previously only knew the DOM producer's `nodes` state — the
+// `Copy ▾` menu was hidden entirely under `producer === "dom"`. Stubs
+// `navigator.clipboard.writeText` rather than relying on the real OS
+// clipboard (the app itself already treats a real write as unreliable in an
+// automated context — see the "Clipboard blocked" fallback message in
+// `App.tsx`), same rationale as the sendMessage stub above: intercept before
+// the unreliable browser API is ever reached.
+async function stubClipboard(nav: NativeHarness): Promise<void> {
+  await nav.panel.evaluate(() => {
+    (window as typeof window & { __copiedText?: string }).__copiedText =
+      undefined;
+    navigator.clipboard.writeText = ((text: string) => {
+      (window as typeof window & { __copiedText?: string }).__copiedText = text;
+      return Promise.resolve();
+    }) as typeof navigator.clipboard.writeText;
+  });
+}
+
+async function readClipboardStub(
+  nav: NativeHarness,
+): Promise<string | undefined> {
+  return nav.panel.evaluate(
+    () => (window as typeof window & { __copiedText?: string }).__copiedText,
+  );
+}
+
+test("Copy on the native tree offers no Tab sequence — native has no tab-order data", async ({
+  nav,
+}) => {
+  await showNative(nav, "native-panel.html");
+
+  // The button's accessible name is its text content ("Copy ▾"), not its
+  // `title` — accname prefers content over title, so a `title`-shaped
+  // locator here never resolves.
+  await nav.panel.getByRole("button", { name: "Copy ▾" }).click();
+  const menu = nav.panel.locator(".sn-export-menu");
+  await expect(menu).toBeVisible();
+  await expect(menu.getByRole("button", { name: "Native tree" })).toBeVisible();
+  await expect(menu.getByRole("button", { name: "Headings" })).toBeVisible();
+  await expect(menu.getByRole("button", { name: "Tab sequence" })).toHaveCount(
+    0,
+  );
+});
+
+/** Open the export fixture on the native tree and copy one Copy ▾ item. */
+async function copyNative(nav: NativeHarness, item: string): Promise<string> {
+  const page = await showNative(nav, "native-export.html");
+  await stubClipboard(nav);
+  await nav.panel.getByRole("button", { name: "Copy ▾" }).click();
+  await nav.panel
+    .locator(".sn-export-menu")
+    .getByRole("button", { name: item })
+    .click();
+  await expect.poll(() => readClipboardStub(nav)).toBeDefined();
+  const markdown = (await readClipboardStub(nav))!;
+
+  // Every item says which producer built it, and where it was read from:
+  // the native read's own page, not the DOM producer's.
+  expect(markdown).toContain(
+    "**Producer:** native (Chromium's own accessibility tree)",
+  );
+  expect(markdown).toMatch(
+    /^# Accessibility report — (Native export fixture|http:\/\/127\.0\.0\.1)/,
+  );
+  expect(markdown).toContain(`**URL:** ${page.url()}`);
+  // A field's value never reaches a copied report, redacted or not.
+  expect(markdown).not.toContain("hunter2");
+  expect(markdown).not.toContain("[redacted]");
+  expect(markdown).not.toContain("## Tab sequence");
+  return markdown;
+}
+
+test("Copy → Everything copies the native tree and its headings", async ({
+  nav,
+}) => {
+  const markdown = await copyNative(nav, "Everything");
+  expect(markdown).toContain("## Native accessibility tree");
+  expect(markdown).toContain("## Heading outline");
+  expect(markdown).toContain("h1 Native export fixture");
+  expect(markdown).toMatch(/button "Sign in"/);
+  // A named generic group survives into the report (`includeGeneric: true`).
+  expect(markdown).toMatch(/generic "Sign-in group"/);
+});
+
+test("Copy → Native tree copies the tree alone", async ({ nav }) => {
+  const markdown = await copyNative(nav, "Native tree");
+  expect(markdown).toContain("## Native accessibility tree");
+  expect(markdown).not.toContain("## Heading outline");
+  expect(markdown).toMatch(/textbox "Password"/);
+  expect(markdown).toMatch(/generic "Sign-in group"/);
+});
+
+test("Copy → Headings copies the outline alone, still marked native", async ({
+  nav,
+}) => {
+  const markdown = await copyNative(nav, "Headings");
+  expect(markdown).toContain("## Heading outline");
+  expect(markdown).not.toContain("## Native accessibility tree");
+  expect(markdown).toContain("h1 Native export fixture");
+  expect(markdown).toContain("h2 Sign in");
+});

@@ -1,8 +1,11 @@
 import { describe, it, expect } from "vitest";
 
-import { buildExportMarkdown } from "./export.js";
+import { ALL_VIEWS, buildExportMarkdown, NATIVE_VIEWS } from "./export.js";
 
-const META = {
+import type { ExportMeta } from "./export.js";
+
+const META: ExportMeta = {
+  producer: "dom",
   pageTitle: "Sign in",
   pageUrl: "https://example.com/login",
   capturedAt: "2026-06-27T10:00:00.000Z",
@@ -23,6 +26,24 @@ describe("buildExportMarkdown", () => {
     expect(md).toContain("**URL:** https://example.com/login");
     expect(md).toContain("**Captured:** 2026-06-27T10:00:00.000Z");
     expect(md).toContain("Semantic Navigator 0.1.4");
+  });
+
+  it("names the producer that built the tree", () => {
+    expect(buildExportMarkdown(VIEWS, META)).toContain(
+      "**Producer:** dom (the extension's own in-page walk)",
+    );
+    const native = buildExportMarkdown(
+      { tree: VIEWS.tree, outline: VIEWS.outline },
+      { ...META, producer: "native" },
+      NATIVE_VIEWS,
+    );
+    expect(native).toContain(
+      "**Producer:** native (Chromium's own accessibility tree)",
+    );
+    // Even a headings-only export says which producer it came from.
+    expect(
+      buildExportMarkdown(VIEWS, { ...META, producer: "native" }, ["outline"]),
+    ).toContain("**Producer:** native");
   });
 
   it("labels the tree section by the current view", () => {
@@ -69,5 +90,20 @@ describe("buildExportMarkdown", () => {
       "outline",
     ]);
     expect(md).toMatch(/## Heading outline\n\n```\n\(empty\)\n```/);
+  });
+});
+
+describe("NATIVE_VIEWS", () => {
+  it("omits the tab-sequence view that ALL_VIEWS includes", () => {
+    expect(ALL_VIEWS).toContain("tab");
+    expect(NATIVE_VIEWS).not.toContain("tab");
+    expect(NATIVE_VIEWS).toEqual(["tree", "outline"]);
+  });
+
+  it("never renders a Tab sequence section when used as the selection", () => {
+    const md = buildExportMarkdown(VIEWS, META, NATIVE_VIEWS);
+    expect(md).not.toContain("## Tab sequence");
+    expect(md).toContain("## Accessibility tree");
+    expect(md).toContain("## Heading outline");
   });
 });

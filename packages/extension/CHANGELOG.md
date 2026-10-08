@@ -66,6 +66,14 @@
   dogfood build and its `DogfoodPanel` diagnostics widget continue to exist
   separately for internal telemetry — see `DOGFOOD.md`. ([#386])
 
+- **Copy ▾ works on the native tree.** Everything, Native tree and Headings
+  produce the same Markdown report as the DOM view. There's no Tab sequence:
+  Chromium's tree has no tab order. Every report's header now names the
+  producer that built it, so a native report is never mistaken for a DOM
+  one, and a native report's URL and capture time are those of the native
+  read itself. No field values are copied, sensitive or not.
+  ([#403])
+
 ## 0.1.15
 
 ### Patch Changes
@@ -817,3 +825,4 @@ Earlier releases predate this changelog.
 [#390]: https://github.com/real-a11y/real-a11y-dev/pull/390
 [#398]: https://github.com/real-a11y/real-a11y-dev/pull/398
 [#399]: https://github.com/real-a11y/real-a11y-dev/pull/399
+[#403]: https://github.com/real-a11y/real-a11y-dev/pull/403

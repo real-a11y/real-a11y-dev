@@ -132,18 +132,21 @@ Pick what to copy:
 - **Headings** — the heading outline (`h1`..`h6`).
 - **Tab sequence** — the focusable nodes in tab order.
 
+Works under [native mode](#native-mode-—-chromium-s-own-accessibility-tree) too, labeled **Native tree** in place of A11y/DOM tree — with one permanent exception: there's no **Tab sequence** option. `tabindex` never reaches a native node (see [Two producers](./core-concepts.md#two-producers)), so there's no tab-order data to export, not merely an unimplemented one; **Everything** under native mode is the tree and headings only.
+
 Every export opens with a reproducibility header, so a pasted report is self-describing:
 
 ```md
 # Accessibility report — Checkout · Example Store
 
 - **URL:** https://example.com/checkout
+- **Producer:** dom (the extension's own in-page walk)
 - **Scope:** dialog "Confirm order"
 - **Captured:** 2026-07-11T14:32:10.000Z
 - **Tool:** Semantic Navigator 0.1.9
 ```
 
-The `Scope` line appears only when the panel is scoped to a subtree, so the report states exactly what it covers. Each selected view then follows as its own fenced `##` section — drop the whole thing into a GitHub issue or any Markdown tracker and the person reading it can see the structure without re-running anything.
+`Producer` says which engine built the tree, `dom` or `native`, so a report from one is never compared with a report from the other by mistake. On the native tree, the URL and capture time are those of the native read itself, since that tree doesn't follow the page on its own. The `Scope` line appears only when the panel is scoped to a subtree, so the report states exactly what it covers. Each selected view then follows as its own fenced `##` section — drop the whole thing into a GitHub issue or any Markdown tracker and the person reading it can see the structure without re-running anything.
 
 ### Cross-iframe tree merging
 
