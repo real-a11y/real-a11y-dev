@@ -56,7 +56,11 @@ import {
 } from "../native/native-actions.js";
 import type { NativeAction } from "../native/native-core.js";
 import { nativeToExtractionResult } from "../native/native-export.js";
-import { NATIVE_MODE_KEY, NATIVE_NOTICE_SEEN_KEY } from "../native/setting.js";
+import {
+  NATIVE_MODE_KEY,
+  NATIVE_NOTICE_SEEN_KEY,
+  nativeModeOn,
+} from "../native/setting.js";
 import {
   isTrustedSender,
   isUnreachablePageResponse,
@@ -253,9 +257,12 @@ function extensionName(): string {
 function NativeModeNotice({
   onAcknowledge,
   onTurnOff,
+  turningOff,
 }: {
   onAcknowledge: () => void;
   onTurnOff: () => void;
+  /** A change to the setting is on its way: Turn off has nothing to add. */
+  turningOff: boolean;
 }) {
   const textId = useId();
   return (
@@ -278,6 +285,7 @@ function NativeModeNotice({
         <button
           class="sn-toolbar-btn"
           aria-describedby={textId}
+          aria-disabled={turningOff}
           onClick={onTurnOff}
         >
           Turn off
@@ -382,6 +390,8 @@ export function App() {
   // Whether a native read has succeeded in this panel, which is when Chrome's
   // bar has shown: the note about it waits for that.
   const [nativeEverRead, setNativeEverRead] = useState(false);
+  // Whether the note is on screen, as of the last commit.
+  const nativeNoticeShown = useRef(false);
   // Setting writes this panel has sent and not yet had answered. Their echo
   // in storage can arrive before the reply, and the reply is what updates
   // this panel, in order, so `followNativeSetting` holds back every change
@@ -404,11 +414,14 @@ export function App() {
     // The service worker didn't say (not woken yet, a context torn down
     // mid-reload, an internal failure): read the key itself, so Settings
     // shows the setting every other window follows. Where even that fails,
-    // the panel stays on the DOM tree, which reads without either.
+    // the panel stays on the DOM tree, which reads without either. (The old
+    // dogfood key is the service worker's to carry over; until it has, its
+    // attach gate refuses what this reads as on, and the carried-over value
+    // reaches this panel as a change in storage.)
     const fromStorage = () => {
       void chrome.storage?.local
         ?.get(NATIVE_MODE_KEY)
-        .then((r) => apply(r[NATIVE_MODE_KEY] !== false))
+        .then((r) => apply(nativeModeOn(r[NATIVE_MODE_KEY])))
         .catch(() => {});
     };
     void chrome.runtime
@@ -633,14 +646,14 @@ export function App() {
       .catch(() => {});
   }, []);
   // Turning native mode off, here or in another window, takes away the native
-  // tree and the DOM/NATIVE toggle, and dismissing the note about Chrome's bar
-  // takes the note away: whatever had focus can go with them. Each such swap
-  // asks (`focusAfterSwap`) for focus to move to the tree on screen (or to
-  // Settings, if there is none), and the layout effect below does that as
-  // soon as the swap commits, only if focus was lost: focus somewhere that
-  // survived the swap stays where the user put it. A layout effect rather
-  // than an effect, which waits for a paint: a panel in a window that isn't
-  // in front can go without one for a long time.
+  // tree and the DOM/NATIVE toggle, and so does a default read that falls
+  // back to the DOM tree: whatever had focus can go with them. Each such swap
+  // asks (`focusAfterSwap`) for focus to be put back (`refocusIfLost`), and
+  // the layout effect below does that as soon as the swap commits. (The note
+  // about Chrome's bar goes by more paths than these, so it has a layout
+  // effect of its own, on whether it is shown.) A layout effect rather than
+  // an effect, which waits for a paint: a panel in a window that isn't in
+  // front can go without one for a long time.
   const focusSwapPending = useRef(false);
   const [focusSwaps, setFocusSwaps] = useState(0);
   const focusAfterSwap = useCallback(() => {
@@ -777,7 +790,7 @@ export function App() {
    *  did. A removed key is the default again, which is on. */
   const applyNativeSetting = useCallback(
     (value: unknown) => {
-      const on = value !== false;
+      const on = nativeModeOn(value);
       settingLearned.current++;
       if (on === nativeModeEnabledRef.current) return;
       if (on) {
@@ -911,12 +924,18 @@ export function App() {
     },
     [ownWrite, focusAfterSwap, showNativeOff, setNativeModeEnabledState],
   );
+  const acknowledgeNativeNotice = useCallback(() => {
+    setNativeNoticeSeen(true);
+    void chrome.storage?.local
+      ?.set({ [NATIVE_NOTICE_SEEN_KEY]: true })
+      .catch(() => {});
+  }, []);
   /** The Settings switch, and the note's Turn off: turn native mode on or off
    *  in every window. Turning it on here is this panel's gesture, so it reads
    *  the page natively at once; turning it off detaches as soon as anything
-   *  in flight finishes. `took` runs once the change is stored. */
+   *  in flight finishes. */
   const setNativeModeFromSettings = useCallback(
-    (next: boolean, took?: () => void) => {
+    (next: boolean) => {
       if (
         nativeSettingPending !== null ||
         next === nativeModeEnabledRef.current
@@ -924,6 +943,10 @@ export function App() {
         return;
       }
       setNativeSettingPending(next);
+      // Turning native mode off while the note is up answers it, however it
+      // was turned off. Marked once the change is stored, and not before: if
+      // it doesn't take, the note stays to say what is still happening.
+      const answersNotice = !next && nativeNoticeShown.current;
       // This switch is the session's gesture, and the read it starts below is
       // the session's first native read, so the default has nothing left to
       // do. Set before the request: the default's effect runs as soon as the
@@ -937,7 +960,7 @@ export function App() {
           announce("Couldn't change that setting — try again.", 3000);
           return;
         }
-        took?.();
+        if (answersNotice) acknowledgeNativeNotice();
         if (next) {
           setProducer("native");
           announce("Reading pages through Chrome — showing its tree.", 3000);
@@ -949,14 +972,13 @@ export function App() {
         }
       });
     },
-    [announce, nativeSettingPending, requestNativeMode],
+    [
+      announce,
+      acknowledgeNativeNotice,
+      nativeSettingPending,
+      requestNativeMode,
+    ],
   );
-  const acknowledgeNativeNotice = useCallback(() => {
-    setNativeNoticeSeen(true);
-    void chrome.storage?.local
-      ?.set({ [NATIVE_NOTICE_SEEN_KEY]: true })
-      .catch(() => {});
-  }, []);
 
   // The native tree's page outline: a settled selection's reveal and a
   // hovered row's preview (see `useNativeOverlay`).
@@ -979,14 +1001,15 @@ export function App() {
   });
 
   /** Focus lost to something that went away (left on the body) moves to the
-   *  tree on screen, or the list shown in its place, or Settings if there is
-   *  neither. Focus anywhere else stays where the user put it. */
+   *  tree on screen, or the list shown in its place (the Tab view, or either
+   *  tree's role filter), or Settings if there is neither. Focus anywhere
+   *  else stays where the user put it. */
   const refocusIfLost = useCallback(() => {
     const active = document.activeElement;
     if (active !== null && active !== document.body) return;
     [
       document.querySelector<HTMLElement>('[role="tree"]'),
-      listViewRef.current,
+      document.querySelector<HTMLElement>('.sn-filtered-list[role="listbox"]'),
       settingsButtonRef.current,
     ]
       .find((el) => el?.isConnected)
@@ -2183,6 +2206,8 @@ export function App() {
       hasAppliedNativeDefault.current = false;
       hasAutoLoadedNative.current = false;
       nativeDefaultFailedOn.current.add(tabId);
+      // The native view goes, and focus in it with it.
+      focusAfterSwap();
       setProducer("dom");
       // NativeTreeView, where the reason would otherwise show, unmounts with
       // the switch, so announce it.
@@ -3087,8 +3112,7 @@ export function App() {
   }, [showNativeNotice, announce]);
   // However the note goes (Got it or Turn off, here or in another window, or
   // the panel falling back to the DOM tree), focus on its buttons goes with
-  // it, so it moves to the tree.
-  const nativeNoticeShown = useRef(false);
+  // it, so it is put back.
   useLayoutEffect(() => {
     if (showNativeNotice) {
       nativeNoticeShown.current = true;
@@ -3261,6 +3285,9 @@ export function App() {
     });
   }, [sendToBoundTab]);
 
+  // What the header calls the page: a page with no <title> is still named.
+  const shownTitle = pageTitle || "Untitled page";
+
   // Extract hostname for display
   const pageHost = (() => {
     try {
@@ -3292,84 +3319,83 @@ export function App() {
 
   return (
     <div class={`sn-root ${themeClass}`}>
-      {/* Page info header */}
-      {pageTitle && (
-        <div class="sn-page-header">
-          <div class="sn-page-info">
-            <span class="sn-page-title" title={pageTitle}>
-              {pageTitle}
-              <span
-                class="sn-beta-pill"
-                title="Semantic Navigator is in public beta. Feedback welcome on GitHub."
-                aria-label="Beta version"
-              >
-                BETA
-              </span>
+      {/* Page info header. Drawn for a page with no <title> too, as
+          "Untitled page": Settings lives here. */}
+      <div class="sn-page-header">
+        <div class="sn-page-info">
+          <span class="sn-page-title" title={shownTitle}>
+            {shownTitle}
+            <span
+              class="sn-beta-pill"
+              title="Semantic Navigator is in public beta. Feedback welcome on GitHub."
+              aria-label="Beta version"
+            >
+              BETA
             </span>
-            {pageHost && (
-              <span class="sn-page-url" title={pageUrl}>
-                {pageHost}
-              </span>
-            )}
-          </div>
-          {/* In the header rather than the toolbar, whose controls don't wrap
+          </span>
+          {pageHost && (
+            <span class="sn-page-url" title={pageUrl}>
+              {pageHost}
+            </span>
+          )}
+        </div>
+        {/* In the header rather than the toolbar, whose controls don't wrap
               and run past a narrow panel's edge: this is where native mode
               turns off and back on, so it must always be on screen. A
               disclosure, not a menu: what it opens is a switch and a line
               about it. */}
-          <div class="sn-export" ref={settingsRef}>
-            <button
-              ref={settingsButtonRef}
-              class="sn-toolbar-btn sn-export-btn"
-              aria-expanded={settingsOpen}
-              aria-controls={settingsOpen ? "sn-settings-menu" : undefined}
-              onClick={() => setSettingsOpen((o) => !o)}
-              title="Settings"
-            >
-              {"Settings ▾"}
-            </button>
-            {settingsOpen && (
-              <div
-                id="sn-settings-menu"
-                class="sn-export-menu sn-settings-menu"
-                role="group"
-                aria-label="Settings"
-              >
-                <label class="sn-settings-item">
-                  <input
-                    type="checkbox"
-                    checked={nativeSettingPending ?? nativeModeEnabled}
-                    aria-describedby="sn-settings-native-hint"
-                    aria-disabled={nativeSettingPending !== null}
-                    onChange={(e) => {
-                      const input = e.target as HTMLInputElement;
-                      const wanted = input.checked;
-                      // Back to what it showed until the panel takes the
-                      // click: none is taken while a change is on its way.
-                      input.checked = nativeSettingPending ?? nativeModeEnabled;
-                      setNativeModeFromSettings(wanted);
-                    }}
-                  />
-                  <span>Read pages through Chrome (recommended)</span>
-                </label>
-                <p id="sn-settings-native-hint" class="sn-settings-hint">
-                  Shows the tree Chrome itself gives assistive technology. While
-                  it reads, Chrome shows a bar: “{extensionName()}” started
-                  debugging this browser. Off, the panel reads the page itself.
-                </p>
-              </div>
-            )}
-          </div>
+        <div class="sn-export" ref={settingsRef}>
           <button
-            class="sn-close-tab-btn"
-            onClick={handleCloseTab}
-            title="Close this tab"
-            aria-label={`Close tab: ${pageTitle}`}
+            ref={settingsButtonRef}
+            class="sn-toolbar-btn sn-export-btn"
+            aria-expanded={settingsOpen}
+            aria-controls={settingsOpen ? "sn-settings-menu" : undefined}
+            onClick={() => setSettingsOpen((o) => !o)}
+            title="Settings"
           >
-            {"\u2715"}
+            {"Settings ▾"}
           </button>
+          {settingsOpen && (
+            <div
+              id="sn-settings-menu"
+              class="sn-export-menu sn-settings-menu"
+              role="group"
+              aria-label="Settings"
+            >
+              <label class="sn-settings-item">
+                <input
+                  type="checkbox"
+                  checked={nativeSettingPending ?? nativeModeEnabled}
+                  aria-describedby="sn-settings-native-hint"
+                  aria-disabled={nativeSettingPending !== null}
+                  onChange={(e) => {
+                    const input = e.target as HTMLInputElement;
+                    const wanted = input.checked;
+                    // Back to what it showed until the panel takes the
+                    // click: none is taken while a change is on its way.
+                    input.checked = nativeSettingPending ?? nativeModeEnabled;
+                    setNativeModeFromSettings(wanted);
+                  }}
+                />
+                <span>Read pages through Chrome (recommended)</span>
+              </label>
+              <p id="sn-settings-native-hint" class="sn-settings-hint">
+                Shows the tree Chrome itself gives assistive technology. While
+                it reads, Chrome shows a bar: “{extensionName()}” started
+                debugging this browser. Off, the panel reads the page itself.
+              </p>
+            </div>
+          )}
         </div>
-      )}
+        <button
+          class="sn-close-tab-btn"
+          onClick={handleCloseTab}
+          title="Close this tab"
+          aria-label={`Close tab: ${shownTitle}`}
+        >
+          {"\u2715"}
+        </button>
+      </div>
 
       {/* Toolbar */}
       <div class="sn-toolbar" role="toolbar" aria-label="Tree controls">
@@ -3594,11 +3620,8 @@ export function App() {
       {showNativeNotice && (
         <NativeModeNotice
           onAcknowledge={acknowledgeNativeNotice}
-          // Marked as seen only once native mode is really off: if it isn't,
-          // the note stays to say what's still happening.
-          onTurnOff={() =>
-            setNativeModeFromSettings(false, acknowledgeNativeNotice)
-          }
+          onTurnOff={() => setNativeModeFromSettings(false)}
+          turningOff={nativeSettingPending !== null}
         />
       )}
 

@@ -37,7 +37,7 @@ import {
   readNativeTree,
   type NativeAction,
 } from "./native-core.js";
-import { NATIVE_MODE_KEY as FLAG_KEY } from "./setting.js";
+import { NATIVE_MODE_KEY as FLAG_KEY, nativeModeOn } from "./setting.js";
 
 /** The dogfood build's name for the same setting, before it became a user
  *  setting. Read once, carried over, then removed — see `migrateFlag`. */
@@ -240,7 +240,7 @@ export function registerNativeMode(): void {
   const migrated = migrateFlag().catch(() => {});
   const flagEnabled = async () => {
     await migrated;
-    return (await nativeModeSetting()) !== false;
+    return nativeModeOn(await nativeModeSetting());
   };
 
   // The dogfood build keeps its event log in `local`, so it survives restarts

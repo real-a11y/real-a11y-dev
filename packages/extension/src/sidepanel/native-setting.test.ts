@@ -1,6 +1,13 @@
 import { render, h } from "preact";
 import { act } from "preact/test-utils";
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import {
+  describe,
+  it,
+  expect,
+  beforeEach,
+  afterEach,
+  onTestFinished,
+} from "vitest";
 
 import type { ContentToPanel } from "../types.js";
 
@@ -41,6 +48,23 @@ const NATIVE_TREE = {
   rootId: "r1",
   url: "https://example.test/",
   documentId: "doc-1",
+};
+
+/** A native read with a heading in it, for the role filter's list. */
+const NATIVE_TREE_WITH_HEADING = {
+  ...NATIVE_TREE,
+  nodes: [
+    { ...NATIVE_TREE.nodes[0], childIds: ["h1"] },
+    {
+      id: "h1",
+      role: "heading",
+      name: "Welcome",
+      depth: 1,
+      childIds: [],
+      states: {},
+      properties: { level: 1 },
+    },
+  ],
 };
 
 /** A native read that can't happen here, so the panel stays on DOM. */
@@ -304,6 +328,60 @@ describe("native mode on by default", () => {
       expect(chromeMock.stored[NOTICE_SEEN]).toBeUndefined();
     });
 
+    it("puts focus on a native role filter's list when it goes", async () => {
+      // jsdom has no scrollIntoView, which the list calls on its selection.
+      const scrollIntoView = Element.prototype.scrollIntoView;
+      Element.prototype.scrollIntoView = function () {};
+      onTestFinished(() => {
+        Element.prototype.scrollIntoView = scrollIntoView;
+      });
+      mount({ storage: {}, read: NATIVE_TREE_WITH_HEADING });
+      await flush();
+      await showTab(7);
+      act(() => buttonNamed("Headings")!.click());
+      await flush();
+      expect(container.querySelector('[role="tree"]')).toBeNull();
+
+      act(() => buttonNamed("Got it")!.click());
+      await flush();
+
+      expect(document.activeElement?.getAttribute("role")).toBe("listbox");
+    });
+
+    it("is answered by a Settings turn-off that Turn off can't add to", async () => {
+      let release = () => {};
+      mount({
+        storage: {},
+        read: NATIVE_TREE,
+        set: (enabled) =>
+          new Promise((resolve) => {
+            release = () => {
+              chromeMock.writeStorage({ [SETTING]: enabled });
+              resolve({ enabled, detached: 0 });
+            };
+          }),
+      });
+      await flush();
+      await showTab(7);
+      // Turned off in Settings while the note is up, and slow to land, as
+      // behind a read in flight. Meanwhile Turn off has nothing to add.
+      const checkbox = await openSettings();
+      act(() => checkbox.click());
+      await flush();
+      expect(buttonNamed("Turn off")!.getAttribute("aria-disabled")).toBe(
+        "true",
+      );
+      act(() => buttonNamed("Turn off")!.click());
+      await flush();
+      expect(sentOfType("NATIVE_FLAG_SET")).toHaveLength(1);
+
+      release();
+      await flush();
+
+      expect(note()).toBeNull();
+      expect(chromeMock.stored[NOTICE_SEEN]).toBe(true);
+    });
+
     it("isn't brought back by a read from before it was acknowledged", async () => {
       mount({ storage: {}, read: NATIVE_TREE });
       // Acknowledged in another window while this panel's own read of the
@@ -390,6 +468,33 @@ describe("native mode on by default", () => {
       expect(
         document.getElementById(controls!)?.getAttribute("aria-label"),
       ).toBe("Settings");
+    });
+
+    it("is there on a page with no title", async () => {
+      mount({ storage: { [NOTICE_SEEN]: true } });
+      await flush();
+      act(() => {
+        chromeMock.emit({
+          type: "ACTIVE_TAB_CHANGED",
+          tabId: 7,
+        } as unknown as ContentToPanel);
+      });
+      const untitled = treeData() as unknown as {
+        payload: { pageTitle: string };
+      };
+      untitled.payload.pageTitle = "";
+      act(() => {
+        chromeMock.emit({
+          ...(untitled as unknown as ContentToPanel),
+          tabId: 7,
+        } as ContentToPanel);
+      });
+      await flush();
+
+      expect(buttonNamed("Settings ▾")).not.toBeNull();
+      expect(container.querySelector(".sn-page-title")?.textContent).toContain(
+        "Untitled page",
+      );
     });
 
     it("shows the stored setting when the service worker doesn't answer", async () => {
@@ -591,6 +696,30 @@ describe("native mode on by default", () => {
 
       expect(container.querySelector('[role="tree"]')).toBeNull();
       expect(document.activeElement?.getAttribute("role")).toBe("listbox");
+    });
+
+    it("puts focus back when the first read falls back to the DOM tree", async () => {
+      let fail = () => {};
+      mount({
+        storage: { [NOTICE_SEEN]: true },
+        read: () =>
+          new Promise((resolve) => {
+            fail = () => resolve(NATIVE_REFUSED);
+          }),
+      });
+      await flush();
+      await showTab(7);
+      const nativeSearch = () =>
+        container.querySelector<HTMLInputElement>(
+          'input[aria-label="Search native tree nodes"]',
+        );
+      act(() => nativeSearch()!.focus());
+
+      fail();
+      await flush();
+
+      expect(nativeSearch()).toBeNull();
+      expect(document.activeElement?.getAttribute("role")).toBe("tree");
     });
 
     it("leaves an armed DOM pick alone when native mode is turned off", async () => {
