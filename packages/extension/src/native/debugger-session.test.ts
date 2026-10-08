@@ -19,9 +19,16 @@ type DetachListener = (
   reason: string,
 ) => void | Promise<void>;
 
+type CdpEventListener = (
+  source: { tabId?: number },
+  method: string,
+  params?: object,
+) => void;
+
 /** Minimal chrome.debugger stub; captures the onDetach listeners registered. */
 function stubChrome() {
   const listeners: DetachListener[] = [];
+  const eventListeners: CdpEventListener[] = [];
   const g = globalThis as unknown as { chrome: unknown };
   g.chrome = {
     debugger: {
@@ -32,14 +39,45 @@ function stubChrome() {
       // it to model a stale one.
       sendCommand: vi.fn(async () => ({})),
       onDetach: { addListener: (fn: DetachListener) => listeners.push(fn) },
+      onEvent: {
+        addListener: (fn: CdpEventListener) => eventListeners.push(fn),
+        removeListener: (fn: CdpEventListener) => {
+          const i = eventListeners.indexOf(fn);
+          if (i !== -1) eventListeners.splice(i, 1);
+        },
+      },
     },
   };
-  return listeners;
+  return { listeners, eventListeners };
+}
+
+/** Fire `Overlay.inspectNodeRequested` on every registered `onEvent` listener,
+ *  the way Chrome would when the user clicks an element while a pick is
+ *  armed. A snapshot copy: `runPick`'s own `finish` removes its listener
+ *  synchronously as part of handling the event, which would otherwise mutate
+ *  `eventListeners` out from under a live `for` loop. */
+function fireInspectNodeRequested(
+  eventListeners: CdpEventListener[],
+  tabId: number,
+  backendNodeId: number,
+) {
+  for (const fn of [...eventListeners]) {
+    fn({ tabId }, "Overlay.inspectNodeRequested", { backendNodeId });
+  }
 }
 
 async function settle() {
   // Let the queued storage read-modify-writes drain.
   for (let i = 0; i < 10; i++) await Promise.resolve();
+}
+
+/** Deeper drain than {@link settle} — `attach()`'s own chain (isEnabled →
+ *  chrome.debugger.attach → the enqueue'd storage read-modify-write) is
+ *  several `await`s longer than the single-hop cases `settle` covers, so a
+ *  test that needs `runPick` to have reached the point of actually arming
+ *  (its synchronous `pickCancel.set` call) needs to drain past all of it. */
+async function settleAttach() {
+  for (let i = 0; i < 40; i++) await Promise.resolve();
 }
 
 function kinds(log: FakeStorage): string[] {
@@ -81,7 +119,7 @@ describe("isConnectionLost", () => {
 describe("NativeDebuggerSession attach bookkeeping", () => {
   let listeners: DetachListener[];
   beforeEach(() => {
-    listeners = stubChrome();
+    listeners = stubChrome().listeners;
   });
 
   it("records an unsolicited detach even after the worker restarted", async () => {
@@ -623,5 +661,378 @@ describe("detachAll (the revoke path)", () => {
     expect(await session.detachAll()).toBe(0);
     await settle();
     expect(kinds(log)).toEqual([]);
+  });
+});
+
+describe("NativeDebuggerSession picker", () => {
+  it("resolves with the picked node's backendNodeId on inspectNodeRequested", async () => {
+    const { eventListeners } = stubChrome();
+    const session = new NativeDebuggerSession(new FakeStorage());
+
+    const result = session.withDebugger(7, (t) => session.runPick(7, t));
+    // Let attach + Overlay.enable + Overlay.setInspectMode settle before the
+    // simulated click — same reason every other async setup in this file
+    // drains microtasks before asserting.
+    await settleAttach();
+    fireInspectNodeRequested(eventListeners, 7, 123);
+
+    const { outcome, value } = await result;
+    expect(outcome.ok).toBe(true);
+    // The default `sendCommand` stub answers `Accessibility.
+    // getAXNodeAndAncestors` with `{}` (no `nodes`), so the ancestor chain
+    // falls back to just the raw hit — the next test covers the real chain.
+    expect(value).toEqual({ backendNodeId: 123, chainBackendNodeIds: [123] });
+  });
+
+  it("resolves ancestorIds from Accessibility.getAXNodeAndAncestors, deduped and self-first", async () => {
+    const { eventListeners } = stubChrome();
+    const g = globalThis as unknown as { chrome: typeof chrome };
+    (
+      g.chrome.debugger.sendCommand as ReturnType<typeof vi.fn>
+    ).mockImplementation(async (_target: unknown, method: string) => {
+      if (method === "Accessibility.getAXNodeAndAncestors") {
+        return {
+          nodes: [
+            // The picked node itself, echoed back without a role — an
+            // unnamed wrapper `<span>` the AX tree never kept.
+            { backendDOMNodeId: 123 },
+            // Its nearest labelled ancestor — the one actually present in a
+            // loaded native tree.
+            { backendDOMNodeId: 100 },
+            // A text-only AX node with no DOM backing at all, same as a
+            // native tree's own synthesized root — must be filtered out,
+            // not turned into `ax-dom-undefined`.
+            {},
+            { backendDOMNodeId: 1 },
+          ],
+        };
+      }
+      return {};
+    });
+    const session = new NativeDebuggerSession(new FakeStorage());
+
+    const result = session.withDebugger(7, (t) => session.runPick(7, t));
+    await settleAttach();
+    fireInspectNodeRequested(eventListeners, 7, 123);
+
+    const { value } = await result;
+    expect(value).toEqual({
+      backendNodeId: 123,
+      chainBackendNodeIds: [123, 100, 1],
+    });
+  });
+
+  it("ignores an inspectNodeRequested for a different tab", async () => {
+    const { eventListeners } = stubChrome();
+    const session = new NativeDebuggerSession(new FakeStorage());
+
+    const result = session.withDebugger(7, (t) => session.runPick(7, t));
+    await settleAttach();
+    fireInspectNodeRequested(eventListeners, 9, 999); // wrong tab — must not settle it
+    expect(session.cancelPick(7)).toBe(true); // still armed
+
+    const { value } = await result;
+    expect(value).toBeNull();
+  });
+
+  it("cancelPick resolves an armed pick with null and reports it was active", async () => {
+    stubChrome();
+    const session = new NativeDebuggerSession(new FakeStorage());
+
+    const result = session.withDebugger(7, (t) => session.runPick(7, t));
+    await settleAttach();
+    expect(session.cancelPick(7)).toBe(true);
+
+    const { outcome, value } = await result;
+    expect(outcome.ok).toBe(true);
+    expect(value).toBeNull();
+    // Nothing armed is left, so a second cancel reports it cancelled nothing.
+    expect(session.cancelPick(7)).toBe(false);
+  });
+
+  it("cancelPick with nothing armed reports false", () => {
+    stubChrome();
+    const session = new NativeDebuggerSession(new FakeStorage());
+    expect(session.cancelPick(7, 3)).toBe(false);
+  });
+
+  it("a STOP for one request never cancels a later pick", async () => {
+    const { eventListeners } = stubChrome();
+    const session = new NativeDebuggerSession(new FakeStorage());
+    // A STOP for request 1, whose START was refused and never ran.
+    expect(session.cancelPick(7, 1)).toBe(false);
+
+    const result = session.withDebugger(7, (t) =>
+      session.runPick(7, t, { requestId: 2 }),
+    );
+    await settleAttach();
+    // Request 2 armed normally, and a click still picks.
+    fireInspectNodeRequested(eventListeners, 7, 42);
+    const { value } = await result;
+    expect(value).toMatchObject({ backendNodeId: 42 });
+  });
+
+  it("two early STOPs both hold, so neither pick arms", async () => {
+    // START 1, STOP 1, START 2, STOP 2, all before START 1's attach
+    // answered: the pick shortcut held down. The second STOP used to
+    // replace the first, and pick 1 armed behind a button showing off.
+    const { eventListeners } = stubChrome();
+    const session = new NativeDebuggerSession(new FakeStorage());
+    expect(session.cancelPick(7, 1)).toBe(false);
+    expect(session.cancelPick(7, 2)).toBe(false);
+    for (const requestId of [1, 2]) {
+      const { value } = await session.withDebugger(7, (t) =>
+        session.runPick(7, t, { requestId }),
+      );
+      expect(value).toBeNull();
+    }
+    expect(eventListeners.length).toBe(0);
+  });
+
+  it("cancelAllPicks also ends a pick that hadn't registered yet", async () => {
+    const { eventListeners } = stubChrome();
+    const session = new NativeDebuggerSession(new FakeStorage());
+    // The generation is captured when the pick is asked for…
+    const generation = session.pickGeneration();
+    // …native mode goes off before the pick reaches runPick…
+    session.cancelAllPicks();
+    const { outcome, value } = await session.withDebugger(7, (t) =>
+      session.runPick(7, t, { requestId: 1, generation }),
+    );
+    // …and it ends at once, without arming.
+    expect(outcome.ok).toBe(true);
+    expect(value).toBeNull();
+    expect(eventListeners.length).toBe(0);
+  });
+
+  it("an armed pick ends by itself after its time limit, and says so", async () => {
+    stubChrome();
+    const session = new NativeDebuggerSession(new FakeStorage());
+    const onTimeout = vi.fn();
+    const result = session.withDebugger(7, (t) =>
+      session.runPick(7, t, { timeoutMs: 20, onTimeout }),
+    );
+    const { outcome, value } = await result;
+    expect(outcome.ok).toBe(true);
+    expect(value).toBeNull();
+    expect(onTimeout).toHaveBeenCalledTimes(1);
+  });
+
+  it("onArmed fires once inspect mode is on, not before", async () => {
+    const sent: string[] = [];
+    stubChrome();
+    const g = globalThis as unknown as { chrome: typeof chrome };
+    (
+      g.chrome.debugger.sendCommand as ReturnType<typeof vi.fn>
+    ).mockImplementation(async (_target: unknown, method: string) => {
+      sent.push(method);
+      return {};
+    });
+    const session = new NativeDebuggerSession(new FakeStorage());
+    let sentWhenArmed: string[] = [];
+    const result = session.withDebugger(7, (t) =>
+      session.runPick(7, t, {
+        requestId: 1,
+        onArmed: () => (sentWhenArmed = [...sent]),
+      }),
+    );
+    await settleAttach();
+    expect(sentWhenArmed).toContain("Overlay.setInspectMode");
+    session.cancelPick(7, 1);
+    await result;
+  });
+
+  it("a STOP that beats an in-flight START's attach cancels it before it ever arms", async () => {
+    // Simulate a slow attach: chrome.debugger.attach doesn't resolve until
+    // released, so `runPick` cannot have registered `pickCancel` yet when
+    // `cancelPick` is called — the exact race a real slow/queued attach
+    // produces.
+    let releaseAttach: () => void = () => {};
+    const attaching = new Promise<void>((r) => (releaseAttach = r));
+    const { eventListeners } = stubChrome();
+    const g = globalThis as unknown as { chrome: typeof chrome };
+    let attachCalls = 0;
+    (g.chrome.debugger.attach as ReturnType<typeof vi.fn>).mockImplementation(
+      async () => {
+        attachCalls++;
+        await attaching;
+      },
+    );
+    const session = new NativeDebuggerSession(new FakeStorage());
+
+    const result = session.withDebugger(7, (t) => session.runPick(7, t));
+    for (let i = 0; i < 10; i++) await Promise.resolve(); // parked in attach
+
+    // Nothing armed yet — this is the early-cancellation race itself. It
+    // cancels nothing now, and is recorded for this request.
+    expect(session.cancelPick(7)).toBe(false);
+
+    releaseAttach();
+    const { outcome, value } = await result;
+
+    // Resolved as a cancel, and — the actual bug — Overlay.setInspectMode
+    // was never armed: no Overlay.inspectNodeRequested listener needed to
+    // fire, `runPick` returned as soon as it saw the pending cancel.
+    expect(outcome.ok).toBe(true);
+    expect(value).toBeNull();
+    expect(attachCalls).toBe(1);
+    expect(eventListeners.length).toBe(0);
+  });
+
+  it("Overlay.inspectModeCanceled resolves the pick as a cancel (page-side Escape)", async () => {
+    const { eventListeners } = stubChrome();
+    const session = new NativeDebuggerSession(new FakeStorage());
+
+    const result = session.withDebugger(7, (t) => session.runPick(7, t));
+    await settleAttach();
+    for (const fn of [...eventListeners]) {
+      fn({ tabId: 7 }, "Overlay.inspectModeCanceled", {});
+    }
+
+    const { outcome, value } = await result;
+    expect(outcome.ok).toBe(true);
+    expect(value).toBeNull();
+  });
+
+  it("a debugger detach mid-pick rejects as connection-lost, not a plain cancel", async () => {
+    const listeners = stubChrome().listeners;
+    const session = new NativeDebuggerSession(new FakeStorage());
+
+    const result = session.withDebugger(7, (t) => session.runPick(7, t));
+    await settleAttach();
+
+    // Chrome itself detaches — DevTools opening on the tab, the connection
+    // dropping — not the user pressing Escape or clicking Stop.
+    listeners[listeners.length - 1]({ tabId: 7 }, "target_closed");
+
+    const { outcome, value } = await result;
+    expect(outcome.ok).toBe(false);
+    expect(outcome.error).toBe("connection-lost");
+    expect(value).toBeUndefined();
+  });
+
+  it("a debugger detach mid-pick books its time as a pick's, not a read's", async () => {
+    // Chrome's detach is recorded by `onDetach`, which claims the attach
+    // entry before the pick's own teardown can, so it has to say it was a
+    // pick: otherwise the time lands in the reads-and-actions total.
+    const listeners = stubChrome().listeners;
+    const log = new FakeStorage();
+    const session = new NativeDebuggerSession(log, new FakeStorage());
+
+    const result = session.withDebugger(7, (t) => session.runPick(7, t), {
+      pick: true,
+    });
+    await settleAttach();
+    listeners[listeners.length - 1]({ tabId: 7 }, "target_closed");
+    await result;
+    await settle();
+
+    const events = (log.data["dogfood.nativeLog"] ?? []) as DogfoodEvent[];
+    expect(events.filter((e) => e.kind.startsWith("detach"))).toEqual([
+      expect.objectContaining({ kind: "detach-unsolicited", pick: true }),
+    ]);
+    expect(log.data["dogfood.nativeCounters"]).toMatchObject({
+      pickSessions: 1,
+    });
+  });
+
+  /** A pick whose `DOM.enable` waits for `release`, recording every inspect
+   *  mode it sends, in order. */
+  function pickWithSlowSetup() {
+    stubChrome();
+    let release: () => void = () => {};
+    const domEnabled = new Promise<void>((r) => (release = r));
+    const modes: string[] = [];
+    const g = globalThis as unknown as { chrome: typeof chrome };
+    (
+      g.chrome.debugger.sendCommand as ReturnType<typeof vi.fn>
+    ).mockImplementation(
+      async (_target: unknown, method: string, params?: { mode?: string }) => {
+        if (method === "Overlay.setInspectMode") modes.push(params!.mode!);
+        if (method === "DOM.enable") await domEnabled;
+        return {};
+      },
+    );
+    const session = new NativeDebuggerSession(new FakeStorage());
+    return { session, release: () => release(), modes };
+  }
+
+  it("a pick stopped while it is still being set up never arms afterwards", async () => {
+    const { session, release, modes } = pickWithSlowSetup();
+    const result = session.withDebugger(7, (t) =>
+      session.runPick(7, t, { requestId: 1 }),
+    );
+    await settleAttach(); // registered, with `DOM.enable` in flight
+    expect(session.cancelPick(7, 1)).toBe(true);
+    await result;
+    release();
+    await settleAttach();
+    // Only the cleanup's `none`: no `searchForNode` after it.
+    expect(modes).toEqual(["none"]);
+  });
+
+  it("a pick that times out while it is still being set up never arms afterwards", async () => {
+    const { session, release, modes } = pickWithSlowSetup();
+    const { value } = await session.withDebugger(7, (t) =>
+      session.runPick(7, t, { timeoutMs: 20 }),
+    );
+    expect(value).toBeNull();
+    release();
+    await settleAttach();
+    expect(modes).toEqual(["none"]);
+  });
+
+  it("a setup command failure (Overlay.setInspectMode rejected) reports a real failure, not a cancel", async () => {
+    stubChrome();
+    const g = globalThis as unknown as { chrome: typeof chrome };
+    (
+      g.chrome.debugger.sendCommand as ReturnType<typeof vi.fn>
+    ).mockImplementation(async (_target: unknown, method: string) => {
+      if (method === "Overlay.setInspectMode") {
+        throw new Error("Could not compute box model.");
+      }
+      return {};
+    });
+    const session = new NativeDebuggerSession(new FakeStorage());
+
+    const { outcome, value } = await session.withDebugger(7, (t) =>
+      session.runPick(7, t),
+    );
+
+    // A protocol failure while arming the picker is not the same thing as
+    // the user cancelling — it must not be misreported as one, and it must
+    // not be misclassified as a connection drop either (the rejection
+    // message here matches neither `isConnectionLost` pattern).
+    expect(outcome.ok).toBe(false);
+    expect(outcome.error).toBe("command-failed");
+    expect(value).toBeUndefined();
+  });
+
+  it("cancelAllPicks resolves every armed pick across every tab", async () => {
+    stubChrome();
+    const session = new NativeDebuggerSession(new FakeStorage());
+
+    const a = session.withDebugger(1, (t) => session.runPick(1, t));
+    const b = session.withDebugger(2, (t) => session.runPick(2, t));
+    await settleAttach();
+
+    session.cancelAllPicks();
+
+    const [ra, rb] = await Promise.all([a, b]);
+    expect(ra.value).toBeNull();
+    expect(rb.value).toBeNull();
+  });
+
+  it("a resolved pick removes its listener, and a late cancel cancels nothing", async () => {
+    const { eventListeners } = stubChrome();
+    const session = new NativeDebuggerSession(new FakeStorage());
+
+    const result = session.withDebugger(7, (t) => session.runPick(7, t));
+    await settleAttach();
+    fireInspectNodeRequested(eventListeners, 7, 42);
+    await result;
+
+    expect(session.cancelPick(7)).toBe(false);
+    expect(eventListeners.length).toBe(0);
   });
 });

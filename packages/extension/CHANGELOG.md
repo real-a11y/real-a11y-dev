@@ -74,6 +74,18 @@
   read itself. No field values are copied, sensitive or not.
   ([#403])
 
+- **Pick element works on the native tree.** The toolbar `⦿` button and
+  `Ctrl`/`Cmd`+`Shift`+`C` arm Chromium's own inspect-element mode (the one
+  DevTools' "select an element" tool uses) for the length of the pick.
+  Clicking an element selects and reveals its row; `Escape` cancels. The
+  button shows as busy until the page is ready to take the click. A pick
+  ends by itself after a minute with nothing clicked, and when the side
+  panel closes, so the debugger never stays attached waiting for a click
+  nobody can make. If the clicked element isn't in the tree you have (the
+  page changed since it was read), the panel says so. Native row names also
+  show their full text in a tooltip, for names too long for the row.
+  ([#404])
+
 ## 0.1.15
 
 ### Patch Changes
@@ -826,3 +838,4 @@ Earlier releases predate this changelog.
 [#398]: https://github.com/real-a11y/real-a11y-dev/pull/398
 [#399]: https://github.com/real-a11y/real-a11y-dev/pull/399
 [#403]: https://github.com/real-a11y/real-a11y-dev/pull/403
+[#404]: https://github.com/real-a11y/real-a11y-dev/pull/404

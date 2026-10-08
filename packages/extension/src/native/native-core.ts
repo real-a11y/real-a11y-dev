@@ -137,8 +137,15 @@ const DETAIL_PROPS = new Set([
  *  with core's own `idOf` — asserted by this file's tests. */
 function nativeIdOf(raw: RawAXNode): string {
   return typeof raw.backendDOMNodeId === "number"
-    ? `ax-dom-${raw.backendDOMNodeId}`
+    ? nativeIdForBackendNode(raw.backendDOMNodeId)
     : `ax-${raw.nodeId}`;
+}
+
+/** The native node id for a DOM-backed node: `ax-dom-<backendNodeId>`. The
+ *  inverse of {@link backendNodeIdFrom}; build ids through this, never by
+ *  hand, so the format lives in one place. */
+export function nativeIdForBackendNode(backendNodeId: number): string {
+  return `ax-dom-${backendNodeId}`;
 }
 
 /** Collapse internal whitespace and trim — matches `@real-a11y-dev/browser`'s

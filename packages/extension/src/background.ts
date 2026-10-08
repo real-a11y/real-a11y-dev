@@ -1,7 +1,7 @@
 /// <reference types="chrome" />
 
 import { buildFrameInfoMap, mergeFrameTrees } from "./frame-merger.js";
-import { registerNativeMode } from "./native/index.js";
+import { cancelNativePicks, registerNativeMode } from "./native/index.js";
 import {
   type PlannedTabMessage,
   describeBroadcastDelivery,
@@ -368,6 +368,7 @@ chrome.runtime.onConnect.addListener((port) => {
     // must NOT stop observing or lift the curtain on that other window.
     if (sidepanelPorts.size > 0) return;
     sidepanelConnected = false;
+    cancelNativePicks();
 
     // The panel arms the focus tracker (and observer) on any tab whose frames
     // announce while it is connected — background tabs included, and
