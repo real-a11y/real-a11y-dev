@@ -91,6 +91,8 @@ export interface NativeNode {
   role: string;
   name: string;
   depth: number;
+  childIds?: string[];
+  redacted?: boolean;
   states?: Record<string, string | boolean>;
   properties?: Record<string, string>;
   value?: string;

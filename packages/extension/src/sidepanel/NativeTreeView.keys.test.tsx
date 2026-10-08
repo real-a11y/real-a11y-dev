@@ -235,14 +235,14 @@ describe("NativeTreeView keyboard and row parity", () => {
     expect(heading.textContent).not.toContain("level=");
   });
 
-  it("marks an iframe row as embedded content the tree leaves out", () => {
+  it("marks an iframe row as embedded content when nothing was read from it", () => {
     mount();
     const badge = row("frame").querySelector(".sn-iframe-badge")!;
     // Visible text "embedded"; the explanation is in the text a screen
     // reader reads too, not only in the tooltip.
     expect(badge.firstChild?.textContent).toBe("embedded");
     expect(badge.querySelector(".sn-sr-only")?.textContent).toContain(
-      "doesn't read its contents",
+      "nothing was read from it",
     );
   });
 
@@ -282,6 +282,14 @@ describe("NativeTreeView keyboard and row parity", () => {
       );
     });
     expect(onActivate).toHaveBeenLastCalledWith(NODES.get("qty"), undefined);
+  });
+
+  it("drops the embedded mark once the frame's content is under its row", () => {
+    const nodes = new Map(NODES);
+    nodes.set("frame", { ...NODES.get("frame")!, childIds: ["inner"] });
+    nodes.set("inner", node("inner", "button", "Zoom in", 3)[1]);
+    mount({ nodes });
+    expect(row("frame").querySelector(".sn-iframe-badge")).toBeNull();
   });
 
   it("names double-click scope in its hints", () => {

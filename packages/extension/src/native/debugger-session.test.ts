@@ -1634,3 +1634,188 @@ describe("NATIVE_ACT preview through the real message handler", () => {
     expect(await laterPreview).toMatchObject({ success: true });
   });
 });
+
+describe("NativeDebuggerSession: out-of-process frames", () => {
+  type Sent = {
+    debuggee: { tabId?: number; sessionId?: string };
+    method: string;
+  };
+
+  /** A tab with one out-of-process frame, `F1`, announced as session `S1`
+   *  `delayMs` after `Target.setAutoAttach` answers — over chrome.debugger
+   *  the announcement can trail the answer. `frameOf` is what that session
+   *  reports as its own frame. */
+  function tabWithFrame(delayMs: number, frameOf = "F1") {
+    const { eventListeners } = stubChrome();
+    const sent: Sent[] = [];
+    const g = globalThis as unknown as { chrome: typeof chrome };
+    (
+      g.chrome.debugger.sendCommand as ReturnType<typeof vi.fn>
+    ).mockImplementation(async (debuggee: Sent["debuggee"], method: string) => {
+      sent.push({ debuggee, method });
+      if (method === "Target.setAutoAttach") {
+        setTimeout(() => {
+          for (const fn of [...eventListeners]) {
+            fn({ tabId: 5 }, "Target.attachedToTarget", {
+              sessionId: "S1",
+              targetInfo: { type: "iframe", targetId: "F1" },
+            });
+          }
+        }, delayMs);
+        return {};
+      }
+      if (method === "Page.getFrameTree" && debuggee.sessionId === "S1") {
+        return { frameTree: { frame: { id: frameOf } } };
+      }
+      return {};
+    });
+    return {
+      sent,
+      session: new NativeDebuggerSession(new FakeStorage(), new FakeStorage()),
+    };
+  }
+
+  it("waits for a frame announced just after the auto-attach answers", async () => {
+    const { session, sent } = tabWithFrame(5);
+    const { value } = await session.withDebugger(5, async (t) => {
+      const frames = (await t.frameSessions!((ids) => ids.length >= 1))!;
+      await frames[0]?.transport.send("Accessibility.getFullAXTree");
+      return frames.map((f) => f.frameId);
+    });
+    expect(value).toEqual(["F1"]);
+    // The frame's commands go to its own child session of the tab's attach.
+    expect(sent).toContainEqual({
+      debuggee: { tabId: 5, sessionId: "S1" },
+      method: "Accessibility.getFullAXTree",
+    });
+  });
+
+  it("waits no longer than a caller's shorter wait", async () => {
+    const { session } = tabWithFrame(150);
+    const { value } = await session.withDebugger(5, async (t) =>
+      t.frameSessions!((ids) => ids.length >= 1, 20),
+    );
+    expect(value).toEqual([]);
+  });
+
+  it("drops a session that answers as some other frame", async () => {
+    // A Chrome too old for child sessions runs a session's commands in the
+    // tab's own, where the frame's backend ids name other elements.
+    const { session } = tabWithFrame(0, "TOP");
+    const { value } = await session.withDebugger(5, async (t) =>
+      t.frameSessions!((ids) => ids.length >= 1),
+    );
+    expect(value).toEqual([]);
+  });
+
+  it("auto-attaches once per transport, however often it is asked", async () => {
+    const { session, sent } = tabWithFrame(0);
+    await session.withDebugger(5, async (t) => {
+      await t.frameSessions!((ids) => ids.length >= 1);
+      await t.frameSessions!((ids) => ids.includes("F1"));
+    });
+    expect(
+      sent.filter((s) => s.method === "Target.setAutoAttach"),
+    ).toHaveLength(1);
+  });
+
+  it("stops listening for frames once the operation ends", async () => {
+    const { session } = tabWithFrame(0);
+    const g = globalThis as unknown as { chrome: typeof chrome };
+    const removed = vi.spyOn(g.chrome.debugger.onEvent, "removeListener");
+    await session.withDebugger(5, async (t) => {
+      await t.frameSessions!((ids) => ids.length >= 1);
+    });
+    await drain();
+    expect(removed).toHaveBeenCalled();
+  });
+
+  it("arms a pick in an out-of-process frame, and reports a hit there with its frame", async () => {
+    const { session, sent } = tabWithFrame(0);
+    const g = globalThis as unknown as { chrome: typeof chrome };
+    const listeners: Array<(s: object, m: string, p?: object) => void> = [];
+    const add = g.chrome.debugger.onEvent.addListener;
+    vi.spyOn(g.chrome.debugger.onEvent, "addListener").mockImplementation(
+      (fn) => {
+        listeners.push(fn as (typeof listeners)[number]);
+        add(fn);
+      },
+    );
+    const picked = session.withDebugger(5, (t) => session.runPick(5, t));
+    // The frame is armed once its announcement window has passed.
+    await vi.waitFor(
+      () =>
+        expect(sent).toContainEqual({
+          debuggee: { tabId: 5, sessionId: "S1" },
+          method: "Overlay.setInspectMode",
+        }),
+      { timeout: 2_000 },
+    );
+    for (const fn of [...listeners]) {
+      fn({ tabId: 5, sessionId: "S1" }, "Overlay.inspectNodeRequested", {
+        backendNodeId: 8,
+      });
+    }
+    const { value } = await picked;
+    expect(value).toMatchObject({
+      backendNodeId: 8,
+      frame: { frameId: "F1" },
+    });
+    // Disarmed in the frame as well as in the tab.
+    expect(
+      sent.filter(
+        (s) => s.method === "Overlay.setInspectMode" && s.debuggee.sessionId,
+      ),
+    ).toHaveLength(2);
+  });
+
+  it("arms a frame the page adds while a pick is open", async () => {
+    // Announced well after the first announcement window has passed.
+    const { session, sent } = tabWithFrame(700);
+    const picked = session.withDebugger(5, (t) => session.runPick(5, t));
+    await vi.waitFor(
+      () =>
+        expect(sent).toContainEqual({
+          debuggee: { tabId: 5, sessionId: "S1" },
+          method: "Overlay.setInspectMode",
+        }),
+      { timeout: 3_000 },
+    );
+    expect(session.cancelPick(5)).toBe(true);
+    expect((await picked).value).toBeNull();
+  });
+
+  it("still settles a pick when the auto-attach for frames is refused", async () => {
+    // What Chrome does to every command once the user presses Cancel on the
+    // debugging bar while a pick is arming. A frame watch that looped on the
+    // refusal never yielded to the event loop, so the STOP below could never
+    // run, and the pick, and this test, hung.
+    stubChrome();
+    const g = globalThis as unknown as { chrome: typeof chrome };
+    (
+      g.chrome.debugger.sendCommand as ReturnType<typeof vi.fn>
+    ).mockImplementation(async (_debuggee: unknown, method: string) => {
+      if (method === "Target.setAutoAttach") throw new Error("Not allowed");
+      return {};
+    });
+    const session = new NativeDebuggerSession(
+      new FakeStorage(),
+      new FakeStorage(),
+    );
+    const picked = session.withDebugger(5, (t) => session.runPick(5, t));
+    await drain();
+    await drain();
+    expect(session.cancelPick(5)).toBe(true);
+    expect((await picked).value).toBeNull();
+  });
+
+  it("stops waiting for a frame that is never announced", async () => {
+    const { session } = tabWithFrame(60_000);
+    const started = Date.now();
+    const { value } = await session.withDebugger(5, async (t) =>
+      t.frameSessions!((ids) => ids.includes("F1")),
+    );
+    expect(value).toEqual([]);
+    expect(Date.now() - started).toBeLessThan(2_000);
+  });
+});

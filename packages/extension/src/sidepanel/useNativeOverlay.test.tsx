@@ -96,6 +96,14 @@ describe("useNativeOverlay", () => {
     expect(acts()).toEqual([]);
   });
 
+  it("previews a row of an out-of-process frame", () => {
+    mount();
+    overlay.preview("ax-dom-5@F1.D1");
+    expect(acts()).toEqual([
+      expect.objectContaining({ action: "preview", nodeId: "ax-dom-5@F1.D1" }),
+    ]);
+  });
+
   it("reveals while a pick is armed, since the user chose the row", () => {
     mount({ pickArmed: true });
     overlay.reveal("ax-dom-5");

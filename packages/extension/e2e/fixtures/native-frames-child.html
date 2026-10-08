@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Native frames — child</title>
+  </head>
+  <body>
+    <!--
+      The document inside both of `native-frames.html`'s frames: one served
+      from the same origin, one from another (`localhost` rather than
+      `127.0.0.1`), which Chromium runs in a renderer of its own. A button to
+      act on, and a card field whose value must never leave the frame.
+    -->
+    <h2>Inner heading</h2>
+    <button id="inner" type="button">Inner save</button>
+    <label>
+      Card number
+      <input id="card" autocomplete="cc-number" value="4111111111111111" />
+    </label>
+    <script>
+      document.getElementById("inner").addEventListener("click", (e) => {
+        e.currentTarget.setAttribute("data-clicked", "true");
+      });
+    </script>
+  </body>
+</html>
