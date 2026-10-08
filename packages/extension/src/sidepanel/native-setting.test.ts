@@ -147,6 +147,14 @@ describe("native mode on by default", () => {
     }
   }
 
+  /** Let a task go by (a timer), and what it set off run. */
+  async function afterTask(): Promise<void> {
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    await flush();
+  }
+
   /** The panel's bound tab becomes `tabId`, and its page connects. */
   async function showTab(tabId: number): Promise<void> {
     act(() => {
@@ -688,17 +696,20 @@ describe("native mode on by default", () => {
       expect(settingsCheckbox()!.checked).toBe(true);
     });
 
-    it("stays open on an Escape something else has answered", async () => {
-      mount({ storage: { [NOTICE_SEEN]: true } });
+    it("stays open on an Escape that cancels an armed native pick", async () => {
+      mount({ storage: { [NOTICE_SEEN]: true }, read: NATIVE_TREE });
       await flush();
       await showTab(7);
-      const checkbox = await openSettings();
-      // Something earlier in line (a native pick's cancel) takes this one.
-      const takeIt = (e: KeyboardEvent) => e.preventDefault();
-      document.addEventListener("keydown", takeIt, true);
-      onTestFinished(() =>
-        document.removeEventListener("keydown", takeIt, true),
+      // A native pick, waiting for a click on the page.
+      act(() =>
+        container
+          .querySelector<HTMLButtonElement>(
+            'button[aria-label="Pick element in page"]',
+          )!
+          .click(),
       );
+      await flush();
+      const checkbox = await openSettings();
 
       act(() => {
         checkbox.dispatchEvent(
@@ -711,25 +722,46 @@ describe("native mode on by default", () => {
       });
       await flush();
 
+      // The Escape was the pick's: it is cancelled, and Settings stays.
+      expect(sentOfType("NATIVE_PICK_STOP")).toHaveLength(1);
       expect(settingsCheckbox()).not.toBeNull();
     });
 
-    it("closes on a click outside it, not on the mousedown before", async () => {
+    it("closes on a press outside it, with any button, once the press is handled", async () => {
       mount({ storage: { [NOTICE_SEEN]: true } });
       await flush();
       await showTab(7);
       await openSettings();
-      const outside = searchBox()!;
 
       act(() => {
-        outside.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+        searchBox()!.dispatchEvent(
+          new MouseEvent("pointerdown", { bubbles: true, button: 2 }),
+        );
       });
-      await flush();
+      // Not while the browser is still handling the press, and moving focus.
       expect(settingsCheckbox()).not.toBeNull();
+      await afterTask();
 
-      act(() => outside.click());
-      await flush();
       expect(settingsCheckbox()).toBeNull();
+    });
+
+    it("stays open when a press inside it ends outside", async () => {
+      mount({ storage: { [NOTICE_SEEN]: true } });
+      await flush();
+      await showTab(7);
+      const checkbox = await openSettings();
+
+      act(() => {
+        checkbox.dispatchEvent(
+          new MouseEvent("pointerdown", { bubbles: true }),
+        );
+      });
+      // Released over the tree: the click goes to what holds both points.
+      act(() => container.querySelector<HTMLElement>(".sn-root")!.click());
+      await afterTask();
+
+      expect(settingsCheckbox()).not.toBeNull();
+      expect(sentOfType("NATIVE_FLAG_SET")).toEqual([]);
     });
 
     it("closes on Escape, returning focus to its button", async () => {

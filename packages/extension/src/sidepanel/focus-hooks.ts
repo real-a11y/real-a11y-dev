@@ -93,12 +93,17 @@ export function useRestoreFocusOnClose() {
 }
 
 /**
- * Close a popup (the Copy menu, Settings) on a click outside it or on Escape.
- * Escape pressed inside it also returns focus to the button that opens it, as
- * a menu button's or a disclosure's does, rather than leaving focus on what
- * closing it took away. A click rather than a mousedown, so the browser has
- * already moved focus to what was clicked by the time the popup goes; and not
- * an Escape something else has already answered (a native pick's cancel).
+ * Close a popup (the Copy menu, Settings) on a press outside it, with any
+ * button, or on Escape. Escape pressed inside it also returns focus to the
+ * button that opens it, as a menu button's or a disclosure's does, rather
+ * than leaving focus on what closing it took away.
+ *
+ * A press outside closes it once the browser has handled that press, which
+ * is when focus moves to what was pressed: closing first would take focus off
+ * the popup's controls, and send it elsewhere, before it got there. A press
+ * that starts inside and ends outside it (a slide off the switch, a text
+ * selection) is not a press outside. Nor is an Escape something else has
+ * already answered (a native pick's cancel).
  */
 export function useDismissible(
   open: boolean,
@@ -108,13 +113,16 @@ export function useDismissible(
 ) {
   useEffect(() => {
     if (!open) return;
-    const onClick = (e: MouseEvent) => {
+    let closing: ReturnType<typeof setTimeout> | undefined;
+    const onPress = (e: Event) => {
       if (
-        containerRef.current &&
-        !containerRef.current.contains(e.target as Node)
+        !containerRef.current ||
+        containerRef.current.contains(e.target as Node)
       ) {
-        setOpen(false);
+        return;
       }
+      clearTimeout(closing);
+      closing = setTimeout(() => setOpen(false), 0);
     };
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape" || e.defaultPrevented) return;
@@ -122,11 +130,12 @@ export function useDismissible(
       setOpen(false);
       if (inside) buttonRef.current?.focus();
     };
-    // Capture, so a click a control stops from bubbling still counts.
-    document.addEventListener("click", onClick, true);
+    // Capture, so a press a control stops from bubbling still counts.
+    document.addEventListener("pointerdown", onPress, true);
     document.addEventListener("keydown", onKey);
     return () => {
-      document.removeEventListener("click", onClick, true);
+      clearTimeout(closing);
+      document.removeEventListener("pointerdown", onPress, true);
       document.removeEventListener("keydown", onKey);
     };
   }, [open, setOpen, containerRef, buttonRef]);
