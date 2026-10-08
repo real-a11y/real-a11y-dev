@@ -731,6 +731,11 @@ describe("native mode on by default", () => {
           new MouseEvent("pointerdown", { bubbles: true, button: 2 }),
         );
       });
+      act(() => {
+        searchBox()!.dispatchEvent(
+          new MouseEvent("mousedown", { bubbles: true, button: 2 }),
+        );
+      });
       await flush();
 
       expect(settingsCheckbox()).toBeNull();
@@ -777,20 +782,25 @@ describe("native mode on by default", () => {
       expect(settingsCheckbox()).not.toBeNull();
     });
 
-    it("closes on a press with no pointer events, as a screen reader's click makes", async () => {
+    it("closes on a press with no pointer events, as a screen reader's click makes, keeping focus", async () => {
       mount({ storage: { [NOTICE_SEEN]: true } });
       await flush();
       await showTab(7);
-      await openSettings();
+      const checkbox = await openSettings();
+      act(() => checkbox.focus());
 
+      // On a tree row, which can't take focus, so the click moves none.
       act(() => {
-        searchBox()!.dispatchEvent(
-          new MouseEvent("mousedown", { bubbles: true }),
-        );
+        container
+          .querySelector('[role="treeitem"]')!
+          .dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
       });
       await flush();
 
       expect(settingsCheckbox()).toBeNull();
+      // Not left on the body with the switch: back on Settings, as Escape
+      // leaves it.
+      expect(document.activeElement).toBe(buttonNamed("Settings ▾"));
     });
 
     it("is never open together with the Copy menu, however that is opened", async () => {

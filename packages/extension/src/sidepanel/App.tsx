@@ -353,6 +353,17 @@ export function App() {
   // place, however it is reached.
   const [openPopup, setOpenPopup] = useState<"copy" | "settings" | null>(null);
   const exportMenuOpen = openPopup === "copy";
+  const togglePopup = useCallback(
+    (popup: "copy" | "settings") =>
+      setOpenPopup((open) => (open === popup ? null : popup)),
+    [],
+  );
+  // Only that popup: a listener left over from the other can't close this.
+  const closePopup = useCallback(
+    (popup: "copy" | "settings") =>
+      setOpenPopup((open) => (open === popup ? null : open)),
+    [],
+  );
   // Picker mode (DevTools-style "select an element in the page"). Off by
   // default; toggled by the toolbar button or Ctrl/Cmd+Shift+C. The
   // content script owns the actual click capture — this flag is just the
@@ -2961,10 +2972,7 @@ export function App() {
     [handleNativeSendKey, announce],
   );
 
-  const closeCopyMenu = useCallback(
-    () => setOpenPopup((open) => (open === "copy" ? null : open)),
-    [],
-  );
+  const closeCopyMenu = useCallback(() => closePopup("copy"), [closePopup]);
 
   // Export the selected view(s) as a Markdown report and copy to clipboard.
   // Serialized entirely panel-side from the merged snapshot the panel already
@@ -3105,18 +3113,9 @@ export function App() {
   const exportViews = producer === "native" ? NATIVE_VIEWS : ALL_VIEWS;
 
   // Close Settings and the Copy menu on a press outside them, or on Escape.
-  const closeSettings = useCallback(
-    () => setOpenPopup((open) => (open === "settings" ? null : open)),
-    [],
-  );
+  const closeSettings = useCallback(() => closePopup("settings"), [closePopup]);
   useDismissible(settingsOpen, closeSettings, settingsRef, settingsButtonRef);
   useDismissible(exportMenuOpen, closeCopyMenu, exportRef, exportButtonRef);
-  // The Copy menu goes with the toolbar while the panel waits for a page, so
-  // nothing there could close it: it is closed instead, rather than coming
-  // back open when the page connects.
-  useEffect(() => {
-    if (!connected) closeCopyMenu();
-  }, [connected, closeCopyMenu]);
 
   // The note about Chrome's debugging bar shows with the native tree, once a
   // native read has succeeded (which is when the bar has appeared), until the
@@ -3219,9 +3218,7 @@ export function App() {
         class="sn-toolbar-btn sn-export-btn"
         aria-expanded={settingsOpen}
         aria-controls={settingsOpen ? "sn-settings-menu" : undefined}
-        onClick={() =>
-          setOpenPopup((open) => (open === "settings" ? null : "settings"))
-        }
+        onClick={() => togglePopup("settings")}
         title="Settings"
       >
         {"Settings ▾"}
@@ -3605,9 +3602,7 @@ export function App() {
             class="sn-toolbar-btn sn-export-btn"
             aria-haspopup="true"
             aria-expanded={exportMenuOpen}
-            onClick={() =>
-              setOpenPopup((open) => (open === "copy" ? null : "copy"))
-            }
+            onClick={() => togglePopup("copy")}
             title="Copy the tree as Markdown — paste into a bug report"
           >
             {"Copy ▾"}

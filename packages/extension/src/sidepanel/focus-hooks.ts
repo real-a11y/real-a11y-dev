@@ -4,7 +4,7 @@
  */
 
 import type { RefObject } from "preact";
-import { useEffect } from "preact/hooks";
+import { useEffect, useLayoutEffect } from "preact/hooks";
 
 /**
  * Everything inside the panel that Tab can reach. Its controls are only ever
@@ -106,10 +106,15 @@ export function useRestoreFocusOnClose(ref: RefObject<HTMLElement>) {
  * disclosure's does. A press outside leaves focus where the press puts it:
  * the popup closes before the browser moves focus, so focus on its controls
  * goes to the body first, and the panel's own focus repair leaves focus a
- * popup took with it alone (see `App`). A press that starts inside it never
- * closes it, and nor does an Escape something else has already answered (a
- * native pick's cancel). Only one popup is open at a time, which `App` keeps
- * to by opening each in place of the other.
+ * popup took with it alone (see `App`). A click a screen reader makes is the
+ * exception: it brings a mousedown with no pointerdown before it, and moves
+ * focus nowhere if what it clicks can't take focus, so focus still inside
+ * the popup then goes to its button, as on Escape. A press that starts
+ * inside it never closes it, and nor does an Escape something else has
+ * already answered (a native pick's cancel). A popup whose button has gone
+ * (the toolbar, while the panel waits for a page) closes too, rather than
+ * coming back open. Only one popup is open at a time, which `App` keeps to
+ * by opening each in place of the other.
  */
 export function useDismissible(
   open: boolean,
@@ -122,7 +127,12 @@ export function useDismissible(
     const inside = (target: EventTarget | null) =>
       containerRef.current?.contains(target as Node) === true;
     const onPress = (e: Event) => {
-      if (containerRef.current && !inside(e.target)) close();
+      if (!containerRef.current || inside(e.target)) return;
+      // A real press closed it on its pointerdown, and focus went with it,
+      // before its mousedown: only a press without one finds focus here.
+      const stranded = e.type === "mousedown" && inside(document.activeElement);
+      close();
+      if (stranded) buttonRef.current?.focus();
     };
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape" || e.defaultPrevented) return;
@@ -143,4 +153,7 @@ export function useDismissible(
       document.removeEventListener("keydown", onKey);
     };
   }, [open, close, containerRef, buttonRef]);
+  useLayoutEffect(() => {
+    if (open && !containerRef.current) close();
+  });
 }
