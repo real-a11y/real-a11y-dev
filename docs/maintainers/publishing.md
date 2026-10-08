@@ -142,7 +142,7 @@ Reuse the monochrome brand: black typography on a white background, echoing the 
    - `activeTab` — read the current page's DOM to build the semantic tree
    - `sidePanel` — the extension's UI lives in the side panel
    - `webNavigation` — detect iframe lifecycle and SPA route changes to refresh the tree
-   - `debugger` — native mode, off by default: reads and acts on Chromium's own accessibility tree over the DevTools protocol, the way DevTools does. Required rather than optional because Chrome doesn't allow `debugger` as an optional permission
+   - `debugger` — native mode, which stays off until the user says yes when the side panel first asks: reads and acts on Chromium's own accessibility tree over the DevTools protocol, the way DevTools does. Required rather than optional because Chrome doesn't allow `debugger` as an optional permission
    - `tabs` — native mode reads the URL of the tab the side panel is bound to, to tell whether the debugger can attach there and whether the page navigated since the tree was read
    - `storage` — remembers whether native mode is on, and keeps content-free attach bookkeeping for the browser session
 8. Submit for review
