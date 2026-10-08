@@ -783,8 +783,12 @@ export function App() {
     if (!connected || nativeModeChosen !== false) return;
     if (askedNativeChoice.current) return;
     askedNativeChoice.current = true;
+    // Already open from "Enable native mode…" (the mount-time read can answer
+    // after that click): the user asked for it, so it stays theirs, and an
+    // answer from another window doesn't close it.
+    if (showNativeConsentRef.current !== false) return;
     setShowNativeConsent("asked");
-  }, [connected, nativeModeChosen]);
+  }, [connected, nativeModeChosen, setShowNativeConsent]);
   // Native as the default view, for a user who has already opted in: once per
   // panel session, on the first page that connects and that native mode can
   // read. Not on every tab or navigation after that — each of those would

@@ -42,6 +42,9 @@ describe("native mode on first run", () => {
       /** Plays the service worker for NATIVE_FLAG_SET: what it writes, and
        *  its reply (a promise, to hold the reply back). */
       set?: (enabled: boolean) => unknown;
+      /** The reply to the mount-time NATIVE_FLAG_GET, overriding `flag`
+       *  (a promise, to hold it back). */
+      get?: () => unknown;
     } = {},
   ): void {
     chromeMock = installChromeMock({
@@ -49,6 +52,7 @@ describe("native mode on first run", () => {
       respond: (message) => {
         const m = message as unknown as { type: string; enabled?: boolean };
         if (m.type === "NATIVE_FLAG_GET") {
+          if (options.get) return options.get();
           if (!options.storage) return flag;
           const value = chromeMock.stored[SETTING];
           return {
@@ -403,6 +407,33 @@ describe("native mode on first run", () => {
 
       expect(toolbarButton("NATIVE")).not.toBeNull();
       expect(document.activeElement).toBe(search);
+    });
+
+    it("leaves open a question opened before the panel knew to ask by itself", async () => {
+      // The mount-time read answers late, after the user has already opened
+      // the question from the toolbar on a connected page.
+      let answerRead = () => {};
+      mount(
+        { enabled: false, chosen: false },
+        {
+          storage: {},
+          get: () =>
+            new Promise((resolve) => {
+              answerRead = () => resolve({ enabled: false, chosen: false });
+            }),
+        },
+      );
+      await flush();
+      await showTab(7);
+      act(() => toolbarButton("Enable native mode…")!.click());
+      await flush();
+      expect(question()).not.toBeNull();
+
+      answerRead();
+      await flush();
+      // Still the user's own question, so another window's "no" leaves it.
+      await answeredElsewhere(false);
+      expect(question()).not.toBeNull();
     });
 
     it("returns this panel to the DOM tree when native mode is turned off", async () => {
