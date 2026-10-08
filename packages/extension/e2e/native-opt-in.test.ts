@@ -241,6 +241,17 @@ test("native mode turned off in another window returns this panel to the DOM tre
   await expect(
     nav.panel.getByRole("button", { name: "Refresh native tree" }),
   ).toBeVisible({ timeout: 20_000 });
+  // A keyboard user in the native tree, which goes away with native mode.
+  // Its rows aren't focusable themselves (aria-activedescendant): the tree is.
+  await nav.panel
+    .getByRole("tree", { name: /^Native accessibility tree/ })
+    .focus();
+  const focused = () =>
+    nav.panel.evaluate(() => ({
+      role: document.activeElement?.getAttribute("role"),
+      text: document.activeElement?.textContent?.trim(),
+    }));
+  await expect.poll(async () => (await focused()).role).toBe("tree");
 
   await answerInAnotherWindow(nav, false);
 
@@ -253,6 +264,10 @@ test("native mode turned off in another window returns this panel to the DOM tre
   await expect(
     nav.panel.getByRole("button", { name: "NATIVE", exact: true }),
   ).toHaveCount(0);
+  // Focus lands on the control that replaced the tree, not the page body.
+  await expect
+    .poll(async () => (await focused()).text)
+    .toBe("Enable native mode…");
 });
 
 test("the store build asks for native mode's permissions and ships no dogfood diagnostics", async ({

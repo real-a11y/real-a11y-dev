@@ -33,18 +33,30 @@ describe("native mode on first run", () => {
   function mount(
     flag: FlagReply,
     options: {
-      /** Extension storage, for the panel to follow the setting in. */
+      /** Extension storage, for the panel to follow the setting in. With it,
+       *  NATIVE_FLAG_GET answers from storage rather than from `flag`. */
       storage?: Record<string, unknown>;
       /** The service worker's answer to "keep the DOM tree". */
       decline?: FlagReply;
+      /** Plays the service worker for NATIVE_FLAG_SET: what it writes, and
+       *  its reply (a promise, to hold the reply back). */
+      set?: (enabled: boolean) => unknown;
     } = {},
   ): void {
     chromeMock = installChromeMock({
       storage: options.storage,
       respond: (message) => {
         const m = message as unknown as { type: string; enabled?: boolean };
-        if (m.type === "NATIVE_FLAG_GET") return flag;
+        if (m.type === "NATIVE_FLAG_GET") {
+          if (!options.storage) return flag;
+          const value = chromeMock.stored[SETTING];
+          return {
+            enabled: value === true,
+            chosen: typeof value === "boolean",
+          };
+        }
         if (m.type === "NATIVE_FLAG_SET") {
+          if (options.set) return options.set(m.enabled === true);
           return { enabled: m.enabled, detached: 0 };
         }
         if (m.type === "NATIVE_FLAG_DECLINE") {
@@ -316,6 +328,59 @@ describe("native mode on first run", () => {
       expect(sentOfType("NATIVE_READ").length).toBeGreaterThan(0);
     });
 
+    it("reads nothing in a panel between pages, when the next page connects", async () => {
+      // The panel has shown a page; the tab is now navigating, so nothing is
+      // connected at the moment the other window says yes.
+      mount(
+        { enabled: false, chosen: true },
+        { storage: { [SETTING]: false } },
+      );
+      await flush();
+      await showTab(7);
+      act(() => {
+        chromeMock.emit({
+          type: "PAGE_NAVIGATED",
+          tabId: 7,
+        } as unknown as ContentToPanel);
+      });
+      await flush();
+
+      await answeredElsewhere(true);
+      act(() => {
+        chromeMock.emit({ ...treeData(), tabId: 7 } as ContentToPanel);
+      });
+      await flush();
+
+      expect(toolbarButton("NATIVE")).not.toBeNull();
+      expect(sentOfType("NATIVE_READ")).toEqual([]);
+    });
+
+    it("leaves an armed DOM pick alone when native mode is turned off", async () => {
+      mount({ enabled: true, chosen: true }, { storage: { [SETTING]: true } });
+      await flush();
+      // The native default can't read this page (the stub refuses it), so
+      // the panel stays on the DOM tree.
+      await showTab(7);
+      const pick = () =>
+        container.querySelector<HTMLButtonElement>(
+          'button[aria-label="Pick element in page"]',
+        );
+      act(() => pick()!.click());
+      await flush();
+      expect(pick()!.getAttribute("aria-pressed")).toBe("true");
+
+      await answeredElsewhere(false);
+
+      // The content script's picker is still armed on the page, so the
+      // button says so; nothing told the page to stop.
+      expect(pick()!.getAttribute("aria-pressed")).toBe("true");
+      expect(
+        sentOfType("SET_PICK_MODE").map(
+          (m) => (m as unknown as { payload: { enabled: boolean } }).payload,
+        ),
+      ).toEqual([{ enabled: true }]);
+    });
+
     it("returns this panel to the DOM tree when native mode is turned off", async () => {
       mount({ enabled: true, chosen: true }, { storage: { [SETTING]: true } });
       await flush();
@@ -327,6 +392,68 @@ describe("native mode on first run", () => {
       expect(toolbarButton("Disable native mode")).toBeNull();
       expect(toolbarButton("Enable native mode…")).not.toBeNull();
       expect(question()).toBeNull();
+    });
+  });
+
+  describe("this panel's own answer", () => {
+    it("isn't closed under 'Turning on…' by its own echo, landing before the reply", async () => {
+      let release = () => {};
+      mount(
+        { enabled: false, chosen: false },
+        {
+          storage: {},
+          set: (enabled) => {
+            // The service worker stores the answer, and storage tells every
+            // panel, this one included, before the reply gets here.
+            chromeMock.writeStorage({ [SETTING]: enabled });
+            return new Promise((resolve) => {
+              release = () => resolve({ enabled, detached: 0 });
+            });
+          },
+        },
+      );
+      await flush();
+      await showTab(7);
+
+      act(() => button("Use native mode").click());
+      await flush();
+      // Still waiting on its own reply: the question stays, saying so.
+      expect(question()).not.toBeNull();
+      expect(question()?.querySelector("button")?.textContent?.trim()).toBe(
+        "Turning on…",
+      );
+      expect(sentOfType("NATIVE_READ")).toEqual([]);
+
+      release();
+      await flush();
+      expect(question()).toBeNull();
+      expect(sentOfType("NATIVE_READ").length).toBeGreaterThan(0);
+    });
+
+    it("doesn't lose another window's answer that lands while its own is on its way", async () => {
+      mount(
+        { enabled: true, chosen: true },
+        {
+          storage: { [SETTING]: true },
+          set: (enabled) => {
+            // This panel's Disable is stored and echoed; before its reply
+            // gets here, another window's panel says yes again.
+            chromeMock.writeStorage({ [SETTING]: enabled });
+            chromeMock.writeStorage({ [SETTING]: true });
+            return { enabled, detached: 0 };
+          },
+        },
+      );
+      await flush();
+      await showTab(7);
+
+      act(() => toolbarButton("Disable native mode")!.click());
+      await flush();
+
+      // The setting is on, and this panel agrees.
+      expect(chromeMock.stored[SETTING]).toBe(true);
+      expect(toolbarButton("Enable native mode…")).toBeNull();
+      expect(toolbarButton("NATIVE")).not.toBeNull();
     });
   });
 });

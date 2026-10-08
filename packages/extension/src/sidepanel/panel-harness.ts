@@ -21,6 +21,8 @@ export interface ChromeMock {
    * `onChanged` for what changed. Only with the `storage` option.
    */
   writeStorage: (items: Record<string, unknown>) => void;
+  /** What the stand-in `chrome.storage.local` holds right now. */
+  stored: Record<string, unknown>;
 }
 
 export interface ChromeMockOptions {
@@ -132,6 +134,7 @@ export function installChromeMock(options: ChromeMockOptions = {}): ChromeMock {
   return {
     sent,
     writeStorage,
+    stored,
     emit: (message) => {
       // The panel's trust gate reads `sender.id`; the routing gate reads
       // `sender.tab?.id` alongside the message's own `tabId`.
