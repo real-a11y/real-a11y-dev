@@ -46,6 +46,13 @@ export type NativeNode = {
    *  `aria-describedby`/`aria-description` resolution. Empty string, not
    *  undefined, when there is none (matches `A11yInfo.description`). */
   description?: string;
+  /** Native ids of the rows this node controls (`aria-controls`, as Chromium
+   *  resolves it), each one present in the tree. Absent for none. */
+  controls?: string[];
+  /** The field's value is withheld (sensitive, inside a sensitive field, or
+   *  unclassified); false only for a field classified as not sensitive.
+   *  Absent counts as withheld — see `pickerCurrentOption`. */
+  valueWithheld?: boolean;
 };
 
 /**
@@ -204,4 +211,57 @@ export function isSteppableRole(role: string): boolean {
  */
 export function isSelectableRole(role: string): boolean {
   return role === "option";
+}
+
+/**
+ * The option rows of a native `<select>`, in document order — what the
+ * panel's option picker (`InputPanel`'s `SelectPicker`) lists for it, as the
+ * DOM tree's `GET_FIELD_STATE` does for the same element. Empty for every
+ * other node.
+ *
+ * A real `<select>` is the one `combobox` Chromium gives a `MenuListPopup`
+ * child; a custom `role="combobox"` never has one, so it keeps its click.
+ * The options come from the tree already read, with no round trip, and
+ * include those inside an `<optgroup>`. Choosing one dispatches the existing
+ * `select` action on it, whose in-page `instanceof HTMLOptionElement` check
+ * stays the final word.
+ */
+export function nativeSelectOptions(
+  node: NativeNode,
+  nodes: Map<string, NativeNode>,
+): NativeNode[] {
+  if (node.role !== "combobox" || node.states?.["editable"]) return [];
+  const popup = (node.childIds ?? [])
+    .map((id) => nodes.get(id))
+    .find((child) => child?.role.toLowerCase() === "menulistpopup");
+  if (!popup) return [];
+  const options: NativeNode[] = [];
+  const walk = (id: string) => {
+    const child = nodes.get(id);
+    if (!child) return;
+    if (child.role === "option") options.push(child);
+    else for (const grandchild of child.childIds ?? []) walk(grandchild);
+  };
+  for (const id of popup.childIds ?? []) walk(id);
+  return options;
+}
+
+/**
+ * The option a native `<select>`'s picker marks as the current one — or
+ * none, when the select's value is withheld (ADR-0001): a sensitive select
+ * (`autocomplete="cc-exp-month"`), one inside a sensitive field, or one the
+ * in-page read couldn't classify, as the DOM tree's picker
+ * (`computeFieldState`) marks none for a sensitive select. Fails closed: only
+ * a select classified as not sensitive (`valueWithheld === false`) shows one.
+ * A redaction gate — `scripts/pr-risk.mjs` grades a change to it as such.
+ */
+export function pickerCurrentOption(
+  select: NativeNode,
+  options: NativeNode[],
+): NativeNode | undefined {
+  if (select.valueWithheld !== false) return undefined;
+  return (
+    options.find((o) => o.states?.["selected"] === true) ??
+    options.find((o) => o.name === select.value)
+  );
 }

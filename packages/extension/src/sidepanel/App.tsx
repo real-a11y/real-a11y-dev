@@ -44,7 +44,12 @@ import {
   type NativeUnavailableReason,
   type TabCapability,
 } from "../native/capability.js";
-import { isTypableRole, type NativeNode } from "../native/native-actions.js";
+import {
+  isTypableRole,
+  nativeSelectOptions,
+  pickerCurrentOption,
+  type NativeNode,
+} from "../native/native-actions.js";
 import type { NativeAction } from "../native/native-core.js";
 import { nativeToExtractionResult } from "../native/native-export.js";
 import {
@@ -54,7 +59,8 @@ import {
 } from "../routing.js";
 import type { ContentToPanel, PanelToContent } from "../types.js";
 
-import { describeAction } from "./action-feedback.js";
+import { describeAction, describeSelection } from "./action-feedback.js";
+import { ControlsChip, JUMP_FLASH_MS } from "./ControlsChip.js";
 import {
   buildExportMarkdown,
   ALL_VIEWS,
@@ -96,10 +102,11 @@ import { TabSequenceView } from "./TabSequenceView.js";
  *  action — same rationale and value as `DogfoodPanel.tsx`'s `SETTLE_MS`. */
 const NATIVE_SETTLE_MS = 250;
 
-/** How many settle windows (~5s) a sent key's native re-read waits for an
- *  in-flight action. If one is still running after that, the read is skipped
- *  as any other would be, and Refresh is the way back. */
-const MAX_SEND_KEY_REREAD_WAITS = 20;
+/** How many settle windows (~5s) `whenNativeIdle` waits for a native read or
+ *  action in flight: a sent key's re-read, or an option picked while one ran.
+ *  If one is still running after that, the key's read is skipped as any
+ *  other would be (Refresh is the way back), and the pick says so. */
+const MAX_NATIVE_IDLE_WAITS = 20;
 
 /** How long after a sent key is acknowledged a navigation still counts as the
  *  key's own, and gets the destination read. An async submit handler can
@@ -666,7 +673,7 @@ export function App() {
       if (mutated) forceRender((c) => c + 1);
       setSelectedId(targetId);
       setFlashingId(targetId);
-      setTimeout(() => setFlashingId(null), 700);
+      setTimeout(() => setFlashingId(null), JUMP_FLASH_MS);
       // Reveal the row even if it is already the selection (jump chips can
       // target the current node); the reveal effect scrolls once ancestors
       // are expanded and `visibleNodeIds` recomputed.
@@ -1386,6 +1393,7 @@ export function App() {
               label: node.a11y.name || node.dom.tagName,
               value: response.value || "",
               options: response.options,
+              valueWithheld: response.valueWithheld === true,
             });
           },
         );
@@ -1641,6 +1649,17 @@ export function App() {
     [loadNativeTreeCore],
   );
 
+  /** Wait, bounded (~5 s), for a native read or action in flight to finish,
+   *  for an operation that mustn't be skipped just because one is running.
+   *  Resolves false if one is still running after that. */
+  const whenNativeIdle = useCallback(async (): Promise<boolean> => {
+    for (let wait = 0; nativeInFlight.current; wait++) {
+      if (wait >= MAX_NATIVE_IDLE_WAITS) return false;
+      await sleep(NATIVE_SETTLE_MS);
+    }
+    return true;
+  }, []);
+
   /** The tail every native operation that can change the page shares (an
    *  action, a sent key): let the page settle, then read it again — or, when
    *  the operation navigated, read the destination through
@@ -1745,7 +1764,16 @@ export function App() {
    *  re-renders a list doesn't leave the tree showing backendDOMNodeIds the
    *  page has already discarded. */
   const dispatchNativeAction = useCallback(
-    async (nodeId: string, action: NativeAction, value?: string) => {
+    async (
+      nodeId: string,
+      action: NativeAction,
+      value?: string,
+      opts: {
+        /** Say this on success instead of the action's own wording — a
+         *  sensitive select's choice, which mustn't name the option. */
+        feedback?: string;
+      } = {},
+    ) => {
       if (!nativeModeEnabled || nativeInFlight.current) return;
       nativeInFlight.current = true;
       try {
@@ -1753,10 +1781,13 @@ export function App() {
         const tabChangeAtStart = tabChangeToken.current;
         // Worded from the node as it is before the action, so a checked
         // checkbox reads "Unchecked" — and from its name, never its id.
-        const feedback = nativeActionFeedback(
-          nativeNodesRef.current.get(nodeId),
-          action,
-        );
+        const feedback =
+          opts.feedback ??
+          nativeActionFeedback(
+            nativeNodesRef.current.get(nodeId),
+            action,
+            nativeNodesRef.current,
+          );
         // Every failure is reported where the DOM tree reports its own, in
         // the feedback bar; the status line alone is easy to miss.
         const fail = (why: string) => {
@@ -1910,6 +1941,42 @@ export function App() {
       explicitAction?: "increment" | "decrement" | "select",
     ) => {
       if (!nativeModeEnabled) return;
+      // A real `<select>` opens the same option picker the DOM tree's does,
+      // listing its own option rows from the tree already read. Checked
+      // before an explicit `select`, which a role-filter list passes for any
+      // row it offers selection on: dispatched on the `<select>` itself it
+      // would only be refused, since only an option can be selected.
+      if (explicitAction === undefined || explicitAction === "select") {
+        const options = nativeSelectOptions(node, nativeNodesRef.current);
+        if (options.length > 0) {
+          // A disabled select can't be changed on the page, so it can't be
+          // here either.
+          if (node.states?.["disabled"] === true) {
+            announce(`${node.name || node.role} is disabled`, 2500);
+            return;
+          }
+          // No current option for a select whose value is withheld — see
+          // the gate's own doc.
+          const current = pickerCurrentOption(node, options);
+          setInputState({
+            type: "select",
+            nodeId: node.id,
+            label: node.name || node.role,
+            value: current?.name ?? "",
+            // Each option is named by its own row id, which a submit
+            // dispatches `select` on.
+            options: options.map((o) => ({
+              value: o.id,
+              label: o.name || o.role,
+              selected: o === current,
+              ...(o.states?.["disabled"] === true ? { disabled: true } : {}),
+            })),
+            source: "native",
+            valueWithheld: node.valueWithheld !== false,
+          });
+          return;
+        }
+      }
       if (explicitAction) {
         void dispatchNativeAction(node.id, explicitAction);
         return;
@@ -1970,6 +2037,36 @@ export function App() {
     (nodeId: string, value: string) => {
       if (inputState?.source === "native") {
         setInputState(null);
+        // A native option picker's value is the chosen option's row id, and
+        // selecting means acting on that option, not on the `<select>`. The
+        // picker has closed, so a choice made while another native operation
+        // holds the line waits for it rather than being dropped unseen.
+        if (inputState.type === "select") {
+          const option =
+            inputState.options?.find((o) => o.value === value)?.label ?? "";
+          const feedback = describeSelection(
+            inputState.label,
+            option,
+            inputState.valueWithheld === true,
+          );
+          // The option's id belongs to the tree it was chosen from. A tab
+          // switch or a navigation while this waits drops that tree, and
+          // the choice with it: `dispatchNativeAction` below is this
+          // render's, still bound to the tab the panel has left.
+          const token = nativeOpToken.current;
+          void whenNativeIdle().then((idle) => {
+            if (token !== nativeOpToken.current) return;
+            if (!idle) {
+              announce(
+                "Failed: the panel is busy — choose the option again",
+                3000,
+              );
+              return;
+            }
+            void dispatchNativeAction(value, "select", undefined, { feedback });
+          });
+          return;
+        }
         // An untouched empty submit never gets here: InputPanel cancels it
         // when `blockEmptySubmit` is set (see its doc). An empty value that
         // does arrive was typed and cleared on purpose — "empty this field".
@@ -1986,8 +2083,16 @@ export function App() {
         },
         () => {
           const name = node?.a11y.name || nodeId;
+          const option =
+            inputState?.options?.find((o) => o.value === value)?.label ?? value;
           announce(
-            actionType === "select" ? `Selected: ${value}` : `Typed in ${name}`,
+            actionType === "select"
+              ? describeSelection(
+                  inputState?.label ?? name,
+                  option,
+                  inputState?.valueWithheld === true,
+                )
+              : `Typed in ${name}`,
             2000,
           );
           // Re-extract tree to reflect new values
@@ -1996,7 +2101,15 @@ export function App() {
       );
       setInputState(null);
     },
-    [nodes, inputState, sendToBoundTab, reExtract, dispatchNativeAction],
+    [
+      nodes,
+      inputState,
+      sendToBoundTab,
+      reExtract,
+      dispatchNativeAction,
+      whenNativeIdle,
+      announce,
+    ],
   );
 
   const handleInputCancel = useCallback(() => {
@@ -2337,10 +2450,7 @@ export function App() {
           until: Date.now() + NATIVE_KEY_NAV_WINDOW_MS,
         };
         void (async () => {
-          for (let wait = 0; nativeInFlight.current; wait++) {
-            if (wait >= MAX_SEND_KEY_REREAD_WAITS) return;
-            await sleep(NATIVE_SETTLE_MS);
-          }
+          if (!(await whenNativeIdle())) return;
           // Only a re-read of this page says what the key did. A skipped one
           // leaves the tree from before the key, and a failed one clears it
           // only once its render lands: neither is for `afterRead` to judge.
@@ -2356,7 +2466,7 @@ export function App() {
         })();
       });
     },
-    [sendKeyOnly, nativeTreeTabId, settleThenReread],
+    [sendKeyOnly, nativeTreeTabId, settleThenReread, whenNativeIdle],
   );
 
   // Follow a navigation inside a sent key's window (see above). A native
@@ -3456,63 +3566,35 @@ export function App() {
                               </span>
                             );
                           })()}
-                          {/* Forward cross-links (aria-controls or heuristic): jump to controlled element(s) */}
+                          {/* Cross-links (aria-controls or heuristic): to the
+                              rows this one controls, and back to those that
+                              control it. */}
                           {controlsIndex.forward.get(id)?.map((targetId) => {
                             const target = asDom(nodes.get(targetId));
                             if (!target) return null;
-                            const role = getDisplayRole(target);
-                            const name = target.a11y.name;
-                            const isInferred = controlsIndex.inferred.has(id);
                             return (
-                              <button
+                              <ControlsChip
                                 key={`controls-${targetId}`}
-                                class={`sn-controls-link${isInferred ? " sn-controls-link--inferred" : ""}`}
-                                tabIndex={-1}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleJumpToNode(targetId);
-                                }}
-                                title={
-                                  isInferred
-                                    ? `Likely controls this ${role} (inferred from aria-haspopup + aria-expanded; no aria-controls set)`
-                                    : `Jump to the ${role} this element controls`
-                                }
-                              >
-                                {"→ "}
-                                {role}
-                                {name &&
-                                  ` "${name.length > 24 ? name.slice(0, 24) + "…" : name}"`}
-                              </button>
+                                role={getDisplayRole(target)}
+                                name={target.a11y.name}
+                                direction="forward"
+                                inferred={controlsIndex.inferred.has(id)}
+                                onJump={() => handleJumpToNode(targetId)}
+                              />
                             );
                           })}
-                          {/* Reverse cross-links: jump back to the trigger(s) controlling this element */}
                           {controlsIndex.reverse.get(id)?.map((triggerId) => {
                             const trigger = asDom(nodes.get(triggerId));
                             if (!trigger) return null;
-                            const role = getDisplayRole(trigger);
-                            const name = trigger.a11y.name;
-                            const isInferred =
-                              controlsIndex.inferred.has(triggerId);
                             return (
-                              <button
+                              <ControlsChip
                                 key={`controlled-by-${triggerId}`}
-                                class={`sn-controls-link sn-controls-link--reverse${isInferred ? " sn-controls-link--inferred" : ""}`}
-                                tabIndex={-1}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleJumpToNode(triggerId);
-                                }}
-                                title={
-                                  isInferred
-                                    ? `Likely controlled by this ${role} (inferred; no aria-controls set on the trigger)`
-                                    : `Jump to the ${role} that controls this element`
-                                }
-                              >
-                                {"← "}
-                                {role}
-                                {name &&
-                                  ` "${name.length > 24 ? name.slice(0, 24) + "…" : name}"`}
-                              </button>
+                                role={getDisplayRole(trigger)}
+                                name={trigger.a11y.name}
+                                direction="reverse"
+                                inferred={controlsIndex.inferred.has(triggerId)}
+                                onJump={() => handleJumpToNode(triggerId)}
+                              />
                             );
                           })}
                         </>

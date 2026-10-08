@@ -351,7 +351,10 @@ export function registerNativeMode(): void {
               // native producer already draws for it). `placeholder` is the
               // same kind of page-authored, non-redacted text. `childIds` is
               // what lets a consumer render an actual tree instead of a flat
-              // depth-indented list.
+              // depth-indented list. `controls` is the `aria-controls`
+              // relation as row ids — structure, not content.
+              // `valueWithheld` is the field's in-page sensitivity verdict,
+              // a boolean, never the value it withholds.
               nodes: value.nodes.map((n) => ({
                 id: n.id,
                 role: n.role,
@@ -365,6 +368,8 @@ export function registerNativeMode(): void {
                 rawValue: n.rawValue,
                 placeholder: n.placeholder,
                 description: n.description,
+                controls: n.controls,
+                valueWithheld: n.valueWithheld,
               })),
             });
             return;

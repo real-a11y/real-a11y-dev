@@ -37,6 +37,7 @@ import { fileURLToPath } from "node:url";
 
 import {
   chromium,
+  expect,
   test as base,
   type BrowserContext,
   type Page,
@@ -95,6 +96,8 @@ export interface NativeNode {
   value?: string;
   rawValue?: string;
   description?: string;
+  /** Ids of the rows this node controls (`aria-controls`). */
+  controls?: string[];
 }
 
 export interface NativeReadResult {
@@ -377,6 +380,27 @@ export class NativeHarness {
    * and a worker may have several fixture tabs alive at once — matching on the
    * bare fixture name would hand back whichever tab happened to be first.
    */
+  /**
+   * Open a fixture, bring it forward, reload the panel onto it and show the
+   * native tree: click NATIVE (which renders only once the DOM producer has
+   * connected) and wait for the auto-load's first rows. Returns the page.
+   */
+  async showNative(fixture: string): Promise<Page> {
+    const { page } = await this.open(fixture);
+    await page.bringToFront();
+    await this.panel.reload();
+    const toggle = this.panel
+      .getByRole("group", { name: "Tree producer" })
+      .getByRole("button", { name: "NATIVE", exact: true });
+    await expect(toggle).toBeVisible({ timeout: 20_000 });
+    await toggle.click();
+    await expect(toggle).toHaveAttribute("aria-pressed", "true");
+    await expect
+      .poll(() => this.panel.locator(".sn-node").count(), { timeout: 20_000 })
+      .toBeGreaterThan(0);
+    return page;
+  }
+
   async open(fixture: string): Promise<FixtureTab> {
     const url = `${this.browser.fixtureOrigin}/${fixture}?t=${Date.now()}-${this.opened.length}`;
     const page = await this.browser.context.newPage();

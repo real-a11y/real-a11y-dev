@@ -17,6 +17,9 @@ export type FieldState =
       value: string;
       placeholder?: string;
       options?: SelectOption[];
+      /** Set for a sensitive field, whose value `value` leaves out — for a
+       *  `<select>`, which option is chosen. */
+      valueWithheld?: true;
     };
 
 /**
@@ -61,12 +64,16 @@ export function computeFieldState(el: Element): FieldState {
       value: opt.value,
       label: opt.textContent?.trim() || opt.value,
       selected: sensitive ? false : opt.selected,
+      // `:disabled`, not `.disabled`: a disabled `<optgroup>` disables its
+      // options without setting their own attribute.
+      ...(opt.matches(":disabled") ? { disabled: true } : {}),
     }));
     return {
       success: true,
       type: "select",
       value: sensitive ? "" : select.value,
       options,
+      ...(sensitive ? { valueWithheld: true as const } : {}),
     };
   }
 

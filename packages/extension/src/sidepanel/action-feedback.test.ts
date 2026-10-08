@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 
-import { describeAction } from "./action-feedback.js";
+import { describeAction, describeSelection } from "./action-feedback.js";
 
 describe("describeAction", () => {
   it("says the action's label and the node's name", () => {
@@ -54,6 +54,20 @@ describe("describeAction", () => {
     );
     expect(describeAction({ role: "spinbutton", name: "Q" }, "decrement")).toBe(
       null,
+    );
+  });
+});
+
+describe("describeSelection", () => {
+  it("names the option chosen in an ordinary select", () => {
+    expect(describeSelection("Country", "Spain", false)).toBe(
+      "Selected: Spain",
+    );
+  });
+
+  it("names only the field for a sensitive one, never the option", () => {
+    expect(describeSelection("Expiry month", "02", true)).toBe(
+      "Selected an option in Expiry month",
     );
   });
 });

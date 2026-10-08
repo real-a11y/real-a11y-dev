@@ -11,6 +11,21 @@ export interface FeedbackTarget {
 }
 
 /**
+ * The feedback line after an option is chosen in a select: the option, or,
+ * for a field whose value is withheld (a sensitive select, ADR-0001), only
+ * the field — which option was chosen IS the value. Shared by both trees.
+ */
+export function describeSelection(
+  field: string,
+  option: string,
+  valueWithheld: boolean,
+): string {
+  return valueWithheld
+    ? `Selected an option in ${field}`
+    : `Selected: ${option}`;
+}
+
+/**
  * The action-feedback line for an action that landed on the page, in one
  * wording for both trees: the DOM tree's `handleActivate` and the native
  * tree's `nativeActionFeedback` both call it, so the two can't drift apart.

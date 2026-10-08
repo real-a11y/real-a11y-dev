@@ -153,6 +153,29 @@
 
   ([#459](https://github.com/real-a11y/real-a11y-dev/pull/459))
 
+- Two more of the DOM tree's controls work in the native tree:
+  - `aria-controls` jump chips. A row shows a chip to each row it controls,
+    and a controlled row shows one back to its controller, plus the DOM
+    tree's dashed "likely" chip for an open menu button with no
+    `aria-controls`. Both trees now draw the same chip. `Alt`+`J` follows a
+    row's links one by one from the keyboard, and `Alt`+`Shift`+`J` goes
+    back. A jump opens the rows above its target and leaves a scope the
+    target is outside.
+  - The option picker for a drop-down `<select>`: activating its row lists
+    its options, starting on the current one, and choosing one selects it on
+    the page. A disabled option or select can't be chosen. A choice made
+    while a read is running waits for it instead of being dropped. A custom
+    `role="combobox"` is still clicked.
+  - A sensitive select, in either tree, shows no current option in the
+    picker, even when it is empty or the native tree couldn't classify it,
+    and the feedback after a choice names the field ("Selected an option in
+    Expiry month"), never the option.
+  - In both trees, the option picker no longer announces its first option as
+    selected when the field reports no current option (a sensitive select);
+    only the field's own current option is announced as selected.
+
+  ([#463](https://github.com/real-a11y/real-a11y-dev/pull/463))
+
 ## 0.1.15
 
 ### Patch Changes

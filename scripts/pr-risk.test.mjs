@@ -490,6 +490,75 @@ describe("field-value redaction covers the extension's page-text reads", () => {
   });
 });
 
+describe("field-value redaction covers the extension's option picker", () => {
+  it("grades marking a withheld select's current option, or naming the choice, 🔴 high", async () => {
+    // A sensitive select's chosen option IS its value. Letting the picker
+    // mark it, or the feedback name it, puts the value on screen: either
+    // edit names only the gate it loosens.
+    const gatePath = "packages/extension/src/native/native-actions.ts";
+    const gate = `export function pickerCurrentOption(select, options) {\n  if (select.valueWithheld !== false) return undefined;\n  return options.find((o) => o.states?.selected === true);\n}\n`;
+    const feedbackPath = "packages/extension/src/sidepanel/action-feedback.ts";
+    const feedback = `export function describeSelection(field, option, valueWithheld) {\n  return valueWithheld ? \`Selected an option in \${field}\` : \`Selected: \${option}\`;\n}\n`;
+    const result = await grade(
+      {
+        [gatePath]: gate.replace(
+          "  if (select.valueWithheld !== false) return undefined;\n",
+          "",
+        ),
+        [feedbackPath]: feedback.replace(
+          "valueWithheld ? `Selected an option in ${field}` : ",
+          "",
+        ),
+      },
+      { base: { [gatePath]: gate, [feedbackPath]: feedback } },
+    );
+
+    assert.equal(result.tier, "high");
+    assert.deepEqual(evidenceFor(result, "field-value-redaction"), [
+      `${gatePath} → pickerCurrentOption`,
+      `${feedbackPath} → describeSelection`,
+    ]);
+  });
+
+  it("grades loosening the native verdict's fail-closed flag 🔴 high", async () => {
+    const corePath = "packages/extension/src/native/native-core.ts";
+    const core = `export function fieldValueWithheld(read) {\n  return !(read.classified === true && read.sensitive !== true);\n}\n`;
+    const result = await grade(
+      {
+        [corePath]: core.replace("read.classified === true && ", ""),
+      },
+      { base: { [corePath]: core } },
+    );
+
+    assert.equal(result.tier, "high");
+    assert.deepEqual(evidenceFor(result, "field-value-redaction"), [
+      `${corePath} → fieldValueWithheld`,
+    ]);
+  });
+});
+
+describe("field-value redaction covers selecting an option row", () => {
+  it("grades naming a withheld select's option from its row 🔴 high", async () => {
+    // A sensitive select's chosen option IS its value: the feedback after a
+    // row's own Select must name only the field.
+    const path = "packages/extension/src/sidepanel/native-feedback.ts";
+    const base = `export function selectFeedback(option, nodes) {\n  const withheld = ownerWithholds(option, nodes);\n  return describeSelection(fieldName(option, nodes), option.name, withheld);\n}\n`;
+    const result = await grade(
+      {
+        [path]: base.replace(
+          "const withheld = ownerWithholds(option, nodes);",
+          "const withheld = false;",
+        ),
+      },
+      { base: { [path]: base } },
+    );
+    assert.equal(result.tier, "high");
+    assert.deepEqual(evidenceFor(result, "field-value-redaction"), [
+      `${path} → selectFeedback`,
+    ]);
+  });
+});
+
 describe("field-value redaction covers the redactInput strict mode", () => {
   it("grades narrowing strictValueRoots or dropping the switch 🔴 high", async () => {
     // Under `redactInput` the native producer withholds all an editing root

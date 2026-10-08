@@ -5,29 +5,9 @@
  * than its id.
  */
 
-import { expect, test, type NativeHarness } from "./harness";
+import { expect, test } from "./harness";
 
 type PanelPage = import("@playwright/test").Page;
-
-/** Bring a fixture forward, reload the panel and show the native tree. */
-async function showNative(
-  nav: NativeHarness,
-  fixture: string,
-): Promise<PanelPage> {
-  const { page } = await nav.open(fixture);
-  await page.bringToFront();
-  await nav.panel.reload();
-  const toggle = nav.panel
-    .getByRole("group", { name: "Tree producer" })
-    .getByRole("button", { name: "NATIVE", exact: true });
-  await expect(toggle).toBeVisible({ timeout: 20_000 });
-  await toggle.click();
-  await expect(toggle).toHaveAttribute("aria-pressed", "true");
-  await expect
-    .poll(() => nav.panel.locator(".sn-node").count(), { timeout: 20_000 })
-    .toBeGreaterThan(0);
-  return page;
-}
 
 /**
  * Route the panel's `SEND_KEY` to the page's top frame, as the background
@@ -81,7 +61,7 @@ async function clickInPanel(
 test("a modal dialog shows the dialog indicator, and Press ESC closes it", async ({
   nav,
 }) => {
-  const page = await showNative(nav, "dialog-modal.html");
+  const page = await nav.showNative("dialog-modal.html");
   await routeSendKeyToPage(nav.panel);
 
   await nav.panel
@@ -113,7 +93,7 @@ test("a modal dialog shows the dialog indicator, and Press ESC closes it", async
 test("the keyboard bar sends a key to the page from the native tree", async ({
   nav,
 }) => {
-  const page = await showNative(nav, "native-panel.html");
+  const page = await nav.showNative("native-panel.html");
   await routeSendKeyToPage(nav.panel);
 
   // Selecting a row moves the page's focus to its element (#412).
@@ -134,7 +114,7 @@ test("the keyboard bar sends a key to the page from the native tree", async ({
 test("a sent key that navigates the page re-reads the native tree there", async ({
   nav,
 }) => {
-  const page = await showNative(nav, "native-nav-key.html");
+  const page = await nav.showNative("native-nav-key.html");
   await routeSendKeyToPage(nav.panel);
 
   await clickInPanel(nav.panel, ".sn-keyboard-bar", "Enter");
@@ -151,7 +131,7 @@ test("a sent key that navigates the page re-reads the native tree there", async 
 test("Enter steps a native slider up and Shift+Enter steps it down", async ({
   nav,
 }) => {
-  const page = await showNative(nav, "slider-single.html");
+  const page = await nav.showNative("slider-single.html");
   const valueNow = () =>
     page.evaluate(() =>
       document.getElementById("temp-thumb")!.getAttribute("aria-valuenow"),
@@ -177,7 +157,7 @@ test("Enter steps a native slider up and Shift+Enter steps it down", async ({
 });
 
 test("type-ahead moves the native tree's selection", async ({ nav }) => {
-  await showNative(nav, "native-panel.html");
+  await nav.showNative("native-panel.html");
   await nav.panel.getByRole("button", { name: "Expand all" }).click();
   await nav.panel.getByRole("treeitem", { name: /^button "Item 2"/ }).click();
 
@@ -191,7 +171,7 @@ test("type-ahead moves the native tree's selection", async ({ nav }) => {
 test("an iframe row is marked embedded, since the native read skips its content", async ({
   nav,
 }) => {
-  await showNative(nav, "pick-mode.html");
+  await nav.showNative("pick-mode.html");
   await nav.panel.getByRole("button", { name: "Expand all" }).click();
   // Whatever Chromium names the frame, its row carries the badge.
   await expect(
@@ -232,7 +212,7 @@ async function failNativeActs(
 test("an aria-modal dialog that Escape can't close says so", async ({
   nav,
 }) => {
-  await showNative(nav, "dialog-aria-modal.html");
+  await nav.showNative("dialog-aria-modal.html");
   await routeSendKeyToPage(nav.panel);
 
   const indicator = nav.panel.locator(".sn-dialog-indicator");
@@ -249,7 +229,7 @@ test("an aria-modal dialog that Escape can't close says so", async ({
 test("a sent key whose page navigates a second later is followed there", async ({
   nav,
 }) => {
-  const page = await showNative(nav, "native-nav-key-async.html");
+  const page = await nav.showNative("native-nav-key-async.html");
   await routeSendKeyToPage(nav.panel);
 
   await clickInPanel(nav.panel, ".sn-keyboard-bar", "Enter");
@@ -263,7 +243,7 @@ test("a sent key whose page navigates a second later is followed there", async (
 test("switching to DOM right after a sent key reads no native tree", async ({
   nav,
 }) => {
-  await showNative(nav, "native-panel.html");
+  await nav.showNative("native-panel.html");
   await routeSendKeyToPage(nav.panel);
 
   // Without the switch, the key is followed by a native read.
@@ -299,7 +279,7 @@ test("switching to DOM right after a sent key reads no native tree", async ({
 test("Press ESC whose re-read fails doesn't say the dialog is still open", async ({
   nav,
 }) => {
-  const page = await showNative(nav, "dialog-modal.html");
+  const page = await nav.showNative("dialog-modal.html");
   await routeSendKeyToPage(nav.panel);
   await nav.panel
     .getByRole("treeitem", { name: /^button "Add delivery address"/ })
@@ -333,7 +313,7 @@ test("Press ESC whose re-read fails doesn't say the dialog is still open", async
 test("a refused native action says Failed in the feedback bar", async ({
   nav,
 }) => {
-  await showNative(nav, "native-parity.html");
+  await nav.showNative("native-parity.html");
   await nav.panel.getByRole("button", { name: "Expand all" }).click();
   await failNativeActs(nav.panel, "refuse");
   await nav.panel
@@ -348,7 +328,7 @@ test("a refused native action says Failed in the feedback bar", async ({
 test("a native action the extension never answers says Failed too", async ({
   nav,
 }) => {
-  await showNative(nav, "native-parity.html");
+  await nav.showNative("native-parity.html");
   await nav.panel.getByRole("button", { name: "Expand all" }).click();
   await failNativeActs(nav.panel, "reject");
   await nav.panel
@@ -363,7 +343,7 @@ test("a native action the extension never answers says Failed too", async ({
 test("a checkbox and a radio word their feedback as the DOM tree does", async ({
   nav,
 }) => {
-  await showNative(nav, "native-parity.html");
+  await nav.showNative("native-parity.html");
   await nav.panel.getByRole("button", { name: "Expand all" }).click();
   const feedback = nav.panel.locator(".sn-action-feedback");
 
@@ -386,7 +366,7 @@ test("a checkbox and a radio word their feedback as the DOM tree does", async ({
 test("Enter opens a native spinbutton's edit box and Shift+Enter steps it down", async ({
   nav,
 }) => {
-  const page = await showNative(nav, "native-parity.html");
+  const page = await nav.showNative("native-parity.html");
   const value = () =>
     page.evaluate(
       () => (document.getElementById("qty") as HTMLInputElement).value,
@@ -410,7 +390,7 @@ test("Enter opens a native spinbutton's edit box and Shift+Enter steps it down",
 test("* opens every sibling group, a heading shows an H badge, and the hints name DblClick", async ({
   nav,
 }) => {
-  await showNative(nav, "native-parity.html");
+  await nav.showNative("native-parity.html");
   const heading = nav.panel.getByRole("treeitem", {
     name: /^heading H2 "Billing"/,
   });

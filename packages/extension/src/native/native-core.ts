@@ -77,7 +77,13 @@ export const NATIVE_REDACTED_VALUE = REDACTED_VALUE;
 interface RawAXNode extends RawNativeAXNode {
   properties?: Array<{
     name: string;
-    value?: { type?: string; value?: unknown };
+    value?: {
+      type?: string;
+      value?: unknown;
+      /** An `idref`/`idrefList` property's targets (`controls`, `owns`, …),
+       *  which carry no scalar `value` at all. */
+      relatedNodes?: Array<{ backendDOMNodeId?: number }>;
+    };
   }>;
   description?: { value?: string };
 }
@@ -184,6 +190,40 @@ function axFacets(
 }
 
 /**
+ * The native ids of the nodes this one controls — Chromium's own resolution
+ * of `aria-controls`, which arrives as an `idrefList` property carrying its
+ * targets' `backendDOMNodeId`s rather than a scalar (so `axFacets` skips it).
+ * Mapped through `nativeIdForBackendNode`, the one encoder of the id format,
+ * and kept only when the target survived normalization: an unnamed wrapper
+ * the normalizer dropped has no row to jump to. Empty for none.
+ *
+ * Why here and not in core's shared vocabulary (`core/src/native/`): this is
+ * an enrichment pass over raw `properties`, like `axFacets` beside it, which
+ * `normalizeNativeAX` never reads; the structural walk stays shared, and the
+ * only consumer of the relation is this panel's jump chips — the CLI and MCP
+ * render no chips. If one starts to, this moves to core with `axFacets`.
+ *
+ * Why only `controls`: `owns` is already structure — Chromium reparents an
+ * owned node under its owner in the tree it sends. `describedby` is already
+ * the node's `description`, resolved to text. `flowto` and `details` have no
+ * DOM-tree chip to match, so they'd be a new feature rather than parity;
+ * they're left for a ticket of their own.
+ */
+export function nativeControls(
+  raw: RawAXNode,
+  keptIds: ReadonlySet<string>,
+): string[] {
+  const prop = raw.properties?.find((p) => p.name === "controls");
+  const ids: string[] = [];
+  for (const related of prop?.value?.relatedNodes ?? []) {
+    if (typeof related.backendDOMNodeId !== "number") continue;
+    const id = nativeIdForBackendNode(related.backendDOMNodeId);
+    if (keptIds.has(id) && !ids.includes(id)) ids.push(id);
+  }
+  return ids;
+}
+
+/**
  * Roles whose backing DOM element could be an `<input>`/`<textarea>`/
  * `<select>` — the read-side counterpart of DOM producer's own tag check in
  * `getKeyAttributes` (`core/src/extraction/dom-extractor.ts`), approximated
@@ -268,6 +308,19 @@ export type EnrichedNativeNode = NativeAXNode &
      *  redacted. Present only for a value-bearing role that actually has
      *  one set. */
     placeholder?: string;
+    /** Native ids of the nodes this one controls (`aria-controls`, as
+     *  Chromium resolves it) that are themselves in the tree — see
+     *  {@link nativeControls}. Absent when there are none. */
+    controls?: string[];
+    /**
+     * Whether this field's value (and which of its options is chosen) must
+     * be withheld from anything shown: true for a sensitive field, for one
+     * inside a sensitive field, and for one the in-page read could not
+     * classify. False only for a field classified as not sensitive. Absent
+     * on a node that was never read as a field, which a consumer treats as
+     * withheld too — see {@link fieldValueWithheld}.
+     */
+    valueWithheld?: boolean;
   };
 
 /** The single capability the native path needs from any CDP transport. */
@@ -499,6 +552,19 @@ export function fieldFacets(
 }
 
 /**
+ * Whether a field's value is withheld, from its in-page read (ADR-0001):
+ * shown only when the element was classified and is not sensitive. An
+ * unclassified field fails closed, as `fieldFacets` does for its value. An
+ * empty sensitive field is withheld too, although it has no value to redact:
+ * which option a sensitive `<select>` has chosen IS its value.
+ *
+ * Exported for its tests.
+ */
+export function fieldValueWithheld(read: PageFieldRead): boolean {
+  return !(read.classified === true && read.sensitive !== true);
+}
+
+/**
  * The structural backstop behind `pageReadValue`'s own shadow-host walk: no
  * node inside a sensitive one in the tree shows a value, whatever its own
  * verdict said. A sensitive field's parts (a month input's "Month" and "Year"
@@ -526,6 +592,7 @@ export function withholdInsideSensitive(
       delete node.value;
       delete node.rawValue;
     }
+    node.valueWithheld = true;
     stack.push(...node.childIds);
   }
 }
@@ -549,12 +616,20 @@ export async function readNativeTree(
   // pass over the raw list, keyed by the same id `normalizeNativeAX` assigns,
   // rather than a per-node lookup.
   const rawById = new Map(full.nodes.map((raw) => [nativeIdOf(raw), raw]));
+  const keptIds = new Set(nodes.map((n) => n.id));
   const enriched: EnrichedNativeNode[] = nodes.map((node) => {
     const raw = rawById.get(node.id);
     const { states, properties, description } = raw
       ? axFacets(raw)
       : { states: {}, properties: {}, description: "" };
-    return { ...node, states, properties, description };
+    const controls = raw ? nativeControls(raw, keptIds) : [];
+    return {
+      ...node,
+      states,
+      properties,
+      description,
+      ...(controls.length > 0 ? { controls } : {}),
+    };
   });
 
   // Field values (see `fieldFacets`) — each candidate classified in-page by
@@ -588,6 +663,7 @@ export async function readNativeTree(
         );
         if (read.classified && read.sensitive) sensitiveIds.push(node.id);
         Object.assign(node, fieldFacets(node.role, axValue, read));
+        node.valueWithheld = fieldValueWithheld(read);
       }),
     );
   } finally {
@@ -1287,6 +1363,12 @@ export function pageStep(this: Element, delta: number): Marker {
  * `role="option"` widget (impossible from the native tree's role-only data
  * alone, the reason `ACTABLE` stayed silent on it). A custom widget refuses
  * cleanly (`not-an-option`) rather than misfiring a wrong action.
+ *
+ * The panel's option picker only opens for a real `<select>` (one Chromium
+ * gives a `MenuListPopup`, see `nativeSelectOptions`), so a `not-an-option`
+ * refusal there means the page changed under the tree since it was read.
+ * It reports "Failed:" rather than falling back to a click: a click on what
+ * is now some other element would act blind. Refresh is the way back.
  */
 export function pageSelectOption(this: Element): Marker {
   const el = this;
@@ -1296,6 +1378,11 @@ export function pageSelectOption(this: Element): Marker {
   }
   const select = el.closest("select");
   if (!select) return { ok: false, reason: "no-select-ancestor" };
+  // A disabled option (or one in a disabled `<optgroup>`), or a disabled
+  // select, can't be chosen on the page, so it can't be from the tree either.
+  if (el.disabled || select.disabled || el.matches(":disabled")) {
+    return { ok: false, reason: "disabled" };
+  }
   select.value = el.value;
   select.dispatchEvent(new Event("change", { bubbles: true }));
   return { ok: true };

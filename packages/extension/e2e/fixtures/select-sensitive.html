@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Sensitive select</title>
+  </head>
+  <body>
+    <!--
+      A payment `<select>`: its chosen option is the card's expiry month, so
+      like any sensitive field its value is withheld (ADR-0001), and the
+      option picker must not show which option is chosen either.
+    -->
+    <label for="exp-month">Expiry month</label>
+    <select id="exp-month" autocomplete="cc-exp-month">
+      <option value="01">01</option>
+      <option value="02">02</option>
+      <option value="11" selected>11</option>
+    </select>
+    <!--
+      Empty, as a payment form starts: its placeholder option is chosen, so
+      there's no value to redact, but which option is chosen must still not
+      show.
+    -->
+    <label for="exp-year">Expiry year</label>
+    <select id="exp-year" autocomplete="cc-exp-year">
+      <option value="" selected>YYYY</option>
+      <option value="2030">2030</option>
+      <option value="2031">2031</option>
+    </select>
+  </body>
+</html>

@@ -12,6 +12,7 @@ import {
   findNative,
   IN_PAGE_ACTION_SOURCE,
   IN_PAGE_READ_VALUE_SOURCE,
+  nativeControls,
   pageClick,
   pageFocus,
   pageReadValue,
@@ -20,6 +21,7 @@ import {
   pageStep,
   pageType,
   readNativeTree,
+  fieldValueWithheld,
   rootIdOf,
   SYNTHETIC_ROOT_ID,
   withholdInsideSensitive,
@@ -88,6 +90,51 @@ describe("readNativeTree", () => {
     expect(res.rawCount).toBe(3);
     expect(res.serialized).toContain('button "Save"');
     expect(findNative(res.nodes, "button", "Save")?.id).toBe("ax-dom-30");
+  });
+
+  it("attaches the rows a node controls, and nothing when it controls none", async () => {
+    const raw = [
+      {
+        nodeId: "1",
+        backendDOMNodeId: 10,
+        role: { value: "RootWebArea" },
+        childIds: ["2", "3"],
+      },
+      {
+        nodeId: "2",
+        backendDOMNodeId: 20,
+        role: { value: "button" },
+        name: { value: "Billing Address" },
+        properties: [
+          {
+            name: "controls",
+            value: {
+              type: "idrefList",
+              relatedNodes: [
+                { backendDOMNodeId: 30 },
+                { backendDOMNodeId: 99 },
+              ],
+            },
+          },
+        ],
+      },
+      {
+        nodeId: "3",
+        backendDOMNodeId: 30,
+        role: { value: "region" },
+        name: { value: "Billing" },
+      },
+    ];
+    const t = new FakeTransport((method) =>
+      method === "Accessibility.getFullAXTree" ? { nodes: raw } : {},
+    );
+    const res = await readNativeTree(t);
+    expect(
+      findNative(res.nodes, "button", "Billing Address")?.controls,
+    ).toEqual(["ax-dom-30"]);
+    expect(findNative(res.nodes, "region", "Billing")).not.toHaveProperty(
+      "controls",
+    );
   });
 
   it("attaches states/properties — the enrichment normalizeNativeAX doesn't do", async () => {
@@ -655,13 +702,51 @@ function node(
   };
 }
 
-/**
- * Live dogfood finding: rounds up to this point never needed a `rootId` at
- * all — the dogfood panel renders a flat depth-indented list. Restoring a
- * real tree structure for the production panel integration needs one, the
- * same way the DOM producer always has exactly one root. Mirrors
- * `@real-a11y-dev/browser`'s own `native-tree.ts` root-synthesis exactly.
- */
+describe("nativeControls", () => {
+  const controls = (relatedNodes: Array<{ backendDOMNodeId?: number }>) => ({
+    nodeId: "1",
+    backendDOMNodeId: 10,
+    role: { value: "tab" },
+    properties: [
+      { name: "controls", value: { type: "idrefList", relatedNodes } },
+    ],
+  });
+
+  it("maps each target's backendDOMNodeId to its row id", () => {
+    expect(
+      nativeControls(
+        controls([{ backendDOMNodeId: 20 }, { backendDOMNodeId: 30 }]),
+        new Set(["ax-dom-20", "ax-dom-30"]),
+      ),
+    ).toEqual(["ax-dom-20", "ax-dom-30"]);
+  });
+
+  it("drops a target the tree doesn't have, and repeats", () => {
+    // A hidden panel, or an unnamed wrapper the normalizer dropped, has no
+    // row to jump to.
+    expect(
+      nativeControls(
+        controls([
+          { backendDOMNodeId: 20 },
+          { backendDOMNodeId: 40 },
+          { backendDOMNodeId: 20 },
+          {},
+        ]),
+        new Set(["ax-dom-20"]),
+      ),
+    ).toEqual(["ax-dom-20"]);
+  });
+
+  it("is empty for a node with no controls relation", () => {
+    expect(
+      nativeControls(
+        { nodeId: "1", role: { value: "button" }, properties: [] },
+        new Set(["ax-dom-20"]),
+      ),
+    ).toEqual([]);
+  });
+});
+
 describe("fieldFacets", () => {
   const classified = { classified: true };
 
@@ -803,6 +888,40 @@ describe("withholdInsideSensitive", () => {
     expect(byId.get("deep")?.value).toBeUndefined();
     expect(byId.get("elsewhere")?.value).toBe("Spain");
   });
+
+  it("marks every node below a sensitive one as withheld", () => {
+    const nodes = [
+      n("wrap", ["field"], { valueWithheld: true }),
+      n("field", [], { valueWithheld: false }),
+      n("elsewhere", [], { valueWithheld: false }),
+    ];
+    withholdInsideSensitive(nodes, ["wrap"]);
+    const byId = new Map(nodes.map((x) => [x.id, x]));
+    expect(byId.get("field")?.valueWithheld).toBe(true);
+    expect(byId.get("elsewhere")?.valueWithheld).toBe(false);
+  });
+});
+
+describe("fieldValueWithheld", () => {
+  it("shows only a field classified as not sensitive", () => {
+    expect(fieldValueWithheld({ classified: true, sensitive: false })).toBe(
+      false,
+    );
+    expect(fieldValueWithheld({ classified: true })).toBe(false);
+  });
+
+  it("withholds a sensitive field, even an empty one", () => {
+    // An empty sensitive select still has an option chosen, and which one
+    // is its value.
+    expect(fieldValueWithheld({ classified: true, sensitive: true })).toBe(
+      true,
+    );
+  });
+
+  it("fails closed on a field the in-page read couldn't classify", () => {
+    expect(fieldValueWithheld({})).toBe(true);
+    expect(fieldValueWithheld({ sensitive: false })).toBe(true);
+  });
 });
 
 describe("capText", () => {
@@ -820,6 +939,13 @@ describe("capText", () => {
   });
 });
 
+/**
+ * Live dogfood finding: rounds up to this point never needed a `rootId` at
+ * all — the dogfood panel renders a flat depth-indented list. Restoring a
+ * real tree structure for the production panel integration needs one, the
+ * same way the DOM producer always has exactly one root. Mirrors
+ * `@real-a11y-dev/browser`'s own `native-tree.ts` root-synthesis exactly.
+ */
 describe("rootIdOf", () => {
   it("returns the single node's id when there's exactly one root", () => {
     const nodes = [node("a", ["b"]), node("b", [], 1)];
@@ -1878,6 +2004,25 @@ describe("in-page actions — select", () => {
       ok: false,
       reason: "not-an-option",
     });
+  });
+
+  it("refuses a disabled option, an option in a disabled optgroup, and a disabled select", () => {
+    document.body.innerHTML = `
+      <select id="a"><option>One</option><option disabled>Two</option></select>
+      <select id="b"><optgroup disabled label="G"><option>Three</option></optgroup></select>
+      <select id="c" disabled><option>Four</option><option>Five</option></select>
+    `;
+    const opt = (sel: string, i: number) =>
+      (document.getElementById(sel) as HTMLSelectElement).options[i]!;
+    for (const option of [opt("a", 1), opt("b", 0), opt("c", 1)]) {
+      expect(on(pageSelectOption, option)).toEqual({
+        ok: false,
+        reason: "disabled",
+      });
+    }
+    expect((document.getElementById("c") as HTMLSelectElement).value).toBe(
+      "Four",
+    );
   });
 
   it("refuses an option with no select ancestor", () => {
