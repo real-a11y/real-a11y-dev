@@ -490,6 +490,71 @@ describe("field-value redaction covers the extension's page-text reads", () => {
   });
 });
 
+describe("field-value redaction covers the names around a sensitive field", () => {
+  it("grades loosening core's name rule, by its renamed and new names, 🔴 high", async () => {
+    // A field's value in another node's name: an empty field gives nothing
+    // away, so widening "empty" withholds less, and the renamed value test
+    // decides what a field holds at all. Each edit names only its gate.
+    const rulePath = "packages/core/src/native/value-regions.ts";
+    const rule = `export function carriesAXValue(raw) {\n  return nonEmptyAXText(raw.value?.value) !== undefined;\n}\n\nexport function givesValueAway(field, byId) {\n  return field.ignored === true || holdsContent(field, byId, false);\n}\n`;
+    const result = await grade(
+      {
+        [rulePath]: rule
+          .replace(
+            "nonEmptyAXText(raw.value?.value) !== undefined",
+            'typeof raw.value?.value === "string"',
+          )
+          .replace("field.ignored === true || ", ""),
+      },
+      { base: { [rulePath]: rule } },
+    );
+
+    assert.equal(result.tier, "high");
+    assert.deepEqual(evidenceFor(result, "field-value-redaction"), [
+      `${rulePath} → carriesAXValue, givesValueAway, holdsContent`,
+    ]);
+  });
+
+  it("still grades loosening the normalizer's own carriesValue 🔴 high", async () => {
+    // A different function from carriesAXValue: the normalizer's rule that a
+    // node holding a value never lends its text to a name.
+    const normPath = "packages/core/src/native/ax-normalize.ts";
+    const norm = `function carriesValue(node) {\n  return nonEmptyAXText(node.value?.value) !== undefined;\n}\n`;
+    const result = await grade(
+      { [normPath]: norm.replace("!== undefined", "=== null") },
+      { base: { [normPath]: norm } },
+    );
+    assert.equal(result.tier, "high");
+    assert.deepEqual(evidenceFor(result, "field-value-redaction"), [
+      `${normPath} → carriesValue`,
+    ]);
+  });
+
+  it("grades narrowing which fields the extension hands that rule 🔴 high", async () => {
+    // Drop the mask from the extension's roots, or stop looking inside a
+    // target that hides an ignored node, and a password's length or a hidden
+    // card's number names the node around it again.
+    const corePath = "packages/extension/src/native/native-core.ts";
+    const core = `function nameWithholdingRoots(rawNodes, withheld) {\n  const roots = new Set(withheld);\n  for (const raw of rawNodes) {\n    if (isNativePasswordMask(raw.value?.value)) roots.add(raw.nodeId);\n  }\n  return [...roots];\n}\n\nfunction hidesUnreadNode(target, byId, read) {\n  return target.ignored === true || anyChildIgnored(target, byId, read);\n}\n`;
+    const result = await grade(
+      {
+        [corePath]: core
+          .replace(
+            "    if (isNativePasswordMask(raw.value?.value)) roots.add(raw.nodeId);\n",
+            "",
+          )
+          .replace("target.ignored === true || ", ""),
+      },
+      { base: { [corePath]: core } },
+    );
+
+    assert.equal(result.tier, "high");
+    assert.deepEqual(evidenceFor(result, "field-value-redaction"), [
+      `${corePath} → nameWithholdingRoots, isNativePasswordMask, hidesUnreadNode`,
+    ]);
+  });
+});
+
 describe("field-value redaction covers the extension's option picker", () => {
   it("grades marking a withheld select's current option, or naming the choice, 🔴 high", async () => {
     // A sensitive select's chosen option IS its value. Letting the picker

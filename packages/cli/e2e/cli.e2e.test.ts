@@ -556,6 +556,28 @@ describe("field values (built bin)", () => {
     }
   });
 
+  it("tree keeps a hidden card field's number out of the name it gives", async () => {
+    // Chromium ignores an aria-hidden field and sends no value for it, yet
+    // still names the region it labels after the card. With nothing to tell
+    // it holds anything, the field withholds that name (core's
+    // givesValueAway), while a password's own label still names it.
+    const page = dataUrl(`<main><h1>Saved</h1>
+      <input id="hidden-cc" aria-hidden="true" autocomplete="cc-number">
+      <section aria-labelledby="hidden-cc">Saved card</section>
+      <label>Password <input id="pw" type="password"></label>
+      <script>
+        document.getElementById("hidden-cc").value = "CC-" + "SENTINEL-3782";
+        document.getElementById("pw").value = "PW-" + "SENTINEL-1";
+      </script>
+    </main>`);
+    const { code, stdout, stderr } = await runCli(["tree", page]);
+    expect(code).toBe(0);
+    expect(stdout).toContain('region "[redacted]"');
+    expect(stdout).toContain('textbox "Password" = "[redacted]"');
+    expect(stdout).not.toMatch(SENSITIVE);
+    expect(stderr).not.toMatch(SENSITIVE);
+  });
+
   it("list and tabs print values too; audit never does", async () => {
     const list = await runCli(["list", "form", FORM_PAGE]);
     expect(list.stdout).toContain('= "VALUE-email@example.com"');

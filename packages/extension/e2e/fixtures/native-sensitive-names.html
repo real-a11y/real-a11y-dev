@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Sensitive names</title>
+  </head>
+  <body>
+    <!--
+      Chromium names a node from its contents, and an embedded field's value
+      is part of them. Each sensitive card field below would otherwise put the
+      card number into a name that isn't its own (ADR-0001). The plain fields
+      are the controls: a value that isn't sensitive still names its cell, and
+      an empty card field gives nothing away, so its label stays.
+    -->
+    <label
+      ><input type="checkbox" /> Save card
+      <input autocomplete="cc-number" value="4111111111111111"
+    /></label>
+
+    <table>
+      <tr>
+        <td>Card</td>
+        <td><input autocomplete="cc-number" value="5555444433332222" /></td>
+      </tr>
+      <tr>
+        <td>Notes</td>
+        <td><input value="leave at door" /></td>
+      </tr>
+    </table>
+
+    <label
+      ><input type="checkbox" /> Remember
+      <input autocomplete="cc-number" value=""
+    /></label>
+
+    <input id="pin" type="password" value="hunter2xyz" />
+    <button aria-describedby="pin">Show</button>
+    <div role="group" aria-labelledby="pin">Group</div>
+
+    <!--
+      Hidden from the tree, so it is never read as a field, but still the
+      label of the region below.
+    -->
+    <input
+      id="hidden-card"
+      aria-hidden="true"
+      autocomplete="cc-number"
+      value="378282246310005"
+    />
+    <div role="region" aria-labelledby="hidden-card">Saved card</div>
+
+    <!--
+      A field's own label is not another node: it names the field and holds
+      none of its value, filled or not, with something hidden in it or not.
+    -->
+    <label>Password <input type="password" value="hunter2own" /></label>
+    <label
+      >Card number <span aria-hidden="true">*</span>
+      <input autocomplete="cc-number" value="6011000990139424"
+    /></label>
+
+    <!--
+      A card month <select> gives its chosen option away the same ways a text
+      field does: by reference, inside a label, and inside a cell.
+    -->
+    <span id="exp-label">Expires</span>
+    <select
+      id="exp-month"
+      aria-label="Expiry month"
+      autocomplete="cc-exp-month"
+    >
+      <option>01</option>
+      <option selected>07</option>
+    </select>
+    <button aria-describedby="exp-month">Pay</button>
+    <div role="group" aria-labelledby="exp-label exp-month">Expiry</div>
+    <label
+      ><input type="checkbox" /> Bill month
+      <select autocomplete="cc-exp-month">
+        <option>08</option>
+        <option selected>09</option>
+      </select></label
+    >
+    <table>
+      <tr>
+        <td>
+          <select aria-label="Month" autocomplete="cc-exp-month">
+            <option>04</option>
+            <option selected>05</option>
+          </select>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>
