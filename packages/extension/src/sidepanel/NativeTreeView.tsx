@@ -154,6 +154,11 @@ export interface NativeTreeViewProps {
   /** The dialog indicator's **Press ESC**, for the open modal dialog with
    *  this id. The indicator is left out without it. */
   onDialogEscape?: (dialogId: string) => void;
+  /** The "Follow page changes" setting: whether the tree reads itself again
+   *  after every burst of page changes, not only after a navigation. The
+   *  toggle is left out without `onToggleFollowPageChanges`. */
+  followPageChanges?: boolean;
+  onToggleFollowPageChanges?: () => void;
 }
 
 /** A node is worth a click/Enter action, a select action, or both never — the
@@ -230,6 +235,8 @@ export function NativeTreeView({
   pickArmed = false,
   onSendKey,
   onDialogEscape,
+  followPageChanges = false,
+  onToggleFollowPageChanges,
 }: NativeTreeViewProps) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -522,21 +529,31 @@ export function NativeTreeView({
 
   useEffect(() => {
     if (!selectedId) return;
-    const index = visibleIds.indexOf(selectedId);
-    if (index === -1) {
+    if (visibleIds.indexOf(selectedId) === -1) {
       // The selected id is gone from the current tree (a refresh dropped it,
       // or its parent collapsed away). Leaving `selectedId` pointing at a
-      // node no longer in `visibleIds` doesn't just skip this scroll — every
+      // node no longer in `visibleIds` doesn't just skip a scroll — every
       // branch of handleKeyDown below bails out the same way on a -1 index,
       // so the WHOLE keyboard interface goes dead until the user clicks a
       // row with the mouse. Clearing it instead drops into handleKeyDown's
       // "no selection" branch, which re-selects the first visible row on the
       // next Arrow/Home press.
       setSelectedId(null);
-      return;
     }
-    scrollToIndex(index, "nearest");
-  }, [selectedId, visibleIds, scrollToIndex]);
+  }, [selectedId, visibleIds]);
+
+  // Scroll the selection into view when it moves — and only then, as the DOM
+  // tree does. Keyed on the selection and a reveal (`followNonce`), not on
+  // `visibleIds`: a re-read, an automatic one included, rebuilds that list,
+  // and a user who scrolled away from the selected row must not be snapped
+  // back to it every time the page changes.
+  const visibleIdsRef = useRef(visibleIds);
+  visibleIdsRef.current = visibleIds;
+  useEffect(() => {
+    if (!selectedId) return;
+    const index = visibleIdsRef.current.indexOf(selectedId);
+    if (index !== -1) scrollToIndex(index, "nearest");
+  }, [selectedId, followNonce, scrollToIndex]);
 
   // Follow the selection onto the page (`onSelectionReveal`). Debounced: a
   // key-repeat burst walks `selectedId` through several rows, and each
@@ -928,6 +945,17 @@ export function NativeTreeView({
         >
           -
         </button>
+        {onToggleFollowPageChanges && (
+          <button
+            class="sn-toolbar-btn"
+            onClick={onToggleFollowPageChanges}
+            aria-pressed={followPageChanges}
+            aria-label="Follow page changes"
+            title="Follow page changes: read the tree again whenever the page changes, not only after it navigates. Each read shows Chrome's debugging bar."
+          >
+            ⟳
+          </button>
+        )}
         <span class="sn-page-url" aria-live="polite">
           {status}
         </span>

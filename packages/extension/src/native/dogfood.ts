@@ -26,7 +26,7 @@ export type DogfoodEventKind =
   | "detach-stale" // revoke cleanup over bookkeeping Chrome had already dropped
   | "reattach-ok" // recovered after an unsolicited detach
   | "reattach-failed" // could not recover
-  | "reattach-abandoned" // a drop we never retried (native mode went off, or a pick or automatic read, which end instead)
+  | "reattach-abandoned" // a drop we never retried (native mode went off, the user's Cancel on Chrome's bar caused it, or a pick or automatic read, which end instead)
   | "conflict" // attach refused — another debugger already attached
   | "unavailable" // native can't run on this tab (see `reason`)
   | "read" // read the native tree (with node counts)
@@ -258,7 +258,7 @@ export class DogfoodLog {
       `    of which you cancelled on Chrome's bar (no recovery expected): ${c.detachCancelledByUser}`,
       `  reattach recovered: ${c.reattachOk}   failed: ${c.reattachFailed}`,
       "",
-      `  recovery not attempted (native mode switched off, or a pick that ends instead): ${c.reattachAbandoned}`,
+      `  recovery not attempted (native mode switched off, the user's Cancel caused the drop, or a pick or automatic read that ends instead): ${c.reattachAbandoned}`,
       "",
       "— DevTools conflict —",
       `  attach refused (another debugger attached): ${c.conflict}`,

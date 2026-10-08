@@ -132,6 +132,33 @@ async function startFixtureServer(): Promise<{
     // `normalize` collapses `..` before the join, so a fixture URL can never
     // escape the fixture directory even though this only ever serves tests.
     const path = normalize(new URL(req.url ?? "/", "http://x").pathname);
+    // A navigation that never commits: Chromium starts it (the extension
+    // hears `onBeforeNavigate`), gets No Content, and stays on the page.
+    if (path === "/no-content") {
+      res.writeHead(204);
+      res.end();
+      return;
+    }
+    // A navigation that commits late: `/slow?ms=N&to=<fixture>` answers with
+    // that fixture after N ms, while the page it leaves is still showing.
+    if (path === "/slow") {
+      const query = new URL(req.url ?? "/", "http://x").searchParams;
+      const to = normalize(`/${query.get("to") ?? ""}`);
+      setTimeout(
+        () =>
+          void readFile(join(FIXTURE_DIR, to))
+            .then((body) => {
+              res.writeHead(200, { "content-type": "text/html" });
+              res.end(body);
+            })
+            .catch(() => {
+              res.writeHead(404);
+              res.end();
+            }),
+        Number(query.get("ms") ?? 0),
+      );
+      return;
+    }
     void readFile(join(FIXTURE_DIR, path))
       .then((body) => {
         res.writeHead(200, {

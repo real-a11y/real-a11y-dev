@@ -92,6 +92,30 @@ describe("readNativeTree", () => {
     expect(findNative(res.nodes, "button", "Save")?.id).toBe("ax-dom-30");
   });
 
+  it("names the document as it was before the tree, when a navigation commits mid-read", async () => {
+    const raw: RawNativeAXNode[] = [
+      { nodeId: "1", backendDOMNodeId: 10, role: { value: "RootWebArea" } },
+    ];
+    // The next document commits as soon as the old one's tree is read.
+    let committed = false;
+    const t = new FakeTransport((method) => {
+      if (method === "Accessibility.getFullAXTree") {
+        committed = true;
+        return { nodes: raw };
+      }
+      if (method === "Page.getFrameTree") {
+        return {
+          frameTree: { frame: { loaderId: committed ? "NEW" : "OLD" } },
+        };
+      }
+      return {};
+    });
+    const res = await readNativeTree(t);
+    // The old page's nodes must not carry the new page's id: the panel would
+    // take them as the new page's read.
+    expect(res.documentId).toBe("OLD");
+  });
+
   it("attaches the rows a node controls, and nothing when it controls none", async () => {
     const raw = [
       {

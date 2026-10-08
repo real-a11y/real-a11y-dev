@@ -80,7 +80,11 @@ export { createPicker } from "./interaction/picker.js";
 export type { Picker, PickerOptions } from "./interaction/picker.js";
 
 // Observation
-export { DomObserver } from "./observation/dom-observer.js";
+export {
+  DomObserver,
+  DOM_OBSERVER_DEBOUNCE_MS,
+  DOM_OBSERVER_MAX_WAIT_MS,
+} from "./observation/dom-observer.js";
 export {
   LiveTreeExtractor,
   type LiveTreeExtractorOptions,

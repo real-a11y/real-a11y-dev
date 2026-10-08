@@ -135,6 +135,8 @@ async function mergeAndSendTree(tabId: number) {
   // The outstanding request is answered by this publish, whatever prompted the
   // merge — so the guard above goes back to being purely port-driven.
   panelTreeRequests.delete(tabId);
+  const topFrameChanged = state.topFrameChanged;
+  state.topFrameChanged = false;
   chrome.runtime
     .sendMessage({
       type: "TREE_DATA",
@@ -144,6 +146,7 @@ async function mergeAndSendTree(tabId: number) {
         rootId: topFrame.rootId,
         pageTitle: topFrame.pageTitle,
         pageUrl: topFrame.frameUrl,
+        topFrameChanged,
       },
     })
     .catch(() => {
@@ -511,6 +514,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           nodes: message.payload.nodes,
           rootId: message.payload.rootId,
         });
+        if (frameId === 0) state.topFrameChanged = true;
         scheduleMerge(tabId);
 
         // Decide what to send back to the frame(s). Rules are in routing.ts

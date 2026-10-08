@@ -30,6 +30,12 @@ export interface TabState {
    * that is mid-navigation still answers, from the document it is leaving.
    */
   droppedFrames: Set<number>;
+  /**
+   * The top frame announced a tree since the last merge was published. The
+   * panel's native auto-refresh reads the top frame only, so a change in a
+   * subframe (an animating ad) must not prompt it.
+   */
+  topFrameChanged: boolean;
 }
 
 export function createTabState(): TabState {
@@ -39,6 +45,7 @@ export function createTabState(): TabState {
     mergeTimer: null,
     recoveryChecked: false,
     droppedFrames: new Set(),
+    topFrameChanged: false,
   };
 }
 

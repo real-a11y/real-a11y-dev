@@ -344,6 +344,10 @@ export interface NativeTreeResult {
   /** The id of the tree's single root — see {@link rootIdOf}. Empty string
    *  for an empty tree. */
   rootId: string;
+  /** The top frame's document (its loader id) as the read began: a new one
+   *  on every navigation, a reload included, unlike the URL. Absent when
+   *  Chromium didn't say. */
+  documentId?: string;
 }
 
 /**
@@ -606,6 +610,16 @@ export async function readNativeTree(
   transport: CdpTransport,
 ): Promise<NativeTreeResult> {
   await transport.send("Accessibility.enable");
+  // Which document this is: see `NativeTreeResult.documentId`. Asked before
+  // the tree, so a navigation that commits in between can only name the old
+  // document over the new one's nodes, which the panel reads again, never
+  // the new document over the old one's, which it would take as current.
+  const documentId = await transport
+    .send<{ frameTree?: { frame?: { loaderId?: string } } }>(
+      "Page.getFrameTree",
+    )
+    .then((r) => r.frameTree?.frame?.loaderId)
+    .catch(() => undefined);
   const full = await transport.send<{ nodes: RawAXNode[] }>(
     "Accessibility.getFullAXTree",
   );
@@ -687,6 +701,7 @@ export async function readNativeTree(
     rawCount: full.nodes.length,
     keptCount,
     rootId,
+    ...(documentId !== undefined ? { documentId } : {}),
   };
 }
 
