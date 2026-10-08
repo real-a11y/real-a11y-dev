@@ -75,11 +75,6 @@ function fenced(body: string): string {
   return ["```", body.trim() ? body : "(empty)", "```"].join("\n");
 }
 
-/**
- * Build the Markdown document: a metadata header followed by a fenced block
- * for each selected view, in canonical order. Defaults to all views. Pastes
- * cleanly into a GitHub issue or any Markdown tracker.
- */
 /** What to call a page: its title, or its URL if it has none, or "Untitled
  *  page". The report's heading and the side panel's header both name it so. */
 export function pageLabel(
@@ -89,6 +84,11 @@ export function pageLabel(
   return pageTitle?.trim() || pageUrl || "Untitled page";
 }
 
+/**
+ * Build the Markdown document: a metadata header followed by a fenced block
+ * for each selected view, in canonical order. Defaults to all views. Pastes
+ * cleanly into a GitHub issue or any Markdown tracker.
+ */
 export function buildExportMarkdown(
   views: ExportViews,
   meta: ExportMeta,

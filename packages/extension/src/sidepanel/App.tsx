@@ -316,6 +316,10 @@ export function App() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [renderCount, forceRender] = useState(0);
   const [connected, setConnected] = useState(false);
+  // The same, for callbacks that run after a reply. Written during render,
+  // like `pickModeOnRef`.
+  const connectedRef = useRef(false);
+  connectedRef.current = connected;
   // Whether a page has connected to this panel at all since it opened.
   const everConnected = useRef(false);
   if (connected) everConnected.current = true;
@@ -658,6 +662,10 @@ export function App() {
   // in the page, or in another window) gets none when focus moves.
   const focusBeforeCommit = useRef<Element | null>(null);
   focusBeforeCommit.current = document.activeElement;
+  // Focus a commit took away while nothing could take it in its place: the
+  // panel was waiting for a page to connect. It is put back once a tree or a
+  // list is on screen again, unless something else has taken focus by then.
+  const focusDisplaced = useRef(false);
 
   /** Drop the native tree and orphan any native read or action in flight.
    *  Bumping `nativeOpToken` makes a late reply recognizably stale to every
@@ -721,6 +729,7 @@ export function App() {
   const listViewRef = useRef<HTMLElement | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const exportRef = useRef<HTMLDivElement>(null);
+  const exportButtonRef = useRef<HTMLButtonElement>(null);
   const { query, matchCount, updateQuery, updateMatchCount } = useSearch();
 
   const focusSearch = useCallback(() => {
@@ -945,31 +954,41 @@ export function App() {
       // Marked once the change is stored, and not before: if it doesn't take,
       // the note stays to say what is still happening.
       const answersNotice = !next && nativeNoticeShown.current;
-      // This switch is the session's gesture, and the read it starts below is
-      // the session's first native read, so the default has nothing left to
-      // do. Set before the request: the default's effect runs as soon as the
-      // setting flips.
-      const defaultWasApplied = hasAppliedNativeDefault.current;
-      if (next) hasAppliedNativeDefault.current = true;
       requestNativeMode(next, (stored) => {
         setNativeSettingPending(null);
         if (!stored) {
-          hasAppliedNativeDefault.current = defaultWasApplied;
           announce("Couldn't change that setting — try again.", 3000);
           return;
         }
         if (answersNotice || (!next && nativeNoticeShown.current)) {
           acknowledgeNativeNotice();
         }
-        if (next) {
-          setProducer("native");
-          announce("Reading pages through Chrome — showing its tree.", 3000);
-        } else {
+        if (!next) {
           announce(
             "Not reading pages through Chrome — showing the DOM tree.",
             3000,
           );
+          return;
         }
+        // Set here, before the render the setting's flip has scheduled: the
+        // default's effect runs in it.
+        if (!connectedRef.current) {
+          // No page to read yet, nor any proof there will be one: the
+          // default reads the first that connects, as in a panel opened with
+          // native mode on.
+          hasAppliedNativeDefault.current = false;
+          announce(
+            "Reading pages through Chrome — the next page shows its tree.",
+            3000,
+          );
+          return;
+        }
+        // This switch is the session's gesture, and the read it starts is
+        // the session's first native read, so the default has nothing left
+        // to do.
+        hasAppliedNativeDefault.current = true;
+        setProducer("native");
+        announce("Reading pages through Chrome — showing its tree.", 3000);
       });
     },
     [
@@ -1003,24 +1022,29 @@ export function App() {
   // After every commit (`focusBeforeCommit`): if it took away the element
   // that had focus, and so left focus on the body, focus moves to the tree on
   // screen, or the list shown in its place (the Tab view, or either tree's
-  // role filter), or Settings if there is neither. Focus anywhere else stays
-  // where it is, and a panel where nothing had focus is left alone. A layout
-  // effect rather than an effect, which waits for a paint: a panel in a
-  // window that isn't in front can go without one for a long time.
+  // role filter), or else Settings beside them. While a page connects there
+  // is neither, so it waits for them (`focusDisplaced`) rather than landing
+  // on Settings and staying there. Focus anywhere else stays where it is,
+  // and a panel where nothing had focus is left alone. A layout effect rather
+  // than an effect, which waits for a paint: a panel in a window that isn't
+  // in front can go without one for a long time.
   useLayoutEffect(() => {
-    const before = focusBeforeCommit.current;
-    if (before === null || before === document.body || before.isConnected) {
+    const active = document.activeElement;
+    if (active !== null && active !== document.body) {
+      focusDisplaced.current = false;
       return;
     }
-    const active = document.activeElement;
-    if (active !== null && active !== document.body) return;
-    [
+    const before = focusBeforeCommit.current;
+    const lost =
+      before !== null && before !== document.body && !before.isConnected;
+    if (!lost && !focusDisplaced.current) return;
+    const target = [
       document.querySelector<HTMLElement>('[role="tree"]'),
       document.querySelector<HTMLElement>('.sn-filtered-list[role="listbox"]'),
-      settingsButtonRef.current,
-    ]
-      .find((el) => el?.isConnected)
-      ?.focus();
+      connectedRef.current ? settingsButtonRef.current : null,
+    ].find((el) => el?.isConnected);
+    focusDisplaced.current = target === undefined;
+    target?.focus();
   });
 
   // Don't leave a clear pending on a panel that is going away.
@@ -3096,6 +3120,7 @@ export function App() {
   // user acknowledges it, in this window or another. Said once when it
   // appears, since a note that appears is not announced by itself.
   const showNativeNotice =
+    connected &&
     nativeModeEnabled &&
     producer === "native" &&
     nativeEverRead &&
@@ -3120,7 +3145,10 @@ export function App() {
       }
     };
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setExportMenuOpen(false);
+      if (e.key !== "Escape") return;
+      const inside = exportRef.current?.contains(document.activeElement);
+      setExportMenuOpen(false);
+      if (inside) exportButtonRef.current?.focus();
     };
     document.addEventListener("mousedown", onDown);
     document.addEventListener("keydown", onKey);
@@ -3249,6 +3277,24 @@ export function App() {
     </div>
   );
 
+  // Action feedback bar, mounted before there is a message — see the search
+  // count below. The explicit `aria-live` is deliberate and overrides what
+  // `role="status"` implies: this bar carries failures ("Failed: …",
+  // "Clipboard blocked …") that are pulled back out of the DOM after 2.5s,
+  // and a polite announcement can still be queued behind the live-relay log
+  // when they go. On both screens, keyed so it stays the same element when
+  // a page connects: Settings is on both, and says how a change went here.
+  const feedbackRegion = (
+    <div
+      key="sn-feedback"
+      class="sn-action-feedback"
+      role="status"
+      aria-live="assertive"
+    >
+      {lastAction && <span class="sn-action-feedback-text">{lastAction}</span>}
+    </div>
+  );
+
   if (!connected) {
     return (
       <div class={`sn-root ${themeClass}`}>
@@ -3312,6 +3358,7 @@ export function App() {
             </button>
           </div>
         </div>
+        {feedbackRegion}
       </div>
     );
   }
@@ -3570,6 +3617,7 @@ export function App() {
 
         <div class="sn-export" ref={exportRef}>
           <button
+            ref={exportButtonRef}
             class="sn-toolbar-btn sn-export-btn"
             aria-haspopup="true"
             aria-expanded={exportMenuOpen}
@@ -3582,7 +3630,11 @@ export function App() {
             <div class="sn-export-menu" aria-label="Copy which view">
               <button
                 class="sn-export-item"
-                onClick={() => doExport(exportViews)}
+                onClick={() => {
+                  // Back to the button the menu goes with.
+                  exportButtonRef.current?.focus();
+                  doExport(exportViews);
+                }}
               >
                 Everything
               </button>
@@ -3590,7 +3642,10 @@ export function App() {
                 <button
                   key={view}
                   class="sn-export-item"
-                  onClick={() => doExport([view])}
+                  onClick={() => {
+                    exportButtonRef.current?.focus();
+                    doExport([view]);
+                  }}
                 >
                   {view === "tree"
                     ? producer === "native"
@@ -3656,17 +3711,7 @@ export function App() {
         />
       )}
 
-      {/* Action feedback bar, mounted before there is a message — see the
-          search count above. The explicit `aria-live` is deliberate and
-          overrides what `role="status"` implies: this bar carries failures
-          ("Failed: …", "Clipboard blocked …") that are pulled back out of the
-          DOM after 2.5s, and a polite announcement can still be queued behind
-          the live-relay log when they go. */}
-      <div class="sn-action-feedback" role="status" aria-live="assertive">
-        {lastAction && (
-          <span class="sn-action-feedback-text">{lastAction}</span>
-        )}
-      </div>
+      {feedbackRegion}
 
       {/* Inline input panel for text / select interactions */}
       {inputState && (

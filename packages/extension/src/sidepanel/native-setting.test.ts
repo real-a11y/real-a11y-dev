@@ -420,6 +420,29 @@ describe("native mode on by default", () => {
       expect(chromeMock.stored[NOTICE_SEEN]).toBe(true);
     });
 
+    it("isn't answered by a turn-off made while it is off screen", async () => {
+      mount({ storage: {}, read: NATIVE_TREE });
+      await flush();
+      await showTab(7);
+      expect(note()).not.toBeNull();
+      // The page navigates: the panel waits for it, and the note is off
+      // screen meanwhile.
+      act(() => {
+        chromeMock.emit({
+          type: "PAGE_NAVIGATED",
+          tabId: 7,
+        } as unknown as ContentToPanel);
+      });
+      await flush();
+
+      const checkbox = await openSettings();
+      act(() => checkbox.click());
+      await flush();
+
+      expect(chromeMock.stored[SETTING]).toBe(false);
+      expect(chromeMock.stored[NOTICE_SEEN]).toBeUndefined();
+    });
+
     it("isn't brought back by a read from before it was acknowledged", async () => {
       mount({ storage: {}, read: NATIVE_TREE });
       // Acknowledged in another window while this panel's own read of the
@@ -542,6 +565,47 @@ describe("native mode on by default", () => {
 
       expect(buttonNamed("Settings ▾")).not.toBeNull();
       expect((await openSettings()).checked).toBe(true);
+    });
+
+    it("turned on before a page connects, reads the first that does", async () => {
+      mount({ storage: { [SETTING]: false, [NOTICE_SEEN]: true } });
+      await flush();
+      act(() => {
+        chromeMock.emit({
+          type: "ACTIVE_TAB_CHANGED",
+          tabId: 7,
+        } as unknown as ContentToPanel);
+      });
+      await flush();
+
+      const checkbox = await openSettings();
+      act(() => checkbox.click());
+      await flush();
+      // Nothing proves there is a page there yet, so nothing is read.
+      expect(sentOfType("NATIVE_READ")).toEqual([]);
+      expect(announced()).toBe(
+        "Reading pages through Chrome — the next page shows its tree.",
+      );
+
+      act(() => {
+        chromeMock.emit({ ...treeData(), tabId: 7 } as ContentToPanel);
+      });
+      await flush();
+      expect(sentOfType("NATIVE_READ").length).toBeGreaterThan(0);
+    });
+
+    it("says how a change went before a page connects", async () => {
+      mount({
+        storage: { [NOTICE_SEEN]: true },
+        set: () => ({ ok: false }),
+      });
+      await flush();
+
+      const checkbox = await openSettings();
+      act(() => checkbox.click());
+      await flush();
+
+      expect(announced()).toBe("Couldn't change that setting — try again.");
     });
 
     it("shows the stored setting when the service worker doesn't answer", async () => {
@@ -777,6 +841,49 @@ describe("native mode on by default", () => {
 
       expect(buttonNamed("NATIVE")?.getAttribute("aria-pressed")).toBe("false");
       expect(document.activeElement).toBe(document.body);
+    });
+
+    it("waits for the tree when a navigation takes it away, rather than settling on Settings", async () => {
+      mount({ storage: { [SETTING]: false, [NOTICE_SEEN]: true } });
+      await flush();
+      await showTab(7);
+      const tree = () => container.querySelector<HTMLElement>('[role="tree"]');
+      act(() => tree()!.focus());
+
+      act(() => {
+        chromeMock.emit({
+          type: "PAGE_NAVIGATED",
+          tabId: 7,
+        } as unknown as ContentToPanel);
+      });
+      await flush();
+      expect(tree()).toBeNull();
+      expect(document.activeElement).not.toBe(buttonNamed("Settings ▾"));
+
+      act(() => {
+        chromeMock.emit({ ...treeData(), tabId: 7 } as ContentToPanel);
+      });
+      await flush();
+      expect(document.activeElement).toBe(tree());
+    });
+
+    it("returns focus to Copy when its menu closes", async () => {
+      mount({ storage: { [SETTING]: false, [NOTICE_SEEN]: true } });
+      await flush();
+      await showTab(7);
+      act(() => buttonNamed("Copy ▾")!.click());
+      await flush();
+      act(() => buttonNamed("Everything")!.focus());
+
+      act(() => {
+        buttonNamed("Everything")!.dispatchEvent(
+          new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
+        );
+      });
+      await flush();
+
+      expect(buttonNamed("Everything")).toBeNull();
+      expect(document.activeElement).toBe(buttonNamed("Copy ▾"));
     });
 
     it("leaves an armed DOM pick alone when native mode is turned off", async () => {
