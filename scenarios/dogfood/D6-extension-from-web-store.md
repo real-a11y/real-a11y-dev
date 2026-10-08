@@ -26,12 +26,12 @@ updated yet, this row is **Blocked**, not Pass — a local build is a different 
 2. Confirm it matches the version just submitted
 3. Read the permissions prompt as a first-time user would
    - **3b** — from the first release after 0.1.15. Open the side panel on any
-     ordinary page: when it connects, the panel asks about native mode, with
-     **Use native mode** focused. Say yes, and check that Chrome's bar appears
-     while the tree is read and names the extension the way the listing does
-     (“Semantic Navigator” started debugging this browser). Steps 4–9 run on
-     whichever tree you chose; the toolbar's **DOM / NATIVE** toggle switches, and
-     step 7 holds on both. **R42** is the full version of this step
+     ordinary page: with nothing asked first, it reads Chrome's own tree, and
+     Chrome's bar appears while it reads, naming the extension the way the listing
+     does (“Semantic Navigator” started debugging this browser). A note below the
+     toolbar explains the bar: press **Got it**. Steps 4–9 run on the native tree;
+     the toolbar's **DOM / NATIVE** toggle switches to the DOM tree, and step 7
+     holds on both. **R42** is the full version of this step
 4. **A docs site** — long content, many headings: open the panel, browse the tree, use search
 5. **An SPA** — client-side routes: navigate, confirm the panel follows; use Back
 6. **A real form** — click, type, toggle; confirm the page's own handlers ran
@@ -45,8 +45,8 @@ updated yet, this row is **Blocked**, not Pass — a local build is a different 
 - The **store build** installs and works — minification and the store's packaging step are both
   in play here and neither is exercised locally
 - The version matches what was submitted
-- **3b** — the panel asks before anything attaches, and Chrome's bar appears only
-  after **Use native mode**, naming the extension
+- **3b** — the panel reads the native tree with nothing asked first, Chrome's bar
+  names the extension, and the note explains the bar
 - Panel works across all three site shapes; SPA routes and Back are followed
 - Real handlers fire on the form
 - **The password value never appears**, in any view
@@ -66,6 +66,6 @@ after twenty minutes passes every scripted check and gets uninstalled anyway.
 Step 7 is the same absolute rule as everywhere else — no view, no debug mode, no error path may
 show a password.
 
-Step 3b is the consent path for `chrome.debugger` as a store user meets it: the permission
-prompt in step 3 is Chrome's, the question is the extension's, and the bar's wording comes from
-the store build's own name, so only the listed artifact shows all three together.
+Step 3b is `chrome.debugger` as a store user meets it: the permission prompt in step 3 is
+Chrome's, the note about the bar is the extension's, and the bar's wording comes from the store
+build's own name, so only the listed artifact shows all three together.
