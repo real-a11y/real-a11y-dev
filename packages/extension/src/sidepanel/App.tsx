@@ -267,9 +267,9 @@ function NativeModeNotice({
       <p id={textId}>
         While {extensionName()} reads a page, Chrome shows a bar across every
         window: “{extensionName()}” started debugging this browser. That's
-        expected: it's how the panel reads exactly what Chrome gives assistive
-        technology. Turn it off to have the panel read the page itself, with no
-        bar.
+        expected: it's how the panel reads the tree Chrome itself gives
+        assistive technology. Turn it off to have the panel read the page
+        itself, with no bar.
       </p>
       <div class="sn-native-consent-actions">
         <button class="sn-toolbar-btn" onClick={onAcknowledge}>
@@ -349,13 +349,13 @@ export function App() {
   const announcementId = useRef(0);
 
   // ---- Native producer (RFC PR H/#229) ----
-  // The capability ships in every build (see background.ts), but stays off
-  // until the user turns on this setting — a real `chrome.storage`-backed
+  // The capability ships in every build (see background.ts), and is on
+  // unless the user turns this setting off — a real `chrome.storage`-backed
   // flag now, not a build-time one. Fetched once on mount via the same
   // NATIVE_FLAG_GET message DogfoodPanel.tsx already used for its own
-  // checkbox; NATIVE_FLAG_SET flips it (see setNativeModeEnabled below).
+  // checkbox; NATIVE_FLAG_SET flips it (see `requestNativeMode` below).
   // Every open panel also follows it in storage (see `followNativeSetting`),
-  // so a panel in one window agrees with an answer given in another.
+  // so a panel in one window agrees with a change made in another.
   const [nativeModeEnabled, setNativeModeEnabledRaw] = useState(false);
   // The same value for callbacks, updated with the state rather than on the
   // next render: two storage changes can land before that render.
@@ -400,8 +400,8 @@ export function App() {
       })
       .catch(() => {
         // Service worker not woken yet / context torn down mid-reload —
-        // leave the setting at its default (off); the toggle just stays
-        // available to try again.
+        // this panel stays on the DOM tree, which reads without it, until
+        // the setting changes in storage or Settings turns it on.
       });
   }, [setNativeModeEnabledState]);
 
@@ -3518,9 +3518,9 @@ export function App() {
                 <span>Read pages through Chrome (recommended)</span>
               </label>
               <p id="sn-settings-native-hint" class="sn-settings-hint">
-                Shows exactly what Chrome gives assistive technology. While it
-                reads, Chrome shows a bar: “{extensionName()}” started debugging
-                this browser. Off, the panel reads the page itself.
+                Shows the tree Chrome itself gives assistive technology. While
+                it reads, Chrome shows a bar: “{extensionName()}” started
+                debugging this browser. Off, the panel reads the page itself.
               </p>
             </div>
           )}
