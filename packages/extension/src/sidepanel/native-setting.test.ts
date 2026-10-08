@@ -728,7 +728,7 @@ describe("native mode on by default", () => {
 
       act(() => {
         searchBox()!.dispatchEvent(
-          new MouseEvent("mousedown", { bubbles: true, button: 2 }),
+          new MouseEvent("pointerdown", { bubbles: true, button: 2 }),
         );
       });
       await flush();
@@ -746,7 +746,9 @@ describe("native mode on by default", () => {
       const checkbox = await openSettings();
 
       act(() => {
-        checkbox.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+        checkbox.dispatchEvent(
+          new MouseEvent("pointerdown", { bubbles: true }),
+        );
       });
       // Released over the tree: the click goes to what holds both points.
       act(() => container.querySelector<HTMLElement>(".sn-root")!.click());
@@ -754,6 +756,24 @@ describe("native mode on by default", () => {
 
       expect(settingsCheckbox()).not.toBeNull();
       expect(sentOfType("NATIVE_FLAG_SET")).toEqual([]);
+    });
+
+    it("stays open when the window gives focus back to the panel", async () => {
+      mount({ storage: { [NOTICE_SEEN]: true } });
+      await flush();
+      await showTab(7);
+      await openSettings();
+
+      // Chrome sends focusin, and no focusout, to what had focus when the
+      // window comes back to the front.
+      act(() => {
+        container
+          .querySelector('[role="tree"]')!
+          .dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
+      });
+      await flush();
+
+      expect(settingsCheckbox()).not.toBeNull();
     });
 
     it("closes when focus leaves it, so the keyboard never opens two popups", async () => {

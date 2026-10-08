@@ -1040,7 +1040,7 @@ export function App() {
     // A popup's controls (the Copy menu, Settings) are not lost when it
     // closes: Escape returns focus to its button, and a press outside puts
     // focus where the press does (`useDismissible`).
-    if (before.closest(".sn-export-menu")) return;
+    if (before.closest("[data-sn-popup]")) return;
     const active = document.activeElement;
     if (active !== null && active !== document.body) return;
     [
@@ -3095,7 +3095,8 @@ export function App() {
   // What the Copy menu offers for the tree on screen.
   const exportViews = producer === "native" ? NATIVE_VIEWS : ALL_VIEWS;
 
-  // Close Settings and the Copy menu on outside-click or Escape.
+  // Close Settings and the Copy menu on a press or focus outside them, or on
+  // Escape.
   useDismissible(settingsOpen, setSettingsOpen, settingsRef, settingsButtonRef);
   useDismissible(exportMenuOpen, setExportMenuOpen, exportRef, exportButtonRef);
 
@@ -3209,6 +3210,7 @@ export function App() {
         <div
           id="sn-settings-menu"
           class="sn-export-menu sn-settings-menu"
+          data-sn-popup
           role="group"
           aria-label="Settings"
         >
@@ -3589,7 +3591,11 @@ export function App() {
             {"Copy ▾"}
           </button>
           {exportMenuOpen && (
-            <div class="sn-export-menu" aria-label="Copy which view">
+            <div
+              class="sn-export-menu"
+              data-sn-popup
+              aria-label="Copy which view"
+            >
               <button
                 class="sn-export-item"
                 onClick={() => doExport(exportViews)}

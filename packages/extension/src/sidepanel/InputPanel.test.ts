@@ -236,6 +236,19 @@ describe("InputPanel focus restoration", () => {
     expect(document.activeElement).toBe(opener);
   });
 
+  it("leaves focus the user moved out of it where it is", () => {
+    open(TEXT_STATE);
+    // Something outside it, as Settings is beside the panel's dialogs.
+    const elsewhere = document.createElement("button");
+    document.body.appendChild(elsewhere);
+    elsewhere.focus();
+
+    close();
+
+    expect(document.activeElement).toBe(elsewhere);
+    elsewhere.remove();
+  });
+
   it("does not throw when the opener has left the DOM", () => {
     open(TEXT_STATE);
     opener.remove();
