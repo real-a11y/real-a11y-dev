@@ -156,6 +156,7 @@ The panel itself is fully keyboard-operable.
 | `/` | Focus the search input |
 | `Home` / `End` | Jump to the first / last visible row |
 | Printable characters | Type-ahead — jump to a row whose accessible name starts with the typed characters (multi-character within ~500ms keeps a still-matching selection; repeating the same letter cycles matches). `/` is reserved for search. |
+| `Alt`+`J` / `Alt`+`Shift`+`J` | Follow the current row's `aria-controls` jump chips: `Alt`+`J` goes to the first row it controls, and pressed again moves on to the next; `Alt`+`Shift`+`J` goes back to the row you jumped from, or to the row that controls this one. The chips sit outside the Tab order, so this is their keyboard path. A search hiding the target is cleared |
 | `Ctrl`/`Cmd`+`Enter` | Chrome extension: scope the tree to the current row (any row with children) |
 | `Esc` | Chrome extension: leave the current scope, from the tree or from a role-filter or Tab-sequence list. In the native tree, while a pick is armed, `Esc` cancels the pick instead |
 

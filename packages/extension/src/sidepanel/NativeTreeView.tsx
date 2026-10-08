@@ -40,9 +40,14 @@ import {
 import {
   createTypeAheadBuffer,
   findTypeAheadIndex,
+  isJumpKey,
   isTypeAheadKey,
+  JUMP_KEYS,
+  JUMP_KEYSHORTCUTS,
+  nextJump,
   resolveStepperKeyAction,
   useVirtualTree,
+  type JumpCycle,
 } from "@real-a11y-dev/semantic-navigator-ui";
 import {
   useCallback,
@@ -75,7 +80,6 @@ import {
   FilteredListView,
   type FilteredListItem,
 } from "./FilteredList.js";
-import { isJumpKey, nextJump, type JumpCycle } from "./jump-keys.js";
 import { findNativeModalDialog } from "./native-feedback.js";
 import { NATIVE_FOLLOW_DEBOUNCE_MS } from "./native-follow.js";
 import {
@@ -715,17 +719,18 @@ export function NativeTreeView({
         return;
       }
 
-      // The jump chips' keyboard path — see `nextJump`. Alt keeps it clear
-      // of type-ahead.
+      // The jump chips' keyboard path — the ui package's `nextJump`, which
+      // every tree's keymap shares. A jump starts type-ahead afresh.
       if (isJumpKey(e)) {
         e.preventDefault();
+        typeAhead.current.clear();
         if (selectedId === null) return;
         const next = nextJump(
           selectedId,
           jumpCycle.current,
           e.shiftKey,
-          (id) => controlsIndex.forward.get(id) ?? [],
-          (id) => controlsIndex.reverse.get(id) ?? [],
+          controlsIndex,
+          (id) => nodes.has(id),
         );
         if (!next) return;
         jumpCycle.current = next.cycle;
@@ -1032,6 +1037,7 @@ export function NativeTreeView({
               class="sn-tree"
               role="tree"
               aria-label={`Native accessibility tree — press Enter to activate (a slider steps up, a spinbutton opens its edit box), +/− or Shift+Enter to step sliders and spinbuttons, arrows to navigate, ${SCOPE_KEY_HINT}, Alt+J to follow a row's aria-controls links one by one and Alt+Shift+J to go back`}
+              aria-keyshortcuts={JUMP_KEYSHORTCUTS}
               tabIndex={0}
               style={{
                 minHeight: totalHeight,
@@ -1234,12 +1240,12 @@ export function NativeTreeView({
                             name={target.name}
                             direction="forward"
                             inferred={controlsIndex.inferred.has(id)}
-                            keyHint="Alt+J"
+                            keyHint={JUMP_KEYS.forward}
                             onJump={() => jumpTo(targetId)}
                           />
                         );
                       })}
-                      {controlsIndex.reverse.get(id)?.map((triggerId) => {
+                      {controlsIndex.reverse.get(id)?.map((triggerId, i) => {
                         const trigger = nodes.get(triggerId);
                         if (!trigger) return null;
                         return (
@@ -1249,7 +1255,8 @@ export function NativeTreeView({
                             name={trigger.name}
                             direction="reverse"
                             inferred={controlsIndex.inferred.has(triggerId)}
-                            keyHint="Alt+Shift+J"
+                            // Alt+Shift+J reaches the first one.
+                            keyHint={i === 0 ? JUMP_KEYS.back : undefined}
                             onJump={() => jumpTo(triggerId)}
                           />
                         );
@@ -1325,7 +1332,7 @@ export function NativeTreeView({
           <div class="sn-hints">
             <kbd>Enter</kbd> activate &middot; <kbd>+/−</kbd> step &middot;{" "}
             <kbd>Space</kbd> expand &middot; <kbd>Arrow</kbd> navigate &middot;{" "}
-            <kbd>DblClick</kbd> scope &middot; <kbd>Alt+J</kbd> jump
+            <kbd>DblClick</kbd> scope &middot; <kbd>Alt+(Shift)+J</kbd> jump
           </div>
         </>
       )}

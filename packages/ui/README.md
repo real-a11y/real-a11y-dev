@@ -111,6 +111,7 @@ Follows the [WAI-ARIA TreeView pattern](https://www.w3.org/WAI/ARIA/apg/patterns
 - Enter to activate (on a slider/spinbutton, steps the value up; `Shift+Enter`, `-`, or `_` steps down; `+` / `=` steps up)
 - Space to toggle expand/collapse
 - Home/End to jump
+- `Alt+J` follows the selected row's `aria-controls` jump chips — the first row it controls, then the next on each press — and `Alt+Shift+J` goes back to the row the jump came from (or the first row that controls this one). The chips sit outside the Tab order, so this is their keyboard path. Matched on the physical `J` key or the character, so it works with macOS Option and on Dvorak or Colemak. The tree lists both in `aria-keyshortcuts`.
 - Type-ahead — printable characters move selection to a visible row whose accessible name starts with the typed buffer (multi-character within 500ms keeps a still-matching selection; repeating the same letter cycles matches). `/` focuses the search input instead. The same type-ahead and slider/spinbutton stepper keys (`+`/`-`/`Shift+Enter`) apply to the filtered-role and tab-sequence listboxes.
 
 ## Styling

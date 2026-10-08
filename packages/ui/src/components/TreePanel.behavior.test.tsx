@@ -195,4 +195,99 @@ describe("TreePanel behavior", () => {
     expect(chip.getAttribute("title") ?? "").toMatch(/controls/i);
     expect(chip.textContent).toMatch(/→/);
   });
+
+  // A jump is a selection like any other, so a host's selection callbacks
+  // (and the page highlight they drive) follow it.
+  it("reports a chip jump through onSelect and onNodeSelect", async () => {
+    const tree = extractA11yTree(host);
+    for (const node of tree.nodes.values()) {
+      if (node.ui && node.childIds.length > 0) node.ui.expanded = true;
+    }
+    const onSelect = vi.fn();
+    const onNodeSelect = vi.fn();
+    panel(tree, { onSelect, onNodeSelect });
+    const chip = await waitFor(container, ".sn-controls-link");
+    act(() => (chip as HTMLElement).click());
+    const menu = [...tree.nodes.values()].find((n) => n.a11y.role === "menu");
+    expect(onSelect).toHaveBeenLastCalledWith(menu!.id, menu);
+    expect(onNodeSelect).toHaveBeenLastCalledWith(menu);
+  });
+
+  it("follows the selected row's link with Alt+J, and reports it", async () => {
+    const tree = extractA11yTree(host);
+    for (const node of tree.nodes.values()) {
+      if (node.ui && node.childIds.length > 0) node.ui.expanded = true;
+    }
+    const onSelect = vi.fn();
+    panel(tree, { onSelect });
+    const open = [...tree.nodes.values()].find(
+      (n) => n.a11y.role === "button" && n.a11y.name === "Open",
+    );
+    const menu = [...tree.nodes.values()].find((n) => n.a11y.role === "menu");
+    const row = await waitFor(container, `[data-node-id="${open!.id}"]`);
+    const treeEl = container.querySelector('[role="tree"]') as HTMLElement;
+    // Select the trigger, then jump.
+    act(() => {
+      (row as HTMLElement).click();
+    });
+    expect(onSelect).toHaveBeenLastCalledWith(open!.id, open);
+    act(() => {
+      treeEl.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          bubbles: true,
+          cancelable: true,
+          altKey: true,
+          code: "KeyJ",
+          key: "j",
+        }),
+      );
+    });
+    expect(onSelect).toHaveBeenLastCalledWith(menu!.id, menu);
+  });
+  it("keeps the tree's name, and lists the jump keys as its shortcuts", async () => {
+    panel(extractA11yTree(host));
+    const treeEl = await waitFor(container, '[role="tree"]');
+    expect(treeEl.getAttribute("aria-label")).toBe("Semantic tree");
+    expect(treeEl.getAttribute("aria-keyshortcuts")).toBe("Alt+J Alt+Shift+J");
+  });
+
+  it("clears a search that hides the row a jump lands on", async () => {
+    const tree = extractA11yTree(host);
+    for (const node of tree.nodes.values()) {
+      if (node.ui && node.childIds.length > 0) node.ui.expanded = true;
+    }
+    panel(tree);
+    const open = [...tree.nodes.values()].find(
+      (n) => n.a11y.role === "button" && n.a11y.name === "Open",
+    );
+    const menu = [...tree.nodes.values()].find((n) => n.a11y.role === "menu");
+    const search = (await waitFor(
+      container,
+      'input[type="search"], input[aria-label*="earch"]',
+    )) as HTMLInputElement;
+    // "Open" matches; the menu it controls doesn't, so the search hides it.
+    act(() => {
+      search.value = "Open";
+      search.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    const row = await waitFor(container, `[data-node-id="${open!.id}"]`);
+    act(() => (row as HTMLElement).click());
+    expect(container.querySelector(`[data-node-id="${menu!.id}"]`)).toBeNull();
+
+    const treeEl = container.querySelector('[role="tree"]') as HTMLElement;
+    act(() => {
+      treeEl.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          bubbles: true,
+          cancelable: true,
+          altKey: true,
+          code: "KeyJ",
+          key: "j",
+        }),
+      );
+    });
+    expect(search.value).toBe("");
+    const target = await waitFor(container, `[data-node-id="${menu!.id}"]`);
+    expect(treeEl.getAttribute("aria-activedescendant")).toBe(target.id);
+  });
 });

@@ -186,7 +186,12 @@ main
     listitem "On the row: pointing back at the trigger."
       strong "controlled"
       code "← <role> "<name>""
-  paragraph "Click either chip and the panel expands every collapsed ancestor of the target, scrolls it to the center of the viewport, and briefly flashes its row."
+  paragraph "Click either chip and the panel expands every collapsed ancestor of the target, scrolls it to the center of the viewport, and briefly flashes its row. The chips sit outside the Tab order, so the keyboard reaches them from the selected row: + follows its first link, and pressed again moves on to the next one; ++ goes back to the row you jumped from, or to the row that controls this one. The key labelled J works on any keyboard layout. A jump leaves a scope or a search that would hide its target."
+    code "Alt"
+    code "J"
+    code "Alt"
+    code "Shift"
+    code "J"
   paragraph
     strong "Two link sources, distinguished visually:"
   list

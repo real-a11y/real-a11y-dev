@@ -7,6 +7,7 @@ import { getPrimaryAction, ACTION_LABELS } from "@real-a11y-dev/core";
 
 import type { NodeDiffStatus } from "../diff.js";
 
+import { JUMP_KEYS } from "../hooks/jumpKeys.js";
 import { treeRowDomId, useInstanceId } from "../hooks/useInstanceId.js";
 
 import type { ControlsLink } from "./TreePanel.js";
@@ -175,15 +176,18 @@ function renderControlsChip(
   link: ControlsLink,
   direction: "forward" | "reverse",
   onJumpToNode: (id: string) => void,
+  /** The key that reaches this chip, if one does (see `nextJump`). */
+  keys?: string,
 ) {
   const arrow = direction === "forward" ? "→ " : "← ";
   const reverseClass =
     direction === "reverse" ? " sn-controls-link--reverse" : "";
   const inferredClass = link.inferred ? " sn-controls-link--inferred" : "";
   const verb = direction === "forward" ? "controls" : "is controlled by";
-  const title = link.inferred
+  const what = link.inferred
     ? `Likely ${verb} ${link.label} (inferred from aria-haspopup; no aria-controls set)`
     : `Jump to ${link.label} — ${verb} this element`;
+  const title = keys ? `${what} (${keys})` : what;
   return (
     <button
       key={`${direction}-${link.id}`}
@@ -325,11 +329,22 @@ export function TreeNode({
         {/* Cross-link chips for disclosure pairs (button ↔ menu, tab ↔ panel) */}
         {onJumpToNode &&
           controlsLinks?.map((link) =>
-            renderControlsChip(link, "forward", onJumpToNode),
+            renderControlsChip(
+              link,
+              "forward",
+              onJumpToNode,
+              JUMP_KEYS.forward,
+            ),
           )}
         {onJumpToNode &&
-          controlledByLinks?.map((link) =>
-            renderControlsChip(link, "reverse", onJumpToNode),
+          controlledByLinks?.map((link, i) =>
+            // Alt+Shift+J reaches the first row that controls this one.
+            renderControlsChip(
+              link,
+              "reverse",
+              onJumpToNode,
+              i === 0 ? JUMP_KEYS.back : undefined,
+            ),
           )}
       </span>
 

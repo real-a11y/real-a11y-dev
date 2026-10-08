@@ -17,6 +17,8 @@ import {
   buildControlsIndex,
 } from "@real-a11y-dev/core";
 import {
+  JUMP_KEYS,
+  JUMP_KEYSHORTCUTS,
   useTreeKeyboard,
   useInputModality,
   useVirtualTree,
@@ -757,32 +759,6 @@ export function App() {
     setRevealNonce((n) => n + 1);
   }, []);
 
-  const handleJumpToNode = useCallback(
-    (targetId: string) => {
-      // Expand every collapsed ancestor so the target is in `visibleNodeIds`
-      // before we try to scroll to it.
-      let cur: DomSemanticNode | undefined = asDom(nodes.get(targetId));
-      let mutated = false;
-      while (cur && cur.parentId) {
-        const parent = asDom(nodes.get(cur.parentId));
-        if (parent && !parent.ui.expanded) {
-          parent.ui.expanded = true;
-          mutated = true;
-        }
-        cur = parent;
-      }
-      if (mutated) forceRender((c) => c + 1);
-      setSelectedId(targetId);
-      setFlashingId(targetId);
-      setTimeout(() => setFlashingId(null), JUMP_FLASH_MS);
-      // Reveal the row even if it is already the selection (jump chips can
-      // target the current node); the reveal effect scrolls once ancestors
-      // are expanded and `visibleNodeIds` recomputed.
-      requestReveal(targetId);
-    },
-    [nodes, requestReveal],
-  );
-
   // The tab this side-panel instance is bound to. Source of truth lives in
   // the background — it pushes ACTIVE_TAB_CHANGED on port connect and on
   // every tab/window activation. We don't try to read tab state from the
@@ -1426,6 +1402,40 @@ export function App() {
       });
     },
     [sendToBoundTab],
+  );
+
+  const handleJumpToNode = useCallback(
+    (targetId: string) => {
+      // Expand every collapsed ancestor so the target is in `visibleNodeIds`
+      // before we try to scroll to it.
+      let cur: DomSemanticNode | undefined = asDom(nodes.get(targetId));
+      let mutated = false;
+      while (cur && cur.parentId) {
+        const parent = asDom(nodes.get(cur.parentId));
+        if (parent && !parent.ui.expanded) {
+          parent.ui.expanded = true;
+          mutated = true;
+        }
+        cur = parent;
+      }
+      if (mutated) forceRender((c) => c + 1);
+      // A row the search hides is not in the visible list, so the selection
+      // would point at nothing a keyboard or screen reader can reach: clear
+      // the search, as the native tree's jump does.
+      if (asDom(nodes.get(targetId))?.ui.matchesFilter === false) {
+        updateQuery("");
+      }
+      // Through the ordinary selection path, so the page highlights the
+      // target as it does for any other selection.
+      handleSelect(targetId);
+      setFlashingId(targetId);
+      setTimeout(() => setFlashingId(null), JUMP_FLASH_MS);
+      // Reveal the row even if it is already the selection (jump chips can
+      // target the current node); the reveal effect scrolls once ancestors
+      // are expanded and `visibleNodeIds` recomputed.
+      requestReveal(targetId);
+    },
+    [nodes, requestReveal, handleSelect, updateQuery],
   );
 
   const handleToggle = useCallback(
@@ -2901,6 +2911,10 @@ export function App() {
     };
   }, [exportMenuOpen]);
 
+  const jumpKeys = useMemo(
+    () => ({ links: controlsIndex, onJump: handleJumpToNode }),
+    [controlsIndex, handleJumpToNode],
+  );
   const { handleKeyDown } = useTreeKeyboard({
     nodes,
     visibleNodeIds,
@@ -2909,6 +2923,8 @@ export function App() {
     onToggle: handleToggle,
     onActivate: handleActivate,
     onFocusSearch: focusSearch,
+    // A jump outside the scope leaves it, as a click on a chip does.
+    jump: jumpKeys,
   });
 
   // Scroll the selected tree item into view whenever the selection changes
@@ -3532,7 +3548,8 @@ export function App() {
               ref={treeRef}
               class="sn-tree"
               role="tree"
-              aria-label={`Semantic tree — press Enter to activate interactive elements; +/− or Shift+Enter to step sliders and spinbuttons; ${SCOPE_KEY_HINT}`}
+              aria-label={`Semantic tree — press Enter to activate interactive elements; +/− or Shift+Enter to step sliders and spinbuttons; ${SCOPE_KEY_HINT}; Alt+J to follow a row's aria-controls links one by one and Alt+Shift+J to go back`}
+              aria-keyshortcuts={JUMP_KEYSHORTCUTS}
               tabIndex={0}
               style={{
                 minHeight: totalHeight,
@@ -3825,24 +3842,31 @@ export function App() {
                                 name={target.a11y.name}
                                 direction="forward"
                                 inferred={controlsIndex.inferred.has(id)}
+                                keyHint={JUMP_KEYS.forward}
                                 onJump={() => handleJumpToNode(targetId)}
                               />
                             );
                           })}
-                          {controlsIndex.reverse.get(id)?.map((triggerId) => {
-                            const trigger = asDom(nodes.get(triggerId));
-                            if (!trigger) return null;
-                            return (
-                              <ControlsChip
-                                key={`controlled-by-${triggerId}`}
-                                role={getDisplayRole(trigger)}
-                                name={trigger.a11y.name}
-                                direction="reverse"
-                                inferred={controlsIndex.inferred.has(triggerId)}
-                                onJump={() => handleJumpToNode(triggerId)}
-                              />
-                            );
-                          })}
+                          {controlsIndex.reverse
+                            .get(id)
+                            ?.map((triggerId, i) => {
+                              const trigger = asDom(nodes.get(triggerId));
+                              if (!trigger) return null;
+                              return (
+                                <ControlsChip
+                                  key={`controlled-by-${triggerId}`}
+                                  role={getDisplayRole(trigger)}
+                                  name={trigger.a11y.name}
+                                  direction="reverse"
+                                  inferred={controlsIndex.inferred.has(
+                                    triggerId,
+                                  )}
+                                  // Alt+Shift+J reaches the first one.
+                                  keyHint={i === 0 ? JUMP_KEYS.back : undefined}
+                                  onJump={() => handleJumpToNode(triggerId)}
+                                />
+                              );
+                            })}
                         </>
                       )}
 
@@ -3917,7 +3941,7 @@ export function App() {
           <div class="sn-hints">
             <kbd>Enter</kbd> activate &middot; <kbd>+/−</kbd> step &middot;{" "}
             <kbd>Space</kbd> expand &middot; <kbd>Arrow</kbd> navigate &middot;{" "}
-            <kbd>DblClick</kbd> scope
+            <kbd>DblClick</kbd> scope &middot; <kbd>Alt+(Shift)+J</kbd> jump
           </div>
         </>
       )}
