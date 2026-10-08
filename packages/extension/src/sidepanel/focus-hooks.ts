@@ -108,8 +108,9 @@ export function useRestoreFocusOnClose(ref: RefObject<HTMLElement>) {
  * goes to the body first, and the panel's own focus repair leaves focus a
  * popup took with it alone (see `App`). A click a screen reader makes is the
  * exception: it brings a mousedown with no pointerdown before it, and moves
- * focus nowhere if what it clicks can't take focus, so focus still inside
- * the popup then goes to its button, as on Escape. A press that starts
+ * focus nowhere if what it clicks can't take focus, so focus still on the
+ * popup's controls then goes where a real press would have put it. A press
+ * that starts
  * inside it never closes it, and nor does an Escape something else has
  * already answered (a native pick's cancel). A popup whose button has gone
  * (the toolbar, while the panel waits for a page) closes too, rather than
@@ -126,19 +127,35 @@ export function useDismissible(
     if (!open) return;
     const inside = (target: EventTarget | null) =>
       containerRef.current?.contains(target as Node) === true;
+    // Close it, and if focus was on its controls (not its button), which go
+    // with it, put focus on `to` instead.
+    const closeKeepingFocus = (to: HTMLElement | null | undefined) => {
+      const active = document.activeElement;
+      const strands =
+        inside(active) && active?.closest("[data-sn-popup]") != null;
+      close();
+      if (strands) to?.focus();
+    };
     const onPress = (e: Event) => {
       if (!containerRef.current || inside(e.target)) return;
-      // A real press closed it on its pointerdown, and focus went with it,
-      // before its mousedown: only a press without one finds focus here.
-      const stranded = e.type === "mousedown" && inside(document.activeElement);
-      close();
-      if (stranded) buttonRef.current?.focus();
+      if (e.type !== "mousedown") {
+        close();
+        return;
+      }
+      // A real press closed it on its pointerdown, taking focus with it,
+      // before its mousedown. Focus still on its controls at a mousedown
+      // means a click a screen reader made, which moves none: focus goes
+      // where a real press would put it, the nearest thing around what was
+      // clicked that takes focus, or else the popup's button.
+      const around =
+        e.target instanceof Element
+          ? e.target.closest<HTMLElement>(FOCUSABLE_SELECTOR)
+          : null;
+      closeKeepingFocus(around ?? buttonRef.current);
     };
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape" || e.defaultPrevented) return;
-      const hadFocus = inside(document.activeElement);
-      close();
-      if (hadFocus) buttonRef.current?.focus();
+      closeKeepingFocus(buttonRef.current);
     };
     // Both press events, in capture, so a control that stops them from
     // bubbling doesn't hide them: `pointerdown` comes for a disabled control

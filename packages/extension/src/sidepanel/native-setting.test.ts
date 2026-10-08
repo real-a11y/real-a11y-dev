@@ -726,16 +726,16 @@ describe("native mode on by default", () => {
       const checkbox = await openSettings();
       act(() => checkbox.focus());
 
-      act(() => {
-        searchBox()!.dispatchEvent(
-          new MouseEvent("pointerdown", { bubbles: true, button: 2 }),
-        );
-      });
-      act(() => {
-        searchBox()!.dispatchEvent(
-          new MouseEvent("mousedown", { bubbles: true, button: 2 }),
-        );
-      });
+      // As Chrome times them: the popup re-renders in the microtask between
+      // the two, while its listeners, removed after a paint, are still there
+      // for the mousedown.
+      searchBox()!.dispatchEvent(
+        new MouseEvent("pointerdown", { bubbles: true, button: 2 }),
+      );
+      await Promise.resolve();
+      searchBox()!.dispatchEvent(
+        new MouseEvent("mousedown", { bubbles: true, button: 2 }),
+      );
       await flush();
 
       expect(settingsCheckbox()).toBeNull();
@@ -798,8 +798,21 @@ describe("native mode on by default", () => {
       await flush();
 
       expect(settingsCheckbox()).toBeNull();
-      // Not left on the body with the switch: back on Settings, as Escape
-      // leaves it.
+      // Not left on the body with the switch: where a real press would have
+      // put it, on the tree around the row.
+      expect(document.activeElement?.getAttribute("role")).toBe("tree");
+
+      // With nothing around what was clicked to take focus, back on
+      // Settings, as Escape leaves it.
+      const again = await openSettings();
+      act(() => again.focus());
+      act(() => {
+        container
+          .querySelector(".sn-root")!
+          .dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+      });
+      await flush();
+      expect(settingsCheckbox()).toBeNull();
       expect(document.activeElement).toBe(buttonNamed("Settings ▾"));
     });
 
