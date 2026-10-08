@@ -864,13 +864,16 @@ const FIELD_VALUE_GATES = [
   "pageReadValue",
   "VALUE_BEARING_ROLES",
   // What it keeps from that verdict: no value inside a sensitive field
-  // (`withholdInsideSensitive`), and the fail-closed flag a consumer reads
+  // (`withholdInsideSensitive`), nor in what it controls
+  // (`controlledRegion`), and the fail-closed flag a consumer reads
   // (`fieldValueWithheld`). The option picker marks no current option for a
   // withheld select (`pickerCurrentOption`), and the feedback after a choice
   // names the field rather than the option (`describeSelection`), in both
   // producers' panels, and so does selecting an option row straight from the
   // native tree (`selectFeedback`).
   "withholdInsideSensitive",
+  "controlledRegion",
+  "NATIVE_AX_CHOICE_STATES",
   "fieldValueWithheld",
   "pickerCurrentOption",
   "describeSelection",

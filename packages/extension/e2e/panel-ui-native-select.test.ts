@@ -220,3 +220,117 @@ test("an option chosen while a read is running is dropped if the panel leaves th
     (await nav.nativeActs()).filter((a) => a.action === "select"),
   ).toHaveLength(0);
 });
+
+test("the tree doesn't say which option of a sensitive select is chosen", async ({
+  nav,
+}) => {
+  const page = await nav.showNative("select-sensitive.html");
+  // A plain select next to it, whose chosen option the tree does show.
+  await page.evaluate(() => {
+    document.body.insertAdjacentHTML(
+      "beforeend",
+      `<label for="size">Size</label>
+       <select id="size"><option>S</option><option selected>M</option></select>`,
+    );
+  });
+  await nav.panel.getByRole("button", { name: "Refresh native tree" }).click();
+  await nav.panel.getByRole("button", { name: "Expand all" }).click();
+
+  const row = (name: string) =>
+    nav.panel.getByRole("treeitem", { name: new RegExp(`^option "${name}"`) });
+  await expect(row("M")).toContainText("selected");
+  // "11" is the chosen month; no option row of the month says so.
+  for (const month of ["01", "02", "11"]) {
+    await expect(row(month)).toBeVisible();
+    await expect(row(month)).not.toContainText("selected");
+  }
+});
+
+test("NATIVE_READ carries no chosen option under a sensitive select, in any of its forms", async ({
+  nav,
+}) => {
+  const { page, tabId } = await nav.open("select-sensitive.html");
+  // A list box and a multiple select, sensitive too, beside the drop-down.
+  await page.evaluate(() => {
+    document.body.insertAdjacentHTML(
+      "beforeend",
+      `<label for="exp-year-list">Expiry year list</label>
+       <select id="exp-year-list" size="3" autocomplete="cc-exp-year">
+         <option>2040</option><option selected>2041</option><option>2042</option>
+       </select>
+       <label for="months">Months</label>
+       <select id="months" multiple autocomplete="cc-exp-month">
+         <option selected>03</option><option>04</option>
+       </select>
+       <label for="plain">Size</label>
+       <select id="plain" size="2"><option>S</option><option selected>M</option></select>`,
+    );
+  });
+  const nodes = await nav.readNodes(tabId);
+  const options = nodes.filter((n) => n.role === "option");
+  // A plain list box still says which option is chosen, so the check below
+  // is about sensitivity, not about Chromium sending no state at all.
+  expect(options.find((n) => n.name === "M")?.states?.selected).toBe(true);
+  const sensitive = options.filter((n) => n.name !== "S" && n.name !== "M");
+  // The fixture's own drop-downs (month, and the empty year), then the list
+  // box and the multiple select added above.
+  expect(sensitive.map((n) => n.name).sort()).toEqual(
+    [
+      "01",
+      "02",
+      "11",
+      "YYYY",
+      "2030",
+      "2031",
+      "2040",
+      "2041",
+      "2042",
+      "03",
+      "04",
+    ].sort(),
+  );
+  for (const option of sensitive) {
+    expect(option.states ?? {}).not.toHaveProperty("selected");
+  }
+});
+
+test("NATIVE_READ carries no chosen option in the listbox a sensitive combobox controls", async ({
+  nav,
+}) => {
+  const { page, tabId } = await nav.open("select-sensitive.html");
+  // An ARIA combobox whose listbox is elsewhere in the page, tied to it only
+  // by aria-controls (naming an unnamed wrapper around it, which the tree
+  // drops), so it isn't the field's descendant; and a plain one beside it,
+  // whose chosen option the tree still shows.
+  await page.evaluate(() => {
+    document.body.insertAdjacentHTML(
+      "beforeend",
+      `<label for="exp-aria">Expiry month (ARIA)</label>
+       <input id="exp-aria" role="combobox" aria-expanded="true"
+         aria-controls="exp-aria-list" autocomplete="cc-exp-month" value="07">
+       <label for="colour">Colour</label>
+       <input id="colour" role="combobox" aria-expanded="true"
+         aria-controls="colour-list" value="Red">
+       <div>
+         <div id="exp-aria-list">
+           <ul role="listbox" aria-label="Months">
+             <li role="option" aria-selected="false">06</li>
+             <li role="option" aria-selected="true">07</li>
+           </ul>
+         </div>
+         <ul id="colour-list" role="listbox" aria-label="Colours">
+           <li role="option" aria-selected="true">Red</li>
+           <li role="option" aria-selected="false">Blue</li>
+         </ul>
+       </div>`,
+    );
+  });
+  const nodes = await nav.readNodes(tabId);
+  const option = (name: string) =>
+    nodes.find((n) => n.role === "option" && n.name === name);
+  expect(option("Red")?.states?.selected).toBe(true);
+  for (const month of ["06", "07"]) {
+    expect(option(month)).toBeDefined();
+    expect(option(month)?.states ?? {}).not.toHaveProperty("selected");
+  }
+});

@@ -25,6 +25,7 @@ import {
   rootIdOf,
   SYNTHETIC_ROOT_ID,
   withholdInsideSensitive,
+  controlledRegion,
   type CdpTransport,
   type EnrichedNativeNode,
 } from "./native-core.js";
@@ -513,6 +514,137 @@ describe("readNativeTree", () => {
     expect(wire).not.toContain("November");
   });
 
+  it("withholds the chosen option in a listbox a sensitive combobox controls through a dropped wrapper", async () => {
+    // The combobox reads as sensitive and the listbox as not, so only the
+    // controls relation can withhold the option. Its `aria-controls` names
+    // an unnamed wrapper the normalizer drops, around the listbox.
+    const raw = [
+      {
+        nodeId: "1",
+        backendDOMNodeId: 5,
+        role: { value: "RootWebArea" },
+        childIds: ["2", "3"],
+      },
+      {
+        nodeId: "2",
+        parentId: "1",
+        backendDOMNodeId: 10,
+        role: { value: "combobox" },
+        name: { value: "Expiry month" },
+        value: { type: "string", value: "07" },
+        properties: [
+          {
+            name: "controls",
+            value: {
+              type: "idrefList",
+              relatedNodes: [{ backendDOMNodeId: 20 }],
+            },
+          },
+        ],
+      },
+      {
+        nodeId: "3",
+        parentId: "1",
+        backendDOMNodeId: 20,
+        role: { value: "generic" },
+        name: { value: "" },
+        childIds: ["4"],
+      },
+      {
+        nodeId: "4",
+        parentId: "3",
+        backendDOMNodeId: 30,
+        role: { value: "listbox" },
+        name: { value: "Months" },
+        childIds: ["5"],
+      },
+      {
+        nodeId: "5",
+        parentId: "4",
+        backendDOMNodeId: 40,
+        role: { value: "option" },
+        name: { value: "07" },
+        properties: [
+          {
+            name: "selected",
+            value: { type: "booleanOrUndefined", value: true },
+          },
+        ],
+      },
+    ];
+    const t = new FakeTransport((method, params) => {
+      if (method === "Accessibility.getFullAXTree") return { nodes: raw };
+      if (method === "DOM.resolveNode") {
+        const id = (params as { backendNodeId: number }).backendNodeId;
+        return { object: { objectId: `obj-${id}` } };
+      }
+      if (method === "Runtime.callFunctionOn") {
+        const { objectId } = params as { objectId: string };
+        return {
+          result: {
+            value:
+              objectId === "obj-10"
+                ? { classified: true, sensitive: true, redacted: true }
+                : { classified: true },
+          },
+        };
+      }
+      return {};
+    });
+    const res = await readNativeTree(t);
+    expect(res.nodes.some((n) => n.id === "ax-dom-20")).toBe(false);
+    expect(findNative(res.nodes, "option")?.states).not.toHaveProperty(
+      "selected",
+    );
+  });
+
+  it("treats a field it could not read as sensitive, down to its options", async () => {
+    // The in-page read fails (no objectId), so the select is unclassified:
+    // it may be a card field, and its chosen option must not say so.
+    const raw = [
+      {
+        nodeId: "1",
+        backendDOMNodeId: 10,
+        role: { value: "combobox" },
+        name: { value: "Expiry month" },
+        value: { type: "string", value: "11" },
+        childIds: ["2"],
+      },
+      {
+        nodeId: "2",
+        parentId: "1",
+        backendDOMNodeId: 20,
+        role: { value: "MenuListPopup" },
+        name: { value: "" },
+        childIds: ["3"],
+      },
+      {
+        nodeId: "3",
+        parentId: "2",
+        backendDOMNodeId: 30,
+        role: { value: "option" },
+        name: { value: "11" },
+        properties: [
+          {
+            name: "selected",
+            value: { type: "booleanOrUndefined", value: true },
+          },
+        ],
+      },
+    ];
+    const t = new FakeTransport((method) => {
+      // Every other call, `DOM.resolveNode` included, answers `{}`: the
+      // field can't be resolved, so its in-page read fails.
+      if (method === "Accessibility.getFullAXTree") return { nodes: raw };
+      return {};
+    });
+    const res = await readNativeTree(t);
+    expect(findNative(res.nodes, "combobox")?.value).toBeUndefined();
+    expect(findNative(res.nodes, "option")?.states).not.toHaveProperty(
+      "selected",
+    );
+  });
+
   it("resolves every field into one object group, and releases it", async () => {
     const t = oneField(
       {
@@ -911,6 +1043,180 @@ describe("withholdInsideSensitive", () => {
     expect(byId.get("part")?.rawValue).toBeUndefined();
     expect(byId.get("deep")?.value).toBeUndefined();
     expect(byId.get("elsewhere")?.value).toBe("Spain");
+  });
+
+  it("marks no option inside a sensitive field as selected", () => {
+    // A redacted `<select autocomplete="cc-exp-month">`, as Chromium reads
+    // it: the combobox, its popup, and its options, one marked selected. A
+    // checkbox inside the popup stands for any control a sensitive wrapper
+    // holds.
+    const nodes = [
+      n("month", ["popup"], {
+        role: "combobox",
+        value: "[redacted]",
+        redacted: true,
+        states: { focusable: true, expanded: false },
+      }),
+      n("popup", ["jan", "nov", "box"], { role: "MenuListPopup" }),
+      n("jan", [], {
+        role: "option",
+        name: "01",
+        states: { focusable: true, selected: false },
+      }),
+      n("nov", [], {
+        role: "option",
+        name: "11",
+        states: { focusable: true, selected: true },
+      }),
+      n("box", [], { role: "checkbox", states: { checked: true } }),
+      n("other", [], {
+        role: "option",
+        name: "Spain",
+        states: { selected: true },
+      }),
+    ];
+    withholdInsideSensitive(nodes, ["month"]);
+    const byId = new Map(nodes.map((x) => [x.id, x]));
+    // Strict: the key has to be gone from the wire, not set to undefined.
+    expect(byId.get("jan")?.states).toStrictEqual({ focusable: true });
+    expect(byId.get("nov")?.states).toStrictEqual({ focusable: true });
+    // A checkbox is its own control, classified on its own: its state isn't
+    // the field's value (see `NATIVE_AX_CHOICE_STATES`).
+    expect(byId.get("box")?.states).toStrictEqual({ checked: true });
+    // The field's own states, and anything outside it, stay.
+    expect(byId.get("month")?.states).toStrictEqual({
+      focusable: true,
+      expanded: false,
+    });
+    expect(byId.get("other")?.states).toStrictEqual({ selected: true });
+  });
+
+  it("treats the listbox a sensitive combobox controls as inside it", () => {
+    // An ARIA combobox (`<input role="combobox" aria-controls="list">`) whose
+    // listbox is a sibling elsewhere in the page, not its descendant.
+    const nodes = [
+      n("exp", [], {
+        role: "combobox",
+        value: "[redacted]",
+        redacted: true,
+        controls: ["list"],
+      }),
+      n("list", ["jan", "nov"], { role: "listbox" }),
+      n("jan", [], { role: "option", name: "01", states: { selected: false } }),
+      n("nov", [], { role: "option", name: "11", states: { selected: true } }),
+      n("other", [], {
+        role: "option",
+        name: "Spain",
+        states: { selected: true },
+      }),
+    ];
+    withholdInsideSensitive(nodes, ["exp"]);
+    const byId = new Map(nodes.map((x) => [x.id, x]));
+    expect(byId.get("nov")?.states).toStrictEqual({});
+    expect(byId.get("nov")?.valueWithheld).toBe(true);
+    expect(byId.get("jan")?.states).toStrictEqual({});
+    expect(byId.get("other")?.states).toStrictEqual({ selected: true });
+  });
+
+  it("keeps the values of fields a sensitive one controls, but not which option is chosen", () => {
+    // A card input whose `aria-controls` names a whole panel: its months
+    // listbox, and a shipping address and a country select of their own,
+    // each read as not sensitive. Only which month is chosen is the card's.
+    const nodes = [
+      n("card", ["part"], {
+        role: "combobox",
+        value: "[redacted]",
+        redacted: true,
+        controls: ["panel"],
+      }),
+      n("part", [], { role: "spinbutton", value: "07" }),
+      n("panel", ["list", "addr", "country"]),
+      n("list", ["jul"], { role: "listbox", valueWithheld: false }),
+      n("jul", [], { role: "option", name: "07", states: { selected: true } }),
+      n("addr", [], {
+        role: "textbox",
+        value: "1 Main St",
+        rawValue: "1 Main St",
+        valueWithheld: false,
+      }),
+      n("country", [], {
+        role: "combobox",
+        value: "France",
+        rawValue: "fr",
+        valueWithheld: false,
+      }),
+    ];
+    // `part` is the card's own child and controlled too: inside wins.
+    withholdInsideSensitive(nodes, ["card"], ["part"]);
+    const byId = new Map(nodes.map((x) => [x.id, x]));
+    expect(byId.get("jul")?.states).toStrictEqual({});
+    expect(byId.get("jul")?.valueWithheld).toBe(true);
+    expect(byId.get("addr")).toMatchObject({
+      value: "1 Main St",
+      rawValue: "1 Main St",
+      valueWithheld: false,
+    });
+    expect(byId.get("country")).toMatchObject({
+      value: "France",
+      rawValue: "fr",
+      valueWithheld: false,
+    });
+    expect(byId.get("list")?.valueWithheld).toBe(false);
+    expect(byId.get("part")?.value).toBeUndefined();
+    expect(byId.get("part")?.valueWithheld).toBe(true);
+  });
+
+  it("follows a controlled wrapper the tree dropped down to its listbox", () => {
+    // `aria-controls` names an unnamed <div> around the listbox, which the
+    // normalizer drops: the combobox's own `controls` is empty, and the
+    // region comes from the raw tree.
+    const raw = [
+      {
+        nodeId: "1",
+        backendDOMNodeId: 10,
+        role: { value: "combobox" },
+        properties: [
+          {
+            name: "controls",
+            value: {
+              type: "idrefList",
+              relatedNodes: [{ backendDOMNodeId: 20 }],
+            },
+          },
+        ],
+      },
+      {
+        nodeId: "2",
+        backendDOMNodeId: 20,
+        role: { value: "generic" },
+        childIds: ["3"],
+      },
+      {
+        nodeId: "3",
+        backendDOMNodeId: 30,
+        role: { value: "listbox" },
+        childIds: ["4"],
+      },
+      { nodeId: "4", backendDOMNodeId: 40, role: { value: "option" } },
+    ];
+    const kept = new Set(["ax-dom-10", "ax-dom-30", "ax-dom-40"]);
+    expect(controlledRegion(raw[0]!, raw, kept)).toEqual(["ax-dom-30"]);
+
+    const nodes = [
+      n("ax-dom-10", [], {
+        role: "combobox",
+        value: "[redacted]",
+        redacted: true,
+      }),
+      n("ax-dom-30", ["ax-dom-40"], { role: "listbox" }),
+      n("ax-dom-40", [], {
+        role: "option",
+        name: "07",
+        states: { selected: true },
+      }),
+    ];
+    withholdInsideSensitive(nodes, ["ax-dom-10"], ["ax-dom-30"]);
+    expect(nodes[2]!.states).toStrictEqual({});
   });
 
   it("marks every node below a sensitive one as withheld", () => {

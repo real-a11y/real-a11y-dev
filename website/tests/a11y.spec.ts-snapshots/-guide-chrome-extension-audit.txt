@@ -291,7 +291,7 @@ main
       code "Alt"
       code "Shift"
       code "J"
-    listitem "A drop-down opens the same option picker as in DOM mode, listing its options and starting on the current one. Choosing one selects it on the page. A disabled option is listed but can't be chosen, and a disabled select opens no picker. A sensitive select, such as a card's expiry month, shows no current option, and the feedback says "Selected an option in Expiry month" rather than naming it. A or is a list box, not a drop-down, so it gets no picker in the native tree. A custom isn't a real select, so it is still clicked."
+    listitem "A drop-down opens the same option picker as in DOM mode, listing its options and starting on the current one. Choosing one selects it on the page. A disabled option is listed but can't be chosen, and a disabled select opens no picker. A sensitive select, such as a card's expiry month, shows no current option, its option rows in the tree don't say which is chosen, and the feedback says "Selected an option in Expiry month" rather than naming it. A or is a list box, not a drop-down, so it gets no picker in the native tree. A custom isn't a real select, so it is still clicked."
       code "<select>"
       code "<select multiple>"
       code "<select size="4">"

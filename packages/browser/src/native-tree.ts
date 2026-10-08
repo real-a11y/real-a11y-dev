@@ -63,6 +63,7 @@ import {
   buildCssPath,
   finishAnnouncedValue,
   isSensitiveFieldAttributes,
+  NATIVE_AX_CHOICE_STATES,
   NATIVE_AX_NAME_SOURCE_ROLES,
   RANGE_VALUE_ROLES,
   REDACTED_VALUE,
@@ -1156,7 +1157,9 @@ export function buildNativeTree(
     const withholdSelection =
       !!raw &&
       (sensitivity.regions.inside(raw) || (redactInput && inChoiceField(raw)));
-    if (withholdSelection) delete states.selected;
+    if (withholdSelection) {
+      for (const state of NATIVE_AX_CHOICE_STATES) delete states[state];
+    }
 
     const enriched =
       nn.backendDOMNodeId !== null
