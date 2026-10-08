@@ -974,15 +974,12 @@ export function App() {
         // Thrown rather than rejected, by a torn-down context: never sent.
         sent = Promise.resolve(undefined);
       }
-      void Promise.resolve(sent)
-        .then(
-          (reply) => reply as { enabled?: boolean } | undefined,
-          // Never reached the service worker, so nothing was persisted.
-          () => undefined,
-        )
+      void sent
+        // Never reached the service worker, so nothing was persisted.
+        .catch(() => undefined)
         .then((reply) => {
           try {
-            onReply(reply);
+            onReply(reply as { enabled?: boolean } | undefined);
           } finally {
             ownWriteDone();
           }
@@ -1007,11 +1004,18 @@ export function App() {
           setShowNativeConsent(false);
           if (next) setNativeModeEnabledState(true);
           else showNativeOff();
+          focusAfterSwap(next ? "toggle" : "enable");
         }
         answered(took);
       });
     },
-    [ownWrite, showNativeOff, setNativeModeEnabledState, setShowNativeConsent],
+    [
+      ownWrite,
+      focusAfterSwap,
+      showNativeOff,
+      setNativeModeEnabledState,
+      setShowNativeConsent,
+    ],
   );
   // "Keep the DOM tree": remembered, so the panel doesn't ask by itself again,
   // and "Enable native mode…" still turns native mode on later. Not a
@@ -1056,8 +1060,8 @@ export function App() {
     pendingNativeFocus.current = null;
     const active = document.activeElement;
     if (active !== null && active !== document.body) return;
-    // Whichever of the two the toolbar shows: a later swap in the same render
-    // can have put the other one there.
+    // Whichever of the two the toolbar shows: the mount-time read of the
+    // setting can change which, without asking for focus.
     const [wanted, other] =
       target === "toggle"
         ? [nativeToggleRef, enableNativeRef]
@@ -3412,7 +3416,6 @@ export function App() {
                     announce("Couldn't disable native mode — try again.", 3000);
                     return;
                   }
-                  focusAfterSwap("enable");
                   announce("Native mode off — showing the DOM tree.", 3000);
                 });
               }}
@@ -3620,7 +3623,6 @@ export function App() {
                 );
                 return;
               }
-              focusAfterSwap("toggle");
               setProducer("native");
               announce("Native mode on — reading Chromium's tree.", 3000);
             });

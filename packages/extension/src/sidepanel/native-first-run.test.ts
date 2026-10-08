@@ -545,6 +545,31 @@ describe("native mode on first run", () => {
       expect(toolbarButton("NATIVE")).not.toBeNull();
     });
 
+    it("isn't left holding by a 'keep the DOM tree' whose send throws", async () => {
+      mount(
+        { enabled: false, chosen: false },
+        {
+          storage: {},
+          decline: () => {
+            throw new Error("Extension context invalidated.");
+          },
+        },
+      );
+      await flush();
+      await showTab(7);
+
+      act(() => button("Keep the DOM tree").click());
+      await flush();
+
+      expect(question()).toBeNull();
+      expect(announced()).toBe(
+        "Keeping the DOM tree. Enable native mode… in the toolbar turns it on.",
+      );
+      // Its write is over, so another window's answer still reaches it.
+      await answeredElsewhere(true);
+      expect(toolbarButton("NATIVE")).not.toBeNull();
+    });
+
     it("leaves focus where the user moved it while its own Disable was on its way", async () => {
       let release = () => {};
       mount(
