@@ -34,6 +34,7 @@ import {
 import {
   useState,
   useEffect,
+  useLayoutEffect,
   useCallback,
   useRef,
   useMemo,
@@ -718,13 +719,21 @@ export function App() {
   }, []);
   // Turning native mode on or off, here or in another window, can take away
   // the control that had focus: the Enable button becomes the DOM/NATIVE
-  // toggle and back, the question closes, the native tree goes. The effect
-  // below then moves focus to the control that replaced it, once that has
-  // rendered, and only if focus was lost: focus somewhere that survived the
-  // swap stays where the user put it.
+  // toggle and back, the question closes, the native tree goes. Each swap
+  // asks (`focusAfterSwap`) for focus to move to the control that replaced
+  // it, and the layout effect below does that as soon as the swap commits,
+  // only if focus was lost: focus somewhere that survived the swap stays
+  // where the user put it. A layout effect rather than an effect, which waits
+  // for a paint: a panel in a window that isn't in front can go without one
+  // for a long time, and another swap can ask for something else meanwhile.
   const nativeToggleRef = useRef<HTMLButtonElement>(null);
   const enableNativeRef = useRef<HTMLButtonElement>(null);
   const pendingNativeFocus = useRef<"toggle" | "enable" | null>(null);
+  const [focusSwaps, setFocusSwaps] = useState(0);
+  const focusAfterSwap = useCallback((target: "toggle" | "enable") => {
+    pendingNativeFocus.current = target;
+    setFocusSwaps((n) => n + 1);
+  }, []);
 
   /** Drop the native tree and orphan any native read or action in flight.
    *  Bumping `nativeOpToken` makes a late reply recognizably stale to every
@@ -877,7 +886,7 @@ export function App() {
       const turnsOn = value && !nativeModeEnabledRef.current;
       const turnsOff = !value && nativeModeEnabledRef.current;
       if (!answersQuestion && !turnsOn && !turnsOff) return;
-      pendingNativeFocus.current = value ? "toggle" : "enable";
+      focusAfterSwap(value ? "toggle" : "enable");
       if (answersQuestion) {
         setShowNativeConsent(false);
         setNativeConsentError(undefined);
@@ -901,7 +910,13 @@ export function App() {
         announce("Native mode off — showing the DOM tree.", 3000);
       }
     },
-    [announce, showNativeOff, setNativeModeEnabledState, setShowNativeConsent],
+    [
+      announce,
+      focusAfterSwap,
+      showNativeOff,
+      setNativeModeEnabledState,
+      setShowNativeConsent,
+    ],
   );
   /** A change to the setting in storage. Held while this panel has a write
    *  of its own on its way (see `ownSettingWrites`). */
@@ -940,47 +955,63 @@ export function App() {
     heldSetting.current = null;
     if (held) applyNativeSetting(held.value);
   }, [applyNativeSetting]);
+  /** Send one of this panel's own writes to the setting. `onReply` gets the
+   *  service worker's reply, or `undefined` if it never answered, and runs
+   *  before a change held meanwhile is applied (`ownWriteDone`), so what it
+   *  does can't undo that change. */
+  const ownWrite = useCallback(
+    (
+      message:
+        | { type: "NATIVE_FLAG_SET"; enabled: boolean }
+        | { type: "NATIVE_FLAG_DECLINE" },
+      onReply: (reply: { enabled?: boolean } | undefined) => void,
+    ): void => {
+      ownSettingWrites.current++;
+      let sent: Promise<unknown>;
+      try {
+        sent = chrome.runtime.sendMessage(message);
+      } catch {
+        // Thrown rather than rejected, by a torn-down context: never sent.
+        sent = Promise.resolve(undefined);
+      }
+      void Promise.resolve(sent)
+        .then(
+          (reply) => reply as { enabled?: boolean } | undefined,
+          // Never reached the service worker, so nothing was persisted.
+          () => undefined,
+        )
+        .then((reply) => {
+          try {
+            onReply(reply);
+          } finally {
+            ownWriteDone();
+          }
+        });
+    },
+    [ownWriteDone],
+  );
   /** Asks the service worker to persist the setting. A request, not a state
    *  setter: it can fail, and `answered` hears whether the setting really
    *  changed. `NATIVE_FLAG_SET` replies `{ok: false}` from its outer catch on
    *  an internal failure rather than rejecting, so a reply alone doesn't mean
    *  it took. Turning native mode off also drops the native tree and returns
    *  the view to DOM; the service worker detaches the debugger as soon as any
-   *  operation in flight finishes. `answered` runs before a change that
-   *  landed from another window meanwhile is applied (`ownWriteDone`), so
-   *  what the caller does with its own answer can't undo that change. */
+   *  operation in flight finishes. */
   const requestNativeMode = useCallback(
     (next: boolean, answered: (took: boolean) => void): void => {
-      ownSettingWrites.current++;
-      void chrome.runtime
-        .sendMessage({ type: "NATIVE_FLAG_SET", enabled: next })
-        .then(
-          (r: { enabled?: boolean; ok?: boolean } | undefined) =>
-            r?.enabled === next,
-          // Never reached the service worker, so nothing was persisted.
-          () => false,
-        )
-        .then((took) => {
-          try {
-            if (took) {
-              settingLearned.current++;
-              setNativeModeChosen(true);
-              setShowNativeConsent(false);
-              if (next) setNativeModeEnabledState(true);
-              else showNativeOff();
-            }
-            answered(took);
-          } finally {
-            ownWriteDone();
-          }
-        });
+      ownWrite({ type: "NATIVE_FLAG_SET", enabled: next }, (reply) => {
+        const took = reply?.enabled === next;
+        if (took) {
+          settingLearned.current++;
+          setNativeModeChosen(true);
+          setShowNativeConsent(false);
+          if (next) setNativeModeEnabledState(true);
+          else showNativeOff();
+        }
+        answered(took);
+      });
     },
-    [
-      ownWriteDone,
-      showNativeOff,
-      setNativeModeEnabledState,
-      setShowNativeConsent,
-    ],
+    [ownWrite, showNativeOff, setNativeModeEnabledState, setShowNativeConsent],
   );
   // "Keep the DOM tree": remembered, so the panel doesn't ask by itself again,
   // and "Enable native mode…" still turns native mode on later. Not a
@@ -991,19 +1022,11 @@ export function App() {
   // stored, and the panel simply asks again next time it opens.
   const declineNativeMode = useCallback(() => {
     setNativeModeChosen(true);
-    ownSettingWrites.current++;
-    void chrome.runtime
-      .sendMessage({ type: "NATIVE_FLAG_DECLINE" })
-      .then(
-        (r: { enabled?: boolean } | undefined) => r,
-        () => undefined,
-      )
-      .then((r) => {
-        // Still on: another window's yes got there first.
-        if (r?.enabled === true) applyNativeSetting(true);
-        ownWriteDone();
-      });
-  }, [applyNativeSetting, ownWriteDone]);
+    ownWrite({ type: "NATIVE_FLAG_DECLINE" }, (reply) => {
+      // Still on: another window's yes got there first.
+      if (reply?.enabled === true) applyNativeSetting(true);
+    });
+  }, [applyNativeSetting, ownWrite]);
 
   // The native tree's page outline: a settled selection's reveal and a
   // hovered row's preview (see `useNativeOverlay`).
@@ -1025,22 +1048,22 @@ export function App() {
     announce,
   });
 
-  // Also when the question closes: one that opened by itself on first connect
-  // had nothing in the panel to return focus to.
-  useEffect(() => {
+  // See `focusAfterSwap`. A question that opened by itself on first connect
+  // had nothing in the panel to return focus to, so its closing is a swap too.
+  useLayoutEffect(() => {
     const target = pendingNativeFocus.current;
     if (target === null) return;
     pendingNativeFocus.current = null;
     const active = document.activeElement;
     if (active !== null && active !== document.body) return;
-    // Whichever of the two the toolbar shows: an answer from another window
-    // can have swapped them in the meantime.
+    // Whichever of the two the toolbar shows: a later swap in the same render
+    // can have put the other one there.
     const [wanted, other] =
       target === "toggle"
         ? [nativeToggleRef, enableNativeRef]
         : [enableNativeRef, nativeToggleRef];
     (wanted.current ?? other.current)?.focus();
-  }, [nativeModeEnabled, showNativeConsent]);
+  }, [focusSwaps]);
 
   // Don't leave a clear pending on a panel that is going away.
   useEffect(
@@ -3382,17 +3405,14 @@ export function App() {
             <button
               class="sn-toolbar-btn"
               onClick={() => {
-                // Set before the request: the toolbar re-renders as soon as
-                // the setting flips, before the answer is handed back.
-                pendingNativeFocus.current = "enable";
                 requestNativeMode(false, (took) => {
                   // A failed disable leaves the setting, and the attached
                   // debugger, as they were, so say the click didn't take.
                   if (!took) {
-                    pendingNativeFocus.current = null;
                     announce("Couldn't disable native mode — try again.", 3000);
                     return;
                   }
+                  focusAfterSwap("enable");
                   announce("Native mode off — showing the DOM tree.", 3000);
                 });
               }}
@@ -3583,7 +3603,6 @@ export function App() {
           onEnable={() => {
             setNativeConsentError(undefined);
             setNativeConsentPending(true);
-            pendingNativeFocus.current = "toggle";
             // The consent click is this session's gesture, and the read it
             // starts below is the session's first native read, so the
             // default has nothing left to do. Set before the request: the
@@ -3595,13 +3614,13 @@ export function App() {
               // Only a real flip switches the view; on failure the banner
               // stays open with the error, for a retry.
               if (!took) {
-                pendingNativeFocus.current = null;
                 hasAppliedNativeDefault.current = defaultWasApplied;
                 setNativeConsentError(
                   "Couldn't enable native mode — try again.",
                 );
                 return;
               }
+              focusAfterSwap("toggle");
               setProducer("native");
               announce("Native mode on — reading Chromium's tree.", 3000);
             });
@@ -3610,7 +3629,7 @@ export function App() {
             // A question that opened by itself has no opener to return
             // focus to, so focus goes to the control that turns native mode
             // on later, which the announcement names.
-            pendingNativeFocus.current = "enable";
+            focusAfterSwap("enable");
             setShowNativeConsent(false);
             setNativeConsentError(undefined);
             declineNativeMode();

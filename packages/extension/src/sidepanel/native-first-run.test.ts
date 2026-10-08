@@ -514,6 +514,37 @@ describe("native mode on first run", () => {
       expect(announced()).toBe("Native mode off — showing the DOM tree.");
     });
 
+    it("isn't left waiting by a send that throws, and still follows other windows", async () => {
+      mount(
+        { enabled: false, chosen: false },
+        {
+          storage: {},
+          set: () => {
+            // A torn-down context throws rather than rejecting.
+            throw new Error("Extension context invalidated.");
+          },
+        },
+      );
+      await flush();
+      await showTab(7);
+
+      act(() => button("Use native mode").click());
+      await flush();
+
+      // Not stuck on "Turning on…": the failure is said, and both answers
+      // work again.
+      expect(question()?.textContent).toContain(
+        "Couldn't enable native mode — try again.",
+      );
+      expect(button("Use native mode").getAttribute("aria-disabled")).toBe(
+        "false",
+      );
+      // And a later answer from another window still reaches this panel.
+      await answeredElsewhere(true);
+      expect(question()).toBeNull();
+      expect(toolbarButton("NATIVE")).not.toBeNull();
+    });
+
     it("leaves focus where the user moved it while its own Disable was on its way", async () => {
       let release = () => {};
       mount(
