@@ -4,10 +4,13 @@
  * Native-mode entry point (RFC PR H). Registered unconditionally from the
  * service worker (`background.ts`) — the capability ships in every build now
  * that `public/manifest.json` carries `debugger`/`tabs`/`storage` as required
- * permissions. What keeps it off by default is the setting below: every
- * `chrome.debugger` use still refuses until a user explicitly turns native
- * mode on, enforced inside `NativeDebuggerSession.attach()` itself so "off"
- * and "attached" stay mutually exclusive.
+ * permissions. What keeps it off until the user says so is the setting
+ * below: every `chrome.debugger` use still refuses until a user explicitly
+ * turns native mode on, enforced inside `NativeDebuggerSession.attach()`
+ * itself so "off" and "attached" stay mutually exclusive. Native mode is
+ * still the suggested default: while the setting has never been set either
+ * way, the panel asks once, before anything attaches, with native mode as
+ * the answer it offers first (see `NATIVE_FLAG_GET`'s `chosen`).
  *
  * This wires the panel↔SW messages for reading Chromium's native tree over
  * `chrome.debugger`, acting through it, and exporting the dogfood report. All
@@ -72,11 +75,22 @@ async function nativeModeEnabled(): Promise<boolean> {
   return got[FLAG_KEY] === true;
 }
 
+/** Whether the user has answered the native-mode question at all, either
+ *  way: the panel's first-run step, or its Enable / Disable buttons. While it
+ *  is unanswered the setting reads as off, so nothing attaches, and the panel
+ *  asks. */
+async function nativeModeChosen(): Promise<boolean> {
+  const got = await chrome.storage.local.get(FLAG_KEY);
+  return typeof got[FLAG_KEY] === "boolean";
+}
+
 /** Request/response messages the panel sends for native mode. Pushes the
  *  other way (`NATIVE_PICK_RESULT`, `NATIVE_PICK_ARMED`) are typed in
  *  `../types.ts` with the panel's other inbound messages, because the panel's
  *  one message handler routes them. */
 type NativeMessage =
+  // Replies `{ enabled, chosen }`: `chosen` is false only while the setting
+  // has never been set either way, which is when the panel asks.
   | { type: "NATIVE_FLAG_GET" }
   | { type: "NATIVE_FLAG_SET"; enabled: boolean }
   | { type: "NATIVE_CAPABILITY"; tabId: number }
@@ -283,9 +297,11 @@ export function registerNativeMode(): void {
           return;
         }
         switch (message.type) {
-          case "NATIVE_FLAG_GET":
-            sendResponse({ enabled: await flagEnabled() });
+          case "NATIVE_FLAG_GET": {
+            const enabled = await flagEnabled();
+            sendResponse({ enabled, chosen: await nativeModeChosen() });
             return;
+          }
           case "NATIVE_FLAG_SET": {
             await migrated;
             await chrome.storage.local.set({ [FLAG_KEY]: message.enabled });

@@ -121,6 +121,43 @@ describe("registerNativeMode: who may send native messages", () => {
   });
 });
 
+describe("registerNativeMode: whether the user has chosen", () => {
+  // The panel asks on its first connect only while the setting has never
+  // been set either way, so the reply has to tell "never asked" apart from
+  // "chose the DOM tree".
+  const get = async () =>
+    (await send({ type: "NATIVE_FLAG_GET" }, PANEL)).response;
+
+  it("reads as off and unchosen before any answer", async () => {
+    await register();
+    expect(await get()).toEqual({ enabled: false, chosen: false });
+  });
+
+  it("remembers a choice of the DOM tree as chosen", async () => {
+    await register();
+    await send({ type: "NATIVE_FLAG_SET", enabled: false }, PANEL);
+    expect(await get()).toEqual({ enabled: false, chosen: true });
+  });
+
+  it("reports native mode turned on", async () => {
+    await register();
+    await send({ type: "NATIVE_FLAG_SET", enabled: true }, PANEL);
+    expect(await get()).toEqual({ enabled: true, chosen: true });
+  });
+
+  it("counts a dogfooder's carried-over flag as their choice", async () => {
+    install({ "devFlags.nativeMode": true });
+    await register();
+    expect(await get()).toEqual({ enabled: true, chosen: true });
+  });
+
+  it("leaves a dropped old 'off' unchosen, so the panel still asks", async () => {
+    install({ "devFlags.nativeMode": false });
+    await register();
+    expect(await get()).toEqual({ enabled: false, chosen: false });
+  });
+});
+
 describe("registerNativeMode: the old dogfood flag", () => {
   it("carries devFlags.nativeMode over and removes it", async () => {
     install({ "devFlags.nativeMode": true });
