@@ -147,14 +147,6 @@ describe("native mode on by default", () => {
     }
   }
 
-  /** Let a task go by (a timer), and what it set off run. */
-  async function afterTask(): Promise<void> {
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    });
-    await flush();
-  }
-
   /** The panel's bound tab becomes `tabId`, and its page connects. */
   async function showTab(tabId: number): Promise<void> {
     act(() => {
@@ -727,22 +719,24 @@ describe("native mode on by default", () => {
       expect(settingsCheckbox()).not.toBeNull();
     });
 
-    it("closes on a press outside it, with any button, once the press is handled", async () => {
+    it("closes on a press outside it, with any button, leaving focus to the press", async () => {
       mount({ storage: { [NOTICE_SEEN]: true } });
       await flush();
       await showTab(7);
-      await openSettings();
+      const checkbox = await openSettings();
+      act(() => checkbox.focus());
 
       act(() => {
         searchBox()!.dispatchEvent(
-          new MouseEvent("pointerdown", { bubbles: true, button: 2 }),
+          new MouseEvent("mousedown", { bubbles: true, button: 2 }),
         );
       });
-      // Not while the browser is still handling the press, and moving focus.
-      expect(settingsCheckbox()).not.toBeNull();
-      await afterTask();
+      await flush();
 
       expect(settingsCheckbox()).toBeNull();
+      // The switch went with it, and focus goes where the press puts it, not
+      // to the tree.
+      expect(document.activeElement).toBe(document.body);
     });
 
     it("stays open when a press inside it ends outside", async () => {
@@ -752,16 +746,32 @@ describe("native mode on by default", () => {
       const checkbox = await openSettings();
 
       act(() => {
-        checkbox.dispatchEvent(
-          new MouseEvent("pointerdown", { bubbles: true }),
-        );
+        checkbox.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
       });
       // Released over the tree: the click goes to what holds both points.
       act(() => container.querySelector<HTMLElement>(".sn-root")!.click());
-      await afterTask();
+      await flush();
 
       expect(settingsCheckbox()).not.toBeNull();
       expect(sentOfType("NATIVE_FLAG_SET")).toEqual([]);
+    });
+
+    it("closes when focus leaves it, so the keyboard never opens two popups", async () => {
+      mount({ storage: { [NOTICE_SEEN]: true } });
+      await flush();
+      await showTab(7);
+      const checkbox = await openSettings();
+      act(() => checkbox.focus());
+
+      // Tab on to Copy, and open it.
+      act(() => buttonNamed("Copy ▾")!.focus());
+      await flush();
+      expect(settingsCheckbox()).toBeNull();
+      act(() => buttonNamed("Copy ▾")!.click());
+      await flush();
+
+      expect(buttonNamed("Everything")).not.toBeNull();
+      expect(settingsCheckbox()).toBeNull();
     });
 
     it("closes on Escape, returning focus to its button", async () => {

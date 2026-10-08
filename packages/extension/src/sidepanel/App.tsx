@@ -1037,6 +1037,10 @@ export function App() {
     if (before === null || before === document.body || before.isConnected) {
       return;
     }
+    // A popup's controls (the Copy menu, Settings) are not lost when it
+    // closes: Escape returns focus to its button, and a press outside puts
+    // focus where the press does (`useDismissible`).
+    if (before.closest(".sn-export-menu")) return;
     const active = document.activeElement;
     if (active !== null && active !== document.body) return;
     [
