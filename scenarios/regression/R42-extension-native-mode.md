@@ -48,10 +48,11 @@ load it again** before step 1, step 9 and step 10.
 
 **Turning it off**
 
-6. Open **Settings ▾** in the toolbar: **Read pages through Chrome (recommended)** is
-   checked, with a line about the bar under it. Uncheck it. The panel shows the DOM
-   tree, the **DOM / NATIVE** toggle goes, focus stays on the switch, and the bar
-   does not come back while you browse.
+6. Open **Settings ▾**, next to the page's title: **Read pages through Chrome
+   (recommended)** is checked, with a line about the bar under it. Uncheck it. The
+   panel shows the DOM tree, the **DOM / NATIVE** toggle goes, focus stays on the
+   switch, and the bar does not come back while you browse. Make the side panel as
+   narrow as Chrome lets it: **Settings ▾** is still fully on screen.
 7. Close and reopen the panel, then quit Chrome and start it again: still the DOM
    tree, and still no bar.
 8. Check the switch again: the panel reads the page natively at once, and the bar

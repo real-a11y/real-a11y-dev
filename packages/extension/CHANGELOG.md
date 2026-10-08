@@ -25,8 +25,8 @@
   Chrome shows across every window while the panel reads a page, “Semantic
   Navigator” started debugging this browser: **Got it** hides the note for
   good, and **Turn off** goes back to the panel reading the page itself.
-  **Settings ▾** in the toolbar turns it off or back on later, with **Read
-  pages through Chrome (recommended)**. Each window has its own side panel,
+  **Settings ▾**, next to the page's title, turns it off or back on later,
+  with **Read pages through Chrome (recommended)**. Each window has its own side panel,
   and a change made in one holds in every panel open in the others
   ([#496](https://github.com/real-a11y/real-a11y-dev/pull/496)).
 
