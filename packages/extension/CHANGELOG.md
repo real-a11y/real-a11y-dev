@@ -29,7 +29,7 @@
   the others. The question's explanation of Chrome's debugging bar is its
   accessible description, so a screen reader reads it out along with the
   focused button
-  ([#NNN](https://github.com/real-a11y/real-a11y-dev/pull/NNN)).
+  ([#496](https://github.com/real-a11y/real-a11y-dev/pull/496)).
 
 - Hardened the shared mutation observer so that re-arming it can no longer
   strand the previous observers and event listeners
