@@ -1,6 +1,13 @@
 import { render, h } from "preact";
 import { act } from "preact/test-utils";
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import {
+  describe,
+  it,
+  expect,
+  beforeEach,
+  afterEach,
+  onTestFinished,
+} from "vitest";
 
 import { FOCUSABLE_SELECTOR } from "./focus-hooks.js";
 import { InputPanel } from "./InputPanel.js";
@@ -241,12 +248,23 @@ describe("InputPanel focus restoration", () => {
     // Something outside it, as Settings is beside the panel's dialogs.
     const elsewhere = document.createElement("button");
     document.body.appendChild(elsewhere);
+    onTestFinished(() => elsewhere.remove());
     elsewhere.focus();
 
     close();
 
     expect(document.activeElement).toBe(elsewhere);
-    elsewhere.remove();
+  });
+
+  it("returns focus to the opener when nothing has it as it closes", () => {
+    open(TEXT_STATE);
+    // A press on something that can't take focus blurs to the body.
+    (document.activeElement as HTMLElement | null)?.blur();
+    expect(document.activeElement).toBe(document.body);
+
+    close();
+
+    expect(document.activeElement).toBe(opener);
   });
 
   it("does not throw when the opener has left the DOM", () => {

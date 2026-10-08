@@ -348,8 +348,11 @@ export function App() {
   const [roleFilter, setRoleFilter] = useState<RoleFilter>(null);
   const [curtainOn, setCurtainOn] = useState(false);
   const [focusTrackerOn, setFocusTrackerOn] = useState(true);
-  // Export dropdown ("Copy" → pick which view(s) to put on the clipboard).
-  const [exportMenuOpen, setExportMenuOpen] = useState(false);
+  // Which popup is open: the export dropdown ("Copy" → pick which view(s) to
+  // put on the clipboard) or Settings. Never both: each opens in the other's
+  // place, however it is reached.
+  const [openPopup, setOpenPopup] = useState<"copy" | "settings" | null>(null);
+  const exportMenuOpen = openPopup === "copy";
   // Picker mode (DevTools-style "select an element in the page"). Off by
   // default; toggled by the toolbar button or Ctrl/Cmd+Shift+C. The
   // content script owns the actual click capture — this flag is just the
@@ -389,7 +392,7 @@ export function App() {
   // The Settings menu (the "Read pages through Chrome" switch), and the turn
   // on or off it has asked for and not had answered: the switch shows that
   // value meanwhile, and goes back if it doesn't take.
-  const [settingsOpen, setSettingsOpen] = useState(false);
+  const settingsOpen = openPopup === "settings";
   const settingsRef = useRef<HTMLDivElement>(null);
   const settingsButtonRef = useRef<HTMLButtonElement>(null);
   const [nativeSettingPending, setNativeSettingPending] = useState<
@@ -2958,13 +2961,18 @@ export function App() {
     [handleNativeSendKey, announce],
   );
 
+  const closeCopyMenu = useCallback(
+    () => setOpenPopup((open) => (open === "copy" ? null : open)),
+    [],
+  );
+
   // Export the selected view(s) as a Markdown report and copy to clipboard.
   // Serialized entirely panel-side from the merged snapshot the panel already
   // holds — so it's exactly what's on screen (current view, scoped) and never
   // depends on the content script being fresh.
   const doExport = useCallback(
     (selection: ExportView[]) => {
-      setExportMenuOpen(false);
+      closeCopyMenu();
       // Back to the button the menu goes with, as a menu button's items do.
       exportButtonRef.current?.focus();
 
@@ -3090,15 +3098,25 @@ export function App() {
       nativeTreeUrl,
       nativeReadAt,
       announce,
+      closeCopyMenu,
     ],
   );
   // What the Copy menu offers for the tree on screen.
   const exportViews = producer === "native" ? NATIVE_VIEWS : ALL_VIEWS;
 
-  // Close Settings and the Copy menu on a press or focus outside them, or on
-  // Escape.
-  useDismissible(settingsOpen, setSettingsOpen, settingsRef, settingsButtonRef);
-  useDismissible(exportMenuOpen, setExportMenuOpen, exportRef, exportButtonRef);
+  // Close Settings and the Copy menu on a press outside them, or on Escape.
+  const closeSettings = useCallback(
+    () => setOpenPopup((open) => (open === "settings" ? null : open)),
+    [],
+  );
+  useDismissible(settingsOpen, closeSettings, settingsRef, settingsButtonRef);
+  useDismissible(exportMenuOpen, closeCopyMenu, exportRef, exportButtonRef);
+  // The Copy menu goes with the toolbar while the panel waits for a page, so
+  // nothing there could close it: it is closed instead, rather than coming
+  // back open when the page connects.
+  useEffect(() => {
+    if (!connected) closeCopyMenu();
+  }, [connected, closeCopyMenu]);
 
   // The note about Chrome's debugging bar shows with the native tree, once a
   // native read has succeeded (which is when the bar has appeared), until the
@@ -3201,7 +3219,9 @@ export function App() {
         class="sn-toolbar-btn sn-export-btn"
         aria-expanded={settingsOpen}
         aria-controls={settingsOpen ? "sn-settings-menu" : undefined}
-        onClick={() => setSettingsOpen((o) => !o)}
+        onClick={() =>
+          setOpenPopup((open) => (open === "settings" ? null : "settings"))
+        }
         title="Settings"
       >
         {"Settings ▾"}
@@ -3585,7 +3605,9 @@ export function App() {
             class="sn-toolbar-btn sn-export-btn"
             aria-haspopup="true"
             aria-expanded={exportMenuOpen}
-            onClick={() => setExportMenuOpen((o) => !o)}
+            onClick={() =>
+              setOpenPopup((open) => (open === "copy" ? null : "copy"))
+            }
             title="Copy the tree as Markdown — paste into a bug report"
           >
             {"Copy ▾"}

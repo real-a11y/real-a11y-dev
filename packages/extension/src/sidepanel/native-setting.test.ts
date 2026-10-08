@@ -749,6 +749,7 @@ describe("native mode on by default", () => {
         checkbox.dispatchEvent(
           new MouseEvent("pointerdown", { bubbles: true }),
         );
+        checkbox.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
       });
       // Released over the tree: the click goes to what holds both points.
       act(() => container.querySelector<HTMLElement>(".sn-root")!.click());
@@ -776,22 +777,61 @@ describe("native mode on by default", () => {
       expect(settingsCheckbox()).not.toBeNull();
     });
 
-    it("closes when focus leaves it, so the keyboard never opens two popups", async () => {
+    it("closes on a press with no pointer events, as a screen reader's click makes", async () => {
       mount({ storage: { [NOTICE_SEEN]: true } });
       await flush();
       await showTab(7);
-      const checkbox = await openSettings();
-      act(() => checkbox.focus());
+      await openSettings();
 
-      // Tab on to Copy, and open it.
-      act(() => buttonNamed("Copy ▾")!.focus());
+      act(() => {
+        searchBox()!.dispatchEvent(
+          new MouseEvent("mousedown", { bubbles: true }),
+        );
+      });
       await flush();
+
       expect(settingsCheckbox()).toBeNull();
+    });
+
+    it("is never open together with the Copy menu, however that is opened", async () => {
+      mount({ storage: { [NOTICE_SEEN]: true } });
+      await flush();
+      await showTab(7);
+      await openSettings();
+
+      // From the keyboard: Enter on Copy, with no press anywhere.
       act(() => buttonNamed("Copy ▾")!.click());
       await flush();
-
       expect(buttonNamed("Everything")).not.toBeNull();
       expect(settingsCheckbox()).toBeNull();
+
+      act(() => buttonNamed("Settings ▾")!.click());
+      await flush();
+      expect(settingsCheckbox()).not.toBeNull();
+      expect(buttonNamed("Everything")).toBeNull();
+    });
+
+    it("doesn't come back with the Copy menu still open after the page reconnects", async () => {
+      mount({ storage: { [NOTICE_SEEN]: true } });
+      await flush();
+      await showTab(7);
+      act(() => buttonNamed("Copy ▾")!.click());
+      await flush();
+      expect(buttonNamed("Everything")).not.toBeNull();
+
+      act(() => {
+        chromeMock.emit({
+          type: "PAGE_NAVIGATED",
+          tabId: 7,
+        } as unknown as ContentToPanel);
+      });
+      await flush();
+      act(() => {
+        chromeMock.emit({ ...treeData(), tabId: 7 } as ContentToPanel);
+      });
+      await flush();
+
+      expect(buttonNamed("Everything")).toBeNull();
     });
 
     it("closes on Escape, returning focus to its button", async () => {
