@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Native parity — rows, wording and steps</title>
+  </head>
+  <body>
+    <!--
+      For panel-ui-native-parity.test.ts: a heading for the H badge, two
+      collapsed groups for `*`, a checkbox and a radio for the feedback
+      wording, and a spinbutton for Enter (edit box) and Shift+Enter (step).
+    -->
+    <h2>Billing</h2>
+    <fieldset>
+      <legend>Extras</legend>
+      <label><input type="checkbox" id="gift" /> Gift wrap</label>
+    </fieldset>
+    <fieldset>
+      <legend>Size</legend>
+      <label><input type="radio" name="size" id="small" /> Small</label>
+      <label><input type="radio" name="size" id="large" /> Large</label>
+    </fieldset>
+    <label for="qty">Quantity</label>
+    <input id="qty" type="number" value="3" min="0" max="10" />
+  </body>
+</html>

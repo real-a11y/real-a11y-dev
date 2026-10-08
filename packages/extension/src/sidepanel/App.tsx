@@ -54,6 +54,7 @@ import {
 } from "../routing.js";
 import type { ContentToPanel, PanelToContent } from "../types.js";
 
+import { describeAction } from "./action-feedback.js";
 import {
   buildExportMarkdown,
   ALL_VIEWS,
@@ -66,6 +67,10 @@ import { FilteredList } from "./FilteredList.js";
 import { useFocusTrap, useRestoreFocusOnClose } from "./focus-hooks.js";
 import { InputPanel } from "./InputPanel.js";
 import type { InputPanelState } from "./InputPanel.js";
+import {
+  findNativeModalDialog,
+  nativeActionFeedback,
+} from "./native-feedback.js";
 import { NativeTreeView, type NativeReveal } from "./NativeTreeView.js";
 import {
   arrowLeftStopsAtScopeRoot,
@@ -79,11 +84,30 @@ import {
   subtreeNodes,
 } from "./scope.js";
 import { ScopeBar } from "./ScopeBar.js";
+import {
+  DialogIndicator,
+  KEYS,
+  SendKeyBar,
+  sendKeySpec,
+} from "./SendKeyBar.js";
 import { TabSequenceView } from "./TabSequenceView.js";
 
 /** How long to let the page react before re-reading the native tree after an
  *  action — same rationale and value as `DogfoodPanel.tsx`'s `SETTLE_MS`. */
 const NATIVE_SETTLE_MS = 250;
+
+/** How many settle windows (~5s) a sent key's native re-read waits for an
+ *  in-flight action. If one is still running after that, the read is skipped
+ *  as any other would be, and Refresh is the way back. */
+const MAX_SEND_KEY_REREAD_WAITS = 20;
+
+/** How long after a sent key is acknowledged a navigation still counts as the
+ *  key's own, and gets the destination read. An async submit handler can
+ *  navigate well after the settle window, once the key's re-read has already
+ *  read the old page. */
+const NATIVE_KEY_NAV_WINDOW_MS = 3_000;
+
+const sleep = (ms: number) => new Promise((res) => setTimeout(res, ms));
 
 /** Bound on how many additional navigations `recoverFromOwnNavigation` will
  *  wait out (a login page that immediately client-redirects to a dashboard,
@@ -410,6 +434,10 @@ export function App() {
   const [nativeNodes, setNativeNodes] = useState<Map<string, NativeNode>>(
     new Map(),
   );
+  // Read by `dispatchNativeAction` for its feedback wording, through a ref so
+  // the callback doesn't change identity on every tree read.
+  const nativeNodesRef = useRef(nativeNodes);
+  nativeNodesRef.current = nativeNodes;
   const [nativeRootId, setNativeRootId] = useState<string>("");
   const [nativeStatus, setNativeStatus] = useState<string>("");
   const [nativeBusy, setNativeBusy] = useState(false);
@@ -942,6 +970,7 @@ export function App() {
         // token orphaned by the bump above, so nothing else is coming to
         // clear the busy flag its own finally block intentionally left set.
         resetNativeState();
+        followKeyNavigationRef.current();
         return;
       }
 
@@ -1382,21 +1411,12 @@ export function App() {
         primaryAction === "increment" || primaryAction === "decrement";
 
       if (!isStepper) {
-        // Contextual feedback based on role. A mixed box gets the plain
-        // label: a click checks or unchecks it by a checkedness that "mixed"
-        // hides, so the tree can't say which.
-        let feedback: string;
-        const checked = node.a11y.states.checked;
-        if ((role === "checkbox" || role === "switch") && checked !== "mixed") {
-          const wasChecked = checked === true;
-          feedback = wasChecked ? `Unchecked: ${name}` : `Checked: ${name}`;
-        } else if (role === "radio") {
-          feedback = `Selected: ${name}`;
-        } else {
-          feedback = `${ACTION_LABELS[primaryAction]}: ${name}`;
-        }
-
-        announce(feedback, 2000);
+        // Worded by the same `describeAction` as the native tree's.
+        const feedback = describeAction(
+          { role, name, checked: node.a11y.states.checked },
+          primaryAction,
+        );
+        if (feedback) announce(feedback, 2000);
       }
 
       sendToBoundTab({ type: "DISPATCH_ACTION", payload: request }, (res) => {
@@ -1507,7 +1527,10 @@ export function App() {
           }
           return false;
         }
-        setNativeNodes(new Map((r.nodes ?? []).map((n) => [n.id, n])));
+        const read = new Map((r.nodes ?? []).map((n) => [n.id, n]));
+        setNativeNodes(read);
+        // Ahead of the render, for a caller that looks at what it just read.
+        nativeNodesRef.current = read;
         setNativeRootId(r.rootId ?? "");
         setNativeTreeTabId(tabId);
         setNativeTreeUrl(r.url);
@@ -1600,17 +1623,64 @@ export function App() {
    *  fallback past that. */
   const recoverFromOwnNavigation = useCallback(
     async (tabId: number, tabChangeAtStart: number) => {
+      // Left the tab or native mode: a read now would attach
+      // `chrome.debugger` for a tree nobody is looking at.
+      const abandoned = () =>
+        tabChangeToken.current !== tabChangeAtStart ||
+        producerRef.current !== "native";
       let lastSeenToken = nativeOpToken.current;
       for (let hop = 0; hop < MAX_NAV_RECOVERY_HOPS; hop++) {
-        if (tabChangeToken.current !== tabChangeAtStart) return;
-        await new Promise((res) => setTimeout(res, NATIVE_SETTLE_MS));
-        if (tabChangeToken.current !== tabChangeAtStart) return;
+        if (abandoned()) return;
+        await sleep(NATIVE_SETTLE_MS);
+        if (abandoned()) return;
         if (nativeOpToken.current === lastSeenToken) break; // no further nav during the wait — settled
         lastSeenToken = nativeOpToken.current;
       }
       await loadNativeTreeCore(tabId);
     },
     [loadNativeTreeCore],
+  );
+
+  /** The tail every native operation that can change the page shares (an
+   *  action, a sent key): let the page settle, then read it again — or, when
+   *  the operation navigated, read the destination through
+   *  `recoverFromOwnNavigation`. `token` and `tabChangeAtStart` are taken
+   *  before the operation, so its own navigation shows as a moved token. A
+   *  navigation that starts while the re-read is under way supersedes the
+   *  read, and is followed the same way. Skipped once the panel has left the
+   *  tab or native mode. The caller holds `nativeInFlight`: this reads
+   *  through the unguarded core. Resolves whether it read the page the
+   *  operation ran on — not when the read failed or the page navigated. */
+  const settleThenReread = useCallback(
+    async (
+      tabId: number,
+      token: number,
+      tabChangeAtStart: number,
+    ): Promise<boolean> => {
+      const abandoned = () =>
+        tabChangeToken.current !== tabChangeAtStart ||
+        producerRef.current !== "native";
+      // Always settle before checking staleness or reading again — even when
+      // `nativeOpToken` already moved (a same-tab link click can make
+      // PAGE_NAVIGATED, fired on `onBeforeNavigate` in background.ts, win the
+      // race against the operation's own round trip). Reading immediately
+      // would race the navigation and land on the old document, or on a new
+      // one that hasn't settled yet. Still a single best-effort attempt, not
+      // a wait-for-load: a destination slower than NATIVE_SETTLE_MS can come
+      // back sparse, and Refresh is there either way.
+      await sleep(NATIVE_SETTLE_MS);
+      if (abandoned()) return false;
+      if (token !== nativeOpToken.current) {
+        await recoverFromOwnNavigation(tabId, tabChangeAtStart);
+        return false;
+      }
+      const ok = await loadNativeTreeCore(tabId);
+      if (!ok && token !== nativeOpToken.current && !abandoned()) {
+        await recoverFromOwnNavigation(tabId, tabChangeAtStart);
+      }
+      return ok;
+    },
+    [loadNativeTreeCore, recoverFromOwnNavigation],
   );
 
   // The default itself (see `hasAppliedNativeDefault`). It waits for
@@ -1681,8 +1751,20 @@ export function App() {
       try {
         const token = nativeOpToken.current;
         const tabChangeAtStart = tabChangeToken.current;
+        // Worded from the node as it is before the action, so a checked
+        // checkbox reads "Unchecked" — and from its name, never its id.
+        const feedback = nativeActionFeedback(
+          nativeNodesRef.current.get(nodeId),
+          action,
+        );
+        // Every failure is reported where the DOM tree reports its own, in
+        // the feedback bar; the status line alone is easy to miss.
+        const fail = (why: string) => {
+          setNativeStatus(why);
+          announce(`Failed: ${why}`, 3000);
+        };
         if (nativeTreeTabId === undefined) {
-          setNativeStatus("load a tree first");
+          fail("load a tree first");
           return;
         }
         const tabId = nativeTreeTabId;
@@ -1705,22 +1787,32 @@ export function App() {
           setNativeRootId("");
           setNativeTreeTabId(undefined);
           setNativeTreeUrl(undefined);
-          setNativeStatus("page navigated — reload the native tree");
+          fail("page navigated — reload the native tree");
           return;
         }
         setNativeBusy(true);
         try {
-          const r = (await chrome.runtime.sendMessage({
-            type: "NATIVE_ACT",
-            tabId,
-            nodeId,
-            action,
-            ...(value !== undefined ? { value } : {}),
-          })) as {
+          type ActReply = {
             success?: boolean;
             error?: string;
             reason?: NativeUnavailableReason;
           };
+          let r: ActReply | undefined;
+          try {
+            r = (await chrome.runtime.sendMessage({
+              type: "NATIVE_ACT",
+              tabId,
+              nodeId,
+              action,
+              ...(value !== undefined ? { value } : {}),
+            })) as ActReply;
+          } catch {
+            // The service worker didn't wake, or the context was torn down.
+            if (token === nativeOpToken.current) {
+              fail("the extension didn't answer");
+            }
+            return;
+          }
           if (!r?.success) {
             // Only report a failure that still describes the tab we asked
             // about — a reply superseded by a tab switch or navigation is
@@ -1730,11 +1822,9 @@ export function App() {
             if (token === nativeOpToken.current) {
               if (r?.reason) {
                 setNativeCapability(blockedBy(r.reason));
-                setNativeStatus(
-                  `native unavailable — ${explainUnavailable(r.reason)}`,
-                );
+                fail(`native unavailable — ${explainUnavailable(r.reason)}`);
               } else {
-                setNativeStatus(`act failed: ${r?.error ?? "unknown"}`);
+                fail(r?.error ?? "unknown");
               }
             }
             return;
@@ -1743,35 +1833,10 @@ export function App() {
           // the token already moved (a real tab switch racing the round
           // trip) belongs to a tab the panel has since left, and toasting it
           // would name an action for a page no longer on screen.
-          if (token === nativeOpToken.current) {
-            announce(`Native: ${action} on ${nodeId}`, 2000);
+          if (token === nativeOpToken.current && feedback) {
+            announce(feedback, 2000);
           }
-          // Always settle before checking staleness or reading again,
-          // regardless of the toast above — even when `nativeOpToken`
-          // already moved by the time `r` arrived (a same-tab link click can
-          // make PAGE_NAVIGATED, fired on `onBeforeNavigate` in
-          // background.ts, win the race against this message's own round
-          // trip). Reading immediately would race the navigation itself and
-          // land on the old document, or on a new one that hasn't settled
-          // yet — the same reason every other action here waits before its
-          // own re-read. This is still a single best-effort attempt, not a
-          // wait-for-load: a destination slower than NATIVE_SETTLE_MS to
-          // become CDP-navigable can still come back sparse, same as the
-          // existing risk of refreshing too early elsewhere in this file —
-          // an accepted tradeoff here rather than a load-event wait, since
-          // an empty/partial recovery read is strictly better than never
-          // getting the request at all (the bug status quo before this
-          // fix), and the user's own "Refresh native tree" button remains
-          // available either way.
-          await new Promise((res) => setTimeout(res, NATIVE_SETTLE_MS));
-          if (token !== nativeOpToken.current) {
-            await recoverFromOwnNavigation(tabId, tabChangeAtStart);
-            return;
-          }
-          // The unguarded core, not `loadNativeTree` — this function already
-          // holds `nativeInFlight`, so calling the guarded wrapper here
-          // would see it held and silently skip the re-read.
-          await loadNativeTreeCore(tabId);
+          await settleThenReread(tabId, token, tabChangeAtStart);
         } finally {
           if (token === nativeOpToken.current) setNativeBusy(false);
         }
@@ -1783,8 +1848,8 @@ export function App() {
       nativeModeEnabled,
       nativeTreeTabId,
       nativeTreeUrl,
-      loadNativeTreeCore,
-      recoverFromOwnNavigation,
+      settleThenReread,
+      announce,
     ],
   );
 
@@ -2191,12 +2256,17 @@ export function App() {
     );
   }, [nativeNodes]);
 
-  const handleSendKey = useCallback(
+  /** Send a key to whatever has focus on the page, through the content
+   *  script's `SEND_KEY`, and say so once it lands. `onDone` runs when the
+   *  content script answers, or fails to: the moment the key has been
+   *  dispatched, which is where a re-read's settle window starts. */
+  const sendKeyOnly = useCallback(
     (
       key: string,
       code: string,
       keyCode: number,
       modifiers?: { shift?: boolean },
+      onDone?: () => void,
     ) => {
       sendToBoundTab(
         { type: "SEND_KEY", payload: { key, code, keyCode, modifiers } },
@@ -2207,11 +2277,120 @@ export function App() {
               : key;
             announce(`Sent key: ${label}`, 1500);
           }
+          onDone?.();
         },
       );
+    },
+    [sendToBoundTab, announce],
+  );
+
+  const handleSendKey = useCallback(
+    (
+      key: string,
+      code: string,
+      keyCode: number,
+      modifiers?: { shift?: boolean },
+    ) => {
+      sendKeyOnly(key, code, keyCode, modifiers);
       setTimeout(reExtract, 300);
     },
-    [sendToBoundTab, reExtract],
+    [sendKeyOnly, reExtract],
+  );
+
+  // A navigation that a sent key may still cause, after its re-read has
+  // already read the old page: the PAGE_NAVIGATED handler follows one that
+  // lands inside the window, through `followKeyNavigationRef`.
+  const nativeKeyNavWindow = useRef<{
+    tabId: number;
+    tabChangeAtStart: number;
+    until: number;
+  } | null>(null);
+
+  // The native tree's keyboard bar and dialog indicator send through the
+  // same content-script path, and only the native tree is read again
+  // afterwards: a key can change the page (Escape closing a dialog, Enter
+  // submitting a form), and a native tree is read only on request. The
+  // settle window starts once the content script has dispatched the key. An
+  // action still in flight would make the read skip silently, and that
+  // action's own re-read may land before the key took effect (Escape after a
+  // click that opened a dialog), so wait it out — bounded — then read. A key
+  // that navigates is followed to its destination, as a native click that
+  // navigates is; one that navigates later than that (an async submit
+  // handler) is followed by the PAGE_NAVIGATED handler for a few seconds.
+  // `afterRead` runs only after a re-read that read this page.
+  const handleNativeSendKey = useCallback(
+    (
+      key: string,
+      code: string,
+      keyCode: number,
+      modifiers?: { shift?: boolean },
+      afterRead?: () => void,
+    ) => {
+      const tabId = nativeTreeTabId;
+      const token = nativeOpToken.current;
+      const tabChangeAtStart = tabChangeToken.current;
+      sendKeyOnly(key, code, keyCode, modifiers, () => {
+        if (tabId === undefined) return;
+        nativeKeyNavWindow.current = {
+          tabId,
+          tabChangeAtStart,
+          until: Date.now() + NATIVE_KEY_NAV_WINDOW_MS,
+        };
+        void (async () => {
+          for (let wait = 0; nativeInFlight.current; wait++) {
+            if (wait >= MAX_SEND_KEY_REREAD_WAITS) return;
+            await sleep(NATIVE_SETTLE_MS);
+          }
+          // Only a re-read of this page says what the key did. A skipped one
+          // leaves the tree from before the key, and a failed one clears it
+          // only once its render lands: neither is for `afterRead` to judge.
+          nativeInFlight.current = true;
+          const read = await settleThenReread(
+            tabId,
+            token,
+            tabChangeAtStart,
+          ).finally(() => {
+            nativeInFlight.current = false;
+          });
+          if (read) afterRead?.();
+        })();
+      });
+    },
+    [sendKeyOnly, nativeTreeTabId, settleThenReread],
+  );
+
+  // Follow a navigation inside a sent key's window (see above). A native
+  // operation still in flight follows it itself, through
+  // `settleThenReread`'s moved-token check.
+  const followKeyNavigationRef = useRef(() => {});
+  followKeyNavigationRef.current = () => {
+    const w = nativeKeyNavWindow.current;
+    if (!w || Date.now() > w.until) return;
+    if (w.tabId !== myTabIdRef.current || nativeInFlight.current) return;
+    nativeKeyNavWindow.current = null;
+    nativeInFlight.current = true;
+    void recoverFromOwnNavigation(w.tabId, w.tabChangeAtStart).finally(() => {
+      nativeInFlight.current = false;
+    });
+  };
+
+  // The dialog indicator's Escape. A `<dialog>` closes on it, but an
+  // `aria-modal` one closes only if a listener of the page's own handles the
+  // key where it lands, which needn't be inside the dialog. Say so when the
+  // re-read still has it open, rather than leaving the button looking broken.
+  const handleNativeDialogEscape = useCallback(
+    (dialogId: string) => {
+      const { key, code, keyCode } = KEYS.Escape;
+      handleNativeSendKey(key, code, keyCode, undefined, () => {
+        if (findNativeModalDialog(nativeNodesRef.current)?.id === dialogId) {
+          announce(
+            "The dialog is still open — this page doesn't close it on Escape. Use the dialog's own close button.",
+            5000,
+          );
+        }
+      });
+    },
+    [handleNativeSendKey, announce],
   );
 
   // Export the selected view(s) as a Markdown report and copy to clipboard.
@@ -2893,19 +3072,11 @@ export function App() {
       )}
 
       {/* Dialog scope indicator — DOM producer only */}
-      {producer === "dom" && isDialogScoped && (
-        <div class="sn-dialog-indicator" role="status">
-          <span class="sn-dialog-label">
-            Dialog: {rootNode?.a11y.name || "Modal"}
-          </span>
-          <button
-            class="sn-key-btn"
-            onClick={() => handleSendKey("Escape", "Escape", 27)}
-            title="Send Escape key to close dialog"
-          >
-            Press ESC
-          </button>
-        </div>
+      {producer === "dom" && (
+        <DialogIndicator
+          dialog={isDialogScoped ? { name: rootNode?.a11y.name ?? "" } : null}
+          onEscape={() => sendKeySpec(handleSendKey, KEYS.Escape)}
+        />
       )}
 
       {/* Scope breadcrumb (when user scoped to a subtree). Native renders
@@ -2963,6 +3134,8 @@ export function App() {
           scopedRootId={nativeScopedRootId}
           onScope={handleNativeScope}
           pickArmed={pickModeOn}
+          onSendKey={handleNativeSendKey}
+          onDialogEscape={handleNativeDialogEscape}
         />
       ) : viewMode === "tab" ? (
         /* ---- Tab sequence view ---- */
@@ -3003,7 +3176,7 @@ export function App() {
               ref={treeRef}
               class="sn-tree"
               role="tree"
-              aria-label={`Semantic tree — press Enter to activate interactive elements; +/− or Shift+Enter to step sliders; ${SCOPE_KEY_HINT}`}
+              aria-label={`Semantic tree — press Enter to activate interactive elements; +/− or Shift+Enter to step sliders and spinbuttons; ${SCOPE_KEY_HINT}`}
               tabIndex={0}
               style={{
                 minHeight: totalHeight,
@@ -3411,62 +3584,7 @@ export function App() {
             </div>
           </div>
 
-          <div
-            class="sn-keyboard-bar"
-            role="toolbar"
-            aria-label="Send keyboard events to page"
-          >
-            <span class="sn-keyboard-label">Send key:</span>
-            <button
-              class="sn-key-btn"
-              onClick={() => handleSendKey("Escape", "Escape", 27)}
-              title="Send Escape key"
-            >
-              Esc
-            </button>
-            <button
-              class="sn-key-btn"
-              onClick={() => handleSendKey("Tab", "Tab", 9)}
-              title="Send Tab key"
-            >
-              Tab
-            </button>
-            <button
-              class="sn-key-btn"
-              onClick={() => handleSendKey("Tab", "Tab", 9, { shift: true })}
-              title="Send Shift+Tab"
-            >
-              Shift+Tab
-            </button>
-            <button
-              class="sn-key-btn"
-              onClick={() => handleSendKey("Enter", "Enter", 13)}
-              title="Send Enter key"
-            >
-              Enter
-            </button>
-            <button
-              class="sn-key-btn"
-              onClick={() => handleSendKey(" ", "Space", 32)}
-              title="Send Space key"
-            >
-              Space
-            </button>
-            <button
-              class="sn-key-btn"
-              onClick={() => handleSendKey("ArrowDown", "ArrowDown", 40)}
-              title="Send Down arrow"
-            >
-              {"\u2193"}
-            </button>
-            <button
-              class="sn-key-btn"
-              onClick={() => handleSendKey("ArrowUp", "ArrowUp", 38)}
-              title="Send Up arrow"
-            >
-              {"\u2191"}
-            </button>
-          </div>
+          <SendKeyBar onSendKey={handleSendKey} />
 
           <div class="sn-hints">
             <kbd>Enter</kbd> activate &middot; <kbd>+/−</kbd> step &middot;{" "}

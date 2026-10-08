@@ -31,12 +31,17 @@
  */
 
 import {
-  getPrimaryAction,
   ROLE_FILTER_LABELS,
   type ActionType,
   type RoleFilter,
 } from "@real-a11y-dev/core";
-import { useVirtualTree } from "@real-a11y-dev/semantic-navigator-ui";
+import {
+  createTypeAheadBuffer,
+  findTypeAheadIndex,
+  isTypeAheadKey,
+  resolveStepperKeyAction,
+  useVirtualTree,
+} from "@real-a11y-dev/semantic-navigator-ui";
 import {
   useCallback,
   useEffect,
@@ -66,6 +71,7 @@ import {
   FilteredListView,
   type FilteredListItem,
 } from "./FilteredList.js";
+import { findNativeModalDialog } from "./native-feedback.js";
 import { NATIVE_FOLLOW_DEBOUNCE_MS } from "./native-follow.js";
 import {
   arrowLeftStopsAtScopeRoot,
@@ -78,6 +84,7 @@ import {
   scopePath,
 } from "./scope.js";
 import { ScopeBar } from "./ScopeBar.js";
+import { DialogIndicator, SendKeyBar, type SendKey } from "./SendKeyBar.js";
 
 const ROLE_FILTER_KEYS = Object.keys(ROLE_FILTER_LABELS) as Array<
   Exclude<RoleFilter, null>
@@ -134,6 +141,14 @@ export interface NativeTreeViewProps {
   onScope?: (id: string | null) => void;
   /** A pick is armed: Escape belongs to cancelling it, not to leaving scope. */
   pickArmed?: boolean;
+  /**
+   * Send a key to the page — the keyboard bar under the tree. Left out
+   * without it.
+   */
+  onSendKey?: SendKey;
+  /** The dialog indicator's **Press ESC**, for the open modal dialog with
+   *  this id. The indicator is left out without it. */
+  onDialogEscape?: (dialogId: string) => void;
 }
 
 /** A node is worth a click/Enter action, a select action, or both never — the
@@ -169,6 +184,19 @@ function toListItem(node: NativeNode): FilteredListItem {
   };
 }
 
+/** What type-ahead matches a row by — its name, else its role — the same
+ *  fallback `useTreeKeyboard`'s `treeNodeTypeAheadLabel` uses for a DOM row
+ *  (a native node has no text content of its own to fall between them). */
+function typeAheadLabel(node: NativeNode): string {
+  return node.name?.trim() || node.role;
+}
+
+/** Chromium's role for an `<iframe>`. The native read covers the top frame
+ *  only, so the row stands for content the tree doesn't show. */
+function isIframeRole(role: string): boolean {
+  return role === "Iframe" || role === "IframePresentational";
+}
+
 export function NativeTreeView({
   nodes,
   rootId,
@@ -183,6 +211,8 @@ export function NativeTreeView({
   scopedRootId = null,
   onScope,
   pickArmed = false,
+  onSendKey,
+  onDialogEscape,
 }: NativeTreeViewProps) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -197,6 +227,7 @@ export function NativeTreeView({
   // goes after leaving the scope from the breadcrumb.
   const listRef = useRef<HTMLElement | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const typeAhead = useRef(createTypeAheadBuffer());
 
   // Seed a sensible default the first time THIS root shows up — root plus its
   // immediate children expanded, so the page's landmark structure is visible
@@ -323,6 +354,8 @@ export function NativeTreeView({
   }, [reveal?.nonce]);
 
   const hasFilter = query.trim().length > 0 || roleFilter !== null;
+
+  const modalDialog = useMemo(() => findNativeModalDialog(nodes), [nodes]);
 
   // Same shape as `applySearchFilter`'s result for the DOM producer, minus
   // the mutation — see `native-search.ts` for why. Only actually walks
@@ -510,21 +543,43 @@ export function NativeTreeView({
     [parentOf],
   );
 
+  /**
+   * What plain Enter does to a row, in the tree and in its role-filter list
+   * alike: the row's own action, and for a slider, which has none but a
+   * step, a step up. A spinbutton's own action is its edit box — the only
+   * keyboard way to type a value from the native tree — so Enter opens it,
+   * and Shift+Enter or +/- step it. (The DOM tree's Enter steps a spinbutton
+   * up instead: its primary action comes from core's `getPrimaryAction`,
+   * shared by every surface.) Returns false when the row has nothing to do.
+   */
+  const activateRow = useCallback(
+    (node: NativeNode): boolean => {
+      if (primaryLabel(node)) {
+        onActivate(node, isSelectableRole(node.role) ? "select" : undefined);
+        return true;
+      }
+      if (isSteppableRole(node.role)) {
+        onActivate(node, "increment");
+        return true;
+      }
+      return false;
+    },
+    [onActivate],
+  );
+
   const activateFromList = useCallback(
     (id: string, action?: ActionType) => {
       const node = nodes.get(id);
       if (!node) return;
-      // A plain Enter/Activate arrives with no action, and `onActivate`
-      // without one clicks — wrong for a slider, which can only step. Resolve
-      // the primary here, as `App.tsx`'s `handleActivate` does for DOM rows.
-      const resolved = action ?? getPrimaryAction(nativeActions(node));
-      if (resolved === "increment" || resolved === "decrement") {
-        onActivate(node, resolved);
+      // A stepper key arrives with its step; a plain Enter or Activate with
+      // none, and gets the tree's Enter.
+      if (action === "increment" || action === "decrement") {
+        onActivate(node, action);
       } else {
-        onActivate(node, isSelectableRole(node.role) ? "select" : undefined);
+        activateRow(node);
       }
     },
-    [nodes, onActivate],
+    [nodes, onActivate, activateRow],
   );
 
   const activeDescendantId = (() => {
@@ -543,6 +598,7 @@ export function NativeTreeView({
       // against an empty or not-yet-loaded tree.
       if (e.key === "/" && !e.ctrlKey && !e.altKey && !e.metaKey) {
         e.preventDefault();
+        typeAhead.current.clear();
         searchInputRef.current?.focus();
         return;
       }
@@ -567,11 +623,28 @@ export function NativeTreeView({
 
       if (visibleIds.length === 0) return;
 
+      // Type-ahead, as the DOM tree's `useTreeKeyboard` has it: printable
+      // keys move to the next row whose name (else role) starts with them.
+      const tryTypeAhead = (from: number) => {
+        if (!isTypeAheadKey(e)) return;
+        e.preventDefault();
+        const buffer = typeAhead.current.push(e.key);
+        const labels = visibleIds.map((id) => {
+          const n = nodes.get(id);
+          return n ? typeAheadLabel(n) : "";
+        });
+        const next = findTypeAheadIndex(labels, buffer, from);
+        if (next >= 0) setSelectedId(visibleIds[next]!);
+      };
+
       if (!selectedId) {
         if (e.key === "ArrowDown" || e.key === "Home") {
           e.preventDefault();
+          typeAhead.current.clear();
           setSelectedId(visibleIds[0]!);
+          return;
         }
+        tryTypeAhead(-1);
         return;
       }
 
@@ -580,21 +653,35 @@ export function NativeTreeView({
       const node = nodes.get(selectedId);
       if (!node) return;
 
+      // `+`/`-` and `Shift+Enter` step a slider or spinbutton before Enter or
+      // type-ahead see the key: the mapping the DOM tree and the role-filter
+      // lists share.
+      const step = resolveStepperKeyAction(e, nativeActions(node));
+      if (step === "increment" || step === "decrement") {
+        e.preventDefault();
+        typeAhead.current.clear();
+        if (!busy) onActivate(node, step);
+        return;
+      }
+
       switch (e.key) {
         case "ArrowDown": {
           e.preventDefault();
+          typeAhead.current.clear();
           const next = currentIndex + 1;
           if (next < visibleIds.length) setSelectedId(visibleIds[next]!);
           break;
         }
         case "ArrowUp": {
           e.preventDefault();
+          typeAhead.current.clear();
           const prev = currentIndex - 1;
           if (prev >= 0) setSelectedId(visibleIds[prev]!);
           break;
         }
         case "ArrowRight": {
           e.preventDefault();
+          typeAhead.current.clear();
           if (!hasChildren(node)) break;
           if (!expanded.has(node.id)) {
             toggle(node.id);
@@ -608,6 +695,7 @@ export function NativeTreeView({
         }
         case "ArrowLeft": {
           e.preventDefault();
+          typeAhead.current.clear();
           const isOpen = expanded.has(node.id) && hasChildren(node);
           if (isOpen) {
             toggle(node.id);
@@ -619,16 +707,13 @@ export function NativeTreeView({
         }
         case "Enter": {
           e.preventDefault();
-          // Navigation/expand stay responsive while busy (no dispatch, no
-          // conflict with an in-flight NATIVE_ACT) — only the activation
-          // itself is held back, same as the action buttons' own `disabled`.
-          if (primaryLabel(node)) {
-            if (!busy) {
-              onActivate(
-                node,
-                isSelectableRole(node.role) ? "select" : undefined,
-              );
-            }
+          typeAhead.current.clear();
+          // See `activateRow`. Navigation/expand stay responsive while busy
+          // (no dispatch, no conflict with an in-flight NATIVE_ACT) — only
+          // the activation itself is held back, same as the action buttons'
+          // own `disabled`.
+          if (primaryLabel(node) || isSteppableRole(node.role)) {
+            if (!busy) activateRow(node);
           } else if (hasChildren(node)) {
             toggle(node.id);
           }
@@ -636,35 +721,48 @@ export function NativeTreeView({
         }
         case " ": {
           e.preventDefault();
+          typeAhead.current.clear();
           if (hasChildren(node)) toggle(node.id);
-          break;
-        }
-        case "+":
-        case "=": {
-          if (isSteppableRole(node.role)) {
-            e.preventDefault();
-            if (!busy) onActivate(node, "increment");
-          }
-          break;
-        }
-        case "-":
-        case "_": {
-          if (isSteppableRole(node.role)) {
-            e.preventDefault();
-            if (!busy) onActivate(node, "decrement");
-          }
           break;
         }
         case "Home": {
           e.preventDefault();
+          typeAhead.current.clear();
           setSelectedId(visibleIds[0]!);
           break;
         }
         case "End": {
           e.preventDefault();
+          typeAhead.current.clear();
           setSelectedId(visibleIds[visibleIds.length - 1]!);
           break;
         }
+        case "*": {
+          // Expand every sibling that has children (WAI-ARIA TreeView), as
+          // the DOM tree's `useTreeKeyboard` does: nothing on the tree's own
+          // root, which has no siblings. On the scope root it opens just that
+          // row, the one visible effect of DOM's `*` there — DOM also opens
+          // the scope root's siblings, which the scoped tree doesn't render.
+          e.preventDefault();
+          typeAhead.current.clear();
+          const parentId = parentOf.get(node.id);
+          const siblings =
+            node.id === scopeRoot
+              ? [node.id]
+              : parentId
+                ? (nodes.get(parentId)?.childIds ?? [])
+                : [];
+          setExpanded((prev) => {
+            const next = new Set(prev);
+            for (const id of siblings) {
+              if ((nodes.get(id)?.childIds?.length ?? 0) > 0) next.add(id);
+            }
+            return next;
+          });
+          break;
+        }
+        default:
+          tryTypeAhead(currentIndex);
       }
     },
     [
@@ -675,6 +773,7 @@ export function NativeTreeView({
       parentOf,
       toggle,
       onActivate,
+      activateRow,
       busy,
       scopeRoot,
       pickArmed,
@@ -747,6 +846,13 @@ export function NativeTreeView({
         ))}
       </div>
 
+      {onDialogEscape && (
+        <DialogIndicator
+          dialog={modalDialog ?? null}
+          onEscape={() => modalDialog && onDialogEscape(modalDialog.id)}
+        />
+      )}
+
       {capability && !capability.native && (
         <div role="status" class="sn-native-capability-banner">
           <strong>native unavailable here</strong> —{" "}
@@ -796,7 +902,7 @@ export function NativeTreeView({
               ref={treeRef}
               class="sn-tree"
               role="tree"
-              aria-label={`Native accessibility tree — press Enter to activate, +/- to step, arrows to navigate, ${SCOPE_KEY_HINT}`}
+              aria-label={`Native accessibility tree — press Enter to activate (a slider steps up, a spinbutton opens its edit box), +/− or Shift+Enter to step sliders and spinbuttons, arrows to navigate, ${SCOPE_KEY_HINT}`}
               tabIndex={0}
               style={{
                 minHeight: totalHeight,
@@ -818,6 +924,13 @@ export function NativeTreeView({
                   ? "select"
                   : undefined;
                 const position = visiblePositions.get(id);
+                // A heading's level shows as the DOM tree's `H2` badge rather
+                // than among the generic `key=value` properties below. Only
+                // for headings: a tree item or grid row carries a level too.
+                const headingLevel =
+                  node.role === "heading"
+                    ? node.properties?.["level"]
+                    : undefined;
 
                 return (
                   <div
@@ -897,6 +1010,23 @@ export function NativeTreeView({
 
                     <span class="sn-label">
                       <span class="sn-role">{node.role}</span>
+                      {headingLevel && (
+                        <span class="sn-level-badge">H{headingLevel}</span>
+                      )}
+                      {/* The native read covers the top frame only — mark the
+                          row whose content it leaves out. */}
+                      {isIframeRole(node.role) && (
+                        <span
+                          class="sn-iframe-badge"
+                          title="Embedded page — the native tree doesn't read its contents"
+                        >
+                          embedded
+                          <span class="sn-sr-only">
+                            {" "}
+                            page — the native tree doesn't read its contents
+                          </span>
+                        </span>
+                      )}
                       {node.name && (
                         <span class="sn-name" title={node.name}>
                           {node.name}
@@ -947,6 +1077,7 @@ export function NativeTreeView({
                         for (const [key, value] of Object.entries(
                           node.properties ?? {},
                         )) {
+                          if (key === "level" && headingLevel) continue;
                           badges.push(`${key}=${value}`);
                         }
                         if (badges.length === 0) return null;
@@ -1029,9 +1160,12 @@ export function NativeTreeView({
             </div>
           </div>
 
+          {onSendKey && <SendKeyBar onSendKey={onSendKey} />}
+
           <div class="sn-hints">
-            <kbd>Enter</kbd> activate &middot; <kbd>+/-</kbd> step &middot;{" "}
-            <kbd>Space</kbd> expand &middot; <kbd>Arrow</kbd> navigate
+            <kbd>Enter</kbd> activate &middot; <kbd>+/−</kbd> step &middot;{" "}
+            <kbd>Space</kbd> expand &middot; <kbd>Arrow</kbd> navigate &middot;{" "}
+            <kbd>DblClick</kbd> scope
           </div>
         </>
       )}

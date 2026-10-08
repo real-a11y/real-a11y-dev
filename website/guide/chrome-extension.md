@@ -217,6 +217,14 @@ Selecting a row also matches the DOM producer now. Click a row, arrow-navigate t
 
 Scoping works the same as in DOM mode too: double-click a container row, or press `Ctrl`/`Cmd`+`Enter` on a selected row with children, to show only that subtree, and use the breadcrumb, its **Exit scope** (✕) button or `Esc` to leave. See [Scoping](/guide/panel-features#scoping).
 
+The rest of the tree's everyday controls carry over as well:
+
+- The **Send key** bar under the tree, and the **Dialog** indicator with **Press ESC** while a modal dialog is open. Both send the key through the page's content script, as in DOM mode, then read the native tree again, following the page if the key navigates it, even a few seconds later. A `<dialog>` closes on Escape. An `aria-modal` dialog closes only if the page handles the key itself, so when it's still open after the re-read, the panel says so.
+- Type-ahead: type a row's first letters to jump to it. `*` expands every sibling of the selected row, and does nothing on the tree's own root.
+- `Enter` steps a slider up, and `Shift`+`Enter` steps a slider or spinbutton down, as `+` and `-` do. On a spinbutton, `Enter` opens the edit box instead, in the tree and in the **Forms** list alike, since it's the only keyboard way to type a value from the native tree. This is one difference from the DOM tree, where `Enter` steps a spinbutton up.
+- The feedback line names what you acted on in the DOM tree's words ("Click: Save", "Navigate: Home", "Checked: Remember me"), and any failed action shows there as "Failed: …" as well as in the status line.
+- A heading shows its level as an **H2** badge. An `<iframe>` row is marked **embedded**: the native tree reads the top frame only, so a frame's own content isn't in it yet.
+
 ### BETA pill in the panel header
 
 Sets expectations during the pre-1.0 phase. Linked to the GitHub issues page. Goes away at v1.0.

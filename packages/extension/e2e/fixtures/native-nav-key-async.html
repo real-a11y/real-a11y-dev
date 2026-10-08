@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Native nav — async key handler</title>
+  </head>
+  <body>
+    <!--
+      Like native-nav-key.html, but the Enter handler navigates a second
+      later, the way an async submit handler does once its request returns.
+      By then the key's own re-read has already read this page, so following
+      the navigation is the PAGE_NAVIGATED handler's job.
+    -->
+    <h1>Before the slow key</h1>
+    <script>
+      document.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter") return;
+        setTimeout(() => {
+          location.href = "tree-view.html";
+        }, 1000);
+      });
+    </script>
+  </body>
+</html>
