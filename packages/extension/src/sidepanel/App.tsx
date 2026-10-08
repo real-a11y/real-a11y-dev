@@ -72,6 +72,7 @@ import { describeAction, describeSelection } from "./action-feedback.js";
 import { ControlsChip, JUMP_FLASH_MS } from "./ControlsChip.js";
 import {
   buildExportMarkdown,
+  pageLabel,
   ALL_VIEWS,
   NATIVE_VIEWS,
   VIEW_LABELS,
@@ -390,7 +391,8 @@ export function App() {
   // Whether a native read has succeeded in this panel, which is when Chrome's
   // bar has shown: the note about it waits for that.
   const [nativeEverRead, setNativeEverRead] = useState(false);
-  // Whether the note is on screen, as of the last commit.
+  // Whether the note is on screen, as of the last render. Written during
+  // render, like `pickModeOnRef`.
   const nativeNoticeShown = useRef(false);
   // Setting writes this panel has sent and not yet had answered. Their echo
   // in storage can arrive before the reply, and the reply is what updates
@@ -645,21 +647,17 @@ export function App() {
       ?.set({ [FOLLOW_PAGE_CHANGES_KEY]: next })
       .catch(() => {});
   }, []);
-  // Turning native mode off, here or in another window, takes away the native
-  // tree and the DOM/NATIVE toggle, and so does a default read that falls
-  // back to the DOM tree: whatever had focus can go with them. Each such swap
-  // asks (`focusAfterSwap`) for focus to be put back (`refocusIfLost`), and
-  // the layout effect below does that as soon as the swap commits. (The note
-  // about Chrome's bar goes by more paths than these, so it has a layout
-  // effect of its own, on whether it is shown.) A layout effect rather than
-  // an effect, which waits for a paint: a panel in a window that isn't in
-  // front can go without one for a long time.
-  const focusSwapPending = useRef(false);
-  const [focusSwaps, setFocusSwaps] = useState(0);
-  const focusAfterSwap = useCallback(() => {
-    focusSwapPending.current = true;
-    setFocusSwaps((n) => n + 1);
-  }, []);
+  // What had focus as this render began, before its commit could take it
+  // away. Turning native mode off, here or in another window, takes away the
+  // native tree and the DOM/NATIVE toggle; so does a default read that falls
+  // back to the DOM tree, and the note about Chrome's bar goes once it is
+  // answered. Whatever had focus can go with them, which would leave it on
+  // the body: a layout effect further down puts it back instead, whichever
+  // way it went. Read during render, which runs before the commit, rather
+  // than from focus events: a panel without the window's focus (the user is
+  // in the page, or in another window) gets none when focus moves.
+  const focusBeforeCommit = useRef<Element | null>(null);
+  focusBeforeCommit.current = document.activeElement;
 
   /** Drop the native tree and orphan any native read or action in flight.
    *  Bumping `nativeOpToken` makes a late reply recognizably stale to every
@@ -809,14 +807,13 @@ export function App() {
       }
       // The service worker has already detached, and refuses reads, so show
       // what this panel's own turn-off would.
-      focusAfterSwap();
       showNativeOff();
       announce(
         "Not reading pages through Chrome — showing the DOM tree.",
         4000,
       );
     },
-    [announce, focusAfterSwap, showNativeOff, setNativeModeEnabledState],
+    [announce, showNativeOff, setNativeModeEnabledState],
   );
   /** A change to the setting in storage. Held while this panel has a write
    *  of its own on its way (see `ownSettingWrites`). */
@@ -915,14 +912,13 @@ export function App() {
           if (next) {
             setNativeModeEnabledState(true);
           } else {
-            focusAfterSwap();
             showNativeOff();
           }
         }
         answered(took);
       });
     },
-    [ownWrite, focusAfterSwap, showNativeOff, setNativeModeEnabledState],
+    [ownWrite, showNativeOff, setNativeModeEnabledState],
   );
   const acknowledgeNativeNotice = useCallback(() => {
     setNativeNoticeSeen(true);
@@ -944,8 +940,10 @@ export function App() {
       }
       setNativeSettingPending(next);
       // Turning native mode off while the note is up answers it, however it
-      // was turned off. Marked once the change is stored, and not before: if
-      // it doesn't take, the note stays to say what is still happening.
+      // was turned off, and so does one that lands while the note is up (a
+      // read in flight shows it while the turn-off waits for that read).
+      // Marked once the change is stored, and not before: if it doesn't take,
+      // the note stays to say what is still happening.
       const answersNotice = !next && nativeNoticeShown.current;
       // This switch is the session's gesture, and the read it starts below is
       // the session's first native read, so the default has nothing left to
@@ -960,7 +958,9 @@ export function App() {
           announce("Couldn't change that setting — try again.", 3000);
           return;
         }
-        if (answersNotice) acknowledgeNativeNotice();
+        if (answersNotice || (!next && nativeNoticeShown.current)) {
+          acknowledgeNativeNotice();
+        }
         if (next) {
           setProducer("native");
           announce("Reading pages through Chrome — showing its tree.", 3000);
@@ -1000,11 +1000,18 @@ export function App() {
     announce,
   });
 
-  /** Focus lost to something that went away (left on the body) moves to the
-   *  tree on screen, or the list shown in its place (the Tab view, or either
-   *  tree's role filter), or Settings if there is neither. Focus anywhere
-   *  else stays where the user put it. */
-  const refocusIfLost = useCallback(() => {
+  // After every commit (`focusBeforeCommit`): if it took away the element
+  // that had focus, and so left focus on the body, focus moves to the tree on
+  // screen, or the list shown in its place (the Tab view, or either tree's
+  // role filter), or Settings if there is neither. Focus anywhere else stays
+  // where it is, and a panel where nothing had focus is left alone. A layout
+  // effect rather than an effect, which waits for a paint: a panel in a
+  // window that isn't in front can go without one for a long time.
+  useLayoutEffect(() => {
+    const before = focusBeforeCommit.current;
+    if (before === null || before === document.body || before.isConnected) {
+      return;
+    }
     const active = document.activeElement;
     if (active !== null && active !== document.body) return;
     [
@@ -1014,13 +1021,7 @@ export function App() {
     ]
       .find((el) => el?.isConnected)
       ?.focus();
-  }, []);
-  // See `focusAfterSwap`.
-  useLayoutEffect(() => {
-    if (!focusSwapPending.current) return;
-    focusSwapPending.current = false;
-    refocusIfLost();
-  }, [focusSwaps, refocusIfLost]);
+  });
 
   // Don't leave a clear pending on a panel that is going away.
   useEffect(
@@ -2206,8 +2207,6 @@ export function App() {
       hasAppliedNativeDefault.current = false;
       hasAutoLoadedNative.current = false;
       nativeDefaultFailedOn.current.add(tabId);
-      // The native view goes, and focus in it with it.
-      focusAfterSwap();
       setProducer("dom");
       // NativeTreeView, where the reason would otherwise show, unmounts with
       // the switch, so announce it.
@@ -3101,6 +3100,7 @@ export function App() {
     producer === "native" &&
     nativeEverRead &&
     nativeNoticeSeen === false;
+  nativeNoticeShown.current = showNativeNotice;
   const announcedNativeNotice = useRef(false);
   useEffect(() => {
     if (!showNativeNotice || announcedNativeNotice.current) return;
@@ -3110,18 +3110,6 @@ export function App() {
       8000,
     );
   }, [showNativeNotice, announce]);
-  // However the note goes (Got it or Turn off, here or in another window, or
-  // the panel falling back to the DOM tree), focus on its buttons goes with
-  // it, so it is put back.
-  useLayoutEffect(() => {
-    if (showNativeNotice) {
-      nativeNoticeShown.current = true;
-      return;
-    }
-    if (!nativeNoticeShown.current) return;
-    nativeNoticeShown.current = false;
-    refocusIfLost();
-  }, [showNativeNotice, refocusIfLost]);
 
   // Close the export menu on outside-click or Escape.
   useEffect(() => {
@@ -3211,6 +3199,56 @@ export function App() {
     window.matchMedia("(prefers-color-scheme: dark)").matches;
   const themeClass = prefersDark ? "sn-theme-dark" : "sn-theme-light";
 
+  // Settings, in each header rather than the toolbar, whose controls don't
+  // wrap and run past a narrow panel's edge: this is where native mode turns
+  // off and back on, so it is on screen whether or not a page is connected.
+  // A disclosure, not a menu: what it opens is a switch and a line about it.
+  const settingsDisclosure = (
+    <div class="sn-export" ref={settingsRef}>
+      <button
+        ref={settingsButtonRef}
+        class="sn-toolbar-btn sn-export-btn"
+        aria-expanded={settingsOpen}
+        aria-controls={settingsOpen ? "sn-settings-menu" : undefined}
+        onClick={() => setSettingsOpen((o) => !o)}
+        title="Settings"
+      >
+        {"Settings ▾"}
+      </button>
+      {settingsOpen && (
+        <div
+          id="sn-settings-menu"
+          class="sn-export-menu sn-settings-menu"
+          role="group"
+          aria-label="Settings"
+        >
+          <label class="sn-settings-item">
+            <input
+              type="checkbox"
+              checked={nativeSettingPending ?? nativeModeEnabled}
+              aria-describedby="sn-settings-native-hint"
+              aria-disabled={nativeSettingPending !== null}
+              onChange={(e) => {
+                const input = e.target as HTMLInputElement;
+                const wanted = input.checked;
+                // Back to what it showed until the panel takes the
+                // click: none is taken while a change is on its way.
+                input.checked = nativeSettingPending ?? nativeModeEnabled;
+                setNativeModeFromSettings(wanted);
+              }}
+            />
+            <span>Read pages through Chrome (recommended)</span>
+          </label>
+          <p id="sn-settings-native-hint" class="sn-settings-hint">
+            Shows the tree Chrome itself gives assistive technology. While it
+            reads, Chrome shows a bar: “{extensionName()}” started debugging
+            this browser. Off, the panel reads the page itself.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+
   if (!connected) {
     return (
       <div class={`sn-root ${themeClass}`}>
@@ -3227,6 +3265,7 @@ export function App() {
               </span>
             </span>
           </div>
+          {settingsDisclosure}
         </div>
         <div class="sn-empty">
           <div class="sn-empty-stack">
@@ -3285,8 +3324,9 @@ export function App() {
     });
   }, [sendToBoundTab]);
 
-  // What the header calls the page: a page with no <title> is still named.
-  const shownTitle = pageTitle || "Untitled page";
+  // What the header calls the page: one with no <title> is still named, as
+  // the Copy report names it.
+  const shownTitle = pageLabel(pageTitle, pageUrl);
 
   // Extract hostname for display
   const pageHost = (() => {
@@ -3319,8 +3359,8 @@ export function App() {
 
   return (
     <div class={`sn-root ${themeClass}`}>
-      {/* Page info header. Drawn for a page with no <title> too, as
-          "Untitled page": Settings lives here. */}
+      {/* Page info header. Drawn for a page with no <title> too: Settings
+          lives here. */}
       <div class="sn-page-header">
         <div class="sn-page-info">
           <span class="sn-page-title" title={shownTitle}>
@@ -3339,54 +3379,7 @@ export function App() {
             </span>
           )}
         </div>
-        {/* In the header rather than the toolbar, whose controls don't wrap
-              and run past a narrow panel's edge: this is where native mode
-              turns off and back on, so it must always be on screen. A
-              disclosure, not a menu: what it opens is a switch and a line
-              about it. */}
-        <div class="sn-export" ref={settingsRef}>
-          <button
-            ref={settingsButtonRef}
-            class="sn-toolbar-btn sn-export-btn"
-            aria-expanded={settingsOpen}
-            aria-controls={settingsOpen ? "sn-settings-menu" : undefined}
-            onClick={() => setSettingsOpen((o) => !o)}
-            title="Settings"
-          >
-            {"Settings ▾"}
-          </button>
-          {settingsOpen && (
-            <div
-              id="sn-settings-menu"
-              class="sn-export-menu sn-settings-menu"
-              role="group"
-              aria-label="Settings"
-            >
-              <label class="sn-settings-item">
-                <input
-                  type="checkbox"
-                  checked={nativeSettingPending ?? nativeModeEnabled}
-                  aria-describedby="sn-settings-native-hint"
-                  aria-disabled={nativeSettingPending !== null}
-                  onChange={(e) => {
-                    const input = e.target as HTMLInputElement;
-                    const wanted = input.checked;
-                    // Back to what it showed until the panel takes the
-                    // click: none is taken while a change is on its way.
-                    input.checked = nativeSettingPending ?? nativeModeEnabled;
-                    setNativeModeFromSettings(wanted);
-                  }}
-                />
-                <span>Read pages through Chrome (recommended)</span>
-              </label>
-              <p id="sn-settings-native-hint" class="sn-settings-hint">
-                Shows the tree Chrome itself gives assistive technology. While
-                it reads, Chrome shows a bar: “{extensionName()}” started
-                debugging this browser. Off, the panel reads the page itself.
-              </p>
-            </div>
-          )}
-        </div>
+        {settingsDisclosure}
         <button
           class="sn-close-tab-btn"
           onClick={handleCloseTab}

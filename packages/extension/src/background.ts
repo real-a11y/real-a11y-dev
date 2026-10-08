@@ -25,10 +25,10 @@ import {
 // `chrome.debugger` native mode (RFC PR H) ships in every build now that the
 // manifest carries `debugger`/`tabs`/`storage` as required permissions (see
 // `public/manifest.json`) — the capability itself is always registered.
-// What stays off by default is a separate, runtime, user-facing setting
-// (`native/index.ts`'s own storage-backed flag): `registerNativeMode()` wires
-// the message handlers, but every one of them refuses to touch
-// `chrome.debugger` until that setting is explicitly turned on — see
+// Whether it attaches is a separate, runtime, user-facing setting
+// (`native/setting.ts`): on by default, and off once the user turns it off in
+// the side panel's Settings. `registerNativeMode()` wires the message
+// handlers, and none of them attaches while it is off — see
 // `NativeDebuggerSession.attach()`'s own gate. `__DOGFOOD__` (still a
 // build-time constant, see `vite.config.ts`) now only decides whether the
 // dev-only `DogfoodPanel` debug widget renders (`sidepanel/main.tsx`); it no

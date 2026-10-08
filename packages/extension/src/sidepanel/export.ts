@@ -80,6 +80,15 @@ function fenced(body: string): string {
  * for each selected view, in canonical order. Defaults to all views. Pastes
  * cleanly into a GitHub issue or any Markdown tracker.
  */
+/** What to call a page: its title, or its URL if it has none, or "Untitled
+ *  page". The report's heading and the side panel's header both name it so. */
+export function pageLabel(
+  pageTitle: string | undefined,
+  pageUrl: string | undefined,
+): string {
+  return pageTitle?.trim() || pageUrl || "Untitled page";
+}
+
 export function buildExportMarkdown(
   views: ExportViews,
   meta: ExportMeta,
@@ -91,7 +100,7 @@ export function buildExportMarkdown(
     { view: "tab", heading: "Tab sequence", body: views.tabSequence ?? "" },
   ];
   const chosen = sections.filter((s) => selection.includes(s.view));
-  const title = meta.pageTitle?.trim() || meta.pageUrl || "Untitled page";
+  const title = pageLabel(meta.pageTitle, meta.pageUrl);
 
   const header = [
     `# Accessibility report — ${title}`,

@@ -228,6 +228,8 @@ describe("native mode on by default", () => {
       await flush();
       await showTab(7);
 
+      // From the keyboard: focus is on the button that goes with the note.
+      act(() => buttonNamed("Got it")!.focus());
       act(() => buttonNamed("Got it")!.click());
       await flush();
 
@@ -342,6 +344,7 @@ describe("native mode on by default", () => {
       await flush();
       expect(container.querySelector('[role="tree"]')).toBeNull();
 
+      act(() => buttonNamed("Got it")!.focus());
       act(() => buttonNamed("Got it")!.click());
       await flush();
 
@@ -376,6 +379,41 @@ describe("native mode on by default", () => {
       expect(sentOfType("NATIVE_FLAG_SET")).toHaveLength(1);
 
       release();
+      await flush();
+
+      expect(note()).toBeNull();
+      expect(chromeMock.stored[NOTICE_SEEN]).toBe(true);
+    });
+
+    it("is answered by a turn-off it showed up during", async () => {
+      let readLands = () => {};
+      let setLands = () => {};
+      mount({
+        storage: {},
+        // The first read is slow, and the service worker answers the
+        // turn-off only once that read is done.
+        read: () =>
+          new Promise((resolve) => {
+            readLands = () => resolve(NATIVE_TREE);
+          }),
+        set: (enabled) =>
+          new Promise((resolve) => {
+            setLands = () => {
+              chromeMock.writeStorage({ [SETTING]: enabled });
+              resolve({ enabled, detached: 0 });
+            };
+          }),
+      });
+      await flush();
+      await showTab(7);
+      const checkbox = await openSettings();
+      act(() => checkbox.click());
+      await flush();
+
+      readLands();
+      await flush();
+      expect(note()).not.toBeNull();
+      setLands();
       await flush();
 
       expect(note()).toBeNull();
@@ -492,9 +530,18 @@ describe("native mode on by default", () => {
       await flush();
 
       expect(buttonNamed("Settings ▾")).not.toBeNull();
+      // Named as the Copy report names it.
       expect(container.querySelector(".sn-page-title")?.textContent).toContain(
-        "Untitled page",
+        "https://example.test/",
       );
+    });
+
+    it("is there before a page connects", async () => {
+      mount({ storage: { [NOTICE_SEEN]: true } });
+      await flush();
+
+      expect(buttonNamed("Settings ▾")).not.toBeNull();
+      expect((await openSettings()).checked).toBe(true);
     });
 
     it("shows the stored setting when the service worker doesn't answer", async () => {
@@ -720,6 +767,16 @@ describe("native mode on by default", () => {
 
       expect(nativeSearch()).toBeNull();
       expect(document.activeElement?.getAttribute("role")).toBe("tree");
+    });
+
+    it("leaves a panel nobody has focused alone when the first read falls back", async () => {
+      mount({ storage: { [NOTICE_SEEN]: true }, read: NATIVE_REFUSED });
+      await flush();
+
+      await showTab(7);
+
+      expect(buttonNamed("NATIVE")?.getAttribute("aria-pressed")).toBe("false");
+      expect(document.activeElement).toBe(document.body);
     });
 
     it("leaves an armed DOM pick alone when native mode is turned off", async () => {
