@@ -482,6 +482,22 @@ export function App() {
     },
     [resetNativeState],
   );
+  // Native as the default view, for a user who has already opted in: once per
+  // panel session, on the first page that connects and that native mode can
+  // read. Not on every tab or navigation after that — each of those would
+  // attach the debugger with no fresh gesture. Spent by a successful default
+  // read, and by turning native mode on in this session (the consent click is
+  // its own gesture, and its own read).
+  const hasAppliedNativeDefault = useRef(false);
+  // The tabs the default has failed on (DevTools owns it, a blocked URL, the
+  // service worker didn't answer). The default waits for a tab not in here
+  // rather than retrying one that is: every retry would attach again, and
+  // flash Chrome's bar, for as long as the page stays unreadable. All of
+  // them, not just the last: switching A → B → A would otherwise retry A.
+  const nativeDefaultFailedOn = useRef(new Set<number>());
+  // Why the last native read failed, in words for the fallback announcement.
+  // A ref because the default's revert runs after the read, in a promise.
+  const lastNativeFailure = useRef("");
 
   const treeRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -1261,14 +1277,17 @@ export function App() {
 
   /** Read the native tree into state. Mirrors DogfoodPanel's readTreeInto,
    *  minus its own flat-list bookkeeping — NativeTreeView owns expand state.
+   *  Returns whether the read succeeded — the native-default effect below is
+   *  the one caller that needs to tell a real failure apart from a read that
+   *  just got superseded by something else.
    *
    *  UNGUARDED by `nativeInFlight` — `dispatchNativeAction`'s own re-read
    *  step calls this directly (not the guarded `loadNativeTree` below) so
    *  that its own held guard doesn't make its post-action re-read a silent
    *  no-op. Never call this one from anywhere else; call `loadNativeTree`. */
   const loadNativeTreeCore = useCallback(
-    async (tabId: number) => {
-      if (!nativeModeEnabled) return;
+    async (tabId: number): Promise<boolean> => {
+      if (!nativeModeEnabled) return false;
       const token = nativeOpToken.current;
       setNativeBusy(true);
       setNativeStatus("reading native tree…");
@@ -1284,19 +1303,21 @@ export function App() {
           rootId?: string;
           url?: string;
         };
-        if (token !== nativeOpToken.current) return; // tab switched mid-flight
+        if (token !== nativeOpToken.current) return false; // tab switched mid-flight
         if (!r?.ok) {
           setNativeNodes(new Map());
           setNativeRootId("");
           if (r?.reason) {
             setNativeCapability(blockedBy(r.reason));
+            lastNativeFailure.current = explainUnavailable(r.reason);
             setNativeStatus(
-              `native unavailable — ${explainUnavailable(r.reason)}`,
+              `native unavailable — ${lastNativeFailure.current}`,
             );
           } else {
-            setNativeStatus(`read failed: ${r?.error ?? "unknown"}`);
+            lastNativeFailure.current = `read failed: ${r?.error ?? "unknown"}`;
+            setNativeStatus(lastNativeFailure.current);
           }
-          return;
+          return false;
         }
         setNativeNodes(new Map((r.nodes ?? []).map((n) => [n.id, n])));
         setNativeRootId(r.rootId ?? "");
@@ -1306,6 +1327,7 @@ export function App() {
         // same reasoning as DogfoodPanel's identical line.
         setNativeCapability(undefined);
         setNativeStatus(`${r.nodes?.length ?? 0} nodes`);
+        return true;
       } finally {
         if (token === nativeOpToken.current) setNativeBusy(false);
       }
@@ -1315,13 +1337,14 @@ export function App() {
 
   /** Guarded entry point for a user- or effect-triggered read (refresh
    *  button, auto-load). Excludes a second read/act while one is in flight —
-   *  see `nativeInFlight`'s own declaration. */
+   *  see `nativeInFlight`'s own declaration. Propagates `loadNativeTreeCore`'s
+   *  success/failure so the native-default effect can tell them apart. */
   const loadNativeTree = useCallback(
-    async (tabId: number) => {
-      if (!nativeModeEnabled || nativeInFlight.current) return;
+    async (tabId: number): Promise<boolean> => {
+      if (!nativeModeEnabled || nativeInFlight.current) return false;
       nativeInFlight.current = true;
       try {
-        await loadNativeTreeCore(tabId);
+        return await loadNativeTreeCore(tabId);
       } finally {
         nativeInFlight.current = false;
       }
@@ -1400,6 +1423,56 @@ export function App() {
     },
     [loadNativeTreeCore],
   );
+
+  // The default itself (see `hasAppliedNativeDefault`). It waits for
+  // `connected`, as the producer toggle does: the DOM producer reaching the
+  // tab first is what proves there is a page there at all.
+  //
+  // It reads through the guarded `loadNativeTree` itself rather than leaving
+  // the auto-load effect to do it, because it has to know whether the read
+  // worked: setting `hasAutoLoadedNative` up front stops a duplicate read, and
+  // a failure reverts to DOM, says why, and leaves the default for the next
+  // tab. A read some other operation superseded (the `token` check) leaves
+  // whatever that operation left alone.
+  useEffect(() => {
+    if (!nativeModeEnabled || !connected || myTabId === null) return;
+    if (hasAppliedNativeDefault.current) return;
+    if (nativeDefaultFailedOn.current.has(myTabId)) return;
+    // Another read is in flight (a refresh, an action's re-read). Reading
+    // now would come back `false` because it's busy, not because the page
+    // can't be read, so wait: `nativeBusy` is a dependency, and this runs
+    // again once that read clears.
+    if (nativeInFlight.current) return;
+    hasAppliedNativeDefault.current = true;
+    const tabId = myTabId;
+    const token = nativeOpToken.current;
+    const revertDefault = (why: string) => {
+      if (token !== nativeOpToken.current) return;
+      hasAppliedNativeDefault.current = false;
+      hasAutoLoadedNative.current = false;
+      nativeDefaultFailedOn.current.add(tabId);
+      setProducer("dom");
+      // NativeTreeView, where the reason would otherwise show, unmounts with
+      // the switch, so announce it.
+      announce(`Native mode: showing the DOM tree — ${why}`, 8000);
+    };
+    setProducer("native");
+    hasAutoLoadedNative.current = true;
+    void loadNativeTree(tabId)
+      .then((ok) => {
+        if (!ok) revertDefault(lastNativeFailure.current || "read failed");
+      })
+      // sendMessage rejected outright: the service worker didn't wake, or the
+      // context was torn down.
+      .catch(() => revertDefault("the extension didn't answer"));
+  }, [
+    nativeModeEnabled,
+    connected,
+    myTabId,
+    nativeBusy,
+    loadNativeTree,
+    announce,
+  ]);
 
   /** Dispatch one native action and, on success, settle + re-read — the same
    *  two-step DogfoodPanel's runAct uses, so a click that opens a menu or
@@ -2286,12 +2359,19 @@ export function App() {
             setNativeConsentError(undefined);
             setNativeConsentPending(true);
             pendingNativeFocus.current = "toggle";
+            // The consent click is this session's gesture, and the read it
+            // starts below is the session's first native read, so the
+            // default has nothing left to do. Set before the request: the
+            // default's effect runs as soon as the setting flips.
+            const defaultWasApplied = hasAppliedNativeDefault.current;
+            hasAppliedNativeDefault.current = true;
             void requestNativeMode(true).then((ok) => {
               setNativeConsentPending(false);
               // Only a real flip switches the view; on failure the banner
               // stays open with the error, for a retry.
               if (!ok) {
                 pendingNativeFocus.current = null;
+                hasAppliedNativeDefault.current = defaultWasApplied;
                 setNativeConsentError(
                   "Couldn't enable native mode — try again.",
                 );

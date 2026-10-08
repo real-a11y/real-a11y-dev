@@ -96,6 +96,9 @@ test("accepting the consent step turns native on, moves focus to NATIVE and read
   await expect
     .poll(() => nav.panel.locator(".sn-node").count(), { timeout: 20_000 })
     .toBeGreaterThan(0);
+  // One read: the consent click's own. The once-per-session native default
+  // is spent by turning native mode on, so it doesn't read a second time.
+  expect(await nav.nativeReads()).toHaveLength(1);
   expect(
     await nav.panel.evaluate(() =>
       chrome.storage.local

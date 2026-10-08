@@ -44,8 +44,11 @@
   panel, click "Enable native mode…", and accept the one-time in-panel notice
   about what it does and about the bar Chrome shows across every window while
   it's attached, reading “Semantic Navigator” started debugging this browser.
-  The setting persists across restarts; turning it back off detaches as soon
-  as any read or action already under way finishes. Nothing is logged about
+  The setting persists across restarts, and once it's on, the panel opens on
+  the native tree for the first page that connects each time you open it
+  ([#390]); if native mode can't read that page, the panel stays on the DOM
+  tree and says why. Turning it back off detaches as soon as any read or
+  action already under way finishes. Nothing is logged about
   how you use it. It ships with what the dogfood build learned along the way:
   an `aria-busy` element shows a `busy` badge
   ([#441](https://github.com/real-a11y/real-a11y-dev/pull/441)); a rich-text
@@ -811,5 +814,6 @@ Earlier releases predate this changelog.
 [#380]: https://github.com/real-a11y/real-a11y-dev/pull/380
 [#386]: https://github.com/real-a11y/real-a11y-dev/pull/386
 [#389]: https://github.com/real-a11y/real-a11y-dev/pull/389
+[#390]: https://github.com/real-a11y/real-a11y-dev/pull/390
 [#398]: https://github.com/real-a11y/real-a11y-dev/pull/398
 [#399]: https://github.com/real-a11y/real-a11y-dev/pull/399

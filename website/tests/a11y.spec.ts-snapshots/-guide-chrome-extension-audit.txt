@@ -221,6 +221,9 @@ main
     strong "DOM / NATIVE"
     strong "Disable native mode"
     link "Two producers"
+  paragraph "Once native mode is on, each time you open the side panel it shows the native tree for the first page that connects, with no click: that first page attaches the debugger by itself. After that, switching tabs or navigating doesn't attach on its own; the native tree's button or the toggle reads the new page. If native mode can't read that first page (DevTools already has it open, say), the panel stays on the DOM tree, says why, and tries the next tab you switch to instead."
+    strong "↻"
+    strong "NATIVE"
   heading "BETA pill in the panel header" (level 3)
   paragraph "Sets expectations during the pre-1.0 phase. Linked to the GitHub issues page. Goes away at v1.0."
   separator

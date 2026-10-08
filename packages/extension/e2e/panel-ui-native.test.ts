@@ -261,3 +261,122 @@ test("clicking a row gives the tree its own focus-visible outline", async ({
   // it to ever apply.
   await expect(nav.panel.locator(".sn-tree")).toBeFocused();
 });
+
+// ---- Native as the default view ----
+//
+// The harness turns native mode on before any test runs, as if the user had
+// opted in during an earlier session: the case where the panel opens on the
+// native tree by itself. None of these tests click NATIVE.
+
+/** Bring a fixture forward and remount the panel, which then defaults to the
+ *  native tree on its own. */
+async function showNativeByDefault(
+  nav: NativeHarness,
+  fixture: string,
+): Promise<PanelPage> {
+  const { page } = await nav.open(fixture);
+  await page.bringToFront();
+  await nav.panel.reload();
+  await expect
+    .poll(() => nav.panel.locator(".sn-node").count(), { timeout: 20_000 })
+    .toBeGreaterThan(0);
+  await expect(
+    nav.panel.getByRole("button", { name: "NATIVE", exact: true }),
+  ).toHaveAttribute("aria-pressed", "true");
+  return page;
+}
+
+/** How long a test waits for a read that should NOT be sent. The panel sends
+ *  NATIVE_READ from an effect within milliseconds of the trigger, and these
+ *  tests count messages sent, not reads finished, so the attach's own speed
+ *  doesn't matter here. */
+const NO_READ_WINDOW_MS = 1_500;
+
+test("native mode defaults to the native producer on first connect, with no click", async ({
+  nav,
+}) => {
+  await showNativeByDefault(nav, "native-panel.html");
+  // native-panel.html's own rows, so this is the native producer's tree.
+  await nav.panel.getByRole("button", { name: "Expand all" }).click();
+  // Anchored, so it doesn't also match "Item 10".."Item 16".
+  await expect(
+    nav.panel.getByRole("treeitem", { name: /^button "Item 1" focusable/ }),
+  ).toBeVisible();
+  expect(await nav.nativeReads()).toHaveLength(1);
+});
+
+test("switching tabs after the default sends no read for the new tab", async ({
+  nav,
+}) => {
+  await showNativeByDefault(nav, "native-panel.html");
+  const second = await nav.open("tree-view.html");
+  await second.page.bringToFront();
+
+  // The switch clears the old tab's tree, and must not attach to the new one
+  // without a gesture.
+  await expect
+    .poll(() => nav.panel.locator(".sn-node").count(), { timeout: 5_000 })
+    .toBe(0);
+  await nav.panel.waitForTimeout(NO_READ_WINDOW_MS);
+  expect(await nav.nativeReads()).toHaveLength(1);
+
+  // The producer stays NATIVE, and Refresh reads normally.
+  await expect(
+    nav.panel.getByRole("button", { name: "NATIVE", exact: true }),
+  ).toHaveAttribute("aria-pressed", "true");
+  await nav.panel.getByRole("button", { name: "Refresh native tree" }).click();
+  await expect
+    .poll(() => nav.panel.locator(".sn-node").count(), { timeout: 20_000 })
+    .toBeGreaterThan(0);
+  expect(await nav.nativeReads()).toHaveLength(2);
+});
+
+test("a default that can't read the page falls back to DOM, says why, and doesn't retry that tab", async ({
+  nav,
+}) => {
+  await nav.setNativeReads("fail");
+  const { page } = await nav.open("native-panel.html");
+  await page.bringToFront();
+  await nav.panel.reload();
+
+  await expect(
+    nav.panel.getByText(/Native mode: showing the DOM tree — .*DevTools/),
+  ).toBeVisible({ timeout: 20_000 });
+  await expect(
+    nav.panel.getByRole("button", { name: "DOM", exact: true }).first(),
+  ).toHaveAttribute("aria-pressed", "true");
+  // One attempt, and no more for this tab: each retry would attach again.
+  await nav.panel.waitForTimeout(NO_READ_WINDOW_MS);
+  expect(await nav.nativeReads()).toHaveLength(1);
+});
+
+test("Disable while the default's read is in flight leaves the panel on DOM", async ({
+  nav,
+}) => {
+  await nav.setNativeReads("delay:2000");
+  const { page } = await nav.open("native-panel.html");
+  await page.bringToFront();
+  await nav.panel.reload();
+  await expect(
+    nav.panel.getByRole("button", { name: "NATIVE", exact: true }),
+  ).toHaveAttribute("aria-pressed", "true", { timeout: 20_000 });
+  expect(await nav.nativeReads()).toHaveLength(1);
+
+  await nav.panel.getByRole("button", { name: "Disable native mode" }).click();
+  const enableEntry = nav.panel.getByRole("button", {
+    name: "Enable native mode…",
+  });
+  await expect(enableEntry).toBeVisible();
+  // The delayed reply lands after the disable; it must not bring the native
+  // tree back or flip the view.
+  await nav.panel.waitForTimeout(2_500);
+  await expect(enableEntry).toBeVisible();
+  await expect(
+    nav.panel.getByRole("button", { name: "Refresh native tree" }),
+  ).toHaveCount(0);
+
+  // This worker's other tests expect native mode on.
+  await nav.panel.evaluate(() =>
+    chrome.storage.local.set({ "settings.nativeModeEnabled": true }),
+  );
+});
