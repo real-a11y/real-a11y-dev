@@ -39,8 +39,8 @@ import {
   readNativeTree,
   type NativeAction,
 } from "./native-core.js";
+import { NATIVE_MODE_KEY as FLAG_KEY } from "./setting.js";
 
-const FLAG_KEY = "settings.nativeModeEnabled";
 /** The dogfood build's name for the same setting, before it became a user
  *  setting. Read once, carried over, then removed — see `migrateFlag`. */
 const LEGACY_FLAG_KEY = "devFlags.nativeMode";
@@ -69,19 +69,15 @@ async function migrateFlag(): Promise<void> {
   await chrome.storage.local.remove(LEGACY_FLAG_KEY);
 }
 
-/** The user-facing native-mode setting — off unless explicitly turned on. */
-async function nativeModeEnabled(): Promise<boolean> {
+/** The user-facing native-mode setting, as stored: `undefined` until the
+ *  user has answered the native-mode question either way (the panel's
+ *  first-run step, or its Enable / Disable buttons). Native mode is on only
+ *  for an explicit `true`; while it is unanswered it reads as off, so nothing
+ *  attaches, and the panel asks. */
+async function nativeModeSetting(): Promise<boolean | undefined> {
   const got = await chrome.storage.local.get(FLAG_KEY);
-  return got[FLAG_KEY] === true;
-}
-
-/** Whether the user has answered the native-mode question at all, either
- *  way: the panel's first-run step, or its Enable / Disable buttons. While it
- *  is unanswered the setting reads as off, so nothing attaches, and the panel
- *  asks. */
-async function nativeModeChosen(): Promise<boolean> {
-  const got = await chrome.storage.local.get(FLAG_KEY);
-  return typeof got[FLAG_KEY] === "boolean";
+  const value: unknown = got[FLAG_KEY];
+  return typeof value === "boolean" ? value : undefined;
 }
 
 /** Request/response messages the panel sends for native mode. Pushes the
@@ -93,6 +89,11 @@ type NativeMessage =
   // has never been set either way, which is when the panel asks.
   | { type: "NATIVE_FLAG_GET" }
   | { type: "NATIVE_FLAG_SET"; enabled: boolean }
+  // "Keep the DOM tree", the other answer to the panel's question. Not a
+  // Disable: it is stored only while the setting has never been set, and it
+  // detaches nothing. Replies `{ enabled, chosen }`, the setting as it then
+  // stands, which is still on if another window's panel said yes first.
+  | { type: "NATIVE_FLAG_DECLINE" }
   | { type: "NATIVE_CAPABILITY"; tabId: number }
   | {
       type: "NATIVE_READ";
@@ -245,7 +246,16 @@ export function registerNativeMode(): void {
   const migrated = migrateFlag().catch(() => {});
   const flagEnabled = async () => {
     await migrated;
-    return nativeModeEnabled();
+    return (await nativeModeSetting()) === true;
+  };
+  // Writes to the setting run one at a time: a "keep the DOM tree" reads the
+  // setting before it writes, and a "yes" from another window's panel landing
+  // between the two would otherwise be overwritten with its "no".
+  let settingWrites: Promise<unknown> = migrated;
+  const writeSetting = <T>(write: () => Promise<T>): Promise<T> => {
+    const run = settingWrites.then(write);
+    settingWrites = run.catch(() => {});
+    return run;
   };
 
   // The dogfood build keeps its event log in `local`, so it survives restarts
@@ -298,13 +308,29 @@ export function registerNativeMode(): void {
         }
         switch (message.type) {
           case "NATIVE_FLAG_GET": {
-            const enabled = await flagEnabled();
-            sendResponse({ enabled, chosen: await nativeModeChosen() });
+            // One read for both fields, so they can't disagree.
+            await migrated;
+            const value = await nativeModeSetting();
+            sendResponse({
+              enabled: value === true,
+              chosen: value !== undefined,
+            });
+            return;
+          }
+          case "NATIVE_FLAG_DECLINE": {
+            const value = await writeSetting(async () => {
+              const current = await nativeModeSetting();
+              if (current !== undefined) return current;
+              await chrome.storage.local.set({ [FLAG_KEY]: false });
+              return false;
+            });
+            sendResponse({ enabled: value, chosen: true });
             return;
           }
           case "NATIVE_FLAG_SET": {
-            await migrated;
-            await chrome.storage.local.set({ [FLAG_KEY]: message.enabled });
+            await writeSetting(() =>
+              chrome.storage.local.set({ [FLAG_KEY]: message.enabled }),
+            );
             // Cancel any in-flight picker session BEFORE detachAll: a pick
             // that never got a click is still occupying that tab's slot in
             // the per-tab operation queue detachAll waits on (see

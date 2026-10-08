@@ -24,9 +24,11 @@
   attaches: **Use native mode** is the answer it offers first, and **Keep the
   DOM tree** is the other (`Esc` answers that way too). Either answer is
   remembered, so the panel doesn't ask again; **Enable native mode…** and
-  **Disable native mode** in the toolbar change it later. The question's
-  explanation of Chrome's debugging bar is its accessible description, so a
-  screen reader reads it out along with the focused button
+  **Disable native mode** in the toolbar change it later. Each window has its
+  own side panel, and an answer given in one holds in every panel open in
+  the others. The question's explanation of Chrome's debugging bar is its
+  accessible description, so a screen reader reads it out along with the
+  focused button
   ([#NNN](https://github.com/real-a11y/real-a11y-dev/pull/NNN)).
 
 - Hardened the shared mutation observer so that re-arming it can no longer
@@ -50,10 +52,11 @@
   yes. The manifest now requests `debugger`, `tabs` and `storage` as required
   permissions (`chrome.debugger` cannot be requested optionally), so **this
   update re-prompts every existing user for the extra permissions** — nothing
-  changes for anyone who doesn't turn the feature on. The side panel asks the
-  first time it connects to a page (see above), in a one-time in-panel notice
-  about what it does and about the bar Chrome shows across every window while
-  it's attached, reading “Semantic Navigator” started debugging this browser.
+  attaches for anyone who doesn't say yes. The side panel asks the first time
+  it connects to a page (see above), in a one-time in-panel question about
+  what native mode does and about the bar Chrome shows across every window
+  while it's attached, reading “Semantic Navigator” started debugging this
+  browser.
   The setting persists across restarts, and once it's on, the panel opens on
   the native tree for the first page that connects each time you open it
   ([#390]); if native mode can't read that page, the panel stays on the DOM

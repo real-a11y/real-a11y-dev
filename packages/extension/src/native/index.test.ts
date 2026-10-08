@@ -158,6 +158,50 @@ describe("registerNativeMode: whether the user has chosen", () => {
   });
 });
 
+describe("registerNativeMode: keeping the DOM tree", () => {
+  // The other answer to the panel's question. Each window has its own side
+  // panel, so the question can still be open in one window after the user
+  // said yes in another: keeping the DOM tree there must not turn native
+  // mode off, the way a Disable does.
+  const decline = async () =>
+    (await send({ type: "NATIVE_FLAG_DECLINE" }, PANEL)).response;
+
+  it("is remembered when nothing was chosen yet", async () => {
+    await register();
+    expect(await decline()).toEqual({ enabled: false, chosen: true });
+    expect(local.data["settings.nativeModeEnabled"]).toBe(false);
+  });
+
+  it("never turns off a yes from another window", async () => {
+    await register();
+    await send({ type: "NATIVE_FLAG_SET", enabled: true }, PANEL);
+    expect(await decline()).toEqual({ enabled: true, chosen: true });
+    expect(local.data["settings.nativeModeEnabled"]).toBe(true);
+  });
+
+  it("never loses a yes that lands while it is being stored", async () => {
+    await register();
+    // Both sent before either is answered: the "no" is stored first, and
+    // the "yes" after it stands.
+    const answers = Promise.all([
+      decline(),
+      send({ type: "NATIVE_FLAG_SET", enabled: true }, PANEL),
+    ]);
+    await answers;
+    expect(local.data["settings.nativeModeEnabled"]).toBe(true);
+  });
+
+  it("is refused to a content script", async () => {
+    await register();
+    const { answered } = await send(
+      { type: "NATIVE_FLAG_DECLINE" },
+      CONTENT_SCRIPT,
+    );
+    expect(answered).toBe(false);
+    expect(local.data["settings.nativeModeEnabled"]).toBeUndefined();
+  });
+});
+
 describe("registerNativeMode: the old dogfood flag", () => {
   it("carries devFlags.nativeMode over and removes it", async () => {
     install({ "devFlags.nativeMode": true });

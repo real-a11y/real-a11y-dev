@@ -21,8 +21,8 @@ pnpm --filter @real-a11y-dev/semantic-navigator-extension build
 
 Load `packages/extension/dist` unpacked, as in **R17**. The panel asks only while the
 setting has never been answered, and removing the extension clears it, so **remove the
-extension and load it again** before step 1 and before step 8. Reloading it keeps the
-answer.
+extension and load it again** before step 1, step 8 and step 12. Reloading it keeps
+the answer.
 
 **Saying yes**
 
@@ -66,6 +66,15 @@ answer.
     dialog named "Native mode", reads its explanation (the bar Chrome shows, and the
     DOM tree as the other answer), and lands on the "Use native mode" button.
 
+**Two windows** — each Chrome window has its own side panel
+
+12. Open a second Chrome window and the side panel in both, each on an ordinary
+    page: both ask. Answer **Use native mode** in one. The question in the other
+    window closes by itself, and its toolbar shows the **DOM / NATIVE** toggle
+    without reading anything until you press NATIVE.
+13. Press **Disable native mode** in one window: the other window's panel returns to
+    the DOM tree and shows **Enable native mode…**.
+
 ## Expected
 
 - **Nothing attaches before the answer.** No bar until **Use native mode**, and none
@@ -79,6 +88,8 @@ answer.
 - **Disable** detaches, and the bar stays away
 - The question is usable by keyboard alone, and a screen reader hears what it asks,
   not only its buttons
+- **An answer in one window holds in every window** (steps 12–13), and nothing reads
+  natively in a window where nobody pressed anything
 
 ## Why this exists
 
@@ -96,3 +107,7 @@ what a user meets first. Step 11 is here because the question's explanation reac
 a screen reader only as the dialog's description: focus lands on a button, so without
 it a screen-reader user would hear "Native mode, dialog, Use native mode" and nothing
 about the bar they are agreeing to.
+
+Steps 12–13 are here because the question can be open in two windows at once. Before
+each panel followed the setting, keeping the DOM tree in a question left open in one
+window switched native mode off, and detached it, in the other.

@@ -15,6 +15,12 @@ export const TAB_ID = 7;
 export interface ChromeMock {
   sent: PanelToContent[];
   emit: (message: ContentToPanel) => void;
+  /**
+   * Write to the stand-in `chrome.storage.local` the way another extension
+   * page would (another window's side panel, the service worker), firing
+   * `onChanged` for what changed. Only with the `storage` option.
+   */
+  writeStorage: (items: Record<string, unknown>) => void;
 }
 
 export interface ChromeMockOptions {
@@ -26,6 +32,12 @@ export interface ChromeMockOptions {
    * the reply distinguishes them.
    */
   respond?: (message: PanelToContent) => unknown;
+  /**
+   * Give the panel a `chrome.storage.local` holding these items, and an
+   * `onChanged` that fires on every write to it. Left out, the panel runs
+   * without extension storage, as most suites do.
+   */
+  storage?: Record<string, unknown>;
 }
 
 export function installChromeMock(options: ChromeMockOptions = {}): ChromeMock {
@@ -75,10 +87,51 @@ export function installChromeMock(options: ChromeMockOptions = {}): ChromeMock {
     },
   };
 
-  (globalThis as unknown as { chrome: unknown }).chrome = { runtime };
+  type StorageListener = (
+    changes: Record<string, chrome.storage.StorageChange>,
+    area: string,
+  ) => void;
+  const storageListeners: StorageListener[] = [];
+  const stored: Record<string, unknown> = { ...options.storage };
+  const writeStorage = (items: Record<string, unknown>) => {
+    const changes: Record<string, chrome.storage.StorageChange> = {};
+    for (const [key, newValue] of Object.entries(items)) {
+      changes[key] = { oldValue: stored[key], newValue };
+      stored[key] = newValue;
+    }
+    for (const fn of [...storageListeners]) fn(changes, "local");
+  };
+  const storage = {
+    local: {
+      get: async (keys?: string | string[]) => {
+        const wanted =
+          keys === undefined
+            ? Object.keys(stored)
+            : Array.isArray(keys)
+              ? keys
+              : [keys];
+        return Object.fromEntries(
+          wanted.filter((k) => k in stored).map((k) => [k, stored[k]]),
+        );
+      },
+      set: async (items: Record<string, unknown>) => writeStorage(items),
+    },
+    onChanged: {
+      addListener: (fn: StorageListener) => storageListeners.push(fn),
+      removeListener: (fn: StorageListener) => {
+        const i = storageListeners.indexOf(fn);
+        if (i !== -1) storageListeners.splice(i, 1);
+      },
+    },
+  };
+
+  (globalThis as unknown as { chrome: unknown }).chrome = options.storage
+    ? { runtime, storage }
+    : { runtime };
 
   return {
     sent,
+    writeStorage,
     emit: (message) => {
       // The panel's trust gate reads `sender.id`; the routing gate reads
       // `sender.tab?.id` alongside the message's own `tabId`.

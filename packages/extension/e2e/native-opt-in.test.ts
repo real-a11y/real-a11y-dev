@@ -1,7 +1,8 @@
 /**
  * Turning native mode on and off, on the store build (`dist/`): the question
- * a fresh profile is asked on its first connect, and the Enable → Disable
- * round trip for a user who kept the DOM tree.
+ * a fresh profile is asked on its first connect, the Enable → Disable round
+ * trip for a user who kept the DOM tree, and an answer given in another
+ * window's side panel, which every open panel follows.
  *
  * These are the first things a store user meets, and the only suite that runs
  * the build the listing ships: the manifest it asks Chrome for, the absence of
@@ -133,6 +134,125 @@ test("keeping the DOM tree is remembered, so the next panel doesn't ask", async 
     nav.panel.getByRole("dialog", { name: "Native mode" }),
   ).toHaveCount(0);
   expect(await nav.nativeReads()).toHaveLength(0);
+});
+
+test("keeping the DOM tree puts focus on Enable native mode…", async ({
+  nav,
+}) => {
+  // The question opened by itself, so nothing in the panel had focus before
+  // it: without a target, focus would fall to the page body.
+  const { question } = await firstRunPanel(nav);
+  await question
+    .getByRole("button", { name: "Use native mode" })
+    .press("Escape");
+  await expect(question).toHaveCount(0);
+  await expect
+    .poll(() =>
+      nav.panel.evaluate(() => document.activeElement?.textContent?.trim()),
+    )
+    .toBe("Enable native mode…");
+});
+
+// Each window has its own side panel, and the setting is shared: these play
+// another window's panel by sending what it sends, from outside this
+// panel's own state.
+const answerInAnotherWindow = (nav: NativeHarness, enabled: boolean) =>
+  nav.panel.evaluate(
+    (on) =>
+      chrome.runtime.sendMessage({ type: "NATIVE_FLAG_SET", enabled: on }),
+    enabled,
+  );
+
+test("a yes in another window closes this panel's question without reading here", async ({
+  nav,
+}) => {
+  const { question } = await firstRunPanel(nav);
+  await answerInAnotherWindow(nav, true);
+
+  await expect(question).toHaveCount(0);
+  await expect(
+    nav.panel.getByRole("group", { name: "Tree producer" }),
+  ).toBeVisible();
+  // This panel was already showing the page, and nobody pressed anything in
+  // it, so nothing read the page natively here.
+  await nav.panel.waitForTimeout(1_000);
+  expect(await nav.nativeReads()).toHaveLength(0);
+  expect(await storedSetting(nav)).toBe(true);
+});
+
+test("keeping the DOM tree never turns off native mode another window turned on", async ({
+  nav,
+}) => {
+  const { tabId } = await nav.open("native-panel.html");
+  await answerInAnotherWindow(nav, true);
+
+  // What a question still open in this window sends when the user keeps
+  // the DOM tree there.
+  const reply = await nav.panel.evaluate(() =>
+    chrome.runtime.sendMessage({ type: "NATIVE_FLAG_DECLINE" }),
+  );
+  expect(reply).toEqual({ enabled: true, chosen: true });
+  expect(await storedSetting(nav)).toBe(true);
+  // The other window's native tree still reads: nothing was detached or
+  // switched off under it.
+  const read = await nav.read(tabId);
+  expect(read.ok).toBe(true);
+});
+
+test("a panel opened before another window answered doesn't ask, and reads its first page", async ({
+  nav,
+}) => {
+  // Opened on a tab with no page to connect to, so it hasn't asked yet.
+  await nav.panel.evaluate(() =>
+    chrome.storage.local.remove("settings.nativeModeEnabled"),
+  );
+  await nav.panel.bringToFront();
+  await nav.panel.reload();
+  await answerInAnotherWindow(nav, true);
+
+  const { page } = await nav.open("native-panel.html");
+  await page.bringToFront();
+  await nav.panel
+    .getByRole("button", { name: /Load tree|Refresh tree/ })
+    .first()
+    .click();
+
+  // Its first page reads natively, as for a panel opened with native mode on.
+  await expect(
+    nav.panel.getByRole("button", { name: "NATIVE", exact: true }),
+  ).toHaveAttribute("aria-pressed", "true", { timeout: 20_000 });
+  await expect(
+    nav.panel.getByRole("dialog", { name: "Native mode" }),
+  ).toHaveCount(0);
+  await expect
+    .poll(async () => (await nav.nativeReads()).length, { timeout: 20_000 })
+    .toBe(1);
+});
+
+test("native mode turned off in another window returns this panel to the DOM tree", async ({
+  nav,
+}) => {
+  const { enableEntry } = await domChosenPanel(nav);
+  await enableEntry.click();
+  await nav.panel
+    .getByRole("dialog", { name: "Native mode" })
+    .getByRole("button", { name: "Use native mode" })
+    .click();
+  await expect(
+    nav.panel.getByRole("button", { name: "Refresh native tree" }),
+  ).toBeVisible({ timeout: 20_000 });
+
+  await answerInAnotherWindow(nav, false);
+
+  await expect(
+    nav.panel.getByRole("button", { name: "Enable native mode…" }),
+  ).toBeVisible();
+  await expect(
+    nav.panel.getByRole("button", { name: "Refresh native tree" }),
+  ).toHaveCount(0);
+  await expect(
+    nav.panel.getByRole("button", { name: "NATIVE", exact: true }),
+  ).toHaveCount(0);
 });
 
 test("the store build asks for native mode's permissions and ships no dogfood diagnostics", async ({
