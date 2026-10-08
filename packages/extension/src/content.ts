@@ -61,14 +61,16 @@ let focusTrackerEnabled = false;
 let curtainVisible = false; // whether the screen curtain is currently on
 
 // Armed by ARM_NATIVE_OVERLAY (see its comment in types.ts) around one native
-// reveal. While armed it drops exactly one `focusin`, the one the reveal's
-// focus causes, and honours exactly one `real-a11y:native-reveal` event, the
-// one carrying `nonce`. The service worker releases it once the dispatch
-// returns (`seq` must match, so a late release from an older dispatch can't
-// disarm a newer one); the deadline only bounds a release that never comes.
+// reveal or preview. While armed it honours exactly one event of its `kind`,
+// the one carrying `nonce`, and a reveal's arm drops exactly one `focusin`,
+// the one the reveal's focus causes. The service worker releases it once the
+// dispatch returns (`seq` must match, so a late release from an older
+// dispatch can't disarm a newer one); the deadline only bounds a release that
+// never comes.
 let nativeOverlayArm: {
   seq: number;
   until: number;
+  kind: "reveal" | "preview";
   /** The one reveal event to honour; cleared once it is. */
   nonce: string | null;
   /** Whether the `focusin` the reveal causes has been dropped yet. */
@@ -314,11 +316,12 @@ chrome.runtime.onMessage.addListener(
       }
 
       case "ARM_NATIVE_OVERLAY": {
-        const { seq, active, nonce } = message.payload;
+        const { seq, active, nonce, kind = "reveal" } = message.payload;
         if (active) {
           nativeOverlayArm = {
             seq,
             until: Date.now() + NATIVE_OVERLAY_ARM_MS,
+            kind,
             nonce: nonce ?? null,
             focusDropped: false,
           };
@@ -426,7 +429,11 @@ chrome.runtime.onMessage.addListener(
 // Reverse focus sync: page focus → tree selection
 document.addEventListener("focusin", (e) => {
   if (focusingFromTree) return;
-  if (nativeOverlayArm && !nativeOverlayArm.focusDropped) {
+  if (
+    nativeOverlayArm &&
+    nativeOverlayArm.kind === "reveal" &&
+    !nativeOverlayArm.focusDropped
+  ) {
     const live = Date.now() < nativeOverlayArm.until;
     nativeOverlayArm.focusDropped = true;
     if (live) return;
@@ -456,36 +463,47 @@ function findTrackedAncestor(el: Element | null): string | null {
 }
 
 // The native tree's selection follow asks for the same overlay the DOM tree's
-// own select draws (HIGHLIGHT_NODE → `highlightElement`, scrolled into view).
-// `pageReveal` in native/native-core.ts fires this at the element from the
-// page's main world, and DOM events reach this isolated world with the same
-// target, so the overlay lands on the element the native row describes.
+// own select draws (HIGHLIGHT_NODE → `highlightElement`, scrolled into view),
+// and its hover for the one the DOM tree's hover draws (in place: no scroll).
+// `pageReveal` and `pagePreview` in native/native-core.ts fire these at the
+// element from the page's main world, and DOM events reach this isolated
+// world with the same target, so the overlay lands on the element the native
+// row describes.
 //
-// The page can dispatch this event too, so it is honoured only while a
-// native reveal has armed us, only once, and only with the arm's nonce, which
-// `pageReveal` receives as an argument and the page never sees ahead of time.
-// The event doesn't bubble, so page listeners below `document` never see it;
-// this listener catches it on the way down. A page listener that captures it
-// even earlier, on `window`, sees the nonce: it can stop the event, or
-// replay that nonce on another element while the arm lasts and put the
-// outline there. That is accepted: the page can draw a lookalike outline of
-// its own anyway, and the arm still lets it draw nothing more than one
-// overlay, nor scroll or focus anything the extension didn't.
+// The page can dispatch these events too, so each is honoured only while a
+// native overlay of its own kind has armed us, only once, and only with the
+// arm's nonce, which the page function receives as an argument and the page
+// never sees ahead of time. A preview's arm can never draw a reveal, so no
+// hover can scroll the page. The events don't bubble, so page listeners below
+// `document` never see them; these listeners catch them on the way down. A
+// page listener that captures one even earlier, on `window`, sees the nonce:
+// it can stop the event, or replay that nonce on another element while the
+// arm lasts and put the outline there. That is accepted: the page can draw a
+// lookalike outline of its own anyway, and the arm still lets it draw nothing
+// more than one overlay, nor scroll or focus anything the extension didn't.
+function highlightFromNativeEvent(e: Event, kind: "reveal" | "preview"): void {
+  const arm = nativeOverlayArm;
+  if (!arm || arm.kind !== kind || Date.now() >= arm.until) return;
+  if (arm.nonce === null || (e as CustomEvent).detail !== arm.nonce) return;
+  arm.nonce = null;
+  if (curtainVisible) return;
+  // `composedPath()[0]` is the real target even inside an open shadow tree,
+  // where `e.target` has been retargeted to the host.
+  const nodeId = findTrackedAncestor(
+    (e.composedPath()[0] ?? e.target) as Element | null,
+  );
+  if (nodeId) {
+    focusManager.highlightElement(nodeId, { scroll: kind === "reveal" });
+  }
+}
 document.addEventListener(
   "real-a11y:native-reveal",
-  (e) => {
-    const arm = nativeOverlayArm;
-    if (!arm || Date.now() >= arm.until) return;
-    if (arm.nonce === null || (e as CustomEvent).detail !== arm.nonce) return;
-    arm.nonce = null;
-    if (curtainVisible) return;
-    // `composedPath()[0]` is the real target even inside an open shadow tree,
-    // where `e.target` has been retargeted to the host.
-    const nodeId = findTrackedAncestor(
-      (e.composedPath()[0] ?? e.target) as Element | null,
-    );
-    if (nodeId) focusManager.highlightElement(nodeId);
-  },
+  (e) => highlightFromNativeEvent(e, "reveal"),
+  true,
+);
+document.addEventListener(
+  "real-a11y:native-preview",
+  (e) => highlightFromNativeEvent(e, "preview"),
   true,
 );
 

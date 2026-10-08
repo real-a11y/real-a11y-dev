@@ -1024,7 +1024,14 @@ export async function readNativeTree(
 
 /** Actions the native backend can dispatch. Others are refused, not guessed. */
 export type NativeAction =
-  "click" | "type" | "focus" | "reveal" | "increment" | "decrement" | "select";
+  | "click"
+  | "type"
+  | "focus"
+  | "reveal"
+  | "preview"
+  | "increment"
+  | "decrement"
+  | "select";
 
 export interface NativeDispatchResult {
   success: boolean;
@@ -1048,6 +1055,7 @@ const SUPPORTED = new Set<NativeAction>([
   "type",
   "focus",
   "reveal",
+  "preview",
   "increment",
   "decrement",
   "select",
@@ -1265,6 +1273,32 @@ export function pageReveal(this: Element, nonce: string): Marker {
         ? SVGElement.prototype
         : null;
   proto?.focus.call(el, { preventScroll: true });
+  return { ok: true };
+}
+
+/**
+ * Outline a hovered native row's element on the page, and nothing more — the
+ * native tree's counterpart to the DOM tree's hover. The same content-script
+ * overlay as {@link pageReveal}, under its own event name and with no focus:
+ * a hover is a preview, so the page neither scrolls nor moves focus
+ * (`planHighlight` in `routing.ts` has the DOM side's reasons). A separate
+ * event rather than a flag in `detail`, so the content script decides what to
+ * draw by the event's name and the arm it holds, and reads nothing else a
+ * page-world object carries. Like the reveal's, it doesn't bubble and carries
+ * the arm's nonce, so page listeners below the document never see it and the
+ * page can't forge one. The event name is repeated in `content.ts`.
+ */
+export function pagePreview(this: Element, nonce: string): Marker {
+  const el = this;
+  if (!el || !el.tagName) return { ok: false, reason: "not-element" };
+  EventTarget.prototype.dispatchEvent.call(
+    el,
+    new CustomEvent("real-a11y:native-preview", {
+      bubbles: false,
+      composed: true,
+      detail: nonce,
+    }),
+  );
   return { ok: true };
 }
 
@@ -1727,6 +1761,7 @@ export const IN_PAGE_ACTION_SOURCE: Record<NativeAction, string> = {
   click: String(pageClick),
   focus: String(pageFocus),
   reveal: String(pageReveal),
+  preview: String(pagePreview),
   type: String(pageType),
   increment: String(pageStep),
   decrement: String(pageStep),
@@ -1746,7 +1781,7 @@ async function runInPage(
       objectId,
       functionDeclaration: IN_PAGE_ACTION_SOURCE[action],
       returnByValue: true,
-      ...(action === "type" || action === "reveal"
+      ...(action === "type" || action === "reveal" || action === "preview"
         ? { arguments: [{ value }] }
         : {}),
       ...(action === "increment" || action === "decrement"

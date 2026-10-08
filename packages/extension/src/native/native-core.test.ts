@@ -16,6 +16,7 @@ import {
   pageClick,
   pageFocus,
   pageReadValue,
+  pagePreview,
   pageReveal,
   pageSelectOption,
   pageStep,
@@ -2018,6 +2019,57 @@ describe("in-page actions — reveal", () => {
     expect(pageReveal.call(form, "n-4")).toEqual({ ok: true });
     expect(events).toHaveLength(1);
     expect(document.activeElement).toBe(form);
+  });
+});
+
+describe("in-page actions — preview", () => {
+  beforeEach(() => {
+    document.body.innerHTML = "";
+  });
+
+  function captured(): { previews: CustomEvent[]; reveals: Event[] } {
+    const previews: CustomEvent[] = [];
+    const reveals: Event[] = [];
+    document.addEventListener(
+      "real-a11y:native-preview",
+      (e) => previews.push(e as CustomEvent),
+      true,
+    );
+    document.addEventListener(
+      "real-a11y:native-reveal",
+      (e) => reveals.push(e),
+      true,
+    );
+    return { previews, reveals };
+  }
+
+  it("fires the preview event at the element with the arm's nonce, and never focuses", () => {
+    const el = document.createElement("button");
+    document.body.appendChild(el);
+    const { previews, reveals } = captured();
+    const focusSpy = vi.spyOn(HTMLElement.prototype, "focus");
+
+    expect(pagePreview.call(el, "n-1")).toEqual({ ok: true });
+    expect(previews).toHaveLength(1);
+    expect(previews[0]!.target).toBe(el);
+    expect(previews[0]!.detail).toBe("n-1");
+    expect(reveals).toHaveLength(0);
+    expect(focusSpy).not.toHaveBeenCalled();
+    focusSpy.mockRestore();
+  });
+
+  it("doesn't bubble, and works on a form whose controls shadow dispatchEvent", () => {
+    document.body.innerHTML = `<main><form><input name="dispatchEvent"></form></main>`;
+    const seen: Event[] = [];
+    document
+      .querySelector("main")!
+      .addEventListener("real-a11y:native-preview", (e) => seen.push(e));
+    const { previews } = captured();
+    expect(pagePreview.call(document.querySelector("form")!, "n-2")).toEqual({
+      ok: true,
+    });
+    expect(previews).toHaveLength(1);
+    expect(seen).toHaveLength(0);
   });
 });
 

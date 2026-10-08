@@ -4,7 +4,10 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 
 import type { NativeNode } from "../native/native-actions.js";
 
-import { NATIVE_FOLLOW_DEBOUNCE_MS } from "./native-follow.js";
+import {
+  NATIVE_FOLLOW_DEBOUNCE_MS,
+  NATIVE_HOVER_DWELL_MS,
+} from "./native-follow.js";
 import { NativeTreeView } from "./NativeTreeView.js";
 
 /**
@@ -334,10 +337,10 @@ describe("NativeTreeView selection-focus follow", () => {
   });
 
   it("does not re-fire for the same selection when only the callback's identity changes", () => {
-    // App.tsx's real callback
-    // (revealNativeSelectionOnPage) depends on nativeBusy/curtainOn, so its
-    // identity changes whenever either flips even though the tree's own
-    // selection didn't move — e.g. a native action settling after dispatch.
+    // A host's callback may change identity whenever its own state flips
+    // (App.tsx's once depended on nativeBusy/curtainOn; `useNativeOverlay`'s
+    // is stable now) even though the tree's own selection didn't move — e.g.
+    // a native action settling after dispatch.
     // The effect used to list the callback itself as a dependency, so a
     // fresh reference re-armed the debounce for the SAME row and fired a
     // second, unwanted dispatch — concretely, stealing focus back from a
@@ -364,9 +367,8 @@ describe("NativeTreeView selection-focus follow", () => {
     });
     expect(first).toHaveBeenCalledExactlyOnceWith("h1");
 
-    // Re-render with a NEW callback reference — same as App.tsx handing down
-    // a fresh `revealNativeSelectionOnPage` once nativeBusy/curtainOn flips —
-    // with the selection itself untouched.
+    // Re-render with a NEW callback reference, with the selection itself
+    // untouched.
     const second = vi.fn();
     act(() => {
       render(
@@ -566,5 +568,300 @@ describe("NativeTreeView selection-focus follow", () => {
       });
       expect(onSelectionReveal).not.toHaveBeenCalled();
     });
+  });
+});
+
+describe("NativeTreeView hover preview", () => {
+  let container: HTMLDivElement;
+  let originalScrollIntoView: typeof Element.prototype.scrollIntoView;
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    originalScrollIntoView = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = function () {};
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    // Input modality is process-wide; start each test from the mouse.
+    window.dispatchEvent(new MouseEvent("mousemove"));
+  });
+
+  afterEach(() => {
+    render(null, container);
+    container.remove();
+    Element.prototype.scrollIntoView = originalScrollIntoView;
+    vi.useRealTimers();
+  });
+
+  function mount(onHoverPreview = vi.fn()) {
+    act(() => {
+      render(
+        <NativeTreeView
+          nodes={NODES}
+          rootId="root"
+          busy={false}
+          capability={undefined}
+          status=""
+          onRefresh={() => {}}
+          onActivate={() => {}}
+          onHoverPreview={onHoverPreview}
+        />,
+        container,
+      );
+    });
+    return onHoverPreview;
+  }
+
+  function row(id: string): HTMLElement {
+    const el = container.querySelector<HTMLElement>(`[data-node-id="${id}"]`);
+    if (!el) throw new Error(`no row for ${id}`);
+    return el;
+  }
+
+  const enter = (id: string) =>
+    act(() => {
+      row(id).dispatchEvent(new MouseEvent("mouseenter"));
+    });
+  const leave = (id: string) =>
+    act(() => {
+      row(id).dispatchEvent(new MouseEvent("mouseleave"));
+    });
+  const wait = (ms: number) =>
+    act(() => {
+      vi.advanceTimersByTime(ms);
+    });
+
+  it("previews the row the pointer settles on, once", () => {
+    const onHoverPreview = mount();
+    enter("h1");
+    expect(onHoverPreview).not.toHaveBeenCalled();
+    wait(NATIVE_HOVER_DWELL_MS);
+    expect(onHoverPreview).toHaveBeenCalledExactlyOnceWith("h1");
+  });
+
+  it("skips the rows a sweep only crosses", () => {
+    const onHoverPreview = mount();
+    enter("h1");
+    wait(50);
+    leave("h1");
+    enter("sec");
+    wait(50);
+    leave("sec");
+    enter("link");
+    wait(NATIVE_HOVER_DWELL_MS);
+    // Nothing was shown on the crossed rows, so nothing to clear either.
+    expect(onHoverPreview.mock.calls).toEqual([["link"]]);
+  });
+
+  it("clears at once on leaving an outlined row", () => {
+    const onHoverPreview = mount();
+    enter("h1");
+    wait(NATIVE_HOVER_DWELL_MS);
+    leave("h1");
+    expect(onHoverPreview.mock.calls).toEqual([["h1"], [null]]);
+  });
+
+  it("clears a clicked row's outline when the pointer leaves before the dwell", () => {
+    // The click's reveal is sent at once rather than after the debounce, so
+    // the clear follows it, as leaving a clicked row does in the DOM tree.
+    const calls: Array<[string, string | null]> = [];
+    act(() => {
+      render(
+        <NativeTreeView
+          nodes={NODES}
+          rootId="root"
+          busy={false}
+          capability={undefined}
+          status=""
+          onRefresh={() => {}}
+          onActivate={() => {}}
+          onHoverPreview={(id) => calls.push(["preview", id])}
+          onSelectionReveal={(id) => calls.push(["reveal", id])}
+        />,
+        container,
+      );
+    });
+    enter("h1");
+    act(() => row("h1").click());
+    wait(50);
+    leave("h1");
+    wait(500);
+    expect(calls).toEqual([
+      ["reveal", "h1"],
+      ["preview", null],
+    ]);
+  });
+
+  it("clears a clicked row's outline when the pointer leaves before the click's reveal is scheduled", () => {
+    // The reveal is scheduled by an effect, after paint: a pointer that
+    // leaves within that frame finds nothing pending to send.
+    const calls: Array<[string, string | null]> = [];
+    act(() => {
+      render(
+        <NativeTreeView
+          nodes={NODES}
+          rootId="root"
+          busy={false}
+          capability={undefined}
+          status=""
+          onRefresh={() => {}}
+          onActivate={() => {}}
+          onHoverPreview={(id) => calls.push(["preview", id])}
+          onSelectionReveal={(id) => calls.push(["reveal", id])}
+        />,
+        container,
+      );
+    });
+    enter("h1");
+    act(() => {
+      row("h1").click();
+      row("h1").dispatchEvent(new MouseEvent("mouseleave"));
+    });
+    wait(500);
+    // The last word on the page is a clear that follows the reveal.
+    expect(calls.slice(-2)).toEqual([
+      ["reveal", "h1"],
+      ["preview", null],
+    ]);
+  });
+
+  it("keeps the next keyboard selection's outline after a clicked row's reveal went and the pointer left", () => {
+    const calls: Array<[string, string | null]> = [];
+    act(() => {
+      render(
+        <NativeTreeView
+          nodes={NODES}
+          rootId="root"
+          busy={false}
+          capability={undefined}
+          status=""
+          onRefresh={() => {}}
+          onActivate={() => {}}
+          onHoverPreview={(id) => calls.push(["preview", id])}
+          onSelectionReveal={(id) => calls.push(["reveal", id])}
+        />,
+        container,
+      );
+    });
+    enter("h1");
+    act(() => row("h1").click());
+    wait(500); // the click's reveal has gone
+    leave("h1");
+    calls.length = 0;
+    act(() => {
+      container
+        .querySelector<HTMLElement>(".sn-tree")!
+        .dispatchEvent(
+          new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }),
+        );
+    });
+    wait(500);
+    // The keyboard's reveal, and no clear after it.
+    expect(calls).toEqual([["reveal", expect.any(String)]]);
+  });
+
+  it("leaves no preview to land after leaving a row early", () => {
+    const onHoverPreview = mount();
+    enter("h1");
+    leave("h1");
+    wait(500);
+    expect(onHoverPreview).not.toHaveBeenCalled();
+  });
+
+  it("clears an outlined row that keyboard scrolling moves away from the pointer", () => {
+    // The keyboard took over, so a row moving under the pointer is no new
+    // hover, but the row that was outlined is still left.
+    const onHoverPreview = mount();
+    enter("h1");
+    wait(NATIVE_HOVER_DWELL_MS);
+    const tree = container.querySelector<HTMLElement>('[role="tree"]')!;
+    act(() => {
+      tree.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }),
+      );
+    });
+    leave("h1");
+    enter("link");
+    wait(500);
+    expect(onHoverPreview.mock.calls).toEqual([["h1"], [null]]);
+  });
+
+  it("clears an outlined row that a re-read drops, with no mouseleave", () => {
+    const onHoverPreview = mount();
+    enter("link");
+    wait(NATIVE_HOVER_DWELL_MS);
+    const without = new Map(NODES);
+    without.delete("link");
+    without.set("main", { ...NODES.get("main")!, childIds: ["h1", "sec"] });
+    act(() => {
+      render(
+        <NativeTreeView
+          nodes={without}
+          rootId="root"
+          busy={false}
+          capability={undefined}
+          status=""
+          onRefresh={() => {}}
+          onActivate={() => {}}
+          onHoverPreview={onHoverPreview}
+        />,
+        container,
+      );
+    });
+    expect(onHoverPreview.mock.calls).toEqual([["link"], [null]]);
+  });
+
+  it("ignores a row that keyboard scrolling moves under a still pointer", () => {
+    const onHoverPreview = mount();
+    act(() => row("h1").click());
+    const tree = container.querySelector<HTMLElement>('[role="tree"]')!;
+    act(() => {
+      tree.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }),
+      );
+    });
+    enter("link");
+    wait(500);
+    expect(onHoverPreview).not.toHaveBeenCalled();
+  });
+
+  it("clears a shown outline when a role filter's list replaces the rows", () => {
+    // The row goes away under a still pointer, so it gets no mouseleave.
+    const onHoverPreview = mount();
+    enter("h1");
+    wait(NATIVE_HOVER_DWELL_MS);
+    const headings = [
+      ...container.querySelectorAll<HTMLButtonElement>(".sn-filter-btn"),
+    ].find((b) => b.textContent === "Headings")!;
+    act(() => headings.click());
+    expect(onHoverPreview.mock.calls).toEqual([["h1"], [null]]);
+  });
+
+  it("clears a shown outline when the tree unmounts, and nothing else", () => {
+    const shown = mount();
+    enter("h1");
+    wait(NATIVE_HOVER_DWELL_MS);
+    act(() => render(null, container));
+    expect(shown.mock.calls).toEqual([["h1"], [null]]);
+
+    // A hover still waiting had nothing on the page to clear.
+    const waiting = mount();
+    enter("h1");
+    act(() => render(null, container));
+    wait(500);
+    expect(waiting).not.toHaveBeenCalled();
+  });
+
+  it("drops a pending preview when the keyboard takes over", () => {
+    const onHoverPreview = mount();
+    enter("h1");
+    wait(50);
+    const tree = container.querySelector<HTMLElement>('[role="tree"]')!;
+    act(() => {
+      tree.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }),
+      );
+    });
+    wait(500);
+    expect(onHoverPreview).not.toHaveBeenCalled();
   });
 });

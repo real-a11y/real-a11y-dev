@@ -106,6 +106,7 @@ import {
   sendKeySpec,
 } from "./SendKeyBar.js";
 import { TabSequenceView } from "./TabSequenceView.js";
+import { useNativeOverlay } from "./useNativeOverlay.js";
 
 /** How many settle windows (~5s) `whenNativeIdle` waits for a native read or
  *  action in flight: a sent key's re-read, or an option picked while one ran.
@@ -791,6 +792,26 @@ export function App() {
       setLastAction(null);
     }, ms);
   }, []);
+
+  // The native tree's page outline: a settled selection's reveal and a
+  // hovered row's preview (see `useNativeOverlay`).
+  const {
+    reveal: revealNativeRow,
+    preview: previewNativeRow,
+    resumePreviews,
+  } = useNativeOverlay({
+    enabled: nativeModeEnabled,
+    tabId: nativeTreeTabId,
+    busy: nativeBusy,
+    curtainOn,
+    pickArmed: pickModeOn,
+    // An automatic read doesn't change the ids an overlay names (same
+    // document), and the service worker queues the overlay behind it, so
+    // only a read or action the user started holds one back.
+    userOpInFlight: () =>
+      nativeInFlight.current && autoRefresh.current.inFlight === null,
+    announce,
+  });
 
   useEffect(() => {
     const target = pendingNativeFocus.current;
@@ -1738,8 +1759,9 @@ export function App() {
         setNativeTreeUrl(r.url);
         setNativeReadAt(new Date().toISOString());
         // A successful read is proof any standing refusal no longer holds —
-        // same reasoning as DogfoodPanel's identical line.
+        // same reasoning as DogfoodPanel's identical line — previews too.
         setNativeCapability(undefined);
+        resumePreviews(tabId);
         if (!auto) setNativeStatus(`${r.nodes?.length ?? 0} nodes`);
         a.armedTab = tabId;
         // Only a read of another document answers a pending navigation. The
@@ -1756,7 +1778,7 @@ export function App() {
         if (!auto && token === nativeOpToken.current) setNativeBusy(false);
       }
     },
-    [nativeModeEnabled, disarmAutoRefresh],
+    [nativeModeEnabled, disarmAutoRefresh, resumePreviews],
   );
 
   /** Guarded entry point for a user- or effect-triggered read (refresh
@@ -2011,7 +2033,8 @@ export function App() {
   const dispatchNativeAction = useCallback(
     async (
       nodeId: string,
-      action: NativeAction,
+      // A preview is `useNativeOverlay`'s, never a user's action.
+      action: Exclude<NativeAction, "preview">,
       value?: string,
       opts: {
         /** Say this on success instead of the action's own wording — a
@@ -2133,60 +2156,6 @@ export function App() {
       announce,
       waitForAutoRead,
     ],
-  );
-
-  // The reveal the panel last asked for, so the service worker can drop one
-  // a newer reveal has replaced before it attaches; and the tab it last told
-  // the user can't show an outline, so it says so once per tab.
-  const nativeRevealRequest = useRef(0);
-  const noOutlineAnnouncedFor = useRef<number | null>(null);
-
-  /**
-   * Show where the settled native selection is on the page, as the DOM tree's
-   * select does: the content script's outline, scrolled into view, plus real
-   * focus (the `reveal` action). Fire-and-forget, and silent on failure: it
-   * is a visual aid, not an action anyone waits on. It skips while a real
-   * action is in flight, so it can't steal focus from what that action
-   * opened, and while Screen Curtain hides the page. Why a page event rather
-   * than focus alone: `pageReveal` in native/native-core.ts.
-   */
-  const revealNativeSelectionOnPage = useCallback(
-    (nodeId: string) => {
-      if (
-        !nativeModeEnabled ||
-        nativeTreeTabId === undefined ||
-        nativeBusy ||
-        // An automatic read doesn't change the ids a reveal names (same
-        // document), and the service worker queues the reveal behind it, so
-        // only a read or action the user started holds a reveal back.
-        (nativeInFlight.current && autoRefresh.current.inFlight === null) ||
-        curtainOn
-      ) {
-        return;
-      }
-      const tabId = nativeTreeTabId;
-      void chrome.runtime
-        .sendMessage({
-          type: "NATIVE_ACT",
-          tabId,
-          nodeId,
-          action: "reveal",
-          silent: true,
-          requestId: ++nativeRevealRequest.current,
-        })
-        .then((r: { success?: boolean; outlined?: boolean } | undefined) => {
-          if (r?.success && r.outlined === false) {
-            if (noOutlineAnnouncedFor.current === tabId) return;
-            noOutlineAnnouncedFor.current = tabId;
-            announce(
-              "This page can't show the outline (the extension's page script isn't running here; reloading the page usually fixes it).",
-              5000,
-            );
-          }
-        })
-        .catch(() => {});
-    },
-    [nativeModeEnabled, nativeTreeTabId, nativeBusy, curtainOn, announce],
   );
 
   const handleNativeActivate = useCallback(
@@ -3500,7 +3469,8 @@ export function App() {
               5000,
             )
           }
-          onSelectionReveal={revealNativeSelectionOnPage}
+          onSelectionReveal={revealNativeRow}
+          onHoverPreview={previewNativeRow}
           scopedRootId={nativeScopedRootId}
           onScope={handleNativeScope}
           pickArmed={pickModeOn}
