@@ -297,6 +297,14 @@ function NativeModeNotice({
   );
 }
 
+/** What turning native mode off says, here or from another window: a panel
+ *  waiting for a page has no DOM tree on screen to point at. */
+function nativeOffMessage(connected: boolean): string {
+  return connected
+    ? "Not reading pages through Chrome — showing the DOM tree."
+    : "Not reading pages through Chrome.";
+}
+
 export function App() {
   const [viewMode, setViewMode] = useState<TreeViewMode>("a11y");
   // Read by `sendTreeRequest` instead of closing over `viewMode`, so that
@@ -708,8 +716,8 @@ export function App() {
   // read. Not on every tab or navigation after that — each of those would
   // attach the debugger with no fresh gesture. Spent by a successful default
   // read, and by turning native mode on from Settings with a page connected
-  // (the switch is its own gesture, and its own read). Turned on before a
-  // page connects, the switch leaves the read to this default instead.
+  // (the switch is its own gesture, and its own read). Turned on while no
+  // page is connected, the switch leaves the read to this default instead.
   const hasAppliedNativeDefault = useRef(false);
   // The tabs the default has failed on (DevTools owns it, a blocked URL, the
   // service worker didn't answer). The default waits for a tab not in here
@@ -817,12 +825,7 @@ export function App() {
       // The service worker has already detached, and refuses reads, so show
       // what this panel's own turn-off would.
       showNativeOff();
-      announce(
-        connectedRef.current
-          ? "Not reading pages through Chrome — showing the DOM tree."
-          : "Not reading pages through Chrome.",
-        4000,
-      );
+      announce(nativeOffMessage(connectedRef.current), 4000);
     },
     [announce, showNativeOff, setNativeModeEnabledState],
   );
@@ -939,8 +942,9 @@ export function App() {
   }, []);
   /** The Settings switch, and the note's Turn off: turn native mode on or off
    *  in every window. Turning it on here is this panel's gesture, so it reads
-   *  the page natively at once, or the first page that connects if none has;
-   *  turning it off detaches as soon as anything in flight finishes. */
+   *  the page natively at once, or, while no page is connected, the next one
+   *  that connects; turning it off detaches as soon as anything in flight
+   *  finishes. */
   const setNativeModeFromSettings = useCallback(
     (next: boolean) => {
       if (
@@ -966,12 +970,7 @@ export function App() {
           acknowledgeNativeNotice();
         }
         if (!next) {
-          announce(
-            connectedRef.current
-              ? "Not reading pages through Chrome — showing the DOM tree."
-              : "Not reading pages through Chrome.",
-            3000,
-          );
+          announce(nativeOffMessage(connectedRef.current), 3000);
           return;
         }
         // Set here, before the render the setting's flip has scheduled: the

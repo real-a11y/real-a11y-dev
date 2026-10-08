@@ -622,6 +622,18 @@ describe("native mode on by default", () => {
       expect(sentOfType("NATIVE_READ").length).toBeGreaterThan(readsBefore);
     });
 
+    it("says it turned off without pointing at a tree while no page is connected", async () => {
+      mount({ storage: { [NOTICE_SEEN]: true } });
+      await flush();
+
+      const checkbox = await openSettings();
+      act(() => checkbox.click());
+      await flush();
+
+      expect(chromeMock.stored[SETTING]).toBe(false);
+      expect(announced()).toBe("Not reading pages through Chrome.");
+    });
+
     it("says how a change went before a page connects", async () => {
       mount({
         storage: { [NOTICE_SEEN]: true },
@@ -674,6 +686,50 @@ describe("native mode on by default", () => {
 
       expect(announced()).toBe("Couldn't change that setting — try again.");
       expect(settingsCheckbox()!.checked).toBe(true);
+    });
+
+    it("stays open on an Escape something else has answered", async () => {
+      mount({ storage: { [NOTICE_SEEN]: true } });
+      await flush();
+      await showTab(7);
+      const checkbox = await openSettings();
+      // Something earlier in line (a native pick's cancel) takes this one.
+      const takeIt = (e: KeyboardEvent) => e.preventDefault();
+      document.addEventListener("keydown", takeIt, true);
+      onTestFinished(() =>
+        document.removeEventListener("keydown", takeIt, true),
+      );
+
+      act(() => {
+        checkbox.dispatchEvent(
+          new KeyboardEvent("keydown", {
+            key: "Escape",
+            bubbles: true,
+            cancelable: true,
+          }),
+        );
+      });
+      await flush();
+
+      expect(settingsCheckbox()).not.toBeNull();
+    });
+
+    it("closes on a click outside it, not on the mousedown before", async () => {
+      mount({ storage: { [NOTICE_SEEN]: true } });
+      await flush();
+      await showTab(7);
+      await openSettings();
+      const outside = searchBox()!;
+
+      act(() => {
+        outside.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+      });
+      await flush();
+      expect(settingsCheckbox()).not.toBeNull();
+
+      act(() => outside.click());
+      await flush();
+      expect(settingsCheckbox()).toBeNull();
     });
 
     it("closes on Escape, returning focus to its button", async () => {
@@ -898,13 +954,14 @@ describe("native mode on by default", () => {
       });
       await flush();
       expect(tree()).toBeNull();
-      expect(document.activeElement).not.toBe(buttonNamed("Settings ▾"));
+      expect(document.activeElement).toBe(document.body);
 
+      // Nor does it wait for the tree, which may come much later, if at all.
       act(() => {
         chromeMock.emit({ ...treeData(), tabId: 7 } as ContentToPanel);
       });
       await flush();
-      expect(document.activeElement).not.toBe(buttonNamed("Settings ▾"));
+      expect(document.activeElement).toBe(document.body);
     });
 
     it("returns focus to Copy when its menu closes", async () => {
@@ -925,7 +982,16 @@ describe("native mode on by default", () => {
       expect(buttonNamed("Everything")).toBeNull();
       expect(document.activeElement).toBe(buttonNamed("Copy ▾"));
 
-      // Choosing an item closes it the same way.
+      // Choosing an item closes it the same way. jsdom has no clipboard.
+      const clipboard = Object.getOwnPropertyDescriptor(navigator, "clipboard");
+      Object.defineProperty(navigator, "clipboard", {
+        configurable: true,
+        value: { writeText: () => Promise.resolve() },
+      });
+      onTestFinished(() => {
+        if (clipboard) Object.defineProperty(navigator, "clipboard", clipboard);
+        else delete (navigator as { clipboard?: unknown }).clipboard;
+      });
       act(() => buttonNamed("Copy ▾")!.click());
       await flush();
       act(() => buttonNamed("Everything")!.focus());

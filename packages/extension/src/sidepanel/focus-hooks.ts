@@ -93,10 +93,12 @@ export function useRestoreFocusOnClose() {
 }
 
 /**
- * Close a popup (the Copy menu, Settings) on a mousedown outside it or on
- * Escape. Escape pressed inside it also returns focus to the button that
- * opens it, as a menu button's or a disclosure's does, rather than leaving
- * focus on what closing it took away.
+ * Close a popup (the Copy menu, Settings) on a click outside it or on Escape.
+ * Escape pressed inside it also returns focus to the button that opens it, as
+ * a menu button's or a disclosure's does, rather than leaving focus on what
+ * closing it took away. A click rather than a mousedown, so the browser has
+ * already moved focus to what was clicked by the time the popup goes; and not
+ * an Escape something else has already answered (a native pick's cancel).
  */
 export function useDismissible(
   open: boolean,
@@ -106,7 +108,7 @@ export function useDismissible(
 ) {
   useEffect(() => {
     if (!open) return;
-    const onDown = (e: MouseEvent) => {
+    const onClick = (e: MouseEvent) => {
       if (
         containerRef.current &&
         !containerRef.current.contains(e.target as Node)
@@ -115,15 +117,16 @@ export function useDismissible(
       }
     };
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
+      if (e.key !== "Escape" || e.defaultPrevented) return;
       const inside = containerRef.current?.contains(document.activeElement);
       setOpen(false);
       if (inside) buttonRef.current?.focus();
     };
-    document.addEventListener("mousedown", onDown);
+    // Capture, so a click a control stops from bubbling still counts.
+    document.addEventListener("click", onClick, true);
     document.addEventListener("keydown", onKey);
     return () => {
-      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("click", onClick, true);
       document.removeEventListener("keydown", onKey);
     };
   }, [open, setOpen, containerRef, buttonRef]);
