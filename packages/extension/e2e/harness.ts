@@ -1,10 +1,10 @@
 /**
  * Shared harness for the extension's native-tree e2e suite.
  *
- * Every test here drives the **actual built `dist-dogfood/` extension** in a
- * real Chromium, over the same `chrome.runtime` messages the dogfood panel
- * sends — so what is under test is the real `chrome.debugger` dispatch path,
- * not a stub of it.
+ * Every test here drives an **actual built extension** in a real Chromium:
+ * `dist-dogfood/` by default, the store build `dist/` where a suite asks. It
+ * goes over the same `chrome.runtime` messages the panel sends, so what is
+ * under test is the real `chrome.debugger` dispatch path, not a stub of it.
  *
  * Three facts about this setup were unknown when the suite was planned and are
  * now measured rather than assumed (see `e2e/README.md` for the full write-up):
@@ -43,13 +43,17 @@ import {
   type Worker,
 } from "@playwright/test";
 
-/** The dogfood build — NOT `dist/`. The store build dead-code-eliminates the
- *  entire native path behind `__DOGFOOD__`, so pointing here at `dist/` would
- *  silently test an extension with no native mode at all. */
 // The package is `"type": "module"`, so Playwright loads this file as ESM and
 // there is no `__dirname` to lean on.
 const HERE = resolve(fileURLToPath(import.meta.url), "..");
-const DIST_DOGFOOD = resolve(HERE, "../dist-dogfood");
+/** Which build a worker loads. Most suites use the dogfood build, because a
+ *  few drive `DogfoodPanel`, which only it contains. Suites about what store
+ *  users get load `dist/` with `test.use({ build: "store" })`. */
+const BUILD_DIRS = {
+  dogfood: resolve(HERE, "../dist-dogfood"),
+  store: resolve(HERE, "../dist"),
+} as const;
+export type ExtensionBuild = keyof typeof BUILD_DIRS;
 const FIXTURE_DIR = resolve(HERE, "fixtures");
 
 /** Mirrors the panel's own `NativeAction` union (`native-core.ts`). Declared
@@ -160,15 +164,17 @@ export interface DogfoodBrowser {
   fixtureOrigin: string;
 }
 
-async function launchDogfoodExtension(): Promise<
-  DogfoodBrowser & { dispose: () => Promise<void> }
-> {
+async function launchDogfoodExtension(
+  build: ExtensionBuild,
+  nativeEnabled: boolean,
+): Promise<DogfoodBrowser & { dispose: () => Promise<void> }> {
+  const dist = BUILD_DIRS[build];
   const { origin, server } = await startFixtureServer();
   const userDataDir = await mkdtemp(join(tmpdir(), "real-a11y-ext-e2e-"));
 
   const args = [
-    `--disable-extensions-except=${DIST_DOGFOOD}`,
-    `--load-extension=${DIST_DOGFOOD}`,
+    `--disable-extensions-except=${dist}`,
+    `--load-extension=${dist}`,
   ];
   // `--headless=new` is passed as an ARG rather than through Playwright's
   // `headless: true`, which selects the old headless shell — that one loads no
@@ -195,13 +201,19 @@ async function launchDogfoodExtension(): Promise<
   await panel.goto(
     `chrome-extension://${extensionId}/src/sidepanel/index.html`,
   );
-  // Native mode is off by default and gated twice over (build constant plus
-  // runtime flag). Flipping the flag here is what the dogfooder's own toggle
-  // does; `attach()` enforces it inside its storage transaction, so every
-  // later `NATIVE_READ`/`NATIVE_ACT` in this worker sees it.
-  await panel.evaluate(() =>
-    chrome.storage.local.set({ "devFlags.nativeMode": true }),
-  );
+  // Native mode is off by default, gated by the user-facing runtime setting
+  // (`settings.nativeModeEnabled` in `chrome.storage.local` —
+  // `packages/extension/src/native/index.ts`'s `FLAG_KEY`). Most suites start
+  // with it on, as if the user had already accepted "Enable native mode…";
+  // `attach()` enforces it inside its storage transaction, so every later
+  // `NATIVE_READ`/`NATIVE_ACT` in this worker sees it. A suite about the
+  // opt-in itself, or one about DOM mode alone, starts with it off through
+  // `test.use({ nativeEnabled: false })`.
+  if (nativeEnabled) {
+    await panel.evaluate(() =>
+      chrome.storage.local.set({ "settings.nativeModeEnabled": true }),
+    );
+  }
 
   return {
     context,
@@ -547,15 +559,13 @@ export function nodes(all: NativeNode[], role: string): NativeNode[] {
 
 export const test = base.extend<
   { nav: NativeHarness },
-  { dogfood: DogfoodBrowser }
+  { dogfood: DogfoodBrowser; build: ExtensionBuild; nativeEnabled: boolean }
 >({
-  // Playwright reads a fixture's dependencies off its destructuring pattern, so
-  // a fixture with none has to destructure nothing rather than take an unused
-  // parameter.
+  build: ["dogfood", { scope: "worker", option: true }],
+  nativeEnabled: [true, { scope: "worker", option: true }],
   dogfood: [
-    // eslint-disable-next-line no-empty-pattern
-    async ({}, use) => {
-      const launched = await launchDogfoodExtension();
+    async ({ build, nativeEnabled }, use) => {
+      const launched = await launchDogfoodExtension(build, nativeEnabled);
       await use(launched);
       await launched.dispose();
     },

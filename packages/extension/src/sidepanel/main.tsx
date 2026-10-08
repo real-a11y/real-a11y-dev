@@ -6,9 +6,12 @@ import "@ui-styles/tree.css";
 import "./export-menu.css";
 import "./empty-state.css";
 
-// `__DOGFOOD__` is a build-time constant — true only in the `DOGFOOD=1` build,
-// so the dev-only `chrome.debugger` panel is dead-code-eliminated from the store
-// build (which never carries the native mode or its `debugger` permission).
+// `__DOGFOOD__` is a build-time constant, true only in the `DOGFOOD=1` build,
+// so the dev-only `DogfoodPanel` diagnostics widget below is dead-code-
+// eliminated from the store build. It doesn't gate native mode itself, which
+// ships in every build, off by default behind the runtime
+// `settings.nativeModeEnabled` setting. See CLAUDE.md's "The extension has a
+// native path" section.
 declare const __DOGFOOD__: boolean;
 const dogfood = typeof __DOGFOOD__ !== "undefined" && __DOGFOOD__;
 

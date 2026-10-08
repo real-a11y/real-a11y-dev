@@ -8,6 +8,7 @@ import {
   planFrameAnnouncementResponse,
   planHighlight,
   planFrameHello,
+  isExtensionPageSender,
   isTrustedSender,
   resolvePanelTargetTab,
   shouldPanelAcceptMessage,
@@ -381,6 +382,58 @@ describe("isTrustedSender", () => {
     expect(isTrustedSender({}, undefined)).toBe(false);
     expect(isTrustedSender(undefined, undefined)).toBe(false);
     expect(isTrustedSender({ id: "" }, "")).toBe(false);
+  });
+});
+
+describe("isExtensionPageSender", () => {
+  const OWN = "abcdefghijklmnopabcdefghijklmnop";
+  const ORIGIN = `chrome-extension://${OWN}/`;
+
+  it("accepts the side panel", () => {
+    expect(
+      isExtensionPageSender(
+        { id: OWN, url: `${ORIGIN}sidepanel/index.html` },
+        OWN,
+        ORIGIN,
+      ),
+    ).toBe(true);
+  });
+
+  it("accepts the panel opened as a tab", () => {
+    expect(
+      isExtensionPageSender(
+        { id: OWN, url: `${ORIGIN}sidepanel/index.html`, tab: { id: 3 } } as {
+          id: string;
+          url: string;
+        },
+        OWN,
+        ORIGIN,
+      ),
+    ).toBe(true);
+  });
+
+  it("rejects a content script, which carries our id and a page URL", () => {
+    expect(
+      isExtensionPageSender(
+        { id: OWN, url: "https://example.com/" },
+        OWN,
+        ORIGIN,
+      ),
+    ).toBe(false);
+  });
+
+  it("rejects another extension's page and a sender with no URL", () => {
+    expect(
+      isExtensionPageSender(
+        { id: OWN, url: "chrome-extension://someoneelse/page.html" },
+        OWN,
+        ORIGIN,
+      ),
+    ).toBe(false);
+    expect(isExtensionPageSender({ id: OWN }, OWN, ORIGIN)).toBe(false);
+    expect(
+      isExtensionPageSender({ id: OWN, url: ORIGIN }, OWN, undefined),
+    ).toBe(false);
   });
 });
 

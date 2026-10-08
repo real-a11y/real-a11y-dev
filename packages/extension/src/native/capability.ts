@@ -4,7 +4,7 @@
  * Native reads Chromium's tree over `chrome.debugger`, which Chrome forbids on
  * a set of privileged pages. Session 1 surfaced every one of those as a bare
  * `attach-failed`, which reads as a bug in the extension rather than a platform
- * rule — and each attempt still flashed the "…is debugging this browser" banner
+ * rule — and each attempt still flashed the "…started debugging this browser" banner
  * on the way to failing.
  *
  * Two layers, because neither is sufficient alone:

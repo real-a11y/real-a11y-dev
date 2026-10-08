@@ -13,7 +13,7 @@
     "typecheck": "node scripts/sync-manifest-version.mjs --check && tsc --noEmit && tsc --noEmit -p tsconfig.e2e.json",
     "test": "vitest run",
     "test:watch": "vitest",
-    "pretest:e2e": "pnpm build:dogfood",
+    "pretest:e2e": "pnpm build && pnpm build:dogfood",
     "test:e2e": "playwright test --config=playwright.config.ts"
   },
   "dependencies": {

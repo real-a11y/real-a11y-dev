@@ -210,6 +210,17 @@ main
   paragraph "The button is still live, because the same signal comes back for a page whose content script simply hasn't finished loading. On a normal page, retrying attaches; on a restricted one, the message stays."
     strong "Try again"
     code "http(s)"
+  heading "Native mode — Chromium's own accessibility tree" (level 3)
+  paragraph "Off by default. Everything above describes the DOM producer — this extension's own in-page ARIA/AccName walk, the same engine uses. Click in the toolbar to instead read accessibility tree over , the same protocol DevTools uses: it sees content the DOM walk structurally can't, such as UA-shadow media controls. While it's attached, Chrome shows a bar across every window reading “Semantic Navigator” started debugging this browser; pressing its detaches."
+    code "@real-a11y-dev/inspector"
+    strong "Enable native mode…"
+    strong "Chromium's own"
+    code "chrome.debugger"
+    strong "Cancel"
+  paragraph "The button opens a one-time consent step naming what it does before anything attaches; accepting swaps the toolbar's single tree for a toggle, and a button next to it turns the setting back off; the debugger detaches as soon as any read or action already under way finishes. The two producers never silently mix — see for why they will never agree byte for byte, by design."
+    strong "DOM / NATIVE"
+    strong "Disable native mode"
+    link "Two producers"
   heading "BETA pill in the panel header" (level 3)
   paragraph "Sets expectations during the pre-1.0 phase. Linked to the GitHub issues page. Goes away at v1.0."
   separator

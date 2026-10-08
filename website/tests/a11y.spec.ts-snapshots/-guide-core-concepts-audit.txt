@@ -52,6 +52,32 @@ main
     code "SemanticNode"
     code "a11y.role"
     code "a11y.name"
+  heading "Two producers" (level 3)
+  paragraph "Two different engines can build that tree, and every tree records which one built it in ."
+    code "source.producer"
+  table
+    rowgroup
+      row
+        columnheader "Producer"
+        columnheader "What it is"
+        columnheader "Where you meet it"
+    rowgroup
+      row
+        cell "dom"
+          code "dom"
+        cell "This project's own in-page walk, with its own ARIA role and accessible-name rules"
+        cell "the inspector, react, the browser extension's default view"
+          code "react"
+      row
+        cell "native"
+          code "native"
+        cell "Chromium's own accessibility tree, read over the DevTools protocol"
+        cell "the CLI and MCP server, and the extension's native mode"
+  paragraph "They agree on most of a page, but never byte for byte, by design. Chromium names some controls differently (a file input is a , is a disclosure), places names differently, and sees content the in-page walk can't reach, such as the built-in media controls inside . So compare a tree only with one from the same producer. Tab order is the exception that only can answer: Chromium's tree knows whether a node can take focus, but not the order Tab visits them in."
+    code "button"
+    code "<details>"
+    code "<video>"
+    code "dom"
   separator
   heading "Roles" (level 2)
   paragraph "Roles follow the . Real A11y maps every HTML element to its implicit ARIA role, then overrides it with an explicit attribute — read the way Chromium reads it, so the DOM producer and Chromium's own tree agree on what the element is."

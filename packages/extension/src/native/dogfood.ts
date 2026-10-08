@@ -7,7 +7,7 @@
  * signals to `chrome.storage.local` so a dogfooder can export a report:
  *
  *   1. Banner tolerance    — every attach/detach + how long we stayed attached
- *                            (the "…is debugging this browser" bar shows while
+ *                            (the "…started debugging this browser" bar shows while
  *                            attached; frequency + dwell time proxy the annoyance).
  *   2. MV3 SW lifecycle    — service-worker suspends drop the debugger; we log
  *                            each unsolicited detach + whether reattach recovered

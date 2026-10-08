@@ -52,7 +52,7 @@ Produces `packages/extension/semantic-navigator-v<version>.zip` (uses the pure-N
 |---|---|
 | Manifest V3 | ✅ |
 | Icons 16 / 48 / 128 | ✅ `packages/extension/public/icons/` |
-| Minimal permissions (`activeTab`, `sidePanel`, `webNavigation`) | ✅ |
+| Permissions (`activeTab`, `sidePanel`, `webNavigation`, plus `debugger`, `tabs`, `storage` for native mode) — each justified below | ✅ |
 | Content Security Policy (`script-src 'self'; object-src 'self'; base-uri 'self'`) | ✅ |
 | `homepage_url` | ✅ Points to `https://real-a11y.dev` |
 | `author` | ✅ `Real A11y` |
@@ -142,9 +142,14 @@ Reuse the monochrome brand: black typography on a white background, echoing the 
    - `activeTab` — read the current page's DOM to build the semantic tree
    - `sidePanel` — the extension's UI lives in the side panel
    - `webNavigation` — detect iframe lifecycle and SPA route changes to refresh the tree
+   - `debugger` — native mode, off by default: reads and acts on Chromium's own accessibility tree over the DevTools protocol, the way DevTools does. Required rather than optional because Chrome doesn't allow `debugger` as an optional permission
+   - `tabs` — native mode reads the URL of the tab the side panel is bound to, to tell whether the debugger can attach there and whether the page navigated since the tree was read
+   - `storage` — remembers whether native mode is on, and keeps content-free attach bookkeeping for the browser session
 8. Submit for review
 
-**Review time:** Typically 1–3 business days. Extensions using `<all_urls>` content scripts + `activeTab` may trigger manual review (up to 7 days).
+**Review time:** Typically 1–3 business days. Extensions using `<all_urls>` content scripts + `activeTab` may trigger manual review (up to 7 days), and `debugger` raises the bar further.
+
+**The first release carrying `debugger`, `tabs` and `storage`** makes Chrome disable the extension for every existing user until they accept the new permissions. Say so in the release notes.
 
 ---
 

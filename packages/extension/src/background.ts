@@ -22,14 +22,18 @@ import {
   removeFrame,
 } from "./tab-state.js";
 
-// `chrome.debugger` native mode (RFC PR H) is a DEV-ONLY dogfood. `__DOGFOOD__`
-// is a build-time constant — false in the store build, so this branch (and the
-// entire native/ module + its `debugger` use) is dead-code-eliminated; the
-// shipped extension never carries the capability. See BUILD_TARGET=dogfood.
-declare const __DOGFOOD__: boolean;
-if (typeof __DOGFOOD__ !== "undefined" && __DOGFOOD__) {
-  registerNativeMode();
-}
+// `chrome.debugger` native mode (RFC PR H) ships in every build now that the
+// manifest carries `debugger`/`tabs`/`storage` as required permissions (see
+// `public/manifest.json`) — the capability itself is always registered.
+// What stays off by default is a separate, runtime, user-facing setting
+// (`native/index.ts`'s own storage-backed flag): `registerNativeMode()` wires
+// the message handlers, but every one of them refuses to touch
+// `chrome.debugger` until that setting is explicitly turned on — see
+// `NativeDebuggerSession.attach()`'s own gate. `__DOGFOOD__` (still a
+// build-time constant, see `vite.config.ts`) now only decides whether the
+// dev-only `DogfoodPanel` debug widget renders (`sidepanel/main.tsx`); it no
+// longer gates this module at all.
+registerNativeMode();
 
 // ---- Per-tab frame state ----
 // Pure state-machine helpers live in ./tab-state, the merge algorithm in
@@ -480,13 +484,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   // tab, so the trust boundary is worth asserting explicitly here.
   if (!isTrustedSender(sender, chrome.runtime.id)) return false;
 
-  // Native-mode (dogfood) messages have their own dedicated onMessage listener
-  // (native/index.ts, registered only in the DOGFOOD build). They carry no
-  // `sender.tab`, so without this guard they fall through to the catch-all
-  // fallback below — which would forward a meaningless message to the active
-  // tab or, with no active tab, race a synchronous `{ success:false }` error
-  // reply against the native handler's slower async response. Leave them to
-  // the native listener. No-op in the store build (no NATIVE_* is ever sent).
+  // Native-mode messages have their own onMessage listener (native/index.ts,
+  // registered in every build). They carry no `sender.tab`, so without this
+  // guard they fall through to the catch-all fallback below, which would
+  // forward a meaningless message to the active tab or, with no active tab,
+  // race a synchronous `{ success:false }` reply against the native handler's
+  // slower async one. Leave them to the native listener.
   if (typeof message?.type === "string" && message.type.startsWith("NATIVE_")) {
     return false;
   }

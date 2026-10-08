@@ -570,7 +570,7 @@ describe("detachAll (the revoke path)", () => {
     // The ORDER matters, not just the final state the previous test checks: if
     // `detachAll()` resolved before the pending attach settled, the panel could
     // report "native mode off — detached from 0 tab(s)" a beat before Chrome
-    // even shows the "…is debugging this browser" banner for the attach that
+    // even shows the "…started debugging this browser" banner for the attach that
     // was already on its way — a report that was true when it went out and
     // false a moment later reads the same to the user as one that was just
     // wrong.

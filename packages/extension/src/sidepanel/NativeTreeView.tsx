@@ -1,6 +1,6 @@
 /**
- * The native producer's tree view (dev-only dogfood build — RFC PR H/#229's
- * production-panel integration). Renders Chromium's own accessibility tree,
+ * The native producer's tree view (RFC PR H/#229, shipped in the store build
+ * since #386). Renders Chromium's own accessibility tree,
  * read over `chrome.debugger`, as a real expand/collapse `role="tree"` —
  * `DogfoodPanel.tsx`'s flat depth-indented list never needed one, but this
  * is the production panel's tree, so it gets the same tree semantics the DOM
@@ -586,6 +586,23 @@ export function NativeTreeView({
                     onClick={(e) => {
                       e.stopPropagation();
                       setSelectedId(id);
+                      // A mouse click on the row never moves real DOM focus (the
+                      // row itself is tabIndex=-1; only the `.sn-tree` container
+                      // is focusable, per the roving-focus/aria-activedescendant
+                      // pattern above) — so without this, `.sn-tree:focus-visible
+                      // .sn-node--selected`'s outline never has a `:focus-visible`
+                      // container to key off, and the selected row shows no focus
+                      // ring at all. Mirrors App.tsx's DOM-tree `handleSelect`,
+                      // which calls the identical `treeRef.current?.focus()`.
+                      treeRef.current?.focus();
+                    }}
+                    onDblClick={(e) => {
+                      e.stopPropagation();
+                      if (label) {
+                        if (!busy) onActivate(node, selectAction);
+                      } else if (hasChildren) {
+                        toggle(id);
+                      }
                     }}
                   >
                     <span class="sn-indent">
@@ -602,6 +619,10 @@ export function NativeTreeView({
                         e.stopPropagation();
                         if (hasChildren) toggle(id);
                       }}
+                      // Its two clicks already toggled it; the row's own
+                      // double-click must not act on the row as well (toggle
+                      // it again, or activate an actionable row on the page).
+                      onDblClick={(e) => e.stopPropagation()}
                     >
                       {hasChildren ? (expanded.has(id) ? "▾" : "▸") : ""}
                     </button>

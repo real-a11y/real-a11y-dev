@@ -1,17 +1,20 @@
 /// <reference types="chrome" />
 
 /**
- * Native-mode entry point (RFC PR H dogfood). Registered from the service worker
- * ONLY in the dogfood build (behind the `__DOGFOOD__` build constant, so it is
- * dead-code-eliminated from the store build) AND only while the runtime dev flag
- * is on — defence in depth so the `debugger` capability is never live by default.
+ * Native-mode entry point (RFC PR H). Registered unconditionally from the
+ * service worker (`background.ts`) — the capability ships in every build now
+ * that `public/manifest.json` carries `debugger`/`tabs`/`storage` as required
+ * permissions. What keeps it off by default is the setting below: every
+ * `chrome.debugger` use still refuses until a user explicitly turns native
+ * mode on, enforced inside `NativeDebuggerSession.attach()` itself so "off"
+ * and "attached" stay mutually exclusive.
  *
  * This wires the panel↔SW messages for reading Chromium's native tree over
  * `chrome.debugger`, acting through it, and exporting the dogfood report. All
  * AX logic lives in native-core; the debugger plumbing in debugger-session.
  */
 
-import { isTrustedSender } from "../routing.js";
+import { isExtensionPageSender } from "../routing.js";
 
 import {
   classifyAttachError,
@@ -27,9 +30,36 @@ import {
   type NativeAction,
 } from "./native-core.js";
 
-const FLAG_KEY = "devFlags.nativeMode";
+const FLAG_KEY = "settings.nativeModeEnabled";
+/** The dogfood build's name for the same setting, before it became a user
+ *  setting. Read once, carried over, then removed — see `migrateFlag`. */
+const LEGACY_FLAG_KEY = "devFlags.nativeMode";
 
-/** Runtime dev flag — off unless a dogfooder explicitly turns it on. */
+declare const __DOGFOOD__: boolean;
+/** True only in the `DOGFOOD=1` build (`vite.config.ts`). The store build
+ *  dead-code-eliminates everything this guards. */
+const DOGFOOD = typeof __DOGFOOD__ !== "undefined" && __DOGFOOD__;
+
+/** A storage area that keeps nothing. The store build hands it to the event
+ *  log, so the log's writes go nowhere and nothing durable is kept about how
+ *  native mode was used. Only the dogfood build records — and reads — it. */
+const discardingStorage: chrome.storage.StorageArea = {
+  get: async () => ({}),
+  set: async () => {},
+} as unknown as chrome.storage.StorageArea;
+
+/** Carry a dogfooder's old `devFlags.nativeMode: true` over to the new key,
+ *  then drop the old key so it doesn't linger in their storage. */
+async function migrateFlag(): Promise<void> {
+  const got = await chrome.storage.local.get([FLAG_KEY, LEGACY_FLAG_KEY]);
+  if (!(LEGACY_FLAG_KEY in got)) return;
+  if (got[LEGACY_FLAG_KEY] === true && got[FLAG_KEY] === undefined) {
+    await chrome.storage.local.set({ [FLAG_KEY]: true });
+  }
+  await chrome.storage.local.remove(LEGACY_FLAG_KEY);
+}
+
+/** The user-facing native-mode setting — off unless explicitly turned on. */
 async function nativeModeEnabled(): Promise<boolean> {
   const got = await chrome.storage.local.get(FLAG_KEY);
   return got[FLAG_KEY] === true;
@@ -112,38 +142,74 @@ function isNativeMessage(m: unknown): m is NativeMessage {
 }
 
 export function registerNativeMode(): void {
-  // The dogfood log is durable (`local` — it spans the ~2-week exercise);
-  // attach bookkeeping is per-browser-session (`session`), which outlives a
-  // service-worker suspend but not a browser restart — the exact lifetime of a
-  // debugger attachment. Keeping it out of memory is what lets the unsolicited
-  // detach survive the very suspend it measures.
+  // Content scripts can read and write `chrome.storage.local` by default. They
+  // run in the page's renderer, and nothing they do needs storage, so keep
+  // the native-mode setting out of their reach.
+  void chrome.storage.local
+    .setAccessLevel?.({ accessLevel: "TRUSTED_CONTEXTS" })
+    .catch(() => {});
+  // Every read and write of the setting waits for the migration: one that
+  // ran alongside a Disable could otherwise write its carried-over `true`
+  // after the user's `false`.
+  const migrated = migrateFlag().catch(() => {});
+  const flagEnabled = async () => {
+    await migrated;
+    return nativeModeEnabled();
+  };
+
+  // The dogfood build keeps its event log in `local`, so it survives restarts
+  // for the dogfooder's report; the store build keeps none (see
+  // `discardingStorage`). Attach bookkeeping is per browser session
+  // (`session`): it outlives a service-worker suspend but not a browser
+  // restart, the exact lifetime of a debugger attachment, and keeping it out of
+  // memory is what lets an unsolicited detach survive the suspend it measures.
   const session = new NativeDebuggerSession(
-    chrome.storage.local,
+    DOGFOOD ? chrome.storage.local : discardingStorage,
     chrome.storage.session ?? chrome.storage.local,
     // The flag is enforced INSIDE the attach transaction, not by the callers.
     // That is what makes it atomic against `detachAll`, and it is why no
     // message handler re-checks it before dispatching.
-    nativeModeEnabled,
+    flagEnabled,
   );
   const log = session.dogfoodLog();
 
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (!isNativeMessage(message)) return; // not ours — let other handlers run
     // These messages route the most powerful capability the extension has —
-    // reading/dispatching over chrome.debugger and toggling the runtime flag.
-    // onMessage is same-extension only, so this never rejects in practice, but
-    // the rest of the codebase asserts the trust boundary on privileged
-    // handlers (background.ts, content.ts); native mode holds itself to the
-    // same bar as defence in depth.
-    if (!isTrustedSender(sender, chrome.runtime.id)) return false;
+    // reading/dispatching over chrome.debugger and toggling the setting — so
+    // only the extension's own pages may send them. A content script carries
+    // the extension's id too, and runs in the page's process.
+    if (
+      !isExtensionPageSender(
+        sender,
+        chrome.runtime.id,
+        chrome.runtime.getURL(""),
+      )
+    ) {
+      return false;
+    }
 
     void (async () => {
       try {
+        // The dogfood build's report and clear buttons. Written as a guarded
+        // block rather than switch cases so the store build drops the code,
+        // and the message names, entirely; there it falls through to
+        // "unsupported" below.
+        if (DOGFOOD && message.type === "NATIVE_DOGFOOD_REPORT") {
+          sendResponse({ report: await log.report(Date.now()) });
+          return;
+        }
+        if (DOGFOOD && message.type === "NATIVE_DOGFOOD_CLEAR") {
+          await log.clear();
+          sendResponse({ ok: true });
+          return;
+        }
         switch (message.type) {
           case "NATIVE_FLAG_GET":
-            sendResponse({ enabled: await nativeModeEnabled() });
+            sendResponse({ enabled: await flagEnabled() });
             return;
           case "NATIVE_FLAG_SET": {
+            await migrated;
             await chrome.storage.local.set({ [FLAG_KEY]: message.enabled });
             // Turning it off must drop the capability, not merely stop offering
             // it. `debugger` cannot be optional, so there is no permission to
@@ -166,13 +232,6 @@ export function registerNativeMode(): void {
             // ticked, instead of after a failed read. It returns only the
             // reason enum, never the URL it classified.
             sendResponse(await capabilityOf(message.tabId));
-            return;
-          case "NATIVE_DOGFOOD_REPORT":
-            sendResponse({ report: await log.report(Date.now()) });
-            return;
-          case "NATIVE_DOGFOOD_CLEAR":
-            await log.clear();
-            sendResponse({ ok: true });
             return;
           case "NATIVE_READ": {
             const { outcome, value } = await withRecovery(
@@ -284,6 +343,10 @@ export function registerNativeMode(): void {
             return;
           }
         }
+        // Only reached by a message this build doesn't handle (the dogfood
+        // report and clear, in the store build). Answer it rather than leave it
+        // hanging.
+        sendResponse({ ok: false, error: "unsupported" });
       } catch {
         sendResponse({ ok: false, error: "native mode error" });
       }

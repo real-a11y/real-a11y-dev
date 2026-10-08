@@ -82,6 +82,17 @@ Heading level isn't a typed field — it's stored as a string (`"1"`–`"6"`) on
 
 Both modes produce the same `SemanticNode` shape; only the `a11y.role` and `a11y.name` computation differs.
 
+### Two producers
+
+Two different engines can build that tree, and every tree records which one built it in `source.producer`.
+
+| Producer | What it is | Where you meet it |
+|---|---|---|
+| `dom` | This project's own in-page walk, with its own ARIA role and accessible-name rules | the inspector, `react`, the browser extension's default view |
+| `native` | Chromium's own accessibility tree, read over the DevTools protocol | the CLI and MCP server, and the extension's native mode |
+
+They agree on most of a page, but never byte for byte, by design. Chromium names some controls differently (a file input is a `button`, `<details>` is a disclosure), places names differently, and sees content the in-page walk can't reach, such as the built-in media controls inside `<video>`. So compare a tree only with one from the same producer. Tab order is the exception that only `dom` can answer: Chromium's tree knows whether a node can take focus, but not the order Tab visits them in.
+
 ---
 
 ## Roles

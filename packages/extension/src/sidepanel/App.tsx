@@ -57,24 +57,11 @@ import { buildExportMarkdown, ALL_VIEWS } from "./export.js";
 import type { ExportView } from "./export.js";
 import { announcedValueLabel, rawValueLabel } from "./field-value.js";
 import { FilteredList } from "./FilteredList.js";
+import { useFocusTrap, useRestoreFocusOnClose } from "./focus-hooks.js";
 import { InputPanel } from "./InputPanel.js";
 import type { InputPanelState } from "./InputPanel.js";
 import { NativeTreeView } from "./NativeTreeView.js";
 import { TabSequenceView } from "./TabSequenceView.js";
-
-/**
- * Native mode (RFC PR H/#229) is a dev-only dogfood build — a build-time
- * constant the store build's bundler replaces with a literal `false`, so this
- * whole branch (and anything it gates below) is dead-code-eliminated from the
- * shipped extension. Same idiom as `background.ts`/`main.tsx`; none of the
- * modules imported above touch `chrome.debugger` themselves (that stays
- * inside `native/index.ts` + `native/debugger-session.ts`, registered only in
- * `background.ts`'s own `__DOGFOOD__` branch) — this gate is about not
- * showing a "NATIVE" control that would silently hang for every store user,
- * not about keeping the capability out of the bundle a second time.
- */
-declare const __DOGFOOD__: boolean;
-const dogfood = typeof __DOGFOOD__ !== "undefined" && __DOGFOOD__;
 
 /** How long to let the page react before re-reading the native tree after an
  *  action — same rationale and value as `DogfoodPanel.tsx`'s `SETTLE_MS`. */
@@ -189,6 +176,111 @@ function isFieldStateSuccess(
   return isSuccessResponse(response);
 }
 
+/**
+ * The one-time consent step before native mode's setting flips on. A separate
+ * component (not inline JSX in App) so its own mount/unmount is what drives
+ * `useFocusTrap`/`useRestoreFocusOnClose` — those hooks key off first-mount
+ * effects, which only fires at the right moment when the banner itself is
+ * what mounts and unmounts, not a `showNativeConsent` boolean toggling inside
+ * an already-mounted `App`. Mirrors `InputPanel.tsx`'s `TextInput`/
+ * `SelectPicker` shape for the identical reason.
+ */
+/** The name Chrome's debugging bar quotes. */
+function extensionName(): string {
+  try {
+    return chrome.runtime.getManifest().name;
+  } catch {
+    return "Semantic Navigator";
+  }
+}
+
+function NativeConsentBanner({
+  onEnable,
+  onCancel,
+  error,
+  pending = false,
+}: {
+  onEnable: () => void;
+  onCancel: () => void;
+  /** An Enable is on its way: the setting may already be written, so neither
+   *  button does anything until it answers — a Cancel then would close the
+   *  banner over a request that still turns native mode on. Marked
+   *  `aria-disabled` rather than `disabled`, so focus stays in the dialog. */
+  pending?: boolean;
+  /** Shown inline when a previous Enable attempt failed — the banner stays
+   *  open on failure (see App's own `onEnable` handler), so this is the only
+   *  place left to surface it; `nativeStatus` renders only inside
+   *  `NativeTreeView`, which never mounts unless the flip already
+   *  succeeded. */
+  error?: string;
+}) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const enableRef = useRef<HTMLButtonElement>(null);
+
+  useRestoreFocusOnClose();
+  useFocusTrap(dialogRef);
+
+  useEffect(() => {
+    enableRef.current?.focus();
+  }, []);
+
+  const handleKeyDown = useCallback(
+    (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        if (!pending) onCancel();
+      }
+    },
+    [onCancel, pending],
+  );
+
+  return (
+    <div
+      ref={dialogRef}
+      class="sn-native-consent-banner"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Enable native mode"
+    >
+      <p>
+        <strong>Native mode</strong> reads Chromium's own accessibility tree
+        over the <code>debugger</code> API — full fidelity, including UA-shadow
+        content the DOM producer can't see. While it's attached, Chrome shows a
+        bar across every window reading “{extensionName()}” started debugging
+        this browser. Pressing its Cancel detaches.
+      </p>
+      {error && (
+        <p class="sn-native-consent-error" role="alert">
+          {error}
+        </p>
+      )}
+      <div class="sn-native-consent-actions">
+        <button
+          ref={enableRef}
+          class="sn-toolbar-btn"
+          aria-disabled={pending}
+          onClick={() => {
+            if (!pending) onEnable();
+          }}
+          onKeyDown={handleKeyDown}
+        >
+          {pending ? "Enabling…" : "Enable"}
+        </button>
+        <button
+          class="sn-toolbar-btn"
+          aria-disabled={pending}
+          onClick={() => {
+            if (!pending) onCancel();
+          }}
+          onKeyDown={handleKeyDown}
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function App() {
   const [viewMode, setViewMode] = useState<TreeViewMode>("a11y");
   // Read by `sendTreeRequest` instead of closing over `viewMode`, so that
@@ -241,10 +333,44 @@ export function App() {
   >([]);
   const announcementId = useRef(0);
 
-  // ---- Native producer (dev-only dogfood build, #229) ----
+  // ---- Native producer (RFC PR H/#229) ----
+  // The capability ships in every build (see background.ts), but stays off
+  // until the user turns on this setting — a real `chrome.storage`-backed
+  // flag now, not a build-time one. Fetched once on mount via the same
+  // NATIVE_FLAG_GET message DogfoodPanel.tsx already used for its own
+  // checkbox; NATIVE_FLAG_SET flips it (see setNativeModeEnabled below).
+  const [nativeModeEnabled, setNativeModeEnabledState] = useState(false);
+  // Shown in place of the producer toggle the first time a user reaches for
+  // NATIVE while the setting is still off — explains the debugger banner
+  // before anything attaches, rather than surprising them with it. Dismissed
+  // by either button; never shown again once the setting is on.
+  const [showNativeConsent, setShowNativeConsent] = useState(false);
+  // Set only when an Enable attempt actually fails (the message never
+  // reached the service worker, or its handler replied with a logical
+  // failure) — cleared on every fresh attempt so a stale error never
+  // outlives the retry it was about.
+  const [nativeConsentError, setNativeConsentError] = useState<
+    string | undefined
+  >(undefined);
+  // An Enable sent and not yet answered: the banner's buttons wait for it.
+  const [nativeConsentPending, setNativeConsentPending] = useState(false);
+
+  useEffect(() => {
+    void chrome.runtime
+      .sendMessage({ type: "NATIVE_FLAG_GET" })
+      .then((r: { enabled?: boolean }) =>
+        setNativeModeEnabledState(r?.enabled === true),
+      )
+      .catch(() => {
+        // Service worker not woken yet / context torn down mid-reload —
+        // leave the setting at its default (off); the toggle just stays
+        // available to try again.
+      });
+  }, []);
+
   // Which tree the panel is currently showing. Only ever leaves "dom" when
-  // `dogfood` is true — the toggle that flips it is itself gated on that
-  // flag below, so this stays "dom" for the lifetime of a store-build panel.
+  // `nativeModeEnabled` is true — the toggle that flips it is itself gated on
+  // that setting below.
   const [producer, setProducer] = useState<"dom" | "native">("dom");
   const [nativeNodes, setNativeNodes] = useState<Map<string, NativeNode>>(
     new Map(),
@@ -271,14 +397,16 @@ export function App() {
   // `capabilityRequest`, one counter shared across both message types since
   // both answer "does this reply still describe the tab we're looking at".
   const nativeOpToken = useRef(0);
-  // Bumped ONLY by the myTabId effect below — never by PAGE_NAVIGATED. A
-  // snapshot of this taken before a native op, compared after, tells apart
-  // "a real tab switch happened" from "nativeOpToken moved for some other
-  // reason", which `myTabId` equality alone cannot: a rapid switch away and
-  // back leaves `myTabId` (and a ref mirroring it) reading the same tab id
-  // again even though the effect fired twice and cleared the tree — see
-  // `dispatchNativeAction`'s own recovery path for why that distinction
-  // matters.
+  // Bumped by the myTabId effect below and by `requestNativeMode` turning
+  // native mode off — NEVER by PAGE_NAVIGATED. A snapshot of this taken
+  // before a native op, compared after, tells apart "something that isn't
+  // this action's own navigation invalidated it" from "nativeOpToken moved
+  // only because PAGE_NAVIGATED fired for the navigation this action
+  // itself caused", which `myTabId` equality alone cannot: a rapid tab
+  // switch away and back leaves `myTabId` (and a ref mirroring it) reading
+  // the same tab id again even though the effect fired twice and cleared
+  // the tree — see `dispatchNativeAction`'s own recovery path for why that
+  // distinction matters.
   const tabChangeToken = useRef(0);
   // Excludes a second native read/act from starting while one is already in
   // flight. Has to be a ref, not state driving a `disabled` attribute alone:
@@ -296,6 +424,64 @@ export function App() {
   // tab switch while already in native mode clears the tree and waits for an
   // explicit refresh rather than re-attaching automatically).
   const hasAutoLoadedNative = useRef(false);
+  // Turning native mode on or off swaps the control that had focus (the
+  // Enable button becomes the DOM/NATIVE toggle, and back), so focus would
+  // otherwise fall to <body>. The effect below moves it to the control that
+  // replaced it once that control has rendered.
+  const nativeToggleRef = useRef<HTMLButtonElement>(null);
+  const enableNativeRef = useRef<HTMLButtonElement>(null);
+  const pendingNativeFocus = useRef<"toggle" | "enable" | null>(null);
+
+  /** Drop the native tree and orphan any native read or action in flight.
+   *  Bumping `nativeOpToken` makes a late reply recognizably stale to every
+   *  `token !== nativeOpToken.current` guard, and because those guards leave
+   *  `nativeBusy` set on a stale reply, this is also what clears it. Used by a
+   *  tab switch, a navigation and turning native mode off — anything that
+   *  makes the native ids in hand meaningless. */
+  const resetNativeState = useCallback(() => {
+    nativeOpToken.current++;
+    setNativeNodes(new Map());
+    setNativeRootId("");
+    setNativeTreeTabId(undefined);
+    setNativeTreeUrl(undefined);
+    setNativeStatus("");
+    setNativeCapability(undefined);
+    setNativeBusy(false);
+  }, []);
+
+  /** Asks the service worker to persist the setting. A request, not a state
+   *  setter: it can fail, and it resolves to whether the setting really
+   *  changed. `NATIVE_FLAG_SET` replies `{ok: false}` from its outer catch on
+   *  an internal failure rather than rejecting, so a resolved promise alone
+   *  doesn't mean it took. Turning native mode off also drops the native tree
+   *  and returns the view to DOM; the service worker detaches the debugger as
+   *  soon as any operation in flight finishes. */
+  const requestNativeMode = useCallback(
+    async (next: boolean): Promise<boolean> => {
+      let r: { enabled?: boolean; ok?: boolean } | undefined;
+      try {
+        r = await chrome.runtime.sendMessage({
+          type: "NATIVE_FLAG_SET",
+          enabled: next,
+        });
+      } catch {
+        // Never reached the service worker, so nothing was persisted.
+        return false;
+      }
+      if (r?.enabled !== next) return false;
+      setNativeModeEnabledState(next);
+      setShowNativeConsent(false);
+      if (!next) {
+        // Disabling mid-recovery must also abort `recoverFromOwnNavigation`'s
+        // settle loop, the same way a real tab switch does.
+        tabChangeToken.current++;
+        resetNativeState();
+        setProducer("dom");
+      }
+      return true;
+    },
+    [resetNativeState],
+  );
 
   const treeRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -357,10 +543,10 @@ export function App() {
   // The tab this side-panel instance is bound to. Source of truth lives in
   // the background — it pushes ACTIVE_TAB_CHANGED on port connect and on
   // every tab/window activation. We don't try to read tab state from the
-  // panel context directly because `chrome.tabs.onActivated` doesn't
-  // reliably fire here (the manifest doesn't request the `"tabs"`
-  // permission, and the side-panel context's event delivery has been
-  // historically quirky regardless).
+  // panel context directly: the side panel's `chrome.tabs` event delivery has
+  // been historically quirky, and the background already owns the binding.
+  // (The manifest's `tabs` permission exists for native mode's URL reads, not
+  // for this.)
   const [myTabId, setMyTabId] = useState<number | null>(null);
   // Latest myTabId for use inside the long-lived onMessage listener,
   // which closes over the value at registration time.
@@ -386,6 +572,13 @@ export function App() {
       setLastAction(null);
     }, ms);
   }, []);
+
+  useEffect(() => {
+    const target = pendingNativeFocus.current;
+    if (target === null) return;
+    pendingNativeFocus.current = null;
+    (target === "toggle" ? nativeToggleRef : enableNativeRef).current?.focus();
+  }, [nativeModeEnabled]);
 
   // Don't leave a clear pending on a panel that is going away.
   useEffect(
@@ -527,15 +720,8 @@ export function App() {
     // reply (see loadNativeTree/dispatchNativeAction's own comments), this is
     // also the one place responsible for clearing it back to false: nothing
     // else is coming to do it for an operation this tab change just orphaned.
-    nativeOpToken.current++;
     tabChangeToken.current++;
-    setNativeNodes(new Map());
-    setNativeRootId("");
-    setNativeTreeTabId(undefined);
-    setNativeTreeUrl(undefined);
-    setNativeStatus("");
-    setNativeCapability(undefined);
-    setNativeBusy(false);
+    resetNativeState();
     // Deliberately NOT resetting hasAutoLoadedNative here — this effect fires
     // on EVERY tab change, including a plain tab switch while already in
     // native mode, and resetting it here would immediately re-trigger the
@@ -559,7 +745,7 @@ export function App() {
     setPageUnreachable(false);
     setPageTitle("");
     setPageUrl("");
-  }, [myTabId, requestTree]);
+  }, [myTabId, requestTree, resetNativeState]);
 
   // Keep a port alive so the background knows when the side panel closes.
   // On disconnect the background clears the highlight overlay AND disables
@@ -648,14 +834,7 @@ export function App() {
         // NATIVE_READ/NATIVE_ACT in flight when the page navigates has its
         // token orphaned by the bump above, so nothing else is coming to
         // clear the busy flag its own finally block intentionally left set.
-        nativeOpToken.current++;
-        setNativeNodes(new Map());
-        setNativeRootId("");
-        setNativeTreeTabId(undefined);
-        setNativeTreeUrl(undefined);
-        setNativeStatus("");
-        setNativeCapability(undefined);
-        setNativeBusy(false);
+        resetNativeState();
         return;
       }
 
@@ -779,7 +958,7 @@ export function App() {
     return () => {
       chrome.runtime.onMessage.removeListener(handler);
     };
-  }, []);
+  }, [resetNativeState]);
 
   const handleViewModeChange = useCallback(
     (mode: TreeViewMode) => {
@@ -1047,38 +1226,38 @@ export function App() {
     [nodes, handleToggle, sendToBoundTab, reExtract],
   );
 
-  // ---- Native producer actions (dev-only dogfood build) ----
+  // ---- Native producer actions ----
   // Cheap pre-flight (no attach) — refreshed whenever the bound tab changes
   // while native is the active producer, so the capability banner tracks the
   // CURRENT tab. Mirrors DogfoodPanel's refreshCapability, driven by App's
   // own authoritative myTabId instead of polling chrome.tabs itself.
   //
-  // Every native-action function below opens with `if (!dogfood) return;`.
-  // The Hook call itself (`useCallback(fn, deps)`) still has to run every
-  // render for Rules of Hooks to hold in both builds — only a function BODY
-  // can be build-time-conditional — but since `dogfood` collapses to the
-  // literal `false` in the store build, `if (!false) return` collapses to an
-  // unconditional `return`, and esbuild's own dead-code-after-return
-  // elimination (the same pass that already proves the `dogfood && <JSX>`
-  // blocks in the toolbar below are dead) strips everything after it —
-  // verified empirically: this is what gets the NATIVE_* message strings and
-  // this function's own literals out of the store bundle, not just the
-  // toggle and NativeTreeView's own file.
-  const refreshNativeCapability = useCallback(async (tabId: number) => {
-    if (!dogfood) return;
-    const token = nativeOpToken.current;
-    const cap = (await chrome.runtime.sendMessage({
-      type: "NATIVE_CAPABILITY",
-      tabId,
-    })) as TabCapability;
-    if (token !== nativeOpToken.current) return; // superseded by a tab switch
-    setNativeCapability(cap);
-  }, []);
+  // Every native-action function below opens with
+  // `if (!nativeModeEnabled) return;`. This used to be load-bearing for
+  // dead-code elimination when the whole capability was build-time gated
+  // (`dogfood` collapsed to a literal in the store build); now that
+  // `nativeModeEnabled` is a real runtime value, the check is a genuine
+  // runtime guard instead — the setting being off is what keeps
+  // `chrome.debugger` from ever being touched, same as
+  // `NativeDebuggerSession.attach()`'s own gate does one layer down.
+  const refreshNativeCapability = useCallback(
+    async (tabId: number) => {
+      if (!nativeModeEnabled) return;
+      const token = nativeOpToken.current;
+      const cap = (await chrome.runtime.sendMessage({
+        type: "NATIVE_CAPABILITY",
+        tabId,
+      })) as TabCapability;
+      if (token !== nativeOpToken.current) return; // superseded by a tab switch
+      setNativeCapability(cap);
+    },
+    [nativeModeEnabled],
+  );
 
   useEffect(() => {
-    if (!dogfood || producer !== "native" || myTabId === null) return;
+    if (!nativeModeEnabled || producer !== "native" || myTabId === null) return;
     void refreshNativeCapability(myTabId);
-  }, [producer, myTabId, refreshNativeCapability]);
+  }, [nativeModeEnabled, producer, myTabId, refreshNativeCapability]);
 
   /** Read the native tree into state. Mirrors DogfoodPanel's readTreeInto,
    *  minus its own flat-list bookkeeping — NativeTreeView owns expand state.
@@ -1087,56 +1266,59 @@ export function App() {
    *  step calls this directly (not the guarded `loadNativeTree` below) so
    *  that its own held guard doesn't make its post-action re-read a silent
    *  no-op. Never call this one from anywhere else; call `loadNativeTree`. */
-  const loadNativeTreeCore = useCallback(async (tabId: number) => {
-    if (!dogfood) return;
-    const token = nativeOpToken.current;
-    setNativeBusy(true);
-    setNativeStatus("reading native tree…");
-    try {
-      const r = (await chrome.runtime.sendMessage({
-        type: "NATIVE_READ",
-        tabId,
-      })) as {
-        ok?: boolean;
-        error?: string;
-        reason?: NativeUnavailableReason;
-        nodes?: NativeNode[];
-        rootId?: string;
-        url?: string;
-      };
-      if (token !== nativeOpToken.current) return; // tab switched mid-flight
-      if (!r?.ok) {
-        setNativeNodes(new Map());
-        setNativeRootId("");
-        if (r?.reason) {
-          setNativeCapability(blockedBy(r.reason));
-          setNativeStatus(
-            `native unavailable — ${explainUnavailable(r.reason)}`,
-          );
-        } else {
-          setNativeStatus(`read failed: ${r?.error ?? "unknown"}`);
+  const loadNativeTreeCore = useCallback(
+    async (tabId: number) => {
+      if (!nativeModeEnabled) return;
+      const token = nativeOpToken.current;
+      setNativeBusy(true);
+      setNativeStatus("reading native tree…");
+      try {
+        const r = (await chrome.runtime.sendMessage({
+          type: "NATIVE_READ",
+          tabId,
+        })) as {
+          ok?: boolean;
+          error?: string;
+          reason?: NativeUnavailableReason;
+          nodes?: NativeNode[];
+          rootId?: string;
+          url?: string;
+        };
+        if (token !== nativeOpToken.current) return; // tab switched mid-flight
+        if (!r?.ok) {
+          setNativeNodes(new Map());
+          setNativeRootId("");
+          if (r?.reason) {
+            setNativeCapability(blockedBy(r.reason));
+            setNativeStatus(
+              `native unavailable — ${explainUnavailable(r.reason)}`,
+            );
+          } else {
+            setNativeStatus(`read failed: ${r?.error ?? "unknown"}`);
+          }
+          return;
         }
-        return;
+        setNativeNodes(new Map((r.nodes ?? []).map((n) => [n.id, n])));
+        setNativeRootId(r.rootId ?? "");
+        setNativeTreeTabId(tabId);
+        setNativeTreeUrl(r.url);
+        // A successful read is proof any standing refusal no longer holds —
+        // same reasoning as DogfoodPanel's identical line.
+        setNativeCapability(undefined);
+        setNativeStatus(`${r.nodes?.length ?? 0} nodes`);
+      } finally {
+        if (token === nativeOpToken.current) setNativeBusy(false);
       }
-      setNativeNodes(new Map((r.nodes ?? []).map((n) => [n.id, n])));
-      setNativeRootId(r.rootId ?? "");
-      setNativeTreeTabId(tabId);
-      setNativeTreeUrl(r.url);
-      // A successful read is proof any standing refusal no longer holds —
-      // same reasoning as DogfoodPanel's identical line.
-      setNativeCapability(undefined);
-      setNativeStatus(`${r.nodes?.length ?? 0} nodes`);
-    } finally {
-      if (token === nativeOpToken.current) setNativeBusy(false);
-    }
-  }, []);
+    },
+    [nativeModeEnabled],
+  );
 
   /** Guarded entry point for a user- or effect-triggered read (refresh
    *  button, auto-load). Excludes a second read/act while one is in flight —
    *  see `nativeInFlight`'s own declaration. */
   const loadNativeTree = useCallback(
     async (tabId: number) => {
-      if (!dogfood || nativeInFlight.current) return;
+      if (!nativeModeEnabled || nativeInFlight.current) return;
       nativeInFlight.current = true;
       try {
         await loadNativeTreeCore(tabId);
@@ -1144,18 +1326,18 @@ export function App() {
         nativeInFlight.current = false;
       }
     },
-    [loadNativeTreeCore],
+    [nativeModeEnabled, loadNativeTreeCore],
   );
 
   // Auto-load once per transition into native mode — see hasAutoLoadedNative's
   // declaration for why this deliberately does NOT also fire on a later tab
   // switch while already in native mode.
   useEffect(() => {
-    if (!dogfood || producer !== "native" || myTabId === null) return;
+    if (!nativeModeEnabled || producer !== "native" || myTabId === null) return;
     if (hasAutoLoadedNative.current) return;
     hasAutoLoadedNative.current = true;
     void loadNativeTree(myTabId);
-  }, [producer, myTabId, loadNativeTree]);
+  }, [nativeModeEnabled, producer, myTabId, loadNativeTree]);
 
   // The ONLY place hasAutoLoadedNative re-arms: leaving native mode. Neither
   // the myTabId effect (a tab switch) nor PAGE_NAVIGATED (a same-tab
@@ -1225,7 +1407,7 @@ export function App() {
    *  page has already discarded. */
   const dispatchNativeAction = useCallback(
     async (nodeId: string, action: NativeAction, value?: string) => {
-      if (!dogfood || nativeInFlight.current) return;
+      if (!nativeModeEnabled || nativeInFlight.current) return;
       nativeInFlight.current = true;
       try {
         const token = nativeOpToken.current;
@@ -1329,6 +1511,7 @@ export function App() {
       }
     },
     [
+      nativeModeEnabled,
       nativeTreeTabId,
       nativeTreeUrl,
       loadNativeTreeCore,
@@ -1341,7 +1524,7 @@ export function App() {
       node: NativeNode,
       explicitAction?: "increment" | "decrement" | "select",
     ) => {
-      if (!dogfood) return;
+      if (!nativeModeEnabled) return;
       if (explicitAction) {
         void dispatchNativeAction(node.id, explicitAction);
         return;
@@ -1395,7 +1578,7 @@ export function App() {
       }
       void dispatchNativeAction(node.id, "click");
     },
-    [dispatchNativeAction],
+    [nativeModeEnabled, dispatchNativeAction],
   );
 
   const handleInputSubmit = useCallback(
@@ -1857,32 +2040,88 @@ export function App() {
           </span>
         )}
 
-        {/* Producer toggle — dev-only dogfood build. Reaching NATIVE requires
-            the DOM producer to have connected once first (this toolbar lives
-            past the `!connected` early return above) — a deliberate scope
-            cut, not a capability gap: every page Chrome actually blocks the
-            content script on (chrome://, the Web Store, an extension page)
-            blocks native's attach for the identical reason (capability.ts's
-            DOM_FALLBACK table), so the two producers' reachability already
-            coincides in practice. Wider capability-surfacing UX is later
-            work (RFC PR H's "done enough for C" checklist), not this slice. */}
-        {dogfood && (
-          <div class="sn-toggle-group" role="group" aria-label="Tree producer">
-            <button
-              class="sn-toggle-btn"
-              aria-pressed={producer === "dom"}
-              onClick={() => setProducer("dom")}
+        {/* Producer toggle. Reaching NATIVE requires the DOM producer to have
+            connected once first (this toolbar lives past the `!connected`
+            early return above) — a deliberate scope cut, not a capability
+            gap: every page Chrome actually blocks the content script on
+            (chrome://, the Web Store, an extension page) blocks native's
+            attach for the identical reason (capability.ts's DOM_FALLBACK
+            table), so the two producers' reachability already coincides in
+            practice. Wider capability-surfacing UX is later work (RFC PR H's
+            "done enough for C" checklist), not this slice.
+
+            Only rendered once `nativeModeEnabled` is on — same structural gate
+            `dogfood` used to be, just a runtime setting now instead of a
+            build-time one. Kept absent (not merely disabled) while off: a
+            visible DOM/NATIVE choice implies NATIVE is one click away, which
+            isn't true before the user has actually opted in, and every other
+            producer-scoped control below reads `producer` to decide whether
+            it applies — introducing a THIRD "not yet decided" state for all of
+            them would cost far more than the one small entry-point button
+            below costs to add.
+
+            The "Disable" button alongside it is the only in-panel way back to
+            off once enabled — without it, a user who opted in has no way to
+            revoke the setting short of chrome://extensions, which contradicts
+            CHANGELOG.md's own "turning it back off detaches".
+            No consent step to turn it off: revoking is the safe direction,
+            same as DogfoodPanel's own checkbox. */}
+        {nativeModeEnabled ? (
+          <>
+            <div
+              class="sn-toggle-group"
+              role="group"
+              aria-label="Tree producer"
             >
-              DOM
-            </button>
+              <button
+                class="sn-toggle-btn"
+                aria-pressed={producer === "dom"}
+                onClick={() => setProducer("dom")}
+              >
+                DOM
+              </button>
+              <button
+                ref={nativeToggleRef}
+                class="sn-toggle-btn"
+                aria-pressed={producer === "native"}
+                onClick={() => setProducer("native")}
+              >
+                NATIVE
+              </button>
+            </div>
             <button
-              class="sn-toggle-btn"
-              aria-pressed={producer === "native"}
-              onClick={() => setProducer("native")}
+              class="sn-toolbar-btn"
+              onClick={() => {
+                // Set before the request: the toolbar re-renders as soon as
+                // the setting flips, before this promise resolves.
+                pendingNativeFocus.current = "enable";
+                void requestNativeMode(false).then((ok) => {
+                  // A failed disable leaves the setting, and the attached
+                  // debugger, as they were, so say the click didn't take.
+                  if (!ok) {
+                    pendingNativeFocus.current = null;
+                    announce("Couldn't disable native mode — try again.", 3000);
+                    return;
+                  }
+                  announce("Native mode off — showing the DOM tree.", 3000);
+                });
+              }}
+              title="Turn off native mode and detach the debugger"
             >
-              NATIVE
+              Disable native mode
             </button>
-          </div>
+          </>
+        ) : (
+          <button
+            ref={enableNativeRef}
+            class="sn-toolbar-btn"
+            aria-haspopup="dialog"
+            aria-expanded={showNativeConsent}
+            onClick={() => setShowNativeConsent(true)}
+            title="Read Chromium's own accessibility tree over the debugger API"
+          >
+            Enable native mode…
+          </button>
         )}
 
         {producer === "dom" && (
@@ -2035,6 +2274,40 @@ export function App() {
         )}
       </div>
 
+      {/* Block-level, NOT a toolbar flex child: its paragraph of consent text
+          would otherwise squeeze every other toolbar control (search box,
+          curtain, refresh, zoom, copy) into a cramped, wrapped mess. Same
+          placement pattern as NativeTreeView's own capability banner. */}
+      {showNativeConsent && (
+        <NativeConsentBanner
+          error={nativeConsentError}
+          pending={nativeConsentPending}
+          onEnable={() => {
+            setNativeConsentError(undefined);
+            setNativeConsentPending(true);
+            pendingNativeFocus.current = "toggle";
+            void requestNativeMode(true).then((ok) => {
+              setNativeConsentPending(false);
+              // Only a real flip switches the view; on failure the banner
+              // stays open with the error, for a retry.
+              if (!ok) {
+                pendingNativeFocus.current = null;
+                setNativeConsentError(
+                  "Couldn't enable native mode — try again.",
+                );
+                return;
+              }
+              setProducer("native");
+              announce("Native mode on — reading Chromium's tree.", 3000);
+            });
+          }}
+          onCancel={() => {
+            setShowNativeConsent(false);
+            setNativeConsentError(undefined);
+          }}
+        />
+      )}
+
       {/* Role filters — DOM producer only; disabled in tab sequence view */}
       {producer === "dom" && (
         <div class="sn-filters" role="toolbar" aria-label="Filter by role">
@@ -2128,8 +2401,8 @@ export function App() {
         />
       )}
 
-      {dogfood && producer === "native" ? (
-        /* ---- Native tree view (dev-only dogfood build) ---- */
+      {nativeModeEnabled && producer === "native" ? (
+        /* ---- Native tree view ---- */
         <NativeTreeView
           nodes={nativeNodes}
           rootId={nativeRootId}

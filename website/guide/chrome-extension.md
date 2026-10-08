@@ -200,6 +200,12 @@ What it will **not** do is keep showing you the last page's tree. Navigating the
 
 The **Try again** button is still live, because the same signal comes back for a page whose content script simply hasn't finished loading. On a normal `http(s)` page, retrying attaches; on a restricted one, the message stays.
 
+### Native mode — Chromium's own accessibility tree
+
+Off by default. Everything above describes the DOM producer — this extension's own in-page ARIA/AccName walk, the same engine `@real-a11y-dev/inspector` uses. Click **Enable native mode…** in the toolbar to instead read **Chromium's own** accessibility tree over `chrome.debugger`, the same protocol DevTools uses: it sees content the DOM walk structurally can't, such as UA-shadow media controls. While it's attached, Chrome shows a bar across every window reading “Semantic Navigator” started debugging this browser; pressing its **Cancel** detaches.
+
+The button opens a one-time consent step naming what it does before anything attaches; accepting swaps the toolbar's single tree for a **DOM / NATIVE** toggle, and a **Disable native mode** button next to it turns the setting back off; the debugger detaches as soon as any read or action already under way finishes. The two producers never silently mix — see [Two producers](./core-concepts.md#two-producers) for why they will never agree byte for byte, by design.
+
 ### BETA pill in the panel header
 
 Sets expectations during the pre-1.0 phase. Linked to the GitHub issues page. Goes away at v1.0.

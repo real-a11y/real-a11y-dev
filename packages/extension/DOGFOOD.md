@@ -1,34 +1,46 @@
 # Extension native mode — `chrome.debugger` dogfood
 
-**Status:** dev-only · **RFC:** [native-tree RFC (#197)](https://github.com/real-a11y/real-a11y-dev/pull/197) (Revision 2 + PR H) · not for the Chrome Web Store.
+**Status:** graduated to production · **RFC:** [native-tree RFC (#197)](https://github.com/real-a11y/real-a11y-dev/pull/197) (Revision 2 + PR H).
 
-This is the time-boxed dogfood the native-tree RFC gates the desktop decision on.
-Spike 5 already proved the mechanism works (an MV3 service worker reads **and**
-dispatches Chromium's native accessibility tree — UA-shadow media controls
-included — over `chrome.debugger`). What it **could not** answer needs a real,
-headed, human session. This build instruments exactly those three questions.
+This was the time-boxed dogfood the native-tree RFC gated the graduation
+decision on. Spike 5 had already proved the mechanism works (an MV3 service
+worker reads **and** dispatches Chromium's native accessibility tree — UA-shadow
+media controls included — over `chrome.debugger`); what it **couldn't** answer
+needed a real, headed, human session. This build instrumented exactly those
+three questions, and the findings log below is the record of that exercise.
 
-> **It produces a decision, not a feature.** The goal is a verdict written back
-> into the RFC, not shipping native mode to store users.
+> **It produced a decision, not just a feature.** The verdict this exercise
+> reached — logged below, backed by the quantitative report the build
+> exports — is what the graduation PR cites as the reason native mode moved
+> from a dev-only build into the production store build: `chrome.debugger`,
+> `tabs` and `storage` are now required permissions in the shipped
+> `packages/extension/public/manifest.json`, off by default behind a
+> `chrome.storage`-backed runtime setting (`packages/extension/src/native/index.ts`)
+> rather than a build-time constant. Every existing user re-consents on the
+> release that carries that manifest change.
 
-## Why it's a separate build
+## Why there's still a separate dogfood build
 
-`chrome.debugger` is one of Chrome's most sensitive permissions. Requesting it
-in the **published** extension would trigger heightened store review, a scary
-permission warning, and a forced re-consent for every existing user — for a
-feature that's off by default. So the store build never carries it:
+Native mode itself — the `chrome.debugger` capability — no longer needs a
+separate build to stay out of the store listing; it ships in every build now,
+gated at runtime. What `dist-dogfood/` still exists for is narrower:
+**`DogfoodPanel`**, the amber debug widget this exercise used for
+instrumentation (raw event log, capability-refusal counters, the "Copy dogfood
+report" button) — internal diagnostics with no reason to ship to end users,
+still gated behind the build-time `__DOGFOOD__` constant and
+dead-code-eliminated from the store build. The production side panel's own
+**"Enable native mode…" → NATIVE toggle** (`App.tsx`, `NativeTreeView.tsx`) is
+the real, unbranded, shipped way to use native mode — it needs no separate
+build and no unpacked load; see the next section.
 
-- `packages/extension/public/manifest.json` (the **shipped** manifest) stays
-  clean: `activeTab`, `sidePanel`, `webNavigation`.
-- The native code is gated behind a build-time `__DOGFOOD__` constant, so it is
-  **dead-code-eliminated** from the store build (verified: the production
-  `background.js` contains no `chrome.debugger` reference).
-- The dogfood build is a **separate, unpacked** artifact (`dist-dogfood/`) with
-  its own manifest that adds `debugger` + `tabs` + `storage` (the last for the
-  content-free instrumentation log). Unpacked extensions need no store review.
-  It is never submitted.
+If you're here to exercise native mode as a **user of the shipped product**,
+skip straight to that toggle: `pnpm --filter
+@real-a11y-dev/semantic-navigator-extension build` (or `dev`), load
+`packages/extension/dist/` as usual, open the side panel, and click "Enable
+native mode…". Everything below this point is specifically about the
+dogfood-only telemetry build and the exercise it was built for.
 
-## Build & load
+## Build & load the dogfood build
 
 ```sh
 pnpm --filter @real-a11y-dev/semantic-navigator-extension build:dogfood
@@ -50,7 +62,7 @@ is a good test — its media controls are the thing only native mode can see).
 2. Tick **native mode** (this is the runtime flag — the `debugger` capability is
    still inert until you do this).
 3. **Load native tree** — attaches the debugger (you'll see Chrome's
-   "…is debugging this browser" banner), reads the tree, and lists it. Interactive
+   "…started debugging this browser" banner), reads the tree, and lists it. Interactive
    rows are buttons; click one to dispatch a click (or type into a text field).
    The tree **re-reads itself after every successful action**, so the ids stay
    valid for the next one — you should not need to reload by hand between
@@ -138,60 +150,11 @@ Add your qualitative read alongside the numbers. That verdict decides whether
 extension-native ships (and, per the RFC, whether the Electron desktop shell is
 ever built).
 
-## Native-mode changes not yet in the store
+## Native-mode changes
 
-`CHANGELOG.md` records what store users get, and native mode ships only in
-this build, so a change to what NATIVE mode shows is recorded here instead.
-Newest first. If native mode graduates to the store build (#386 proposes it),
-these describe what it does at that point, and its changelog entry can draw
-on them; changes after that go in `CHANGELOG.md`.
-
-- In NATIVE mode, an element with `aria-busy="true"` now shows a `busy`
-  badge in the tree and the filtered lists, as DOM mode does. Chromium sends
-  that state as the number `1`, and the native tree read it as text, so the
-  badge said `busy=1` in the tree and `busy: 1` in the lists.
-  ([#441](https://github.com/real-a11y/real-a11y-dev/pull/441))
-
-- In NATIVE mode, a rich-text editor with no role (a ProseMirror-style
-  `<div contenteditable>`) now stays in the tree as a `generic`, empty or
-  filled, as DOM mode already shows it, so the A11y view has a node to show
-  its text on. It used to be dropped, leaving what was typed into it with no
-  field around it. (ADR-0001)
-  ([#432](https://github.com/real-a11y/real-a11y-dev/pull/432))
-
-- In NATIVE mode, the A11y view shows a `<select>`'s option label instead of
-  its `value`, a custom slider's `aria-valuetext`, and a rich-text editor's
-  text. The editor's edit box opens empty, as a password field's does:
-  submitting it untouched leaves the editor alone, and submitting it after
-  erasing what you typed empties the editor, including an editor that keeps
-  its own document model and would have ignored a plain empty write.
-  (ADR-0001) ([#431](https://github.com/real-a11y/real-a11y-dev/pull/431))
-
-- In NATIVE mode, an indeterminate progress bar and a static separator no
-  longer show their text as their name.
-  `<div role="progressbar">Loading files</div>` read
-  `progressbar "Loading files"` and `<div role="separator">Or</div>` read
-  `separator "Or"`; both now read bare, as Chromium names them. One labelled
-  with `aria-label` keeps its label.
-  ([#424](https://github.com/real-a11y/real-a11y-dev/pull/424))
-
-- In NATIVE mode, a rich-text editor no longer shows what was typed into it as
-  its name. A `<div role="application" contenteditable>` read
-  `application "<everything typed>"`, and so did a `role="document"` or
-  `role="log"` editor and a contenteditable `<p>`. Each now reads bare, as
-  Chromium names it; an editor labelled with `aria-label` keeps its label. A
-  list item or note around a plain `<div contenteditable>` no longer takes
-  its typed text as its name either, and a `role="progressbar"` no longer
-  shows its fallback text as its name.
-  ([#418](https://github.com/real-a11y/real-a11y-dev/pull/418))
-
-- In NATIVE mode, an image, dialog, landmark or form field that has no label
-  no longer shows its text as its name. `<span role="img">🎉</span>` read
-  `img "🎉"` and now reads a bare `img`, as Chromium names it. The same goes for
-  a text-only dialog or `<footer>`. An unlabeled text field no longer shows what
-  was typed into it as its name either; its value still shows as its value,
-  with sensitive fields masked as before.
-  ([#414](https://github.com/real-a11y/real-a11y-dev/pull/414))
+Native mode ships in the store build since #386, so its changes are recorded
+in `CHANGELOG.md` like any other. The changes this build made before then
+(#414, #418, #424, #431, #432, #441) are summed up in #386's entry there.
 
 ## Findings from real-use dogfooding
 

@@ -1,10 +1,10 @@
 /**
  * The element picker vs. a panel-driven action, in a real browser.
  *
- * This is the only file here that drives the DOM producer — the path the
- * SHIPPED store build uses. Every other suite drives the dev-only native path
- * over `chrome.debugger`, so none of them would notice a regression in the
- * in-page content script at all.
+ * This is the only file here that drives the DOM producer's picker — the
+ * store build's default. Most other suites drive native mode over
+ * `chrome.debugger`, so none of them would notice a regression in the in-page
+ * content script's picker at all.
  *
  * It is here because the bug it guards is made of exactly the things a jsdom
  * unit test has to fake:
