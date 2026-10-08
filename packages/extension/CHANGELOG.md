@@ -19,12 +19,14 @@
 
 ## Unreleased
 
-- **Native mode is now the suggested default.** The first time the side panel
+- **Native mode is the suggested default.** The first time the side panel
   connects to a page, it asks whether to use native mode, before anything
   attaches: **Use native mode** is the answer it offers first, and **Keep the
   DOM tree** is the other (`Esc` answers that way too). Either answer is
   remembered, so the panel doesn't ask again; **Enable native mode…** and
-  **Disable native mode** in the toolbar change it later
+  **Disable native mode** in the toolbar change it later. The question's
+  explanation of Chrome's debugging bar is its accessible description, so a
+  screen reader reads it out along with the focused button
   ([#NNN](https://github.com/real-a11y/real-a11y-dev/pull/NNN)).
 
 - Hardened the shared mutation observer so that re-arming it can no longer

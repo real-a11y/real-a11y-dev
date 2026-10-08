@@ -108,6 +108,21 @@ describe("native mode on first run", () => {
     expect(sentOfType("NATIVE_READ")).toEqual([]);
   });
 
+  it("describes itself with what it asks, for a screen reader", async () => {
+    mount({ enabled: false, chosen: false });
+    await flush();
+    await showTab(7);
+
+    // Focus lands on a button, so the explanation reaches a screen reader
+    // only as the dialog's description.
+    const ids = question()?.getAttribute("aria-describedby")?.split(" ") ?? [];
+    const description = ids
+      .map((id) => document.getElementById(id)?.textContent ?? "")
+      .join(" ");
+    expect(description).toContain("started debugging this browser");
+    expect(description).toContain("Or keep the DOM tree");
+  });
+
   it("turns native mode on and reads the page when the user says yes", async () => {
     mount({ enabled: false, chosen: false });
     await flush();

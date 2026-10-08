@@ -37,6 +37,7 @@ import {
   useCallback,
   useRef,
   useMemo,
+  useId,
 } from "preact/hooks";
 
 import type { FieldState } from "../field-state.js";
@@ -278,6 +279,13 @@ function NativeConsentBanner({
 }) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const enableRef = useRef<HTMLButtonElement>(null);
+  // The two paragraphs are what the user is agreeing to, so they are the
+  // dialog's description: focus lands on a button, and without this a screen
+  // reader announces the dialog's name and that button and nothing about
+  // Chrome's bar.
+  const descriptionId = useId();
+  const whatId = `${descriptionId}-what`;
+  const orId = `${descriptionId}-or`;
 
   useRestoreFocusOnClose();
   useFocusTrap(dialogRef);
@@ -303,8 +311,9 @@ function NativeConsentBanner({
       role="dialog"
       aria-modal="true"
       aria-label="Native mode"
+      aria-describedby={`${whatId} ${orId}`}
     >
-      <p>
+      <p id={whatId}>
         <strong>Native mode</strong> is the default tree: Chromium's own
         accessibility tree, read over the <code>debugger</code> API, including
         UA-shadow content the DOM tree can't see. While it's attached, Chrome
@@ -314,7 +323,7 @@ function NativeConsentBanner({
         and when the tab opens a new page. Pressing its Cancel detaches, and
         stops automatic reads until you refresh.
       </p>
-      <p>
+      <p id={orId}>
         Or keep the DOM tree, this extension's own reading of the page. Either
         answer is remembered, and the toolbar changes it later.
       </p>

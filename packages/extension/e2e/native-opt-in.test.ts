@@ -70,7 +70,11 @@ test("a fresh profile is asked on its first connect, before anything attaches", 
   nav,
 }) => {
   const { question } = await firstRunPanel(nav);
-  await expect(question).toContainText("started debugging this browser");
+  // What the user is agreeing to is the dialog's description, so a screen
+  // reader announces it along with the button that has focus.
+  await expect(question).toHaveAccessibleDescription(
+    /started debugging this browser.*Or keep the DOM tree/,
+  );
   // The fixture page has the window's focus, so read the panel's own
   // active element rather than asking Playwright whether it is focused.
   await expect
