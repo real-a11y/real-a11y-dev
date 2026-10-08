@@ -270,6 +270,39 @@ test("native mode turned off in another window returns this panel to the DOM tre
     .toBe("Enable native mode…");
 });
 
+test("native mode turned off in another window closes a native edit box", async ({
+  nav,
+}) => {
+  const { page, enableEntry } = await domChosenPanel(nav);
+  await enableEntry.click();
+  await nav.panel
+    .getByRole("dialog", { name: "Native mode" })
+    .getByRole("button", { name: "Use native mode" })
+    .click();
+  await nav.panel
+    .getByRole("button", { name: "Expand all" })
+    .click({ timeout: 20_000 });
+  const pwRow = nav.panel.getByRole("treeitem", { name: "Password" });
+  await pwRow.getByTitle("Type (Enter)").click();
+  const field = nav.panel.locator(".sn-input-panel-field");
+  await expect(field).toBeVisible();
+
+  await answerInAnotherWindow(nav, false);
+
+  // It acts through native mode, which is off now: left open, what was
+  // typed into it would go nowhere.
+  await expect(field).toHaveCount(0);
+  await expect(
+    nav.panel.getByRole("button", { name: "Enable native mode…" }),
+  ).toBeVisible();
+  await expect
+    .poll(() =>
+      nav.panel.evaluate(() => document.activeElement?.textContent?.trim()),
+    )
+    .toBe("Enable native mode…");
+  await expect(page.locator("#pw")).toHaveValue("hunter2");
+});
+
 test("the store build asks for native mode's permissions and ships no dogfood diagnostics", async ({
   nav,
 }) => {
