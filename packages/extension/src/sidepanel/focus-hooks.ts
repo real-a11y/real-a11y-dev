@@ -1,5 +1,6 @@
 /**
- * Focus management for the panel's dialogs (the input panel).
+ * Focus management for the panel's dialogs (the input panel) and popups (the
+ * Copy menu, Settings).
  */
 
 import type { RefObject } from "preact";
@@ -89,4 +90,41 @@ export function useRestoreFocusOnClose() {
       if (opener?.isConnected) opener.focus();
     };
   }, []);
+}
+
+/**
+ * Close a popup (the Copy menu, Settings) on a mousedown outside it or on
+ * Escape. Escape pressed inside it also returns focus to the button that
+ * opens it, as a menu button's or a disclosure's does, rather than leaving
+ * focus on what closing it took away.
+ */
+export function useDismissible(
+  open: boolean,
+  setOpen: (open: boolean) => void,
+  containerRef: RefObject<HTMLElement>,
+  buttonRef: RefObject<HTMLElement>,
+) {
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      if (
+        containerRef.current &&
+        !containerRef.current.contains(e.target as Node)
+      ) {
+        setOpen(false);
+      }
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      const inside = containerRef.current?.contains(document.activeElement);
+      setOpen(false);
+      if (inside) buttonRef.current?.focus();
+    };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open, setOpen, containerRef, buttonRef]);
 }

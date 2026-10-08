@@ -594,6 +594,34 @@ describe("native mode on by default", () => {
       expect(sentOfType("NATIVE_READ").length).toBeGreaterThan(0);
     });
 
+    it("turned on before a page connects, reads a tab the default failed on", async () => {
+      mount({ storage: { [NOTICE_SEEN]: true }, read: NATIVE_REFUSED });
+      await flush();
+      // The default fails on this tab, and native mode is turned off.
+      await showTab(7);
+      const checkbox = await openSettings();
+      act(() => checkbox.click());
+      await flush();
+      // While the page reloads, it is turned back on.
+      act(() => {
+        chromeMock.emit({
+          type: "PAGE_NAVIGATED",
+          tabId: 7,
+        } as unknown as ContentToPanel);
+      });
+      await flush();
+      act(() => settingsCheckbox()!.click());
+      await flush();
+      const readsBefore = sentOfType("NATIVE_READ").length;
+
+      act(() => {
+        chromeMock.emit({ ...treeData(), tabId: 7 } as ContentToPanel);
+      });
+      await flush();
+
+      expect(sentOfType("NATIVE_READ").length).toBeGreaterThan(readsBefore);
+    });
+
     it("says how a change went before a page connects", async () => {
       mount({
         storage: { [NOTICE_SEEN]: true },
@@ -754,6 +782,18 @@ describe("native mode on by default", () => {
       expect(sentOfType("NATIVE_READ").length).toBeGreaterThan(0);
     });
 
+    it("words what it says for a panel waiting for a page", async () => {
+      mount({ storage: { [SETTING]: false, [NOTICE_SEEN]: true } });
+      await flush();
+
+      await writtenElsewhere({ [SETTING]: true });
+      // No toolbar here to point at.
+      expect(announced()).toBe("Reading pages through Chrome is on.");
+
+      await writtenElsewhere({ [SETTING]: false });
+      expect(announced()).toBe("Not reading pages through Chrome.");
+    });
+
     it("reads a removed or non-boolean setting as on", async () => {
       mount({ storage: { [SETTING]: false, [NOTICE_SEEN]: true } });
       await flush();
@@ -843,7 +883,7 @@ describe("native mode on by default", () => {
       expect(document.activeElement).toBe(document.body);
     });
 
-    it("waits for the tree when a navigation takes it away, rather than settling on Settings", async () => {
+    it("leaves focus as a navigation leaves it, not on Settings", async () => {
       mount({ storage: { [SETTING]: false, [NOTICE_SEEN]: true } });
       await flush();
       await showTab(7);
@@ -864,7 +904,7 @@ describe("native mode on by default", () => {
         chromeMock.emit({ ...treeData(), tabId: 7 } as ContentToPanel);
       });
       await flush();
-      expect(document.activeElement).toBe(tree());
+      expect(document.activeElement).not.toBe(buttonNamed("Settings ▾"));
     });
 
     it("returns focus to Copy when its menu closes", async () => {
@@ -880,6 +920,16 @@ describe("native mode on by default", () => {
           new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
         );
       });
+      await flush();
+
+      expect(buttonNamed("Everything")).toBeNull();
+      expect(document.activeElement).toBe(buttonNamed("Copy ▾"));
+
+      // Choosing an item closes it the same way.
+      act(() => buttonNamed("Copy ▾")!.click());
+      await flush();
+      act(() => buttonNamed("Everything")!.focus());
+      act(() => buttonNamed("Everything")!.click());
       await flush();
 
       expect(buttonNamed("Everything")).toBeNull();

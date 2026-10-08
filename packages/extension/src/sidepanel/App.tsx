@@ -80,6 +80,7 @@ import {
 import type { ExportMeta, ExportView, ExportViews } from "./export.js";
 import { announcedValueLabel, rawValueLabel } from "./field-value.js";
 import { FilteredList } from "./FilteredList.js";
+import { useDismissible } from "./focus-hooks.js";
 import { InputPanel } from "./InputPanel.js";
 import type { InputPanelState } from "./InputPanel.js";
 import {
@@ -662,10 +663,6 @@ export function App() {
   // in the page, or in another window) gets none when focus moves.
   const focusBeforeCommit = useRef<Element | null>(null);
   focusBeforeCommit.current = document.activeElement;
-  // Focus a commit took away while nothing could take it in its place: the
-  // panel was waiting for a page to connect. It is put back once a tree or a
-  // list is on screen again, unless something else has taken focus by then.
-  const focusDisplaced = useRef(false);
 
   /** Drop the native tree and orphan any native read or action in flight.
    *  Bumping `nativeOpToken` makes a late reply recognizably stale to every
@@ -710,8 +707,9 @@ export function App() {
   // panel session, on the first page that connects and that native mode can
   // read. Not on every tab or navigation after that — each of those would
   // attach the debugger with no fresh gesture. Spent by a successful default
-  // read, and by turning native mode on in this session (the Settings switch
-  // is its own gesture, and its own read).
+  // read, and by turning native mode on from Settings with a page connected
+  // (the switch is its own gesture, and its own read). Turned on before a
+  // page connects, the switch leaves the read to this default instead.
   const hasAppliedNativeDefault = useRef(false);
   // The tabs the default has failed on (DevTools owns it, a blocked URL, the
   // service worker didn't answer). The default waits for a tab not in here
@@ -809,7 +807,9 @@ export function App() {
         if (everConnected.current) hasAppliedNativeDefault.current = true;
         setNativeModeEnabledState(true);
         announce(
-          "Reading pages through Chrome is on — NATIVE in the toolbar shows its tree.",
+          connectedRef.current
+            ? "Reading pages through Chrome is on — NATIVE in the toolbar shows its tree."
+            : "Reading pages through Chrome is on.",
           4000,
         );
         return;
@@ -818,7 +818,9 @@ export function App() {
       // what this panel's own turn-off would.
       showNativeOff();
       announce(
-        "Not reading pages through Chrome — showing the DOM tree.",
+        connectedRef.current
+          ? "Not reading pages through Chrome — showing the DOM tree."
+          : "Not reading pages through Chrome.",
         4000,
       );
     },
@@ -937,8 +939,8 @@ export function App() {
   }, []);
   /** The Settings switch, and the note's Turn off: turn native mode on or off
    *  in every window. Turning it on here is this panel's gesture, so it reads
-   *  the page natively at once; turning it off detaches as soon as anything
-   *  in flight finishes. */
+   *  the page natively at once, or the first page that connects if none has;
+   *  turning it off detaches as soon as anything in flight finishes. */
   const setNativeModeFromSettings = useCallback(
     (next: boolean) => {
       if (
@@ -965,7 +967,9 @@ export function App() {
         }
         if (!next) {
           announce(
-            "Not reading pages through Chrome — showing the DOM tree.",
+            connectedRef.current
+              ? "Not reading pages through Chrome — showing the DOM tree."
+              : "Not reading pages through Chrome.",
             3000,
           );
           return;
@@ -975,8 +979,10 @@ export function App() {
         if (!connectedRef.current) {
           // No page to read yet, nor any proof there will be one: the
           // default reads the first that connects, as in a panel opened with
-          // native mode on.
+          // native mode on. This switch is a gesture, so a tab the default
+          // failed on before is read again.
           hasAppliedNativeDefault.current = false;
+          nativeDefaultFailedOn.current.clear();
           announce(
             "Reading pages through Chrome — the next page shows its tree.",
             3000,
@@ -1022,29 +1028,24 @@ export function App() {
   // After every commit (`focusBeforeCommit`): if it took away the element
   // that had focus, and so left focus on the body, focus moves to the tree on
   // screen, or the list shown in its place (the Tab view, or either tree's
-  // role filter), or else Settings beside them. While a page connects there
-  // is neither, so it waits for them (`focusDisplaced`) rather than landing
-  // on Settings and staying there. Focus anywhere else stays where it is,
-  // and a panel where nothing had focus is left alone. A layout effect rather
-  // than an effect, which waits for a paint: a panel in a window that isn't
-  // in front can go without one for a long time.
+  // role filter). While the panel waits for a page there is neither, and
+  // focus is left as a navigation leaves it. Focus anywhere else stays where
+  // it is, and a panel where nothing had focus is left alone. A layout effect
+  // rather than an effect, which waits for a paint: a panel in a window that
+  // isn't in front can go without one for a long time.
   useLayoutEffect(() => {
-    const active = document.activeElement;
-    if (active !== null && active !== document.body) {
-      focusDisplaced.current = false;
+    const before = focusBeforeCommit.current;
+    if (before === null || before === document.body || before.isConnected) {
       return;
     }
-    const before = focusBeforeCommit.current;
-    const lost =
-      before !== null && before !== document.body && !before.isConnected;
-    if (!lost && !focusDisplaced.current) return;
-    const target = [
+    const active = document.activeElement;
+    if (active !== null && active !== document.body) return;
+    [
       document.querySelector<HTMLElement>('[role="tree"]'),
       document.querySelector<HTMLElement>('.sn-filtered-list[role="listbox"]'),
-      connectedRef.current ? settingsButtonRef.current : null,
-    ].find((el) => el?.isConnected);
-    focusDisplaced.current = target === undefined;
-    target?.focus();
+    ]
+      .find((el) => el?.isConnected)
+      ?.focus();
   });
 
   // Don't leave a clear pending on a panel that is going away.
@@ -2961,6 +2962,8 @@ export function App() {
   const doExport = useCallback(
     (selection: ExportView[]) => {
       setExportMenuOpen(false);
+      // Back to the button the menu goes with, as a menu button's items do.
+      exportButtonRef.current?.focus();
 
       /** Put the report on the clipboard and say whether it worked. */
       const copyReport = (
@@ -3089,31 +3092,9 @@ export function App() {
   // What the Copy menu offers for the tree on screen.
   const exportViews = producer === "native" ? NATIVE_VIEWS : ALL_VIEWS;
 
-  // Close the Settings menu on outside-click or Escape, which returns focus to
-  // its button when it was inside the menu.
-  useEffect(() => {
-    if (!settingsOpen) return;
-    const onDown = (e: MouseEvent) => {
-      if (
-        settingsRef.current &&
-        !settingsRef.current.contains(e.target as Node)
-      ) {
-        setSettingsOpen(false);
-      }
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
-      const inside = settingsRef.current?.contains(document.activeElement);
-      setSettingsOpen(false);
-      if (inside) settingsButtonRef.current?.focus();
-    };
-    document.addEventListener("mousedown", onDown);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onDown);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [settingsOpen]);
+  // Close Settings and the Copy menu on outside-click or Escape.
+  useDismissible(settingsOpen, setSettingsOpen, settingsRef, settingsButtonRef);
+  useDismissible(exportMenuOpen, setExportMenuOpen, exportRef, exportButtonRef);
 
   // The note about Chrome's debugging bar shows with the native tree, once a
   // native read has succeeded (which is when the bar has appeared), until the
@@ -3135,28 +3116,6 @@ export function App() {
       8000,
     );
   }, [showNativeNotice, announce]);
-
-  // Close the export menu on outside-click or Escape.
-  useEffect(() => {
-    if (!exportMenuOpen) return;
-    const onDown = (e: MouseEvent) => {
-      if (exportRef.current && !exportRef.current.contains(e.target as Node)) {
-        setExportMenuOpen(false);
-      }
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
-      const inside = exportRef.current?.contains(document.activeElement);
-      setExportMenuOpen(false);
-      if (inside) exportButtonRef.current?.focus();
-    };
-    document.addEventListener("mousedown", onDown);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onDown);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [exportMenuOpen]);
 
   const jumpKeys = useMemo(
     () => ({ links: controlsIndex, onJump: handleJumpToNode }),
@@ -3630,11 +3589,7 @@ export function App() {
             <div class="sn-export-menu" aria-label="Copy which view">
               <button
                 class="sn-export-item"
-                onClick={() => {
-                  // Back to the button the menu goes with.
-                  exportButtonRef.current?.focus();
-                  doExport(exportViews);
-                }}
+                onClick={() => doExport(exportViews)}
               >
                 Everything
               </button>
@@ -3642,10 +3597,7 @@ export function App() {
                 <button
                   key={view}
                   class="sn-export-item"
-                  onClick={() => {
-                    exportButtonRef.current?.focus();
-                    doExport([view]);
-                  }}
+                  onClick={() => doExport([view])}
                 >
                   {view === "tree"
                     ? producer === "native"
