@@ -88,18 +88,16 @@ native-tree execution plan in Notion.
 
 Where the gates actually are:
 
-- **The setting.** `settings.nativeModeEnabled` in `chrome.storage.local`, off
-  until the user turns it on. The side panel asks the first time it connects
-  to a page while the setting is unset, with native mode offered first, and
-  "Enable native mode…" asks again later. It is enforced in one place:
-  `NativeDebuggerSession.attach()` re-reads it inside its storage transaction,
-  so turning it off and attaching are mutually exclusive. The message handlers
-  in `native/index.ts` are registered in every build and don't check it
-  themselves; turning it off detaches once any operation in flight finishes.
-  Each window has its own side panel, so every open panel follows the key in
-  storage, and "Keep the DOM tree" is its own message (`NATIVE_FLAG_DECLINE`),
-  stored only while the key is unset: a question left open in one window must
-  never act as a Disable for another.
+- **The setting.** `settings.nativeModeEnabled` in `chrome.storage.local`. Native
+  mode is on by default (#496): only a stored `false` turns it off, so an unset
+  or non-boolean value reads as on. The user turns it off in the side panel's
+  Settings, or from the one-time note about Chrome's debugging bar. It is
+  enforced in one place: `NativeDebuggerSession.attach()` re-reads it inside
+  its storage transaction, so turning it off and attaching are mutually
+  exclusive. The message handlers in `native/index.ts` are registered in every
+  build and don't check it themselves; turning it off detaches once any
+  operation in flight finishes. Each window has its own side panel, so every
+  open panel follows the key in storage.
 - **The senders.** `registerNativeMode()` accepts `NATIVE_*` messages only from
   the extension's own pages (`isExtensionPageSender`), never from a content
   script, and keeps `chrome.storage.local` at `TRUSTED_CONTEXTS`.
