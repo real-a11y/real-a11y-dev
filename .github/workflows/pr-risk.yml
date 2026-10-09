@@ -273,17 +273,13 @@ jobs:
 
             // Who has applied `label` to this PR, from its issue events — which
             // GitHub writes, and only someone with triage access can cause.
-            const appliers = new Map();
-            async function appliedBy(label) {
-              if (!appliers.has(label)) {
-                const events = await github.paginate(github.rest.issues.listEvents, {
-                  owner, repo, issue_number, per_page: 100,
-                });
-                appliers.set(label, new Set(events
-                  .filter((e) => e.event === 'labeled' && e.label?.name === label)
-                  .map((e) => e.actor?.login)));
-              }
-              return appliers.get(label);
+            let events;
+            async function appliedBy(label, actor) {
+              events ??= await github.paginate(github.rest.issues.listEvents, {
+                owner, repo, issue_number, per_page: 100,
+              });
+              return Boolean(actor) && events.some((e) =>
+                e.event === 'labeled' && e.label?.name === label && e.actor?.login === actor);
             }
 
             // Whether `label` was applied at `sha` and not taken off since: the
@@ -300,7 +296,7 @@ jobs:
               for (const { id, title, actor, own } of histories.get(sha)) {
                 if (title === titled('unlabeled', label, id)) return false;
                 if (title !== titled('labeled', label, id)) continue;
-                if (own || (await appliedBy(label)).has(actor)) return true;
+                if (own || (await appliedBy(label, actor))) return true;
               }
               return false;
             }
