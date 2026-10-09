@@ -194,6 +194,8 @@ const runName = () => topLevel("run-name");
 const bindStep = () => stepBlock("Bind review labels to the head", "script");
 
 const NUMBER = 7;
+const AUTHOR = "someone";
+const MAINTAINER = "darcusfenix";
 const [A, B] = ["a", "b"].map((c) => c.repeat(40));
 
 /**
@@ -210,6 +212,8 @@ const [A, B] = ["a", "b"].map((c) => c.repeat(40));
  *
  * `fork` puts the head in another repository, where the token is read-only;
  * `"deleted"` is a fork that no longer exists, which GitHub reports as null.
+ * Runs are made by `AUTHOR` unless said otherwise, and labels applied by
+ * `MAINTAINER`, who also shows up in the PR's issue events for it.
  * `onRemove(name, state)` runs before each removal, so a case can stand in for
  * another run getting there first (delete the label) or GitHub failing (throw).
  */
@@ -222,6 +226,7 @@ function simulate({ fork = false, onRemove } = {}) {
     labels: new Set(["risk:high"]),
     runs: [],
     removals: [],
+    events: [],
     listings: 0,
   };
   const asLabels = () => [...state.labels].map((name) => ({ name }));
@@ -244,6 +249,7 @@ function simulate({ fork = false, onRemove } = {}) {
       event: "pull_request",
       head_sha: state.head,
       head_repository: asRepo(),
+      actor: { login: AUTHOR },
       display_title:
         typeof display_title === "function" ? display_title(id) : display_title,
       ...run,
@@ -251,7 +257,7 @@ function simulate({ fork = false, onRemove } = {}) {
     return state.runs.at(-1);
   }
 
-  function fire(action, label) {
+  function fire(action, label, by = AUTHOR) {
     const payload = {
       action,
       ...(label && { label: { name: label } }),
@@ -266,7 +272,10 @@ function simulate({ fork = false, onRemove } = {}) {
     };
     const title = (id) =>
       evaluate(runName(), { github: { event: payload, run_id: id } });
-    return { payload, run: made({ display_title: title }) };
+    return {
+      payload,
+      run: made({ display_title: title, actor: { login: by } }),
+    };
   }
 
   return {
@@ -275,13 +284,23 @@ function simulate({ fork = false, onRemove } = {}) {
       state.head = sha;
       return fire("synchronize");
     },
-    label(name) {
+    label(name, by = MAINTAINER) {
       state.labels.add(name);
-      return fire("labeled", name);
+      state.events.push({
+        event: "labeled",
+        label: { name },
+        actor: { login: by },
+      });
+      return fire("labeled", name, by);
     },
-    unlabel(name) {
+    unlabel(name, by = MAINTAINER) {
       state.labels.delete(name);
-      return fire("unlabeled", name);
+      state.events.push({
+        event: "unlabeled",
+        label: { name },
+        actor: { login: by },
+      });
+      return fire("unlabeled", name, by);
     },
     edit: () => fire("edited"),
     reopen: () => fire("reopened"),
@@ -318,6 +337,7 @@ function simulate({ fork = false, onRemove } = {}) {
           },
         },
         issues: {
+          listEvents: async () => ({ data: state.events }),
           removeLabel: async ({ name }) => {
             state.removals.push(name);
             onRemove?.(name, state);
@@ -589,12 +609,30 @@ describe("which commit a review label describes", () => {
     // like a review at the commit they mean to push back later, and leaves
     // the run behind; then the PR is reviewed at another commit and they push
     // that one back. The record their title forged can't name its own run id,
-    // which GitHub assigns after the title is written. Nor can a guess.
+    // which GitHub assigns after the title is written — even when the run is
+    // a maintainer's, made by some edit of theirs while the title stood.
     const pr = simulate({ fork: true });
     pr.made({ display_title: `PR risk #${NUMBER} labeled reviewed:deep` });
     pr.made({
+      actor: { login: MAINTAINER },
       display_title: (id) =>
         `PR risk #${NUMBER} labeled reviewed:deep (run ${id + 1})`,
+    });
+    await bind(pr, pr.push(B));
+    await bind(pr, pr.label("reviewed:deep"));
+
+    assert.equal((await bind(pr, pr.push(A))).reviewed, "false");
+  });
+
+  it("trusts no record from someone who never applied the label", async () => {
+    // The same forgery with a guess that landed: run ids are close to
+    // sequential, so enough retitled runs could name their own. The run is
+    // still the author's, and the PR's issue events show only the maintainer
+    // applying the label.
+    const pr = simulate({ fork: true });
+    pr.made({
+      display_title: (id) =>
+        `PR risk #${NUMBER} labeled reviewed:deep (run ${id})`,
     });
     await bind(pr, pr.push(B));
     await bind(pr, pr.label("reviewed:deep"));

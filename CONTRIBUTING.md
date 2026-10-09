@@ -288,8 +288,9 @@ Four properties worth knowing before you change it:
   that payload is as old as the event, so an edit landing just after a push
   still listed the old review, and on a fork nothing could take it off. It
   reads the workflow's own run history instead — `run-name` titles every run
-  with the action and label that fired it, and GitHub stamps each with the head
-  it fired at — so a push owes a new review, and editing the description
+  with the action and label that fired it and its own run id, GitHub stamps
+  each with the head it fired at, and a record counts only from someone the
+  PR's issue events show applying that label — so a push owes a new review, and editing the description
   afterwards costs nothing. Apply the label once the new head's run has
   started: one applied the instant a push lands can beat GitHub moving the PR
   to that head, and re-applying one still on the PR fires no event at all.

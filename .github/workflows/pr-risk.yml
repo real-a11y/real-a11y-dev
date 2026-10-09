@@ -104,8 +104,9 @@ name: PR risk
 # run at that commit to apply or remove it applied it. A fork's author can't
 # fire a `labeled` — that takes triage access — and can't write a record either:
 # a run made without this `run-name` carries the PR title, but no title can name
-# the run id GitHub assigns afterwards (see `run-name`), and changing what a run
-# here is titled means editing this file, which grades 🔴 high and is human
+# the run id GitHub assigns afterwards (see `run-name`), and a record counts only
+# from someone the PR's issue events show applying that label. Changing what a
+# run here is titled means editing this file, which grades 🔴 high and is human
 # review's job anyway (above).
 #
 # By commit, not by push: a head pushed back to a commit that was reviewed gets
@@ -158,6 +159,7 @@ permissions:
   contents: read
   pull-requests: write # apply the risk label + post the sticky comment
   actions: read # list this workflow's runs: which commit each review label was applied at
+  issues: read # the PR's issue events: who has applied each review label
 
 # One run per pull request at a time, and the newest event wins: it cancels the
 # run in flight rather than queueing behind it, so the `labeled` run that a
@@ -247,12 +249,20 @@ jobs:
                   run.event === 'pull_request' &&
                   run.head_sha === sha &&
                   (run.head_repository?.full_name ?? null) === headRepo)
-                .map((run) => ({ id: run.id, number: run.run_number, title: run.display_title }));
+                .map((run) => ({
+                  id: run.id,
+                  number: run.run_number,
+                  title: run.display_title,
+                  actor: run.actor?.login,
+                }));
               if (pr.head.sha === sha) {
+                // From the payload, which only GitHub writes — so no check
+                // below has to vouch for it.
                 records.push({
                   id: context.runId,
                   number: context.runNumber,
                   title: titled(context.payload.action, context.payload.label?.name, context.runId),
+                  own: true,
                 });
               }
               // By run number, which GitHub assigns as it creates runs. Not the
@@ -261,14 +271,36 @@ jobs:
               return records.sort((a, b) => b.number - a.number || b.id - a.id);
             }
 
+            // Who has applied `label` to this PR, from its issue events — which
+            // GitHub writes, and only someone with triage access can cause.
+            const appliers = new Map();
+            async function appliedBy(label) {
+              if (!appliers.has(label)) {
+                const events = await github.paginate(github.rest.issues.listEvents, {
+                  owner, repo, issue_number, per_page: 100,
+                });
+                appliers.set(label, new Set(events
+                  .filter((e) => e.event === 'labeled' && e.label?.name === label)
+                  .map((e) => e.actor?.login)));
+              }
+              return appliers.get(label);
+            }
+
             // Whether `label` was applied at `sha` and not taken off since: the
             // newest run at `sha` that applied or removed it, applied it.
+            //
+            // A record of applying it has to name its own run id (see
+            // `run-name`) AND come from someone who has applied it here. Either
+            // alone stops a title the PR's author wrote; both, because run ids
+            // are close enough to sequential that enough retitled runs could
+            // land one guess, and nothing in an author's own run makes them
+            // someone who applied a label.
             async function appliedAt(label, sha) {
               if (!histories.has(sha)) histories.set(sha, await history(sha));
-              // Against the run's own id: see `run-name` for why.
-              for (const { id, title } of histories.get(sha)) {
-                if (title === titled('labeled', label, id)) return true;
+              for (const { id, title, actor, own } of histories.get(sha)) {
                 if (title === titled('unlabeled', label, id)) return false;
+                if (title !== titled('labeled', label, id)) continue;
+                if (own || (await appliedBy(label)).has(actor)) return true;
               }
               return false;
             }
