@@ -298,10 +298,10 @@ function NativeModeNotice({
 }
 
 /** What turning native mode off says, here or from another window: a panel
- *  waiting for a page has no DOM tree on screen to point at. */
+ *  waiting for a page has no in-page tree on screen to point at. */
 function nativeOffMessage(connected: boolean): string {
   return connected
-    ? "Not reading pages through Chrome — showing the DOM tree."
+    ? "Not reading pages through Chrome — showing the in-page tree."
     : "Not reading pages through Chrome.";
 }
 
@@ -676,10 +676,10 @@ export function App() {
   }, []);
   // What had focus as this render began, before its commit could take it
   // away. Turning native mode off, here or in another window, takes away the
-  // native tree and the DOM/NATIVE toggle; so does a default read that falls
-  // back to the DOM tree, and the note about Chrome's bar goes once it is
-  // answered. Whatever had focus can go with them, which would leave it on
-  // the body: a layout effect further down puts it back instead, whichever
+  // native tree and the tree choice in Settings; so does a default read that
+  // falls back to the in-page tree, and the note about Chrome's bar goes once
+  // it is answered. Whatever had focus can go with them, which would leave it
+  // on the body: a layout effect further down puts it back instead, whichever
   // way it went. Read during render, which runs before the commit, rather
   // than from focus events: a panel without the window's focus (the user is
   // in the page, or in another window) gets none when focus moves.
@@ -823,14 +823,14 @@ export function App() {
       if (on) {
         // Not a gesture in this window. A panel that has shown a page
         // doesn't read the next one natively on its own, so its default read
-        // is spent: the toolbar offers NATIVE, and nothing attaches until
-        // it's pressed. One that has never connected reads the first page
+        // is spent: Settings offers Chrome's tree, and nothing attaches until
+        // it's chosen. One that has never connected reads the first page
         // that does, as a panel opened with native mode on would.
         if (everConnected.current) hasAppliedNativeDefault.current = true;
         setNativeModeEnabledState(true);
         announce(
           connectedRef.current
-            ? "Reading pages through Chrome is on — NATIVE in the toolbar shows its tree."
+            ? "Reading pages through Chrome is on — choose Chrome's tree in Settings to see it."
             : "Reading pages through Chrome is on.",
           4000,
         );
@@ -1057,6 +1057,15 @@ export function App() {
     if (before.closest("[data-sn-popup]")) return;
     const active = document.activeElement;
     if (active !== null && active !== document.body) return;
+    // The tree choice in Settings goes on its own, Settings staying open,
+    // when native mode goes off in another window or the page disconnects:
+    // focus moves to the switch above it rather than out of Settings.
+    if (before.closest(".sn-settings-source")) {
+      document
+        .querySelector<HTMLElement>('#sn-settings-menu input[type="checkbox"]')
+        ?.focus();
+      return;
+    }
     [
       document.querySelector<HTMLElement>('[role="tree"]'),
       document.querySelector<HTMLElement>('.sn-filtered-list[role="listbox"]'),
@@ -2216,8 +2225,8 @@ export function App() {
   );
 
   // The default itself (see `hasAppliedNativeDefault`). It waits for
-  // `connected`, as the producer toggle does: the DOM producer reaching the
-  // tab first is what proves there is a page there at all.
+  // `connected`, as the tree choice in Settings does: the DOM producer
+  // reaching the tab first is what proves there is a page there at all.
   //
   // It reads through the guarded `loadNativeTree` itself rather than leaving
   // the auto-load effect to do it, because it has to know whether the read
@@ -2252,7 +2261,7 @@ export function App() {
       setProducer("dom");
       // NativeTreeView, where the reason would otherwise show, unmounts with
       // the switch, so announce it.
-      announce(`Native mode: showing the DOM tree — ${why}`, 8000);
+      announce(`Native mode: showing the in-page tree — ${why}`, 8000);
     };
     setProducer("native");
     hasAutoLoadedNative.current = true;
@@ -3210,7 +3219,8 @@ export function App() {
   // Settings, in each header rather than the toolbar, whose controls don't
   // wrap and run past a narrow panel's edge: this is where native mode turns
   // off and back on, so it is on screen whether or not a page is connected.
-  // A disclosure, not a menu: what it opens is a switch and a line about it.
+  // A disclosure, not a menu: what it opens is a switch and a line about it,
+  // and, while native mode is on, which tree this panel shows.
   const settingsDisclosure = (
     <div class="sn-export" ref={settingsRef}>
       <button
@@ -3253,6 +3263,53 @@ export function App() {
             reads, Chrome shows a bar: “{extensionName()}” started debugging
             this browser. Off, the panel reads the page itself.
           </p>
+          {/* Which producer this panel shows. Here rather than in the
+              toolbar, whose DOM / A11Y / TAB views belong to the in-page
+              tree: a DOM / NATIVE toggle beside them put two different
+              "DOM" buttons side by side.
+
+              Only while native mode is on, and not while a turn-off is on its
+              way: a choice of Chrome's tree implies it is one click away,
+              which isn't true once the user has turned native mode off, and
+              the switch above already shows it off. And only once a page has
+              connected: the DOM
+              producer reaching the tab first is what proves there is a page
+              there at all. That is a scope cut, not a capability gap: every
+              page Chrome blocks the content script on (chrome://, the Web
+              Store, an extension page) blocks native's attach for the same
+              reason (capability.ts's DOM_FALLBACK table). */}
+          {connected && nativeModeEnabled && nativeSettingPending !== false && (
+            <div class="sn-settings-source">
+              <span id="sn-settings-source-label" class="sn-settings-label">
+                Show
+              </span>
+              <div
+                class="sn-toggle-group"
+                role="group"
+                aria-labelledby="sn-settings-source-label"
+                aria-describedby="sn-settings-source-hint"
+              >
+                <button
+                  class="sn-toggle-btn"
+                  aria-pressed={producer === "native"}
+                  onClick={() => switchProducer("native")}
+                >
+                  Chrome's tree
+                </button>
+                <button
+                  class="sn-toggle-btn"
+                  aria-pressed={producer === "dom"}
+                  onClick={() => switchProducer("dom")}
+                >
+                  In-page tree
+                </button>
+              </div>
+              <p id="sn-settings-source-hint" class="sn-settings-hint">
+                The in-page tree is the panel's own reading of the page, with
+                the DOM, A11Y and TAB views.
+              </p>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -3439,41 +3496,6 @@ export function App() {
             {(query || roleFilter) &&
               matchCountLabel(matchCount, scopedRootId !== null)}
           </span>
-        )}
-
-        {/* Producer toggle. Reaching NATIVE requires the DOM producer to have
-            connected once first (this toolbar lives past the `!connected`
-            early return above) — a deliberate scope cut, not a capability
-            gap: every page Chrome actually blocks the content script on
-            (chrome://, the Web Store, an extension page) blocks native's
-            attach for the identical reason (capability.ts's DOM_FALLBACK
-            table), so the two producers' reachability already coincides in
-            practice. Wider capability-surfacing UX is later work (RFC PR H's
-            "done enough for C" checklist), not this slice.
-
-            Only rendered while native mode is on (the default; Settings
-            turns it off). Kept absent (not merely disabled) while off: a
-            visible DOM/NATIVE choice implies NATIVE is one click away, which
-            isn't true while the user has turned native mode off, and every
-            other producer-scoped control below reads `producer` to decide
-            whether it applies. */}
-        {nativeModeEnabled && (
-          <div class="sn-toggle-group" role="group" aria-label="Tree producer">
-            <button
-              class="sn-toggle-btn"
-              aria-pressed={producer === "dom"}
-              onClick={() => switchProducer("dom")}
-            >
-              DOM
-            </button>
-            <button
-              class="sn-toggle-btn"
-              aria-pressed={producer === "native"}
-              onClick={() => switchProducer("native")}
-            >
-              NATIVE
-            </button>
-          </div>
         )}
 
         {producer === "dom" && (

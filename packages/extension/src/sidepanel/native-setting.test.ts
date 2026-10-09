@@ -189,6 +189,21 @@ describe("native mode on by default", () => {
     return settingsCheckbox()!;
   }
 
+  /** A button of the choice of tree in Settings, opening Settings to look if
+   *  it is shut; null while there is no choice to make (native mode is off,
+   *  or no page has connected). */
+  async function treeChoice(
+    name: "Chrome's tree" | "In-page tree",
+  ): Promise<HTMLButtonElement | null> {
+    if (!settingsCheckbox()) await openSettings();
+    return buttonNamed(name);
+  }
+
+  /** The in-page tree's DOM / A11Y / TAB views, in the toolbar while it
+   *  shows. */
+  const viewToggle = () =>
+    container.querySelector('[role="group"][aria-label="Tree view mode"]');
+
   /** What the panel last announced in its feedback bar. */
   const announced = () =>
     container.querySelector(".sn-action-feedback-text")?.textContent ?? "";
@@ -270,12 +285,12 @@ describe("native mode on by default", () => {
         { type: "NATIVE_FLAG_SET", enabled: false },
       ]);
       expect(note()).toBeNull();
-      expect(buttonNamed("NATIVE")).toBeNull();
       expect(searchBox()).not.toBeNull();
       expect(chromeMock.stored[NOTICE_SEEN]).toBe(true);
       expect(announced()).toBe(
-        "Not reading pages through Chrome — showing the DOM tree.",
+        "Not reading pages through Chrome — showing the in-page tree.",
       );
+      expect(await treeChoice("Chrome's tree")).toBeNull();
     });
 
     it("doesn't show with the DOM tree", async () => {
@@ -466,14 +481,16 @@ describe("native mode on by default", () => {
       act(() => checkbox.click());
       await flush();
       expect(settingsCheckbox()!.checked).toBe(false);
-      expect(buttonNamed("NATIVE")).toBeNull();
+      expect(buttonNamed("Chrome's tree")).toBeNull();
       expect(chromeMock.stored[SETTING]).toBe(false);
 
       const readsBefore = sentOfType("NATIVE_READ").length;
       act(() => settingsCheckbox()!.click());
       await flush();
       expect(settingsCheckbox()!.checked).toBe(true);
-      expect(buttonNamed("NATIVE")?.getAttribute("aria-pressed")).toBe("true");
+      expect(buttonNamed("Chrome's tree")?.getAttribute("aria-pressed")).toBe(
+        "true",
+      );
       expect(sentOfType("NATIVE_READ").length).toBeGreaterThan(readsBefore);
       expect(announced()).toBe(
         "Reading pages through Chrome — showing its tree.",
@@ -496,10 +513,13 @@ describe("native mode on by default", () => {
       await showTab(7);
       const checkbox = await openSettings();
 
+      expect(buttonNamed("Chrome's tree")).not.toBeNull();
       act(() => checkbox.click());
       await flush();
       expect(settingsCheckbox()!.checked).toBe(false);
       expect(settingsCheckbox()!.getAttribute("aria-disabled")).toBe("true");
+      // The choice of tree goes with the switch's off, not with the store's.
+      expect(buttonNamed("Chrome's tree")).toBeNull();
       act(() => settingsCheckbox()!.click());
       await flush();
       expect(settingsCheckbox()!.checked).toBe(false);
@@ -529,6 +549,75 @@ describe("native mode on by default", () => {
       expect(
         document.getElementById(controls!)?.getAttribute("aria-label"),
       ).toBe("Settings");
+    });
+
+    it("holds the choice of tree, leaving the toolbar a single DOM button", async () => {
+      // The native read can't happen here, so the in-page tree shows, with
+      // its DOM / A11Y / TAB views in the toolbar.
+      mount({ storage: { [NOTICE_SEEN]: true }, read: NATIVE_REFUSED });
+      await flush();
+      await showTab(7);
+      const toolbarButtons = (text: string) =>
+        [
+          ...container.querySelectorAll<HTMLButtonElement>(
+            '[role="toolbar"] button',
+          ),
+        ].filter((b) => b.textContent?.trim() === text);
+
+      expect(toolbarButtons("DOM")).toHaveLength(1);
+      expect(toolbarButtons("DOM")[0]!.closest('[role="group"]')).toBe(
+        viewToggle(),
+      );
+      expect(toolbarButtons("NATIVE")).toEqual([]);
+
+      const inPage = (await treeChoice("In-page tree"))!;
+      const choice = inPage.closest<HTMLElement>('[role="group"]')!;
+      expect(
+        document
+          .getElementById(choice.getAttribute("aria-labelledby")!)
+          ?.textContent?.trim(),
+      ).toBe("Show");
+      expect(inPage.getAttribute("aria-pressed")).toBe("true");
+      expect(buttonNamed("Chrome's tree")!.getAttribute("aria-pressed")).toBe(
+        "false",
+      );
+    });
+
+    it("switches this panel's tree, staying open, without changing the setting", async () => {
+      mount({ storage: { [NOTICE_SEEN]: true }, read: NATIVE_TREE });
+      await flush();
+      await showTab(7);
+      expect(viewToggle()).toBeNull();
+
+      const inPage = (await treeChoice("In-page tree"))!;
+      act(() => inPage.click());
+      await flush();
+      expect(viewToggle()).not.toBeNull();
+      expect(buttonNamed("In-page tree")!.getAttribute("aria-pressed")).toBe(
+        "true",
+      );
+
+      act(() => buttonNamed("Chrome's tree")!.click());
+      await flush();
+      expect(viewToggle()).toBeNull();
+      expect(container.querySelector('[role="tree"]')).not.toBeNull();
+      expect(buttonNamed("Chrome's tree")!.getAttribute("aria-pressed")).toBe(
+        "true",
+      );
+      // Settings stayed open throughout, and nothing was stored.
+      expect(settingsCheckbox()!.checked).toBe(true);
+      expect(sentOfType("NATIVE_FLAG_SET")).toEqual([]);
+      expect(chromeMock.stored[SETTING]).toBeUndefined();
+    });
+
+    it("offers no choice of tree before a page connects", async () => {
+      mount({ storage: { [NOTICE_SEEN]: true } });
+      await flush();
+
+      const checkbox = await openSettings();
+      expect(checkbox.checked).toBe(true);
+      expect(buttonNamed("Chrome's tree")).toBeNull();
+      expect(buttonNamed("In-page tree")).toBeNull();
     });
 
     it("is there on a page with no title", async () => {
@@ -877,34 +966,47 @@ describe("native mode on by default", () => {
   });
 
   describe("a change made in another window", () => {
-    it("returns this panel to the DOM tree when native mode is turned off", async () => {
+    it("returns this panel to the in-page tree when native mode is turned off", async () => {
       mount({ storage: { [SETTING]: true, [NOTICE_SEEN]: true } });
       await flush();
       await showTab(7);
-      expect(buttonNamed("NATIVE")).not.toBeNull();
+      expect(await treeChoice("Chrome's tree")).not.toBeNull();
 
       await writtenElsewhere({ [SETTING]: false });
 
-      expect(buttonNamed("NATIVE")).toBeNull();
+      // Settings, open all along, follows: off, and no choice of tree.
+      expect(settingsCheckbox()!.checked).toBe(false);
+      expect(buttonNamed("Chrome's tree")).toBeNull();
+      expect(viewToggle()).not.toBeNull();
       expect(announced()).toBe(
-        "Not reading pages through Chrome — showing the DOM tree.",
+        "Not reading pages through Chrome — showing the in-page tree.",
       );
     });
 
     it("moves focus to the tree when what had it goes away", async () => {
-      mount({ storage: { [NOTICE_SEEN]: true } });
+      mount({ storage: { [NOTICE_SEEN]: true }, read: NATIVE_TREE });
       await flush();
       await showTab(7);
-      const producerToggle = () =>
-        container.querySelector<HTMLButtonElement>(
-          '[role="group"][aria-label="Tree producer"] button',
-        );
-      act(() => producerToggle()!.focus());
+      const nativeTree = container.querySelector<HTMLElement>('[role="tree"]')!;
+      act(() => nativeTree.focus());
 
       await writtenElsewhere({ [SETTING]: false });
 
-      expect(producerToggle()).toBeNull();
+      expect(nativeTree.isConnected).toBe(false);
       expect(document.activeElement?.getAttribute("role")).toBe("tree");
+    });
+
+    it("keeps focus in Settings when the choice of tree goes", async () => {
+      mount({ storage: { [NOTICE_SEEN]: true }, read: NATIVE_TREE });
+      await flush();
+      await showTab(7);
+      const inPage = (await treeChoice("In-page tree"))!;
+      act(() => inPage.focus());
+
+      await writtenElsewhere({ [SETTING]: false });
+
+      expect(inPage.isConnected).toBe(false);
+      expect(document.activeElement).toBe(settingsCheckbox());
     });
 
     it("leaves focus where it was when what had it survives the change", async () => {
@@ -915,8 +1017,8 @@ describe("native mode on by default", () => {
 
       await writtenElsewhere({ [SETTING]: true });
 
-      expect(buttonNamed("NATIVE")).not.toBeNull();
       expect(document.activeElement).toBe(searchBox());
+      expect(await treeChoice("Chrome's tree")).not.toBeNull();
     });
 
     it("doesn't read in a panel that has shown a page when it's turned on", async () => {
@@ -926,7 +1028,10 @@ describe("native mode on by default", () => {
 
       await writtenElsewhere({ [SETTING]: true });
 
-      expect(buttonNamed("NATIVE")).not.toBeNull();
+      // On offer, and not taken: the panel stays on the in-page tree.
+      expect(
+        (await treeChoice("In-page tree"))?.getAttribute("aria-pressed"),
+      ).toBe("true");
       expect(sentOfType("NATIVE_READ")).toEqual([]);
     });
 
@@ -948,7 +1053,7 @@ describe("native mode on by default", () => {
       });
       await flush();
 
-      expect(buttonNamed("NATIVE")).not.toBeNull();
+      expect(await treeChoice("Chrome's tree")).not.toBeNull();
       expect(sentOfType("NATIVE_READ")).toEqual([]);
     });
 
@@ -979,14 +1084,14 @@ describe("native mode on by default", () => {
       mount({ storage: { [SETTING]: false, [NOTICE_SEEN]: true } });
       await flush();
       await showTab(7);
-      expect(buttonNamed("NATIVE")).toBeNull();
+      expect(await treeChoice("Chrome's tree")).toBeNull();
 
       await writtenElsewhere({ [SETTING]: undefined });
-      expect(buttonNamed("NATIVE")).not.toBeNull();
+      expect(buttonNamed("Chrome's tree")).not.toBeNull();
 
       await writtenElsewhere({ [SETTING]: false });
       await writtenElsewhere({ [SETTING]: "false" });
-      expect(buttonNamed("NATIVE")).not.toBeNull();
+      expect(buttonNamed("Chrome's tree")).not.toBeNull();
     });
 
     it("drops its own first read when a newer change has landed", async () => {
@@ -1006,20 +1111,23 @@ describe("native mode on by default", () => {
       answer();
       await flush();
 
-      expect(buttonNamed("NATIVE")).toBeNull();
-      expect((await openSettings()).checked).toBe(false);
+      expect(await treeChoice("Chrome's tree")).toBeNull();
+      expect(settingsCheckbox()!.checked).toBe(false);
     });
 
     it("moves focus to the list shown in the tree's place", async () => {
       mount({ storage: { [NOTICE_SEEN]: true }, read: NATIVE_TREE });
       await flush();
       await showTab(7);
-      // The DOM side is left on its Tab view, then the native tree shown.
-      act(() => buttonNamed("DOM")!.click());
+      // The in-page tree is left on its Tab view, then the native tree shown.
+      const inPage = (await treeChoice("In-page tree"))!;
+      act(() => inPage.click());
       await flush();
       act(() => buttonNamed("TAB")!.click());
       await flush();
-      act(() => buttonNamed("NATIVE")!.click());
+      act(() => buttonNamed("Chrome's tree")!.click());
+      await flush();
+      act(() => buttonNamed("Settings ▾")!.click());
       await flush();
       const nativeTree = container.querySelector<HTMLElement>('[role="tree"]');
       act(() => nativeTree!.focus());
@@ -1060,8 +1168,8 @@ describe("native mode on by default", () => {
 
       await showTab(7);
 
-      expect(buttonNamed("NATIVE")?.getAttribute("aria-pressed")).toBe("false");
       expect(document.activeElement).toBe(document.body);
+      expect(viewToggle()).not.toBeNull();
     });
 
     it("leaves focus as a navigation leaves it, not on Settings", async () => {
@@ -1169,9 +1277,9 @@ describe("native mode on by default", () => {
 
       // The setting is on, and this panel agrees, and says so last.
       expect(chromeMock.stored[SETTING]).toBe(true);
-      expect(buttonNamed("NATIVE")).not.toBeNull();
+      expect(buttonNamed("Chrome's tree")).not.toBeNull();
       expect(announced()).toBe(
-        "Reading pages through Chrome is on — NATIVE in the toolbar shows its tree.",
+        "Reading pages through Chrome is on — choose Chrome's tree in Settings to see it.",
       );
       // Applied from what storage reported, in order: no second read whose
       // late reply could overwrite a newer change.
@@ -1195,11 +1303,11 @@ describe("native mode on by default", () => {
       await flush();
 
       expect(chromeMock.stored[SETTING]).toBe(false);
-      expect(buttonNamed("NATIVE")).toBeNull();
-      // The DOM tree's own controls are back, so the view really is DOM.
+      expect(buttonNamed("Chrome's tree")).toBeNull();
+      // The in-page tree's own controls are back, so that is what shows.
       expect(searchBox()).not.toBeNull();
       expect(announced()).toBe(
-        "Not reading pages through Chrome — showing the DOM tree.",
+        "Not reading pages through Chrome — showing the in-page tree.",
       );
     });
 
@@ -1222,7 +1330,7 @@ describe("native mode on by default", () => {
       expect(settingsCheckbox()!.getAttribute("aria-disabled")).toBe("false");
       // Its write is over, so another window's change still reaches it.
       await writtenElsewhere({ [SETTING]: false });
-      expect(buttonNamed("NATIVE")).toBeNull();
+      expect(buttonNamed("Chrome's tree")).toBeNull();
     });
 
     it("leaves focus where the user moved it while its own turn-off was on its way", async () => {
@@ -1248,7 +1356,7 @@ describe("native mode on by default", () => {
       release();
       await flush();
 
-      expect(buttonNamed("NATIVE")).toBeNull();
+      expect(buttonNamed("Chrome's tree")).toBeNull();
       expect(document.activeElement).toBe(searchBox());
     });
   });
