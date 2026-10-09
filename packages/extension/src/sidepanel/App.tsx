@@ -496,15 +496,12 @@ export function App() {
   nativeNodesRef.current = nativeNodes;
   // Focus sync for the native tree: the read the tree on screen came from,
   // when that read numbered the page, and its rows by number. The content
-  // script's focus reports name rows by those numbers (`page-keys.ts`). Refs,
-  // for the long-lived message listener.
-  const nativePageKeysReadId = useRef<string | undefined>(undefined);
-  const nativeRowsByKey = useMemo(
-    () => nativeRowsByPageKey(nativeNodes),
-    [nativeNodes],
-  );
-  const nativeRowsByKeyRef = useRef(nativeRowsByKey);
-  nativeRowsByKeyRef.current = nativeRowsByKey;
+  // script's focus reports name rows by those numbers (`page-keys.ts`). Set
+  // with the tree, both at once, so a report never meets one read's id and
+  // another's rows; a ref, for the long-lived message listener.
+  const nativePageKeys = useRef<
+    { readId: string; rows: Map<number, string> } | undefined
+  >(undefined);
   const [nativeRootId, setNativeRootId] = useState<string>("");
   const [nativeStatus, setNativeStatus] = useState<string>("");
   const [nativeBusy, setNativeBusy] = useState(false);
@@ -745,7 +742,7 @@ export function App() {
     // focus report, and the numbering it names rows by.
     setNativePickReveal(undefined);
     setNativePageFocus(undefined);
-    nativePageKeysReadId.current = undefined;
+    nativePageKeys.current = undefined;
   }, []);
 
   /** Native mode is off: drop the native tree and return the view to DOM.
@@ -1481,11 +1478,14 @@ export function App() {
         focusTrackerOnRef.current &&
         producerRef.current === "native"
       ) {
-        const nodeId = nativeRowForPageFocus(
-          message.payload.pageKeys,
-          nativePageKeysReadId.current,
-          nativeRowsByKeyRef.current,
-        );
+        const numbered = nativePageKeys.current;
+        const nodeId = numbered
+          ? nativeRowForPageFocus(
+              message.payload.pageKeys,
+              numbered.readId,
+              numbered.rows,
+            )
+          : undefined;
         if (nodeId !== undefined) {
           setNativePageFocus((prev) => ({
             nodeId,
@@ -2072,7 +2072,7 @@ export function App() {
           }
           setNativeNodes(new Map());
           setNativeRootId("");
-          nativePageKeysReadId.current = undefined;
+          nativePageKeys.current = undefined;
           if (r?.reason) {
             setNativeCapability(blockedBy(r.reason));
             lastNativeFailure.current = explainUnavailable(r.reason);
@@ -2094,7 +2094,10 @@ export function App() {
         nativeNodesRef.current = read;
         // A read that didn't number the page leaves this tree unfollowed:
         // the numbers from an earlier read name rows of an earlier tree.
-        nativePageKeysReadId.current = r.pageKeysReadId;
+        nativePageKeys.current =
+          r.pageKeysReadId !== undefined
+            ? { readId: r.pageKeysReadId, rows: nativeRowsByPageKey(read) }
+            : undefined;
         // Focus sync was turned on while this read was under way: number the
         // tree now, once this read has let go of the in-flight guard.
         if (!numbered && focusTrackerOnRef.current) {
@@ -2162,7 +2165,7 @@ export function App() {
       !focusTrackerOnRef.current ||
       producerRef.current !== "native" ||
       nativeNodesRef.current.size === 0 ||
-      nativePageKeysReadId.current !== undefined ||
+      nativePageKeys.current !== undefined ||
       nativeInFlight.current
     ) {
       return;
@@ -2455,6 +2458,7 @@ export function App() {
         if (token !== nativeOpToken.current) return; // invalidated during the lookup
         if (nativeTreeUrl && nowUrl && nowUrl !== nativeTreeUrl) {
           setNativeNodes(new Map());
+          nativePageKeys.current = undefined;
           setNativeRootId("");
           setNativeTreeTabId(undefined);
           setNativeTreeUrl(undefined);
