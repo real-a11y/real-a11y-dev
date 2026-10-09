@@ -139,6 +139,14 @@ export interface NativeTreeViewProps {
    *  last read, or the element sits where the native read doesn't reach. */
   onRevealMiss?: () => void;
   /**
+   * Focus sync: the page's focus moved to this row's element. The row is
+   * selected and brought into view, as the DOM tree does it, and nothing is
+   * done on the page: focus is already there. `nonce` changes on every
+   * report, so focusing the same element again after scrolling away brings
+   * its row back. `ancestorIds` is unused.
+   */
+  pageFocus?: NativeReveal;
+  /**
    * The user settled on this node as the selection (a click, arrow keys, a
    * pick, the role-filter list): App reveals it on the page, with the same
    * outline the DOM tree's selection draws. Optional, so a host that doesn't
@@ -240,6 +248,7 @@ export function NativeTreeView({
   onActivate,
   reveal,
   onRevealMiss,
+  pageFocus,
   onSelectionReveal,
   onHoverPreview,
   scopedRootId = null,
@@ -561,11 +570,50 @@ export function NativeTreeView({
   // back to it every time the page changes.
   const visibleIdsRef = useRef(visibleIds);
   visibleIdsRef.current = visibleIds;
+
+  // Focus sync (`pageFocus`). Selecting the row must not follow it back onto
+  // the page, as every other selection does: focus is there already, and the
+  // follow attaches the debugger, which would put Chrome's bar up on every
+  // Tab press. So the row it selects is held here, set in the same render as
+  // the selection, and the follow effect below lets that selection go by;
+  // it is let go once the selection moves to another row. It leaves a scope
+  // the row is outside of, as the DOM tree does, but takes no focus from the
+  // page and clears nothing the user filtered by: with a search that hides
+  // the row, or the role filter's list, which keeps its own selection, the
+  // selection stays where it was.
+  const [selectedFromPage, setSelectedFromPage] = useState<string | null>(null);
+  const [pageFocusScroll, setPageFocusScroll] = useState(0);
+  useEffect(() => {
+    if (!pageFocus) return;
+    const id = pageFocus.nodeId;
+    if (!nodes.has(id)) return;
+    if (roleFilter !== null || (hasFilter && !search.visibleIds.has(id))) {
+      return;
+    }
+    if (scopeRoot && !isInScope(id, scopeRoot, (p) => parentOf.get(p))) {
+      scopeTo(null);
+    }
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      for (let p = parentOf.get(id); p; p = parentOf.get(p)) next.add(p);
+      return next;
+    });
+    setSelectedId(id);
+    setSelectedFromPage(id);
+    setPageFocusScroll((n) => n + 1);
+    // Only on a new report (`nonce`), like the pick's reveal above.
+  }, [pageFocus?.nonce]);
+  useEffect(() => {
+    if (selectedFromPage !== null && selectedFromPage !== selectedId) {
+      setSelectedFromPage(null);
+    }
+  }, [selectedId, selectedFromPage]);
+
   useEffect(() => {
     if (!selectedId) return;
     const index = visibleIdsRef.current.indexOf(selectedId);
     if (index !== -1) scrollToIndex(index, "nearest");
-  }, [selectedId, followNonce, scrollToIndex]);
+  }, [selectedId, followNonce, pageFocusScroll, scrollToIndex]);
 
   // Follow the selection onto the page (`onSelectionReveal`). Debounced: a
   // key-repeat burst walks `selectedId` through several rows, and each
@@ -592,9 +640,15 @@ export function NativeTreeView({
   // `endHover`. Every run of the effect settles both.
   const clickAwaitsFollow = useRef(false);
   const clickRevealOwesClear = useRef(false);
+  // The `followNonce` this effect last ran with: a new one is a gesture (a
+  // click, a pick's reveal), which follows even a row focus sync selected.
+  const followNonceSeen = useRef(followNonce);
   useEffect(() => {
     clickAwaitsFollow.current = false;
+    const gesture = followNonce !== followNonceSeen.current;
+    followNonceSeen.current = followNonce;
     if (!selectedId) return;
+    if (!gesture && selectedId === selectedFromPage) return;
     if (clickRevealOwesClear.current) {
       // The pointer has already left: reveal now, then clear what it draws,
       // as `endHover` does for a reveal still pending when it left.
