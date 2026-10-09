@@ -208,12 +208,15 @@ const [A, B] = ["a", "b"].map((c) => c.repeat(40));
  * the whole point: these cases are about runs that execute after the pull
  * request has moved on under them.
  *
- * `fork` puts the head in another repository, where the token is read-only.
+ * `fork` puts the head in another repository, where the token is read-only;
+ * `"deleted"` is a fork that no longer exists, which GitHub reports as null.
  * `onRemove(name, state)` runs before each removal, so a case can stand in for
  * another run getting there first (delete the label) or GitHub failing (throw).
  */
 function simulate({ fork = false, onRemove } = {}) {
-  const headRepo = fork ? `someone/${REPO}` : `${OWNER}/${REPO}`;
+  const headRepo =
+    fork === "deleted" ? null : fork ? `someone/${REPO}` : `${OWNER}/${REPO}`;
+  const asRepo = () => headRepo && { full_name: headRepo };
   const state = {
     head: A,
     labels: new Set(["risk:high"]),
@@ -225,18 +228,24 @@ function simulate({ fork = false, onRemove } = {}) {
   const head = () => ({
     sha: state.head,
     ref: "topic",
-    repo: { full_name: headRepo },
+    repo: asRepo(),
   });
 
-  /** A run GitHub made, as its listing returns it. */
-  function made(run) {
+  /**
+   * A run GitHub made, as its listing returns it. `display_title` may be a
+   * function of the run's id, which GitHub assigns before it titles the run.
+   */
+  function made({ display_title, ...run }) {
     const n = state.runs.length;
+    const id = 37_000_000 + n;
     state.runs.push({
-      id: 37_000_000 + n,
+      id,
       run_number: 1_400 + n,
       event: "pull_request",
       head_sha: state.head,
-      head_repository: { full_name: headRepo },
+      head_repository: asRepo(),
+      display_title:
+        typeof display_title === "function" ? display_title(id) : display_title,
       ...run,
     });
     return state.runs.at(-1);
@@ -255,7 +264,8 @@ function simulate({ fork = false, onRemove } = {}) {
         labels: asLabels(),
       },
     };
-    const title = evaluate(runName(), { github: { event: payload } });
+    const title = (id) =>
+      evaluate(runName(), { github: { event: payload, run_id: id } });
     return { payload, run: made({ display_title: title }) };
   }
 
@@ -363,6 +373,7 @@ describe("the record each run leaves", () => {
       "github.event.pull_request.number",
       "github.event.action",
       "github.event.label.name",
+      "github.run_id",
     ];
     assert.ok(fields.length, "run-name should carry the event");
     for (const field of fields) {
@@ -371,6 +382,13 @@ describe("the record each run leaves", () => {
         `run-name carries ${field}; if GitHub alone sets it, allow it here`,
       );
     }
+  });
+
+  it("names its own run, which no title written beforehand can", () => {
+    // Without the id, any run made with no `run-name` — all of them before
+    // this workflow had one — would be titled with the PR title, and its
+    // author can write `PR risk #7 labeled reviewed:deep` there.
+    assert.ok(runName().includes("${{ github.run_id }}"));
   });
 });
 
@@ -554,11 +572,43 @@ describe("which commit a review label describes", () => {
     pr.push(B);
     pr.made({
       head_repository: { full_name: `elsewhere/${REPO}` },
-      display_title: `PR risk #${NUMBER} labeled reviewed:deep`,
+      display_title: (id) =>
+        `PR risk #${NUMBER} labeled reviewed:deep (run ${id})`,
     });
-    pr.made({ display_title: `PR risk #${NUMBER + 1} labeled reviewed:deep` });
+    pr.made({
+      display_title: (id) =>
+        `PR risk #${NUMBER + 1} labeled reviewed:deep (run ${id})`,
+    });
 
     assert.equal((await bind(pr, pr.edit())).reviewed, "false");
+  });
+
+  it("trusts no run title a pull request's author could have written", async () => {
+    // A run made with no `run-name` — every run before the workflow had one —
+    // is titled with the PR title. A fork's author retitles the PR to look
+    // like a review at the commit they mean to push back later, and leaves
+    // the run behind; then the PR is reviewed at another commit and they push
+    // that one back. The record their title forged can't name its own run id,
+    // which GitHub assigns after the title is written. Nor can a guess.
+    const pr = simulate({ fork: true });
+    pr.made({ display_title: `PR risk #${NUMBER} labeled reviewed:deep` });
+    pr.made({
+      display_title: (id) =>
+        `PR risk #${NUMBER} labeled reviewed:deep (run ${id + 1})`,
+    });
+    await bind(pr, pr.push(B));
+    await bind(pr, pr.label("reviewed:deep"));
+
+    assert.equal((await bind(pr, pr.push(A))).reviewed, "false");
+  });
+
+  it("still reads a pull request whose fork was deleted", async () => {
+    // GitHub reports the head repository as null then, on the PR and on its
+    // runs alike, and the two must still match each other.
+    const pr = simulate({ fork: "deleted" });
+    await bind(pr, pr.push(B));
+    await bind(pr, pr.label("reviewed:deep"));
+    assert.equal((await bind(pr, pr.edit())).reviewed, "true");
   });
 
   it("binds risk-override the same way", async () => {
@@ -588,9 +638,13 @@ describe("which commit a review label describes", () => {
     pr.label("reviewed:deep");
     pr.push(B);
 
-    const { reviewed } = await bind(pr, pr.edit());
+    const { reviewed, notices } = await bind(pr, pr.edit());
     assert.equal(reviewed, "false");
     assert.deepEqual(pr.state.removals, ["reviewed:deep"]);
+    assert.match(
+      notices.join("\n"),
+      /^Another run already removed reviewed:deep/m,
+    );
   });
 
   it("still fails on anything but a 404", async () => {

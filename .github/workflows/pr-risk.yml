@@ -102,9 +102,11 @@ name: PR risk
 #
 # So a gate label counts for a commit when it is on the PR now and the newest
 # run at that commit to apply or remove it applied it. A fork's author can't
-# fire a `labeled` — that takes triage access — and nobody can retitle a run
-# without editing this file, which grades 🔴 high and is human review's job
-# anyway (above).
+# fire a `labeled` — that takes triage access — and can't write a record either:
+# a run made without this `run-name` carries the PR title, but no title can name
+# the run id GitHub assigns afterwards (see `run-name`), and changing what a run
+# here is titled means editing this file, which grades 🔴 high and is human
+# review's job anyway (above).
 #
 # By commit, not by push: a head pushed back to a commit that was reviewed gets
 # that review back, because it is the same tree. Any other commit owes one.
@@ -133,7 +135,13 @@ name: PR risk
 # COMMIT IT WAS APPLIED AT. Change it and that step together, and put nothing in
 # it a pull request's author writes: a PR title copied in here could claim a
 # `labeled reviewed:deep` that never happened.
-run-name: "PR risk #${{ github.event.pull_request.number }} ${{ github.event.action }} ${{ github.event.label.name }}"
+#
+# The run id is what makes a title this workflow's. A run with no `run-name` —
+# every run before this line existed, and any made from a merge ref without it
+# — is titled with the PR title instead, which its author can set to anything,
+# this format included. What they can't set is the id GitHub hands the run
+# after the title is written, so a record counts only when it names its own.
+run-name: "PR risk #${{ github.event.pull_request.number }} ${{ github.event.action }} ${{ github.event.label.name }} (run ${{ github.run_id }})"
 
 on:
   pull_request:
@@ -219,7 +227,7 @@ jobs:
             // What `run-name` titles a run. The two must agree to the
             // character: `scripts/pr-risk-workflow.test.mjs` titles its runs
             // from `run-name` itself, so changing one alone fails there.
-            const titled = (action, label) => `PR risk #${pr.number} ${action} ${label ?? ''}`;
+            const titled = (action, label, id) => `PR risk #${pr.number} ${action} ${label ?? ''} (run ${id})`;
 
             // This workflow's runs at `sha`, newest first. Matched on GitHub's
             // own fields, never the title, so another fork's copy of the same
@@ -244,7 +252,7 @@ jobs:
                 records.push({
                   id: context.runId,
                   number: context.runNumber,
-                  title: titled(context.payload.action, context.payload.label?.name),
+                  title: titled(context.payload.action, context.payload.label?.name, context.runId),
                 });
               }
               // By run number, which GitHub assigns as it creates runs. Not the
@@ -257,9 +265,10 @@ jobs:
             // newest run at `sha` that applied or removed it, applied it.
             async function appliedAt(label, sha) {
               if (!histories.has(sha)) histories.set(sha, await history(sha));
-              for (const { title } of histories.get(sha)) {
-                if (title === titled('labeled', label)) return true;
-                if (title === titled('unlabeled', label)) return false;
+              // Against the run's own id: see `run-name` for why.
+              for (const { id, title } of histories.get(sha)) {
+                if (title === titled('labeled', label, id)) return true;
+                if (title === titled('unlabeled', label, id)) return false;
               }
               return false;
             }
@@ -275,6 +284,7 @@ jobs:
             for (const name of Object.values(GATES)) {
               if (!sameRepo || !present.has(name)) continue;
               if (await appliedAt(name, live.head.sha)) continue;
+              let removed = 'Removed';
               try {
                 await github.rest.issues.removeLabel({ owner, repo, issue_number, name });
               } catch (error) {
@@ -282,9 +292,13 @@ jobs:
                 // a stack force-push fires two `synchronize` a second apart, see
                 // `concurrency` above. Gone is the point.
                 if (error.status !== 404) throw error;
+                removed = 'Another run already removed';
               }
               present.delete(name);
-              core.notice(`Removed ${name} — it wasn't applied at ${short(live.head.sha)}, the PR's head, so the review is owed again. Apply it once this head is reviewed.`);
+              // Applying a label still on the PR fires no event, and a label
+              // applied the instant a push lands can beat GitHub moving the PR
+              // to it — either way, no run saw it go on at this head.
+              core.notice(`${removed} ${name} — no run saw it applied at ${short(live.head.sha)}, the PR's head, so the review is owed again. Apply it once this head is reviewed and its run has started.`);
             }
 
             // Exactly 'true' or 'false', and set on every path that gets here:

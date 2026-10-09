@@ -290,8 +290,10 @@ Four properties worth knowing before you change it:
   reads the workflow's own run history instead — `run-name` titles every run
   with the action and label that fired it, and GitHub stamps each with the head
   it fired at — so a push owes a new review, and editing the description
-  afterwards costs nothing. Change `run-name` and the step that reads it back
-  together. A `risk-override` reason that names rule ids waives only those, in
+  afterwards costs nothing. Apply the label once the new head's run has
+  started: one applied the instant a push lands can beat GitHub moving the PR
+  to that head, and re-applying one still on the PR fires no event at all.
+  Change `run-name` and the step that reads it back together. A `risk-override` reason that names rule ids waives only those, in
   CI as well as locally.
 
 ### Testing the Chrome extension
