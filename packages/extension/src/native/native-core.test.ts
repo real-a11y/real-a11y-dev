@@ -31,6 +31,7 @@ import {
   type EnrichedNativeNode,
   type FrameSession,
 } from "./native-core.js";
+import { cdpPageKeys, type CdpDomNode } from "./page-keys.js";
 
 // A scripted fake CDP transport — records every call, returns programmed
 // responses. The same shape the chrome.debugger and Playwright transports have.
@@ -54,6 +55,124 @@ function resolving(objectId: string | null, fnResult: unknown): Handler {
     return {};
   };
 }
+
+describe("readNativeTree's page keys", () => {
+  const raw: RawNativeAXNode[] = [
+    {
+      nodeId: "1",
+      backendDOMNodeId: 1,
+      role: { value: "RootWebArea" },
+      childIds: ["2", "3"],
+    },
+    {
+      nodeId: "2",
+      backendDOMNodeId: 20,
+      role: { value: "heading" },
+      name: { value: "Hi" },
+    },
+    {
+      nodeId: "3",
+      backendDOMNodeId: 30,
+      role: { value: "button" },
+      name: { value: "Save" },
+    },
+  ];
+  // The page `DOM.getDocument` describes: html 0, head 1, body 2, h1 3,
+  // button 4, numbered as the content script numbers the live page.
+  const dom: CdpDomNode = {
+    nodeType: 9,
+    backendNodeId: 1,
+    children: [
+      { nodeType: 10, backendNodeId: 2 },
+      {
+        nodeType: 1,
+        backendNodeId: 3,
+        localName: "html",
+        children: [
+          { nodeType: 1, backendNodeId: 4, localName: "head" },
+          {
+            nodeType: 1,
+            backendNodeId: 5,
+            localName: "body",
+            children: [
+              {
+                nodeType: 1,
+                backendNodeId: 20,
+                localName: "h1",
+                children: [{ nodeType: 3, backendNodeId: 21 }],
+              },
+              { nodeType: 1, backendNodeId: 30, localName: "button" },
+            ],
+          },
+        ],
+      },
+    ],
+  };
+  const digest = cdpPageKeys(dom)!.digest;
+  const transport = (getDocument: () => unknown = () => ({ root: dom })) =>
+    new FakeTransport((method) => {
+      if (method === "Accessibility.getFullAXTree") return { nodes: raw };
+      if (method === "DOM.getDocument") return getDocument();
+      return {};
+    });
+  const keys = (nodes: EnrichedNativeNode[]) =>
+    Object.fromEntries(nodes.map((n) => [n.id, n.pageKey]));
+
+  it("gives each row its element's number when the content script numbered the page alike", async () => {
+    const t = transport();
+    const res = await readNativeTree(t, { pageKeys: async () => digest });
+    expect(res.pageKeyed).toBe(true);
+    expect(keys(res.nodes)).toMatchObject({
+      "ax-dom-20": 3,
+      "ax-dom-30": 4,
+    });
+    expect(t.calls.find((c) => c.method === "DOM.getDocument")?.params).toEqual(
+      { depth: -1, pierce: true },
+    );
+  });
+
+  it("numbers no row when the two walks disagree: the page changed between them", async () => {
+    for (const other of [
+      { ...digest, count: digest.count + 1 },
+      { ...digest, hash: (digest.hash + 1) >>> 0 },
+    ]) {
+      const res = await readNativeTree(transport(), {
+        pageKeys: async () => other,
+      });
+      expect(res.pageKeyed).toBeUndefined();
+      expect(res.nodes.some((n) => n.pageKey !== undefined)).toBe(false);
+    }
+  });
+
+  it("numbers no row, and still reads, when either walk can't be had", async () => {
+    const cases: Array<
+      [FakeTransport, () => Promise<typeof digest | undefined>]
+    > = [
+      [transport(), async () => undefined],
+      [transport(), () => Promise.reject(new Error("no content script"))],
+      [
+        transport(() => {
+          throw new Error("DOM.getDocument failed");
+        }),
+        async () => digest,
+      ],
+      [transport(() => ({})), async () => digest],
+    ];
+    for (const [t, pageKeys] of cases) {
+      const res = await readNativeTree(t, { pageKeys });
+      expect(res.pageKeyed).toBeUndefined();
+      expect(res.nodes.some((n) => n.pageKey !== undefined)).toBe(false);
+      expect(findNative(res.nodes, "button", "Save")).toBeDefined();
+    }
+  });
+
+  it("asks for no document when nothing numbers the page", async () => {
+    const t = transport();
+    const res = await readNativeTree(t);
+    expect(res.pageKeyed).toBeUndefined();
+    expect(t.calls.some((c) => c.method === "DOM.getDocument")).toBe(false);
+  });
+});
 
 describe("backendNodeIdFrom", () => {
   it("parses author-DOM ids and rejects unbacked ones", () => {

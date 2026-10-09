@@ -65,6 +65,12 @@ import {
   type NativeAXIndex,
 } from "@real-a11y-dev/core";
 
+import {
+  cdpPageKeys,
+  type CdpDomNode,
+  type PageKeyDigest,
+} from "./page-keys.js";
+
 /**
  * The sentinel a sensitive field's `value` arrives as on the wire — never the
  * raw secret (R1). A node that carries it also carries `redacted: true`,
@@ -386,6 +392,10 @@ export type EnrichedNativeNode = NativeAXNode &
      * withheld too — see {@link fieldValueWithheld}.
      */
     valueWithheld?: boolean;
+    /** Its element's number in the page's walk (`page-keys.ts`), which the
+     *  content script reports focus by. Only on a row of the top document,
+     *  and only when the read numbered the page. */
+    pageKey?: number;
   };
 
 /** The single capability the native path needs from any CDP transport. */
@@ -445,6 +455,18 @@ export interface NativeTreeResult {
    *  on every navigation, a reload included, unlike the URL. Absent when
    *  Chromium didn't say. */
   documentId?: string;
+  /** The rows carry `pageKey`s: the read numbered the page, and the content
+   *  script's numbering agreed. See {@link ReadNativeTreeOptions.pageKeys}. */
+  pageKeyed?: boolean;
+}
+
+export interface ReadNativeTreeOptions {
+  /**
+   * Have the content script number the live page for this read
+   * (`NATIVE_PAGE_KEYS`), and answer with its digest, or `undefined` when it
+   * couldn't. Left out, the read numbers nothing.
+   */
+  pageKeys?: () => Promise<PageKeyDigest | undefined>;
 }
 
 /**
@@ -885,6 +907,7 @@ let fieldReadCount = 0;
  *  `Iframe` row (see {@link readFrames}). */
 export async function readNativeTree(
   transport: CdpTransport,
+  options: ReadNativeTreeOptions = {},
 ): Promise<NativeTreeResult> {
   await transport.send("Accessibility.enable");
   // Which document this is: see `NativeTreeResult.documentId`. Asked before
@@ -908,6 +931,11 @@ export async function readNativeTree(
       rawCount += frame.rawCount;
     }
   }
+  // Last, so the numbering is as close as it can be to the moment the panel
+  // starts using it.
+  const pageKeyed = options.pageKeys
+    ? await keyPageRows(transport, nodes, options.pageKeys)
+    : false;
 
   // Serialized before `rootIdOf` adds any synthetic root, which is a
   // rendering/dispatch concern only — the plain-text output never had one.
@@ -922,7 +950,56 @@ export async function readNativeTree(
     keptCount,
     rootId,
     ...(documentId !== undefined ? { documentId } : {}),
+    ...(pageKeyed ? { pageKeyed } : {}),
   };
+}
+
+/**
+ * Give each row of the top document its element's number in the page's walk
+ * (`pageKey`, see `page-keys.ts`), so the panel can find the row for an
+ * element the content script reports focus on, with no debugger attached.
+ * The two walks start together, this one over `DOM.getDocument` and the
+ * content script's over the live DOM, to leave the page as little time as
+ * possible to change between them. If it changed anyway, their digests
+ * disagree and the numbers can't be trusted to name the same elements: no
+ * row gets one. True when the rows were numbered.
+ *
+ * Only the document's shape is used: which element sits where, and its local
+ * name. `DOM.getDocument` sends every attribute and text node as well; none
+ * of it is kept, or leaves this function.
+ */
+async function keyPageRows(
+  transport: CdpTransport,
+  nodes: EnrichedNativeNode[],
+  contentWalk: () => Promise<PageKeyDigest | undefined>,
+): Promise<boolean> {
+  const [content, dom] = await Promise.all([
+    contentWalk().catch(() => undefined),
+    transport
+      .send<{ root?: CdpDomNode }>("DOM.getDocument", {
+        depth: -1,
+        pierce: true,
+      })
+      .catch(() => undefined),
+  ]);
+  const page = dom?.root ? cdpPageKeys(dom.root) : undefined;
+  if (
+    !content ||
+    !page ||
+    content.count !== page.digest.count ||
+    content.hash !== page.digest.hash
+  ) {
+    return false;
+  }
+  for (const node of nodes) {
+    // A frame's row has a suffixed id, naming an element of another
+    // document, which the walk doesn't cover.
+    const backendNodeId = backendNodeIdFrom(node.id);
+    if (backendNodeId === null) continue;
+    const key = page.keys.get(backendNodeId);
+    if (key !== undefined) node.pageKey = key;
+  }
+  return true;
 }
 
 /**

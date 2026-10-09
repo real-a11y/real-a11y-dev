@@ -230,3 +230,121 @@ describe("registerNativeMode: the dogfood event log in the store build", () => {
     expect(keys).toEqual([]);
   });
 });
+
+describe("registerNativeMode: a read numbers the page for focus sync", () => {
+  // A page of one button: `DOM.getDocument`'s tree, and the AX tree over it.
+  const dom = {
+    nodeType: 9,
+    backendNodeId: 1,
+    children: [
+      {
+        nodeType: 1,
+        backendNodeId: 2,
+        localName: "html",
+        children: [
+          {
+            nodeType: 1,
+            backendNodeId: 3,
+            localName: "body",
+            children: [{ nodeType: 1, backendNodeId: 30, localName: "button" }],
+          },
+        ],
+      },
+    ],
+  };
+  const ax = [
+    {
+      nodeId: "1",
+      backendDOMNodeId: 1,
+      role: { value: "RootWebArea" },
+      childIds: ["3"],
+    },
+    {
+      nodeId: "3",
+      backendDOMNodeId: 30,
+      role: { value: "button" },
+      name: { value: "Save" },
+    },
+  ];
+  /** The live page numbered as CDP numbers it: html 0, body 1, button 2. */
+  let contentReply: () => Promise<unknown>;
+  let sendMessage: ReturnType<typeof vi.fn>;
+
+  beforeEach(async () => {
+    const { cdpPageKeys } = await import("./page-keys.js");
+    const digest = cdpPageKeys(dom)!.digest;
+    contentReply = async () => digest;
+    sendMessage = vi.fn(() => contentReply());
+    const c = chrome as unknown as {
+      debugger: { sendCommand: unknown };
+      tabs: { sendMessage: unknown };
+    };
+    c.debugger.sendCommand = async (_target: unknown, method: string) =>
+      method === "Accessibility.getFullAXTree"
+        ? { nodes: ax }
+        : method === "DOM.getDocument"
+          ? { root: dom }
+          : {};
+    c.tabs.sendMessage = sendMessage;
+  });
+
+  type Read = {
+    ok?: boolean;
+    pageKeysReadId?: string;
+    nodes?: Array<{ name: string; pageKey?: number }>;
+  };
+  const read = async () =>
+    (await send({ type: "NATIVE_READ", tabId: 7 }, PANEL)).response as Read;
+
+  it("asks the top frame to number the page, under an id the read answers with", async () => {
+    await register();
+    const r = await read();
+    expect(r.ok).toBe(true);
+    expect(sendMessage).toHaveBeenCalledWith(
+      7,
+      { type: "NATIVE_PAGE_KEYS", payload: { readId: r.pageKeysReadId } },
+      { frameId: 0 },
+    );
+    expect(r.pageKeysReadId).toMatch(/^[0-9a-f-]{36}$/);
+    expect(r.nodes?.find((n) => n.name === "Save")?.pageKey).toBe(2);
+  });
+
+  it("names a new numbering on every read", async () => {
+    await register();
+    const first = (await read()).pageKeysReadId;
+    const second = (await read()).pageKeysReadId;
+    expect(second).not.toBe(first);
+  });
+
+  it("answers with no numbering when the content script numbered the page differently, or not at all", async () => {
+    await register();
+    for (const reply of [
+      async () => ({ count: 1, hash: 1 }),
+      async () => null,
+      async () => {
+        throw new Error("Receiving end does not exist.");
+      },
+    ]) {
+      contentReply = reply;
+      const r = await read();
+      expect(r.ok).toBe(true);
+      expect(r.pageKeysReadId).toBeUndefined();
+      expect(r.nodes?.find((n) => n.name === "Save")?.pageKey).toBeUndefined();
+    }
+  });
+
+  it("doesn't wait on a content script that never answers", async () => {
+    await register();
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      contentReply = () => new Promise(() => {});
+      const pending = read();
+      await vi.advanceTimersByTimeAsync(2_000);
+      const r = await pending;
+      expect(r.ok).toBe(true);
+      expect(r.pageKeysReadId).toBeUndefined();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});

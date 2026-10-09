@@ -16,6 +16,11 @@ import {
 import type { TreeViewMode, TreeChange } from "@real-a11y-dev/core";
 
 import { computeFieldState } from "./field-state.js";
+import {
+  liveDocumentElement,
+  livePageKeyWalker,
+  PageKeySnapshots,
+} from "./native/page-keys.js";
 import { pageText } from "./page-text.js";
 import { isTrustedSender, planHighlight } from "./routing.js";
 import { elementsFromTabSequence, sendKey } from "./send-key.js";
@@ -80,6 +85,18 @@ const NATIVE_OVERLAY_ARM_MS = 800;
 const elementRefs = getElementRefs();
 const dispatcher = new ActionDispatcher(elementRefs);
 const focusManager = new FocusManager(elementRefs);
+// The native reads' numberings of this page, which focus is reported by for
+// the native tree: see native/page-keys.ts. Only the top frame is numbered.
+// `chrome.dom.openOrClosedShadowRoot` is how the walk sees a closed shadow
+// root, as the read's CDP walk does.
+const pageKeys = new PageKeySnapshots(
+  livePageKeyWalker(
+    chrome.dom?.openOrClosedShadowRoot
+      ? (el) => chrome.dom.openOrClosedShadowRoot(el)
+      : undefined,
+  ),
+  renderingParent,
+);
 let liveObserver: MutationObserver | null = null;
 // Whether live tree observation is armed. Starts OFF — deferred until the
 // side panel connects for this tab, so a page whose panel is never opened
@@ -315,6 +332,15 @@ chrome.runtime.onMessage.addListener(
         break;
       }
 
+      case "NATIVE_PAGE_KEYS": {
+        // A native read numbering the page (the service worker asks the top
+        // frame only). The digest goes back for the read to compare with its
+        // own; the numbering stays here for the focus reports below.
+        const root = isSubFrame ? null : liveDocumentElement(document);
+        sendResponse(root ? pageKeys.take(message.payload.readId, root) : null);
+        break;
+      }
+
       case "ARM_NATIVE_OVERLAY": {
         const { seq, active, nonce, kind = "reveal" } = message.payload;
         if (active) {
@@ -442,13 +468,33 @@ document.addEventListener("focusin", (e) => {
   if (curtainVisible) return;
 
   const nodeId = findTrackedAncestor(e.target as Element | null);
-  if (!nodeId) return;
-  focusManager.highlightElement(nodeId);
+  // For the native tree, which may hold a row for the element itself where
+  // the DOM tree has only its host.
+  const keys = pageKeys.keysFor(deepFocusTarget(e));
+  if (!nodeId && !keys) return;
+  if (nodeId) focusManager.highlightElement(nodeId);
   safeSendMessage({
     type: "FOCUS_CHANGED",
-    payload: { nodeId },
+    payload: {
+      ...(nodeId ? { nodeId } : {}),
+      ...(keys ? { pageKeys: keys } : {}),
+    },
   });
 });
+
+/** The element focus landed on. `e.target` is retargeted to the outermost
+ *  shadow host, and `composedPath()[0]` reaches into open roots only; a
+ *  closed root's own `activeElement` says which of its elements has focus. */
+function deepFocusTarget(e: Event): Element | null {
+  const first = e.composedPath()[0] ?? e.target;
+  let el = first instanceof Element ? first : null;
+  for (let depth = 0; el instanceof HTMLElement && depth < 32; depth++) {
+    const inner = chrome.dom?.openOrClosedShadowRoot?.(el)?.activeElement;
+    if (!inner || inner === el) break;
+    el = inner;
+  }
+  return el;
+}
 
 /** The nearest element at or above `el` that the tree tracks, climbing out of
  *  shadow roots. Clobber-safe (`renderingParent`): through a `<form>` whose

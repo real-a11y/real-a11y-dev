@@ -849,3 +849,57 @@ describe("background: top-frame navigation tells the panel its tree is stale", (
     );
   });
 });
+
+describe("background: page focus forwarded to the panel", () => {
+  let h: Harness;
+
+  beforeEach(async () => {
+    vi.useFakeTimers();
+    vi.resetModules();
+    h = makeHarness();
+    (globalThis as { chrome?: unknown }).chrome = h.chromeMock;
+    await import("./background.js");
+    await vi.runAllTimersAsync();
+    h.panelMessages.length = 0;
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    delete (globalThis as { chrome?: unknown }).chrome;
+  });
+
+  /** Report focus as frame `frameId`'s content script does. */
+  function reportFocus(frameId: number, payload: object) {
+    for (const fn of h.messageListeners) {
+      fn(
+        { type: "FOCUS_CHANGED", payload },
+        { id: EXTENSION_ID, tab: { id: TAB_ID }, frameId },
+        () => {},
+      );
+    }
+  }
+
+  const forwarded = () =>
+    h.panelMessages.filter((m) => m.type === "FOCUS_CHANGED");
+
+  it("passes the top frame's page keys on with its node", () => {
+    const pageKeys = { "read-1": [7, 2, 0] };
+    reportFocus(0, { nodeId: "n3", pageKeys });
+    reportFocus(0, { pageKeys });
+    expect(forwarded()).toEqual([
+      {
+        type: "FOCUS_CHANGED",
+        tabId: TAB_ID,
+        payload: { nodeId: "n3", pageKeys },
+      },
+      { type: "FOCUS_CHANGED", tabId: TAB_ID, payload: { pageKeys } },
+    ]);
+  });
+
+  it("keeps a subframe's node, frame-prefixed, and drops any page keys it sends", () => {
+    reportFocus(2, { nodeId: "n3", pageKeys: { "read-1": [7] } });
+    expect(forwarded()).toEqual([
+      { type: "FOCUS_CHANGED", tabId: TAB_ID, payload: { nodeId: "f2-n3" } },
+    ]);
+  });
+});
