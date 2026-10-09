@@ -28,14 +28,7 @@ async function show(
   await page.bringToFront();
   await nav.panel.reload();
 
-  // Scoped to the toolbar's producer group: the view-mode group has its own
-  // "DOM" button.
-  const toggle = nav.panel
-    .getByRole("group", { name: "Tree producer" })
-    .getByRole("button", { name: producer, exact: true });
-  await expect(toggle).toBeVisible({ timeout: 20_000 });
-  await toggle.click();
-  await expect(toggle).toHaveAttribute("aria-pressed", "true");
+  await nav.chooseTree(producer === "DOM" ? "In-page tree" : "Chrome's tree");
   if (producer === "DOM") {
     // The A11Y view, so rows read `role "name"` the way native's do.
     await nav.panel
@@ -349,8 +342,7 @@ test("DOM: page focus moving while native shows keeps the hidden DOM scope", asy
   await itemsRow(nav.panel).dblclick({ position: { x: 5, y: 5 } });
   await expect(scopeBar(nav.panel)).toBeVisible();
 
-  const producers = nav.panel.getByRole("group", { name: "Tree producer" });
-  await producers.getByRole("button", { name: "NATIVE", exact: true }).click();
+  await nav.chooseTree("Chrome's tree");
   await expect(nav.panel.locator(".sn-scope-bar")).toHaveCount(0);
   await expect
     .poll(() => nav.panel.locator(".sn-node").count(), { timeout: 20_000 })
@@ -364,7 +356,7 @@ test("DOM: page focus moving while native shows keeps the hidden DOM scope", asy
     "Showing the full tree",
   );
 
-  await producers.getByRole("button", { name: "DOM", exact: true }).click();
+  await nav.chooseTree("In-page tree");
   await expect(scopeBar(nav.panel)).toBeVisible();
   await expect(
     scopeBar(nav.panel).locator('[aria-current="location"]'),

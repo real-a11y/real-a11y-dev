@@ -40,6 +40,7 @@ import {
   expect,
   test as base,
   type BrowserContext,
+  type Locator,
   type Page,
   type Worker,
 } from "@playwright/test";
@@ -56,6 +57,10 @@ const BUILD_DIRS = {
 } as const;
 export type ExtensionBuild = keyof typeof BUILD_DIRS;
 const FIXTURE_DIR = resolve(HERE, "fixtures");
+
+/** The choice of tree in the panel's Settings: Chrome's own (the native
+ *  tree), or the panel's in-page reading with its DOM / A11Y / TAB views. */
+export type TreeChoice = "Chrome's tree" | "In-page tree";
 
 /** Mirrors the panel's own `NativeAction` union (`native-core.ts`). Declared
  *  rather than imported: the e2e suite talks to the extension over the message
@@ -408,23 +413,56 @@ export class NativeHarness {
    */
   /**
    * Open a fixture, bring it forward, reload the panel onto it and show the
-   * native tree: click NATIVE (which renders only once the DOM producer has
-   * connected) and wait for the auto-load's first rows. Returns the page.
+   * native tree: choose Chrome's tree in Settings (offered only once the DOM
+   * producer has connected) and wait for the auto-load's first rows. Returns
+   * the page.
    */
   async showNative(fixture: string): Promise<Page> {
     const { page } = await this.open(fixture);
     await page.bringToFront();
     await this.panel.reload();
-    const toggle = this.panel
-      .getByRole("group", { name: "Tree producer" })
-      .getByRole("button", { name: "NATIVE", exact: true });
-    await expect(toggle).toBeVisible({ timeout: 20_000 });
-    await toggle.click();
-    await expect(toggle).toHaveAttribute("aria-pressed", "true");
+    await this.chooseTree("Chrome's tree");
     await expect
       .poll(() => this.panel.locator(".sn-node").count(), { timeout: 20_000 })
       .toBeGreaterThan(0);
     return page;
+  }
+
+  /** Chrome's tree on screen: the native producer's own. */
+  nativeTree(): Locator {
+    return this.panel.getByRole("tree", {
+      name: /^Native accessibility tree/,
+    });
+  }
+
+  /** The in-page tree's DOM / A11Y / TAB views, in the toolbar while that
+   *  tree shows. */
+  viewToggle(): Locator {
+    return this.panel.getByRole("group", { name: "Tree view mode" });
+  }
+
+  /** A button of the choice of tree in Settings, while Settings is open. */
+  treeChoice(name: TreeChoice): Locator {
+    return this.panel.getByRole("button", { name, exact: true });
+  }
+
+  /**
+   * Show Chrome's tree or the in-page tree, as the user does: open
+   * Settings ▾, choose (offered once a page has connected, while native
+   * mode is on), and close Settings again with its own button, which keeps
+   * focus on that button.
+   */
+  async chooseTree(name: TreeChoice): Promise<void> {
+    const settings = this.panel.getByRole("button", { name: "Settings ▾" });
+    const choice = this.treeChoice(name);
+    if ((await settings.getAttribute("aria-expanded")) !== "true") {
+      await settings.click();
+    }
+    await expect(choice).toBeVisible({ timeout: 20_000 });
+    await choice.click();
+    await expect(choice).toHaveAttribute("aria-pressed", "true");
+    await settings.click();
+    await expect(choice).toHaveCount(0);
   }
 
   async open(fixture: string): Promise<FixtureTab> {

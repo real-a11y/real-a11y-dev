@@ -465,9 +465,7 @@ async function showNativeByDefault(
   await expect
     .poll(() => nav.panel.locator(".sn-node").count(), { timeout: 20_000 })
     .toBeGreaterThan(0);
-  await expect(
-    nav.panel.getByRole("button", { name: "NATIVE", exact: true }),
-  ).toHaveAttribute("aria-pressed", "true");
+  await expect(nav.nativeTree()).toBeVisible();
   return page;
 }
 
@@ -505,10 +503,8 @@ test("switching tabs after the default sends no read for the new tab", async ({
   await nav.panel.waitForTimeout(NO_READ_WINDOW_MS);
   expect(await nav.nativeReads()).toHaveLength(1);
 
-  // The producer stays NATIVE, and Refresh reads normally.
-  await expect(
-    nav.panel.getByRole("button", { name: "NATIVE", exact: true }),
-  ).toHaveAttribute("aria-pressed", "true");
+  // The panel stays on Chrome's tree, and Refresh reads normally.
+  await expect(nav.viewToggle()).toHaveCount(0);
   await nav.panel.getByRole("button", { name: "Refresh native tree" }).click();
   await expect
     .poll(() => nav.panel.locator(".sn-node").count(), { timeout: 20_000 })
@@ -516,7 +512,7 @@ test("switching tabs after the default sends no read for the new tab", async ({
   expect(await nav.nativeReads()).toHaveLength(2);
 });
 
-test("a default that can't read the page falls back to DOM, says why, and doesn't retry that tab", async ({
+test("a default that can't read the page falls back to the in-page tree, says why, and doesn't retry that tab", async ({
   nav,
 }) => {
   await nav.setNativeReads("fail");
@@ -525,42 +521,39 @@ test("a default that can't read the page falls back to DOM, says why, and doesn'
   await nav.panel.reload();
 
   await expect(
-    nav.panel.getByText(/Native mode: showing the DOM tree — .*DevTools/),
+    nav.panel.getByText(/Native mode: showing the in-page tree — .*DevTools/),
   ).toBeVisible({ timeout: 20_000 });
-  await expect(
-    nav.panel.getByRole("button", { name: "DOM", exact: true }).first(),
-  ).toHaveAttribute("aria-pressed", "true");
+  await expect(nav.viewToggle()).toBeVisible();
   // One attempt, and no more for this tab: each retry would attach again.
   await nav.panel.waitForTimeout(NO_READ_WINDOW_MS);
   expect(await nav.nativeReads()).toHaveLength(1);
 });
 
-test("turning native mode off while the default's read is in flight leaves the panel on DOM", async ({
+test("turning native mode off while the default's read is in flight leaves the panel on the in-page tree", async ({
   nav,
 }) => {
   await nav.setNativeReads("delay:2000");
   const { page } = await nav.open("native-panel.html");
   await page.bringToFront();
   await nav.panel.reload();
-  await expect(
-    nav.panel.getByRole("button", { name: "NATIVE", exact: true }),
-  ).toHaveAttribute("aria-pressed", "true", { timeout: 20_000 });
+  await nav.panel.getByRole("button", { name: "Settings ▾" }).click();
+  const chromeTree = nav.treeChoice("Chrome's tree");
+  await expect(chromeTree).toHaveAttribute("aria-pressed", "true", {
+    timeout: 20_000,
+  });
   expect(await nav.nativeReads()).toHaveLength(1);
 
-  await nav.panel.getByRole("button", { name: "Settings ▾" }).click();
   const setting = nav.panel.getByRole("checkbox", {
     name: "Read pages through Chrome (recommended)",
   });
   await setting.click();
   await expect(setting).not.toBeChecked();
-  const producerToggle = nav.panel.getByRole("group", {
-    name: "Tree producer",
-  });
-  await expect(producerToggle).toHaveCount(0);
+  await expect(chromeTree).toHaveCount(0);
   // The delayed reply lands after the switch; it must not bring the native
   // tree back or flip the view.
   await nav.panel.waitForTimeout(2_500);
-  await expect(producerToggle).toHaveCount(0);
+  await expect(chromeTree).toHaveCount(0);
+  await expect(nav.viewToggle()).toBeVisible();
   await expect(
     nav.panel.getByRole("button", { name: "Refresh native tree" }),
   ).toHaveCount(0);
@@ -756,7 +749,7 @@ test("picking an element on the page selects and reveals it in the native tree",
   await expect(nav.panel.locator(".sn-tree")).toBeFocused();
 });
 
-test("switching to DOM and back doesn't apply an old pick again", async ({
+test("switching to the in-page tree and back doesn't apply an old pick again", async ({
   nav,
 }) => {
   const page = await nav.showNative("native-panel.html");
@@ -766,9 +759,8 @@ test("switching to DOM and back doesn't apply an old pick again", async ({
   const selected = nav.panel.locator('[role="treeitem"][aria-selected="true"]');
   await expect(selected).toHaveCount(1);
 
-  const producer = nav.panel.getByRole("group", { name: "Tree producer" });
-  await producer.getByRole("button", { name: "DOM", exact: true }).click();
-  await producer.getByRole("button", { name: "NATIVE", exact: true }).click();
+  await nav.chooseTree("In-page tree");
+  await nav.chooseTree("Chrome's tree");
   await expect
     .poll(() => nav.panel.locator(".sn-node").count(), { timeout: 20_000 })
     .toBeGreaterThan(0);
@@ -874,7 +866,7 @@ test("switching producer while a native pick is armed resets the button and canc
   const page = await nav.showNative("native-panel.html");
   const pickButton = await armPick(nav);
 
-  await nav.panel.getByRole("button", { name: "DOM", exact: true }).click();
+  await nav.chooseTree("In-page tree");
 
   // The same button now shows the DOM producer's own, never-armed picker.
   await expect(pickButton).toHaveAttribute("aria-pressed", "false");

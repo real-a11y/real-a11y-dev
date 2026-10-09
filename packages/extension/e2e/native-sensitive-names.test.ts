@@ -79,11 +79,7 @@ test("the panel shows no card number in any row", async ({ nav }) => {
   const { page } = await nav.open("native-sensitive-names.html");
   await page.bringToFront();
   await nav.panel.reload();
-  const toggle = nav.panel
-    .getByRole("group", { name: "Tree producer" })
-    .getByRole("button", { name: "NATIVE", exact: true });
-  await expect(toggle).toBeVisible({ timeout: 20_000 });
-  await toggle.click();
+  await nav.chooseTree("Chrome's tree");
   await expect
     .poll(() => nav.panel.locator(".sn-node").count(), { timeout: 20_000 })
     .toBeGreaterThan(0);

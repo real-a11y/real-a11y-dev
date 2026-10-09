@@ -103,12 +103,7 @@ test("NATIVE panel: the tree shows the announced label, and a retype starts from
   nav,
 }) => {
   const page = await showFixture(nav);
-  const nativeToggle = nav.panel.getByRole("button", {
-    name: "NATIVE",
-    exact: true,
-  });
-  await expect(nativeToggle).toBeVisible({ timeout: 20_000 });
-  await nativeToggle.click();
+  await nav.chooseTree("Chrome's tree");
   await expect
     .poll(() => nav.panel.locator(".sn-node").count(), { timeout: 20_000 })
     .toBeGreaterThan(0);
