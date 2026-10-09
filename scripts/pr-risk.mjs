@@ -1469,7 +1469,7 @@ function renderMarkdown({ tier, reasons, shape, unrecognised }, facts) {
 
   if (tier === "high") {
     out.push(
-      `> This check stays red until the deep review is on record. Run the review passes named above, then add the **\`reviewed:deep\`** label — it is cleared automatically whenever the head changes, so it always means "reviewed at this diff". If a rule fired on something genuinely inert, add **\`risk-override\`** and put the reason in the description; the check reads it back.`,
+      `> This check stays red until the deep review is on record. Run the review passes named above, then add the **\`reviewed:deep\`** label — it counts only for the commit it was applied at and comes off when the head moves, so it always means "reviewed at this diff". If a rule fired on something genuinely inert, add **\`risk-override\`** and put the reason in the description; the check reads it back.`,
       ``,
     );
   }
@@ -1680,13 +1680,14 @@ if (bools.has("gate")) {
         .map((r) => r.title)
         .join(", ")}`,
       ``,
-      `  Run the passes named above, then add the \`reviewed:deep\` label — it is`,
-      `  dropped automatically whenever the head changes, so it always means`,
+      `  Run the passes named above, then add the \`reviewed:deep\` label — it`,
+      `  counts only for the commit it was applied at, so it always means`,
       `  "reviewed at this diff" rather than "reviewed once".`,
       ``,
       `  If a rule fired on something inert, \`risk-override\` plus a reason in the`,
       `  description clears it. The reason is required: the check reads the body`,
-      `  back and refuses an empty one.`,
+      `  back and refuses an empty one, and a reason naming rule ids waives only`,
+      `  those.`,
     ]);
   }
 }

@@ -265,7 +265,7 @@ high; a 2,000-line docs rewrite is low. A path it doesn't recognise grades 🟡
 medium rather than 🟢 low, on the principle that "never heard of it" is not
 evidence of harmlessness.
 
-Two properties worth knowing before you change it:
+Four properties worth knowing before you change it:
 
 - **CI grades with the base branch's copy of the rubric, not yours.** The
   workflow extracts `scripts/` from `origin/main` into a temp directory and runs
@@ -283,6 +283,16 @@ Two properties worth knowing before you change it:
   an empty diff. An empty diff matches no rule, grades low, and exits 0 — a
   control that reports "nothing to see here" when it cannot see is worse than no
   control at all.
+- **A review label counts only for the commit it was applied at.** The check
+  never takes `reviewed:deep` or `risk-override` from the event that ran it:
+  that payload is as old as the event, so an edit landing just after a push
+  still listed the old review, and on a fork nothing could take it off. It
+  reads the workflow's own run history instead — `run-name` titles every run
+  with the action and label that fired it, and GitHub stamps each with the head
+  it fired at — so a push owes a new review, and editing the description
+  afterwards costs nothing. Change `run-name` and the step that reads it back
+  together. A `risk-override` reason that names rule ids waives only those, in
+  CI as well as locally.
 
 ### Testing the Chrome extension
 
