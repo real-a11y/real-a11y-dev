@@ -105,6 +105,8 @@ export interface NativeNode {
   description?: string;
   /** Ids of the rows this node controls (`aria-controls`). */
   controls?: string[];
+  /** Its element's number in the read's walk of the page (focus sync). */
+  pageKey?: number;
 }
 
 export interface NativeReadResult {
@@ -112,6 +114,8 @@ export interface NativeReadResult {
   serialized?: string;
   url?: string;
   nodes?: NativeNode[];
+  /** Set when the read numbered the page, and its rows carry `pageKey`s. */
+  pageKeysReadId?: string;
   error?: string;
   reason?: string;
 }
