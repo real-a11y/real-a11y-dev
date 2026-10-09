@@ -80,7 +80,7 @@ import {
 import type { ExportMeta, ExportView, ExportViews } from "./export.js";
 import { announcedValueLabel, rawValueLabel } from "./field-value.js";
 import { FilteredList } from "./FilteredList.js";
-import { useDismissible } from "./focus-hooks.js";
+import { FOCUSABLE_SELECTOR, useDismissible } from "./focus-hooks.js";
 import { InputPanel } from "./InputPanel.js";
 import type { InputPanelState } from "./InputPanel.js";
 import {
@@ -685,6 +685,12 @@ export function App() {
   // in the page, or in another window) gets none when focus moves.
   const focusBeforeCommit = useRef<Element | null>(null);
   focusBeforeCommit.current = document.activeElement;
+  // The popup (Copy, Settings) it was in, if any, found while it is still
+  // attached: once a commit removes part of a popup, the removed part no
+  // longer leads back to it.
+  const popupBeforeCommit = useRef<Element | null>(null);
+  popupBeforeCommit.current =
+    document.activeElement?.closest("[data-sn-popup]") ?? null;
 
   /** Drop the native tree and orphan any native read or action in flight.
    *  Bumping `nativeOpToken` makes a late reply recognizably stale to every
@@ -1051,21 +1057,21 @@ export function App() {
     if (before === null || before === document.body || before.isConnected) {
       return;
     }
+    const active = document.activeElement;
     // A popup's controls (the Copy menu, Settings) are not lost when it
     // closes: Escape returns focus to its button, and a press outside puts
-    // focus where the press does (`useDismissible`).
-    if (before.closest("[data-sn-popup]")) return;
-    const active = document.activeElement;
-    if (active !== null && active !== document.body) return;
-    // The tree choice in Settings goes on its own, Settings staying open,
-    // when native mode goes off in another window or the page disconnects:
-    // focus moves to the switch above it rather than out of Settings.
-    if (before.closest(".sn-settings-source")) {
-      document
-        .querySelector<HTMLElement>('#sn-settings-menu input[type="checkbox"]')
-        ?.focus();
+    // focus where the press does (`useDismissible`). One that went while its
+    // popup stayed open (the choice of tree in Settings, when native mode
+    // goes off in another window or the page disconnects) leaves focus in
+    // the popup, on its first control.
+    const popup = popupBeforeCommit.current;
+    if (popup) {
+      if (popup.isConnected && (active === null || active === document.body)) {
+        popup.querySelector<HTMLElement>(FOCUSABLE_SELECTOR)?.focus();
+      }
       return;
     }
+    if (active !== null && active !== document.body) return;
     [
       document.querySelector<HTMLElement>('[role="tree"]'),
       document.querySelector<HTMLElement>('.sn-filtered-list[role="listbox"]'),
@@ -2237,9 +2243,10 @@ export function App() {
   useEffect(() => {
     if (!nativeModeEnabled || !connected || myTabId === null) return;
     if (hasAppliedNativeDefault.current) return;
-    // Already native by another path in the same window (a manual NATIVE
-    // click): nothing is left to default, and a second read here could only
-    // undo the user's choice if it failed. The session's default is spent.
+    // Already native by another path in the same window (Chrome's tree
+    // chosen in Settings): nothing is left to default, and a second read here
+    // could only undo the user's choice if it failed. The session's default
+    // is spent.
     if (producerRef.current === "native") {
       hasAppliedNativeDefault.current = true;
       return;

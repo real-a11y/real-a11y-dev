@@ -465,16 +465,9 @@ async function showNativeByDefault(
   await expect
     .poll(() => nav.panel.locator(".sn-node").count(), { timeout: 20_000 })
     .toBeGreaterThan(0);
-  await expect(
-    nav.panel.getByRole("tree", { name: /^Native accessibility tree/ }),
-  ).toBeVisible();
+  await expect(nav.nativeTree()).toBeVisible();
   return page;
 }
-
-/** The in-page tree's DOM / A11Y / TAB views, in the toolbar while that tree
- *  shows. */
-const viewToggle = (nav: NativeHarness) =>
-  nav.panel.getByRole("group", { name: "Tree view mode" });
 
 /** How long a test waits for a read that should NOT be sent. The panel sends
  *  NATIVE_READ from an effect within milliseconds of the trigger, and these
@@ -511,7 +504,7 @@ test("switching tabs after the default sends no read for the new tab", async ({
   expect(await nav.nativeReads()).toHaveLength(1);
 
   // The panel stays on Chrome's tree, and Refresh reads normally.
-  await expect(viewToggle(nav)).toHaveCount(0);
+  await expect(nav.viewToggle()).toHaveCount(0);
   await nav.panel.getByRole("button", { name: "Refresh native tree" }).click();
   await expect
     .poll(() => nav.panel.locator(".sn-node").count(), { timeout: 20_000 })
@@ -530,7 +523,7 @@ test("a default that can't read the page falls back to the in-page tree, says wh
   await expect(
     nav.panel.getByText(/Native mode: showing the in-page tree — .*DevTools/),
   ).toBeVisible({ timeout: 20_000 });
-  await expect(viewToggle(nav)).toBeVisible();
+  await expect(nav.viewToggle()).toBeVisible();
   // One attempt, and no more for this tab: each retry would attach again.
   await nav.panel.waitForTimeout(NO_READ_WINDOW_MS);
   expect(await nav.nativeReads()).toHaveLength(1);
@@ -560,7 +553,7 @@ test("turning native mode off while the default's read is in flight leaves the p
   // tree back or flip the view.
   await nav.panel.waitForTimeout(2_500);
   await expect(chromeTree).toHaveCount(0);
-  await expect(viewToggle(nav)).toBeVisible();
+  await expect(nav.viewToggle()).toBeVisible();
   await expect(
     nav.panel.getByRole("button", { name: "Refresh native tree" }),
   ).toHaveCount(0);

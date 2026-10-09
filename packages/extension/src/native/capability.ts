@@ -202,8 +202,8 @@ export function explainUnavailable(reason: NativeUnavailableReason): string {
     case "no-url":
       return "couldn't read this tab's URL — it has probably gone away. Try again, or switch to a tab that is still open.";
     case "devtools-conflict":
-      return "DevTools is attached to this tab, and Chrome allows only one debugger client at a time. Close DevTools (or undock it onto another tab) and try again — the DOM tree below works meanwhile.";
+      return "DevTools is attached to this tab, and Chrome allows only one debugger client at a time. Close DevTools (or undock it onto another tab) and try again — the in-page tree works meanwhile.";
     case "attach-refused":
-      return "Chrome refused the debugger attach on this tab. The DOM tree below should still work.";
+      return "Chrome refused the debugger attach on this tab. The in-page tree should still work.";
   }
 }

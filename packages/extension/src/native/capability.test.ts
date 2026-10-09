@@ -166,11 +166,11 @@ describe("explainUnavailable", () => {
   });
 
   it("never promises a DOM fallback where there isn't one", () => {
-    // "the DOM tree below" on a chrome:// page would be a second dead end
-    // dressed up as a remedy.
+    // "the in-page tree works meanwhile" on a chrome:// page would be a
+    // second dead end dressed up as a remedy.
     for (const reason of ALL_REASONS) {
       if (blockedBy(reason).domFallback) continue;
-      expect(explainUnavailable(reason)).not.toMatch(/DOM tree below/i);
+      expect(explainUnavailable(reason)).not.toMatch(/in-page tree/i);
     }
   });
 });

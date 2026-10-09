@@ -28,10 +28,13 @@
   **Settings ▾**, next to the page's title, turns it off or back on later,
   with **Read pages through Chrome (recommended)**. Each window has its own side panel,
   and a change made in one holds in every panel open in the others
-  ([#496](https://github.com/real-a11y/real-a11y-dev/pull/496)). While it is
-  on, **Show**, also in Settings, switches the panel between **Chrome's tree**
-  and the **In-page tree**, the panel's own reading of the page, whose DOM /
-  A11Y / TAB views are in the toolbar.
+  ([#496](https://github.com/real-a11y/real-a11y-dev/pull/496)).
+
+- **Settings ▾ also chooses which tree the panel shows.** While native mode
+  is on, **Show** switches between **Chrome's tree** and the **In-page
+  tree**, the panel's own reading of the page, whose DOM / A11Y / TAB views
+  are in the toolbar. That leaves the toolbar a single **DOM** button. The
+  choice is per panel, and isn't stored.
 
 - Hardened the shared mutation observer so that re-arming it can no longer
   strand the previous observers and event listeners

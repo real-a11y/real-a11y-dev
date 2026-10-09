@@ -428,6 +428,19 @@ export class NativeHarness {
     return page;
   }
 
+  /** Chrome's tree on screen: the native producer's own. */
+  nativeTree(): Locator {
+    return this.panel.getByRole("tree", {
+      name: /^Native accessibility tree/,
+    });
+  }
+
+  /** The in-page tree's DOM / A11Y / TAB views, in the toolbar while that
+   *  tree shows. */
+  viewToggle(): Locator {
+    return this.panel.getByRole("group", { name: "Tree view mode" });
+  }
+
   /** A button of the choice of tree in Settings, while Settings is open. */
   treeChoice(name: TreeChoice): Locator {
     return this.panel.getByRole("button", { name, exact: true });

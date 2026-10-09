@@ -64,15 +64,6 @@ async function offPanel(nav: NativeHarness) {
 const storedSetting = (nav: NativeHarness, key: string) =>
   nav.panel.evaluate((k) => chrome.storage.local.get(k).then((r) => r[k]), key);
 
-/** Chrome's tree on screen: the native producer's own. */
-const nativeTree = (nav: NativeHarness) =>
-  nav.panel.getByRole("tree", { name: /^Native accessibility tree/ });
-
-/** The in-page tree's DOM / A11Y / TAB views, in the toolbar while that tree
- *  shows. */
-const viewToggle = (nav: NativeHarness) =>
-  nav.panel.getByRole("group", { name: "Tree view mode" });
-
 const note = (nav: NativeHarness) =>
   nav.panel.getByRole("note", { name: "About Chrome's debugging bar" });
 
@@ -108,7 +99,7 @@ test("a fresh profile's first page is read natively, and a note explains Chrome'
 }) => {
   await freshPanel(nav);
 
-  await expect(nativeTree(nav)).toBeVisible({ timeout: 20_000 });
+  await expect(nav.nativeTree()).toBeVisible({ timeout: 20_000 });
   await expect
     .poll(async () => (await nav.nativeReads()).length, { timeout: 20_000 })
     .toBe(1);
@@ -129,7 +120,7 @@ test("Got it hides the note for good", async ({ nav }) => {
   await expect.poll(async () => (await focused(nav)).role).toBe("tree");
 
   await nav.panel.reload();
-  await expect(nativeTree(nav)).toBeVisible({ timeout: 20_000 });
+  await expect(nav.nativeTree()).toBeVisible({ timeout: 20_000 });
   await expect(note(nav)).toHaveCount(0);
 });
 
@@ -139,8 +130,8 @@ test("Turn off in the note shows the in-page tree, and the next panel reads noth
   await freshPanel(nav);
   await note(nav).getByRole("button", { name: "Turn off" }).click();
 
-  await expect(viewToggle(nav)).toBeVisible();
-  await expect(nativeTree(nav)).toHaveCount(0);
+  await expect(nav.viewToggle()).toBeVisible();
+  await expect(nav.nativeTree()).toHaveCount(0);
   await expect(note(nav)).toHaveCount(0);
   await expect
     .poll(() => storedSetting(nav, "settings.nativeModeEnabled"))
@@ -163,14 +154,14 @@ test("Settings turns native mode off and back on, keeping focus on the switch", 
   nav,
 }) => {
   await freshPanel(nav);
-  await expect(nativeTree(nav)).toBeVisible({ timeout: 20_000 });
+  await expect(nav.nativeTree()).toBeVisible({ timeout: 20_000 });
   const toggle = await settingsSwitch(nav);
   await expect(toggle).toBeChecked();
 
   await toggle.click();
   await expect(toggle).not.toBeChecked();
   await expect(nav.treeChoice("Chrome's tree")).toHaveCount(0);
-  await expect(viewToggle(nav)).toBeVisible();
+  await expect(nav.viewToggle()).toBeVisible();
   await expect
     .poll(() => storedSetting(nav, "settings.nativeModeEnabled"))
     .toBe(false);
@@ -191,7 +182,7 @@ test("Settings turns native mode off and back on, keeping focus on the switch", 
 
 test("Settings stays on screen in a narrow side panel", async ({ nav }) => {
   await freshPanel(nav);
-  await expect(nativeTree(nav)).toBeVisible({ timeout: 20_000 });
+  await expect(nav.nativeTree()).toBeVisible({ timeout: 20_000 });
   // The in-page tree, whose DOM / A11Y / TAB views make the widest toolbar
   // there is; its controls don't wrap.
   await nav.chooseTree("In-page tree");
@@ -214,7 +205,7 @@ test("Settings holds the choice of tree, leaving the toolbar a single DOM button
   nav,
 }) => {
   await freshPanel(nav);
-  await expect(nativeTree(nav)).toBeVisible({ timeout: 20_000 });
+  await expect(nav.nativeTree()).toBeVisible({ timeout: 20_000 });
   await nav.panel.getByRole("button", { name: "Settings ▾" }).click();
   await expect(nav.treeChoice("Chrome's tree")).toHaveAttribute(
     "aria-pressed",
@@ -222,7 +213,7 @@ test("Settings holds the choice of tree, leaving the toolbar a single DOM button
   );
 
   await nav.treeChoice("In-page tree").click();
-  await expect(viewToggle(nav)).toBeVisible();
+  await expect(nav.viewToggle()).toBeVisible();
   const toolbar = nav.panel.getByRole("toolbar", { name: "Tree controls" });
   await expect(
     toolbar.getByRole("button", { name: "DOM", exact: true }),
@@ -233,8 +224,8 @@ test("Settings holds the choice of tree, leaving the toolbar a single DOM button
 
   // Settings stayed open; back to Chrome's tree from there.
   await nav.treeChoice("Chrome's tree").click();
-  await expect(nativeTree(nav)).toBeVisible({ timeout: 20_000 });
-  await expect(viewToggle(nav)).toHaveCount(0);
+  await expect(nav.nativeTree()).toBeVisible({ timeout: 20_000 });
+  await expect(nav.viewToggle()).toHaveCount(0);
   // Only this panel's tree changed, not the setting.
   expect(
     await storedSetting(nav, "settings.nativeModeEnabled"),
@@ -245,7 +236,7 @@ test("a change that doesn't reach the service worker says so and leaves the sett
   nav,
 }) => {
   await freshPanel(nav);
-  await expect(nativeTree(nav)).toBeVisible({ timeout: 20_000 });
+  await expect(nav.nativeTree()).toBeVisible({ timeout: 20_000 });
 
   // NATIVE_FLAG_SET never reaching the service worker: a torn-down extension
   // context, or an MV3 worker that hasn't woken. Only that message is
@@ -340,7 +331,7 @@ test("turned on in another window, a panel that never connected reads its first 
     .click();
 
   // As for a panel opened with native mode on.
-  await expect(nativeTree(nav)).toBeVisible({ timeout: 20_000 });
+  await expect(nav.nativeTree()).toBeVisible({ timeout: 20_000 });
   await expect
     .poll(async () => (await nav.nativeReads()).length, { timeout: 20_000 })
     .toBe(1);
@@ -355,14 +346,12 @@ test("turned off in another window, this panel returns to the in-page tree with 
   ).toBeVisible({ timeout: 20_000 });
   // A keyboard user in the native tree, which goes away with native mode.
   // Its rows aren't focusable themselves (aria-activedescendant): the tree is.
-  await nav.panel
-    .getByRole("tree", { name: /^Native accessibility tree/ })
-    .focus();
+  await nav.nativeTree().focus();
   await expect.poll(async () => (await focused(nav)).role).toBe("tree");
 
   await setInAnotherWindow(nav, false);
 
-  await expect(viewToggle(nav)).toBeVisible();
+  await expect(nav.viewToggle()).toBeVisible();
   await expect(
     nav.panel.getByRole("button", { name: "Refresh native tree" }),
   ).toHaveCount(0);
@@ -376,7 +365,7 @@ test("turned off in another window, focus on the choice of tree stays in Setting
   nav,
 }) => {
   await freshPanel(nav);
-  await expect(nativeTree(nav)).toBeVisible({ timeout: 20_000 });
+  await expect(nav.nativeTree()).toBeVisible({ timeout: 20_000 });
   await nav.panel.getByRole("button", { name: "Settings ▾" }).click();
   await nav.treeChoice("In-page tree").focus();
   await expect
@@ -411,7 +400,7 @@ test("turned off in another window, a native edit box closes", async ({
   // It acts through native mode, which is off now: left open, what was
   // typed into it would go nowhere.
   await expect(field).toHaveCount(0);
-  await expect(viewToggle(nav)).toBeVisible();
+  await expect(nav.viewToggle()).toBeVisible();
   await expect
     .poll(async () => (await focused(nav)).label)
     .toMatch(/^Semantic tree/);
