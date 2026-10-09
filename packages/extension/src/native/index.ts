@@ -103,6 +103,10 @@ type NativeMessage =
       // `cancelled-by-user`. The panel pauses its automatic reads after any
       // failed one.
       auto?: boolean;
+      // Number the page for focus sync (`page-keys.ts`), which the panel asks
+      // for while its Focus sync is on. It costs the read a `DOM.getDocument`
+      // and a walk of the page in the content script.
+      pageKeys?: boolean;
     }
   | {
       type: "NATIVE_ACT";
@@ -383,13 +387,13 @@ export function registerNativeMode(): void {
             // the focus reports it gets against the id its tree came with.
             const readId = crypto.randomUUID();
             const tabId = message.tabId;
+            const options = message.pageKeys
+              ? { pageKeys: () => numberPage(tabId, readId) }
+              : {};
             const { outcome, value } = await withRecovery(
               session,
               tabId,
-              (t) =>
-                readNativeTree(t, {
-                  pageKeys: () => numberPage(tabId, readId),
-                }),
+              (t) => readNativeTree(t, options),
               log,
               { retryDrop: !message.auto, respectCancel: message.auto },
             );

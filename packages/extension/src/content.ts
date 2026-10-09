@@ -335,9 +335,11 @@ chrome.runtime.onMessage.addListener(
       case "NATIVE_PAGE_KEYS": {
         // A native read numbering the page (the service worker asks the top
         // frame only). The digest goes back for the read to compare with its
-        // own; the numbering stays here for the focus reports below.
+        // own; the numbering stays here for the focus reports below, which
+        // also need to hear moves inside the shadow root focus is in now.
         const root = isSubFrame ? null : liveDocumentElement(document);
         sendResponse(root ? pageKeys.take(message.payload.readId, root) : null);
+        if (root) watchFocusRoots(deepActiveElement());
         break;
       }
 
@@ -453,7 +455,15 @@ chrome.runtime.onMessage.addListener(
 );
 
 // Reverse focus sync: page focus → tree selection
-document.addEventListener("focusin", (e) => {
+document.addEventListener("focusin", (e) => onFocusIn(e, true));
+
+/**
+ * Report a focus change to the panel. `atDocument` is false for one heard on
+ * a shadow root (see `watchFocusRoots`), which never reached the document.
+ */
+function onFocusIn(e: Event, atDocument: boolean): void {
+  const target = deepFocusTarget(e);
+  watchFocusRoots(target);
   if (focusingFromTree) return;
   if (
     nativeOverlayArm &&
@@ -467,10 +477,15 @@ document.addEventListener("focusin", (e) => {
   if (!focusTrackerEnabled) return;
   if (curtainVisible) return;
 
-  const nodeId = findTrackedAncestor(e.target as Element | null);
+  // The DOM tree's node is found from the document's view of the event, the
+  // outermost shadow host. A move inside one shadow root keeps that host, so
+  // there it has nothing to follow.
+  const nodeId = atDocument
+    ? findTrackedAncestor(e.target as Element | null)
+    : null;
   // For the native tree, which may hold a row for the element itself where
   // the DOM tree has only its host.
-  const keys = pageKeys.keysFor(deepFocusTarget(e));
+  const keys = pageKeys.keysFor(target);
   if (!nodeId && !keys) return;
   if (nodeId) focusManager.highlightElement(nodeId);
   safeSendMessage({
@@ -480,20 +495,65 @@ document.addEventListener("focusin", (e) => {
       ...(keys ? { pageKeys: keys } : {}),
     },
   });
-});
+}
 
 /** The element focus landed on. `e.target` is retargeted to the outermost
- *  shadow host, and `composedPath()[0]` reaches into open roots only; a
- *  closed root's own `activeElement` says which of its elements has focus. */
+ *  shadow host, and `composedPath()[0]` reaches into open roots only. */
 function deepFocusTarget(e: Event): Element | null {
   const first = e.composedPath()[0] ?? e.target;
-  let el = first instanceof Element ? first : null;
+  return focusedWithin(first instanceof Element ? first : null);
+}
+
+/** `el`, or the element focused inside its shadow root, and so on down. A
+ *  closed root's own `activeElement` says which of its elements has focus,
+ *  where nothing outside it can. */
+function focusedWithin(el: Element | null): Element | null {
   for (let depth = 0; el instanceof HTMLElement && depth < 32; depth++) {
     const inner = chrome.dom?.openOrClosedShadowRoot?.(el)?.activeElement;
     if (!inner || inner === el) break;
     el = inner;
   }
   return el;
+}
+
+/** The node at the root of `node`'s tree: a shadow root, or the document. */
+const rootNodeOf = (node: Node): Node => Node.prototype.getRootNode.call(node);
+
+/**
+ * Focus that moves between two elements of one shadow root never reaches the
+ * document: past the root, the element losing focus and the one gaining it
+ * both retarget to the host, and the event stops there. So every shadow root
+ * focus is seen inside gets a listener of its own, for those moves alone:
+ * focus coming from outside a root reaches the next root out, or the
+ * document, and is reported there.
+ */
+const watchedFocusRoots = new WeakSet<ShadowRoot>();
+function watchFocusRoots(el: Element | null): void {
+  let root = el ? rootNodeOf(el) : null;
+  while (root instanceof ShadowRoot) {
+    if (!watchedFocusRoots.has(root)) {
+      watchedFocusRoots.add(root);
+      const own = root;
+      own.addEventListener("focusin", (e) => {
+        const from = (e as FocusEvent).relatedTarget;
+        if (from instanceof Node && rootNodeOf(from) === own) {
+          onFocusIn(e, false);
+        }
+      });
+    }
+    root = rootNodeOf(root.host);
+  }
+}
+
+/** Where focus is now, inside shadow roots too. Read clobber-safely: a named
+ *  `<img>` or `<form>` called `activeElement` shadows the document's own. */
+function deepActiveElement(): Element | null {
+  const get = Object.getOwnPropertyDescriptor(
+    Document.prototype,
+    "activeElement",
+  )?.get;
+  const active: unknown = get ? get.call(document) : document.activeElement;
+  return focusedWithin(active instanceof Element ? active : null);
 }
 
 /** The nearest element at or above `el` that the tree tracks, climbing out of

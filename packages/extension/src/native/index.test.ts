@@ -293,8 +293,9 @@ describe("registerNativeMode: a read numbers the page for focus sync", () => {
     pageKeysReadId?: string;
     nodes?: Array<{ name: string; pageKey?: number }>;
   };
-  const read = async () =>
-    (await send({ type: "NATIVE_READ", tabId: 7 }, PANEL)).response as Read;
+  const read = async (pageKeys = true) =>
+    (await send({ type: "NATIVE_READ", tabId: 7, pageKeys }, PANEL))
+      .response as Read;
 
   it("asks the top frame to number the page, under an id the read answers with", async () => {
     await register();
@@ -307,6 +308,14 @@ describe("registerNativeMode: a read numbers the page for focus sync", () => {
     );
     expect(r.pageKeysReadId).toMatch(/^[0-9a-f-]{36}$/);
     expect(r.nodes?.find((n) => n.name === "Save")?.pageKey).toBe(2);
+  });
+
+  it("numbers nothing unless the panel asks: Focus sync is off", async () => {
+    await register();
+    const r = await read(false);
+    expect(r.ok).toBe(true);
+    expect(r.pageKeysReadId).toBeUndefined();
+    expect(sendMessage).not.toHaveBeenCalled();
   });
 
   it("names a new numbering on every read", async () => {

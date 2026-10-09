@@ -65,6 +65,7 @@ import {
   type NativeAXIndex,
 } from "@real-a11y-dev/core";
 
+import { isConnectionLost } from "./connection-lost.js";
 import {
   cdpPageKeys,
   type CdpDomNode,
@@ -980,7 +981,17 @@ async function keyPageRows(
         depth: -1,
         pierce: true,
       })
-      .catch(() => undefined),
+      .catch((err: unknown) => {
+        // A dropped connection fails the read, as it fails any other
+        // command: this is the read's last, so nothing after it would
+        // notice. A command that merely failed leaves the rows unnumbered.
+        if (
+          isConnectionLost(err instanceof Error ? err.message : String(err))
+        ) {
+          throw err;
+        }
+        return undefined;
+      }),
   ]);
   const page = dom?.root ? cdpPageKeys(dom.root) : undefined;
   if (

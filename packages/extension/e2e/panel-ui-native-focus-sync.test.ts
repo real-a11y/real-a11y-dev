@@ -28,7 +28,9 @@ test("a native read numbers the page's rows, and not a frame's", async ({
   nav,
 }) => {
   const { tabId } = await nav.open(FIXTURE);
-  const result = await nav.read(tabId);
+  // Only when asked, as the panel does while Focus sync is on.
+  expect((await nav.read(tabId)).pageKeysReadId).toBeUndefined();
+  const result = await nav.read(tabId, { pageKeys: true });
   expect(result.ok).toBe(true);
   expect(result.pageKeysReadId).toEqual(expect.any(String));
   const pageKey = (name: string) =>
@@ -90,24 +92,42 @@ test("focus moving on the page selects its row, with nothing read or done on the
   await expect(page.locator("#second-link")).toBeFocused();
 });
 
-test("focus inside an open or a closed shadow root selects the element's own row", async ({
+test("focus inside an open or a closed shadow root selects the element's own row, moving inside the root too", async ({
   nav,
 }) => {
   const page = await nav.showNative(FIXTURE);
+  const focusClosed = (id: string) =>
+    page.evaluate(
+      (id) =>
+        (
+          window as typeof window & { focusClosed(id: string): void }
+        ).focusClosed(id),
+      id,
+    );
+  // Into each root from outside it, then on to its other button: a move the
+  // document never hears.
   await page.locator("#open-button").focus();
   await expect(row(nav, "button", "Open button")).toHaveAttribute(
     "aria-selected",
     "true",
   );
-  await page.evaluate(() =>
-    (
-      window as typeof window & { focusClosedButton(): void }
-    ).focusClosedButton(),
+  await page.locator("#open-second").focus();
+  await expect(row(nav, "button", "Open second")).toHaveAttribute(
+    "aria-selected",
+    "true",
   );
+  await focusClosed("closed-button");
   await expect(row(nav, "button", "Closed button")).toHaveAttribute(
     "aria-selected",
     "true",
   );
+  await focusClosed("closed-second");
+  await expect(row(nav, "button", "Closed second")).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  await page.waitForTimeout(500);
+  expect(await nav.nativeActs()).toEqual([]);
 });
 
 test("after the page changes, focus still finds its row, or the nearest one above an element added since", async ({
@@ -172,4 +192,41 @@ test("Focus sync shows over Chrome's tree, and turning it off stops the followin
     "aria-selected",
     "true",
   );
+});
+
+test("turning Focus sync on over a tree read while it was off reads the page again, and follows", async ({
+  nav,
+}) => {
+  // Whether the content script's tracker stays off through page updates is
+  // `background.test.ts`'s to check: this harness's panel is a tab, whose
+  // messages the service worker takes for a content script's, so its toggle
+  // never reaches the tracker here.
+  const page = await nav.showNative(FIXTURE);
+  const off = nav.panel.getByRole("button", { name: "Focus OFF" });
+  await nav.panel
+    .getByRole("button", { name: "Focus sync", exact: true })
+    .click();
+  await expect(off).toHaveAttribute("aria-pressed", "false");
+
+  // Read with Focus sync off, the tree has nothing to follow focus by, so
+  // turning it on reads the page again.
+  await nav.panel.getByRole("button", { name: "Refresh native tree" }).click();
+  await expect(nav.panel.locator(".sn-node").first()).toBeVisible();
+  const reads = (await nav.nativeReads()).length;
+  await off.click();
+  await expect
+    .poll(async () => (await nav.nativeReads()).length)
+    .toBe(reads + 1);
+  // Until that read's tree arrives, focus reports name nothing in it.
+  await expect
+    .poll(
+      async () => {
+        await page.locator("#alpha").focus();
+        await page.locator("#gamma").focus();
+        return (await selected(nav).allTextContents()).join();
+      },
+      { timeout: 15_000 },
+    )
+    .toContain("Gamma");
+  expect(await nav.nativeReads()).toHaveLength(reads + 1);
 });

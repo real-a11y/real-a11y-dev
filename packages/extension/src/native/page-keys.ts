@@ -35,6 +35,8 @@ export interface PageKeyDigest {
 
 /** How a walk reads one side's elements. */
 export interface PageKeyWalker<E> {
+  /** `el` is one of the extension's own elements: see {@link isOwnElementId}. */
+  isOwn(el: E): boolean;
   /** `el`'s element children, in document order. */
   children(el: E): readonly E[];
   /** The element children of `el`'s author shadow root, open or closed, or
@@ -42,6 +44,18 @@ export interface PageKeyWalker<E> {
   shadowChildren(el: E): readonly E[] | null;
   /** `el`'s local name: `div`, `foreignObject`, `my-widget`. */
   localName(el: E): string;
+}
+
+/**
+ * The extension's own elements in the page — the outline it draws, the screen
+ * curtain — carry an id starting `__sn-`, which core's DOM walk leaves out the
+ * same way. Both walks leave them out, with everything inside them: they come
+ * and go on their own (a hover's outline cleared, the curtain lifted), outside
+ * the read, so numbering them could set the two walks apart with no change to
+ * the page itself.
+ */
+export function isOwnElementId(id: string | null | undefined): boolean {
+  return id?.startsWith("__sn-") ?? false;
 }
 
 // 32-bit FNV-1a.
@@ -53,8 +67,9 @@ const NAME_END = 0x20;
 
 /**
  * Number `root` and every element under it, in the one order both sides
- * walk: pre-order, an element's own children before its shadow root's.
- * `visit` gets each element with its number, from 0 at `root`.
+ * walk: pre-order, an element's own children before its shadow root's, and
+ * the extension's own elements left out. `visit` gets each element with its
+ * number, from 0 at `root`.
  *
  * The digest catches an element added or removed between the two walks, or
  * one moved where its name differs from what was there. A reorder of
@@ -73,6 +88,7 @@ export function walkPageKeys<E>(
   const stack: E[] = [root];
   while (stack.length > 0) {
     const el = stack.pop()!;
+    if (el !== root && walker.isOwn(el)) continue;
     visit(el, count++);
     const name = walker.localName(el);
     for (let i = 0; i < name.length; i++) {
@@ -96,6 +112,8 @@ export interface CdpDomNode {
   nodeType: number;
   backendNodeId: number;
   localName?: string;
+  /** Flat: `[name, value, name, value, …]`. */
+  attributes?: string[];
   children?: CdpDomNode[];
   shadowRoots?: CdpDomNode[];
   /** On a shadow root: `open`, `closed` or `user-agent`. */
@@ -113,6 +131,13 @@ function elementsOf(nodes: readonly CdpDomNode[] | undefined): CdpDomNode[] {
  *  document is another walk's, and a `<template>`'s content is a fragment
  *  outside the document, as the live DOM has it. */
 export const cdpPageKeyWalker: PageKeyWalker<CdpDomNode> = {
+  isOwn: (node) => {
+    const attributes = node.attributes ?? [];
+    for (let i = 0; i + 1 < attributes.length; i += 2) {
+      if (attributes[i] === "id") return isOwnElementId(attributes[i + 1]);
+    }
+    return false;
+  },
   children: (node) => elementsOf(node.children),
   shadowChildren: (node) => {
     const root = node.shadowRoots?.find(
@@ -150,9 +175,12 @@ export function asPageKeyDigest(reply: unknown): PageKeyDigest | undefined {
 /**
  * The walk over the live page, for the content script. Read through the
  * prototype's own accessors: on a `<form>`, a control named `children`,
- * `localName` or `shadowRoot` shadows the property (core's
- * `clobber-safe.ts`). The accessors are looked up here, not at module load,
- * because the service worker loads this module too and has no `Element`.
+ * `localName`, `shadowRoot` or `getAttribute` shadows the property, as core's
+ * `clobber-safe.ts` describes. Its helpers aren't core's exports, and two
+ * would read differently anyway: this walk names an element by `localName`,
+ * as CDP does, not by `tagName`, and needs a closed root as well as an open
+ * one. They are looked up when the walker is made, not at module load: the
+ * service worker loads this module too, and has no `Element`.
  *
  * `openOrClosedShadowRoot` is `chrome.dom.openOrClosedShadowRoot`, the only
  * way a content script sees a closed root, and CDP walks closed roots too.
@@ -168,6 +196,7 @@ export function livePageKeyWalker(
   const childrenOf = getter("children");
   const localNameOf = getter("localName");
   const openShadowRootOf = getter("shadowRoot");
+  const getAttribute = Element.prototype.getAttribute;
   const shadowRootOf = (el: Element): ShadowRoot | null => {
     if (openOrClosedShadowRoot) {
       return el instanceof HTMLElement ? openOrClosedShadowRoot(el) : null;
@@ -178,6 +207,7 @@ export function livePageKeyWalker(
     return root instanceof ShadowRoot ? root : null;
   };
   return {
+    isOwn: (el) => isOwnElementId(getAttribute.call(el, "id")),
     children: (el) =>
       Array.from(
         (childrenOf ? childrenOf.call(el) : el.children) as HTMLCollection,

@@ -1239,9 +1239,10 @@ export function App() {
   // tree so the user sees the empty state, and they hit the refresh
   // button to load the new tab's tree explicitly.
   //
-  // Only `myTabId` may re-run this. `requestTree` is in the deps as well but
-  // is identity-stable by construction (see `viewModeRef`) — the teardown
-  // below describes leaving a tab, and nothing else is allowed to trigger it.
+  // Only `myTabId` may re-run this. `requestTree` and `sendToBoundTab` are in
+  // the deps as well but are identity-stable by construction (see
+  // `viewModeRef`) — the teardown below describes leaving a tab, and nothing
+  // else is allowed to trigger it.
   const hasRequestedInitial = useRef(false);
   useEffect(() => {
     if (myTabId === null) return;
@@ -1267,6 +1268,13 @@ export function App() {
     // user actually leaves and re-enters native mode (see the producer effect
     // right below the auto-load effect).
 
+    // The service worker keeps Focus sync's state by tab, so the tab now
+    // bound gets this panel's: a tab first seen here starts out on.
+    sendToBoundTab({
+      type: "SET_FOCUS_TRACKER",
+      payload: { enabled: focusTrackerOnRef.current },
+    });
+
     if (!hasRequestedInitial.current) {
       hasRequestedInitial.current = true;
       requestTree();
@@ -1282,7 +1290,13 @@ export function App() {
     setPageUnreachable(false);
     setPageTitle("");
     setPageUrl("");
-  }, [myTabId, requestTree, resetNativeState, disarmAutoRefresh]);
+  }, [
+    myTabId,
+    requestTree,
+    resetNativeState,
+    disarmAutoRefresh,
+    sendToBoundTab,
+  ]);
 
   // Keep a port alive so the background knows when the side panel closes.
   // On disconnect the background clears the highlight overlay AND disables
@@ -1294,10 +1308,11 @@ export function App() {
     const connect = () => {
       port = chrome.runtime.connect({ name: "sidepanel" });
       // Push the panel's focus-tracker state on (re)connect — the tracker
-      // starts OFF in content.ts, so this is what turns it on.
+      // starts OFF in content.ts, so this is what turns it on. The current
+      // state, not the mount's: a worker that restarted forgot it.
       sendToBoundTab({
         type: "SET_FOCUS_TRACKER",
-        payload: { enabled: focusTrackerOn },
+        payload: { enabled: focusTrackerOnRef.current },
       });
       port.onDisconnect.addListener(() => {
         // The MV3 service worker was torn down (its port drops while the panel
@@ -1311,7 +1326,7 @@ export function App() {
     return () => port?.disconnect();
     // Intentionally empty deps: toggleFocusTracker handles subsequent changes;
     // this effect owns the port lifecycle + the service-worker-death reconnect.
-    // sendToBoundTab is stable (empty deps); focusTrackerOn is the mount value.
+    // sendToBoundTab is stable (empty deps); the toggle is read through its ref.
   }, []);
 
   // Listen for tree data and focus changes from content script
@@ -2023,6 +2038,9 @@ export function App() {
           type: "NATIVE_READ",
           tabId,
           ...(auto ? { auto: true } : {}),
+          // Numbered for Focus sync only while it is on: it costs the read a
+          // walk of the whole page, twice.
+          ...(focusTrackerOnRef.current ? { pageKeys: true } : {}),
         })) as {
           ok?: boolean;
           error?: string;
@@ -2673,11 +2691,25 @@ export function App() {
   const toggleFocusTracker = useCallback(() => {
     const next = !focusTrackerOn;
     setFocusTrackerOn(next);
+    // Ahead of the render, for the read below to ask for numbers.
+    focusTrackerOnRef.current = next;
     sendToBoundTab({
       type: "SET_FOCUS_TRACKER",
       payload: { enabled: next },
     });
-  }, [focusTrackerOn, sendToBoundTab]);
+    // A native read numbers the page only while Focus sync is on, so Chrome's
+    // tree read with it off has nothing to follow focus by: read it again.
+    const tabId = myTabIdRef.current;
+    if (
+      next &&
+      tabId !== null &&
+      producerRef.current === "native" &&
+      nativeNodesRef.current.size > 0 &&
+      nativePageKeysReadId.current === undefined
+    ) {
+      void loadNativeTree(tabId);
+    }
+  }, [focusTrackerOn, sendToBoundTab, loadNativeTree]);
 
   // Picker mode toggle. DOM: tells the content script to install / remove
   // its capture-phase click handler — PICK_MODE_CHANGED comes back when the

@@ -63,6 +63,8 @@ function cdpDocument(
     if (children.length > 0) out.children = children;
     if (node instanceof Element) {
       out.localName = localName(node);
+      const attributes = [...node.attributes].flatMap((a) => [a.name, a.value]);
+      if (attributes.length > 0) out.attributes = attributes;
       const author = openOrClosed(node as HTMLElement);
       if (author) {
         out.shadowRoots = [{ ...convert(author), shadowRootType: author.mode }];
@@ -172,6 +174,7 @@ describe("walkPageKeys", () => {
         children: (n) => n.kids ?? [],
         shadowChildren: (n) => n.shadow ?? null,
         localName: (n) => n.name,
+        isOwn: () => false,
       },
       (n, key) => order.push(`${key}:${n.name}`),
     );
@@ -184,6 +187,7 @@ describe("walkPageKeys", () => {
       children: (n: string[]) => n.slice(1).map((name) => [name]),
       shadowChildren: () => null,
       localName: (n: string[]) => n[0]!,
+      isOwn: () => false,
     };
     const hash = (names: string[]) =>
       walkPageKeys(names, walker, () => {}).hash;
@@ -203,6 +207,7 @@ describe("walkPageKeys", () => {
         children: (n) => (n.kid ? [n.kid] : []),
         shadowChildren: () => null,
         localName: () => "div",
+        isOwn: () => false,
       },
       () => {},
     );
@@ -256,6 +261,32 @@ describe("the two walks of a page", () => {
     expect(cdp.keys.has(ids.get(template.content.firstElementChild!)!)).toBe(
       false,
     );
+  });
+
+  it("leave out the extension's own elements, and everything inside them, which come and go on their own", () => {
+    buildPage();
+    const before = cdpPageKeys(cdpDocument(document, new Map()))!.digest;
+    const overlay = document.createElement("div");
+    overlay.id = "__sn-highlight";
+    overlay.append(document.createElement("span"));
+    const curtain = document.createElement("div");
+    curtain.id = "__sn-curtain";
+    curtain.innerHTML = "<div>Screen Curtain</div>";
+    document.documentElement.append(overlay, curtain);
+    try {
+      const ids = new Map<Node, number>();
+      const cdp = cdpPageKeys(cdpDocument(document, ids))!;
+      const live = walkPageKeys(document.documentElement, liveWalker, () => {});
+      expect(cdp.digest).toEqual(live);
+      // As if they weren't there: a read can't be set apart by one drawn or
+      // cleared between its two walks.
+      expect(live).toEqual(before);
+      expect(cdp.keys.has(ids.get(overlay)!)).toBe(false);
+      expect(cdp.keys.has(ids.get(curtain.firstElementChild!)!)).toBe(false);
+    } finally {
+      overlay.remove();
+      curtain.remove();
+    }
   });
 
   it("disagree once the page changes between them", () => {

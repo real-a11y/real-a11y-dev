@@ -113,10 +113,12 @@ export interface PlannedTabMessage {
  *   2. **Re-assert the focus tracker** to the announcing frame if the
  *      side panel is currently open. Closes the cold-start race where the
  *      panel's one-shot `SET_FOCUS_TRACKER` could land before the content
- *      script was listening. Tying the enable signal to "content script
- *      announced itself" turns the tracker on the moment the frame is
- *      reachable — and every subframe or new navigation gets the current
- *      state automatically.
+ *      script was listening. Tying the signal to "content script announced
+ *      itself" sets the tracker the moment the frame is reachable — and every
+ *      subframe or new navigation gets the current state automatically.
+ *      `focusTracker` is that state: the Focus sync toggle as the panel last
+ *      set it for this tab. Re-asserting `true` regardless turned a tracker
+ *      the user had switched off back on with the page's next update.
  */
 export function planFrameAnnouncementResponse(opts: {
   tabId: number;
@@ -124,6 +126,7 @@ export function planFrameAnnouncementResponse(opts: {
   isNewTopFrame: boolean;
   sidepanelConnected: boolean;
   curtainOn: boolean;
+  focusTracker: boolean;
 }): PlannedTabMessage[] {
   const out: PlannedTabMessage[] = [];
 
@@ -146,7 +149,10 @@ export function planFrameAnnouncementResponse(opts: {
     out.push({
       tabId: opts.tabId,
       frameId: opts.frameId,
-      body: { type: "SET_FOCUS_TRACKER", payload: { enabled: true } },
+      body: {
+        type: "SET_FOCUS_TRACKER",
+        payload: { enabled: opts.focusTracker },
+      },
     });
   }
 
@@ -156,9 +162,10 @@ export function planFrameAnnouncementResponse(opts: {
 /**
  * Decide what to send a frame that just sent a lightweight `FRAME_HELLO`
  * (content-script load announce — it is NOT yet observing). If a panel is
- * connected for the tab, tell the frame to start observing and enable the
- * focus tracker. When no panel is connected this returns nothing, so a page
- * whose panel was never opened does zero extraction.
+ * connected for the tab, tell the frame to start observing and set the
+ * focus tracker as the panel last set it for the tab (`focusTracker`). When
+ * no panel is connected this returns nothing, so a page whose panel was never
+ * opened does zero extraction.
  *
  * Curtain re-application is intentionally NOT handled here — it rides the
  * `FRAME_TREE_DATA` path (planFrameAnnouncementResponse), which the frame
@@ -168,6 +175,7 @@ export function planFrameHello(opts: {
   tabId: number;
   frameId: number;
   sidepanelConnected: boolean;
+  focusTracker: boolean;
 }): PlannedTabMessage[] {
   if (!opts.sidepanelConnected) return [];
   return [
@@ -179,7 +187,10 @@ export function planFrameHello(opts: {
     {
       tabId: opts.tabId,
       frameId: opts.frameId,
-      body: { type: "SET_FOCUS_TRACKER", payload: { enabled: true } },
+      body: {
+        type: "SET_FOCUS_TRACKER",
+        payload: { enabled: opts.focusTracker },
+      },
     },
   ];
 }

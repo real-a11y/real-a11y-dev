@@ -166,6 +166,17 @@ describe("readNativeTree's page keys", () => {
     }
   });
 
+  it("fails the read when the debugger is dropped while the page is numbered", async () => {
+    // The user's Cancel on Chrome's bar, say: the numbering is the read's
+    // last command, so nothing after it would notice the drop.
+    const t = transport(() => {
+      throw new Error("Debugger is not attached to the tab with id: 7.");
+    });
+    await expect(
+      readNativeTree(t, { pageKeys: async () => digest }),
+    ).rejects.toThrow(/not attached/);
+  });
+
   it("asks for no document when nothing numbers the page", async () => {
     const t = transport();
     const res = await readNativeTree(t);

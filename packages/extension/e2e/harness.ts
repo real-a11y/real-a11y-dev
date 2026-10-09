@@ -487,8 +487,15 @@ export class NativeHarness {
   }
 
   /** Read the native tree, as the panel's "Load native tree" button does. */
-  async read(tabId: number): Promise<NativeReadResult> {
-    return await this.send<NativeReadResult>({ type: "NATIVE_READ", tabId });
+  async read(
+    tabId: number,
+    options: { pageKeys?: boolean } = {},
+  ): Promise<NativeReadResult> {
+    return await this.send<NativeReadResult>({
+      type: "NATIVE_READ",
+      tabId,
+      ...options,
+    });
   }
 
   /** Read, and fail loudly rather than returning an unusable result — every

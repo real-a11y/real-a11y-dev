@@ -54,12 +54,16 @@ describe("native focus sync", () => {
         const type = (message as { type: string }).type;
         if (type === "NATIVE_FLAG_GET") return { enabled: true };
         if (type === "NATIVE_READ") {
+          // Numbered when the panel asks, as the service worker does.
+          const numbered =
+            readId !== undefined &&
+            (message as { pageKeys?: boolean }).pageKeys === true;
           return {
             ok: true,
             url: "https://example.test/",
             rootId: "ax-root",
             nodes: structuredClone(NODES),
-            ...(readId !== undefined ? { pageKeysReadId: readId } : {}),
+            ...(numbered ? { pageKeysReadId: readId } : {}),
           };
         }
         return undefined;
@@ -180,5 +184,58 @@ describe("native focus sync", () => {
     act(() => toggle.click());
     focusOnPage({ pageKeys: { "read-1": [5] } });
     expect(selected()).toBe("ax-dom-3");
+  });
+
+  it("asks for the page numbered only while Focus sync is on, and reads again when it is turned on", async () => {
+    await showNative();
+    const reads = () =>
+      sentOfType("NATIVE_READ") as Array<{ pageKeys?: boolean }>;
+    expect(reads().at(-1)?.pageKeys).toBe(true);
+
+    const toggle = container.querySelector<HTMLButtonElement>(
+      ".sn-focus-tracker-btn",
+    )!;
+    const refresh = [...container.querySelectorAll("button")].find(
+      (b) => b.getAttribute("aria-label") === "Refresh native tree",
+    )!;
+    act(() => toggle.click());
+    act(() => refresh.click());
+    await flush();
+    expect(reads().at(-1)?.pageKeys).toBeUndefined();
+
+    // That tree has nothing to follow focus by: turning Focus sync on reads
+    // it again, numbered.
+    const before = reads().length;
+    act(() => toggle.click());
+    await flush();
+    expect(reads()).toHaveLength(before + 1);
+    expect(reads().at(-1)?.pageKeys).toBe(true);
+    focusOnPage({ pageKeys: { "read-1": [5] } });
+    expect(selected()).toBe("ax-dom-3");
+
+    // Turned off and on again over a numbered tree, it reads nothing.
+    act(() => toggle.click());
+    act(() => toggle.click());
+    await flush();
+    expect(reads()).toHaveLength(before + 1);
+  });
+
+  it("tells each tab it is bound to how Focus sync is set", async () => {
+    await showNative();
+    act(() =>
+      container
+        .querySelector<HTMLButtonElement>(".sn-focus-tracker-btn")!
+        .click(),
+    );
+    act(() => {
+      chromeMock.emit({
+        type: "ACTIVE_TAB_CHANGED",
+        tabId: TAB_ID + 1,
+      } as unknown as ContentToPanel);
+    });
+    expect(sentOfType("SET_FOCUS_TRACKER").at(-1)).toMatchObject({
+      tabId: TAB_ID + 1,
+      payload: { enabled: false },
+    });
   });
 });

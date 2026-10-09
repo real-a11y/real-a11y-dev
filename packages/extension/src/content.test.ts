@@ -1097,6 +1097,49 @@ describe("content: numbering the page for the native tree", () => {
     expect(focusReports()[0]?.payload.pageKeys?.["read-1"]?.[0]).toBe(before);
   });
 
+  it("hears a move between two elements of one shadow root, which never reaches the document", async () => {
+    const host = document.createElement("div");
+    document.getElementById("app")!.append(host);
+    const root = host.attachShadow({ mode: "open" });
+    root.innerHTML = `<button id="a">A</button><button id="b">B</button>`;
+    const [a, b] = [root.getElementById("a")!, root.getElementById("b")!];
+    h.send({ type: "NATIVE_PAGE_KEYS", payload: { readId: "read-1" } });
+    const keys = await numbers();
+    const focus = (el: Element, from: Element | null) =>
+      el.dispatchEvent(
+        new FocusEvent("focusin", {
+          bubbles: true,
+          composed: true,
+          relatedTarget: from,
+        }),
+      );
+    // Into the root from outside: the document hears it, and the DOM tree's
+    // node goes with it.
+    h.sent.length = 0;
+    focus(a, document.getElementById("target"));
+    expect(focusReports()).toHaveLength(1);
+    expect(focusReports()[0]!.payload.nodeId).toEqual(expect.any(String));
+    expect(focusReports()[0]!.payload.pageKeys!["read-1"]![0]).toBe(
+      keys.get(a),
+    );
+
+    // Within it: only the root hears it. The DOM tree's node, the host's,
+    // hasn't changed, so only the native numbers go.
+    h.sent.length = 0;
+    focus(b, a);
+    expect(focusReports()).toHaveLength(1);
+    expect(focusReports()[0]!.payload.nodeId).toBeUndefined();
+    expect(focusReports()[0]!.payload.pageKeys!["read-1"]![0]).toBe(
+      keys.get(b),
+    );
+
+    // Out of it again: the document alone.
+    h.sent.length = 0;
+    focus(document.getElementById("target")!, b);
+    expect(focusReports()).toHaveLength(1);
+    expect(focusReports()[0]!.payload.nodeId).toEqual(expect.any(String));
+  });
+
   it("reports no numbers before a read, and nothing at all with the tracker off", () => {
     h.sent.length = 0;
     focusTarget();

@@ -356,6 +356,21 @@ export function NativeTreeView({
     [onScope, scopedRootId],
   );
 
+  // Open every row above `id`, which may be nested under rows the user never
+  // opened. The same set comes back when they are all open already, so a
+  // focus report for a row already in view re-walks nothing.
+  const expandTo = useCallback(
+    (id: string) =>
+      setExpanded((prev) => {
+        let next: Set<string> | null = null;
+        for (let p = parentOf.get(id); p; p = parentOf.get(p)) {
+          if (!prev.has(p)) (next ??= new Set(prev)).add(p);
+        }
+        return next ?? prev;
+      }),
+    [parentOf],
+  );
+
   // Bring a row into view and select it: expand every ancestor (it may be
   // nested under rows the user never opened), leave a scope it sits outside
   // of, and clear any active search/role filter first, since a filter that
@@ -373,13 +388,7 @@ export function NativeTreeView({
       }
       setQuery("");
       setRoleFilter(null);
-      setExpanded((prev) => {
-        const next = new Set(prev);
-        for (let id = parentOf.get(nodeId); id; id = parentOf.get(id)) {
-          next.add(id);
-        }
-        return next;
-      });
+      expandTo(nodeId);
       setSelectedId(nodeId);
       setFollowNonce((n) => n + 1);
       // Clearing the role filter above swaps `FilteredListView` back for the
@@ -392,7 +401,7 @@ export function NativeTreeView({
         requestAnimationFrame(() => treeRef.current?.focus());
       });
     },
-    [scopeRoot, parentOf, scopeTo],
+    [scopeRoot, parentOf, scopeTo, expandTo],
   );
 
   // A pick result lands here from App.tsx's own message handler.
@@ -593,11 +602,7 @@ export function NativeTreeView({
     if (scopeRoot && !isInScope(id, scopeRoot, (p) => parentOf.get(p))) {
       scopeTo(null);
     }
-    setExpanded((prev) => {
-      const next = new Set(prev);
-      for (let p = parentOf.get(id); p; p = parentOf.get(p)) next.add(p);
-      return next;
-    });
+    expandTo(id);
     setSelectedId(id);
     setSelectedFromPage(id);
     setPageFocusScroll((n) => n + 1);
@@ -768,17 +773,13 @@ export function NativeTreeView({
       // No scope check: the list is built from the scope root in the same
       // render as this callback, so every item it offers is inside the scope.
       setRoleFilter(null);
-      setExpanded((prev) => {
-        const next = new Set(prev);
-        for (let p = parentOf.get(id); p; p = parentOf.get(p)) next.add(p);
-        return next;
-      });
+      expandTo(id);
       setSelectedId(id);
       requestAnimationFrame(() => {
         requestAnimationFrame(() => treeRef.current?.focus());
       });
     },
-    [parentOf],
+    [expandTo],
   );
 
   /**

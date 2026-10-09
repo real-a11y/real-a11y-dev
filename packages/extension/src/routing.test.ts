@@ -220,6 +220,7 @@ describe("planFrameAnnouncementResponse", () => {
     isNewTopFrame: false,
     sidepanelConnected: false,
     curtainOn: false,
+    focusTracker: true,
   };
 
   it("sends nothing when panel is closed and curtain is off", () => {
@@ -299,6 +300,20 @@ describe("planFrameAnnouncementResponse", () => {
     expect(plan.find((m) => m.body.type === "TOGGLE_CURTAIN")).toBeUndefined();
   });
 
+  it("re-asserts the tracker as the panel last set it, so Focus OFF holds through page updates", () => {
+    const plan = planFrameAnnouncementResponse({
+      ...baseOpts,
+      sidepanelConnected: true,
+      focusTracker: false,
+    });
+
+    expect(plan.find((m) => m.body.type === "SET_FOCUS_TRACKER")).toEqual({
+      tabId: 42,
+      frameId: 0,
+      body: { type: "SET_FOCUS_TRACKER", payload: { enabled: false } },
+    });
+  });
+
   it("combines curtain + tracker messages when both conditions apply", () => {
     const plan = planFrameAnnouncementResponse({
       ...baseOpts,
@@ -319,13 +334,23 @@ describe("planFrameAnnouncementResponse", () => {
 describe("planFrameHello", () => {
   it("sends nothing when the panel is closed (no observing on a page with no panel)", () => {
     expect(
-      planFrameHello({ tabId: 42, frameId: 0, sidepanelConnected: false }),
+      planFrameHello({
+        tabId: 42,
+        frameId: 0,
+        sidepanelConnected: false,
+        focusTracker: true,
+      }),
     ).toEqual([]);
   });
 
   it("arms observing + focus tracker on the announcing frame when connected", () => {
     expect(
-      planFrameHello({ tabId: 42, frameId: 0, sidepanelConnected: true }),
+      planFrameHello({
+        tabId: 42,
+        frameId: 0,
+        sidepanelConnected: true,
+        focusTracker: true,
+      }),
     ).toEqual([
       {
         tabId: 42,
@@ -345,8 +370,21 @@ describe("planFrameHello", () => {
       tabId: 42,
       frameId: 9,
       sidepanelConnected: true,
+      focusTracker: true,
     });
     for (const item of plan) expect(item).toMatchObject({ frameId: 9 });
+  });
+
+  it("sets the tracker as the panel last set it for the tab", () => {
+    const plan = planFrameHello({
+      tabId: 42,
+      frameId: 0,
+      sidepanelConnected: true,
+      focusTracker: false,
+    });
+    expect(plan.find((m) => m.body.type === "SET_FOCUS_TRACKER")).toMatchObject(
+      { body: { payload: { enabled: false } } },
+    );
   });
 });
 

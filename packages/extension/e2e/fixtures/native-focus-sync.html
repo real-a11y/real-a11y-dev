@@ -75,7 +75,7 @@
           constructor() {
             super();
             this.attachShadow({ mode: "open" }).innerHTML =
-              '<div role="group" aria-label="Open widget"><button id="open-button">Open button</button></div>';
+              '<div role="group" aria-label="Open widget"><button id="open-button">Open button</button><button id="open-second">Open second</button></div>';
           }
         },
       );
@@ -87,13 +87,12 @@
             super();
             closedRoot = this.attachShadow({ mode: "closed" });
             closedRoot.innerHTML =
-              '<div role="group" aria-label="Closed widget"><button id="closed-button">Closed button</button></div>';
+              '<div role="group" aria-label="Closed widget"><button id="closed-button">Closed button</button><button id="closed-second">Closed second</button></div>';
           }
         },
       );
       // For the test to focus inside the closed root, which it can't reach.
-      window.focusClosedButton = () =>
-        closedRoot.getElementById("closed-button").focus();
+      window.focusClosed = (id) => closedRoot.getElementById(id).focus();
       // Moves the page's structure under the read's numbering: an element
       // inserted ahead of the buttons shifts every later element's place.
       window.insertAhead = () => {
