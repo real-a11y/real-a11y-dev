@@ -13,7 +13,8 @@ not run Playwright in this checkout before.
 
 `pretest:e2e` runs both `build` and `build:dogfood`. Most suites load the
 dogfood build (`dist-dogfood/`) with native mode on, as it comes out of the box,
-and drive the real panel: its NATIVE toggle, tree and actions. A few also drive
+and drive the real panel: the choice of tree in its Settings, the tree and its
+actions. A few also drive
 `DogfoodPanel`, the internal diagnostics widget, which only the dogfood build
 contains. `native-on-by-default.test.ts` loads the store build (`dist/`), to
 check what the listing ships: the manifest, the absence of the dogfood
