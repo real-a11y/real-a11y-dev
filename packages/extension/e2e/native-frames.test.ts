@@ -137,9 +137,7 @@ async function showNative(nav: NativeHarness): Promise<{
   const { page, cross } = await openFrames(nav);
   await page.bringToFront();
   await nav.panel.reload();
-  const toggle = nav.panel.getByRole("button", { name: "NATIVE", exact: true });
-  await expect(toggle).toBeVisible({ timeout: 20_000 });
-  await toggle.click();
+  await nav.chooseTree("Chrome's tree");
   await expect
     .poll(() => nav.panel.locator(".sn-node").count(), { timeout: 20_000 })
     .toBeGreaterThan(0);
@@ -215,9 +213,7 @@ test("a pick inside either frame selects that frame's row", async ({ nav }) => {
   const { page, same, cross } = await openFrames(nav);
   await page.bringToFront();
   await nav.panel.reload();
-  const toggle = nav.panel.getByRole("button", { name: "NATIVE", exact: true });
-  await expect(toggle).toBeVisible({ timeout: 20_000 });
-  await toggle.click();
+  await nav.chooseTree("Chrome's tree");
   await expect
     .poll(() => nav.panel.locator(".sn-node").count(), { timeout: 20_000 })
     .toBeGreaterThan(0);

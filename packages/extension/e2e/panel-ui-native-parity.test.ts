@@ -243,7 +243,7 @@ test("a sent key whose page navigates a second later is followed there", async (
   ).toBeVisible({ timeout: 10_000 });
 });
 
-test("switching to DOM right after a sent key reads no native tree", async ({
+test("switching to the in-page tree right after a sent key reads no native tree", async ({
   nav,
 }) => {
   await nav.showNative("native-panel.html");
@@ -259,21 +259,24 @@ test("switching to DOM right after a sent key reads no native tree", async ({
     nav.panel.getByRole("button", { name: "Refresh native tree" }),
   ).toBeEnabled();
 
-  // With it, in the same task as the key, there is none.
+  // With it, in the same task as the key, there is none. The switch is in
+  // Settings, so Settings is opened first.
   reads = (await nav.nativeReads()).length;
+  await nav.panel.getByRole("button", { name: "Settings ▾" }).click();
+  await expect(nav.treeChoice("In-page tree")).toBeVisible();
   await nav.panel.evaluate(() => {
     const press = [
       ...document.querySelectorAll<HTMLButtonElement>(
         ".sn-keyboard-bar button",
       ),
     ].find((b) => b.textContent?.trim() === "Tab")!;
-    const dom = [
+    const inPage = [
       ...document.querySelectorAll<HTMLButtonElement>(
-        '[aria-label="Tree producer"] button',
+        "#sn-settings-menu button",
       ),
-    ].find((b) => b.textContent?.trim() === "DOM")!;
+    ].find((b) => b.textContent?.trim() === "In-page tree")!;
     press.click();
-    dom.click();
+    inPage.click();
   });
   await nav.panel.waitForTimeout(NO_READ_WINDOW_MS);
   expect((await nav.nativeReads()).length).toBe(reads);
