@@ -1140,6 +1140,30 @@ describe("content: numbering the page for the native tree", () => {
     expect(focusReports()[0]!.payload.nodeId).toEqual(expect.any(String));
   });
 
+  it("reports a move from inside a shadow root to an element slotted into its host once, as the document hears it", () => {
+    const host = document.createElement("div");
+    const slotted = document.createElement("button");
+    host.append(slotted);
+    document.getElementById("app")!.append(host);
+    const root = host.attachShadow({ mode: "open" });
+    root.innerHTML = `<button id="a">A</button><slot></slot>`;
+    const a = root.getElementById("a")!;
+    h.send({ type: "NATIVE_PAGE_KEYS", payload: { readId: "read-1" } });
+    const focus = (el: Element, from: Element | null) =>
+      el.dispatchEvent(
+        new FocusEvent("focusin", {
+          bubbles: true,
+          composed: true,
+          relatedTarget: from,
+        }),
+      );
+    focus(a, document.getElementById("target"));
+    h.sent.length = 0;
+    focus(slotted, a);
+    expect(focusReports()).toHaveLength(1);
+    expect(focusReports()[0]!.payload.nodeId).toEqual(expect.any(String));
+  });
+
   it("reports no numbers before a read, and nothing at all with the tracker off", () => {
     h.sent.length = 0;
     focusTarget();

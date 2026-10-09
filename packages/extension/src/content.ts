@@ -524,7 +524,8 @@ const rootNodeOf = (node: Node): Node => Node.prototype.getRootNode.call(node);
  * document: past the root, the element losing focus and the one gaining it
  * both retarget to the host, and the event stops there. So every shadow root
  * focus is seen inside gets a listener of its own, for those moves alone:
- * focus coming from outside a root reaches the next root out, or the
+ * focus coming from outside a root, or going to an element slotted into its
+ * host, which is outside it too, reaches the next root out, or the
  * document, and is reported there.
  */
 const watchedFocusRoots = new WeakSet<ShadowRoot>();
@@ -536,7 +537,12 @@ function watchFocusRoots(el: Element | null): void {
       const own = root;
       own.addEventListener("focusin", (e) => {
         const from = (e as FocusEvent).relatedTarget;
-        if (from instanceof Node && rootNodeOf(from) === own) {
+        if (
+          e.target instanceof Node &&
+          rootNodeOf(e.target) === own &&
+          from instanceof Node &&
+          rootNodeOf(from) === own
+        ) {
           onFocusIn(e, false);
         }
       });
