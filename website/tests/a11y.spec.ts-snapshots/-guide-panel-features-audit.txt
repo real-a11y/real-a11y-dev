@@ -136,7 +136,7 @@ main
     strong "on"
     strong "bidirectionally"
   list
-    listitem "— when focus moves on the page (Tab, click on a focusable element), the panel draws the highlight overlay on that element, scrolls the tree to its node, and selects the row. Implemented by the via a listener in its content script; the in-page surfaces don't ship this auto-sync (the host app would have to wire it up itself)."
+    listitem "— when focus moves on the page (Tab, click on a focusable element), the panel draws the highlight overlay on that element, scrolls the tree to its node, and selects the row. Implemented by the via a listener in its content script, for its in-page tree and for Chrome's own tree alike; the in-page surfaces don't ship this auto-sync (the host app would have to wire it up itself)."
       strong "Page → panel"
       strong "This is what the "Focus sync" toggle controls."
       link "Chrome extension"
@@ -173,7 +173,7 @@ main
     rowgroup
       row
         cell "Chrome extension"
-        cell ""Focus sync" / "Focus OFF" toggle in the toolbar — controls page → panel sync; panel → page focus is always on (separate window, no conflict)"
+        cell ""Focus sync" / "Focus OFF" toggle in the toolbar, for either tree — controls page → panel sync; panel → page focus is always on (separate window, no conflict)"
       row
         cell "inspector"
           code "inspector"
