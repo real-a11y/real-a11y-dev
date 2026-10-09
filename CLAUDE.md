@@ -88,13 +88,16 @@ native-tree execution plan in Notion.
 
 Where the gates actually are:
 
-- **The setting.** `settings.nativeModeEnabled` in `chrome.storage.local`, off
-  unless the user turns it on from the side panel's "Enable native mode…". It
-  is enforced in one place: `NativeDebuggerSession.attach()` re-reads it inside
+- **The setting.** `settings.nativeModeEnabled` in `chrome.storage.local`. Native
+  mode is on by default (#496): only a stored `false` turns it off, so an unset
+  or non-boolean value reads as on. The user turns it off in the side panel's
+  Settings, or from the one-time note about Chrome's debugging bar. It is
+  enforced in one place: `NativeDebuggerSession.attach()` re-reads it inside
   its storage transaction, so turning it off and attaching are mutually
   exclusive. The message handlers in `native/index.ts` are registered in every
   build and don't check it themselves; turning it off detaches once any
-  operation in flight finishes.
+  operation in flight finishes. Each window has its own side panel, so every
+  open panel follows the key in storage.
 - **The senders.** `registerNativeMode()` accepts `NATIVE_*` messages only from
   the extension's own pages (`isExtensionPageSender`), never from a content
   script, and keeps `chrome.storage.local` at `TRUSTED_CONTEXTS`.

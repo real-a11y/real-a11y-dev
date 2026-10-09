@@ -1,10 +1,10 @@
 /**
- * Focus management shared by the panel's dialogs (the input panel and the
- * native-mode consent banner).
+ * Focus management for the panel's dialogs (the input panel) and popups (the
+ * Copy menu, Settings).
  */
 
 import type { RefObject } from "preact";
-import { useEffect } from "preact/hooks";
+import { useEffect, useLayoutEffect } from "preact/hooks";
 
 /**
  * Everything inside the panel that Tab can reach. Its controls are only ever
@@ -76,18 +76,101 @@ export function useFocusTrap(ref: RefObject<HTMLDivElement>) {
  * which drops DOM focus to `<body>` and leaves a keyboard user Tabbing back
  * from the top of the panel. Return focus to whatever opened it instead — the
  * tree container, the filtered list or the tab sequence, depending on the view
- * the interaction started from.
+ * the interaction started from. Only while the dialog (`ref`) still has focus,
+ * or nothing does: focus the user has moved elsewhere while it was open (to
+ * Settings, say) stays there when something else closes it.
  *
  * Must be called before any hook that moves focus into the dialog, so that it
  * captures the opener rather than the dialog's own initial focus target.
  */
-export function useRestoreFocusOnClose() {
+export function useRestoreFocusOnClose(ref: RefObject<HTMLElement>) {
   useEffect(() => {
     const opener = document.activeElement as HTMLElement | null;
     return () => {
+      const active = document.activeElement;
+      const dialogHasFocus =
+        active === null ||
+        active === document.body ||
+        ref.current?.contains(active) === true;
       // The opener can be gone by the time the panel closes — a re-extraction
       // replaces tree rows — and a detached element cannot take focus.
-      if (opener?.isConnected) opener.focus();
+      if (dialogHasFocus && opener?.isConnected) opener.focus();
     };
-  }, []);
+  }, [ref]);
+}
+
+/**
+ * Close a popup (the Copy menu, Settings, each marked `data-sn-popup`) on a
+ * press outside it, with any button, or on Escape. Escape pressed inside it
+ * also returns focus to the button that opens it, as a menu button's or a
+ * disclosure's does. A press outside leaves focus where the press puts it:
+ * the popup closes before the browser moves focus, so focus on its controls
+ * goes to the body first, and the panel's own focus repair leaves focus a
+ * popup took with it alone (see `App`). A click a screen reader makes is the
+ * exception: it brings a mousedown with no pointerdown before it, and moves
+ * focus nowhere if what it clicks can't take focus, so focus still on the
+ * popup's controls then goes where a real press would have put it. A press
+ * that starts
+ * inside it never closes it, and nor does an Escape something else has
+ * already answered (a native pick's cancel). A popup whose button has gone
+ * (the toolbar, while the panel waits for a page) closes too, rather than
+ * coming back open. Only one popup is open at a time, which `App` keeps to
+ * by opening each in place of the other.
+ */
+export function useDismissible(
+  open: boolean,
+  close: () => void,
+  containerRef: RefObject<HTMLElement>,
+  buttonRef: RefObject<HTMLElement>,
+) {
+  useEffect(() => {
+    if (!open) return;
+    const inside = (target: EventTarget | null) =>
+      containerRef.current?.contains(target as Node) === true;
+    // Close it, and if focus was on its controls (not its button), which go
+    // with it, put focus on `to` instead.
+    const closeKeepingFocus = (to: HTMLElement | null | undefined) => {
+      const active = document.activeElement;
+      const strands =
+        inside(active) && active?.closest("[data-sn-popup]") != null;
+      close();
+      if (strands) to?.focus();
+    };
+    const onPress = (e: Event) => {
+      if (!containerRef.current || inside(e.target)) return;
+      if (e.type !== "mousedown") {
+        close();
+        return;
+      }
+      // A real press closed it on its pointerdown, taking focus with it,
+      // before its mousedown. Focus still on its controls at a mousedown
+      // means a click a screen reader made, which moves none: focus goes
+      // where a real press would put it, the nearest thing around what was
+      // clicked that takes focus, or else the popup's button.
+      const around =
+        e.target instanceof Element
+          ? e.target.closest<HTMLElement>(FOCUSABLE_SELECTOR)
+          : null;
+      closeKeepingFocus(around ?? buttonRef.current);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape" || e.defaultPrevented) return;
+      closeKeepingFocus(buttonRef.current);
+    };
+    // Both press events, in capture, so a control that stops them from
+    // bubbling doesn't hide them: `pointerdown` comes for a disabled control
+    // too, and `mousedown` for a click a screen reader makes, which brings no
+    // pointer events. Closing twice is closing once.
+    document.addEventListener("pointerdown", onPress, true);
+    document.addEventListener("mousedown", onPress, true);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", onPress, true);
+      document.removeEventListener("mousedown", onPress, true);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open, close, containerRef, buttonRef]);
+  useLayoutEffect(() => {
+    if (open && !containerRef.current) close();
+  });
 }

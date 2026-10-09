@@ -4,10 +4,11 @@
  * Native-mode entry point (RFC PR H). Registered unconditionally from the
  * service worker (`background.ts`) — the capability ships in every build now
  * that `public/manifest.json` carries `debugger`/`tabs`/`storage` as required
- * permissions. What keeps it off by default is the setting below: every
- * `chrome.debugger` use still refuses until a user explicitly turns native
- * mode on, enforced inside `NativeDebuggerSession.attach()` itself so "off"
- * and "attached" stay mutually exclusive.
+ * permissions. Native mode is on by default: the side panel reads
+ * Chromium's own tree unless the user has turned it off in the panel's
+ * Settings. That setting is enforced in one place, inside
+ * `NativeDebuggerSession.attach()` itself, so "off" and "attached" stay
+ * mutually exclusive.
  *
  * This wires the panel↔SW messages for reading Chromium's native tree over
  * `chrome.debugger`, acting through it, and exporting the dogfood report. All
@@ -36,8 +37,8 @@ import {
   readNativeTree,
   type NativeAction,
 } from "./native-core.js";
+import { NATIVE_MODE_KEY as FLAG_KEY, nativeModeOn } from "./setting.js";
 
-const FLAG_KEY = "settings.nativeModeEnabled";
 /** The dogfood build's name for the same setting, before it became a user
  *  setting. Read once, carried over, then removed — see `migrateFlag`. */
 const LEGACY_FLAG_KEY = "devFlags.nativeMode";
@@ -55,21 +56,28 @@ const discardingStorage: chrome.storage.StorageArea = {
   set: async () => {},
 } as unknown as chrome.storage.StorageArea;
 
-/** Carry a dogfooder's old `devFlags.nativeMode: true` over to the new key,
- *  then drop the old key so it doesn't linger in their storage. */
+/** Carry a dogfooder's old `devFlags.nativeMode` over to the new key, then
+ *  drop the old key so it doesn't linger in their storage. Native mode is on
+ *  by default now, so it is an old "off" that matters: either answer was the
+ *  user's, and either is kept. */
 async function migrateFlag(): Promise<void> {
   const got = await chrome.storage.local.get([FLAG_KEY, LEGACY_FLAG_KEY]);
   if (!(LEGACY_FLAG_KEY in got)) return;
-  if (got[LEGACY_FLAG_KEY] === true && got[FLAG_KEY] === undefined) {
-    await chrome.storage.local.set({ [FLAG_KEY]: true });
+  const legacy: unknown = got[LEGACY_FLAG_KEY];
+  if (typeof legacy === "boolean" && got[FLAG_KEY] === undefined) {
+    await chrome.storage.local.set({ [FLAG_KEY]: legacy });
   }
   await chrome.storage.local.remove(LEGACY_FLAG_KEY);
 }
 
-/** The user-facing native-mode setting — off unless explicitly turned on. */
-async function nativeModeEnabled(): Promise<boolean> {
+/** The user-facing native-mode setting, as stored: `false` once the user
+ *  turns native mode off in the panel's Settings, `true` once they turn it
+ *  back on, `undefined` if they never touched it. Native mode is on unless it
+ *  is `false`. */
+async function nativeModeSetting(): Promise<boolean | undefined> {
   const got = await chrome.storage.local.get(FLAG_KEY);
-  return got[FLAG_KEY] === true;
+  const value: unknown = got[FLAG_KEY];
+  return typeof value === "boolean" ? value : undefined;
 }
 
 /** Request/response messages the panel sends for native mode. Pushes the
@@ -77,6 +85,7 @@ async function nativeModeEnabled(): Promise<boolean> {
  *  `../types.ts` with the panel's other inbound messages, because the panel's
  *  one message handler routes them. */
 type NativeMessage =
+  // Replies `{ enabled }`: on unless the user turned native mode off.
   | { type: "NATIVE_FLAG_GET" }
   | { type: "NATIVE_FLAG_SET"; enabled: boolean }
   | { type: "NATIVE_CAPABILITY"; tabId: number }
@@ -231,7 +240,7 @@ export function registerNativeMode(): void {
   const migrated = migrateFlag().catch(() => {});
   const flagEnabled = async () => {
     await migrated;
-    return nativeModeEnabled();
+    return nativeModeOn(await nativeModeSetting());
   };
 
   // The dogfood build keeps its event log in `local`, so it survives restarts
@@ -287,6 +296,13 @@ export function registerNativeMode(): void {
             sendResponse({ enabled: await flagEnabled() });
             return;
           case "NATIVE_FLAG_SET": {
+            // Only `false` turns native mode off, so storing anything but a
+            // boolean would leave it reading as on while this went on to
+            // detach as if turning it off.
+            if (typeof message.enabled !== "boolean") {
+              sendResponse({ ok: false, error: "bad-request" });
+              return;
+            }
             await migrated;
             await chrome.storage.local.set({ [FLAG_KEY]: message.enabled });
             // Cancel any in-flight picker session BEFORE detachAll: a pick

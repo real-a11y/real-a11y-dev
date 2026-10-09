@@ -13,8 +13,8 @@ import {
 } from "./panel-harness.js";
 
 /**
- * Native as the default view, for a user who opted in during an earlier
- * session. A default that can't read a tab falls back to DOM and must not try
+ * Native as the default view, as native mode comes out of the box. A
+ * default that can't read a tab falls back to DOM and must not try
  * that tab again: each retry attaches the debugger, and flashes Chrome's bar,
  * with no gesture behind it.
  */

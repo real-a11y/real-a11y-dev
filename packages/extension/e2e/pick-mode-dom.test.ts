@@ -1,10 +1,11 @@
 /**
  * The element picker vs. a panel-driven action, in a real browser.
  *
- * This is the only file here that drives the DOM producer's picker — the
- * store build's default. Most other suites drive native mode over
- * `chrome.debugger`, so none of them would notice a regression in the in-page
- * content script's picker at all.
+ * This is the only file here that drives the DOM producer's picker — what the
+ * panel uses with native mode turned off, and falls back to when a native read
+ * can't attach. Most other suites drive native mode over `chrome.debugger`, so
+ * none of them would notice a regression in the in-page content script's
+ * picker at all.
  *
  * It is here because the bug it guards is made of exactly the things a jsdom
  * unit test has to fake:

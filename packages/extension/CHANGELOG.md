@@ -19,6 +19,17 @@
 
 ## Unreleased
 
+- **Native mode is on by default.** The side panel reads Chromium's own
+  accessibility tree from the first page it connects to, with nothing to set
+  up. The first time it does, a note below the toolbar explains the bar
+  Chrome shows across every window while the panel reads a page, “Semantic
+  Navigator” started debugging this browser: **Got it** hides the note for
+  good, and **Turn off** goes back to the panel reading the page itself.
+  **Settings ▾**, next to the page's title, turns it off or back on later,
+  with **Read pages through Chrome (recommended)**. Each window has its own side panel,
+  and a change made in one holds in every panel open in the others
+  ([#496](https://github.com/real-a11y/real-a11y-dev/pull/496)).
+
 - Hardened the shared mutation observer so that re-arming it can no longer
   strand the previous observers and event listeners
   ([#487](https://github.com/real-a11y/real-a11y-dev/pull/487)). No
@@ -36,19 +47,17 @@
 - **Native mode graduates from the dev-only dogfood build into the shipped
   extension.** Reading Chromium's own accessibility tree over `chrome.debugger`
   — full fidelity, including UA-shadow content (media controls, etc.) the DOM
-  producer can't see — is now a real, user-facing feature, off by default. The
-  manifest now requests `debugger`, `tabs` and `storage` as required
-  permissions (`chrome.debugger` cannot be requested optionally), so **this
-  update re-prompts every existing user for the extra permissions** — nothing
-  changes for anyone who doesn't turn the feature on. To use it: open the side
-  panel, click "Enable native mode…", and accept the one-time in-panel notice
-  about what it does and about the bar Chrome shows across every window while
-  it's attached, reading “Semantic Navigator” started debugging this browser.
-  The setting persists across restarts, and once it's on, the panel opens on
+  producer can't see — is now a real, user-facing feature, on by default (see
+  above). The manifest now requests `debugger`, `tabs` and `storage` as
+  required permissions (`chrome.debugger` cannot be requested optionally), so
+  **this update re-prompts every existing user for the extra permissions**.
+  While native mode is attached, Chrome shows a bar across every window,
+  reading “Semantic Navigator” started debugging this browser.
+  The setting persists across restarts, and with it on, the panel opens on
   the native tree for the first page that connects each time you open it
   ([#390]); if native mode can't read that page, the panel stays on the DOM
-  tree and says why. Turning it back off detaches as soon as any read or
-  action already under way finishes. Nothing is logged about
+  tree and says why. Turning it off detaches as soon as any read or action
+  already under way finishes. Nothing is logged about
   how you use it. It ships with what the dogfood build learned along the way:
   an `aria-busy` element shows a `busy` badge
   ([#441](https://github.com/real-a11y/real-a11y-dev/pull/441)); a rich-text

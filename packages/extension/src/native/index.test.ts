@@ -40,15 +40,17 @@ function storageArea(initial: Record<string, unknown> = {}) {
 
 let listeners: Listener[];
 let local: ReturnType<typeof storageArea>;
+let attach: ReturnType<typeof vi.fn>;
 
 function install(initial: Record<string, unknown> = {}) {
   listeners = [];
   local = storageArea(initial);
+  attach = vi.fn(async () => {});
   vi.stubGlobal("chrome", {
     storage: { local, session: storageArea() },
     debugger: {
       onDetach: { addListener: () => {} },
-      attach: async () => {},
+      attach,
       detach: async () => {},
       sendCommand: async () => ({}),
     },
@@ -121,6 +123,56 @@ describe("registerNativeMode: who may send native messages", () => {
   });
 });
 
+describe("registerNativeMode: on by default", () => {
+  // Native mode is on unless the user turned it off in the panel's
+  // Settings: a profile that never touched the setting reads natively.
+  const get = async () =>
+    (await send({ type: "NATIVE_FLAG_GET" }, PANEL)).response;
+
+  it("reads as on while the setting was never touched", async () => {
+    await register();
+    expect(await get()).toEqual({ enabled: true });
+  });
+
+  it("reads as off once turned off, and on again once turned back on", async () => {
+    await register();
+    await send({ type: "NATIVE_FLAG_SET", enabled: false }, PANEL);
+    expect(await get()).toEqual({ enabled: false });
+    await send({ type: "NATIVE_FLAG_SET", enabled: true }, PANEL);
+    expect(await get()).toEqual({ enabled: true });
+  });
+
+  it("attaches for a read while the setting was never touched", async () => {
+    await register();
+    await send({ type: "NATIVE_READ", tabId: 7 }, PANEL);
+    expect(attach).toHaveBeenCalled();
+  });
+
+  it("never attaches once the user turned it off", async () => {
+    await register();
+    await send({ type: "NATIVE_FLAG_SET", enabled: false }, PANEL);
+    await send({ type: "NATIVE_READ", tabId: 7 }, PANEL);
+    expect(attach).not.toHaveBeenCalled();
+  });
+
+  it("reads a stored value that isn't a boolean as on", async () => {
+    install({ "settings.nativeModeEnabled": "false" });
+    await register();
+    expect(await get()).toEqual({ enabled: true });
+  });
+
+  it("refuses a change that isn't a boolean, and changes nothing", async () => {
+    await register();
+    await send({ type: "NATIVE_FLAG_SET", enabled: false }, PANEL);
+
+    const { response } = await send({ type: "NATIVE_FLAG_SET" }, PANEL);
+
+    expect(response).toEqual({ ok: false, error: "bad-request" });
+    expect(local.data["settings.nativeModeEnabled"]).toBe(false);
+    expect(await get()).toEqual({ enabled: false });
+  });
+});
+
 describe("registerNativeMode: the old dogfood flag", () => {
   it("carries devFlags.nativeMode over and removes it", async () => {
     install({ "devFlags.nativeMode": true });
@@ -129,10 +181,10 @@ describe("registerNativeMode: the old dogfood flag", () => {
     expect("devFlags.nativeMode" in local.data).toBe(false);
   });
 
-  it("drops an old 'off' without turning anything on", async () => {
+  it("carries an old 'off' over, so native mode stays off", async () => {
     install({ "devFlags.nativeMode": false });
     await register();
-    expect(local.data["settings.nativeModeEnabled"]).toBeUndefined();
+    expect(local.data["settings.nativeModeEnabled"]).toBe(false);
     expect("devFlags.nativeMode" in local.data).toBe(false);
   });
 

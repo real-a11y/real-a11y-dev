@@ -24,6 +24,11 @@ select `packages/extension/dist`. (After any rebuild, click the refresh icon on 
 page — a stale service worker is the usual cause of "it didn't change".)
 
 1. Open the side panel on a content-rich page — does it connect and render a tree?
+   From the first release after 0.1.15 the panel opens on Chrome's own tree (native
+   mode, which **R42** covers), and this row exercises the DOM tree: open
+   **Settings ▾** and uncheck **Read pages through Chrome (recommended)**. That holds
+   for the rest of the run, R18 and R19 included. A build from 0.1.15 or earlier has
+   no native mode and no Settings.
 2. Switch views: tree / outline / tab order / findings
 3. Search, and type-ahead within the tree
 4. Select a node — is the corresponding element highlighted on the page?

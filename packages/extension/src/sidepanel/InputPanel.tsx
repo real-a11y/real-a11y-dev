@@ -86,7 +86,7 @@ function TextInput({
   const dialogRef = useRef<HTMLDivElement>(null);
   const fieldId = useId();
 
-  useRestoreFocusOnClose();
+  useRestoreFocusOnClose(dialogRef);
   useFocusTrap(dialogRef);
 
   useEffect(() => {
@@ -171,7 +171,7 @@ function SelectPicker({
   const listRef = useRef<HTMLDivElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
 
-  useRestoreFocusOnClose();
+  useRestoreFocusOnClose(dialogRef);
   useFocusTrap(dialogRef);
 
   useEffect(() => {

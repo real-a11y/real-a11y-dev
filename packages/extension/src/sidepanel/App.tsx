@@ -34,9 +34,11 @@ import {
 import {
   useState,
   useEffect,
+  useLayoutEffect,
   useCallback,
   useRef,
   useMemo,
+  useId,
 } from "preact/hooks";
 
 import type { FieldState } from "../field-state.js";
@@ -55,6 +57,11 @@ import {
 import type { NativeAction } from "../native/native-core.js";
 import { nativeToExtractionResult } from "../native/native-export.js";
 import {
+  NATIVE_MODE_KEY,
+  NATIVE_NOTICE_SEEN_KEY,
+  nativeModeOn,
+} from "../native/setting.js";
+import {
   isTrustedSender,
   isUnreachablePageResponse,
   shouldPanelAcceptMessage,
@@ -65,6 +72,7 @@ import { describeAction, describeSelection } from "./action-feedback.js";
 import { ControlsChip, JUMP_FLASH_MS } from "./ControlsChip.js";
 import {
   buildExportMarkdown,
+  pageLabel,
   ALL_VIEWS,
   NATIVE_VIEWS,
   VIEW_LABELS,
@@ -72,7 +80,7 @@ import {
 import type { ExportMeta, ExportView, ExportViews } from "./export.js";
 import { announcedValueLabel, rawValueLabel } from "./field-value.js";
 import { FilteredList } from "./FilteredList.js";
-import { useFocusTrap, useRestoreFocusOnClose } from "./focus-hooks.js";
+import { useDismissible } from "./focus-hooks.js";
 import { InputPanel } from "./InputPanel.js";
 import type { InputPanelState } from "./InputPanel.js";
 import {
@@ -231,15 +239,6 @@ function isFieldStateSuccess(
   return isSuccessResponse(response);
 }
 
-/**
- * The one-time consent step before native mode's setting flips on. A separate
- * component (not inline JSX in App) so its own mount/unmount is what drives
- * `useFocusTrap`/`useRestoreFocusOnClose` — those hooks key off first-mount
- * effects, which only fires at the right moment when the banner itself is
- * what mounts and unmounts, not a `showNativeConsent` boolean toggling inside
- * an already-mounted `App`. Mirrors `InputPanel.tsx`'s `TextInput`/
- * `SelectPicker` shape for the identical reason.
- */
 /** The name Chrome's debugging bar quotes. */
 function extensionName(): string {
   try {
@@ -249,93 +248,61 @@ function extensionName(): string {
   }
 }
 
-function NativeConsentBanner({
-  onEnable,
-  onCancel,
-  error,
-  pending = false,
+/**
+ * The one-time note about Chrome's debugging bar, shown above the native tree
+ * until the user acknowledges it. Native mode is on by default and nothing
+ * asks first, so this is where the bar gets explained: a bar reading "…
+ * started debugging this browser" that nobody mentioned looks like something
+ * is wrong. Not a dialog: it takes no focus and blocks nothing, and Turn off
+ * is the same switch as the Settings checkbox.
+ */
+function NativeModeNotice({
+  onAcknowledge,
+  onTurnOff,
+  turningOff,
 }: {
-  onEnable: () => void;
-  onCancel: () => void;
-  /** An Enable is on its way: the setting may already be written, so neither
-   *  button does anything until it answers — a Cancel then would close the
-   *  banner over a request that still turns native mode on. Marked
-   *  `aria-disabled` rather than `disabled`, so focus stays in the dialog. */
-  pending?: boolean;
-  /** Shown inline when a previous Enable attempt failed — the banner stays
-   *  open on failure (see App's own `onEnable` handler), so this is the only
-   *  place left to surface it; `nativeStatus` renders only inside
-   *  `NativeTreeView`, which never mounts unless the flip already
-   *  succeeded. */
-  error?: string;
+  onAcknowledge: () => void;
+  onTurnOff: () => void;
+  /** A change to the setting is on its way: Turn off has nothing to add. */
+  turningOff: boolean;
 }) {
-  const dialogRef = useRef<HTMLDivElement>(null);
-  const enableRef = useRef<HTMLButtonElement>(null);
-
-  useRestoreFocusOnClose();
-  useFocusTrap(dialogRef);
-
-  useEffect(() => {
-    enableRef.current?.focus();
-  }, []);
-
-  const handleKeyDown = useCallback(
-    (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        e.preventDefault();
-        if (!pending) onCancel();
-      }
-    },
-    [onCancel, pending],
-  );
-
+  const textId = useId();
   return (
     <div
-      ref={dialogRef}
       class="sn-native-consent-banner"
-      role="dialog"
-      aria-modal="true"
-      aria-label="Enable native mode"
+      role="note"
+      aria-label="About Chrome's debugging bar"
     >
-      <p>
-        <strong>Native mode</strong> reads Chromium's own accessibility tree
-        over the <code>debugger</code> API — full fidelity, including UA-shadow
-        content the DOM producer can't see. While it's attached, Chrome shows a
-        bar across every window reading “{extensionName()}” started debugging
-        this browser. It attaches only to read or act, so the bar comes and
-        goes: when you refresh, act, or open a new page in the tab. Pressing its
-        Cancel detaches, and stops automatic reads until you refresh.
+      <p id={textId}>
+        While {extensionName()} reads a page, Chrome shows a bar across every
+        window: “{extensionName()}” started debugging this browser. That's
+        expected: it's how the panel reads the tree Chrome itself gives
+        assistive technology. Turn it off to have the panel read the page
+        itself, with no bar.
       </p>
-      {error && (
-        <p class="sn-native-consent-error" role="alert">
-          {error}
-        </p>
-      )}
       <div class="sn-native-consent-actions">
-        <button
-          ref={enableRef}
-          class="sn-toolbar-btn"
-          aria-disabled={pending}
-          onClick={() => {
-            if (!pending) onEnable();
-          }}
-          onKeyDown={handleKeyDown}
-        >
-          {pending ? "Enabling…" : "Enable"}
+        <button class="sn-toolbar-btn" onClick={onAcknowledge}>
+          Got it
         </button>
         <button
           class="sn-toolbar-btn"
-          aria-disabled={pending}
-          onClick={() => {
-            if (!pending) onCancel();
-          }}
-          onKeyDown={handleKeyDown}
+          aria-describedby={textId}
+          aria-disabled={turningOff}
+          onClick={onTurnOff}
         >
-          Cancel
+          Turn off
         </button>
       </div>
     </div>
   );
+}
+
+/** What turning native mode off says, here or from another window: a panel
+ *  waiting for a page has no DOM tree on screen to point at. */
+function nativeOffMessage(connected: boolean): string {
+  return connected
+    ? "Not reading pages through Chrome — showing the DOM tree."
+    : "Not reading pages through Chrome.";
 }
 
 export function App() {
@@ -358,6 +325,13 @@ export function App() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [renderCount, forceRender] = useState(0);
   const [connected, setConnected] = useState(false);
+  // The same, for callbacks that run after a reply. Written during render,
+  // like `pickModeOnRef`.
+  const connectedRef = useRef(false);
+  connectedRef.current = connected;
+  // Whether a page has connected to this panel at all since it opened.
+  const everConnected = useRef(false);
+  if (connected) everConnected.current = true;
   // The last REQUEST_TREE came back saying no content script could receive it.
   // Distinct from `!connected`: that is "no tree yet", which on a restricted
   // page never resolves, and rendering the two the same is what left the panel
@@ -374,8 +348,22 @@ export function App() {
   const [roleFilter, setRoleFilter] = useState<RoleFilter>(null);
   const [curtainOn, setCurtainOn] = useState(false);
   const [focusTrackerOn, setFocusTrackerOn] = useState(true);
-  // Export dropdown ("Copy" → pick which view(s) to put on the clipboard).
-  const [exportMenuOpen, setExportMenuOpen] = useState(false);
+  // Which popup is open: the export dropdown ("Copy" → pick which view(s) to
+  // put on the clipboard) or Settings. Never both: each opens in the other's
+  // place, however it is reached.
+  const [openPopup, setOpenPopup] = useState<"copy" | "settings" | null>(null);
+  const exportMenuOpen = openPopup === "copy";
+  const togglePopup = useCallback(
+    (popup: "copy" | "settings") =>
+      setOpenPopup((open) => (open === popup ? null : popup)),
+    [],
+  );
+  // Only that popup: a listener left over from the other can't close this.
+  const closePopup = useCallback(
+    (popup: "copy" | "settings") =>
+      setOpenPopup((open) => (open === popup ? null : open)),
+    [],
+  );
   // Picker mode (DevTools-style "select an element in the page"). Off by
   // default; toggled by the toolbar button or Ctrl/Cmd+Shift+C. The
   // content script owns the actual click capture — this flag is just the
@@ -397,39 +385,82 @@ export function App() {
   const announcementId = useRef(0);
 
   // ---- Native producer (RFC PR H/#229) ----
-  // The capability ships in every build (see background.ts), but stays off
-  // until the user turns on this setting — a real `chrome.storage`-backed
+  // The capability ships in every build (see background.ts), and is on
+  // unless the user turns this setting off — a real `chrome.storage`-backed
   // flag now, not a build-time one. Fetched once on mount via the same
   // NATIVE_FLAG_GET message DogfoodPanel.tsx already used for its own
-  // checkbox; NATIVE_FLAG_SET flips it (see setNativeModeEnabled below).
-  const [nativeModeEnabled, setNativeModeEnabledState] = useState(false);
-  // Shown in place of the producer toggle the first time a user reaches for
-  // NATIVE while the setting is still off — explains the debugger banner
-  // before anything attaches, rather than surprising them with it. Dismissed
-  // by either button; never shown again once the setting is on.
-  const [showNativeConsent, setShowNativeConsent] = useState(false);
-  // Set only when an Enable attempt actually fails (the message never
-  // reached the service worker, or its handler replied with a logical
-  // failure) — cleared on every fresh attempt so a stale error never
-  // outlives the retry it was about.
-  const [nativeConsentError, setNativeConsentError] = useState<
-    string | undefined
-  >(undefined);
-  // An Enable sent and not yet answered: the banner's buttons wait for it.
-  const [nativeConsentPending, setNativeConsentPending] = useState(false);
-
+  // checkbox; NATIVE_FLAG_SET flips it (see `requestNativeMode` below).
+  // Every open panel also follows it in storage (see `followNativeSetting`),
+  // so a panel in one window agrees with a change made in another.
+  const [nativeModeEnabled, setNativeModeEnabledRaw] = useState(false);
+  // The same value for callbacks, updated with the state rather than on the
+  // next render: two storage changes can land before that render.
+  const nativeModeEnabledRef = useRef(false);
+  const setNativeModeEnabledState = useCallback((on: boolean) => {
+    nativeModeEnabledRef.current = on;
+    setNativeModeEnabledRaw(on);
+  }, []);
+  // The Settings menu (the "Read pages through Chrome" switch), and the turn
+  // on or off it has asked for and not had answered: the switch shows that
+  // value meanwhile, and goes back if it doesn't take.
+  const settingsOpen = openPopup === "settings";
+  const settingsRef = useRef<HTMLDivElement>(null);
+  const settingsButtonRef = useRef<HTMLButtonElement>(null);
+  const [nativeSettingPending, setNativeSettingPending] = useState<
+    boolean | null
+  >(null);
+  // Whether the user has acknowledged the note about Chrome's debugging bar
+  // (see `NativeModeNotice`). `null` until storage says, or where the panel
+  // runs without extension storage: the note shows only on a definite "no".
+  const [nativeNoticeSeen, setNativeNoticeSeen] = useState<boolean | null>(
+    null,
+  );
+  // Whether a native read has succeeded in this panel, which is when Chrome's
+  // bar has shown: the note about it waits for that.
+  const [nativeEverRead, setNativeEverRead] = useState(false);
+  // Whether the note is on screen, as of the last render. Written during
+  // render, like `pickModeOnRef`.
+  const nativeNoticeShown = useRef(false);
+  // Setting writes this panel has sent and not yet had answered. Their echo
+  // in storage can arrive before the reply, and the reply is what updates
+  // this panel, in order, so `followNativeSetting` holds back every change
+  // that lands meanwhile, and applies the last one once the writes are
+  // answered (`ownWriteDone`): it may have been another window's. Storage
+  // reports changes in the order they were written, so the last one held is
+  // the setting as it then stood.
+  const ownSettingWrites = useRef(0);
+  const heldSetting = useRef<{ value: unknown } | null>(null);
+  // Bumped each time the panel learns the setting from something newer than
+  // its mount-time read: a change in storage, or the reply to its own write.
+  // That read's reply is dropped if it lands after one.
+  const settingLearned = useRef(0);
   useEffect(() => {
+    const learned = settingLearned.current;
+    const apply = (on: boolean) => {
+      if (settingLearned.current !== learned) return;
+      setNativeModeEnabledState(on);
+    };
+    // The service worker didn't say (not woken yet, a context torn down
+    // mid-reload, an internal failure): read the key itself, so Settings
+    // shows the setting every other window follows. Where even that fails,
+    // the panel stays on the DOM tree, which reads without either. (The old
+    // dogfood key is the service worker's to carry over; until it has, its
+    // attach gate refuses what this reads as on, and the carried-over value
+    // reaches this panel as a change in storage.)
+    const fromStorage = () => {
+      void chrome.storage?.local
+        ?.get(NATIVE_MODE_KEY)
+        .then((r) => apply(nativeModeOn(r[NATIVE_MODE_KEY])))
+        .catch(() => {});
+    };
     void chrome.runtime
       .sendMessage({ type: "NATIVE_FLAG_GET" })
-      .then((r: { enabled?: boolean }) =>
-        setNativeModeEnabledState(r?.enabled === true),
-      )
-      .catch(() => {
-        // Service worker not woken yet / context torn down mid-reload —
-        // leave the setting at its default (off); the toggle just stays
-        // available to try again.
-      });
-  }, []);
+      .then((r: { enabled?: unknown } | undefined) => {
+        if (typeof r?.enabled === "boolean") apply(r.enabled);
+        else fromStorage();
+      })
+      .catch(fromStorage);
+  }, [setNativeModeEnabledState]);
 
   // Which tree the panel is currently showing. Only ever leaves "dom" when
   // `nativeModeEnabled` is true — the toggle that flips it is itself gated on
@@ -520,16 +551,16 @@ export function App() {
   // `capabilityRequest`, one counter shared across both message types since
   // both answer "does this reply still describe the tab we're looking at".
   const nativeOpToken = useRef(0);
-  // Bumped by the myTabId effect below and by `requestNativeMode` turning
-  // native mode off — NEVER by PAGE_NAVIGATED. A snapshot of this taken
-  // before a native op, compared after, tells apart "something that isn't
-  // this action's own navigation invalidated it" from "nativeOpToken moved
-  // only because PAGE_NAVIGATED fired for the navigation this action
-  // itself caused", which `myTabId` equality alone cannot: a rapid tab
-  // switch away and back leaves `myTabId` (and a ref mirroring it) reading
-  // the same tab id again even though the effect fired twice and cleared
-  // the tree — see `dispatchNativeAction`'s own recovery path for why that
-  // distinction matters.
+  // Bumped by the myTabId effect below and by `showNativeOff` (native mode
+  // turned off, here or in another window) — NEVER by PAGE_NAVIGATED. A
+  // snapshot of this taken before a native op, compared after, tells apart
+  // "something that isn't this action's own navigation invalidated it" from
+  // "nativeOpToken moved only because PAGE_NAVIGATED fired for the
+  // navigation this action itself caused", which `myTabId` equality alone
+  // cannot: a rapid tab switch away and back leaves `myTabId` (and a ref
+  // mirroring it) reading the same tab id again even though the effect fired
+  // twice and cleared the tree — see `dispatchNativeAction`'s own recovery
+  // path for why that distinction matters.
   const tabChangeToken = useRef(0);
   // Excludes a second native read/act from starting while one is already in
   // flight. Has to be a ref, not state driving a `disabled` attribute alone:
@@ -643,13 +674,17 @@ export function App() {
       ?.set({ [FOLLOW_PAGE_CHANGES_KEY]: next })
       .catch(() => {});
   }, []);
-  // Turning native mode on or off swaps the control that had focus (the
-  // Enable button becomes the DOM/NATIVE toggle, and back), so focus would
-  // otherwise fall to <body>. The effect below moves it to the control that
-  // replaced it once that control has rendered.
-  const nativeToggleRef = useRef<HTMLButtonElement>(null);
-  const enableNativeRef = useRef<HTMLButtonElement>(null);
-  const pendingNativeFocus = useRef<"toggle" | "enable" | null>(null);
+  // What had focus as this render began, before its commit could take it
+  // away. Turning native mode off, here or in another window, takes away the
+  // native tree and the DOM/NATIVE toggle; so does a default read that falls
+  // back to the DOM tree, and the note about Chrome's bar goes once it is
+  // answered. Whatever had focus can go with them, which would leave it on
+  // the body: a layout effect further down puts it back instead, whichever
+  // way it went. Read during render, which runs before the commit, rather
+  // than from focus events: a panel without the window's focus (the user is
+  // in the page, or in another window) gets none when focus moves.
+  const focusBeforeCommit = useRef<Element | null>(null);
+  focusBeforeCommit.current = document.activeElement;
 
   /** Drop the native tree and orphan any native read or action in flight.
    *  Bumping `nativeOpToken` makes a late reply recognizably stale to every
@@ -671,50 +706,32 @@ export function App() {
     setNativePickReveal(undefined);
   }, []);
 
-  /** Asks the service worker to persist the setting. A request, not a state
-   *  setter: it can fail, and it resolves to whether the setting really
-   *  changed. `NATIVE_FLAG_SET` replies `{ok: false}` from its outer catch on
-   *  an internal failure rather than rejecting, so a resolved promise alone
-   *  doesn't mean it took. Turning native mode off also drops the native tree
-   *  and returns the view to DOM; the service worker detaches the debugger as
-   *  soon as any operation in flight finishes. */
-  const requestNativeMode = useCallback(
-    async (next: boolean): Promise<boolean> => {
-      let r: { enabled?: boolean; ok?: boolean } | undefined;
-      try {
-        r = await chrome.runtime.sendMessage({
-          type: "NATIVE_FLAG_SET",
-          enabled: next,
-        });
-      } catch {
-        // Never reached the service worker, so nothing was persisted.
-        return false;
-      }
-      if (r?.enabled !== next) return false;
-      setNativeModeEnabledState(next);
-      setShowNativeConsent(false);
-      if (!next) {
-        // Disabling mid-recovery must also abort `recoverFromOwnNavigation`'s
-        // settle loop, the same way a real tab switch does.
-        tabChangeToken.current++;
-        resetNativeState();
-        setProducer("dom");
-        // The service worker cancels an armed pick when native mode goes off,
-        // but its NATIVE_PICK_RESULT arrives after `producerRef` has already
-        // flipped to "dom", and the handler drops a native result then. Clear
-        // the button here instead of waiting for a message that won't land.
-        setPickModeOn(false);
-      }
-      return true;
-    },
-    [resetNativeState],
-  );
-  // Native as the default view, for a user who has already opted in: once per
+  /** Native mode is off: drop the native tree and return the view to DOM.
+   *  For this panel's own Disable, and for one in another window. */
+  const showNativeOff = useCallback(() => {
+    setNativeModeEnabledState(false);
+    // Disabling mid-recovery must also abort `recoverFromOwnNavigation`'s
+    // settle loop, the same way a real tab switch does.
+    tabChangeToken.current++;
+    resetNativeState();
+    setProducer("dom");
+    // The service worker cancels an armed native pick when native mode goes
+    // off, but its NATIVE_PICK_RESULT arrives after `producerRef` has already
+    // flipped to "dom", and the handler drops a native result then. Clear
+    // the button here instead of waiting for a message that won't land. A
+    // DOM pick is the content script's, and carries on in the DOM tree.
+    if (producerRef.current === "native") setPickModeOn(false);
+    // An edit box or option picker opened from the native tree acts through
+    // native mode, which is off now: submitting it would do nothing.
+    setInputState((open) => (open?.source === "native" ? null : open));
+  }, [resetNativeState, setNativeModeEnabledState]);
+  // Native as the default view, on unless the user turned it off: once per
   // panel session, on the first page that connects and that native mode can
   // read. Not on every tab or navigation after that — each of those would
   // attach the debugger with no fresh gesture. Spent by a successful default
-  // read, and by turning native mode on in this session (the consent click is
-  // its own gesture, and its own read).
+  // read, and by turning native mode on from Settings with a page connected
+  // (the switch is its own gesture, and its own read). Turned on while no
+  // page is connected, the switch leaves the read to this default instead.
   const hasAppliedNativeDefault = useRef(false);
   // The tabs the default has failed on (DevTools owns it, a blocked URL, the
   // service worker didn't answer). The default waits for a tab not in here
@@ -732,6 +749,7 @@ export function App() {
   const listViewRef = useRef<HTMLElement | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const exportRef = useRef<HTMLDivElement>(null);
+  const exportButtonRef = useRef<HTMLButtonElement>(null);
   const { query, matchCount, updateQuery, updateMatchCount } = useSearch();
 
   const focusSearch = useCallback(() => {
@@ -793,6 +811,213 @@ export function App() {
     }, ms);
   }, []);
 
+  /** Show the setting as it stands after a change made outside this panel:
+   *  another window's panel turned native mode on or off in its Settings
+   *  (each window has its own side panel), or the dogfood build's checkbox
+   *  did. A removed key is the default again, which is on. */
+  const applyNativeSetting = useCallback(
+    (value: unknown) => {
+      const on = nativeModeOn(value);
+      settingLearned.current++;
+      if (on === nativeModeEnabledRef.current) return;
+      if (on) {
+        // Not a gesture in this window. A panel that has shown a page
+        // doesn't read the next one natively on its own, so its default read
+        // is spent: the toolbar offers NATIVE, and nothing attaches until
+        // it's pressed. One that has never connected reads the first page
+        // that does, as a panel opened with native mode on would.
+        if (everConnected.current) hasAppliedNativeDefault.current = true;
+        setNativeModeEnabledState(true);
+        announce(
+          connectedRef.current
+            ? "Reading pages through Chrome is on — NATIVE in the toolbar shows its tree."
+            : "Reading pages through Chrome is on.",
+          4000,
+        );
+        return;
+      }
+      // The service worker has already detached, and refuses reads, so show
+      // what this panel's own turn-off would.
+      showNativeOff();
+      announce(nativeOffMessage(connectedRef.current), 4000);
+    },
+    [announce, showNativeOff, setNativeModeEnabledState],
+  );
+  /** A change to the setting in storage. Held while this panel has a write
+   *  of its own on its way (see `ownSettingWrites`). */
+  const followNativeSetting = useCallback(
+    (value: unknown) => {
+      if (ownSettingWrites.current > 0) {
+        heldSetting.current = { value };
+        return;
+      }
+      applyNativeSetting(value);
+    },
+    [applyNativeSetting],
+  );
+  useEffect(() => {
+    // Absent where the panel runs without extension storage (unit tests).
+    if (!chrome.storage?.onChanged) return;
+    const onChanged = (
+      changes: Record<string, chrome.storage.StorageChange>,
+      area: string,
+    ) => {
+      if (area !== "local") return;
+      if (NATIVE_MODE_KEY in changes) {
+        followNativeSetting(changes[NATIVE_MODE_KEY]!.newValue);
+      }
+      if (NATIVE_NOTICE_SEEN_KEY in changes) {
+        setNativeNoticeSeen(changes[NATIVE_NOTICE_SEEN_KEY]!.newValue === true);
+      }
+    };
+    // Read before a change `onChanged` may already have applied, so it can
+    // only add a "seen", never take one back.
+    void chrome.storage.local
+      ?.get(NATIVE_NOTICE_SEEN_KEY)
+      .then((r) =>
+        setNativeNoticeSeen(
+          (seen) => seen === true || r[NATIVE_NOTICE_SEEN_KEY] === true,
+        ),
+      )
+      .catch(() => {});
+    chrome.storage.onChanged.addListener(onChanged);
+    return () => chrome.storage.onChanged.removeListener(onChanged);
+  }, [followNativeSetting]);
+  /** One of this panel's own setting writes is answered, or failed, and its
+   *  answer applied. Once none is left on its way, the last change held back
+   *  meanwhile is applied after it: that write's own echo, which changes
+   *  nothing, or another window's answer. */
+  const ownWriteDone = useCallback(() => {
+    ownSettingWrites.current--;
+    if (ownSettingWrites.current > 0) return;
+    const held = heldSetting.current;
+    heldSetting.current = null;
+    if (held) applyNativeSetting(held.value);
+  }, [applyNativeSetting]);
+  /** Send one of this panel's own writes to the setting. `onReply` gets the
+   *  service worker's reply, or `undefined` if it never answered, and runs
+   *  before a change held meanwhile is applied (`ownWriteDone`), so what it
+   *  does can't undo that change. */
+  const ownWrite = useCallback(
+    (
+      message: { type: "NATIVE_FLAG_SET"; enabled: boolean },
+      onReply: (reply: { enabled?: boolean } | undefined) => void,
+    ): void => {
+      ownSettingWrites.current++;
+      let sent: Promise<unknown>;
+      try {
+        sent = chrome.runtime.sendMessage(message);
+      } catch {
+        // Thrown rather than rejected, by a torn-down context: never sent.
+        sent = Promise.resolve(undefined);
+      }
+      void sent
+        // Never reached the service worker, so nothing was persisted.
+        .catch(() => undefined)
+        .then((reply) => {
+          try {
+            onReply(reply as { enabled?: boolean } | undefined);
+          } finally {
+            ownWriteDone();
+          }
+        });
+    },
+    [ownWriteDone],
+  );
+  /** Asks the service worker to persist the setting. A request, not a state
+   *  setter: it can fail, and `answered` hears whether the setting really
+   *  changed. `NATIVE_FLAG_SET` replies `{ok: false}` from its outer catch on
+   *  an internal failure rather than rejecting, so a reply alone doesn't mean
+   *  it took. Turning native mode off also drops the native tree and returns
+   *  the view to DOM; the service worker detaches the debugger as soon as any
+   *  operation in flight finishes. */
+  const requestNativeMode = useCallback(
+    (next: boolean, answered: (took: boolean) => void): void => {
+      ownWrite({ type: "NATIVE_FLAG_SET", enabled: next }, (reply) => {
+        const took = reply?.enabled === next;
+        if (took) {
+          settingLearned.current++;
+          if (next) {
+            setNativeModeEnabledState(true);
+          } else {
+            showNativeOff();
+          }
+        }
+        answered(took);
+      });
+    },
+    [ownWrite, showNativeOff, setNativeModeEnabledState],
+  );
+  const acknowledgeNativeNotice = useCallback(() => {
+    setNativeNoticeSeen(true);
+    void chrome.storage?.local
+      ?.set({ [NATIVE_NOTICE_SEEN_KEY]: true })
+      .catch(() => {});
+  }, []);
+  /** The Settings switch, and the note's Turn off: turn native mode on or off
+   *  in every window. Turning it on here is this panel's gesture, so it reads
+   *  the page natively at once, or, while no page is connected, the next one
+   *  that connects; turning it off detaches as soon as anything in flight
+   *  finishes. */
+  const setNativeModeFromSettings = useCallback(
+    (next: boolean) => {
+      if (
+        nativeSettingPending !== null ||
+        next === nativeModeEnabledRef.current
+      ) {
+        return;
+      }
+      setNativeSettingPending(next);
+      // Turning native mode off while the note is up answers it, however it
+      // was turned off, and so does one that lands while the note is up (a
+      // read in flight shows it while the turn-off waits for that read).
+      // Marked once the change is stored, and not before: if it doesn't take,
+      // the note stays to say what is still happening.
+      const answersNotice = !next && nativeNoticeShown.current;
+      requestNativeMode(next, (stored) => {
+        setNativeSettingPending(null);
+        if (!stored) {
+          announce("Couldn't change that setting — try again.", 3000);
+          return;
+        }
+        if (answersNotice || (!next && nativeNoticeShown.current)) {
+          acknowledgeNativeNotice();
+        }
+        if (!next) {
+          announce(nativeOffMessage(connectedRef.current), 3000);
+          return;
+        }
+        // Set here, before the render the setting's flip has scheduled: the
+        // default's effect runs in it.
+        if (!connectedRef.current) {
+          // No page to read yet, nor any proof there will be one: the
+          // default reads the first that connects, as in a panel opened with
+          // native mode on. This switch is a gesture, so a tab the default
+          // failed on before is read again.
+          hasAppliedNativeDefault.current = false;
+          nativeDefaultFailedOn.current.clear();
+          announce(
+            "Reading pages through Chrome — the next page shows its tree.",
+            3000,
+          );
+          return;
+        }
+        // This switch is the session's gesture, and the read it starts is
+        // the session's first native read, so the default has nothing left
+        // to do.
+        hasAppliedNativeDefault.current = true;
+        setProducer("native");
+        announce("Reading pages through Chrome — showing its tree.", 3000);
+      });
+    },
+    [
+      announce,
+      acknowledgeNativeNotice,
+      nativeSettingPending,
+      requestNativeMode,
+    ],
+  );
+
   // The native tree's page outline: a settled selection's reveal and a
   // hovered row's preview (see `useNativeOverlay`).
   const {
@@ -813,12 +1038,32 @@ export function App() {
     announce,
   });
 
-  useEffect(() => {
-    const target = pendingNativeFocus.current;
-    if (target === null) return;
-    pendingNativeFocus.current = null;
-    (target === "toggle" ? nativeToggleRef : enableNativeRef).current?.focus();
-  }, [nativeModeEnabled]);
+  // After every commit (`focusBeforeCommit`): if it took away the element
+  // that had focus, and so left focus on the body, focus moves to the tree on
+  // screen, or the list shown in its place (the Tab view, or either tree's
+  // role filter). While the panel waits for a page there is neither, and
+  // focus is left as a navigation leaves it. Focus anywhere else stays where
+  // it is, and a panel where nothing had focus is left alone. A layout effect
+  // rather than an effect, which waits for a paint: a panel in a window that
+  // isn't in front can go without one for a long time.
+  useLayoutEffect(() => {
+    const before = focusBeforeCommit.current;
+    if (before === null || before === document.body || before.isConnected) {
+      return;
+    }
+    // A popup's controls (the Copy menu, Settings) are not lost when it
+    // closes: Escape returns focus to its button, and a press outside puts
+    // focus where the press does (`useDismissible`).
+    if (before.closest("[data-sn-popup]")) return;
+    const active = document.activeElement;
+    if (active !== null && active !== document.body) return;
+    [
+      document.querySelector<HTMLElement>('[role="tree"]'),
+      document.querySelector<HTMLElement>('.sn-filtered-list[role="listbox"]'),
+    ]
+      .find((el) => el?.isConnected)
+      ?.focus();
+  });
 
   // Don't leave a clear pending on a panel that is going away.
   useEffect(
@@ -1756,6 +2001,7 @@ export function App() {
         nativeNodesRef.current = read;
         setNativeRootId(r.rootId ?? "");
         setNativeTreeTabId(tabId);
+        setNativeEverRead(true);
         setNativeTreeUrl(r.url);
         setNativeReadAt(new Date().toISOString());
         // A successful read is proof any standing refusal no longer holds —
@@ -2726,13 +2972,17 @@ export function App() {
     [handleNativeSendKey, announce],
   );
 
+  const closeCopyMenu = useCallback(() => closePopup("copy"), [closePopup]);
+
   // Export the selected view(s) as a Markdown report and copy to clipboard.
   // Serialized entirely panel-side from the merged snapshot the panel already
   // holds — so it's exactly what's on screen (current view, scoped) and never
   // depends on the content script being fresh.
   const doExport = useCallback(
     (selection: ExportView[]) => {
-      setExportMenuOpen(false);
+      closeCopyMenu();
+      // Back to the button the menu goes with, as a menu button's items do.
+      exportButtonRef.current?.focus();
 
       /** Put the report on the clipboard and say whether it worked. */
       const copyReport = (
@@ -2856,29 +3106,37 @@ export function App() {
       nativeTreeUrl,
       nativeReadAt,
       announce,
+      closeCopyMenu,
     ],
   );
   // What the Copy menu offers for the tree on screen.
   const exportViews = producer === "native" ? NATIVE_VIEWS : ALL_VIEWS;
 
-  // Close the export menu on outside-click or Escape.
+  // Close Settings and the Copy menu on a press outside them, or on Escape.
+  const closeSettings = useCallback(() => closePopup("settings"), [closePopup]);
+  useDismissible(settingsOpen, closeSettings, settingsRef, settingsButtonRef);
+  useDismissible(exportMenuOpen, closeCopyMenu, exportRef, exportButtonRef);
+
+  // The note about Chrome's debugging bar shows with the native tree, once a
+  // native read has succeeded (which is when the bar has appeared), until the
+  // user acknowledges it, in this window or another. Said once when it
+  // appears, since a note that appears is not announced by itself.
+  const showNativeNotice =
+    connected &&
+    nativeModeEnabled &&
+    producer === "native" &&
+    nativeEverRead &&
+    nativeNoticeSeen === false;
+  nativeNoticeShown.current = showNativeNotice;
+  const announcedNativeNotice = useRef(false);
   useEffect(() => {
-    if (!exportMenuOpen) return;
-    const onDown = (e: MouseEvent) => {
-      if (exportRef.current && !exportRef.current.contains(e.target as Node)) {
-        setExportMenuOpen(false);
-      }
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setExportMenuOpen(false);
-    };
-    document.addEventListener("mousedown", onDown);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onDown);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [exportMenuOpen]);
+    if (!showNativeNotice || announcedNativeNotice.current) return;
+    announcedNativeNotice.current = true;
+    announce(
+      "While the panel reads a page, Chrome shows a bar saying it started debugging this browser. That's expected — see the note below the toolbar.",
+      8000,
+    );
+  }, [showNativeNotice, announce]);
 
   const jumpKeys = useMemo(
     () => ({ links: controlsIndex, onJump: handleJumpToNode }),
@@ -2949,6 +3207,75 @@ export function App() {
     window.matchMedia("(prefers-color-scheme: dark)").matches;
   const themeClass = prefersDark ? "sn-theme-dark" : "sn-theme-light";
 
+  // Settings, in each header rather than the toolbar, whose controls don't
+  // wrap and run past a narrow panel's edge: this is where native mode turns
+  // off and back on, so it is on screen whether or not a page is connected.
+  // A disclosure, not a menu: what it opens is a switch and a line about it.
+  const settingsDisclosure = (
+    <div class="sn-export" ref={settingsRef}>
+      <button
+        ref={settingsButtonRef}
+        class="sn-toolbar-btn sn-export-btn"
+        aria-expanded={settingsOpen}
+        aria-controls={settingsOpen ? "sn-settings-menu" : undefined}
+        onClick={() => togglePopup("settings")}
+        title="Settings"
+      >
+        {"Settings ▾"}
+      </button>
+      {settingsOpen && (
+        <div
+          id="sn-settings-menu"
+          class="sn-export-menu sn-settings-menu"
+          data-sn-popup
+          role="group"
+          aria-label="Settings"
+        >
+          <label class="sn-settings-item">
+            <input
+              type="checkbox"
+              checked={nativeSettingPending ?? nativeModeEnabled}
+              aria-describedby="sn-settings-native-hint"
+              aria-disabled={nativeSettingPending !== null}
+              onChange={(e) => {
+                const input = e.target as HTMLInputElement;
+                const wanted = input.checked;
+                // Back to what it showed until the panel takes the
+                // click: none is taken while a change is on its way.
+                input.checked = nativeSettingPending ?? nativeModeEnabled;
+                setNativeModeFromSettings(wanted);
+              }}
+            />
+            <span>Read pages through Chrome (recommended)</span>
+          </label>
+          <p id="sn-settings-native-hint" class="sn-settings-hint">
+            Shows the tree Chrome itself gives assistive technology. While it
+            reads, Chrome shows a bar: “{extensionName()}” started debugging
+            this browser. Off, the panel reads the page itself.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+
+  // Action feedback bar, mounted before there is a message — see the search
+  // count below. The explicit `aria-live` is deliberate and overrides what
+  // `role="status"` implies: this bar carries failures ("Failed: …",
+  // "Clipboard blocked …") that are pulled back out of the DOM after 2.5s,
+  // and a polite announcement can still be queued behind the live-relay log
+  // when they go. On both screens, keyed so it stays the same element when
+  // a page connects: Settings is on both, and says how a change went here.
+  const feedbackRegion = (
+    <div
+      key="sn-feedback"
+      class="sn-action-feedback"
+      role="status"
+      aria-live="assertive"
+    >
+      {lastAction && <span class="sn-action-feedback-text">{lastAction}</span>}
+    </div>
+  );
+
   if (!connected) {
     return (
       <div class={`sn-root ${themeClass}`}>
@@ -2965,6 +3292,7 @@ export function App() {
               </span>
             </span>
           </div>
+          {settingsDisclosure}
         </div>
         <div class="sn-empty">
           <div class="sn-empty-stack">
@@ -3011,6 +3339,7 @@ export function App() {
             </button>
           </div>
         </div>
+        {feedbackRegion}
       </div>
     );
   }
@@ -3022,6 +3351,10 @@ export function App() {
       }
     });
   }, [sendToBoundTab]);
+
+  // What the header calls the page: one with no <title> is still named, as
+  // the Copy report names it.
+  const shownTitle = pageLabel(pageTitle, pageUrl);
 
   // Extract hostname for display
   const pageHost = (() => {
@@ -3054,36 +3387,36 @@ export function App() {
 
   return (
     <div class={`sn-root ${themeClass}`}>
-      {/* Page info header */}
-      {pageTitle && (
-        <div class="sn-page-header">
-          <div class="sn-page-info">
-            <span class="sn-page-title" title={pageTitle}>
-              {pageTitle}
-              <span
-                class="sn-beta-pill"
-                title="Semantic Navigator is in public beta. Feedback welcome on GitHub."
-                aria-label="Beta version"
-              >
-                BETA
-              </span>
+      {/* Page info header. Drawn for a page with no <title> too: Settings
+          lives here. */}
+      <div class="sn-page-header">
+        <div class="sn-page-info">
+          <span class="sn-page-title" title={shownTitle}>
+            {shownTitle}
+            <span
+              class="sn-beta-pill"
+              title="Semantic Navigator is in public beta. Feedback welcome on GitHub."
+              aria-label="Beta version"
+            >
+              BETA
             </span>
-            {pageHost && (
-              <span class="sn-page-url" title={pageUrl}>
-                {pageHost}
-              </span>
-            )}
-          </div>
-          <button
-            class="sn-close-tab-btn"
-            onClick={handleCloseTab}
-            title="Close this tab"
-            aria-label={`Close tab: ${pageTitle}`}
-          >
-            {"\u2715"}
-          </button>
+          </span>
+          {pageHost && (
+            <span class="sn-page-url" title={pageUrl}>
+              {pageHost}
+            </span>
+          )}
         </div>
-      )}
+        {settingsDisclosure}
+        <button
+          class="sn-close-tab-btn"
+          onClick={handleCloseTab}
+          title="Close this tab"
+          aria-label={`Close tab: ${shownTitle}`}
+        >
+          {"\u2715"}
+        </button>
+      </div>
 
       {/* Toolbar */}
       <div class="sn-toolbar" role="toolbar" aria-label="Tree controls">
@@ -3118,78 +3451,29 @@ export function App() {
             practice. Wider capability-surfacing UX is later work (RFC PR H's
             "done enough for C" checklist), not this slice.
 
-            Only rendered once `nativeModeEnabled` is on — same structural gate
-            `dogfood` used to be, just a runtime setting now instead of a
-            build-time one. Kept absent (not merely disabled) while off: a
+            Only rendered while native mode is on (the default; Settings
+            turns it off). Kept absent (not merely disabled) while off: a
             visible DOM/NATIVE choice implies NATIVE is one click away, which
-            isn't true before the user has actually opted in, and every other
-            producer-scoped control below reads `producer` to decide whether
-            it applies — introducing a THIRD "not yet decided" state for all of
-            them would cost far more than the one small entry-point button
-            below costs to add.
-
-            The "Disable" button alongside it is the only in-panel way back to
-            off once enabled — without it, a user who opted in has no way to
-            revoke the setting short of chrome://extensions, which contradicts
-            CHANGELOG.md's own "turning it back off detaches".
-            No consent step to turn it off: revoking is the safe direction,
-            same as DogfoodPanel's own checkbox. */}
-        {nativeModeEnabled ? (
-          <>
-            <div
-              class="sn-toggle-group"
-              role="group"
-              aria-label="Tree producer"
-            >
-              <button
-                class="sn-toggle-btn"
-                aria-pressed={producer === "dom"}
-                onClick={() => switchProducer("dom")}
-              >
-                DOM
-              </button>
-              <button
-                ref={nativeToggleRef}
-                class="sn-toggle-btn"
-                aria-pressed={producer === "native"}
-                onClick={() => switchProducer("native")}
-              >
-                NATIVE
-              </button>
-            </div>
+            isn't true while the user has turned native mode off, and every
+            other producer-scoped control below reads `producer` to decide
+            whether it applies. */}
+        {nativeModeEnabled && (
+          <div class="sn-toggle-group" role="group" aria-label="Tree producer">
             <button
-              class="sn-toolbar-btn"
-              onClick={() => {
-                // Set before the request: the toolbar re-renders as soon as
-                // the setting flips, before this promise resolves.
-                pendingNativeFocus.current = "enable";
-                void requestNativeMode(false).then((ok) => {
-                  // A failed disable leaves the setting, and the attached
-                  // debugger, as they were, so say the click didn't take.
-                  if (!ok) {
-                    pendingNativeFocus.current = null;
-                    announce("Couldn't disable native mode — try again.", 3000);
-                    return;
-                  }
-                  announce("Native mode off — showing the DOM tree.", 3000);
-                });
-              }}
-              title="Turn off native mode and detach the debugger"
+              class="sn-toggle-btn"
+              aria-pressed={producer === "dom"}
+              onClick={() => switchProducer("dom")}
             >
-              Disable native mode
+              DOM
             </button>
-          </>
-        ) : (
-          <button
-            ref={enableNativeRef}
-            class="sn-toolbar-btn"
-            aria-haspopup="dialog"
-            aria-expanded={showNativeConsent}
-            onClick={() => setShowNativeConsent(true)}
-            title="Read Chromium's own accessibility tree over the debugger API"
-          >
-            Enable native mode…
-          </button>
+            <button
+              class="sn-toggle-btn"
+              aria-pressed={producer === "native"}
+              onClick={() => switchProducer("native")}
+            >
+              NATIVE
+            </button>
+          </div>
         )}
 
         {producer === "dom" && (
@@ -3314,16 +3598,21 @@ export function App() {
 
         <div class="sn-export" ref={exportRef}>
           <button
+            ref={exportButtonRef}
             class="sn-toolbar-btn sn-export-btn"
             aria-haspopup="true"
             aria-expanded={exportMenuOpen}
-            onClick={() => setExportMenuOpen((o) => !o)}
+            onClick={() => togglePopup("copy")}
             title="Copy the tree as Markdown — paste into a bug report"
           >
             {"Copy ▾"}
           </button>
           {exportMenuOpen && (
-            <div class="sn-export-menu" aria-label="Copy which view">
+            <div
+              class="sn-export-menu"
+              data-sn-popup
+              aria-label="Copy which view"
+            >
               <button
                 class="sn-export-item"
                 onClick={() => doExport(exportViews)}
@@ -3350,44 +3639,15 @@ export function App() {
         </div>
       </div>
 
-      {/* Block-level, NOT a toolbar flex child: its paragraph of consent text
-          would otherwise squeeze every other toolbar control (search box,
-          curtain, refresh, zoom, copy) into a cramped, wrapped mess. Same
-          placement pattern as NativeTreeView's own capability banner. */}
-      {showNativeConsent && (
-        <NativeConsentBanner
-          error={nativeConsentError}
-          pending={nativeConsentPending}
-          onEnable={() => {
-            setNativeConsentError(undefined);
-            setNativeConsentPending(true);
-            pendingNativeFocus.current = "toggle";
-            // The consent click is this session's gesture, and the read it
-            // starts below is the session's first native read, so the
-            // default has nothing left to do. Set before the request: the
-            // default's effect runs as soon as the setting flips.
-            const defaultWasApplied = hasAppliedNativeDefault.current;
-            hasAppliedNativeDefault.current = true;
-            void requestNativeMode(true).then((ok) => {
-              setNativeConsentPending(false);
-              // Only a real flip switches the view; on failure the banner
-              // stays open with the error, for a retry.
-              if (!ok) {
-                pendingNativeFocus.current = null;
-                hasAppliedNativeDefault.current = defaultWasApplied;
-                setNativeConsentError(
-                  "Couldn't enable native mode — try again.",
-                );
-                return;
-              }
-              setProducer("native");
-              announce("Native mode on — reading Chromium's tree.", 3000);
-            });
-          }}
-          onCancel={() => {
-            setShowNativeConsent(false);
-            setNativeConsentError(undefined);
-          }}
+      {/* Block-level, NOT a toolbar flex child: its paragraph would otherwise
+          squeeze every other toolbar control (search box, curtain, refresh,
+          zoom, copy) into a cramped, wrapped mess. Same placement pattern as
+          NativeTreeView's own capability banner. */}
+      {showNativeNotice && (
+        <NativeModeNotice
+          onAcknowledge={acknowledgeNativeNotice}
+          onTurnOff={() => setNativeModeFromSettings(false)}
+          turningOff={nativeSettingPending !== null}
         />
       )}
 
@@ -3429,17 +3689,7 @@ export function App() {
         />
       )}
 
-      {/* Action feedback bar, mounted before there is a message — see the
-          search count above. The explicit `aria-live` is deliberate and
-          overrides what `role="status"` implies: this bar carries failures
-          ("Failed: …", "Clipboard blocked …") that are pulled back out of the
-          DOM after 2.5s, and a polite announcement can still be queued behind
-          the live-relay log when they go. */}
-      <div class="sn-action-feedback" role="status" aria-live="assertive">
-        {lastAction && (
-          <span class="sn-action-feedback-text">{lastAction}</span>
-        )}
-      </div>
+      {feedbackRegion}
 
       {/* Inline input panel for text / select interactions */}
       {inputState && (

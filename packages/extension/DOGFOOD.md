@@ -14,10 +14,11 @@ three questions, and the findings log below is the record of that exercise.
 > exports — is what the graduation PR cites as the reason native mode moved
 > from a dev-only build into the production store build: `chrome.debugger`,
 > `tabs` and `storage` are now required permissions in the shipped
-> `packages/extension/public/manifest.json`, off by default behind a
-> `chrome.storage`-backed runtime setting (`packages/extension/src/native/index.ts`)
-> rather than a build-time constant. Every existing user re-consents on the
-> release that carries that manifest change.
+> `packages/extension/public/manifest.json`, behind a `chrome.storage`-backed
+> runtime setting (`packages/extension/src/native/index.ts`) rather than a
+> build-time constant. It is on by default (#496), and the side panel's
+> Settings turn it off. Every existing user re-consents on the release that
+> carries that manifest change.
 
 ## Why there's still a separate dogfood build
 
@@ -29,16 +30,17 @@ instrumentation (raw event log, capability-refusal counters, the "Copy dogfood
 report" button) — internal diagnostics with no reason to ship to end users,
 still gated behind the build-time `__DOGFOOD__` constant and
 dead-code-eliminated from the store build. The production side panel's own
-**"Enable native mode…" → NATIVE toggle** (`App.tsx`, `NativeTreeView.tsx`) is
-the real, unbranded, shipped way to use native mode — it needs no separate
+**native tree**, on by default (`App.tsx`, `NativeTreeView.tsx`), is the
+real, unbranded, shipped way to use native mode — it needs no separate
 build and no unpacked load; see the next section.
 
 If you're here to exercise native mode as a **user of the shipped product**,
-skip straight to that toggle: `pnpm --filter
+skip straight to it: `pnpm --filter
 @real-a11y-dev/semantic-navigator-extension build` (or `dev`), load
-`packages/extension/dist/` as usual, open the side panel, and click "Enable
-native mode…". Everything below this point is specifically about the
-dogfood-only telemetry build and the exercise it was built for.
+`packages/extension/dist/` as usual, and open the side panel on a page. It
+reads the native tree by itself (if you turned native mode off before, switch
+it back on in **Settings ▾**). Everything below this point is specifically
+about the dogfood-only telemetry build and the exercise it was built for.
 
 ## Build & load the dogfood build
 
