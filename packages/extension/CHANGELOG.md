@@ -30,6 +30,13 @@
   and a change made in one holds in every panel open in the others
   ([#496](https://github.com/real-a11y/real-a11y-dev/pull/496)).
 
+- Picked up the shared fix that treats a mutation anywhere inside the panel's
+  own overlay elements as internal, rather than only one on an overlay's root
+  element ([#493](https://github.com/real-a11y/real-a11y-dev/pull/493)). No
+  behaviour change in the shipped extension: it registers no sentinel ids of
+  its own, and although the curtain it injects has inner elements, they are
+  built before it is attached and are never mutated afterwards.
+
 - Hardened the shared mutation observer so that re-arming it can no longer
   strand the previous observers and event listeners
   ([#487](https://github.com/real-a11y/real-a11y-dev/pull/487)). No
