@@ -23,6 +23,8 @@
  * reach: focus inside either is reported on the element that holds it.
  */
 
+import { safeGetAttribute } from "@real-a11y-dev/core";
+
 /** What a walk numbered, for the two sides to compare. They disagree when
  *  the page changed between the two walks, and the numbers are then not
  *  trusted to name the same elements on both. */
@@ -176,11 +178,12 @@ export function asPageKeyDigest(reply: unknown): PageKeyDigest | undefined {
  * The walk over the live page, for the content script. Read through the
  * prototype's own accessors: on a `<form>`, a control named `children`,
  * `localName`, `shadowRoot` or `getAttribute` shadows the property, as core's
- * `clobber-safe.ts` describes. Its helpers aren't core's exports, and two
- * would read differently anyway: this walk names an element by `localName`,
- * as CDP does, not by `tagName`, and needs a closed root as well as an open
- * one. They are looked up when the walker is made, not at module load: the
- * service worker loads this module too, and has no `Element`.
+ * `clobber-safe.ts` describes. Its `safeGetAttribute` is used as it is. Its
+ * readers of children and of the shadow root aren't among core's exports, and
+ * the walk needs other ones anyway: it names an element by `localName`, as
+ * CDP does, not by `tagName`, and needs a closed root as well as an open one.
+ * They are looked up when the walker is made, not at module load: the service
+ * worker loads this module too, and has no `Element`.
  *
  * `openOrClosedShadowRoot` is `chrome.dom.openOrClosedShadowRoot`, the only
  * way a content script sees a closed root, and CDP walks closed roots too.
@@ -196,7 +199,6 @@ export function livePageKeyWalker(
   const childrenOf = getter("children");
   const localNameOf = getter("localName");
   const openShadowRootOf = getter("shadowRoot");
-  const getAttribute = Element.prototype.getAttribute;
   const shadowRootOf = (el: Element): ShadowRoot | null => {
     if (openOrClosedShadowRoot) {
       return el instanceof HTMLElement ? openOrClosedShadowRoot(el) : null;
@@ -207,7 +209,7 @@ export function livePageKeyWalker(
     return root instanceof ShadowRoot ? root : null;
   };
   return {
-    isOwn: (el) => isOwnElementId(getAttribute.call(el, "id")),
+    isOwn: (el) => isOwnElementId(safeGetAttribute(el, "id")),
     children: (el) =>
       Array.from(
         (childrenOf ? childrenOf.call(el) : el.children) as HTMLCollection,

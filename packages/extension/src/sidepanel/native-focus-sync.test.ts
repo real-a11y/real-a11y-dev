@@ -45,9 +45,12 @@ describe("native focus sync", () => {
   let chromeMock: ChromeMock;
   /** What the next NATIVE_READ answers with as its numbering. */
   let readId: string | undefined;
+  /** Holds the next NATIVE_READ's reply back until it settles. */
+  let hold: Promise<void> | null;
 
   beforeEach(() => {
     readId = "read-1";
+    hold = null;
     stubMatchMedia();
     chromeMock = installChromeMock({
       respond: (message) => {
@@ -58,13 +61,16 @@ describe("native focus sync", () => {
           const numbered =
             readId !== undefined &&
             (message as { pageKeys?: boolean }).pageKeys === true;
-          return {
+          const reply = {
             ok: true,
             url: "https://example.test/",
             rootId: "ax-root",
             nodes: structuredClone(NODES),
             ...(numbered ? { pageKeysReadId: readId } : {}),
           };
+          const held = hold;
+          hold = null;
+          return held ? held.then(() => reply) : reply;
         }
         return undefined;
       },
@@ -204,12 +210,12 @@ describe("native focus sync", () => {
     expect(reads().at(-1)?.pageKeys).toBeUndefined();
 
     // That tree has nothing to follow focus by: turning Focus sync on reads
-    // it again, numbered.
+    // it again, numbered, and quietly, as auto-refresh does.
     const before = reads().length;
     act(() => toggle.click());
     await flush();
     expect(reads()).toHaveLength(before + 1);
-    expect(reads().at(-1)?.pageKeys).toBe(true);
+    expect(reads().at(-1)).toMatchObject({ pageKeys: true, auto: true });
     focusOnPage({ pageKeys: { "read-1": [5] } });
     expect(selected()).toBe("ax-dom-3");
 
@@ -218,6 +224,42 @@ describe("native focus sync", () => {
     act(() => toggle.click());
     await flush();
     expect(reads()).toHaveLength(before + 1);
+  });
+
+  it("numbers the tree once a read under way when Focus sync was turned on comes back without numbers", async () => {
+    await showNative();
+    const reads = () =>
+      sentOfType("NATIVE_READ") as Array<{
+        pageKeys?: boolean;
+        auto?: boolean;
+      }>;
+    const toggle = container.querySelector<HTMLButtonElement>(
+      ".sn-focus-tracker-btn",
+    )!;
+    const refresh = [...container.querySelectorAll("button")].find(
+      (b) => b.getAttribute("aria-label") === "Refresh native tree",
+    )!;
+    act(() => toggle.click());
+    let release = () => {};
+    hold = new Promise<void>((resolve) => (release = resolve));
+    act(() => refresh.click());
+    await flush();
+    // On while that read, sent without numbers, is still out.
+    act(() => toggle.click());
+    await flush();
+    const before = reads().length;
+    expect(reads().at(-1)?.pageKeys).toBeUndefined();
+
+    release();
+    await flush();
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 10));
+    });
+    await flush();
+    expect(reads()).toHaveLength(before + 1);
+    expect(reads().at(-1)).toMatchObject({ pageKeys: true, auto: true });
+    focusOnPage({ pageKeys: { "read-1": [6] } });
+    expect(selected()).toBe("ax-dom-4");
   });
 
   it("tells each tab it is bound to how Focus sync is set", async () => {

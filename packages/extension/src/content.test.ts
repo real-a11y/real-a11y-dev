@@ -1140,6 +1140,44 @@ describe("content: numbering the page for the native tree", () => {
     expect(focusReports()[0]!.payload.nodeId).toEqual(expect.any(String));
   });
 
+  it("hears focus moving between a shadow host and its own shadow tree, which the document never does", async () => {
+    // A list box whose host takes focus and moves it to its options: from the
+    // host into the root, only the root hears a focusin; back out to the
+    // host, nobody does, and only the root hears the focusout.
+    const host = document.createElement("div");
+    host.tabIndex = 0;
+    document.getElementById("app")!.append(host);
+    const root = host.attachShadow({ mode: "open" });
+    root.innerHTML = `<div id="o1" tabindex="-1">1</div>`;
+    const option = root.getElementById("o1")!;
+    h.send({ type: "NATIVE_PAGE_KEYS", payload: { readId: "read-1" } });
+    const keys = await numbers();
+    const fire = (type: string, el: Element, related: Element | null) =>
+      el.dispatchEvent(
+        new FocusEvent(type, {
+          bubbles: true,
+          composed: true,
+          relatedTarget: related,
+        }),
+      );
+    const target = document.getElementById("target")!;
+    fire("focusin", host, target);
+    h.sent.length = 0;
+
+    fire("focusout", host, option);
+    fire("focusin", option, host);
+    expect(
+      focusReports().map((r) => r.payload.pageKeys!["read-1"]![0]),
+    ).toEqual([keys.get(option)]);
+
+    h.sent.length = 0;
+    fire("focusout", option, host);
+    fire("focusin", host, option);
+    expect(
+      focusReports().map((r) => r.payload.pageKeys!["read-1"]![0]),
+    ).toEqual([keys.get(host)]);
+  });
+
   it("reports a move from inside a shadow root to an element slotted into its host once, as the document hears it", () => {
     const host = document.createElement("div");
     const slotted = document.createElement("button");

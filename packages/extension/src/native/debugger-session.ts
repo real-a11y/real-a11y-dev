@@ -242,9 +242,6 @@ async function announceFrames(
   };
 }
 
-/** Re-exported for what read it from here before it moved to its own module. */
-export { isConnectionLost };
-
 export interface AttachOutcome {
   ok: boolean;
   /**

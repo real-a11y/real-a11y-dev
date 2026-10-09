@@ -965,9 +965,11 @@ export async function readNativeTree(
  * disagree and the numbers can't be trusted to name the same elements: no
  * row gets one. True when the rows were numbered.
  *
- * Only the document's shape is used: which element sits where, and its local
- * name. `DOM.getDocument` sends every attribute and text node as well; none
- * of it is kept, or leaves this function.
+ * Only the document's shape is used: which element sits where, its local
+ * name, and whether its `id` marks it as one of the extension's own
+ * (`isOwnElementId`). `DOM.getDocument` sends every attribute and text node
+ * as well; nothing else of it is read, and none of it is kept, or leaves
+ * this function.
  */
 async function keyPageRows(
   transport: CdpTransport,

@@ -352,11 +352,10 @@ export function App() {
   const [roleFilter, setRoleFilter] = useState<RoleFilter>(null);
   const [curtainOn, setCurtainOn] = useState(false);
   const [focusTrackerOn, setFocusTrackerOn] = useState(true);
-  // For the message listener: with Focus sync off, a focus report is
-  // dropped here too. The content script's tracker doesn't stay off: the
-  // service worker turns it back on whenever a frame sends its tree
-  // (`planFrameAnnouncementResponse`), which a page does after every burst
-  // of changes.
+  // For the message listener and the native reads. With Focus sync off, a
+  // focus report is dropped here too: one can still be on its way when the
+  // toggle flips, and a service worker that restarted turns every tracker
+  // back on until this panel's port reconnects and says otherwise.
   const focusTrackerOnRef = useRef(focusTrackerOn);
   focusTrackerOnRef.current = focusTrackerOn;
   // Which popup is open: the export dropdown ("Copy" → pick which view(s) to
@@ -604,6 +603,9 @@ export function App() {
   // display flag, a stale token here must not leave this permanently stuck
   // true, or no native action could ever dispatch again.
   const nativeInFlight = useRef(false);
+  // Reads Chrome's tree again, numbered, when Focus sync wants numbers it
+  // lacks: see where it is re-pointed, after `loadNativeTree`.
+  const numberNativeTree = useRef(() => {});
   // Auto-load the native tree once per transition into native mode (mirrors
   // the DOM producer's own `hasRequestedInitial` restraint below — a later
   // tab switch while already in native mode clears the tree and waits for an
@@ -2033,14 +2035,15 @@ export function App() {
             : "reading native tree…",
         );
       }
+      // Numbered for Focus sync only while it is on: it costs the read a walk
+      // of the whole page, twice.
+      const numbered = focusTrackerOnRef.current;
       try {
         const r = (await chrome.runtime.sendMessage({
           type: "NATIVE_READ",
           tabId,
           ...(auto ? { auto: true } : {}),
-          // Numbered for Focus sync only while it is on: it costs the read a
-          // walk of the whole page, twice.
-          ...(focusTrackerOnRef.current ? { pageKeys: true } : {}),
+          ...(numbered ? { pageKeys: true } : {}),
         })) as {
           ok?: boolean;
           error?: string;
@@ -2092,6 +2095,11 @@ export function App() {
         // A read that didn't number the page leaves this tree unfollowed:
         // the numbers from an earlier read name rows of an earlier tree.
         nativePageKeysReadId.current = r.pageKeysReadId;
+        // Focus sync was turned on while this read was under way: number the
+        // tree now, once this read has let go of the in-flight guard.
+        if (!numbered && focusTrackerOnRef.current) {
+          setTimeout(() => numberNativeTree.current(), 0);
+        }
         setNativeRootId(r.rootId ?? "");
         setNativeTreeTabId(tabId);
         setNativeEverRead(true);
@@ -2140,6 +2148,27 @@ export function App() {
     },
     [nativeModeEnabled, loadNativeTreeCore, waitForAutoRead],
   );
+
+  // Chrome's tree is numbered for Focus sync only while it is on, so a tree
+  // read with it off has nothing to follow focus by: once it is on, read the
+  // tree again. Automatically, as auto-refresh does: it keeps the tree on
+  // screen if it fails, shows no busy state, and doesn't attach over the
+  // user's Cancel on Chrome's bar. While another read is under way it waits:
+  // that read's reply calls this again if it wasn't numbered.
+  numberNativeTree.current = () => {
+    const tabId = myTabIdRef.current;
+    if (
+      tabId === null ||
+      !focusTrackerOnRef.current ||
+      producerRef.current !== "native" ||
+      nativeNodesRef.current.size === 0 ||
+      nativePageKeysReadId.current !== undefined ||
+      nativeInFlight.current
+    ) {
+      return;
+    }
+    void loadNativeTree(tabId, { auto: true });
+  };
 
   // Re-pointed every render so the timer always decides with the current
   // `loadNativeTree` and mode; everything else it reads is a ref.
@@ -2691,25 +2720,15 @@ export function App() {
   const toggleFocusTracker = useCallback(() => {
     const next = !focusTrackerOn;
     setFocusTrackerOn(next);
-    // Ahead of the render, for the read below to ask for numbers.
+    // Ahead of the render, for `numberNativeTree` below and the read it
+    // sends to see it.
     focusTrackerOnRef.current = next;
     sendToBoundTab({
       type: "SET_FOCUS_TRACKER",
       payload: { enabled: next },
     });
-    // A native read numbers the page only while Focus sync is on, so Chrome's
-    // tree read with it off has nothing to follow focus by: read it again.
-    const tabId = myTabIdRef.current;
-    if (
-      next &&
-      tabId !== null &&
-      producerRef.current === "native" &&
-      nativeNodesRef.current.size > 0 &&
-      nativePageKeysReadId.current === undefined
-    ) {
-      void loadNativeTree(tabId);
-    }
-  }, [focusTrackerOn, sendToBoundTab, loadNativeTree]);
+    if (next) numberNativeTree.current();
+  }, [focusTrackerOn, sendToBoundTab]);
 
   // Picker mode toggle. DOM: tells the content script to install / remove
   // its capture-phase click handler — PICK_MODE_CHANGED comes back when the

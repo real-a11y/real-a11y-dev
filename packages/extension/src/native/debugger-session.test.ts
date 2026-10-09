@@ -1,10 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import {
-  detachEndsPick,
-  isConnectionLost,
-  NativeDebuggerSession,
-} from "./debugger-session.js";
+import { isConnectionLost } from "./connection-lost.js";
+import { detachEndsPick, NativeDebuggerSession } from "./debugger-session.js";
 import type { DogfoodEvent } from "./dogfood.js";
 
 import { registerNativeMode, withRecovery } from "./index.js";

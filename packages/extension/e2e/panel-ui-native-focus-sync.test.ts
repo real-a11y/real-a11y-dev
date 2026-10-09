@@ -210,23 +210,29 @@ test("turning Focus sync on over a tree read while it was off reads the page aga
 
   // Read with Focus sync off, the tree has nothing to follow focus by, so
   // turning it on reads the page again.
+  const before = (await nav.nativeReads()).length;
   await nav.panel.getByRole("button", { name: "Refresh native tree" }).click();
-  await expect(nav.panel.locator(".sn-node").first()).toBeVisible();
-  const reads = (await nav.nativeReads()).length;
+  await expect
+    .poll(async () => (await nav.nativeReads())[before]?.done)
+    .toBe(true);
+  expect((await nav.nativeReads())[before]?.pageKeys).toBeUndefined();
+  const reads = before + 1;
   await off.click();
   await expect
     .poll(async () => (await nav.nativeReads()).length)
     .toBe(reads + 1);
+  expect((await nav.nativeReads())[reads]).toMatchObject({
+    pageKeys: true,
+    auto: true,
+  });
   // Until that read's tree arrives, focus reports name nothing in it.
   await expect
-    .poll(
-      async () => {
-        await page.locator("#alpha").focus();
-        await page.locator("#gamma").focus();
-        return (await selected(nav).allTextContents()).join();
-      },
-      { timeout: 15_000 },
-    )
-    .toContain("Gamma");
+    .poll(async () => (await nav.nativeReads())[reads]?.done)
+    .toBe(true);
+  await page.locator("#gamma").focus();
+  await expect(row(nav, "button", "Gamma")).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
   expect(await nav.nativeReads()).toHaveLength(reads + 1);
 });
