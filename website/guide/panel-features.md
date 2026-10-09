@@ -50,7 +50,7 @@ Six chip-style toggles that hide every node except the matching role (and the an
 
 When focus tracking is **on**, the panel and the host page stay in sync **bidirectionally**:
 
-- **Page → panel** — when focus moves on the page (Tab, click on a focusable element), the panel draws the highlight overlay on that element, scrolls the tree to its node, and selects the row. **This is what the "Focus sync" toggle controls.** Implemented by the [Chrome extension](/guide/chrome-extension) via a `focusin` listener in its content script; the in-page surfaces don't ship this auto-sync (the host app would have to wire it up itself).
+- **Page → panel** — when focus moves on the page (Tab, click on a focusable element), the panel draws the highlight overlay on that element, scrolls the tree to its node, and selects the row. **This is what the "Focus sync" toggle controls.** Implemented by the [Chrome extension](/guide/chrome-extension) via a `focusin` listener in its content script, for its in-page tree and for Chrome's own tree alike; the in-page surfaces don't ship this auto-sync (the host app would have to wire it up itself).
 - **Panel → page** — selecting a tree node draws the highlight overlay on the corresponding element. The Chrome extension *also* moves real focus to that element on selection — its DevTools panel lives in a separate window, so it can do that without disrupting panel navigation. For the in-page surfaces (`inspector`, React `<SemanticNavigator />`), focus and scroll side effects on the host element are **opt-in**, to avoid stealing focus from the panel itself. See [Panel interaction vs. host side effects](#panel-interaction-vs-host-side-effects).
 
 ### When to leave it on
@@ -68,7 +68,7 @@ Focus the page itself first (click anywhere on the page, not the panel), then pr
 
 | Surface | API |
 |---|---|
-| Chrome extension | "Focus sync" / "Focus OFF" toggle in the toolbar — controls page → panel sync; panel → page focus is always on (separate window, no conflict) |
+| Chrome extension | "Focus sync" / "Focus OFF" toggle in the toolbar, for either tree — controls page → panel sync; panel → page focus is always on (separate window, no conflict) |
 | `inspector` | `createInspector({ root, container, highlightOnHover: true, scrollHostOnSelect: true, focusHostOnActivate: true })` — opt in to overlay / scroll / focus on the host page; all three default to off, see [the rationale](#panel-interaction-vs-host-side-effects) |
 | React `<SemanticNavigator />` | `<SemanticNavigator highlightOnHover scrollHostOnSelect focusHostOnActivate />` — same opt-ins as the inspector; see [the package reference](/packages/react#props) |
 | Storybook addon | Selection draws an overlay on the story preview by default; the addon hardcodes safe values since the manager iframe is isolated from the preview |

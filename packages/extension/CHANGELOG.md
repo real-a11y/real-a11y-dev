@@ -37,6 +37,14 @@
   choice is per panel, and isn't stored
   ([#498](https://github.com/real-a11y/real-a11y-dev/pull/498)).
 
+- **Chrome's tree follows page focus, as the in-page tree does.** With
+  **Focus sync** on, focus moving on the page selects the focused element's
+  row, opens the rows above it and scrolls to it, without bringing up Chrome's
+  debugging bar: each read of the tree numbers the page's elements, and the
+  page reports focus by those numbers. Focus inside a frame isn't followed
+  yet. **Focus OFF** also holds now once the page changes: the tree used to
+  start following again, for either tree, the next time the page updated.
+
 - Hardened the shared mutation observer so that re-arming it can no longer
   strand the previous observers and event listeners
   ([#487](https://github.com/real-a11y/real-a11y-dev/pull/487)). No

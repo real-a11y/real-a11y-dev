@@ -102,6 +102,12 @@ sidesteps the question entirely.
   a query, and the `/`-focuses-search shortcut. `native-search.test.ts` (in
   `src/native/`) covers the matching logic itself at the unit level; this
   file is only for what a unit test can't see — the actual toolbar wiring.
+- `panel-ui-native-focus-sync.test.ts` — Focus sync over Chrome's tree: page
+  focus selects the focused element's row with nothing read or acted on. Its
+  fixture holds everything the read's two walks of the page (over CDP, and the
+  content script's over the live DOM) must number alike: open and closed
+  shadow roots, built-in controls' user-agent shadow roots, a template, a
+  frame, and a form whose controls shadow the properties the walk reads.
 - `field-values.test.ts` — ADR-0001's field values in both producers and both
   views: a `<select>` reads its announced label (`= "Spain"`) in the A11y view
   and its raw value (`value="es"`) in the DOM view, a password and a
