@@ -34,7 +34,8 @@
   is on, **Show** switches between **Chrome's tree** and the **In-page
   tree**, the panel's own reading of the page, whose DOM / A11Y / TAB views
   are in the toolbar. That leaves the toolbar a single **DOM** button. The
-  choice is per panel, and isn't stored.
+  choice is per panel, and isn't stored
+  ([#498](https://github.com/real-a11y/real-a11y-dev/pull/498)).
 
 - Hardened the shared mutation observer so that re-arming it can no longer
   strand the previous observers and event listeners
