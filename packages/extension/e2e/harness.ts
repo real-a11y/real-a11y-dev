@@ -105,8 +105,12 @@ export interface NativeNode {
   description?: string;
   /** Ids of the rows this node controls (`aria-controls`). */
   controls?: string[];
-  /** Its element's number in the read's walk of the page (focus sync). */
+  /** Its element's number in the read's walk of its document (focus sync). */
   pageKey?: number;
+  /** The frame whose document numbered `pageKey`, when not the top one. */
+  pageFrame?: number;
+  /** On an `Iframe` row: the frame it shows, when the read numbered it. */
+  embedsPageFrame?: number;
 }
 
 export interface NativeReadResult {

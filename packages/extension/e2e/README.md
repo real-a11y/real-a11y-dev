@@ -108,6 +108,8 @@ sidesteps the question entirely.
   content script's over the live DOM) must number alike: open and closed
   shadow roots, built-in controls' user-agent shadow roots, a template, a
   frame, and a form whose controls shadow the properties the walk reads.
+  Focus inside frames is `native-frames.test.ts`'s, on its same-origin and
+  cross-origin frames, which show the same document.
 - `field-values.test.ts` — ADR-0001's field values in both producers and both
   views: a `<select>` reads its announced label (`= "Spain"`) in the A11y view
   and its raw value (`value="es"`) in the DOM view, a password and a
