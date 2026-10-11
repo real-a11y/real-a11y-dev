@@ -1102,8 +1102,10 @@ async function keyPageRows(
   ) {
     frameOf.set(top, 0);
   }
+  // Without its fragment, as `shownAt` counts it: a frame whose hash moved
+  // between the two walks still shows the same document.
   const matchKey = (url: string, digest: PageKeyDigest) =>
-    `${digest.count} ${digest.hash} ${url}`;
+    `${digest.count} ${digest.hash} ${withoutFragment(url)}`;
   const framesByKey = new Map<string, FramePageKeyDigest[]>();
   for (const frame of frames) {
     if (frame.frameId === 0) continue;

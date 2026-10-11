@@ -3706,6 +3706,17 @@ describe("readNativeTree's page keys across frames", () => {
       expect(byId(res.nodes, "ax-dom-9").pageKey).toBe(5);
     });
 
+    it("numbers a frame whose hash moved between the two walks: it shows the same document", async () => {
+      for (const url of [`${FRAME_URL}#section-2`, `${FRAME_URL}#`]) {
+        const res = await readNativeTree(transport(), {
+          pageKeys: async () =>
+            answered(topAnswer(), { ...answer(frameDom(), 3), url }),
+        });
+        const inner = byId(res.nodes, "ax-dom-25");
+        expect([inner.pageKey, inner.pageFrame]).toEqual([4, 3]);
+      }
+    });
+
     it("numbers a frame only when its URL and its numbering both agree", async () => {
       const changed = frameDom();
       changed.children![0]!.children![1]!.children!.push(el("p", 90));
