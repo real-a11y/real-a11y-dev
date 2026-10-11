@@ -30,8 +30,8 @@ updated yet, this row is **Blocked**, not Pass — a local build is a different 
      Chrome's bar appears while it reads, naming the extension the way the listing
      does (“Semantic Navigator” started debugging this browser). A note below the
      toolbar explains the bar: press **Got it**. Steps 4–9 run on the native tree;
-     the toolbar's **DOM / NATIVE** toggle switches to the DOM tree, and step 7
-     holds on both. **R42** is the full version of this step
+     **Show** in **Settings ▾** switches to the in-page tree, and step 7 holds on
+     both. **R42** is the full version of this step
 4. **A docs site** — long content, many headings: open the panel, browse the tree, use search
 5. **An SPA** — client-side routes: navigate, confirm the panel follows; use Back
 6. **A real form** — click, type, toggle; confirm the page's own handlers ran

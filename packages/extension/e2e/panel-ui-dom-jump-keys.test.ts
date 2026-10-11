@@ -16,11 +16,7 @@ async function showDom(
   const { page } = await nav.open(fixture);
   await page.bringToFront();
   await nav.panel.reload();
-  const toggle = nav.panel
-    .getByRole("group", { name: "Tree producer" })
-    .getByRole("button", { name: "DOM", exact: true });
-  await expect(toggle).toBeVisible({ timeout: 20_000 });
-  await toggle.click();
+  await nav.chooseTree("In-page tree");
   await nav.panel
     .getByRole("group", { name: "Tree view mode" })
     .getByRole("button", { name: "A11Y", exact: true })

@@ -47,10 +47,11 @@
   font-weight: 600;
 }
 
-/* Settings: one switch and the line that explains it. Wider than Copy's
-   menu, and its text wraps. */
+/* Settings: one switch and the line that explains it, then, while native
+   mode is on, which tree the panel shows. Wider than Copy's menu, and its
+   text wraps. */
 .sn-settings-menu {
-  width: 240px;
+  width: 260px;
   gap: 4px;
   padding: 8px;
 }
@@ -73,4 +74,26 @@
   color: var(--sn-text-muted);
   font-size: 11px;
   line-height: 1.4;
+}
+
+/* The tree choice, indented under the switch it depends on. */
+.sn-settings-source {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  margin: 6px 0 0 19px;
+}
+
+.sn-settings-label {
+  color: var(--sn-text);
+  font-size: 12px;
+}
+
+.sn-settings-source .sn-toggle-btn {
+  padding: 3px 8px;
+}
+
+.sn-settings-source .sn-settings-hint {
+  margin-left: 0;
 }
