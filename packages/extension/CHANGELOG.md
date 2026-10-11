@@ -41,11 +41,19 @@
   **Focus sync** on, focus moving on the page selects the focused element's
   row, opens the rows above it and scrolls to it, inside shadow roots too,
   without bringing up Chrome's debugging bar: each read of the tree numbers
-  the page's elements, and the page reports focus by those numbers. Focus
-  inside a frame isn't followed yet. **Focus OFF** also holds now once the
-  page changes: the next update turned focus tracking back on, for either
-  tree, outlining and scrolling to every element focused after it
+  the page's elements, and the page reports focus by those numbers.
+  **Focus OFF** also holds now once the page changes: the next update turned
+  focus tracking back on, for either tree, outlining and scrolling to every
+  element focused after it
   ([#499](https://github.com/real-a11y/real-a11y-dev/pull/499)).
+
+- **Chrome's tree follows focus inside frames too**, cross-origin ones
+  included: focus moving inside a frame selects the focused element's row
+  under the frame's row, and the frame's own row when nothing focused there
+  has one. A frame the extension's content script doesn't run in, such as an
+  `about:blank` or `srcdoc` frame, isn't followed, nor is either of two frames
+  showing the same page alike
+  ([#500](https://github.com/real-a11y/real-a11y-dev/pull/500)).
 
 - Hardened the shared mutation observer so that re-arming it can no longer
   strand the previous observers and event listeners
