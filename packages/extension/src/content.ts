@@ -21,6 +21,7 @@ import type {
 
 import { computeFieldState } from "./field-state.js";
 import {
+  FRAME_HOLDER_SELECTOR,
   frameOwnerMark,
   isFrameHolder,
   markFrameOwner,
@@ -227,19 +228,39 @@ function sendTree(change?: TreeChange) {
   });
 }
 
-/** The tree's nodes for elements that hold a frame whose script marked
- *  them, each with the mark: where the service worker puts that frame's
- *  tree (see frame-owner.ts). */
+// Through the prototype: a named <img> or <form> called `querySelectorAll`
+// shadows the document's own.
+const querySelectorAll = Document.prototype.querySelectorAll;
+
+/**
+ * The tree's nodes for elements that hold a frame whose script marked them,
+ * each with the mark: where the service worker puts that frame's tree (see
+ * frame-owner.ts). A marked element the tree has no node for, as the a11y
+ * view has none for a hidden <iframe>, goes with an empty node id: the
+ * frame has no place in this tree, and the service worker needn't ask this
+ * document where it is. One inside a shadow root isn't found that way, and
+ * is asked after once.
+ */
 function markedFrames(
   nodes: ReadonlyArray<[string, SemanticNode]>,
 ): Array<[nodeId: string, owner: string]> {
   const out: Array<[string, string]> = [];
+  const inTree = new Set<string>();
   for (const [nodeId, node] of nodes) {
     const tagName = node.dom?.tagName;
     if (!tagName || !isFrameHolder(tagName.toLowerCase())) continue;
     const element = elementRefs.get(nodeId);
     const mark = element ? frameOwnerMark(element) : undefined;
-    if (mark !== undefined) out.push([nodeId, mark]);
+    if (mark === undefined) continue;
+    out.push([nodeId, mark]);
+    inTree.add(mark);
+  }
+  for (const element of querySelectorAll.call(
+    document,
+    FRAME_HOLDER_SELECTOR,
+  )) {
+    const mark = frameOwnerMark(element);
+    if (mark !== undefined && !inTree.has(mark)) out.push(["", mark]);
   }
   return out;
 }
@@ -467,31 +488,7 @@ chrome.runtime.onMessage.addListener(
           focusManager.clearHighlight();
         }
 
-        // Only the top frame renders the curtain DOM element
-        if (isSubFrame) {
-          sendResponse({ success: true });
-          break;
-        }
-        const show = message.payload.visible;
-        let curtain = document.getElementById("__sn-curtain");
-        if (show && !curtain) {
-          curtain = document.createElement("div");
-          curtain.id = "__sn-curtain";
-          curtain.style.cssText = `
-            position: fixed; inset: 0; z-index: 2147483646;
-            background: #0f172a; color: #94a3b8;
-            display: flex; align-items: center; justify-content: center;
-            flex-direction: column; gap: 8px;
-            font: 16px/1.5 system-ui, sans-serif;
-          `;
-          curtain.innerHTML = `
-            <div style="font-size:24px;font-weight:700;color:#e2e8f0">Screen Curtain</div>
-            <div>Content hidden — navigate via Semantic Navigator</div>
-          `;
-          document.documentElement.appendChild(curtain);
-        } else if (!show && curtain) {
-          curtain.remove();
-        }
+        drawCurtain();
         sendResponse({ success: true });
         break;
       }
@@ -542,6 +539,31 @@ chrome.runtime.onMessage.addListener(
   },
 );
 
+/** Put the curtain's element in the document, or take it out, as
+ *  `curtainVisible` has it. Only the top frame renders it. */
+function drawCurtain(): void {
+  if (isSubFrame) return;
+  let curtain = document.getElementById("__sn-curtain");
+  if (curtainVisible && !curtain && boundRoot) {
+    curtain = document.createElement("div");
+    curtain.id = "__sn-curtain";
+    curtain.style.cssText = `
+      position: fixed; inset: 0; z-index: 2147483646;
+      background: #0f172a; color: #94a3b8;
+      display: flex; align-items: center; justify-content: center;
+      flex-direction: column; gap: 8px;
+      font: 16px/1.5 system-ui, sans-serif;
+    `;
+    curtain.innerHTML = `
+      <div style="font-size:24px;font-weight:700;color:#e2e8f0">Screen Curtain</div>
+      <div>Content hidden — navigate via Semantic Navigator</div>
+    `;
+    boundRoot.appendChild(curtain);
+  } else if (!curtainVisible && curtain) {
+    curtain.remove();
+  }
+}
+
 // Reverse focus sync: page focus → tree selection. Added by
 // `listenToDocument`, as every listener on the document or its window is.
 const onDocumentFocusIn = (e: Event) => onFocusIn(e, true);
@@ -577,8 +599,15 @@ function onFocusIn(
   const nodeId = atDocument
     ? findTrackedAncestor(e.target as Element | null)
     : null;
-  // For the native tree, which may hold a row for the element itself.
-  const keys = pageKeys.keysFor(focused);
+  // For the native tree, which may hold a row for the element itself. A
+  // report that numbers nothing still says which frame focus is in, and the
+  // panel takes that frame's row. In the top frame it says nothing at all.
+  const chains = pageKeys.keysFor(focused);
+  const keys =
+    chains &&
+    (isSubFrame || Object.values(chains).some((chain) => chain.length > 0))
+      ? chains
+      : undefined;
   if (!nodeId && !keys) return;
   if (nodeId) focusManager.highlightElement(nodeId);
   safeSendMessage({
@@ -974,6 +1003,8 @@ function rebindDocument(): void {
     picker.teardown();
     picker.setEnabled(true);
   }
+  // The curtain was an element of the document that is gone.
+  drawCurtain();
   if (!observingEnabled) return;
   observer?.start();
   observeLiveRegions();

@@ -38,6 +38,28 @@ export function isFrameHolder(localName: string): boolean {
   return FRAME_HOLDERS.has(localName);
 }
 
+/** A selector for every element that can hold a frame. */
+export const FRAME_HOLDER_SELECTOR = [...FRAME_HOLDERS].join(",");
+
+/** The most marked frames taken from one document's report. A document of
+ *  more leaves the rest of its frames to be told apart by URL. */
+export const MAX_MARKED_FRAMES = 512;
+/** Longer than any mark `newFrameMark` makes. */
+const MAX_MARK_LENGTH = 64;
+
+/**
+ * `value` as a mark, when it is one a content script could have made. A
+ * content script runs in the page's process, so the service worker checks
+ * every mark it is sent before going by it.
+ */
+export function asFrameMark(value: unknown): string | undefined {
+  return typeof value === "string" &&
+    value.length > 0 &&
+    value.length <= MAX_MARK_LENGTH
+    ? value
+    : undefined;
+}
+
 /** A mark for one content script: 96 random bits, as hex. Not a secret, as
  *  the page never sees it; only never the same for two frames. */
 export function newFrameMark(): string {

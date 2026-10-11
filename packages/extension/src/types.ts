@@ -43,7 +43,8 @@ export type FrameToBackground =
          *  its parent's. */
         owner?: string;
         /** This tree's nodes for elements holding a frame that marked them,
-         *  each with the mark. */
+         *  each with the mark. An empty node id is a marked element the tree
+         *  has no node for, such as a hidden `<iframe>` in the a11y view. */
         embeds?: Array<[nodeId: string, owner: string]>;
       };
     }

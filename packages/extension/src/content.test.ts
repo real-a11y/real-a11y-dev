@@ -1367,6 +1367,34 @@ describe("content: the mark a frame leaves on its <iframe>", () => {
     expect(frameOwnerMark(holder)).toBeUndefined();
   });
 
+  it("reports focus in a document written since the read as in this frame, naming no element", async () => {
+    await load();
+    h.send({ type: "NATIVE_PAGE_KEYS", payload: { readId: "read-1" } });
+    h.send({ type: "SET_FOCUS_TRACKER", payload: { enabled: true } });
+    // What `document.open()` leaves: a root element no read has seen.
+    const original = document.documentElement;
+    const html = document.createElement("html");
+    html.innerHTML = `<head></head><body><button id="new">New</button></body>`;
+    original.remove();
+    document.append(html);
+    try {
+      await vi.advanceTimersByTimeAsync(0);
+      h.sent.length = 0;
+      document
+        .getElementById("new")!
+        .dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
+      // The service worker adds the frame, and the panel takes its row.
+      expect(h.sent.filter((m) => m.type === "FOCUS_CHANGED")).toEqual([
+        { type: "FOCUS_CHANGED", payload: { pageKeys: { "read-1": [] } } },
+      ]);
+    } finally {
+      h.send({ type: "SET_FOCUS_TRACKER", payload: { enabled: false } });
+      html.remove();
+      document.append(original);
+      await vi.advanceTimersByTimeAsync(0);
+    }
+  });
+
   it("reports no mark from a frame that can't reach its element", async () => {
     await load(false);
     const { frameOwnerMark } = await import("./frame-owner.js");
@@ -1441,6 +1469,31 @@ describe("content: the marked frames inside a document", () => {
       [nodeFor("two"), "mark-two"],
     ]);
     expect(payload).not.toHaveProperty("owner");
+  });
+
+  it("go with no node when the tree has none for their <iframe>", async () => {
+    // Hidden from assistive technology, so the a11y view leaves it out.
+    const hidden = document.createElement("iframe");
+    hidden.id = "hidden";
+    hidden.setAttribute("aria-hidden", "true");
+    document.querySelector("main")!.append(hidden);
+    const { markFrameOwner } = await import("./frame-owner.js");
+    markFrameOwner(
+      { frameElement: hidden } as unknown as Window,
+      "mark-hidden",
+    );
+
+    h.send({ type: "REQUEST_TREE", payload: { viewMode: "a11y" } });
+    const trees = h.sent.filter((m) => m.type === "FRAME_TREE_DATA");
+    const payload = trees[trees.length - 1]!.payload as {
+      nodes: Array<[string, SemanticNode]>;
+      embeds?: Array<[string, string]>;
+    };
+    expect(
+      payload.nodes.some(([, n]) => n.dom?.attributes?.["id"] === "hidden"),
+    ).toBe(false);
+    expect(payload.embeds).toHaveLength(3);
+    expect(payload.embeds).toContainEqual(["", "mark-hidden"]);
   });
 
   it("are left out of a tree that holds none", () => {
@@ -1608,6 +1661,33 @@ describe("content: a page that replaces its document", () => {
       payload: { pageKeys?: Record<string, number[]> };
     }>;
     expect(report?.payload.pageKeys?.["read-1"]?.[0]).toBe(keys.get(target));
+  });
+
+  it("sends no focus report that names nothing: the top frame has no row of its own", async () => {
+    h.send({ type: "NATIVE_PAGE_KEYS", payload: { readId: "read-1" } });
+    h.send({ type: "SET_FOCUS_TRACKER", payload: { enabled: true } });
+    await rewrite(`<button id="new">New</button>`);
+    h.sent.length = 0;
+    // No element of the new document was numbered, and no tree was asked
+    // for, so the in-page tree tracks none of them either.
+    document
+      .getElementById("new")!
+      .dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
+    expect(h.sent.filter((m) => m.type === "FOCUS_CHANGED")).toEqual([]);
+  });
+
+  it("draws the screen curtain again over the new document", async () => {
+    h.send({ type: "TOGGLE_CURTAIN", payload: { visible: true } });
+    expect(document.getElementById("__sn-curtain")).not.toBeNull();
+    await rewrite(`<button id="new">New</button>`);
+    const curtain = document.getElementById("__sn-curtain");
+    expect(curtain).not.toBeNull();
+    expect(curtain!.parentElement).toBe(document.documentElement);
+
+    h.send({ type: "TOGGLE_CURTAIN", payload: { visible: false } });
+    expect(document.getElementById("__sn-curtain")).toBeNull();
+    await rewrite(`<button id="newer">Newer</button>`);
+    expect(document.getElementById("__sn-curtain")).toBeNull();
   });
 
   it("waits out a document left with no root element, and reads the next one", async () => {

@@ -641,6 +641,25 @@ describe("mergeFrameTrees: frames placed by the mark on their element", () => {
     expect(result.unplaced).toEqual([5]);
   });
 
+  it("leaves a frame whose element the tree has no node for out of the tree, and doesn't call it unplaced", () => {
+    // A hidden <iframe>, which the a11y view has no node for: the document
+    // around it reports the mark with an empty node id. The frame's place
+    // is known, so nobody is asked, and it is nowhere in this tree, so it
+    // goes under nothing: not under the first empty <iframe> either.
+    const result = mergeFrameTrees({
+      frames: new Map([
+        [0, topOf([["", "mark-hidden"]])],
+        [5, blankFrame(5, "mark-hidden")],
+      ]),
+      frameInfoMap: listed(5),
+    })!;
+    expect(result.unplaced).toEqual([]);
+    expect(result.nodes.get("f5-c-root")!.parentId).toBeNull();
+    for (const id of ["ifr-1", "ifr-2", "ifr-3"]) {
+      expect(result.nodes.get(id)!.childIds, id).toEqual([]);
+    }
+  });
+
   it("names the unplaced frames without merging anything", () => {
     const frames = new Map([
       [0, topOf([["ifr-1", "mark-1"]])],
@@ -793,6 +812,10 @@ describe("asFrameMarks", () => {
     ).toEqual({ embeds: [["sn-1", "mark-a"]] });
     const many = Array.from({ length: 600 }, (_, i) => [`sn-${i}`, `m-${i}`]);
     expect(asFrameMarks({ embeds: many }).embeds).toHaveLength(512);
+    // A marked element with no node in the tree comes with an empty id.
+    expect(asFrameMarks({ embeds: [["", "mark-a"]] })).toEqual({
+      embeds: [["", "mark-a"]],
+    });
   });
 });
 

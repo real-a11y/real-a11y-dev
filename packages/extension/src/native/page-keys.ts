@@ -29,7 +29,11 @@
 
 import { safeGetAttribute } from "@real-a11y-dev/core";
 
-import { isFrameHolder } from "../frame-owner.js";
+import {
+  asFrameMark,
+  isFrameHolder,
+  MAX_MARKED_FRAMES,
+} from "../frame-owner.js";
 
 /** What a walk numbered, for the two sides to compare. They disagree when
  *  the page changed between the two walks, and the numbers are then not
@@ -299,17 +303,7 @@ export function asPageKeyDigest(reply: unknown): PageKeyDigest | undefined {
 
 /** The most marked frames one walk reports, and one answer is read for. A
  *  document of more leaves the rest of its frames unmatched. */
-export const MAX_FRAME_EMBEDS = 512;
-/** Longer than any mark `newFrameMark` makes. */
-const MAX_MARK_LENGTH = 64;
-
-function asMark(value: unknown): string | undefined {
-  return typeof value === "string" &&
-    value.length > 0 &&
-    value.length <= MAX_MARK_LENGTH
-    ? value
-    : undefined;
-}
+export const MAX_FRAME_EMBEDS = MAX_MARKED_FRAMES;
 
 /**
  * The reply of frame `frameId`'s content script to `NATIVE_PAGE_KEYS`,
@@ -329,13 +323,13 @@ export function asFramePageKeyDigest(
     embeds?: unknown;
   };
   if (!digest || typeof url !== "string") return undefined;
-  const mark = asMark(owner);
+  const mark = asFrameMark(owner);
   const marked: FrameEmbed[] = [];
   if (Array.isArray(embeds)) {
     for (const entry of embeds.slice(0, MAX_FRAME_EMBEDS) as unknown[]) {
       if (!Array.isArray(entry)) continue;
       const [key, held] = entry as unknown[];
-      const heldMark = asMark(held);
+      const heldMark = asFrameMark(held);
       if (Number.isSafeInteger(key) && heldMark !== undefined) {
         marked.push([key as number, heldMark]);
       }

@@ -225,10 +225,12 @@ const PLACE_WAIT_MS = 1500;
  * its parent is asked to send its tree again. That reads the parent's whole
  * document, which is why it isn't asked at once.
  *
- * Once per frame and mark. An element the parent's tree leaves out is never
- * found, and asking again on every merge would read the parent's document
- * over and over for nothing. A frame Chrome doesn't list (a `javascript:`
- * one) has no known parent to ask.
+ * Once per frame and mark, for as long as the frame stays unplaced: asking
+ * again on every merge would read the parent's document over and over for
+ * nothing. A frame Chrome doesn't list (a `javascript:` one) has no known
+ * parent to ask. A frame whose element the parent's tree has no node for (a
+ * hidden `<iframe>`, in the a11y view) is never asked after: the parent
+ * reports the mark all the same, so the merge knows where it is.
  */
 function askForFramePlaces(
   tabId: number,
@@ -239,6 +241,11 @@ function askForFramePlaces(
   const now = Date.now();
   const parents = new Set<number>();
   let waiting = false;
+  // A frame placed since starts over if it is ever unplaced again.
+  const still = new Set(unplaced);
+  for (const frameId of state.askedPlaces.keys()) {
+    if (!still.has(frameId)) state.askedPlaces.delete(frameId);
+  }
   for (const frameId of unplaced) {
     const mark = state.frames.get(frameId)?.owner;
     const parent = frameInfoMap.get(frameId)?.parentFrameId;

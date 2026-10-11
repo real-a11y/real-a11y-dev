@@ -13,6 +13,7 @@
 
 import type { SemanticNode } from "@real-a11y-dev/core";
 
+import { asFrameMark, MAX_MARKED_FRAMES } from "./frame-owner.js";
 import { prefixNodeId, urlsMatch } from "./routing.js";
 
 export interface FrameTree {
@@ -25,8 +26,12 @@ export interface FrameTree {
    *  `frame-owner.ts`). Absent for the top frame, and for a frame of another
    *  origin than its parent's. */
   owner?: string;
-  /** This tree's nodes for elements holding a frame that marked them, each
-   *  with the mark. */
+  /**
+   * This tree's nodes for elements holding a frame that marked them, each
+   * with the mark. An empty node id is a marked element the tree has no node
+   * for, as the a11y view has none for a hidden `<iframe>`: the frame's
+   * place is known, and is nowhere in this tree.
+   */
   embeds?: Array<[nodeId: string, owner: string]>;
 }
 
@@ -41,10 +46,11 @@ export interface MergeResult {
   /** For action routing: which frame each node lives in. */
   nodeToFrame: Map<string, number>;
   /**
-   * The frames that marked the element holding them where no tree has a
-   * node bearing the mark: the tree of the document around such a frame
-   * was read before the frame's script loaded, or leaves the element out.
-   * Each is left out of the tree's structure until its place is known.
+   * The frames that marked the element holding them where no tree bears the
+   * mark: the tree of the document around such a frame was read before the
+   * frame's script loaded. Each is left out of the tree's structure until
+   * its place is known. A frame whose element a tree reports with no node
+   * isn't among them: its place is known, and it has none in the tree.
    */
   unplaced: number[];
 }
@@ -324,20 +330,6 @@ export function mergeFrameTrees(opts: {
   return { nodes, nodeToFrame, unplaced };
 }
 
-/** The most marked frames taken from one tree: a document of more leaves
- *  the rest to be placed by URL. */
-const MAX_EMBEDS = 512;
-/** Longer than any mark `newFrameMark` makes. */
-const MAX_MARK_LENGTH = 64;
-
-function asMark(value: unknown): string | undefined {
-  return typeof value === "string" &&
-    value.length > 0 &&
-    value.length <= MAX_MARK_LENGTH
-    ? value
-    : undefined;
-}
-
 /**
  * The marks of a frame's `FRAME_TREE_DATA`, kept only where they are well
  * formed. A content script runs in the page's process, so its message is
@@ -347,13 +339,16 @@ export function asFrameMarks(payload: {
   owner?: unknown;
   embeds?: unknown;
 }): Pick<FrameTree, "owner" | "embeds"> {
-  const owner = asMark(payload.owner);
+  const owner = asFrameMark(payload.owner);
   const embeds: Array<[string, string]> = [];
   if (Array.isArray(payload.embeds)) {
-    for (const entry of payload.embeds.slice(0, MAX_EMBEDS) as unknown[]) {
+    for (const entry of payload.embeds.slice(
+      0,
+      MAX_MARKED_FRAMES,
+    ) as unknown[]) {
       if (!Array.isArray(entry)) continue;
       const [nodeId, mark] = entry as unknown[];
-      const held = asMark(mark);
+      const held = asFrameMark(mark);
       if (typeof nodeId === "string" && held !== undefined) {
         embeds.push([nodeId, held]);
       }

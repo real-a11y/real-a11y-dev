@@ -68,9 +68,10 @@
 
 - **The in-page tree keeps up with a page that writes its document over
   again.** After `document.open()`, the tree went on showing the document
-  that was replaced, and Focus sync and the element picker stopped
-  responding in that frame until it was reloaded. This affected any frame
-  whose page does it, not only blank ones
+  that was replaced, Focus sync and the element picker stopped responding in
+  that frame until it was reloaded, and the screen curtain came down with
+  the old document. This affected any frame whose page does it, not only
+  blank ones
   ([#501](https://github.com/real-a11y/real-a11y-dev/pull/501)).
 
 - Hardened the shared mutation observer so that re-arming it can no longer

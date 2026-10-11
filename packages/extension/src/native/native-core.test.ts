@@ -3718,9 +3718,10 @@ describe("readNativeTree's page keys across frames", () => {
     });
 
     it("tells two frames showing the same page apart by the mark each left on its <iframe>", async () => {
-      // As above, but each frame's script marked the element holding it, and
-      // the top frame's walk found the marks: on the first <iframe>, number
-      // 4, frame 4's, and on the second, number 6, frame 3's.
+      // The same document twice over again, but each frame's script marked
+      // the element holding it, and the top frame's walk found the marks: on
+      // the first <iframe>, number 4, frame 4's, and on the second, number
+      // 6, frame 3's.
       const twice = topDom(frameDom(20));
       const body = twice.children![0]!.children![1]!;
       body.children!.push(

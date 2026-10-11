@@ -877,6 +877,38 @@ describe("background: a frame whose place in the tree isn't known yet", () => {
     expect(sentSince(h, 0, "RESEND_TREE")).toHaveLength(2);
   });
 
+  it("asks nobody about a frame whose <iframe> the tree around it has no node for", async () => {
+    // A hidden <iframe>, left out of the a11y view: the top frame reports
+    // its mark with no node. The frame can't be placed, and reading the top
+    // document again wouldn't change that.
+    announceTree(0, { ...topTree(), embeds: [["", "mark-9"]] });
+    for (const frameId of [1, 2]) announce(h, frameId);
+    announceTree(9, blankTree("mark-9"));
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(sentSince(h, 0, "RESEND_TREE")).toEqual([]);
+    expect(lastNodes().get("f9-root")!.parentId).toBeNull();
+    expect(lastNodes().get("ifBlank")!.childIds).toEqual([]);
+  });
+
+  it("starts over for a frame that was placed and is unplaced again", async () => {
+    announceTree(0, topTree());
+    for (const frameId of [1, 2]) announce(h, frameId);
+    announceTree(9, blankTree("mark-9"));
+    await vi.advanceTimersByTimeAsync(200 + 1_500);
+    await vi.runAllTimersAsync();
+    expect(sentSince(h, 0, "RESEND_TREE")).toHaveLength(1);
+
+    // Placed, then the top frame's tree stops bearing the mark.
+    announceTree(0, topTree("mark-9"));
+    await vi.runAllTimersAsync();
+    expect(lastNodes().get("f9-root")!.parentId).toBe("ifBlank");
+    announceTree(0, topTree());
+    await vi.advanceTimersByTimeAsync(200);
+    expect(sentSince(h, 0, "RESEND_TREE")).toHaveLength(1);
+    await vi.advanceTimersByTimeAsync(1_500);
+    expect(sentSince(h, 0, "RESEND_TREE")).toHaveLength(2);
+  });
+
   it("asks nobody once the panel has closed", async () => {
     announceTree(0, topTree());
     for (const frameId of [1, 2]) announce(h, frameId);
