@@ -37,6 +37,7 @@ import {
   readNativeTree,
   type NativeAction,
 } from "./native-core.js";
+import { asPageKeyDigest, type PageKeyDigest } from "./page-keys.js";
 import { NATIVE_MODE_KEY as FLAG_KEY, nativeModeOn } from "./setting.js";
 
 /** The dogfood build's name for the same setting, before it became a user
@@ -102,6 +103,10 @@ type NativeMessage =
       // `cancelled-by-user`. The panel pauses its automatic reads after any
       // failed one.
       auto?: boolean;
+      // Number the page for focus sync (`page-keys.ts`), which the panel asks
+      // for while its Focus sync is on. It costs the read a `DOM.getDocument`
+      // and a walk of the page in the content script.
+      pageKeys?: boolean;
     }
   | {
       type: "NATIVE_ACT";
@@ -147,6 +152,38 @@ type NativeMessage =
   // the panel leaving native mode or switching tabs. Naming the request keeps
   // a late STOP from cancelling a later pick.
   | { type: "NATIVE_PICK_STOP"; tabId: number; requestId: number };
+
+/** How long a read waits for the content script to number the page. The walk
+ *  takes milliseconds; a script that hasn't answered by now never will (a
+ *  hung page), and the read goes on without keys rather than wait on it. */
+const PAGE_KEYS_TIMEOUT_MS = 2000;
+
+/**
+ * Ask the tab's top-frame content script to number the live page for read
+ * `readId` (see `page-keys.ts`), and answer with its digest. `undefined` when
+ * there is no content script to ask (one that can't run on this page, or one
+ * orphaned by an extension reload), or it didn't answer in time: the read
+ * then numbers nothing, and the native tree doesn't follow page focus until
+ * a read that does.
+ */
+function numberPage(
+  tabId: number,
+  readId: string,
+): Promise<PageKeyDigest | undefined> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  return Promise.race([
+    chrome.tabs
+      .sendMessage(
+        tabId,
+        { type: "NATIVE_PAGE_KEYS", payload: { readId } },
+        { frameId: 0 },
+      )
+      .then(asPageKeyDigest, () => undefined),
+    new Promise<undefined>((resolve) => {
+      timer = setTimeout(() => resolve(undefined), PAGE_KEYS_TIMEOUT_MS);
+    }),
+  ]).finally(() => clearTimeout(timer));
+}
 
 /** The tab's current URL, or undefined if it can't be read. Best-effort: it
  *  only drives a staleness check, so a miss degrades to "don't refuse". */
@@ -345,10 +382,18 @@ export function registerNativeMode(): void {
               sendResponse({ ok: false, error });
               return;
             }
+            // Names this read's numbering of the page, for focus sync: the
+            // content script keeps it under this id, and the panel matches
+            // the focus reports it gets against the id its tree came with.
+            const readId = crypto.randomUUID();
+            const tabId = message.tabId;
+            const options = message.pageKeys
+              ? { pageKeys: () => numberPage(tabId, readId) }
+              : {};
             const { outcome, value } = await withRecovery(
               session,
-              message.tabId,
-              (t) => readNativeTree(t),
+              tabId,
+              (t) => readNativeTree(t, options),
               log,
               { retryDrop: !message.auto, respectCancel: message.auto },
             );
@@ -398,6 +443,9 @@ export function registerNativeMode(): void {
               ...(value.documentId !== undefined
                 ? { documentId: value.documentId }
                 : {}),
+              // The rows carry `pageKey`s from this read's numbering of the
+              // page: what the content script's focus reports name.
+              ...(value.pageKeyed ? { pageKeysReadId: readId } : {}),
               // Structural fields plus the state/property enrichment
               // `readNativeTree` attaches (`expanded`, `checked`, `level`, …).
               // `axFacets`'s own allowlist (DETAIL_PROPS) excludes
@@ -435,6 +483,7 @@ export function registerNativeMode(): void {
                 description: n.description,
                 controls: n.controls,
                 valueWithheld: n.valueWithheld,
+                pageKey: n.pageKey,
               })),
             });
             return;

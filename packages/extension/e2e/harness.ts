@@ -105,6 +105,8 @@ export interface NativeNode {
   description?: string;
   /** Ids of the rows this node controls (`aria-controls`). */
   controls?: string[];
+  /** Its element's number in the read's walk of the page (focus sync). */
+  pageKey?: number;
 }
 
 export interface NativeReadResult {
@@ -112,6 +114,8 @@ export interface NativeReadResult {
   serialized?: string;
   url?: string;
   nodes?: NativeNode[];
+  /** Set when the read numbered the page, and its rows carry `pageKey`s. */
+  pageKeysReadId?: string;
   error?: string;
   reason?: string;
 }
@@ -273,10 +277,20 @@ async function launchDogfoodExtension(
 export type NativeReadMode = "normal" | "fail" | `delay:${number}`;
 const NATIVE_READ_MODE_KEY = "e2e.nativeReadMode";
 
+/** A NATIVE_READ the panel sent, as `recordNativeReads` keeps it. */
+export interface NativeReadRecord {
+  tabId?: number;
+  auto?: boolean;
+  /** It asked for the page to be numbered (Focus sync was on). */
+  pageKeys?: boolean;
+  /** Its answer has come back. */
+  done?: boolean;
+}
+
 /** Runs in the panel page before its own scripts (see `addInitScript`). */
 function recordNativeReads(): void {
   const w = window as typeof window & {
-    __e2eNativeReads?: Array<{ tabId?: number; auto?: boolean }>;
+    __e2eNativeReads?: NativeReadRecord[];
     __e2eNativeActs?: Array<{
       action?: string;
       nodeId?: string;
@@ -294,6 +308,7 @@ function recordNativeReads(): void {
       type?: unknown;
       tabId?: number;
       auto?: boolean;
+      pageKeys?: boolean;
       action?: string;
       nodeId?: string;
     };
@@ -309,22 +324,31 @@ function recordNativeReads(): void {
       });
     }
     if (m?.type !== "NATIVE_READ") return real(message, ...rest);
-    w.__e2eNativeReads!.push({ tabId: m.tabId, auto: m.auto });
+    const entry: NativeReadRecord = {
+      tabId: m.tabId,
+      auto: m.auto,
+      pageKeys: m.pageKeys,
+    };
+    w.__e2eNativeReads!.push(entry);
+    const done = (answer: unknown) => {
+      entry.done = true;
+      return answer;
+    };
     const mode = sessionStorage.getItem("e2e.nativeReadMode") ?? "normal";
     if (mode === "fail") {
       return Promise.resolve({
         ok: false,
         error: "unavailable",
         reason: "devtools-conflict",
-      });
+      }).then(done);
     }
     if (mode.startsWith("delay:")) {
       const ms = Number(mode.slice("delay:".length));
-      return new Promise((r) => setTimeout(r, ms)).then(() =>
-        real(message, ...rest),
-      );
+      return new Promise((r) => setTimeout(r, ms))
+        .then(() => real(message, ...rest))
+        .then(done);
     }
-    return real(message, ...rest);
+    return real(message, ...rest).then(done);
   }) as typeof chrome.runtime.sendMessage;
 }
 
@@ -393,12 +417,12 @@ export class NativeHarness {
   }
 
   /** The NATIVE_READs the panel has sent since it last loaded. */
-  async nativeReads(): Promise<Array<{ tabId?: number; auto?: boolean }>> {
+  async nativeReads(): Promise<NativeReadRecord[]> {
     return this.panel.evaluate(
       () =>
         (
           window as typeof window & {
-            __e2eNativeReads?: Array<{ tabId?: number; auto?: boolean }>;
+            __e2eNativeReads?: NativeReadRecord[];
           }
         ).__e2eNativeReads ?? [],
     );
@@ -483,8 +507,15 @@ export class NativeHarness {
   }
 
   /** Read the native tree, as the panel's "Load native tree" button does. */
-  async read(tabId: number): Promise<NativeReadResult> {
-    return await this.send<NativeReadResult>({ type: "NATIVE_READ", tabId });
+  async read(
+    tabId: number,
+    options: { pageKeys?: boolean } = {},
+  ): Promise<NativeReadResult> {
+    return await this.send<NativeReadResult>({
+      type: "NATIVE_READ",
+      tabId,
+      ...options,
+    });
   }
 
   /** Read, and fail loudly rather than returning an unusable result — every

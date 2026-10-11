@@ -7,6 +7,23 @@ import type {
 
 import type { NativeUnavailableReason } from "./native/capability.js";
 
+/**
+ * Where the page's focus went (Focus sync), for whichever tree the panel
+ * shows. Either field may be missing, never both.
+ */
+export interface FocusChangedPayload {
+  /** The DOM tree's node for the focused element, or the nearest one above
+   *  it that the tree tracks. */
+  nodeId?: string;
+  /**
+   * For the native tree: by native read, the numbers the read gave the
+   * focused element and each numbered element above it, nearest first (see
+   * `native/page-keys.ts`). The panel takes the first that names a row of the
+   * tree it got from that read. From the top frame only.
+   */
+  pageKeys?: Record<string, number[]>;
+}
+
 /** Messages from content script frame → background (per-frame tree data) */
 export type FrameToBackground =
   | {
@@ -30,7 +47,7 @@ export type FrameToBackground =
   // which is all `planFrameHello` takes. Page-derived data belongs on
   // FRAME_TREE_DATA, which is only ever sent by an armed frame.
   | { type: "FRAME_HELLO" }
-  | { type: "FOCUS_CHANGED"; payload: { nodeId: string } }
+  | { type: "FOCUS_CHANGED"; payload: FocusChangedPayload }
   | {
       type: "LIVE_REGION";
       payload: { text: string; level: "polite" | "assertive"; role: string };
@@ -72,7 +89,7 @@ export type ContentToPanel =
   // Carries no replacement — the new page's content script announces one if
   // it can run at all, and if it can't, saying so is the panel's job.
   | { type: "PAGE_NAVIGATED"; tabId: number }
-  | { type: "FOCUS_CHANGED"; tabId?: number; payload: { nodeId: string } }
+  | { type: "FOCUS_CHANGED"; tabId?: number; payload: FocusChangedPayload }
   | {
       type: "LIVE_REGION";
       tabId?: number;
@@ -228,6 +245,12 @@ export type PanelToContent =
         kind?: "reveal" | "preview";
       };
     })
+  // Sent by the SERVICE WORKER (native/index.ts, NATIVE_READ), to the top
+  // frame, during a native read: number the live page for read `readId` and
+  // answer with the digest (`PageKeyDigest` in native/page-keys.ts), so the
+  // read can check it numbered the same elements over CDP. The content
+  // script keeps the numbering for its FOCUS_CHANGED reports.
+  | (BoundTab & { type: "NATIVE_PAGE_KEYS"; payload: { readId: string } })
   // Start/stop the (expensive) live tree observation in the content script.
   // Driven by the panel's connect/disconnect the same way SET_FOCUS_TRACKER
   // is, so a page whose panel was never opened does no observing at all.

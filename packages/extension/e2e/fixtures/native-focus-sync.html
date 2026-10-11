@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Native focus sync fixture</title>
+    <template id="unused"><button>Inside a template</button></template>
+  </head>
+  <body>
+    <h1>Native focus sync fixture</h1>
+
+    <!--
+      Everything the two walks of the page (the content script's, over the
+      live DOM, and the native read's, over CDP) must number alike for the
+      native tree to follow focus here: built-in controls with user-agent
+      shadow roots neither walk enters, a template's content outside the
+      document, a frame's document left to its own walk, a form whose
+      controls shadow `children`, `localName` and `shadowRoot`, a document
+      property shadowed by a named image, and author shadow roots, open and
+      closed.
+    -->
+    <form aria-label="Clobbering form">
+      <input name="children" aria-label="Children" />
+      <input name="localName" aria-label="Local name" />
+      <input name="shadowRoot" aria-label="Shadow root" />
+      <select aria-label="Size">
+        <option>Small</option>
+        <option>Large</option>
+      </select>
+      <details>
+        <summary>More</summary>
+        <p>Details text</p>
+      </details>
+    </form>
+    <img name="documentElement" alt="" width="1" height="1" />
+    <svg width="10" height="10" aria-hidden="true">
+      <foreignObject width="10" height="10"></foreignObject>
+    </svg>
+    <video controls width="10" height="10" aria-label="Clip"></video>
+    <iframe
+      title="Same-origin frame"
+      srcdoc="<button>Inside the frame</button>"
+    ></iframe>
+
+    <nav aria-label="Links">
+      <a id="first-link" href="#first">First link</a>
+      <div class="wrapper">
+        <div class="wrapper">
+          <a id="second-link" href="#second">Second link</a>
+        </div>
+      </div>
+    </nav>
+
+    <section aria-label="Buttons">
+      <button id="alpha">Alpha</button>
+      <button id="beta">Beta</button>
+      <div id="unnamed" tabindex="-1">
+        <span>No row of its own</span>
+      </div>
+    </section>
+
+    <open-widget id="open-host"></open-widget>
+    <closed-widget id="closed-host"></closed-widget>
+
+    <section id="deep" aria-label="Deep">
+      <h2>Deep section</h2>
+      <div role="group" aria-label="Inner group">
+        <button id="gamma">Gamma</button>
+      </div>
+    </section>
+
+    <script>
+      customElements.define(
+        "open-widget",
+        class extends HTMLElement {
+          constructor() {
+            super();
+            this.attachShadow({ mode: "open" }).innerHTML =
+              '<div role="group" aria-label="Open widget"><button id="open-button">Open button</button><button id="open-second">Open second</button></div>';
+          }
+        },
+      );
+      let closedRoot = null;
+      customElements.define(
+        "closed-widget",
+        class extends HTMLElement {
+          constructor() {
+            super();
+            closedRoot = this.attachShadow({ mode: "closed" });
+            closedRoot.innerHTML =
+              '<div role="group" aria-label="Closed widget"><button id="closed-button">Closed button</button><button id="closed-second">Closed second</button></div>';
+          }
+        },
+      );
+      // For the test to focus inside the closed root, which it can't reach.
+      window.focusClosed = (id) => closedRoot.getElementById(id).focus();
+      // Moves the page's structure under the read's numbering: an element
+      // inserted ahead of the buttons shifts every later element's place.
+      window.insertAhead = () => {
+        const extra = document.createElement("p");
+        extra.textContent = "Inserted after the read";
+        document.body.insertBefore(extra, document.body.firstChild);
+      };
+    </script>
+  </body>
+</html>

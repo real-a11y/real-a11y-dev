@@ -1009,3 +1009,208 @@ describe("content: live regions", () => {
     ]);
   });
 });
+
+describe("content: numbering the page for the native tree", () => {
+  let h: Harness;
+  const scrollIntoView = Element.prototype.scrollIntoView;
+
+  beforeEach(async () => {
+    vi.useFakeTimers();
+    vi.resetModules();
+    Element.prototype.scrollIntoView = () => {};
+    document.body.innerHTML = `<main id="app"><div><button id="target">Save</button></div></main>`;
+    h = makeHarness();
+    (globalThis as { chrome?: unknown }).chrome = h.chromeMock;
+    await import("./content.js");
+    h.send({ type: "REQUEST_TREE", payload: { viewMode: "a11y" } });
+    h.send({ type: "SET_FOCUS_TRACKER", payload: { enabled: true } });
+  });
+
+  afterEach(() => {
+    h.send({ type: "SET_FOCUS_TRACKER", payload: { enabled: false } });
+    h.send({ type: "SET_OBSERVING", payload: { enabled: false } });
+    document.getElementById("__sn-highlight")?.remove();
+    vi.clearAllTimers();
+    vi.useRealTimers();
+    Element.prototype.scrollIntoView = scrollIntoView;
+    delete (globalThis as { chrome?: unknown }).chrome;
+    document.body.innerHTML = "";
+  });
+
+  /** Each element's number, as a walk of the page now gives it. */
+  async function numbers(): Promise<Map<Element, number>> {
+    const { livePageKeyWalker, walkPageKeys } =
+      await import("./native/page-keys.js");
+    const keys = new Map<Element, number>();
+    walkPageKeys(document.documentElement, livePageKeyWalker(), (el, key) =>
+      keys.set(el, key),
+    );
+    return keys;
+  }
+
+  function focusTarget(): void {
+    document
+      .getElementById("target")!
+      .dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
+  }
+
+  const focusReports = () =>
+    h.sent.filter((m) => m.type === "FOCUS_CHANGED") as Array<{
+      payload: { nodeId?: string; pageKeys?: Record<string, number[]> };
+    }>;
+
+  it("answers a read with the digest of its walk of the page", async () => {
+    const { livePageKeyWalker, walkPageKeys } =
+      await import("./native/page-keys.js");
+    expect(
+      h.send({ type: "NATIVE_PAGE_KEYS", payload: { readId: "read-1" } }),
+    ).toEqual(
+      walkPageKeys(document.documentElement, livePageKeyWalker(), () => {}),
+    );
+  });
+
+  it("reports focus by the read's numbers, the focused element's first, alongside the DOM tree's node", async () => {
+    h.send({ type: "NATIVE_PAGE_KEYS", payload: { readId: "read-1" } });
+    const keys = await numbers();
+    const target = document.getElementById("target")!;
+    h.sent.length = 0;
+    focusTarget();
+    const [report] = focusReports();
+    expect(report?.payload.nodeId).toEqual(expect.any(String));
+    expect(report?.payload.pageKeys).toEqual({
+      "read-1": [
+        keys.get(target),
+        keys.get(target.parentElement!),
+        keys.get(document.getElementById("app")!),
+        keys.get(document.body),
+        keys.get(document.documentElement),
+      ],
+    });
+  });
+
+  it("reports by the numbers the read gave, after the page changed", async () => {
+    h.send({ type: "NATIVE_PAGE_KEYS", payload: { readId: "read-1" } });
+    const before = (await numbers()).get(document.getElementById("target")!);
+    document.body.prepend(document.createElement("p"));
+    h.sent.length = 0;
+    focusTarget();
+    expect(focusReports()[0]?.payload.pageKeys?.["read-1"]?.[0]).toBe(before);
+  });
+
+  it("hears a move between two elements of one shadow root, which never reaches the document", async () => {
+    const host = document.createElement("div");
+    document.getElementById("app")!.append(host);
+    const root = host.attachShadow({ mode: "open" });
+    root.innerHTML = `<button id="a">A</button><button id="b">B</button>`;
+    const [a, b] = [root.getElementById("a")!, root.getElementById("b")!];
+    h.send({ type: "NATIVE_PAGE_KEYS", payload: { readId: "read-1" } });
+    const keys = await numbers();
+    const focus = (el: Element, from: Element | null) =>
+      el.dispatchEvent(
+        new FocusEvent("focusin", {
+          bubbles: true,
+          composed: true,
+          relatedTarget: from,
+        }),
+      );
+    // Into the root from outside: the document hears it, and the DOM tree's
+    // node goes with it.
+    h.sent.length = 0;
+    focus(a, document.getElementById("target"));
+    expect(focusReports()).toHaveLength(1);
+    expect(focusReports()[0]!.payload.nodeId).toEqual(expect.any(String));
+    expect(focusReports()[0]!.payload.pageKeys!["read-1"]![0]).toBe(
+      keys.get(a),
+    );
+
+    // Within it: only the root hears it. The DOM tree's node, the host's,
+    // hasn't changed, so only the native numbers go.
+    h.sent.length = 0;
+    focus(b, a);
+    expect(focusReports()).toHaveLength(1);
+    expect(focusReports()[0]!.payload.nodeId).toBeUndefined();
+    expect(focusReports()[0]!.payload.pageKeys!["read-1"]![0]).toBe(
+      keys.get(b),
+    );
+
+    // Out of it again: the document alone.
+    h.sent.length = 0;
+    focus(document.getElementById("target")!, b);
+    expect(focusReports()).toHaveLength(1);
+    expect(focusReports()[0]!.payload.nodeId).toEqual(expect.any(String));
+  });
+
+  it("hears focus moving between a shadow host and its own shadow tree, which the document never does", async () => {
+    // A list box whose host takes focus and moves it to its options: from the
+    // host into the root, only the root hears a focusin; back out to the
+    // host, nobody does, and only the root hears the focusout.
+    const host = document.createElement("div");
+    host.tabIndex = 0;
+    document.getElementById("app")!.append(host);
+    const root = host.attachShadow({ mode: "open" });
+    root.innerHTML = `<div id="o1" tabindex="-1">1</div>`;
+    const option = root.getElementById("o1")!;
+    h.send({ type: "NATIVE_PAGE_KEYS", payload: { readId: "read-1" } });
+    const keys = await numbers();
+    const fire = (type: string, el: Element, related: Element | null) =>
+      el.dispatchEvent(
+        new FocusEvent(type, {
+          bubbles: true,
+          composed: true,
+          relatedTarget: related,
+        }),
+      );
+    const target = document.getElementById("target")!;
+    fire("focusin", host, target);
+    h.sent.length = 0;
+
+    fire("focusout", host, option);
+    fire("focusin", option, host);
+    expect(
+      focusReports().map((r) => r.payload.pageKeys!["read-1"]![0]),
+    ).toEqual([keys.get(option)]);
+
+    h.sent.length = 0;
+    fire("focusout", option, host);
+    fire("focusin", host, option);
+    expect(
+      focusReports().map((r) => r.payload.pageKeys!["read-1"]![0]),
+    ).toEqual([keys.get(host)]);
+  });
+
+  it("reports a move from inside a shadow root to an element slotted into its host once, as the document hears it", () => {
+    const host = document.createElement("div");
+    const slotted = document.createElement("button");
+    host.append(slotted);
+    document.getElementById("app")!.append(host);
+    const root = host.attachShadow({ mode: "open" });
+    root.innerHTML = `<button id="a">A</button><slot></slot>`;
+    const a = root.getElementById("a")!;
+    h.send({ type: "NATIVE_PAGE_KEYS", payload: { readId: "read-1" } });
+    const focus = (el: Element, from: Element | null) =>
+      el.dispatchEvent(
+        new FocusEvent("focusin", {
+          bubbles: true,
+          composed: true,
+          relatedTarget: from,
+        }),
+      );
+    focus(a, document.getElementById("target"));
+    h.sent.length = 0;
+    focus(slotted, a);
+    expect(focusReports()).toHaveLength(1);
+    expect(focusReports()[0]!.payload.nodeId).toEqual(expect.any(String));
+  });
+
+  it("reports no numbers before a read, and nothing at all with the tracker off", () => {
+    h.sent.length = 0;
+    focusTarget();
+    expect(focusReports()[0]?.payload.pageKeys).toBeUndefined();
+
+    h.send({ type: "NATIVE_PAGE_KEYS", payload: { readId: "read-1" } });
+    h.send({ type: "SET_FOCUS_TRACKER", payload: { enabled: false } });
+    h.sent.length = 0;
+    focusTarget();
+    expect(focusReports()).toEqual([]);
+  });
+});

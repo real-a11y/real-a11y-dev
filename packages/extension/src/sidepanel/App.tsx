@@ -57,6 +57,10 @@ import {
 import type { NativeAction } from "../native/native-core.js";
 import { nativeToExtractionResult } from "../native/native-export.js";
 import {
+  nativeRowForPageFocus,
+  nativeRowsByPageKey,
+} from "../native/native-tree-utils.js";
+import {
   NATIVE_MODE_KEY,
   NATIVE_NOTICE_SEEN_KEY,
   nativeModeOn,
@@ -348,6 +352,12 @@ export function App() {
   const [roleFilter, setRoleFilter] = useState<RoleFilter>(null);
   const [curtainOn, setCurtainOn] = useState(false);
   const [focusTrackerOn, setFocusTrackerOn] = useState(true);
+  // For the message listener and the native reads. With Focus sync off, a
+  // focus report is dropped here too: one can still be on its way when the
+  // toggle flips, and a service worker that restarted turns every tracker
+  // back on until this panel's port reconnects and says otherwise.
+  const focusTrackerOnRef = useRef(focusTrackerOn);
+  focusTrackerOnRef.current = focusTrackerOn;
   // Which popup is open: the export dropdown ("Copy" → pick which view(s) to
   // put on the clipboard) or Settings. Never both: each opens in the other's
   // place, however it is reached.
@@ -484,6 +494,14 @@ export function App() {
   // the callback doesn't change identity on every tree read.
   const nativeNodesRef = useRef(nativeNodes);
   nativeNodesRef.current = nativeNodes;
+  // Focus sync for the native tree: the read the tree on screen came from,
+  // when that read numbered the page, and its rows by number. The content
+  // script's focus reports name rows by those numbers (`page-keys.ts`). Set
+  // with the tree, both at once, so a report never meets one read's id and
+  // another's rows; a ref, for the long-lived message listener.
+  const nativePageKeys = useRef<
+    { readId: string; rows: Map<number, string> } | undefined
+  >(undefined);
   const [nativeRootId, setNativeRootId] = useState<string>("");
   const [nativeStatus, setNativeStatus] = useState<string>("");
   const [nativeBusy, setNativeBusy] = useState(false);
@@ -513,11 +531,20 @@ export function App() {
   const [nativePickReveal, setNativePickReveal] = useState<
     NativeReveal | undefined
   >(undefined);
+  // Focus sync's counterpart, for the same reason: the row the page's focus
+  // went to, handed down as NativeTreeView's `pageFocus`.
+  const [nativePageFocus, setNativePageFocus] = useState<
+    NativeReveal | undefined
+  >(undefined);
   // A reveal is consumed when the native tree mounts with it, so it must not
   // outlive that tree: switching to DOM and back would remount the tree and
-  // apply an old pick again, clearing its search and selecting that row.
+  // apply an old pick again, clearing its search and selecting that row. An
+  // old focus report would select its row again in the same way.
   useEffect(() => {
-    if (producer !== "native") setNativePickReveal(undefined);
+    if (producer !== "native") {
+      setNativePickReveal(undefined);
+      setNativePageFocus(undefined);
+    }
   }, [producer]);
   // The native pick's inspect mode is on (NATIVE_PICK_ARMED arrived). Until
   // then the Pick button is pressed but busy: a page click isn't a pick yet.
@@ -573,6 +600,9 @@ export function App() {
   // display flag, a stale token here must not leave this permanently stuck
   // true, or no native action could ever dispatch again.
   const nativeInFlight = useRef(false);
+  // Reads Chrome's tree again, numbered, when Focus sync wants numbers it
+  // lacks: see where it is re-pointed, after `loadNativeTree`.
+  const numberNativeTree = useRef(() => {});
   // Auto-load the native tree once per transition into native mode (mirrors
   // the DOM producer's own `hasRequestedInitial` restraint below — a later
   // tab switch while already in native mode clears the tree and waits for an
@@ -708,8 +738,11 @@ export function App() {
     setNativeStatus("");
     setNativeCapability(undefined);
     setNativeBusy(false);
-    // A pick's reveal belongs to the tree it was picked in.
+    // A pick's reveal belongs to the tree it was picked in, and so does a
+    // focus report, and the numbering it names rows by.
     setNativePickReveal(undefined);
+    setNativePageFocus(undefined);
+    nativePageKeys.current = undefined;
   }, []);
 
   /** Native mode is off: drop the native tree and return the view to DOM.
@@ -1205,9 +1238,10 @@ export function App() {
   // tree so the user sees the empty state, and they hit the refresh
   // button to load the new tab's tree explicitly.
   //
-  // Only `myTabId` may re-run this. `requestTree` is in the deps as well but
-  // is identity-stable by construction (see `viewModeRef`) — the teardown
-  // below describes leaving a tab, and nothing else is allowed to trigger it.
+  // Only `myTabId` may re-run this. `requestTree` and `sendToBoundTab` are in
+  // the deps as well but are identity-stable by construction (see
+  // `viewModeRef`) — the teardown below describes leaving a tab, and nothing
+  // else is allowed to trigger it.
   const hasRequestedInitial = useRef(false);
   useEffect(() => {
     if (myTabId === null) return;
@@ -1233,6 +1267,13 @@ export function App() {
     // user actually leaves and re-enters native mode (see the producer effect
     // right below the auto-load effect).
 
+    // The service worker keeps Focus sync's state by tab, so the tab now
+    // bound gets this panel's: a tab first seen here starts out on.
+    sendToBoundTab({
+      type: "SET_FOCUS_TRACKER",
+      payload: { enabled: focusTrackerOnRef.current },
+    });
+
     if (!hasRequestedInitial.current) {
       hasRequestedInitial.current = true;
       requestTree();
@@ -1248,7 +1289,13 @@ export function App() {
     setPageUnreachable(false);
     setPageTitle("");
     setPageUrl("");
-  }, [myTabId, requestTree, resetNativeState, disarmAutoRefresh]);
+  }, [
+    myTabId,
+    requestTree,
+    resetNativeState,
+    disarmAutoRefresh,
+    sendToBoundTab,
+  ]);
 
   // Keep a port alive so the background knows when the side panel closes.
   // On disconnect the background clears the highlight overlay AND disables
@@ -1260,10 +1307,11 @@ export function App() {
     const connect = () => {
       port = chrome.runtime.connect({ name: "sidepanel" });
       // Push the panel's focus-tracker state on (re)connect — the tracker
-      // starts OFF in content.ts, so this is what turns it on.
+      // starts OFF in content.ts, so this is what turns it on. The current
+      // state, not the mount's: a worker that restarted forgot it.
       sendToBoundTab({
         type: "SET_FOCUS_TRACKER",
-        payload: { enabled: focusTrackerOn },
+        payload: { enabled: focusTrackerOnRef.current },
       });
       port.onDisconnect.addListener(() => {
         // The MV3 service worker was torn down (its port drops while the panel
@@ -1277,7 +1325,7 @@ export function App() {
     return () => port?.disconnect();
     // Intentionally empty deps: toggleFocusTracker handles subsequent changes;
     // this effect owns the port lifecycle + the service-worker-death reconnect.
-    // sendToBoundTab is stable (empty deps); focusTrackerOn is the mount value.
+    // sendToBoundTab is stable (empty deps); the toggle is read through its ref.
   }, []);
 
   // Listen for tree data and focus changes from content script
@@ -1420,13 +1468,37 @@ export function App() {
         }, 8000);
       }
 
-      // Only while the DOM tree is the one showing. Focus tracking keeps
-      // reporting while native is on screen (its toggle is hidden there, not
-      // off), and following it would move the hidden DOM selection, and leave
-      // a hidden DOM scope that doesn't hold the focused node: "Showing the
-      // full tree" announced over a native tree that is still scoped, and the
-      // DOM scope gone when the user switches back.
-      if (message.type === "FOCUS_CHANGED" && producerRef.current === "dom") {
+      // Each tree follows focus only while it is the one showing. Following
+      // it in the hidden DOM tree would move the hidden DOM selection, and
+      // leave a hidden DOM scope that doesn't hold the focused node: "Showing
+      // the full tree" announced over a native tree that is still scoped, and
+      // the DOM scope gone when the user switches back.
+      if (
+        message.type === "FOCUS_CHANGED" &&
+        focusTrackerOnRef.current &&
+        producerRef.current === "native"
+      ) {
+        const numbered = nativePageKeys.current;
+        const nodeId = numbered
+          ? nativeRowForPageFocus(
+              message.payload.pageKeys,
+              numbered.readId,
+              numbered.rows,
+            )
+          : undefined;
+        if (nodeId !== undefined) {
+          setNativePageFocus((prev) => ({
+            nodeId,
+            nonce: (prev?.nonce ?? 0) + 1,
+          }));
+        }
+      }
+      if (
+        message.type === "FOCUS_CHANGED" &&
+        focusTrackerOnRef.current &&
+        producerRef.current === "dom" &&
+        message.payload.nodeId !== undefined
+      ) {
         const nodeId = message.payload.nodeId;
         setSelectedId(nodeId);
 
@@ -1963,11 +2035,15 @@ export function App() {
             : "reading native tree…",
         );
       }
+      // Numbered for Focus sync only while it is on: it costs the read a walk
+      // of the whole page, twice.
+      const numbered = focusTrackerOnRef.current;
       try {
         const r = (await chrome.runtime.sendMessage({
           type: "NATIVE_READ",
           tabId,
           ...(auto ? { auto: true } : {}),
+          ...(numbered ? { pageKeys: true } : {}),
         })) as {
           ok?: boolean;
           error?: string;
@@ -1976,6 +2052,7 @@ export function App() {
           rootId?: string;
           url?: string;
           documentId?: string;
+          pageKeysReadId?: string;
         };
         if (token !== nativeOpToken.current) return false; // tab switched mid-flight
         if (!r?.ok) {
@@ -1995,6 +2072,7 @@ export function App() {
           }
           setNativeNodes(new Map());
           setNativeRootId("");
+          nativePageKeys.current = undefined;
           if (r?.reason) {
             setNativeCapability(blockedBy(r.reason));
             lastNativeFailure.current = explainUnavailable(r.reason);
@@ -2014,6 +2092,17 @@ export function App() {
         setNativeNodes(read);
         // Ahead of the render, for a caller that looks at what it just read.
         nativeNodesRef.current = read;
+        // A read that didn't number the page leaves this tree unfollowed:
+        // the numbers from an earlier read name rows of an earlier tree.
+        nativePageKeys.current =
+          r.pageKeysReadId !== undefined
+            ? { readId: r.pageKeysReadId, rows: nativeRowsByPageKey(read) }
+            : undefined;
+        // Focus sync was turned on while this read was under way: number the
+        // tree now, once this read has let go of the in-flight guard.
+        if (!numbered && focusTrackerOnRef.current) {
+          setTimeout(() => numberNativeTree.current(), 0);
+        }
         setNativeRootId(r.rootId ?? "");
         setNativeTreeTabId(tabId);
         setNativeEverRead(true);
@@ -2062,6 +2151,27 @@ export function App() {
     },
     [nativeModeEnabled, loadNativeTreeCore, waitForAutoRead],
   );
+
+  // Chrome's tree is numbered for Focus sync only while it is on, so a tree
+  // read with it off has nothing to follow focus by: once it is on, read the
+  // tree again. Automatically, as auto-refresh does: it keeps the tree on
+  // screen if it fails, shows no busy state, and doesn't attach over the
+  // user's Cancel on Chrome's bar. While another read is under way it waits:
+  // that read's reply calls this again if it wasn't numbered.
+  numberNativeTree.current = () => {
+    const tabId = myTabIdRef.current;
+    if (
+      tabId === null ||
+      !focusTrackerOnRef.current ||
+      producerRef.current !== "native" ||
+      nativeNodesRef.current.size === 0 ||
+      nativePageKeys.current !== undefined ||
+      nativeInFlight.current
+    ) {
+      return;
+    }
+    void loadNativeTree(tabId, { auto: true });
+  };
 
   // Re-pointed every render so the timer always decides with the current
   // `loadNativeTree` and mode; everything else it reads is a ref.
@@ -2348,6 +2458,7 @@ export function App() {
         if (token !== nativeOpToken.current) return; // invalidated during the lookup
         if (nativeTreeUrl && nowUrl && nowUrl !== nativeTreeUrl) {
           setNativeNodes(new Map());
+          nativePageKeys.current = undefined;
           setNativeRootId("");
           setNativeTreeTabId(undefined);
           setNativeTreeUrl(undefined);
@@ -2613,10 +2724,14 @@ export function App() {
   const toggleFocusTracker = useCallback(() => {
     const next = !focusTrackerOn;
     setFocusTrackerOn(next);
+    // Ahead of the render, for `numberNativeTree` below and the read it
+    // sends to see it.
+    focusTrackerOnRef.current = next;
     sendToBoundTab({
       type: "SET_FOCUS_TRACKER",
       payload: { enabled: next },
     });
+    if (next) numberNativeTree.current();
   }, [focusTrackerOn, sendToBoundTab]);
 
   // Picker mode toggle. DOM: tells the content script to install / remove
@@ -3570,20 +3685,18 @@ export function App() {
           {curtainOn ? "Curtain ON" : "Curtain"}
         </button>
 
-        {producer === "dom" && (
-          <button
-            class="sn-focus-tracker-btn"
-            aria-pressed={focusTrackerOn}
-            onClick={toggleFocusTracker}
-            title={
-              focusTrackerOn
-                ? "Focus sync ON — click to disable (useful on focus-heavy pages)"
-                : "Focus sync OFF — click to enable"
-            }
-          >
-            {focusTrackerOn ? "Focus sync" : "Focus OFF"}
-          </button>
-        )}
+        <button
+          class="sn-focus-tracker-btn"
+          aria-pressed={focusTrackerOn}
+          onClick={toggleFocusTracker}
+          title={
+            focusTrackerOn
+              ? "Focus sync ON — click to disable (useful on focus-heavy pages)"
+              : "Focus sync OFF — click to enable"
+          }
+        >
+          {focusTrackerOn ? "Focus sync" : "Focus OFF"}
+        </button>
 
         {producer === "dom" && (
           <button
@@ -3742,6 +3855,7 @@ export function App() {
           }}
           onActivate={handleNativeActivate}
           reveal={nativePickReveal}
+          pageFocus={nativePageFocus}
           onRevealMiss={() =>
             announce(
               "The picked element isn't in this tree — refresh the native tree, then pick again.",

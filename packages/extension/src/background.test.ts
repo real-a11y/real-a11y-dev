@@ -849,3 +849,126 @@ describe("background: top-frame navigation tells the panel its tree is stale", (
     );
   });
 });
+
+describe("background: page focus forwarded to the panel", () => {
+  let h: Harness;
+
+  beforeEach(async () => {
+    vi.useFakeTimers();
+    vi.resetModules();
+    h = makeHarness();
+    (globalThis as { chrome?: unknown }).chrome = h.chromeMock;
+    await import("./background.js");
+    await vi.runAllTimersAsync();
+    h.panelMessages.length = 0;
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    delete (globalThis as { chrome?: unknown }).chrome;
+  });
+
+  /** Report focus as frame `frameId`'s content script does. */
+  function reportFocus(frameId: number, payload: object) {
+    for (const fn of h.messageListeners) {
+      fn(
+        { type: "FOCUS_CHANGED", payload },
+        { id: EXTENSION_ID, tab: { id: TAB_ID }, frameId },
+        () => {},
+      );
+    }
+  }
+
+  const forwarded = () =>
+    h.panelMessages.filter((m) => m.type === "FOCUS_CHANGED");
+
+  it("passes the top frame's page keys on with its node", () => {
+    const pageKeys = { "read-1": [7, 2, 0] };
+    reportFocus(0, { nodeId: "n3", pageKeys });
+    reportFocus(0, { pageKeys });
+    expect(forwarded()).toEqual([
+      {
+        type: "FOCUS_CHANGED",
+        tabId: TAB_ID,
+        payload: { nodeId: "n3", pageKeys },
+      },
+      { type: "FOCUS_CHANGED", tabId: TAB_ID, payload: { pageKeys } },
+    ]);
+  });
+
+  it("keeps a subframe's node, frame-prefixed, and drops any page keys it sends", () => {
+    reportFocus(2, { nodeId: "n3", pageKeys: { "read-1": [7] } });
+    expect(forwarded()).toEqual([
+      { type: "FOCUS_CHANGED", tabId: TAB_ID, payload: { nodeId: "f2-n3" } },
+    ]);
+  });
+});
+
+describe("background: the Focus sync toggle, through page updates", () => {
+  let h: Harness;
+
+  beforeEach(async () => {
+    vi.useFakeTimers();
+    vi.resetModules();
+    h = makeHarness();
+    (globalThis as { chrome?: unknown }).chrome = h.chromeMock;
+    await import("./background.js");
+    await vi.runAllTimersAsync();
+    connectPanel(h);
+    await vi.runAllTimersAsync();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    delete (globalThis as { chrome?: unknown }).chrome;
+  });
+
+  /** The panel sets Focus sync for the tab it is bound to. */
+  function setFocusSync(enabled: boolean) {
+    for (const fn of h.messageListeners) {
+      fn(
+        { type: "SET_FOCUS_TRACKER", tabId: TAB_ID, payload: { enabled } },
+        { id: EXTENSION_ID },
+        () => {},
+      );
+    }
+  }
+
+  /** What the frames were last told about the tracker, frame by frame. */
+  function trackerSentSince(from: number): Array<boolean | undefined> {
+    return sentSince(h, from, "SET_FOCUS_TRACKER").map(
+      (m) => (m.body.payload as { enabled?: boolean }).enabled,
+    );
+  }
+
+  it("keeps a tracker the panel turned off off when the page updates its tree", async () => {
+    setFocusSync(false);
+    await vi.runAllTimersAsync();
+    const from = h.tabMessages.length;
+    announce(h, 0);
+    for (const fn of h.messageListeners) {
+      fn(
+        { type: "FRAME_HELLO" },
+        { id: EXTENSION_ID, tab: { id: TAB_ID }, frameId: 1 },
+        () => {},
+      );
+    }
+    await vi.runAllTimersAsync();
+    // Every frame that announced (the merge asks the others to, too).
+    const sent = trackerSentSince(from);
+    expect(sent.length).toBeGreaterThanOrEqual(2);
+    expect(new Set(sent)).toEqual(new Set([false]));
+  });
+
+  it("turns it back on once the panel does", async () => {
+    setFocusSync(false);
+    setFocusSync(true);
+    await vi.runAllTimersAsync();
+    const from = h.tabMessages.length;
+    announce(h, 0);
+    await vi.runAllTimersAsync();
+    const sent = trackerSentSince(from);
+    expect(sent.length).toBeGreaterThanOrEqual(1);
+    expect(new Set(sent)).toEqual(new Set([true]));
+  });
+});

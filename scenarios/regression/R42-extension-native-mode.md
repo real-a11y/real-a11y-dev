@@ -8,7 +8,7 @@ priority: P0
 status: Active
 validFrom: "extension ≥ the first release after 0.1.15. Native mode is in the `Unreleased` section of packages/extension/CHANGELOG.md until then; on 0.1.15 or earlier there is no native mode, so this row is Blocked, not Fail. Load unpacked from packages/extension/dist"
 validUntil: ""
-expected: "a fresh profile reads the native tree with nothing asked, and Chrome's bar names the extension; a note explains the bar once; Settings holds the choice of tree, leaving the toolbar at most one DOM button; Turn off and Settings turn native mode off, and nothing attaches while it is off; the setting survives reopening the panel and restarting Chrome; Cancel on the bar is respected; a change in one window holds in every window"
+expected: "a fresh profile reads the native tree with nothing asked, and Chrome's bar names the extension; a note explains the bar once; Settings holds the choice of tree, leaving the toolbar at most one DOM button; Turn off and Settings turn native mode off, and nothing attaches while it is off; the setting survives reopening the panel and restarting Chrome; Cancel on the bar is respected; a change in one window holds in every window; page focus selects its row in Chrome's tree without the bar"
 twin: D6
 notion: ""
 ---
@@ -85,6 +85,15 @@ load it again** before step 1, step 9 and step 10.
     is in Settings again, but nothing is read there until you choose **Chrome's
     tree** in its **Settings ▾**.
 
+**Focus sync**
+
+13. On **Chrome's tree**, click into the page and press `Tab` a few times: each
+    press selects the focused element's row, opening the rows above it and
+    scrolling to it, and Chrome's bar doesn't appear for it. Press **Focus sync**
+    in the toolbar, which then reads **Focus OFF**, and press `Tab` on the page
+    again: the selection stays where it was. Press it once more, and `Tab` is
+    followed again.
+
 ## Expected
 
 - **The native tree with nothing asked** (step 1), and Chrome's bar names the
@@ -104,6 +113,8 @@ load it again** before step 1, step 9 and step 10.
   bar is, not only the buttons
 - **A change in one window holds in every window** (steps 11–12), and nothing reads
   natively in a window where nobody pressed anything
+- **Page focus selects its row in Chrome's tree** (step 13) with no bar, and
+  **Focus OFF** stops it
 
 ## Why this exists
 

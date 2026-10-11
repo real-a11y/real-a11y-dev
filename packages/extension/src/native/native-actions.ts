@@ -53,6 +53,10 @@ export type NativeNode = {
    *  unclassified); false only for a field classified as not sensitive.
    *  Absent counts as withheld — see `pickerCurrentOption`. */
   valueWithheld?: boolean;
+  /** Its element's number in the read's walk of the page, which the content
+   *  script reports focus by (`page-keys.ts`). Only on a row of the top
+   *  document, and only when the read numbered the page. */
+  pageKey?: number;
 };
 
 /**

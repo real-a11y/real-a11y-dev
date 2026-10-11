@@ -324,6 +324,13 @@ function dispatchPlan(plan: PlannedTabMessage[]) {
 // avoiding the race where the panel's one-shot SET_FOCUS_TRACKER on mount
 // arrives before the content script is listening.
 let sidepanelConnected = false;
+// The tabs whose panel has Focus sync off: the last SET_FOCUS_TRACKER a panel
+// sent for each. The re-assert above sends this state, not always "on" — a
+// page updates its tree after every burst of changes, which would otherwise
+// turn a tracker the user switched off back on at once. Cleared with the last
+// panel, whose disconnect turns every tracker off; a panel that connects
+// sends its own state.
+const focusTrackerOffTabs = new Set<number>();
 // The connected side-panel ports. Chrome renders one side panel PER WINDOW, so
 // there can be several at once — ref-counted here so the disconnect teardown
 // runs only when the LAST panel closes (the panel-driven state below is global).
@@ -371,6 +378,7 @@ chrome.runtime.onConnect.addListener((port) => {
     // must NOT stop observing or lift the curtain on that other window.
     if (sidepanelPorts.size > 0) return;
     sidepanelConnected = false;
+    focusTrackerOffTabs.clear();
     cancelNativePicks();
 
     // The panel arms the focus tracker (and observer) on any tab whose frames
@@ -525,6 +533,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           isNewTopFrame,
           sidepanelConnected,
           curtainOn: !!tabCurtainOn.get(tabId),
+          focusTracker: !focusTrackerOffTabs.has(tabId),
         });
         dispatchPlan(plan);
 
@@ -536,20 +545,34 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         // A frame just loaded and announced itself WITHOUT extracting. If a
         // panel is connected for the tab, tell it to start observing (and
         // enable the focus tracker). Otherwise do nothing — no extraction.
-        dispatchPlan(planFrameHello({ tabId, frameId, sidepanelConnected }));
+        dispatchPlan(
+          planFrameHello({
+            tabId,
+            frameId,
+            sidepanelConnected,
+            focusTracker: !focusTrackerOffTabs.has(tabId),
+          }),
+        );
         sendResponse({ received: true });
         return false;
       }
 
       case "FOCUS_CHANGED": {
         // Prefix the nodeId and forward to side panel. Stamp `tabId` so
-        // the panel can drop focus events for tabs it isn't bound to.
-        const prefixedNodeId = prefixNodeId(frameId, message.payload.nodeId);
+        // the panel can drop focus events for tabs it isn't bound to. The
+        // native tree's page keys are the top frame's alone: only that frame
+        // is numbered (`NATIVE_PAGE_KEYS`).
+        const { nodeId, pageKeys } = message.payload;
         chrome.runtime
           .sendMessage({
             type: "FOCUS_CHANGED",
             tabId,
-            payload: { nodeId: prefixedNodeId },
+            payload: {
+              ...(nodeId !== undefined
+                ? { nodeId: prefixNodeId(frameId, nodeId) }
+                : {}),
+              ...(frameId === 0 && pageKeys !== undefined ? { pageKeys } : {}),
+            },
           })
           .catch((err) => {
             // Panel may be closed; benign, but log so real routing bugs aren't invisible.
@@ -634,6 +657,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     // in one place also means neither route can be left silently not
     // answering, which would hang the panel on an open message channel.
     const broadcast = (tabId: number) => {
+      if (message.type === "SET_FOCUS_TRACKER") {
+        if (message.payload.enabled) focusTrackerOffTabs.delete(tabId);
+        else focusTrackerOffTabs.add(tabId);
+      }
       // Clear old frame data on fresh request
       if (message.type === "REQUEST_TREE") {
         clearTabFrames(getTabState(tabId));
@@ -896,6 +923,7 @@ chrome.tabs.onRemoved.addListener((tabId) => {
   disposeTabState(tabStates, tabId);
   tabCurtainOn.delete(tabId);
   panelTreeRequests.delete(tabId);
+  focusTrackerOffTabs.delete(tabId);
 });
 
 // Set side panel behavior
