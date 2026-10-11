@@ -32,7 +32,7 @@ import { readFile } from "node:fs/promises";
 import { mkdtemp, rm } from "node:fs/promises";
 import { createServer, type Server } from "node:http";
 import { tmpdir } from "node:os";
-import { extname, join, normalize, resolve } from "node:path";
+import { extname, join, posix, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
@@ -146,7 +146,10 @@ async function startFixtureServer(): Promise<{
   const server = createServer((req, res) => {
     // `normalize` collapses `..` before the join, so a fixture URL can never
     // escape the fixture directory even though this only ever serves tests.
-    const path = normalize(new URL(req.url ?? "/", "http://x").pathname);
+    // The POSIX one, as a URL's path is POSIX on every platform: Windows'
+    // own turns `/no-content` into `\no-content`, which matches neither
+    // route below, and a navigation meant never to commit loads a 404.
+    const path = posix.normalize(new URL(req.url ?? "/", "http://x").pathname);
     // A navigation that never commits: Chromium starts it (the extension
     // hears `onBeforeNavigate`), gets No Content, and stays on the page.
     if (path === "/no-content") {
@@ -158,7 +161,7 @@ async function startFixtureServer(): Promise<{
     // that fixture after N ms, while the page it leaves is still showing.
     if (path === "/slow") {
       const query = new URL(req.url ?? "/", "http://x").searchParams;
-      const to = normalize(`/${query.get("to") ?? ""}`);
+      const to = posix.normalize(`/${query.get("to") ?? ""}`);
       setTimeout(
         () =>
           void readFile(join(FIXTURE_DIR, to))
