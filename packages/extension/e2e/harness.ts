@@ -79,6 +79,8 @@ export type NativeAction =
  */
 export interface DomNode {
   id: string;
+  parentId?: string | null;
+  childIds?: string[];
   dom?: { tagName: string; attributes?: Record<string, string> };
   a11y?: { role: string; name: string };
 }

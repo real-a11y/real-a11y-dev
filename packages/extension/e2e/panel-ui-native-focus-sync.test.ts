@@ -24,7 +24,7 @@ function selected(nav: NativeHarness) {
   return nav.nativeTree().locator('[role="treeitem"][aria-selected="true"]');
 }
 
-test("a native read numbers the page's rows, and not those of a frame no content script runs in", async ({
+test("a native read numbers the page's rows, and those of its srcdoc frame, by a walk of its own", async ({
   nav,
 }) => {
   const { tabId } = await nav.open(FIXTURE);
@@ -44,17 +44,18 @@ test("a native read numbers the page's rows, and not those of a frame no content
   ]) {
     expect(pageKey(name), name).toEqual(expect.any(Number));
   }
-  // A `srcdoc` frame's document is walked by no content script, so nothing
-  // numbers it, though its rows are in the tree.
-  expect(
-    result.nodes!.some(
-      (n) => n.role === "button" && n.name === "Inside the frame",
-    ),
-  ).toBe(true);
-  expect(pageKey("Inside the frame")).toBeUndefined();
-  expect(
-    result.nodes!.find((n) => n.role === "Iframe")?.embedsPageFrame,
-  ).toBeUndefined();
+  // The `srcdoc` frame's document is no part of the page's walk: the
+  // content script in the frame numbers it, from 0, under the frame.
+  // `blank-frames.test.ts` has the rest about such frames.
+  const inner = result.nodes!.find(
+    (n) => n.role === "button" && n.name === "Inside the frame",
+  );
+  expect(inner?.pageKey).toEqual(expect.any(Number));
+  expect(inner?.pageKey).toBeLessThan(pageKey("Alpha")!);
+  const frame = result.nodes!.find((n) => n.role === "Iframe")?.embedsPageFrame;
+  expect(frame).toEqual(expect.any(Number));
+  expect(frame).not.toBe(0);
+  expect(inner?.pageFrame).toBe(frame);
 });
 
 test("focus moving on the page selects its row, with nothing read or done on the page", async ({

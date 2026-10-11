@@ -289,8 +289,15 @@ test("a read numbers each frame's document on its own, and marks the row that sh
   )!;
   expect(outer.pageKey).toEqual(expect.any(Number));
   expect(outer.pageFrame).toBeUndefined();
-  // No content script runs in an about:blank frame to number it.
-  expect(frameRow("Empty frame").embedsPageFrame).toBeUndefined();
+  // The content script runs in an about:blank frame too: an empty one has
+  // a document of its own, numbered under a frame of its own.
+  const empty = frameRow("Empty frame").embedsPageFrame;
+  expect(empty).toEqual(expect.any(Number));
+  expect([
+    0,
+    same!.row.embedsPageFrame,
+    cross!.row.embedsPageFrame,
+  ]).not.toContain(empty);
 });
 
 test("focus inside either frame selects that frame's row, with nothing read or done on the page", async ({

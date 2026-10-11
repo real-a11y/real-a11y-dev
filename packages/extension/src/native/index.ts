@@ -180,9 +180,14 @@ const FRAME_GRACE_MS = 250;
  *  and the frames the read put in the tree come before the rest. */
 const MAX_NUMBERED_FRAMES = 32;
 
-/** The schemes the content script runs in: the manifest's `<all_urls>`, with
- *  no `match_about_blank`. A frame showing anything else has none to ask. */
-const NUMBERED_SCHEMES = new Set(["http:", "https:", "file:"]);
+/**
+ * The schemes of the frames the content script runs in: the manifest's
+ * `<all_urls>`, and with its `match_about_blank` the `about:blank` and
+ * `srcdoc` frames of a page it runs in. Some `about:` frame has none all the
+ * same (a sandboxed one, whose origin is its own), and answers nothing. A
+ * frame showing anything else (`data:`, `blob:`) has none to ask.
+ */
+const NUMBERED_SCHEMES = new Set(["http:", "https:", "file:", "about:"]);
 
 function schemeOf(url: string): string {
   try {
@@ -195,12 +200,12 @@ function schemeOf(url: string): string {
 /**
  * Ask the content script in every frame of the tab to number its own
  * document for read `readId` (see `page-keys.ts`), and answer with what the
- * frames answered: each one's digest and its document's URL, which its
- * document is matched to CDP's by, and the URL of each frame that gave none.
- * A frame with no content script to ask (an `about:blank` frame, an error
- * page, one orphaned by an extension reload), or one that didn't answer in
- * time, goes unnumbered, and the native tree doesn't follow focus inside it
- * until a read that numbers it.
+ * frames answered: each one's digest, and its mark and its document's URL,
+ * which its document is matched to CDP's by, and the URL of each frame that
+ * gave none. A frame with no content script to ask (a sandboxed or `data:`
+ * frame, an error page, one orphaned by an extension reload), or one that
+ * didn't answer in time, goes unnumbered, and the native tree doesn't follow
+ * focus inside it until a read that numbers it.
  */
 async function numberFrames(
   tabId: number,
@@ -214,7 +219,7 @@ async function numberFrames(
       if (!settled) timers.push(setTimeout(resolve, ms, undefined));
     });
   const timeout = after(PAGE_KEYS_TIMEOUT_MS);
-  const ask = (frameId: number, until: Promise<undefined>) =>
+  const ask = (frameId: number, until: Promise<undefined>, blank = false) =>
     Promise.race([
       chrome.tabs
         .sendMessage(
@@ -223,7 +228,10 @@ async function numberFrames(
           { frameId },
         )
         .then(
-          (reply: unknown) => asFramePageKeyDigest(reply, frameId),
+          (reply: unknown) => {
+            const answer = asFramePageKeyDigest(reply, frameId);
+            return answer && blank ? { ...answer, blank } : answer;
+          },
           () => undefined,
         ),
       until,
@@ -249,18 +257,27 @@ async function numberFrames(
         !f.errorOccurred,
     );
     // The frames the read put in the tree first: the rest (hidden ones, ones
-    // past what a read follows) have no rows to follow focus to.
+    // past what a read follows) have no rows to follow focus to. A frame
+    // with no URL of its own can't be told to be in the tree by it: every
+    // `about:blank` frame shares one, and CDP has a frame a script wrote
+    // into at the URL of the document that wrote it. So those come after
+    // the frames known to be in the tree, which none of them can crowd out,
+    // and ahead of the ones known not to be.
     const inTree = new Set(frameUrls.map(withoutFragment));
+    const isInTree = (f: { url: string }) => inTree.has(withoutFragment(f.url));
+    const isBlank = (f: { url: string }) => schemeOf(f.url) === "about:";
     const askable = shown.filter((f) => NUMBERED_SCHEMES.has(schemeOf(f.url)));
     const asked = [
-      ...askable.filter((f) => inTree.has(withoutFragment(f.url))),
-      ...askable.filter((f) => !inTree.has(withoutFragment(f.url))),
+      ...askable.filter((f) => !isBlank(f) && isInTree(f)),
+      ...askable.filter((f) => isBlank(f) && isInTree(f)),
+      ...askable.filter((f) => isBlank(f) && !isInTree(f)),
+      ...askable.filter((f) => !isBlank(f) && !isInTree(f)),
     ].slice(0, MAX_NUMBERED_FRAMES - 1);
     const until = Promise.race([timeout, grace]);
     const answers = await Promise.all([
       top,
       ...asked.map((f) =>
-        ask(f.frameId, inTree.has(withoutFragment(f.url)) ? timeout : until),
+        ask(f.frameId, isInTree(f) ? timeout : until, isBlank(f)),
       ),
     ]);
     const answered = answers.filter(

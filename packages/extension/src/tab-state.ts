@@ -36,6 +36,14 @@ export interface TabState {
    * subframe (an animating ad) must not prompt it.
    */
   topFrameChanged: boolean;
+  /**
+   * The frames a merge couldn't place, each with the mark it had, since when,
+   * and whether its place has been asked after (see the background's
+   * `askForFramePlaces`). A frame is asked after once per mark: an element
+   * the tree of the document around it leaves out would otherwise be asked
+   * for on every merge.
+   */
+  askedPlaces: Map<number, { mark: string; since: number; asked: boolean }>;
 }
 
 export function createTabState(): TabState {
@@ -46,6 +54,7 @@ export function createTabState(): TabState {
     recoveryChecked: false,
     droppedFrames: new Set(),
     topFrameChanged: false,
+    askedPlaces: new Map(),
   };
 }
 
@@ -111,6 +120,7 @@ export function clearTabFrames(state: TabState): void {
   // Everything is dropped, so nothing is individually "dropped" any more —
   // the whole-map case is handled by the `frames.has(0)` guard in the merge.
   state.droppedFrames.clear();
+  state.askedPlaces.clear();
 }
 
 /**
@@ -128,6 +138,7 @@ export function removeFrame(
 ): { shouldRemerge: boolean } {
   state.frames.delete(frameId);
   state.droppedFrames.add(frameId);
+  state.askedPlaces.delete(frameId);
   return { shouldRemerge: state.frames.size > 0 };
 }
 

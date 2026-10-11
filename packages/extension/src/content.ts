@@ -13,9 +13,20 @@ import {
   safeNodeType,
   safeParentElement,
 } from "@real-a11y-dev/core";
-import type { TreeViewMode, TreeChange } from "@real-a11y-dev/core";
+import type {
+  SemanticNode,
+  TreeViewMode,
+  TreeChange,
+} from "@real-a11y-dev/core";
 
 import { computeFieldState } from "./field-state.js";
+import {
+  frameOwnerMark,
+  isFrameHolder,
+  markFrameOwner,
+  newFrameMark,
+  unmarkFrameOwner,
+} from "./frame-owner.js";
 import {
   liveDocumentElement,
   liveDocumentURL,
@@ -50,14 +61,34 @@ function liveMode(): "dom" | "a11y" {
   return currentViewMode === "dom" ? "dom" : "a11y";
 }
 
-function getLiveExtractor(): LiveTreeExtractor {
-  if (!liveExtractor) {
-    liveExtractor = new LiveTreeExtractor(document.documentElement, {
-      mode: liveMode(),
-    });
+/** The extractor over the document's root element, or null while the
+ *  document has none: one a script emptied (`document.open()`) and hasn't
+ *  written to yet. */
+function getLiveExtractor(): LiveTreeExtractor | null {
+  if (!liveExtractor && boundRoot) {
+    liveExtractor = new LiveTreeExtractor(boundRoot, { mode: liveMode() });
   }
   return liveExtractor;
 }
+
+// This frame's mark on the element holding it (see frame-owner.ts), which is
+// how both trees know which <iframe> this frame's document belongs under
+// when its URL can't say: an `about:blank` or `srcdoc` frame, or one a
+// script wrote into. None for the top frame.
+const frameMark = isSubFrame ? newFrameMark() : null;
+
+/** Leave this frame's mark, and answer with it: undefined for the top frame,
+ *  and for a frame of another origin than its parent's, which can't reach
+ *  the element. Left again with everything that reports it, over whatever
+ *  an earlier document in the frame left behind. */
+function ownFrameMark(): string | undefined {
+  return frameMark !== null && markFrameOwner(window, frameMark)
+    ? frameMark
+    : undefined;
+}
+// At load, so the walk of the document around this frame finds it whichever
+// of the two is asked first.
+ownFrameMark();
 // The focus tracker exists to inform the side panel of real-DOM focus changes.
 // Starts OFF — the panel turns it on via SET_FOCUS_TRACKER when it connects,
 // and the background turns it off when the panel disconnects. Without this
@@ -89,7 +120,8 @@ const focusManager = new FocusManager(elementRefs);
 // The native reads' numberings of this frame's document, which focus is
 // reported by for the native tree: see native/page-keys.ts. Every frame
 // numbers its own. `chrome.dom.openOrClosedShadowRoot` is how the walk sees
-// a closed shadow root, as the read's CDP walk does.
+// a closed shadow root, as the read's CDP walk does. The walk also reports
+// the frames inside this document that marked their <iframe>.
 const pageKeys = new PageKeySnapshots(
   livePageKeyWalker(
     chrome.dom?.openOrClosedShadowRoot
@@ -97,6 +129,7 @@ const pageKeys = new PageKeySnapshots(
       : undefined,
   ),
   renderingParent,
+  frameOwnerMark,
 );
 let liveObserver: MutationObserver | null = null;
 // Whether live tree observation is armed. Starts OFF — deferred until the
@@ -157,8 +190,9 @@ let tornDown = false;
 function teardown(): void {
   if (tornDown) return;
   tornDown = true;
-  observer.stop();
+  observer?.stop();
   liveObserver?.disconnect();
+  documentObserver.disconnect();
   // Drop the picker listeners and restore the cursor so the page stops
   // showing crosshair after the extension is reloaded / orphaned.
   picker.teardown();
@@ -167,6 +201,8 @@ function teardown(): void {
 /** Extract tree and send to background as per-frame data */
 function sendTree(change?: TreeChange) {
   const extractor = getLiveExtractor();
+  // No root element to read: the next one to appear sends the tree.
+  if (!extractor) return;
   const mode = liveMode();
   if (extractor.mode !== mode) {
     extractor.setMode(mode);
@@ -175,6 +211,8 @@ function sendTree(change?: TreeChange) {
   const result = change ? extractor.refresh(change) : extractor.extract();
 
   const serialized = Array.from(result.nodes.entries());
+  const owner = ownFrameMark();
+  const embeds = markedFrames(serialized);
 
   safeSendMessage({
     type: "FRAME_TREE_DATA",
@@ -183,14 +221,43 @@ function sendTree(change?: TreeChange) {
       pageTitle: document.title,
       nodes: serialized,
       rootId: result.rootId,
+      ...(owner !== undefined ? { owner } : {}),
+      ...(embeds.length > 0 ? { embeds } : {}),
     },
   });
 }
 
+/** The tree's nodes for elements that hold a frame whose script marked
+ *  them, each with the mark: where the service worker puts that frame's
+ *  tree (see frame-owner.ts). */
+function markedFrames(
+  nodes: ReadonlyArray<[string, SemanticNode]>,
+): Array<[nodeId: string, owner: string]> {
+  const out: Array<[string, string]> = [];
+  for (const [nodeId, node] of nodes) {
+    const tagName = node.dom?.tagName;
+    if (!tagName || !isFrameHolder(tagName.toLowerCase())) continue;
+    const element = elementRefs.get(nodeId);
+    const mark = element ? frameOwnerMark(element) : undefined;
+    if (mark !== undefined) out.push([nodeId, mark]);
+  }
+  return out;
+}
+
+/** The document's root element the script is bound to: what the tree is
+ *  read from and watched under. See `rebindDocument`. */
+let boundRoot: Element | null = liveDocumentElement(document);
+
 /** Set up DOM observer for live updates */
-const observer = new DomObserver(document.documentElement, (change) => {
-  sendTree(change);
-});
+function observerOf(root: Element | null): DomObserver | null {
+  return root ? new DomObserver(root, (change) => sendTree(change)) : null;
+}
+let observer = observerOf(boundRoot);
+// Hears the root element change: see `rebindDocument`. The document's own
+// children change only then (or when a comment or doctype beside the root
+// does), so this costs nothing on a page that never replaces its document.
+const documentObserver = new MutationObserver(() => rebindDocument());
+documentObserver.observe(document, { childList: true });
 
 // ─── Element picker (DevTools-style "select an element in the page") ─────────
 //
@@ -338,17 +405,21 @@ chrome.runtime.onMessage.addListener(
 
       case "NATIVE_PAGE_KEYS": {
         // A native read numbering the page: the service worker asks every
-        // frame, and each numbers its own document. The digest goes back,
-        // with the document's URL, for the read to find this document among
-        // CDP's and compare its numbering with its own; the numbering stays
-        // here for the focus reports below, which also need to hear moves
-        // inside the shadow root focus is in now.
+        // frame, and each numbers its own document. The digest goes back
+        // for the read to compare the numbering with its own, with what it
+        // finds this document among CDP's by: this frame's mark on its
+        // <iframe> and those of the frames inside this document, and the
+        // document's URL. The numbering stays here for the focus reports
+        // below, which also need to hear moves inside the shadow root focus
+        // is in now.
         const root = liveDocumentElement(document);
+        const owner = ownFrameMark();
         sendResponse(
           root
             ? {
                 ...pageKeys.take(message.payload.readId, root),
                 url: liveDocumentURL(document),
+                ...(owner !== undefined ? { owner } : {}),
               }
             : null,
         );
@@ -454,8 +525,12 @@ chrome.runtime.onMessage.addListener(
         // policy as the panel's Tab Sequence view.
         const target = document.activeElement || document.body;
         sendKey(target, message.payload, {
-          resolveTabSequence: () =>
-            elementsFromTabSequence(getLiveExtractor().extract(), elementRefs),
+          resolveTabSequence: () => {
+            const extractor = getLiveExtractor();
+            return extractor
+              ? elementsFromTabSequence(extractor.extract(), elementRefs)
+              : [];
+          },
         });
         sendResponse({ success: true });
         setTimeout(() => sendTree(), 200);
@@ -467,8 +542,9 @@ chrome.runtime.onMessage.addListener(
   },
 );
 
-// Reverse focus sync: page focus → tree selection
-document.addEventListener("focusin", (e) => onFocusIn(e, true));
+// Reverse focus sync: page focus → tree selection. Added by
+// `listenToDocument`, as every listener on the document or its window is.
+const onDocumentFocusIn = (e: Event) => onFocusIn(e, true);
 
 /**
  * Report a focus change to the panel. `atDocument` is false for one heard on
@@ -660,16 +736,8 @@ function highlightFromNativeEvent(e: Event, kind: "reveal" | "preview"): void {
     focusManager.highlightElement(nodeId, { scroll: kind === "reveal" });
   }
 }
-document.addEventListener(
-  "real-a11y:native-reveal",
-  (e) => highlightFromNativeEvent(e, "reveal"),
-  true,
-);
-document.addEventListener(
-  "real-a11y:native-preview",
-  (e) => highlightFromNativeEvent(e, "preview"),
-  true,
-);
+const onNativeReveal = (e: Event) => highlightFromNativeEvent(e, "reveal");
+const onNativePreview = (e: Event) => highlightFromNativeEvent(e, "preview");
 
 // ---- Live region observer (top frame only) ----
 
@@ -806,14 +874,8 @@ if (!isSubFrame) {
 function startObserving() {
   if (observingEnabled) return;
   observingEnabled = true;
-  observer.start();
-  liveObserver?.observe(document.body, {
-    childList: true,
-    subtree: true,
-    characterData: true,
-    attributes: true,
-    attributeFilter: LIVE_REGION_ATTRIBUTES,
-  });
+  observer?.start();
+  observeLiveRegions();
   // Emit the current tree the moment we arm. On panel open the panel also
   // drives this via REQUEST_TREE, but a bfcache restore re-arms us through
   // FRAME_HELLO -> SET_OBSERVING(true) with no REQUEST_TREE and no mutation to
@@ -824,11 +886,24 @@ function startObserving() {
   sendTree();
 }
 
+/** Watch the document's body for live regions (top frame only). A document
+ *  with no body yet has none to watch. */
+function observeLiveRegions() {
+  if (!liveObserver || !document.body) return;
+  liveObserver.observe(document.body, {
+    childList: true,
+    subtree: true,
+    characterData: true,
+    attributes: true,
+    attributeFilter: LIVE_REGION_ATTRIBUTES,
+  });
+}
+
 /** Disarm observation when the panel disconnects. Idempotent. */
 function stopObserving() {
   if (!observingEnabled) return;
   observingEnabled = false;
-  observer.stop();
+  observer?.stop();
   liveObserver?.disconnect();
 }
 
@@ -848,8 +923,62 @@ function onNavigated() {
 // in every frame of every page the user visits.
 safeSendMessage({ type: "FRAME_HELLO" });
 
-window.addEventListener("popstate", onNavigated);
-window.addEventListener("hashchange", onNavigated);
+// ---- A document replaced under the script ----
+//
+// `document.open()` empties a document and builds another in its place, and
+// a script can swap the root element itself. Neither navigates the frame, so
+// no new script is injected and this one lives on, with nothing left of what
+// it hung on the old document: the root element the tree is read from and
+// watched under is detached, and `document.open()` also removes every
+// listener from the document and its window. A blank frame a page writes
+// into goes through exactly this, as often as not after this script has
+// loaded in it. So whenever the document's root element changes, the script
+// binds to the document again.
+
+/** A document leaving its frame takes its mark off the <iframe>: the next
+ *  one may be of another origin, and unable to put its own over it. Not one
+ *  going into the back/forward cache, which is still the frame's. */
+const onPageHide = (e: Event) => {
+  if (frameMark !== null && !(e as PageTransitionEvent).persisted) {
+    unmarkFrameOwner(window, frameMark);
+  }
+};
+
+/** Add the listeners on the document and its window. Adding one that is
+ *  already there does nothing, so this runs again as it is when only the
+ *  root element was swapped and no listener was lost. */
+function listenToDocument(): void {
+  document.addEventListener("focusin", onDocumentFocusIn);
+  document.addEventListener("real-a11y:native-reveal", onNativeReveal, true);
+  document.addEventListener("real-a11y:native-preview", onNativePreview, true);
+  window.addEventListener("popstate", onNavigated);
+  window.addEventListener("hashchange", onNavigated);
+  window.addEventListener("pageshow", onPageShow);
+  window.addEventListener("pagehide", onPageHide);
+}
+
+function rebindDocument(): void {
+  if (tornDown) return;
+  const root = liveDocumentElement(document);
+  if (root === boundRoot) return;
+  boundRoot = root;
+  listenToDocument();
+  // The tree is read from the new root, and watched under it.
+  liveExtractor = null;
+  observer?.stop();
+  observer = observerOf(root);
+  liveObserver?.disconnect();
+  // An armed picker lost its listeners with the rest: arm it again, which
+  // tells the panel nothing it doesn't know.
+  if (picker.isEnabled()) {
+    picker.teardown();
+    picker.setEnabled(true);
+  }
+  if (!observingEnabled) return;
+  observer?.start();
+  observeLiveRegions();
+  sendTree();
+}
 
 // Back/forward-cache restore. When the user navigates A → B and presses Back,
 // A is served from bfcache: no content-script re-injection, no mutations (so
@@ -866,6 +995,8 @@ window.addEventListener("hashchange", onNavigated);
 // `onNavigated` re-sends the tree immediately on restore; if the panel had
 // been closed on this page (observingEnabled=false), the `FRAME_HELLO` above
 // re-arms us when a panel is connected and `startObserving` emits the tree.
-window.addEventListener("pageshow", (e) => {
-  if (e.persisted) onNavigated();
-});
+const onPageShow = (e: Event) => {
+  if ((e as PageTransitionEvent).persisted) onNavigated();
+};
+
+listenToDocument();

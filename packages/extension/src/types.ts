@@ -37,6 +37,14 @@ export type FrameToBackground =
         pageTitle: string;
         nodes: Array<[string, SemanticNode]>;
         rootId: string;
+        /** The mark this frame's script left on the element holding the
+         *  frame (see `frame-owner.ts`): which <iframe> its tree goes under.
+         *  Absent for the top frame, and for a frame of another origin than
+         *  its parent's. */
+        owner?: string;
+        /** This tree's nodes for elements holding a frame that marked them,
+         *  each with the mark. */
+        embeds?: Array<[nodeId: string, owner: string]>;
       };
     }
   // Cheap "I'm here" announce sent at content-script load, carrying no tree.

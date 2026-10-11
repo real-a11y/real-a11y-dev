@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Blank frames fixture</title>
+  </head>
+  <body>
+    <h1>Blank frames</h1>
+
+    <!--
+      Frames a page makes with no URL of their own, which the content script
+      runs in under the manifest's `match_about_blank`:
+
+      - two `srcdoc` frames whose documents are alike, element for element.
+        Both show `about:srcdoc`, so nothing but the mark each frame's script
+        leaves on its <iframe> says which is which;
+      - a frame the page wrote into with `document.open()`, after the script
+        loaded in it: its document has this page's URL from then on, and
+        every listener the script had on it is gone;
+      - an empty one, with no content at all.
+
+      And one the script still doesn't run in: a sandboxed `srcdoc` frame,
+      whose origin is its own.
+    -->
+    <iframe
+      id="first"
+      title="First frame"
+      srcdoc="<button id='inner'>First button</button>"
+    ></iframe>
+    <iframe
+      id="second"
+      title="Second frame"
+      srcdoc="<button id='inner'>Second button</button>"
+    ></iframe>
+    <iframe id="written" title="Written frame"></iframe>
+    <iframe id="empty" title="Empty frame"></iframe>
+    <iframe
+      id="sandboxed"
+      title="Sandboxed frame"
+      sandbox
+      srcdoc="<button id='inner'>Sandboxed button</button>"
+    ></iframe>
+    <button id="outer">Outer button</button>
+    <div id="late"></div>
+
+    <script>
+      const write = (frame, html) => {
+        const doc = frame.contentDocument;
+        doc.open();
+        doc.write(html);
+        doc.close();
+      };
+      const button = (label) => `<button id="inner">${label}</button>`;
+      write(document.getElementById("written"), button("Written button"));
+
+      // Writes the frame's document over again, as an ad slot or an editor
+      // does: every element of it is new.
+      window.rewrite = (label) =>
+        write(
+          document.getElementById("written"),
+          `<p>Rewritten</p>${button(label)}`,
+        );
+
+      // Adds two blank frames at once, alike but for their button's name.
+      window.addFrames = () => {
+        for (const name of ["Late one", "Late two"]) {
+          const frame = document.createElement("iframe");
+          frame.title = `${name} frame`;
+          document.getElementById("late").append(frame);
+          write(frame, button(`${name} button`));
+        }
+      };
+
+      // Adds a frame whose document takes over a second to load, held up by
+      // a script the server is slow to refuse: the content script loads in
+      // it long after this page was last read, and nothing changes here in
+      // between.
+      window.addSlowFrame = () => {
+        const frame = document.createElement("iframe");
+        frame.title = "Slow frame";
+        frame.srcdoc =
+          `<script src="/slow?ms=1200&to=missing.js"><\/script>` +
+          button("Slow button");
+        document.getElementById("late").append(frame);
+      };
+    </script>
+  </body>
+</html>

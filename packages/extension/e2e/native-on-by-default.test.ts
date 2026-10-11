@@ -288,6 +288,37 @@ test("the store build asks for native mode's permissions and ships no dogfood di
   expect(bundle).toContain("chrome.debugger");
 });
 
+test("the store build runs its content script in a page's blank frames, and asks for nothing more to do it", async ({
+  nav,
+}) => {
+  const manifest = await nav.panel.evaluate(() => chrome.runtime.getManifest());
+  // Which frames get the script: every frame of a page, and with
+  // `match_about_blank` its `about:blank` and `srcdoc` frames. Not
+  // `match_origin_as_fallback`, which would add sandboxed, `data:` and
+  // `blob:` frames, none of which either tree could place.
+  expect(manifest.content_scripts).toEqual([
+    {
+      matches: ["<all_urls>"],
+      js: ["content.js"],
+      run_at: "document_idle",
+      all_frames: true,
+      match_about_blank: true,
+    },
+  ]);
+  // What the extension may access is as it was. A permission added here is
+  // one every user is asked to accept again on the update that carries it.
+  expect([...(manifest.permissions ?? [])].sort()).toEqual([
+    "activeTab",
+    "debugger",
+    "sidePanel",
+    "storage",
+    "tabs",
+    "webNavigation",
+  ]);
+  expect(manifest.host_permissions ?? []).toEqual([]);
+  expect(manifest.optional_permissions ?? []).toEqual([]);
+});
+
 test("turned on in another window, a panel already showing a page reads nothing", async ({
   nav,
 }) => {

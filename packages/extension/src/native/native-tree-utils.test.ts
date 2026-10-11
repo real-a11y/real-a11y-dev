@@ -114,6 +114,12 @@ describe("nativeRowForPageFocus", () => {
     expect(nativeRowForPageFocus({ r1: [2] }, "r1", rows, 3)).toBe(
       "ax-dom-frame",
     );
+    // Or on an element of a document the frame's page wrote since the read,
+    // none of whose elements the read numbered: the report is empty.
+    expect(nativeRowForPageFocus({ r1: [] }, "r1", rows, 3)).toBe(
+      "ax-dom-frame",
+    );
+    expect(nativeRowForPageFocus({ r1: [] }, "r1", rows, 0)).toBeUndefined();
     // Never in the top frame, which no row shows, nor in a frame the read
     // numbered no document of.
     expect(nativeRowForPageFocus({ r1: [99] }, "r1", rows, 0)).toBeUndefined();

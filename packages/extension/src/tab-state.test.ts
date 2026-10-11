@@ -117,6 +117,13 @@ describe("clearTabFrames", () => {
     clearTabFrames(s);
     expect(s.recoveryChecked).toBe(true);
   });
+
+  it("forgets which frames' places were asked after: the page's frames are all new", () => {
+    const s = createTabState();
+    s.askedPlaces.set(5, { mark: "mark-a", since: 0, asked: true });
+    clearTabFrames(s);
+    expect(s.askedPlaces.size).toBe(0);
+  });
 });
 
 describe("removeFrame", () => {
@@ -141,6 +148,15 @@ describe("removeFrame", () => {
     s.frames.set(0, makeFrameTree(0));
     expect(removeFrame(s, 99)).toEqual({ shouldRemerge: true });
     expect(s.frames.size).toBe(1);
+  });
+
+  it("forgets that the frame's place was asked after, and no other frame's", () => {
+    const s = createTabState();
+    s.frames.set(0, makeFrameTree(0));
+    s.askedPlaces.set(5, { mark: "mark-a", since: 0, asked: true });
+    s.askedPlaces.set(6, { mark: "mark-b", since: 0, asked: false });
+    removeFrame(s, 5);
+    expect([...s.askedPlaces.keys()]).toEqual([6]);
   });
 });
 
