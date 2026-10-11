@@ -70,8 +70,11 @@ import {
   cdpFrameDocuments,
   cdpPageKeys,
   type CdpDomNode,
+  type FrameAnswers,
   type FramePageKeyDigest,
   type PageKeyDigest,
+  type PageKeysRead,
+  withoutFragment,
 } from "./page-keys.js";
 
 /**
@@ -474,10 +477,13 @@ export interface NativeTreeResult {
 export interface ReadNativeTreeOptions {
   /**
    * Have the content script in every frame number its own document for this
-   * read (`NATIVE_PAGE_KEYS`), and answer with what each frame that could
-   * answered. Left out, the read numbers nothing.
+   * read (`NATIVE_PAGE_KEYS`), and answer with what the frames answered.
+   * The read says when its own walks are in, so that a frame still walking
+   * by then, one busy in a long task, holds it up only a moment longer, and
+   * which frames it put in the tree, to be asked first. Left out, the read
+   * numbers nothing.
    */
-  pageKeys?: () => Promise<readonly FramePageKeyDigest[]>;
+  pageKeys?: (read: PageKeysRead) => Promise<FrameAnswers>;
 }
 
 /**
@@ -940,9 +946,11 @@ export async function readNativeTree(
   // The sessions the tree was read through: the top frame's, and that of
   // each out-of-process frame grafted in.
   const sessions: ReadSession[] = [{ transport, suffix: "" }];
+  const frameUrls: string[] = [];
   for (const frame of await readFrames(transport, "", 0, nodes, budget)) {
     if (graftNativeFrame(nodes, frame.ownerId, frame.nodes)) {
       rawCount += frame.rawCount;
+      if (frame.url) frameUrls.push(frame.url);
       if (frame.session) {
         sessions.push({ ...frame.session, ownerId: frame.ownerId });
       }
@@ -951,7 +959,7 @@ export async function readNativeTree(
   // Last, so the numbering is as close as it can be to the moment the panel
   // starts using it.
   const pageKeyed = options.pageKeys
-    ? await keyPageRows(sessions, nodes, options.pageKeys)
+    ? await keyPageRows(sessions, nodes, frameUrls, options.pageKeys)
     : false;
 
   // Serialized before `rootIdOf` adds any synthetic root, which is a
@@ -970,6 +978,9 @@ export async function readNativeTree(
     ...(pageKeyed ? { pageKeyed } : {}),
   };
 }
+
+/** What a numbering the content scripts never answered comes to. */
+const NO_ANSWERS: FrameAnswers = { answered: [], unanswered: [] };
 
 /** A session a read went through: the top frame's, or an out-of-process
  *  frame's, with the suffix its rows' ids carry and, for a frame's, the row
@@ -1001,10 +1012,11 @@ interface NumberedDocument {
  *
  * The top document is the top frame's. Any other is matched to the frame
  * whose content script numbered a document at the same URL to the same
- * digest, when exactly one document and one frame agree: two frames showing
- * the same page, alike, can't be told apart, and neither is numbered. A
- * document whose two walks disagree changed between them, and its numbers
- * can't be trusted to name the same elements: none of its rows gets one. A
+ * digest, when that frame is the only one showing the URL: of two frames
+ * showing the same page, either could be showing a document read at it, and
+ * neither is numbered. A document whose two walks disagree
+ * changed between them, and its numbers can't be trusted to name the same
+ * elements: none of its rows gets one. A
  * frame's numbers name elements of its own document only, so its rows also
  * carry the frame (`pageFrame`), and its `Iframe` row the frame it shows
  * (`embedsPageFrame`). True when any document was numbered.
@@ -1018,34 +1030,46 @@ interface NumberedDocument {
 async function keyPageRows(
   sessions: readonly ReadSession[],
   nodes: EnrichedNativeNode[],
-  contentWalk: () => Promise<readonly FramePageKeyDigest[]>,
+  frameUrls: readonly string[],
+  contentWalk: (read: PageKeysRead) => Promise<FrameAnswers>,
 ): Promise<boolean> {
-  const [frames, roots] = await Promise.all([
-    contentWalk().catch(() => []),
-    Promise.all(
-      sessions.map((session, index) =>
-        session.transport
-          .send<{ root?: CdpDomNode }>("DOM.getDocument", {
-            depth: -1,
-            pierce: true,
-          })
-          .then(
-            (dom) => dom.root,
-            (err: unknown) => {
-              // A dropped connection fails the read, as it fails any other
-              // command: this is the read's last, so nothing after it would
-              // notice. The top frame's only: a frame's session drops when
-              // the frame goes away, which leaves that frame unnumbered and
-              // the rest as they are. A command that merely failed leaves
-              // its documents unnumbered.
-              const message = err instanceof Error ? err.message : String(err);
-              if (index === 0 && isConnectionLost(message)) throw err;
-              return undefined;
-            },
-          ),
-      ),
+  const walks = Promise.all(
+    sessions.map((session, index) =>
+      session.transport
+        .send<{ root?: CdpDomNode }>("DOM.getDocument", {
+          depth: -1,
+          pierce: true,
+        })
+        .then(
+          (dom) => dom.root,
+          (err: unknown) => {
+            // A dropped connection fails the read, as it fails any other
+            // command: this is the read's last, so nothing after it would
+            // notice. The top frame's only: a frame's session drops when
+            // the frame goes away, which leaves that frame unnumbered and
+            // the rest as they are. A command that merely failed leaves its
+            // documents unnumbered.
+            const message = err instanceof Error ? err.message : String(err);
+            if (index === 0 && isConnectionLost(message)) throw err;
+            return undefined;
+          },
+        ),
     ),
+  );
+  const [answers, roots] = await Promise.all([
+    contentWalk({ walked: walks, frameUrls }).catch(() => NO_ANSWERS),
+    walks,
   ]);
+  const frames = answers.answered;
+  // How many frames show each URL, answered or not.
+  const shownAt = new Map<string, number>();
+  for (const url of [
+    ...frames.filter((f) => f.frameId !== 0).map((f) => f.url),
+    ...answers.unanswered,
+  ]) {
+    const at = withoutFragment(url);
+    shownAt.set(at, (shownAt.get(at) ?? 0) + 1);
+  }
 
   const documents: NumberedDocument[] = [];
   roots.forEach((root, session) => {
@@ -1094,7 +1118,11 @@ async function keyPageRows(
   }
   for (const [key, alike] of documentsByKey) {
     const answered = framesByKey.get(key);
-    if (alike.length === 1 && answered?.length === 1) {
+    if (
+      alike.length === 1 &&
+      answered?.length === 1 &&
+      shownAt.get(withoutFragment(alike[0]!.url)) === 1
+    ) {
       frameOf.set(alike[0]!, answered[0]!.frameId);
     }
   }
@@ -1305,10 +1333,12 @@ interface FrameDocument {
    *  through, and the suffix its rows' ids carry. A same-process frame's is
    *  its owner's. */
   session?: { transport: CdpTransport; suffix: string };
+  /** The frame's URL, as its frame tree has it. */
+  url?: string;
 }
 
 interface FrameTreeNode {
-  frame: { id: string; loaderId?: string };
+  frame: { id: string; loaderId?: string; url?: string };
   childFrames?: FrameTreeNode[];
 }
 
@@ -1372,6 +1402,8 @@ async function readFrames(
   depth: number,
   parentDocument: readonly EnrichedNativeNode[],
   budget: { left: number },
+  // `transport`'s frame tree, when the caller has read it already.
+  known?: { frameTree?: FrameTreeNode },
 ): Promise<FrameDocument[]> {
   if (depth >= NATIVE_MAX_FRAME_DEPTH) return [];
   const out: FrameDocument[] = [];
@@ -1388,19 +1420,21 @@ async function readFrames(
   );
   const localOwners = new Set<string>();
 
-  const tree = await transport
-    .send<{ frameTree?: FrameTreeNode }>("Page.getFrameTree")
-    .catch(() => undefined);
-  const local: string[] = [];
+  const tree =
+    known ??
+    (await transport
+      .send<{ frameTree?: FrameTreeNode }>("Page.getFrameTree")
+      .catch(() => undefined));
+  const local: Array<FrameTreeNode["frame"]> = [];
   const walk = (node: FrameTreeNode, level: number) => {
     if (depth + level >= NATIVE_MAX_FRAME_DEPTH) return;
     for (const child of node.childFrames ?? []) {
-      local.push(child.frame.id);
+      local.push(child.frame);
       walk(child, level + 1);
     }
   };
   if (tree?.frameTree) walk(tree.frameTree, 0);
-  for (const frameId of local) {
+  for (const { id: frameId, url } of local) {
     const ownerId = await owner(frameId);
     if (ownerId) localOwners.add(ownerId);
     // A frame whose row the tree drops (a hidden ad frame) would be read in
@@ -1423,6 +1457,7 @@ async function readFrames(
       ownerId: `${ownerId}${suffix}`,
       nodes: suffix ? nodes.map((n) => withNativeIdSuffix(n, suffix)) : nodes,
       rawCount: raw.nodes.length,
+      url,
     });
   }
 
@@ -1505,16 +1540,26 @@ async function readFrames(
     const childSuffix = nativeFrameSuffix(session);
     const nodes = await readDocument(child, raw.nodes).catch(() => null);
     if (!nodes) continue;
+    // For the frame's URL, and the frames inside it.
+    const childTree = await child
+      .send<{ frameTree?: FrameTreeNode }>("Page.getFrameTree")
+      .catch(() => undefined);
     out.push({
       ownerId: `${ownerId}${suffix}`,
       nodes: nodes.map((n) => withNativeIdSuffix(n, childSuffix)),
       rawCount: raw.nodes.length,
       session: { transport: child, suffix: childSuffix },
+      url: childTree?.frameTree?.frame.url,
     });
     out.push(
-      ...(await readFrames(child, childSuffix, depth + 1, nodes, budget).catch(
-        () => [],
-      )),
+      ...(await readFrames(
+        child,
+        childSuffix,
+        depth + 1,
+        nodes,
+        budget,
+        childTree ?? {},
+      ).catch(() => [])),
     );
   }
   return out;

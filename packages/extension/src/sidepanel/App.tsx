@@ -2039,7 +2039,7 @@ export function App() {
         );
       }
       // Numbered for Focus sync only while it is on: it costs the read a walk
-      // of the whole page, twice.
+      // of each document, the page's and its frames', twice.
       const numbered = focusTrackerOnRef.current;
       try {
         const r = (await chrome.runtime.sendMessage({

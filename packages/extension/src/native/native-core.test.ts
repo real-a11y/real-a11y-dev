@@ -34,9 +34,16 @@ import {
 import {
   cdpPageKeys,
   type CdpDomNode,
+  type FrameAnswers,
   type FramePageKeyDigest,
   type PageKeyDigest,
 } from "./page-keys.js";
+
+/** What the frames answered, every one of them. */
+const answered = (...frames: FramePageKeyDigest[]): FrameAnswers => ({
+  answered: frames,
+  unanswered: [],
+});
 
 // A scripted fake CDP transport — records every call, returns programmed
 // responses. The same shape the chrome.debugger and Playwright transports have.
@@ -115,9 +122,8 @@ describe("readNativeTree's page keys", () => {
   };
   const digest = cdpPageKeys(dom)!.digest;
   /** The top frame's content script's answer: the page, numbered to `d`. */
-  const topFrame = (d: PageKeyDigest): FramePageKeyDigest[] => [
-    { ...d, frameId: 0, url: "https://a.test/" },
-  ];
+  const topFrame = (d: PageKeyDigest): FrameAnswers =>
+    answered({ ...d, frameId: 0, url: "https://a.test/" });
   const transport = (getDocument: () => unknown = () => ({ root: dom })) =>
     new FakeTransport((method) => {
       if (method === "Accessibility.getFullAXTree") return { nodes: raw };
@@ -158,13 +164,14 @@ describe("readNativeTree's page keys", () => {
   });
 
   it("numbers no row, and still reads, when either walk can't be had", async () => {
-    const cases: Array<
-      [FakeTransport, () => Promise<readonly FramePageKeyDigest[]>]
-    > = [
-      [transport(), async () => []],
+    const cases: Array<[FakeTransport, () => Promise<FrameAnswers>]> = [
+      [transport(), async () => answered()],
       [transport(), () => Promise.reject(new Error("no content script"))],
       // Some other frame's answer, with nothing of the top frame's.
-      [transport(), async () => [{ ...topFrame(digest)[0]!, frameId: 3 }]],
+      [
+        transport(),
+        async () => answered({ ...topFrame(digest).answered[0]!, frameId: 3 }),
+      ],
       [
         transport(() => {
           throw new Error("DOM.getDocument failed");
@@ -190,6 +197,27 @@ describe("readNativeTree's page keys", () => {
     await expect(
       readNativeTree(t, { pageKeys: async () => topFrame(digest) }),
     ).rejects.toThrow(/not attached/);
+  });
+
+  it("lets the numbering know once the read's own walk is in", async () => {
+    let release: () => void = () => {};
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    let walked = false;
+    const pending = readNativeTree(
+      transport(() => gate.then(() => ({ root: dom }))),
+      {
+        pageKeys: async ({ walked: w }) => {
+          void w.then(() => (walked = true));
+          return topFrame(digest);
+        },
+      },
+    );
+    await new Promise((r) => setTimeout(r, 0));
+    expect(walked).toBe(false);
+    release();
+    const res = await pending;
+    expect(walked).toBe(true);
+    expect(res.pageKeyed).toBe(true);
   });
 
   it("asks for no document when nothing numbers the page", async () => {
@@ -3628,7 +3656,7 @@ describe("readNativeTree's page keys across frames", () => {
           return {
             frameTree: {
               frame: { id: "TOP" },
-              childFrames: [{ frame: { id: "SAME" } }],
+              childFrames: [{ frame: { id: "SAME", url: FRAME_URL } }],
             },
           };
         }
@@ -3642,7 +3670,7 @@ describe("readNativeTree's page keys across frames", () => {
     it("numbers the frame's rows by its own document's walk, with the frame they're reported from", async () => {
       const t = transport();
       const res = await readNativeTree(t, {
-        pageKeys: async () => [topAnswer(), answer(frameDom(), 3)],
+        pageKeys: async () => answered(topAnswer(), answer(frameDom(), 3)),
       });
       expect(res.pageKeyed).toBe(true);
       const inner = byId(res.nodes, "ax-dom-25");
@@ -3668,11 +3696,8 @@ describe("readNativeTree's page keys across frames", () => {
       );
       const top = { ...cdpPageKeys(twice)!.digest, frameId: 0, url: TOP_URL };
       const res = await readNativeTree(transport(twice), {
-        pageKeys: async () => [
-          top,
-          answer(frameDom(), 3),
-          answer(frameDom(), 4),
-        ],
+        pageKeys: async () =>
+          answered(top, answer(frameDom(), 3), answer(frameDom(), 4)),
       });
       expect(byId(res.nodes, "ax-dom-25").pageKey).toBeUndefined();
       expect(byId(res.nodes, "ax-dom-8").embedsPageFrame).toBeUndefined();
@@ -3689,7 +3714,7 @@ describe("readNativeTree's page keys across frames", () => {
         answer(changed, 3),
       ]) {
         const res = await readNativeTree(transport(), {
-          pageKeys: async () => [topAnswer(), frame],
+          pageKeys: async () => answered(topAnswer(), frame),
         });
         expect(byId(res.nodes, "ax-dom-25").pageKey).toBeUndefined();
         expect(byId(res.nodes, "ax-dom-8").embedsPageFrame).toBeUndefined();
@@ -3697,12 +3722,62 @@ describe("readNativeTree's page keys across frames", () => {
       }
     });
 
+    it("tells the numbering which frames' URLs it put in the tree", async () => {
+      let frameUrls: readonly string[] = [];
+      await readNativeTree(transport(), {
+        pageKeys: async (read) => {
+          frameUrls = read.frameUrls;
+          return answered(topAnswer(), answer(frameDom(), 3));
+        },
+      });
+      expect(frameUrls).toEqual([FRAME_URL]);
+    });
+
+    it("numbers no frame at a URL another frame showed without answering: it may be that frame's", async () => {
+      // A second frame at the frame's URL, which wasn't asked, or didn't
+      // answer in time: the document read may be its, not the one that
+      // answered.
+      for (const url of [FRAME_URL, `${FRAME_URL}#top`]) {
+        const res = await readNativeTree(transport(), {
+          pageKeys: async () => ({
+            answered: [topAnswer(), answer(frameDom(), 3)],
+            unanswered: [url],
+          }),
+        });
+        expect(byId(res.nodes, "ax-dom-25").pageKey).toBeUndefined();
+        expect(byId(res.nodes, "ax-dom-8").embedsPageFrame).toBeUndefined();
+        expect(byId(res.nodes, "ax-dom-9").pageKey).toBe(5);
+      }
+      // A silent frame elsewhere says nothing about this one.
+      const res = await readNativeTree(transport(), {
+        pageKeys: async () => ({
+          answered: [topAnswer(), answer(frameDom(), 3)],
+          unanswered: ["https://a.test/elsewhere", "about:blank"],
+        }),
+      });
+      expect(byId(res.nodes, "ax-dom-25").pageKey).toBe(4);
+    });
+
+    it("numbers no frame at a URL another frame answered at too, though their pages differ", async () => {
+      // This frame changed between its two walks, and the other, whose
+      // document the read didn't reach, answered what this one's was when
+      // CDP walked it: matched by digest alone, this frame's rows would take
+      // the other frame's.
+      const changed = frameDom();
+      changed.children![0]!.children![1]!.children!.push(el("p", 90));
+      const res = await readNativeTree(transport(), {
+        pageKeys: async () =>
+          answered(topAnswer(), answer(changed, 3), answer(frameDom(), 4)),
+      });
+      expect(byId(res.nodes, "ax-dom-25").pageKey).toBeUndefined();
+      expect(byId(res.nodes, "ax-dom-8").embedsPageFrame).toBeUndefined();
+      expect(byId(res.nodes, "ax-dom-9").pageKey).toBe(5);
+    });
+
     it("numbers a frame whose page agrees when the top document's doesn't", async () => {
       const res = await readNativeTree(transport(), {
-        pageKeys: async () => [
-          { ...topAnswer(), count: 99 },
-          answer(frameDom(), 3),
-        ],
+        pageKeys: async () =>
+          answered({ ...topAnswer(), count: 99 }, answer(frameDom(), 3)),
       });
       expect(res.pageKeyed).toBe(true);
       expect(byId(res.nodes, "ax-dom-25").pageKey).toBe(4);
@@ -3748,7 +3823,7 @@ describe("readNativeTree's page keys across frames", () => {
         if (method === "Accessibility.getFullAXTree")
           return { nodes: FRAME_AX };
         if (method === "Page.getFrameTree") {
-          return { frameTree: { frame: { id: "OOPIF" } } };
+          return { frameTree: { frame: { id: "OOPIF", url: FRAME_URL } } };
         }
         if (method === "DOM.getDocument") return getDocument();
         return {};
@@ -3776,7 +3851,7 @@ describe("readNativeTree's page keys across frames", () => {
     it("numbers the frame's rows by the document its own session reads", async () => {
       const frame = frameTransport();
       const res = await readNativeTree(topTransport(frame), {
-        pageKeys: async () => [topAnswer(), answer(frameDom(), 12)],
+        pageKeys: async () => answered(topAnswer(), answer(frameDom(), 12)),
       });
       expect(res.pageKeyed).toBe(true);
       expect(
@@ -3818,8 +3893,8 @@ describe("readNativeTree's page keys across frames", () => {
           if (method === "Page.getFrameTree") {
             return {
               frameTree: {
-                frame: { id: "OOPIF" },
-                childFrames: [{ frame: { id: "NESTED" } }],
+                frame: { id: "OOPIF", url: FRAME_URL },
+                childFrames: [{ frame: { id: "NESTED", url: NESTED_URL } }],
               },
             };
           }
@@ -3829,13 +3904,23 @@ describe("readNativeTree's page keys across frames", () => {
           return undefined;
         },
       );
+      let frameUrls: readonly string[] = [];
       const res = await readNativeTree(topTransport(frame), {
-        pageKeys: async () => [
-          topAnswer(),
-          answer(frameDom(nested), 12),
-          answer(nested, 14),
-        ],
+        pageKeys: async (read) => {
+          frameUrls = read.frameUrls;
+          return answered(
+            topAnswer(),
+            answer(frameDom(nested), 12),
+            answer(nested, 14),
+          );
+        },
       });
+      // Both frames' URLs, from the frame trees: the out-of-process frame's
+      // own, read once for it and for the frames inside it.
+      expect(frameUrls).toEqual([FRAME_URL, NESTED_URL]);
+      expect(
+        frame.calls.filter((c) => c.method === "Page.getFrameTree"),
+      ).toHaveLength(1);
       const deep = byId(res.nodes, "ax-dom-35@OOPIF");
       expect([deep.pageKey, deep.pageFrame]).toEqual([3, 14]);
       const nestedOwner = byId(res.nodes, "ax-dom-6@OOPIF");
@@ -3852,7 +3937,7 @@ describe("readNativeTree's page keys across frames", () => {
         throw new Error("Debugger is not attached to the target");
       });
       const res = await readNativeTree(topTransport(frame), {
-        pageKeys: async () => [topAnswer(), answer(frameDom(), 12)],
+        pageKeys: async () => answered(topAnswer(), answer(frameDom(), 12)),
       });
       expect(res.pageKeyed).toBe(true);
       expect(byId(res.nodes, "ax-dom-8@OOPIF").pageKey).toBeUndefined();

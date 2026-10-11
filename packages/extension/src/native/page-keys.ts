@@ -51,6 +51,33 @@ export interface FramePageKeyDigest extends PageKeyDigest {
   url: string;
 }
 
+/**
+ * What the tab's frames answered a read's `NATIVE_PAGE_KEYS` with: each
+ * frame's answer, and the URL of each other frame the tab lists (but the top
+ * one) that gave none, because it didn't answer in time or wasn't asked. A
+ * document at a URL more than one frame shows, answered or not, can't be
+ * told apart from the others', so the read matches none at it.
+ */
+export interface FrameAnswers {
+  answered: readonly FramePageKeyDigest[];
+  unanswered: readonly string[];
+}
+
+/** What a read tells the numbering it asks for. */
+export interface PageKeysRead {
+  /** Settles once the read's own walks of the documents are in. */
+  walked: Promise<unknown>;
+  /** The URL of each frame the read put in the tree, as CDP's frame tree
+   *  has it: the frames worth asking first. */
+  frameUrls: readonly string[];
+}
+
+/** `url` without its fragment, which is no part of which document a frame
+ *  shows, and which CDP's frame tree leaves out. */
+export function withoutFragment(url: string): string {
+  return url.split("#", 1)[0]!;
+}
+
 /** How a walk reads one side's elements. */
 export interface PageKeyWalker<E> {
   /** `el` is one of the extension's own elements: see {@link isOwnElementId}. */
@@ -319,7 +346,7 @@ export const KEPT_PAGE_KEY_READS = 3;
 /** How far a focus report climbs for numbered elements above the focused one. */
 const MAX_CLIMB = 256;
 
-/** The content script's numberings of the page, by read. */
+/** The content script's numberings of its frame's document, by read. */
 export class PageKeySnapshots {
   private reads: Array<{ readId: string; keys: WeakMap<Element, number> }> = [];
 
@@ -330,9 +357,9 @@ export class PageKeySnapshots {
     private readonly parentOf: (el: Element) => Element | null,
   ) {}
 
-  /** Number the page under `root` for read `readId`, replacing an earlier
-   *  numbering under the same id: a read retried after the debugger dropped
-   *  numbers again. */
+  /** Number the elements under `root` for read `readId`, replacing an
+   *  earlier numbering under the same id: a read retried after the debugger
+   *  dropped numbers again. */
   take(readId: string, root: Element): PageKeyDigest {
     const keys = new WeakMap<Element, number>();
     const digest = walkPageKeys(root, this.walker, (el, key) =>

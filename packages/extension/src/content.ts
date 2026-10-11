@@ -86,10 +86,10 @@ const NATIVE_OVERLAY_ARM_MS = 800;
 const elementRefs = getElementRefs();
 const dispatcher = new ActionDispatcher(elementRefs);
 const focusManager = new FocusManager(elementRefs);
-// The native reads' numberings of this page, which focus is reported by for
-// the native tree: see native/page-keys.ts. Only the top frame is numbered.
-// `chrome.dom.openOrClosedShadowRoot` is how the walk sees a closed shadow
-// root, as the read's CDP walk does.
+// The native reads' numberings of this frame's document, which focus is
+// reported by for the native tree: see native/page-keys.ts. Every frame
+// numbers its own. `chrome.dom.openOrClosedShadowRoot` is how the walk sees
+// a closed shadow root, as the read's CDP walk does.
 const pageKeys = new PageKeySnapshots(
   livePageKeyWalker(
     chrome.dom?.openOrClosedShadowRoot
