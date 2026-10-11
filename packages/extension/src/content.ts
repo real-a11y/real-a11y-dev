@@ -192,7 +192,7 @@ function teardown(): void {
   if (tornDown) return;
   tornDown = true;
   observer?.stop();
-  liveObserver?.disconnect();
+  unobserveLiveRegions();
   documentObserver.disconnect();
   // Drop the picker listeners and restore the cursor so the page stops
   // showing crosshair after the extension is reloaded / orphaned.
@@ -915,11 +915,41 @@ function startObserving() {
   sendTree();
 }
 
-/** Watch the document's body for live regions (top frame only). A document
- *  with no body yet has none to watch. */
+// Through the prototype: a named <img> or <form> called `body` shadows the
+// document's own.
+const bodyGetter = Object.getOwnPropertyDescriptor(
+  Document.prototype,
+  "body",
+)?.get;
+function documentBody(): Element | null {
+  const body: unknown = bodyGetter ? bodyGetter.call(document) : document.body;
+  return body instanceof Element ? body : null;
+}
+
+/** The body the live-region observer watches now. */
+let liveBody: Element | null = null;
+/** Hears the root element's own children change, for a body that comes
+ *  after it or takes another's place. */
+let bodyObserver: MutationObserver | null = null;
+
+/**
+ * Watch the document's body for live regions (top frame only), and the root
+ * element for another body. A document written in stages has a root before
+ * it has a body, and nothing else says when the body arrives: the root is
+ * the same element, so `rebindDocument` has nothing to do.
+ */
 function observeLiveRegions() {
-  if (!liveObserver || !document.body) return;
-  liveObserver.observe(document.body, {
+  if (!liveObserver) return;
+  unobserveLiveRegions();
+  if (boundRoot) {
+    bodyObserver = new MutationObserver(() => {
+      if (documentBody() !== liveBody) observeLiveRegions();
+    });
+    bodyObserver.observe(boundRoot, { childList: true });
+  }
+  liveBody = documentBody();
+  if (!liveBody) return;
+  liveObserver.observe(liveBody, {
     childList: true,
     subtree: true,
     characterData: true,
@@ -928,12 +958,19 @@ function observeLiveRegions() {
   });
 }
 
+function unobserveLiveRegions() {
+  liveObserver?.disconnect();
+  bodyObserver?.disconnect();
+  bodyObserver = null;
+  liveBody = null;
+}
+
 /** Disarm observation when the panel disconnects. Idempotent. */
 function stopObserving() {
   if (!observingEnabled) return;
   observingEnabled = false;
   observer?.stop();
-  liveObserver?.disconnect();
+  unobserveLiveRegions();
 }
 
 function onNavigated() {
@@ -996,7 +1033,7 @@ function rebindDocument(): void {
   liveExtractor = null;
   observer?.stop();
   observer = observerOf(root);
-  liveObserver?.disconnect();
+  unobserveLiveRegions();
   // An armed picker lost its listeners with the rest: arm it again, which
   // tells the panel nothing it doesn't know.
   if (picker.isEnabled()) {

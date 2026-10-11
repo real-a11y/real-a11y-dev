@@ -1002,6 +1002,9 @@ interface NumberedDocument {
   /** For a frame sharing its parent's renderer: the numbered document the
    *  element holding the frame is in, and that element's number there. */
   within?: { document: NumberedDocument; key: number };
+  /** It was found under an `<iframe>` of another document of its session:
+   *  its frame shares that document's renderer. */
+  framed: boolean;
 }
 
 /**
@@ -1029,7 +1032,11 @@ interface NumberedDocument {
  * Or else by URL: to the frame whose script numbered a document at the same
  * URL to the same digest, when that frame is the only one showing the URL.
  * Of two frames showing the same page, either could be showing a document
- * read at it, and neither is numbered this way.
+ * read at it, and neither is numbered this way. Nor is a frame's document
+ * that has the URL of another document in its renderer: a frame a script
+ * wrote into takes the URL of the document that wrote it, so such a
+ * document may be a frame's the tab lists at `about:blank`, and not the
+ * one's that answered at that URL.
  *
  * A frame's numbers name elements of its own document only, so its rows
  * also carry the frame (`pageFrame`), and its `Iframe` row the frame it
@@ -1111,6 +1118,7 @@ async function keyPageRows(
         ...(around && key !== undefined
           ? { within: { document: around, key } }
           : {}),
+        framed: ownerBackendNodeId !== undefined,
       };
       byNode.set(document, entry);
       documents.push(entry);
@@ -1158,6 +1166,15 @@ async function keyPageRows(
     const key = matchKey(document.url, document.digest);
     documentsByKey.set(key, [...(documentsByKey.get(key) ?? []), document]);
   }
+  // How many documents of each session are at each URL, the session's own
+  // root among them.
+  const urlInSession = (document: NumberedDocument) =>
+    `${document.session} ${withoutFragment(document.url)}`;
+  const documentsAt = new Map<string, number>();
+  for (const document of documents) {
+    const at = urlInSession(document);
+    documentsAt.set(at, (documentsAt.get(at) ?? 0) + 1);
+  }
 
   // A frame shows one document, so it is given no second one.
   const given = new Set<number>();
@@ -1180,10 +1197,16 @@ async function keyPageRows(
         // so the frame is given no other.
         else given.add(marked[0]!.frameId);
       }
-    } else if (!document.url.startsWith("about:")) {
+    } else if (
+      !document.url.startsWith("about:") &&
+      !(document.framed && documentsAt.get(urlInSession(document))! > 1)
+    ) {
       // A document at an `about:` URL is the one of a frame with no URL of
       // its own, which is matched by its mark alone: no frame is given it
-      // for answering that it shows that URL.
+      // for answering that it shows that URL. Nor one that has the URL of
+      // another document in its renderer, which may be the document that
+      // wrote it: its frame is then listed at `about:blank`, whatever frame
+      // answered at this URL.
       const key = matchKey(document.url, document.digest);
       const answered = framesByKey.get(key);
       if (

@@ -1690,6 +1690,70 @@ describe("content: a page that replaces its document", () => {
     expect(document.getElementById("__sn-curtain")).toBeNull();
   });
 
+  describe("live regions", () => {
+    const announced = () =>
+      h.sent
+        .filter((m) => m.type === "LIVE_REGION")
+        .map((m) => (m.payload as { text: string }).text);
+    /** Change the status region's text, and wait out the read's debounce. */
+    async function say(text: string): Promise<void> {
+      document.getElementById("status")!.textContent = text;
+      await vi.advanceTimersByTimeAsync(500);
+    }
+
+    it("are heard in the new document", async () => {
+      h.send({ type: "REQUEST_TREE", payload: { viewMode: "a11y" } });
+      await rewrite(`<div role="status" id="status">Loading</div>`);
+      h.sent.length = 0;
+      await say("Ready");
+      expect(announced()).toEqual(["Ready"]);
+    });
+
+    it("are heard in a body that arrives after the root element", async () => {
+      // A document written in stages: the root and its head, and the body
+      // some time later. The root is the same element both times.
+      h.send({ type: "REQUEST_TREE", payload: { viewMode: "a11y" } });
+      const html = document.createElement("html");
+      html.append(document.createElement("head"));
+      document.documentElement.remove();
+      document.append(html);
+      await vi.advanceTimersByTimeAsync(0);
+
+      const body = document.createElement("body");
+      body.innerHTML = `<div role="status" id="status">Loading</div>`;
+      html.append(body);
+      await vi.advanceTimersByTimeAsync(0);
+      h.sent.length = 0;
+      await say("Ready");
+      expect(announced()).toEqual(["Ready"]);
+    });
+
+    it("are heard in a body that takes another's place", async () => {
+      h.send({ type: "REQUEST_TREE", payload: { viewMode: "a11y" } });
+      const body = document.createElement("body");
+      body.innerHTML = `<div role="status" id="status">Loading</div>`;
+      document.body.replaceWith(body);
+      await vi.advanceTimersByTimeAsync(0);
+      h.sent.length = 0;
+      await say("Ready");
+      expect(announced()).toEqual(["Ready"]);
+    });
+
+    it("are heard no more once the panel has gone", async () => {
+      h.send({ type: "REQUEST_TREE", payload: { viewMode: "a11y" } });
+      await rewrite(`<div role="status" id="status">Loading</div>`);
+      h.send({ type: "SET_OBSERVING", payload: { enabled: false } });
+      // A body arriving now arms nothing.
+      const body = document.createElement("body");
+      body.innerHTML = `<div role="status" id="status">Loading</div>`;
+      document.body.replaceWith(body);
+      await vi.advanceTimersByTimeAsync(0);
+      h.sent.length = 0;
+      await say("Ready");
+      expect(announced()).toEqual([]);
+    });
+  });
+
   it("waits out a document left with no root element, and reads the next one", async () => {
     // `document.open()` with nothing written yet.
     h.send({ type: "REQUEST_TREE", payload: { viewMode: "a11y" } });

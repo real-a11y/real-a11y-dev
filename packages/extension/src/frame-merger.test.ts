@@ -616,6 +616,46 @@ describe("mergeFrameTrees: frames placed by the mark on their element", () => {
     expect(result.nodeToFrame.get("f5-c-root")).toBe(5);
   });
 
+  it("guesses an <iframe> for no frame under a parent that holds an unplaced marked frame", () => {
+    // Frame 5 marked its element, and the top frame's tree doesn't bear the
+    // mark yet. Frame 9 marked nothing and matches no `src`: the guess would
+    // hand it the first empty <iframe>, which may be the one frame 5 is in,
+    // and its content would show, and be acted on, under the wrong frame.
+    const frames = new Map([
+      [0, topOf([])],
+      [9, blankFrame(9, undefined, "https://other.test/redirected")],
+      [5, blankFrame(5, "mark-late")],
+    ]);
+    const result = mergeFrameTrees({ frames, frameInfoMap: listed(9, 5) })!;
+    expect(result.nodes.get("f9-c-root")!.parentId).toBeNull();
+    expect(result.nodes.get("f5-c-root")!.parentId).toBeNull();
+    for (const id of ["ifr-1", "ifr-2", "ifr-3"]) {
+      expect(result.nodes.get(id)!.childIds, id).toEqual([]);
+    }
+    expect(result.unplaced).toEqual([5]);
+
+    // Once the top frame's tree bears the mark, the guess is taken again,
+    // past the marked frame's <iframe>.
+    frames.set(0, topOf([["ifr-1", "mark-late"]]));
+    const placed = mergeFrameTrees({ frames, frameInfoMap: listed(9, 5) })!;
+    expect(placed.nodes.get("f5-c-root")!.parentId).toBe("ifr-1");
+    expect(placed.nodes.get("f9-c-root")!.parentId).toBe("ifr-2");
+  });
+
+  it("holds the guess back for no frame Chrome has stopped listing", () => {
+    // The stale tree of a frame whose <iframe> is gone still carries its
+    // mark, which no tree will ever bear.
+    const result = mergeFrameTrees({
+      frames: new Map([
+        [0, topOf([])],
+        [5, blankFrame(5, "mark-gone")],
+        [9, blankFrame(9, undefined, "https://other.test/redirected")],
+      ]),
+      frameInfoMap: listed(9),
+    })!;
+    expect(result.nodes.get("f9-c-root")!.parentId).toBe("ifr-1");
+  });
+
   it("still places a marked frame by its URL while its mark is in no tree", () => {
     const top: FrameTree = makeFrame(0, "https://top.test/", [
       ["root", makeNode("root", { childIds: ["ifr"] })],

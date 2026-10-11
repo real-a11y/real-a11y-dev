@@ -211,6 +211,23 @@ export function mergeFrameTrees(opts: {
     claimedIframes.add(prefixNodeId(frameId, nodeId));
   }
   const unplaced: number[] = [];
+  // The parents holding a marked frame that isn't placed yet. Its element is
+  // one of that parent's, in a tree that doesn't say which yet, so the
+  // last-resort guess is not taken under such a parent meanwhile: the empty
+  // <iframe> it would hand another frame may be this one's. A frame Chrome
+  // no longer lists holds nothing back.
+  const awaited = new Set<number>();
+  for (const [frameId, tree] of opts.frames) {
+    const parent = opts.frameInfoMap.get(frameId)?.parentFrameId;
+    if (
+      frameId !== 0 &&
+      tree.owner !== undefined &&
+      !placed.has(frameId) &&
+      parent !== undefined
+    ) {
+      awaited.add(parent);
+    }
+  }
 
   for (const childFrameId of childFrameIds) {
     const childTree = opts.frames.get(childFrameId);
@@ -280,7 +297,7 @@ export function mergeFrameTrees(opts: {
         ) ??
         // 3. Fallback: first un-attached <iframe> in the parent. Beats
         //    dropping the subframe entirely.
-        (frameInfo && !marked
+        (frameInfo && !marked && !awaited.has(parentFrameId)
           ? findIframe(
               (_node, mergedNode) =>
                 mergedNode !== undefined && mergedNode.childIds.length === 0,

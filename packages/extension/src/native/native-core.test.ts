@@ -4038,6 +4038,29 @@ describe("readNativeTree's page keys across frames", () => {
       expect(byId(res.nodes, "ax-dom-8").embedsPageFrame).toBeUndefined();
     });
 
+    it("gives a document that has the URL of another in its renderer to no frame by URL: a script may have written it", async () => {
+      // The top document wrote into the first frame, whose document has the
+      // top document's URL from then on, and whose mark never reached the
+      // read. Another frame shows the top document's page, in a frame the
+      // read didn't reach, and answers alike: by URL and digest alone, the
+      // written frame's rows would be that frame's.
+      const written = blank(20, TOP_URL);
+      const dom = page(written, blank(40, "about:srcdoc", true));
+      const elsewhere: FramePageKeyDigest = {
+        ...answer(written, 9),
+        url: TOP_URL,
+      };
+      const res = await readNativeTree(transport(dom), {
+        pageKeys: async () => ({
+          answered: [top([], dom), elsewhere],
+          unanswered: ["about:blank"],
+        }),
+      });
+      expect(first(res.nodes).pageKey).toBeUndefined();
+      expect(byId(res.nodes, "ax-dom-8").embedsPageFrame).toBeUndefined();
+      expect(byId(res.nodes, "ax-dom-9").pageKey).toBe(5);
+    });
+
     it("takes a mark two frames answered with, or two elements bear, for neither", async () => {
       const marks: Array<[number, string]> = [
         [3, "mark-first"],
