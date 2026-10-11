@@ -1180,7 +1180,10 @@ async function keyPageRows(
         // so the frame is given no other.
         else given.add(marked[0]!.frameId);
       }
-    } else {
+    } else if (!document.url.startsWith("about:")) {
+      // A document at an `about:` URL is the one of a frame with no URL of
+      // its own, which is matched by its mark alone: no frame is given it
+      // for answering that it shows that URL.
       const key = matchKey(document.url, document.digest);
       const answered = framesByKey.get(key);
       if (

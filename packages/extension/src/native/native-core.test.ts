@@ -3968,8 +3968,27 @@ describe("readNativeTree's page keys across frames", () => {
       expect(first(res.nodes).pageKey).toBeUndefined();
       expect(byId(res.nodes, "ax-dom-8").embedsPageFrame).toBeUndefined();
       expect(byId(res.nodes, "ax-dom-9").pageKey).toBe(5);
-      // What keeps it out is the tab listing it at an `about:` URL.
-      const listed = await read({ ...frame(blank(20), 6), blank: false });
+      // Nor is a document at such a URL given to a frame the tab lists at a
+      // URL of its own, for answering that it shows `about:srcdoc`.
+      const claimed = await read({ ...frame(blank(20), 6), blank: false });
+      expect(first(claimed.nodes).pageKey).toBeUndefined();
+    });
+
+    it("numbers no frame a script wrote into by the URL its document took, though no other frame shows it", async () => {
+      // `document.open()` gave the frame's document the top document's URL,
+      // on both sides. Its mark didn't reach the read.
+      const WRITER_URL = "https://a.test/editor";
+      const written = blank(20, WRITER_URL);
+      const dom = page(written, blank(40, "about:srcdoc", true));
+      const read = (answer: FramePageKeyDigest) =>
+        readNativeTree(transport(dom), {
+          pageKeys: async () => answered(top([], dom), answer),
+        });
+      const res = await read(frame(written, 6));
+      expect(first(res.nodes).pageKey).toBeUndefined();
+      // What keeps it out is the tab listing the frame at an `about:` URL:
+      // a frame listed at that URL itself is matched by it.
+      const listed = await read({ ...frame(written, 6), blank: false });
       expect(first(listed.nodes).pageFrame).toBe(6);
     });
 
