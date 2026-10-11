@@ -110,6 +110,16 @@ sidesteps the question entirely.
   frame, and a form whose controls shadow the properties the walk reads.
   Focus inside frames is `native-frames.test.ts`'s, on its same-origin and
   cross-origin frames, which show the same document.
+- `blank-frames.test.ts` — frames with no URL of their own, in both trees:
+  two `srcdoc` frames alike element for element, a frame the page writes
+  into with `document.open()`, an empty one, and a sandboxed one the content
+  script doesn't run in. The in-page tree reads each under its own
+  `<iframe>` and keeps up when one is written over again, and Chrome's tree
+  follows focus into each. It pins the three facts about Chromium the
+  feature rests on, which jsdom can't show: a frame of its parent's origin
+  reads `window.frameElement`, one extension's content scripts share an
+  element's object across the frames of an origin (`src/frame-owner.ts`),
+  and `document.open()` removes the content script's listeners.
 - `field-values.test.ts` — ADR-0001's field values in both producers and both
   views: a `<select>` reads its announced label (`= "Spain"`) in the A11y view
   and its raw value (`value="es"`) in the DOM view, a password and a

@@ -6,9 +6,9 @@ area: Extension
 type: Manual
 priority: P1
 status: Active
-validFrom: "extension ≥ 0.1.8. Manual only — bfcache restore cannot be reproduced reliably in an automated harness"
+validFrom: "extension ≥ 0.1.8; steps 15–18 from the first release after 0.1.15. Manual only — bfcache restore cannot be reproduced reliably in an automated harness"
 validUntil: ""
-expected: "iframe subtrees appear under their iframe node; after Back the panel shows the RESTORED page and actions hit the right elements"
+expected: "iframe subtrees appear under their iframe node, blank and script-written frames included, each under its own; after Back the panel shows the RESTORED page and actions hit the right elements"
 notion: "https://app.notion.com/p/3aa1c354b0b5811eaea8e3ddfde1467b"
 ---
 
@@ -47,6 +47,30 @@ Use a real SPA with client-side routing and at least one same-origin iframe.
 14. Cause a DOM change in the **top** frame only — type in a field, click a button.
     Do not touch anything inside the iframes
 
+**Frames with no address of their own**
+
+Use a page whose frames have no URL: a rich-text editor that edits inside an
+`<iframe>` (the classic-mode TinyMCE and CKEditor 4 demos do; put two editors on
+one page if the demo lets you), or any page you can paste this into the console of:
+
+```js
+for (const label of ["One", "Two"]) {
+  const frame = document.createElement("iframe");
+  frame.title = label;
+  document.body.append(frame);
+  frame.contentDocument.open();
+  frame.contentDocument.write(`<button>${label} button</button>`);
+  frame.contentDocument.close();
+}
+```
+
+15. Show the **In-page tree** (Settings ▾) and expand each of those frames' nodes
+16. Select a node inside one and act on it
+17. Change what a frame shows — type in the editor, or run the snippet's three
+    `contentDocument` lines again on one frame with another label
+18. Find a sandboxed frame if the page has one (`<iframe sandbox>` without
+    `allow-same-origin`, common around ads) and expand its node
+
 ## Expected
 
 - **2** — iframe subtrees render under their iframe node, not as a separate root or a
@@ -59,6 +83,14 @@ Use a real SPA with client-side routing and at least one same-origin iframe.
 - **9** — the panel shows the **restored** page. This is the one that breaks
 - **14** — the iframe subtrees are still there after the tree redraws. They must not
   disappear and wait for you to interact inside each iframe to come back
+- **15** — each frame's content sits under **its own** iframe node: `One button`
+  under `One`, `Two button` under `Two`, never both under one or swapped. Before the
+  first release after 0.1.15 these nodes are empty, which is a Blocked, not a Fail
+- **16** — the action lands in the frame the node is in
+- **17** — the tree shows the new content, under the same iframe node, without a
+  reload
+- **18** — an empty iframe node. No content script runs in a sandboxed frame, so
+  nothing inside it is read; it must not show another frame's content
 
 ## Why this exists
 
@@ -87,3 +119,15 @@ content scripts keep running and stay silent until their own DOM next changes �
 which meant the first top-frame change republished the page without any iframe.
 Chrome restarts that worker on its own schedule, so this is a state users reach by
 waiting, not by doing anything unusual.
+
+Steps 15–18 are the frames the URL can't tell apart. An `about:blank` or `srcdoc`
+frame, and one a script writes into, has no URL of its own: every one of them shows
+the same, and their `<iframe>`s carry no `src` to compare it with. The panel used to
+have no content script in them at all, so editors and many ad slots were empty
+nodes. Now each frame says which `<iframe>` holds it, and the failure to look for is
+the one a guess produces: two frames' content under one node, or under each other's.
+Step 17 is its own check because writing a document over again (`document.open()`)
+removes everything the content script had attached to the old one, with no
+navigation to load a new script; the tree then goes on showing the document that is
+gone. Step 18 is the boundary: a frame the panel can't read must stay empty rather
+than be given a neighbour's subtree.
