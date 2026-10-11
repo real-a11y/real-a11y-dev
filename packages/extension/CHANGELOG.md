@@ -44,7 +44,8 @@
   the page's elements, and the page reports focus by those numbers. Focus
   inside a frame isn't followed yet. **Focus OFF** also holds now once the
   page changes: the next update turned focus tracking back on, for either
-  tree, outlining and scrolling to every element focused after it.
+  tree, outlining and scrolling to every element focused after it
+  ([#499](https://github.com/real-a11y/real-a11y-dev/pull/499)).
 
 - Hardened the shared mutation observer so that re-arming it can no longer
   strand the previous observers and event listeners
