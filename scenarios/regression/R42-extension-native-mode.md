@@ -94,9 +94,12 @@ load it again** before step 1, step 9 and step 10.
     again: the selection stays where it was. Press it once more, and `Tab` is
     followed again.
 14. Open a page with an `<iframe>`, a cross-origin one if you can (an embedded
-    video or map), and `Tab` into it: the focused element's row is selected under
-    the frame's row, and Chrome's bar doesn't appear for it. `Tab` back out: the
-    top document's rows are followed again.
+    video or map). Once the frame has loaded, press **↻** (Refresh native tree),
+    since a frame that loads after the tree was read, as a lazy embed below the
+    fold does, is numbered only by the next read, and wait for Chrome's bar to
+    go. Then click into the page and `Tab` into the frame: the focused element's
+    row is selected under the frame's row, and Chrome's bar doesn't appear for it.
+    `Tab` back out: the top document's rows are followed again.
 
 ## Expected
 

@@ -52,7 +52,7 @@
   under the frame's row, and the frame's own row when nothing focused there
   has one. A frame the extension's content script doesn't run in, such as an
   `about:blank` or `srcdoc` frame, isn't followed, nor is either of two frames
-  showing the same page alike
+  showing the same page
   ([#500](https://github.com/real-a11y/real-a11y-dev/pull/500)).
 
 - Hardened the shared mutation observer so that re-arming it can no longer
