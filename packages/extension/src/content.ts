@@ -18,6 +18,7 @@ import type { TreeViewMode, TreeChange } from "@real-a11y-dev/core";
 import { computeFieldState } from "./field-state.js";
 import {
   liveDocumentElement,
+  liveDocumentURL,
   livePageKeyWalker,
   PageKeySnapshots,
 } from "./native/page-keys.js";
@@ -336,12 +337,21 @@ chrome.runtime.onMessage.addListener(
       }
 
       case "NATIVE_PAGE_KEYS": {
-        // A native read numbering the page (the service worker asks the top
-        // frame only). The digest goes back for the read to compare with its
-        // own; the numbering stays here for the focus reports below, which
-        // also need to hear moves inside the shadow root focus is in now.
-        const root = isSubFrame ? null : liveDocumentElement(document);
-        sendResponse(root ? pageKeys.take(message.payload.readId, root) : null);
+        // A native read numbering the page: the service worker asks every
+        // frame, and each numbers its own document. The digest goes back,
+        // with the document's URL, for the read to find this document among
+        // CDP's and compare its numbering with its own; the numbering stays
+        // here for the focus reports below, which also need to hear moves
+        // inside the shadow root focus is in now.
+        const root = liveDocumentElement(document);
+        sendResponse(
+          root
+            ? {
+                ...pageKeys.take(message.payload.readId, root),
+                url: liveDocumentURL(document),
+              }
+            : null,
+        );
         if (root) watchFocusRoots(deepActiveElement());
         break;
       }

@@ -16,11 +16,13 @@
  * the read, and on a focus change it reports the numbers of the focused
  * element and of the elements above it.
  *
- * The walk covers the top document: its elements, and those of every author
- * shadow root, open or closed. A frame's document is left out (another
- * content script, another walk), and so is a user-agent shadow root (a
- * `<video>`'s controls, an `<input>`'s inner editor), which page script can't
- * reach: focus inside either is reported on the element that holds it.
+ * A walk covers one document: its elements, and those of every author shadow
+ * root, open or closed. A frame's document is walked on its own, by the
+ * content script in that frame, and matched to its CDP counterpart by URL and
+ * digest ({@link FramePageKeyDigest}); a frame's number names an element of
+ * that frame's document only. A user-agent shadow root (a `<video>`'s
+ * controls, an `<input>`'s inner editor) is left out, as page script can't
+ * reach it: focus inside one is reported on the element that holds it.
  */
 
 import { safeGetAttribute } from "@real-a11y-dev/core";
@@ -33,6 +35,20 @@ export interface PageKeyDigest {
   count: number;
   /** A hash of each numbered element's local name, in walk order. */
   hash: number;
+}
+
+/**
+ * A frame's answer to `NATIVE_PAGE_KEYS`: the digest of its own document's
+ * walk, which frame it is, and its document's URL. The read matches each
+ * frame's document to its CDP counterpart by URL and digest together, as the
+ * two sides name frames differently: the extension by a number, CDP by a
+ * token, with nothing that turns one into the other.
+ */
+export interface FramePageKeyDigest extends PageKeyDigest {
+  /** The frame, as the extension knows it: 0 for the top frame. */
+  frameId: number;
+  /** Its document's URL (`document.URL`), as CDP's `documentURL` has it. */
+  url: string;
 }
 
 /** How a walk reads one side's elements. */
@@ -120,6 +136,11 @@ export interface CdpDomNode {
   shadowRoots?: CdpDomNode[];
   /** On a shadow root: `open`, `closed` or `user-agent`. */
   shadowRootType?: string;
+  /** On a frame's `<iframe>`, the document it shows, when the frame shares
+   *  the renderer of the document the `<iframe>` is in. */
+  contentDocument?: CdpDomNode;
+  /** On a document, its URL. */
+  documentURL?: string;
 }
 
 const ELEMENT_NODE = 1;
@@ -164,6 +185,37 @@ export function cdpPageKeys(
   return { keys, digest };
 }
 
+/**
+ * The documents of `DOM.getDocument({ pierce: true })`'s tree: `root` itself,
+ * and the document of every frame inside it that shares its renderer,
+ * however deeply they nest, each with its `<iframe>`'s backend node id. A
+ * frame in a renderer of its own has no document here: CDP reaches it only
+ * through that frame's own session.
+ */
+export function cdpFrameDocuments(
+  root: CdpDomNode,
+): Array<{ document: CdpDomNode; ownerBackendNodeId?: number }> {
+  const out: Array<{ document: CdpDomNode; ownerBackendNodeId?: number }> = [
+    { document: root },
+  ];
+  // A stack, as the walk above: a deep page would overflow the call stack.
+  const stack: CdpDomNode[] = [root];
+  while (stack.length > 0) {
+    const node = stack.pop()!;
+    if (node.contentDocument) {
+      out.push({
+        document: node.contentDocument,
+        ownerBackendNodeId: node.backendNodeId,
+      });
+      stack.push(node.contentDocument);
+    }
+    // Shadow roots too: an `<iframe>` can sit inside one.
+    for (const child of node.children ?? []) stack.push(child);
+    for (const shadow of node.shadowRoots ?? []) stack.push(shadow);
+  }
+  return out;
+}
+
 /** A content script's reply to `NATIVE_PAGE_KEYS`, checked: anything that
  *  isn't a digest reads as no numbering at all. */
 export function asPageKeyDigest(reply: unknown): PageKeyDigest | undefined {
@@ -171,6 +223,20 @@ export function asPageKeyDigest(reply: unknown): PageKeyDigest | undefined {
   const { count, hash } = reply as Partial<PageKeyDigest>;
   return Number.isSafeInteger(count) && Number.isSafeInteger(hash)
     ? { count: count!, hash: hash! }
+    : undefined;
+}
+
+/** The reply of frame `frameId`'s content script to `NATIVE_PAGE_KEYS`,
+ *  checked as {@link asPageKeyDigest} checks one, and with its document's
+ *  URL, which a frame's document can't be matched without. */
+export function asFramePageKeyDigest(
+  reply: unknown,
+  frameId: number,
+): FramePageKeyDigest | undefined {
+  const digest = asPageKeyDigest(reply);
+  const url = (reply as { url?: unknown } | null)?.url;
+  return digest && typeof url === "string"
+    ? { ...digest, frameId, url }
     : undefined;
 }
 
@@ -235,6 +301,14 @@ export function liveDocumentElement(doc: Document): Element | null {
   )?.get;
   const el: unknown = get ? get.call(doc) : doc.documentElement;
   return el instanceof Element ? el : null;
+}
+
+/** The document's URL, read clobber-safely as {@link liveDocumentElement}
+ *  reads its element: an `<img name="URL">` shadows the property. */
+export function liveDocumentURL(doc: Document): string {
+  const get = Object.getOwnPropertyDescriptor(Document.prototype, "URL")?.get;
+  const url: unknown = get ? get.call(doc) : doc.URL;
+  return typeof url === "string" ? url : "";
 }
 
 /** How many reads' numberings the content script keeps: the one the panel's

@@ -17,11 +17,15 @@ export interface FocusChangedPayload {
   nodeId?: string;
   /**
    * For the native tree: by native read, the numbers the read gave the
-   * focused element and each numbered element above it, nearest first (see
-   * `native/page-keys.ts`). The panel takes the first that names a row of the
-   * tree it got from that read. From the top frame only.
+   * focused element and each numbered element above it in its document,
+   * nearest first (see `native/page-keys.ts`). The panel takes the first that
+   * names a row of the tree it got from that read.
    */
   pageKeys?: Record<string, number[]>;
+  /** The frame whose document `pageKeys` number, as the extension knows it
+   *  (0: the top frame). The service worker sets it, from the sender, on
+   *  what it forwards to the panel. */
+  frameId?: number;
 }
 
 /** Messages from content script frame → background (per-frame tree data) */

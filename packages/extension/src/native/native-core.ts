@@ -67,8 +67,10 @@ import {
 
 import { isConnectionLost } from "./connection-lost.js";
 import {
+  cdpFrameDocuments,
   cdpPageKeys,
   type CdpDomNode,
+  type FramePageKeyDigest,
   type PageKeyDigest,
 } from "./page-keys.js";
 
@@ -393,10 +395,17 @@ export type EnrichedNativeNode = NativeAXNode &
      * withheld too — see {@link fieldValueWithheld}.
      */
     valueWithheld?: boolean;
-    /** Its element's number in the page's walk (`page-keys.ts`), which the
-     *  content script reports focus by. Only on a row of the top document,
-     *  and only when the read numbered the page. */
+    /** Its element's number in its document's walk (`page-keys.ts`), which
+     *  the content script in that document's frame reports focus by. Only
+     *  when the read numbered that document. */
     pageKey?: number;
+    /** The frame whose document numbered `pageKey`, as the extension knows
+     *  it, when that isn't the top frame (0). */
+    pageFrame?: number;
+    /** On an `Iframe` row: the frame it shows, when the read numbered that
+     *  frame's document. Focus inside the frame on an element with no row
+     *  above it in the frame selects this row. */
+    embedsPageFrame?: number;
   };
 
 /** The single capability the native path needs from any CDP transport. */
@@ -456,18 +465,19 @@ export interface NativeTreeResult {
    *  on every navigation, a reload included, unlike the URL. Absent when
    *  Chromium didn't say. */
   documentId?: string;
-  /** The rows carry `pageKey`s: the read numbered the page, and the content
-   *  script's numbering agreed. See {@link ReadNativeTreeOptions.pageKeys}. */
+  /** Rows carry `pageKey`s: the read numbered a document, the top one or a
+   *  frame's, and the content script's numbering of it agreed. See
+   *  {@link ReadNativeTreeOptions.pageKeys}. */
   pageKeyed?: boolean;
 }
 
 export interface ReadNativeTreeOptions {
   /**
-   * Have the content script number the live page for this read
-   * (`NATIVE_PAGE_KEYS`), and answer with its digest, or `undefined` when it
-   * couldn't. Left out, the read numbers nothing.
+   * Have the content script in every frame number its own document for this
+   * read (`NATIVE_PAGE_KEYS`), and answer with what each frame that could
+   * answered. Left out, the read numbers nothing.
    */
-  pageKeys?: () => Promise<PageKeyDigest | undefined>;
+  pageKeys?: () => Promise<readonly FramePageKeyDigest[]>;
 }
 
 /**
@@ -927,15 +937,21 @@ export async function readNativeTree(
   const nodes = await readDocument(transport, full.nodes);
   let rawCount = full.nodes.length;
   const budget = { left: MAX_FRAMES_PER_READ };
+  // The sessions the tree was read through: the top frame's, and that of
+  // each out-of-process frame grafted in.
+  const sessions: ReadSession[] = [{ transport, suffix: "" }];
   for (const frame of await readFrames(transport, "", 0, nodes, budget)) {
     if (graftNativeFrame(nodes, frame.ownerId, frame.nodes)) {
       rawCount += frame.rawCount;
+      if (frame.session) {
+        sessions.push({ ...frame.session, ownerId: frame.ownerId });
+      }
     }
   }
   // Last, so the numbering is as close as it can be to the moment the panel
   // starts using it.
   const pageKeyed = options.pageKeys
-    ? await keyPageRows(transport, nodes, options.pageKeys)
+    ? await keyPageRows(sessions, nodes, options.pageKeys)
     : false;
 
   // Serialized before `rootIdOf` adds any synthetic root, which is a
@@ -955,62 +971,161 @@ export async function readNativeTree(
   };
 }
 
+/** A session a read went through: the top frame's, or an out-of-process
+ *  frame's, with the suffix its rows' ids carry and, for a frame's, the row
+ *  the frame is grafted under. */
+interface ReadSession {
+  transport: CdpTransport;
+  suffix: string;
+  ownerId?: string;
+}
+
+/** A document numbered over CDP, in the read's session `session`. */
+interface NumberedDocument {
+  session: number;
+  keys: Map<number, number>;
+  digest: PageKeyDigest;
+  url: string;
+  /** The row it is grafted under; absent for the top document. */
+  ownerId?: string;
+}
+
 /**
- * Give each row of the top document its element's number in the page's walk
- * (`pageKey`, see `page-keys.ts`), so the panel can find the row for an
- * element the content script reports focus on, with no debugger attached.
- * The two walks start together, this one over `DOM.getDocument` and the
- * content script's over the live DOM, to leave the page as little time as
- * possible to change between them. If it changed anyway, their digests
- * disagree and the numbers can't be trusted to name the same elements: no
- * row gets one. True when the rows were numbered.
+ * Give each row its element's number in its document's walk (`pageKey`, see
+ * `page-keys.ts`), so the panel can find the row for an element a content
+ * script reports focus on, with no debugger attached. Each document is
+ * walked twice: over `DOM.getDocument` in the session it is read through,
+ * and by the content script in its frame, over the live DOM. All the walks
+ * start together, to leave the page as little time as possible to change
+ * between them.
  *
- * Only the document's shape is used: which element sits where, its local
+ * The top document is the top frame's. Any other is matched to the frame
+ * whose content script numbered a document at the same URL to the same
+ * digest, when exactly one document and one frame agree: two frames showing
+ * the same page, alike, can't be told apart, and neither is numbered. A
+ * document whose two walks disagree changed between them, and its numbers
+ * can't be trusted to name the same elements: none of its rows gets one. A
+ * frame's numbers name elements of its own document only, so its rows also
+ * carry the frame (`pageFrame`), and its `Iframe` row the frame it shows
+ * (`embedsPageFrame`). True when any document was numbered.
+ *
+ * Only a document's shape is used: which element sits where, its local
  * name, and whether its `id` marks it as one of the extension's own
- * (`isOwnElementId`). `DOM.getDocument` sends every attribute and text node
- * as well; nothing else of it is read, and none of it is kept, or leaves
- * this function.
+ * (`isOwnElementId`), with its URL to match it by. `DOM.getDocument` sends
+ * every attribute and text node as well; nothing else of it is read, and
+ * none of it is kept, or leaves this function.
  */
 async function keyPageRows(
-  transport: CdpTransport,
+  sessions: readonly ReadSession[],
   nodes: EnrichedNativeNode[],
-  contentWalk: () => Promise<PageKeyDigest | undefined>,
+  contentWalk: () => Promise<readonly FramePageKeyDigest[]>,
 ): Promise<boolean> {
-  const [content, dom] = await Promise.all([
-    contentWalk().catch(() => undefined),
-    transport
-      .send<{ root?: CdpDomNode }>("DOM.getDocument", {
-        depth: -1,
-        pierce: true,
-      })
-      .catch((err: unknown) => {
-        // A dropped connection fails the read, as it fails any other
-        // command: this is the read's last, so nothing after it would
-        // notice. A command that merely failed leaves the rows unnumbered.
-        if (
-          isConnectionLost(err instanceof Error ? err.message : String(err))
-        ) {
-          throw err;
-        }
-        return undefined;
-      }),
+  const [frames, roots] = await Promise.all([
+    contentWalk().catch(() => []),
+    Promise.all(
+      sessions.map((session, index) =>
+        session.transport
+          .send<{ root?: CdpDomNode }>("DOM.getDocument", {
+            depth: -1,
+            pierce: true,
+          })
+          .then(
+            (dom) => dom.root,
+            (err: unknown) => {
+              // A dropped connection fails the read, as it fails any other
+              // command: this is the read's last, so nothing after it would
+              // notice. The top frame's only: a frame's session drops when
+              // the frame goes away, which leaves that frame unnumbered and
+              // the rest as they are. A command that merely failed leaves
+              // its documents unnumbered.
+              const message = err instanceof Error ? err.message : String(err);
+              if (index === 0 && isConnectionLost(message)) throw err;
+              return undefined;
+            },
+          ),
+      ),
+    ),
   ]);
-  const page = dom?.root ? cdpPageKeys(dom.root) : undefined;
+
+  const documents: NumberedDocument[] = [];
+  roots.forEach((root, session) => {
+    if (!root) return;
+    const { suffix, ownerId } = sessions[session]!;
+    for (const { document, ownerBackendNodeId } of cdpFrameDocuments(root)) {
+      const numbered = cdpPageKeys(document);
+      if (!numbered) continue;
+      documents.push({
+        session,
+        ...numbered,
+        url: document.documentURL ?? "",
+        ownerId:
+          ownerBackendNodeId !== undefined
+            ? `${nativeIdForBackendNode(ownerBackendNodeId)}${suffix}`
+            : ownerId,
+      });
+    }
+  });
+
+  // Which frame numbered each document.
+  const frameOf = new Map<NumberedDocument, number>();
+  const top = documents.find((d) => d.session === 0 && d.ownerId === undefined);
+  const topFrame = frames.find((f) => f.frameId === 0);
   if (
-    !content ||
-    !page ||
-    content.count !== page.digest.count ||
-    content.hash !== page.digest.hash
+    top &&
+    topFrame &&
+    top.digest.count === topFrame.count &&
+    top.digest.hash === topFrame.hash
   ) {
-    return false;
+    frameOf.set(top, 0);
   }
+  const matchKey = (url: string, digest: PageKeyDigest) =>
+    `${digest.count} ${digest.hash} ${url}`;
+  const framesByKey = new Map<string, FramePageKeyDigest[]>();
+  for (const frame of frames) {
+    if (frame.frameId === 0) continue;
+    const key = matchKey(frame.url, frame);
+    framesByKey.set(key, [...(framesByKey.get(key) ?? []), frame]);
+  }
+  const documentsByKey = new Map<string, NumberedDocument[]>();
+  for (const document of documents) {
+    if (document === top) continue;
+    const key = matchKey(document.url, document.digest);
+    documentsByKey.set(key, [...(documentsByKey.get(key) ?? []), document]);
+  }
+  for (const [key, alike] of documentsByKey) {
+    const answered = framesByKey.get(key);
+    if (alike.length === 1 && answered?.length === 1) {
+      frameOf.set(alike[0]!, answered[0]!.frameId);
+    }
+  }
+  if (frameOf.size === 0) return false;
+
+  // By session, each numbered element's number and frame. Backend ids are
+  // unique across every document a session's renderer holds.
+  const numbered = sessions.map(
+    () => new Map<number, { key: number; frameId: number }>(),
+  );
+  for (const [document, frameId] of frameOf) {
+    for (const [backendNodeId, key] of document.keys) {
+      numbered[document.session]!.set(backendNodeId, { key, frameId });
+    }
+  }
+  const sessionOf = new Map(sessions.map((s, index) => [s.suffix, index]));
+  const byId = new Map(nodes.map((node) => [node.id, node]));
   for (const node of nodes) {
-    // A frame's row has a suffixed id, naming an element of another
-    // document, which the walk doesn't cover.
-    const backendNodeId = backendNodeIdFrom(node.id);
-    if (backendNodeId === null) continue;
-    const key = page.keys.get(backendNodeId);
-    if (key !== undefined) node.pageKey = key;
+    const { localId, frame } = splitNativeNodeId(node.id);
+    const backendNodeId = backendNodeIdFrom(localId);
+    const session = sessionOf.get(nativeFrameSuffix(frame));
+    if (backendNodeId === null || session === undefined) continue;
+    const at = numbered[session]!.get(backendNodeId);
+    if (!at) continue;
+    node.pageKey = at.key;
+    if (at.frameId !== 0) node.pageFrame = at.frameId;
+  }
+  for (const [document, frameId] of frameOf) {
+    const owner =
+      document.ownerId !== undefined ? byId.get(document.ownerId) : undefined;
+    if (owner) owner.embedsPageFrame = frameId;
   }
   return true;
 }
@@ -1186,6 +1301,10 @@ interface FrameDocument {
   ownerId: string;
   nodes: EnrichedNativeNode[];
   rawCount: number;
+  /** For an out-of-process frame's document: the session it was read
+   *  through, and the suffix its rows' ids carry. A same-process frame's is
+   *  its owner's. */
+  session?: { transport: CdpTransport; suffix: string };
 }
 
 interface FrameTreeNode {
@@ -1390,6 +1509,7 @@ async function readFrames(
       ownerId: `${ownerId}${suffix}`,
       nodes: nodes.map((n) => withNativeIdSuffix(n, childSuffix)),
       rawCount: raw.nodes.length,
+      session: { transport: child, suffix: childSuffix },
     });
     out.push(
       ...(await readFrames(child, childSuffix, depth + 1, nodes, budget).catch(

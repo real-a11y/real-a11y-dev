@@ -31,7 +31,12 @@ import {
   type EnrichedNativeNode,
   type FrameSession,
 } from "./native-core.js";
-import { cdpPageKeys, type CdpDomNode } from "./page-keys.js";
+import {
+  cdpPageKeys,
+  type CdpDomNode,
+  type FramePageKeyDigest,
+  type PageKeyDigest,
+} from "./page-keys.js";
 
 // A scripted fake CDP transport — records every call, returns programmed
 // responses. The same shape the chrome.debugger and Playwright transports have.
@@ -109,6 +114,10 @@ describe("readNativeTree's page keys", () => {
     ],
   };
   const digest = cdpPageKeys(dom)!.digest;
+  /** The top frame's content script's answer: the page, numbered to `d`. */
+  const topFrame = (d: PageKeyDigest): FramePageKeyDigest[] => [
+    { ...d, frameId: 0, url: "https://a.test/" },
+  ];
   const transport = (getDocument: () => unknown = () => ({ root: dom })) =>
     new FakeTransport((method) => {
       if (method === "Accessibility.getFullAXTree") return { nodes: raw };
@@ -120,12 +129,16 @@ describe("readNativeTree's page keys", () => {
 
   it("gives each row its element's number when the content script numbered the page alike", async () => {
     const t = transport();
-    const res = await readNativeTree(t, { pageKeys: async () => digest });
+    const res = await readNativeTree(t, {
+      pageKeys: async () => topFrame(digest),
+    });
     expect(res.pageKeyed).toBe(true);
     expect(keys(res.nodes)).toMatchObject({
       "ax-dom-20": 3,
       "ax-dom-30": 4,
     });
+    // The top frame's rows name no frame: focus there is reported as 0.
+    expect(res.nodes.some((n) => n.pageFrame !== undefined)).toBe(false);
     expect(t.calls.find((c) => c.method === "DOM.getDocument")?.params).toEqual(
       { depth: -1, pierce: true },
     );
@@ -137,7 +150,7 @@ describe("readNativeTree's page keys", () => {
       { ...digest, hash: (digest.hash + 1) >>> 0 },
     ]) {
       const res = await readNativeTree(transport(), {
-        pageKeys: async () => other,
+        pageKeys: async () => topFrame(other),
       });
       expect(res.pageKeyed).toBeUndefined();
       expect(res.nodes.some((n) => n.pageKey !== undefined)).toBe(false);
@@ -146,17 +159,19 @@ describe("readNativeTree's page keys", () => {
 
   it("numbers no row, and still reads, when either walk can't be had", async () => {
     const cases: Array<
-      [FakeTransport, () => Promise<typeof digest | undefined>]
+      [FakeTransport, () => Promise<readonly FramePageKeyDigest[]>]
     > = [
-      [transport(), async () => undefined],
+      [transport(), async () => []],
       [transport(), () => Promise.reject(new Error("no content script"))],
+      // Some other frame's answer, with nothing of the top frame's.
+      [transport(), async () => [{ ...topFrame(digest)[0]!, frameId: 3 }]],
       [
         transport(() => {
           throw new Error("DOM.getDocument failed");
         }),
-        async () => digest,
+        async () => topFrame(digest),
       ],
-      [transport(() => ({})), async () => digest],
+      [transport(() => ({})), async () => topFrame(digest)],
     ];
     for (const [t, pageKeys] of cases) {
       const res = await readNativeTree(t, { pageKeys });
@@ -173,7 +188,7 @@ describe("readNativeTree's page keys", () => {
       throw new Error("Debugger is not attached to the tab with id: 7.");
     });
     await expect(
-      readNativeTree(t, { pageKeys: async () => digest }),
+      readNativeTree(t, { pageKeys: async () => topFrame(digest) }),
     ).rejects.toThrow(/not attached/);
   });
 
@@ -3506,6 +3521,344 @@ describe("readNativeTree across frames", () => {
     expect(findNative(res.nodes, "button", "Inner save")!.id).toBe(
       "ax-dom-8@INNER",
     );
+  });
+});
+
+describe("readNativeTree's page keys across frames", () => {
+  /** A `DOM.getDocument` element. */
+  const el = (
+    localName: string,
+    backendNodeId: number,
+    children: CdpDomNode[] = [],
+    extra: Partial<CdpDomNode> = {},
+  ): CdpDomNode => ({
+    nodeType: 1,
+    backendNodeId,
+    localName,
+    children,
+    ...extra,
+  });
+  const doc = (backendNodeId: number, url: string, html: CdpDomNode) =>
+    ({
+      nodeType: 9,
+      backendNodeId,
+      documentURL: url,
+      children: [html],
+    }) as CdpDomNode;
+  /** A document's raw AX nodes: its root, and a row for each element. */
+  const axDocument = (
+    rootId: string,
+    rows: Array<[backendDOMNodeId: number, role: string, name: string]>,
+  ) => [
+    {
+      nodeId: rootId,
+      role: { value: "RootWebArea" },
+      childIds: rows.map(([backend]) => String(backend)),
+    },
+    ...rows.map(([backendDOMNodeId, role, name]) => ({
+      nodeId: String(backendDOMNodeId),
+      backendDOMNodeId,
+      parentId: rootId,
+      role: { value: role },
+      name: { value: name },
+    })),
+  ];
+
+  // The top document: a heading, the <iframe> (8) and a button. Numbered
+  // html 0, head 1, body 2, h1 3, iframe 4, button 5.
+  const TOP_URL = "https://a.test/";
+  const TOP_AX = axDocument("1", [
+    [2, "heading", "Outer"],
+    [8, "Iframe", "Frame"],
+    [9, "button", "Outer button"],
+  ]);
+  const topDom = (frame?: CdpDomNode) =>
+    doc(
+      1,
+      TOP_URL,
+      el("html", 3, [
+        el("head", 4),
+        el("body", 5, [
+          el("h1", 2),
+          el("iframe", 8, [], frame ? { contentDocument: frame } : {}),
+          el("button", 9),
+        ]),
+      ]),
+    );
+  const topAnswer = (): FramePageKeyDigest => ({
+    ...cdpPageKeys(topDom())!.digest,
+    frameId: 0,
+    url: TOP_URL,
+  });
+  /** Frame `frameId`'s content script's answer for `document`. */
+  const answer = (
+    document: CdpDomNode,
+    frameId: number,
+  ): FramePageKeyDigest => ({
+    ...cdpPageKeys(document)!.digest,
+    frameId,
+    url: document.documentURL!,
+  });
+  const byId = (nodes: EnrichedNativeNode[], id: string) =>
+    nodes.find((n) => n.id === id)!;
+
+  describe("a frame sharing the page's renderer", () => {
+    // The frame's document: a button in a <main>. Numbered html 0, head 1,
+    // body 2, main 3, button 4.
+    const FRAME_URL = "https://a.test/frame";
+    const frameDom = (backend = 20) =>
+      doc(
+        backend,
+        FRAME_URL,
+        el("html", backend + 1, [
+          el("head", backend + 2),
+          el("body", backend + 3, [
+            el("main", backend + 4, [el("button", backend + 5)]),
+          ]),
+        ]),
+      );
+    const FRAME_AX = axDocument("20", [[25, "button", "Inner save"]]);
+    const transport = (dom: CdpDomNode = topDom(frameDom())) =>
+      new FakeTransport((method, params) => {
+        const frameId = (params as { frameId?: string } | undefined)?.frameId;
+        if (method === "Accessibility.getFullAXTree") {
+          return { nodes: frameId === "SAME" ? FRAME_AX : TOP_AX };
+        }
+        if (method === "Page.getFrameTree") {
+          return {
+            frameTree: {
+              frame: { id: "TOP" },
+              childFrames: [{ frame: { id: "SAME" } }],
+            },
+          };
+        }
+        if (method === "DOM.getFrameOwner") {
+          return frameId === "SAME" ? { backendNodeId: 8 } : {};
+        }
+        if (method === "DOM.getDocument") return { root: dom };
+        return {};
+      });
+
+    it("numbers the frame's rows by its own document's walk, with the frame they're reported from", async () => {
+      const t = transport();
+      const res = await readNativeTree(t, {
+        pageKeys: async () => [topAnswer(), answer(frameDom(), 3)],
+      });
+      expect(res.pageKeyed).toBe(true);
+      const inner = byId(res.nodes, "ax-dom-25");
+      expect([inner.pageKey, inner.pageFrame]).toEqual([4, 3]);
+      // The top document's rows as before; its <iframe>'s row shows frame 3.
+      const frame = byId(res.nodes, "ax-dom-8");
+      expect([frame.pageKey, frame.pageFrame]).toEqual([4, undefined]);
+      expect(frame.embedsPageFrame).toBe(3);
+      expect(byId(res.nodes, "ax-dom-9").pageKey).toBe(5);
+      // One document read for both: they share the session.
+      expect(
+        t.calls.filter((c) => c.method === "DOM.getDocument"),
+      ).toHaveLength(1);
+    });
+
+    it("numbers neither of two frames showing the same page alike: their reports can't be told apart", async () => {
+      // The same document twice over, in two frames whose content scripts
+      // both answer alike.
+      const twice = topDom(frameDom(20));
+      const body = twice.children![0]!.children![1]!;
+      body.children!.push(
+        el("iframe", 60, [], { contentDocument: frameDom(60) }),
+      );
+      const top = { ...cdpPageKeys(twice)!.digest, frameId: 0, url: TOP_URL };
+      const res = await readNativeTree(transport(twice), {
+        pageKeys: async () => [
+          top,
+          answer(frameDom(), 3),
+          answer(frameDom(), 4),
+        ],
+      });
+      expect(byId(res.nodes, "ax-dom-25").pageKey).toBeUndefined();
+      expect(byId(res.nodes, "ax-dom-8").embedsPageFrame).toBeUndefined();
+      // The top document is the top frame's, whatever its frames.
+      expect(res.pageKeyed).toBe(true);
+      expect(byId(res.nodes, "ax-dom-9").pageKey).toBe(5);
+    });
+
+    it("numbers a frame only when its URL and its numbering both agree", async () => {
+      const changed = frameDom();
+      changed.children![0]!.children![1]!.children!.push(el("p", 90));
+      for (const frame of [
+        { ...answer(frameDom(), 3), url: "https://a.test/other" },
+        answer(changed, 3),
+      ]) {
+        const res = await readNativeTree(transport(), {
+          pageKeys: async () => [topAnswer(), frame],
+        });
+        expect(byId(res.nodes, "ax-dom-25").pageKey).toBeUndefined();
+        expect(byId(res.nodes, "ax-dom-8").embedsPageFrame).toBeUndefined();
+        expect(byId(res.nodes, "ax-dom-9").pageKey).toBe(5);
+      }
+    });
+
+    it("numbers a frame whose page agrees when the top document's doesn't", async () => {
+      const res = await readNativeTree(transport(), {
+        pageKeys: async () => [
+          { ...topAnswer(), count: 99 },
+          answer(frameDom(), 3),
+        ],
+      });
+      expect(res.pageKeyed).toBe(true);
+      expect(byId(res.nodes, "ax-dom-25").pageKey).toBe(4);
+      expect(byId(res.nodes, "ax-dom-8").embedsPageFrame).toBe(3);
+      expect(byId(res.nodes, "ax-dom-9").pageKey).toBeUndefined();
+    });
+  });
+
+  describe("a frame in a renderer of its own", () => {
+    // Its document: a heading and a button in a <main>, with backend ids of
+    // its own, the button's (8) the same as the top document's <iframe>'s.
+    // Numbered html 0, head 1, body 2, main 3, h1 4, button 5.
+    const FRAME_URL = "https://b.test/frame";
+    const frameDom = (nested?: CdpDomNode) =>
+      doc(
+        1,
+        FRAME_URL,
+        el("html", 2, [
+          el("head", 3),
+          el("body", 4, [
+            el("main", 5, [
+              el("h1", 7),
+              el("button", 8),
+              ...(nested
+                ? [el("iframe", 6, [], { contentDocument: nested })]
+                : []),
+            ]),
+          ]),
+        ]),
+      );
+    const FRAME_AX = axDocument("1", [
+      [7, "heading", "Inner"],
+      [8, "button", "Inner save"],
+    ]);
+
+    function frameTransport(
+      getDocument: () => unknown = () => ({ root: frameDom() }),
+      handler: Handler = () => undefined,
+    ) {
+      return new FakeTransport((method, params) => {
+        const handled = handler(method, params);
+        if (handled !== undefined) return handled;
+        if (method === "Accessibility.getFullAXTree")
+          return { nodes: FRAME_AX };
+        if (method === "Page.getFrameTree") {
+          return { frameTree: { frame: { id: "OOPIF" } } };
+        }
+        if (method === "DOM.getDocument") return getDocument();
+        return {};
+      });
+    }
+
+    function topTransport(frame: FakeTransport) {
+      const top = new FakeTransport((method, params) => {
+        if (method === "Accessibility.getFullAXTree") return { nodes: TOP_AX };
+        if (method === "DOM.getFrameOwner") {
+          return (params as { frameId?: string }).frameId === "OOPIF"
+            ? { backendNodeId: 8 }
+            : {};
+        }
+        if (method === "Page.getFrameTree") {
+          return { frameTree: { frame: { id: "TOP" } } };
+        }
+        if (method === "DOM.getDocument") return { root: topDom() };
+        return {};
+      }) as FakeTransport & CdpTransport;
+      top.frameSessions = async () => [{ frameId: "OOPIF", transport: frame }];
+      return top;
+    }
+
+    it("numbers the frame's rows by the document its own session reads", async () => {
+      const frame = frameTransport();
+      const res = await readNativeTree(topTransport(frame), {
+        pageKeys: async () => [topAnswer(), answer(frameDom(), 12)],
+      });
+      expect(res.pageKeyed).toBe(true);
+      expect(
+        frame.calls.find((c) => c.method === "DOM.getDocument")?.params,
+      ).toEqual({ depth: -1, pierce: true });
+      // Backend ids restart in the frame's renderer: its button is 8 too,
+      // and keeps its own number.
+      const inner = byId(res.nodes, "ax-dom-8@OOPIF");
+      expect([inner.pageKey, inner.pageFrame]).toEqual([5, 12]);
+      expect(byId(res.nodes, "ax-dom-7@OOPIF").pageKey).toBe(4);
+      const owner = byId(res.nodes, "ax-dom-8");
+      expect([owner.pageKey, owner.pageFrame]).toEqual([4, undefined]);
+      expect(owner.embedsPageFrame).toBe(12);
+    });
+
+    it("numbers a frame inside it that shares its renderer, under that frame's own row", async () => {
+      // A frame inside the frame, with an <iframe> row (6) for it.
+      const NESTED_URL = "https://b.test/nested";
+      const nested = doc(
+        30,
+        NESTED_URL,
+        el("html", 31, [el("head", 32), el("body", 33, [el("button", 35)])]),
+      );
+      const frame = frameTransport(
+        () => ({ root: frameDom(nested) }),
+        (method, params) => {
+          const frameId = (params as { frameId?: string } | undefined)?.frameId;
+          if (method === "Accessibility.getFullAXTree") {
+            return {
+              nodes:
+                frameId === "NESTED"
+                  ? axDocument("30", [[35, "button", "Deep save"]])
+                  : axDocument("1", [
+                      [8, "button", "Inner save"],
+                      [6, "Iframe", "Nested"],
+                    ]),
+            };
+          }
+          if (method === "Page.getFrameTree") {
+            return {
+              frameTree: {
+                frame: { id: "OOPIF" },
+                childFrames: [{ frame: { id: "NESTED" } }],
+              },
+            };
+          }
+          if (method === "DOM.getFrameOwner") {
+            return frameId === "NESTED" ? { backendNodeId: 6 } : {};
+          }
+          return undefined;
+        },
+      );
+      const res = await readNativeTree(topTransport(frame), {
+        pageKeys: async () => [
+          topAnswer(),
+          answer(frameDom(nested), 12),
+          answer(nested, 14),
+        ],
+      });
+      const deep = byId(res.nodes, "ax-dom-35@OOPIF");
+      expect([deep.pageKey, deep.pageFrame]).toEqual([3, 14]);
+      const nestedOwner = byId(res.nodes, "ax-dom-6@OOPIF");
+      expect([nestedOwner.pageFrame, nestedOwner.embedsPageFrame]).toEqual([
+        12, 14,
+      ]);
+      expect(byId(res.nodes, "ax-dom-8").embedsPageFrame).toBe(12);
+    });
+
+    it("still reads, the frame unnumbered, when the frame's session drops while it is numbered", async () => {
+      // The frame navigated away or was removed: its session goes with it,
+      // which says nothing about the tab's own.
+      const frame = frameTransport(() => {
+        throw new Error("Debugger is not attached to the target");
+      });
+      const res = await readNativeTree(topTransport(frame), {
+        pageKeys: async () => [topAnswer(), answer(frameDom(), 12)],
+      });
+      expect(res.pageKeyed).toBe(true);
+      expect(byId(res.nodes, "ax-dom-8@OOPIF").pageKey).toBeUndefined();
+      expect(byId(res.nodes, "ax-dom-8").embedsPageFrame).toBeUndefined();
+      expect(byId(res.nodes, "ax-dom-9").pageKey).toBe(5);
+    });
   });
 });
 

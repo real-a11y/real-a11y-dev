@@ -882,7 +882,7 @@ describe("background: page focus forwarded to the panel", () => {
   const forwarded = () =>
     h.panelMessages.filter((m) => m.type === "FOCUS_CHANGED");
 
-  it("passes the top frame's page keys on with its node", () => {
+  it("passes the top frame's page keys on with its node, as frame 0's", () => {
     const pageKeys = { "read-1": [7, 2, 0] };
     reportFocus(0, { nodeId: "n3", pageKeys });
     reportFocus(0, { pageKeys });
@@ -890,16 +890,39 @@ describe("background: page focus forwarded to the panel", () => {
       {
         type: "FOCUS_CHANGED",
         tabId: TAB_ID,
-        payload: { nodeId: "n3", pageKeys },
+        payload: { nodeId: "n3", pageKeys, frameId: 0 },
       },
-      { type: "FOCUS_CHANGED", tabId: TAB_ID, payload: { pageKeys } },
+      {
+        type: "FOCUS_CHANGED",
+        tabId: TAB_ID,
+        payload: { pageKeys, frameId: 0 },
+      },
     ]);
   });
 
-  it("keeps a subframe's node, frame-prefixed, and drops any page keys it sends", () => {
-    reportFocus(2, { nodeId: "n3", pageKeys: { "read-1": [7] } });
+  it("passes a subframe's page keys on with the frame they number, its node frame-prefixed", () => {
+    const pageKeys = { "read-1": [7] };
+    reportFocus(2, { nodeId: "n3", pageKeys });
+    reportFocus(2, { nodeId: "n4" });
     expect(forwarded()).toEqual([
-      { type: "FOCUS_CHANGED", tabId: TAB_ID, payload: { nodeId: "f2-n3" } },
+      {
+        type: "FOCUS_CHANGED",
+        tabId: TAB_ID,
+        payload: { nodeId: "f2-n3", pageKeys, frameId: 2 },
+      },
+      { type: "FOCUS_CHANGED", tabId: TAB_ID, payload: { nodeId: "f2-n4" } },
+    ]);
+  });
+
+  it("names the frame from the sender, never from what the page sent", () => {
+    const pageKeys = { "read-1": [7] };
+    reportFocus(2, { pageKeys, frameId: 0 });
+    expect(forwarded()).toEqual([
+      {
+        type: "FOCUS_CHANGED",
+        tabId: TAB_ID,
+        payload: { pageKeys, frameId: 2 },
+      },
     ]);
   });
 });

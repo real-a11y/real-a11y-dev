@@ -232,10 +232,12 @@ describe("registerNativeMode: the dogfood event log in the store build", () => {
 });
 
 describe("registerNativeMode: a read numbers the page for focus sync", () => {
+  const PAGE_URL = "https://example.com/";
   // A page of one button: `DOM.getDocument`'s tree, and the AX tree over it.
   const dom = {
     nodeType: 9,
     backendNodeId: 1,
+    documentURL: PAGE_URL,
     children: [
       {
         nodeType: 1,
@@ -262,22 +264,41 @@ describe("registerNativeMode: a read numbers the page for focus sync", () => {
     {
       nodeId: "3",
       backendDOMNodeId: 30,
+      parentId: "1",
       role: { value: "button" },
       name: { value: "Save" },
     },
   ];
-  /** The live page numbered as CDP numbers it: html 0, body 1, button 2. */
+  /** The top frame's content script's answer: the live page numbered as CDP
+   *  numbers it, html 0, body 1, button 2. */
   let contentReply: () => Promise<unknown>;
+  /** Other frames' answers, by frame; a frame with none has no content
+   *  script to answer. */
+  let frameReplies: Record<number, () => Promise<unknown>>;
+  /** What `webNavigation.getAllFrames` lists. */
+  let frames: () => Promise<unknown>;
   let sendMessage: ReturnType<typeof vi.fn>;
 
   beforeEach(async () => {
     const { cdpPageKeys } = await import("./page-keys.js");
     const digest = cdpPageKeys(dom)!.digest;
-    contentReply = async () => digest;
-    sendMessage = vi.fn(() => contentReply());
+    contentReply = async () => ({ ...digest, url: PAGE_URL });
+    frameReplies = {};
+    frames = async () => [{ frameId: 0, documentLifecycle: "active" }];
+    sendMessage = vi.fn(
+      (_tabId: number, _message: unknown, options?: { frameId?: number }) => {
+        const frameId = options?.frameId ?? 0;
+        if (frameId === 0) return contentReply();
+        const reply = frameReplies[frameId];
+        return reply
+          ? reply()
+          : Promise.reject(new Error("Receiving end does not exist."));
+      },
+    );
     const c = chrome as unknown as {
       debugger: { sendCommand: unknown };
       tabs: { sendMessage: unknown };
+      webNavigation: unknown;
     };
     c.debugger.sendCommand = async (_target: unknown, method: string) =>
       method === "Accessibility.getFullAXTree"
@@ -286,16 +307,28 @@ describe("registerNativeMode: a read numbers the page for focus sync", () => {
           ? { root: dom }
           : {};
     c.tabs.sendMessage = sendMessage;
+    c.webNavigation = { getAllFrames: () => frames() };
   });
 
   type Read = {
     ok?: boolean;
     pageKeysReadId?: string;
-    nodes?: Array<{ name: string; pageKey?: number }>;
+    nodes?: Array<{
+      name: string;
+      role: string;
+      pageKey?: number;
+      pageFrame?: number;
+      embedsPageFrame?: number;
+    }>;
   };
   const read = async (pageKeys = true) =>
     (await send({ type: "NATIVE_READ", tabId: 7, pageKeys }, PANEL))
       .response as Read;
+  /** The frames asked to number their document, in order. */
+  const asked = () =>
+    sendMessage.mock.calls.map(
+      ([, , options]) => (options as { frameId: number }).frameId,
+    );
 
   it("asks the top frame to number the page, under an id the read answers with", async () => {
     await register();
@@ -308,6 +341,176 @@ describe("registerNativeMode: a read numbers the page for focus sync", () => {
     );
     expect(r.pageKeysReadId).toMatch(/^[0-9a-f-]{36}$/);
     expect(r.nodes?.find((n) => n.name === "Save")?.pageKey).toBe(2);
+  });
+
+  it("asks every frame showing a document to number its own, all under the read's id", async () => {
+    frames = async () => [
+      { frameId: 0, documentLifecycle: "active" },
+      { frameId: 3, documentLifecycle: "active" },
+      // Not the documents on screen.
+      { frameId: 4, documentLifecycle: "prerender" },
+      { frameId: 5, documentLifecycle: "cached" },
+      // A Chrome too old to say.
+      { frameId: 6 },
+    ];
+    await register();
+    const r = await read();
+    expect(asked()).toEqual([0, 3, 6]);
+    const readIds = new Set(
+      sendMessage.mock.calls.map(
+        ([, message]) =>
+          (message as { payload: { readId: string } }).payload.readId,
+      ),
+    );
+    expect([...readIds]).toEqual([r.pageKeysReadId]);
+  });
+
+  it("asks the top frame alone when the tab's frames can't be listed", async () => {
+    frames = () => Promise.reject(new Error("No tab with id: 7."));
+    await register();
+    const r = await read();
+    expect(asked()).toEqual([0]);
+    expect(r.nodes?.find((n) => n.name === "Save")?.pageKey).toBe(2);
+  });
+
+  it("asks the top frame before the tab's frames are listed, and the rest once they are", async () => {
+    let list: (frames: unknown) => void = () => {};
+    frames = () => new Promise((resolve) => (list = resolve));
+    await register();
+    const pending = read();
+    await vi.waitFor(() => expect(asked()).toEqual([0]));
+    list([{ frameId: 0 }, { frameId: 3 }]);
+    const r = await pending;
+    expect(asked()).toEqual([0, 3]);
+    expect(r.nodes?.find((n) => n.name === "Save")?.pageKey).toBe(2);
+  });
+
+  it("numbers the top frame's document without waiting on frames that are never listed", async () => {
+    frames = () => new Promise(() => {});
+    await register();
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      const pending = read();
+      await vi.advanceTimersByTimeAsync(2_000);
+      const r = await pending;
+      expect(asked()).toEqual([0]);
+      expect(r.nodes?.find((n) => n.name === "Save")?.pageKey).toBe(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("asks no more than 32 frames, the top one among them", async () => {
+    frames = async () =>
+      Array.from({ length: 50 }, (_, i) => ({ frameId: 49 - i }));
+    await register();
+    await read();
+    expect(asked()).toHaveLength(32);
+    expect(asked()[0]).toBe(0);
+  });
+
+  it("numbers a frame's rows, and gives its <iframe> row the frame it shows", async () => {
+    // The page with a frame in the same renderer under an <iframe> (40):
+    // html 0, body 1, button 2, iframe 3; the frame's html 0, body 1,
+    // button 2.
+    const FRAME_URL = "https://example.com/frame";
+    const frameDom = {
+      nodeType: 9,
+      backendNodeId: 50,
+      documentURL: FRAME_URL,
+      children: [
+        {
+          nodeType: 1,
+          backendNodeId: 51,
+          localName: "html",
+          children: [
+            {
+              nodeType: 1,
+              backendNodeId: 52,
+              localName: "body",
+              children: [
+                { nodeType: 1, backendNodeId: 55, localName: "button" },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+    const page = structuredClone(dom);
+    page.children[0]!.children[0]!.children.push({
+      nodeType: 1,
+      backendNodeId: 40,
+      localName: "iframe",
+      contentDocument: frameDom,
+    } as (typeof page.children)[0]["children"][0]["children"][0]);
+    const { cdpPageKeys } = await import("./page-keys.js");
+    contentReply = async () => ({
+      ...cdpPageKeys(page)!.digest,
+      url: PAGE_URL,
+    });
+    frameReplies = {
+      3: async () => ({ ...cdpPageKeys(frameDom)!.digest, url: FRAME_URL }),
+    };
+    frames = async () => [{ frameId: 0 }, { frameId: 3 }];
+    const c = chrome as unknown as { debugger: { sendCommand: unknown } };
+    c.debugger.sendCommand = async (
+      _target: unknown,
+      method: string,
+      params?: { frameId?: string },
+    ) => {
+      if (method === "Accessibility.getFullAXTree") {
+        return params?.frameId === "F"
+          ? {
+              nodes: [
+                {
+                  nodeId: "50",
+                  role: { value: "RootWebArea" },
+                  childIds: ["55"],
+                },
+                {
+                  nodeId: "55",
+                  backendDOMNodeId: 55,
+                  parentId: "50",
+                  role: { value: "button" },
+                  name: { value: "Inner save" },
+                },
+              ],
+            }
+          : {
+              nodes: [
+                { ...ax[0]!, childIds: ["3", "40"] },
+                ax[1]!,
+                {
+                  nodeId: "40",
+                  backendDOMNodeId: 40,
+                  parentId: "1",
+                  role: { value: "Iframe" },
+                  name: { value: "Frame" },
+                },
+              ],
+            };
+      }
+      if (method === "Page.getFrameTree") {
+        return {
+          frameTree: {
+            frame: { id: "TOP" },
+            childFrames: [{ frame: { id: "F" } }],
+          },
+        };
+      }
+      if (method === "DOM.getFrameOwner") {
+        return params?.frameId === "F" ? { backendNodeId: 40 } : {};
+      }
+      if (method === "DOM.getDocument") return { root: page };
+      return {};
+    };
+    await register();
+    const r = await read();
+    const inner = r.nodes?.find((n) => n.name === "Inner save");
+    expect([inner?.pageKey, inner?.pageFrame]).toEqual([2, 3]);
+    const owner = r.nodes?.find((n) => n.role === "Iframe");
+    expect([owner?.pageKey, owner?.embedsPageFrame]).toEqual([3, 3]);
+    expect(r.nodes?.find((n) => n.name === "Save")?.pageFrame).toBeUndefined();
   });
 
   it("numbers nothing unless the panel asks: Focus sync is off", async () => {
@@ -327,8 +530,11 @@ describe("registerNativeMode: a read numbers the page for focus sync", () => {
 
   it("answers with no numbering when the content script numbered the page differently, or not at all", async () => {
     await register();
+    const { cdpPageKeys } = await import("./page-keys.js");
     for (const reply of [
-      async () => ({ count: 1, hash: 1 }),
+      async () => ({ count: 1, hash: 1, url: PAGE_URL }),
+      // A digest it can't be matched by.
+      async () => cdpPageKeys(dom)!.digest,
       async () => null,
       async () => {
         throw new Error("Receiving end does not exist.");
@@ -352,6 +558,22 @@ describe("registerNativeMode: a read numbers the page for focus sync", () => {
       const r = await pending;
       expect(r.ok).toBe(true);
       expect(r.pageKeysReadId).toBeUndefined();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("numbers what answered in time when one frame never does", async () => {
+    frames = async () => [{ frameId: 0 }, { frameId: 3 }];
+    frameReplies = { 3: () => new Promise(() => {}) };
+    await register();
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      const pending = read();
+      await vi.advanceTimersByTimeAsync(2_000);
+      const r = await pending;
+      expect(r.pageKeysReadId).toBeDefined();
+      expect(r.nodes?.find((n) => n.name === "Save")?.pageKey).toBe(2);
     } finally {
       vi.useRealTimers();
     }

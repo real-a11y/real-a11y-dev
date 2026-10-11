@@ -53,10 +53,15 @@ export type NativeNode = {
    *  unclassified); false only for a field classified as not sensitive.
    *  Absent counts as withheld — see `pickerCurrentOption`. */
   valueWithheld?: boolean;
-  /** Its element's number in the read's walk of the page, which the content
-   *  script reports focus by (`page-keys.ts`). Only on a row of the top
-   *  document, and only when the read numbered the page. */
+  /** Its element's number in the read's walk of its document, which the
+   *  content script in that document's frame reports focus by
+   *  (`page-keys.ts`). Only when the read numbered that document. */
   pageKey?: number;
+  /** The frame whose document numbered `pageKey`, when not the top frame. */
+  pageFrame?: number;
+  /** On an `Iframe` row: the frame it shows, when the read numbered that
+   *  frame's document. */
+  embedsPageFrame?: number;
 };
 
 /**
