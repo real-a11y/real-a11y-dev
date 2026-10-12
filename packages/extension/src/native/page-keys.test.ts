@@ -564,6 +564,8 @@ describe("asFramePageKeyDigest", () => {
     expect(reply({ embeds: many }).embeds).toHaveLength(MAX_FRAME_EMBEDS);
     // It can't say it has no URL of its own: the tab's list of frames does.
     expect(reply({ blank: true }).blank).toBeUndefined();
+    // Nor which frame holds it.
+    expect(reply({ parent: 0 }).parent).toBeUndefined();
   });
 });
 

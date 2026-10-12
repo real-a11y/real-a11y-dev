@@ -950,6 +950,127 @@ describe("background: a frame whose place in the tree isn't known yet", () => {
     expect(sentSince(h, 0, "RESEND_TREE")).toHaveLength(1);
   });
 
+  it("holds a sibling's guessed place back only until the document around them has been read again", async () => {
+    // Frame 11 marked nothing and its URL matches no <iframe>'s `src`, so
+    // it is placed by the last-resort guess: the first empty <iframe>, which
+    // may be the one frame 9 is waiting to be placed under.
+    h.knobs.frames = [
+      ...h.knobs.frames,
+      { frameId: 11, parentFrameId: 0, url: "https://c.test/redirected" },
+    ];
+    h.liveFrames.add(11);
+    const redirected = {
+      ...frameTreePayload(1),
+      frameUrl: "https://c.test/redirected",
+    };
+    announceTree(0, topTree());
+    for (const frameId of [1, 2]) announce(h, frameId);
+    announceTree(9, blankTree("mark-9"));
+    announceTree(11, redirected);
+    await vi.advanceTimersByTimeAsync(200);
+    expect(lastNodes().get("f11-root")!.parentId).toBeNull();
+
+    // Asked after, and the top frame's tree comes back bearing no such
+    // mark: frame 9's <iframe> is one the tree has no node for, so the
+    // guess can't take it, and is taken again.
+    await vi.advanceTimersByTimeAsync(1_500);
+    expect(sentSince(h, 0, "RESEND_TREE")).toHaveLength(1);
+    await vi.runAllTimersAsync();
+    announceTree(0, topTree());
+    await vi.runAllTimersAsync();
+    expect(lastNodes().get("f11-root")!.parentId).toBe("ifBlank");
+    expect(lastNodes().get("f9-root")!.parentId).toBeNull();
+  });
+
+  it("remembers a frame has no place when the panel asks for the tree again", async () => {
+    h.knobs.frames = [
+      ...h.knobs.frames,
+      { frameId: 11, parentFrameId: 0, url: "https://c.test/redirected" },
+    ];
+    h.liveFrames.add(11);
+    const redirected = {
+      ...frameTreePayload(1),
+      frameUrl: "https://c.test/redirected",
+    };
+    const announcePage = () => {
+      announceTree(0, topTree());
+      for (const frameId of [1, 2]) announce(h, frameId);
+      announceTree(9, blankTree("mark-9"));
+      announceTree(11, redirected);
+    };
+    announcePage();
+    await vi.advanceTimersByTimeAsync(200 + 1_500);
+    await vi.runAllTimersAsync();
+    announceTree(0, topTree());
+    await vi.runAllTimersAsync();
+    expect(lastNodes().get("f11-root")!.parentId).toBe("ifBlank");
+    expect(sentSince(h, 0, "RESEND_TREE")).toHaveLength(1);
+
+    // The panel's REQUEST_TREE, as it sends after every action: every
+    // frame's tree is dropped and sent again, the same page as before.
+    for (const fn of h.messageListeners) {
+      fn(
+        { type: "REQUEST_TREE", tabId: TAB_ID, payload: { viewMode: "a11y" } },
+        { id: EXTENSION_ID },
+        () => {},
+      );
+    }
+    await vi.advanceTimersByTimeAsync(0);
+    announcePage();
+    await vi.advanceTimersByTimeAsync(200);
+    // At once, with no second wait and nobody asked again.
+    expect(lastNodes().get("f11-root")!.parentId).toBe("ifBlank");
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(sentSince(h, 0, "RESEND_TREE")).toHaveLength(1);
+  });
+
+  it("remembers it through a request the frame answers before its parent does", async () => {
+    // The blank frame is inside frame 1 here. After a fresh request its own
+    // tree is back first: with no tree for the frame around it, the merge
+    // says nothing of it either way, which isn't the frame being placed.
+    h.knobs.frames = [
+      ...PAGE_FRAMES,
+      { frameId: 9, parentFrameId: 1, url: "about:blank" },
+    ];
+    announce(h, 0);
+    for (const frameId of [1, 2]) announce(h, frameId);
+    announceTree(9, blankTree("mark-9"));
+    await vi.advanceTimersByTimeAsync(200 + 1_500);
+    await vi.runAllTimersAsync();
+    expect(sentSince(h, 0, "RESEND_TREE").map((m) => m.frameId)).toEqual([1]);
+
+    h.liveFrames.delete(1); // slow to answer the request below
+    for (const fn of h.messageListeners) {
+      fn(
+        { type: "REQUEST_TREE", tabId: TAB_ID, payload: { viewMode: "a11y" } },
+        { id: EXTENSION_ID },
+        () => {},
+      );
+    }
+    await vi.advanceTimersByTimeAsync(0);
+    announceTree(9, blankTree("mark-9"));
+    await vi.advanceTimersByTimeAsync(200);
+    announce(h, 1);
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(sentSince(h, 0, "RESEND_TREE")).toHaveLength(1);
+  });
+
+  it("forgets it when the page navigates: the next page's frames are new", async () => {
+    announceTree(0, topTree());
+    for (const frameId of [1, 2]) announce(h, frameId);
+    announceTree(9, blankTree("mark-9"));
+    await vi.advanceTimersByTimeAsync(200 + 1_500);
+    await vi.runAllTimersAsync();
+    expect(sentSince(h, 0, "RESEND_TREE")).toHaveLength(1);
+
+    beginTopFrameNavigation(h);
+    announceTree(0, topTree());
+    for (const frameId of [1, 2]) announce(h, frameId);
+    announceTree(9, blankTree("mark-9"));
+    await vi.advanceTimersByTimeAsync(200 + 1_500);
+    expect(sentSince(h, 0, "RESEND_TREE")).toHaveLength(2);
+  });
+
   it("asks nobody once the panel has closed", async () => {
     announceTree(0, topTree());
     for (const frameId of [1, 2]) announce(h, frameId);

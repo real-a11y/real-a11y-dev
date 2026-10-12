@@ -642,6 +642,31 @@ describe("mergeFrameTrees: frames placed by the mark on their element", () => {
     expect(placed.nodes.get("f9-c-root")!.parentId).toBe("ifr-2");
   });
 
+  it("takes the guess again once a waiting frame is known to have no place in the tree", () => {
+    // A hidden blank <iframe> inside a shadow root: its frame marked it, the
+    // tree has no node for it, and the document's own look for marked
+    // elements doesn't reach into shadow roots. No tree will ever bear the
+    // mark, so holding the guess back would keep frame 9 out for good.
+    const frames = new Map([
+      [0, topOf([])],
+      [9, blankFrame(9, undefined, "https://other.test/redirected")],
+      [5, blankFrame(5, "mark-hidden")],
+    ]);
+    const waiting = mergeFrameTrees({ frames, frameInfoMap: listed(9, 5) })!;
+    expect(waiting.nodes.get("f9-c-root")!.parentId).toBeNull();
+
+    // The document around them has been read again since, and still bears
+    // no such mark: frame 5 has no place, and holds nothing back.
+    const result = mergeFrameTrees({
+      frames,
+      frameInfoMap: listed(9, 5),
+      unplaceable: new Set([5]),
+    })!;
+    expect(result.nodes.get("f9-c-root")!.parentId).toBe("ifr-1");
+    expect(result.nodes.get("f5-c-root")!.parentId).toBeNull();
+    expect(result.unplaced).toEqual([5]);
+  });
+
   it("holds the guess back for no frame Chrome has stopped listing", () => {
     // The stale tree of a frame whose <iframe> is gone still carries its
     // mark, which no tree will ever bear.

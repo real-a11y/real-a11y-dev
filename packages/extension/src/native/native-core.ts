@@ -1005,6 +1005,8 @@ interface NumberedDocument {
   /** It was found under an `<iframe>` of another document of its session:
    *  its frame shares that document's renderer. */
   framed: boolean;
+  /** That document, when the walk numbered it. */
+  inside?: NumberedDocument;
 }
 
 /**
@@ -1032,11 +1034,14 @@ interface NumberedDocument {
  * Or else by URL: to the frame whose script numbered a document at the same
  * URL to the same digest, when that frame is the only one showing the URL.
  * Of two frames showing the same page, either could be showing a document
- * read at it, and neither is numbered this way. Nor is a frame's document
- * that has the URL of another document in its renderer: a frame a script
- * wrote into takes the URL of the document that wrote it, so such a
- * document may be a frame's the tab lists at `about:blank`, and not the
- * one's that answered at that URL.
+ * read at it, and neither is numbered this way. A frame's document that has
+ * the URL of another document in its renderer may be one a script wrote: a
+ * frame written into takes the URL of the document that wrote it, and is
+ * listed at `about:blank`, whichever frame answered at that URL. Such a
+ * document is matched by URL only to a frame the tab lists as a child of
+ * the frame around it, and only when it is the one document at that URL
+ * inside the document around it: a child at that URL shares the renderer,
+ * so its own document is among those read, and of two neither is matched.
  *
  * A frame's numbers name elements of its own document only, so its rows
  * also carry the frame (`pageFrame`), and its `Iframe` row the frame it
@@ -1119,6 +1124,7 @@ async function keyPageRows(
           ? { within: { document: around, key } }
           : {}),
         framed: ownerBackendNodeId !== undefined,
+        ...(around ? { inside: around } : {}),
       };
       byNode.set(document, entry);
       documents.push(entry);
@@ -1171,9 +1177,15 @@ async function keyPageRows(
   const urlInSession = (document: NumberedDocument) =>
     `${document.session} ${withoutFragment(document.url)}`;
   const documentsAt = new Map<string, number>();
+  // And how many frames' documents inside each document are at each URL.
+  const framedAt = new Map<NumberedDocument, Map<string, number>>();
   for (const document of documents) {
     const at = urlInSession(document);
     documentsAt.set(at, (documentsAt.get(at) ?? 0) + 1);
+    if (!document.inside) continue;
+    const inside = framedAt.get(document.inside) ?? new Map<string, number>();
+    framedAt.set(document.inside, inside);
+    inside.set(at, (inside.get(at) ?? 0) + 1);
   }
 
   // A frame shows one document, so it is given no second one.
@@ -1197,16 +1209,10 @@ async function keyPageRows(
         // so the frame is given no other.
         else given.add(marked[0]!.frameId);
       }
-    } else if (
-      !document.url.startsWith("about:") &&
-      !(document.framed && documentsAt.get(urlInSession(document))! > 1)
-    ) {
+    } else if (!document.url.startsWith("about:")) {
       // A document at an `about:` URL is the one of a frame with no URL of
       // its own, which is matched by its mark alone: no frame is given it
-      // for answering that it shows that URL. Nor one that has the URL of
-      // another document in its renderer, which may be the document that
-      // wrote it: its frame is then listed at `about:blank`, whatever frame
-      // answered at this URL.
+      // for answering that it shows that URL.
       const key = matchKey(document.url, document.digest);
       const answered = framesByKey.get(key);
       if (
@@ -1215,6 +1221,31 @@ async function keyPageRows(
         shownAt.get(withoutFragment(document.url)) === 1
       ) {
         frame = answered[0];
+      }
+      // One that has the URL of another document in its renderer may be a
+      // frame's a script wrote into, listed at `about:blank`: it is a frame's
+      // at that URL only when the tab lists that frame under the frame
+      // around this document. The top document's frame is the top frame,
+      // whether its walks agree or not.
+      if (
+        frame &&
+        document.framed &&
+        documentsAt.get(urlInSession(document))! > 1
+      ) {
+        const around =
+          document.inside === undefined
+            ? undefined
+            : document.inside === top
+              ? 0
+              : frameOf.get(document.inside);
+        // And only when it is the one document there at that URL: of two,
+        // either could be the written one, whichever the frame answered as.
+        const alone =
+          document.inside !== undefined &&
+          framedAt.get(document.inside)?.get(urlInSession(document)) === 1;
+        if (around === undefined || frame.parent !== around || !alone) {
+          frame = undefined;
+        }
       }
     }
     if (frame && !given.has(frame.frameId)) {

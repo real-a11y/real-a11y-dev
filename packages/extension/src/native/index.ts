@@ -219,7 +219,11 @@ async function numberFrames(
       if (!settled) timers.push(setTimeout(resolve, ms, undefined));
     });
   const timeout = after(PAGE_KEYS_TIMEOUT_MS);
-  const ask = (frameId: number, until: Promise<undefined>, blank = false) =>
+  const ask = (
+    frameId: number,
+    until: Promise<undefined>,
+    listed: { blank?: boolean; parent?: number } = {},
+  ) =>
     Promise.race([
       chrome.tabs
         .sendMessage(
@@ -229,8 +233,17 @@ async function numberFrames(
         )
         .then(
           (reply: unknown) => {
+            // What the tab's list says of the frame, never the frame itself.
             const answer = asFramePageKeyDigest(reply, frameId);
-            return answer && blank ? { ...answer, blank } : answer;
+            return (
+              answer && {
+                ...answer,
+                ...(listed.blank ? { blank: true } : {}),
+                ...(listed.parent !== undefined
+                  ? { parent: listed.parent }
+                  : {}),
+              }
+            );
           },
           () => undefined,
         ),
@@ -277,7 +290,10 @@ async function numberFrames(
     const answers = await Promise.all([
       top,
       ...asked.map((f) =>
-        ask(f.frameId, isInTree(f) ? timeout : until, isBlank(f)),
+        ask(f.frameId, isInTree(f) ? timeout : until, {
+          blank: isBlank(f),
+          parent: f.parentFrameId,
+        }),
       ),
     ]);
     const answered = answers.filter(

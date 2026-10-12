@@ -723,6 +723,59 @@ describe("registerNativeMode: a read numbers the page for focus sync", () => {
     expect(r.nodes?.find((n) => n.name === "Save")?.pageKey).toBe(2);
   });
 
+  it("numbers a frame showing the page's own URL as the top frame's child, when the page's walks disagree", async () => {
+    // The frame's document is at the page's URL on both sides, as a page
+    // that embeds itself has it. The top document's own walk disagrees, so
+    // no mark can be gone by, and the frame is matched by URL only as the
+    // child of the top frame the tab lists it as.
+    await withFrame();
+    const c = chrome as unknown as {
+      debugger: {
+        sendCommand: (
+          target: unknown,
+          method: string,
+          params?: object,
+        ) => Promise<unknown>;
+      };
+    };
+    const sendCommand = c.debugger.sendCommand;
+    c.debugger.sendCommand = async (target, method, params) => {
+      const result = await sendCommand(target, method, params);
+      if (method !== "DOM.getDocument") return result;
+      const page = structuredClone(result) as {
+        root: { children: Array<{ children: Array<{ children: object[] }> }> };
+      };
+      const iframe = page.root.children[0]!.children[0]!.children[1] as {
+        contentDocument: { documentURL: string };
+      };
+      iframe.contentDocument.documentURL = PAGE_URL;
+      return page;
+    };
+    const top = contentReply;
+    const inner = frameReplies[3]!;
+    contentReply = async () => ({ ...((await top()) as object), count: 99 });
+    frameReplies = {
+      3: async () => ({ ...((await inner()) as object), url: PAGE_URL }),
+    };
+    const innerOf = (r: Read) => r.nodes?.find((n) => n.name === "Inner save");
+
+    frames = async () => [
+      { frameId: 0, parentFrameId: -1, url: PAGE_URL },
+      { frameId: 3, parentFrameId: 0, url: PAGE_URL },
+    ];
+    await register();
+    const r = await read();
+    expect([innerOf(r)?.pageKey, innerOf(r)?.pageFrame]).toEqual([2, 3]);
+    expect(r.nodes?.find((n) => n.name === "Save")?.pageKey).toBeUndefined();
+
+    // Listed as another frame's child, it isn't the one under this <iframe>.
+    frames = async () => [
+      { frameId: 0, parentFrameId: -1, url: PAGE_URL },
+      { frameId: 3, parentFrameId: 8, url: PAGE_URL },
+    ];
+    expect(innerOf(await read())?.pageKey).toBeUndefined();
+  });
+
   describe("a frame with no URL of its own", () => {
     /**
      * `withFrame`'s page, its frame one the page wrote into

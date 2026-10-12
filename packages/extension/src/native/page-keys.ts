@@ -74,6 +74,9 @@ export interface FramePageKeyDigest extends PageKeyWalk {
   /** The mark its script left on the element holding the frame. Absent for
    *  the top frame, and for a frame of another origin than its parent's. */
   owner?: string;
+  /** The frame holding it, as the tab lists it. The service worker sets it,
+   *  from the tab's list of frames; absent for the top frame. */
+  parent?: number;
   /**
    * The tab lists the frame at an `about:` URL: it has no URL of its own.
    * Its document's URL then says nothing of which frame it is, as every

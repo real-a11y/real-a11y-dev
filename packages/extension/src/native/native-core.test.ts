@@ -3828,6 +3828,57 @@ describe("readNativeTree's page keys across frames", () => {
       expect(byId(res.nodes, "ax-dom-9").pageKey).toBeUndefined();
     });
 
+    it("numbers a frame showing its parent's own URL by it, when the parent's walks disagree", async () => {
+      // The page embeds itself, the copy in the frame of another shape. The
+      // top document changed between its walks, so no mark of its can be
+      // gone by; the frame has a URL of its own and is the top frame's one
+      // child at it.
+      const same = { ...frameDom(), documentURL: TOP_URL };
+      const read = (frame: FramePageKeyDigest) =>
+        readNativeTree(transport(topDom(same)), {
+          pageKeys: async () => answered({ ...topAnswer(), count: 99 }, frame),
+        });
+      const res = await read({ ...answer(same, 3), parent: 0 });
+      const inner = byId(res.nodes, "ax-dom-25");
+      expect([inner.pageKey, inner.pageFrame]).toEqual([4, 3]);
+      expect(byId(res.nodes, "ax-dom-8").embedsPageFrame).toBe(3);
+      // Not a frame at that URL held elsewhere in the tab, or nobody knows
+      // where: the document may be one this page wrote into a blank frame.
+      for (const frame of [
+        answer(same, 3),
+        { ...answer(same, 3), parent: 7 },
+      ]) {
+        const other = await read(frame);
+        expect(byId(other.nodes, "ax-dom-25").pageKey).toBeUndefined();
+      }
+    });
+
+    it("numbers neither of two documents at their parent's URL by it: one may be a frame's a script wrote", async () => {
+      // The page embeds itself in one frame and writes into another, blank
+      // one, whose document has the page's URL from then on. The embedded
+      // copy changed between its walks into the shape the written document
+      // has: by URL and digest, the written document would be its frame's.
+      const same = { ...frameDom(), documentURL: TOP_URL };
+      const written = doc(
+        60,
+        TOP_URL,
+        el("html", 61, [el("head", 62), el("body", 63, [el("p", 64)])]),
+      );
+      const dom = topDom(same);
+      dom.children![0]!.children![1]!.children!.push(
+        el("iframe", 65, [], { contentDocument: written }),
+      );
+      const res = await readNativeTree(transport(dom), {
+        pageKeys: async () =>
+          answered(
+            { ...topAnswer(), count: 99 },
+            { ...answer(written, 3), parent: 0 },
+          ),
+      });
+      expect(res.pageKeyed).toBeUndefined();
+      expect(byId(res.nodes, "ax-dom-25").pageKey).toBeUndefined();
+    });
+
     it("trusts no mark from a document whose own walks disagree, and falls back to the frame's URL", async () => {
       // The top document changed between its walks: the number its script
       // gave the marked <iframe> may be another element's by CDP's walk. The
@@ -4049,6 +4100,8 @@ describe("readNativeTree's page keys across frames", () => {
       const elsewhere: FramePageKeyDigest = {
         ...answer(written, 9),
         url: TOP_URL,
+        // Inside a cross-origin frame, past what the read follows.
+        parent: 12,
       };
       const res = await readNativeTree(transport(dom), {
         pageKeys: async () => ({

@@ -145,6 +145,10 @@ export function unplacedFrames(frames: Map<number, FrameTree>): number[] {
 export function mergeFrameTrees(opts: {
   frames: Map<number, FrameTree>;
   frameInfoMap: Map<number, FrameInfo>;
+  /** The unplaced marked frames known to have no place in any tree: the
+   *  document around each has been read again since, and bears no such
+   *  mark. They hold no other frame's place back. */
+  unplaceable?: ReadonlySet<number>;
 }): MergeResult | null {
   const topFrame = opts.frames.get(0);
   if (!topFrame) return null;
@@ -215,7 +219,8 @@ export function mergeFrameTrees(opts: {
   // one of that parent's, in a tree that doesn't say which yet, so the
   // last-resort guess is not taken under such a parent meanwhile: the empty
   // <iframe> it would hand another frame may be this one's. A frame Chrome
-  // no longer lists holds nothing back.
+  // no longer lists holds nothing back, nor one known to have no place: its
+  // element is none the tree has a node for, so no guess can take it.
   const awaited = new Set<number>();
   for (const [frameId, tree] of opts.frames) {
     const parent = opts.frameInfoMap.get(frameId)?.parentFrameId;
@@ -223,6 +228,7 @@ export function mergeFrameTrees(opts: {
       frameId !== 0 &&
       tree.owner !== undefined &&
       !placed.has(frameId) &&
+      !opts.unplaceable?.has(frameId) &&
       parent !== undefined
     ) {
       awaited.add(parent);
