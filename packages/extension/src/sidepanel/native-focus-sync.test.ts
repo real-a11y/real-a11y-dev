@@ -33,11 +33,30 @@ const NODES: NativeNode[] = [
     role: "main",
     name: "",
     depth: 1,
-    childIds: ["ax-dom-3", "ax-dom-4"],
+    childIds: ["ax-dom-3", "ax-dom-4", "ax-dom-8"],
     pageKey: 2,
   },
   { id: "ax-dom-3", role: "button", name: "Save", depth: 2, pageKey: 5 },
   { id: "ax-dom-4", role: "link", name: "Docs", depth: 2, pageKey: 6 },
+  // A frame (3, as the extension knows it), whose document is numbered on
+  // its own: its button's 5 is not the top document's.
+  {
+    id: "ax-dom-8",
+    role: "Iframe",
+    name: "Frame",
+    depth: 2,
+    childIds: ["ax-dom-25"],
+    pageKey: 7,
+    embedsPageFrame: 3,
+  },
+  {
+    id: "ax-dom-25",
+    role: "button",
+    name: "Inner save",
+    depth: 3,
+    pageKey: 5,
+    pageFrame: 3,
+  },
 ];
 
 describe("native focus sync", () => {
@@ -136,6 +155,28 @@ describe("native focus sync", () => {
     // An element with no row of its own: the nearest row above it.
     focusOnPage({ pageKeys: { "read-1": [9, 2, 0] } });
     expect(selected()).toBe("ax-dom-2");
+  });
+
+  it("selects a row inside a frame from that frame's report, by that frame's numbers alone", async () => {
+    await showNative();
+    focusOnPage({ pageKeys: { "read-1": [5, 2, 0] }, frameId: 3 });
+    expect(selected()).toBe("ax-dom-25");
+    focusOnPage({ pageKeys: { "read-1": [5, 2, 0] }, frameId: 0 });
+    expect(selected()).toBe("ax-dom-3");
+    focusOnPage({ pageKeys: { "read-1": [5] }, frameId: 3 });
+    expect(selected()).toBe("ax-dom-25");
+    // A report with no frame is the top frame's.
+    focusOnPage({ pageKeys: { "read-1": [5] } });
+    expect(selected()).toBe("ax-dom-3");
+  });
+
+  it("selects the frame's own row when nothing focused in the frame has one, and nothing for a frame the read didn't number", async () => {
+    await showNative();
+    focusOnPage({ pageKeys: { "read-1": [5] }, frameId: 4 });
+    expect(selected()).toBeNull();
+    // The frame's <body>, say: no row of its own, nor any above it there.
+    focusOnPage({ pageKeys: { "read-1": [1, 0] }, frameId: 3 });
+    expect(selected()).toBe("ax-dom-8");
   });
 
   it("sends nothing back to the page for it", async () => {

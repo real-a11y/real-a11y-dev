@@ -1059,14 +1059,15 @@ describe("content: numbering the page for the native tree", () => {
       payload: { nodeId?: string; pageKeys?: Record<string, number[]> };
     }>;
 
-  it("answers a read with the digest of its walk of the page", async () => {
+  it("answers a read with the digest of its walk of the page, and the page's URL", async () => {
     const { livePageKeyWalker, walkPageKeys } =
       await import("./native/page-keys.js");
     expect(
       h.send({ type: "NATIVE_PAGE_KEYS", payload: { readId: "read-1" } }),
-    ).toEqual(
-      walkPageKeys(document.documentElement, livePageKeyWalker(), () => {}),
-    );
+    ).toEqual({
+      ...walkPageKeys(document.documentElement, livePageKeyWalker(), () => {}),
+      url: location.href,
+    });
   });
 
   it("reports focus by the read's numbers, the focused element's first, alongside the DOM tree's node", async () => {
@@ -1212,5 +1213,64 @@ describe("content: numbering the page for the native tree", () => {
     h.sent.length = 0;
     focusTarget();
     expect(focusReports()).toEqual([]);
+  });
+});
+
+describe("content: numbering a frame's document for the native tree", () => {
+  let h: Harness;
+  const top = Object.getOwnPropertyDescriptor(window, "top")!;
+  const scrollIntoView = Element.prototype.scrollIntoView;
+
+  beforeEach(async () => {
+    vi.useFakeTimers();
+    vi.resetModules();
+    // The element refs are the realm's, shared with every earlier test's
+    // module: one may still name `body`, which a focus report then
+    // highlights.
+    Element.prototype.scrollIntoView = () => {};
+    // In a frame: the top window is another one.
+    Object.defineProperty(window, "top", { configurable: true, value: {} });
+    document.body.innerHTML = `<main><div><button id="target">Inner save</button></div></main>`;
+    h = makeHarness();
+    (globalThis as { chrome?: unknown }).chrome = h.chromeMock;
+    await import("./content.js");
+    h.send({ type: "SET_FOCUS_TRACKER", payload: { enabled: true } });
+  });
+
+  afterEach(() => {
+    h.send({ type: "SET_FOCUS_TRACKER", payload: { enabled: false } });
+    Object.defineProperty(window, "top", top);
+    document.getElementById("__sn-highlight")?.remove();
+    Element.prototype.scrollIntoView = scrollIntoView;
+    vi.clearAllTimers();
+    vi.useRealTimers();
+    delete (globalThis as { chrome?: unknown }).chrome;
+    document.body.innerHTML = "";
+  });
+
+  it("numbers its own document, and reports focus inside it by those numbers", async () => {
+    const { livePageKeyWalker, walkPageKeys } =
+      await import("./native/page-keys.js");
+    const keys = new Map<Element, number>();
+    const digest = walkPageKeys(
+      document.documentElement,
+      livePageKeyWalker(),
+      (el, key) => keys.set(el, key),
+    );
+    expect(
+      h.send({ type: "NATIVE_PAGE_KEYS", payload: { readId: "read-1" } }),
+    ).toEqual({ ...digest, url: location.href });
+
+    h.sent.length = 0;
+    const target = document.getElementById("target")!;
+    target.dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
+    const reports = h.sent.filter((m) => m.type === "FOCUS_CHANGED") as Array<{
+      payload: { nodeId?: string; pageKeys?: Record<string, number[]> };
+    }>;
+    expect(reports).toHaveLength(1);
+    expect(reports[0]!.payload.pageKeys?.["read-1"]?.slice(0, 2)).toEqual([
+      keys.get(target),
+      keys.get(target.parentElement!),
+    ]);
   });
 });

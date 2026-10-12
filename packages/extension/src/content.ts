@@ -18,6 +18,7 @@ import type { TreeViewMode, TreeChange } from "@real-a11y-dev/core";
 import { computeFieldState } from "./field-state.js";
 import {
   liveDocumentElement,
+  liveDocumentURL,
   livePageKeyWalker,
   PageKeySnapshots,
 } from "./native/page-keys.js";
@@ -85,10 +86,10 @@ const NATIVE_OVERLAY_ARM_MS = 800;
 const elementRefs = getElementRefs();
 const dispatcher = new ActionDispatcher(elementRefs);
 const focusManager = new FocusManager(elementRefs);
-// The native reads' numberings of this page, which focus is reported by for
-// the native tree: see native/page-keys.ts. Only the top frame is numbered.
-// `chrome.dom.openOrClosedShadowRoot` is how the walk sees a closed shadow
-// root, as the read's CDP walk does.
+// The native reads' numberings of this frame's document, which focus is
+// reported by for the native tree: see native/page-keys.ts. Every frame
+// numbers its own. `chrome.dom.openOrClosedShadowRoot` is how the walk sees
+// a closed shadow root, as the read's CDP walk does.
 const pageKeys = new PageKeySnapshots(
   livePageKeyWalker(
     chrome.dom?.openOrClosedShadowRoot
@@ -336,12 +337,21 @@ chrome.runtime.onMessage.addListener(
       }
 
       case "NATIVE_PAGE_KEYS": {
-        // A native read numbering the page (the service worker asks the top
-        // frame only). The digest goes back for the read to compare with its
-        // own; the numbering stays here for the focus reports below, which
-        // also need to hear moves inside the shadow root focus is in now.
-        const root = isSubFrame ? null : liveDocumentElement(document);
-        sendResponse(root ? pageKeys.take(message.payload.readId, root) : null);
+        // A native read numbering the page: the service worker asks every
+        // frame, and each numbers its own document. The digest goes back,
+        // with the document's URL, for the read to find this document among
+        // CDP's and compare its numbering with its own; the numbering stays
+        // here for the focus reports below, which also need to hear moves
+        // inside the shadow root focus is in now.
+        const root = liveDocumentElement(document);
+        sendResponse(
+          root
+            ? {
+                ...pageKeys.take(message.payload.readId, root),
+                url: liveDocumentURL(document),
+              }
+            : null,
+        );
         if (root) watchFocusRoots(deepActiveElement());
         break;
       }

@@ -37,7 +37,13 @@ import {
   readNativeTree,
   type NativeAction,
 } from "./native-core.js";
-import { asPageKeyDigest, type PageKeyDigest } from "./page-keys.js";
+import {
+  asFramePageKeyDigest,
+  type FrameAnswers,
+  type FramePageKeyDigest,
+  type PageKeysRead,
+  withoutFragment,
+} from "./page-keys.js";
 import { NATIVE_MODE_KEY as FLAG_KEY, nativeModeOn } from "./setting.js";
 
 /** The dogfood build's name for the same setting, before it became a user
@@ -103,9 +109,10 @@ type NativeMessage =
       // `cancelled-by-user`. The panel pauses its automatic reads after any
       // failed one.
       auto?: boolean;
-      // Number the page for focus sync (`page-keys.ts`), which the panel asks
-      // for while its Focus sync is on. It costs the read a `DOM.getDocument`
-      // and a walk of the page in the content script.
+      // Number the page and its frames for focus sync (`page-keys.ts`),
+      // which the panel asks for while its Focus sync is on. It costs the
+      // read a `DOM.getDocument` in each session it reads through, and a walk
+      // of each frame's document by the content script in that frame.
       pageKeys?: boolean;
     }
   | {
@@ -153,36 +160,123 @@ type NativeMessage =
   // a late STOP from cancelling a later pick.
   | { type: "NATIVE_PICK_STOP"; tabId: number; requestId: number };
 
-/** How long a read waits for the content script to number the page. The walk
+/** How long a read waits for the content scripts to number the page. A walk
  *  takes milliseconds; a script that hasn't answered by now never will (a
- *  hung page), and the read goes on without keys rather than wait on it. */
+ *  hung page), and the read goes on without its frame's keys rather than
+ *  wait on it. */
 const PAGE_KEYS_TIMEOUT_MS = 2000;
 
+/** How much longer a frame the read didn't put in the tree gets, once the
+ *  top frame has answered, the read's own walks are in and the frames are
+ *  listed. One still walking by then is busy (a hidden ad frame in a long
+ *  task, say), and waiting on it would hold up every read of the page for a
+ *  frame with no rows to follow focus to. A frame in the tree gets as long
+ *  as the top frame: a big one sharing the top frame's renderer walks only
+ *  once the read's own walk is done. */
+const FRAME_GRACE_MS = 250;
+
+/** The most frames a read asks to number their document: a page of dozens
+ *  of ad frames costs a walk of each. The top frame is always among them,
+ *  and the frames the read put in the tree come before the rest. */
+const MAX_NUMBERED_FRAMES = 32;
+
+/** The schemes the content script runs in: the manifest's `<all_urls>`, with
+ *  no `match_about_blank`. A frame showing anything else has none to ask. */
+const NUMBERED_SCHEMES = new Set(["http:", "https:", "file:"]);
+
+function schemeOf(url: string): string {
+  try {
+    return new URL(url).protocol;
+  } catch {
+    return "";
+  }
+}
+
 /**
- * Ask the tab's top-frame content script to number the live page for read
- * `readId` (see `page-keys.ts`), and answer with its digest. `undefined` when
- * there is no content script to ask (one that can't run on this page, or one
- * orphaned by an extension reload), or it didn't answer in time: the read
- * then numbers nothing, and the native tree doesn't follow page focus until
- * a read that does.
+ * Ask the content script in every frame of the tab to number its own
+ * document for read `readId` (see `page-keys.ts`), and answer with what the
+ * frames answered: each one's digest and its document's URL, which its
+ * document is matched to CDP's by, and the URL of each frame that gave none.
+ * A frame with no content script to ask (an `about:blank` frame, an error
+ * page, one orphaned by an extension reload), or one that didn't answer in
+ * time, goes unnumbered, and the native tree doesn't follow focus inside it
+ * until a read that numbers it.
  */
-function numberPage(
+async function numberFrames(
   tabId: number,
   readId: string,
-): Promise<PageKeyDigest | undefined> {
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  return Promise.race([
-    chrome.tabs
-      .sendMessage(
-        tabId,
-        { type: "NATIVE_PAGE_KEYS", payload: { readId } },
-        { frameId: 0 },
-      )
-      .then(asPageKeyDigest, () => undefined),
+  { walked, frameUrls }: PageKeysRead,
+): Promise<FrameAnswers> {
+  const timers: Array<ReturnType<typeof setTimeout>> = [];
+  let settled = false;
+  const after = (ms: number) =>
     new Promise<undefined>((resolve) => {
-      timer = setTimeout(() => resolve(undefined), PAGE_KEYS_TIMEOUT_MS);
-    }),
-  ]).finally(() => clearTimeout(timer));
+      if (!settled) timers.push(setTimeout(resolve, ms, undefined));
+    });
+  const timeout = after(PAGE_KEYS_TIMEOUT_MS);
+  const ask = (frameId: number, until: Promise<undefined>) =>
+    Promise.race([
+      chrome.tabs
+        .sendMessage(
+          tabId,
+          { type: "NATIVE_PAGE_KEYS", payload: { readId } },
+          { frameId },
+        )
+        .then(
+          (reply: unknown) => asFramePageKeyDigest(reply, frameId),
+          () => undefined,
+        ),
+      until,
+    ]);
+  try {
+    // The top frame at once, as the read's own walk starts: its page is the
+    // one most worth numbering alike. The other frames once they're listed.
+    const top = ask(0, timeout);
+    const listed = await Promise.race([
+      chrome.webNavigation.getAllFrames({ tabId }).catch(() => null),
+      timeout,
+    ]);
+    const grace = Promise.all([top, walked.catch(() => undefined)]).then(() =>
+      after(FRAME_GRACE_MS),
+    );
+    const shown = (listed ?? []).filter(
+      (f) =>
+        f.frameId !== 0 &&
+        // A prerendered or cached document isn't the one on screen, and an
+        // error page shows none at the URL it failed to load.
+        (f.documentLifecycle === undefined ||
+          f.documentLifecycle === "active") &&
+        !f.errorOccurred,
+    );
+    // The frames the read put in the tree first: the rest (hidden ones, ones
+    // past what a read follows) have no rows to follow focus to.
+    const inTree = new Set(frameUrls.map(withoutFragment));
+    const askable = shown.filter((f) => NUMBERED_SCHEMES.has(schemeOf(f.url)));
+    const asked = [
+      ...askable.filter((f) => inTree.has(withoutFragment(f.url))),
+      ...askable.filter((f) => !inTree.has(withoutFragment(f.url))),
+    ].slice(0, MAX_NUMBERED_FRAMES - 1);
+    const until = Promise.race([timeout, grace]);
+    const answers = await Promise.all([
+      top,
+      ...asked.map((f) =>
+        ask(f.frameId, inTree.has(withoutFragment(f.url)) ? timeout : until),
+      ),
+    ]);
+    const answered = answers.filter(
+      (a): a is FramePageKeyDigest => a !== undefined,
+    );
+    const numbered = new Set(answered.map((a) => a.frameId));
+    return {
+      answered,
+      unanswered: shown
+        .filter((f) => !numbered.has(f.frameId))
+        .map((f) => f.url),
+    };
+  } finally {
+    settled = true;
+    for (const timer of timers) clearTimeout(timer);
+  }
 }
 
 /** The tab's current URL, or undefined if it can't be read. Best-effort: it
@@ -388,7 +482,10 @@ export function registerNativeMode(): void {
             const readId = crypto.randomUUID();
             const tabId = message.tabId;
             const options = message.pageKeys
-              ? { pageKeys: () => numberPage(tabId, readId) }
+              ? {
+                  pageKeys: (read: PageKeysRead) =>
+                    numberFrames(tabId, readId, read),
+                }
               : {};
             const { outcome, value } = await withRecovery(
               session,
@@ -443,8 +540,8 @@ export function registerNativeMode(): void {
               ...(value.documentId !== undefined
                 ? { documentId: value.documentId }
                 : {}),
-              // The rows carry `pageKey`s from this read's numbering of the
-              // page: what the content script's focus reports name.
+              // Rows carry `pageKey`s from this read's numbering of the page
+              // and its frames: what the content scripts' focus reports name.
               ...(value.pageKeyed ? { pageKeysReadId: readId } : {}),
               // Structural fields plus the state/property enrichment
               // `readNativeTree` attaches (`expanded`, `checked`, `level`, …).
@@ -484,6 +581,8 @@ export function registerNativeMode(): void {
                 controls: n.controls,
                 valueWithheld: n.valueWithheld,
                 pageKey: n.pageKey,
+                pageFrame: n.pageFrame,
+                embedsPageFrame: n.embedsPageFrame,
               })),
             });
             return;

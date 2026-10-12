@@ -17,11 +17,15 @@ export interface FocusChangedPayload {
   nodeId?: string;
   /**
    * For the native tree: by native read, the numbers the read gave the
-   * focused element and each numbered element above it, nearest first (see
-   * `native/page-keys.ts`). The panel takes the first that names a row of the
-   * tree it got from that read. From the top frame only.
+   * focused element and each numbered element above it in its document,
+   * nearest first (see `native/page-keys.ts`). The panel takes the first that
+   * names a row of the tree it got from that read.
    */
   pageKeys?: Record<string, number[]>;
+  /** The frame whose document `pageKeys` number, as the extension knows it
+   *  (0: the top frame). The service worker sets it, from the sender, on
+   *  what it forwards to the panel. */
+  frameId?: number;
 }
 
 /** Messages from content script frame → background (per-frame tree data) */
@@ -245,11 +249,13 @@ export type PanelToContent =
         kind?: "reveal" | "preview";
       };
     })
-  // Sent by the SERVICE WORKER (native/index.ts, NATIVE_READ), to the top
-  // frame, during a native read: number the live page for read `readId` and
-  // answer with the digest (`PageKeyDigest` in native/page-keys.ts), so the
-  // read can check it numbered the same elements over CDP. The content
-  // script keeps the numbering for its FOCUS_CHANGED reports.
+  // Sent by the SERVICE WORKER (native/index.ts, NATIVE_READ), to every
+  // frame, during a native read: number this frame's live document for read
+  // `readId` and answer with the digest and the document's URL (what
+  // `asFramePageKeyDigest` in native/page-keys.ts takes), so the read can
+  // find the document over CDP and check it numbered the same elements
+  // there. A reply without the URL numbers nothing. The content script keeps
+  // the numbering for its FOCUS_CHANGED reports.
   | (BoundTab & { type: "NATIVE_PAGE_KEYS"; payload: { readId: string } })
   // Start/stop the (expensive) live tree observation in the content script.
   // Driven by the panel's connect/disconnect the same way SET_FOCUS_TRACKER

@@ -132,9 +132,10 @@ test("an action on a frame's row is refused once the frame has navigated", async
 /** Bring the fixture forward, reload the panel and show its native tree. */
 async function showNative(nav: NativeHarness): Promise<{
   page: Page;
+  same: Frame;
   cross: Frame;
 }> {
-  const { page, cross } = await openFrames(nav);
+  const { page, same, cross } = await openFrames(nav);
   await page.bringToFront();
   await nav.panel.reload();
   await nav.chooseTree("Chrome's tree");
@@ -142,7 +143,7 @@ async function showNative(nav: NativeHarness): Promise<{
     .poll(() => nav.panel.locator(".sn-node").count(), { timeout: 20_000 })
     .toBeGreaterThan(0);
   await nav.panel.getByRole("button", { name: "Expand all" }).click();
-  return { page, cross };
+  return { page, same, cross };
 }
 
 test("the panel shows a frame's content under its row, and marks only the empty frame", async ({
@@ -256,4 +257,80 @@ test("a pick inside either frame selects that frame's row", async ({ nav }) => {
     await expect(selected).toHaveAttribute("data-node-id", id);
     await expect(selected).toHaveAccessibleName(/Inner save/);
   }
+});
+
+test("a read numbers each frame's document on its own, and marks the row that shows it", async ({
+  nav,
+}) => {
+  const { tabId } = await openFrames(nav);
+  const result = await nav.read(tabId, { pageKeys: true });
+  expect(result.ok).toBe(true);
+  expect(result.pageKeysReadId).toEqual(expect.any(String));
+  const nodes = result.nodes!;
+  const frameRow = (title: string) =>
+    nodes.find((n) => n.role === "Iframe" && n.name === title)!;
+  const [same, cross] = ["Same origin frame", "Cross origin frame"].map(
+    (title) => {
+      const row = frameRow(title);
+      const inner = inFrame(nodes, title, "button", "Inner save")!;
+      expect(row.embedsPageFrame, title).toEqual(expect.any(Number));
+      expect(row.embedsPageFrame, title).not.toBe(0);
+      expect(inner.pageKey, title).toEqual(expect.any(Number));
+      expect(inner.pageFrame, title).toBe(row.embedsPageFrame);
+      return { row, inner };
+    },
+  );
+  // One document in two frames: numbered alike, and told apart by frame.
+  expect(same!.inner.pageKey).toBe(cross!.inner.pageKey);
+  expect(same!.row.embedsPageFrame).not.toBe(cross!.row.embedsPageFrame);
+  // The top document's rows name no frame.
+  const outer = nodes.find(
+    (n) => n.role === "button" && n.name === "Outer button",
+  )!;
+  expect(outer.pageKey).toEqual(expect.any(Number));
+  expect(outer.pageFrame).toBeUndefined();
+  // No content script runs in an about:blank frame to number it.
+  expect(frameRow("Empty frame").embedsPageFrame).toBeUndefined();
+});
+
+test("focus inside either frame selects that frame's row, with nothing read or done on the page", async ({
+  nav,
+}) => {
+  const { page, same, cross } = await showNative(nav);
+  const reads = (await nav.nativeReads()).length;
+  const selected = nav.panel.locator('[role="treeitem"][aria-selected="true"]');
+
+  for (const [frame, id] of [
+    [same, /^ax-dom-\d+$/],
+    [cross, /^ax-dom-\d+@[0-9A-F]+\.[0-9A-F]+$/],
+    [same, /^ax-dom-\d+$/],
+  ] as const) {
+    await frame.locator("#inner").focus();
+    // Both frames' buttons are named alike: tell them apart by row id.
+    await expect(selected).toHaveAttribute("data-node-id", id);
+    await expect(selected).toHaveAccessibleName(/Inner save/);
+  }
+  // And back out to the top document.
+  await page.getByRole("button", { name: "Outer button" }).focus();
+  await expect(selected).toHaveAccessibleName(/Outer button/);
+
+  await page.waitForTimeout(500);
+  expect(await nav.nativeActs()).toEqual([]);
+  expect(await nav.nativeReads()).toHaveLength(reads);
+});
+
+test("focus on an element a frame added since the read selects the frame's row", async ({
+  nav,
+}) => {
+  const { cross } = await showNative(nav);
+  // Not in the tree, and nothing above it in the frame has a row of its
+  // own: the frame's row is the nearest there is.
+  await cross.evaluate(() => {
+    const late = document.createElement("button");
+    late.textContent = "Late";
+    document.body.prepend(late);
+    late.focus();
+  });
+  const selected = nav.panel.locator('[role="treeitem"][aria-selected="true"]');
+  await expect(selected).toHaveAccessibleName(/Cross origin frame/);
 });

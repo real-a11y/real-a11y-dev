@@ -560,8 +560,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       case "FOCUS_CHANGED": {
         // Prefix the nodeId and forward to side panel. Stamp `tabId` so
         // the panel can drop focus events for tabs it isn't bound to. The
-        // native tree's page keys are the top frame's alone: only that frame
-        // is numbered (`NATIVE_PAGE_KEYS`).
+        // native tree's page keys number the reporting frame's own document
+        // (`NATIVE_PAGE_KEYS`), so they go with that frame.
         const { nodeId, pageKeys } = message.payload;
         chrome.runtime
           .sendMessage({
@@ -571,7 +571,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
               ...(nodeId !== undefined
                 ? { nodeId: prefixNodeId(frameId, nodeId) }
                 : {}),
-              ...(frameId === 0 && pageKeys !== undefined ? { pageKeys } : {}),
+              ...(pageKeys !== undefined ? { pageKeys, frameId } : {}),
             },
           })
           .catch((err) => {

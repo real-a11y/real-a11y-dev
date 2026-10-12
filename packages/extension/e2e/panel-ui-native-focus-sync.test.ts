@@ -24,7 +24,7 @@ function selected(nav: NativeHarness) {
   return nav.nativeTree().locator('[role="treeitem"][aria-selected="true"]');
 }
 
-test("a native read numbers the page's rows, and not a frame's", async ({
+test("a native read numbers the page's rows, and not those of a frame no content script runs in", async ({
   nav,
 }) => {
   const { tabId } = await nav.open(FIXTURE);
@@ -44,14 +44,17 @@ test("a native read numbers the page's rows, and not a frame's", async ({
   ]) {
     expect(pageKey(name), name).toEqual(expect.any(Number));
   }
-  // The frame's own document is left out of the walk, though its rows are
-  // in the tree.
+  // A `srcdoc` frame's document is walked by no content script, so nothing
+  // numbers it, though its rows are in the tree.
   expect(
     result.nodes!.some(
       (n) => n.role === "button" && n.name === "Inside the frame",
     ),
   ).toBe(true);
   expect(pageKey("Inside the frame")).toBeUndefined();
+  expect(
+    result.nodes!.find((n) => n.role === "Iframe")?.embedsPageFrame,
+  ).toBeUndefined();
 });
 
 test("focus moving on the page selects its row, with nothing read or done on the page", async ({

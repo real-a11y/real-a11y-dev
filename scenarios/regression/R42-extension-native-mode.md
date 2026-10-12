@@ -8,7 +8,7 @@ priority: P0
 status: Active
 validFrom: "extension ≥ the first release after 0.1.15. Native mode is in the `Unreleased` section of packages/extension/CHANGELOG.md until then; on 0.1.15 or earlier there is no native mode, so this row is Blocked, not Fail. Load unpacked from packages/extension/dist"
 validUntil: ""
-expected: "a fresh profile reads the native tree with nothing asked, and Chrome's bar names the extension; a note explains the bar once; Settings holds the choice of tree, leaving the toolbar at most one DOM button; Turn off and Settings turn native mode off, and nothing attaches while it is off; the setting survives reopening the panel and restarting Chrome; Cancel on the bar is respected; a change in one window holds in every window; page focus selects its row in Chrome's tree without the bar"
+expected: "a fresh profile reads the native tree with nothing asked, and Chrome's bar names the extension; a note explains the bar once; Settings holds the choice of tree, leaving the toolbar at most one DOM button; Turn off and Settings turn native mode off, and nothing attaches while it is off; the setting survives reopening the panel and restarting Chrome; Cancel on the bar is respected; a change in one window holds in every window; page focus selects its row in Chrome's tree without the bar, inside frames too"
 twin: D6
 notion: ""
 ---
@@ -93,6 +93,13 @@ load it again** before step 1, step 9 and step 10.
     in the toolbar, which then reads **Focus OFF**, and press `Tab` on the page
     again: the selection stays where it was. Press it once more, and `Tab` is
     followed again.
+14. Open a page with an `<iframe>`, a cross-origin one if you can (an embedded
+    video or map). Once the frame has loaded, press **↻** (Refresh native tree),
+    since a frame that loads after the tree was read, as a lazy embed below the
+    fold does, is numbered only by the next read, and wait for Chrome's bar to
+    go. Then click into the page and `Tab` into the frame: the focused element's
+    row is selected under the frame's row, and Chrome's bar doesn't appear for it.
+    `Tab` back out: the top document's rows are followed again.
 
 ## Expected
 
@@ -114,7 +121,7 @@ load it again** before step 1, step 9 and step 10.
 - **A change in one window holds in every window** (steps 11–12), and nothing reads
   natively in a window where nobody pressed anything
 - **Page focus selects its row in Chrome's tree** (step 13) with no bar, and
-  **Focus OFF** stops it
+  **Focus OFF** stops it; inside a frame too (step 14), under that frame's row
 
 ## Why this exists
 

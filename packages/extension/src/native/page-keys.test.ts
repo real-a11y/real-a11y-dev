@@ -2,10 +2,13 @@ import { renderingParent } from "@real-a11y-dev/core";
 import { afterEach, describe, expect, it } from "vitest";
 
 import {
+  asFramePageKeyDigest,
   asPageKeyDigest,
+  cdpFrameDocuments,
   cdpPageKeys,
   KEPT_PAGE_KEY_READS,
   liveDocumentElement,
+  liveDocumentURL,
   livePageKeyWalker,
   PageKeySnapshots,
   walkPageKeys,
@@ -330,6 +333,121 @@ describe("liveDocumentElement", () => {
     } finally {
       delete (document as { documentElement?: unknown }).documentElement;
     }
+  });
+});
+
+describe("liveDocumentURL", () => {
+  it("reads past a named element that shadows the document's property", () => {
+    const img = document.createElement("img");
+    Object.defineProperty(document, "URL", {
+      configurable: true,
+      get: () => img,
+    });
+    try {
+      expect(liveDocumentURL(document)).toBe(location.href);
+    } finally {
+      delete (document as { URL?: unknown }).URL;
+    }
+  });
+});
+
+describe("cdpFrameDocuments", () => {
+  /** A `DOM.getDocument` element. */
+  const el = (
+    localName: string,
+    backendNodeId: number,
+    children: CdpDomNode[] = [],
+    extra: Partial<CdpDomNode> = {},
+  ): CdpDomNode => ({
+    nodeType: 1,
+    backendNodeId,
+    localName,
+    children,
+    ...extra,
+  });
+  const doc = (backendNodeId: number, url: string, ...children: CdpDomNode[]) =>
+    ({ nodeType: 9, backendNodeId, documentURL: url, children }) as CdpDomNode;
+
+  it("finds the document of every frame sharing its renderer, however deep, in a shadow root too, each with its frame's element", () => {
+    const deep = doc(40, "https://a.test/deep", el("html", 41));
+    const frame = doc(
+      20,
+      "https://a.test/frame",
+      el("html", 21, [
+        el("body", 22, [el("iframe", 23, [], { contentDocument: deep })]),
+      ]),
+    );
+    const inShadow = doc(60, "https://a.test/shadow", el("html", 61));
+    const root = doc(
+      1,
+      "https://a.test/",
+      el("html", 2, [
+        el("body", 3, [
+          el("iframe", 10, [], { contentDocument: frame }),
+          // In a renderer of its own: no document here.
+          el("iframe", 11),
+          el("div", 12, [], {
+            shadowRoots: [
+              {
+                nodeType: 11,
+                backendNodeId: 13,
+                shadowRootType: "open",
+                children: [el("iframe", 14, [], { contentDocument: inShadow })],
+              },
+            ],
+          }),
+        ]),
+      ]),
+    );
+    const found = cdpFrameDocuments(root)
+      .map(({ document, ownerBackendNodeId }) => [
+        document.documentURL,
+        ownerBackendNodeId,
+      ])
+      .sort();
+    expect(found).toEqual([
+      ["https://a.test/", undefined],
+      ["https://a.test/deep", 23],
+      ["https://a.test/frame", 10],
+      ["https://a.test/shadow", 14],
+    ]);
+    // Each is walked on its own: the top document's walk stops at the
+    // <iframe>, and the frame's numbers its elements from 0.
+    expect(cdpPageKeys(root)!.keys.has(21)).toBe(false);
+    expect(cdpPageKeys(frame)!.keys.get(21)).toBe(0);
+  });
+
+  it("is the document alone when no frame shares its renderer", () => {
+    const root = doc(1, "https://a.test/", el("html", 2, [el("iframe", 3)]));
+    expect(cdpFrameDocuments(root)).toEqual([{ document: root }]);
+  });
+});
+
+describe("asFramePageKeyDigest", () => {
+  it("takes a digest with its document's URL, as the frame it was asked of", () => {
+    const url = "https://a.test/frame";
+    expect(asFramePageKeyDigest({ count: 3, hash: 7, url }, 4)).toEqual({
+      count: 3,
+      hash: 7,
+      frameId: 4,
+      url,
+    });
+    // The frame is the one asked, whatever the reply says it is.
+    expect(
+      asFramePageKeyDigest({ count: 3, hash: 7, url, frameId: 0 }, 4)?.frameId,
+    ).toBe(4);
+  });
+
+  it("takes nothing that can't be matched: no URL, or no digest", () => {
+    expect(asFramePageKeyDigest({ count: 3, hash: 7 }, 4)).toBeUndefined();
+    expect(
+      asFramePageKeyDigest({ count: 3, hash: 7, url: 5 }, 4),
+    ).toBeUndefined();
+    expect(
+      asFramePageKeyDigest({ count: "3", hash: 7, url: "x" }, 4),
+    ).toBeUndefined();
+    expect(asFramePageKeyDigest(null, 0)).toBeUndefined();
+    expect(asFramePageKeyDigest("x", 0)).toBeUndefined();
   });
 });
 

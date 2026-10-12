@@ -59,6 +59,7 @@ import { nativeToExtractionResult } from "../native/native-export.js";
 import {
   nativeRowForPageFocus,
   nativeRowsByPageKey,
+  type NativePageRows,
 } from "../native/native-tree-utils.js";
 import {
   NATIVE_MODE_KEY,
@@ -495,12 +496,13 @@ export function App() {
   const nativeNodesRef = useRef(nativeNodes);
   nativeNodesRef.current = nativeNodes;
   // Focus sync for the native tree: the read the tree on screen came from,
-  // when that read numbered the page, and its rows by number. The content
-  // script's focus reports name rows by those numbers (`page-keys.ts`). Set
-  // with the tree, both at once, so a report never meets one read's id and
-  // another's rows; a ref, for the long-lived message listener.
+  // when that read numbered the page, and its rows by frame and number. The
+  // content scripts' focus reports name rows by those numbers
+  // (`page-keys.ts`). Set with the tree, both at once, so a report never meets
+  // one read's id and another's rows; a ref, for the long-lived message
+  // listener.
   const nativePageKeys = useRef<
-    { readId: string; rows: Map<number, string> } | undefined
+    { readId: string; rows: NativePageRows } | undefined
   >(undefined);
   const [nativeRootId, setNativeRootId] = useState<string>("");
   const [nativeStatus, setNativeStatus] = useState<string>("");
@@ -1484,6 +1486,7 @@ export function App() {
               message.payload.pageKeys,
               numbered.readId,
               numbered.rows,
+              message.payload.frameId ?? 0,
             )
           : undefined;
         if (nodeId !== undefined) {
@@ -2036,7 +2039,7 @@ export function App() {
         );
       }
       // Numbered for Focus sync only while it is on: it costs the read a walk
-      // of the whole page, twice.
+      // of each document, the page's and its frames', twice.
       const numbered = focusTrackerOnRef.current;
       try {
         const r = (await chrome.runtime.sendMessage({
