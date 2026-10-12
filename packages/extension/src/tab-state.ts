@@ -44,6 +44,9 @@ export interface TabState {
    * for on every merge.
    */
   askedPlaces: Map<number, { mark: string; since: number; asked: boolean }>;
+  /** The one pending check on the frames in `askedPlaces` that haven't been
+   *  asked after yet; null when none is scheduled. */
+  placeTimer: ReturnType<typeof setTimeout> | null;
 }
 
 export function createTabState(): TabState {
@@ -55,6 +58,7 @@ export function createTabState(): TabState {
     droppedFrames: new Set(),
     topFrameChanged: false,
     askedPlaces: new Map(),
+    placeTimer: null,
   };
 }
 
@@ -153,5 +157,6 @@ export function disposeTabState(
 ): void {
   const state = registry.get(tabId);
   if (state?.mergeTimer) clearTimeout(state.mergeTimer);
+  if (state?.placeTimer) clearTimeout(state.placeTimer);
   registry.delete(tabId);
 }

@@ -126,6 +126,24 @@ describe("clearTabFrames", () => {
   });
 });
 
+describe("disposeTabState: the check on unplaced frames", () => {
+  it("cancels it with the tab", () => {
+    vi.useFakeTimers();
+    try {
+      const registry = new Map<number, TabState>();
+      const s = getOrCreateTabState(registry, 7);
+      const check = vi.fn();
+      s.placeTimer = setTimeout(check, 1_500) as unknown as typeof s.placeTimer;
+      disposeTabState(registry, 7);
+      vi.advanceTimersByTime(5_000);
+      expect(check).not.toHaveBeenCalled();
+      expect(registry.has(7)).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
 describe("removeFrame", () => {
   it("removes the named frame and reports remaining state", () => {
     const s = createTabState();

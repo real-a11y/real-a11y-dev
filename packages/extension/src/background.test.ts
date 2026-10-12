@@ -909,6 +909,47 @@ describe("background: a frame whose place in the tree isn't known yet", () => {
     expect(sentSince(h, 0, "RESEND_TREE")).toHaveLength(2);
   });
 
+  it("checks on each waiting frame when its own while is up, one check at a time", async () => {
+    announceTree(0, topTree());
+    for (const frameId of [1, 2]) announce(h, frameId);
+    announceTree(9, blankTree("mark-9"));
+    await vi.advanceTimersByTimeAsync(700);
+    // A second frame the page adds, half a second after the first was
+    // found unplaced.
+    h.knobs.frames = [
+      ...h.knobs.frames,
+      { frameId: 10, parentFrameId: 0, url: "about:srcdoc" },
+    ];
+    h.liveFrames.add(10);
+    announceTree(10, { ...blankTree("mark-10"), frameUrl: "about:srcdoc" });
+    await vi.advanceTimersByTimeAsync(200);
+    expect(sentSince(h, 0, "RESEND_TREE")).toEqual([]);
+
+    // The first frame's while is up, the second's isn't.
+    await vi.advanceTimersByTimeAsync(900);
+    expect(sentSince(h, 0, "RESEND_TREE")).toHaveLength(1);
+    // The top frame's answer still bears neither mark; the second frame is
+    // asked after in its own time.
+    await vi.advanceTimersByTimeAsync(1_500);
+    expect(sentSince(h, 0, "RESEND_TREE")).toHaveLength(2);
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(sentSince(h, 0, "RESEND_TREE")).toHaveLength(2);
+  });
+
+  it("still asks when the clock steps back while a frame waits", async () => {
+    announceTree(0, topTree());
+    for (const frameId of [1, 2]) announce(h, frameId);
+    announceTree(9, blankTree("mark-9"));
+    await vi.advanceTimersByTimeAsync(200);
+    vi.setSystemTime(Date.now() - 60_000);
+    // Not at the first check, which finds the frame's wait in the future,
+    // but one full wait after it rather than a minute later.
+    await vi.advanceTimersByTimeAsync(1_500);
+    expect(sentSince(h, 0, "RESEND_TREE")).toEqual([]);
+    await vi.advanceTimersByTimeAsync(1_500);
+    expect(sentSince(h, 0, "RESEND_TREE")).toHaveLength(1);
+  });
+
   it("asks nobody once the panel has closed", async () => {
     announceTree(0, topTree());
     for (const frameId of [1, 2]) announce(h, frameId);

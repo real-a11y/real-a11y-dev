@@ -240,7 +240,8 @@ function askForFramePlaces(
 ): void {
   const now = Date.now();
   const parents = new Set<number>();
-  let waiting = false;
+  // How long until the next frame still waiting is due, if any is.
+  let wait: number | undefined;
   // A frame placed since starts over if it is ever unplaced again.
   const still = new Set(unplaced);
   for (const frameId of state.askedPlaces.keys()) {
@@ -250,13 +251,20 @@ function askForFramePlaces(
     const mark = state.frames.get(frameId)?.owner;
     const parent = frameInfoMap.get(frameId)?.parentFrameId;
     if (mark === undefined || parent === undefined) continue;
-    const seen = state.askedPlaces.get(frameId);
+    let seen = state.askedPlaces.get(frameId);
     if (seen?.mark !== mark) {
-      state.askedPlaces.set(frameId, { mark, since: now, asked: false });
-      waiting = true;
-    } else if (!seen.asked && now - seen.since >= PLACE_WAIT_MS) {
+      seen = { mark, since: now, asked: false };
+      state.askedPlaces.set(frameId, seen);
+    }
+    if (seen.asked) continue;
+    // The clock went back: one full wait from here, and no longer.
+    if (now < seen.since) seen.since = now;
+    const left = seen.since + PLACE_WAIT_MS - now;
+    if (left <= 0) {
       seen.asked = true;
       parents.add(parent);
+    } else {
+      wait = Math.min(wait ?? left, left);
     }
   }
   for (const frameId of parents) {
@@ -266,7 +274,14 @@ function askForFramePlaces(
       }
     });
   }
-  if (waiting) setTimeout(() => void recheckFramePlaces(tabId), PLACE_WAIT_MS);
+  // One check per tab, when the next frame is due: a page adding frames in
+  // a stream doesn't stack them, and each check sets the one after it.
+  if (wait !== undefined && state.placeTimer === null) {
+    state.placeTimer = setTimeout(() => {
+      state.placeTimer = null;
+      void recheckFramePlaces(tabId);
+    }, wait);
+  }
 }
 
 /** `PLACE_WAIT_MS` after a merge left frames unplaced: ask after the ones
