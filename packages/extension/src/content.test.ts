@@ -1274,3 +1274,514 @@ describe("content: numbering a frame's document for the native tree", () => {
     ]);
   });
 });
+
+describe("content: the mark a frame leaves on its <iframe>", () => {
+  let h: Harness;
+  let holder: HTMLIFrameElement;
+  const top = Object.getOwnPropertyDescriptor(window, "top")!;
+  const frameElement = Object.getOwnPropertyDescriptor(window, "frameElement");
+
+  /** Load the script in a frame held by `holder`, or by an element it can't
+   *  reach when `reachable` is false: one of another origin's document. */
+  async function load(reachable = true): Promise<void> {
+    vi.useFakeTimers();
+    vi.resetModules();
+    Object.defineProperty(window, "top", { configurable: true, value: {} });
+    // Out of the document: in it, jsdom would load a frame of its own.
+    holder = document.createElement("iframe");
+    Object.defineProperty(window, "frameElement", {
+      configurable: true,
+      get: () => (reachable ? holder : null),
+    });
+    document.body.innerHTML = `<main><button id="target">Inner save</button></main>`;
+    h = makeHarness();
+    (globalThis as { chrome?: unknown }).chrome = h.chromeMock;
+    await import("./content.js");
+  }
+
+  afterEach(() => {
+    h.send({ type: "SET_OBSERVING", payload: { enabled: false } });
+    Object.defineProperty(window, "top", top);
+    if (frameElement) {
+      Object.defineProperty(window, "frameElement", frameElement);
+    } else {
+      delete (window as { frameElement?: unknown }).frameElement;
+    }
+    vi.clearAllTimers();
+    vi.useRealTimers();
+    delete (globalThis as { chrome?: unknown }).chrome;
+    document.body.innerHTML = "";
+  });
+
+  const keysAnswer = () =>
+    h.send({ type: "NATIVE_PAGE_KEYS", payload: { readId: "read-1" } }) as {
+      owner?: string;
+    };
+  const lastTreePayload = () => {
+    const trees = h.sent.filter((m) => m.type === "FRAME_TREE_DATA");
+    return trees[trees.length - 1]!.payload as {
+      owner?: string;
+      embeds?: unknown;
+    };
+  };
+
+  it("marks the element as it loads, before anything asks", async () => {
+    await load();
+    const { frameOwnerMark } = await import("./frame-owner.js");
+    expect(frameOwnerMark(holder)).toMatch(/^[0-9a-f]{24}$/);
+    // And tells the extension nothing by it: the announce is still empty.
+    expect(h.sent).toEqual([{ type: "FRAME_HELLO" }]);
+  });
+
+  it("answers a read with its mark, and sends it with its tree", async () => {
+    await load();
+    const { frameOwnerMark } = await import("./frame-owner.js");
+    const mark = frameOwnerMark(holder);
+    expect(keysAnswer().owner).toBe(mark);
+    h.send({ type: "REQUEST_TREE", payload: { viewMode: "a11y" } });
+    expect(lastTreePayload().owner).toBe(mark);
+  });
+
+  it("puts its mark back over whatever is there, each time it reports it", async () => {
+    await load();
+    const { frameOwnerMark, markFrameOwner } = await import("./frame-owner.js");
+    const mark = frameOwnerMark(holder);
+    // An earlier document's script, still running as it unloads.
+    markFrameOwner({ frameElement: holder } as unknown as Window, "stale");
+    expect(keysAnswer().owner).toBe(mark);
+    expect(frameOwnerMark(holder)).toBe(mark);
+  });
+
+  it("takes its mark off as its document leaves the frame, and not for the back/forward cache", async () => {
+    await load();
+    const { frameOwnerMark } = await import("./frame-owner.js");
+    const mark = frameOwnerMark(holder);
+    const hide = (persisted: boolean) => {
+      const event = new Event("pagehide");
+      Object.defineProperty(event, "persisted", { value: persisted });
+      window.dispatchEvent(event);
+    };
+    hide(true);
+    expect(frameOwnerMark(holder)).toBe(mark);
+    hide(false);
+    expect(frameOwnerMark(holder)).toBeUndefined();
+  });
+
+  it("reports focus in a document written since the read as in this frame, naming no element", async () => {
+    await load();
+    h.send({ type: "NATIVE_PAGE_KEYS", payload: { readId: "read-1" } });
+    h.send({ type: "SET_FOCUS_TRACKER", payload: { enabled: true } });
+    // What `document.open()` leaves: a root element no read has seen.
+    const original = document.documentElement;
+    const html = document.createElement("html");
+    html.innerHTML = `<head></head><body><button id="new">New</button></body>`;
+    original.remove();
+    document.append(html);
+    try {
+      await vi.advanceTimersByTimeAsync(0);
+      h.sent.length = 0;
+      document
+        .getElementById("new")!
+        .dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
+      // The service worker adds the frame, and the panel takes its row.
+      expect(h.sent.filter((m) => m.type === "FOCUS_CHANGED")).toEqual([
+        { type: "FOCUS_CHANGED", payload: { pageKeys: { "read-1": [] } } },
+      ]);
+    } finally {
+      h.send({ type: "SET_FOCUS_TRACKER", payload: { enabled: false } });
+      html.remove();
+      document.append(original);
+      await vi.advanceTimersByTimeAsync(0);
+    }
+  });
+
+  it("reports no mark from a frame that can't reach its element", async () => {
+    await load(false);
+    const { frameOwnerMark } = await import("./frame-owner.js");
+    expect(frameOwnerMark(holder)).toBeUndefined();
+    expect(keysAnswer()).not.toHaveProperty("owner");
+    h.send({ type: "REQUEST_TREE", payload: { viewMode: "a11y" } });
+    expect(lastTreePayload()).not.toHaveProperty("owner");
+  });
+});
+
+describe("content: the marked frames inside a document", () => {
+  let h: Harness;
+
+  beforeEach(async () => {
+    vi.useFakeTimers();
+    vi.resetModules();
+    document.body.innerHTML =
+      `<main><iframe id="one" title="One"></iframe>` +
+      `<iframe id="two" title="Two"></iframe>` +
+      `<iframe id="none" title="None"></iframe></main>`;
+    h = makeHarness();
+    (globalThis as { chrome?: unknown }).chrome = h.chromeMock;
+    await import("./content.js");
+    // The frames' own scripts have marked their <iframe>s.
+    const { markFrameOwner } = await import("./frame-owner.js");
+    for (const id of ["one", "two"]) {
+      markFrameOwner(
+        { frameElement: document.getElementById(id) } as unknown as Window,
+        `mark-${id}`,
+      );
+    }
+  });
+
+  afterEach(() => {
+    h.send({ type: "SET_OBSERVING", payload: { enabled: false } });
+    vi.clearAllTimers();
+    vi.useRealTimers();
+    delete (globalThis as { chrome?: unknown }).chrome;
+    document.body.innerHTML = "";
+  });
+
+  it("go back with a read's answer, each by its element's number", async () => {
+    const { livePageKeyWalker, walkPageKeys } =
+      await import("./native/page-keys.js");
+    const keys = new Map<Element, number>();
+    walkPageKeys(document.documentElement, livePageKeyWalker(), (el, key) =>
+      keys.set(el, key),
+    );
+    const answer = h.send({
+      type: "NATIVE_PAGE_KEYS",
+      payload: { readId: "read-1" },
+    }) as { embeds?: unknown; owner?: unknown };
+    expect(answer.embeds).toEqual([
+      [keys.get(document.getElementById("one")!), "mark-one"],
+      [keys.get(document.getElementById("two")!), "mark-two"],
+    ]);
+    // The top frame is held by nothing.
+    expect(answer).not.toHaveProperty("owner");
+  });
+
+  it("go with the tree, each by its <iframe>'s node", () => {
+    h.send({ type: "REQUEST_TREE", payload: { viewMode: "a11y" } });
+    const trees = h.sent.filter((m) => m.type === "FRAME_TREE_DATA");
+    const payload = trees[trees.length - 1]!.payload as {
+      nodes: Array<[string, SemanticNode]>;
+      embeds?: Array<[string, string]>;
+    };
+    const nodeFor = (id: string) =>
+      payload.nodes.find(([, n]) => n.dom?.attributes?.["id"] === id)![0];
+    expect(payload.embeds).toEqual([
+      [nodeFor("one"), "mark-one"],
+      [nodeFor("two"), "mark-two"],
+    ]);
+    expect(payload).not.toHaveProperty("owner");
+  });
+
+  it("go with no node when the tree has none for their <iframe>", async () => {
+    // Hidden from assistive technology, so the a11y view leaves it out.
+    const hidden = document.createElement("iframe");
+    hidden.id = "hidden";
+    hidden.setAttribute("aria-hidden", "true");
+    document.querySelector("main")!.append(hidden);
+    const { markFrameOwner } = await import("./frame-owner.js");
+    markFrameOwner(
+      { frameElement: hidden } as unknown as Window,
+      "mark-hidden",
+    );
+
+    h.send({ type: "REQUEST_TREE", payload: { viewMode: "a11y" } });
+    const trees = h.sent.filter((m) => m.type === "FRAME_TREE_DATA");
+    const payload = trees[trees.length - 1]!.payload as {
+      nodes: Array<[string, SemanticNode]>;
+      embeds?: Array<[string, string]>;
+    };
+    expect(
+      payload.nodes.some(([, n]) => n.dom?.attributes?.["id"] === "hidden"),
+    ).toBe(false);
+    expect(payload.embeds).toHaveLength(3);
+    expect(payload.embeds).toContainEqual(["", "mark-hidden"]);
+  });
+
+  it("are left out of a tree that holds none", () => {
+    document.body.innerHTML = `<main><button>Save</button></main>`;
+    h.send({ type: "REQUEST_TREE", payload: { viewMode: "a11y" } });
+    const trees = h.sent.filter((m) => m.type === "FRAME_TREE_DATA");
+    expect(trees[trees.length - 1]!.payload).not.toHaveProperty("embeds");
+  });
+});
+
+describe("content: a page that replaces its document", () => {
+  let h: Harness;
+  let original: Element;
+  let added: Array<[string, EventListenerOrEventListenerObject]>;
+  const addEventListener = document.addEventListener;
+  const scrollIntoView = Element.prototype.scrollIntoView;
+
+  beforeEach(async () => {
+    vi.useFakeTimers();
+    vi.resetModules();
+    Element.prototype.scrollIntoView = () => {};
+    original = document.documentElement;
+    document.body.innerHTML = `<main><button id="old">Old</button></main>`;
+    // The listeners the script hangs on the document, as it adds them.
+    added = [];
+    document.addEventListener = function (
+      this: Document,
+      type: string,
+      listener: EventListenerOrEventListenerObject,
+      options?: boolean | AddEventListenerOptions,
+    ) {
+      added.push([type, listener]);
+      return addEventListener.call(this, type, listener, options);
+    } as typeof document.addEventListener;
+    h = makeHarness();
+    (globalThis as { chrome?: unknown }).chrome = h.chromeMock;
+    await import("./content.js");
+  });
+
+  afterEach(async () => {
+    h.send({ type: "SET_PICK_MODE", payload: { enabled: false } });
+    h.send({ type: "SET_FOCUS_TRACKER", payload: { enabled: false } });
+    h.send({ type: "SET_OBSERVING", payload: { enabled: false } });
+    document.addEventListener = addEventListener;
+    Element.prototype.scrollIntoView = scrollIntoView;
+    document.getElementById("__sn-highlight")?.remove();
+    // Back to the document every other test shares.
+    if (document.documentElement !== original) {
+      document.documentElement?.remove();
+      document.append(original);
+    }
+    await vi.advanceTimersByTimeAsync(0);
+    vi.clearAllTimers();
+    vi.useRealTimers();
+    delete (globalThis as { chrome?: unknown }).chrome;
+    document.body.innerHTML = "";
+  });
+
+  /** What `document.open()` and a `write()` leave: another root element. */
+  async function rewrite(body: string): Promise<void> {
+    const html = document.createElement("html");
+    html.innerHTML = `<head></head><body>${body}</body>`;
+    document.documentElement?.remove();
+    document.append(html);
+    // The observer that hears it runs after the script that did it.
+    await vi.advanceTimersByTimeAsync(0);
+  }
+
+  const trees = () =>
+    h.sent.filter((m) => m.type === "FRAME_TREE_DATA") as Array<{
+      payload: { nodes: Array<[string, SemanticNode]> };
+    }>;
+  const names = (tree: { payload: { nodes: Array<[string, SemanticNode]> } }) =>
+    tree.payload.nodes.map(([, n]) => n.a11y?.name).filter(Boolean);
+
+  it("sends the new document's tree, read from its root", async () => {
+    h.send({ type: "REQUEST_TREE", payload: { viewMode: "a11y" } });
+    expect(names(trees().at(-1)!)).toContain("Old");
+    h.sent.length = 0;
+
+    await rewrite(`<button id="new">New</button>`);
+    expect(trees()).toHaveLength(1);
+    expect(names(trees()[0]!)).toContain("New");
+    expect(names(trees()[0]!)).not.toContain("Old");
+    // Nothing more follows from the old root, which is watched no longer.
+    original.querySelector("#old")!.textContent = "Changed";
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(trees()).toHaveLength(1);
+  });
+
+  it("keeps watching the new document for changes", async () => {
+    h.send({ type: "REQUEST_TREE", payload: { viewMode: "a11y" } });
+    await rewrite(`<button id="new">New</button>`);
+    h.sent.length = 0;
+
+    const later = document.createElement("button");
+    later.textContent = "Later";
+    document.body.append(later);
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(names(trees().at(-1)!)).toEqual(
+      expect.arrayContaining(["New", "Later"]),
+    );
+  });
+
+  it("reads nothing, and sends nothing, for a page whose panel never connected", async () => {
+    h.sent.length = 0;
+    await rewrite(`<button id="new">New</button>`);
+    expect(h.sent).toEqual([]);
+    // Armed later, it reads the document that is there now.
+    h.send({ type: "SET_OBSERVING", payload: { enabled: true } });
+    expect(names(trees().at(-1)!)).toContain("New");
+  });
+
+  it("adds its listeners to the document again, the same ones", async () => {
+    // `document.open()` removes every listener from the document and its
+    // window, which jsdom's stand-in for it here doesn't. Adding the very
+    // same listener again restores it where it was lost, and does nothing
+    // where it wasn't.
+    const atLoad = [...added];
+    expect(atLoad.map(([type]) => type).sort()).toEqual([
+      "focusin",
+      "real-a11y:native-preview",
+      "real-a11y:native-reveal",
+    ]);
+    added.length = 0;
+    await rewrite(`<button id="new">New</button>`);
+    // Each of them once more. Earlier tests' modules are still on this
+    // document and add theirs again too, so count this module's own.
+    for (const [type, listener] of atLoad) {
+      expect(
+        added.filter(([t, l]) => t === type && l === listener),
+        type,
+      ).toHaveLength(1);
+    }
+
+    // Not lost here, so not doubled: one report for one focus change.
+    h.send({ type: "REQUEST_TREE", payload: { viewMode: "a11y" } });
+    h.send({ type: "SET_FOCUS_TRACKER", payload: { enabled: true } });
+    h.sent.length = 0;
+    document
+      .getElementById("new")!
+      .dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
+    expect(h.sent.filter((m) => m.type === "FOCUS_CHANGED")).toHaveLength(1);
+  });
+
+  it("numbers the new document for a read, and reports focus in it by those numbers", async () => {
+    await rewrite(`<main><button id="new">New</button></main>`);
+    const { livePageKeyWalker, walkPageKeys } =
+      await import("./native/page-keys.js");
+    const keys = new Map<Element, number>();
+    const digest = walkPageKeys(
+      document.documentElement,
+      livePageKeyWalker(),
+      (el, key) => keys.set(el, key),
+    );
+    expect(
+      h.send({ type: "NATIVE_PAGE_KEYS", payload: { readId: "read-1" } }),
+    ).toEqual({ ...digest, url: location.href });
+
+    h.send({ type: "SET_FOCUS_TRACKER", payload: { enabled: true } });
+    h.sent.length = 0;
+    const target = document.getElementById("new")!;
+    target.dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
+    const [report] = h.sent.filter((m) => m.type === "FOCUS_CHANGED") as Array<{
+      payload: { pageKeys?: Record<string, number[]> };
+    }>;
+    expect(report?.payload.pageKeys?.["read-1"]?.[0]).toBe(keys.get(target));
+  });
+
+  it("sends no focus report that names nothing: the top frame has no row of its own", async () => {
+    h.send({ type: "NATIVE_PAGE_KEYS", payload: { readId: "read-1" } });
+    h.send({ type: "SET_FOCUS_TRACKER", payload: { enabled: true } });
+    await rewrite(`<button id="new">New</button>`);
+    h.sent.length = 0;
+    // No element of the new document was numbered, and no tree was asked
+    // for, so the in-page tree tracks none of them either.
+    document
+      .getElementById("new")!
+      .dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
+    expect(h.sent.filter((m) => m.type === "FOCUS_CHANGED")).toEqual([]);
+  });
+
+  it("draws the screen curtain again over the new document", async () => {
+    h.send({ type: "TOGGLE_CURTAIN", payload: { visible: true } });
+    expect(document.getElementById("__sn-curtain")).not.toBeNull();
+    await rewrite(`<button id="new">New</button>`);
+    const curtain = document.getElementById("__sn-curtain");
+    expect(curtain).not.toBeNull();
+    expect(curtain!.parentElement).toBe(document.documentElement);
+
+    h.send({ type: "TOGGLE_CURTAIN", payload: { visible: false } });
+    expect(document.getElementById("__sn-curtain")).toBeNull();
+    await rewrite(`<button id="newer">Newer</button>`);
+    expect(document.getElementById("__sn-curtain")).toBeNull();
+  });
+
+  describe("live regions", () => {
+    const announced = () =>
+      h.sent
+        .filter((m) => m.type === "LIVE_REGION")
+        .map((m) => (m.payload as { text: string }).text);
+    /** Change the status region's text, and wait out the read's debounce. */
+    async function say(text: string): Promise<void> {
+      document.getElementById("status")!.textContent = text;
+      await vi.advanceTimersByTimeAsync(500);
+    }
+
+    it("are heard in the new document", async () => {
+      h.send({ type: "REQUEST_TREE", payload: { viewMode: "a11y" } });
+      await rewrite(`<div role="status" id="status">Loading</div>`);
+      h.sent.length = 0;
+      await say("Ready");
+      expect(announced()).toEqual(["Ready"]);
+    });
+
+    it("are heard in a body that arrives after the root element", async () => {
+      // A document written in stages: the root and its head, and the body
+      // some time later. The root is the same element both times.
+      h.send({ type: "REQUEST_TREE", payload: { viewMode: "a11y" } });
+      const html = document.createElement("html");
+      html.append(document.createElement("head"));
+      document.documentElement.remove();
+      document.append(html);
+      await vi.advanceTimersByTimeAsync(0);
+
+      const body = document.createElement("body");
+      body.innerHTML = `<div role="status" id="status">Loading</div>`;
+      html.append(body);
+      await vi.advanceTimersByTimeAsync(0);
+      h.sent.length = 0;
+      await say("Ready");
+      expect(announced()).toEqual(["Ready"]);
+    });
+
+    it("are heard in a body that takes another's place", async () => {
+      h.send({ type: "REQUEST_TREE", payload: { viewMode: "a11y" } });
+      const body = document.createElement("body");
+      body.innerHTML = `<div role="status" id="status">Loading</div>`;
+      document.body.replaceWith(body);
+      await vi.advanceTimersByTimeAsync(0);
+      h.sent.length = 0;
+      await say("Ready");
+      expect(announced()).toEqual(["Ready"]);
+    });
+
+    it("are heard no more once the panel has gone", async () => {
+      h.send({ type: "REQUEST_TREE", payload: { viewMode: "a11y" } });
+      await rewrite(`<div role="status" id="status">Loading</div>`);
+      h.send({ type: "SET_OBSERVING", payload: { enabled: false } });
+      // A body arriving now arms nothing.
+      const body = document.createElement("body");
+      body.innerHTML = `<div role="status" id="status">Loading</div>`;
+      document.body.replaceWith(body);
+      await vi.advanceTimersByTimeAsync(0);
+      h.sent.length = 0;
+      await say("Ready");
+      expect(announced()).toEqual([]);
+    });
+  });
+
+  it("waits out a document left with no root element, and reads the next one", async () => {
+    // `document.open()` with nothing written yet.
+    h.send({ type: "REQUEST_TREE", payload: { viewMode: "a11y" } });
+    h.sent.length = 0;
+    document.documentElement.remove();
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(() =>
+      h.send({ type: "REQUEST_TREE", payload: { viewMode: "a11y" } }),
+    ).not.toThrow();
+    expect(
+      h.send({ type: "NATIVE_PAGE_KEYS", payload: { readId: "read-1" } }),
+    ).toBeNull();
+    expect(trees()).toEqual([]);
+
+    await rewrite(`<button id="new">New</button>`);
+    expect(names(trees().at(-1)!)).toContain("New");
+  });
+
+  it("keeps an armed picker picking in the new document", async () => {
+    h.send({ type: "REQUEST_TREE", payload: { viewMode: "a11y" } });
+    h.send({ type: "SET_PICK_MODE", payload: { enabled: true } });
+    await rewrite(`<button id="new">New</button>`);
+    h.sent.length = 0;
+
+    document
+      .getElementById("new")!
+      .dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    expect(h.sent.filter((m) => m.type === "NODE_PICKED")).toHaveLength(1);
+  });
+});

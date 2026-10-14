@@ -18,14 +18,22 @@
  *
  * A walk covers one document: its elements, and those of every author shadow
  * root, open or closed. A frame's document is walked on its own, by the
- * content script in that frame, and matched to its CDP counterpart by URL and
- * digest ({@link FramePageKeyDigest}); a frame's number names an element of
- * that frame's document only. A user-agent shadow root (a `<video>`'s
- * controls, an `<input>`'s inner editor) is left out, as page script can't
- * reach it: focus inside one is reported on the element that holds it.
+ * content script in that frame, and matched to its CDP counterpart by the
+ * mark its script left on the element holding the frame, or else by URL,
+ * and by digest ({@link FramePageKeyDigest}); a frame's number names an
+ * element of that frame's document only. A user-agent shadow root (a
+ * `<video>`'s controls, an `<input>`'s inner editor) is left out, as page
+ * script can't reach it: focus inside one is reported on the element that
+ * holds it.
  */
 
 import { safeGetAttribute } from "@real-a11y-dev/core";
+
+import {
+  asFrameMark,
+  isFrameHolder,
+  MAX_MARKED_FRAMES,
+} from "../frame-owner.js";
 
 /** What a walk numbered, for the two sides to compare. They disagree when
  *  the page changed between the two walks, and the numbers are then not
@@ -37,18 +45,47 @@ export interface PageKeyDigest {
   hash: number;
 }
 
+/** An element of a walk that holds a frame whose script marked it: the
+ *  element's number, and the mark (see `frame-owner.ts`). */
+export type FrameEmbed = readonly [key: number, owner: string];
+
+/** What a content script's walk numbered: its digest, and the marked frames
+ *  it came across. */
+export interface PageKeyWalk extends PageKeyDigest {
+  embeds?: FrameEmbed[];
+}
+
 /**
  * A frame's answer to `NATIVE_PAGE_KEYS`: the digest of its own document's
- * walk, which frame it is, and its document's URL. The read matches each
- * frame's document to its CDP counterpart by URL and digest together, as the
- * two sides name frames differently: the extension by a number, CDP by a
- * token, with nothing that turns one into the other.
+ * walk, and what tells which frame's it is. The two sides name frames
+ * differently, the extension by a number and CDP by a token, with nothing
+ * that turns one into the other, so the read finds each frame's document
+ * among CDP's one of two ways. A frame of its parent's origin marks the
+ * element holding it (`owner`), and the parent's walk reports that element's
+ * number with the mark (`embeds`), which CDP's walk of the parent gives the
+ * same element: that names the document exactly. Any other frame is matched
+ * by its document's URL, when no other frame shows it.
  */
-export interface FramePageKeyDigest extends PageKeyDigest {
+export interface FramePageKeyDigest extends PageKeyWalk {
   /** The frame, as the extension knows it: 0 for the top frame. */
   frameId: number;
   /** Its document's URL (`document.URL`), as CDP's `documentURL` has it. */
   url: string;
+  /** The mark its script left on the element holding the frame. Absent for
+   *  the top frame, and for a frame of another origin than its parent's. */
+  owner?: string;
+  /** The frame holding it, as the tab lists it. The service worker sets it,
+   *  from the tab's list of frames; absent for the top frame. */
+  parent?: number;
+  /**
+   * The tab lists the frame at an `about:` URL: it has no URL of its own.
+   * Its document's URL then says nothing of which frame it is, as every
+   * `about:blank` frame shares one and a frame a script wrote into
+   * (`document.open()`) has the URL of the document that wrote it, so such
+   * a frame is matched by its mark or not at all. The service worker sets
+   * it, from the tab's list of frames.
+   */
+  blank?: boolean;
 }
 
 /**
@@ -56,7 +93,8 @@ export interface FramePageKeyDigest extends PageKeyDigest {
  * frame's answer, and the URL of each other frame the tab lists (but the top
  * one) that gave none, because it didn't answer in time or wasn't asked. A
  * document at a URL more than one frame shows, answered or not, can't be
- * told apart from the others', so the read matches none at it.
+ * told apart from the others' by URL, so the read matches none at it that
+ * way.
  */
 export interface FrameAnswers {
   answered: readonly FramePageKeyDigest[];
@@ -114,7 +152,7 @@ const NAME_END = 0x20;
  * Number `root` and every element under it, in the one order both sides
  * walk: pre-order, an element's own children before its shadow root's, and
  * the extension's own elements left out. `visit` gets each element with its
- * number, from 0 at `root`.
+ * number, from 0 at `root`, and its local name.
  *
  * The digest catches an element added or removed between the two walks, or
  * one moved where its name differs from what was there. A reorder of
@@ -124,7 +162,7 @@ const NAME_END = 0x20;
 export function walkPageKeys<E>(
   root: E,
   walker: PageKeyWalker<E>,
-  visit: (el: E, key: number) => void,
+  visit: (el: E, key: number, localName: string) => void,
 ): PageKeyDigest {
   let count = 0;
   let hash = FNV_OFFSET;
@@ -134,8 +172,8 @@ export function walkPageKeys<E>(
   while (stack.length > 0) {
     const el = stack.pop()!;
     if (el !== root && walker.isOwn(el)) continue;
-    visit(el, count++);
     const name = walker.localName(el);
+    visit(el, count++, name);
     for (let i = 0; i < name.length; i++) {
       hash = Math.imul(hash ^ name.charCodeAt(i), FNV_PRIME);
     }
@@ -212,33 +250,46 @@ export function cdpPageKeys(
   return { keys, digest };
 }
 
+/** A document of `DOM.getDocument`'s tree. A frame's comes with the backend
+ *  node id of the element holding the frame, and the document that element
+ *  is in. */
+export interface CdpFrameDocument {
+  document: CdpDomNode;
+  ownerBackendNodeId?: number;
+  within?: CdpDomNode;
+}
+
 /**
  * The documents of `DOM.getDocument({ pierce: true })`'s tree: `root` itself,
  * and the document of every frame inside it that shares its renderer,
- * however deeply they nest, each with its `<iframe>`'s backend node id. A
- * frame in a renderer of its own has no document here: CDP reaches it only
- * through that frame's own session.
+ * however deeply they nest, each with its `<iframe>`'s backend node id and
+ * the document around it, which always comes before it. A frame in a
+ * renderer of its own has no document here: CDP reaches it only through
+ * that frame's own session.
  */
-export function cdpFrameDocuments(
-  root: CdpDomNode,
-): Array<{ document: CdpDomNode; ownerBackendNodeId?: number }> {
-  const out: Array<{ document: CdpDomNode; ownerBackendNodeId?: number }> = [
-    { document: root },
-  ];
+export function cdpFrameDocuments(root: CdpDomNode): CdpFrameDocument[] {
+  const out: CdpFrameDocument[] = [{ document: root }];
   // A stack, as the walk above: a deep page would overflow the call stack.
-  const stack: CdpDomNode[] = [root];
+  const stack: Array<{ node: CdpDomNode; within: CdpDomNode }> = [
+    { node: root, within: root },
+  ];
   while (stack.length > 0) {
-    const node = stack.pop()!;
+    const { node, within } = stack.pop()!;
     if (node.contentDocument) {
       out.push({
         document: node.contentDocument,
         ownerBackendNodeId: node.backendNodeId,
+        within,
       });
-      stack.push(node.contentDocument);
+      stack.push({ node: node.contentDocument, within: node.contentDocument });
     }
     // Shadow roots too: an `<iframe>` can sit inside one.
-    for (const child of node.children ?? []) stack.push(child);
-    for (const shadow of node.shadowRoots ?? []) stack.push(shadow);
+    for (const child of node.children ?? []) {
+      stack.push({ node: child, within });
+    }
+    for (const shadow of node.shadowRoots ?? []) {
+      stack.push({ node: shadow, within });
+    }
   }
   return out;
 }
@@ -253,18 +304,47 @@ export function asPageKeyDigest(reply: unknown): PageKeyDigest | undefined {
     : undefined;
 }
 
-/** The reply of frame `frameId`'s content script to `NATIVE_PAGE_KEYS`,
- *  checked as {@link asPageKeyDigest} checks one, and with its document's
- *  URL, which a frame's document can't be matched without. */
+/** The most marked frames one walk reports, and one answer is read for. A
+ *  document of more leaves the rest of its frames unmatched. */
+export const MAX_FRAME_EMBEDS = MAX_MARKED_FRAMES;
+
+/**
+ * The reply of frame `frameId`'s content script to `NATIVE_PAGE_KEYS`,
+ * checked as {@link asPageKeyDigest} checks one, and with its document's
+ * URL. Its own mark and the marks it reports are kept only where they are
+ * well formed: a content script runs in the page's process, so nothing of
+ * its answer is taken on trust.
+ */
 export function asFramePageKeyDigest(
   reply: unknown,
   frameId: number,
 ): FramePageKeyDigest | undefined {
   const digest = asPageKeyDigest(reply);
-  const url = (reply as { url?: unknown } | null)?.url;
-  return digest && typeof url === "string"
-    ? { ...digest, frameId, url }
-    : undefined;
+  const { url, owner, embeds } = (reply ?? {}) as {
+    url?: unknown;
+    owner?: unknown;
+    embeds?: unknown;
+  };
+  if (!digest || typeof url !== "string") return undefined;
+  const mark = asFrameMark(owner);
+  const marked: FrameEmbed[] = [];
+  if (Array.isArray(embeds)) {
+    for (const entry of embeds.slice(0, MAX_FRAME_EMBEDS) as unknown[]) {
+      if (!Array.isArray(entry)) continue;
+      const [key, held] = entry as unknown[];
+      const heldMark = asFrameMark(held);
+      if (Number.isSafeInteger(key) && heldMark !== undefined) {
+        marked.push([key as number, heldMark]);
+      }
+    }
+  }
+  return {
+    ...digest,
+    frameId,
+    url,
+    ...(mark !== undefined ? { owner: mark } : {}),
+    ...(marked.length > 0 ? { embeds: marked } : {}),
+  };
 }
 
 /**
@@ -350,33 +430,49 @@ const MAX_CLIMB = 256;
 export class PageKeySnapshots {
   private reads: Array<{ readId: string; keys: WeakMap<Element, number> }> = [];
 
-  /** `parentOf` is the climb a focus report takes: core's `renderingParent`,
-   *  which leaves a shadow root for its host. */
+  /**
+   * `parentOf` is the climb a focus report takes: core's `renderingParent`,
+   * which leaves a shadow root for its host. `markOf` reads the mark the
+   * frame an element holds left on it (`frameOwnerMark`), and is asked only
+   * of elements that can hold a frame.
+   */
   constructor(
     private readonly walker: PageKeyWalker<Element>,
     private readonly parentOf: (el: Element) => Element | null,
+    private readonly markOf: (el: Element) => string | undefined = () =>
+      undefined,
   ) {}
 
   /** Number the elements under `root` for read `readId`, replacing an
    *  earlier numbering under the same id: a read retried after the debugger
-   *  dropped numbers again. */
-  take(readId: string, root: Element): PageKeyDigest {
+   *  dropped numbers again. The walk comes back with the marked frames it
+   *  passed, for the read to find their documents by. */
+  take(readId: string, root: Element): PageKeyWalk {
     const keys = new WeakMap<Element, number>();
-    const digest = walkPageKeys(root, this.walker, (el, key) =>
-      keys.set(el, key),
-    );
+    const embeds: FrameEmbed[] = [];
+    const digest = walkPageKeys(root, this.walker, (el, key, localName) => {
+      keys.set(el, key);
+      if (embeds.length < MAX_FRAME_EMBEDS && isFrameHolder(localName)) {
+        const mark = this.markOf(el);
+        if (mark !== undefined) embeds.push([key, mark]);
+      }
+    });
     this.reads = [
       ...this.reads.filter((read) => read.readId !== readId),
       { readId, keys },
     ].slice(-KEPT_PAGE_KEY_READS);
-    return digest;
+    return embeds.length > 0 ? { ...digest, embeds } : digest;
   }
 
   /**
    * For each read kept, the numbers of `el` and of each numbered element
    * above it, nearest first: the panel takes the first that names a row of
    * its tree. An element added since the read has no number, and reports
-   * those above it. `undefined` when no read numbered any of them.
+   * those above it. When none of them has one either, the page has replaced
+   * its whole document since the read (`document.open()`), and the report is
+   * empty: it names no element, and still says focus is in this frame, whose
+   * own row the panel then takes. `undefined` for no element, or before any
+   * read.
    */
   keysFor(el: Element | null): Record<string, number[]> | undefined {
     if (!el) return undefined;
@@ -388,7 +484,7 @@ export class PageKeySnapshots {
         const key = keys.get(at);
         if (key !== undefined) chain.push(key);
       }
-      if (chain.length > 0) (out ??= {})[readId] = chain;
+      (out ??= {})[readId] = chain;
     }
     return out;
   }

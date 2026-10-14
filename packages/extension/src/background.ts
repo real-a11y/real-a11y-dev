@@ -1,6 +1,11 @@
 /// <reference types="chrome" />
 
-import { buildFrameInfoMap, mergeFrameTrees } from "./frame-merger.js";
+import {
+  asFrameMarks,
+  buildFrameInfoMap,
+  mergeFrameTrees,
+  unplacedFrames,
+} from "./frame-merger.js";
 import { cancelNativePicks, registerNativeMode } from "./native/index.js";
 import {
   type PlannedTabMessage,
@@ -15,11 +20,14 @@ import {
 } from "./routing.js";
 import {
   type TabState,
+  answeredPlacesAskedOf,
   clearTabFrames,
   disposeTabState,
+  forgetAskedPlaces,
   getOrCreateTabState,
   recordFrameTree,
   removeFrame,
+  unplaceableFrames,
 } from "./tab-state.js";
 
 // `chrome.debugger` native mode (RFC PR H) ships in every build now that the
@@ -120,13 +128,16 @@ async function mergeAndSendTree(tabId: number) {
     return;
   }
 
+  const frameInfoMap = buildFrameInfoMap(allFrames);
   const result = mergeFrameTrees({
     frames: state.frames,
-    frameInfoMap: buildFrameInfoMap(allFrames),
+    frameInfoMap,
+    unplaceable: unplaceableFrames(state),
   });
   if (!result) return; // top frame went away between schedule and run
 
   state.nodeToFrame = result.nodeToFrame;
+  askForFramePlaces(tabId, state, result.unplaced, frameInfoMap);
 
   // Send merged tree to side panel with page info. `tabId` lets the side
   // panel filter out broadcasts for tabs it isn't bound to — without that
@@ -200,15 +211,133 @@ function recoverMissingFrames(
 }
 
 /**
+ * How long a frame the merge couldn't place is left to the tree of the
+ * document around it arriving on its own, before that document is asked for
+ * it. Past the longest a content script holds back a tree while its page
+ * keeps changing (core's `DOM_OBSERVER_MAX_WAIT_MS`), and the merge after.
+ */
+const PLACE_WAIT_MS = 1500;
+
+/**
+ * See to the place of each frame the merge couldn't put under its element:
+ * one that marked the element holding it (`frame-owner.ts`) where no tree
+ * has a node bearing the mark. That is a frame whose script loaded after the
+ * document around it was last read.
+ *
+ * Most often that document is about to send its tree anyway: a page that
+ * adds a frame changes, and the tree it sends for that carries the mark. So
+ * a frame gets `PLACE_WAIT_MS` first. One still unplaced by then sits in a
+ * document nothing has changed in since (a frame slow to load in a page
+ * otherwise still: marking an element changes nothing in the document), and
+ * its parent is asked to send its tree again. That reads the parent's whole
+ * document, which is why it isn't asked at once.
+ *
+ * Once per frame and mark, for as long as the frame stays unplaced: asking
+ * again on every merge would read the parent's document over and over for
+ * nothing. A frame still unplaced once its parent has answered is held by
+ * an element the tree has no node for (a hidden `<iframe>` inside a shadow
+ * root, which the parent's own look for marks doesn't reach), and the merge
+ * stops holding other frames' guessed places back for it
+ * (`unplaceableFrames`). A frame Chrome doesn't list (a `javascript:` one) has no known
+ * parent to ask. A frame whose element the parent's tree has no node for (a
+ * hidden `<iframe>`, in the a11y view) is never asked after: the parent
+ * reports the mark all the same, so the merge knows where it is.
+ */
+function askForFramePlaces(
+  tabId: number,
+  state: TabState,
+  unplaced: readonly number[],
+  frameInfoMap: ReadonlyMap<number, { parentFrameId: number }>,
+): void {
+  const now = Date.now();
+  const parents = new Set<number>();
+  // How long until the next frame still waiting is due, if any is.
+  let wait: number | undefined;
+  // A frame placed since starts over if it is ever unplaced again. One
+  // with no tree at the moment hasn't been placed, nor one whose parent has
+  // none: a fresh request dropped them, the merge says nothing of the frame
+  // until both are back, and what is known of it holds when they are.
+  const still = new Set(unplaced);
+  for (const [frameId, place] of state.askedPlaces) {
+    if (
+      !still.has(frameId) &&
+      state.frames.has(frameId) &&
+      state.frames.has(place.parent)
+    ) {
+      state.askedPlaces.delete(frameId);
+    }
+  }
+  for (const frameId of unplaced) {
+    const mark = state.frames.get(frameId)?.owner;
+    const parent = frameInfoMap.get(frameId)?.parentFrameId;
+    if (mark === undefined || parent === undefined) continue;
+    let seen = state.askedPlaces.get(frameId);
+    if (seen?.mark !== mark) {
+      seen = { mark, since: now, asked: false, parent, answered: false };
+      state.askedPlaces.set(frameId, seen);
+    }
+    if (seen.asked) continue;
+    // The clock went back: one full wait from here, and no longer.
+    if (now < seen.since) seen.since = now;
+    const left = seen.since + PLACE_WAIT_MS - now;
+    if (left <= 0) {
+      seen.asked = true;
+      seen.parent = parent;
+      parents.add(parent);
+    } else {
+      wait = Math.min(wait ?? left, left);
+    }
+  }
+  for (const frameId of parents) {
+    chrome.tabs.sendMessage(tabId, { type: "RESEND_TREE" }, { frameId }, () => {
+      if (chrome.runtime.lastError) {
+        /* the parent went away between the merge and the send */
+      }
+    });
+  }
+  // One check per tab, when the next frame is due: a page adding frames in
+  // a stream doesn't stack them, and each check sets the one after it.
+  if (wait !== undefined && state.placeTimer === null) {
+    state.placeTimer = setTimeout(() => {
+      state.placeTimer = null;
+      void recheckFramePlaces(tabId);
+    }, wait);
+  }
+}
+
+/** `PLACE_WAIT_MS` after a merge left frames unplaced: ask after the ones
+ *  that still are. Publishes nothing: the trees are as the last merge had
+ *  them. */
+async function recheckFramePlaces(tabId: number): Promise<void> {
+  // Resolve, don't create: the tab may have closed meanwhile.
+  const state = tabStates.get(tabId);
+  if (!state || !sidepanelConnected) return;
+  if (unplacedFrames(state.frames).length === 0) return;
+  const frames = await chrome.webNavigation
+    .getAllFrames({ tabId })
+    .catch(() => null);
+  if (!frames || tabStates.get(tabId) !== state) return;
+  // Read again: a tree may have arrived while the frames were listed.
+  askForFramePlaces(
+    tabId,
+    state,
+    unplacedFrames(state.frames),
+    buildFrameInfoMap(frames),
+  );
+}
+
+/**
  * Whether a frame Chrome reported could be running one of our content
  * scripts, judged by its URL scheme.
  *
- * `public/manifest.json` injects at `<all_urls>` with no `match_about_blank`,
- * so a whole class of frames is guaranteed-reported and guaranteed-silent: a
- * bare or `srcdoc` iframe (`about:blank`), `data:`/`blob:` frames, sandboxed
- * frames, PDF and plugin frames, `chrome-error://`. Ad slots are usually the
- * first of those. Pinging them is harmless in itself, but each one counts as
- * missing forever and would hold the publish back a debounce every time.
+ * `public/manifest.json` injects at `<all_urls>`, and with its
+ * `match_about_blank` into the `about:blank` and `srcdoc` frames of a page
+ * it runs in. That still leaves frames guaranteed-reported and
+ * guaranteed-silent: `data:` frames, PDF and plugin frames,
+ * `chrome-error://`. Pinging them is harmless in itself, but each one counts
+ * as missing forever and would hold the publish back a debounce every time.
+ * An `about:` frame can be silent too (a sandboxed one, whose origin is its
+ * own), which its URL doesn't show: it costs the one ping.
  *
  * Unknown/absent URLs are treated as reachable — better one wasted ping than
  * a silently skipped frame that needed the repair.
@@ -219,7 +348,9 @@ function canHostContentScript(url: string | undefined): boolean {
     url.startsWith("http:") ||
     url.startsWith("https:") ||
     url.startsWith("file:") ||
-    url.startsWith("ftp:")
+    url.startsWith("ftp:") ||
+    url.startsWith("about:blank") ||
+    url.startsWith("about:srcdoc")
   );
 }
 
@@ -521,7 +652,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           pageTitle: message.payload.pageTitle || "",
           nodes: message.payload.nodes,
           rootId: message.payload.rootId,
+          ...asFrameMarks(message.payload),
         });
+        // A frame asked where one of its frames goes has now answered.
+        answeredPlacesAskedOf(state, frameId);
         if (frameId === 0) state.topFrameChanged = true;
         scheduleMerge(tabId);
 
@@ -892,6 +1026,7 @@ chrome.webNavigation.onBeforeNavigate.addListener((details) => {
   if (details.frameId === 0) {
     // Top frame navigating — clear ALL frame data for this tab
     clearTabFrames(state);
+    forgetAskedPlaces(state);
     // And tell the panel, which holds its own copy. Nothing else would:
     // a tree only reaches it when some frame announces, so navigating to a
     // page that cannot run a content script (the Web Store, a PDF, a

@@ -4,8 +4,10 @@ import { describe, it, expect } from "vitest";
 import {
   type FrameInfo,
   type FrameTree,
+  asFrameMarks,
   buildFrameInfoMap,
   mergeFrameTrees,
+  unplacedFrames,
 } from "./frame-merger.js";
 
 // ---- Fixture helpers ----------------------------------------------------
@@ -498,6 +500,387 @@ describe("mergeFrameTrees", () => {
     expect(result!.nodes.get("f5-c-root")!.ui!.expanded).toBe(true);
     // c-deep sits at merged depth 4 → collapsed.
     expect(result!.nodes.get("f5-c-deep")!.ui!.expanded).toBe(false);
+  });
+});
+
+describe("mergeFrameTrees: frames placed by the mark on their element", () => {
+  // Frames a page makes with no URL of their own all show `about:blank` or
+  // `about:srcdoc`, and their <iframe>s carry no `src`: nothing in a URL
+  // says which frame is in which. Each frame's script marks the element
+  // holding it instead, and the tree of the document around it says which
+  // of its nodes bears which mark.
+
+  const blankIframe = (id: string) =>
+    [id, makeNode(id, { tagName: "iframe", parentId: "root", depth: 1 })] as [
+      string,
+      SemanticNode,
+    ];
+  /** A top frame of three blank <iframe>s, bearing `marks` by node id. */
+  const topOf = (marks: Array<[string, string]>): FrameTree => ({
+    ...makeFrame(0, "https://top.test/", [
+      ["root", makeNode("root", { childIds: ["ifr-1", "ifr-2", "ifr-3"] })],
+      blankIframe("ifr-1"),
+      blankIframe("ifr-2"),
+      blankIframe("ifr-3"),
+    ]),
+    embeds: marks,
+  });
+  const blankFrame = (
+    frameId: number,
+    owner?: string,
+    url = "about:blank",
+  ): FrameTree => ({
+    ...makeFrame(frameId, url, [["c-root", makeNode("c-root")]]),
+    ...(owner !== undefined ? { owner } : {}),
+  });
+  const listed = (...frameIds: number[]) =>
+    new Map<number, FrameInfo>(
+      frameIds.map((id) => [id, { parentFrameId: 0, url: "about:blank" }]),
+    );
+
+  it("puts each blank frame under its own <iframe>, whatever order they announced in", () => {
+    // Frame 7 is in the first <iframe> and frame 5 in the third, and they
+    // announced in neither order.
+    const result = mergeFrameTrees({
+      frames: new Map([
+        [6, blankFrame(6, "mark-2")],
+        [5, blankFrame(5, "mark-3", "about:srcdoc")],
+        [
+          0,
+          topOf([
+            ["ifr-1", "mark-1"],
+            ["ifr-2", "mark-2"],
+            ["ifr-3", "mark-3"],
+          ]),
+        ],
+        [7, blankFrame(7, "mark-1")],
+      ]),
+      frameInfoMap: listed(5, 6, 7),
+    })!;
+
+    expect(result.nodes.get("f7-c-root")!.parentId).toBe("ifr-1");
+    expect(result.nodes.get("f6-c-root")!.parentId).toBe("ifr-2");
+    expect(result.nodes.get("f5-c-root")!.parentId).toBe("ifr-3");
+    expect(result.nodes.get("ifr-1")!.childIds).toEqual(["f7-c-root"]);
+    expect(result.nodes.get("ifr-2")!.childIds).toEqual(["f6-c-root"]);
+    expect(result.nodes.get("ifr-3")!.childIds).toEqual(["f5-c-root"]);
+    // Under the <iframe>, at depth 1: its root at 2.
+    expect(result.nodes.get("f7-c-root")!.depth).toBe(2);
+    expect(result.unplaced).toEqual([]);
+  });
+
+  it("puts a frame a script wrote into under its <iframe>, though its URL is the page's", () => {
+    // `document.open()` gives the frame's document the URL of the one that
+    // wrote it, which matches no <iframe>'s `src`.
+    const result = mergeFrameTrees({
+      frames: new Map([
+        [0, topOf([["ifr-2", "mark-w"]])],
+        [5, blankFrame(5, "mark-w", "https://top.test/")],
+      ]),
+      frameInfoMap: listed(5),
+    })!;
+    expect(result.nodes.get("f5-c-root")!.parentId).toBe("ifr-2");
+  });
+
+  it("keeps a marked frame's <iframe> for it: no other frame is put there by the last-resort guess", () => {
+    // Frame 9 marked nothing (another origin's, say) and matches no `src`.
+    // The first childless <iframe> is frame 5's by its mark, whenever frame
+    // 5's tree is merged, so the guess goes past it.
+    const frames = new Map([
+      [0, topOf([["ifr-1", "mark-1"]])],
+      [9, blankFrame(9, undefined, "https://other.test/redirected")],
+      [5, blankFrame(5, "mark-1")],
+    ]);
+    const result = mergeFrameTrees({ frames, frameInfoMap: listed(9, 5) })!;
+    expect(result.nodes.get("f5-c-root")!.parentId).toBe("ifr-1");
+    expect(result.nodes.get("f9-c-root")!.parentId).toBe("ifr-2");
+  });
+
+  it("guesses no <iframe> for a marked frame whose mark no tree bears yet, and says it is unplaced", () => {
+    // The top frame's tree was read before frame 5's script marked its
+    // element. Guessing would put it under the first childless <iframe>,
+    // which may be another frame's.
+    const result = mergeFrameTrees({
+      frames: new Map([
+        [0, topOf([])],
+        [5, blankFrame(5, "mark-late")],
+      ]),
+      frameInfoMap: listed(5),
+    })!;
+    expect(result.nodes.get("f5-c-root")!.parentId).toBeNull();
+    for (const id of ["ifr-1", "ifr-2", "ifr-3"]) {
+      expect(result.nodes.get(id)!.childIds, id).toEqual([]);
+    }
+    expect(result.unplaced).toEqual([5]);
+    // Its nodes are still there, for actions to route by.
+    expect(result.nodeToFrame.get("f5-c-root")).toBe(5);
+  });
+
+  it("guesses an <iframe> for no frame under a parent that holds an unplaced marked frame", () => {
+    // Frame 5 marked its element, and the top frame's tree doesn't bear the
+    // mark yet. Frame 9 marked nothing and matches no `src`: the guess would
+    // hand it the first empty <iframe>, which may be the one frame 5 is in,
+    // and its content would show, and be acted on, under the wrong frame.
+    const frames = new Map([
+      [0, topOf([])],
+      [9, blankFrame(9, undefined, "https://other.test/redirected")],
+      [5, blankFrame(5, "mark-late")],
+    ]);
+    const result = mergeFrameTrees({ frames, frameInfoMap: listed(9, 5) })!;
+    expect(result.nodes.get("f9-c-root")!.parentId).toBeNull();
+    expect(result.nodes.get("f5-c-root")!.parentId).toBeNull();
+    for (const id of ["ifr-1", "ifr-2", "ifr-3"]) {
+      expect(result.nodes.get(id)!.childIds, id).toEqual([]);
+    }
+    expect(result.unplaced).toEqual([5]);
+
+    // Once the top frame's tree bears the mark, the guess is taken again,
+    // past the marked frame's <iframe>.
+    frames.set(0, topOf([["ifr-1", "mark-late"]]));
+    const placed = mergeFrameTrees({ frames, frameInfoMap: listed(9, 5) })!;
+    expect(placed.nodes.get("f5-c-root")!.parentId).toBe("ifr-1");
+    expect(placed.nodes.get("f9-c-root")!.parentId).toBe("ifr-2");
+  });
+
+  it("takes the guess again once a waiting frame is known to have no place in the tree", () => {
+    // A hidden blank <iframe> inside a shadow root: its frame marked it, the
+    // tree has no node for it, and the document's own look for marked
+    // elements doesn't reach into shadow roots. No tree will ever bear the
+    // mark, so holding the guess back would keep frame 9 out for good.
+    const frames = new Map([
+      [0, topOf([])],
+      [9, blankFrame(9, undefined, "https://other.test/redirected")],
+      [5, blankFrame(5, "mark-hidden")],
+    ]);
+    const waiting = mergeFrameTrees({ frames, frameInfoMap: listed(9, 5) })!;
+    expect(waiting.nodes.get("f9-c-root")!.parentId).toBeNull();
+
+    // The document around them has been read again since, and still bears
+    // no such mark: frame 5 has no place, and holds nothing back.
+    const result = mergeFrameTrees({
+      frames,
+      frameInfoMap: listed(9, 5),
+      unplaceable: new Set([5]),
+    })!;
+    expect(result.nodes.get("f9-c-root")!.parentId).toBe("ifr-1");
+    expect(result.nodes.get("f5-c-root")!.parentId).toBeNull();
+    expect(result.unplaced).toEqual([5]);
+  });
+
+  it("holds the guess back for no frame Chrome has stopped listing", () => {
+    // The stale tree of a frame whose <iframe> is gone still carries its
+    // mark, which no tree will ever bear.
+    const result = mergeFrameTrees({
+      frames: new Map([
+        [0, topOf([])],
+        [5, blankFrame(5, "mark-gone")],
+        [9, blankFrame(9, undefined, "https://other.test/redirected")],
+      ]),
+      frameInfoMap: listed(9),
+    })!;
+    expect(result.nodes.get("f9-c-root")!.parentId).toBe("ifr-1");
+  });
+
+  it("still places a marked frame by its URL while its mark is in no tree", () => {
+    const top: FrameTree = makeFrame(0, "https://top.test/", [
+      ["root", makeNode("root", { childIds: ["ifr"] })],
+      [
+        "ifr",
+        makeNode("ifr", {
+          tagName: "iframe",
+          attrs: { src: "/widget" },
+          parentId: "root",
+          depth: 1,
+        }),
+      ],
+    ]);
+    const result = mergeFrameTrees({
+      frames: new Map([
+        [0, top],
+        [5, blankFrame(5, "mark-late", "https://top.test/widget")],
+      ]),
+      frameInfoMap: listed(5),
+    })!;
+    expect(result.nodes.get("f5-c-root")!.parentId).toBe("ifr");
+    // Its place by mark is still unknown, and worth asking after.
+    expect(result.unplaced).toEqual([5]);
+  });
+
+  it("leaves a frame whose element the tree has no node for out of the tree, and doesn't call it unplaced", () => {
+    // A hidden <iframe>, which the a11y view has no node for: the document
+    // around it reports the mark with an empty node id. The frame's place
+    // is known, so nobody is asked, and it is nowhere in this tree, so it
+    // goes under nothing: not under the first empty <iframe> either.
+    const result = mergeFrameTrees({
+      frames: new Map([
+        [0, topOf([["", "mark-hidden"]])],
+        [5, blankFrame(5, "mark-hidden")],
+      ]),
+      frameInfoMap: listed(5),
+    })!;
+    expect(result.unplaced).toEqual([]);
+    expect(result.nodes.get("f5-c-root")!.parentId).toBeNull();
+    for (const id of ["ifr-1", "ifr-2", "ifr-3"]) {
+      expect(result.nodes.get(id)!.childIds, id).toEqual([]);
+    }
+  });
+
+  it("names the unplaced frames without merging anything", () => {
+    const frames = new Map([
+      [0, topOf([["ifr-1", "mark-1"]])],
+      [5, blankFrame(5, "mark-1")],
+      [6, blankFrame(6, "mark-late")],
+      // Marked nothing: placed by URL or not at all, never by a mark.
+      [7, blankFrame(7)],
+    ]);
+    expect(unplacedFrames(frames)).toEqual([6]);
+    expect(unplacedFrames(frames)).toEqual(
+      mergeFrameTrees({ frames, frameInfoMap: listed(5, 6, 7) })!.unplaced,
+    );
+  });
+
+  it("takes a mark two nodes bear, or a frame's own tree bears, for no place", () => {
+    const twice = mergeFrameTrees({
+      frames: new Map([
+        [
+          0,
+          topOf([
+            ["ifr-1", "mark-1"],
+            ["ifr-2", "mark-1"],
+          ]),
+        ],
+        [5, blankFrame(5, "mark-1")],
+      ]),
+      frameInfoMap: listed(5),
+    })!;
+    expect(twice.nodes.get("f5-c-root")!.parentId).toBeNull();
+    expect(twice.unplaced).toEqual([5]);
+
+    const own: FrameTree = {
+      ...blankFrame(5, "mark-1"),
+      embeds: [["c-root", "mark-1"]],
+    };
+    const self = mergeFrameTrees({
+      frames: new Map([
+        [0, topOf([])],
+        [5, own],
+      ]),
+      frameInfoMap: listed(5),
+    })!;
+    expect(self.nodes.get("f5-c-root")!.parentId).toBeNull();
+  });
+
+  it("places a frame Chrome doesn't list, and one inside it, by their marks", () => {
+    // A `javascript:` frame runs the content script and is in no list of
+    // the tab's frames: its parent, and that it is live at all, are known
+    // by its mark alone. A frame inside it announced first.
+    const outer: FrameTree = {
+      ...makeFrame(5, "about:blank", [
+        ["c-root", makeNode("c-root", { childIds: ["c-ifr"] })],
+        [
+          "c-ifr",
+          makeNode("c-ifr", {
+            tagName: "iframe",
+            parentId: "c-root",
+            depth: 1,
+          }),
+        ],
+      ]),
+      owner: "mark-outer",
+      embeds: [["c-ifr", "mark-inner"]],
+    };
+    const result = mergeFrameTrees({
+      frames: new Map([
+        [8, blankFrame(8, "mark-inner")],
+        [5, outer],
+        [0, topOf([["ifr-3", "mark-outer"]])],
+      ]),
+      frameInfoMap: new Map(),
+    })!;
+    expect(result.nodes.get("f5-c-root")!.parentId).toBe("ifr-3");
+    expect(result.nodes.get("f8-c-root")!.parentId).toBe("f5-c-ifr");
+    expect(result.nodes.get("f5-c-ifr")!.childIds).toEqual(["f8-c-root"]);
+    // ifr-3 at depth 1, the outer root at 2, its <iframe> at 3.
+    expect(result.nodes.get("f8-c-root")!.depth).toBe(4);
+  });
+
+  it("lets a marked frame take its <iframe> from a stale tree left at the same place", () => {
+    // The page swapped a blank frame for another in the same slot. The dead
+    // frame's tree lingers with the mark of an element that is gone; the
+    // live one's mark is on the element there now.
+    const result = mergeFrameTrees({
+      frames: new Map([
+        [5, blankFrame(5, "mark-gone")],
+        [0, topOf([["ifr-1", "mark-new"]])],
+        [6, blankFrame(6, "mark-new")],
+      ]),
+      frameInfoMap: listed(6),
+    })!;
+    expect(result.nodes.get("ifr-1")!.childIds).toEqual(["f6-c-root"]);
+    expect(result.nodes.get("f5-c-root")!.parentId).toBeNull();
+  });
+
+  it("holds a frame by the element's node, whatever element that is", () => {
+    const top: FrameTree = {
+      ...makeFrame(0, "https://top.test/", [
+        ["root", makeNode("root", { childIds: ["obj"] })],
+        ["obj", makeNode("obj", { tagName: "object", parentId: "root" })],
+      ]),
+      embeds: [["obj", "mark-1"]],
+    };
+    const result = mergeFrameTrees({
+      frames: new Map([
+        [0, top],
+        [5, blankFrame(5, "mark-1", "https://top.test/doc.html")],
+      ]),
+      frameInfoMap: listed(5),
+    })!;
+    expect(result.nodes.get("f5-c-root")!.parentId).toBe("obj");
+  });
+});
+
+describe("asFrameMarks", () => {
+  it("takes a frame's mark and the marks its tree bears", () => {
+    expect(
+      asFrameMarks({
+        owner: "mark-a",
+        embeds: [
+          ["sn-4", "mark-b"],
+          ["sn-9", "mark-c"],
+        ],
+      }),
+    ).toEqual({
+      owner: "mark-a",
+      embeds: [
+        ["sn-4", "mark-b"],
+        ["sn-9", "mark-c"],
+      ],
+    });
+  });
+
+  it("keeps only what is well formed: the message comes from the page's process", () => {
+    expect(asFrameMarks({})).toEqual({});
+    expect(asFrameMarks({ owner: 5, embeds: "x" })).toEqual({});
+    expect(asFrameMarks({ owner: "", embeds: [] })).toEqual({});
+    expect(asFrameMarks({ owner: "m".repeat(65) })).toEqual({});
+    expect(
+      asFrameMarks({
+        embeds: [
+          ["sn-1", "mark-a"],
+          [2, "mark-b"],
+          ["sn-3", 9],
+          ["sn-4"],
+          null,
+          ["sn-5", "m".repeat(65)],
+        ],
+      }),
+    ).toEqual({ embeds: [["sn-1", "mark-a"]] });
+    const many = Array.from({ length: 600 }, (_, i) => [`sn-${i}`, `m-${i}`]);
+    expect(asFrameMarks({ embeds: many }).embeds).toHaveLength(512);
+    // A marked element with no node in the tree comes with an empty id.
+    expect(asFrameMarks({ embeds: [["", "mark-a"]] })).toEqual({
+      embeds: [["", "mark-a"]],
+    });
   });
 });
 

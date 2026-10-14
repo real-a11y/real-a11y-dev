@@ -488,10 +488,10 @@ describe("background: recovery after a service-worker restart", () => {
   });
 
   /**
-   * A frame that cannot host a content script — `about:blank`, `srcdoc`,
-   * sandboxed, a PDF — is reported by `getAllFrames` and never answers. It
-   * must not hold the panel's tree back, or an ordinary page with an ad slot
-   * pays the wait forever.
+   * A frame that cannot host a content script — a `data:` frame, a PDF — is
+   * reported by `getAllFrames` and never answers. It must not hold the
+   * panel's tree back, or an ordinary page with such a frame pays the wait
+   * forever.
    */
   it("publishes without waiting on a frame that can never answer", async () => {
     connectPanel(h);
@@ -499,7 +499,7 @@ describe("background: recovery after a service-worker restart", () => {
 
     h.knobs.frames = [
       ...PAGE_FRAMES,
-      { frameId: 9, parentFrameId: 0, url: "about:blank" },
+      { frameId: 9, parentFrameId: 0, url: "data:text/html,<p>Ad</p>" },
     ];
     h.liveFrames.delete(9); // no content script, will never announce
 
@@ -519,6 +519,35 @@ describe("background: recovery after a service-worker restart", () => {
     const ids = lastTreeToPanel(h);
     expect(ids).toContain("f1-root");
     expect(ids).toContain("f2-root");
+  });
+
+  /**
+   * The content script runs in an `about:blank` or `srcdoc` frame of a page
+   * it runs in (`match_about_blank`), so one whose tree the worker lost is
+   * asked for it like any other.
+   */
+  it("asks a frame with no URL of its own for the tree the worker lost", async () => {
+    connectPanel(h);
+    await vi.runAllTimersAsync();
+
+    h.knobs.frames = [
+      ...PAGE_FRAMES,
+      { frameId: 8, parentFrameId: 0, url: "about:blank" },
+      { frameId: 9, parentFrameId: 0, url: "about:srcdoc" },
+    ];
+    h.liveFrames.add(8).add(9);
+
+    const before = h.tabMessages.length;
+    for (const frameId of [0, 1, 2]) announce(h, frameId);
+    await vi.runAllTimersAsync();
+
+    expect(
+      reAnnounceRequests(h, before)
+        .map((m) => m.frameId)
+        .sort(),
+    ).toEqual([8, 9]);
+    expect(lastTreeToPanel(h)).toContain("f8-root");
+    expect(lastTreeToPanel(h)).toContain("f9-root");
   });
 
   /**
@@ -684,6 +713,387 @@ describe("background: recovery after a service-worker restart", () => {
  * signal is a tree that never arrives, it sits on "Connecting to page..."
  * forever instead of saying the page is out of reach.
  */
+describe("background: a frame whose place in the tree isn't known yet", () => {
+  let h: Harness;
+
+  beforeEach(async () => {
+    vi.useFakeTimers();
+    vi.resetModules();
+    h = makeHarness();
+    (globalThis as { chrome?: unknown }).chrome = h.chromeMock;
+    await import("./background.js");
+    await vi.runAllTimersAsync();
+    // A page with a blank frame, which says where it goes by the mark its
+    // script left on its <iframe> (see frame-owner.ts).
+    h.knobs.frames = [
+      ...PAGE_FRAMES,
+      { frameId: 9, parentFrameId: 0, url: "about:blank" },
+    ];
+    h.liveFrames.add(9);
+    // A panel that can close again, which the shared `connectPanel` can't.
+    closePanel = [];
+    for (const fn of h.connectListeners) {
+      fn({
+        name: "sidepanel",
+        onDisconnect: { addListener: (cb: () => void) => closePanel.push(cb) },
+      });
+    }
+    await vi.runAllTimersAsync();
+    h.panelMessages.length = 0;
+    h.tabMessages.length = 0;
+  });
+  let closePanel: Array<() => void>;
+  const disconnectPanel = () => closePanel.forEach((cb) => cb());
+
+  afterEach(() => {
+    vi.useRealTimers();
+    delete (globalThis as { chrome?: unknown }).chrome;
+  });
+
+  /** Deliver a `FRAME_TREE_DATA` with this payload, as frame `frameId`. */
+  function announceTree(frameId: number, payload: object) {
+    for (const fn of h.messageListeners) {
+      fn(
+        { type: "FRAME_TREE_DATA", payload },
+        { id: EXTENSION_ID, tab: { id: TAB_ID }, frameId },
+        () => {},
+      );
+    }
+  }
+  /** The top frame's tree, with a blank <iframe> bearing `mark` if any. */
+  function topTree(mark?: string) {
+    const top = frameTreePayload(0);
+    const blank = makeNode("ifBlank", {
+      parentId: "root",
+      depth: 1,
+      tagName: "iframe",
+    });
+    return {
+      ...top,
+      nodes: [...top.nodes, ["ifBlank", blank]],
+      ...(mark !== undefined ? { embeds: [["ifBlank", mark]] } : {}),
+    };
+  }
+  const blankTree = (owner: string) => ({
+    ...frameTreePayload(9),
+    frameUrl: "about:blank",
+    owner,
+  });
+  function lastNodes(): Map<string, SemanticNode> {
+    const trees = h.panelMessages.filter((m) => m.type === "TREE_DATA");
+    const last = trees[trees.length - 1] as unknown as {
+      payload: { nodes: Array<[string, SemanticNode]> };
+    };
+    return new Map(last.payload.nodes);
+  }
+
+  it("puts a blank frame's tree under the <iframe> bearing its mark", async () => {
+    announceTree(0, topTree("mark-9"));
+    for (const frameId of [1, 2]) announce(h, frameId);
+    announceTree(9, blankTree("mark-9"));
+    await vi.runAllTimersAsync();
+
+    expect(lastNodes().get("f9-root")!.parentId).toBe("ifBlank");
+    expect(lastNodes().get("ifBlank")!.childIds).toEqual(["f9-root"]);
+    // Nothing to ask after.
+    expect(sentSince(h, 0, "RESEND_TREE")).toEqual([]);
+  });
+
+  it("leaves a frame its tree couldn't place to the tree around it arriving on its own", async () => {
+    // The top frame's tree as it was before the frame's script loaded. A
+    // page that adds a frame changes, and sends a tree for it shortly.
+    announceTree(0, topTree());
+    for (const frameId of [1, 2]) announce(h, frameId);
+    announceTree(9, blankTree("mark-9"));
+    await vi.advanceTimersByTimeAsync(200);
+
+    // Unplaced, guessed under no <iframe> meanwhile, and nobody asked yet:
+    // asking reads the whole document around it.
+    expect(lastNodes().get("f9-root")!.parentId).toBeNull();
+    expect(sentSince(h, 0, "RESEND_TREE")).toEqual([]);
+
+    announceTree(0, topTree("mark-9"));
+    await vi.runAllTimersAsync();
+    expect(lastNodes().get("f9-root")!.parentId).toBe("ifBlank");
+    expect(sentSince(h, 0, "RESEND_TREE")).toEqual([]);
+  });
+
+  it("asks the document around it for its tree again, once, when none has come after a while", async () => {
+    announceTree(0, topTree());
+    for (const frameId of [1, 2]) announce(h, frameId);
+    announceTree(9, blankTree("mark-9"));
+    await vi.advanceTimersByTimeAsync(200);
+    expect(sentSince(h, 0, "RESEND_TREE")).toEqual([]);
+    const published = h.panelMessages.filter((m) => m.type === "TREE_DATA");
+
+    // Nothing changed in the top document, so it sent nothing.
+    await vi.advanceTimersByTimeAsync(1_500);
+    expect(sentSince(h, 0, "RESEND_TREE").map((m) => m.frameId)).toEqual([0]);
+    // The check itself publishes nothing: the trees are as they were.
+    expect(h.panelMessages.filter((m) => m.type === "TREE_DATA")).toEqual(
+      published,
+    );
+
+    // The top frame answers with a tree that doesn't bear the mark either
+    // (it leaves the element out, say): it isn't asked again, on that merge
+    // or any later one.
+    await vi.runAllTimersAsync();
+    announce(h, 1);
+    await vi.runAllTimersAsync();
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(sentSince(h, 0, "RESEND_TREE")).toHaveLength(1);
+  });
+
+  it("places the frame once the tree it asked for bears the mark", async () => {
+    announceTree(0, topTree());
+    for (const frameId of [1, 2]) announce(h, frameId);
+    announceTree(9, blankTree("mark-9"));
+    await vi.advanceTimersByTimeAsync(200 + 1_500);
+    expect(sentSince(h, 0, "RESEND_TREE")).toHaveLength(1);
+    // Past this harness's own answer to the ask, which is the top frame's
+    // tree as the fixture has it, with no blank <iframe> at all.
+    await vi.runAllTimersAsync();
+    expect(lastNodes().get("f9-root")!.parentId).toBeNull();
+
+    announceTree(0, topTree("mark-9"));
+    await vi.advanceTimersByTimeAsync(200);
+    expect(lastNodes().get("f9-root")!.parentId).toBe("ifBlank");
+  });
+
+  it("asks again for a frame that comes back with another mark", async () => {
+    announceTree(0, topTree());
+    for (const frameId of [1, 2]) announce(h, frameId);
+    announceTree(9, blankTree("mark-9"));
+    await vi.advanceTimersByTimeAsync(200 + 1_500);
+    await vi.runAllTimersAsync();
+    expect(sentSince(h, 0, "RESEND_TREE")).toHaveLength(1);
+
+    // Another document in the frame: another script, another mark, and
+    // its own while to be placed in.
+    announceTree(9, blankTree("mark-next"));
+    await vi.advanceTimersByTimeAsync(200);
+    expect(sentSince(h, 0, "RESEND_TREE")).toHaveLength(1);
+    await vi.advanceTimersByTimeAsync(1_500);
+    expect(sentSince(h, 0, "RESEND_TREE")).toHaveLength(2);
+  });
+
+  it("asks nobody about a frame whose <iframe> the tree around it has no node for", async () => {
+    // A hidden <iframe>, left out of the a11y view: the top frame reports
+    // its mark with no node. The frame can't be placed, and reading the top
+    // document again wouldn't change that.
+    announceTree(0, { ...topTree(), embeds: [["", "mark-9"]] });
+    for (const frameId of [1, 2]) announce(h, frameId);
+    announceTree(9, blankTree("mark-9"));
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(sentSince(h, 0, "RESEND_TREE")).toEqual([]);
+    expect(lastNodes().get("f9-root")!.parentId).toBeNull();
+    expect(lastNodes().get("ifBlank")!.childIds).toEqual([]);
+  });
+
+  it("starts over for a frame that was placed and is unplaced again", async () => {
+    announceTree(0, topTree());
+    for (const frameId of [1, 2]) announce(h, frameId);
+    announceTree(9, blankTree("mark-9"));
+    await vi.advanceTimersByTimeAsync(200 + 1_500);
+    await vi.runAllTimersAsync();
+    expect(sentSince(h, 0, "RESEND_TREE")).toHaveLength(1);
+
+    // Placed, then the top frame's tree stops bearing the mark.
+    announceTree(0, topTree("mark-9"));
+    await vi.runAllTimersAsync();
+    expect(lastNodes().get("f9-root")!.parentId).toBe("ifBlank");
+    announceTree(0, topTree());
+    await vi.advanceTimersByTimeAsync(200);
+    expect(sentSince(h, 0, "RESEND_TREE")).toHaveLength(1);
+    await vi.advanceTimersByTimeAsync(1_500);
+    expect(sentSince(h, 0, "RESEND_TREE")).toHaveLength(2);
+  });
+
+  it("checks on each waiting frame when its own while is up, one check at a time", async () => {
+    announceTree(0, topTree());
+    for (const frameId of [1, 2]) announce(h, frameId);
+    announceTree(9, blankTree("mark-9"));
+    await vi.advanceTimersByTimeAsync(700);
+    // A second frame the page adds, half a second after the first was
+    // found unplaced.
+    h.knobs.frames = [
+      ...h.knobs.frames,
+      { frameId: 10, parentFrameId: 0, url: "about:srcdoc" },
+    ];
+    h.liveFrames.add(10);
+    announceTree(10, { ...blankTree("mark-10"), frameUrl: "about:srcdoc" });
+    await vi.advanceTimersByTimeAsync(200);
+    expect(sentSince(h, 0, "RESEND_TREE")).toEqual([]);
+
+    // The first frame's while is up, the second's isn't.
+    await vi.advanceTimersByTimeAsync(900);
+    expect(sentSince(h, 0, "RESEND_TREE")).toHaveLength(1);
+    // The top frame's answer still bears neither mark; the second frame is
+    // asked after in its own time.
+    await vi.advanceTimersByTimeAsync(1_500);
+    expect(sentSince(h, 0, "RESEND_TREE")).toHaveLength(2);
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(sentSince(h, 0, "RESEND_TREE")).toHaveLength(2);
+  });
+
+  it("still asks when the clock steps back while a frame waits", async () => {
+    announceTree(0, topTree());
+    for (const frameId of [1, 2]) announce(h, frameId);
+    announceTree(9, blankTree("mark-9"));
+    await vi.advanceTimersByTimeAsync(200);
+    vi.setSystemTime(Date.now() - 60_000);
+    // Not at the first check, which finds the frame's wait in the future,
+    // but one full wait after it rather than a minute later.
+    await vi.advanceTimersByTimeAsync(1_500);
+    expect(sentSince(h, 0, "RESEND_TREE")).toEqual([]);
+    await vi.advanceTimersByTimeAsync(1_500);
+    expect(sentSince(h, 0, "RESEND_TREE")).toHaveLength(1);
+  });
+
+  it("holds a sibling's guessed place back only until the document around them has been read again", async () => {
+    // Frame 11 marked nothing and its URL matches no <iframe>'s `src`, so
+    // it is placed by the last-resort guess: the first empty <iframe>, which
+    // may be the one frame 9 is waiting to be placed under.
+    h.knobs.frames = [
+      ...h.knobs.frames,
+      { frameId: 11, parentFrameId: 0, url: "https://c.test/redirected" },
+    ];
+    h.liveFrames.add(11);
+    const redirected = {
+      ...frameTreePayload(1),
+      frameUrl: "https://c.test/redirected",
+    };
+    announceTree(0, topTree());
+    for (const frameId of [1, 2]) announce(h, frameId);
+    announceTree(9, blankTree("mark-9"));
+    announceTree(11, redirected);
+    await vi.advanceTimersByTimeAsync(200);
+    expect(lastNodes().get("f11-root")!.parentId).toBeNull();
+
+    // Asked after, and the top frame's tree comes back bearing no such
+    // mark: frame 9's <iframe> is one the tree has no node for, so the
+    // guess can't take it, and is taken again.
+    await vi.advanceTimersByTimeAsync(1_500);
+    expect(sentSince(h, 0, "RESEND_TREE")).toHaveLength(1);
+    await vi.runAllTimersAsync();
+    announceTree(0, topTree());
+    await vi.runAllTimersAsync();
+    expect(lastNodes().get("f11-root")!.parentId).toBe("ifBlank");
+    expect(lastNodes().get("f9-root")!.parentId).toBeNull();
+  });
+
+  it("remembers a frame has no place when the panel asks for the tree again", async () => {
+    h.knobs.frames = [
+      ...h.knobs.frames,
+      { frameId: 11, parentFrameId: 0, url: "https://c.test/redirected" },
+    ];
+    h.liveFrames.add(11);
+    const redirected = {
+      ...frameTreePayload(1),
+      frameUrl: "https://c.test/redirected",
+    };
+    const announcePage = () => {
+      announceTree(0, topTree());
+      for (const frameId of [1, 2]) announce(h, frameId);
+      announceTree(9, blankTree("mark-9"));
+      announceTree(11, redirected);
+    };
+    announcePage();
+    await vi.advanceTimersByTimeAsync(200 + 1_500);
+    await vi.runAllTimersAsync();
+    announceTree(0, topTree());
+    await vi.runAllTimersAsync();
+    expect(lastNodes().get("f11-root")!.parentId).toBe("ifBlank");
+    expect(sentSince(h, 0, "RESEND_TREE")).toHaveLength(1);
+
+    // The panel's REQUEST_TREE, as it sends after every action: every
+    // frame's tree is dropped and sent again, the same page as before.
+    for (const fn of h.messageListeners) {
+      fn(
+        { type: "REQUEST_TREE", tabId: TAB_ID, payload: { viewMode: "a11y" } },
+        { id: EXTENSION_ID },
+        () => {},
+      );
+    }
+    await vi.advanceTimersByTimeAsync(0);
+    announcePage();
+    await vi.advanceTimersByTimeAsync(200);
+    // At once, with no second wait and nobody asked again.
+    expect(lastNodes().get("f11-root")!.parentId).toBe("ifBlank");
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(sentSince(h, 0, "RESEND_TREE")).toHaveLength(1);
+  });
+
+  it("remembers it through a request the frame answers before its parent does", async () => {
+    // The blank frame is inside frame 1 here. After a fresh request its own
+    // tree is back first: with no tree for the frame around it, the merge
+    // says nothing of it either way, which isn't the frame being placed.
+    h.knobs.frames = [
+      ...PAGE_FRAMES,
+      { frameId: 9, parentFrameId: 1, url: "about:blank" },
+    ];
+    announce(h, 0);
+    for (const frameId of [1, 2]) announce(h, frameId);
+    announceTree(9, blankTree("mark-9"));
+    await vi.advanceTimersByTimeAsync(200 + 1_500);
+    await vi.runAllTimersAsync();
+    expect(sentSince(h, 0, "RESEND_TREE").map((m) => m.frameId)).toEqual([1]);
+
+    h.liveFrames.delete(1); // slow to answer the request below
+    for (const fn of h.messageListeners) {
+      fn(
+        { type: "REQUEST_TREE", tabId: TAB_ID, payload: { viewMode: "a11y" } },
+        { id: EXTENSION_ID },
+        () => {},
+      );
+    }
+    await vi.advanceTimersByTimeAsync(0);
+    announceTree(9, blankTree("mark-9"));
+    await vi.advanceTimersByTimeAsync(200);
+    announce(h, 1);
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(sentSince(h, 0, "RESEND_TREE")).toHaveLength(1);
+  });
+
+  it("forgets it when the page navigates: the next page's frames are new", async () => {
+    announceTree(0, topTree());
+    for (const frameId of [1, 2]) announce(h, frameId);
+    announceTree(9, blankTree("mark-9"));
+    await vi.advanceTimersByTimeAsync(200 + 1_500);
+    await vi.runAllTimersAsync();
+    expect(sentSince(h, 0, "RESEND_TREE")).toHaveLength(1);
+
+    beginTopFrameNavigation(h);
+    announceTree(0, topTree());
+    for (const frameId of [1, 2]) announce(h, frameId);
+    announceTree(9, blankTree("mark-9"));
+    await vi.advanceTimersByTimeAsync(200 + 1_500);
+    expect(sentSince(h, 0, "RESEND_TREE")).toHaveLength(2);
+  });
+
+  it("asks nobody once the panel has closed", async () => {
+    announceTree(0, topTree());
+    for (const frameId of [1, 2]) announce(h, frameId);
+    announceTree(9, blankTree("mark-9"));
+    await vi.advanceTimersByTimeAsync(200);
+    disconnectPanel();
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(sentSince(h, 0, "RESEND_TREE")).toEqual([]);
+  });
+
+  it("keeps a mark that isn't well formed out of the merge", async () => {
+    announceTree(0, { ...topTree(), embeds: [["ifBlank", 9], "junk"] });
+    for (const frameId of [1, 2]) announce(h, frameId);
+    announceTree(9, { ...blankTree("x"), owner: { toString: () => "9" } });
+    await vi.runAllTimersAsync();
+
+    // With no mark, the frame is placed as any other: by the last-resort
+    // guess, under the one <iframe> nothing else is in.
+    expect(lastNodes().get("f9-root")!.parentId).toBe("ifBlank");
+    expect(sentSince(h, 0, "RESEND_TREE")).toEqual([]);
+  });
+});
+
 describe("background: panel broadcast delivery reporting", () => {
   let h: Harness;
 

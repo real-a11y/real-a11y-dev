@@ -1,14 +1,18 @@
 import { describe, it, expect, vi } from "vitest";
 
 import type { FrameTree } from "./frame-merger.js";
+import { MAX_MARKED_FRAMES } from "./frame-owner.js";
 import {
   type TabState,
+  answeredPlacesAskedOf,
   clearTabFrames,
   createTabState,
   disposeTabState,
+  forgetAskedPlaces,
   getOrCreateTabState,
   recordFrameTree,
   removeFrame,
+  unplaceableFrames,
 } from "./tab-state.js";
 
 function makeFrameTree(frameId: number): FrameTree {
@@ -117,6 +121,115 @@ describe("clearTabFrames", () => {
     clearTabFrames(s);
     expect(s.recoveryChecked).toBe(true);
   });
+
+  it("keeps what was learned of frames' places: a fresh request is for the same page", () => {
+    // The panel asks for the tree again after every action. Forgetting here
+    // would have each frame found to have no place waited on, and its
+    // parent's document read, all over again each time.
+    const s = createTabState();
+    s.askedPlaces.set(5, {
+      mark: "mark-a",
+      since: 0,
+      asked: true,
+      parent: 0,
+      answered: true,
+    });
+    clearTabFrames(s);
+    expect(s.askedPlaces.size).toBe(1);
+    // A navigation's frames are all new.
+    forgetAskedPlaces(s);
+    expect(s.askedPlaces.size).toBe(0);
+  });
+});
+
+describe("disposeTabState: the check on unplaced frames", () => {
+  it("cancels it with the tab", () => {
+    vi.useFakeTimers();
+    try {
+      const registry = new Map<number, TabState>();
+      const s = getOrCreateTabState(registry, 7);
+      const check = vi.fn();
+      s.placeTimer = setTimeout(check, 1_500) as unknown as typeof s.placeTimer;
+      disposeTabState(registry, 7);
+      vi.advanceTimersByTime(5_000);
+      expect(check).not.toHaveBeenCalled();
+      expect(registry.has(7)).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe("frames found to have no place in the tree", () => {
+  const waiting = (owner: string) => ({ ...makeFrameTree(5), owner });
+
+  it("are the ones asked after whose parent has sent its tree since", () => {
+    const s = createTabState();
+    s.frames.set(5, waiting("mark-a"));
+    s.askedPlaces.set(5, {
+      mark: "mark-a",
+      since: 0,
+      asked: true,
+      parent: 2,
+      answered: false,
+    });
+    expect([...unplaceableFrames(s)]).toEqual([]);
+    // Another frame's tree says nothing of it.
+    answeredPlacesAskedOf(s, 0);
+    expect([...unplaceableFrames(s)]).toEqual([]);
+    answeredPlacesAskedOf(s, 2);
+    expect([...unplaceableFrames(s)]).toEqual([5]);
+  });
+
+  it("aren't ones still waiting to be asked after", () => {
+    const s = createTabState();
+    s.frames.set(5, waiting("mark-a"));
+    s.askedPlaces.set(5, {
+      mark: "mark-a",
+      since: 0,
+      asked: false,
+      parent: 2,
+      answered: false,
+    });
+    // The parent's tree, before anyone asked it: it may predate the mark.
+    answeredPlacesAskedOf(s, 2);
+    expect([...unplaceableFrames(s)]).toEqual([]);
+  });
+
+  it("aren't ones whose parent reported as many marks as a report carries", () => {
+    // Past that many, a mark the parent's tree does bear goes unreported:
+    // the frame may have a node after all.
+    const s = createTabState();
+    s.frames.set(5, waiting("mark-a"));
+    s.frames.set(2, {
+      ...makeFrameTree(2),
+      embeds: Array.from(
+        { length: MAX_MARKED_FRAMES },
+        (_, i) => [`sn-${i}`, `mark-${i}`] as [string, string],
+      ),
+    });
+    s.askedPlaces.set(5, {
+      mark: "mark-a",
+      since: 0,
+      asked: true,
+      parent: 2,
+      answered: true,
+    });
+    expect([...unplaceableFrames(s)]).toEqual([]);
+  });
+
+  it("aren't ones that have come back with another mark", () => {
+    const s = createTabState();
+    s.frames.set(5, waiting("mark-next"));
+    s.askedPlaces.set(5, {
+      mark: "mark-a",
+      since: 0,
+      asked: true,
+      parent: 2,
+      answered: true,
+    });
+    expect([...unplaceableFrames(s)]).toEqual([]);
+  });
 });
 
 describe("removeFrame", () => {
@@ -141,6 +254,16 @@ describe("removeFrame", () => {
     s.frames.set(0, makeFrameTree(0));
     expect(removeFrame(s, 99)).toEqual({ shouldRemerge: true });
     expect(s.frames.size).toBe(1);
+  });
+
+  it("forgets that the frame's place was asked after, and no other frame's", () => {
+    const s = createTabState();
+    s.frames.set(0, makeFrameTree(0));
+    const entry = { since: 0, parent: 0, answered: false };
+    s.askedPlaces.set(5, { ...entry, mark: "mark-a", asked: true });
+    s.askedPlaces.set(6, { ...entry, mark: "mark-b", asked: false });
+    removeFrame(s, 5);
+    expect([...s.askedPlaces.keys()]).toEqual([6]);
   });
 });
 

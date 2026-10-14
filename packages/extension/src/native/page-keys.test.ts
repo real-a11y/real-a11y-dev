@@ -10,6 +10,7 @@ import {
   liveDocumentElement,
   liveDocumentURL,
   livePageKeyWalker,
+  MAX_FRAME_EMBEDS,
   PageKeySnapshots,
   walkPageKeys,
   type CdpDomNode,
@@ -421,6 +422,54 @@ describe("cdpFrameDocuments", () => {
     const root = doc(1, "https://a.test/", el("html", 2, [el("iframe", 3)]));
     expect(cdpFrameDocuments(root)).toEqual([{ document: root }]);
   });
+
+  it("gives each frame's document the document its <iframe> is in, which comes first", () => {
+    const deep = doc(40, "about:srcdoc", el("html", 41));
+    const frame = doc(
+      20,
+      "about:blank",
+      el("html", 21, [
+        el("body", 22, [
+          // In a shadow root of the frame's document: still that document's.
+          el("div", 24, [], {
+            shadowRoots: [
+              {
+                nodeType: 11,
+                backendNodeId: 25,
+                shadowRootType: "closed",
+                children: [el("iframe", 23, [], { contentDocument: deep })],
+              },
+            ],
+          }),
+        ]),
+      ]),
+    );
+    const sibling = doc(60, "about:blank", el("html", 61));
+    const root = doc(
+      1,
+      "https://a.test/",
+      el("html", 2, [
+        el("body", 3, [
+          el("iframe", 10, [], { contentDocument: frame }),
+          el("iframe", 11, [], { contentDocument: sibling }),
+        ]),
+      ]),
+    );
+    const found = cdpFrameDocuments(root);
+    const of = (document: CdpDomNode) =>
+      found.find((f) => f.document === document)!;
+    expect(of(root).within).toBeUndefined();
+    expect(of(frame).within).toBe(root);
+    expect(of(sibling).within).toBe(root);
+    expect(of(deep).within).toBe(frame);
+    for (const { document, within } of found) {
+      if (!within) continue;
+      expect(
+        found.findIndex((f) => f.document === within),
+        document.documentURL,
+      ).toBeLessThan(found.findIndex((f) => f.document === document));
+    }
+  });
 });
 
 describe("asFramePageKeyDigest", () => {
@@ -448,6 +497,75 @@ describe("asFramePageKeyDigest", () => {
     ).toBeUndefined();
     expect(asFramePageKeyDigest(null, 0)).toBeUndefined();
     expect(asFramePageKeyDigest("x", 0)).toBeUndefined();
+  });
+
+  it("takes the frame's mark, and the marked frames its walk passed", () => {
+    expect(
+      asFramePageKeyDigest(
+        {
+          count: 3,
+          hash: 7,
+          url: "about:blank",
+          owner: "mark-a",
+          embeds: [
+            [4, "mark-b"],
+            [9, "mark-c"],
+          ],
+        },
+        4,
+      ),
+    ).toEqual({
+      count: 3,
+      hash: 7,
+      frameId: 4,
+      url: "about:blank",
+      owner: "mark-a",
+      embeds: [
+        [4, "mark-b"],
+        [9, "mark-c"],
+      ],
+    });
+  });
+
+  it("keeps of the marks only what is well formed: the script answers from the page's process", () => {
+    const reply = (extra: object) =>
+      asFramePageKeyDigest({ count: 3, hash: 7, url: "x", ...extra }, 4)!;
+    // The answer still stands without them.
+    expect(reply({ owner: 5, embeds: "none" })).toEqual({
+      count: 3,
+      hash: 7,
+      frameId: 4,
+      url: "x",
+    });
+    expect(reply({ owner: "" }).owner).toBeUndefined();
+    expect(reply({ owner: "m".repeat(65) }).owner).toBeUndefined();
+    expect(
+      reply({
+        embeds: [
+          [1, "mark-a"],
+          ["2", "mark-b"],
+          [3, 9],
+          [4.5, "mark-c"],
+          [5],
+          null,
+          [6, "m".repeat(65)],
+          [7, "mark-d", "more"],
+        ],
+      }).embeds,
+    ).toEqual([
+      [1, "mark-a"],
+      [7, "mark-d"],
+    ]);
+    // No more than a walk reports.
+    const many = Array.from({ length: MAX_FRAME_EMBEDS + 40 }, (_, i) => [
+      i,
+      `mark-${i}`,
+    ]);
+    expect(reply({ embeds: many }).embeds).toHaveLength(MAX_FRAME_EMBEDS);
+    // It can't say it has no URL of its own: the tab's list of frames does.
+    expect(reply({ blank: true }).blank).toBeUndefined();
+    // Nor which frame holds it.
+    expect(reply({ parent: 0 }).parent).toBeUndefined();
   });
 });
 
@@ -529,12 +647,92 @@ describe("PageKeySnapshots", () => {
     expect(retaken[0]).toBe(liveKeys(document.documentElement).get(last));
   });
 
-  it("reports nothing before a read, for nothing, or for an element no read numbered", () => {
+  it("reports nothing before a read, or for nothing", () => {
     buildPage();
     const store = snapshots();
     expect(store.keysFor(document.getElementById("last"))).toBeUndefined();
     store.take("read-1", document.documentElement);
     expect(store.keysFor(null)).toBeUndefined();
-    expect(store.keysFor(document.createElement("div"))).toBeUndefined();
+  });
+
+  it("reports an empty chain under each read when nothing above the element was numbered: the document was replaced", () => {
+    buildPage();
+    const store = snapshots();
+    store.take("read-1", document.documentElement);
+    store.take("read-2", document.documentElement);
+    // What `document.open()` leaves: elements no read has seen, up to the
+    // root. Stood in for by a tree out of the document.
+    const html = document.createElement("html");
+    html.innerHTML = `<body><button>New</button></body>`;
+    expect(store.keysFor(html.querySelector("button"))).toEqual({
+      "read-1": [],
+      "read-2": [],
+    });
+  });
+
+  describe("the marked frames a walk passes", () => {
+    const marks = new WeakMap<Element, string>();
+    const asked: Element[] = [];
+    const marked = () =>
+      new PageKeySnapshots(liveWalker, renderingParent, (el) => {
+        asked.push(el);
+        return marks.get(el);
+      });
+
+    it("come back with the walk, each by its element's number", () => {
+      document.body.innerHTML = `<main>
+        <iframe id="one"></iframe>
+        <p>Between</p>
+        <div id="host"></div>
+        <iframe id="none"></iframe>
+        <object id="two"></object>
+      </main>`;
+      // In a shadow root too, as the walk goes there.
+      const inShadow = document.createElement("iframe");
+      document
+        .getElementById("host")!
+        .attachShadow({ mode: "open" })
+        .append(inShadow);
+      const [one, two] = ["one", "two"].map((id) =>
+        document.getElementById(id)!,
+      );
+      marks.set(one!, "mark-1");
+      marks.set(two!, "mark-2");
+      marks.set(inShadow, "mark-3");
+      const keys = liveKeys(document.documentElement);
+      const walk = marked().take("read-1", document.documentElement);
+      expect(walk).toEqual({
+        ...walkPageKeys(document.documentElement, liveWalker, () => {}),
+        embeds: [
+          [keys.get(one!), "mark-1"],
+          [keys.get(inShadow), "mark-3"],
+          [keys.get(two!), "mark-2"],
+        ],
+      });
+    });
+
+    it("are asked after only where an element can hold a frame", () => {
+      document.body.innerHTML = `<main><p>Text</p><iframe></iframe><embed /></main>`;
+      asked.length = 0;
+      const walk = marked().take("read-1", document.documentElement);
+      expect(asked.map((el) => el.localName)).toEqual(["iframe", "embed"]);
+      // None marked: the answer is the digest alone.
+      expect(walk).toEqual(
+        walkPageKeys(document.documentElement, liveWalker, () => {}),
+      );
+    });
+
+    it("stop at as many as an answer is read for", () => {
+      // Out of the document, where jsdom would load a frame into each.
+      const main = document.createElement("main");
+      for (let i = 0; i < MAX_FRAME_EMBEDS + 5; i++) {
+        const iframe = document.createElement("iframe");
+        marks.set(iframe, `mark-${i}`);
+        main.append(iframe);
+      }
+      const walk = marked().take("read-1", main);
+      expect(walk.embeds).toHaveLength(MAX_FRAME_EMBEDS);
+      expect(walk.count).toBe(MAX_FRAME_EMBEDS + 5 + 1);
+    });
   });
 });

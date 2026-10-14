@@ -100,6 +100,10 @@ load it again** before step 1, step 9 and step 10.
     go. Then click into the page and `Tab` into the frame: the focused element's
     row is selected under the frame's row, and Chrome's bar doesn't appear for it.
     `Tab` back out: the top document's rows are followed again.
+15. Do the same on a page with frames that have no address of their own, two of
+    them if you can: a rich-text editor that edits inside an `<iframe>` (classic
+    TinyMCE, CKEditor 4), or the two frames **R19**'s console snippet makes. Press
+    **↻**, then click or `Tab` into each frame in turn.
 
 ## Expected
 
@@ -122,6 +126,9 @@ load it again** before step 1, step 9 and step 10.
   natively in a window where nobody pressed anything
 - **Page focus selects its row in Chrome's tree** (step 13) with no bar, and
   **Focus OFF** stops it; inside a frame too (step 14), under that frame's row
+- **Each blank frame is followed under its own row** (step 15): focus in the first
+  selects a row under the first frame's row, focus in the second under the second's,
+  never the other way round
 
 ## Why this exists
 

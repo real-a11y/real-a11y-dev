@@ -11,6 +11,7 @@
  */
 
 import type { FrameTree } from "./frame-merger.js";
+import { MAX_MARKED_FRAMES } from "./frame-owner.js";
 
 export interface TabState {
   frames: Map<number, FrameTree>;
@@ -36,6 +37,63 @@ export interface TabState {
    * subframe (an animating ad) must not prompt it.
    */
   topFrameChanged: boolean;
+  /**
+   * The frames a merge couldn't place, each with the mark it had, since when,
+   * whether its place has been asked after (see the background's
+   * `askForFramePlaces`), of which frame, and whether that frame has sent
+   * its tree since. A frame is asked after once per mark: an element the
+   * tree of the document around it leaves out would otherwise be asked for
+   * on every merge.
+   */
+  askedPlaces: Map<number, AskedPlace>;
+  /** The one pending check on the frames in `askedPlaces` that haven't been
+   *  asked after yet; null when none is scheduled. */
+  placeTimer: ReturnType<typeof setTimeout> | null;
+}
+
+/** A frame a merge couldn't place: see `TabState.askedPlaces`. */
+export interface AskedPlace {
+  mark: string;
+  since: number;
+  asked: boolean;
+  /** The frame holding it, as the tab lists it: the one asked. */
+  parent: number;
+  /** `parent` has sent a tree since it was asked. */
+  answered: boolean;
+}
+
+/**
+ * Frame `frameId` has sent its tree: the frames whose place it was asked
+ * for have their answer. One still unplaced after that is held by an
+ * element the tree has no node for, and no later tree will place it.
+ */
+export function answeredPlacesAskedOf(state: TabState, frameId: number): void {
+  for (const place of state.askedPlaces.values()) {
+    if (place.asked && place.parent === frameId) place.answered = true;
+  }
+}
+
+/**
+ * The frames known to have no place in the tree: asked after, answered, and
+ * still showing the mark they were asked after by. The merge stops waiting
+ * on them. Not a frame whose parent reported as many marks as a report
+ * carries: past that many, one its tree does bear goes unreported.
+ */
+export function unplaceableFrames(state: TabState): Set<number> {
+  const out = new Set<number>();
+  for (const [frameId, place] of state.askedPlaces) {
+    if (!place.answered) continue;
+    if (state.frames.get(frameId)?.owner !== place.mark) continue;
+    const reported = state.frames.get(place.parent)?.embeds?.length ?? 0;
+    if (reported < MAX_MARKED_FRAMES) out.add(frameId);
+  }
+  return out;
+}
+
+/** The page is another one: what was learned of its frames' places is of
+ *  frames that are gone. */
+export function forgetAskedPlaces(state: TabState): void {
+  state.askedPlaces.clear();
 }
 
 export function createTabState(): TabState {
@@ -46,6 +104,8 @@ export function createTabState(): TabState {
     recoveryChecked: false,
     droppedFrames: new Set(),
     topFrameChanged: false,
+    askedPlaces: new Map(),
+    placeTimer: null,
   };
 }
 
@@ -111,6 +171,9 @@ export function clearTabFrames(state: TabState): void {
   // Everything is dropped, so nothing is individually "dropped" any more —
   // the whole-map case is handled by the `frames.has(0)` guard in the merge.
   state.droppedFrames.clear();
+  // `askedPlaces` stays: a fresh request is for the same page, whose frames
+  // come back with the marks they had. A navigation forgets it
+  // (`forgetAskedPlaces`).
 }
 
 /**
@@ -128,6 +191,7 @@ export function removeFrame(
 ): { shouldRemerge: boolean } {
   state.frames.delete(frameId);
   state.droppedFrames.add(frameId);
+  state.askedPlaces.delete(frameId);
   return { shouldRemerge: state.frames.size > 0 };
 }
 
@@ -142,5 +206,6 @@ export function disposeTabState(
 ): void {
   const state = registry.get(tabId);
   if (state?.mergeTimer) clearTimeout(state.mergeTimer);
+  if (state?.placeTimer) clearTimeout(state.placeTimer);
   registry.delete(tabId);
 }

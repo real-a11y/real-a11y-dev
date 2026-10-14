@@ -370,10 +370,10 @@ describe("registerNativeMode: a read numbers the page for focus sync", () => {
       { frameId: 0, url: PAGE_URL },
       ...Array.from({ length: 40 }, (_, i) => ({
         frameId: 100 + i,
-        url: "about:blank",
+        url: `data:text/html,<p>${i}</p>`,
       })),
-      { frameId: 3, url: "about:srcdoc" },
-      { frameId: 4, url: "data:text/html,<p>Hi</p>" },
+      { frameId: 3, url: "blob:https://a.test/0b9f" },
+      { frameId: 4, url: "chrome-error://chromewebdata/" },
       // An error page, at the URL it failed to load.
       { frameId: 5, url: "https://a.test/gone", errorOccurred: true },
       { frameId: 6, url: "file:///tmp/page.html" },
@@ -382,6 +382,42 @@ describe("registerNativeMode: a read numbers the page for focus sync", () => {
     await register();
     await read();
     expect(asked()).toEqual([0, 6, 7]);
+  });
+
+  it("asks the frames with no URL of their own, which the content script runs in too", async () => {
+    frames = async () => [
+      { frameId: 0, url: PAGE_URL },
+      { frameId: 3, url: "about:blank" },
+      { frameId: 4, url: "about:srcdoc" },
+      { frameId: 5, url: "https://a.test/video" },
+    ];
+    await register();
+    await read();
+    expect(asked().sort()).toEqual([0, 3, 4, 5]);
+  });
+
+  it("asks them after the frames known to be in the tree, and ahead of those known not to be", async () => {
+    // Dozens of blank ad frames, listed first. Which of them the tree holds
+    // can't be told by a URL they all share, where a frame with a URL of
+    // its own is known by it: the one with rows keeps its place, and the
+    // hidden ones give theirs up.
+    const frameUrl = await withFrame();
+    frames = async () => [
+      { frameId: 0, url: PAGE_URL },
+      ...Array.from({ length: 40 }, (_, i) => ({
+        frameId: 100 + i,
+        url: i % 2 ? "about:blank" : "about:srcdoc",
+      })),
+      { frameId: 8, url: "https://sync.test/hidden" },
+      { frameId: 3, url: frameUrl },
+    ];
+    await register();
+    const r = await read();
+    expect(asked()).toHaveLength(32);
+    expect(asked().slice(0, 2)).toEqual([0, 3]);
+    expect(asked()).not.toContain(8);
+    const inner = r.nodes?.find((n) => n.name === "Inner save");
+    expect([inner?.pageKey, inner?.pageFrame]).toEqual([2, 3]);
   });
 
   it("asks the top frame alone when the tab's frames can't be listed", async () => {
@@ -685,6 +721,122 @@ describe("registerNativeMode: a read numbers the page for focus sync", () => {
     const owner = r.nodes?.find((n) => n.role === "Iframe");
     expect(owner?.embedsPageFrame).toBeUndefined();
     expect(r.nodes?.find((n) => n.name === "Save")?.pageKey).toBe(2);
+  });
+
+  it("numbers a frame showing the page's own URL as the top frame's child, when the page's walks disagree", async () => {
+    // The frame's document is at the page's URL on both sides, as a page
+    // that embeds itself has it. The top document's own walk disagrees, so
+    // no mark can be gone by, and the frame is matched by URL only as the
+    // child of the top frame the tab lists it as.
+    await withFrame();
+    const c = chrome as unknown as {
+      debugger: {
+        sendCommand: (
+          target: unknown,
+          method: string,
+          params?: object,
+        ) => Promise<unknown>;
+      };
+    };
+    const sendCommand = c.debugger.sendCommand;
+    c.debugger.sendCommand = async (target, method, params) => {
+      const result = await sendCommand(target, method, params);
+      if (method !== "DOM.getDocument") return result;
+      const page = structuredClone(result) as {
+        root: { children: Array<{ children: Array<{ children: object[] }> }> };
+      };
+      const iframe = page.root.children[0]!.children[0]!.children[1] as {
+        contentDocument: { documentURL: string };
+      };
+      iframe.contentDocument.documentURL = PAGE_URL;
+      return page;
+    };
+    const top = contentReply;
+    const inner = frameReplies[3]!;
+    contentReply = async () => ({ ...((await top()) as object), count: 99 });
+    frameReplies = {
+      3: async () => ({ ...((await inner()) as object), url: PAGE_URL }),
+    };
+    const innerOf = (r: Read) => r.nodes?.find((n) => n.name === "Inner save");
+
+    frames = async () => [
+      { frameId: 0, parentFrameId: -1, url: PAGE_URL },
+      { frameId: 3, parentFrameId: 0, url: PAGE_URL },
+    ];
+    await register();
+    const r = await read();
+    expect([innerOf(r)?.pageKey, innerOf(r)?.pageFrame]).toEqual([2, 3]);
+    expect(r.nodes?.find((n) => n.name === "Save")?.pageKey).toBeUndefined();
+
+    // Listed as another frame's child, it isn't the one under this <iframe>.
+    frames = async () => [
+      { frameId: 0, parentFrameId: -1, url: PAGE_URL },
+      { frameId: 3, parentFrameId: 8, url: PAGE_URL },
+    ];
+    expect(innerOf(await read())?.pageKey).toBeUndefined();
+  });
+
+  describe("a frame with no URL of its own", () => {
+    /**
+     * `withFrame`'s page, its frame one the page wrote into
+     * (`document.open()`): CDP and the frame's own script both have its
+     * document at a URL, the one of the document that wrote it, while the
+     * tab lists the frame at `about:blank`.
+     */
+    async function withWrittenFrame(): Promise<void> {
+      await withFrame();
+      frames = async () => [
+        { frameId: 0, url: PAGE_URL },
+        { frameId: 3, url: "about:blank" },
+      ];
+    }
+    /** The two frames' answers: the top frame's walk found `held` on its
+     *  <iframe>, number 3, and the frame answers with `owner`. */
+    function marks(held: string | undefined, owner: string | undefined): void {
+      const top = contentReply;
+      const inner = frameReplies[3]!;
+      contentReply = async () => ({
+        ...((await top()) as object),
+        ...(held !== undefined ? { embeds: [[3, held]] } : {}),
+      });
+      frameReplies = {
+        3: async () => ({
+          ...((await inner()) as object),
+          ...(owner !== undefined ? { owner } : {}),
+        }),
+      };
+    }
+    const innerOf = (r: Read) => r.nodes?.find((n) => n.name === "Inner save");
+
+    it("is numbered by the mark its script left on its <iframe>", async () => {
+      await withWrittenFrame();
+      marks("mark-a", "mark-a");
+      await register();
+      const r = await read();
+      expect(asked()).toEqual([0, 3]);
+      expect([innerOf(r)?.pageKey, innerOf(r)?.pageFrame]).toEqual([2, 3]);
+      expect(r.nodes?.find((n) => n.role === "Iframe")?.embedsPageFrame).toBe(
+        3,
+      );
+    });
+
+    it("is never numbered by its document's URL, though no other frame shows it", async () => {
+      // No mark the read can go by: the frame's script loaded after the top
+      // frame's walk, or the two disagree on it. The document's URL and its
+      // numbering agree on both sides all along.
+      for (const [held, owner] of [
+        [undefined, undefined],
+        [undefined, "mark-a"],
+        ["mark-a", "mark-b"],
+      ] as const) {
+        await withWrittenFrame();
+        marks(held, owner);
+        await register();
+        const r = await read();
+        expect(innerOf(r)?.pageKey, `${held} ${owner}`).toBeUndefined();
+        expect(r.nodes?.find((n) => n.name === "Save")?.pageKey).toBe(2);
+      }
+    });
   });
 
   it("numbers nothing unless the panel asks: Focus sync is off", async () => {

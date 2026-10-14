@@ -13,6 +13,7 @@
 
 import type { SemanticNode } from "@real-a11y-dev/core";
 
+import { asFrameMark, MAX_MARKED_FRAMES } from "./frame-owner.js";
 import { prefixNodeId, urlsMatch } from "./routing.js";
 
 export interface FrameTree {
@@ -21,6 +22,17 @@ export interface FrameTree {
   pageTitle: string;
   nodes: Array<[string, SemanticNode]>;
   rootId: string;
+  /** The mark the frame's script left on the element holding the frame (see
+   *  `frame-owner.ts`). Absent for the top frame, and for a frame of another
+   *  origin than its parent's. */
+  owner?: string;
+  /**
+   * This tree's nodes for elements holding a frame that marked them, each
+   * with the mark. An empty node id is a marked element the tree has no node
+   * for, as the a11y view has none for a hidden `<iframe>`: the frame's
+   * place is known, and is nowhere in this tree.
+   */
+  embeds?: Array<[nodeId: string, owner: string]>;
 }
 
 export interface FrameInfo {
@@ -33,6 +45,14 @@ export interface MergeResult {
   nodes: Map<string, SemanticNode>;
   /** For action routing: which frame each node lives in. */
   nodeToFrame: Map<string, number>;
+  /**
+   * The frames that marked the element holding them where no tree bears the
+   * mark: the tree of the document around such a frame was read before the
+   * frame's script loaded. Each is left out of the tree's structure until
+   * its place is known. A frame whose element a tree reports with no node
+   * isn't among them: its place is known, and it has none in the tree.
+   */
+  unplaced: number[];
 }
 
 /**
@@ -45,10 +65,12 @@ export interface MergeResult {
  * direct child of the top frame (depth 1), matching the `?? 0` parent
  * fallback the merge uses. The `seen` guard makes a malformed/cyclic chain
  * terminate instead of looping forever.
+ *
+ * `parentOf` answers a frame's parent, or undefined when nothing says.
  */
 function frameHierarchyDepth(
   frameId: number,
-  frameInfoMap: Map<number, FrameInfo>,
+  parentOf: (frameId: number) => number | undefined,
 ): number {
   let depth = 0;
   let current = frameId;
@@ -56,12 +78,55 @@ function frameHierarchyDepth(
   while (current !== 0) {
     if (seen.has(current)) break;
     seen.add(current);
-    const info = frameInfoMap.get(current);
-    if (!info) break;
+    const parent = parentOf(current);
+    if (parent === undefined) break;
     depth++;
-    current = info.parentFrameId;
+    current = parent;
   }
   return depth;
+}
+
+/** Where a frame's mark says its tree goes: the frame whose tree has the
+ *  node bearing it, and that node's id there. */
+interface Placement {
+  frameId: number;
+  nodeId: string;
+}
+
+/**
+ * Each marked frame's place, for the frames whose mark exactly one node of
+ * the trees bears. A mark on two nodes names neither: a frame is held by
+ * one element.
+ */
+function placeMarkedFrames(
+  frames: Map<number, FrameTree>,
+): Map<number, Placement> {
+  const borne = new Map<string, Placement | null>();
+  for (const [frameId, tree] of frames) {
+    for (const [nodeId, mark] of tree.embeds ?? []) {
+      borne.set(mark, borne.has(mark) ? null : { frameId, nodeId });
+    }
+  }
+  const placed = new Map<number, Placement>();
+  for (const [frameId, tree] of frames) {
+    const place = tree.owner !== undefined ? borne.get(tree.owner) : null;
+    if (frameId !== 0 && place && place.frameId !== frameId) {
+      placed.set(frameId, place);
+    }
+  }
+  return placed;
+}
+
+/** The frames that marked the element holding them where no tree has a node
+ *  bearing the mark: see `MergeResult.unplaced`. */
+export function unplacedFrames(frames: Map<number, FrameTree>): number[] {
+  const placed = placeMarkedFrames(frames);
+  return [...frames]
+    .filter(
+      ([frameId, tree]) =>
+        frameId !== 0 && tree.owner !== undefined && !placed.has(frameId),
+    )
+    .map(([frameId]) => frameId);
 }
 
 /**
@@ -69,10 +134,21 @@ function frameHierarchyDepth(
  *
  * Returns `null` if the top frame (frameId 0) has not announced itself yet —
  * there is nothing to render until then, and the caller should skip sending.
+ *
+ * A child frame's tree goes under the node of the element holding the frame.
+ * A frame that marked that element (`FrameTree.owner`) says which it is, and
+ * is placed by the mark alone: this is the only thing that tells apart the
+ * frames a page makes with no URL of their own, which all show `about:blank`
+ * or `about:srcdoc`. Any other frame is placed by comparing its URL with
+ * each `<iframe>`'s `src`, as below.
  */
 export function mergeFrameTrees(opts: {
   frames: Map<number, FrameTree>;
   frameInfoMap: Map<number, FrameInfo>;
+  /** The unplaced marked frames known to have no place in any tree: the
+   *  document around each has been read again since, and bears no such
+   *  mark. They hold no other frame's place back. */
+  unplaceable?: ReadonlySet<number>;
 }): MergeResult | null {
   const topFrame = opts.frames.get(0);
   if (!topFrame) return null;
@@ -108,14 +184,21 @@ export function mergeFrameTrees(opts: {
   // and returns 0: without this tie-break it would sort ahead of every live
   // child frame, claim the iframe, and leave the live frame that actually
   // hosts the document attached to nothing and so invisible.
-  const isLive = (id: number) => (opts.frameInfoMap.has(id) ? 0 : 1);
+  //
+  // A frame placed by its mark is live whatever Chrome reports: the element
+  // bearing the mark is in a tree now. Chrome lists no `javascript:` frame,
+  // though the content script runs in one.
+  const placed = placeMarkedFrames(opts.frames);
+  const parentOf = (id: number) =>
+    placed.get(id)?.frameId ?? opts.frameInfoMap.get(id)?.parentFrameId;
+  const isLive = (id: number) =>
+    placed.has(id) || opts.frameInfoMap.has(id) ? 0 : 1;
   const childFrameIds = Array.from(opts.frames.keys())
     .filter((id) => id !== 0)
     .sort(
       (a, b) =>
         isLive(a) - isLive(b) ||
-        frameHierarchyDepth(a, opts.frameInfoMap) -
-          frameHierarchyDepth(b, opts.frameInfoMap),
+        frameHierarchyDepth(a, parentOf) - frameHierarchyDepth(b, parentOf),
     );
 
   // <iframe> nodes already handed to a frame, as merged (prefixed) node ids.
@@ -124,14 +207,41 @@ export function mergeFrameTrees(opts: {
   // comparison cannot tell apart — the same widget embedded twice, differing
   // only by query string or not at all — both matched the FIRST such iframe
   // and piled into it, leaving the second iframe rendered empty.
+  //
+  // The nodes marked frames are placed under are theirs from the start, so
+  // no frame placed by URL, or by the last-resort guess below, takes one.
   const claimedIframes = new Set<string>();
+  for (const { frameId, nodeId } of placed.values()) {
+    claimedIframes.add(prefixNodeId(frameId, nodeId));
+  }
+  const unplaced: number[] = [];
+  // The parents holding a marked frame that isn't placed yet. Its element is
+  // one of that parent's, in a tree that doesn't say which yet, so the
+  // last-resort guess is not taken under such a parent meanwhile: the empty
+  // <iframe> it would hand another frame may be this one's. A frame Chrome
+  // no longer lists holds nothing back, nor one known to have no place: its
+  // element is none the tree has a node for, so no guess can take it.
+  const awaited = new Set<number>();
+  for (const [frameId, tree] of opts.frames) {
+    const parent = opts.frameInfoMap.get(frameId)?.parentFrameId;
+    if (
+      frameId !== 0 &&
+      tree.owner !== undefined &&
+      !placed.has(frameId) &&
+      !opts.unplaceable?.has(frameId) &&
+      parent !== undefined
+    ) {
+      awaited.add(parent);
+    }
+  }
 
   for (const childFrameId of childFrameIds) {
     const childTree = opts.frames.get(childFrameId);
     if (!childTree) continue;
 
     const frameInfo = opts.frameInfoMap.get(childFrameId);
-    const parentFrameId = frameInfo?.parentFrameId ?? 0;
+    const place = placed.get(childFrameId);
+    const parentFrameId = place?.frameId ?? frameInfo?.parentFrameId ?? 0;
 
     const parentTree =
       parentFrameId === 0 ? topFrame : opts.frames.get(parentFrameId);
@@ -165,27 +275,40 @@ export function mergeFrameTrees(opts: {
 
     const srcOf = (node: SemanticNode) => node.dom!.attributes.src || "";
 
-    const match =
-      // 1. Exact match, query string included. The only pass that can tell
-      //    apart sibling embeds whose urls differ solely by query.
-      findIframe((node) =>
-        urlsMatch(srcOf(node), childTree.frameUrl, parentFrameUrl, {
-          matchQuery: true,
-        }),
-      ) ??
-      // 2. Query-stripped match, as before — tolerates a frame url the page
-      //    rewrote with params the markup's `src` never had.
-      findIframe((node) =>
-        urlsMatch(srcOf(node), childTree.frameUrl, parentFrameUrl),
-      ) ??
-      // 3. Fallback: first un-attached <iframe> in the parent. Beats dropping
-      //    the subframe entirely.
-      (frameInfo
-        ? findIframe(
-            (_node, mergedNode) =>
-              mergedNode !== undefined && mergedNode.childIds.length === 0,
-          )
-        : null);
+    // A frame that marked its element and isn't placed by the mark has its
+    // place in no tree yet. Its URL may still say where (1 and 2), but the
+    // guess (3) is never taken for it: it is held by one element, which is
+    // none of those the guess would pick from now.
+    const marked = childTree.owner !== undefined;
+    if (marked && !place) unplaced.push(childFrameId);
+
+    const byMark = (at: Placement): { id: string; depth: number } | null => {
+      const id = prefixNodeId(at.frameId, at.nodeId);
+      const mergedNode = nodes.get(id);
+      return mergedNode ? { id, depth: mergedNode.depth } : null;
+    };
+    const match = place
+      ? byMark(place)
+      : // 1. Exact match, query string included. The only pass that can tell
+        //    apart sibling embeds whose urls differ solely by query.
+        (findIframe((node) =>
+          urlsMatch(srcOf(node), childTree.frameUrl, parentFrameUrl, {
+            matchQuery: true,
+          }),
+        ) ??
+        // 2. Query-stripped match, as before — tolerates a frame url the page
+        //    rewrote with params the markup's `src` never had.
+        findIframe((node) =>
+          urlsMatch(srcOf(node), childTree.frameUrl, parentFrameUrl),
+        ) ??
+        // 3. Fallback: first un-attached <iframe> in the parent. Beats
+        //    dropping the subframe entirely.
+        (frameInfo && !marked && !awaited.has(parentFrameId)
+          ? findIframe(
+              (_node, mergedNode) =>
+                mergedNode !== undefined && mergedNode.childIds.length === 0,
+            )
+          : null));
 
     const iframeNodeId = match?.id ?? null;
     const iframeDepth = match?.depth ?? 0;
@@ -227,7 +350,37 @@ export function mergeFrameTrees(opts: {
     }
   }
 
-  return { nodes, nodeToFrame };
+  return { nodes, nodeToFrame, unplaced };
+}
+
+/**
+ * The marks of a frame's `FRAME_TREE_DATA`, kept only where they are well
+ * formed. A content script runs in the page's process, so its message is
+ * checked before any of it decides where a tree goes.
+ */
+export function asFrameMarks(payload: {
+  owner?: unknown;
+  embeds?: unknown;
+}): Pick<FrameTree, "owner" | "embeds"> {
+  const owner = asFrameMark(payload.owner);
+  const embeds: Array<[string, string]> = [];
+  if (Array.isArray(payload.embeds)) {
+    for (const entry of payload.embeds.slice(
+      0,
+      MAX_MARKED_FRAMES,
+    ) as unknown[]) {
+      if (!Array.isArray(entry)) continue;
+      const [nodeId, mark] = entry as unknown[];
+      const held = asFrameMark(mark);
+      if (typeof nodeId === "string" && held !== undefined) {
+        embeds.push([nodeId, held]);
+      }
+    }
+  }
+  return {
+    ...(owner !== undefined ? { owner } : {}),
+    ...(embeds.length > 0 ? { embeds } : {}),
+  };
 }
 
 /**

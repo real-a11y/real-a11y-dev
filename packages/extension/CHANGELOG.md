@@ -55,6 +55,25 @@
   showing the same page
   ([#500](https://github.com/real-a11y/real-a11y-dev/pull/500)).
 
+- **Frames with no address of their own are read, and followed.** An
+  `about:blank` or `srcdoc` frame, and one a page's script writes into, as
+  rich-text editors and many ad slots do, used to show as an empty
+  `<iframe>` in the in-page tree, and Chrome's tree didn't follow focus
+  inside one. Both do now: each such frame is read under its own `<iframe>`,
+  however many a page has, and focus inside it selects its row. Two frames
+  of the page's own origin showing the same page are told apart as well.
+  A sandboxed frame without `allow-same-origin`, a `data:` frame and a
+  `blob:` frame are still left out. The update asks for no new permission
+  ([#501](https://github.com/real-a11y/real-a11y-dev/pull/501)).
+
+- **The in-page tree keeps up with a page that writes its document over
+  again.** After `document.open()`, the tree went on showing the document
+  that was replaced, Focus sync and the element picker stopped responding in
+  that frame until it was reloaded, and the screen curtain came down with
+  the old document. This affected any frame whose page does it, not only
+  blank ones
+  ([#501](https://github.com/real-a11y/real-a11y-dev/pull/501)).
+
 - Hardened the shared mutation observer so that re-arming it can no longer
   strand the previous observers and event listeners
   ([#487](https://github.com/real-a11y/real-a11y-dev/pull/487)). No

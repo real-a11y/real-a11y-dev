@@ -3717,6 +3717,38 @@ describe("readNativeTree's page keys across frames", () => {
       }
     });
 
+    it("tells two frames showing the same page apart by the mark each left on its <iframe>", async () => {
+      // The same document twice over again, but each frame's script marked
+      // the element holding it, and the top frame's walk found the marks: on
+      // the first <iframe>, number 4, frame 4's, and on the second, number
+      // 6, frame 3's.
+      const twice = topDom(frameDom(20));
+      const body = twice.children![0]!.children![1]!;
+      body.children!.push(
+        el("iframe", 60, [], { contentDocument: frameDom(60) }),
+      );
+      const top: FramePageKeyDigest = {
+        ...cdpPageKeys(twice)!.digest,
+        frameId: 0,
+        url: TOP_URL,
+        embeds: [
+          [4, "mark-first"],
+          [6, "mark-second"],
+        ],
+      };
+      const res = await readNativeTree(transport(twice), {
+        pageKeys: async () =>
+          answered(
+            top,
+            { ...answer(frameDom(), 3), owner: "mark-second" },
+            { ...answer(frameDom(), 4), owner: "mark-first" },
+          ),
+      });
+      const inner = byId(res.nodes, "ax-dom-25");
+      expect([inner.pageKey, inner.pageFrame]).toEqual([4, 4]);
+      expect(byId(res.nodes, "ax-dom-8").embedsPageFrame).toBe(4);
+    });
+
     it("numbers a frame only when its URL and its numbering both agree", async () => {
       const changed = frameDom();
       changed.children![0]!.children![1]!.children!.push(el("p", 90));
@@ -3794,6 +3826,412 @@ describe("readNativeTree's page keys across frames", () => {
       expect(byId(res.nodes, "ax-dom-25").pageKey).toBe(4);
       expect(byId(res.nodes, "ax-dom-8").embedsPageFrame).toBe(3);
       expect(byId(res.nodes, "ax-dom-9").pageKey).toBeUndefined();
+    });
+
+    it("numbers a frame showing its parent's own URL by it, when the parent's walks disagree", async () => {
+      // The page embeds itself, the copy in the frame of another shape. The
+      // top document changed between its walks, so no mark of its can be
+      // gone by; the frame has a URL of its own and is the top frame's one
+      // child at it.
+      const same = { ...frameDom(), documentURL: TOP_URL };
+      const read = (frame: FramePageKeyDigest) =>
+        readNativeTree(transport(topDom(same)), {
+          pageKeys: async () => answered({ ...topAnswer(), count: 99 }, frame),
+        });
+      const res = await read({ ...answer(same, 3), parent: 0 });
+      const inner = byId(res.nodes, "ax-dom-25");
+      expect([inner.pageKey, inner.pageFrame]).toEqual([4, 3]);
+      expect(byId(res.nodes, "ax-dom-8").embedsPageFrame).toBe(3);
+      // Not a frame at that URL held elsewhere in the tab, or nobody knows
+      // where: the document may be one this page wrote into a blank frame.
+      for (const frame of [
+        answer(same, 3),
+        { ...answer(same, 3), parent: 7 },
+      ]) {
+        const other = await read(frame);
+        expect(byId(other.nodes, "ax-dom-25").pageKey).toBeUndefined();
+      }
+    });
+
+    it("numbers neither of two documents at their parent's URL by it: one may be a frame's a script wrote", async () => {
+      // The page embeds itself in one frame and writes into another, blank
+      // one, whose document has the page's URL from then on. The embedded
+      // copy changed between its walks into the shape the written document
+      // has: by URL and digest, the written document would be its frame's.
+      const same = { ...frameDom(), documentURL: TOP_URL };
+      const written = doc(
+        60,
+        TOP_URL,
+        el("html", 61, [el("head", 62), el("body", 63, [el("p", 64)])]),
+      );
+      const dom = topDom(same);
+      dom.children![0]!.children![1]!.children!.push(
+        el("iframe", 65, [], { contentDocument: written }),
+      );
+      const res = await readNativeTree(transport(dom), {
+        pageKeys: async () =>
+          answered(
+            { ...topAnswer(), count: 99 },
+            { ...answer(written, 3), parent: 0 },
+          ),
+      });
+      expect(res.pageKeyed).toBeUndefined();
+      expect(byId(res.nodes, "ax-dom-25").pageKey).toBeUndefined();
+    });
+
+    it("trusts no mark from a document whose own walks disagree, and falls back to the frame's URL", async () => {
+      // The top document changed between its walks: the number its script
+      // gave the marked <iframe> may be another element's by CDP's walk. The
+      // frame has a URL of its own, and is still matched by it.
+      const res = await readNativeTree(transport(), {
+        pageKeys: async () =>
+          answered(
+            { ...topAnswer(), count: 99, embeds: [[4, "mark-a"]] },
+            { ...answer(frameDom(), 3), owner: "mark-a" },
+          ),
+      });
+      expect(byId(res.nodes, "ax-dom-25").pageKey).toBe(4);
+      expect(byId(res.nodes, "ax-dom-8").embedsPageFrame).toBe(3);
+    });
+  });
+
+  describe("frames with no URL of their own", () => {
+    // The top document: two <iframe>s (8 and 10) and a button. Numbered
+    // html 0, head 1, body 2, iframe 3, iframe 4, button 5.
+    const BLANK_AX = axDocument("1", [
+      [8, "Iframe", "First"],
+      [10, "Iframe", "Second"],
+      [9, "button", "Outer button"],
+    ]);
+    // A frame's document: html 0, head 1, body 2, button 3, and with `extra`
+    // a paragraph 4. Both frames' are alike unless one is given more.
+    const blank = (backend: number, url = "about:srcdoc", extra = false) =>
+      doc(
+        backend,
+        url,
+        el("html", backend + 1, [
+          el("head", backend + 2),
+          el("body", backend + 3, [
+            el("button", backend + 4),
+            ...(extra ? [el("p", backend + 5)] : []),
+          ]),
+        ]),
+      );
+    const page = (first = blank(20), second = blank(40)) =>
+      doc(
+        1,
+        TOP_URL,
+        el("html", 3, [
+          el("head", 4),
+          el("body", 5, [
+            el("iframe", 8, [], { contentDocument: first }),
+            el("iframe", 10, [], { contentDocument: second }),
+            el("button", 9),
+          ]),
+        ]),
+      );
+    const transport = (dom: CdpDomNode = page()) =>
+      new FakeTransport((method, params) => {
+        const frameId = (params as { frameId?: string } | undefined)?.frameId;
+        if (method === "Accessibility.getFullAXTree") {
+          if (frameId === "A")
+            return { nodes: axDocument("20", [[24, "button", "In first"]]) };
+          if (frameId === "B")
+            return { nodes: axDocument("40", [[44, "button", "In second"]]) };
+          return { nodes: BLANK_AX };
+        }
+        if (method === "Page.getFrameTree") {
+          return {
+            frameTree: {
+              frame: { id: "TOP" },
+              childFrames: [
+                { frame: { id: "A", url: "about:srcdoc" } },
+                { frame: { id: "B", url: "about:srcdoc" } },
+              ],
+            },
+          };
+        }
+        if (method === "DOM.getFrameOwner") {
+          if (frameId === "A") return { backendNodeId: 8 };
+          return frameId === "B" ? { backendNodeId: 10 } : {};
+        }
+        if (method === "DOM.getDocument") return { root: dom };
+        return {};
+      });
+    /** The top frame's answer, with the marks its walk found by number. */
+    const top = (
+      embeds: Array<[number, string]>,
+      dom: CdpDomNode = page(),
+    ): FramePageKeyDigest => ({
+      ...cdpPageKeys(dom)!.digest,
+      frameId: 0,
+      url: TOP_URL,
+      ...(embeds.length > 0 ? { embeds } : {}),
+    });
+    /** A frame's answer for `document`: listed at an `about:` URL, and
+     *  marked `owner` when it reached its <iframe>. */
+    const frame = (
+      document: CdpDomNode,
+      frameId: number,
+      owner?: string,
+    ): FramePageKeyDigest => ({
+      ...answer(document, frameId),
+      blank: true,
+      ...(owner !== undefined ? { owner } : {}),
+    });
+    const first = (nodes: EnrichedNativeNode[]) => byId(nodes, "ax-dom-24");
+    const second = (nodes: EnrichedNativeNode[]) => byId(nodes, "ax-dom-44");
+
+    it("tells two frames at one URL apart by the mark each left on its <iframe>", async () => {
+      // Listed and answering in the other order than the page holds them:
+      // frame 6 is in the second <iframe>, frame 7 in the first.
+      const res = await readNativeTree(transport(), {
+        pageKeys: async () =>
+          answered(
+            top([
+              [3, "mark-first"],
+              [4, "mark-second"],
+            ]),
+            frame(blank(40), 6, "mark-second"),
+            frame(blank(20), 7, "mark-first"),
+          ),
+      });
+      expect(res.pageKeyed).toBe(true);
+      expect([first(res.nodes).pageKey, first(res.nodes).pageFrame]).toEqual([
+        3, 7,
+      ]);
+      expect([second(res.nodes).pageKey, second(res.nodes).pageFrame]).toEqual([
+        3, 6,
+      ]);
+      expect(byId(res.nodes, "ax-dom-8").embedsPageFrame).toBe(7);
+      expect(byId(res.nodes, "ax-dom-10").embedsPageFrame).toBe(6);
+    });
+
+    it("numbers no such frame by its URL, though it is the only one that answered at it", async () => {
+      // The second frame's document differs, so by URL and digest the first
+      // frame's would be found. Its URL is every such frame's, though.
+      const dom = page(blank(20), blank(40, "about:srcdoc", true));
+      const read = (answer: FramePageKeyDigest) =>
+        readNativeTree(transport(dom), {
+          pageKeys: async () => answered(top([], dom), answer),
+        });
+      const res = await read(frame(blank(20), 6));
+      expect(first(res.nodes).pageKey).toBeUndefined();
+      expect(byId(res.nodes, "ax-dom-8").embedsPageFrame).toBeUndefined();
+      expect(byId(res.nodes, "ax-dom-9").pageKey).toBe(5);
+      // Nor is a document at such a URL given to a frame the tab lists at a
+      // URL of its own, for answering that it shows `about:srcdoc`.
+      const claimed = await read({ ...frame(blank(20), 6), blank: false });
+      expect(first(claimed.nodes).pageKey).toBeUndefined();
+    });
+
+    it("numbers no frame a script wrote into by the URL its document took, though no other frame shows it", async () => {
+      // `document.open()` gave the frame's document the top document's URL,
+      // on both sides. Its mark didn't reach the read.
+      const WRITER_URL = "https://a.test/editor";
+      const written = blank(20, WRITER_URL);
+      const dom = page(written, blank(40, "about:srcdoc", true));
+      const read = (answer: FramePageKeyDigest) =>
+        readNativeTree(transport(dom), {
+          pageKeys: async () => answered(top([], dom), answer),
+        });
+      const res = await read(frame(written, 6));
+      expect(first(res.nodes).pageKey).toBeUndefined();
+      // What keeps it out is the tab listing the frame at an `about:` URL:
+      // a frame listed at that URL itself is matched by it.
+      const listed = await read({ ...frame(written, 6), blank: false });
+      expect(first(listed.nodes).pageFrame).toBe(6);
+    });
+
+    it("leaves a marked frame unnumbered when its two walks disagree", async () => {
+      const dom = page(blank(20), blank(40, "about:srcdoc", true));
+      const res = await readNativeTree(transport(dom), {
+        pageKeys: async () =>
+          answered(
+            top(
+              [
+                [3, "mark-first"],
+                [4, "mark-second"],
+              ],
+              dom,
+            ),
+            // The first frame's page grew between its walks.
+            frame(blank(20, "about:srcdoc", true), 7, "mark-first"),
+            frame(blank(40, "about:srcdoc", true), 6, "mark-second"),
+          ),
+      });
+      expect(first(res.nodes).pageKey).toBeUndefined();
+      expect(byId(res.nodes, "ax-dom-8").embedsPageFrame).toBeUndefined();
+      // The other frame, and the top document, are numbered all the same.
+      expect(second(res.nodes).pageFrame).toBe(6);
+      expect(byId(res.nodes, "ax-dom-9").pageKey).toBe(5);
+    });
+
+    it("gives a marked frame's document to no other frame by URL when its own keeps silent", async () => {
+      // A frame the top document wrote into (`document.open()`), which has
+      // that document's URL from then on. Its script marked the <iframe> and
+      // didn't answer this read. Another frame shows the top document's
+      // page, in a frame the read didn't reach, and answers alike: by URL
+      // and digest, the written frame's rows would be that frame's.
+      const written = blank(20, TOP_URL);
+      const dom = page(written, blank(40, "about:srcdoc", true));
+      const elsewhere: FramePageKeyDigest = {
+        ...answer(written, 9),
+        url: TOP_URL,
+      };
+      const res = await readNativeTree(transport(dom), {
+        pageKeys: async () => ({
+          answered: [top([[3, "mark-first"]], dom), elsewhere],
+          unanswered: ["about:blank"],
+        }),
+      });
+      expect(first(res.nodes).pageKey).toBeUndefined();
+      expect(byId(res.nodes, "ax-dom-8").embedsPageFrame).toBeUndefined();
+    });
+
+    it("gives a document that has the URL of another in its renderer to no frame by URL: a script may have written it", async () => {
+      // The top document wrote into the first frame, whose document has the
+      // top document's URL from then on, and whose mark never reached the
+      // read. Another frame shows the top document's page, in a frame the
+      // read didn't reach, and answers alike: by URL and digest alone, the
+      // written frame's rows would be that frame's.
+      const written = blank(20, TOP_URL);
+      const dom = page(written, blank(40, "about:srcdoc", true));
+      const elsewhere: FramePageKeyDigest = {
+        ...answer(written, 9),
+        url: TOP_URL,
+        // Inside a cross-origin frame, past what the read follows.
+        parent: 12,
+      };
+      const res = await readNativeTree(transport(dom), {
+        pageKeys: async () => ({
+          answered: [top([], dom), elsewhere],
+          unanswered: ["about:blank"],
+        }),
+      });
+      expect(first(res.nodes).pageKey).toBeUndefined();
+      expect(byId(res.nodes, "ax-dom-8").embedsPageFrame).toBeUndefined();
+      expect(byId(res.nodes, "ax-dom-9").pageKey).toBe(5);
+    });
+
+    it("takes a mark two frames answered with, or two elements bear, for neither", async () => {
+      const marks: Array<[number, string]> = [
+        [3, "mark-first"],
+        [4, "mark-second"],
+      ];
+      for (const frames of [
+        // Two frames with one mark.
+        [
+          top(marks),
+          frame(blank(20), 7, "mark-first"),
+          frame(blank(20), 8, "mark-first"),
+        ],
+        // One mark on both <iframe>s.
+        [
+          top([
+            [3, "mark-first"],
+            [4, "mark-first"],
+          ]),
+          frame(blank(20), 7, "mark-first"),
+        ],
+      ]) {
+        const res = await readNativeTree(transport(), {
+          pageKeys: async () => answered(...frames),
+        });
+        expect(first(res.nodes).pageKey).toBeUndefined();
+        expect(byId(res.nodes, "ax-dom-8").embedsPageFrame).toBeUndefined();
+        expect(byId(res.nodes, "ax-dom-9").pageKey).toBe(5);
+      }
+    });
+
+    it("numbers none of them under a document whose own walks disagree", async () => {
+      const res = await readNativeTree(transport(), {
+        pageKeys: async () =>
+          answered(
+            {
+              ...top([
+                [3, "mark-first"],
+                [4, "mark-second"],
+              ]),
+              count: 99,
+            },
+            frame(blank(20), 7, "mark-first"),
+            frame(blank(40), 6, "mark-second"),
+          ),
+      });
+      expect(res.pageKeyed).toBeUndefined();
+      expect(first(res.nodes).pageKey).toBeUndefined();
+      expect(second(res.nodes).pageKey).toBeUndefined();
+    });
+
+    it("numbers a frame inside a marked frame by that frame's own walk", async () => {
+      // The first frame holds a frame of its own, an <iframe> numbered 4 in
+      // its walk.
+      const deep = blank(70, "about:blank");
+      const outer = doc(
+        20,
+        "about:srcdoc",
+        el("html", 21, [
+          el("head", 22),
+          el("body", 23, [
+            el("button", 24),
+            el("iframe", 26, [], { contentDocument: deep }),
+          ]),
+        ]),
+      );
+      const dom = page(outer, blank(40));
+      const base = transport(dom);
+      const t = new FakeTransport((method, params) => {
+        const frameId = (params as { frameId?: string } | undefined)?.frameId;
+        if (method === "Accessibility.getFullAXTree" && frameId === "A") {
+          return {
+            nodes: axDocument("20", [
+              [24, "button", "In first"],
+              [26, "Iframe", "Deep"],
+            ]),
+          };
+        }
+        if (method === "Accessibility.getFullAXTree" && frameId === "C") {
+          return { nodes: axDocument("70", [[74, "button", "Deep save"]]) };
+        }
+        if (method === "Page.getFrameTree") {
+          return {
+            frameTree: {
+              frame: { id: "TOP" },
+              childFrames: [
+                {
+                  frame: { id: "A", url: "about:srcdoc" },
+                  childFrames: [{ frame: { id: "C", url: "about:blank" } }],
+                },
+                { frame: { id: "B", url: "about:srcdoc" } },
+              ],
+            },
+          };
+        }
+        if (method === "DOM.getFrameOwner" && frameId === "C") {
+          return { backendNodeId: 26 };
+        }
+        return base.send(method, params);
+      });
+      const res = await readNativeTree(t, {
+        pageKeys: async () =>
+          answered(
+            top(
+              [
+                [3, "mark-first"],
+                [4, "mark-second"],
+              ],
+              dom,
+            ),
+            { ...frame(outer, 7, "mark-first"), embeds: [[4, "mark-deep"]] },
+            frame(blank(40), 6, "mark-second"),
+            frame(deep, 11, "mark-deep"),
+          ),
+      });
+      const deepSave = byId(res.nodes, "ax-dom-74");
+      expect([deepSave.pageKey, deepSave.pageFrame]).toEqual([3, 11]);
+      const holder = byId(res.nodes, "ax-dom-26");
+      expect([holder.pageFrame, holder.embedsPageFrame]).toEqual([7, 11]);
     });
   });
 
@@ -3939,6 +4377,62 @@ describe("readNativeTree's page keys across frames", () => {
         12, 14,
       ]);
       expect(byId(res.nodes, "ax-dom-8").embedsPageFrame).toBe(12);
+    });
+
+    it("keeps its numbering when a frame it wrote into answers at its URL", async () => {
+      // A frame inside it that its script wrote into: that one's document
+      // has this frame's URL, and CDP and its own script both say so. Listed
+      // at `about:blank`, it counts for no URL, and is found by its mark.
+      const written = doc(
+        30,
+        FRAME_URL,
+        el("html", 31, [el("head", 32), el("body", 33, [el("button", 35)])]),
+      );
+      const frame = frameTransport(
+        () => ({ root: frameDom(written) }),
+        (method, params) => {
+          const frameId = (params as { frameId?: string } | undefined)?.frameId;
+          if (method === "Accessibility.getFullAXTree") {
+            return {
+              nodes:
+                frameId === "WRITTEN"
+                  ? axDocument("30", [[35, "button", "Written save"]])
+                  : axDocument("1", [
+                      [8, "button", "Inner save"],
+                      [6, "Iframe", "Written"],
+                    ]),
+            };
+          }
+          if (method === "Page.getFrameTree") {
+            return {
+              frameTree: {
+                frame: { id: "OOPIF", url: FRAME_URL },
+                childFrames: [{ frame: { id: "WRITTEN", url: FRAME_URL } }],
+              },
+            };
+          }
+          if (method === "DOM.getFrameOwner") {
+            return frameId === "WRITTEN" ? { backendNodeId: 6 } : {};
+          }
+          return undefined;
+        },
+      );
+      // The frame's walk numbers its <iframe> 6: html 0, head 1, body 2,
+      // main 3, h1 4, button 5, iframe 6.
+      const res = await readNativeTree(topTransport(frame), {
+        pageKeys: async () =>
+          answered(
+            topAnswer(),
+            { ...answer(frameDom(written), 12), embeds: [[6, "mark-w"]] },
+            { ...answer(written, 14), blank: true, owner: "mark-w" },
+          ),
+      });
+      const inner = byId(res.nodes, "ax-dom-8@OOPIF");
+      expect([inner.pageKey, inner.pageFrame]).toEqual([5, 12]);
+      expect(byId(res.nodes, "ax-dom-8").embedsPageFrame).toBe(12);
+      const writtenSave = byId(res.nodes, "ax-dom-35@OOPIF");
+      expect([writtenSave.pageKey, writtenSave.pageFrame]).toEqual([3, 14]);
+      expect(byId(res.nodes, "ax-dom-6@OOPIF").embedsPageFrame).toBe(14);
     });
 
     it("still reads, the frame unnumbered, when the frame's session drops while it is numbered", async () => {
