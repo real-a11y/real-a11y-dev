@@ -17,6 +17,11 @@
  *   backing off ({@link autoRefreshGapMs}) the longer it runs without the
  *   user, so a page that animates forever doesn't keep the bar up for good.
  *
+ * In either mode, the page's changes for a few seconds after an action or a
+ * key sent through the tree are the action's own, and each burst is read as
+ * soon as the page goes quiet ({@link ACTION_FOLLOW_MS}): the action's own
+ * re-read comes too soon for a reaction that waits on the network.
+ *
  * A frame's changes count as the top frame's do wherever the page shows the
  * frame, since the native read puts its content under the frame's row. A
  * hidden frame's (an animating ad's) don't: the service worker leaves them
@@ -37,6 +42,14 @@ import {
  *  starts after the changes the action's own signal reports, and isn't
  *  followed by an automatic read for them (pinned by this module's tests). */
 export const NATIVE_SETTLE_MS = 250;
+
+/** How long after an action's or a sent key's own re-read the page's changes
+ *  still count as its own, and are read whatever the mode: a click that
+ *  loads a form over the network changes the page well after that re-read.
+ *  Each burst inside it is read once the page goes quiet, with no gap or
+ *  back-off: the action's attach has Chrome's bar up already. Bounded, so a
+ *  page that keeps changing goes back to its mode's rules. */
+export const ACTION_FOLLOW_MS = 5000;
 
 /** How long the page has to stay quiet before the tree is read again. The
  *  content script already batches mutations (`DOM_OBSERVER_DEBOUNCE_MS`, at
@@ -71,7 +84,8 @@ export const AUTO_REFRESH_FREE_READS = 2;
  * attaches rather than by what they found: a page that really changes all
  * the time would otherwise be read every few seconds forever, and keep
  * Chrome's bar up for good. A read the user causes (Refresh, an action, a
- * key) or a navigation starts the count over.
+ * key, or one following up an action — {@link ACTION_FOLLOW_MS}) or a
+ * navigation starts the count over.
  */
 export function autoRefreshGapMs(autoReads: number): number {
   return Math.min(
@@ -124,6 +138,9 @@ export interface AutoRefreshState {
   /** Automatic reads in a row since the user last caused one — see
    *  {@link autoRefreshGapMs}. */
   autoReads: number;
+  /** Until when, in ms, a change is the latest action's own: its re-read's
+   *  end plus {@link ACTION_FOLLOW_MS}. 0 when no action is being followed. */
+  followUntil: number;
   /** A native read or action is in flight, or a pick is armed. A pick holds
    *  the tab's debugger queue until the user clicks, so a read queued behind
    *  it would wait that long too. */
@@ -133,7 +150,9 @@ export interface AutoRefreshState {
 export type AutoRefreshDecision =
   | { kind: "skip" }
   | { kind: "wait"; ms: number }
-  | { kind: "read"; tabId: number };
+  /** `followsAction`: the read follows up an action ({@link ACTION_FOLLOW_MS}),
+   *  so it starts the back-off over rather than adding to it. */
+  | { kind: "read"; tabId: number; followsAction?: true };
 
 export function decideAutoRefresh(
   s: AutoRefreshState,
@@ -142,11 +161,17 @@ export function decideAutoRefresh(
   if (!s.native || s.armedTab === null || s.armedTab !== s.boundTab) {
     return { kind: "skip" };
   }
-  // By default only a navigation's new page is read on its own.
-  if (s.mode === "navigation" && !s.navigationPending) return { kind: "skip" };
   // Nothing changed since the latest read began.
   if (s.lastChangeAt <= s.lastReadStartedAt) return { kind: "skip" };
+  // Judged by when the page changed, not by when the quiet period ended.
+  const followsAction = s.lastChangeAt < s.followUntil;
+  // By default only a navigation's new page, and what an action does, are
+  // read on their own.
+  if (s.mode === "navigation" && !s.navigationPending && !followsAction) {
+    return { kind: "skip" };
+  }
   if (s.busy) return { kind: "wait", ms: AUTO_REFRESH_QUIET_MS };
+  if (followsAction) return { kind: "read", tabId: s.armedTab, followsAction };
   const gap = s.lastReadEndedAt + autoRefreshGapMs(s.autoReads) - now;
   if (gap > 0) return { kind: "wait", ms: gap };
   return { kind: "read", tabId: s.armedTab };

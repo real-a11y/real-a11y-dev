@@ -2,6 +2,7 @@ import { DOM_OBSERVER_DEBOUNCE_MS } from "@real-a11y-dev/core";
 import { describe, expect, it } from "vitest";
 
 import {
+  ACTION_FOLLOW_MS,
   AUTO_REFRESH_FREE_READS,
   AUTO_REFRESH_MAX_GAP_MS,
   AUTO_REFRESH_MAX_WAIT_MS,
@@ -28,6 +29,7 @@ function state(over: Partial<AutoRefreshState> = {}): AutoRefreshState {
     lastReadStartedAt: NOW - 6000,
     lastReadEndedAt: NOW - AUTO_REFRESH_MIN_GAP_MS - 1,
     autoReads: 0,
+    followUntil: 0,
     busy: false,
     ...over,
   };
@@ -144,6 +146,118 @@ describe("decideAutoRefresh in changes mode", () => {
   });
 });
 
+describe("decideAutoRefresh after an action", () => {
+  // The action's own re-read ran from 4 s to 3.8 s ago, which opened the
+  // window it follows the page for.
+  const reread = { lastReadStartedAt: NOW - 4000, lastReadEndedAt: NOW - 3800 };
+  const followUntil = reread.lastReadEndedAt + ACTION_FOLLOW_MS;
+
+  it("reads what the page does next in the default mode too", () => {
+    // A form the click loads over the network, after the re-read.
+    expect(
+      decideAutoRefresh(
+        state({
+          mode: "navigation",
+          ...reread,
+          lastChangeAt: NOW - 1000,
+          followUntil,
+        }),
+        NOW,
+      ),
+    ).toEqual({ kind: "read", tabId: 7, followsAction: true });
+  });
+
+  it("reads it at once, whatever gap the back-off had reached", () => {
+    expect(
+      decideAutoRefresh(
+        state({
+          ...reread,
+          lastReadEndedAt: NOW - 100,
+          autoReads: AUTO_REFRESH_FREE_READS + 3,
+          lastChangeAt: NOW - 1000,
+          followUntil,
+        }),
+        NOW,
+      ),
+    ).toEqual({ kind: "read", tabId: 7, followsAction: true });
+  });
+
+  it("goes by when the page changed, not by when it went quiet", () => {
+    // Changed inside the window; quiet only after it closed.
+    expect(
+      decideAutoRefresh(
+        state({
+          mode: "navigation",
+          ...reread,
+          lastChangeAt: followUntil - 1,
+          followUntil,
+        }),
+        followUntil + AUTO_REFRESH_QUIET_MS,
+      ),
+    ).toEqual({ kind: "read", tabId: 7, followsAction: true });
+  });
+
+  it("leaves a change after the window to the mode's own rules", () => {
+    const later = {
+      ...reread,
+      lastReadEndedAt: NOW - 100,
+      lastChangeAt: followUntil,
+      followUntil,
+    };
+    expect(
+      decideAutoRefresh(state({ mode: "navigation", ...later }), NOW),
+    ).toEqual({ kind: "skip" });
+    expect(decideAutoRefresh(state(later), NOW)).toEqual({
+      kind: "wait",
+      ms: AUTO_REFRESH_MIN_GAP_MS - 100,
+    });
+  });
+
+  it("doesn't read again what the action's own re-read saw", () => {
+    expect(
+      decideAutoRefresh(
+        state({
+          mode: "navigation",
+          ...reread,
+          lastChangeAt: reread.lastReadStartedAt - 1,
+          followUntil,
+        }),
+        NOW,
+      ),
+    ).toEqual({ kind: "skip" });
+  });
+
+  it("waits out a read or an action in flight", () => {
+    expect(
+      decideAutoRefresh(
+        state({
+          mode: "navigation",
+          ...reread,
+          lastChangeAt: NOW - 1000,
+          followUntil,
+          busy: true,
+        }),
+        NOW,
+      ),
+    ).toEqual({ kind: "wait", ms: AUTO_REFRESH_QUIET_MS });
+  });
+
+  it("follows only the tab it is armed on", () => {
+    expect(
+      decideAutoRefresh(
+        state({
+          mode: "navigation",
+          ...reread,
+          lastChangeAt: NOW - 1000,
+          followUntil,
+          boundTab: 9,
+        }),
+        NOW,
+      ),
+    ).toEqual({ kind: "skip" });
+  });
+});
+
 describe("autoRefreshGapMs", () => {
   it("keeps the minimum gap for the first few automatic reads", () => {
     for (let n = 0; n < AUTO_REFRESH_FREE_READS; n++) {
@@ -206,5 +320,11 @@ describe("timings the policy depends on", () => {
 
   it("waits out at least one signal batch before reading", () => {
     expect(AUTO_REFRESH_QUIET_MS).toBeGreaterThan(DOM_OBSERVER_DEBOUNCE_MS);
+  });
+
+  it("follows an action for longer than a burst takes to be read", () => {
+    expect(ACTION_FOLLOW_MS).toBeGreaterThan(
+      PAGE_SIGNAL_LAG_MS + AUTO_REFRESH_MAX_WAIT_MS,
+    );
   });
 });

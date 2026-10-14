@@ -89,6 +89,7 @@ import { FOCUSABLE_SELECTOR, useDismissible } from "./focus-hooks.js";
 import { InputPanel } from "./InputPanel.js";
 import type { InputPanelState } from "./InputPanel.js";
 import {
+  ACTION_FOLLOW_MS,
   decideAutoRefresh,
   FOLLOW_PAGE_CHANGES_KEY,
   NATIVE_SETTLE_MS,
@@ -630,6 +631,8 @@ export function App() {
     lastReadStartedAt: number;
     lastReadEndedAt: number;
     autoReads: number;
+    /** Until when the page's changes are the latest action's own. */
+    followUntil: number;
     timer: ReturnType<typeof setTimeout> | null;
     /** When the first signal the pending timer answers arrived. */
     signalSince: number | null;
@@ -644,6 +647,7 @@ export function App() {
     lastReadStartedAt: 0,
     lastReadEndedAt: 0,
     autoReads: 0,
+    followUntil: 0,
     timer: null,
     signalSince: null,
     inFlight: null,
@@ -666,8 +670,15 @@ export function App() {
   const disarmAutoRefresh = useCallback(() => {
     autoRefresh.current.armedTab = null;
     autoRefresh.current.navigationPending = false;
+    autoRefresh.current.followUntil = 0;
     cancelAutoRefreshTimer();
   }, [cancelAutoRefreshTimer]);
+  /** An action's or a sent key's re-read has just read the page: what the
+   *  page does next, for a while, is read as it lands too — see
+   *  `ACTION_FOLLOW_MS`. */
+  const followActionAftermath = useCallback(() => {
+    autoRefresh.current.followUntil = Date.now() + ACTION_FOLLOW_MS;
+  }, []);
   const scheduleAutoRefresh = useCallback((ms: number) => {
     const a = autoRefresh.current;
     if (a.timer !== null) clearTimeout(a.timer);
@@ -1392,6 +1403,8 @@ export function App() {
         // with a TREE_DATA, and that reads it, once. A pending read for the
         // old page is dropped, and the back-off starts over: the gap a quiet
         // page built up must not leave the new page's tree empty that long.
+        // An action followed on the old page isn't on this one; an action
+        // that navigated follows its destination once it has read it.
         const a = autoRefresh.current;
         cancelAutoRefreshTimer();
         a.navigationPending = a.armedTab !== null;
@@ -1399,6 +1412,7 @@ export function App() {
         a.lastReadStartedAt = 0;
         a.lastReadEndedAt = 0;
         a.autoReads = 0;
+        a.followUntil = 0;
         followKeyNavigationRef.current();
         return;
       }
@@ -2017,17 +2031,21 @@ export function App() {
    *  line is a live region, so that would be announced on every read), and
    *  on failure the tree stays as it was. The service worker doesn't retry a
    *  dropped attach for it either, since the drop may be the user's Cancel
-   *  on Chrome's bar. Any other read starts auto-refresh's back-off over. */
+   *  on Chrome's bar. Any other read starts auto-refresh's back-off over, as
+   *  does an automatic one that `followsAction` (`ACTION_FOLLOW_MS`). */
   const loadNativeTreeCore = useCallback(
     async (
       tabId: number,
-      { auto = false }: { auto?: boolean } = {},
+      {
+        auto = false,
+        followsAction = false,
+      }: { auto?: boolean; followsAction?: boolean } = {},
     ): Promise<boolean> => {
       if (!nativeModeEnabled) return false;
       const token = nativeOpToken.current;
       const a = autoRefresh.current;
       a.lastReadStartedAt = Date.now();
-      a.autoReads = auto ? a.autoReads + 1 : 0;
+      a.autoReads = auto && !followsAction ? a.autoReads + 1 : 0;
       if (!auto) {
         setNativeBusy(true);
         // A read on a tab with a pick armed queues behind the pick, which
@@ -2139,7 +2157,10 @@ export function App() {
    *  see `nativeInFlight`'s own declaration. Propagates `loadNativeTreeCore`'s
    *  success/failure so the native-default effect can tell them apart. */
   const loadNativeTree = useCallback(
-    async (tabId: number, opts?: { auto?: boolean }): Promise<boolean> => {
+    async (
+      tabId: number,
+      opts?: { auto?: boolean; followsAction?: boolean },
+    ): Promise<boolean> => {
       // The user's read waits for an automatic one rather than being dropped
       // by the in-flight guard below: the user didn't start that one, so it
       // mustn't cost them a click.
@@ -2191,6 +2212,7 @@ export function App() {
         lastReadStartedAt: a.lastReadStartedAt,
         lastReadEndedAt: a.lastReadEndedAt,
         autoReads: a.autoReads,
+        followUntil: a.followUntil,
         busy: nativeInFlight.current || pickModeOnRef.current,
       },
       Date.now(),
@@ -2199,9 +2221,10 @@ export function App() {
     else if (decision.kind === "read") {
       // A reply that never arrives (an unreachable service worker) attached
       // nothing, so it leaves auto-refresh armed for the next change.
-      const read = loadNativeTree(decision.tabId, { auto: true }).catch(
-        () => false,
-      );
+      const read = loadNativeTree(decision.tabId, {
+        auto: true,
+        followsAction: decision.followsAction === true,
+      }).catch(() => false);
       a.inFlight = read;
       void read.finally(() => {
         if (a.inFlight === read) a.inFlight = null;
@@ -2285,9 +2308,11 @@ export function App() {
         if (nativeOpToken.current === lastSeenToken) break; // no further nav during the wait — settled
         lastSeenToken = nativeOpToken.current;
       }
-      await loadNativeTreeCore(tabId);
+      // The destination may go on loading after this read, as the page an
+      // action stays on may go on reacting.
+      if (await loadNativeTreeCore(tabId)) followActionAftermath();
     },
-    [loadNativeTreeCore],
+    [loadNativeTreeCore, followActionAftermath],
   );
 
   /** Wait, bounded (~5 s), for a native read or action in flight to finish,
@@ -2309,8 +2334,10 @@ export function App() {
    *  navigation that starts while the re-read is under way supersedes the
    *  read, and is followed the same way. Skipped once the panel has left the
    *  tab or native mode. The caller holds `nativeInFlight`: this reads
-   *  through the unguarded core. Resolves whether it read the page the
-   *  operation ran on — not when the read failed or the page navigated. */
+   *  through the unguarded core. A read that succeeds, of either page, has
+   *  the page's next changes followed for a while (`ACTION_FOLLOW_MS`).
+   *  Resolves whether it read the page the operation ran on — not when the
+   *  read failed or the page navigated. */
   const settleThenReread = useCallback(
     async (
       tabId: number,
@@ -2325,9 +2352,10 @@ export function App() {
       // PAGE_NAVIGATED, fired on `onBeforeNavigate` in background.ts, win the
       // race against the operation's own round trip). Reading immediately
       // would race the navigation and land on the old document, or on a new
-      // one that hasn't settled yet. Still a single best-effort attempt, not
-      // a wait-for-load: a destination slower than NATIVE_SETTLE_MS can come
-      // back sparse, and Refresh is there either way.
+      // one that hasn't settled yet. Still a single attempt, not a
+      // wait-for-load: what lands later, on this page or a destination slower
+      // than NATIVE_SETTLE_MS, is read once the page goes quiet
+      // (`followActionAftermath`), and Refresh is there either way.
       await sleep(NATIVE_SETTLE_MS);
       if (abandoned()) return false;
       if (token !== nativeOpToken.current) {
@@ -2335,12 +2363,13 @@ export function App() {
         return false;
       }
       const ok = await loadNativeTreeCore(tabId);
-      if (!ok && token !== nativeOpToken.current && !abandoned()) {
+      if (ok) followActionAftermath();
+      else if (token !== nativeOpToken.current && !abandoned()) {
         await recoverFromOwnNavigation(tabId, tabChangeAtStart);
       }
       return ok;
     },
-    [loadNativeTreeCore, recoverFromOwnNavigation],
+    [loadNativeTreeCore, recoverFromOwnNavigation, followActionAftermath],
   );
 
   // The default itself (see `hasAppliedNativeDefault`). It waits for

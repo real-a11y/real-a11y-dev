@@ -2,15 +2,16 @@
  * Native auto-refresh, through the real build.
  *
  * By default the native tree reads itself again once, after a same-tab
- * navigation settles, and otherwise waits for Refresh, an action or a key.
- * With "Follow page changes" on, it also reads after every burst of page
- * changes, backing off the longer that runs on without the user
- * (`native-auto-refresh.ts` is the policy). Either way it follows only the
- * tab a read succeeded on, and a frame's changes count wherever the page
- * shows the frame.
+ * navigation settles, and for a few seconds after an action or a key, and
+ * otherwise waits for Refresh. With "Follow page changes" on, it also reads
+ * after every burst of page changes, backing off the longer that runs on
+ * without the user (`native-auto-refresh.ts` is the policy). Either way it
+ * follows only the tab a read succeeded on, and a frame's changes count
+ * wherever the page shows the frame.
  */
 
 import {
+  ACTION_FOLLOW_MS,
   AUTO_REFRESH_MIN_GAP_MS,
   AUTO_REFRESH_QUIET_MS,
 } from "../src/sidepanel/native-auto-refresh.ts";
@@ -171,6 +172,44 @@ test.describe("by default", () => {
     });
     await expect(heading).toBeVisible({ timeout: READ_WINDOW_MS });
     expect(new URL(page.url()).pathname).toBe("/native-panel.html");
+  });
+});
+
+test.describe("after an action, by default", () => {
+  test("what a click loads after its re-read reaches the native tree", async ({
+    nav,
+  }) => {
+    // The button adds a form a second after the click: later than the
+    // action's own re-read, so only a read that follows it sees the form.
+    const page = await nav.showNative("native-follow-action.html");
+    await (
+      await findRow(nav.panel, "Load form")
+    ).dblclick({
+      position: { x: 5, y: 5 },
+    });
+    await expect(await findRow(nav.panel, "Save form")).toBeVisible({
+      timeout: READ_WINDOW_MS,
+    });
+    expect(await autoReads(nav)).toBe(1);
+
+    // For a few seconds only: after that a change waits for Refresh again.
+    await nav.panel.waitForTimeout(ACTION_FOLLOW_MS);
+    await addButton(page, "Added much later");
+    await nav.panel.waitForTimeout(READ_WINDOW_MS);
+    expect(await autoReads(nav)).toBe(1);
+  });
+
+  test("so does what it loads inside a frame", async ({ nav }) => {
+    await nav.showNative("native-follow-action.html");
+    await (
+      await findRow(nav.panel, "Create contact")
+    ).dblclick({
+      position: { x: 5, y: 5 },
+    });
+    await expect(await findRow(nav.panel, "Save contact")).toBeVisible({
+      timeout: READ_WINDOW_MS,
+    });
+    expect(await autoReads(nav)).toBe(1);
   });
 });
 
