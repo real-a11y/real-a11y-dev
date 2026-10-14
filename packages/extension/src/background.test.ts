@@ -1405,3 +1405,91 @@ describe("background: the Focus sync toggle, through page updates", () => {
     expect(new Set(sent)).toEqual(new Set([true]));
   });
 });
+
+describe("background: which frames' changes Chrome's tree follows", () => {
+  let h: Harness;
+
+  beforeEach(async () => {
+    vi.useFakeTimers();
+    vi.resetModules();
+    h = makeHarness();
+    (globalThis as { chrome?: unknown }).chrome = h.chromeMock;
+    await import("./background.js");
+    await vi.runAllTimersAsync();
+    connectPanel(h);
+    // The page, its two frames placed under their <iframe>s.
+    for (const frameId of [0, 1, 2]) announce(h, frameId);
+    await vi.runAllTimersAsync();
+    h.panelMessages.length = 0;
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    delete (globalThis as { chrome?: unknown }).chrome;
+  });
+
+  /** Deliver a `FRAME_TREE_DATA` with this payload, as frame `frameId`. */
+  function deliver(frameId: number, payload: object) {
+    for (const fn of h.messageListeners) {
+      fn(
+        { type: "FRAME_TREE_DATA", payload },
+        { id: EXTENSION_ID, tab: { id: TAB_ID }, frameId },
+        () => {},
+      );
+    }
+  }
+
+  /** Each published tree's `pageChanged`, since the last call. */
+  function pageChanged(): unknown[] {
+    const out = h.panelMessages
+      .filter((m) => m.type === "TREE_DATA")
+      .map((m) => (m.payload as { pageChanged?: unknown }).pageChanged);
+    h.panelMessages.length = 0;
+    return out;
+  }
+
+  it("follows a change in a frame the page shows, as one in the top frame", async () => {
+    announce(h, 1);
+    await vi.runAllTimersAsync();
+    expect(pageChanged()).toEqual([true]);
+    announce(h, 0);
+    await vi.runAllTimersAsync();
+    expect(pageChanged()).toEqual([true]);
+  });
+
+  it("leaves out a change in a frame hidden from assistive technology", async () => {
+    // The top frame's second <iframe>, frame 2's, is hidden: Chrome's tree
+    // has no row for it to read the frame under.
+    const top = frameTreePayload(0);
+    deliver(0, {
+      ...top,
+      nodes: top.nodes.map(([id, node]) =>
+        id === "ifB"
+          ? [id, { ...node, a11y: { ...node.a11y, isExposedToAT: false } }]
+          : [id, node],
+      ),
+    });
+    await vi.runAllTimersAsync();
+    pageChanged();
+
+    announce(h, 2);
+    await vi.runAllTimersAsync();
+    expect(pageChanged()).toEqual([false]);
+    announce(h, 1);
+    await vi.runAllTimersAsync();
+    expect(pageChanged()).toEqual([true]);
+  });
+
+  it("leaves out a change in a frame the tree has no place for", async () => {
+    const url = "https://c.test/widget";
+    h.knobs.frames.push({ frameId: 3, parentFrameId: 0, url });
+    deliver(3, {
+      frameUrl: url,
+      pageTitle: "Frame 3",
+      rootId: "root",
+      nodes: [["root", makeNode("root")]],
+    });
+    await vi.runAllTimersAsync();
+    expect(pageChanged()).toEqual([false]);
+  });
+});

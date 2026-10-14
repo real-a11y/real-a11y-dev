@@ -1405,11 +1405,11 @@ export function App() {
 
       // The content script sends a tree after every burst of page changes,
       // whichever producer the panel shows, so it is native auto-refresh's
-      // "the page changed" signal too — the top frame's only, since the
-      // native read covers the top frame.
+      // "the page changed" signal too: the top frame's, and that of every
+      // frame the page shows, which the native read covers as well.
       if (
         message.type === "TREE_DATA" &&
-        message.payload.topFrameChanged === true &&
+        message.payload.pageChanged === true &&
         producerRef.current === "native"
       ) {
         const a = autoRefresh.current;

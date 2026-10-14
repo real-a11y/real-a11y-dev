@@ -3,6 +3,7 @@
 import {
   asFrameMarks,
   buildFrameInfoMap,
+  isFrameShown,
   mergeFrameTrees,
   unplacedFrames,
 } from "./frame-merger.js";
@@ -146,8 +147,17 @@ async function mergeAndSendTree(tabId: number) {
   // The outstanding request is answered by this publish, whatever prompted the
   // merge — so the guard above goes back to being purely port-driven.
   panelTreeRequests.delete(tabId);
-  const topFrameChanged = state.topFrameChanged;
-  state.topFrameChanged = false;
+  // Chrome's tree reads the top frame and every frame the page shows, so a
+  // change in any of them is one its auto-refresh follows; a hidden frame's
+  // (an animating ad's) changes nothing there.
+  const pageChanged = [...state.changedFrames].some((frameId) => {
+    const tree = state.frames.get(frameId);
+    return (
+      tree !== undefined &&
+      isFrameShown(result.nodes, frameId, tree.rootId, topFrame.rootId)
+    );
+  });
+  state.changedFrames.clear();
   chrome.runtime
     .sendMessage({
       type: "TREE_DATA",
@@ -157,7 +167,7 @@ async function mergeAndSendTree(tabId: number) {
         rootId: topFrame.rootId,
         pageTitle: topFrame.pageTitle,
         pageUrl: topFrame.frameUrl,
-        topFrameChanged,
+        pageChanged,
       },
     })
     .catch(() => {
@@ -656,7 +666,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         });
         // A frame asked where one of its frames goes has now answered.
         answeredPlacesAskedOf(state, frameId);
-        if (frameId === 0) state.topFrameChanged = true;
+        state.changedFrames.add(frameId);
         scheduleMerge(tabId);
 
         // Decide what to send back to the frame(s). Rules are in routing.ts

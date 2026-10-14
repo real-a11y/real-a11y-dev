@@ -6,6 +6,7 @@ import {
   type FrameTree,
   asFrameMarks,
   buildFrameInfoMap,
+  isFrameShown,
   mergeFrameTrees,
   unplacedFrames,
 } from "./frame-merger.js";
@@ -896,5 +897,98 @@ describe("buildFrameInfoMap", () => {
 
   it("returns an empty map for an empty input", () => {
     expect(buildFrameInfoMap([]).size).toBe(0);
+  });
+});
+
+describe("isFrameShown", () => {
+  /**
+   * The page's tree with frame 5 under its `<iframe>`, and frame 7 under an
+   * `<iframe>` of frame 5's; `hidden` names the `<iframe>`s hidden from
+   * assistive technology.
+   */
+  function merged(hidden: string[] = []) {
+    const iframe = (
+      id: string,
+      src: string,
+      parentId: string,
+      depth: number,
+    ) => {
+      const node = makeNode(id, {
+        tagName: "iframe",
+        attrs: { src },
+        parentId,
+        depth,
+      });
+      node.a11y.isExposedToAT = !hidden.includes(id);
+      return node;
+    };
+    const frames = new Map([
+      [
+        0,
+        makeFrame(0, "https://top.test/", [
+          ["root", makeNode("root", { childIds: ["ifr"] })],
+          ["ifr", iframe("ifr", "https://child.test/", "root", 1)],
+        ]),
+      ],
+      [
+        5,
+        makeFrame(5, "https://child.test/", [
+          ["c-root", makeNode("c-root", { childIds: ["c-ifr"] })],
+          ["c-ifr", iframe("c-ifr", "https://deep.test/", "c-root", 1)],
+        ]),
+      ],
+      [7, makeFrame(7, "https://deep.test/", [["d-root", makeNode("d-root")]])],
+    ]);
+    const result = mergeFrameTrees({
+      frames,
+      frameInfoMap: new Map<number, FrameInfo>([
+        [5, { parentFrameId: 0, url: "https://child.test/" }],
+        [7, { parentFrameId: 5, url: "https://deep.test/" }],
+      ]),
+    })!;
+    return (frameId: number, rootId: string) =>
+      isFrameShown(result.nodes, frameId, rootId, "root");
+  }
+
+  it("shows the top frame, and every frame under an <iframe> the page exposes, however deep", () => {
+    const shown = merged();
+    expect(shown(0, "root")).toBe(true);
+    expect(shown(5, "c-root")).toBe(true);
+    expect(shown(7, "d-root")).toBe(true);
+  });
+
+  it("shows no frame under an <iframe> hidden from assistive technology, nor any inside it", () => {
+    const shown = merged(["ifr"]);
+    expect(shown(5, "c-root")).toBe(false);
+    expect(shown(7, "d-root")).toBe(false);
+    // Hidden deeper down: the frame above it still shows.
+    const deeper = merged(["c-ifr"]);
+    expect(deeper(5, "c-root")).toBe(true);
+    expect(deeper(7, "d-root")).toBe(false);
+  });
+
+  it("shows no frame the tree has no place for yet", () => {
+    const top = makeFrame(0, "https://top.test/", [["root", makeNode("root")]]);
+    const lost = makeFrame(9, "https://lost.test/", [
+      ["l-root", makeNode("l-root")],
+    ]);
+    const result = mergeFrameTrees({
+      frames: new Map([
+        [0, top],
+        [9, lost],
+      ]),
+      frameInfoMap: new Map(),
+    })!;
+    expect(isFrameShown(result.nodes, 9, "l-root", "root")).toBe(false);
+  });
+
+  it("ends on a tree whose parents loop", () => {
+    const a = makeNode("f5-a", { parentId: "f5-b" });
+    const b = makeNode("f5-b", { parentId: "f5-a" });
+    const nodes = new Map([
+      ["f5-a", a],
+      ["f5-b", b],
+    ]);
+    expect(isFrameShown(nodes, 5, "a", "root")).toBe(false);
   });
 });

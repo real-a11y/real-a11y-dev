@@ -17,7 +17,10 @@
  *   backing off ({@link autoRefreshGapMs}) the longer it runs without the
  *   user, so a page that animates forever doesn't keep the bar up for good.
  *
- * Only the top frame's changes count: the native read covers the top frame.
+ * A frame's changes count as the top frame's do wherever the page shows the
+ * frame, since the native read puts its content under the frame's row. A
+ * hidden frame's (an animating ad's) don't: the service worker leaves them
+ * out of the signal (`isFrameShown`).
  *
  * This module only decides. `App.tsx` owns the timer, the reads, and the
  * state the decision is made from.
@@ -110,8 +113,8 @@ export interface AutoRefreshState {
   native: boolean;
   /** A same-tab navigation happened and its page hasn't been read yet. */
   navigationPending: boolean;
-  /** When the page last changed, in ms: the latest top-frame page-change
-   *  signal (`TREE_DATA`) less {@link PAGE_SIGNAL_LAG_MS}. */
+  /** When the page last changed, in ms: the latest page-change signal
+   *  (`TREE_DATA`) less {@link PAGE_SIGNAL_LAG_MS}. */
   lastChangeAt: number;
   /** When the latest native read of any kind started, in ms. A read that
    *  started after a change already describes it. */

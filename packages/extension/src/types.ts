@@ -85,9 +85,10 @@ export type ContentToPanel =
         rootId: string;
         pageTitle: string;
         pageUrl: string;
-        /** The top frame's own tree changed since the last publish, rather
-         *  than only a subframe's — see `TabState.topFrameChanged`. */
-        topFrameChanged?: boolean;
+        /** The tree of the top frame, or of a frame the page shows, changed
+         *  since the last publish: not only a hidden frame's — see
+         *  `TabState.changedFrames`. */
+        pageChanged?: boolean;
       };
     }
   | {
