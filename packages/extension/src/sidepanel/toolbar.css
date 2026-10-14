@@ -1,0 +1,12 @@
+/* The side panel's own additions to `tree.css`'s toolbar. */
+
+/* A toolbar button that stays on (Chrome's tree's "Follow page changes")
+ * shows that it is, as the picker's toggle does, hovered or not. */
+.sn-toolbar-btn[aria-pressed="true"],
+.sn-toolbar-btn[aria-pressed="true"]:hover:not(:disabled):not(
+    [aria-disabled="true"]
+  ) {
+  background: var(--sn-accent);
+  color: #fff;
+  border-color: var(--sn-accent);
+}

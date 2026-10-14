@@ -101,6 +101,7 @@ import {
   nativeActionFeedback,
 } from "./native-feedback.js";
 import { NativeTreeView, type NativeReveal } from "./NativeTreeView.js";
+import { domStateBadges, EmbeddedBadge, StateBadges } from "./row-badges.js";
 import {
   arrowLeftStopsAtScopeRoot,
   describeNode,
@@ -4103,9 +4104,8 @@ export function App() {
                               H{node.a11y.properties.level}
                             </span>
                           )}
-                          {/* Iframe embedded content badge */}
-                          {node.dom.tagName === "iframe" && (
-                            <span class="sn-iframe-badge">embedded</span>
+                          {node.dom.tagName === "iframe" && !isParent && (
+                            <EmbeddedBadge />
                           )}
                           {node.a11y.name && (
                             <span class="sn-name">{node.a11y.name}</span>
@@ -4148,82 +4148,9 @@ export function App() {
                               {announcedValueLabel(node.a11y.value)}
                             </span>
                           )}
-                          {/* State badges: disabled, checked, required, expanded, etc. */}
-                          {(() => {
-                            const states = node.a11y.states;
-                            const badges: Array<{
-                              label: string;
-                              cls: string;
-                            }> = [];
-                            if (states.disabled === true)
-                              badges.push({
-                                label: "disabled",
-                                cls: "sn-state--disabled",
-                              });
-                            if (states.checked === true)
-                              badges.push({
-                                label: "checked",
-                                cls: "sn-state--on",
-                              });
-                            if (states.checked === "mixed")
-                              badges.push({
-                                label: "mixed",
-                                cls: "sn-state--mixed",
-                              });
-                            if (states.pressed === true)
-                              badges.push({
-                                label: "pressed",
-                                cls: "sn-state--on",
-                              });
-                            if (states.selected === true)
-                              badges.push({
-                                label: "selected",
-                                cls: "sn-state--on",
-                              });
-                            if (states.expanded === true)
-                              badges.push({
-                                label: "expanded",
-                                cls: "sn-state--info",
-                              });
-                            if (states.expanded === false)
-                              badges.push({
-                                label: "collapsed",
-                                cls: "sn-state--info",
-                              });
-                            if (states.required === true)
-                              badges.push({
-                                label: "required",
-                                cls: "sn-state--required",
-                              });
-                            if (states.readonly === true)
-                              badges.push({
-                                label: "readonly",
-                                cls: "sn-state--info",
-                              });
-                            if (states.busy === true)
-                              badges.push({
-                                label: "busy",
-                                cls: "sn-state--info",
-                              });
-                            if (states.current)
-                              badges.push({
-                                label: `current: ${states.current}`,
-                                cls: "sn-state--info",
-                              });
-                            if (badges.length === 0) return null;
-                            return (
-                              <span class="sn-state-badges">
-                                {badges.map((b) => (
-                                  <span
-                                    key={b.label}
-                                    class={`sn-state-badge ${b.cls}`}
-                                  >
-                                    {b.label}
-                                  </span>
-                                ))}
-                              </span>
-                            );
-                          })()}
+                          <StateBadges
+                            badges={domStateBadges(node.a11y.states)}
+                          />
                           {/* Cross-links (aria-controls or heuristic): to the
                               rows this one controls, and back to those that
                               control it. */}

@@ -214,6 +214,30 @@ test.describe("after an action, by default", () => {
 });
 
 test.describe("with Follow page changes on", () => {
+  test("its toggle looks pressed, hovered or not", async ({ nav }) => {
+    await nav.showNative("native-panel.html");
+    const toggle = nav.panel.getByRole("button", {
+      name: "Follow page changes",
+    });
+    const background = () =>
+      toggle.evaluate((el) => getComputedStyle(el).backgroundColor);
+    const accent = await toggle.evaluate((el) => {
+      const probe = document.createElement("span");
+      probe.style.background = "var(--sn-accent)";
+      el.parentElement!.append(probe);
+      const colour = getComputedStyle(probe).backgroundColor;
+      probe.remove();
+      return colour;
+    });
+    expect(await background()).not.toBe(accent);
+
+    // The pointer stays on it after the click.
+    await followPageChanges(nav.panel);
+    expect(await background()).toBe(accent);
+    await nav.panel.mouse.move(0, 0);
+    expect(await background()).toBe(accent);
+  });
+
   test("a page change reaches the native tree without Refresh", async ({
     nav,
   }) => {
