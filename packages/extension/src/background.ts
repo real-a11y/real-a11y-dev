@@ -3,7 +3,7 @@
 import {
   asFrameMarks,
   buildFrameInfoMap,
-  isFrameShown,
+  frameVisibility,
   mergeFrameTrees,
   unplacedFrames,
 } from "./frame-merger.js";
@@ -136,11 +136,10 @@ async function mergeAndSendTree(tabId: number) {
   }
 
   const frameInfoMap = buildFrameInfoMap(allFrames);
-  const unplaceable = unplaceableFrames(state);
   const result = mergeFrameTrees({
     frames: state.frames,
     frameInfoMap,
-    unplaceable,
+    unplaceable: unplaceableFrames(state),
   });
   if (!result) return; // top frame went away between schedule and run
 
@@ -160,14 +159,14 @@ async function mergeAndSendTree(tabId: number) {
   let pageChangedAt: number | undefined;
   for (const [frameId, at] of changed) {
     const tree = state.frames.get(frameId);
-    if (tree && isFrameShown(result.nodes, tree, topFrame.rootId)) {
-      pageChangedAt = Math.max(pageChangedAt ?? at, at);
-    }
-    // A frame waiting for its place is answered for by the publish that
-    // places it, which its parent's tree, sent again on request, prompts.
-    const awaitingPlace =
-      result.unplaced.includes(frameId) && !unplaceable.has(frameId);
-    if (state.changedFrames.get(frameId) === at && !awaitingPlace) {
+    const where = tree
+      ? frameVisibility(result.nodes, tree, topFrame.rootId)
+      : "hidden";
+    if (where === "shown") pageChangedAt = Math.max(pageChangedAt ?? at, at);
+    // A frame with no place yet, or inside one that has none, is answered
+    // for by the publish that places it, such as one its parent's tree,
+    // sent again on request, prompts.
+    if (where !== "unplaced" && state.changedFrames.get(frameId) === at) {
       state.changedFrames.delete(frameId);
     }
   }
@@ -680,11 +679,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         // A frame asked where one of its frames goes has now answered.
         answeredPlacesAskedOf(state, frameId);
         if (message.payload.reread !== true) {
+          // The page's clock, which can't be ahead of now.
+          const now = Date.now();
           const stamp = message.payload.changedAt;
           const at =
             typeof stamp === "number" && Number.isFinite(stamp)
-              ? stamp
-              : Date.now();
+              ? Math.min(stamp, now)
+              : now;
           const before = state.changedFrames.get(frameId);
           state.changedFrames.set(frameId, Math.max(before ?? at, at));
         }

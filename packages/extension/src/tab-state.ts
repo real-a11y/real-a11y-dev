@@ -35,7 +35,7 @@ export interface TabState {
    * The frames that announced a changed tree (not a re-read: see the
    * payload's `reread`) that no publish has answered for yet, each with when
    * it last changed (`changedAt`). A publish tells the panel when the latest
-   * of them that the page shows (`isFrameShown`) changed, which is what
+   * of them that the page shows (`frameVisibility`) changed, which is what
    * prompts the native tree's auto-refresh: Chrome's tree reads those frames,
    * and a change in a hidden one (an animating ad) changes nothing there.
    */

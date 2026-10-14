@@ -131,29 +131,36 @@ export function unplacedFrames(frames: Map<number, FrameTree>): number[] {
 
 /**
  * Whether a frame's document shows on the page, as the merged `nodes` have
- * it: its root hangs under the top frame's root (`topRootId`) through nodes
- * all exposed to assistive technology, its `<iframe>`'s among them. Chrome's
- * tree reads a frame only where its `<iframe>` has a row, and the DOM walk
- * stops at anything hidden from assistive technology, so a hidden frame (an
- * ad's, a tracker's) and one with no place in the tree yet show in neither.
+ * it. Chrome's tree reads a frame only where its `<iframe>` has a row, and
+ * the DOM walk stops at anything hidden from assistive technology, so:
+ *
+ * - `"shown"`: its root hangs under the top frame's root (`topRootId`)
+ *   through nodes all exposed to assistive technology, its `<iframe>`'s
+ *   among them.
+ * - `"hidden"`: a node on the way up is hidden from assistive technology, as
+ *   a hidden frame's (an ad's, a tracker's) `<iframe>` is.
+ * - `"unplaced"`: the way up ends short of the top frame: the frame, or a
+ *   frame around it, has no place in the tree yet.
+ *
  * Only as good as the merge's placement, which for a frame of another origin
  * whose URL matches no `<iframe>` is a guess (see {@link mergeFrameTrees}).
  */
-export function isFrameShown(
+export function frameVisibility(
   nodes: ReadonlyMap<string, SemanticNode>,
   frame: Pick<FrameTree, "frameId" | "rootId">,
   topRootId: string,
-): boolean {
-  if (frame.frameId === 0) return true;
+): "shown" | "hidden" | "unplaced" {
+  if (frame.frameId === 0) return "shown";
   let id: string | null = prefixNodeId(frame.frameId, frame.rootId);
   // Bounded by the node count: a malformed tree with a parent cycle ends.
   for (let steps = 0; id !== null && steps <= nodes.size; steps++) {
-    if (id === topRootId) return true;
+    if (id === topRootId) return "shown";
     const node = nodes.get(id);
-    if (!node || node.a11y.isExposedToAT === false) return false;
+    if (!node) return "unplaced";
+    if (node.a11y.isExposedToAT === false) return "hidden";
     id = node.parentId;
   }
-  return false;
+  return "unplaced";
 }
 
 /**

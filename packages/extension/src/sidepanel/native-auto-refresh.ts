@@ -25,7 +25,7 @@
  * A frame's changes count as the top frame's do wherever the page shows the
  * frame, since the native read puts its content under the frame's row. A
  * hidden frame's (an animating ad's) don't: the service worker leaves them
- * out of the signal (`isFrameShown`).
+ * out of the signal (`frameVisibility`).
  *
  * This module only decides. `App.tsx` owns the timer, the reads, and the
  * state the decision is made from.
@@ -112,7 +112,10 @@ export interface AutoRefreshState {
   navigationPending: boolean;
   /** When the page last changed, in ms: the latest date a page-change
    *  signal carried (`TREE_DATA`'s `pageChangedAt`), which the frame that
-   *  changed stamps. A read that started after it already saw the change. */
+   *  changed stamps. A read that started after it already saw the change.
+   *  The one exception is a stream of changes the frame's observer flushes
+   *  at its ceiling, which can go on up to its debounce past the date; the
+   *  stream's next flush, or Refresh, reads the rest. */
   lastChangeAt: number;
   /** When the latest native read of any kind started, in ms. A read that
    *  started after a change already describes it. */

@@ -207,6 +207,8 @@ function teardown(): void {
  * payload's own `reread` and `changedAt`.
  */
 function sendTree(change?: TreeChange, { reread = false } = {}) {
+  // Before extracting, which can take a while on a big page.
+  const readAt = Date.now();
   const extractor = getLiveExtractor();
   // No root element to read: the next one to appear sends the tree.
   if (!extractor) return;
@@ -234,7 +236,7 @@ function sendTree(change?: TreeChange, { reread = false } = {}) {
       // unasked, such as a frame's first tree, is the page as it is now.
       ...(reread
         ? { reread: true }
-        : { changedAt: Date.now() - (change ? DOM_OBSERVER_DEBOUNCE_MS : 0) }),
+        : { changedAt: readAt - (change ? DOM_OBSERVER_DEBOUNCE_MS : 0) }),
     },
   });
 }

@@ -53,9 +53,11 @@ export type FrameToBackground =
         reread?: true;
         /** On a tree that isn't a re-read: when the frame last changed, in
          *  ms since the epoch. For a burst of changes its observer saw, when
-         *  the burst ended, a debounce before the tree was sent; for a tree
+         *  the burst ended, a debounce before the tree was read; for a tree
          *  sent unasked otherwise, such as the frame's first, when it was
-         *  read. */
+         *  read. A burst the observer flushed at its ceiling, still going,
+         *  can have changed up to that debounce later: its next flush says
+         *  so. */
         changedAt?: number;
       };
     }
@@ -96,10 +98,10 @@ export type ContentToPanel =
         rootId: string;
         pageTitle: string;
         pageUrl: string;
-        /** The tree of the top frame, or of a frame the page shows, changed
-         *  since the last publish, the latest at this time (the frames'
-         *  `changedAt`, in ms since the epoch). Absent when none did, or
-         *  only a hidden frame's — see `TabState.changedFrames`. */
+        /** When the top frame, or a frame the page shows, last changed (its
+         *  `changedAt`, in ms since the epoch), for a change no publish has
+         *  answered for yet. Absent when there is none, or only a hidden
+         *  frame's — see `TabState.changedFrames`. */
         pageChangedAt?: number;
       };
     }

@@ -1435,9 +1435,10 @@ export function App() {
       ) {
         const a = autoRefresh.current;
         const now = Date.now();
-        a.lastChangeAt = Math.max(
-          a.lastChangeAt,
-          message.payload.pageChangedAt,
+        // Never ahead of now, should the page's clock and ours disagree.
+        a.lastChangeAt = Math.min(
+          Math.max(a.lastChangeAt, message.payload.pageChangedAt),
+          now,
         );
         const next = quietPeriodOnSignal(a.signalSince, now);
         if (next.kind === "restart") {

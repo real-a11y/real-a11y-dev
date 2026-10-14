@@ -1538,6 +1538,84 @@ describe("background: which frames' changes Chrome's tree follows", () => {
     expect(changedAt()).toEqual([1_000, 2_000]);
   });
 
+  it("answers for a frame inside one with no place yet once that one has it", async () => {
+    // Frame 5's <iframe> isn't in the page's tree as it was read; frame 7
+    // sits inside frame 5.
+    h.knobs.frames.push(
+      { frameId: 5, parentFrameId: 0, url: "https://c.test/" },
+      { frameId: 7, parentFrameId: 5, url: "https://d.test/" },
+    );
+    deliver(5, {
+      frameUrl: "https://c.test/",
+      pageTitle: "Frame 5",
+      rootId: "root",
+      changedAt: 1_000,
+      nodes: [
+        ["root", makeNode("root", { childIds: ["ifD"] })],
+        [
+          "ifD",
+          makeNode("ifD", {
+            parentId: "root",
+            depth: 1,
+            tagName: "iframe",
+            attrs: { src: "https://d.test/" },
+          }),
+        ],
+      ],
+    });
+    deliver(7, {
+      frameUrl: "https://d.test/",
+      pageTitle: "Frame 7",
+      rootId: "root",
+      changedAt: 2_000,
+      nodes: [["root", makeNode("root")]],
+    });
+    await vi.runAllTimersAsync();
+    expect(changedAt().every((at) => at === undefined)).toBe(true);
+
+    // The page's tree, read again, has frame 5's <iframe> now.
+    const top = frameTreePayload(0);
+    deliver(0, {
+      ...top,
+      reread: true,
+      nodes: [
+        ["root", makeNode("root", { childIds: ["ifA", "ifB", "ifC"] })],
+        ...top.nodes.slice(1),
+        [
+          "ifC",
+          makeNode("ifC", {
+            parentId: "root",
+            depth: 1,
+            tagName: "iframe",
+            attrs: { src: "https://c.test/" },
+          }),
+        ],
+      ],
+    });
+    await vi.runAllTimersAsync();
+    expect(changedAt()).toEqual([2_000]);
+  });
+
+  it("answers once for a marked frame its URL placed", async () => {
+    // Frame 2 marked its <iframe> after the page's tree was read, but its URL
+    // places it all the same.
+    deliver(2, { ...frameTreePayload(2), owner: "mark-2", changedAt: 4_000 });
+    await vi.runAllTimersAsync();
+    expect(changedAt()).toContain(4_000);
+    deliver(1, { ...frameTreePayload(1), reread: true });
+    await vi.runAllTimersAsync();
+    expect(changedAt().every((at) => at === undefined)).toBe(true);
+  });
+
+  it("never dates a change after now", async () => {
+    const now = Date.now();
+    deliver(1, { ...frameTreePayload(1), changedAt: now + 60_000 });
+    await vi.runAllTimersAsync();
+    const [at] = changedAt();
+    expect(at).toBeGreaterThanOrEqual(now);
+    expect(at).toBeLessThanOrEqual(Date.now());
+  });
+
   it("answers for a frame waiting for its place in the publish that places it", async () => {
     // A blank frame of the page's own origin goes under the <iframe> its
     // script marks, and the page's tree was read before it marked it.
