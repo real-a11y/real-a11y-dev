@@ -216,6 +216,22 @@ test.describe("after an action, by default", () => {
     });
   });
 
+  test("so does what the page a click leads to loads later", async ({
+    nav,
+  }) => {
+    // The click navigates a second after it, past the action's own re-read,
+    // and the page it leads to adds its result after its first read.
+    await nav.showNative("native-follow-action.html");
+    await (
+      await findRow(nav.panel, "Search")
+    ).dblclick({
+      position: { x: 5, y: 5 },
+    });
+    await expect(await findRow(nav.panel, "Result 1")).toBeVisible({
+      timeout: 15_000,
+    });
+  });
+
   test("so does what it loads inside a frame", async ({ nav }) => {
     await nav.showNative("native-follow-action.html");
     await (

@@ -634,6 +634,10 @@ export function App() {
     autoReads: number;
     /** Until when the page's changes are the latest action's own. */
     followUntil: number;
+    /** A navigation started while an action was followed: most likely the
+     *  action's own, so the page it leads to is followed once read. */
+    followDestination: boolean;
+    firstUnreadChangeAt: number;
     timer: ReturnType<typeof setTimeout> | null;
     /** When the first signal the pending timer answers arrived. */
     signalSince: number | null;
@@ -649,6 +653,8 @@ export function App() {
     lastReadEndedAt: 0,
     autoReads: 0,
     followUntil: 0,
+    followDestination: false,
+    firstUnreadChangeAt: Infinity,
     timer: null,
     signalSince: null,
     inFlight: null,
@@ -672,6 +678,7 @@ export function App() {
     autoRefresh.current.armedTab = null;
     autoRefresh.current.navigationPending = false;
     autoRefresh.current.followUntil = 0;
+    autoRefresh.current.followDestination = false;
     cancelAutoRefreshTimer();
   }, [cancelAutoRefreshTimer]);
   const scheduleAutoRefresh = useCallback((ms: number) => {
@@ -691,7 +698,7 @@ export function App() {
     a.followUntil = Date.now() + ACTION_FOLLOW_MS;
     // A change reported while that re-read ran was judged before the window
     // opened, and let go if nothing else was due: judge it again.
-    if (a.timer === null && a.lastChangeAt > a.lastReadStartedAt) {
+    if (a.timer === null && a.firstUnreadChangeAt < a.followUntil) {
       scheduleAutoRefresh(AUTO_REFRESH_QUIET_MS);
     }
   }, [scheduleAutoRefresh]);
@@ -1410,8 +1417,9 @@ export function App() {
         // with a TREE_DATA, and that reads it, once. A pending read for the
         // old page is dropped, and the back-off starts over: the gap a quiet
         // page built up must not leave the new page's tree empty that long.
-        // An action followed on the old page isn't on this one; an action
-        // that navigated follows its destination once it has read it.
+        // A navigation that starts while an action is followed, such as one
+        // a click sets off a second later, carries the follow-up to the page
+        // it leads to, from that page's first read.
         const a = autoRefresh.current;
         cancelAutoRefreshTimer();
         a.navigationPending = a.armedTab !== null;
@@ -1419,7 +1427,9 @@ export function App() {
         a.lastReadStartedAt = 0;
         a.lastReadEndedAt = 0;
         a.autoReads = 0;
+        a.followDestination ||= Date.now() < a.followUntil;
         a.followUntil = 0;
+        a.firstUnreadChangeAt = Infinity;
         followKeyNavigationRef.current();
         return;
       }
@@ -1430,16 +1440,20 @@ export function App() {
       // frame the page shows, which the native read covers as well.
       if (
         message.type === "TREE_DATA" &&
-        typeof message.payload.pageChangedAt === "number" &&
+        Array.isArray(message.payload.pageChangedAt) &&
         producerRef.current === "native"
       ) {
         const a = autoRefresh.current;
         const now = Date.now();
-        // Never ahead of now, should the page's clock and ours disagree.
-        a.lastChangeAt = Math.min(
-          Math.max(a.lastChangeAt, message.payload.pageChangedAt),
-          now,
-        );
+        for (const stamp of message.payload.pageChangedAt) {
+          if (typeof stamp !== "number" || !Number.isFinite(stamp)) continue;
+          // Never ahead of now, should the page's clock and ours disagree.
+          const at = Math.min(stamp, now);
+          a.lastChangeAt = Math.min(Math.max(a.lastChangeAt, at), now);
+          if (at > a.lastReadStartedAt) {
+            a.firstUnreadChangeAt = Math.min(a.firstUnreadChangeAt, at);
+          }
+        }
         const next = quietPeriodOnSignal(a.signalSince, now);
         if (next.kind === "restart") {
           a.signalSince ??= now;
@@ -2056,6 +2070,8 @@ export function App() {
       const token = nativeOpToken.current;
       const a = autoRefresh.current;
       a.lastReadStartedAt = Date.now();
+      // Whatever changed before now, this read sees.
+      a.firstUnreadChangeAt = Infinity;
       a.autoReads = auto && !followsAction ? a.autoReads + 1 : 0;
       if (!auto) {
         setNativeBusy(true);
@@ -2152,6 +2168,10 @@ export function App() {
         // for the new page's, or the new page is never read at all.
         if (r.documentId === undefined || r.documentId !== a.leavingDocument) {
           a.navigationPending = false;
+          if (a.followDestination) {
+            a.followDestination = false;
+            a.followUntil = Date.now() + ACTION_FOLLOW_MS;
+          }
         }
         a.readDocument = r.documentId;
         return true;
@@ -2220,6 +2240,7 @@ export function App() {
         native: nativeModeEnabled && producerRef.current === "native",
         navigationPending: a.navigationPending,
         lastChangeAt: a.lastChangeAt,
+        firstUnreadChangeAt: a.firstUnreadChangeAt,
         lastReadStartedAt: a.lastReadStartedAt,
         lastReadEndedAt: a.lastReadEndedAt,
         autoReads: a.autoReads,

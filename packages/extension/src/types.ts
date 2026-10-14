@@ -98,11 +98,11 @@ export type ContentToPanel =
         rootId: string;
         pageTitle: string;
         pageUrl: string;
-        /** When the top frame, or a frame the page shows, last changed (its
-         *  `changedAt`, in ms since the epoch), for a change no publish has
-         *  answered for yet. Absent when there is none, or only a hidden
-         *  frame's — see `TabState.changedFrames`. */
-        pageChangedAt?: number;
+        /** When the top frame, and each frame the page shows, last changed
+         *  (their `changedAt`, in ms since the epoch, earliest first), for
+         *  the changes no publish has answered for yet. Absent when there is
+         *  none, or only a hidden frame's — see `TabState.changedFrames`. */
+        pageChangedAt?: number[];
       };
     }
   | {

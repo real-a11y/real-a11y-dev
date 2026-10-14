@@ -156,13 +156,13 @@ async function mergeAndSendTree(tabId: number) {
   // Chrome's tree reads the top frame and every frame the page shows, so a
   // change in any of them is one its auto-refresh follows; a hidden frame's
   // (an animating ad's) changes nothing there.
-  let pageChangedAt: number | undefined;
+  const pageChangedAt: number[] = [];
   for (const [frameId, at] of changed) {
     const tree = state.frames.get(frameId);
     const where = tree
       ? frameVisibility(result.nodes, tree, topFrame.rootId)
       : "hidden";
-    if (where === "shown") pageChangedAt = Math.max(pageChangedAt ?? at, at);
+    if (where === "shown") pageChangedAt.push(at);
     // A frame with no place yet, or inside one that has none, is answered
     // for by the publish that places it, such as one its parent's tree,
     // sent again on request, prompts.
@@ -179,7 +179,11 @@ async function mergeAndSendTree(tabId: number) {
         rootId: topFrame.rootId,
         pageTitle: topFrame.pageTitle,
         pageUrl: topFrame.frameUrl,
-        ...(pageChangedAt !== undefined ? { pageChangedAt } : {}),
+        // Each one: the panel follows an action while any change it hasn't
+        // read falls in the action's window, not only the latest.
+        ...(pageChangedAt.length > 0
+          ? { pageChangedAt: pageChangedAt.sort((x, y) => x - y) }
+          : {}),
       },
     })
     .catch(() => {

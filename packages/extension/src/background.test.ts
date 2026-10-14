@@ -1459,7 +1459,7 @@ describe("background: which frames' changes Chrome's tree follows", () => {
   /** Whether each published tree says the page changed, since the last
    *  call. */
   function pageChanged(): boolean[] {
-    return changedAt().map((at) => typeof at === "number");
+    return changedAt().map((at) => Array.isArray(at));
   }
 
   it("follows a change in a frame the page shows, as one in the top frame", async () => {
@@ -1517,15 +1517,15 @@ describe("background: which frames' changes Chrome's tree follows", () => {
     expect(pageChanged()).toEqual([false]);
   });
 
-  it("says when the page changed, as the frames that changed saw it", async () => {
+  it("says when each frame the page shows changed, as the frame saw it", async () => {
     deliver(1, { ...frameTreePayload(1), changedAt: 1_000 });
     await vi.runAllTimersAsync();
-    expect(changedAt()).toEqual([1_000]);
-    // The latest of the frames the page shows; a hidden frame's isn't one.
-    deliver(0, { ...frameTreePayload(0), changedAt: 2_000 });
+    expect(changedAt()).toEqual([[1_000]]);
+    // Each one, earliest first: an action's window may hold either.
     deliver(1, { ...frameTreePayload(1), changedAt: 3_000 });
+    deliver(0, { ...frameTreePayload(0), changedAt: 2_000 });
     await vi.runAllTimersAsync();
-    expect(changedAt()).toEqual([3_000]);
+    expect(changedAt()).toEqual([[2_000, 3_000]]);
   });
 
   it("keeps a change made while a publish waits for the frame list for the next one", async () => {
@@ -1535,7 +1535,7 @@ describe("background: which frames' changes Chrome's tree follows", () => {
     await vi.advanceTimersByTimeAsync(250);
     deliver(1, { ...frameTreePayload(1), changedAt: 2_000 });
     await vi.runAllTimersAsync();
-    expect(changedAt()).toEqual([1_000, 2_000]);
+    expect(changedAt()).toEqual([[1_000], [2_000]]);
   });
 
   it("answers for a frame inside one with no place yet once that one has it", async () => {
@@ -1593,7 +1593,7 @@ describe("background: which frames' changes Chrome's tree follows", () => {
       ],
     });
     await vi.runAllTimersAsync();
-    expect(changedAt()).toEqual([2_000]);
+    expect(changedAt()).toEqual([[1_000, 2_000]]);
   });
 
   it("answers once for a marked frame its URL placed", async () => {
@@ -1601,7 +1601,7 @@ describe("background: which frames' changes Chrome's tree follows", () => {
     // places it all the same.
     deliver(2, { ...frameTreePayload(2), owner: "mark-2", changedAt: 4_000 });
     await vi.runAllTimersAsync();
-    expect(changedAt()).toContain(4_000);
+    expect(changedAt()).toContainEqual([4_000]);
     deliver(1, { ...frameTreePayload(1), reread: true });
     await vi.runAllTimersAsync();
     expect(changedAt().every((at) => at === undefined)).toBe(true);
@@ -1611,7 +1611,7 @@ describe("background: which frames' changes Chrome's tree follows", () => {
     const now = Date.now();
     deliver(1, { ...frameTreePayload(1), changedAt: now + 60_000 });
     await vi.runAllTimersAsync();
-    const [at] = changedAt();
+    const [[at]] = changedAt() as number[][];
     expect(at).toBeGreaterThanOrEqual(now);
     expect(at).toBeLessThanOrEqual(Date.now());
   });
@@ -1658,7 +1658,7 @@ describe("background: which frames' changes Chrome's tree follows", () => {
     // frame goes, places it: its change is the page's now.
     deliver(0, { ...top("mark-9"), reread: true });
     await vi.runAllTimersAsync();
-    expect(changedAt()).toEqual([5_000]);
+    expect(changedAt()).toEqual([[5_000]]);
   });
 
   it("answers for a frame whose first tree arrives while a publish waits for the frame list", async () => {

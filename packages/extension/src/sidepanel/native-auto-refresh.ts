@@ -117,6 +117,10 @@ export interface AutoRefreshState {
    *  at its ceiling, which can go on up to its debounce past the date; the
    *  stream's next flush, or Refresh, reads the rest. */
   lastChangeAt: number;
+  /** When the earliest change since the latest read began was made, in ms,
+   *  or `Infinity` when there is none: whether one falls in an action's
+   *  window ({@link ACTION_FOLLOW_MS}) can't be told from the latest alone. */
+  firstUnreadChangeAt: number;
   /** When the latest native read of any kind started, in ms. A read that
    *  started after a change already describes it. */
   lastReadStartedAt: number;
@@ -150,8 +154,9 @@ export function decideAutoRefresh(
   }
   // Nothing changed since the latest read began.
   if (s.lastChangeAt <= s.lastReadStartedAt) return { kind: "skip" };
-  // Judged by when the page changed, not by when the quiet period ended.
-  const followsAction = s.lastChangeAt < s.followUntil;
+  // Judged by when the page changed, not by when the quiet period ended,
+  // and by any change still unread, not only the latest.
+  const followsAction = s.firstUnreadChangeAt < s.followUntil;
   // By default only a navigation's new page, and what an action does, are
   // read on their own.
   if (s.mode === "navigation" && !s.navigationPending && !followsAction) {

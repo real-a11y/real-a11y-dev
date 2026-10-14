@@ -18,8 +18,8 @@ import {
 const NOW = 100_000;
 
 function state(over: Partial<AutoRefreshState> = {}): AutoRefreshState {
-  return {
-    mode: "changes",
+  const s = {
+    mode: "changes" as const,
     armedTab: 7,
     boundTab: 7,
     native: true,
@@ -31,6 +31,13 @@ function state(over: Partial<AutoRefreshState> = {}): AutoRefreshState {
     followUntil: 0,
     busy: false,
     ...over,
+  };
+  // One unread change unless a test says otherwise: the latest.
+  return {
+    ...s,
+    firstUnreadChangeAt:
+      over.firstUnreadChangeAt ??
+      (s.lastChangeAt > s.lastReadStartedAt ? s.lastChangeAt : Infinity),
   };
 }
 
@@ -190,6 +197,23 @@ describe("decideAutoRefresh after an action", () => {
           followUntil,
         }),
         followUntil + AUTO_REFRESH_QUIET_MS,
+      ),
+    ).toEqual({ kind: "read", tabId: 7, followsAction: true });
+  });
+
+  it("reads a change made in the window though a later one came after it", () => {
+    // Two changes arrive together, or one soon after the other: the first
+    // inside the window, the latest just past it.
+    expect(
+      decideAutoRefresh(
+        state({
+          mode: "navigation",
+          ...reread,
+          firstUnreadChangeAt: followUntil - 1,
+          lastChangeAt: followUntil + 1,
+          followUntil,
+        }),
+        NOW,
       ),
     ).toEqual({ kind: "read", tabId: 7, followsAction: true });
   });
