@@ -130,6 +130,33 @@ export function unplacedFrames(frames: Map<number, FrameTree>): number[] {
 }
 
 /**
+ * Whether a frame's document shows on the page, as the merged `nodes` have
+ * it: its root hangs under the top frame's root (`topRootId`) through nodes
+ * all exposed to assistive technology, its `<iframe>`'s among them. Chrome's
+ * tree reads a frame only where its `<iframe>` has a row, and the DOM walk
+ * stops at anything hidden from assistive technology, so a hidden frame (an
+ * ad's, a tracker's) and one with no place in the tree yet show in neither.
+ * Only as good as the merge's placement, which for a frame of another origin
+ * whose URL matches no `<iframe>` is a guess (see {@link mergeFrameTrees}).
+ */
+export function isFrameShown(
+  nodes: ReadonlyMap<string, SemanticNode>,
+  frame: Pick<FrameTree, "frameId" | "rootId">,
+  topRootId: string,
+): boolean {
+  if (frame.frameId === 0) return true;
+  let id: string | null = prefixNodeId(frame.frameId, frame.rootId);
+  // Bounded by the node count: a malformed tree with a parent cycle ends.
+  for (let steps = 0; id !== null && steps <= nodes.size; steps++) {
+    if (id === topRootId) return true;
+    const node = nodes.get(id);
+    if (!node || node.a11y.isExposedToAT === false) return false;
+    id = node.parentId;
+  }
+  return false;
+}
+
+/**
  * Merge per-frame trees into a single tree.
  *
  * Returns `null` if the top frame (frameId 0) has not announced itself yet —
@@ -142,32 +169,6 @@ export function unplacedFrames(frames: Map<number, FrameTree>): number[] {
  * or `about:srcdoc`. Any other frame is placed by comparing its URL with
  * each `<iframe>`'s `src`, as below.
  */
-/**
- * Whether frame `frameId`'s document shows on the page, as the merged tree
- * has it: its root hangs under the top frame's root through nodes all
- * exposed to assistive technology, its `<iframe>`'s among them. Chrome's
- * tree reads a frame only where its `<iframe>` has a row, and the DOM walk
- * stops at anything hidden from assistive technology, so a hidden frame (an
- * ad's, a tracker's) and one with no place in the tree yet show in neither.
- */
-export function isFrameShown(
-  nodes: ReadonlyMap<string, SemanticNode>,
-  frameId: number,
-  rootId: string,
-  topRootId: string,
-): boolean {
-  if (frameId === 0) return true;
-  let id: string | null = prefixNodeId(frameId, rootId);
-  // Bounded by the node count: a malformed tree with a parent cycle ends.
-  for (let steps = 0; id !== null && steps <= nodes.size; steps++) {
-    if (id === topRootId) return true;
-    const node = nodes.get(id);
-    if (!node || node.a11y.isExposedToAT === false) return false;
-    id = node.parentId;
-  }
-  return false;
-}
-
 export function mergeFrameTrees(opts: {
   frames: Map<number, FrameTree>;
   frameInfoMap: Map<number, FrameInfo>;

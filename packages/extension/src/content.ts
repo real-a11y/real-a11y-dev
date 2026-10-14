@@ -5,6 +5,7 @@ import {
   ActionDispatcher,
   FocusManager,
   DomObserver,
+  DOM_OBSERVER_DEBOUNCE_MS,
   createPicker,
   getElementRefs,
   getExplicitRole,
@@ -199,8 +200,13 @@ function teardown(): void {
   picker.teardown();
 }
 
-/** Extract tree and send to background as per-frame data */
-function sendTree(change?: TreeChange) {
+/**
+ * Extract tree and send to background as per-frame data. `change` is what
+ * the observer saw; `reread`, that the frame is read again on request, or
+ * after an action or a key, rather than because it changed — see the
+ * payload's own `reread` and `changedAt`.
+ */
+function sendTree(change?: TreeChange, { reread = false } = {}) {
   const extractor = getLiveExtractor();
   // No root element to read: the next one to appear sends the tree.
   if (!extractor) return;
@@ -224,6 +230,11 @@ function sendTree(change?: TreeChange) {
       rootId: result.rootId,
       ...(owner !== undefined ? { owner } : {}),
       ...(embeds.length > 0 ? { embeds } : {}),
+      // The burst the observer saw ended its debounce ago. Anything else sent
+      // unasked, such as a frame's first tree, is the page as it is now.
+      ...(reread
+        ? { reread: true }
+        : { changedAt: Date.now() - (change ? DOM_OBSERVER_DEBOUNCE_MS : 0) }),
     },
   });
 }
@@ -318,7 +329,7 @@ chrome.runtime.onMessage.addListener(
         // Requesting a tree implies the panel is open — arm live updates so
         // the panel keeps receiving them after this one-time populate.
         startObserving();
-        sendTree();
+        sendTree(undefined, { reread: true });
         sendResponse({ success: true });
         break;
       }
@@ -337,14 +348,14 @@ chrome.runtime.onMessage.addListener(
         // background deliberately didn't arm (observation is panel-gated;
         // `planFrameHello` returns nothing when no panel is connected), and
         // the panel can drop between the send and its arrival.
-        if (observingEnabled) sendTree();
+        if (observingEnabled) sendTree(undefined, { reread: true });
         sendResponse({ success: true });
         break;
       }
 
       case "SET_VIEW_MODE": {
         currentViewMode = message.payload.viewMode;
-        sendTree();
+        sendTree(undefined, { reread: true });
         sendResponse({ success: true });
         break;
       }
@@ -378,7 +389,7 @@ chrome.runtime.onMessage.addListener(
         sendResponse(result);
 
         // Re-extract tree after interaction (page may have changed)
-        setTimeout(() => sendTree(), 100);
+        setTimeout(() => sendTree(undefined, { reread: true }), 100);
         break;
       }
 
@@ -530,7 +541,7 @@ chrome.runtime.onMessage.addListener(
           },
         });
         sendResponse({ success: true });
-        setTimeout(() => sendTree(), 200);
+        setTimeout(() => sendTree(undefined, { reread: true }), 200);
         break;
       }
     }

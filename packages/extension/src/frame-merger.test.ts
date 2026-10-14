@@ -947,7 +947,7 @@ describe("isFrameShown", () => {
       ]),
     })!;
     return (frameId: number, rootId: string) =>
-      isFrameShown(result.nodes, frameId, rootId, "root");
+      isFrameShown(result.nodes, { frameId, rootId }, "root");
   }
 
   it("shows the top frame, and every frame under an <iframe> the page exposes, however deep", () => {
@@ -979,7 +979,9 @@ describe("isFrameShown", () => {
       ]),
       frameInfoMap: new Map(),
     })!;
-    expect(isFrameShown(result.nodes, 9, "l-root", "root")).toBe(false);
+    expect(
+      isFrameShown(result.nodes, { frameId: 9, rootId: "l-root" }, "root"),
+    ).toBe(false);
   });
 
   it("ends on a tree whose parents loop", () => {
@@ -989,6 +991,8 @@ describe("isFrameShown", () => {
       ["f5-a", a],
       ["f5-b", b],
     ]);
-    expect(isFrameShown(nodes, 5, "a", "root")).toBe(false);
+    expect(isFrameShown(nodes, { frameId: 5, rootId: "a" }, "root")).toBe(
+      false,
+    );
   });
 });

@@ -1,4 +1,3 @@
-import type { SemanticNode } from "@real-a11y-dev/core";
 import { h, render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -6,7 +5,12 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { ContentToPanel } from "../types.js";
 
 import { App } from "./App.js";
-import { installChromeMock, stubMatchMedia, TAB_ID } from "./panel-harness.js";
+import {
+  installChromeMock,
+  node,
+  stubMatchMedia,
+  TAB_ID,
+} from "./panel-harness.js";
 import {
   domStateBadges,
   EmbeddedBadge,
@@ -164,42 +168,6 @@ describe("StateBadges and EmbeddedBadge", () => {
   });
 });
 
-/** An in-page tree node: `kids` under it, a frame when `tagName` is iframe. */
-function domNode(
-  id: string,
-  parentId: string | null,
-  tagName: string,
-  role: string,
-  name: string,
-  kids: string[] = [],
-): [string, SemanticNode] {
-  return [
-    id,
-    {
-      id,
-      parentId,
-      childIds: kids,
-      depth: parentId === null ? 0 : 1,
-      a11y: {
-        role,
-        name,
-        description: "",
-        states: {},
-        properties: {},
-        isExposedToAT: true,
-      },
-      dom: { tagName, attributes: {}, textContent: "", descendantText: "" },
-      interaction: {
-        isInteractive: false,
-        actions: [],
-        isEditable: false,
-        isFocusable: false,
-      },
-      ui: { expanded: true, selected: false, matchesFilter: true },
-    } as unknown as SemanticNode,
-  ];
-}
-
 describe("the in-page tree's embedded mark", () => {
   let container: HTMLDivElement;
 
@@ -225,13 +193,19 @@ describe("the in-page tree's embedded mark", () => {
         tabId: TAB_ID,
         payload: {
           nodes: [
-            domNode("root", null, "body", "generic", "", ["read", "empty"]),
-            domNode("read", "root", "iframe", "iframe", "Contacts", [
-              "f5-root",
-            ]),
-            domNode("f5-root", "read", "body", "generic", "", ["f5-save"]),
-            domNode("f5-save", "f5-root", "button", "button", "Save"),
-            domNode("empty", "root", "iframe", "iframe", "Ad"),
+            node("root", null, 0, "generic", "", ["read", "empty"]),
+            node(
+              "read",
+              "root",
+              1,
+              "iframe",
+              "Contacts",
+              ["f5-root"],
+              "iframe",
+            ),
+            node("f5-root", "read", 2, "generic", "", ["f5-save"]),
+            node("f5-save", "f5-root", 3, "button", "Save"),
+            node("empty", "root", 1, "iframe", "Ad", [], "iframe"),
           ],
           rootId: "root",
           pageTitle: "Frames",

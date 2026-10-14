@@ -31,16 +31,13 @@
  * state the decision is made from.
  */
 
-import {
-  DOM_OBSERVER_DEBOUNCE_MS,
-  DOM_OBSERVER_MAX_WAIT_MS,
-} from "@real-a11y-dev/core";
+import { DOM_OBSERVER_MAX_WAIT_MS } from "@real-a11y-dev/core";
 
 /** How long to let the page react before re-reading the native tree after an
  *  action or a sent key — same rationale and value as `DogfoodPanel.tsx`'s
- *  `SETTLE_MS`. Shorter than {@link PAGE_SIGNAL_LAG_MS}, so the re-read
- *  starts after the changes the action's own signal reports, and isn't
- *  followed by an automatic read for them (pinned by this module's tests). */
+ *  `SETTLE_MS`. A change the page makes within it is dated by the frame that
+ *  saw it, before the re-read started, so it isn't read a second time
+ *  however late its signal arrives. */
 export const NATIVE_SETTLE_MS = 250;
 
 /** How long after an action's or a sent key's own re-read the page's changes
@@ -95,20 +92,6 @@ export function autoRefreshGapMs(autoReads: number): number {
   );
 }
 
-/** How far a page-change signal trails the changes it reports: the content
- *  script's `DomObserver` sends `TREE_DATA` once the page has been quiet for
- *  its debounce. So a signal at `t` reports changes made by
- *  `t - PAGE_SIGNAL_LAG_MS`, and a read that started after that already saw
- *  them. That is what keeps an action's own re-read
- *  ({@link NATIVE_SETTLE_MS} after the action) from being followed by a
- *  second, automatic one.
- *
- *  The observer's ceiling can flush a continuous stream of changes sooner
- *  than that. The stream's next flush reports what this one left out; only
- *  a stream that stops within the lag of a read starting can be missed, and
- *  the next change, or Refresh, reads it. */
-export const PAGE_SIGNAL_LAG_MS = DOM_OBSERVER_DEBOUNCE_MS;
-
 export type AutoRefreshMode = "navigation" | "changes";
 
 export interface AutoRefreshState {
@@ -127,8 +110,9 @@ export interface AutoRefreshState {
   native: boolean;
   /** A same-tab navigation happened and its page hasn't been read yet. */
   navigationPending: boolean;
-  /** When the page last changed, in ms: the latest page-change signal
-   *  (`TREE_DATA`) less {@link PAGE_SIGNAL_LAG_MS}. */
+  /** When the page last changed, in ms: the latest date a page-change
+   *  signal carried (`TREE_DATA`'s `pageChangedAt`), which the frame that
+   *  changed stamps. A read that started after it already saw the change. */
   lastChangeAt: number;
   /** When the latest native read of any kind started, in ms. A read that
    *  started after a change already describes it. */

@@ -282,8 +282,12 @@ async function launchDogfoodExtension(
 }
 
 /** How NATIVE_READ behaves for the panel, per `sessionStorage`, which
- *  survives the panel reloads tests use to remount the App. */
-export type NativeReadMode = "normal" | "fail" | `delay:${number}`;
+ *  survives the panel reloads tests use to remount the App. `delay:N` sends
+ *  each read N ms late; `hold:N` sends it at once and holds its answer back
+ *  N ms, as a read of a heavy page does, so the page can change after the
+ *  read looked at it and before the panel has its answer. */
+export type NativeReadMode =
+  "normal" | "fail" | `delay:${number}` | `hold:${number}`;
 const NATIVE_READ_MODE_KEY = "e2e.nativeReadMode";
 
 /** A NATIVE_READ the panel sent, as `recordNativeReads` keeps it. */
@@ -355,6 +359,12 @@ function recordNativeReads(): void {
       const ms = Number(mode.slice("delay:".length));
       return new Promise((r) => setTimeout(r, ms))
         .then(() => real(message, ...rest))
+        .then(done);
+    }
+    if (mode.startsWith("hold:")) {
+      const ms = Number(mode.slice("hold:".length));
+      return real(message, ...rest)
+        .then((answer) => new Promise((r) => setTimeout(() => r(answer), ms)))
         .then(done);
     }
     return real(message, ...rest).then(done);

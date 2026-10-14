@@ -46,6 +46,17 @@ export type FrameToBackground =
          *  each with the mark. An empty node id is a marked element the tree
          *  has no node for, such as a hidden `<iframe>` in the a11y view. */
         embeds?: Array<[nodeId: string, owner: string]>;
+        /** The frame was read again on request (REQUEST_TREE, RESEND_TREE,
+         *  SET_VIEW_MODE) or after an action or a key, not because it
+         *  changed: what the action did, the frame's observer reports on
+         *  its own. Not a page change for Chrome's tree to follow. */
+        reread?: true;
+        /** On a tree that isn't a re-read: when the frame last changed, in
+         *  ms since the epoch. For a burst of changes its observer saw, when
+         *  the burst ended, a debounce before the tree was sent; for a tree
+         *  sent unasked otherwise, such as the frame's first, when it was
+         *  read. */
+        changedAt?: number;
       };
     }
   // Cheap "I'm here" announce sent at content-script load, carrying no tree.
@@ -86,9 +97,10 @@ export type ContentToPanel =
         pageTitle: string;
         pageUrl: string;
         /** The tree of the top frame, or of a frame the page shows, changed
-         *  since the last publish: not only a hidden frame's — see
-         *  `TabState.changedFrames`. */
-        pageChanged?: boolean;
+         *  since the last publish, the latest at this time (the frames'
+         *  `changedAt`, in ms since the epoch). Absent when none did, or
+         *  only a hidden frame's — see `TabState.changedFrames`. */
+        pageChangedAt?: number;
       };
     }
   | {

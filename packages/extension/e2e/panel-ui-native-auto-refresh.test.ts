@@ -199,6 +199,23 @@ test.describe("after an action, by default", () => {
     expect(await autoReads(nav)).toBe(1);
   });
 
+  test("what lands while a slow re-read is under way is read after it", async ({
+    nav,
+  }) => {
+    // Each read's answer comes back 2.5 s after the read looked at the page:
+    // the form, a second after the click, lands in between.
+    await nav.showNative("native-follow-action.html");
+    await nav.setNativeReads("hold:2500");
+    await (
+      await findRow(nav.panel, "Load form")
+    ).dblclick({
+      position: { x: 5, y: 5 },
+    });
+    await expect(await findRow(nav.panel, "Save form")).toBeVisible({
+      timeout: 15_000,
+    });
+  });
+
   test("so does what it loads inside a frame", async ({ nav }) => {
     await nav.showNative("native-follow-action.html");
     await (

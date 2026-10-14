@@ -90,10 +90,10 @@ import { InputPanel } from "./InputPanel.js";
 import type { InputPanelState } from "./InputPanel.js";
 import {
   ACTION_FOLLOW_MS,
+  AUTO_REFRESH_QUIET_MS,
   decideAutoRefresh,
   FOLLOW_PAGE_CHANGES_KEY,
   NATIVE_SETTLE_MS,
-  PAGE_SIGNAL_LAG_MS,
   quietPeriodOnSignal,
 } from "./native-auto-refresh.js";
 import {
@@ -674,12 +674,6 @@ export function App() {
     autoRefresh.current.followUntil = 0;
     cancelAutoRefreshTimer();
   }, [cancelAutoRefreshTimer]);
-  /** An action's or a sent key's re-read has just read the page: what the
-   *  page does next, for a while, is read as it lands too — see
-   *  `ACTION_FOLLOW_MS`. */
-  const followActionAftermath = useCallback(() => {
-    autoRefresh.current.followUntil = Date.now() + ACTION_FOLLOW_MS;
-  }, []);
   const scheduleAutoRefresh = useCallback((ms: number) => {
     const a = autoRefresh.current;
     if (a.timer !== null) clearTimeout(a.timer);
@@ -689,6 +683,18 @@ export function App() {
       runNativeAutoRefresh.current();
     }, ms);
   }, []);
+  /** An action's or a sent key's re-read has just read the page: what the
+   *  page does next, for a while, is read as it lands too — see
+   *  `ACTION_FOLLOW_MS`. */
+  const followActionAftermath = useCallback(() => {
+    const a = autoRefresh.current;
+    a.followUntil = Date.now() + ACTION_FOLLOW_MS;
+    // A change reported while that re-read ran was judged before the window
+    // opened, and let go if nothing else was due: judge it again.
+    if (a.timer === null && a.lastChangeAt > a.lastReadStartedAt) {
+      scheduleAutoRefresh(AUTO_REFRESH_QUIET_MS);
+    }
+  }, [scheduleAutoRefresh]);
   useEffect(() => cancelAutoRefreshTimer, [cancelAutoRefreshTimer]);
   // The "Follow page changes" setting, kept in `chrome.storage.local` with
   // native mode's own, and followed while the panel is open.
@@ -1424,12 +1430,15 @@ export function App() {
       // frame the page shows, which the native read covers as well.
       if (
         message.type === "TREE_DATA" &&
-        message.payload.pageChanged === true &&
+        typeof message.payload.pageChangedAt === "number" &&
         producerRef.current === "native"
       ) {
         const a = autoRefresh.current;
         const now = Date.now();
-        a.lastChangeAt = now - PAGE_SIGNAL_LAG_MS;
+        a.lastChangeAt = Math.max(
+          a.lastChangeAt,
+          message.payload.pageChangedAt,
+        );
         const next = quietPeriodOnSignal(a.signalSince, now);
         if (next.kind === "restart") {
           a.signalSince ??= now;
