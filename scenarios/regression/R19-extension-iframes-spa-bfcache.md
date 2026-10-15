@@ -6,7 +6,7 @@ area: Extension
 type: Manual
 priority: P1
 status: Active
-validFrom: "extension ≥ 0.1.8; steps 15–18 from the first release after 0.1.15. Manual only — bfcache restore cannot be reproduced reliably in an automated harness"
+validFrom: "extension ≥ 0.1.8; steps 15–19 from the first release after 0.1.15. Manual only — bfcache restore cannot be reproduced reliably in an automated harness"
 validUntil: ""
 expected: "iframe subtrees appear under their iframe node, blank and script-written frames included, each under its own; after Back the panel shows the RESTORED page and actions hit the right elements"
 notion: "https://app.notion.com/p/3aa1c354b0b5811eaea8e3ddfde1467b"
@@ -71,6 +71,14 @@ for (const label of ["One", "Two"]) {
 18. Find a sandboxed frame if the page has one (`<iframe sandbox>` without
     `allow-same-origin`, common around ads) and expand its node
 
+**Hidden frames**
+
+19. Open a news article with an embedded video or map: most such pages also
+    load hidden ad and tracking frames, which
+    `[...document.querySelectorAll("iframe")].filter((f) => !f.checkVisibility())`
+    lists in the console. Show the **In-page tree** and expand the video's or
+    map's iframe node
+
 ## Expected
 
 - **2** — iframe subtrees render under their iframe node, not as a separate root or a
@@ -91,6 +99,9 @@ for (const label of ["One", "Two"]) {
   reload
 - **18** — an empty iframe node. No content script runs in a sandboxed frame, so
   nothing inside it is read; it must not show another frame's content
+- **19** — the embed's own content sits under its iframe node: the player's or
+  the map's controls, not an ad's or a tracker's, and not nothing. A hidden
+  frame's content hangs under no iframe node
 
 ## Why this exists
 
@@ -131,3 +142,12 @@ removes everything the content script had attached to the old one, with no
 navigation to load a new script; the tree then goes on showing the document that is
 gone. Step 18 is the boundary: a frame the panel can't read must stay empty rather
 than be given a neighbour's subtree.
+
+Step 19 is the frame a URL places loosely. A hidden frame's `<iframe>` has no
+node in the tree, so the frame's URL names none exactly: it is matched without
+its query string, or put under the first empty `<iframe>` as a last resort. Such
+frames load before the embeds a page shows, and frames used to be placed one at
+a time in the order they loaded, so a tracker took the video's node: its content
+showed there, the video's was missing, and the tracker's changes counted as the
+page's for Chrome's tree. Every frame now takes the `<iframe>` its URL names
+before any is placed loosely.

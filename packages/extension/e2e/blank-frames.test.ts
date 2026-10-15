@@ -23,8 +23,11 @@
 
 import {
   expect,
+  frameOf,
   test,
+  treeWhen,
   type DomNode,
+  type DomTree,
   type NativeHarness,
   type NativeNode,
 } from "./harness";
@@ -41,50 +44,6 @@ async function framesLoaded(page: Page): Promise<void> {
 }
 
 // ---- The in-page tree ----------------------------------------------------
-
-type DomTree = Map<string, DomNode>;
-
-/** The title of the <iframe> the node named `name` sits under, or null when
- *  it is under none: in no frame, or in a frame the tree couldn't place. */
-function frameOf(tree: DomTree, name: string): string | null | undefined {
-  const node = [...tree.values()].find((n) => n.a11y?.name === name);
-  if (!node) return undefined;
-  for (
-    let at = node.parentId ? tree.get(node.parentId) : undefined;
-    at;
-    at = at.parentId ? tree.get(at.parentId) : undefined
-  ) {
-    if (at.dom?.tagName.toLowerCase() === "iframe") {
-      return at.dom.attributes?.["title"] ?? "";
-    }
-  }
-  return null;
-}
-
-/** The latest merged tree pushed to the panel since `from`, once `ready`. */
-async function treeWhen(
-  nav: NativeHarness,
-  tabId: number,
-  from: number,
-  ready: (tree: DomTree) => boolean,
-): Promise<DomTree> {
-  let tree: DomTree = new Map();
-  await expect
-    .poll(
-      async () => {
-        const pushes = (await nav.panelMessages("TREE_DATA", from)).filter(
-          (m) => m.tabId === tabId,
-        );
-        const last = pushes[pushes.length - 1]?.payload as
-          { nodes: [string, DomNode][] } | undefined;
-        tree = new Map(last?.nodes ?? []);
-        return ready(tree);
-      },
-      { timeout: 15_000 },
-    )
-    .toBe(true);
-  return tree;
-}
 
 test("the in-page tree reads each blank frame under its own <iframe>", async ({
   nav,

@@ -97,6 +97,18 @@
   toggle for **Follow page changes** now shows when it's on
   ([#502](https://github.com/real-a11y/real-a11y-dev/pull/502)).
 
+- The in-page tree no longer shows a hidden frame's content in place of an
+  embed's. A frame of another origin is placed under the `<iframe>` whose
+  `src` its address names, and failing that under the first empty one. A
+  hidden frame, such as a tracker's or a collapsed ad slot's, has no
+  `<iframe>` in the tree, and one that loaded before a video or a map took
+  that embed's place: its content showed under the embed's row, the
+  embed's own content was missing, and with **Follow page changes** on, the
+  hidden frame's changes refreshed Chrome's tree while the embed's didn't.
+  Every frame now gets the `<iframe>` its address names before any frame is
+  placed by a looser match
+  ([#503](https://github.com/real-a11y/real-a11y-dev/pull/503)).
+
 - Hardened the shared mutation observer so that re-arming it can no longer
   strand the previous observers and event listeners
   ([#487](https://github.com/real-a11y/real-a11y-dev/pull/487)). No

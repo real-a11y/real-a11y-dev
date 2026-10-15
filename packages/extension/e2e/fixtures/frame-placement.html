@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Frame placement fixture</title>
+  </head>
+  <body>
+    <h1>Frame placement</h1>
+
+    <!--
+      Frames of another origin (`localhost` rather than `127.0.0.1`, on the
+      same server), so none can mark the element holding it and the tree
+      places each by its URL. Two are hidden (`display: none`), as trackers
+      and collapsed ad slots are, and the a11y view has no node for their
+      <iframe>s:
+
+      - a tracking pixel, whose URL names no <iframe> at all;
+      - an ad slot, whose URL names the shown slot's <iframe> but for the
+        query string.
+
+      `showSlot()` adds the shown slot once both have been read, so it
+      announces after them, as an embed that loads slower than the page's
+      trackers does.
+    -->
+    <div id="slots"></div>
+    <button id="outer" type="button">Outer button</button>
+
+    <script>
+      const at = (path) => `http://localhost:${location.port}/${path}`;
+      const frame = (id, title, src) => {
+        const iframe = document.createElement("iframe");
+        iframe.id = id;
+        iframe.title = title;
+        iframe.src = src;
+        return iframe;
+      };
+
+      for (const hidden of [
+        frame("pixel", "Pixel frame", at("frame-placement-pixel.html")),
+        frame("slot-1", "First slot", at("frame-placement-slot.html?slot=1")),
+      ]) {
+        hidden.style.display = "none";
+        document.body.append(hidden);
+      }
+
+      window.showSlot = () =>
+        document
+          .getElementById("slots")
+          .append(
+            frame(
+              "slot-2",
+              "Second slot",
+              at("frame-placement-slot.html?slot=2"),
+            ),
+          );
+    </script>
+  </body>
+</html>
