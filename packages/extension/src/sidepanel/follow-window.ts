@@ -11,6 +11,7 @@
 
 import { ACTION_FOLLOW_MS } from "./native-auto-refresh.js";
 
+/** @internal */
 export interface FollowWindow {
   /** A change dated after `from` and before `until`, in ms, is what the
    *  user did. `until` is 0 when no window is open. */
@@ -36,7 +37,9 @@ export interface FollowWindow {
   typedAt: number;
 }
 
-/** No window, and nothing followed. */
+/** No window, and nothing followed.
+ *
+ * @internal */
 export const NOT_FOLLOWING: FollowWindow = {
   from: 0,
   until: 0,
@@ -49,7 +52,9 @@ export const NOT_FOLLOWING: FollowWindow = {
   typedAt: 0,
 };
 
-/** Whether a change dated `at` is what the user did. */
+/** Whether a change dated `at` is what the user did.
+ *
+ * @internal */
 export function isFollowed(w: FollowWindow, at: number): boolean {
   return (
     (at > w.from && at < w.until) ||
@@ -57,13 +62,17 @@ export function isFollowed(w: FollowWindow, at: number): boolean {
   );
 }
 
-/** A change dated `at` was heard of, which no read has seen yet. */
+/** A change dated `at` was heard of, which no read has seen yet.
+ *
+ * @internal */
 export function followChange(w: FollowWindow, at: number): FollowWindow {
   if (!isFollowed(w, at) || at >= w.firstChangeAt) return w;
   return { ...w, firstChangeAt: at };
 }
 
-/** A read started: it sees every change made before it. */
+/** A read started: it sees every change made before it.
+ *
+ * @internal */
 export function followReadStarted(w: FollowWindow): FollowWindow {
   return w.firstChangeAt === Infinity ? w : { ...w, firstChangeAt: Infinity };
 }
@@ -75,6 +84,8 @@ export function followReadStarted(w: FollowWindow): FollowWindow {
  * saw every change made before it started, so the window starts there, and
  * every change since (the earliest at `firstUnreadChangeAt`) is followed:
  * until the user typed, if they did while it ran (`followTyping`).
+ *
+ * @internal
  */
 export function followAfterRead(
   w: FollowWindow,
@@ -106,6 +117,8 @@ export function followAfterRead(
  * window it opens starts after them, keeping the one it closes for that
  * one's changes reported late, and anything followed stays followed. A
  * window already open is only stretched.
+ *
+ * @internal
  */
 export function followPageInput(
   w: FollowWindow,
@@ -132,6 +145,8 @@ export function followPageInput(
  * if the user typed while it ran (`followAfterRead`), and the page a
  * navigation led to isn't followed if they typed there before its first
  * read (`followDestination`).
+ *
+ * @internal
  */
 export function followTyping(w: FollowWindow, at: number): FollowWindow {
   const ends = (end: number) => (at > w.from && at < end ? at : end);
@@ -150,6 +165,8 @@ export function followTyping(w: FollowWindow, at: number): FollowWindow {
  * the same navigation going on: within {@link ACTION_FOLLOW_MS} of the hop
  * before, and only if the user hasn't typed since, on the page between.
  * One that never committed (a download) is let go of that way too.
+ *
+ * @internal
  */
 export function followNavigation(w: FollowWindow, now: number): FollowWindow {
   const kept =
@@ -167,7 +184,9 @@ export function followNavigation(w: FollowWindow, now: number): FollowWindow {
 
 /** The first read of another page ended at `now`, having started at
  *  `readStartedAt`: follow it if a navigation in the window led to it, and
- *  the user hasn't typed there since. */
+ *  the user hasn't typed there since.
+ *
+ *  @internal */
 export function followDestination(
   w: FollowWindow,
   readStartedAt: number,

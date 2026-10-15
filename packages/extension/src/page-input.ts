@@ -11,7 +11,9 @@ import {
   safeGetAttribute,
 } from "@real-a11y-dev/core";
 
-/** What a page-input filter looks at in an event. */
+/** What a page-input filter looks at in an event.
+ *
+ * @internal */
 export interface PageInputEvent {
   type: string;
   isTrusted: boolean;
@@ -43,6 +45,8 @@ export interface PageInputEvent {
  * an Enter already counted. Nor is a press of the pointer: a read while it
  * is held, in a drag, would bring Chrome's bar up and move the page under
  * it.
+ *
+ * @internal
  */
 export function isPageInput(
   e: PageInputEvent,
@@ -65,6 +69,8 @@ export function isPageInput(
  * The user typing: an edit of text, which the browser reports with what it
  * did (`inputType`), unlike a checkbox, a select or a slider changing value.
  * Only the browser's own, as for `isPageInput`.
+ *
+ * @internal
  */
 export function isTyping(e: PageInputEvent): boolean {
   return e.isTrusted && e.type === "input" && !!e.inputType;
@@ -77,6 +83,8 @@ export function isTyping(e: PageInputEvent): boolean {
  * script's click is still being dispatched, so a click until that dispatch
  * is over is left out with it. No user input can come in between: the
  * browser dispatches each in a task of its own.
+ *
+ * @internal
  */
 export function pageInputFilter(): (
   e: PageInputEvent,
