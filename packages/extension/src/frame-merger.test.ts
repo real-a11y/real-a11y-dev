@@ -1182,6 +1182,53 @@ describe("frameVisibility", () => {
     ).toBe("unplaced");
   });
 
+  it("shows the embed a hidden frame announced before, and not the hidden frame", () => {
+    // A tracker's <iframe> (`display: none`) has no node in the page's tree,
+    // and its frame announced before the video's. The video's frame keeps
+    // the <iframe> its URL names, so its changes are the page's, and the
+    // tracker's, under no <iframe> the tree has, are none Chrome's tree
+    // follows.
+    const result = mergeFrameTrees({
+      frames: new Map([
+        [
+          0,
+          makeFrame(0, "https://top.test/", [
+            ["root", makeNode("root", { childIds: ["ifr-video"] })],
+            [
+              "ifr-video",
+              makeNode("ifr-video", {
+                tagName: "iframe",
+                attrs: { src: "https://video.test/embed/1" },
+                parentId: "root",
+                depth: 1,
+              }),
+            ],
+          ]),
+        ],
+        [
+          9,
+          makeFrame(9, "https://tracker.test/px", [
+            ["t-root", makeNode("t-root")],
+          ]),
+        ],
+        [
+          5,
+          makeFrame(5, "https://video.test/embed/1", [
+            ["v-root", makeNode("v-root")],
+          ]),
+        ],
+      ]),
+      frameInfoMap: new Map<number, FrameInfo>([
+        [9, { parentFrameId: 0, url: "https://tracker.test/px" }],
+        [5, { parentFrameId: 0, url: "https://video.test/embed/1" }],
+      ]),
+    })!;
+    const where = (frameId: number, rootId: string) =>
+      frameVisibility(result.nodes, { frameId, rootId }, "root");
+    expect(where(5, "v-root")).toBe("shown");
+    expect(where(9, "t-root")).toBe("unplaced");
+  });
+
   it("ends on a tree whose parents loop", () => {
     const a = makeNode("f5-a", { parentId: "f5-b" });
     const b = makeNode("f5-b", { parentId: "f5-a" });
