@@ -1,8 +1,8 @@
 /**
  * Which of the user's own events on a page count as acting on it, for
  * Chrome's tree to follow what the page does next (the content script's
- * `PAGE_INPUT`). The content script reports only that one happened: never
- * what was clicked or typed, or where.
+ * `PAGE_INPUT`), and when. The content script reports only that one
+ * happened, and when: never what was clicked or typed, or where.
  */
 
 import {
@@ -100,6 +100,59 @@ export function pageInputFilter(): (
     }
     if (e.type === "click" && scriptClicking) return false;
     return isPageInput(e, target);
+  };
+}
+
+/** What dating an event looks at. */
+interface TimedEvent {
+  type: string;
+  isTrusted: boolean;
+  timeStamp: number;
+}
+
+/**
+ * When the user did what `e` reports, by the clock a frame dates its
+ * changes by (`Date.now()`): the event's own time, not when the page got
+ * round to dispatching it, which a busy page holds back. A click and a key
+ * carry the moment the browser took them from the user.
+ *
+ * @internal
+ */
+export function actedAt(e: TimedEvent): number {
+  return Date.now() - Math.max(0, performance.now() - e.timeStamp);
+}
+
+/** How long after the page dispatches a key an edit of text is still that
+ *  key's: it follows at once, unless the page's own handling of the key
+ *  holds it up. */
+const KEY_EDITS_WITHIN_MS = 500;
+
+/**
+ * When the user pressed the key that made an edit `isTyping` sees. Chrome
+ * dates an `input` event when the page dispatches it, late on a busy page,
+ * so the key is the one the page dispatched just before it; an edit with
+ * none (a paste from a menu, a drop) is dated by itself. The panel orders
+ * typing and clicks in different frames by when the user did them, not by
+ * whose report reaches it first.
+ *
+ * @internal
+ */
+export function typingClock(): {
+  keyPressed(e: TimedEvent): void;
+  pressedAt(e: TimedEvent): number;
+} {
+  let key: { at: number; dispatchedAt: number } | null = null;
+  return {
+    keyPressed(e) {
+      if (!e.isTrusted || e.type !== "keydown") return;
+      key = { at: actedAt(e), dispatchedAt: performance.now() };
+    },
+    pressedAt(e) {
+      return key !== null &&
+        performance.now() - key.dispatchedAt <= KEY_EDITS_WITHIN_MS
+        ? key.at
+        : actedAt(e);
+    },
   };
 }
 

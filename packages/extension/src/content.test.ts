@@ -1594,15 +1594,31 @@ describe("content: the user acting on the page", () => {
     targetsSeen = [];
     // jsdom makes no event the browser's own: stand in for one.
     if (trusted) {
-      vi.doMock("./page-input.js", () => ({
-        pageInputFilter:
-          () =>
-          (e: { type: string }, target: () => Element | null): boolean => {
-            targetsSeen.push([e.type, target()]);
-            return true;
+      vi.doMock("./page-input.js", async (importOriginal) => {
+        const actual = await importOriginal<typeof import("./page-input.js")>();
+        return {
+          ...actual,
+          pageInputFilter:
+            () =>
+            (e: { type: string }, target: () => Element | null): boolean => {
+              targetsSeen.push([e.type, target()]);
+              return true;
+            },
+          isTyping: (e: { type: string }) => e.type === "input",
+          typingClock: () => {
+            const clock = actual.typingClock();
+            return {
+              ...clock,
+              keyPressed: (e: Event) =>
+                clock.keyPressed({
+                  type: e.type,
+                  isTrusted: true,
+                  timeStamp: e.timeStamp,
+                }),
+            };
           },
-        isTyping: (e: { type: string }) => e.type === "input",
-      }));
+        };
+      });
     }
     document.body.innerHTML = body;
     h = makeHarness();
@@ -1618,6 +1634,7 @@ describe("content: the user acting on the page", () => {
     h.send({ type: "SET_PICK_MODE", payload: { enabled: false } });
     h.send({ type: "SET_OBSERVING", payload: { enabled: false } });
     vi.doUnmock("./page-input.js");
+    vi.restoreAllMocks();
     vi.clearAllTimers();
     vi.useRealTimers();
     delete (globalThis as { chrome?: unknown }).chrome;
@@ -1631,10 +1648,39 @@ describe("content: the user acting on the page", () => {
       new InputEvent("input", { inputType: "insertText", bubbles: true }),
     );
 
-  it("says the user acted, and nothing about what or where", async () => {
+  it("says the user acted, and when, and nothing about what or where", async () => {
     await load({ trusted: true });
     document.querySelector("button")!.click();
-    expect(inputs()).toEqual([{ type: "PAGE_INPUT" }]);
+    expect(inputs()).toEqual([{ type: "PAGE_INPUT", at: Date.now() }]);
+  });
+
+  /** An event the browser took from the user `ago` ms before the page,
+   *  busy, got round to dispatching it. */
+  function late<E extends Event>(e: E, ago: number): E {
+    vi.spyOn(performance, "now").mockReturnValue(10_000);
+    Object.defineProperty(e, "timeStamp", { value: 10_000 - ago });
+    return e;
+  }
+
+  it("dates a click by when the user made it, though the page dispatched it late", async () => {
+    await load({ trusted: true });
+    document
+      .querySelector("button")!
+      .dispatchEvent(late(new MouseEvent("click", { bubbles: true }), 700));
+    expect(inputs()).toEqual([{ type: "PAGE_INPUT", at: Date.now() - 700 }]);
+  });
+
+  it("dates typing by the key that typed it", async () => {
+    await load({ trusted: true, body: `<input type="search">` });
+    const field = document.querySelector("input")!;
+    field.dispatchEvent(
+      late(new KeyboardEvent("keydown", { key: "a", bubbles: true }), 700),
+    );
+    // The edit, made when it was dispatched.
+    type(field);
+    expect(typing()).toEqual([
+      { type: "PAGE_TYPING", at: Date.now(), pressedAt: Date.now() - 700 },
+    ]);
   });
 
   it("says nothing while the panel is closed", async () => {
@@ -1684,8 +1730,22 @@ describe("content: the user acting on the page", () => {
     vi.advanceTimersByTime(100);
     type(field);
     expect(typing()).toEqual([
-      { type: "PAGE_TYPING", at: first },
-      { type: "PAGE_TYPING", at: first + 100 },
+      { type: "PAGE_TYPING", at: first, pressedAt: first },
+      { type: "PAGE_TYPING", at: first + 100, pressedAt: first + 100 },
+    ]);
+  });
+
+  it("dates typing by no key the user pressed while the panel was closed", async () => {
+    await load({ trusted: true, body: `<input type="search">` });
+    const field = document.querySelector("input")!;
+    h.send({ type: "SET_OBSERVING", payload: { enabled: false } });
+    field.dispatchEvent(
+      late(new KeyboardEvent("keydown", { key: "a", bubbles: true }), 700),
+    );
+    h.send({ type: "SET_OBSERVING", payload: { enabled: true } });
+    type(field);
+    expect(typing()).toEqual([
+      { type: "PAGE_TYPING", at: Date.now(), pressedAt: Date.now() },
     ]);
   });
 

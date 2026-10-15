@@ -35,7 +35,12 @@ import {
   livePageKeyWalker,
   PageKeySnapshots,
 } from "./native/page-keys.js";
-import { isTyping, pageInputFilter } from "./page-input.js";
+import {
+  actedAt,
+  isTyping,
+  pageInputFilter,
+  typingClock,
+} from "./page-input.js";
 import { pageText } from "./page-text.js";
 import { isTrustedSender, planHighlight } from "./routing.js";
 import { elementsFromTabSequence, sendKey } from "./send-key.js";
@@ -1027,13 +1032,15 @@ const onPageHide = (e: Event) => {
 };
 
 const isPageInput = pageInputFilter();
+const typing = typingClock();
 
 /**
  * The user acted on the page: clicked, or pressed Enter or Space
- * (`isPageInput`). While the panel is open, say so, and nothing more: not
- * what or where. Chrome's tree then reads what the page does in the next
- * few seconds, as it does after an action sent through the tree. A click
- * the picker takes is a pick, not an action on the page.
+ * (`isPageInput`). While the panel is open, say so, and when (`actedAt`),
+ * and nothing more: not what or where. Chrome's tree then reads what the
+ * page does in the next few seconds, as it does after an action sent
+ * through the tree. A click the picker takes is a pick, not an action on
+ * the page.
  */
 const onPageInput = (e: Event) => {
   if (tornDown || !observingEnabled || picker.isEnabled()) return;
@@ -1042,21 +1049,32 @@ const onPageInput = (e: Event) => {
   const target = () =>
     e.type === "keydown" ? deepFocusTarget(e) : composedTarget(e);
   if (isPageInput(e as KeyboardEvent, target)) {
-    safeSendMessage({ type: "PAGE_INPUT" });
+    safeSendMessage({ type: "PAGE_INPUT", at: actedAt(e) });
   }
+};
+
+/** The user pressed a key: when, to date the typing it makes. */
+const onKeyPressed = (e: Event) => {
+  if (!tornDown && observingEnabled) typing.keyPressed(e);
 };
 
 /**
  * The user typed on the page (`isTyping`). While the panel is open, say so,
  * and when, by the clock the frame dates its changes by, and nothing more:
  * not what or where. Chrome's tree stops following what the page does for
- * an earlier click from that moment, which would otherwise read the page
- * as the user types. Each time, with no throttle: one that held a frame's
- * report back would let typing after a click in another frame be followed.
+ * an earlier click where the edit was made (`at`), which would otherwise
+ * read the page as the user types; when they pressed the key that made it
+ * (`pressedAt`) orders it against a click in another frame. Each time,
+ * with no throttle: one that held a frame's report back would let typing
+ * after a click in another frame be followed.
  */
 const onPageTyping = (e: Event) => {
   if (tornDown || !observingEnabled || !isTyping(e as InputEvent)) return;
-  safeSendMessage({ type: "PAGE_TYPING", at: Date.now() });
+  safeSendMessage({
+    type: "PAGE_TYPING",
+    at: Date.now(),
+    pressedAt: typing.pressedAt(e),
+  });
 };
 
 /** Add the listeners on the document and its window. Adding one that is
@@ -1076,6 +1094,7 @@ function listenToDocument(): void {
   for (const type of ["click", "keydown"]) {
     window.addEventListener(type, onPageInput, true);
   }
+  window.addEventListener("keydown", onKeyPressed, true);
   window.addEventListener("input", onPageTyping, true);
 }
 

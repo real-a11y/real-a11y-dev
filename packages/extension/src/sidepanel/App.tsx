@@ -1518,12 +1518,21 @@ export function App() {
       // while auto-refresh is paused, which only Refresh resumes.
       if (
         message.type === "PAGE_INPUT" &&
+        typeof message.at === "number" &&
+        Number.isFinite(message.at) &&
         producerRef.current === "native" &&
         autoRefresh.current.armedTab !== null &&
         autoRefresh.current.armedTab === myTabIdRef.current
       ) {
         const a = autoRefresh.current;
-        a.follow = followPageInput(a.follow, a.lastChangeAt, Date.now());
+        const now = Date.now();
+        // Never ahead of now, should the page's clock and ours disagree.
+        a.follow = followPageInput(
+          a.follow,
+          Math.min(message.at, now),
+          a.lastChangeAt,
+          now,
+        );
       }
       // The user typed on the page: what they type isn't what a click did.
       if (
@@ -1533,8 +1542,16 @@ export function App() {
         producerRef.current === "native"
       ) {
         const a = autoRefresh.current;
-        // Never ahead of now, should the page's clock and ours disagree.
-        a.follow = followTyping(a.follow, Math.min(message.at, Date.now()));
+        const now = Date.now();
+        // Never ahead of now, should the page's clock and ours disagree,
+        // and the key never after the edit it made.
+        const at = Math.min(message.at, now);
+        const pressedAt =
+          typeof message.pressedAt === "number" &&
+          Number.isFinite(message.pressedAt)
+            ? Math.min(message.pressedAt, at)
+            : at;
+        a.follow = followTyping(a.follow, at, pressedAt, now);
       }
 
       if (message.type === "LIVE_REGION") {

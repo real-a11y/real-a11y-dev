@@ -33,8 +33,15 @@ export interface FollowWindow {
    *  started in an action's part. Set at `destinationAt`, in ms. */
   destination: "action" | "input" | null;
   destinationAt: number;
-  /** When the user last typed on the page, in ms, or 0. */
+  /** When the user last clicked or pressed a key on the page, in ms, or
+   *  0, to order it against typing. */
+  actedAt: number;
+  /** When the user last typed on the page, in ms, or 0: when the edit was
+   *  made, where a window ends, and when they pressed the key that made
+   *  it, which orders it against a click. A frame busy as they type makes
+   *  the edit later. */
   typedAt: number;
+  pressedAt: number;
 }
 
 /** No window, and nothing followed.
@@ -49,8 +56,22 @@ export const NOT_FOLLOWING: FollowWindow = {
   firstChangeAt: Infinity,
   destination: null,
   destinationAt: 0,
+  actedAt: 0,
   typedAt: 0,
+  pressedAt: 0,
 };
+
+/** Whether typing whose key was pressed at `pressedAt` came after the
+ *  user's latest click or key on the page, by when they did each. Where
+ *  the clock has stepped back since that click, it can't tell, and takes
+ *  the typing as the later. */
+function typedSinceActing(
+  w: FollowWindow,
+  pressedAt: number,
+  now: number,
+): boolean {
+  return pressedAt >= w.actedAt || w.actedAt > now;
+}
 
 /** Whether a change dated `at` is what the user did.
  *
@@ -83,7 +104,9 @@ export function followReadStarted(w: FollowWindow): FollowWindow {
  * of the page a navigation in the window led to (as its `destination`). It
  * saw every change made before it started, so the window starts there, and
  * every change since (the earliest at `firstUnreadChangeAt`) is followed:
- * until the user typed, if they did while it ran (`followTyping`).
+ * until the user typed, if they did while it ran (`followTyping`), or, if
+ * they clicked on the page after typing, only its action part ends there
+ * and the rest runs as a click's.
  *
  * @internal
  */
@@ -94,16 +117,15 @@ export function followAfterRead(
   firstUnreadChangeAt: number,
   now: number,
 ): FollowWindow {
+  const end = now + ACTION_FOLLOW_MS;
   // Bounded, should the clock have stepped back since the typing.
-  const until = Math.min(
-    w.typedAt > readStartedAt ? w.typedAt : Infinity,
-    now + ACTION_FOLLOW_MS,
-  );
+  const typed = Math.min(w.typedAt > readStartedAt ? w.typedAt : Infinity, end);
+  const until = typedSinceActing(w, w.pressedAt, now) ? typed : end;
   return {
     ...w,
     from: readStartedAt,
     until,
-    actionUntil: as === "action" ? until : w.actionUntil,
+    actionUntil: as === "action" ? typed : w.actionUntil,
     previousFrom: 0,
     previousUntil: 0,
     firstChangeAt: firstUnreadChangeAt < until ? firstUnreadChangeAt : Infinity,
@@ -111,50 +133,71 @@ export function followAfterRead(
 }
 
 /**
- * The user clicked or pressed a key on the page at `now`, the latest change
- * heard of being dated `lastChangeAt`. Nothing reads the page for it, so
- * the changes already heard of were made before it, and aren't its own: a
- * window it opens starts after them, keeping the one it closes for that
- * one's changes reported late, and anything followed stays followed. A
- * window already open is only stretched.
+ * The user clicked or pressed a key on the page at `at`, heard of at `now`,
+ * the latest change heard of being dated `lastChangeAt`. Nothing reads the
+ * page for it, so the changes already heard of were made before it, and
+ * aren't its own: a window it opens starts after them, keeping the one it
+ * closes for that one's changes reported late, and anything followed stays
+ * followed. A window already open is only stretched. It runs from `now`,
+ * not `at`: a frame busy when the user clicked reports it late, and only
+ * then does what the click asks. One the user typed after, pressing the
+ * key in another frame whose report came first, opens nothing: the typing
+ * ended what it would follow (`followTyping`). Not where the clock has
+ * stepped back since the typing, which would make every click older.
  *
  * @internal
  */
 export function followPageInput(
   w: FollowWindow,
+  at: number,
   lastChangeAt: number,
   now: number,
 ): FollowWindow {
+  if (at <= w.pressedAt && w.pressedAt <= now) return w;
   const until = now + ACTION_FOLLOW_MS;
-  if (w.until > now) return { ...w, until: Math.max(w.until, until) };
+  const actedAt = Math.max(w.actedAt, at);
+  if (w.until > now) {
+    return { ...w, until: Math.max(w.until, until), actedAt };
+  }
   return {
     ...w,
     from: lastChangeAt,
     until,
+    actedAt,
     previousFrom: w.from,
     previousUntil: w.until,
   };
 }
 
 /**
- * The user typed on the page at `at`, by the clock its changes are dated
- * by. What they type isn't what a click or an action did, and reading it
- * would bring Chrome's bar up as they type, so a window open then ends
- * there, a change made before it still followed. A window opened after
- * it, by a click, is left alone; one a read opens ends where the typing was
- * if the user typed while it ran (`followAfterRead`), and the page a
- * navigation led to isn't followed if they typed there before its first
- * read (`followDestination`).
+ * The user typed on the page, heard of at `now`: the edit was made at
+ * `at`, by the clock changes are dated by, and they pressed the key that
+ * made it at `pressedAt`. What they type isn't what a click or an action
+ * did, and reading it would bring Chrome's bar up as they type, so a
+ * window open then ends where the edit was made, a change made before it
+ * still followed. Not if the user clicked after pressing the key, in
+ * another frame whose report came first: the window is left to what the
+ * click does, and an edit a busy frame made late is read with it. An
+ * action's part, which no click opens, ends all the same. A window a read opens ends where the edit was made if it was made
+ * while the read ran (`followAfterRead`), and the page a navigation led to
+ * isn't followed if they typed there before its first read
+ * (`followDestination`).
  *
  * @internal
  */
-export function followTyping(w: FollowWindow, at: number): FollowWindow {
+export function followTyping(
+  w: FollowWindow,
+  at: number,
+  pressedAt: number,
+  now: number,
+): FollowWindow {
   const ends = (end: number) => (at > w.from && at < end ? at : end);
   return {
     ...w,
-    until: ends(w.until),
+    until: typedSinceActing(w, pressedAt, now) ? ends(w.until) : w.until,
     actionUntil: ends(w.actionUntil),
     typedAt: Math.max(w.typedAt, at),
+    pressedAt: Math.max(w.pressedAt, pressedAt),
   };
 }
 

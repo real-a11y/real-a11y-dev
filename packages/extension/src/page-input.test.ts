@@ -1,9 +1,11 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
+  actedAt,
   isPageInput,
   isTyping,
   pageInputFilter,
+  typingClock,
   type PageInputEvent,
 } from "./page-input.js";
 
@@ -213,5 +215,76 @@ describe("pageInputFilter", () => {
     expect(accepts(key(), field)).toBe(true);
     expect(accepts(key({ key: "a" }), field)).toBe(false);
     expect(accepts(event({ type: "submit" }), button)).toBe(false);
+  });
+});
+
+describe("dating the user's input", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  /** The page's two clocks, as they read now. */
+  function clocks(date: number, page: number): void {
+    vi.spyOn(Date, "now").mockReturnValue(date);
+    vi.spyOn(performance, "now").mockReturnValue(page);
+  }
+
+  const timed = (over: {
+    type?: string;
+    isTrusted?: boolean;
+    timeStamp: number;
+  }) => ({
+    type: "keydown",
+    isTrusted: true,
+    ...over,
+  });
+
+  it("dates an event by when the user acted, though a busy page dispatched it late", () => {
+    clocks(1_000_000, 5000);
+    // Taken from the user 700 ms before the page got round to it.
+    expect(actedAt(timed({ type: "click", timeStamp: 4300 }))).toBe(999_300);
+    // Never after now, whatever the event says.
+    expect(actedAt(timed({ type: "click", timeStamp: 5200 }))).toBe(1_000_000);
+  });
+
+  it("dates typing by the key that typed it, the edit dispatched late", () => {
+    const clock = typingClock();
+    // The key, pressed 700 ms before the busy page dispatched it, and the
+    // edit it made, dispatched right after it and dated then.
+    clocks(1_000_000, 5000);
+    clock.keyPressed(timed({ timeStamp: 4300 }));
+    clocks(1_000_005, 5005);
+    expect(clock.pressedAt(timed({ type: "input", timeStamp: 5005 }))).toBe(
+      999_300,
+    );
+    // Its next edit, held up by the page's own handling of the key.
+    clocks(1_000_500, 5500);
+    expect(clock.pressedAt(timed({ type: "input", timeStamp: 5500 }))).toBe(
+      999_300,
+    );
+  });
+
+  it("dates an edit with no key just before it by itself", () => {
+    const clock = typingClock();
+    clocks(1_000_000, 5000);
+    expect(clock.pressedAt(timed({ type: "input", timeStamp: 5000 }))).toBe(
+      1_000_000,
+    );
+    // A paste from a menu, a while after the last key.
+    clock.keyPressed(timed({ timeStamp: 5000 }));
+    clocks(1_000_501, 5501);
+    expect(clock.pressedAt(timed({ type: "input", timeStamp: 5501 }))).toBe(
+      1_000_501,
+    );
+  });
+
+  it("dates typing by no key a script pressed, nor by another event", () => {
+    const clock = typingClock();
+    clocks(1_000_000, 5000);
+    clock.keyPressed(timed({ isTrusted: false, timeStamp: 4300 }));
+    clock.keyPressed(timed({ type: "click", timeStamp: 4300 }));
+    expect(clock.pressedAt(timed({ type: "input", timeStamp: 5000 }))).toBe(
+      1_000_000,
+    );
   });
 });

@@ -122,7 +122,7 @@ describe("Chrome's tree after the user acts on the page", () => {
 
   it("reads what the page does after the user clicks it", async () => {
     await showNative();
-    emit({ type: "PAGE_INPUT" });
+    emit({ type: "PAGE_INPUT", at: Date.now() });
     await wait(400);
     pageChanged(Date.now() - 300);
     await wait(AUTO_REFRESH_QUIET_MS + 10);
@@ -131,7 +131,7 @@ describe("Chrome's tree after the user acts on the page", () => {
 
   it("reads nothing for a click that changes nothing", async () => {
     await showNative();
-    emit({ type: "PAGE_INPUT" });
+    emit({ type: "PAGE_INPUT", at: Date.now() });
     await wait(ACTION_FOLLOW_MS + AUTO_REFRESH_QUIET_MS);
     expect(reads()).toBe(0);
   });
@@ -142,7 +142,7 @@ describe("Chrome's tree after the user acts on the page", () => {
     // clicks something that does nothing.
     pageChanged(Date.now() - 500);
     await wait(AUTO_REFRESH_QUIET_MS - 200);
-    emit({ type: "PAGE_INPUT" });
+    emit({ type: "PAGE_INPUT", at: Date.now() });
     await wait(ACTION_FOLLOW_MS);
     expect(reads()).toBe(0);
   });
@@ -151,7 +151,7 @@ describe("Chrome's tree after the user acts on the page", () => {
     await showNative();
     pageChanged(Date.now() - 500);
     await wait(AUTO_REFRESH_QUIET_MS - 200);
-    emit({ type: "PAGE_INPUT" });
+    emit({ type: "PAGE_INPUT", at: Date.now() });
     await wait(400);
     pageChanged(Date.now() - 300);
     await wait(AUTO_REFRESH_QUIET_MS + 10);
@@ -165,29 +165,29 @@ describe("Chrome's tree after the user acts on the page", () => {
     const heardAt = Date.now() - 500;
     pageChanged(heardAt);
     await wait(AUTO_REFRESH_QUIET_MS + 10);
-    emit({ type: "PAGE_INPUT" });
+    emit({ type: "PAGE_INPUT", at: Date.now() });
     pageChanged(heardAt - 200);
     await wait(ACTION_FOLLOW_MS);
     expect(reads()).toBe(0);
   });
   it("reads a change a window that just closed followed, though a click opens another", async () => {
     await showNative();
-    emit({ type: "PAGE_INPUT" });
+    emit({ type: "PAGE_INPUT", at: Date.now() });
     // What the first click loaded, late in its window, still in its quiet
     // period when the user clicks again.
     await wait(ACTION_FOLLOW_MS + 100);
     pageChanged(Date.now() - 500);
     await wait(100);
-    emit({ type: "PAGE_INPUT" });
+    emit({ type: "PAGE_INPUT", at: Date.now() });
     await wait(AUTO_REFRESH_QUIET_MS);
     expect(reads()).toBe(1);
   });
 
   it("stretches the window for a click while it is open", async () => {
     await showNative();
-    emit({ type: "PAGE_INPUT" });
+    emit({ type: "PAGE_INPUT", at: Date.now() });
     await wait(3000);
-    emit({ type: "PAGE_INPUT" });
+    emit({ type: "PAGE_INPUT", at: Date.now() });
     // Past the first click's window, inside the second's.
     await wait(3000);
     pageChanged(Date.now() - 300);
@@ -197,7 +197,7 @@ describe("Chrome's tree after the user acts on the page", () => {
 
   it("reads a later burst no sooner than the minimum gap after the read before", async () => {
     await showNative();
-    emit({ type: "PAGE_INPUT" });
+    emit({ type: "PAGE_INPUT", at: Date.now() });
     await wait(400);
     pageChanged(Date.now() - 300);
     await wait(AUTO_REFRESH_QUIET_MS + 10);
@@ -212,7 +212,7 @@ describe("Chrome's tree after the user acts on the page", () => {
   });
   it("follows the page a click leads to at the click's pace", async () => {
     await showNative();
-    emit({ type: "PAGE_INPUT" });
+    emit({ type: "PAGE_INPUT", at: Date.now() });
     await wait(1000);
     emit({ type: "PAGE_NAVIGATED", tabId: TAB_ID });
     // The new page reports itself, and is read once it goes quiet.
@@ -252,7 +252,7 @@ describe("Chrome's tree after the user acts on the page", () => {
     await showNative();
     // An automatic read the user cancels on Chrome's bar pauses it.
     cancelReads = true;
-    emit({ type: "PAGE_INPUT" });
+    emit({ type: "PAGE_INPUT", at: Date.now() });
     await wait(400);
     pageChanged(Date.now() - 300);
     await wait(AUTO_REFRESH_QUIET_MS + 10);
@@ -260,7 +260,7 @@ describe("Chrome's tree after the user acts on the page", () => {
     cancelReads = false;
     await wait(ACTION_FOLLOW_MS);
     // A click while paused, then the user's Refresh, which resumes it.
-    emit({ type: "PAGE_INPUT" });
+    emit({ type: "PAGE_INPUT", at: Date.now() });
     act(() => {
       container
         .querySelector<HTMLButtonElement>(
@@ -277,7 +277,7 @@ describe("Chrome's tree after the user acts on the page", () => {
   });
   it("stops following once the user types", async () => {
     await showNative();
-    emit({ type: "PAGE_INPUT" });
+    emit({ type: "PAGE_INPUT", at: Date.now() });
     await wait(400);
     emit({ type: "PAGE_TYPING", at: Date.now() });
     // What the typing changed.
@@ -289,7 +289,7 @@ describe("Chrome's tree after the user acts on the page", () => {
 
   it("still reads what the click did before the user typed", async () => {
     await showNative();
-    emit({ type: "PAGE_INPUT" });
+    emit({ type: "PAGE_INPUT", at: Date.now() });
     await wait(400);
     pageChanged(Date.now() - 300);
     emit({ type: "PAGE_TYPING", at: Date.now() });
@@ -298,7 +298,7 @@ describe("Chrome's tree after the user acts on the page", () => {
   });
   it("stops following at the moment the user typed, though heard of later", async () => {
     await showNative();
-    emit({ type: "PAGE_INPUT" });
+    emit({ type: "PAGE_INPUT", at: Date.now() });
     await wait(400);
     const typedAt = Date.now();
     // What the typing changed, dated just after it, and the report of the
@@ -310,9 +310,103 @@ describe("Chrome's tree after the user acts on the page", () => {
     expect(reads()).toBe(0);
   });
 
-  it("doesn't follow the page a click led to once the user types there", async () => {
+  it("follows no click the user typed after, though its busy frame reported it last", async () => {
+    await showNative();
+    const clickedAt = Date.now();
+    // Typing in another frame, reported at once, then the click's report.
+    await wait(200);
+    emit({ type: "PAGE_TYPING", at: Date.now() });
+    await wait(500);
+    emit({ type: "PAGE_INPUT", at: clickedAt });
+    // What the typing changed.
+    await wait(400);
+    pageChanged(Date.now() - 300);
+    await wait(ACTION_FOLLOW_MS);
+    expect(reads()).toBe(0);
+  });
+
+  it("keeps following a click the user typed before, though the typing's busy frame reported it last", async () => {
+    await showNative();
+    const typedAt = Date.now();
+    // A click in another frame, reported at once, then the typing's report:
+    // the edit made late, the key pressed before the click.
+    await wait(200);
+    emit({ type: "PAGE_INPUT", at: Date.now() });
+    await wait(500);
+    emit({ type: "PAGE_TYPING", at: Date.now(), pressedAt: typedAt });
+    // What the click loaded.
+    await wait(400);
+    pageChanged(Date.now() - 300);
+    await wait(AUTO_REFRESH_QUIET_MS + 10);
+    expect(reads()).toBe(1);
+  });
+
+  it("follows a click made after the user typed, though their busy frame made the edit after it", async () => {
+    await showNative();
+    const pressedAt = Date.now();
+    await wait(200);
+    const clickedAt = Date.now();
+    // The frame, busy, makes the edit, then dispatches the click.
+    await wait(500);
+    emit({ type: "PAGE_TYPING", at: Date.now(), pressedAt });
+    emit({ type: "PAGE_INPUT", at: clickedAt });
+    // What the click loaded.
+    await wait(400);
+    pageChanged(Date.now() - 300);
+    await wait(AUTO_REFRESH_QUIET_MS + 10);
+    expect(reads()).toBe(1);
+  });
+
+  it("stops following once the user types, though the page's clock runs ahead", async () => {
+    await showNative();
+    emit({ type: "PAGE_INPUT", at: Date.now() + 60_000 });
+    await wait(400);
+    emit({ type: "PAGE_TYPING", at: Date.now() });
+    await wait(400);
+    pageChanged(Date.now() - 300);
+    await wait(ACTION_FOLLOW_MS);
+    expect(reads()).toBe(0);
+  });
+
+  it("takes a click dated ahead of now as made when it was heard of", async () => {
+    await showNative();
+    emit({ type: "PAGE_INPUT", at: Date.now() + 60_000 });
+    const heardAt = Date.now();
+    // Typing whose key was pressed before that, reported after it.
+    await wait(400);
+    emit({ type: "PAGE_TYPING", at: Date.now(), pressedAt: heardAt - 100 });
+    // What the click loaded.
+    await wait(400);
+    pageChanged(Date.now() - 300);
+    await wait(AUTO_REFRESH_QUIET_MS + 10);
+    expect(reads()).toBe(1);
+  });
+
+  it("takes a key dated after its edit as pressed when the edit was made", async () => {
+    await showNative();
+    const typedAt = Date.now();
+    emit({ type: "PAGE_TYPING", at: typedAt, pressedAt: typedAt + 2000 });
+    // A click after the edit, which a busy frame reported late.
+    await wait(3000);
+    emit({ type: "PAGE_INPUT", at: typedAt + 1000 });
+    await wait(400);
+    pageChanged(Date.now() - 300);
+    await wait(AUTO_REFRESH_QUIET_MS + 10);
+    expect(reads()).toBe(1);
+  });
+
+  it("follows nothing for a report that doesn't say when", async () => {
     await showNative();
     emit({ type: "PAGE_INPUT" });
+    await wait(400);
+    pageChanged(Date.now() - 300);
+    await wait(ACTION_FOLLOW_MS);
+    expect(reads()).toBe(0);
+  });
+
+  it("doesn't follow the page a click led to once the user types there", async () => {
+    await showNative();
+    emit({ type: "PAGE_INPUT", at: Date.now() });
     await wait(1000);
     emit({ type: "PAGE_NAVIGATED", tabId: TAB_ID });
     await wait(500);
