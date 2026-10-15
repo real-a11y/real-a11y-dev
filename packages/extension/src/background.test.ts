@@ -1507,6 +1507,26 @@ describe("background: which frames' changes Chrome's tree follows", () => {
     expect(pageChanged()).toEqual([false]);
   });
 
+  it("leaves the user acting on the page to the content script's own message", async () => {
+    // It reaches the panel straight from the content script; a relayed copy
+    // would be a second one.
+    for (const type of ["PAGE_INPUT", "PAGE_TYPING"]) {
+      for (const fn of h.messageListeners) {
+        fn(
+          { type },
+          { id: EXTENSION_ID, tab: { id: TAB_ID }, frameId: 1 },
+          () => {},
+        );
+      }
+    }
+    await vi.runAllTimersAsync();
+    expect(
+      h.panelMessages.filter((m) =>
+        ["PAGE_INPUT", "PAGE_TYPING"].includes(m.type),
+      ),
+    ).toEqual([]);
+  });
+
   it("leaves out a frame read again rather than changed", async () => {
     // An answer to RESEND_TREE or REQUEST_TREE, or the re-read after a key.
     deliver(1, { ...frameTreePayload(1), reread: true });

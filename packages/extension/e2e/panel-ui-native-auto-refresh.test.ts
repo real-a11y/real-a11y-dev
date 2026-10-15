@@ -2,8 +2,9 @@
  * Native auto-refresh, through the real build.
  *
  * By default the native tree reads itself again once, after a same-tab
- * navigation settles, and for a few seconds after an action or a key, and
- * otherwise waits for Refresh. With "Follow page changes" on, it also reads
+ * navigation settles, and for a few seconds after an action or a key sent
+ * through the tree, or a click or a key on the page itself, and otherwise
+ * waits for Refresh. With "Follow page changes" on, it also reads
  * after every burst of page changes, backing off the longer that runs on
  * without the user (`native-auto-refresh.ts` is the policy). Either way it
  * follows only the tab a read succeeded on, and a frame's changes count
@@ -243,6 +244,74 @@ test.describe("after an action, by default", () => {
       timeout: READ_WINDOW_MS,
     });
     expect(await autoReads(nav)).toBe(1);
+  });
+});
+
+test.describe("after a click on the page itself, by default", () => {
+  test("what it loads reaches the native tree", async ({ nav }) => {
+    // The same follow-up as an action sent through the tree, for a click the
+    // user makes on the page.
+    const page = await nav.showNative("native-follow-action.html");
+    await page.click("#load");
+    await expect(await findRow(nav.panel, "Save form")).toBeVisible({
+      timeout: READ_WINDOW_MS,
+    });
+    expect(await autoReads(nav)).toBe(1);
+  });
+
+  test("so does what a click inside a frame loads", async ({ nav }) => {
+    const page = await nav.showNative("native-follow-action.html");
+    const frame = page.frames().find((f) => f !== page.mainFrame())!;
+    await frame.click("#create");
+    await expect(await findRow(nav.panel, "Save contact")).toBeVisible({
+      timeout: READ_WINDOW_MS,
+    });
+  });
+
+  test("so does what Enter in a field loads", async ({ nav }) => {
+    const page = await nav.showNative("native-follow-action.html");
+    await page.press("#query", "Enter");
+    await expect(await findRow(nav.panel, "Open answer")).toBeVisible({
+      timeout: READ_WINDOW_MS,
+    });
+  });
+
+  test("and what the page a click leads to loads later", async ({ nav }) => {
+    // The click navigates a second after it, and the page it leads to adds
+    // its result after its first read.
+    const page = await nav.showNative("native-follow-action.html");
+    await page.click("#search");
+    await expect(await findRow(nav.panel, "Result 1")).toBeVisible({
+      timeout: 15_000,
+    });
+  });
+
+  test("a click that changes nothing reads nothing", async ({ nav }) => {
+    const page = await nav.showNative("native-follow-action.html");
+    await page.click("h1");
+    await nav.panel.waitForTimeout(READ_WINDOW_MS);
+    expect(await autoReads(nav)).toBe(0);
+  });
+
+  test("typing after a click elsewhere ends what the click is followed for", async ({
+    nav,
+  }) => {
+    const page = await nav.showNative("native-follow-action.html");
+    await page.click("h1");
+    await page.focus("#query");
+    await page.keyboard.type("calendar", { delay: 100 });
+    await nav.panel.waitForTimeout(READ_WINDOW_MS);
+    expect(await autoReads(nav)).toBe(0);
+  });
+
+  test("typing in a field the user clicked into reads nothing", async ({
+    nav,
+  }) => {
+    const page = await nav.showNative("native-follow-action.html");
+    await page.click("#query");
+    await page.keyboard.type("calendar", { delay: 100 });
+    await nav.panel.waitForTimeout(READ_WINDOW_MS);
+    expect(await autoReads(nav)).toBe(0);
   });
 });
 

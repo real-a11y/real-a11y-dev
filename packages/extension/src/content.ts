@@ -35,6 +35,7 @@ import {
   livePageKeyWalker,
   PageKeySnapshots,
 } from "./native/page-keys.js";
+import { isTyping, pageInputFilter } from "./page-input.js";
 import { pageText } from "./page-text.js";
 import { isTrustedSender, planHighlight } from "./routing.js";
 import { elementsFromTabSequence, sendKey } from "./send-key.js";
@@ -632,11 +633,17 @@ function onFocusIn(
   });
 }
 
-/** The element focus landed on. `e.target` is retargeted to the outermost
- *  shadow host, and `composedPath()[0]` reaches into open roots only. */
-function deepFocusTarget(e: Event): Element | null {
+/** The element an event happened on. `e.target` is retargeted to the
+ *  outermost shadow host, and `composedPath()[0]` reaches into open roots
+ *  only. */
+function composedTarget(e: Event): Element | null {
   const first = e.composedPath()[0] ?? e.target;
-  return focusedWithin(first instanceof Element ? first : null);
+  return first instanceof Element ? first : null;
+}
+
+/** The element focus landed on, inside closed shadow roots too. */
+function deepFocusTarget(e: Event): Element | null {
+  return focusedWithin(composedTarget(e));
 }
 
 /** `el`'s author shadow root, open or closed — only
@@ -769,11 +776,7 @@ function highlightFromNativeEvent(e: Event, kind: "reveal" | "preview"): void {
   if (arm.nonce === null || (e as CustomEvent).detail !== arm.nonce) return;
   arm.nonce = null;
   if (curtainVisible) return;
-  // `composedPath()[0]` is the real target even inside an open shadow tree,
-  // where `e.target` has been retargeted to the host.
-  const nodeId = findTrackedAncestor(
-    (e.composedPath()[0] ?? e.target) as Element | null,
-  );
+  const nodeId = findTrackedAncestor(composedTarget(e));
   if (nodeId) {
     focusManager.highlightElement(nodeId, { scroll: kind === "reveal" });
   }
@@ -1023,6 +1026,39 @@ const onPageHide = (e: Event) => {
   }
 };
 
+const isPageInput = pageInputFilter();
+
+/**
+ * The user acted on the page: clicked, or pressed Enter or Space
+ * (`isPageInput`). While the panel is open, say so, and nothing more: not
+ * what or where. Chrome's tree then reads what the page does in the next
+ * few seconds, as it does after an action sent through the tree. A click
+ * the picker takes is a pick, not an action on the page.
+ */
+const onPageInput = (e: Event) => {
+  if (tornDown || !observingEnabled || picker.isEnabled()) return;
+  // A key in a closed shadow root's field reaches the window as its host's;
+  // `deepFocusTarget` finds the field.
+  const target = () =>
+    e.type === "keydown" ? deepFocusTarget(e) : composedTarget(e);
+  if (isPageInput(e as KeyboardEvent, target)) {
+    safeSendMessage({ type: "PAGE_INPUT" });
+  }
+};
+
+/**
+ * The user typed on the page (`isTyping`). While the panel is open, say so,
+ * and when, by the clock the frame dates its changes by, and nothing more:
+ * not what or where. Chrome's tree stops following what the page does for
+ * an earlier click from that moment, which would otherwise read the page
+ * as the user types. Each time, with no throttle: one that held a frame's
+ * report back would let typing after a click in another frame be followed.
+ */
+const onPageTyping = (e: Event) => {
+  if (tornDown || !observingEnabled || !isTyping(e as InputEvent)) return;
+  safeSendMessage({ type: "PAGE_TYPING", at: Date.now() });
+};
+
 /** Add the listeners on the document and its window. Adding one that is
  *  already there does nothing, so this runs again as it is when only the
  *  root element was swapped and no listener was lost. */
@@ -1034,6 +1070,13 @@ function listenToDocument(): void {
   window.addEventListener("hashchange", onNavigated);
   window.addEventListener("pageshow", onPageShow);
   window.addEventListener("pagehide", onPageHide);
+  // On the window's capture phase, so that a page's handler on the way in
+  // stopping the event doesn't hide it. One the page put on the window's
+  // own capture phase before this script ran still can.
+  for (const type of ["click", "keydown"]) {
+    window.addEventListener(type, onPageInput, true);
+  }
+  window.addEventListener("input", onPageTyping, true);
 }
 
 function rebindDocument(): void {

@@ -86,10 +86,20 @@ import type { ExportMeta, ExportView, ExportViews } from "./export.js";
 import { announcedValueLabel, rawValueLabel } from "./field-value.js";
 import { FilteredList } from "./FilteredList.js";
 import { FOCUSABLE_SELECTOR, useDismissible } from "./focus-hooks.js";
+import {
+  followAfterRead,
+  followChange,
+  followDestination,
+  followNavigation,
+  followPageInput,
+  followReadStarted,
+  followTyping,
+  NOT_FOLLOWING,
+  type FollowWindow,
+} from "./follow-window.js";
 import { InputPanel } from "./InputPanel.js";
 import type { InputPanelState } from "./InputPanel.js";
 import {
-  ACTION_FOLLOW_MS,
   AUTO_REFRESH_QUIET_MS,
   decideAutoRefresh,
   FOLLOW_PAGE_CHANGES_KEY,
@@ -632,11 +642,10 @@ export function App() {
     lastReadStartedAt: number;
     lastReadEndedAt: number;
     autoReads: number;
-    /** Until when the page's changes are the latest action's own. */
-    followUntil: number;
-    /** A navigation started while an action was followed: most likely the
-     *  action's own, so the page it leads to is followed once read. */
-    followDestination: boolean;
+    /** The few seconds after the user acts whose changes are read
+     *  whatever the mode (`follow-window.ts`). */
+    follow: FollowWindow;
+    /** The earliest change since the latest read began. */
     firstUnreadChangeAt: number;
     timer: ReturnType<typeof setTimeout> | null;
     /** When the first signal the pending timer answers arrived. */
@@ -652,8 +661,7 @@ export function App() {
     lastReadStartedAt: 0,
     lastReadEndedAt: 0,
     autoReads: 0,
-    followUntil: 0,
-    followDestination: false,
+    follow: NOT_FOLLOWING,
     firstUnreadChangeAt: Infinity,
     timer: null,
     signalSince: null,
@@ -677,8 +685,7 @@ export function App() {
   const disarmAutoRefresh = useCallback(() => {
     autoRefresh.current.armedTab = null;
     autoRefresh.current.navigationPending = false;
-    autoRefresh.current.followUntil = 0;
-    autoRefresh.current.followDestination = false;
+    autoRefresh.current.follow = NOT_FOLLOWING;
     cancelAutoRefreshTimer();
   }, [cancelAutoRefreshTimer]);
   const scheduleAutoRefresh = useCallback((ms: number) => {
@@ -695,10 +702,16 @@ export function App() {
    *  `ACTION_FOLLOW_MS`. */
   const followActionAftermath = useCallback(() => {
     const a = autoRefresh.current;
-    a.followUntil = Date.now() + ACTION_FOLLOW_MS;
+    a.follow = followAfterRead(
+      a.follow,
+      "action",
+      a.lastReadStartedAt,
+      a.firstUnreadChangeAt,
+      Date.now(),
+    );
     // A change reported while that re-read ran was judged before the window
     // opened, and let go if nothing else was due: judge it again.
-    if (a.timer === null && a.firstUnreadChangeAt < a.followUntil) {
+    if (a.timer === null && a.follow.firstChangeAt < a.follow.until) {
       scheduleAutoRefresh(AUTO_REFRESH_QUIET_MS);
     }
   }, [scheduleAutoRefresh]);
@@ -1427,8 +1440,7 @@ export function App() {
         a.lastReadStartedAt = 0;
         a.lastReadEndedAt = 0;
         a.autoReads = 0;
-        a.followDestination ||= Date.now() < a.followUntil;
-        a.followUntil = 0;
+        a.follow = followNavigation(a.follow, Date.now());
         a.firstUnreadChangeAt = Infinity;
         followKeyNavigationRef.current();
         return;
@@ -1452,6 +1464,7 @@ export function App() {
           a.lastChangeAt = Math.min(Math.max(a.lastChangeAt, at), now);
           if (at > a.lastReadStartedAt) {
             a.firstUnreadChangeAt = Math.min(a.firstUnreadChangeAt, at);
+            a.follow = followChange(a.follow, at);
           }
         }
         const next = quietPeriodOnSignal(a.signalSince, now);
@@ -1497,6 +1510,31 @@ export function App() {
           setPageTitle(message.payload.pageTitle || "");
           setPageUrl(message.payload.pageUrl || "");
         }
+      }
+
+      // The user acted on the page itself: follow what it does next, as
+      // after an action sent through the tree (`followPageInput`). A page
+      // that changes nothing in that time is read no more than before. Not
+      // while auto-refresh is paused, which only Refresh resumes.
+      if (
+        message.type === "PAGE_INPUT" &&
+        producerRef.current === "native" &&
+        autoRefresh.current.armedTab !== null &&
+        autoRefresh.current.armedTab === myTabIdRef.current
+      ) {
+        const a = autoRefresh.current;
+        a.follow = followPageInput(a.follow, a.lastChangeAt, Date.now());
+      }
+      // The user typed on the page: what they type isn't what a click did.
+      if (
+        message.type === "PAGE_TYPING" &&
+        typeof message.at === "number" &&
+        Number.isFinite(message.at) &&
+        producerRef.current === "native"
+      ) {
+        const a = autoRefresh.current;
+        // Never ahead of now, should the page's clock and ours disagree.
+        a.follow = followTyping(a.follow, Math.min(message.at, Date.now()));
       }
 
       if (message.type === "LIVE_REGION") {
@@ -2072,6 +2110,7 @@ export function App() {
       a.lastReadStartedAt = Date.now();
       // Whatever changed before now, this read sees.
       a.firstUnreadChangeAt = Infinity;
+      a.follow = followReadStarted(a.follow);
       a.autoReads = auto && !followsAction ? a.autoReads + 1 : 0;
       if (!auto) {
         setNativeBusy(true);
@@ -2168,10 +2207,12 @@ export function App() {
         // for the new page's, or the new page is never read at all.
         if (r.documentId === undefined || r.documentId !== a.leavingDocument) {
           a.navigationPending = false;
-          if (a.followDestination) {
-            a.followDestination = false;
-            a.followUntil = Date.now() + ACTION_FOLLOW_MS;
-          }
+          a.follow = followDestination(
+            a.follow,
+            a.lastReadStartedAt,
+            a.firstUnreadChangeAt,
+            Date.now(),
+          );
         }
         a.readDocument = r.documentId;
         return true;
@@ -2240,11 +2281,12 @@ export function App() {
         native: nativeModeEnabled && producerRef.current === "native",
         navigationPending: a.navigationPending,
         lastChangeAt: a.lastChangeAt,
-        firstUnreadChangeAt: a.firstUnreadChangeAt,
+        firstFollowedChangeAt: a.follow.firstChangeAt,
         lastReadStartedAt: a.lastReadStartedAt,
         lastReadEndedAt: a.lastReadEndedAt,
         autoReads: a.autoReads,
-        followUntil: a.followUntil,
+        followUntil: a.follow.until,
+        actionFollowUntil: a.follow.actionUntil,
         busy: nativeInFlight.current || pickModeOnRef.current,
       },
       Date.now(),
