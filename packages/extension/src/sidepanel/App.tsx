@@ -89,10 +89,11 @@ import { FOCUSABLE_SELECTOR, useDismissible } from "./focus-hooks.js";
 import { InputPanel } from "./InputPanel.js";
 import type { InputPanelState } from "./InputPanel.js";
 import {
+  ACTION_FOLLOW_MS,
+  AUTO_REFRESH_QUIET_MS,
   decideAutoRefresh,
   FOLLOW_PAGE_CHANGES_KEY,
   NATIVE_SETTLE_MS,
-  PAGE_SIGNAL_LAG_MS,
   quietPeriodOnSignal,
 } from "./native-auto-refresh.js";
 import {
@@ -100,6 +101,7 @@ import {
   nativeActionFeedback,
 } from "./native-feedback.js";
 import { NativeTreeView, type NativeReveal } from "./NativeTreeView.js";
+import { domStateBadges, EmbeddedBadge, StateBadges } from "./row-badges.js";
 import {
   arrowLeftStopsAtScopeRoot,
   describeNode,
@@ -630,6 +632,12 @@ export function App() {
     lastReadStartedAt: number;
     lastReadEndedAt: number;
     autoReads: number;
+    /** Until when the page's changes are the latest action's own. */
+    followUntil: number;
+    /** A navigation started while an action was followed: most likely the
+     *  action's own, so the page it leads to is followed once read. */
+    followDestination: boolean;
+    firstUnreadChangeAt: number;
     timer: ReturnType<typeof setTimeout> | null;
     /** When the first signal the pending timer answers arrived. */
     signalSince: number | null;
@@ -644,6 +652,9 @@ export function App() {
     lastReadStartedAt: 0,
     lastReadEndedAt: 0,
     autoReads: 0,
+    followUntil: 0,
+    followDestination: false,
+    firstUnreadChangeAt: Infinity,
     timer: null,
     signalSince: null,
     inFlight: null,
@@ -666,6 +677,8 @@ export function App() {
   const disarmAutoRefresh = useCallback(() => {
     autoRefresh.current.armedTab = null;
     autoRefresh.current.navigationPending = false;
+    autoRefresh.current.followUntil = 0;
+    autoRefresh.current.followDestination = false;
     cancelAutoRefreshTimer();
   }, [cancelAutoRefreshTimer]);
   const scheduleAutoRefresh = useCallback((ms: number) => {
@@ -677,6 +690,18 @@ export function App() {
       runNativeAutoRefresh.current();
     }, ms);
   }, []);
+  /** An action's or a sent key's re-read has just read the page: what the
+   *  page does next, for a while, is read as it lands too — see
+   *  `ACTION_FOLLOW_MS`. */
+  const followActionAftermath = useCallback(() => {
+    const a = autoRefresh.current;
+    a.followUntil = Date.now() + ACTION_FOLLOW_MS;
+    // A change reported while that re-read ran was judged before the window
+    // opened, and let go if nothing else was due: judge it again.
+    if (a.timer === null && a.firstUnreadChangeAt < a.followUntil) {
+      scheduleAutoRefresh(AUTO_REFRESH_QUIET_MS);
+    }
+  }, [scheduleAutoRefresh]);
   useEffect(() => cancelAutoRefreshTimer, [cancelAutoRefreshTimer]);
   // The "Follow page changes" setting, kept in `chrome.storage.local` with
   // native mode's own, and followed while the panel is open.
@@ -1392,6 +1417,9 @@ export function App() {
         // with a TREE_DATA, and that reads it, once. A pending read for the
         // old page is dropped, and the back-off starts over: the gap a quiet
         // page built up must not leave the new page's tree empty that long.
+        // A navigation that starts while an action is followed, such as one
+        // a click sets off a second later, carries the follow-up to the page
+        // it leads to, from that page's first read.
         const a = autoRefresh.current;
         cancelAutoRefreshTimer();
         a.navigationPending = a.armedTab !== null;
@@ -1399,22 +1427,33 @@ export function App() {
         a.lastReadStartedAt = 0;
         a.lastReadEndedAt = 0;
         a.autoReads = 0;
+        a.followDestination ||= Date.now() < a.followUntil;
+        a.followUntil = 0;
+        a.firstUnreadChangeAt = Infinity;
         followKeyNavigationRef.current();
         return;
       }
 
       // The content script sends a tree after every burst of page changes,
       // whichever producer the panel shows, so it is native auto-refresh's
-      // "the page changed" signal too — the top frame's only, since the
-      // native read covers the top frame.
+      // "the page changed" signal too: the top frame's, and that of every
+      // frame the page shows, which the native read covers as well.
       if (
         message.type === "TREE_DATA" &&
-        message.payload.topFrameChanged === true &&
+        Array.isArray(message.payload.pageChangedAt) &&
         producerRef.current === "native"
       ) {
         const a = autoRefresh.current;
         const now = Date.now();
-        a.lastChangeAt = now - PAGE_SIGNAL_LAG_MS;
+        for (const stamp of message.payload.pageChangedAt) {
+          if (typeof stamp !== "number" || !Number.isFinite(stamp)) continue;
+          // Never ahead of now, should the page's clock and ours disagree.
+          const at = Math.min(stamp, now);
+          a.lastChangeAt = Math.min(Math.max(a.lastChangeAt, at), now);
+          if (at > a.lastReadStartedAt) {
+            a.firstUnreadChangeAt = Math.min(a.firstUnreadChangeAt, at);
+          }
+        }
         const next = quietPeriodOnSignal(a.signalSince, now);
         if (next.kind === "restart") {
           a.signalSince ??= now;
@@ -2017,17 +2056,23 @@ export function App() {
    *  line is a live region, so that would be announced on every read), and
    *  on failure the tree stays as it was. The service worker doesn't retry a
    *  dropped attach for it either, since the drop may be the user's Cancel
-   *  on Chrome's bar. Any other read starts auto-refresh's back-off over. */
+   *  on Chrome's bar. Any other read starts auto-refresh's back-off over, as
+   *  does an automatic one that `followsAction` (`ACTION_FOLLOW_MS`). */
   const loadNativeTreeCore = useCallback(
     async (
       tabId: number,
-      { auto = false }: { auto?: boolean } = {},
+      {
+        auto = false,
+        followsAction = false,
+      }: { auto?: boolean; followsAction?: boolean } = {},
     ): Promise<boolean> => {
       if (!nativeModeEnabled) return false;
       const token = nativeOpToken.current;
       const a = autoRefresh.current;
       a.lastReadStartedAt = Date.now();
-      a.autoReads = auto ? a.autoReads + 1 : 0;
+      // Whatever changed before now, this read sees.
+      a.firstUnreadChangeAt = Infinity;
+      a.autoReads = auto && !followsAction ? a.autoReads + 1 : 0;
       if (!auto) {
         setNativeBusy(true);
         // A read on a tab with a pick armed queues behind the pick, which
@@ -2123,6 +2168,10 @@ export function App() {
         // for the new page's, or the new page is never read at all.
         if (r.documentId === undefined || r.documentId !== a.leavingDocument) {
           a.navigationPending = false;
+          if (a.followDestination) {
+            a.followDestination = false;
+            a.followUntil = Date.now() + ACTION_FOLLOW_MS;
+          }
         }
         a.readDocument = r.documentId;
         return true;
@@ -2139,7 +2188,10 @@ export function App() {
    *  see `nativeInFlight`'s own declaration. Propagates `loadNativeTreeCore`'s
    *  success/failure so the native-default effect can tell them apart. */
   const loadNativeTree = useCallback(
-    async (tabId: number, opts?: { auto?: boolean }): Promise<boolean> => {
+    async (
+      tabId: number,
+      opts?: { auto?: boolean; followsAction?: boolean },
+    ): Promise<boolean> => {
       // The user's read waits for an automatic one rather than being dropped
       // by the in-flight guard below: the user didn't start that one, so it
       // mustn't cost them a click.
@@ -2188,9 +2240,11 @@ export function App() {
         native: nativeModeEnabled && producerRef.current === "native",
         navigationPending: a.navigationPending,
         lastChangeAt: a.lastChangeAt,
+        firstUnreadChangeAt: a.firstUnreadChangeAt,
         lastReadStartedAt: a.lastReadStartedAt,
         lastReadEndedAt: a.lastReadEndedAt,
         autoReads: a.autoReads,
+        followUntil: a.followUntil,
         busy: nativeInFlight.current || pickModeOnRef.current,
       },
       Date.now(),
@@ -2199,9 +2253,10 @@ export function App() {
     else if (decision.kind === "read") {
       // A reply that never arrives (an unreachable service worker) attached
       // nothing, so it leaves auto-refresh armed for the next change.
-      const read = loadNativeTree(decision.tabId, { auto: true }).catch(
-        () => false,
-      );
+      const read = loadNativeTree(decision.tabId, {
+        auto: true,
+        followsAction: decision.followsAction === true,
+      }).catch(() => false);
       a.inFlight = read;
       void read.finally(() => {
         if (a.inFlight === read) a.inFlight = null;
@@ -2285,9 +2340,11 @@ export function App() {
         if (nativeOpToken.current === lastSeenToken) break; // no further nav during the wait — settled
         lastSeenToken = nativeOpToken.current;
       }
-      await loadNativeTreeCore(tabId);
+      // The destination may go on loading after this read, as the page an
+      // action stays on may go on reacting.
+      if (await loadNativeTreeCore(tabId)) followActionAftermath();
     },
-    [loadNativeTreeCore],
+    [loadNativeTreeCore, followActionAftermath],
   );
 
   /** Wait, bounded (~5 s), for a native read or action in flight to finish,
@@ -2309,8 +2366,10 @@ export function App() {
    *  navigation that starts while the re-read is under way supersedes the
    *  read, and is followed the same way. Skipped once the panel has left the
    *  tab or native mode. The caller holds `nativeInFlight`: this reads
-   *  through the unguarded core. Resolves whether it read the page the
-   *  operation ran on — not when the read failed or the page navigated. */
+   *  through the unguarded core. A read that succeeds, of either page, has
+   *  the page's next changes followed for a while (`ACTION_FOLLOW_MS`).
+   *  Resolves whether it read the page the operation ran on — not when the
+   *  read failed or the page navigated. */
   const settleThenReread = useCallback(
     async (
       tabId: number,
@@ -2325,9 +2384,10 @@ export function App() {
       // PAGE_NAVIGATED, fired on `onBeforeNavigate` in background.ts, win the
       // race against the operation's own round trip). Reading immediately
       // would race the navigation and land on the old document, or on a new
-      // one that hasn't settled yet. Still a single best-effort attempt, not
-      // a wait-for-load: a destination slower than NATIVE_SETTLE_MS can come
-      // back sparse, and Refresh is there either way.
+      // one that hasn't settled yet. Still a single attempt, not a
+      // wait-for-load: what lands later, on this page or a destination slower
+      // than NATIVE_SETTLE_MS, is read once the page goes quiet
+      // (`followActionAftermath`), and Refresh is there either way.
       await sleep(NATIVE_SETTLE_MS);
       if (abandoned()) return false;
       if (token !== nativeOpToken.current) {
@@ -2335,12 +2395,13 @@ export function App() {
         return false;
       }
       const ok = await loadNativeTreeCore(tabId);
-      if (!ok && token !== nativeOpToken.current && !abandoned()) {
+      if (ok) followActionAftermath();
+      else if (token !== nativeOpToken.current && !abandoned()) {
         await recoverFromOwnNavigation(tabId, tabChangeAtStart);
       }
       return ok;
     },
-    [loadNativeTreeCore, recoverFromOwnNavigation],
+    [loadNativeTreeCore, recoverFromOwnNavigation, followActionAftermath],
   );
 
   // The default itself (see `hasAppliedNativeDefault`). It waits for
@@ -4074,9 +4135,8 @@ export function App() {
                               H{node.a11y.properties.level}
                             </span>
                           )}
-                          {/* Iframe embedded content badge */}
-                          {node.dom.tagName === "iframe" && (
-                            <span class="sn-iframe-badge">embedded</span>
+                          {node.dom.tagName === "iframe" && !isParent && (
+                            <EmbeddedBadge />
                           )}
                           {node.a11y.name && (
                             <span class="sn-name">{node.a11y.name}</span>
@@ -4119,82 +4179,9 @@ export function App() {
                               {announcedValueLabel(node.a11y.value)}
                             </span>
                           )}
-                          {/* State badges: disabled, checked, required, expanded, etc. */}
-                          {(() => {
-                            const states = node.a11y.states;
-                            const badges: Array<{
-                              label: string;
-                              cls: string;
-                            }> = [];
-                            if (states.disabled === true)
-                              badges.push({
-                                label: "disabled",
-                                cls: "sn-state--disabled",
-                              });
-                            if (states.checked === true)
-                              badges.push({
-                                label: "checked",
-                                cls: "sn-state--on",
-                              });
-                            if (states.checked === "mixed")
-                              badges.push({
-                                label: "mixed",
-                                cls: "sn-state--mixed",
-                              });
-                            if (states.pressed === true)
-                              badges.push({
-                                label: "pressed",
-                                cls: "sn-state--on",
-                              });
-                            if (states.selected === true)
-                              badges.push({
-                                label: "selected",
-                                cls: "sn-state--on",
-                              });
-                            if (states.expanded === true)
-                              badges.push({
-                                label: "expanded",
-                                cls: "sn-state--info",
-                              });
-                            if (states.expanded === false)
-                              badges.push({
-                                label: "collapsed",
-                                cls: "sn-state--info",
-                              });
-                            if (states.required === true)
-                              badges.push({
-                                label: "required",
-                                cls: "sn-state--required",
-                              });
-                            if (states.readonly === true)
-                              badges.push({
-                                label: "readonly",
-                                cls: "sn-state--info",
-                              });
-                            if (states.busy === true)
-                              badges.push({
-                                label: "busy",
-                                cls: "sn-state--info",
-                              });
-                            if (states.current)
-                              badges.push({
-                                label: `current: ${states.current}`,
-                                cls: "sn-state--info",
-                              });
-                            if (badges.length === 0) return null;
-                            return (
-                              <span class="sn-state-badges">
-                                {badges.map((b) => (
-                                  <span
-                                    key={b.label}
-                                    class={`sn-state-badge ${b.cls}`}
-                                  >
-                                    {b.label}
-                                  </span>
-                                ))}
-                              </span>
-                            );
-                          })()}
+                          <StateBadges
+                            badges={domStateBadges(node.a11y.states)}
+                          />
                           {/* Cross-links (aria-controls or heuristic): to the
                               rows this one controls, and back to those that
                               control it. */}

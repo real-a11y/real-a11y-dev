@@ -165,6 +165,7 @@ export function node(
   role: string,
   name: string,
   childIds: string[] = [],
+  tagName = "div",
 ): [string, SemanticNode] {
   return [
     id,
@@ -174,7 +175,7 @@ export function node(
       childIds,
       depth,
       a11y: { role, name, description: "", states: {}, properties: {} },
-      dom: { tagName: "div", attributes: {}, textContent: name },
+      dom: { tagName, attributes: {}, textContent: name },
       interaction: {
         actions: [],
         isEditable: false,

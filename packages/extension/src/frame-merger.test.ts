@@ -6,6 +6,7 @@ import {
   type FrameTree,
   asFrameMarks,
   buildFrameInfoMap,
+  frameVisibility,
   mergeFrameTrees,
   unplacedFrames,
 } from "./frame-merger.js";
@@ -896,5 +897,138 @@ describe("buildFrameInfoMap", () => {
 
   it("returns an empty map for an empty input", () => {
     expect(buildFrameInfoMap([]).size).toBe(0);
+  });
+});
+
+describe("frameVisibility", () => {
+  /**
+   * The page's tree with frame 5 under its `<iframe>`, and frame 7 under an
+   * `<iframe>` of frame 5's; `hidden` names the `<iframe>`s hidden from
+   * assistive technology.
+   */
+  function merged(hidden: string[] = []) {
+    const iframe = (
+      id: string,
+      src: string,
+      parentId: string,
+      depth: number,
+    ) => {
+      const node = makeNode(id, {
+        tagName: "iframe",
+        attrs: { src },
+        parentId,
+        depth,
+      });
+      node.a11y.isExposedToAT = !hidden.includes(id);
+      return node;
+    };
+    const frames = new Map([
+      [
+        0,
+        makeFrame(0, "https://top.test/", [
+          ["root", makeNode("root", { childIds: ["ifr"] })],
+          ["ifr", iframe("ifr", "https://child.test/", "root", 1)],
+        ]),
+      ],
+      [
+        5,
+        makeFrame(5, "https://child.test/", [
+          ["c-root", makeNode("c-root", { childIds: ["c-ifr"] })],
+          ["c-ifr", iframe("c-ifr", "https://deep.test/", "c-root", 1)],
+        ]),
+      ],
+      [7, makeFrame(7, "https://deep.test/", [["d-root", makeNode("d-root")]])],
+    ]);
+    const result = mergeFrameTrees({
+      frames,
+      frameInfoMap: new Map<number, FrameInfo>([
+        [5, { parentFrameId: 0, url: "https://child.test/" }],
+        [7, { parentFrameId: 5, url: "https://deep.test/" }],
+      ]),
+    })!;
+    return (frameId: number, rootId: string) =>
+      frameVisibility(result.nodes, { frameId, rootId }, "root");
+  }
+
+  it("shows the top frame, and every frame under an <iframe> the page exposes, however deep", () => {
+    const where = merged();
+    expect(where(0, "root")).toBe("shown");
+    expect(where(5, "c-root")).toBe("shown");
+    expect(where(7, "d-root")).toBe("shown");
+  });
+
+  it("hides every frame under an <iframe> hidden from assistive technology, however deep", () => {
+    const where = merged(["ifr"]);
+    expect(where(5, "c-root")).toBe("hidden");
+    expect(where(7, "d-root")).toBe("hidden");
+    // Hidden deeper down: the frame above it still shows.
+    const deeper = merged(["c-ifr"]);
+    expect(deeper(5, "c-root")).toBe("shown");
+    expect(deeper(7, "d-root")).toBe("hidden");
+  });
+
+  it("has a frame inside one with no place in the tree yet unplaced too", () => {
+    // Frame 5's <iframe> isn't in the page's tree as it was read.
+    const frames = new Map([
+      [0, makeFrame(0, "https://top.test/", [["root", makeNode("root")]])],
+      [
+        5,
+        makeFrame(5, "https://child.test/", [
+          ["c-root", makeNode("c-root", { childIds: ["c-ifr"] })],
+          [
+            "c-ifr",
+            makeNode("c-ifr", {
+              tagName: "iframe",
+              attrs: { src: "https://deep.test/" },
+              parentId: "c-root",
+              depth: 1,
+            }),
+          ],
+        ]),
+      ],
+      [7, makeFrame(7, "https://deep.test/", [["d-root", makeNode("d-root")]])],
+    ]);
+    const result = mergeFrameTrees({
+      frames,
+      frameInfoMap: new Map<number, FrameInfo>([
+        [5, { parentFrameId: 0, url: "https://child.test/" }],
+        [7, { parentFrameId: 5, url: "https://deep.test/" }],
+      ]),
+    })!;
+    expect(
+      frameVisibility(result.nodes, { frameId: 5, rootId: "c-root" }, "root"),
+    ).toBe("unplaced");
+    expect(
+      frameVisibility(result.nodes, { frameId: 7, rootId: "d-root" }, "root"),
+    ).toBe("unplaced");
+  });
+
+  it("has a frame the tree has no place for yet unplaced", () => {
+    const top = makeFrame(0, "https://top.test/", [["root", makeNode("root")]]);
+    const lost = makeFrame(9, "https://lost.test/", [
+      ["l-root", makeNode("l-root")],
+    ]);
+    const result = mergeFrameTrees({
+      frames: new Map([
+        [0, top],
+        [9, lost],
+      ]),
+      frameInfoMap: new Map(),
+    })!;
+    expect(
+      frameVisibility(result.nodes, { frameId: 9, rootId: "l-root" }, "root"),
+    ).toBe("unplaced");
+  });
+
+  it("ends on a tree whose parents loop", () => {
+    const a = makeNode("f5-a", { parentId: "f5-b" });
+    const b = makeNode("f5-b", { parentId: "f5-a" });
+    const nodes = new Map([
+      ["f5-a", a],
+      ["f5-b", b],
+    ]);
+    expect(frameVisibility(nodes, { frameId: 5, rootId: "a" }, "root")).toBe(
+      "unplaced",
+    );
   });
 });

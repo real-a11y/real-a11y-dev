@@ -87,6 +87,7 @@ import {
   NATIVE_FOLLOW_DEBOUNCE_MS,
   NATIVE_HOVER_DWELL_MS,
 } from "./native-follow.js";
+import { EmbeddedBadge, nativeStateBadges, StateBadges } from "./row-badges.js";
 import {
   arrowLeftStopsAtScopeRoot,
   describeNode,
@@ -1300,19 +1301,8 @@ export function NativeTreeView({
                       {headingLevel && (
                         <span class="sn-level-badge">H{headingLevel}</span>
                       )}
-                      {/* A frame the read found no content in: one it
-                          couldn't reach, or an empty one. */}
                       {isNativeIframeRole(node.role) && !hasChildren(node) && (
-                        <span
-                          class="sn-iframe-badge"
-                          title="Embedded page — no content read from it"
-                        >
-                          embedded
-                          <span class="sn-sr-only">
-                            {" "}
-                            page — nothing was read from it
-                          </span>
-                        </span>
+                        <EmbeddedBadge />
                       )}
                       {node.name && (
                         <span class="sn-name" title={node.name}>
@@ -1339,48 +1329,13 @@ export function NativeTreeView({
                           {JSON.stringify(node.placeholder)}
                         </span>
                       )}
-                      {(() => {
-                        const badges: string[] = [];
-                        for (const [key, value] of Object.entries(
-                          node.states ?? {},
-                        )) {
-                          if (key === "expanded") {
-                            badges.push(
-                              value === true ? "expanded" : "collapsed",
-                            );
-                          } else if (key === "checked" && value === "mixed") {
-                            badges.push("mixed");
-                          } else if (value === true) {
-                            badges.push(key);
-                          } else if (value !== false) {
-                            badges.push(`${key}=${value}`);
-                          }
-                        }
-                        // AX properties (heading level, hasPopup, orientation,
-                        // value bounds, …) — a separate collection from states on
-                        // the wire (native-core.ts's axFacets), and DogfoodPanel's
-                        // own formatFacets shows both. Always key=value; unlike
-                        // states, nothing here is a bare boolean flag.
-                        for (const [key, value] of Object.entries(
-                          node.properties ?? {},
-                        )) {
-                          if (key === "level" && headingLevel) continue;
-                          badges.push(`${key}=${value}`);
-                        }
-                        if (badges.length === 0) return null;
-                        return (
-                          <span class="sn-state-badges">
-                            {badges.map((b) => (
-                              <span
-                                key={b}
-                                class="sn-state-badge sn-state--info"
-                              >
-                                {b}
-                              </span>
-                            ))}
-                          </span>
-                        );
-                      })()}
+                      <StateBadges
+                        badges={nativeStateBadges(
+                          node.states,
+                          node.properties,
+                          { headingLevel },
+                        )}
+                      />
                       {/* Jump chips: to the rows this one controls, and back
                           to the rows that control it. */}
                       {controlsIndex.forward.get(id)?.map((targetId) => {

@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Native follow action</title>
+  </head>
+  <body>
+    <!--
+      Clicks whose result lands after the native tree's own re-read, a
+      second later, as it does when the page waits on the network first:
+      one in the page, one inside a frame, the way a contacts panel
+      embedded in a calendar loads its form, and one that leads to another
+      page a second later, which loads its result later still.
+    -->
+    <h1>Follow an action</h1>
+    <button id="load" type="button">Load form</button>
+    <button id="search" type="button">Search</button>
+    <iframe
+      id="contacts"
+      title="Contacts"
+      src="native-follow-action-frame.html"
+      width="400"
+      height="120"
+    ></iframe>
+    <script>
+      document.getElementById("load").addEventListener("click", () => {
+        setTimeout(() => {
+          const save = document.createElement("button");
+          save.type = "button";
+          save.textContent = "Save form";
+          document.body.append(save);
+        }, 1000);
+      });
+      document.getElementById("search").addEventListener("click", () => {
+        setTimeout(() => {
+          location.href = "native-follow-action-results.html";
+        }, 1000);
+      });
+    </script>
+  </body>
+</html>

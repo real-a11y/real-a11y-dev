@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Native follow action — frame</title>
+  </head>
+  <body>
+    <!--
+      The frame of `native-follow-action.html`: its button swaps the frame's
+      content for a form a second after it is clicked.
+    -->
+    <button id="create" type="button">Create contact</button>
+    <script>
+      document.getElementById("create").addEventListener("click", () => {
+        setTimeout(() => {
+          const save = document.createElement("button");
+          save.type = "button";
+          save.textContent = "Save contact";
+          document.body.replaceChildren(save);
+        }, 1000);
+      });
+    </script>
+  </body>
+</html>

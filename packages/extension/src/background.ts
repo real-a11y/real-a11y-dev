@@ -3,6 +3,7 @@
 import {
   asFrameMarks,
   buildFrameInfoMap,
+  frameVisibility,
   mergeFrameTrees,
   unplacedFrames,
 } from "./frame-merger.js";
@@ -95,6 +96,12 @@ async function mergeAndSendTree(tabId: number) {
   // re-read below is that, since this check cannot see a navigation that
   // lands while `getAllFrames` is in flight. This one just saves the IPC.
   if (!state.frames.has(0)) return;
+  // The changes this publish answers for: those announced before the frame
+  // list below was asked for. A frame whose first tree arrives during the
+  // wait may be missing from that list, and so can't be placed, and one that
+  // changes again then has a later change to report: the publish their own
+  // announcements schedule answers for those.
+  const changed = new Map(state.changedFrames);
 
   let allFrames: chrome.webNavigation.GetAllFrameResultDetails[] = [];
   try {
@@ -146,8 +153,23 @@ async function mergeAndSendTree(tabId: number) {
   // The outstanding request is answered by this publish, whatever prompted the
   // merge — so the guard above goes back to being purely port-driven.
   panelTreeRequests.delete(tabId);
-  const topFrameChanged = state.topFrameChanged;
-  state.topFrameChanged = false;
+  // Chrome's tree reads the top frame and every frame the page shows, so a
+  // change in any of them is one its auto-refresh follows; a hidden frame's
+  // (an animating ad's) changes nothing there.
+  const pageChangedAt: number[] = [];
+  for (const [frameId, at] of changed) {
+    const tree = state.frames.get(frameId);
+    const where = tree
+      ? frameVisibility(result.nodes, tree, topFrame.rootId)
+      : "hidden";
+    if (where === "shown") pageChangedAt.push(at);
+    // A frame with no place yet, or inside one that has none, is answered
+    // for by the publish that places it, such as one its parent's tree,
+    // sent again on request, prompts.
+    if (where !== "unplaced" && state.changedFrames.get(frameId) === at) {
+      state.changedFrames.delete(frameId);
+    }
+  }
   chrome.runtime
     .sendMessage({
       type: "TREE_DATA",
@@ -157,7 +179,11 @@ async function mergeAndSendTree(tabId: number) {
         rootId: topFrame.rootId,
         pageTitle: topFrame.pageTitle,
         pageUrl: topFrame.frameUrl,
-        topFrameChanged,
+        // Each one: the panel follows an action while any change it hasn't
+        // read falls in the action's window, not only the latest.
+        ...(pageChangedAt.length > 0
+          ? { pageChangedAt: pageChangedAt.sort((x, y) => x - y) }
+          : {}),
       },
     })
     .catch(() => {
@@ -656,7 +682,17 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         });
         // A frame asked where one of its frames goes has now answered.
         answeredPlacesAskedOf(state, frameId);
-        if (frameId === 0) state.topFrameChanged = true;
+        if (message.payload.reread !== true) {
+          // The page's clock, which can't be ahead of now.
+          const now = Date.now();
+          const stamp = message.payload.changedAt;
+          const at =
+            typeof stamp === "number" && Number.isFinite(stamp)
+              ? Math.min(stamp, now)
+              : now;
+          const before = state.changedFrames.get(frameId);
+          state.changedFrames.set(frameId, Math.max(before ?? at, at));
+        }
         scheduleMerge(tabId);
 
         // Decide what to send back to the frame(s). Rules are in routing.ts

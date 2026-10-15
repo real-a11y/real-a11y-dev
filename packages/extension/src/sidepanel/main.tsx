@@ -6,6 +6,7 @@ import "@ui-styles/tree.css";
 import "./export-menu.css";
 import "./empty-state.css";
 import "./select-picker.css";
+import "./toolbar.css";
 
 // `__DOGFOOD__` is a build-time constant, true only in the `DOGFOOD=1` build,
 // so the dev-only `DogfoodPanel` diagnostics widget below is dead-code-

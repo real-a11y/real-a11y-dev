@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Native follow action — results</title>
+  </head>
+  <body>
+    <!--
+      Where `native-follow-action.html`'s Search leads: the page loads with
+      a heading, and its result arrives two seconds later, after the native
+      tree's first read of it.
+    -->
+    <h1>Results</h1>
+    <script>
+      setTimeout(() => {
+        const result = document.createElement("button");
+        result.type = "button";
+        result.textContent = "Result 1";
+        document.body.append(result);
+      }, 2000);
+    </script>
+  </body>
+</html>

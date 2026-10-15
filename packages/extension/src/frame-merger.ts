@@ -130,6 +130,40 @@ export function unplacedFrames(frames: Map<number, FrameTree>): number[] {
 }
 
 /**
+ * Whether a frame's document shows on the page, as the merged `nodes` have
+ * it. Chrome's tree reads a frame only where its `<iframe>` has a row, and
+ * the DOM walk stops at anything hidden from assistive technology, so:
+ *
+ * - `"shown"`: its root hangs under the top frame's root (`topRootId`)
+ *   through nodes all exposed to assistive technology, its `<iframe>`'s
+ *   among them.
+ * - `"hidden"`: a node on the way up is hidden from assistive technology, as
+ *   a hidden frame's (an ad's, a tracker's) `<iframe>` is.
+ * - `"unplaced"`: the way up ends short of the top frame: the frame, or a
+ *   frame around it, has no place in the tree yet.
+ *
+ * Only as good as the merge's placement, which for a frame of another origin
+ * whose URL matches no `<iframe>` is a guess (see {@link mergeFrameTrees}).
+ */
+export function frameVisibility(
+  nodes: ReadonlyMap<string, SemanticNode>,
+  frame: Pick<FrameTree, "frameId" | "rootId">,
+  topRootId: string,
+): "shown" | "hidden" | "unplaced" {
+  if (frame.frameId === 0) return "shown";
+  let id: string | null = prefixNodeId(frame.frameId, frame.rootId);
+  // Bounded by the node count: a malformed tree with a parent cycle ends.
+  for (let steps = 0; id !== null && steps <= nodes.size; steps++) {
+    if (id === topRootId) return "shown";
+    const node = nodes.get(id);
+    if (!node) return "unplaced";
+    if (node.a11y.isExposedToAT === false) return "hidden";
+    id = node.parentId;
+  }
+  return "unplaced";
+}
+
+/**
  * Merge per-frame trees into a single tree.
  *
  * Returns `null` if the top frame (frameId 0) has not announced itself yet —

@@ -32,11 +32,14 @@ export interface TabState {
    */
   droppedFrames: Set<number>;
   /**
-   * The top frame announced a tree since the last merge was published. The
-   * panel's native auto-refresh reads the top frame only, so a change in a
-   * subframe (an animating ad) must not prompt it.
+   * The frames that announced a changed tree (not a re-read: see the
+   * payload's `reread`) that no publish has answered for yet, each with when
+   * it last changed (`changedAt`). A publish tells the panel when those the
+   * page shows (`frameVisibility`) changed, which is what
+   * prompts the native tree's auto-refresh: Chrome's tree reads those frames,
+   * and a change in a hidden one (an animating ad) changes nothing there.
    */
-  topFrameChanged: boolean;
+  changedFrames: Map<number, number>;
   /**
    * The frames a merge couldn't place, each with the mark it had, since when,
    * whether its place has been asked after (see the background's
@@ -103,7 +106,7 @@ export function createTabState(): TabState {
     mergeTimer: null,
     recoveryChecked: false,
     droppedFrames: new Set(),
-    topFrameChanged: false,
+    changedFrames: new Map(),
     askedPlaces: new Map(),
     placeTimer: null,
   };

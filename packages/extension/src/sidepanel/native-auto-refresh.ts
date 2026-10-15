@@ -17,23 +17,36 @@
  *   backing off ({@link autoRefreshGapMs}) the longer it runs without the
  *   user, so a page that animates forever doesn't keep the bar up for good.
  *
- * Only the top frame's changes count: the native read covers the top frame.
+ * In either mode, the page's changes for a few seconds after an action or a
+ * key sent through the tree are the action's own, and each burst is read as
+ * soon as the page goes quiet ({@link ACTION_FOLLOW_MS}): the action's own
+ * re-read comes too soon for a reaction that waits on the network.
+ *
+ * A frame's changes count as the top frame's do wherever the page shows the
+ * frame, since the native read puts its content under the frame's row. A
+ * hidden frame's (an animating ad's) don't: the service worker leaves them
+ * out of the signal (`frameVisibility`).
  *
  * This module only decides. `App.tsx` owns the timer, the reads, and the
  * state the decision is made from.
  */
 
-import {
-  DOM_OBSERVER_DEBOUNCE_MS,
-  DOM_OBSERVER_MAX_WAIT_MS,
-} from "@real-a11y-dev/core";
+import { DOM_OBSERVER_MAX_WAIT_MS } from "@real-a11y-dev/core";
 
 /** How long to let the page react before re-reading the native tree after an
  *  action or a sent key — same rationale and value as `DogfoodPanel.tsx`'s
- *  `SETTLE_MS`. Shorter than {@link PAGE_SIGNAL_LAG_MS}, so the re-read
- *  starts after the changes the action's own signal reports, and isn't
- *  followed by an automatic read for them (pinned by this module's tests). */
+ *  `SETTLE_MS`. A change the page makes within it is dated by the frame that
+ *  saw it, before the re-read started, so it isn't read a second time
+ *  however late its signal arrives. */
 export const NATIVE_SETTLE_MS = 250;
+
+/** How long after an action's or a sent key's own re-read the page's changes
+ *  still count as its own, and are read whatever the mode: a click that
+ *  loads a form over the network changes the page well after that re-read.
+ *  Each burst inside it is read once the page goes quiet, with no gap or
+ *  back-off: the action's attach has Chrome's bar up already. Bounded, so a
+ *  page that keeps changing goes back to its mode's rules. */
+export const ACTION_FOLLOW_MS = 5000;
 
 /** How long the page has to stay quiet before the tree is read again. The
  *  content script already batches mutations (`DOM_OBSERVER_DEBOUNCE_MS`, at
@@ -68,7 +81,8 @@ export const AUTO_REFRESH_FREE_READS = 2;
  * attaches rather than by what they found: a page that really changes all
  * the time would otherwise be read every few seconds forever, and keep
  * Chrome's bar up for good. A read the user causes (Refresh, an action, a
- * key) or a navigation starts the count over.
+ * key, or one following up an action — {@link ACTION_FOLLOW_MS}) or a
+ * navigation starts the count over.
  */
 export function autoRefreshGapMs(autoReads: number): number {
   return Math.min(
@@ -77,20 +91,6 @@ export function autoRefreshGapMs(autoReads: number): number {
     AUTO_REFRESH_MAX_GAP_MS,
   );
 }
-
-/** How far a page-change signal trails the changes it reports: the content
- *  script's `DomObserver` sends `TREE_DATA` once the page has been quiet for
- *  its debounce. So a signal at `t` reports changes made by
- *  `t - PAGE_SIGNAL_LAG_MS`, and a read that started after that already saw
- *  them. That is what keeps an action's own re-read
- *  ({@link NATIVE_SETTLE_MS} after the action) from being followed by a
- *  second, automatic one.
- *
- *  The observer's ceiling can flush a continuous stream of changes sooner
- *  than that. The stream's next flush reports what this one left out; only
- *  a stream that stops within the lag of a read starting can be missed, and
- *  the next change, or Refresh, reads it. */
-export const PAGE_SIGNAL_LAG_MS = DOM_OBSERVER_DEBOUNCE_MS;
 
 export type AutoRefreshMode = "navigation" | "changes";
 
@@ -110,9 +110,17 @@ export interface AutoRefreshState {
   native: boolean;
   /** A same-tab navigation happened and its page hasn't been read yet. */
   navigationPending: boolean;
-  /** When the page last changed, in ms: the latest top-frame page-change
-   *  signal (`TREE_DATA`) less {@link PAGE_SIGNAL_LAG_MS}. */
+  /** When the page last changed, in ms: the latest date a page-change
+   *  signal carried (`TREE_DATA`'s `pageChangedAt`), which the frame that
+   *  changed stamps. A read that started after it already saw the change.
+   *  The one exception is a stream of changes the frame's observer flushes
+   *  at its ceiling, which can go on up to its debounce past the date; the
+   *  stream's next flush, or Refresh, reads the rest. */
   lastChangeAt: number;
+  /** When the earliest change since the latest read began was made, in ms,
+   *  or `Infinity` when there is none: whether one falls in an action's
+   *  window ({@link ACTION_FOLLOW_MS}) can't be told from the latest alone. */
+  firstUnreadChangeAt: number;
   /** When the latest native read of any kind started, in ms. A read that
    *  started after a change already describes it. */
   lastReadStartedAt: number;
@@ -121,6 +129,9 @@ export interface AutoRefreshState {
   /** Automatic reads in a row since the user last caused one — see
    *  {@link autoRefreshGapMs}. */
   autoReads: number;
+  /** Until when, in ms, a change is the latest action's own: its re-read's
+   *  end plus {@link ACTION_FOLLOW_MS}. 0 when no action is being followed. */
+  followUntil: number;
   /** A native read or action is in flight, or a pick is armed. A pick holds
    *  the tab's debugger queue until the user clicks, so a read queued behind
    *  it would wait that long too. */
@@ -130,7 +141,9 @@ export interface AutoRefreshState {
 export type AutoRefreshDecision =
   | { kind: "skip" }
   | { kind: "wait"; ms: number }
-  | { kind: "read"; tabId: number };
+  /** `followsAction`: the read follows up an action ({@link ACTION_FOLLOW_MS}),
+   *  so it starts the back-off over rather than adding to it. */
+  | { kind: "read"; tabId: number; followsAction?: true };
 
 export function decideAutoRefresh(
   s: AutoRefreshState,
@@ -139,11 +152,18 @@ export function decideAutoRefresh(
   if (!s.native || s.armedTab === null || s.armedTab !== s.boundTab) {
     return { kind: "skip" };
   }
-  // By default only a navigation's new page is read on its own.
-  if (s.mode === "navigation" && !s.navigationPending) return { kind: "skip" };
   // Nothing changed since the latest read began.
   if (s.lastChangeAt <= s.lastReadStartedAt) return { kind: "skip" };
+  // Judged by when the page changed, not by when the quiet period ended,
+  // and by any change still unread, not only the latest.
+  const followsAction = s.firstUnreadChangeAt < s.followUntil;
+  // By default only a navigation's new page, and what an action does, are
+  // read on their own.
+  if (s.mode === "navigation" && !s.navigationPending && !followsAction) {
+    return { kind: "skip" };
+  }
   if (s.busy) return { kind: "wait", ms: AUTO_REFRESH_QUIET_MS };
+  if (followsAction) return { kind: "read", tabId: s.armedTab, followsAction };
   const gap = s.lastReadEndedAt + autoRefreshGapMs(s.autoReads) - now;
   if (gap > 0) return { kind: "wait", ms: gap };
   return { kind: "read", tabId: s.armedTab };

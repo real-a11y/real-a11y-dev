@@ -262,7 +262,11 @@ function makeHarness() {
             : [opts.frameId];
         for (const frameId of targets) {
           if (!liveFrames.has(frameId)) continue;
-          setTimeout(() => announce(harness, frameId), knobs.answerDelayMs);
+          // Each of these is a re-read in the real content script.
+          setTimeout(
+            () => announce(harness, frameId, { reread: true }),
+            knobs.answerDelayMs,
+          );
         }
       },
     },
@@ -284,11 +288,15 @@ function makeHarness() {
 
 type Harness = ReturnType<typeof makeHarness>;
 
-/** Deliver a `FRAME_TREE_DATA` to the background as frame `frameId` would. */
-function announce(h: Harness, frameId: number) {
+/** Deliver a `FRAME_TREE_DATA` to the background as frame `frameId` would,
+ *  with `extra` on its payload. */
+function announce(h: Harness, frameId: number, extra: object = {}) {
   for (const fn of h.messageListeners) {
     fn(
-      { type: "FRAME_TREE_DATA", payload: frameTreePayload(frameId) },
+      {
+        type: "FRAME_TREE_DATA",
+        payload: { ...frameTreePayload(frameId), ...extra },
+      },
       { id: EXTENSION_ID, tab: { id: TAB_ID }, frameId },
       () => {},
     );
@@ -1403,5 +1411,294 @@ describe("background: the Focus sync toggle, through page updates", () => {
     const sent = trackerSentSince(from);
     expect(sent.length).toBeGreaterThanOrEqual(1);
     expect(new Set(sent)).toEqual(new Set([true]));
+  });
+});
+
+describe("background: which frames' changes Chrome's tree follows", () => {
+  let h: Harness;
+
+  beforeEach(async () => {
+    vi.useFakeTimers();
+    vi.resetModules();
+    h = makeHarness();
+    (globalThis as { chrome?: unknown }).chrome = h.chromeMock;
+    await import("./background.js");
+    await vi.runAllTimersAsync();
+    connectPanel(h);
+    // The page, its two frames placed under their <iframe>s.
+    for (const frameId of [0, 1, 2]) announce(h, frameId);
+    await vi.runAllTimersAsync();
+    h.panelMessages.length = 0;
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    delete (globalThis as { chrome?: unknown }).chrome;
+  });
+
+  /** Deliver a `FRAME_TREE_DATA` with this payload, as frame `frameId`. */
+  function deliver(frameId: number, payload: object) {
+    for (const fn of h.messageListeners) {
+      fn(
+        { type: "FRAME_TREE_DATA", payload },
+        { id: EXTENSION_ID, tab: { id: TAB_ID }, frameId },
+        () => {},
+      );
+    }
+  }
+
+  /** Each published tree's `pageChangedAt`, since the last call. */
+  function changedAt(): unknown[] {
+    const out = h.panelMessages
+      .filter((m) => m.type === "TREE_DATA")
+      .map((m) => (m.payload as { pageChangedAt?: unknown }).pageChangedAt);
+    h.panelMessages.length = 0;
+    return out;
+  }
+
+  /** Whether each published tree says the page changed, since the last
+   *  call. */
+  function pageChanged(): boolean[] {
+    return changedAt().map((at) => Array.isArray(at));
+  }
+
+  it("follows a change in a frame the page shows, as one in the top frame", async () => {
+    announce(h, 1);
+    await vi.runAllTimersAsync();
+    expect(pageChanged()).toEqual([true]);
+    announce(h, 0);
+    await vi.runAllTimersAsync();
+    expect(pageChanged()).toEqual([true]);
+  });
+
+  it("leaves out a change in a frame hidden from assistive technology", async () => {
+    // The top frame's second <iframe>, frame 2's, is hidden: Chrome's tree
+    // has no row for it to read the frame under.
+    const top = frameTreePayload(0);
+    deliver(0, {
+      ...top,
+      nodes: top.nodes.map(([id, node]) =>
+        id === "ifB"
+          ? [id, { ...node, a11y: { ...node.a11y, isExposedToAT: false } }]
+          : [id, node],
+      ),
+    });
+    await vi.runAllTimersAsync();
+    pageChanged();
+
+    announce(h, 2);
+    await vi.runAllTimersAsync();
+    expect(pageChanged()).toEqual([false]);
+    announce(h, 1);
+    await vi.runAllTimersAsync();
+    expect(pageChanged()).toEqual([true]);
+  });
+
+  it("leaves out a change in a frame the tree has no place for", async () => {
+    const url = "https://c.test/widget";
+    h.knobs.frames.push({ frameId: 3, parentFrameId: 0, url });
+    deliver(3, {
+      frameUrl: url,
+      pageTitle: "Frame 3",
+      rootId: "root",
+      nodes: [["root", makeNode("root")]],
+    });
+    await vi.runAllTimersAsync();
+    expect(pageChanged()).toEqual([false]);
+  });
+
+  it("leaves out a frame read again rather than changed", async () => {
+    // An answer to RESEND_TREE or REQUEST_TREE, or the re-read after a key.
+    deliver(1, { ...frameTreePayload(1), reread: true });
+    await vi.runAllTimersAsync();
+    expect(pageChanged()).toEqual([false]);
+    deliver(0, { ...frameTreePayload(0), reread: true });
+    await vi.runAllTimersAsync();
+    expect(pageChanged()).toEqual([false]);
+  });
+
+  it("says when each frame the page shows changed, as the frame saw it", async () => {
+    deliver(1, { ...frameTreePayload(1), changedAt: 1_000 });
+    await vi.runAllTimersAsync();
+    expect(changedAt()).toEqual([[1_000]]);
+    // Each one, earliest first: an action's window may hold either.
+    deliver(1, { ...frameTreePayload(1), changedAt: 3_000 });
+    deliver(0, { ...frameTreePayload(0), changedAt: 2_000 });
+    await vi.runAllTimersAsync();
+    expect(changedAt()).toEqual([[2_000, 3_000]]);
+  });
+
+  it("keeps a change made while a publish waits for the frame list for the next one", async () => {
+    h.knobs.getAllFramesDelayMs = 100;
+    deliver(1, { ...frameTreePayload(1), changedAt: 1_000 });
+    // The publish has asked for the frame list when frame 1 changes again.
+    await vi.advanceTimersByTimeAsync(250);
+    deliver(1, { ...frameTreePayload(1), changedAt: 2_000 });
+    await vi.runAllTimersAsync();
+    expect(changedAt()).toEqual([[1_000], [2_000]]);
+  });
+
+  it("answers for a frame inside one with no place yet once that one has it", async () => {
+    // Frame 5's <iframe> isn't in the page's tree as it was read; frame 7
+    // sits inside frame 5.
+    h.knobs.frames.push(
+      { frameId: 5, parentFrameId: 0, url: "https://c.test/" },
+      { frameId: 7, parentFrameId: 5, url: "https://d.test/" },
+    );
+    deliver(5, {
+      frameUrl: "https://c.test/",
+      pageTitle: "Frame 5",
+      rootId: "root",
+      changedAt: 1_000,
+      nodes: [
+        ["root", makeNode("root", { childIds: ["ifD"] })],
+        [
+          "ifD",
+          makeNode("ifD", {
+            parentId: "root",
+            depth: 1,
+            tagName: "iframe",
+            attrs: { src: "https://d.test/" },
+          }),
+        ],
+      ],
+    });
+    deliver(7, {
+      frameUrl: "https://d.test/",
+      pageTitle: "Frame 7",
+      rootId: "root",
+      changedAt: 2_000,
+      nodes: [["root", makeNode("root")]],
+    });
+    await vi.runAllTimersAsync();
+    expect(changedAt().every((at) => at === undefined)).toBe(true);
+
+    // The page's tree, read again, has frame 5's <iframe> now.
+    const top = frameTreePayload(0);
+    deliver(0, {
+      ...top,
+      reread: true,
+      nodes: [
+        ["root", makeNode("root", { childIds: ["ifA", "ifB", "ifC"] })],
+        ...top.nodes.slice(1),
+        [
+          "ifC",
+          makeNode("ifC", {
+            parentId: "root",
+            depth: 1,
+            tagName: "iframe",
+            attrs: { src: "https://c.test/" },
+          }),
+        ],
+      ],
+    });
+    await vi.runAllTimersAsync();
+    expect(changedAt()).toEqual([[1_000, 2_000]]);
+  });
+
+  it("answers once for a marked frame its URL placed", async () => {
+    // Frame 2 marked its <iframe> after the page's tree was read, but its URL
+    // places it all the same.
+    deliver(2, { ...frameTreePayload(2), owner: "mark-2", changedAt: 4_000 });
+    await vi.runAllTimersAsync();
+    expect(changedAt()).toContainEqual([4_000]);
+    deliver(1, { ...frameTreePayload(1), reread: true });
+    await vi.runAllTimersAsync();
+    expect(changedAt().every((at) => at === undefined)).toBe(true);
+  });
+
+  it("never dates a change after now", async () => {
+    const now = Date.now();
+    deliver(1, { ...frameTreePayload(1), changedAt: now + 60_000 });
+    await vi.runAllTimersAsync();
+    const [[at]] = changedAt() as number[][];
+    expect(at).toBeGreaterThanOrEqual(now);
+    expect(at).toBeLessThanOrEqual(Date.now());
+  });
+
+  it("answers for a frame waiting for its place in the publish that places it", async () => {
+    // A blank frame of the page's own origin goes under the <iframe> its
+    // script marks, and the page's tree was read before it marked it.
+    h.knobs.frames.push({ frameId: 9, parentFrameId: 0, url: "about:blank" });
+    // The page's answer to being asked where the frame goes is sent below.
+    h.liveFrames.delete(0);
+    const top = (mark?: string) => {
+      const payload = frameTreePayload(0);
+      return {
+        ...payload,
+        nodes: [
+          ...payload.nodes,
+          [
+            "ifBlank",
+            makeNode("ifBlank", {
+              parentId: "root",
+              depth: 1,
+              tagName: "iframe",
+            }),
+          ],
+        ],
+        ...(mark !== undefined ? { embeds: [["ifBlank", mark]] } : {}),
+      };
+    };
+    const blank = {
+      ...frameTreePayload(9),
+      frameUrl: "about:blank",
+      owner: "mark-9",
+    };
+    deliver(0, top());
+    await vi.runAllTimersAsync();
+    changedAt();
+    deliver(9, { ...blank, changedAt: 5_000 });
+    await vi.runAllTimersAsync();
+    const unplaced = changedAt();
+    expect(unplaced.length).toBeGreaterThan(0);
+    expect(unplaced.every((at) => at === undefined)).toBe(true);
+
+    // The page's tree, sent again when the service worker asks where the
+    // frame goes, places it: its change is the page's now.
+    deliver(0, { ...top("mark-9"), reread: true });
+    await vi.runAllTimersAsync();
+    expect(changedAt()).toEqual([[5_000]]);
+  });
+
+  it("answers for a frame whose first tree arrives while a publish waits for the frame list", async () => {
+    // Frame 1 holds an <iframe> for frame 3, which is still loading.
+    const url = "https://c.test/widget";
+    deliver(1, {
+      ...frameTreePayload(1),
+      nodes: [
+        ["root", makeNode("root", { childIds: ["ifC"] })],
+        [
+          "ifC",
+          makeNode("ifC", {
+            parentId: "root",
+            depth: 1,
+            tagName: "iframe",
+            attrs: { src: url },
+          }),
+        ],
+      ],
+    });
+    await vi.runAllTimersAsync();
+    pageChanged();
+
+    h.knobs.getAllFramesDelayMs = 100;
+    announce(h, 0);
+    // The publish has asked for the frame list, which doesn't have frame 3
+    // yet, when frame 3's first tree arrives.
+    await vi.advanceTimersByTimeAsync(250);
+    deliver(3, {
+      frameUrl: url,
+      pageTitle: "Frame 3",
+      rootId: "root",
+      nodes: [["root", makeNode("root")]],
+    });
+    await vi.advanceTimersByTimeAsync(60);
+    expect(pageChanged()).toEqual([true]);
+
+    // Placed by the next publish, which answers for it.
+    h.knobs.frames.push({ frameId: 3, parentFrameId: 1, url });
+    await vi.runAllTimersAsync();
+    expect(pageChanged()).toEqual([true]);
   });
 });

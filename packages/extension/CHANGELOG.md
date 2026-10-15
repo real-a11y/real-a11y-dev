@@ -50,9 +50,8 @@
 - **Chrome's tree follows focus inside frames too**, cross-origin ones
   included: focus moving inside a frame selects the focused element's row
   under the frame's row, and the frame's own row when nothing focused there
-  has one. A frame the extension's content script doesn't run in, such as an
-  `about:blank` or `srcdoc` frame, isn't followed, nor is either of two frames
-  showing the same page
+  has one. Either of two cross-origin frames showing the same page isn't
+  followed, since the two can't be told apart
   ([#500](https://github.com/real-a11y/real-a11y-dev/pull/500)).
 
 - **Frames with no address of their own are read, and followed.** An
@@ -73,6 +72,30 @@
   the old document. This affected any frame whose page does it, not only
   blank ones
   ([#501](https://github.com/real-a11y/real-a11y-dev/pull/501)).
+
+- **Chrome's tree keeps up with what an action does.** After a click or a
+  key sent through the tree, it read the page once, a quarter of a second
+  later, so a form the click loaded over the network, or anything else the
+  page took longer over, stayed off the tree until **↻**. For a few seconds
+  after that read, whatever the page does next is now read as well, as soon
+  as the page goes quiet, with **Follow page changes** on or off
+  ([#502](https://github.com/real-a11y/real-a11y-dev/pull/502)).
+
+- **Changes inside a frame refresh Chrome's tree.** With **Follow page
+  changes** on, only the top frame's changes were read, so what loaded
+  inside a frame, such as a contacts panel embedded in a calendar, stayed as
+  first read. A change in any frame the page shows now counts as one in the
+  page. A hidden frame's, such as an animating ad's, still doesn't
+  ([#502](https://github.com/real-a11y/real-a11y-dev/pull/502)).
+
+- **Both trees mark and colour their rows alike.** The in-page tree marked
+  every frame's row **embedded**, even with the frame's content under it; it
+  now marks only a frame nothing was read from, as Chrome's tree does.
+  Chrome's tree showed every state in grey; it now colours them as the
+  in-page tree does: **disabled** red, **checked**, **pressed** and
+  **selected** green, **mixed** amber, **required** orange. The **⟳**
+  toggle for **Follow page changes** now shows when it's on
+  ([#502](https://github.com/real-a11y/real-a11y-dev/pull/502)).
 
 - Hardened the shared mutation observer so that re-arming it can no longer
   strand the previous observers and event listeners

@@ -1504,6 +1504,76 @@ describe("content: the marked frames inside a document", () => {
   });
 });
 
+describe("content: what a tree says of how it was read", () => {
+  let h: Harness;
+
+  beforeEach(async () => {
+    vi.useFakeTimers();
+    vi.resetModules();
+    document.body.innerHTML = `<main><button>Save</button></main>`;
+    h = makeHarness();
+    (globalThis as { chrome?: unknown }).chrome = h.chromeMock;
+    await import("./content.js");
+    h.send({ type: "REQUEST_TREE", payload: { viewMode: "a11y" } });
+  });
+
+  afterEach(() => {
+    h.send({ type: "SET_OBSERVING", payload: { enabled: false } });
+    vi.clearAllTimers();
+    vi.useRealTimers();
+    delete (globalThis as { chrome?: unknown }).chrome;
+    document.body.innerHTML = "";
+  });
+
+  /** The payloads of the trees sent since the last call. */
+  function sentTrees(): Array<Record<string, unknown>> {
+    const trees = h.sent
+      .filter((m) => m.type === "FRAME_TREE_DATA")
+      .map((m) => m.payload as Record<string, unknown>);
+    h.sent.length = 0;
+    return trees;
+  }
+
+  it("calls a tree sent on request, or after a key, a re-read", async () => {
+    sentTrees();
+    h.send({ type: "REQUEST_TREE", payload: { viewMode: "a11y" } });
+    h.send({ type: "RESEND_TREE" });
+    h.send({ type: "SET_VIEW_MODE", payload: { viewMode: "dom" } });
+    h.send({
+      type: "SEND_KEY",
+      payload: { key: "Tab", code: "Tab", keyCode: 9 },
+    });
+    await vi.advanceTimersByTimeAsync(200);
+    const trees = sentTrees();
+    expect(trees.map((t) => t["reread"])).toEqual([true, true, true, true]);
+    // A re-read isn't a change, so it carries no date for one.
+    for (const tree of trees) expect(tree).not.toHaveProperty("changedAt");
+  });
+
+  it("dates a change the observer saw by when the page went quiet", async () => {
+    sentTrees();
+    const changedAt = Date.now();
+    document.querySelector("main")!.append(document.createElement("button"));
+    await vi.advanceTimersByTimeAsync(2000);
+    const trees = sentTrees();
+    expect(trees.length).toBeGreaterThan(0);
+    for (const tree of trees) expect(tree).not.toHaveProperty("reread");
+    // Sent a debounce later, but dated to the change.
+    expect(trees[0]).toHaveProperty("changedAt", changedAt);
+  });
+
+  it("dates a tree sent unasked otherwise by when it was read", () => {
+    // Armed again, as after a panel reconnects: the frame's first tree.
+    h.send({ type: "SET_OBSERVING", payload: { enabled: false } });
+    sentTrees();
+    h.send({ type: "SET_OBSERVING", payload: { enabled: true } });
+    const trees = sentTrees();
+    expect(trees).toHaveLength(1);
+    expect(trees[0]).not.toHaveProperty("reread");
+    expect(trees[0]).toHaveProperty("changedAt", Date.now());
+  });
+});
+
 describe("content: a page that replaces its document", () => {
   let h: Harness;
   let original: Element;

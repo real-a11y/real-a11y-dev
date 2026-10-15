@@ -197,6 +197,23 @@ test("a busy region shows a bare busy badge, not busy=1", async ({ nav }) => {
   await expect(badges).toHaveText(["busy"]);
 });
 
+test("state badges take the in-page tree's colours", async ({ nav }) => {
+  await nav.showNative("checkbox-radio-switch.html");
+  const badge = (row: RegExp, text: string) =>
+    nav.panel
+      .getByRole("treeitem", { name: row })
+      .locator(".sn-state-badge", { hasText: new RegExp(`^${text}$`) });
+  await expect(badge(/^checkbox "Sandwich Condiments"/, "mixed")).toHaveClass(
+    /\bsn-state--mixed\b/,
+  );
+  await expect(badge(/^checkbox "Lettuce"/, "checked")).toHaveClass(
+    /\bsn-state--on\b/,
+  );
+  await expect(badge(/^checkbox "Lettuce"/, "focusable")).toHaveClass(
+    /\bsn-state--info\b/,
+  );
+});
+
 test("double-clicking a row activates it, same as the DOM tree's own row", async ({
   nav,
 }) => {

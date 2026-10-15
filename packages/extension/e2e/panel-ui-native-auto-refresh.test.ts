@@ -2,14 +2,16 @@
  * Native auto-refresh, through the real build.
  *
  * By default the native tree reads itself again once, after a same-tab
- * navigation settles, and otherwise waits for Refresh, an action or a key.
- * With "Follow page changes" on, it also reads after every burst of page
- * changes, backing off the longer that runs on without the user
- * (`native-auto-refresh.ts` is the policy). Either way it follows only the
- * tab a read succeeded on, and only the top frame's changes.
+ * navigation settles, and for a few seconds after an action or a key, and
+ * otherwise waits for Refresh. With "Follow page changes" on, it also reads
+ * after every burst of page changes, backing off the longer that runs on
+ * without the user (`native-auto-refresh.ts` is the policy). Either way it
+ * follows only the tab a read succeeded on, and a frame's changes count
+ * wherever the page shows the frame.
  */
 
 import {
+  ACTION_FOLLOW_MS,
   AUTO_REFRESH_MIN_GAP_MS,
   AUTO_REFRESH_QUIET_MS,
 } from "../src/sidepanel/native-auto-refresh.ts";
@@ -41,8 +43,11 @@ async function findRow(panel: PanelPage, name: string) {
   return panel.getByRole("treeitem", { name: new RegExp(`^button "${name}"`) });
 }
 
-/** Add a button the native tree has never seen. */
-async function addButton(page: PanelPage, name: string): Promise<void> {
+/** Add a button the native tree has never seen, to a page or a frame. */
+async function addButton(
+  page: Pick<PanelPage, "evaluate">,
+  name: string,
+): Promise<void> {
   await page.evaluate((text) => {
     const button = document.createElement("button");
     button.textContent = text;
@@ -170,7 +175,102 @@ test.describe("by default", () => {
   });
 });
 
+test.describe("after an action, by default", () => {
+  test("what a click loads after its re-read reaches the native tree", async ({
+    nav,
+  }) => {
+    // The button adds a form a second after the click: later than the
+    // action's own re-read, so only a read that follows it sees the form.
+    const page = await nav.showNative("native-follow-action.html");
+    await (
+      await findRow(nav.panel, "Load form")
+    ).dblclick({
+      position: { x: 5, y: 5 },
+    });
+    await expect(await findRow(nav.panel, "Save form")).toBeVisible({
+      timeout: READ_WINDOW_MS,
+    });
+    expect(await autoReads(nav)).toBe(1);
+
+    // For a few seconds only: after that a change waits for Refresh again.
+    await nav.panel.waitForTimeout(ACTION_FOLLOW_MS);
+    await addButton(page, "Added much later");
+    await nav.panel.waitForTimeout(READ_WINDOW_MS);
+    expect(await autoReads(nav)).toBe(1);
+  });
+
+  test("what lands while a slow re-read is under way is read after it", async ({
+    nav,
+  }) => {
+    // Each read's answer comes back 2.5 s after the read looked at the page:
+    // the form, a second after the click, lands in between.
+    await nav.showNative("native-follow-action.html");
+    await nav.setNativeReads("hold:2500");
+    await (
+      await findRow(nav.panel, "Load form")
+    ).dblclick({
+      position: { x: 5, y: 5 },
+    });
+    await expect(await findRow(nav.panel, "Save form")).toBeVisible({
+      timeout: 15_000,
+    });
+  });
+
+  test("so does what the page a click leads to loads later", async ({
+    nav,
+  }) => {
+    // The click navigates a second after it, past the action's own re-read,
+    // and the page it leads to adds its result after its first read.
+    await nav.showNative("native-follow-action.html");
+    await (
+      await findRow(nav.panel, "Search")
+    ).dblclick({
+      position: { x: 5, y: 5 },
+    });
+    await expect(await findRow(nav.panel, "Result 1")).toBeVisible({
+      timeout: 15_000,
+    });
+  });
+
+  test("so does what it loads inside a frame", async ({ nav }) => {
+    await nav.showNative("native-follow-action.html");
+    await (
+      await findRow(nav.panel, "Create contact")
+    ).dblclick({
+      position: { x: 5, y: 5 },
+    });
+    await expect(await findRow(nav.panel, "Save contact")).toBeVisible({
+      timeout: READ_WINDOW_MS,
+    });
+    expect(await autoReads(nav)).toBe(1);
+  });
+});
+
 test.describe("with Follow page changes on", () => {
+  test("its toggle looks pressed, hovered or not", async ({ nav }) => {
+    await nav.showNative("native-panel.html");
+    const toggle = nav.panel.getByRole("button", {
+      name: "Follow page changes",
+    });
+    const background = () =>
+      toggle.evaluate((el) => getComputedStyle(el).backgroundColor);
+    const accent = await toggle.evaluate((el) => {
+      const probe = document.createElement("span");
+      probe.style.background = "var(--sn-accent)";
+      el.parentElement!.append(probe);
+      const colour = getComputedStyle(probe).backgroundColor;
+      probe.remove();
+      return colour;
+    });
+    expect(await background()).not.toBe(accent);
+
+    // The pointer stays on it after the click.
+    await followPageChanges(nav.panel);
+    expect(await background()).toBe(accent);
+    await nav.panel.mouse.move(0, 0);
+    expect(await background()).toBe(accent);
+  });
+
   test("a page change reaches the native tree without Refresh", async ({
     nav,
   }) => {
@@ -188,25 +288,45 @@ test.describe("with Follow page changes on", () => {
     ).not.toContainText("reading");
   });
 
-  test("a subframe's changes don't prompt a read of the top frame", async ({
+  test("a change inside a frame the page shows reaches the native tree", async ({
     nav,
   }) => {
+    // The native read puts a frame's content under its Iframe row, so the
+    // frame changing is the page changing.
     const page = await nav.showNative("pick-mode.html");
     await followPageChanges(nav.panel);
     const frame = page.frames().find((f) => f !== page.mainFrame())!;
-    await frame.evaluate(() => {
-      const p = document.createElement("p");
-      p.textContent = "changed inside the frame";
-      document.body.append(p);
-    });
-    await nav.panel.waitForTimeout(READ_WINDOW_MS);
-    expect(await autoReads(nav)).toBe(0);
+    const added = await findRow(nav.panel, "Added inside the frame");
+    await expect(added).toHaveCount(0);
 
-    // The top frame's own change does.
-    await addButton(page, "Added to the top frame");
+    await addButton(frame, "Added inside the frame");
+    await expect(added).toBeVisible({ timeout: READ_WINDOW_MS });
+    expect(await autoReads(nav)).toBe(1);
+  });
+
+  test("a hidden frame's changes don't prompt a read", async ({ nav }) => {
+    // An animating ad in a hidden frame would otherwise keep Chrome's
+    // debugging bar up, for content the native tree doesn't show.
+    const page = await nav.showNative("pick-mode.html");
+    await followPageChanges(nav.panel);
+    // Hiding it is a change to the top frame, which is read.
+    await page.evaluate(() => {
+      document.getElementById("child")!.style.display = "none";
+    });
     await expect
       .poll(() => autoReads(nav), { timeout: READ_WINDOW_MS })
       .toBe(1);
+
+    const frame = page.frames().find((f) => f !== page.mainFrame())!;
+    await addButton(frame, "Added while hidden");
+    await nav.panel.waitForTimeout(READ_WINDOW_MS);
+    expect(await autoReads(nav)).toBe(1);
+
+    // The top frame's own change still is.
+    await addButton(page, "Added to the top frame");
+    await expect
+      .poll(() => autoReads(nav), { timeout: READ_WINDOW_MS })
+      .toBe(2);
   });
 
   test("a page that never goes quiet is still read, and backs off", async ({

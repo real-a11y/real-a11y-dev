@@ -2,6 +2,7 @@ import { DOM_OBSERVER_DEBOUNCE_MS } from "@real-a11y-dev/core";
 import { describe, expect, it } from "vitest";
 
 import {
+  ACTION_FOLLOW_MS,
   AUTO_REFRESH_FREE_READS,
   AUTO_REFRESH_MAX_GAP_MS,
   AUTO_REFRESH_MAX_WAIT_MS,
@@ -10,7 +11,6 @@ import {
   autoRefreshGapMs,
   decideAutoRefresh,
   NATIVE_SETTLE_MS,
-  PAGE_SIGNAL_LAG_MS,
   quietPeriodOnSignal,
   type AutoRefreshState,
 } from "./native-auto-refresh.js";
@@ -18,8 +18,8 @@ import {
 const NOW = 100_000;
 
 function state(over: Partial<AutoRefreshState> = {}): AutoRefreshState {
-  return {
-    mode: "changes",
+  const s = {
+    mode: "changes" as const,
     armedTab: 7,
     boundTab: 7,
     native: true,
@@ -28,8 +28,16 @@ function state(over: Partial<AutoRefreshState> = {}): AutoRefreshState {
     lastReadStartedAt: NOW - 6000,
     lastReadEndedAt: NOW - AUTO_REFRESH_MIN_GAP_MS - 1,
     autoReads: 0,
+    followUntil: 0,
     busy: false,
     ...over,
+  };
+  // One unread change unless a test says otherwise: the latest.
+  return {
+    ...s,
+    firstUnreadChangeAt:
+      over.firstUnreadChangeAt ??
+      (s.lastChangeAt > s.lastReadStartedAt ? s.lastChangeAt : Infinity),
   };
 }
 
@@ -78,17 +86,15 @@ describe("decideAutoRefresh in changes mode", () => {
     ).toEqual({ kind: "skip" });
   });
 
-  it("counts a change the read started after as already read", () => {
-    // An action's re-read starts NATIVE_SETTLE_MS after the action; the
-    // page's signal for that action's changes lands PAGE_SIGNAL_LAG_MS after
-    // them, i.e. after the re-read began, but it reports changes the re-read
-    // already saw.
+  it("counts a change made before a read started as read", () => {
+    // An action's re-read starts NATIVE_SETTLE_MS after the action. The
+    // page's signal for what the action did at once arrives after that, but
+    // carries when the page changed, which is before the re-read began.
     const actionAt = NOW - 5000;
-    const signalAt = actionAt + PAGE_SIGNAL_LAG_MS;
     expect(
       decideAutoRefresh(
         state({
-          lastChangeAt: signalAt - PAGE_SIGNAL_LAG_MS,
+          lastChangeAt: actionAt + 50,
           lastReadStartedAt: actionAt + NATIVE_SETTLE_MS,
         }),
         NOW,
@@ -144,6 +150,135 @@ describe("decideAutoRefresh in changes mode", () => {
   });
 });
 
+describe("decideAutoRefresh after an action", () => {
+  // The action's own re-read ran from 4 s to 3.8 s ago, which opened the
+  // window it follows the page for.
+  const reread = { lastReadStartedAt: NOW - 4000, lastReadEndedAt: NOW - 3800 };
+  const followUntil = reread.lastReadEndedAt + ACTION_FOLLOW_MS;
+
+  it("reads what the page does next in the default mode too", () => {
+    // A form the click loads over the network, after the re-read.
+    expect(
+      decideAutoRefresh(
+        state({
+          mode: "navigation",
+          ...reread,
+          lastChangeAt: NOW - 1000,
+          followUntil,
+        }),
+        NOW,
+      ),
+    ).toEqual({ kind: "read", tabId: 7, followsAction: true });
+  });
+
+  it("reads it at once, whatever gap the back-off had reached", () => {
+    expect(
+      decideAutoRefresh(
+        state({
+          ...reread,
+          lastReadEndedAt: NOW - 100,
+          autoReads: AUTO_REFRESH_FREE_READS + 3,
+          lastChangeAt: NOW - 1000,
+          followUntil,
+        }),
+        NOW,
+      ),
+    ).toEqual({ kind: "read", tabId: 7, followsAction: true });
+  });
+
+  it("goes by when the page changed, not by when it went quiet", () => {
+    // Changed inside the window; quiet only after it closed.
+    expect(
+      decideAutoRefresh(
+        state({
+          mode: "navigation",
+          ...reread,
+          lastChangeAt: followUntil - 1,
+          followUntil,
+        }),
+        followUntil + AUTO_REFRESH_QUIET_MS,
+      ),
+    ).toEqual({ kind: "read", tabId: 7, followsAction: true });
+  });
+
+  it("reads a change made in the window though a later one came after it", () => {
+    // Two changes arrive together, or one soon after the other: the first
+    // inside the window, the latest just past it.
+    expect(
+      decideAutoRefresh(
+        state({
+          mode: "navigation",
+          ...reread,
+          firstUnreadChangeAt: followUntil - 1,
+          lastChangeAt: followUntil + 1,
+          followUntil,
+        }),
+        NOW,
+      ),
+    ).toEqual({ kind: "read", tabId: 7, followsAction: true });
+  });
+
+  it("leaves a change after the window to the mode's own rules", () => {
+    const later = {
+      ...reread,
+      lastReadEndedAt: NOW - 100,
+      lastChangeAt: followUntil,
+      followUntil,
+    };
+    expect(
+      decideAutoRefresh(state({ mode: "navigation", ...later }), NOW),
+    ).toEqual({ kind: "skip" });
+    expect(decideAutoRefresh(state(later), NOW)).toEqual({
+      kind: "wait",
+      ms: AUTO_REFRESH_MIN_GAP_MS - 100,
+    });
+  });
+
+  it("doesn't read again what the action's own re-read saw", () => {
+    expect(
+      decideAutoRefresh(
+        state({
+          mode: "navigation",
+          ...reread,
+          lastChangeAt: reread.lastReadStartedAt - 1,
+          followUntil,
+        }),
+        NOW,
+      ),
+    ).toEqual({ kind: "skip" });
+  });
+
+  it("waits out a read or an action in flight", () => {
+    expect(
+      decideAutoRefresh(
+        state({
+          mode: "navigation",
+          ...reread,
+          lastChangeAt: NOW - 1000,
+          followUntil,
+          busy: true,
+        }),
+        NOW,
+      ),
+    ).toEqual({ kind: "wait", ms: AUTO_REFRESH_QUIET_MS });
+  });
+
+  it("follows only the tab it is armed on", () => {
+    expect(
+      decideAutoRefresh(
+        state({
+          mode: "navigation",
+          ...reread,
+          lastChangeAt: NOW - 1000,
+          followUntil,
+          boundTab: 9,
+        }),
+        NOW,
+      ),
+    ).toEqual({ kind: "skip" });
+  });
+});
+
 describe("autoRefreshGapMs", () => {
   it("keeps the minimum gap for the first few automatic reads", () => {
     for (let n = 0; n < AUTO_REFRESH_FREE_READS; n++) {
@@ -195,15 +330,6 @@ describe("quietPeriodOnSignal", () => {
 });
 
 describe("timings the policy depends on", () => {
-  it("lags signals by the content script's own debounce", () => {
-    expect(PAGE_SIGNAL_LAG_MS).toBe(DOM_OBSERVER_DEBOUNCE_MS);
-  });
-
-  it("starts an action's re-read before the action's own signal could count", () => {
-    // Otherwise every action is followed by a second, automatic read.
-    expect(NATIVE_SETTLE_MS).toBeLessThan(PAGE_SIGNAL_LAG_MS);
-  });
-
   it("waits out at least one signal batch before reading", () => {
     expect(AUTO_REFRESH_QUIET_MS).toBeGreaterThan(DOM_OBSERVER_DEBOUNCE_MS);
   });

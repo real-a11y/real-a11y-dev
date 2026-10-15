@@ -8,7 +8,7 @@ priority: P0
 status: Active
 validFrom: "extension ≥ the first release after 0.1.15. Native mode is in the `Unreleased` section of packages/extension/CHANGELOG.md until then; on 0.1.15 or earlier there is no native mode, so this row is Blocked, not Fail. Load unpacked from packages/extension/dist"
 validUntil: ""
-expected: "a fresh profile reads the native tree with nothing asked, and Chrome's bar names the extension; a note explains the bar once; Settings holds the choice of tree, leaving the toolbar at most one DOM button; Turn off and Settings turn native mode off, and nothing attaches while it is off; the setting survives reopening the panel and restarting Chrome; Cancel on the bar is respected; a change in one window holds in every window; page focus selects its row in Chrome's tree without the bar, inside frames too"
+expected: "a fresh profile reads the native tree with nothing asked, and Chrome's bar names the extension; a note explains the bar once; Settings holds the choice of tree, leaving the toolbar at most one DOM button; Turn off and Settings turn native mode off, and nothing attaches while it is off; the setting survives reopening the panel and restarting Chrome; Cancel on the bar is respected; a change in one window holds in every window; page focus selects its row in Chrome's tree without the bar, inside frames too; what a click through the tree loads a moment later, and a change inside a shown frame with Follow page changes on, reach Chrome's tree without Refresh; its state badges take the in-page tree's colours"
 twin: D6
 notion: ""
 ---
@@ -105,6 +105,21 @@ load it again** before step 1, step 9 and step 10.
     TinyMCE, CKEditor 4), or the two frames **R19**'s console snippet makes. Press
     **↻**, then click or `Tab` into each frame in turn.
 
+**Keeping up with the page**
+
+16. On **Chrome's tree**, find a button that loads something a moment later (a
+    "Load more" or "Show replies" button, or, on Google Calendar, **Create contact**
+    in the contacts side panel, which is a frame). Double-click its row, or select
+    it and press `Enter`. What loads shows in the tree within a few seconds, with no
+    **↻**, and a form that loads inside a frame shows under the frame's row.
+17. Press **⟳** (Follow page changes) in the native toolbar: it stays highlighted
+    while on. Change something inside a frame on the page yourself, such as typing
+    into an embedded editor or opening an embedded map's menu: the frame's rows
+    update shortly after you stop. Press **⟳** again to turn it off.
+18. On a page with a disabled button and a checked checkbox, both trees show
+    **disabled** in red and **checked** in green, and only a frame row with nothing
+    read under it says **embedded**.
+
 ## Expected
 
 - **The native tree with nothing asked** (step 1), and Chrome's bar names the
@@ -129,6 +144,11 @@ load it again** before step 1, step 9 and step 10.
 - **Each blank frame is followed under its own row** (step 15): focus in the first
   selects a row under the first frame's row, focus in the second under the second's,
   never the other way round
+- **Chrome's tree keeps up** (steps 16–17): what a click through the tree loads a
+  moment later reaches it without **↻**, inside a frame too, and with **Follow page
+  changes** on, so does a change made inside a frame the page shows
+- **The two trees look alike** (step 18): the same state badge is the same colour in
+  both, and **embedded** marks only a frame nothing was read from
 
 ## Why this exists
 
