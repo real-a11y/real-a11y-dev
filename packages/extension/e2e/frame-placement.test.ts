@@ -12,71 +12,28 @@
  * page shows.
  */
 
-import { expect, test, type DomNode, type NativeHarness } from "./harness";
+import { expect, frameOf, test, treeWhen } from "./harness";
 
 const FIXTURE = "frame-placement.html";
-
-type DomTree = Map<string, DomNode>;
-
-/** The title of the <iframe> the node named `name` sits under, or null when
- *  it is under none: in no frame, or in a frame the tree couldn't place. */
-function frameOf(tree: DomTree, name: string): string | null | undefined {
-  const node = [...tree.values()].find((n) => n.a11y?.name === name);
-  if (!node) return undefined;
-  for (
-    let at = node.parentId ? tree.get(node.parentId) : undefined;
-    at;
-    at = at.parentId ? tree.get(at.parentId) : undefined
-  ) {
-    if (at.dom?.tagName.toLowerCase() === "iframe") {
-      return at.dom.attributes?.["title"] ?? "";
-    }
-  }
-  return null;
-}
-
-/** The latest merged tree pushed to the panel since `from`, once `ready`. */
-async function treeWhen(
-  nav: NativeHarness,
-  tabId: number,
-  from: number,
-  ready: (tree: DomTree) => boolean,
-): Promise<DomTree> {
-  let tree: DomTree = new Map();
-  await expect
-    .poll(
-      async () => {
-        const pushes = (await nav.panelMessages("TREE_DATA", from)).filter(
-          (m) => m.tabId === tabId,
-        );
-        const last = pushes[pushes.length - 1]?.payload as
-          { nodes: [string, DomNode][] } | undefined;
-        tree = new Map(last?.nodes ?? []);
-        return ready(tree);
-      },
-      { timeout: 15_000 },
-    )
-    .toBe(true);
-  return tree;
-}
 
 test("a frame lands under the <iframe> its URL names, though hidden frames announced before it", async ({
   nav,
 }) => {
   const { page, tabId } = await nav.open(FIXTURE);
-  // Both hidden frames are in the page's tree: theirs are the only nodes a
-  // frame's id prefixes yet. Asking each frame for its tree again leaves
-  // the order they first announced in as it was.
+  // Both hidden frames are in the page's tree, so both announced. Asking
+  // each frame for its tree again leaves the order they first announced in
+  // as it was.
   await expect
     .poll(
       async () => {
-        const { nodes } = await nav.domTree(tabId);
-        return new Set(nodes.map(([id]) => /^f\d+-/.exec(id)?.[0])).size;
+        const tree = new Map((await nav.domTree(tabId)).nodes);
+        return ["Pixel button", "Slot 1 button"].every(
+          (name) => frameOf(tree, name) !== undefined,
+        );
       },
       { timeout: 15_000 },
     )
-    // Two frames' prefixes, and `undefined` for the page's own nodes.
-    .toBe(3);
+    .toBe(true);
 
   const from = await nav.panelMessageCount();
   await page.evaluate(() =>

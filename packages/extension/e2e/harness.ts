@@ -883,6 +883,56 @@ export function nodes(all: NativeNode[], role: string): NativeNode[] {
   return all.filter((n) => n.role === role);
 }
 
+/** The in-page tree as the panel was sent it, by node id. */
+export type DomTree = Map<string, DomNode>;
+
+/** The title of the <iframe> the node named `name` sits under in the in-page
+ *  tree, or null when it is under none: in no frame, or in a frame the tree
+ *  couldn't place. Undefined when no node has that name. */
+export function frameOf(
+  tree: DomTree,
+  name: string,
+): string | null | undefined {
+  const node = [...tree.values()].find((n) => n.a11y?.name === name);
+  if (!node) return undefined;
+  for (
+    let at = node.parentId ? tree.get(node.parentId) : undefined;
+    at;
+    at = at.parentId ? tree.get(at.parentId) : undefined
+  ) {
+    if (at.dom?.tagName.toLowerCase() === "iframe") {
+      return at.dom.attributes?.["title"] ?? "";
+    }
+  }
+  return null;
+}
+
+/** The latest merged tree pushed to the panel for `tabId` since `from`, once
+ *  `ready`. */
+export async function treeWhen(
+  nav: NativeHarness,
+  tabId: number,
+  from: number,
+  ready: (tree: DomTree) => boolean,
+): Promise<DomTree> {
+  let tree: DomTree = new Map();
+  await expect
+    .poll(
+      async () => {
+        const pushes = (await nav.panelMessages("TREE_DATA", from)).filter(
+          (m) => m.tabId === tabId,
+        );
+        const last = pushes[pushes.length - 1]?.payload as
+          { nodes: [string, DomNode][] } | undefined;
+        tree = new Map(last?.nodes ?? []);
+        return ready(tree);
+      },
+      { timeout: 15_000 },
+    )
+    .toBe(true);
+  return tree;
+}
+
 export const test = base.extend<
   { nav: NativeHarness },
   { dogfood: DogfoodBrowser; build: ExtensionBuild }

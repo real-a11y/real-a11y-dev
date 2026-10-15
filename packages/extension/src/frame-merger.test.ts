@@ -510,6 +510,46 @@ describe("mergeFrameTrees", () => {
       expect(result.nodes.get("ifr-video")!.childIds).toEqual(["f5-v-root"]);
     });
 
+    it("nests a frame matched by URL under its <iframe> as merged, though the frame around it was guessed its place", () => {
+      // Frame 5 redirected away from its `src`, so it is guessed the <iframe>;
+      // frame 9, inside it, is matched by URL before frame 5 is merged, and
+      // announced first. Its depth comes from frame 5's <iframe> as merged.
+      const result = mergeFrameTrees({
+        frames: new Map([
+          [0, topOf(["ifr-a", "https://a.test/"])],
+          [
+            9,
+            makeFrame(9, "https://b.test/", [["b-root", makeNode("b-root")]]),
+          ],
+          [
+            5,
+            makeFrame(5, "https://a2.test/", [
+              ["a-root", makeNode("a-root", { childIds: ["a-ifr"] })],
+              [
+                "a-ifr",
+                makeNode("a-ifr", {
+                  tagName: "iframe",
+                  attrs: { src: "https://b.test/" },
+                  parentId: "a-root",
+                  depth: 1,
+                }),
+              ],
+            ]),
+          ],
+        ]),
+        frameInfoMap: new Map<number, FrameInfo>([
+          listedAt(5, "https://a2.test/"),
+          [9, { parentFrameId: 5, url: "https://b.test/" }],
+        ]),
+      })!;
+
+      expect(result.nodes.get("f5-a-root")!.parentId).toBe("ifr-a");
+      expect(result.nodes.get("f9-b-root")!.parentId).toBe("f5-a-ifr");
+      // ifr-a(1) → f5-a-root(2) → f5-a-ifr(3) → f9-b-root(4).
+      expect(result.nodes.get("f5-a-ifr")!.depth).toBe(3);
+      expect(result.nodes.get("f9-b-root")!.depth).toBe(4);
+    });
+
     it("guesses a live frame its <iframe> before a stale tree's URL can take it", () => {
       // The page swapped an ad's <iframe> for an equal-src one, and the new
       // frame has since navigated off that `src`. The dead frame's tree

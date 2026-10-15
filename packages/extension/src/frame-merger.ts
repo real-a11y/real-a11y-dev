@@ -318,6 +318,15 @@ export function mergeFrameTrees(opts: {
       }),
     );
 
+  /** Both passes for one frame, the exact one first. */
+  const findByUrl = (
+    childTree: FrameTree,
+    parentFrameId: number,
+    parentTree: FrameTree,
+  ): { id: string; depth: number } | null =>
+    findBySrc(childTree, parentFrameId, parentTree, true) ??
+    findBySrc(childTree, parentFrameId, parentTree, false);
+
   // Every frame Chrome lists takes the <iframe> its URL names exactly (1),
   // then each one left takes the <iframe> its URL names but for the query
   // (2), all before any frame is guessed one (3, below). A hidden tracker's
@@ -381,8 +390,7 @@ export function mergeFrameTrees(opts: {
         //    for one it doesn't, which sorts after every frame it does.
         ((frameInfo
           ? byUrl.get(childFrameId)
-          : (findBySrc(childTree, parentFrameId, parentTree, true) ??
-            findBySrc(childTree, parentFrameId, parentTree, false))) ??
+          : findByUrl(childTree, parentFrameId, parentTree)) ??
         // 3. Fallback: first un-attached <iframe> in the parent. Beats
         //    dropping the subframe entirely.
         (frameInfo && !marked && !awaited.has(parentFrameId)
