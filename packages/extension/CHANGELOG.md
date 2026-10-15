@@ -120,7 +120,7 @@
   the cursor in a field or an editor, nor `Enter` in a text area or a
   rich-text editor, where it starts a new line, and starting to type ends
   those seconds. While the panel is open, the page tells it only that you
-  clicked, pressed one of those keys or typed, never what or where
+  clicked, pressed one of those keys or typed, and when, never what or where
   ([#504](https://github.com/real-a11y/real-a11y-dev/pull/504)).
 
 - Hardened the shared mutation observer so that re-arming it can no longer
