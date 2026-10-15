@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Frame placement — ad slot</title>
+  </head>
+  <body>
+    <!--
+      The document inside both of `frame-placement.html`'s ad slots, at one
+      path: only the `slot` parameter tells them apart, and it names the
+      button, so the tree does too.
+    -->
+    <button id="inner" type="button"></button>
+    <script>
+      const slot = new URLSearchParams(location.search).get("slot");
+      document.getElementById("inner").textContent = `Slot ${slot} button`;
+    </script>
+  </body>
+</html>

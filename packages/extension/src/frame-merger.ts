@@ -269,6 +269,87 @@ export function mergeFrameTrees(opts: {
     }
   }
 
+  /**
+   * First unclaimed <iframe> in `parentTree`, frame `parentFrameId`'s,
+   * satisfying `predicate`, as its merged id plus the depth to nest the child
+   * frame under, as merged so far. `predicate` also receives the
+   * already-merged copy of the node, which is where the post-attachment
+   * `childIds` live.
+   */
+  const findIframe = (
+    parentFrameId: number,
+    parentTree: FrameTree,
+    predicate: (
+      node: SemanticNode,
+      mergedNode: SemanticNode | undefined,
+    ) => boolean,
+  ): { id: string; depth: number } | null => {
+    for (const [nodeId, node] of parentTree.nodes) {
+      if (node.dom!.tagName !== "iframe") continue;
+      const prefId = prefixNodeId(parentFrameId, nodeId);
+      if (claimedIframes.has(prefId)) continue;
+      const mergedNode = nodes.get(prefId);
+      if (!predicate(node, mergedNode)) continue;
+      return { id: prefId, depth: mergedNode?.depth ?? node.depth };
+    }
+    return null;
+  };
+
+  const srcOf = (node: SemanticNode) => node.dom!.attributes.src || "";
+
+  /**
+   * The first unclaimed <iframe> in `parentTree`, frame `parentFrameId`'s,
+   * whose `src` names the URL of `childTree`'s frame, in one of two passes:
+   *
+   * 1. Exact match, query string included (`matchQuery`). The only pass that
+   *    can tell apart sibling embeds whose urls differ solely by query.
+   * 2. Query-stripped match, as before — tolerates a frame url the page
+   *    rewrote with params the markup's `src` never had.
+   */
+  const findBySrc = (
+    childTree: FrameTree,
+    parentFrameId: number,
+    parentTree: FrameTree,
+    matchQuery: boolean,
+  ): { id: string; depth: number } | null =>
+    findIframe(parentFrameId, parentTree, (node) =>
+      urlsMatch(srcOf(node), childTree.frameUrl, parentTree.frameUrl, {
+        matchQuery,
+      }),
+    );
+
+  // Every frame Chrome lists takes the <iframe> its URL names exactly (1),
+  // then each one left takes the <iframe> its URL names but for the query
+  // (2), all before any frame is guessed one (3, below). A hidden tracker's
+  // or ad's <iframe> has no node in the a11y view, so its frame's URL names
+  // none exactly: it is matched without the query, or guessed. And such a
+  // frame routinely announces before the embeds a page shows. Matched frame
+  // by frame in announce order, it took the <iframe> of an embed that
+  // announced after it: the tracker's content showed under the embed's
+  // <iframe>, and the embed's own, finding its <iframe> taken, was left out.
+  // A frame Chrome doesn't list is still matched in its turn below, after
+  // every guess: a stale tree takes no <iframe> a live frame could have.
+  const byUrl = new Map<number, { id: string; depth: number }>();
+  for (const matchQuery of [true, false]) {
+    for (const childFrameId of childFrameIds) {
+      const childTree = opts.frames.get(childFrameId);
+      const frameInfo = opts.frameInfoMap.get(childFrameId);
+      if (!childTree || !frameInfo || placed.has(childFrameId)) continue;
+      const parentTree = opts.frames.get(frameInfo.parentFrameId);
+      if (!parentTree || byUrl.has(childFrameId)) continue;
+      const match = findBySrc(
+        childTree,
+        frameInfo.parentFrameId,
+        parentTree,
+        matchQuery,
+      );
+      if (match) {
+        claimedIframes.add(match.id);
+        byUrl.set(childFrameId, match);
+      }
+    }
+  }
+
   for (const childFrameId of childFrameIds) {
     const childTree = opts.frames.get(childFrameId);
     if (!childTree) continue;
@@ -281,34 +362,6 @@ export function mergeFrameTrees(opts: {
       parentFrameId === 0 ? topFrame : opts.frames.get(parentFrameId);
     if (!parentTree) continue;
 
-    // Find the iframe node in the parent that points at this child frame.
-    const parentFrameUrl = parentTree.frameUrl;
-
-    /**
-     * First unclaimed <iframe> in the parent satisfying `predicate`, as its
-     * merged id plus the depth to nest the child frame under. `predicate` also
-     * receives the already-merged copy of the node, which is where the
-     * post-attachment `childIds` live.
-     */
-    const findIframe = (
-      predicate: (
-        node: SemanticNode,
-        mergedNode: SemanticNode | undefined,
-      ) => boolean,
-    ): { id: string; depth: number } | null => {
-      for (const [nodeId, node] of parentTree.nodes) {
-        if (node.dom!.tagName !== "iframe") continue;
-        const prefId = prefixNodeId(parentFrameId, nodeId);
-        if (claimedIframes.has(prefId)) continue;
-        const mergedNode = nodes.get(prefId);
-        if (!predicate(node, mergedNode)) continue;
-        return { id: prefId, depth: mergedNode?.depth ?? node.depth };
-      }
-      return null;
-    };
-
-    const srcOf = (node: SemanticNode) => node.dom!.attributes.src || "";
-
     // A frame that marked its element and isn't placed by the mark has its
     // place in no tree yet. Its URL may still say where (1 and 2), but the
     // guess (3) is never taken for it: it is held by one element, which is
@@ -316,6 +369,7 @@ export function mergeFrameTrees(opts: {
     const marked = childTree.owner !== undefined;
     if (marked && !place) unplaced.push(childFrameId);
 
+    // Find the iframe node in the parent that points at this child frame.
     const byMark = (at: Placement): { id: string; depth: number } | null => {
       const id = prefixNodeId(at.frameId, at.nodeId);
       const mergedNode = nodes.get(id);
@@ -323,29 +377,27 @@ export function mergeFrameTrees(opts: {
     };
     const match = place
       ? byMark(place)
-      : // 1. Exact match, query string included. The only pass that can tell
-        //    apart sibling embeds whose urls differ solely by query.
-        (findIframe((node) =>
-          urlsMatch(srcOf(node), childTree.frameUrl, parentFrameUrl, {
-            matchQuery: true,
-          }),
-        ) ??
-        // 2. Query-stripped match, as before — tolerates a frame url the page
-        //    rewrote with params the markup's `src` never had.
-        findIframe((node) =>
-          urlsMatch(srcOf(node), childTree.frameUrl, parentFrameUrl),
-        ) ??
+      : // 1 and 2, by URL: matched above for a frame Chrome lists, and now
+        //    for one it doesn't, which sorts after every frame it does.
+        ((frameInfo
+          ? byUrl.get(childFrameId)
+          : (findBySrc(childTree, parentFrameId, parentTree, true) ??
+            findBySrc(childTree, parentFrameId, parentTree, false))) ??
         // 3. Fallback: first un-attached <iframe> in the parent. Beats
         //    dropping the subframe entirely.
         (frameInfo && !marked && !awaited.has(parentFrameId)
           ? findIframe(
+              parentFrameId,
+              parentTree,
               (_node, mergedNode) =>
                 mergedNode !== undefined && mergedNode.childIds.length === 0,
             )
           : null));
 
     const iframeNodeId = match?.id ?? null;
-    const iframeDepth = match?.depth ?? 0;
+    // Its depth as merged by now: an <iframe> in a frame inside another may
+    // have been matched by its `src` above, before that frame was merged.
+    const iframeDepth = match ? (nodes.get(match.id)?.depth ?? match.depth) : 0;
     if (iframeNodeId) claimedIframes.add(iframeNodeId);
 
     const prefix = childFrameId;

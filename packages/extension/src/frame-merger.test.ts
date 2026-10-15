@@ -378,6 +378,168 @@ describe("mergeFrameTrees", () => {
     expect(result!.nodes.get("f5-c-root")!.parentId).toBeNull();
   });
 
+  describe("every frame's URL matched before any frame is guessed an <iframe>", () => {
+    // A hidden tracker's or ad's <iframe> (`display: none`) has no node in the
+    // a11y view, so no `src` in the tree names its frame's URL exactly: it is
+    // matched without the query string, or by the last-resort guess. Such a
+    // frame routinely announces before the embeds the page shows, and the
+    // looser match must not hand it an <iframe> whose `src` names a frame
+    // that announced after it more closely.
+
+    /** A top frame of `<iframe>`s, each `[id, src]`. */
+    const topOf = (...iframes: Array<[string, string]>): FrameTree =>
+      makeFrame(0, "https://top.test/", [
+        ["root", makeNode("root", { childIds: iframes.map(([id]) => id) })],
+        ...iframes.map(
+          ([id, src]) =>
+            [
+              id,
+              makeNode(id, {
+                tagName: "iframe",
+                attrs: { src },
+                parentId: "root",
+                depth: 1,
+              }),
+            ] as [string, SemanticNode],
+        ),
+      ]);
+    /** The frame `frameId` at `url`, as Chrome lists it: in the top frame. */
+    const listedAt = (frameId: number, url: string): [number, FrameInfo] => [
+      frameId,
+      { parentFrameId: 0, url },
+    ];
+
+    it("leaves the <iframe> a frame's URL names to it, though a frame with none announced first", () => {
+      const result = mergeFrameTrees({
+        frames: new Map([
+          [0, topOf(["ifr-video", "https://video.test/embed/1"])],
+          [
+            9,
+            makeFrame(9, "https://tracker.test/px", [
+              ["t-root", makeNode("t-root")],
+            ]),
+          ],
+          [
+            5,
+            makeFrame(5, "https://video.test/embed/1", [
+              ["v-root", makeNode("v-root")],
+            ]),
+          ],
+        ]),
+        frameInfoMap: new Map([
+          listedAt(9, "https://tracker.test/px"),
+          listedAt(5, "https://video.test/embed/1"),
+        ]),
+      })!;
+
+      expect(result.nodes.get("f5-v-root")!.parentId).toBe("ifr-video");
+      expect(result.nodes.get("ifr-video")!.childIds).toEqual(["f5-v-root"]);
+      // The tracker's <iframe> is none the tree has a node for, so its
+      // content hangs off nothing rather than off the video's.
+      expect(result.nodes.get("f9-t-root")!.parentId).toBeNull();
+    });
+
+    it("leaves the <iframe> a frame's URL names exactly to it, though a frame that names it but for the query announced first", () => {
+      // Two slots of one ad server, the first hidden. Its URL names the shown
+      // slot's <iframe> but for the query string, and it announced first:
+      // matched without the query before the shown slot's frame was matched
+      // with it, it took that <iframe>.
+      const result = mergeFrameTrees({
+        frames: new Map([
+          [0, topOf(["ifr-shown", "https://ads.test/slot?id=2"])],
+          [
+            9,
+            makeFrame(9, "https://ads.test/slot?id=1", [
+              ["h-root", makeNode("h-root")],
+            ]),
+          ],
+          [
+            5,
+            makeFrame(5, "https://ads.test/slot?id=2", [
+              ["s-root", makeNode("s-root")],
+            ]),
+          ],
+        ]),
+        frameInfoMap: new Map([
+          listedAt(9, "https://ads.test/slot?id=1"),
+          listedAt(5, "https://ads.test/slot?id=2"),
+        ]),
+      })!;
+
+      expect(result.nodes.get("f5-s-root")!.parentId).toBe("ifr-shown");
+      expect(result.nodes.get("ifr-shown")!.childIds).toEqual(["f5-s-root"]);
+      expect(result.nodes.get("f9-h-root")!.parentId).toBeNull();
+    });
+
+    it("still guesses a frame whose URL names no <iframe> the one no frame's URL names", () => {
+      // The ad's frame redirected away from its `src`, so its URL names no
+      // <iframe> either. It announced first and the video's <iframe> comes
+      // first, yet the guess hands it the one left once the video's frame
+      // has the <iframe> its URL names.
+      const result = mergeFrameTrees({
+        frames: new Map([
+          [
+            0,
+            topOf(
+              ["ifr-video", "https://video.test/embed/1"],
+              ["ifr-ad", "https://ads.test/slot"],
+            ),
+          ],
+          [
+            9,
+            makeFrame(9, "https://ads-cdn.test/creative", [
+              ["a-root", makeNode("a-root")],
+            ]),
+          ],
+          [
+            5,
+            makeFrame(5, "https://video.test/embed/1", [
+              ["v-root", makeNode("v-root")],
+            ]),
+          ],
+        ]),
+        frameInfoMap: new Map([
+          listedAt(9, "https://ads-cdn.test/creative"),
+          listedAt(5, "https://video.test/embed/1"),
+        ]),
+      })!;
+
+      expect(result.nodes.get("f9-a-root")!.parentId).toBe("ifr-ad");
+      expect(result.nodes.get("ifr-ad")!.childIds).toEqual(["f9-a-root"]);
+      expect(result.nodes.get("f5-v-root")!.parentId).toBe("ifr-video");
+      expect(result.nodes.get("ifr-video")!.childIds).toEqual(["f5-v-root"]);
+    });
+
+    it("guesses a live frame its <iframe> before a stale tree's URL can take it", () => {
+      // The page swapped an ad's <iframe> for an equal-src one, and the new
+      // frame has since navigated off that `src`. The dead frame's tree
+      // lingers with the URL that does match, and Chrome lists only the live
+      // frame: a stale tree takes no <iframe> before a live frame has picked,
+      // by its URL or by the guess.
+      const result = mergeFrameTrees({
+        frames: new Map([
+          [0, topOf(["ifr", "https://ads.test/unit"])],
+          [
+            5,
+            makeFrame(5, "https://ads.test/unit", [
+              ["c-root", makeNode("c-root")],
+            ]),
+          ],
+          [
+            9,
+            makeFrame(9, "https://ads.test/unit/next", [
+              ["c-root", makeNode("c-root")],
+            ]),
+          ],
+        ]),
+        frameInfoMap: new Map([listedAt(9, "https://ads.test/unit/next")]),
+      })!;
+
+      expect(result.nodes.get("ifr")!.childIds).toEqual(["f9-c-root"]);
+      expect(result.nodes.get("f5-c-root")!.parentId).toBeNull();
+    });
+  });
+
   it("keeps an unattached subframe's nodes in the result with parentId=null on root", () => {
     // Top frame has no <iframe> at all — degenerate case where Chrome
     // reports a subframe but the DOM walker missed it. We still return the
