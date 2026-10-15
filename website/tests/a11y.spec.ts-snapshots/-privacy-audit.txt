@@ -20,7 +20,7 @@ navigation "On this page"
 main
   heading "Privacy Policy" (level 1)
   paragraph
-    emphasis "Last updated: 2026-10-08"
+    emphasis "Last updated: 2026-10-15"
   paragraph "This policy covers the Real A11y website (), the Semantic Navigator Chrome extension, and the npm packages."
     code "real-a11y.dev"
     code "@real-a11y-dev/*"
@@ -48,6 +48,9 @@ main
     listitem "On your explicit action (clicking a tree node's action button, pressing , etc.), dispatches the corresponding event on the element — e.g. click a button, focus a field, submit a form."
       code "Enter"
     listitem "Draws a highlight overlay on the element under the cursor in the tree."
+    listitem "While the side panel is open, notices when you click, press or , or type on the page, and tells the side panel only that you did, and when, never what you clicked or typed, or where, so the native tree can read what the page does next, and stop once you type."
+      code "Enter"
+      code "Space"
   paragraph
     strong "What it does NOT do:"
   list
