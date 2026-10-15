@@ -109,6 +109,20 @@
   placed by a looser match
   ([#503](https://github.com/real-a11y/real-a11y-dev/pull/503)).
 
+- **Chrome's tree keeps up with a click made on the page too.** What a
+  click on the page itself loaded a moment later, such as a form fetched
+  over the network, stayed off the tree until **↻**, unless **Follow page
+  changes** was on. A click, `Enter` or `Space` on the page now gets the
+  same few seconds as an action sent through the tree: whatever the page
+  does in them, on the page a link leads to as well, is read once it goes
+  quiet, at most every three seconds, and a page that changes nothing is
+  read no more than before. Typing isn't followed: not a click that puts
+  the cursor in a field or an editor, nor `Enter` in a text area or a
+  rich-text editor, where it starts a new line, and starting to type ends
+  those seconds. While the panel is open, the page tells it only that you
+  clicked, pressed one of those keys or typed, never what or where
+  ([#504](https://github.com/real-a11y/real-a11y-dev/pull/504)).
+
 - Hardened the shared mutation observer so that re-arming it can no longer
   strand the previous observers and event listeners
   ([#487](https://github.com/real-a11y/real-a11y-dev/pull/487)). No

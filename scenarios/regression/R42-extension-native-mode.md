@@ -111,7 +111,10 @@ load it again** before step 1, step 9 and step 10.
     "Load more" or "Show replies" button, or, on Google Calendar, **Create contact**
     in the contacts side panel, which is a frame). Double-click its row, or select
     it and press `Enter`. What loads shows in the tree within a few seconds, with no
-    **↻**, and a form that loads inside a frame shows under the frame's row.
+    **↻**, and a form that loads inside a frame shows under the frame's row. Then,
+    with **⟳** off, click such a button on the page itself, not in the tree: what it
+    loads shows the same way. On a page that doesn't change by itself, click some
+    text that does nothing: Chrome's bar doesn't come up for it.
 17. Press **⟳** (Follow page changes) in the native toolbar: it stays highlighted
     while on. Change something inside a frame on the page yourself, such as typing
     into an embedded editor or opening an embedded map's menu: the frame's rows
@@ -144,9 +147,10 @@ load it again** before step 1, step 9 and step 10.
 - **Each blank frame is followed under its own row** (step 15): focus in the first
   selects a row under the first frame's row, focus in the second under the second's,
   never the other way round
-- **Chrome's tree keeps up** (steps 16–17): what a click through the tree loads a
-  moment later reaches it without **↻**, inside a frame too, and with **Follow page
-  changes** on, so does a change made inside a frame the page shows
+- **Chrome's tree keeps up** (steps 16–17): what a click loads a moment later, made
+  through the tree or on the page itself, reaches it without **↻**, inside a frame
+  too, and a click that changes nothing on a quiet page reads nothing; with
+  **Follow page changes** on, so does a change made inside a frame the page shows
 - **The two trees look alike** (step 18): the same state badge is the same colour in
   both, and **embedded** marks only a frame nothing was read from
 

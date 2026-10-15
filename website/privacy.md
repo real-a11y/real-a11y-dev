@@ -1,6 +1,6 @@
 # Privacy Policy
 
-_Last updated: 2026-10-08_
+_Last updated: 2026-10-15_
 
 This policy covers the Real A11y website (`real-a11y.dev`), the Semantic Navigator Chrome extension, and the `@real-a11y-dev/*` npm packages.
 
@@ -26,6 +26,7 @@ You can turn native mode off at any time in the side panel's **Settings**, and t
 - Unless you've turned native mode off, reads Chromium's accessibility tree for the active tab over `chrome.debugger`, while it's attached.
 - On your explicit action (clicking a tree node's action button, pressing `Enter`, etc.), dispatches the corresponding event on the element — e.g. click a button, focus a field, submit a form.
 - Draws a highlight overlay on the element under the cursor in the tree.
+- While the side panel is open, notices when you click, press `Enter` or `Space`, or type on the page, and tells the side panel only that you did, and when, never what you clicked or typed, or where, so the native tree can read what the page does next, and stop once you type.
 
 **What it does NOT do:**
 
