@@ -616,6 +616,12 @@ chrome.action.onClicked.addListener((tab) => {
 /** The last ordinary window the user was in: a popup shows in its panel. */
 let lastNormalWindowId: number | null = null;
 
+/** Windows closed in the last minute, longer than any look-up takes. A
+ *  look-up that answers after its window closed must not make that window
+ *  the one popups show in, nor a guess of Chrome's that answers late. */
+const closedWindows = new Set<number>();
+const CLOSED_WINDOW_KEPT_MS = 60_000;
+
 /** Orders what the look-ups below write: `"active"` is `activeTabId`,
  *  `"normal"` is `lastNormalWindowId`, and a window's id is its panel. */
 const lookups = lookupOrder<number | "active" | "normal">();
@@ -671,7 +677,7 @@ async function followWindow(
     activeTab ??
       chrome.tabs.query({ active: true, windowId }).then(([found]) => found),
   ]);
-  if (tab?.id === undefined) return;
+  if (tab?.id === undefined || closedWindows.has(windowId)) return;
   setActiveTab(tab.id, since);
   if (win.type === "normal") {
     if (lookups.claim("normal", since)) lastNormalWindowId = windowId;
@@ -681,7 +687,11 @@ async function followWindow(
     const normal = await chrome.windows.getLastFocused({
       windowTypes: ["normal"],
     });
-    if (normal.id !== undefined && lookups.claim("normal", since)) {
+    if (
+      normal.id !== undefined &&
+      !closedWindows.has(normal.id) &&
+      lookups.claim("normal", since)
+    ) {
       lastNormalWindowId = normal.id;
     }
   }
@@ -730,6 +740,8 @@ chrome.windows.onFocusChanged.addListener((windowId) => {
 chrome.windows.onRemoved.addListener((windowId) => {
   if (windowId === lastNormalWindowId) lastNormalWindowId = null;
   lookups.forget(windowId);
+  closedWindows.add(windowId);
+  setTimeout(() => closedWindows.delete(windowId), CLOSED_WINDOW_KEPT_MS);
 });
 
 // Route messages between frames, side panel, and content scripts

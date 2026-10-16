@@ -1928,6 +1928,34 @@ describe("background: which tab each window's side panel is told", () => {
     expect(told().at(-1)).toEqual({ tabId: 9, windowId: 1 });
   });
 
+  it("shows no popup in a window that closed while the user's move to it was looked up", async () => {
+    // The user clicks a background window's close button: it takes focus,
+    // then closes before the look-up of it answers.
+    h.knobs.windows.set(2, { type: "normal", activeTabId: 5, delayMs: 50 });
+    focus(2);
+    closeWindow(2);
+    await vi.runAllTimersAsync();
+
+    focus(3);
+    await vi.runAllTimersAsync();
+    expect(told()).toEqual([{ tabId: 9, windowId: 1 }]);
+  });
+
+  it("shows no popup in a window Chrome picks that closed while it answered", async () => {
+    h = makeHarness();
+    h.knobs.windows.set(2, { type: "normal", activeTabId: 5 });
+    h.knobs.windows.set(3, { type: "popup", activeTabId: 9, delayMs: 50 });
+    h.knobs.lastFocusedTab = { id: 9, windowId: 3 };
+    h.knobs.lastFocusedNormalWindowId = undefined;
+    await load();
+
+    h.knobs.lastFocusedNormalWindowId = 2;
+    focus(3);
+    closeWindow(2);
+    await vi.runAllTimersAsync();
+    expect(told()).toEqual([]);
+  });
+
   it("shows a popup in no panel when there is no ordinary window", async () => {
     h = makeHarness();
     h.knobs.windows.set(3, { type: "popup", activeTabId: 9 });
