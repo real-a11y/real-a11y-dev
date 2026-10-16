@@ -137,11 +137,24 @@ export type ContentToPanel =
       payload: { text: string; level: "polite" | "assertive"; role: string };
     }
   | {
-      // Background → panel push: the active tab in the panel's window
-      // has changed. Panel uses this as its source of truth for myTabId
-      // because the background's `chrome.tabs.onActivated` listener is
-      // the canonical writer for activeTabId.
+      // Background → panel push: the tab window `windowId`'s side panel
+      // shows has changed. Every panel hears it and only that window's
+      // takes it (`isPanelWindow`), as its source of truth for myTabId,
+      // because the background's `chrome.tabs.onActivated` listener is the
+      // canonical writer. A popup window shows in the panel of the last
+      // ordinary window the user was in (`panelWindowFor`), so `windowId` is
+      // the panel's window, not always the tab's. `focus`: the window's own
+      // tab, told because the user moved to the window, which a panel that
+      // has focus itself leaves, since moving to it is what focused it.
       type: "ACTIVE_TAB_CHANGED";
+      tabId: number;
+      windowId: number;
+      focus?: boolean;
+    }
+  | {
+      // Background → panel push: tab `tabId` closed. A panel showing it
+      // goes back to its own window's active tab.
+      type: "TAB_CLOSED";
       tabId: number;
     }
   // Picker (DevTools-style "select an element in the page"): the user

@@ -8,7 +8,7 @@ priority: P0
 status: Active
 validFrom: "extension ≥ the first release after 0.1.15. Native mode is in the `Unreleased` section of packages/extension/CHANGELOG.md until then; on 0.1.15 or earlier there is no native mode, so this row is Blocked, not Fail. Load unpacked from packages/extension/dist"
 validUntil: ""
-expected: "a fresh profile reads the native tree with nothing asked, and Chrome's bar names the extension; a note explains the bar once; Settings holds the choice of tree, leaving the toolbar at most one DOM button; Turn off and Settings turn native mode off, and nothing attaches while it is off; the setting survives reopening the panel and restarting Chrome; Cancel on the bar is respected; a change in one window holds in every window; page focus selects its row in Chrome's tree without the bar, inside frames too; what a click through the tree loads a moment later, and a change inside a shown frame with Follow page changes on, reach Chrome's tree without Refresh; its state badges take the in-page tree's colours"
+expected: "a fresh profile reads the native tree with nothing asked, and Chrome's bar names the extension; a note explains the bar once; Settings holds the choice of tree, leaving the toolbar at most one DOM button; Turn off and Settings turn native mode off, and nothing attaches while it is off; the setting survives reopening the panel and restarting Chrome; Cancel on the bar is respected; a change in one window holds in every window, and each window's panel shows only its own window's tab, or a popup opened from it; page focus selects its row in Chrome's tree without the bar, inside frames too; what a click through the tree loads a moment later, and a change inside a shown frame with Follow page changes on, reach Chrome's tree without Refresh; its state badges take the in-page tree's colours"
 twin: D6
 notion: ""
 ---
@@ -83,7 +83,13 @@ load it again** before step 1, step 9 and step 10.
     returns to the in-page tree by itself.
 12. Turn it back on in the first window: the other window's panel says Chrome's tree
     is in Settings again, but nothing is read there until you choose **Chrome's
-    tree** in its **Settings ▾**.
+    tree** in its **Settings ▾**. Then click around the second window and switch
+    tabs there: the first window's panel keeps its own page's title, tree and
+    announcements. From the first window's page, open a popup (in the console,
+    `window.open(location.href, "", "popup")`): the first window's panel shows it.
+    Click into that panel: it stays on the popup, and **×** closes the popup, not
+    the page. Open the popup again, then click the first window's page: the panel
+    shows its own tab again.
 
 **Focus sync**
 
@@ -142,6 +148,9 @@ load it again** before step 1, step 9 and step 10.
   bar is, not only the buttons
 - **A change in one window holds in every window** (steps 11–12), and nothing reads
   natively in a window where nobody pressed anything
+- **Each window's panel shows its own window's tab** (step 12): another window's
+  tabs never show in it, and a popup opened from it shows there until it closes or
+  you go back to the window's page, and stays while you use the panel itself
 - **Page focus selects its row in Chrome's tree** (step 13) with no bar, and
   **Focus OFF** stops it; inside a frame too (step 14), under that frame's row
 - **Each blank frame is followed under its own row** (step 15): focus in the first

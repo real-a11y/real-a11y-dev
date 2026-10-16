@@ -251,6 +251,7 @@ async function launchDogfoodExtension(
   // NATIVE_READ messages the panel sends, and let a test make them fail or
   // answer late (`NativeHarness.setNativeReads`). Counting what was sent is
   // what lets a test assert a read did NOT happen without waiting out a timer.
+  // It also keeps the tabs the panel binds to (`NativeHarness.boundTabs`).
   await panel.addInitScript(recordNativeReads);
   await panel.goto(
     `chrome-extension://${extensionId}/src/sidepanel/index.html`,
@@ -304,6 +305,7 @@ export interface NativeReadRecord {
 function recordNativeReads(): void {
   const w = window as typeof window & {
     __e2eNativeReads?: NativeReadRecord[];
+    __e2eBoundTabs?: number[];
     __e2eNativeActs?: Array<{
       action?: string;
       nodeId?: string;
@@ -312,6 +314,7 @@ function recordNativeReads(): void {
   };
   w.__e2eNativeReads = [];
   w.__e2eNativeActs = [];
+  w.__e2eBoundTabs = [];
   const real = chrome.runtime.sendMessage.bind(chrome.runtime) as (
     message: unknown,
     ...rest: unknown[]
@@ -325,6 +328,15 @@ function recordNativeReads(): void {
       action?: string;
       nodeId?: string;
     };
+    // The panel gives each tab it binds to its Focus sync state first. It
+    // gives it again on a reconnect, which binds nothing.
+    if (
+      m?.type === "SET_FOCUS_TRACKER" &&
+      typeof m.tabId === "number" &&
+      w.__e2eBoundTabs!.at(-1) !== m.tabId
+    ) {
+      w.__e2eBoundTabs!.push(m.tabId);
+    }
     if (m?.type === "NATIVE_ACT") {
       const entry: { action?: string; nodeId?: string; answer?: unknown } = {
         action: m.action,
@@ -392,6 +404,7 @@ function splitNodeId(nodeId: string): { frameId: number; localId: string } {
 /** Per-test API over one launched extension. */
 export class NativeHarness {
   private readonly opened: Page[] = [];
+  private readonly windows: number[] = [];
 
   constructor(private readonly browser: DogfoodBrowser) {}
 
@@ -432,6 +445,15 @@ export class NativeHarness {
             }>;
           }
         ).__e2eNativeActs ?? [],
+    );
+  }
+
+  /** The tabs the panel has bound to since it last loaded, in order. */
+  async boundTabs(): Promise<number[]> {
+    return this.panel.evaluate(
+      () =>
+        (window as typeof window & { __e2eBoundTabs?: number[] })
+          .__e2eBoundTabs ?? [],
     );
   }
 
@@ -523,6 +545,39 @@ export class NativeHarness {
     }, url);
     if (tabId === null) throw new Error(`no tab found for fixture ${fixture}`);
     return { page, tabId };
+  }
+
+  /**
+   * Open a fixture in a window of its own, as a user does: an ordinary
+   * window, which has a side panel of its own, or a popup, which has none.
+   * `closeAll` closes it.
+   */
+  async openWindow(
+    fixture: string,
+    type: "normal" | "popup" = "normal",
+  ): Promise<{ windowId: number; tabId: number }> {
+    const url = `${this.browser.fixtureOrigin}/${fixture}?t=${Date.now()}-w${this.windows.length}`;
+    const opened = await this.browser.serviceWorker.evaluate(
+      async ([want, kind]) => {
+        const win = await chrome.windows.create({ url: want, type: kind });
+        const tabId = win?.tabs?.[0]?.id;
+        if (win?.id === undefined || tabId === undefined) {
+          throw new Error(`no window opened for ${want}`);
+        }
+        return { windowId: win.id, tabId };
+      },
+      [url, type] as const,
+    );
+    this.windows.push(opened.windowId);
+    return opened;
+  }
+
+  /** Close a window `openWindow` opened. */
+  async closeWindow(windowId: number): Promise<void> {
+    await this.browser.serviceWorker.evaluate(
+      (id) => chrome.windows.remove(id).catch(() => {}),
+      windowId,
+    );
   }
 
   /** Read the native tree, as the panel's "Load native tree" button does. */
@@ -795,6 +850,8 @@ export class NativeHarness {
   async closeAll(): Promise<void> {
     for (const page of this.opened) await page.close();
     this.opened.length = 0;
+    for (const id of this.windows) await this.closeWindow(id);
+    this.windows.length = 0;
     await this.setNativeReads("normal");
   }
 }

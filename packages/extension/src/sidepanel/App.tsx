@@ -67,6 +67,7 @@ import {
   nativeModeOn,
 } from "../native/setting.js";
 import {
+  isPanelWindow,
   isTrustedSender,
   isUnreachablePageResponse,
   shouldPanelAcceptMessage,
@@ -132,6 +133,21 @@ import {
 } from "./SendKeyBar.js";
 import { TabSequenceView } from "./TabSequenceView.js";
 import { useNativeOverlay } from "./useNativeOverlay.js";
+
+/** What the panel keeps of an ACTIVE_TAB_CHANGED. */
+type ActiveTabTold = { tabId: number; windowId: number; focus?: boolean };
+
+/**
+ * Whether a panel in window `myWindowId` takes an ACTIVE_TAB_CHANGED: one for
+ * its own window (`isPanelWindow`), unless the worker told it the window's
+ * tab because the user moved to the window, and what they moved to is this
+ * panel. Then they came for what it shows (a popup, say), not the page.
+ */
+function takesActiveTab(m: ActiveTabTold, myWindowId: number | null): boolean {
+  return (
+    isPanelWindow(m.windowId, myWindowId) && !(m.focus && document.hasFocus())
+  );
+}
 
 /** How many settle windows (~5s) `whenNativeIdle` waits for a native read or
  *  action in flight: a sent key's re-read, or an option picked while one ran.
@@ -857,13 +873,14 @@ export function App() {
     setRevealNonce((n) => n + 1);
   }, []);
 
-  // The tab this side-panel instance is bound to. Source of truth lives in
-  // the background — it pushes ACTIVE_TAB_CHANGED on port connect and on
-  // every tab/window activation. We don't try to read tab state from the
-  // panel context directly: the side panel's `chrome.tabs` event delivery has
-  // been historically quirky, and the background already owns the binding.
-  // (The manifest's `tabs` permission exists for native mode's URL reads, not
-  // for this.)
+  // The tab this side-panel instance is bound to: the active tab of the
+  // window it is in, since Chrome gives each window a side panel of its own.
+  // On mount the panel asks for that tab itself, as only it knows which
+  // window it is in; after that the background pushes ACTIVE_TAB_CHANGED on
+  // every tab or window switch, naming the window it is for. We don't listen
+  // for tab switches in the panel context: the side panel's `chrome.tabs`
+  // event delivery has been historically quirky, and the background owns the
+  // binding.
   const [myTabId, setMyTabId] = useState<number | null>(null);
   // Latest myTabId for use inside the long-lived onMessage listener,
   // which closes over the value at registration time.
@@ -871,6 +888,104 @@ export function App() {
   useEffect(() => {
     myTabIdRef.current = myTabId;
   }, [myTabId]);
+  // The window this panel is in: an ACTIVE_TAB_CHANGED for another window is
+  // that window's panel's (`isPanelWindow`). `undefined` until the look-up
+  // below answers. `null` where it can't be learned (no `chrome.tabs` to ask,
+  // as in a test's stand-in), and then every one is ours.
+  const myWindowIdRef = useRef<number | null | undefined>(undefined);
+  // Those that came before the window was known. The latest of ours is newer
+  // than the look-up's answer, which was asked for before it came.
+  const earlyActiveTabs = useRef<ActiveTabTold[]>([]);
+  // The tab last taken, at once: `myTabIdRef` follows `myTabId` only after
+  // the render, and a popup can close before that.
+  const shownTabRef = useRef<number | null>(null);
+  // Counts the tabs taken: a look-up of the window's tab that started before
+  // one was taken is older than it, and its answer is dropped.
+  const activeTabsTaken = useRef(0);
+  // Tabs that closed before the window was known: none of them is shown.
+  const earlyClosedTabs = useRef(new Set<number>());
+  const showTab = useCallback((tabId: number) => {
+    activeTabsTaken.current += 1;
+    shownTabRef.current = tabId;
+    setMyTabId(tabId);
+  }, []);
+  /** Show window `windowId`'s active tab, unless a tab is taken after
+   *  `taken` was counted, which is when the look-up started: that one is
+   *  newer. */
+  const showWindowTab = useCallback(
+    (windowId: number, taken = activeTabsTaken.current) => {
+      chrome.tabs.query({ active: true, windowId }).then(
+        ([tab]) => {
+          if (taken !== activeTabsTaken.current) return;
+          if (tab?.id !== undefined) showTab(tab.id);
+        },
+        () => {
+          // The window is closing with the panel in it; nothing to show.
+        },
+      );
+    },
+    [showTab],
+  );
+  useEffect(() => {
+    let mounted = true;
+    const learned = (tab: { id?: number; windowId: number } | undefined) => {
+      if (!mounted) return;
+      const windowId = tab?.windowId ?? null;
+      myWindowIdRef.current = windowId;
+      const ours = earlyActiveTabs.current.filter((m) =>
+        takesActiveTab(m, windowId),
+      );
+      earlyActiveTabs.current = [];
+      const closed = earlyClosedTabs.current;
+      earlyClosedTabs.current = new Set();
+      const shown = ours.length > 0 ? ours[ours.length - 1].tabId : tab?.id;
+      if (shown === undefined) return;
+      if (!closed.has(shown)) showTab(shown);
+      else if (windowId !== null) showWindowTab(windowId);
+    };
+    if (chrome.tabs?.query) {
+      chrome.tabs.query({ active: true, currentWindow: true }).then(
+        ([tab]) => learned(tab),
+        (err) => {
+          console.warn(
+            "[SN panel] couldn't learn its window, so it follows every window's tab:",
+            err,
+          );
+          learned(undefined);
+        },
+      );
+    } else {
+      learned(undefined);
+    }
+    return () => {
+      mounted = false;
+    };
+  }, [showTab, showWindowTab]);
+  // Moving from the panel to its window's page is a move inside the window,
+  // which the worker isn't told of: a panel left on a popup while the user
+  // worked in it shows its window's tab again then. Focus that left for
+  // another window is the worker's to follow.
+  useEffect(() => {
+    const onBlur = () => {
+      const windowId = myWindowIdRef.current;
+      if (typeof windowId !== "number" || !chrome.windows?.get) return;
+      // A tab taken from here on, a popup the user moved to, say, is newer.
+      const taken = activeTabsTaken.current;
+      chrome.windows.get(windowId).then(
+        (win) => {
+          if (taken !== activeTabsTaken.current) return;
+          if (win.focused && !document.hasFocus()) {
+            showWindowTab(windowId, taken);
+          }
+        },
+        () => {
+          // The window is closing with the panel in it.
+        },
+      );
+    };
+    window.addEventListener("blur", onBlur);
+    return () => window.removeEventListener("blur", onBlur);
+  }, [showWindowTab]);
 
   /**
    * Put a line in the action-feedback bar for `ms`, then clear it.
@@ -1339,20 +1454,23 @@ export function App() {
 
   // Keep a port alive so the background knows when the side panel closes.
   // On disconnect the background clears the highlight overlay AND disables
-  // the focus tracker across every frame. On mount we push the panel's
-  // current focus-tracker state to the content script — the tracker starts
-  // OFF in content.ts, so this first SET_FOCUS_TRACKER is what turns it on.
+  // the focus tracker across every frame. The tracker starts OFF in
+  // content.ts: binding a tab pushes the panel's state to it (the myTabId
+  // effect), and a reconnect pushes it again.
   useEffect(() => {
     let port: chrome.runtime.Port | null = null;
     const connect = () => {
       port = chrome.runtime.connect({ name: "sidepanel" });
-      // Push the panel's focus-tracker state on (re)connect — the tracker
-      // starts OFF in content.ts, so this is what turns it on. The current
-      // state, not the mount's: a worker that restarted forgot it.
-      sendToBoundTab({
-        type: "SET_FOCUS_TRACKER",
-        payload: { enabled: focusTrackerOnRef.current },
-      });
+      // Push the panel's focus-tracker state on reconnect: the current
+      // state, not the mount's, since a worker that restarted forgot it. A
+      // panel with no tab yet has nowhere to push it: one with no tab named
+      // would go to the tab last switched to, in any window.
+      if (myTabIdRef.current !== null) {
+        sendToBoundTab({
+          type: "SET_FOCUS_TRACKER",
+          payload: { enabled: focusTrackerOnRef.current },
+        });
+      }
       port.onDisconnect.addListener(() => {
         // The MV3 service worker was torn down (its port drops while the panel
         // is still open). Reconnect to revive it and re-run the background's
@@ -1395,7 +1513,20 @@ export function App() {
       }
 
       if (message.type === "ACTIVE_TAB_CHANGED") {
-        setMyTabId(message.tabId);
+        const mine = myWindowIdRef.current;
+        if (mine === undefined) earlyActiveTabs.current.push(message);
+        else if (takesActiveTab(message, mine)) showTab(message.tabId);
+        return;
+      }
+
+      // The tab this panel shows closed: a popup it was showing, say, which
+      // switches no tab in this panel's own window. Show that window's tab.
+      if (message.type === "TAB_CLOSED") {
+        const windowId = myWindowIdRef.current;
+        if (windowId === undefined) earlyClosedTabs.current.add(message.tabId);
+        else if (message.tabId === shownTabRef.current && windowId !== null) {
+          showWindowTab(windowId);
+        }
         return;
       }
 
@@ -1739,7 +1870,7 @@ export function App() {
     return () => {
       chrome.runtime.onMessage.removeListener(handler);
     };
-  }, [resetNativeState, announce]);
+  }, [resetNativeState, announce, showTab, showWindowTab]);
 
   const handleViewModeChange = useCallback(
     (mode: TreeViewMode) => {
