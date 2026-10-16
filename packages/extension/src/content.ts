@@ -1058,6 +1058,11 @@ const onKeyPressed = (e: Event) => {
   if (!tornDown && observingEnabled) typing.keyPressed(e);
 };
 
+/** The user pressed the pointer: what is edited next isn't a key's. */
+const onPointerPressed = (e: Event) => {
+  if (!tornDown && observingEnabled) typing.pointerPressed(e);
+};
+
 /**
  * The user typed on the page (`isTyping`). While the panel is open, say so,
  * and when, by the clock the frame dates its changes by, and nothing more:
@@ -1095,6 +1100,7 @@ function listenToDocument(): void {
     window.addEventListener(type, onPageInput, true);
   }
   window.addEventListener("keydown", onKeyPressed, true);
+  window.addEventListener("pointerdown", onPointerPressed, true);
   window.addEventListener("input", onPageTyping, true);
 }
 

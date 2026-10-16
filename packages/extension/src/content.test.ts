@@ -1615,6 +1615,12 @@ describe("content: the user acting on the page", () => {
                   isTrusted: true,
                   timeStamp: e.timeStamp,
                 }),
+              pointerPressed: (e: Event) =>
+                clock.pointerPressed({
+                  type: e.type,
+                  isTrusted: true,
+                  timeStamp: e.timeStamp,
+                }),
             };
           },
         };
@@ -1732,6 +1738,20 @@ describe("content: the user acting on the page", () => {
     expect(typing()).toEqual([
       { type: "PAGE_TYPING", at: first, pressedAt: first },
       { type: "PAGE_TYPING", at: first + 100, pressedAt: first + 100 },
+    ]);
+  });
+
+  it("dates an edit after a press of the pointer by itself", async () => {
+    await load({ trusted: true, body: `<input type="search">` });
+    const field = document.querySelector("input")!;
+    field.dispatchEvent(
+      late(new KeyboardEvent("keydown", { key: "a", bubbles: true }), 700),
+    );
+    // A click into the field, then a paste from its menu.
+    field.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true }));
+    type(field);
+    expect(typing()).toEqual([
+      { type: "PAGE_TYPING", at: Date.now(), pressedAt: Date.now() },
     ]);
   });
 

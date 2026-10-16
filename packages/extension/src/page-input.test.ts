@@ -278,6 +278,32 @@ describe("dating the user's input", () => {
     );
   });
 
+  it("dates an edit after a press of the pointer by itself, a key just before it or not", () => {
+    const clock = typingClock();
+    clocks(1_000_000, 5000);
+    clock.keyPressed(timed({ timeStamp: 4900 }));
+    // A click, then a paste from the page's menu.
+    clocks(1_000_100, 5100);
+    clock.pointerPressed(timed({ type: "pointerdown", timeStamp: 5100 }));
+    clocks(1_000_200, 5200);
+    expect(clock.pressedAt(timed({ type: "input", timeStamp: 5200 }))).toBe(
+      1_000_200,
+    );
+  });
+
+  it("forgets the key for no press of the pointer a script made, nor another event", () => {
+    const clock = typingClock();
+    clocks(1_000_000, 5000);
+    clock.keyPressed(timed({ timeStamp: 4900 }));
+    clock.pointerPressed(
+      timed({ type: "pointerdown", isTrusted: false, timeStamp: 5000 }),
+    );
+    clock.pointerPressed(timed({ type: "pointerup", timeStamp: 5000 }));
+    expect(clock.pressedAt(timed({ type: "input", timeStamp: 5000 }))).toBe(
+      999_900,
+    );
+  });
+
   it("dates typing by no key a script pressed, nor by another event", () => {
     const clock = typingClock();
     clocks(1_000_000, 5000);

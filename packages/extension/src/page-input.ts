@@ -130,15 +130,16 @@ const KEY_EDITS_WITHIN_MS = 500;
 /**
  * When the user pressed the key that made an edit `isTyping` sees. Chrome
  * dates an `input` event when the page dispatches it, late on a busy page,
- * so the key is the one the page dispatched just before it; an edit with
- * none (a paste from a menu, a drop) is dated by itself. The panel orders
- * typing and clicks in different frames by when the user did them, not by
- * whose report reaches it first.
+ * so the key is the one the page dispatched just before it, with no press
+ * of the pointer since; an edit with none (a paste from a menu, a drop) is
+ * dated by itself. The panel orders typing and clicks in different frames
+ * by when the user did them, not by whose report reaches it first.
  *
  * @internal
  */
 export function typingClock(): {
   keyPressed(e: TimedEvent): void;
+  pointerPressed(e: TimedEvent): void;
   pressedAt(e: TimedEvent): number;
 } {
   let key: { at: number; dispatchedAt: number } | null = null;
@@ -146,6 +147,11 @@ export function typingClock(): {
     keyPressed(e) {
       if (!e.isTrusted || e.type !== "keydown") return;
       key = { at: actedAt(e), dispatchedAt: performance.now() };
+    },
+    // Whatever is edited after a press of the pointer (a paste from a menu,
+    // a drop, a pick from a list) isn't the key's.
+    pointerPressed(e) {
+      if (e.isTrusted && e.type === "pointerdown") key = null;
     },
     pressedAt(e) {
       return key !== null &&
