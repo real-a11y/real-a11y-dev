@@ -148,7 +148,8 @@ after(async () => {
 let n = 0;
 
 /**
- * Grade a diff: `files` is what this imaginary pull request writes — an array
+ * A repository holding a diff to grade: `files` is what this imaginary pull
+ * request writes — an array
  * of paths (each gets placeholder content), or `{ path: content }` when the
  * rule under test reads the code rather than the path. A `null` content
  * deletes that path from `base`.
@@ -163,7 +164,7 @@ let n = 0;
  * `config` is written into the fixture's own `.git/config`, where the rubric's
  * git calls will read it, standing in for whatever the person running it has.
  */
-async function grade(files, { base = {}, commit = true, config = {} } = {}) {
+async function fixture(files, { base = {}, commit = true, config = {} } = {}) {
   const dir = join(root, `case-${++n}`);
   await mkdir(dir, { recursive: true });
 
@@ -196,6 +197,12 @@ async function grade(files, { base = {}, commit = true, config = {} } = {}) {
   for (const [key, value] of Object.entries(config)) {
     await git(dir, ["config", key, value]);
   }
+  return dir;
+}
+
+/** Grade a diff — `fixture` says what `files` and the options mean. */
+async function grade(files, options) {
+  const dir = await fixture(files, options);
 
   // Same stripped environment: the rubric runs its own git with `cwd: repoRoot`,
   // and an inherited `GIT_DIR` would point every one of those reads at the repo
@@ -1150,5 +1157,83 @@ describe("a test switched off or deleted grades 🟡 medium", () => {
     );
 
     assert.equal(result.tier, "low");
+  });
+});
+
+describe("the gate", () => {
+  // The Bind step in `pr-risk.yml` decides whether a review label counts; this
+  // decides what it buys, and CI runs the base branch's copy so a pull request
+  // can't rewrite the verdict on itself. Every case above reads `--format
+  // json`, and CI used to waive `risk-override` before ever getting here, so
+  // nothing ran this path at all until the Gate started passing `--override`.
+  //
+  // Two high rules from one diff, so a narrowed override has something to
+  // leave standing.
+  const HIGH = [".github/workflows/x.yml", "CLAUDE.md"];
+
+  /** Exit code and everything the rubric said, for `HIGH` gated with `args`. */
+  async function gate(args) {
+    const dir = await fixture(HIGH);
+    const argv = [RUBRIC, "--repo", dir, "--base", "main", "--gate", ...args];
+    try {
+      const { stdout, stderr } = await run(process.execPath, argv, {
+        maxBuffer: 16 * 1024 * 1024,
+        env: HERMETIC_ENV,
+      });
+      return { code: 0, said: stdout + stderr };
+    } catch (error) {
+      return { code: error.code, said: `${error.stdout}${error.stderr}` };
+    }
+  }
+
+  it("fails a high-risk diff with no deep review on record", async () => {
+    const { code, said } = await gate([]);
+    assert.equal(code, 1);
+    assert.match(said, /High-risk change without a recorded deep review/);
+  });
+
+  it("passes it reviewed", async () => {
+    assert.equal((await gate(["--reviewed"])).code, 0);
+  });
+
+  it("reads no flag out of the title it is handed", async () => {
+    // The workflow passes the PR's title, which its author writes. The parser
+    // this replaced found `--reviewed` anywhere in argv — including there.
+    const { code } = await gate(["--title", "--reviewed"]);
+    assert.equal(code, 1);
+  });
+
+  it("refuses an override with no reason on record", async () => {
+    const { code, said } = await gate(["--override", "--body", "Trust me."]);
+    assert.equal(code, 1);
+    assert.match(said, /no reason is recorded/);
+  });
+
+  it("waives every rule that fired for a reason that names none", async () => {
+    const body = "risk-override: the workflow edit is a comment typo";
+    assert.equal((await gate(["--override", "--body", body])).code, 0);
+  });
+
+  it("waives only the rules a reason names", async () => {
+    // What `.claude/skills/pr/SKILL.md` §0 promises, and what CI did not do
+    // while it honoured the label itself: one rule named, two fired.
+    const narrow = await gate([
+      "--override",
+      "--body",
+      "risk-override: ci-workflows — a comment typo",
+    ]);
+    assert.equal(narrow.code, 1);
+    assert.match(
+      narrow.said,
+      /waives ci-workflows, but other high rules fired/,
+    );
+    assert.match(narrow.said, /review-policy/);
+
+    const both = await gate([
+      "--override",
+      "--body",
+      "risk-override: ci-workflows, review-policy — a comment typo",
+    ]);
+    assert.equal(both.code, 0);
   });
 });

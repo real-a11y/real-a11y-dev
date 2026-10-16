@@ -80,6 +80,46 @@ name: PR risk
 # that can't be fetched any more — is graded against the trunk with a warning,
 # the old answer: it over-counts, never under-counts.
 # ---------------------------------------------------------------------------
+# A REVIEW LABEL COUNTS ONLY FOR THE COMMIT IT WAS APPLIED AT.
+#
+# `reviewed:deep` and `risk-override` are what turn a red Gate green, so the
+# question the check turns on is whether the label describes the commit being
+# graded. The event payload can't say. It is a snapshot taken when the event
+# fired, so an `edited` fired between a push and the step that drops the old
+# label still lists it — and can cancel that step's run before it gets there —
+# while on a fork nothing can drop it at all, the token being read-only. An
+# author could push a new head, edit the description, and get a green check on
+# a commit nobody reviewed.
+#
+# This workflow's own run history can say. `run-name` below has GitHub title
+# every run with the pull request, the action and the label that fired it, and
+# GitHub stamps every run with the head it fired at. Both are written as the
+# event is processed, before any step runs, and they outlive the run: one that
+# `concurrency` cancels before it starts is still listed, title and head
+# intact. That is not hypothetical: #494's own `labeled reviewed:deep` run was
+# cancelled within two seconds by the run for a `risk:medium` label applied in
+# the same second, and never ran a step.
+#
+# So a gate label counts for a commit when it is on the PR now and the newest
+# run at that commit to apply or remove it applied it. A fork's author can't
+# fire a `labeled` — that takes triage access — and can't write a record either:
+# a run made without this `run-name` carries the PR title, but no title can name
+# the run id GitHub assigns afterwards (see `run-name`), and a record counts only
+# from someone the PR's issue events show applying that label. Changing what a
+# run here is titled means editing this file, which grades 🔴 high and is human
+# review's job anyway (above).
+#
+# By commit, not by push: a head pushed back to a commit that was reviewed gets
+# that review back, because it is the same tree. Any other commit owes one.
+#
+# Rejected, so nobody reaches for them again:
+#   - Comparing the label's time with the head's push time. A force-push gets a
+#     timeline event on GitHub's clock; an ordinary push gets only its commits,
+#     placed by committer date — which the author sets.
+#   - Having the `labeled` run write "reviewed at <sha>" down. A fork's token
+#     can't write anything, and a run cancelled before its first step writes
+#     nothing — see #494 above.
+# ---------------------------------------------------------------------------
 #
 # Two more things follow from being REQUIRED, and both are easy to get wrong:
 #
@@ -90,6 +130,19 @@ name: PR risk
 #      is node-core + git only and this job deliberately skips `pnpm install`.
 #      Adding an import of anything installed breaks it with ERR_MODULE_NOT_FOUND
 #      on every run.
+
+# LOAD-BEARING: the Bind step reads these titles back as the record of which
+# label was applied at which commit — see A REVIEW LABEL COUNTS ONLY FOR THE
+# COMMIT IT WAS APPLIED AT. Change it and that step together, and put nothing in
+# it a pull request's author writes: a PR title copied in here could claim a
+# `labeled reviewed:deep` that never happened.
+#
+# The run id is what makes a title this workflow's. A run with no `run-name` —
+# every run before this line existed, and any made from a merge ref without it
+# — is titled with the PR title instead, which its author can set to anything,
+# this format included. What they can't set is the id GitHub hands the run
+# after the title is written, so a record counts only when it names its own.
+run-name: "PR risk #${{ github.event.pull_request.number }} ${{ github.event.action }} ${{ github.event.label.name }} (run ${{ github.run_id }})"
 
 on:
   pull_request:
@@ -105,6 +158,8 @@ on:
 permissions:
   contents: read
   pull-requests: write # apply the risk label + post the sticky comment
+  actions: read # list this workflow's runs: which commit each review label was applied at
+  issues: read # the PR's issue events: who has applied each review label
 
 # One run per pull request at a time, and the newest event wins: it cancels the
 # run in flight rather than queueing behind it, so the `labeled` run that a
@@ -118,8 +173,8 @@ permissions:
 # touched them; the second run, whether it follows the first or cancels it
 # part-way, starts from labels already changed under it. Hence the label writes
 # below treat "already done" as done, the risk label is reconciled against the
-# PR's live labels, and the Gate never counts a review label out of a
-# `synchronize` payload.
+# PR's live labels, and nothing decides whether a review label counts from the
+# payload at all — see the Bind step.
 concurrency:
   group: pr-risk-${{ github.event.pull_request.number }}
   cancel-in-progress: true
@@ -139,45 +194,152 @@ jobs:
           node-version-file: .nvmrc
 
       # Runs FIRST, before anything can grade the diff: a review recorded
-      # against one tree must not carry over to a different one.
+      # against one tree must not carry over to a different one. Otherwise a
+      # maintainer approves a `feat!:` PR, its author force-pushes a tree adding
+      # `curl $NPM_TOKEN` to publish.yml, and the gate stays green. This is the
+      # label analogue of `dismiss_stale_reviews`, and the header's A REVIEW
+      # LABEL COUNTS ONLY FOR THE COMMIT IT WAS APPLIED AT has the why.
       #
-      # The old sweep was `startsWith('risk:')`, which matches neither
-      # `reviewed:deep` (starts `reviewed:`) nor `risk-override` (starts
-      # `risk-`). So a maintainer could approve a `feat!:` PR, the author could
-      # force-push a tree adding `curl $NPM_TOKEN` to publish.yml, and the
-      # `synchronize` run would recompute `tier: high`, say so in the comment,
-      # and still exit 0. This is the label analogue of `dismiss_stale_reviews`.
+      # One read of the PR and its run history, two answers:
       #
-      # Taking the labels off the PR is what every event after this one sees.
-      # This run's own Gate reads the payload, which still lists them, so it
-      # refuses them on `synchronize` itself — see the Gate.
-      - name: Drop stale review labels on a new head
-        if: >-
-          github.event.action == 'synchronize' &&
-          github.event.pull_request.head.repo.full_name == github.repository
+      #   - For the Gate: whether each gate label counts for the commit THIS
+      #     run graded — the payload's head, which is what its check reports
+      #     on. Forks too, since it only reads.
+      #   - For the PR: which gate labels don't describe the head it has NOW,
+      #     and off they come. The live head, not the payload's, because a
+      #     re-run replays an old payload: sweeping by it took a review applied
+      #     since straight back off. Same-repo only — a fork's token is
+      #     read-only, and the Gate refuses the label either way.
+      #
+      # This used to run on `synchronize` alone and read the payload, which
+      # left the label standing whenever another event's run cancelled that one
+      # first, and after a `reopened` whose branch had moved while the PR was
+      # closed. Any event that finds one stale now takes it off.
+      - name: Bind review labels to the head
+        id: bind
         uses: actions/github-script@v9
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const { owner, repo } = context.repo;
-            const issue_number = context.issue.number;
-            // The payload's labels on purpose, unlike the risk label below: they
-            // are the ones that were on the PR when the head moved, so every one
-            // of them predates it. The live list would also sweep a review
-            // applied AFTER the push, to this very head, whenever this run
-            // started late.
-            const present = (context.payload.pull_request.labels || []).map((l) => l.name);
-            for (const name of ['reviewed:deep', 'risk-override']) {
-              if (!present.includes(name)) continue;
+            const pr = context.payload.pull_request;
+            const issue_number = pr.number;
+            const GATES = { reviewed: 'reviewed:deep', override: 'risk-override' };
+
+            // What `run-name` titles a run. The two must agree to the
+            // character: `scripts/pr-risk-workflow.test.mjs` titles its runs
+            // from `run-name` itself, so changing one alone fails there.
+            const titled = (action, label, id) => `PR risk #${pr.number} ${action} ${label ?? ''} (run ${id})`;
+
+            // This workflow's runs at `sha`, newest first. Matched on GitHub's
+            // own fields, never the title, so another fork's copy of the same
+            // commit can't speak for this PR. This run joins from its own
+            // payload, which is the same record, in case the listing hasn't
+            // caught up with it yet.
+            const headRepo = pr.head.repo?.full_name ?? null;
+            const histories = new Map();
+            async function history(sha) {
+              const runs = await github.paginate(github.rest.actions.listWorkflowRuns, {
+                owner, repo, workflow_id: 'pr-risk.yml', event: 'pull_request',
+                head_sha: sha, exclude_pull_requests: true, per_page: 100,
+              });
+              const records = runs
+                .filter((run) =>
+                  run.id !== context.runId &&
+                  run.event === 'pull_request' &&
+                  run.head_sha === sha &&
+                  (run.head_repository?.full_name ?? null) === headRepo)
+                .map((run) => ({
+                  id: run.id,
+                  number: run.run_number,
+                  title: run.display_title,
+                  actor: run.actor?.login,
+                }));
+              if (pr.head.sha === sha) {
+                // From the payload, which only GitHub writes — so no check
+                // below has to vouch for it.
+                records.push({
+                  id: context.runId,
+                  number: context.runNumber,
+                  title: titled(context.payload.action, context.payload.label?.name, context.runId),
+                  own: true,
+                });
+              }
+              // By run number, which GitHub assigns as it creates runs. Not the
+              // listing's order: two runs created in the same second can come
+              // back either way round.
+              return records.sort((a, b) => b.number - a.number || b.id - a.id);
+            }
+
+            // Who has applied `label` to this PR, from its issue events — which
+            // GitHub writes, and only someone with triage access can cause.
+            let events;
+            async function appliedBy(label, actor) {
+              events ??= await github.paginate(github.rest.issues.listEvents, {
+                owner, repo, issue_number, per_page: 100,
+              });
+              return Boolean(actor) && events.some((e) =>
+                e.event === 'labeled' && e.label?.name === label && e.actor?.login === actor);
+            }
+
+            // Whether `label` was applied at `sha` and not taken off since: the
+            // newest run at `sha` that applied or removed it, applied it.
+            //
+            // A record of applying it has to name its own run id (see
+            // `run-name`) AND come from someone who has applied it here. Either
+            // alone stops a title the PR's author wrote; both, because run ids
+            // are close enough to sequential that enough retitled runs could
+            // land one guess, and nothing in an author's own run makes them
+            // someone who applied a label.
+            async function appliedAt(label, sha) {
+              if (!histories.has(sha)) histories.set(sha, await history(sha));
+              for (const { id, title, actor, own } of histories.get(sha)) {
+                if (title === titled('unlabeled', label, id)) return false;
+                if (title !== titled('labeled', label, id)) continue;
+                if (own || (await appliedBy(label, actor))) return true;
+              }
+              return false;
+            }
+
+            // The PR as it is now. The payload's labels are as old as the event,
+            // and a label taken off since — by a person, or by this step in
+            // another run — is not one this run may count.
+            const { data: live } = await github.rest.pulls.get({ owner, repo, pull_number: pr.number });
+            const present = new Set(live.labels.map((l) => l.name));
+            const sameRepo = headRepo === `${owner}/${repo}`;
+            const short = (sha) => sha.slice(0, 7);
+
+            for (const name of Object.values(GATES)) {
+              if (!sameRepo || !present.has(name)) continue;
+              if (await appliedAt(name, live.head.sha)) continue;
+              let removed = 'Removed';
               try {
                 await github.rest.issues.removeLabel({ owner, repo, issue_number, name });
-                console.log(`Removed ${name} — the head changed, so the review is owed again.`);
               } catch (error) {
-                // 404 is "not on the PR": something removed it first, usually
-                // the other `synchronize` run for this head — see `concurrency`
-                // above. Gone is the point.
+                // 404 is "not on the PR": another run for it got there first —
+                // a stack force-push fires two `synchronize` a second apart, see
+                // `concurrency` above. Gone is the point.
                 if (error.status !== 404) throw error;
-                console.log(`${name} was already removed — the head changed, so the review is owed again.`);
+                removed = 'Another run already removed';
+              }
+              present.delete(name);
+              // Applying a label still on the PR fires no event, and a label
+              // applied the instant a push lands can beat GitHub moving the PR
+              // to it — either way, no run saw it go on at this head.
+              core.notice(`${removed} ${name} — no run saw it applied at ${short(live.head.sha)}, the PR's head, so the review is owed again. Apply it once this head is reviewed and its run has started.`);
+            }
+
+            // Exactly 'true' or 'false', and set on every path that gets here:
+            // the Gate counts nothing but 'true'.
+            for (const [output, name] of Object.entries(GATES)) {
+              const counts = present.has(name) && (await appliedAt(name, pr.head.sha));
+              core.setOutput(output, String(counts));
+              if (present.has(name) && !counts) {
+                core.notice(`Not counting ${name} — it wasn't applied at ${short(pr.head.sha)}, the commit this run graded. ` + (
+                  live.head.sha !== pr.head.sha
+                    ? `The PR has moved on to ${short(live.head.sha)} since this event fired.`
+                    : `A fork's token is read-only, so it stays on the PR: remove it, then apply it again once this commit is reviewed.`
+                ));
               }
             }
 
@@ -354,8 +516,7 @@ jobs:
 
             // Only ever touch the risk:<tier> labels. Anything else on the PR is
             // somebody's deliberate triage and is none of this job's business —
-            // the two gate labels are handled by their own step above, on the
-            // one event where they go stale.
+            // the two gate labels are the Bind step's, above.
             //
             // Read live, NOT from the payload. That is a snapshot from when the
             // event fired, and another run for this PR may have relabelled it
@@ -410,58 +571,46 @@ jobs:
         env:
           PR_TITLE: ${{ github.event.pull_request.title }}
           PR_BODY: ${{ github.event.pull_request.body }}
-          LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
-          EVENT_ACTION: ${{ github.event.action }}
+          # Whether each gate label counts for the commit this run graded, from
+          # the Bind step. Never the payload's label list: that is as old as
+          # the event, and can't say which commit a label was applied at.
+          REVIEWED: ${{ steps.bind.outputs.reviewed }}
+          OVERRIDE: ${{ steps.bind.outputs.override }}
           RUBRIC: ${{ steps.classify.outputs.rubric }}
           # The trunk, or a stacked layer's parent — whichever Classify graded.
           DIFF_REF: ${{ steps.classify.outputs.diff_ref }}
         run: |
           set -euo pipefail
 
-          # A new head owes its review again, so on `synchronize` neither gate
-          # label counts. The first step took them off the PR, but LABELS is
-          # the payload, snapshotted at the push, and still lists them — read
-          # as-is, it let a new head keep the green gate the previous one
-          # earned, the exact failure that step was written to stop. On a fork
-          # nothing removes them at all, since the token is read-only. A label
-          # applied after the push arrives in a `labeled` event, which counts.
-          if [ "$EVENT_ACTION" = synchronize ]; then
-            LABELS=",$LABELS,"
-            for stale in reviewed:deep risk-override; do
-              case "$LABELS" in
-                *",$stale,"*)
-                  echo "::notice::Not counting $stale — it was applied before this push, so it describes the previous head. Apply it again once this head is reviewed (remove it first if it is still on the PR)."
-                  LABELS="${LABELS//,$stale,/,}"
-                  ;;
-              esac
-            done
-          fi
-
-          # The override is honoured BEFORE the rubric runs, not passed to it.
-          # This check is required, so a bug in the rubric would otherwise block
-          # every PR in the repo with no way out — including the PR that fixes
-          # the bug. Checking the label here means the escape hatch still works
-          # when the thing it is escaping is what's broken.
+          # Exactly `true` or it doesn't count: an output that never got set
+          # reads as empty, and empty has to mean "not reviewed".
           #
-          # It still demands a written reason, because the comment claims the
-          # override is "recorded, not silent" and a label alone is neither.
-          case ",$LABELS," in
-            *,risk-override,*)
-              if ! printf '%s' "$PR_BODY" | grep -qiE '^[[:space:]]*risk-override:[[:space:]]*[^[:space:]]'; then
-                echo "::error::risk-override is set, but the description has no 'risk-override: <reason>' line."
-                exit 1
-              fi
-              echo "risk-override accepted — reason is on the PR."
-              exit 0
-              ;;
-          esac
-
-          args=""
-          case ",$LABELS," in *,reviewed:deep,*) args="--reviewed" ;; esac
+          # The override goes to the rubric, the base branch's copy like every
+          # other decision here, rather than being honoured in this step. The
+          # rubric reads the `risk-override:` reason back and, when the line
+          # names rule ids, waives only those. This step used to accept the
+          # label on any reason line and exit before the rubric ran, so a line
+          # naming one rule waived every rule that fired: the narrowing the
+          # `pr` skill describes held locally and nowhere it gated anything.
+          # Exiting first was meant to keep a broken rubric from blocking every
+          # PR, the fix included — but Classify runs the same rubric before this
+          # step, so a rubric that crashes fails there and this never runs.
+          # What it guarded was a bug in the `--gate` path alone, and
+          # `pr-risk.test.mjs` covers that path now.
+          #
+          # A counted review makes the override moot, so it isn't passed: the
+          # rubric weighs a narrowed override before `--reviewed`, and would
+          # refuse a reviewed PR whose override names too few rules.
+          flag=""
+          if [ "${REVIEWED:-}" = true ]; then
+            flag="--reviewed"
+          elif [ "${OVERRIDE:-}" = true ]; then
+            flag="--override"
+          fi
 
           # Same rubric the Classify step resolved, bootstrap fallback included,
           # against the same base and the same tree — for a stacked layer that
           # is still the detached head Classify left behind.
           node "$RUBRIC" \
             --repo "$GITHUB_WORKSPACE" --base "origin/$DIFF_REF" \
-            --title "$PR_TITLE" --body "$PR_BODY" --gate $args
+            --title "$PR_TITLE" --body "$PR_BODY" --gate $flag
