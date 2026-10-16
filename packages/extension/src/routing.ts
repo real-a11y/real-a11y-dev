@@ -368,8 +368,10 @@ const BACKGROUND_RELAYED_TYPES: ReadonlySet<string> = new Set([
  *      carry theirs in `sender.tab.id`. With neither, accept — panel-internal
  *      and future message types have no tab to compare.
  *
- * `ACTIVE_TAB_CHANGED` is exempt from both: it is intentionally about a tab
- * other than ours, because it is how the panel LEARNS which tab it is bound to.
+ * `ACTIVE_TAB_CHANGED` and `TAB_CLOSED` are exempt from both: each is about a
+ * tab other than the one the panel has rendered. The first is how the panel
+ * LEARNS which tab it is bound to; the second is about a tab it may have just
+ * taken, which it compares with the tab it took last itself.
  *
  * Pure (no `chrome` access) so both rules are unit-tested directly rather than
  * living as inline conditions in the panel's message handler.
@@ -383,7 +385,9 @@ export function shouldPanelAcceptMessage(opts: {
   /** The tab the panel is bound to; `null` before it has learned one. */
   myTabId: number | null;
 }): boolean {
-  if (opts.type === "ACTIVE_TAB_CHANGED") return true;
+  if (opts.type === "ACTIVE_TAB_CHANGED" || opts.type === "TAB_CLOSED") {
+    return true;
+  }
 
   if (
     BACKGROUND_RELAYED_TYPES.has(opts.type) &&
@@ -436,6 +440,89 @@ export function resolvePanelTargetTab(
   activeTabId: number | null,
 ): number | null {
   return messageTabId ?? activeTabId ?? null;
+}
+
+// ---- Which window's side panel shows a tab ----
+
+/**
+ * The window whose side panel shows the active tab of a window of type
+ * `windowType`, when the user moves to that window.
+ *
+ * Chrome gives every ordinary window a side panel of its own, which shows
+ * that window's active tab and never another window's. A popup, such as a
+ * login window a page opens, has no side panel: it shows in the panel of the
+ * last ordinary window the user was in, so the panel can still look into a
+ * popup its page opened, since Chrome doesn't say which tab opened a popup
+ * window. No other kind of window shows in a panel.
+ *
+ * @returns `null` when no panel shows it.
+ * @internal
+ */
+export function panelWindowFor(opts: {
+  windowId: number;
+  /** `chrome.windows.Window.type`. */
+  windowType: string | undefined;
+  /** The last `"normal"` window the user was in, if known. */
+  lastNormalWindowId: number | null;
+}): number | null {
+  switch (opts.windowType) {
+    case "normal":
+      return opts.windowId;
+    case "popup":
+      return opts.lastNormalWindowId;
+    default:
+      return null;
+  }
+}
+
+/**
+ * Whether an `ACTIVE_TAB_CHANGED` is for this panel: the one for its own
+ * window. A panel that can't learn its window takes every one.
+ *
+ * @internal
+ */
+export function isPanelWindow(
+  messageWindowId: number,
+  myWindowId: number | null,
+): boolean {
+  return myWindowId === null || messageWindowId === myWindowId;
+}
+
+/**
+ * Keeps answers that wait on a look-up in order. The worker learns which tab
+ * a panel shows, and which window the user is in, sometimes at once (a tab
+ * switch) and sometimes only after asking Chrome (which window has focus, and
+ * what type it is). An answer to an older question must not land over a newer
+ * one: each look-up takes a stamp when it starts, and a write to a key is
+ * refused to a look-up older than the last write to it.
+ *
+ * @internal
+ */
+export function lookupOrder<K>(): {
+  /** A look-up starts: its stamp. */
+  begin(): number;
+  /**
+   * Whether to write `key` now, for a look-up stamped `since`, or with none,
+   * for what just happened. Records the write if so.
+   */
+  claim(key: K, since?: number): boolean;
+  /** Drop what is kept for `key`, once nothing will be written to it. */
+  forget(key: K): void;
+} {
+  let clock = 0;
+  const written = new Map<K, number>();
+  return {
+    begin: () => ++clock,
+    claim(key, since) {
+      const at = since ?? ++clock;
+      if ((written.get(key) ?? 0) > at) return false;
+      written.set(key, at);
+      return true;
+    },
+    forget(key) {
+      written.delete(key);
+    },
+  };
 }
 
 // ---- Panel→content broadcast delivery ----

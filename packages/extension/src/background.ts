@@ -12,6 +12,8 @@ import {
   type PlannedTabMessage,
   describeBroadcastDelivery,
   isTrustedSender,
+  lookupOrder,
+  panelWindowFor,
   prefixNodeId,
   parseNodeId,
   planFrameAnnouncementResponse,
@@ -30,6 +32,7 @@ import {
   removeFrame,
   unplaceableFrames,
 } from "./tab-state.js";
+import type { ContentToPanel } from "./types.js";
 
 // `chrome.debugger` native mode (RFC PR H) ships in every build now that the
 // manifest carries `debugger`/`tabs`/`storage` as required permissions (see
@@ -505,10 +508,8 @@ chrome.runtime.onConnect.addListener((port) => {
   sidepanelPorts.add(port);
   sidepanelConnected = true;
 
-  // The freshly-mounted panel needs to know which tab it's bound to before
-  // it can request a tree or filter inbound messages. Push the current
-  // activeTabId immediately on connect.
-  broadcastActiveTabToPanel();
+  // A freshly-mounted panel learns its tab by itself, as its window's active
+  // tab (see the panel's `myTabId`): only it knows which window it is in.
 
   // Arm observation on the active tab's already-loaded content scripts — they
   // announced via FRAME_HELLO before the panel existed and are waiting for
@@ -588,60 +589,147 @@ chrome.action.onClicked.addListener((tab) => {
   }
 });
 
-// `activeTabId` tracks the user-visible active tab so panel-originated
-// messages get routed to the right page. Three legitimate writers:
+// `activeTabId` is the tab last switched to, in any window, or the active tab
+// of the window the user last moved to: where a panel-originated message that
+// names no tab of its own goes. Its legitimate writers:
 //  - startup query below (cold start before any tab event fires)
 //  - chrome.tabs.onActivated (user switches tabs within a window)
 //  - chrome.windows.onFocusChanged (user switches windows)
+//  - the REQUEST_TREE and CLOSE_TAB fallbacks below
 // It used to also be rewritten on every inbound content-script message,
 // which let any background tab silently steal active-tab status the
 // moment one of its frames announced itself — so the side panel ended
 // up showing the tree of an unrelated tab.
+//
+// The panels are told their tabs window by window, never `activeTabId`.
+// Chrome gives every ordinary window a side panel of its own, showing that
+// window's active tab, so each ACTIVE_TAB_CHANGED names the window whose
+// panel it is for: moving to another window, or to a tab there, leaves this
+// window's panel where it was. A popup, which has no panel, shows in the
+// last ordinary window's (`panelWindowFor`) from when the user moves to it.
+// That panel goes back to its own window's tab when the popup closes
+// (TAB_CLOSED), when a tab is switched to in its window, or when the user
+// moves to that window's page from another window. Not when they move to the
+// panel itself: it is in that window too, and must stay on the popup they
+// came to it for (`focus`).
+
+/** The last ordinary window the user was in: a popup shows in its panel. */
+let lastNormalWindowId: number | null = null;
+
+/** Orders what the look-ups below write: `"active"` is `activeTabId`,
+ *  `"normal"` is `lastNormalWindowId`, and a window's id is its panel. */
+const lookups = lookupOrder<number | "active" | "normal">();
+
+/** Set `activeTabId`, unless a look-up newer than `since` already has. */
+function setActiveTab(tabId: number, since?: number): void {
+  if (lookups.claim("active", since)) activeTabId = tabId;
+}
+
+/**
+ * Tell window `windowId`'s side panel which tab it shows, unless a look-up
+ * newer than `since` already has. The panel uses this as the source of truth
+ * for `myTabId` rather than its own `chrome.tabs.onActivated` listener — the
+ * panel context's listener is unreliable in some Chrome configurations (no
+ * `"tabs"` permission, plus historical sidepanel quirks), but the
+ * background's listener is authoritative. Every panel hears it, and only
+ * `windowId`'s takes it. `focus` marks the window's own tab, told because the
+ * user moved to the window. Cheap; safe to fire often.
+ */
+function tellPanel(
+  tabId: number,
+  windowId: number,
+  since?: number,
+  focus = false,
+): void {
+  if (!lookups.claim(windowId, since)) return;
+  const message: Extract<ContentToPanel, { type: "ACTIVE_TAB_CHANGED" }> = {
+    type: "ACTIVE_TAB_CHANGED",
+    tabId,
+    windowId,
+    ...(focus ? { focus } : {}),
+  };
+  chrome.runtime.sendMessage(message).catch(() => {
+    // Panel may be closed; benign.
+  });
+}
+
+/**
+ * The user is in window `windowId`, by a look-up stamped `since`: its active
+ * tab (`activeTab`, when the caller has it) becomes `activeTabId`, and with
+ * `tell`, the panel that shows the window is told it. That is the window's
+ * own panel, which may have been showing a popup, or for a popup, the last
+ * ordinary window's.
+ */
+async function followWindow(
+  windowId: number,
+  since: number,
+  tell: boolean,
+  activeTab?: chrome.tabs.Tab,
+): Promise<void> {
+  const [win, tab] = await Promise.all([
+    chrome.windows.get(windowId),
+    activeTab ??
+      chrome.tabs.query({ active: true, windowId }).then(([found]) => found),
+  ]);
+  if (tab?.id === undefined) return;
+  setActiveTab(tab.id, since);
+  if (win.type === "normal") {
+    if (lookups.claim("normal", since)) lastNormalWindowId = windowId;
+  } else if (lastNormalWindowId === null) {
+    // A worker that started while a popup had focus hasn't seen the user in
+    // an ordinary window yet: Chrome's pick of one, right when there is one.
+    const normal = await chrome.windows.getLastFocused({
+      windowTypes: ["normal"],
+    });
+    if (normal.id !== undefined && lookups.claim("normal", since)) {
+      lastNormalWindowId = normal.id;
+    }
+  }
+  if (!tell) return;
+  const panelWindow = panelWindowFor({
+    windowId,
+    windowType: win.type,
+    lastNormalWindowId,
+  });
+  if (panelWindow === null) return;
+  tellPanel(tab.id, panelWindow, since, panelWindow === windowId);
+}
 
 async function refreshActiveTabFromLastFocusedWindow(): Promise<void> {
+  const since = lookups.begin();
   try {
     const [tab] = await chrome.tabs.query({
       active: true,
       lastFocusedWindow: true,
     });
-    if (tab?.id !== undefined) {
-      activeTabId = tab.id;
-      broadcastActiveTabToPanel();
-    }
+    if (tab?.id === undefined) return;
+    await followWindow(tab.windowId, since, false, tab);
   } catch {
     // Service worker can be invoked before any window exists; ignore.
   }
 }
 
-/**
- * Tell the side panel which tab is currently active. The panel uses this
- * as the source of truth for `myTabId` rather than its own
- * `chrome.tabs.onActivated` listener — the panel context's listener is
- * unreliable in some Chrome configurations (no `"tabs"` permission, plus
- * historical sidepanel quirks), but the background's listener is
- * authoritative because that's what tracks `activeTabId` in the first
- * place. Idempotent and cheap; safe to fire often.
- */
-function broadcastActiveTabToPanel(): void {
-  if (activeTabId === null) return;
-  chrome.runtime
-    .sendMessage({ type: "ACTIVE_TAB_CHANGED", tabId: activeTabId })
-    .catch(() => {
-      // Panel may be closed; benign.
-    });
-}
-
 void refreshActiveTabFromLastFocusedWindow();
 
-chrome.tabs.onActivated.addListener((activeInfo) => {
-  activeTabId = activeInfo.tabId;
-  broadcastActiveTabToPanel();
+chrome.tabs.onActivated.addListener(({ tabId, windowId }) => {
+  setActiveTab(tabId);
+  tellPanel(tabId, windowId);
 });
 
-// Switching between windows doesn't fire onActivated, so refresh here too.
+// Switching between windows doesn't fire onActivated. A window's own panel
+// is told its tab again, in case it was showing a popup.
 chrome.windows.onFocusChanged.addListener((windowId) => {
   if (windowId === chrome.windows.WINDOW_ID_NONE) return;
-  void refreshActiveTabFromLastFocusedWindow();
+  followWindow(windowId, lookups.begin(), true).catch(() => {
+    // The window closed before it could be looked at; nothing to follow.
+  });
+});
+
+// A closed window has no panel to show a popup in: the next popup goes to
+// Chrome's pick of an ordinary window (see `followWindow`).
+chrome.windows.onRemoved.addListener((windowId) => {
+  if (windowId === lastNormalWindowId) lastNormalWindowId = null;
+  lookups.forget(windowId);
 });
 
 // Route messages between frames, side panel, and content scripts
@@ -851,7 +939,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
         const tabId = tabs[0]?.id;
         if (tabId) {
-          activeTabId = tabId;
+          setActiveTab(tabId);
           broadcast(tabId);
         } else {
           sendResponse({ success: false, error: "No active tab" });
@@ -881,12 +969,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         }
         // Focus the last focused window and update activeTabId
         chrome.tabs.query({ active: true, lastFocusedWindow: true }, (tabs) => {
-          if (tabs[0]?.id) {
-            activeTabId = tabs[0].id;
+          const nowActive = tabs[0]?.id;
+          if (nowActive) {
+            setActiveTab(nowActive);
             chrome.windows.update(tabs[0].windowId!, { focused: true });
             // Request fresh tree from the now-active tab
             chrome.tabs.sendMessage(
-              activeTabId,
+              nowActive,
               {
                 type: "REQUEST_TREE",
                 payload: { viewMode: "a11y" },
@@ -1097,6 +1186,16 @@ chrome.tabs.onRemoved.addListener((tabId) => {
   tabCurtainOn.delete(tabId);
   panelTreeRequests.delete(tabId);
   focusTrackerOffTabs.delete(tabId);
+  // A panel showing a popup is told nothing else when the popup closes: no
+  // tab is switched to in the panel's own window, so it asks for that
+  // window's tab itself.
+  const closed: Extract<ContentToPanel, { type: "TAB_CLOSED" }> = {
+    type: "TAB_CLOSED",
+    tabId,
+  };
+  chrome.runtime.sendMessage(closed).catch(() => {
+    // No panel open; benign.
+  });
 });
 
 // Set side panel behavior

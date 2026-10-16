@@ -9,7 +9,10 @@ import {
   planHighlight,
   planFrameHello,
   isExtensionPageSender,
+  isPanelWindow,
   isTrustedSender,
+  lookupOrder,
+  panelWindowFor,
   resolvePanelTargetTab,
   shouldPanelAcceptMessage,
   describeBroadcastDelivery,
@@ -759,6 +762,126 @@ describe("shouldPanelAcceptMessage", () => {
         myTabId: MY_TAB,
       }),
     ).toBe(true);
+  });
+
+  it("never filters TAB_CLOSED — the tab may be one the panel has just taken", () => {
+    expect(
+      shouldPanelAcceptMessage({
+        type: "TAB_CLOSED",
+        messageTabId: 99,
+        myTabId: MY_TAB,
+      }),
+    ).toBe(true);
+  });
+});
+
+describe("panelWindowFor", () => {
+  const LAST_NORMAL = 1;
+
+  it("shows an ordinary window's tab in that window's own panel", () => {
+    expect(
+      panelWindowFor({
+        windowId: 2,
+        windowType: "normal",
+        lastNormalWindowId: LAST_NORMAL,
+      }),
+    ).toBe(2);
+  });
+
+  it("shows a popup in the last ordinary window's panel", () => {
+    expect(
+      panelWindowFor({
+        windowId: 3,
+        windowType: "popup",
+        lastNormalWindowId: LAST_NORMAL,
+      }),
+    ).toBe(LAST_NORMAL);
+  });
+
+  it("shows a popup in no panel before an ordinary window is known", () => {
+    expect(
+      panelWindowFor({
+        windowId: 3,
+        windowType: "popup",
+        lastNormalWindowId: null,
+      }),
+    ).toBeNull();
+  });
+
+  it("shows an app's window, a DevTools window, or one of no known type, in no panel", () => {
+    for (const windowType of ["app", "devtools", "panel", undefined]) {
+      expect(
+        panelWindowFor({
+          windowId: 3,
+          windowType,
+          lastNormalWindowId: LAST_NORMAL,
+        }),
+      ).toBeNull();
+    }
+  });
+});
+
+describe("isPanelWindow", () => {
+  it("takes the tab of its own window, and not another window's", () => {
+    expect(isPanelWindow(1, 1)).toBe(true);
+    expect(isPanelWindow(2, 1)).toBe(false);
+  });
+
+  it("takes every one when it can't know its own window", () => {
+    expect(isPanelWindow(2, null)).toBe(true);
+  });
+});
+
+describe("lookupOrder", () => {
+  it("lets what happens now write, every time", () => {
+    const order = lookupOrder<string>();
+    expect(order.claim("a")).toBe(true);
+    expect(order.claim("a")).toBe(true);
+  });
+
+  it("refuses a look-up older than the last write to its key", () => {
+    const order = lookupOrder<string>();
+    const older = order.begin();
+    const newer = order.begin();
+    expect(order.claim("a", newer)).toBe(true);
+    expect(order.claim("a", older)).toBe(false);
+  });
+
+  it("lets a newer look-up write over an older one's answer", () => {
+    const order = lookupOrder<string>();
+    const older = order.begin();
+    const newer = order.begin();
+    expect(order.claim("a", older)).toBe(true);
+    expect(order.claim("a", newer)).toBe(true);
+  });
+
+  it("refuses a look-up begun before something that happened since", () => {
+    const order = lookupOrder<string>();
+    const since = order.begin();
+    expect(order.claim("a")).toBe(true);
+    expect(order.claim("a", since)).toBe(false);
+  });
+
+  it("orders each key on its own", () => {
+    const order = lookupOrder<string>();
+    const older = order.begin();
+    expect(order.claim("a")).toBe(true);
+    expect(order.claim("b", older)).toBe(true);
+  });
+
+  it("lets one look-up write the same key again", () => {
+    const order = lookupOrder<string>();
+    const since = order.begin();
+    expect(order.claim("a", since)).toBe(true);
+    expect(order.claim("a", since)).toBe(true);
+  });
+
+  it("keeps nothing for a key it was told to forget", () => {
+    const order = lookupOrder<string>();
+    const older = order.begin();
+    expect(order.claim("a")).toBe(true);
+    order.forget("a");
+    expect(order.claim("a", older)).toBe(true);
   });
 });
 

@@ -128,6 +128,18 @@ type NavigateListener = (details: { tabId: number; frameId: number }) => void;
 
 type RemovedListener = (tabId: number) => void;
 
+type ActivatedListener = (info: { tabId: number; windowId: number }) => void;
+
+type WindowListener = (windowId: number) => void;
+
+/** A window as `chrome.windows.get` knows it. */
+interface FakeWindow {
+  type: string;
+  activeTabId: number;
+  /** How long `chrome.windows.get` takes to answer for it, in ms. */
+  delayMs?: number;
+}
+
 /**
  * Knobs, not constants. Each of these is a dimension along which the real
  * thing varies and the recovery can fail: how long a frame takes to answer,
@@ -142,6 +154,9 @@ function makeHarness() {
   const connectListeners: ConnectListener[] = [];
   const navigateListeners: NavigateListener[] = [];
   const removedListeners: RemovedListener[] = [];
+  const activatedListeners: ActivatedListener[] = [];
+  const focusListeners: WindowListener[] = [];
+  const windowRemovedListeners: WindowListener[] = [];
   /** Frames whose content script is loaded and will answer. Reducible. */
   const liveFrames = new Set(PAGE_FRAMES.map((f) => f.frameId));
   /** What `chrome.webNavigation.getAllFrames` reports. Settable. */
@@ -157,6 +172,16 @@ function makeHarness() {
     getAllFramesDelayMs: 0,
     /** `chrome.runtime.lastError` seen by a `tabs.sendMessage` callback. */
     sendError: undefined as undefined | { message: string },
+    /** The windows `chrome.windows.get` knows. */
+    windows: new Map<number, FakeWindow>([
+      [1, { type: "normal", activeTabId: TAB_ID }],
+    ]),
+    /** The active tab of the window last focused, as `chrome.tabs.query`
+     *  reports it. */
+    lastFocusedTab: { id: TAB_ID, windowId: 1 },
+    /** What `chrome.windows.getLastFocused` says the last ordinary window
+     *  is; none makes it fail, as with no ordinary window open. */
+    lastFocusedNormalWindowId: 1 as number | undefined,
   };
 
   const noopEvent = () => ({ addListener: () => {} });
@@ -209,7 +234,29 @@ function makeHarness() {
       setPanelBehavior: () => Promise.resolve(),
       open: () => Promise.resolve(),
     },
-    windows: { WINDOW_ID_NONE: -1, onFocusChanged: noopEvent() },
+    windows: {
+      WINDOW_ID_NONE: -1,
+      onFocusChanged: {
+        addListener: (fn: WindowListener) => focusListeners.push(fn),
+      },
+      onRemoved: {
+        addListener: (fn: WindowListener) => windowRemovedListeners.push(fn),
+      },
+      get: (id: number) => {
+        const win = knobs.windows.get(id);
+        if (!win) return Promise.reject(new Error(`No window with id: ${id}.`));
+        const answer = { id, type: win.type };
+        return win.delayMs
+          ? new Promise((resolve) =>
+              setTimeout(() => resolve(answer), win.delayMs),
+            )
+          : Promise.resolve(answer);
+      },
+      getLastFocused: () =>
+        knobs.lastFocusedNormalWindowId === undefined
+          ? Promise.reject(new Error("No last-focused window"))
+          : Promise.resolve({ id: knobs.lastFocusedNormalWindowId }),
+    },
     webNavigation: {
       onBeforeNavigate: {
         addListener: (fn: NavigateListener) => navigateListeners.push(fn),
@@ -225,11 +272,21 @@ function makeHarness() {
             ),
     },
     tabs: {
-      onActivated: noopEvent(),
+      onActivated: {
+        addListener: (fn: ActivatedListener) => activatedListeners.push(fn),
+      },
       onRemoved: {
         addListener: (fn: RemovedListener) => removedListeners.push(fn),
       },
-      query: () => Promise.resolve([{ id: TAB_ID, windowId: 1 }]),
+      query: (q: { windowId?: number } = {}) => {
+        if (q.windowId === undefined) {
+          return Promise.resolve([knobs.lastFocusedTab]);
+        }
+        const win = knobs.windows.get(q.windowId);
+        return Promise.resolve(
+          win ? [{ id: win.activeTabId, windowId: q.windowId }] : [],
+        );
+      },
       sendMessage: (
         tabId: number,
         body: { type: string; payload?: unknown },
@@ -280,6 +337,9 @@ function makeHarness() {
     connectListeners,
     navigateListeners,
     removedListeners,
+    activatedListeners,
+    focusListeners,
+    windowRemovedListeners,
     liveFrames,
     knobs,
   };
@@ -1720,5 +1780,163 @@ describe("background: which frames' changes Chrome's tree follows", () => {
     h.knobs.frames.push({ frameId: 3, parentFrameId: 1, url });
     await vi.runAllTimersAsync();
     expect(pageChanged()).toEqual([true]);
+  });
+});
+
+describe("background: which tab each window's side panel is told", () => {
+  let h: Harness;
+
+  /** What the panels have been told about their tabs, in order. */
+  function told(): Array<{
+    tabId: unknown;
+    windowId: unknown;
+    focus?: unknown;
+  }> {
+    return h.panelMessages
+      .filter((m) => m.type === "ACTIVE_TAB_CHANGED")
+      .map(({ tabId, windowId, focus }) => ({ tabId, windowId, focus }));
+  }
+
+  function activate(tabId: number, windowId: number) {
+    for (const fn of h.activatedListeners) fn({ tabId, windowId });
+  }
+
+  function focus(windowId: number) {
+    for (const fn of h.focusListeners) fn(windowId);
+  }
+
+  function closeWindow(windowId: number) {
+    h.knobs.windows.delete(windowId);
+    for (const fn of h.windowRemovedListeners) fn(windowId);
+  }
+
+  async function load() {
+    vi.useFakeTimers();
+    vi.resetModules();
+    (globalThis as { chrome?: unknown }).chrome = h.chromeMock;
+    await import("./background.js");
+    await vi.runAllTimersAsync();
+    h.panelMessages.length = 0;
+    h.tabMessages.length = 0;
+  }
+
+  beforeEach(async () => {
+    h = makeHarness();
+    // Window 1 is where the user is; window 2 is another ordinary window,
+    // and window 3 a popup.
+    h.knobs.windows.set(2, { type: "normal", activeTabId: 5 });
+    h.knobs.windows.set(3, { type: "popup", activeTabId: 9 });
+    await load();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    delete (globalThis as { chrome?: unknown }).chrome;
+  });
+
+  it("tells a tab switch to the panel of the tab's own window", () => {
+    activate(5, 2);
+    expect(told()).toEqual([{ tabId: 5, windowId: 2 }]);
+  });
+
+  it("tells a window's own panel its tab when the user moves to it, and no other panel", async () => {
+    focus(2);
+    await vi.runAllTimersAsync();
+    expect(told()).toEqual([{ tabId: 5, windowId: 2, focus: true }]);
+  });
+
+  it("shows a popup in the panel of the ordinary window the user was in, and that window's tab when they come back", async () => {
+    focus(2);
+    focus(3);
+    await vi.runAllTimersAsync();
+    expect(told()).toEqual([
+      { tabId: 5, windowId: 2, focus: true },
+      { tabId: 9, windowId: 2 },
+    ]);
+
+    focus(2);
+    await vi.runAllTimersAsync();
+    expect(told().at(-1)).toEqual({ tabId: 5, windowId: 2, focus: true });
+  });
+
+  it("drops what an older look-up found once a newer one has told the panel", async () => {
+    // The user goes to the popup and straight back; the popup is slower to
+    // look at than the window.
+    h.knobs.windows.set(3, { type: "popup", activeTabId: 9, delayMs: 50 });
+    focus(3);
+    focus(1);
+    await vi.runAllTimersAsync();
+    expect(told()).toEqual([{ tabId: TAB_ID, windowId: 1, focus: true }]);
+  });
+
+  it("drops a look-up begun before a tab switch in the same window", async () => {
+    h.knobs.windows.set(2, { type: "normal", activeTabId: 5, delayMs: 50 });
+    focus(2);
+    activate(6, 2);
+    await vi.runAllTimersAsync();
+    expect(told()).toEqual([{ tabId: 6, windowId: 2 }]);
+  });
+
+  it("sends a panel's message that names no tab to the window the user is in", async () => {
+    focus(2);
+    await vi.runAllTimersAsync();
+    for (const fn of h.messageListeners) {
+      fn(
+        { type: "REQUEST_TREE", payload: { viewMode: "a11y" } },
+        { id: EXTENSION_ID },
+        () => {},
+      );
+    }
+    expect(h.tabMessages.map((m) => m.tabId)).toEqual([5]);
+  });
+
+  it("tells no panel a tab when one connects: the panel asks for its own", async () => {
+    connectPanel(h);
+    await vi.runAllTimersAsync();
+    expect(told()).toEqual([]);
+  });
+
+  it("tells the panels when a tab closes, for one that shows it", () => {
+    removeTab(h);
+    expect(h.panelMessages).toContainEqual({
+      type: "TAB_CLOSED",
+      tabId: TAB_ID,
+    });
+  });
+
+  it("shows a popup in Chrome's pick of an ordinary window when it started with the popup in front", async () => {
+    h = makeHarness();
+    h.knobs.windows.set(2, { type: "normal", activeTabId: 5 });
+    h.knobs.windows.set(3, { type: "popup", activeTabId: 9 });
+    h.knobs.lastFocusedTab = { id: 9, windowId: 3 };
+    h.knobs.lastFocusedNormalWindowId = 2;
+    await load();
+
+    focus(3);
+    await vi.runAllTimersAsync();
+    expect(told()).toEqual([{ tabId: 9, windowId: 2 }]);
+  });
+
+  it("shows a popup in Chrome's pick of an ordinary window once the last one the user was in has closed", async () => {
+    focus(2);
+    await vi.runAllTimersAsync();
+    closeWindow(2);
+    h.knobs.lastFocusedNormalWindowId = 1;
+
+    focus(3);
+    await vi.runAllTimersAsync();
+    expect(told().at(-1)).toEqual({ tabId: 9, windowId: 1 });
+  });
+
+  it("shows a popup in no panel when there is no ordinary window", async () => {
+    h = makeHarness();
+    h.knobs.windows.set(3, { type: "popup", activeTabId: 9 });
+    h.knobs.lastFocusedTab = { id: 9, windowId: 3 };
+    h.knobs.lastFocusedNormalWindowId = undefined;
+    await load();
+
+    focus(3);
+    await vi.runAllTimersAsync();
+    expect(told()).toEqual([]);
   });
 });
