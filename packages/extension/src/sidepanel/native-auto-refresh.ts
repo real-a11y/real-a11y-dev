@@ -18,9 +18,11 @@
  *   user, so a page that animates forever doesn't keep the bar up for good.
  *
  * In either mode, the page's changes for a few seconds after an action or a
- * key sent through the tree are the action's own, and each burst is read as
- * soon as the page goes quiet ({@link ACTION_FOLLOW_MS}): the action's own
- * re-read comes too soon for a reaction that waits on the network.
+ * key sent through the tree, or after the user clicks or presses a key that
+ * acts on the page itself, are what the user just did, and are read as the
+ * page goes quiet ({@link ACTION_FOLLOW_MS}): an action's own re-read comes
+ * too soon for a reaction that waits on the network, and nothing reads the
+ * page for the user's own click at all.
  *
  * A frame's changes count as the top frame's do wherever the page shows the
  * frame, since the native read puts its content under the frame's row. A
@@ -28,7 +30,8 @@
  * out of the signal (`frameVisibility`).
  *
  * This module only decides. `App.tsx` owns the timer, the reads, and the
- * state the decision is made from.
+ * state the decision is made from, and `follow-window.ts` the follow
+ * window's bookkeeping.
  */
 
 import { DOM_OBSERVER_MAX_WAIT_MS } from "@real-a11y-dev/core";
@@ -40,12 +43,16 @@ import { DOM_OBSERVER_MAX_WAIT_MS } from "@real-a11y-dev/core";
  *  however late its signal arrives. */
 export const NATIVE_SETTLE_MS = 250;
 
-/** How long after an action's or a sent key's own re-read the page's changes
- *  still count as its own, and are read whatever the mode: a click that
- *  loads a form over the network changes the page well after that re-read.
- *  Each burst inside it is read once the page goes quiet, with no gap or
- *  back-off: the action's attach has Chrome's bar up already. Bounded, so a
- *  page that keeps changing goes back to its mode's rules. */
+/** How long after an action's or a sent key's own re-read, or after the
+ *  user's click or key on the page itself, the page's changes still count
+ *  as what the user did, and are read whatever the mode, with no back-off:
+ *  a click that loads a form over the network changes the page well after
+ *  that re-read. After an action, each burst is read once the page goes
+ *  quiet: its attach has Chrome's bar up already. After a click on the
+ *  page, which the user makes far more often and not always for the tree,
+ *  a read keeps {@link AUTO_REFRESH_MIN_GAP_MS} after the one before it, so
+ *  a page that also changes by itself isn't read on its every burst. Bounded,
+ *  so a page that keeps changing goes back to its mode's rules. */
 export const ACTION_FOLLOW_MS = 5000;
 
 /** How long the page has to stay quiet before the tree is read again. The
@@ -117,10 +124,10 @@ export interface AutoRefreshState {
    *  at its ceiling, which can go on up to its debounce past the date; the
    *  stream's next flush, or Refresh, reads the rest. */
   lastChangeAt: number;
-  /** When the earliest change since the latest read began was made, in ms,
-   *  or `Infinity` when there is none: whether one falls in an action's
-   *  window ({@link ACTION_FOLLOW_MS}) can't be told from the latest alone. */
-  firstUnreadChangeAt: number;
+  /** When the earliest change inside the follow window that no read has
+   *  seen yet was made, in ms, or `Infinity` when there is none: whether
+   *  one falls in the window can't be told from the latest change alone. */
+  firstFollowedChangeAt: number;
   /** When the latest native read of any kind started, in ms. A read that
    *  started after a change already describes it. */
   lastReadStartedAt: number;
@@ -129,9 +136,17 @@ export interface AutoRefreshState {
   /** Automatic reads in a row since the user last caused one — see
    *  {@link autoRefreshGapMs}. */
   autoReads: number;
-  /** Until when, in ms, a change is the latest action's own: its re-read's
-   *  end plus {@link ACTION_FOLLOW_MS}. 0 when no action is being followed. */
+  /** Until when, in ms, a change is what the user just did: the end of an
+   *  action's own re-read, or the moment the user clicked or pressed a key
+   *  on the page, plus {@link ACTION_FOLLOW_MS}. 0 when nothing is being
+   *  followed. Where the window starts is `follow-window.ts`'s to say. */
   followUntil: number;
+  /** Until when, in ms, a change in the window is an action's, sent
+   *  through the tree, and read at once; past it the window is the user's
+   *  click or key on the page, read no closer than
+   *  {@link AUTO_REFRESH_MIN_GAP_MS} to the read before. 0 when no action
+   *  is being followed. */
+  actionFollowUntil: number;
   /** A native read or action is in flight, or a pick is armed. A pick holds
    *  the tab's debugger queue until the user clicks, so a read queued behind
    *  it would wait that long too. */
@@ -141,8 +156,9 @@ export interface AutoRefreshState {
 export type AutoRefreshDecision =
   | { kind: "skip" }
   | { kind: "wait"; ms: number }
-  /** `followsAction`: the read follows up an action ({@link ACTION_FOLLOW_MS}),
-   *  so it starts the back-off over rather than adding to it. */
+  /** `followsAction`: the read follows up what the user did, through the
+   *  tree or on the page ({@link ACTION_FOLLOW_MS}), so it starts the
+   *  back-off over rather than adding to it. */
   | { kind: "read"; tabId: number; followsAction?: true };
 
 export function decideAutoRefresh(
@@ -155,15 +171,23 @@ export function decideAutoRefresh(
   // Nothing changed since the latest read began.
   if (s.lastChangeAt <= s.lastReadStartedAt) return { kind: "skip" };
   // Judged by when the page changed, not by when the quiet period ended,
-  // and by any change still unread, not only the latest.
-  const followsAction = s.firstUnreadChangeAt < s.followUntil;
-  // By default only a navigation's new page, and what an action does, are
+  // and by any change still unread in the window, not only the latest.
+  const followsAction = s.firstFollowedChangeAt < s.followUntil;
+  // By default only a navigation's new page, and what the user does, are
   // read on their own.
   if (s.mode === "navigation" && !s.navigationPending && !followsAction) {
     return { kind: "skip" };
   }
   if (s.busy) return { kind: "wait", ms: AUTO_REFRESH_QUIET_MS };
-  if (followsAction) return { kind: "read", tabId: s.armedTab, followsAction };
+  if (followsAction) {
+    // What an action sent through the tree does is read at once; what a
+    // click on the page does, no closer than the gap to the read before.
+    if (s.firstFollowedChangeAt >= s.actionFollowUntil) {
+      const gap = s.lastReadEndedAt + AUTO_REFRESH_MIN_GAP_MS - now;
+      if (gap > 0) return { kind: "wait", ms: gap };
+    }
+    return { kind: "read", tabId: s.armedTab, followsAction };
+  }
   const gap = s.lastReadEndedAt + autoRefreshGapMs(s.autoReads) - now;
   if (gap > 0) return { kind: "wait", ms: gap };
   return { kind: "read", tabId: s.armedTab };

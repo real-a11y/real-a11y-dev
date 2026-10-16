@@ -10,11 +10,13 @@
       second later, as it does when the page waits on the network first:
       one in the page, one inside a frame, the way a contacts panel
       embedded in a calendar loads its form, and one that leads to another
-      page a second later, which loads its result later still.
+      page a second later, which loads its result later still. Enter in the
+      query field loads its answer the same way.
     -->
     <h1>Follow an action</h1>
     <button id="load" type="button">Load form</button>
     <button id="search" type="button">Search</button>
+    <input id="query" type="search" aria-label="Query" />
     <iframe
       id="contacts"
       title="Contacts"
@@ -34,6 +36,15 @@
       document.getElementById("search").addEventListener("click", () => {
         setTimeout(() => {
           location.href = "native-follow-action-results.html";
+        }, 1000);
+      });
+      document.getElementById("query").addEventListener("keydown", (e) => {
+        if (e.key !== "Enter") return;
+        setTimeout(() => {
+          const open = document.createElement("button");
+          open.type = "button";
+          open.textContent = "Open answer";
+          document.body.append(open);
         }, 1000);
       });
     </script>

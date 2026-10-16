@@ -73,6 +73,17 @@ export type FrameToBackground =
   // which is all `planFrameHello` takes. Page-derived data belongs on
   // FRAME_TREE_DATA, which is only ever sent by an armed frame.
   | { type: "FRAME_HELLO" }
+  // The user clicked, or pressed Enter or Space, on the page, or typed
+  // there (`page-input.ts`), sent only while the panel is open. They say
+  // nothing more on purpose than when, by the frame's clock, as for
+  // `changedAt`: never what or where. A click says when the user made it
+  // (`at`), which a busy frame dispatches late; typing, when its edit was
+  // made (`at`) and when the user pressed the key that made it
+  // (`pressedAt`). Like LIVE_REGION they reach the panel straight from the
+  // content script, scoped by `sender.tab.id`, and the service worker
+  // doesn't relay them.
+  | { type: "PAGE_INPUT"; at: number }
+  | { type: "PAGE_TYPING"; at: number; pressedAt: number }
   | { type: "FOCUS_CHANGED"; payload: FocusChangedPayload }
   | {
       type: "LIVE_REGION";
@@ -118,6 +129,8 @@ export type ContentToPanel =
   // it can run at all, and if it can't, saying so is the panel's job.
   | { type: "PAGE_NAVIGATED"; tabId: number }
   | { type: "FOCUS_CHANGED"; tabId?: number; payload: FocusChangedPayload }
+  | { type: "PAGE_INPUT"; at: number; tabId?: number }
+  | { type: "PAGE_TYPING"; at: number; pressedAt: number; tabId?: number }
   | {
       type: "LIVE_REGION";
       tabId?: number;

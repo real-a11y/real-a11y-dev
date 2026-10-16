@@ -776,7 +776,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         return false;
       }
 
-      case "LIVE_REGION": {
+      case "LIVE_REGION":
+      case "PAGE_INPUT":
+      case "PAGE_TYPING": {
         // No-op: chrome.runtime.sendMessage from the content script
         // already delivers to the sidepanel directly.  Forwarding here
         // caused every announcement to appear twice.

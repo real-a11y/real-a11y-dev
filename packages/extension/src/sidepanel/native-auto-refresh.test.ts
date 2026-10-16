@@ -32,12 +32,17 @@ function state(over: Partial<AutoRefreshState> = {}): AutoRefreshState {
     busy: false,
     ...over,
   };
-  // One unread change unless a test says otherwise: the latest.
+  // One unread change unless a test says otherwise: the latest, followed
+  // when it falls in the window, which an action's re-read opened unless a
+  // test says the user's input on the page did.
   return {
     ...s,
-    firstUnreadChangeAt:
-      over.firstUnreadChangeAt ??
-      (s.lastChangeAt > s.lastReadStartedAt ? s.lastChangeAt : Infinity),
+    firstFollowedChangeAt:
+      over.firstFollowedChangeAt ??
+      (s.lastChangeAt > s.lastReadStartedAt && s.lastChangeAt < s.followUntil
+        ? s.lastChangeAt
+        : Infinity),
+    actionFollowUntil: over.actionFollowUntil ?? s.followUntil,
   };
 }
 
@@ -209,7 +214,7 @@ describe("decideAutoRefresh after an action", () => {
         state({
           mode: "navigation",
           ...reread,
-          firstUnreadChangeAt: followUntil - 1,
+          firstFollowedChangeAt: followUntil - 1,
           lastChangeAt: followUntil + 1,
           followUntil,
         }),
@@ -272,6 +277,84 @@ describe("decideAutoRefresh after an action", () => {
           lastChangeAt: NOW - 1000,
           followUntil,
           boundTab: 9,
+        }),
+        NOW,
+      ),
+    ).toEqual({ kind: "skip" });
+  });
+});
+
+describe("decideAutoRefresh after the user's click on the page", () => {
+  // A click 1 s ago opened the window; nothing read the page for it.
+  const clicked = {
+    mode: "navigation" as const,
+    lastReadStartedAt: NOW - 8000,
+    lastReadEndedAt: NOW - 7800,
+    followUntil: NOW - 1000 + ACTION_FOLLOW_MS,
+    actionFollowUntil: 0,
+  };
+
+  it("reads what the page does next at once, a while after the last read", () => {
+    expect(
+      decideAutoRefresh(state({ ...clicked, lastChangeAt: NOW - 500 }), NOW),
+    ).toEqual({ kind: "read", tabId: 7, followsAction: true });
+  });
+
+  it("keeps the minimum gap after the read before it", () => {
+    // Read a moment ago, for an earlier burst in the same window.
+    expect(
+      decideAutoRefresh(
+        state({
+          ...clicked,
+          lastReadStartedAt: NOW - 1200,
+          lastReadEndedAt: NOW - 1000,
+          lastChangeAt: NOW - 500,
+        }),
+        NOW,
+      ),
+    ).toEqual({ kind: "wait", ms: AUTO_REFRESH_MIN_GAP_MS - 1000 });
+  });
+
+  it("but no back-off, however many automatic reads came before", () => {
+    expect(
+      decideAutoRefresh(
+        state({
+          ...clicked,
+          mode: "changes",
+          autoReads: AUTO_REFRESH_FREE_READS + 3,
+          lastReadEndedAt: NOW - AUTO_REFRESH_MIN_GAP_MS,
+          lastChangeAt: NOW - 500,
+        }),
+        NOW,
+      ),
+    ).toEqual({ kind: "read", tabId: 7, followsAction: true });
+  });
+
+  it("reads at once a change made while an action was followed", () => {
+    // The click stretched an action's window: what the action did is still
+    // read at once.
+    expect(
+      decideAutoRefresh(
+        state({
+          ...clicked,
+          lastReadStartedAt: NOW - 1200,
+          lastReadEndedAt: NOW - 1000,
+          actionFollowUntil: NOW - 200,
+          lastChangeAt: NOW - 500,
+        }),
+        NOW,
+      ),
+    ).toEqual({ kind: "read", tabId: 7, followsAction: true });
+  });
+
+  it("leaves a change the click didn't make to the mode's own rules", () => {
+    // Heard of before the click, so the panel never followed it.
+    expect(
+      decideAutoRefresh(
+        state({
+          ...clicked,
+          lastChangeAt: NOW - 1500,
+          firstFollowedChangeAt: Infinity,
         }),
         NOW,
       ),

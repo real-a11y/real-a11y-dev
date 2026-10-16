@@ -1574,6 +1574,239 @@ describe("content: what a tree says of how it was read", () => {
   });
 });
 
+describe("content: the user acting on the page", () => {
+  let h: Harness;
+
+  /** What the stand-in filter was given as each event's element. */
+  let targetsSeen: Array<[string, Element | null]>;
+
+  async function load({
+    trusted,
+    body = `<main><button>Save</button></main>`,
+    dom,
+  }: {
+    trusted: boolean;
+    body?: string;
+    dom?: { openOrClosedShadowRoot: (el: Element) => ShadowRoot | null };
+  }) {
+    vi.useFakeTimers();
+    vi.resetModules();
+    targetsSeen = [];
+    // jsdom makes no event the browser's own: stand in for one.
+    if (trusted) {
+      vi.doMock("./page-input.js", async (importOriginal) => {
+        const actual = await importOriginal<typeof import("./page-input.js")>();
+        return {
+          ...actual,
+          pageInputFilter:
+            () =>
+            (e: { type: string }, target: () => Element | null): boolean => {
+              targetsSeen.push([e.type, target()]);
+              return true;
+            },
+          isTyping: (e: { type: string }) => e.type === "input",
+          typingClock: () => {
+            const clock = actual.typingClock();
+            return {
+              ...clock,
+              keyPressed: (e: Event) =>
+                clock.keyPressed({
+                  type: e.type,
+                  isTrusted: true,
+                  timeStamp: e.timeStamp,
+                }),
+              pointerPressed: (e: Event) =>
+                clock.pointerPressed({
+                  type: e.type,
+                  isTrusted: true,
+                  timeStamp: e.timeStamp,
+                }),
+            };
+          },
+        };
+      });
+    }
+    document.body.innerHTML = body;
+    h = makeHarness();
+    (globalThis as { chrome?: unknown }).chrome = dom
+      ? { ...(h.chromeMock as object), dom }
+      : h.chromeMock;
+    await import("./content.js");
+    h.send({ type: "REQUEST_TREE", payload: { viewMode: "a11y" } });
+    h.sent.length = 0;
+  }
+
+  afterEach(() => {
+    h.send({ type: "SET_PICK_MODE", payload: { enabled: false } });
+    h.send({ type: "SET_OBSERVING", payload: { enabled: false } });
+    vi.doUnmock("./page-input.js");
+    vi.restoreAllMocks();
+    vi.clearAllTimers();
+    vi.useRealTimers();
+    delete (globalThis as { chrome?: unknown }).chrome;
+    document.body.innerHTML = "";
+  });
+
+  const inputs = () => h.sent.filter((m) => m.type === "PAGE_INPUT");
+  const typing = () => h.sent.filter((m) => m.type === "PAGE_TYPING");
+  const type = (into: Element) =>
+    into.dispatchEvent(
+      new InputEvent("input", { inputType: "insertText", bubbles: true }),
+    );
+
+  it("says the user acted, and when, and nothing about what or where", async () => {
+    await load({ trusted: true });
+    document.querySelector("button")!.click();
+    expect(inputs()).toEqual([{ type: "PAGE_INPUT", at: Date.now() }]);
+  });
+
+  /** An event the browser took from the user `ago` ms before the page,
+   *  busy, got round to dispatching it. */
+  function late<E extends Event>(e: E, ago: number): E {
+    vi.spyOn(performance, "now").mockReturnValue(10_000);
+    Object.defineProperty(e, "timeStamp", { value: 10_000 - ago });
+    return e;
+  }
+
+  it("dates a click by when the user made it, though the page dispatched it late", async () => {
+    await load({ trusted: true });
+    document
+      .querySelector("button")!
+      .dispatchEvent(late(new MouseEvent("click", { bubbles: true }), 700));
+    expect(inputs()).toEqual([{ type: "PAGE_INPUT", at: Date.now() - 700 }]);
+  });
+
+  it("dates typing by the key that typed it", async () => {
+    await load({ trusted: true, body: `<input type="search">` });
+    const field = document.querySelector("input")!;
+    field.dispatchEvent(
+      late(new KeyboardEvent("keydown", { key: "a", bubbles: true }), 700),
+    );
+    // The edit, made when it was dispatched.
+    type(field);
+    expect(typing()).toEqual([
+      { type: "PAGE_TYPING", at: Date.now(), pressedAt: Date.now() - 700 },
+    ]);
+  });
+
+  it("says nothing while the panel is closed", async () => {
+    await load({ trusted: true });
+    h.send({ type: "SET_OBSERVING", payload: { enabled: false } });
+    document.querySelector("button")!.click();
+    expect(inputs()).toEqual([]);
+  });
+
+  it("says nothing of a click the picker takes", async () => {
+    await load({ trusted: true });
+    h.send({ type: "SET_PICK_MODE", payload: { enabled: true } });
+    document.querySelector("button")!.click();
+    expect(inputs()).toEqual([]);
+  });
+
+  it("says nothing of what a script did, the extension's own among them", async () => {
+    await load({
+      trusted: false,
+      body:
+        `<main><button>Save</button>` +
+        `<form><label for="agree">Agree</label>` +
+        `<input id="agree" type="checkbox"><button>Send</button></form></main>`,
+    });
+    const form = document.querySelector("form")!;
+    form.addEventListener("submit", (e) => e.preventDefault());
+    document.querySelector("button")!.click();
+    h.send({
+      type: "SEND_KEY",
+      payload: { key: "Enter", code: "Enter", keyCode: 13 },
+    });
+    // The browser fires these as its own: the form's submit, and the
+    // label's click on its control.
+    form.querySelector("button")!.click();
+    form.requestSubmit();
+    form.querySelector("label")!.click();
+    type(document.querySelector("input")!);
+    expect(inputs()).toEqual([]);
+    expect(typing()).toEqual([]);
+  });
+
+  it("says each time the user typed, and when, and nothing more", async () => {
+    await load({ trusted: true, body: `<input type="search">` });
+    const field = document.querySelector("input")!;
+    const first = Date.now();
+    type(field);
+    vi.advanceTimersByTime(100);
+    type(field);
+    expect(typing()).toEqual([
+      { type: "PAGE_TYPING", at: first, pressedAt: first },
+      { type: "PAGE_TYPING", at: first + 100, pressedAt: first + 100 },
+    ]);
+  });
+
+  it("dates an edit after a press of the pointer by itself", async () => {
+    await load({ trusted: true, body: `<input type="search">` });
+    const field = document.querySelector("input")!;
+    field.dispatchEvent(
+      late(new KeyboardEvent("keydown", { key: "a", bubbles: true }), 700),
+    );
+    // A click into the field, then a paste from its menu.
+    field.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true }));
+    type(field);
+    expect(typing()).toEqual([
+      { type: "PAGE_TYPING", at: Date.now(), pressedAt: Date.now() },
+    ]);
+  });
+
+  it("dates typing by no key the user pressed while the panel was closed", async () => {
+    await load({ trusted: true, body: `<input type="search">` });
+    const field = document.querySelector("input")!;
+    h.send({ type: "SET_OBSERVING", payload: { enabled: false } });
+    field.dispatchEvent(
+      late(new KeyboardEvent("keydown", { key: "a", bubbles: true }), 700),
+    );
+    h.send({ type: "SET_OBSERVING", payload: { enabled: true } });
+    type(field);
+    expect(typing()).toEqual([
+      { type: "PAGE_TYPING", at: Date.now(), pressedAt: Date.now() },
+    ]);
+  });
+
+  it("says nothing of typing while the panel is closed", async () => {
+    await load({ trusted: true, body: `<input type="search">` });
+    h.send({ type: "SET_OBSERVING", payload: { enabled: false } });
+    type(document.querySelector("input")!);
+    expect(typing()).toEqual([]);
+  });
+
+  it("judges Enter by the field it went to, inside a closed shadow root too", async () => {
+    const roots = new Map<Element, ShadowRoot>();
+    await load({
+      trusted: true,
+      body: `<div id="host"></div>`,
+      dom: { openOrClosedShadowRoot: (el) => roots.get(el) ?? null },
+    });
+    const host = document.getElementById("host")!;
+    const root = host.attachShadow({ mode: "closed" });
+    roots.set(host, root);
+    root.innerHTML = "<textarea></textarea>";
+    const area = root.querySelector("textarea")!;
+    area.focus();
+    area.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key: "Enter",
+        bubbles: true,
+        composed: true,
+      }),
+    );
+    expect(targetsSeen).toEqual([["keydown", area]]);
+  });
+
+  it("judges a click by the element clicked", async () => {
+    await load({ trusted: true, body: `<input type="search">` });
+    const field = document.querySelector("input")!;
+    field.click();
+    expect(targetsSeen).toEqual([["click", field]]);
+  });
+});
+
 describe("content: a page that replaces its document", () => {
   let h: Harness;
   let original: Element;
