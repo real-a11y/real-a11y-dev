@@ -123,6 +123,16 @@
   clicked, pressed one of those keys or typed, and when, never what or where
   ([#504](https://github.com/real-a11y/real-a11y-dev/pull/504)).
 
+- **Each window's side panel stays on that window's tab.** Moving to
+  another window, or to a tab in it, moved every open panel to that tab:
+  its title, its live-region announcements and its tree were the other
+  window's until you went back. A panel now shows only its own window's
+  tab. A popup, such as a login window, has no side panel of its own: when
+  you move to one, the panel of the window you were in shows it until it
+  closes. Clicking into that panel no longer takes it back to the window's
+  own page, so **×** closes the popup, not the page under it
+  ([#505](https://github.com/real-a11y/real-a11y-dev/pull/505)).
+
 - Hardened the shared mutation observer so that re-arming it can no longer
   strand the previous observers and event listeners
   ([#487](https://github.com/real-a11y/real-a11y-dev/pull/487)). No

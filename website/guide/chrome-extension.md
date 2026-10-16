@@ -171,6 +171,8 @@ Synthetic `KeyboardEvent`s are untrusted (`isTrusted: false`), so Chrome skips t
 
 Closes the **panel-bound** browser tab (the tab whose tree the panel is showing), not whichever tab Chrome has just activated. Handy for dismissing popups, login windows, or test tabs without reaching for the mouse. Extension-only because it uses `chrome.tabs.remove`.
 
+Each Chrome window has its own side panel, which shows that window's tab and never another window's. A popup, such as a login window, has no side panel of its own: when you move to it, the panel of the window you were in shows it until it closes, so you can read it there and close it with `×`. Switching tabs in that window, or going back to its page, shows the window's own tab again.
+
 Every panel→content command stamps that bound `tabId` the same way — so activate, keyboard-bar keys, highlight, curtain, and pick mode all stay on the page the panel is inspecting even if you flip browser tabs mid-click.
 
 ### Cross-link chips on disclosure pairs
