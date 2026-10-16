@@ -42,9 +42,9 @@ export interface PageInputEvent {
  * down repeating or one an IME takes to finish what it composes. A form
  * submitted isn't listened for: the browser fires `submit` as its own for a
  * script's `requestSubmit()` too, and a user's submit comes from a click or
- * an Enter already counted. Nor is a press of the pointer: a read while it
- * is held, in a drag, would bring Chrome's bar up and move the page under
- * it.
+ * an Enter already counted. Nor does a press of the pointer count, which
+ * only `typingClock` hears: a read while it is held, in a drag, would bring
+ * Chrome's bar up and move the page under it.
  *
  * @internal
  */
