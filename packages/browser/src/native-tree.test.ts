@@ -469,6 +469,92 @@ describe("buildNativeTree — value edge cases", () => {
   });
 });
 
+// Chromium 141 for `<main><input disabled role="none" autocomplete="cc-number"
+// value="4111…"><div>Loose block</div><button>Pay</button></main>`. With the
+// role applied (the field is disabled, so not focusable), the field's own
+// node is gone, and its inner text box reads like the `<div>` beside it: a
+// bare generic holding the value. Only the DOM walk tells them apart.
+describe("buildNativeTree — R1: a field's inner text box, with the field gone", () => {
+  const CARD = "4111111111111111";
+  const raw = [
+    { nodeId: "1", childIds: ["2"], role: { value: "RootWebArea" } },
+    {
+      nodeId: "2",
+      parentId: "1",
+      childIds: ["7", "8", "9"],
+      role: { value: "main" },
+      backendDOMNodeId: 6,
+    },
+    {
+      nodeId: "7",
+      parentId: "2",
+      childIds: ["70"],
+      role: { value: "generic" },
+      backendDOMNodeId: 7,
+    },
+    {
+      nodeId: "70",
+      parentId: "7",
+      role: { value: "StaticText" },
+      name: { value: CARD },
+      backendDOMNodeId: 70,
+    },
+    {
+      nodeId: "8",
+      parentId: "2",
+      childIds: ["80"],
+      role: { value: "generic" },
+      backendDOMNodeId: 8,
+    },
+    {
+      nodeId: "80",
+      parentId: "8",
+      role: { value: "StaticText" },
+      name: { value: "Loose block" },
+      backendDOMNodeId: 80,
+    },
+    {
+      nodeId: "9",
+      parentId: "2",
+      role: { value: "button" },
+      name: { value: "Pay" },
+      backendDOMNodeId: 9,
+    },
+  ] as Parameters<typeof buildNativeTree>[0];
+  const dom = new Map<number, NativeDomInfo>([
+    [6, domOf("main")],
+    [7, { ...domOf("div"), fieldInternal: true }],
+    [70, { ...domOf("#text"), fieldInternal: true }],
+    [8, domOf("div")],
+    [80, domOf("#text")],
+    [9, domOf("button")],
+  ]);
+
+  it.each([false, true])(
+    "keeps the value out of the tree, the page's own block in (strict: %s)",
+    (redactInput) => {
+      const tree = buildNativeTree(raw, dom, undefined, { redactInput });
+      const printed = serializeTree(tree, { includeGeneric: true });
+      expect(printed).not.toContain(CARD);
+      expect(printed).toContain('generic "Loose block"');
+      expect(nativeAXView(raw, dom, { redactInput }).tree).not.toContain(CARD);
+    },
+  );
+
+  it("keeps the value out when the DOM walk never saw the box", () => {
+    // The page put the field in between the AX read and the DOM walk: what
+    // the walk didn't see may be a field's internals, so it fails closed.
+    const unseen = new Map(dom);
+    unseen.delete(7);
+    unseen.delete(70);
+    const printed = serializeTree(buildNativeTree(raw, unseen), {
+      includeGeneric: true,
+    });
+    expect(printed).not.toContain(CARD);
+    expect(printed).toContain('generic "Loose block"');
+  });
+});
+
 describe("buildNativeTree — R1: unlabeled field value must not leak via the name", () => {
   // The fixture's inputs are all labeled, so an UNLABELED control (where
   // Chromium emits the typed value as a StaticText descendant) is not

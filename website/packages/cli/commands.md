@@ -1199,7 +1199,9 @@ Reinstall even if the target build is already cached.
   [`tree`](#tree-url), [`inspect`](#inspect-url)
 
 Include generic container nodes (untyped `div`/`span` wrappers) in the semantic
-tree, which are collapsed away by default. Only the commands that print a full
+tree, which are collapsed away by default. That includes a `<div>` of text,
+named from its own text: `generic "A window splitter is a moveable
+separator."`. Only the commands that print a full
 tree honor it. [`snapshot`](#snapshot-url), [`outline`](#outline-url),
 [`tabs`](#tabs-url), and [`list`](#list-category-url) accept the flag but ignore
 it — snapshot's artifact tree always collapses generics.

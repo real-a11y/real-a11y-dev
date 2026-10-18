@@ -1,0 +1,1615 @@
+{
+  "chrome": "141.0.7390.37",
+  "nodes": [
+    {
+      "nodeId": "1",
+      "childIds": ["5"],
+      "backendDOMNodeId": 1,
+      "role": {
+        "value": "RootWebArea"
+      },
+      "name": {
+        "value": "loose text fixture"
+      },
+      "properties": [
+        {
+          "name": "focusable",
+          "value": {
+            "value": true
+          }
+        }
+      ]
+    },
+    {
+      "nodeId": "5",
+      "parentId": "1",
+      "childIds": ["8"],
+      "backendDOMNodeId": 5,
+      "ignored": true,
+      "role": {
+        "value": "none"
+      }
+    },
+    {
+      "nodeId": "8",
+      "parentId": "5",
+      "childIds": ["9", "80"],
+      "backendDOMNodeId": 8,
+      "ignored": true,
+      "role": {
+        "value": "none"
+      }
+    },
+    {
+      "nodeId": "9",
+      "parentId": "8",
+      "childIds": [
+        "10",
+        "22",
+        "23",
+        "24",
+        "26",
+        "29",
+        "33",
+        "40",
+        "47",
+        "3",
+        "59",
+        "65",
+        "68",
+        "74"
+      ],
+      "backendDOMNodeId": 9,
+      "role": {
+        "value": "main"
+      },
+      "name": {
+        "value": ""
+      }
+    },
+    {
+      "nodeId": "80",
+      "parentId": "8",
+      "childIds": ["112"],
+      "backendDOMNodeId": 80,
+      "role": {
+        "value": "generic"
+      },
+      "name": {
+        "value": ""
+      }
+    },
+    {
+      "nodeId": "10",
+      "parentId": "9",
+      "childIds": ["11", "20"],
+      "backendDOMNodeId": 10,
+      "role": {
+        "value": "list"
+      },
+      "name": {
+        "value": ""
+      }
+    },
+    {
+      "nodeId": "22",
+      "parentId": "9",
+      "childIds": ["86"],
+      "backendDOMNodeId": 22,
+      "role": {
+        "value": "generic"
+      },
+      "name": {
+        "value": ""
+      }
+    },
+    {
+      "nodeId": "23",
+      "parentId": "9",
+      "childIds": ["87"],
+      "backendDOMNodeId": 23,
+      "role": {
+        "value": "button"
+      },
+      "name": {
+        "value": "Save"
+      },
+      "properties": [
+        {
+          "name": "focusable",
+          "value": {
+            "value": true
+          }
+        }
+      ]
+    },
+    {
+      "nodeId": "24",
+      "parentId": "9",
+      "childIds": ["88", "25", "90"],
+      "backendDOMNodeId": 24,
+      "role": {
+        "value": "generic"
+      },
+      "name": {
+        "value": ""
+      }
+    },
+    {
+      "nodeId": "26",
+      "parentId": "9",
+      "childIds": ["27", "28"],
+      "backendDOMNodeId": 26,
+      "role": {
+        "value": "dialog"
+      },
+      "name": {
+        "value": ""
+      }
+    },
+    {
+      "nodeId": "29",
+      "parentId": "9",
+      "childIds": ["30", "32"],
+      "backendDOMNodeId": 29,
+      "role": {
+        "value": "article"
+      },
+      "name": {
+        "value": ""
+      }
+    },
+    {
+      "nodeId": "33",
+      "parentId": "9",
+      "childIds": ["34", "35", "36"],
+      "backendDOMNodeId": 33,
+      "role": {
+        "value": "link"
+      },
+      "name": {
+        "value": "Card title Card desc pic"
+      },
+      "properties": [
+        {
+          "name": "focusable",
+          "value": {
+            "value": true
+          }
+        }
+      ]
+    },
+    {
+      "nodeId": "40",
+      "parentId": "9",
+      "childIds": ["41", "42", "43"],
+      "backendDOMNodeId": 40,
+      "role": {
+        "value": "button"
+      },
+      "name": {
+        "value": "Save draft i"
+      },
+      "properties": [
+        {
+          "name": "focusable",
+          "value": {
+            "value": true
+          }
+        }
+      ]
+    },
+    {
+      "nodeId": "47",
+      "parentId": "9",
+      "childIds": ["99", "48", "2"],
+      "backendDOMNodeId": 47,
+      "role": {
+        "value": "LabelText"
+      },
+      "name": {
+        "value": ""
+      }
+    },
+    {
+      "nodeId": "3",
+      "parentId": "9",
+      "childIds": ["50"],
+      "backendDOMNodeId": 3,
+      "role": {
+        "value": "Date"
+      },
+      "name": {
+        "value": "Due"
+      },
+      "properties": [
+        {
+          "name": "focusable",
+          "value": {
+            "value": true
+          }
+        }
+      ],
+      "value": {
+        "value": "2026-10-18"
+      }
+    },
+    {
+      "nodeId": "59",
+      "parentId": "9",
+      "childIds": ["60", "61"],
+      "backendDOMNodeId": 59,
+      "role": {
+        "value": "textbox"
+      },
+      "name": {
+        "value": ""
+      },
+      "properties": [
+        {
+          "name": "focusable",
+          "value": {
+            "value": true
+          }
+        }
+      ],
+      "value": {
+        "value": "typed box"
+      }
+    },
+    {
+      "nodeId": "65",
+      "parentId": "9",
+      "childIds": ["66", "67"],
+      "backendDOMNodeId": 65,
+      "role": {
+        "value": "generic"
+      },
+      "name": {
+        "value": ""
+      },
+      "properties": [
+        {
+          "name": "focusable",
+          "value": {
+            "value": true
+          }
+        },
+        {
+          "name": "editable",
+          "value": {
+            "value": "richtext"
+          }
+        }
+      ],
+      "value": {
+        "value": "typed line\nlnk"
+      }
+    },
+    {
+      "nodeId": "68",
+      "parentId": "9",
+      "childIds": ["69", "70"],
+      "backendDOMNodeId": 68,
+      "role": {
+        "value": "progressbar"
+      },
+      "name": {
+        "value": ""
+      }
+    },
+    {
+      "nodeId": "74",
+      "parentId": "9",
+      "childIds": ["75"],
+      "backendDOMNodeId": 74,
+      "role": {
+        "value": "LayoutTable"
+      },
+      "name": {
+        "value": ""
+      }
+    },
+    {
+      "nodeId": "112",
+      "parentId": "80",
+      "childIds": ["-1000000033"],
+      "backendDOMNodeId": 112,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": "Outside every landmark"
+      }
+    },
+    {
+      "nodeId": "11",
+      "parentId": "10",
+      "childIds": ["81", "12", "19"],
+      "backendDOMNodeId": 11,
+      "role": {
+        "value": "listitem"
+      },
+      "name": {
+        "value": ""
+      }
+    },
+    {
+      "nodeId": "20",
+      "parentId": "10",
+      "childIds": ["84", "21"],
+      "backendDOMNodeId": 20,
+      "role": {
+        "value": "listitem"
+      },
+      "name": {
+        "value": ""
+      }
+    },
+    {
+      "nodeId": "86",
+      "parentId": "22",
+      "childIds": ["-1000000007"],
+      "backendDOMNodeId": 86,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": "Loose block"
+      }
+    },
+    {
+      "nodeId": "87",
+      "parentId": "23",
+      "childIds": ["-1000000008"],
+      "backendDOMNodeId": 87,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": "Save"
+      }
+    },
+    {
+      "nodeId": "88",
+      "parentId": "24",
+      "childIds": ["-1000000009"],
+      "backendDOMNodeId": 88,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": "See the "
+      }
+    },
+    {
+      "nodeId": "25",
+      "parentId": "24",
+      "childIds": ["89"],
+      "backendDOMNodeId": 25,
+      "role": {
+        "value": "link"
+      },
+      "name": {
+        "value": "docs"
+      },
+      "properties": [
+        {
+          "name": "focusable",
+          "value": {
+            "value": true
+          }
+        }
+      ]
+    },
+    {
+      "nodeId": "90",
+      "parentId": "24",
+      "childIds": ["-1000000011"],
+      "backendDOMNodeId": 90,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": " for more."
+      }
+    },
+    {
+      "nodeId": "27",
+      "parentId": "26",
+      "childIds": ["91"],
+      "backendDOMNodeId": 27,
+      "role": {
+        "value": "generic"
+      },
+      "name": {
+        "value": ""
+      }
+    },
+    {
+      "nodeId": "28",
+      "parentId": "26",
+      "childIds": ["92"],
+      "backendDOMNodeId": 28,
+      "role": {
+        "value": "button"
+      },
+      "name": {
+        "value": "Cancel"
+      },
+      "properties": [
+        {
+          "name": "focusable",
+          "value": {
+            "value": true
+          }
+        }
+      ]
+    },
+    {
+      "nodeId": "30",
+      "parentId": "29",
+      "childIds": ["31"],
+      "backendDOMNodeId": 30,
+      "role": {
+        "value": "sectionheader"
+      },
+      "name": {
+        "value": ""
+      }
+    },
+    {
+      "nodeId": "32",
+      "parentId": "29",
+      "childIds": ["94"],
+      "backendDOMNodeId": 32,
+      "role": {
+        "value": "heading"
+      },
+      "name": {
+        "value": "Post"
+      }
+    },
+    {
+      "nodeId": "34",
+      "parentId": "33",
+      "childIds": ["95"],
+      "backendDOMNodeId": 34,
+      "role": {
+        "value": "generic"
+      },
+      "name": {
+        "value": ""
+      }
+    },
+    {
+      "nodeId": "35",
+      "parentId": "33",
+      "childIds": ["96"],
+      "backendDOMNodeId": 35,
+      "role": {
+        "value": "generic"
+      },
+      "name": {
+        "value": ""
+      }
+    },
+    {
+      "nodeId": "36",
+      "parentId": "33",
+      "backendDOMNodeId": 36,
+      "role": {
+        "value": "image"
+      },
+      "name": {
+        "value": "pic"
+      }
+    },
+    {
+      "nodeId": "41",
+      "parentId": "40",
+      "childIds": ["97"],
+      "backendDOMNodeId": 41,
+      "role": {
+        "value": "generic"
+      },
+      "name": {
+        "value": ""
+      }
+    },
+    {
+      "nodeId": "42",
+      "parentId": "40",
+      "childIds": ["98"],
+      "backendDOMNodeId": 42,
+      "role": {
+        "value": "generic"
+      },
+      "name": {
+        "value": ""
+      }
+    },
+    {
+      "nodeId": "43",
+      "parentId": "40",
+      "backendDOMNodeId": 43,
+      "role": {
+        "value": "image"
+      },
+      "name": {
+        "value": "i"
+      }
+    },
+    {
+      "nodeId": "99",
+      "parentId": "47",
+      "childIds": ["-1000000020"],
+      "backendDOMNodeId": 99,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": "Email"
+      }
+    },
+    {
+      "nodeId": "48",
+      "parentId": "47",
+      "childIds": ["100"],
+      "backendDOMNodeId": 48,
+      "role": {
+        "value": "generic"
+      },
+      "name": {
+        "value": ""
+      }
+    },
+    {
+      "nodeId": "2",
+      "parentId": "47",
+      "childIds": ["49"],
+      "backendDOMNodeId": 2,
+      "role": {
+        "value": "textbox"
+      },
+      "name": {
+        "value": "Email hint"
+      },
+      "properties": [
+        {
+          "name": "focusable",
+          "value": {
+            "value": true
+          }
+        },
+        {
+          "name": "editable",
+          "value": {
+            "value": "plaintext"
+          }
+        }
+      ]
+    },
+    {
+      "nodeId": "50",
+      "parentId": "3",
+      "childIds": ["51", "58"],
+      "backendDOMNodeId": 50,
+      "ignored": true,
+      "role": {
+        "value": "none"
+      }
+    },
+    {
+      "nodeId": "51",
+      "parentId": "50",
+      "childIds": ["52"],
+      "backendDOMNodeId": 51,
+      "role": {
+        "value": "generic"
+      },
+      "name": {
+        "value": ""
+      }
+    },
+    {
+      "nodeId": "58",
+      "parentId": "50",
+      "backendDOMNodeId": 58,
+      "role": {
+        "value": "button"
+      },
+      "name": {
+        "value": "Show date picker"
+      },
+      "properties": [
+        {
+          "name": "focusable",
+          "value": {
+            "value": true
+          }
+        }
+      ]
+    },
+    {
+      "nodeId": "60",
+      "parentId": "59",
+      "childIds": ["106"],
+      "backendDOMNodeId": 60,
+      "role": {
+        "value": "generic"
+      },
+      "name": {
+        "value": ""
+      }
+    },
+    {
+      "nodeId": "61",
+      "parentId": "59",
+      "backendDOMNodeId": 61,
+      "role": {
+        "value": "image"
+      },
+      "name": {
+        "value": "tb"
+      }
+    },
+    {
+      "nodeId": "66",
+      "parentId": "65",
+      "childIds": ["107"],
+      "backendDOMNodeId": 66,
+      "role": {
+        "value": "generic"
+      },
+      "name": {
+        "value": ""
+      },
+      "properties": [
+        {
+          "name": "editable",
+          "value": {
+            "value": "richtext"
+          }
+        }
+      ]
+    },
+    {
+      "nodeId": "67",
+      "parentId": "65",
+      "childIds": ["108"],
+      "backendDOMNodeId": 67,
+      "role": {
+        "value": "link"
+      },
+      "name": {
+        "value": "lnk"
+      },
+      "properties": [
+        {
+          "name": "editable",
+          "value": {
+            "value": "richtext"
+          }
+        }
+      ]
+    },
+    {
+      "nodeId": "69",
+      "parentId": "68",
+      "childIds": ["109"],
+      "backendDOMNodeId": 69,
+      "role": {
+        "value": "generic"
+      },
+      "name": {
+        "value": ""
+      }
+    },
+    {
+      "nodeId": "70",
+      "parentId": "68",
+      "backendDOMNodeId": 70,
+      "role": {
+        "value": "image"
+      },
+      "name": {
+        "value": "p"
+      }
+    },
+    {
+      "nodeId": "75",
+      "parentId": "74",
+      "childIds": ["76"],
+      "backendDOMNodeId": 75,
+      "ignored": true,
+      "role": {
+        "value": "none"
+      }
+    },
+    {
+      "nodeId": "76",
+      "parentId": "75",
+      "childIds": ["77"],
+      "backendDOMNodeId": 76,
+      "role": {
+        "value": "LayoutTableRow"
+      },
+      "name": {
+        "value": ""
+      }
+    },
+    {
+      "nodeId": "-1000000033",
+      "parentId": "112",
+      "role": {
+        "value": "InlineTextBox"
+      },
+      "name": {
+        "value": "Outside every landmark"
+      }
+    },
+    {
+      "nodeId": "81",
+      "parentId": "11",
+      "childIds": ["-1000000002"],
+      "backendDOMNodeId": 81,
+      "role": {
+        "value": "ListMarker"
+      },
+      "name": {
+        "value": "• "
+      }
+    },
+    {
+      "nodeId": "12",
+      "parentId": "11",
+      "childIds": ["13"],
+      "backendDOMNodeId": 12,
+      "role": {
+        "value": "link"
+      },
+      "name": {
+        "value": "Window Splitter"
+      },
+      "properties": [
+        {
+          "name": "focusable",
+          "value": {
+            "value": true
+          }
+        }
+      ]
+    },
+    {
+      "nodeId": "19",
+      "parentId": "11",
+      "childIds": ["83"],
+      "backendDOMNodeId": 19,
+      "role": {
+        "value": "generic"
+      },
+      "name": {
+        "value": ""
+      }
+    },
+    {
+      "nodeId": "84",
+      "parentId": "20",
+      "childIds": ["-1000000005"],
+      "backendDOMNodeId": 84,
+      "role": {
+        "value": "ListMarker"
+      },
+      "name": {
+        "value": "• "
+      }
+    },
+    {
+      "nodeId": "21",
+      "parentId": "20",
+      "childIds": ["85"],
+      "backendDOMNodeId": 21,
+      "role": {
+        "value": "generic"
+      },
+      "name": {
+        "value": ""
+      }
+    },
+    {
+      "nodeId": "-1000000007",
+      "parentId": "86",
+      "role": {
+        "value": "InlineTextBox"
+      },
+      "name": {
+        "value": "Loose block"
+      }
+    },
+    {
+      "nodeId": "-1000000008",
+      "parentId": "87",
+      "role": {
+        "value": "InlineTextBox"
+      },
+      "name": {
+        "value": "Save"
+      }
+    },
+    {
+      "nodeId": "-1000000009",
+      "parentId": "88",
+      "role": {
+        "value": "InlineTextBox"
+      },
+      "name": {
+        "value": "See the "
+      }
+    },
+    {
+      "nodeId": "89",
+      "parentId": "25",
+      "childIds": ["-1000000010"],
+      "backendDOMNodeId": 89,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": "docs"
+      }
+    },
+    {
+      "nodeId": "-1000000011",
+      "parentId": "90",
+      "role": {
+        "value": "InlineTextBox"
+      },
+      "name": {
+        "value": " for more."
+      }
+    },
+    {
+      "nodeId": "91",
+      "parentId": "27",
+      "childIds": ["-1000000012"],
+      "backendDOMNodeId": 91,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": "Delete this project?"
+      }
+    },
+    {
+      "nodeId": "92",
+      "parentId": "28",
+      "childIds": ["-1000000013"],
+      "backendDOMNodeId": 92,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": "Cancel"
+      }
+    },
+    {
+      "nodeId": "31",
+      "parentId": "30",
+      "childIds": ["93"],
+      "backendDOMNodeId": 31,
+      "role": {
+        "value": "generic"
+      },
+      "name": {
+        "value": ""
+      }
+    },
+    {
+      "nodeId": "94",
+      "parentId": "32",
+      "childIds": ["-1000000015"],
+      "backendDOMNodeId": 94,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": "Post"
+      }
+    },
+    {
+      "nodeId": "95",
+      "parentId": "34",
+      "childIds": ["-1000000016"],
+      "backendDOMNodeId": 95,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": "Card title"
+      }
+    },
+    {
+      "nodeId": "96",
+      "parentId": "35",
+      "childIds": ["-1000000017"],
+      "backendDOMNodeId": 96,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": "Card desc"
+      }
+    },
+    {
+      "nodeId": "97",
+      "parentId": "41",
+      "childIds": ["-1000000018"],
+      "backendDOMNodeId": 97,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": "Save"
+      }
+    },
+    {
+      "nodeId": "98",
+      "parentId": "42",
+      "childIds": ["-1000000019"],
+      "backendDOMNodeId": 98,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": "draft"
+      }
+    },
+    {
+      "nodeId": "-1000000020",
+      "parentId": "99",
+      "role": {
+        "value": "InlineTextBox"
+      },
+      "name": {
+        "value": "Email"
+      }
+    },
+    {
+      "nodeId": "100",
+      "parentId": "48",
+      "childIds": ["-1000000021"],
+      "backendDOMNodeId": 100,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": "hint"
+      }
+    },
+    {
+      "nodeId": "49",
+      "parentId": "2",
+      "backendDOMNodeId": 49,
+      "role": {
+        "value": "generic"
+      },
+      "name": {
+        "value": ""
+      },
+      "properties": [
+        {
+          "name": "editable",
+          "value": {
+            "value": "plaintext"
+          }
+        }
+      ]
+    },
+    {
+      "nodeId": "52",
+      "parentId": "51",
+      "childIds": ["53", "102", "55", "104", "57"],
+      "backendDOMNodeId": 52,
+      "role": {
+        "value": "generic"
+      },
+      "name": {
+        "value": ""
+      }
+    },
+    {
+      "nodeId": "106",
+      "parentId": "60",
+      "childIds": ["-1000000027"],
+      "backendDOMNodeId": 106,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": "typed box"
+      }
+    },
+    {
+      "nodeId": "107",
+      "parentId": "66",
+      "childIds": ["-1000000028"],
+      "backendDOMNodeId": 107,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": "typed line"
+      },
+      "properties": [
+        {
+          "name": "editable",
+          "value": {
+            "value": "richtext"
+          }
+        }
+      ]
+    },
+    {
+      "nodeId": "108",
+      "parentId": "67",
+      "childIds": ["-1000000029"],
+      "backendDOMNodeId": 108,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": "lnk"
+      },
+      "properties": [
+        {
+          "name": "editable",
+          "value": {
+            "value": "richtext"
+          }
+        }
+      ]
+    },
+    {
+      "nodeId": "109",
+      "parentId": "69",
+      "childIds": ["-1000000030"],
+      "backendDOMNodeId": 109,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": "Loading"
+      }
+    },
+    {
+      "nodeId": "77",
+      "parentId": "76",
+      "childIds": ["78", "79"],
+      "backendDOMNodeId": 77,
+      "role": {
+        "value": "LayoutTableCell"
+      },
+      "name": {
+        "value": "Line 1 Edit"
+      }
+    },
+    {
+      "nodeId": "-1000000002",
+      "parentId": "81",
+      "ignored": true,
+      "role": {
+        "value": "none"
+      }
+    },
+    {
+      "nodeId": "13",
+      "parentId": "12",
+      "childIds": ["82"],
+      "backendDOMNodeId": 13,
+      "role": {
+        "value": "heading"
+      },
+      "name": {
+        "value": "Window Splitter"
+      }
+    },
+    {
+      "nodeId": "83",
+      "parentId": "19",
+      "childIds": ["-1000000004"],
+      "backendDOMNodeId": 83,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": "A window splitter is a moveable separator."
+      }
+    },
+    {
+      "nodeId": "-1000000005",
+      "parentId": "84",
+      "ignored": true,
+      "role": {
+        "value": "none"
+      }
+    },
+    {
+      "nodeId": "85",
+      "parentId": "21",
+      "childIds": ["-1000000006"],
+      "backendDOMNodeId": 85,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": "Alpha"
+      }
+    },
+    {
+      "nodeId": "-1000000010",
+      "parentId": "89",
+      "role": {
+        "value": "InlineTextBox"
+      },
+      "name": {
+        "value": "docs"
+      }
+    },
+    {
+      "nodeId": "-1000000012",
+      "parentId": "91",
+      "role": {
+        "value": "InlineTextBox"
+      },
+      "name": {
+        "value": "Delete this project?"
+      }
+    },
+    {
+      "nodeId": "-1000000013",
+      "parentId": "92",
+      "role": {
+        "value": "InlineTextBox"
+      },
+      "name": {
+        "value": "Cancel"
+      }
+    },
+    {
+      "nodeId": "93",
+      "parentId": "31",
+      "childIds": ["-1000000014"],
+      "backendDOMNodeId": 93,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": "By Ada"
+      }
+    },
+    {
+      "nodeId": "-1000000015",
+      "parentId": "94",
+      "role": {
+        "value": "InlineTextBox"
+      },
+      "name": {
+        "value": "Post"
+      }
+    },
+    {
+      "nodeId": "-1000000016",
+      "parentId": "95",
+      "role": {
+        "value": "InlineTextBox"
+      },
+      "name": {
+        "value": "Card title"
+      }
+    },
+    {
+      "nodeId": "-1000000017",
+      "parentId": "96",
+      "role": {
+        "value": "InlineTextBox"
+      },
+      "name": {
+        "value": "Card desc"
+      }
+    },
+    {
+      "nodeId": "-1000000018",
+      "parentId": "97",
+      "role": {
+        "value": "InlineTextBox"
+      },
+      "name": {
+        "value": "Save"
+      }
+    },
+    {
+      "nodeId": "-1000000019",
+      "parentId": "98",
+      "role": {
+        "value": "InlineTextBox"
+      },
+      "name": {
+        "value": "draft"
+      }
+    },
+    {
+      "nodeId": "-1000000021",
+      "parentId": "100",
+      "role": {
+        "value": "InlineTextBox"
+      },
+      "name": {
+        "value": "hint"
+      }
+    },
+    {
+      "nodeId": "53",
+      "parentId": "52",
+      "childIds": ["101"],
+      "backendDOMNodeId": 53,
+      "role": {
+        "value": "spinbutton"
+      },
+      "name": {
+        "value": "Month Month"
+      },
+      "properties": [
+        {
+          "name": "focusable",
+          "value": {
+            "value": true
+          }
+        }
+      ],
+      "value": {
+        "value": 10
+      }
+    },
+    {
+      "nodeId": "102",
+      "parentId": "52",
+      "childIds": ["-1000000023"],
+      "backendDOMNodeId": 102,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": "/"
+      }
+    },
+    {
+      "nodeId": "55",
+      "parentId": "52",
+      "childIds": ["103"],
+      "backendDOMNodeId": 55,
+      "role": {
+        "value": "spinbutton"
+      },
+      "name": {
+        "value": "Day Day"
+      },
+      "properties": [
+        {
+          "name": "focusable",
+          "value": {
+            "value": true
+          }
+        }
+      ],
+      "value": {
+        "value": 18
+      }
+    },
+    {
+      "nodeId": "104",
+      "parentId": "52",
+      "childIds": ["-1000000025"],
+      "backendDOMNodeId": 104,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": "/"
+      }
+    },
+    {
+      "nodeId": "57",
+      "parentId": "52",
+      "childIds": ["105"],
+      "backendDOMNodeId": 57,
+      "role": {
+        "value": "spinbutton"
+      },
+      "name": {
+        "value": "Year Year"
+      },
+      "properties": [
+        {
+          "name": "focusable",
+          "value": {
+            "value": true
+          }
+        }
+      ],
+      "value": {
+        "value": 2026
+      }
+    },
+    {
+      "nodeId": "-1000000027",
+      "parentId": "106",
+      "role": {
+        "value": "InlineTextBox"
+      },
+      "name": {
+        "value": "typed box"
+      }
+    },
+    {
+      "nodeId": "-1000000028",
+      "parentId": "107",
+      "role": {
+        "value": "InlineTextBox"
+      },
+      "name": {
+        "value": "typed line"
+      },
+      "properties": [
+        {
+          "name": "editable",
+          "value": {
+            "value": "richtext"
+          }
+        }
+      ]
+    },
+    {
+      "nodeId": "-1000000029",
+      "parentId": "108",
+      "role": {
+        "value": "InlineTextBox"
+      },
+      "name": {
+        "value": "lnk"
+      },
+      "properties": [
+        {
+          "name": "editable",
+          "value": {
+            "value": "richtext"
+          }
+        }
+      ]
+    },
+    {
+      "nodeId": "-1000000030",
+      "parentId": "109",
+      "role": {
+        "value": "InlineTextBox"
+      },
+      "name": {
+        "value": "Loading"
+      }
+    },
+    {
+      "nodeId": "78",
+      "parentId": "77",
+      "childIds": ["110"],
+      "backendDOMNodeId": 78,
+      "role": {
+        "value": "generic"
+      },
+      "name": {
+        "value": ""
+      }
+    },
+    {
+      "nodeId": "79",
+      "parentId": "77",
+      "childIds": ["111"],
+      "backendDOMNodeId": 79,
+      "role": {
+        "value": "button"
+      },
+      "name": {
+        "value": "Edit"
+      },
+      "properties": [
+        {
+          "name": "focusable",
+          "value": {
+            "value": true
+          }
+        }
+      ]
+    },
+    {
+      "nodeId": "82",
+      "parentId": "13",
+      "childIds": ["-1000000003"],
+      "backendDOMNodeId": 82,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": "Window Splitter"
+      }
+    },
+    {
+      "nodeId": "-1000000004",
+      "parentId": "83",
+      "role": {
+        "value": "InlineTextBox"
+      },
+      "name": {
+        "value": "A window splitter is a moveable separator."
+      }
+    },
+    {
+      "nodeId": "-1000000006",
+      "parentId": "85",
+      "role": {
+        "value": "InlineTextBox"
+      },
+      "name": {
+        "value": "Alpha"
+      }
+    },
+    {
+      "nodeId": "-1000000014",
+      "parentId": "93",
+      "role": {
+        "value": "InlineTextBox"
+      },
+      "name": {
+        "value": "By Ada"
+      }
+    },
+    {
+      "nodeId": "101",
+      "parentId": "53",
+      "childIds": ["-1000000022"],
+      "backendDOMNodeId": 101,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": "10"
+      }
+    },
+    {
+      "nodeId": "-1000000023",
+      "parentId": "102",
+      "role": {
+        "value": "InlineTextBox"
+      },
+      "name": {
+        "value": "/"
+      }
+    },
+    {
+      "nodeId": "103",
+      "parentId": "55",
+      "childIds": ["-1000000024"],
+      "backendDOMNodeId": 103,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": "18"
+      }
+    },
+    {
+      "nodeId": "-1000000025",
+      "parentId": "104",
+      "role": {
+        "value": "InlineTextBox"
+      },
+      "name": {
+        "value": "/"
+      }
+    },
+    {
+      "nodeId": "105",
+      "parentId": "57",
+      "childIds": ["-1000000026"],
+      "backendDOMNodeId": 105,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": "2026"
+      }
+    },
+    {
+      "nodeId": "110",
+      "parentId": "78",
+      "childIds": ["-1000000031"],
+      "backendDOMNodeId": 110,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": "Line 1"
+      }
+    },
+    {
+      "nodeId": "111",
+      "parentId": "79",
+      "childIds": ["-1000000032"],
+      "backendDOMNodeId": 111,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": "Edit"
+      }
+    },
+    {
+      "nodeId": "-1000000003",
+      "parentId": "82",
+      "role": {
+        "value": "InlineTextBox"
+      },
+      "name": {
+        "value": "Window Splitter"
+      }
+    },
+    {
+      "nodeId": "-1000000022",
+      "parentId": "101",
+      "role": {
+        "value": "InlineTextBox"
+      },
+      "name": {
+        "value": "10"
+      }
+    },
+    {
+      "nodeId": "-1000000024",
+      "parentId": "103",
+      "role": {
+        "value": "InlineTextBox"
+      },
+      "name": {
+        "value": "18"
+      }
+    },
+    {
+      "nodeId": "-1000000026",
+      "parentId": "105",
+      "role": {
+        "value": "InlineTextBox"
+      },
+      "name": {
+        "value": "2026"
+      }
+    },
+    {
+      "nodeId": "-1000000031",
+      "parentId": "110",
+      "role": {
+        "value": "InlineTextBox"
+      },
+      "name": {
+        "value": "Line 1"
+      }
+    },
+    {
+      "nodeId": "-1000000032",
+      "parentId": "111",
+      "role": {
+        "value": "InlineTextBox"
+      },
+      "name": {
+        "value": "Edit"
+      }
+    }
+  ]
+}

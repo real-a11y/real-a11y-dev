@@ -78,8 +78,10 @@ import {
   isNativePasswordMask,
   nonEmptyAXText,
   nativeAXProperty,
+  opensFieldInternals,
   valueRegions,
   winningNameSource,
+  withholdFieldInternalText,
   withholdRegionNames,
   type CssPathAdapter,
   type RawAXNameNode as RawAXNode,
@@ -540,7 +542,9 @@ function editableRootBackendIds(rawNodes: RawAXNode[]): Set<number> {
  * Sensitive fields always ({@link withholdRegionNames} over
  * {@link fieldSensitivity}); in strict mode, every field value and all editor
  * content too ({@link withholdRegionNames} over {@link strictValueRoots}, then
- * {@link redactEditableContent}).
+ * {@link redactEditableContent}). And always, the text a form control draws
+ * inside itself, which the DOM walk marks (`fieldInternal`; core's
+ * `withholdFieldInternalText`).
  */
 function prepareRawNodes(
   rawNodes: RawAXNode[],
@@ -554,15 +558,29 @@ function prepareRawNodes(
   const index = indexNativeAX(rawNodes);
   const sensitivity = fieldSensitivity(rawNodes, index, enrichment);
   const named = withholdRegionNames(rawNodes, sensitivity.regions);
+  // Last: it blanks text runs only, which no step above keeps by identity. A
+  // node the DOM walk never saw is `undefined`: see withholdFieldInternalText.
+  const fieldText = (backendDOMNodeId: number): boolean | undefined => {
+    const info = enrichment.get(backendDOMNodeId);
+    return info === undefined ? undefined : info.fieldInternal === true;
+  };
   if (options.redactInput !== true) {
-    return { nodes: named, sensitivity, insideEditor: new Set() };
+    return {
+      nodes: withholdFieldInternalText(named, fieldText),
+      sensitivity,
+      insideEditor: new Set(),
+    };
   }
   const strict = withholdRegionNames(
     named,
     valueRegions(index, strictValueRoots(rawNodes, index)),
   );
   const { nodes, inside } = redactEditableContent(strict);
-  return { nodes, sensitivity, insideEditor: inside };
+  return {
+    nodes: withholdFieldInternalText(nodes, fieldText),
+    sensitivity,
+    insideEditor: inside,
+  };
 }
 
 /**
@@ -704,7 +722,9 @@ async function enrichFromDom(
       (n.nodeName ?? "").toLowerCase() === "html",
   };
 
-  const walk = (node: DomNode, inside: boolean): void => {
+  // `inField`: below the user-agent shadow root of a form control, where it
+  // draws its value (`NativeDomInfo.fieldInternal`).
+  const walk = (node: DomNode, inside: boolean, inField: boolean): void => {
     if (inside) insideEditable.add(node);
     for (const child of elementChildren(node)) parents.set(child, node);
     if (typeof node.backendNodeId === "number" && node.nodeName) {
@@ -714,17 +734,24 @@ async function enrichFromDom(
         attributes: allowlistAttributes(node.attributes ?? []),
         locator: buildCssPath(node, adapter),
         ...(ariaValueText !== null ? { ariaValueText } : {}),
+        ...(inField ? { fieldInternal: true } : {}),
       });
     }
     const below =
       inside ||
       (typeof node.backendNodeId === "number" &&
         editableRoots.has(node.backendNodeId));
-    for (const child of node.children ?? []) walk(child, below);
-    if (node.contentDocument) walk(node.contentDocument, below);
-    for (const sub of node.shadowRoots ?? []) walk(sub, below);
+    for (const child of node.children ?? []) walk(child, below, inField);
+    if (node.contentDocument) walk(node.contentDocument, below, false);
+    for (const sub of node.shadowRoots ?? []) {
+      walk(
+        sub,
+        below,
+        inField || opensFieldInternals(node.nodeName, sub.shadowRootType),
+      );
+    }
   };
-  walk(root, false);
+  walk(root, false, false);
   return out;
 }
 
@@ -754,6 +781,13 @@ export interface NativeDomInfo {
    * the `dom` facet.
    */
   ariaValueText?: string;
+  /**
+   * The node sits in the user-agent shadow root of an `<input>`, `<textarea>`
+   * or `<select>`, where the control draws what it holds (core's
+   * `opensFieldInternals`). Its text never reaches the tree: core's
+   * `withholdFieldInternalText`, which says why.
+   */
+  fieldInternal?: boolean;
 }
 
 interface DomNode {
@@ -764,6 +798,8 @@ interface DomNode {
   children?: DomNode[];
   contentDocument?: DomNode;
   shadowRoots?: DomNode[];
+  /** On a shadow root: `open`, `closed` or `user-agent`. */
+  shadowRootType?: string;
 }
 
 /** Both CDP reads a native tree is built from, over one session. */

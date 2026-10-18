@@ -749,7 +749,9 @@ export function buildServer(
         includeGeneric: z
           .boolean()
           .default(false)
-          .describe("Include generic container nodes in the tree."),
+          .describe(
+            "Include generic container nodes in the tree, among them a block of text, named from its own text.",
+          ),
         session: sessionParam,
       },
     },
@@ -778,7 +780,9 @@ export function buildServer(
         includeGeneric: z
           .boolean()
           .default(false)
-          .describe("Include generic container nodes (role=generic)."),
+          .describe(
+            "Include generic container nodes (role=generic), among them a block of text, named from its own text.",
+          ),
         session: sessionParam,
       },
     },

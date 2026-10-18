@@ -238,7 +238,7 @@ GitHub Actions annotations (grouped `::error` lines + a job summary), on by defa
 
 **`includeGeneric: boolean`** — flag `--include-generic` · default `false` · applies to `inspect`, the view commands, `snapshot`
 
-Keep generic container nodes (no role, no name) in the serialized tree. Off by default so output shows only what a screen reader announces. Declared on every view command; only tree-rendering output (`tree`, `inspect`, `snapshot`) actually consumes it.
+Keep generic container nodes (untyped `div`/`span` wrappers) in the serialized tree, including a `<div>` of text, named from its own text: `generic "A window splitter is a moveable separator."`. Off by default, so output lists only the roles a screen reader announces. Declared on every view command; only tree-rendering output (`tree`, `inspect`, `snapshot`) actually consumes it.
 
 ### `redactInput`
 

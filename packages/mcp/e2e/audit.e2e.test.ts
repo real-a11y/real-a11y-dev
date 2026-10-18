@@ -98,6 +98,38 @@ describe("MCP end-to-end against a real browser", () => {
     expect(out).toMatch(/textbox "Search"/); // labeled input, not flagged
   });
 
+  it("lists a block of text beside other content as a generic, with includeGeneric", async () => {
+    // A `<div>` of text is an unnamed generic in Chromium's tree, kept now
+    // beside other content and named from its own text. Generics print only
+    // when asked for.
+    await client.callTool({
+      name: "open_page",
+      arguments: {
+        url: dataUrl(
+          `<main><ul><li><a href="#ws"><h2>Window Splitter</h2></a>` +
+            `<div>A window splitter is a moveable separator.</div></li></ul>` +
+            `<div>Loose block</div><button>Save</button></main>`,
+        ),
+      },
+    });
+    const plain = textOf(
+      await client.callTool({ name: "get_semantic_tree", arguments: {} }),
+    );
+    expect(plain).toMatch(/heading "Window Splitter"/);
+    expect(plain).not.toMatch(/generic/);
+
+    const withGeneric = textOf(
+      await client.callTool({
+        name: "get_semantic_tree",
+        arguments: { includeGeneric: true },
+      }),
+    );
+    expect(withGeneric).toContain(
+      'generic "A window splitter is a moveable separator."',
+    );
+    expect(withGeneric).toContain('generic "Loose block"');
+  });
+
   it("extracts under a Trusted Types CSP that blocks addScriptTag", async () => {
     // `require-trusted-types-for 'script'` blocks `<script>.text` assignment
     // (the old addScriptTag path). Injection via page.evaluate must still work.

@@ -149,6 +149,20 @@ because that text is the value: what was typed into a
 that rule, so none of them can leak typed text into a name by forgetting to
 strip it.
 
+A `<div>` of text is an unnamed `generic` in Chromium's tree, with its text on
+a `StaticText` child. The one block a leaf is named after stays dropped
+(`listitem "Alpha"`). Every other is kept as a `generic` named from its own
+text, as the DOM producer keeps it: `generic "A window splitter is a moveable
+separator."`, and a node holding only blocks is still named as a leaf, so no
+name changes. Never inside a role in `NATIVE_AX_TEXT_OWNING_ROLES`, whose text
+names another node (a `<label>`'s) or is a value (a field's), inside one in
+`NATIVE_AX_NAME_FROM_CONTENT_ROLES` that Chromium named from it (a link, a
+cell), nor inside anything editable or carrying a value. A form control draws
+its value in its own user-agent shadow root, which no AX node marks: each
+transport reads the document for it (`opensFieldInternals`) and blanks that
+text first (`withholdFieldInternalText`), failing closed for a node its walk
+never saw.
+
 ```ts
 import { normalizeNativeAX, serializeNativeAX } from "@real-a11y-dev/core";
 

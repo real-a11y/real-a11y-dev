@@ -56,8 +56,10 @@ import {
   NATIVE_AX_CHOICE_STATES,
   nativeAXStateValue,
   normalizeNativeAX,
+  opensFieldInternals,
   REDACTED_VALUE,
   serializeNativeAX,
+  withholdFieldInternalText,
   withholdSensitiveFieldNames,
   type A11yInfo,
   type NativeAXNode,
@@ -784,13 +786,26 @@ export function withholdInsideSensitive(
 }
 
 /** The raw nodes some node is labelled or described by that the normalized
- *  tree doesn't keep. */
+ *  tree doesn't keep, or keeps as no more than a block of text: a `<div>` the
+ *  tree keeps for the text it holds is looked into as it was when the tree
+ *  dropped it, Chromium having named it nothing. */
 function referencedOutsideTree(
   rawNodes: RawAXNode[],
   index: NativeAXIndex<RawAXNode>,
   kept: readonly NativeAXNode[],
+  rawByNativeId: ReadonlyMap<string, RawAXNode>,
 ): RawAXNode[] {
-  const keptIds = new Set(kept.map((n) => n.id));
+  const keptIds = new Set(
+    kept
+      .filter((n) => {
+        const raw = rawByNativeId.get(n.id);
+        return !(
+          raw?.role?.value === "generic" &&
+          cleanAXText(String(raw.name?.value ?? "")) === ""
+        );
+      })
+      .map((n) => n.id),
+  );
   const out = new Map<string, RawAXNode>();
   for (const raw of rawNodes) {
     for (const property of raw.properties ?? []) {
@@ -882,6 +897,74 @@ async function fieldsWithin(
   }
 }
 
+/** What a walk of a session's documents found, by backend id: every DOM node
+ *  it saw, and those in a form control's own internals. */
+interface FieldInternals {
+  seen: ReadonlySet<number>;
+  internal: ReadonlySet<number>;
+}
+
+/**
+ * Walk the documents `transport` reads for the DOM nodes in a form control's
+ * own internals: the user-agent shadow root of an `<input>`, `<textarea>` or
+ * `<select>` (core's `opensFieldInternals`), where it draws what it holds.
+ * Core's `withholdFieldInternalText` keeps their text out of the tree, since
+ * nothing in the AX tree tells such a node from a `<div>`. One walk serves the
+ * session's top document and every frame it reads in the same renderer, which
+ * `DOM.getDocument` lists under its `<iframe>`; a node one of them added since
+ * is one the walk never saw, which fails closed. `undefined` when the DOM
+ * agent can't list them, which fails closed throughout.
+ */
+async function fieldInternals(
+  transport: CdpTransport,
+): Promise<FieldInternals | undefined> {
+  let root: CdpDomNode | undefined;
+  try {
+    await transport.send("DOM.enable");
+    root = (
+      await transport.send<{ root?: CdpDomNode }>("DOM.getDocument", {
+        depth: -1,
+        pierce: true,
+      })
+    ).root;
+  } catch {
+    return undefined;
+  }
+  if (!root) return undefined;
+  const seen = new Set<number>();
+  const internal = new Set<number>();
+  const stack: Array<[CdpDomNode, boolean]> = [[root, false]];
+  while (stack.length > 0) {
+    const [node, inField] = stack.pop()!;
+    seen.add(node.backendNodeId);
+    if (inField) internal.add(node.backendNodeId);
+    for (const child of node.children ?? []) stack.push([child, inField]);
+    if (node.contentDocument) stack.push([node.contentDocument, false]);
+    for (const sub of node.shadowRoots ?? []) {
+      stack.push([
+        sub,
+        inField || opensFieldInternals(node.localName, sub.shadowRootType),
+      ]);
+    }
+  }
+  return { seen, internal };
+}
+
+/** {@link fieldInternals}, walked once per session for the whole of a read. */
+function fieldWalks(): (
+  transport: CdpTransport,
+) => Promise<FieldInternals | undefined> {
+  const walks = new Map<CdpTransport, Promise<FieldInternals | undefined>>();
+  return (transport) => {
+    let walk = walks.get(transport);
+    if (walk === undefined) {
+      walk = fieldInternals(transport);
+      walks.set(transport, walk);
+    }
+    return walk;
+  };
+}
+
 /**
  * The raw ids of every field whose value must stay out of other nodes'
  * names: the fields the in-page read found sensitive or could not read
@@ -940,9 +1023,10 @@ export async function readNativeTree(
   const full = await transport.send<{ nodes: RawAXNode[] }>(
     "Accessibility.getFullAXTree",
   );
-  const nodes = await readDocument(transport, full.nodes);
+  const walkOf = fieldWalks();
+  const nodes = await readDocument(transport, full.nodes, walkOf(transport));
   let rawCount = full.nodes.length;
-  const budget = { left: MAX_FRAMES_PER_READ };
+  const budget = { left: MAX_FRAMES_PER_READ, walkOf };
   // The sessions the tree was read through: the top frame's, and that of
   // each out-of-process frame grafted in.
   const sessions: ReadSession[] = [{ transport, suffix: "" }];
@@ -1294,8 +1378,24 @@ async function keyPageRows(
 async function readDocument(
   transport: CdpTransport,
   rawDocument: RawAXNode[],
+  // The walk of `transport`'s documents: see `fieldInternals`.
+  walk: Promise<FieldInternals | undefined>,
 ): Promise<EnrichedNativeNode[]> {
-  const full = { nodes: rawDocument };
+  // First of all, the text a form control draws inside itself, which the AX
+  // tree can't tell from a `<div>` of the page's.
+  const internals = await walk;
+  const full = {
+    nodes: withholdFieldInternalText(
+      rawDocument,
+      internals &&
+        ((backendDOMNodeId) =>
+          internals.internal.has(backendDOMNodeId)
+            ? true
+            : internals.seen.has(backendDOMNodeId)
+              ? false
+              : undefined),
+    ),
+  };
   // Which fields are sensitive is known only after reading them in the page,
   // and the reads are chosen from the normalized tree. So: normalize once to
   // pick and classify the fields, keep their values out of every OTHER
@@ -1371,7 +1471,7 @@ async function readDocument(
     for (const id of facetsById.keys()) read.add(id);
     const index = indexNativeAX(full.nodes);
     await Promise.all(
-      referencedOutsideTree(full.nodes, index, firstPass)
+      referencedOutsideTree(full.nodes, index, firstPass, firstRawById)
         .filter((target) => hidesUnreadNode(target, index.byId, read))
         .map(async (target) => {
           const fields =
@@ -1528,7 +1628,11 @@ async function readFrames(
   suffix: string,
   depth: number,
   parentDocument: readonly EnrichedNativeNode[],
-  budget: { left: number },
+  // The frames left to read, and each session's walk (see `fieldInternals`).
+  budget: {
+    left: number;
+    walkOf: (transport: CdpTransport) => Promise<FieldInternals | undefined>;
+  },
   // `transport`'s frame tree, when the caller has read it already.
   known?: { frameTree?: FrameTreeNode },
 ): Promise<FrameDocument[]> {
@@ -1577,7 +1681,11 @@ async function readFrames(
     if (!raw?.nodes) continue;
     // A frame that fails partway (removed, navigated) is left out; the rest
     // of the tree still reads.
-    const nodes = await readDocument(transport, raw.nodes).catch(() => null);
+    const nodes = await readDocument(
+      transport,
+      raw.nodes,
+      budget.walkOf(transport),
+    ).catch(() => null);
     if (!nodes) continue;
     for (const n of nodes) if (isNativeIframeRole(n.role)) iframes.add(n.id);
     out.push({
@@ -1665,7 +1773,11 @@ async function readFrames(
       .catch(() => undefined);
     if (!raw?.nodes) continue;
     const childSuffix = nativeFrameSuffix(session);
-    const nodes = await readDocument(child, raw.nodes).catch(() => null);
+    const nodes = await readDocument(
+      child,
+      raw.nodes,
+      budget.walkOf(child),
+    ).catch(() => null);
     if (!nodes) continue;
     // For the frame's URL, and the frames inside it.
     const childTree = await child

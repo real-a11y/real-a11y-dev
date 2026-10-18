@@ -133,6 +133,27 @@
   own page, so **×** closes the popup, not the page under it
   ([#505](https://github.com/real-a11y/real-a11y-dev/pull/505)).
 
+- **Chrome's tree keeps blocks of text.** A `<div>` of text beside a link, a
+  heading or a button showed nowhere in Chrome's tree: the description on
+  each card of the APG patterns page, a dialog's message, a sentence beside
+  a button, a job title under a name in a list item. Each is now a row of
+  its own, `generic`, named from its text, as the in-page tree shows it, and
+  **Copy ▾** includes it. Keeping them changes no row's name: a list item
+  holding one such `<div>` is still named from it. Nothing inside a link, a
+  button, a label, a field or a player becomes a row
+  ([#506](https://github.com/real-a11y/real-a11y-dev/pull/506)).
+
+- Chrome's tree no longer names a list item after the value of a field in
+  it. A disabled field marked `role="none"` or `"presentation"` leaves the
+  text box inside it in Chromium's tree, holding the value, and a list item
+  with nothing else in it took that value as its name:
+  `<li><input disabled role="none" value="4111 1111 1111 1111"></li>` showed
+  a row `listitem 4111 1111 1111 1111`, in the copied report too. The panel
+  now reads the page's document to find each field's own text box and keeps
+  its text out. When it can't read the document, it leaves out the text of
+  every `<div>` of text rather than guess
+  ([#506](https://github.com/real-a11y/real-a11y-dev/pull/506)).
+
 - Hardened the shared mutation observer so that re-arming it can no longer
   strand the previous observers and event listeners
   ([#487](https://github.com/real-a11y/real-a11y-dev/pull/487)). No

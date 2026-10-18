@@ -187,7 +187,7 @@ There is **no tab-order section**: the tree this reads carries none, and printin
 Parameters:
 
 - **`rules`** — array of the five rule ids above — optional — subset for the findings section. Omit to run all.
-- **`includeGeneric`** — boolean — optional (default `false`) — include generic container nodes (`role=generic`) in the tree.
+- **`includeGeneric`** — boolean — optional (default `false`) — include generic container nodes (`role=generic`) in the tree, among them a `<div>` of text, named from its own text.
 
 An agent calls this for a consistent whole-page picture in a single round-trip:
 
@@ -221,7 +221,7 @@ A server started with [`REAL_A11Y_REDACT_INPUT=1`](#real-a11y-redact-input) show
 
 Parameters:
 
-- **`includeGeneric`** — boolean — optional (default `false`) — include generic container nodes (`role=generic`).
+- **`includeGeneric`** — boolean — optional (default `false`) — include generic container nodes (`role=generic`), among them a `<div>` of text, named from its own text: `generic "A window splitter is a moveable separator."`.
 
 An agent calls this to reason about page structure or diff it against another rendering.
 
