@@ -410,11 +410,12 @@ main
     listitem "— array of the five rule ids above — optional — subset for the findings section. Omit to run all."
       strong
         code "rules"
-    listitem "— boolean — optional (default ) — include generic container nodes () in the tree."
+    listitem "— boolean — optional (default ) — include generic container nodes () in the tree, among them a of text, named from its own text."
       strong
         code "includeGeneric"
       code "false"
       code "role=generic"
+      code "<div>"
   paragraph "An agent calls this for a consistent whole-page picture in a single round-trip:"
   button "Copy Code"
   code
@@ -474,11 +475,13 @@ main
     code "contenteditable="false""
   paragraph "Parameters:"
   list
-    listitem "— boolean — optional (default ) — include generic container nodes ()."
+    listitem "— boolean — optional (default ) — include generic container nodes (), among them a of text, named from its own text: ."
       strong
         code "includeGeneric"
       code "false"
       code "role=generic"
+      code "<div>"
+      code "generic "A window splitter is a moveable separator.""
   paragraph "An agent calls this to reason about page structure or diff it against another rendering."
   heading "get_heading_outline" (level 3)
     code "get_heading_outline"
