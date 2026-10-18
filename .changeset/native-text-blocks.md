@@ -19,7 +19,7 @@ The same goes for:
 
 A link inside the `<div>` nests beneath it: `<div>See the <a>docs</a> for more.</div>` reads `generic "See the for more."` with `link "docs"` under it.
 
-No name changes. A dialog's message isn't its name, so `<div role="dialog"><div>Delete this project?</div><button>Cancel</button></div>` is still an unnamed `dialog`, and the `dialog-labeled` audit still reports it.
+Keeping them changes no name. A dialog's message isn't its name, so `<div role="dialog"><div>Delete this project?</div><button>Cancel</button></div>` is still an unnamed `dialog`, and the `dialog-labeled` audit still reports it.
 
 Text that is already said somewhere, or must not be, is left out:
 
