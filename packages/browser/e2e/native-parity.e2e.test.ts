@@ -416,3 +416,73 @@ describe("web components reach the DOM producer", () => {
     }
   });
 });
+
+// Chromium names no `generic`, so a `<div>` of text is an unnamed generic with
+// its text on a text run of its own. The native normalizer dropped both, and
+// beside other content the text printed nowhere: an APG pattern card's
+// description beside the link to the pattern, a sentence beside a button. The
+// native tree keeps such a block now, named from its own text, as the DOM
+// producer does. A generic prints only with `includeGeneric`, in either tree.
+describe("a block of text beside other content", () => {
+  it("is a generic named from its own text in both producers", async () => {
+    await session.open(
+      dataUrl(
+        `<main>` +
+          `<ul><li><a href="#ws"><h2>Window Splitter</h2></a><div>A window splitter is a moveable separator.</div></li></ul>` +
+          `<div>Loose block</div><button>Save</button>` +
+          `<div role="dialog"><div>Delete this project?</div><button>Cancel</button></div>` +
+          `<nav><div>Only text</div></nav>` +
+          `</main>` +
+          `<div>Outside every landmark</div>`,
+      ),
+    );
+    const domTree = await session.call<string>("treeSnapshot", "body", [
+      { markFocus: false, includeGeneric: true },
+    ]);
+    const nativeTree = serializeTree(await session.nativeTree(), {
+      markFocus: false,
+      includeGeneric: true,
+    });
+
+    for (const [producer, tree] of [
+      ["dom", domTree],
+      ["native", nativeTree],
+    ]) {
+      const lines = tree.split("\n").map((l) => l.trim());
+      for (const text of [
+        "A window splitter is a moveable separator.",
+        "Loose block",
+        "Delete this project?",
+        "Only text",
+        "Outside every landmark",
+      ]) {
+        expect(lines, producer).toContain(`generic "${text}"`);
+      }
+      // The dialog's message is content, not its name.
+      expect(lines, producer).toContain("dialog");
+      expect(lines, producer).toContain("navigation");
+    }
+  });
+
+  it("is never kept where its text is already a name, a value or typed", async () => {
+    await session.open(
+      dataUrl(
+        `<main>` +
+          `<a href="#card"><div>Card title</div><div>Card desc</div><img alt="pic" src="data:image/gif;base64,R0lGODlhAQABAAAAACw="></a>` +
+          `<label>Email <div>hint</div><input></label>` +
+          `<input type="date" aria-label="Due" value="2026-10-18">` +
+          `<div contenteditable="true"><div>typed line</div><a href="#lnk">lnk</a></div>` +
+          `<button>Go</button>` +
+          `</main>`,
+      ),
+    );
+    const nativeTree = serializeTree(await session.nativeTree(), {
+      markFocus: false,
+      includeGeneric: true,
+    });
+    expect(nativeTree).toContain('link "Card title Card desc pic"');
+    expect(nativeTree).toContain('textbox "Email hint"');
+    expect(nativeTree).not.toMatch(/generic "/);
+    expect(nativeTree).not.toContain("typed");
+  });
+});
