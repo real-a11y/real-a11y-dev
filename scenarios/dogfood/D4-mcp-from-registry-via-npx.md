@@ -6,7 +6,7 @@ area: MCP
 type: Automated
 priority: P0
 status: Active
-validFrom: "mcp ≥ 0.1.0-beta.1 via npx on the `beta` tag. Tool list: 20 from mcp 0.1.0-beta.2 (act tools); 19 from the producer migration (#258) — `compare_producers` removed, `get_tab_order` kept; **20** from mcp ≥ 0.1.0-beta.3, which adds `list_sessions`. Assert names."
+validFrom: "mcp ≥ 0.1.0-beta.1 via npx on the `beta` tag. Tool list: 20 from mcp 0.1.0-beta.2 (act tools); 19 from the producer migration (#258) — `compare_producers` removed, `get_tab_order` kept; **20** from mcp ≥ 0.1.0-beta.3, which adds `list_sessions`. Assert names. Step 5's named `generic` lines from mcp ≥ 0.1.0-beta.9."
 validUntil: ""
 expected: "npx starts the published server; tools/list matches the documented set EXACTLY (assert the names, not the count); perception + audit tools return real data for the live site"
 twin:
@@ -41,7 +41,7 @@ Point a real MCP client (Claude Code, Claude Desktop, Cursor) at the **published
 3. `open_page https://real-a11y.dev`
 4. `audit_page`, `inspect_page`
 5. `get_semantic_tree` — there is one producer now (Chromium's own); a call passing `producer`
-   is rejected by the schema
+   is rejected by the schema. Then `get_semantic_tree { includeGeneric: true }`
 6. `get_heading_outline`, `list_elements`, `get_tab_order` — the last is the only read that
    still takes `rootSelector`
 7. `checkpoint_findings` → navigate to another page → `diff_findings`
@@ -55,6 +55,10 @@ Point a real MCP client (Claude Code, Claude Desktop, Cursor) at the **published
 - **2** — names match the docs exactly (assert the list, not the count). 20 today;
   `get_tab_order` and `list_sessions` present, `compare_producers` absent
 - **3–6** — real data for the live site, not empty shells
+- **5** — with `includeGeneric`, the tree gains `generic` lines. From mcp ≥ 0.1.0-beta.9, a
+  named one is a block of text the page shows, such as a `<div>` of text beside a link, and
+  `tools/list` describes the parameter that way; earlier releases print no such line, the old
+  behaviour, not a fail
 - **7** — the diff reports the real delta between two live pages
 - **9** — the agent picks a sensible sequence **from the tool descriptions alone**. If it
   flails, calls tools in the wrong order, or gives up, the descriptions are the finding — not

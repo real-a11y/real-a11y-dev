@@ -2152,7 +2152,7 @@
           "properties": {
             "includeGeneric": {
               "default": false,
-              "description": "Include generic container nodes (role=generic).",
+              "description": "Include generic container nodes (role=generic), among them a block of text, named from its own text.",
               "type": "boolean"
             },
             "session": {
@@ -2243,7 +2243,7 @@
           "properties": {
             "includeGeneric": {
               "default": false,
-              "description": "Include generic container nodes in the tree.",
+              "description": "Include generic container nodes in the tree, among them a block of text, named from its own text.",
               "type": "boolean"
             },
             "rules": {
