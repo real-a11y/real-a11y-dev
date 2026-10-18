@@ -3402,9 +3402,10 @@ export function App() {
         );
         copyReport(
           {
-            // `normalizeNativeAX` already drops every UNNAMED generic
-            // wrapper, so every generic left in a native tree is a named
-            // group the panel shows. `serializeTree`'s default
+            // `normalizeNativeAX` already drops every bare generic wrapper,
+            // so every generic left in a native tree is one the panel shows:
+            // a named group, a block of text named from its own text, or a
+            // role-less editor. `serializeTree`'s default
             // `includeGeneric: false` doesn't know that and would drop it.
             tree: serializeTree(tree, { includeGeneric: true }),
             outline: serializeOutline(tree),
