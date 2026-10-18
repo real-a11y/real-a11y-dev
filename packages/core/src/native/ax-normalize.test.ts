@@ -6,9 +6,11 @@
 import { describe, expect, it } from "vitest";
 
 import authorNamedFixture from "./__fixtures__/ax-author-named-leaves.json";
+import looseTextFixture from "./__fixtures__/ax-loose-text.json";
 import fixture from "./__fixtures__/ax-media-form.json";
 import mixedTextFixture from "./__fixtures__/ax-mixed-text.json";
 import rangeWidgetsFixture from "./__fixtures__/ax-range-widgets.json";
+import textOwningFixture from "./__fixtures__/ax-text-owning.json";
 import valueCarryingFixture from "./__fixtures__/ax-value-carrying.json";
 import {
   normalizeNativeAX,
@@ -23,6 +25,7 @@ import {
   NATIVE_AX_DROP_UNLESS_NAMED,
   NATIVE_AX_DROP_WHEN_BARE,
   NATIVE_AX_OWN_TEXT_ROLES,
+  NATIVE_AX_TEXT_OWNING_ROLES,
   NATIVE_AX_VOCABULARY_VERSION,
   nativeAXStateValue,
 } from "./ax-vocabulary.js";
@@ -291,6 +294,8 @@ describe("a node's own text (direct StaticText children)", () => {
   it("never lets a container take text from a dropped wrapper", () => {
     // Only DIRECT StaticText counts once a node has kept descendants: a
     // `main` must not be named after a loose `<div>` or a `<label>` inside it.
+    // The `<div>` is a node of its own instead (see "a block of text beside
+    // other content"); the label's text names its field, so it stays out.
     const nodes = normalizeNativeAX([
       raw("1", "main", { childIds: ["2", "4", "6"] }),
       raw("2", "generic", { parentId: "1", childIds: ["3"] }),
@@ -300,7 +305,7 @@ describe("a node's own text (direct StaticText children)", () => {
       raw("6", "button", { parentId: "1", name: "Save" }),
     ]);
     expect(serializeNativeAX(nodes)).toBe(
-      ["main", '  button "Save"'].join("\n"),
+      ["main", '  generic "Loose block"', '  button "Save"'].join("\n"),
     );
   });
 
@@ -552,6 +557,8 @@ describe("normalizeNativeAX (recorded mixed inline text)", () => {
         '  paragraph "Visible text ."',
         '    link "here"',
         '  textbox "Email"',
+        // A block of text beside other content is a node of its own.
+        '  generic "Loose block"',
         "  article",
         "    sectionheader",
         '      heading "Post"',
@@ -724,6 +731,138 @@ describe("normalizeNativeAX (recorded range widgets)", () => {
   });
 });
 
+// Recorded from Chromium 141 on this page (trimmed like the fixtures above;
+// the images are a 1×1 GIF):
+//
+//   <main>
+//   <ul>
+//   <li><a href="#ws"><h2><img alt="" src="…"><span>Window Splitter</span></h2></a>
+//     <div>A window splitter is a moveable separator.</div></li>
+//   <li><div>Alpha</div></li>
+//   </ul>
+//   <div>Loose block</div><button>Save</button>
+//   <div>See the <a href="#docs">docs</a> for more.</div>
+//   <div role="dialog"><div>Delete this project?</div><button>Cancel</button></div>
+//   <article><header><div>By Ada</div></header><h2>Post</h2></article>
+//   <a href="#card"><div>Card title</div><div>Card desc</div><img alt="pic" src="…"></a>
+//   <button><div>Save</div><div>draft</div><img alt="i" src="…"></button>
+//   <label>Email <div>hint</div><input></label>
+//   <input type="date" aria-label="Due" value="2026-10-18">
+//   <div role="textbox" tabindex="0"><div>typed box</div><img alt="tb" src="…"></div>
+//   <div contenteditable="true"><div>typed line</div><a href="#lnk">lnk</a></div>
+//   <div role="progressbar"><div>Loading</div><img alt="p" src="…"></div>
+//   <table><tr><td><div>Line 1</div><button>Edit</button></td></tr></table>
+//   </main>
+//   <div>Outside every landmark</div>
+//
+// Each `<div>` of text is an unnamed `generic` with its text on a StaticText
+// child, except in the date input, where Chromium hangs the `/` between the
+// spinbuttons on a generic of its own.
+describe("normalizeNativeAX (recorded loose text)", () => {
+  const nodes = normalizeNativeAX(looseTextFixture.nodes as RawNativeAXNode[]);
+
+  it("keeps each block of text beside other content, and none whose text is owned", () => {
+    expect(serializeNativeAX(nodes)).toBe(
+      [
+        "main",
+        "  list",
+        "    listitem",
+        '      link "Window Splitter"',
+        '        heading "Window Splitter"',
+        // Printed nowhere before.
+        '      generic "A window splitter is a moveable separator."',
+        // Its only content: the item is named after it, as before.
+        '    listitem "Alpha"',
+        '  generic "Loose block"',
+        '  button "Save"',
+        '  generic "See the for more."',
+        '    link "docs"',
+        // Still unnamed: `dialog-labeled` reports it.
+        "  dialog",
+        '    generic "Delete this project?"',
+        '    button "Cancel"',
+        "  article",
+        '    generic "By Ada"',
+        '    heading "Post"',
+        // Named from their content: their blocks are in their names.
+        '  link "Card title Card desc pic"',
+        '    img "pic"',
+        '  button "Save draft i"',
+        '    img "i"',
+        // The label's text names the field.
+        '  textbox "Email hint"',
+        // No `/` between the date's parts.
+        '  Date "Due"',
+        '    spinbutton "Month Month"',
+        '    spinbutton "Day Day"',
+        '    spinbutton "Year Year"',
+        '    button "Show date picker"',
+        // What the fields and the editor hold, and the progress bar's fallback.
+        "  textbox",
+        '    img "tb"',
+        "  generic",
+        '    link "lnk"',
+        "  progressbar",
+        '    img "p"',
+        "  LayoutTable",
+        "    LayoutTableRow",
+        '      LayoutTableCell "Line 1 Edit"',
+        '        button "Edit"',
+        'generic "Outside every landmark"',
+      ].join("\n"),
+    );
+  });
+
+  it("keeps what was typed out of the tree", () => {
+    for (const node of nodes) expect(node.name).not.toContain("typed");
+  });
+});
+
+// Recorded from Chromium 141 on a page holding `<div>… text</div><img alt="k">`
+// in every role of NATIVE_AX_TEXT_OWNING_ROLES but the media elements and the
+// colour input, which hold no text of the page's: each as a widget with a value
+// and, where Chromium gives one none, without (an indeterminate progress bar,
+// a static separator, an empty date or time input, whose `/`, `:` and "Week"
+// are still shown). A `role="group"` and a `role="caption"` hold the same
+// block, and keep it.
+describe("normalizeNativeAX (recorded text-owning roles)", () => {
+  const rawNodes = textOwningFixture.nodes as RawNativeAXNode[];
+  const nodes = normalizeNativeAX(rawNodes);
+
+  it("keeps no block of text inside any of them", () => {
+    expect(
+      nodes.filter((n) => n.role === "generic" && n.name).map((n) => n.name),
+    ).toEqual(["Control text", "Caption text"]);
+  });
+
+  it("puts a block of text in every one of them", () => {
+    // So a role taken off the table keeps a block here, and the case above
+    // fails.
+    const byId = new Map(rawNodes.map((n) => [n.nodeId, n]));
+    const isBlock = (node: RawNativeAXNode) =>
+      node.role?.value === "generic" &&
+      (node.childIds ?? []).some((id) => {
+        const child = byId.get(id);
+        return (
+          child?.role?.value === "StaticText" &&
+          (child.name?.value ?? "").trim() !== ""
+        );
+      });
+    const holdsBlock = (node: RawNativeAXNode): boolean =>
+      (node.childIds ?? []).some((id) => {
+        const child = byId.get(id);
+        return child !== undefined && (isBlock(child) || holdsBlock(child));
+      });
+    const holding = new Set(
+      rawNodes.filter(holdsBlock).map((n) => n.role?.value),
+    );
+    for (const role of NATIVE_AX_TEXT_OWNING_ROLES) {
+      if (["Audio", "Video", "ColorWell"].includes(role)) continue;
+      expect(holding.has(role), role).toBe(true);
+    }
+  });
+});
+
 describe("value-carrying nodes", () => {
   it.each([
     ["typed text", "typed secret"],
@@ -882,6 +1021,407 @@ describe("named container preservation (generic)", () => {
         "\n",
       ),
     );
+  });
+});
+
+// Every role whose text is its own, spelled out (raw Blink role strings) so a
+// role taken off NATIVE_AX_TEXT_OWNING_ROLES fails a case below: the table
+// itself can't say what it has lost.
+const TEXT_OWNING_ROLES = [
+  "button",
+  "cell",
+  "checkbox",
+  "columnheader",
+  "DisclosureTriangle",
+  "doc-backlink",
+  "doc-biblioref",
+  "doc-glossref",
+  "doc-noteref",
+  "gridcell",
+  "heading",
+  "LayoutTableCell",
+  "LayoutTableRow",
+  "link",
+  "menuitem",
+  "menuitemcheckbox",
+  "menuitemradio",
+  "option",
+  "radio",
+  "row",
+  "rowheader",
+  "switch",
+  "tab",
+  "term",
+  "tooltip",
+  "treeitem",
+  "LabelText",
+  "Legend",
+  "ColorWell",
+  "combobox",
+  "Date",
+  "DateTime",
+  "InputTime",
+  "listbox",
+  "searchbox",
+  "slider",
+  "spinbutton",
+  "textbox",
+  "meter",
+  "progressbar",
+  "scrollbar",
+  "separator",
+  "image",
+  "Audio",
+  "Video",
+];
+
+// Chromium names no `generic`, so a `<div>` of prose is an unnamed generic with
+// its text on StaticText children, and both were dropped. As its kept
+// ancestor's only content, promotion still carried the text; beside a kept
+// sibling it vanished.
+describe("a block of text beside other content", () => {
+  it("keeps it, named from its own text, beside a kept sibling", () => {
+    // An APG pattern card: `<li><a><h2>Window Splitter</h2></a><div>A window
+    // splitter is…</div></li>`. The description printed nowhere.
+    const nodes = normalizeNativeAX([
+      raw("1", "listitem", { childIds: ["2", "5"] }),
+      raw("2", "link", {
+        parentId: "1",
+        name: "Window Splitter",
+        childIds: ["3"],
+      }),
+      raw("3", "heading", {
+        parentId: "2",
+        name: "Window Splitter",
+        childIds: ["4"],
+      }),
+      raw("4", "StaticText", { parentId: "3", name: "Window Splitter" }),
+      raw("5", "generic", { parentId: "1", childIds: ["6"] }),
+      raw("6", "StaticText", {
+        parentId: "5",
+        name: "A window splitter is a moveable separator.",
+      }),
+    ]);
+    expect(serializeNativeAX(nodes)).toBe(
+      [
+        "listitem",
+        '  link "Window Splitter"',
+        '    heading "Window Splitter"',
+        '  generic "A window splitter is a moveable separator."',
+      ].join("\n"),
+    );
+  });
+
+  it("keeps it beside a kept node anywhere under the same kept ancestor", () => {
+    // The link sits inside a wrapper with no text of its own.
+    const nodes = normalizeNativeAX([
+      raw("1", "listitem", { childIds: ["2", "4"] }),
+      raw("2", "generic", { parentId: "1", childIds: ["3"] }),
+      raw("3", "link", { parentId: "2", name: "Window Splitter" }),
+      raw("4", "generic", { parentId: "1", childIds: ["5"] }),
+      raw("5", "StaticText", { parentId: "4", name: "A moveable separator." }),
+    ]);
+    expect(serializeNativeAX(nodes)).toBe(
+      [
+        "listitem",
+        '  link "Window Splitter"',
+        '  generic "A moveable separator."',
+      ].join("\n"),
+    );
+  });
+
+  it("still names a leaf after its only content instead", () => {
+    // The leaf guard: with nothing kept beside them, a leaf's blocks are never
+    // nodes of their own, and promotion takes the first one's text, as before.
+    const one = normalizeNativeAX([
+      raw("1", "listitem", { childIds: ["2"] }),
+      raw("2", "generic", { parentId: "1", childIds: ["3"] }),
+      raw("3", "StaticText", { parentId: "2", name: "Alpha" }),
+    ]);
+    expect(serializeNativeAX(one)).toBe('listitem "Alpha"');
+
+    const two = normalizeNativeAX([
+      raw("1", "listitem", { childIds: ["2", "4"] }),
+      raw("2", "generic", { parentId: "1", childIds: ["3"] }),
+      raw("3", "StaticText", { parentId: "2", name: "Alice" }),
+      raw("4", "generic", { parentId: "1", childIds: ["5"] }),
+      raw("5", "StaticText", { parentId: "4", name: "Engineer" }),
+    ]);
+    expect(serializeNativeAX(two)).toBe('listitem "Alice"');
+  });
+
+  it.each(["main", "dialog", "navigation"])(
+    "keeps it as the only content of a %s, which takes no name from it",
+    (role) => {
+      // `<main><div>Only text</div></main>`: named by its author only, the
+      // landmark never took the text, so it printed nowhere.
+      const nodes = normalizeNativeAX([
+        raw("1", role, { childIds: ["2"] }),
+        raw("2", "generic", { parentId: "1", childIds: ["3"] }),
+        raw("3", "StaticText", { parentId: "2", name: "Only text" }),
+      ]);
+      expect(serializeNativeAX(nodes)).toBe(
+        [role, '  generic "Only text"'].join("\n"),
+      );
+    },
+  );
+
+  it("keeps it as the only content of a node named already", () => {
+    // `<li aria-label="Card"><div>Alpha</div></li>`
+    const nodes = normalizeNativeAX([
+      raw("1", "listitem", { name: "Card", childIds: ["2"] }),
+      raw("2", "generic", { parentId: "1", childIds: ["3"] }),
+      raw("3", "StaticText", { parentId: "2", name: "Alpha" }),
+    ]);
+    expect(serializeNativeAX(nodes)).toBe(
+      ['listitem "Card"', '  generic "Alpha"'].join("\n"),
+    );
+  });
+
+  it("keeps it beside a prose role's own text", () => {
+    // `<li>Note: <div>Details here</div></li>`: a list item keeps its own
+    // text beside kept children, so it keeps its name.
+    const nodes = normalizeNativeAX([
+      raw("1", "listitem", { childIds: ["2", "3"] }),
+      raw("2", "StaticText", { parentId: "1", name: "Note:" }),
+      raw("3", "generic", { parentId: "1", childIds: ["4"] }),
+      raw("4", "StaticText", { parentId: "3", name: "Details here" }),
+    ]);
+    expect(serializeNativeAX(nodes)).toBe(
+      ['listitem "Note:"', '  generic "Details here"'].join("\n"),
+    );
+  });
+
+  it("never costs a leaf the name its own text gives it", () => {
+    // An alert takes its own text as a name only as a leaf: kept, the block
+    // would leave it unnamed, so it stays dropped.
+    const nodes = normalizeNativeAX([
+      raw("1", "alert", { childIds: ["2", "3"] }),
+      raw("2", "StaticText", { parentId: "1", name: "Error:" }),
+      raw("3", "generic", { parentId: "1", childIds: ["4"] }),
+      raw("4", "StaticText", { parentId: "3", name: "Card declined" }),
+    ]);
+    expect(serializeNativeAX(nodes)).toBe('alert "Error:"');
+  });
+
+  it("keeps one with no kept ancestor at all", () => {
+    // Text outside every landmark, under the dropped RootWebArea and body.
+    const nodes = normalizeNativeAX([
+      raw("1", "RootWebArea", { childIds: ["2"] }),
+      raw("2", "none", { parentId: "1", ignored: true, childIds: ["3", "5"] }),
+      raw("3", "generic", { parentId: "2", childIds: ["4"] }),
+      raw("4", "StaticText", { parentId: "3", name: "Outside every landmark" }),
+      raw("5", "main", { parentId: "2" }),
+    ]);
+    expect(serializeNativeAX(nodes)).toBe(
+      ['generic "Outside every landmark"', "main"].join("\n"),
+    );
+  });
+
+  it("nests a kept child beneath it, and reads only its own text", () => {
+    // `<div>See the <a>docs</a> for more.</div>` beside a button.
+    const nodes = normalizeNativeAX([
+      raw("1", "main", { childIds: ["2", "7"] }),
+      raw("2", "generic", { parentId: "1", childIds: ["3", "4", "6"] }),
+      raw("3", "StaticText", { parentId: "2", name: "See the " }),
+      raw("4", "link", { parentId: "2", name: "docs", childIds: ["5"] }),
+      raw("5", "StaticText", { parentId: "4", name: "docs" }),
+      raw("6", "StaticText", { parentId: "2", name: " for more." }),
+      raw("7", "button", { parentId: "1", name: "Save" }),
+    ]);
+    expect(serializeNativeAX(nodes)).toBe(
+      [
+        "main",
+        '  generic "See the for more."',
+        '    link "docs"',
+        '  button "Save"',
+      ].join("\n"),
+    );
+  });
+
+  it("keeps a block inside a block", () => {
+    const nodes = normalizeNativeAX([
+      raw("1", "main", { childIds: ["2", "6"] }),
+      raw("2", "generic", { parentId: "1", childIds: ["3", "4"] }),
+      raw("3", "StaticText", { parentId: "2", name: "Intro" }),
+      raw("4", "generic", { parentId: "2", childIds: ["5"] }),
+      raw("5", "StaticText", { parentId: "4", name: "Nested text" }),
+      raw("6", "button", { parentId: "1", name: "Save" }),
+    ]);
+    expect(serializeNativeAX(nodes)).toBe(
+      [
+        "main",
+        '  generic "Intro"',
+        '    generic "Nested text"',
+        '  button "Save"',
+      ].join("\n"),
+    );
+  });
+
+  it("never names the author-named node it sits in", () => {
+    // `dialog-labeled` still reports this dialog: its message is content.
+    const nodes = normalizeNativeAX([
+      raw("1", "dialog", { childIds: ["2", "4"] }),
+      raw("2", "generic", { parentId: "1", childIds: ["3"] }),
+      raw("3", "StaticText", { parentId: "2", name: "Delete this project?" }),
+      raw("4", "button", { parentId: "1", name: "Cancel" }),
+    ]);
+    expect(serializeNativeAX(nodes)).toBe(
+      ["dialog", '  generic "Delete this project?"', '  button "Cancel"'].join(
+        "\n",
+      ),
+    );
+  });
+
+  it("keeps a byline in a dropped header as its own node, and never as the article's name", () => {
+    // `<article><header><div>By Ada</div></header><h2>Post</h2></article>`:
+    // the bare header is dropped, and the promotion barrier that keeps its
+    // text from naming the article still holds.
+    const nodes = normalizeNativeAX([
+      raw("1", "article", { childIds: ["2", "5"] }),
+      raw("2", "sectionheader", { parentId: "1", childIds: ["3"] }),
+      raw("3", "generic", { parentId: "2", childIds: ["4"] }),
+      raw("4", "StaticText", { parentId: "3", name: "By Ada" }),
+      raw("5", "heading", { parentId: "1", name: "Post" }),
+    ]);
+    expect(serializeNativeAX(nodes)).toBe(
+      ["article", '  generic "By Ada"', '  heading "Post"'].join("\n"),
+    );
+  });
+
+  it.each(TEXT_OWNING_ROLES)(
+    "never keeps one inside a %s, which owns its text",
+    (role) => {
+      // Kept beside a sibling anywhere else.
+      const nodes = normalizeNativeAX([
+        raw("1", "main", { childIds: ["2"] }),
+        raw("2", role, { parentId: "1", childIds: ["3", "5"] }),
+        raw("3", "generic", { parentId: "2", childIds: ["4"] }),
+        raw("4", "StaticText", { parentId: "3", name: "Inner text" }),
+        raw("5", "button", { parentId: "2", name: "Kept" }),
+      ]);
+      expect(nodes.map((n) => n.name)).not.toContain("Inner text");
+      expect(nodes.map((n) => n.role)).not.toContain("generic");
+    },
+  );
+
+  it("never keeps one deeper inside a node that owns its text", () => {
+    // `<a><ul><li><div>Inner text</div><img alt="i"></li></ul></a>`: the
+    // link's name already holds it.
+    const nodes = normalizeNativeAX([
+      raw("1", "link", { name: "Inner text i", childIds: ["2"] }),
+      raw("2", "list", { parentId: "1", childIds: ["3"] }),
+      raw("3", "listitem", { parentId: "2", childIds: ["4", "6"] }),
+      raw("4", "generic", { parentId: "3", childIds: ["5"] }),
+      raw("5", "StaticText", { parentId: "4", name: "Inner text" }),
+      raw("6", "image", { parentId: "3", name: "i" }),
+    ]);
+    expect(serializeNativeAX(nodes)).toBe(
+      ['link "Inner text i"', "  list", "    listitem", '      img "i"'].join(
+        "\n",
+      ),
+    );
+  });
+
+  it.each([
+    [
+      "inside an editor",
+      { properties: [{ name: "editable", value: { value: "richtext" } }] },
+    ],
+    ["inside a node with a value", { value: "typed secret" }],
+  ])("never keeps one %s, whatever its role", (_, extra) => {
+    // `<article contenteditable><div>typed secret</div><a>link</a></article>`:
+    // a block in an editor is what was typed.
+    const nodes = normalizeNativeAX([
+      raw("1", "main", { childIds: ["2"] }),
+      raw("2", "article", { parentId: "1", childIds: ["3", "5"], ...extra }),
+      raw("3", "generic", { parentId: "2", childIds: ["4"] }),
+      raw("4", "StaticText", { parentId: "3", name: "typed secret" }),
+      raw("5", "link", { parentId: "2", name: "link" }),
+    ]);
+    expect(serializeNativeAX(nodes)).not.toContain("typed");
+  });
+
+  it("never keeps an editable block, even outside an editor's root", () => {
+    const nodes = normalizeNativeAX([
+      raw("1", "main", { childIds: ["2", "4"] }),
+      raw("2", "generic", {
+        parentId: "1",
+        childIds: ["3"],
+        properties: [{ name: "editable", value: { value: "plaintext" } }],
+      }),
+      raw("3", "StaticText", { parentId: "2", name: "typed secret" }),
+      raw("4", "button", { parentId: "1", name: "Save" }),
+    ]);
+    expect(serializeNativeAX(nodes)).toBe('main\n  button "Save"');
+  });
+
+  it("reads none of the text in an ignored wrapper as a block", () => {
+    // Chromium ignores a `<div>` mixing text with blocks, and a flex item's
+    // `<span>`: their text is still dropped beside a kept sibling.
+    const nodes = normalizeNativeAX([
+      raw("1", "main", { childIds: ["2", "4"] }),
+      raw("2", "none", { parentId: "1", ignored: true, childIds: ["3"] }),
+      raw("3", "StaticText", { parentId: "2", name: "Flex label" }),
+      raw("4", "link", { parentId: "1", name: "flex link" }),
+    ]);
+    expect(serializeNativeAX(nodes)).toBe('main\n  link "flex link"');
+  });
+
+  it("needs text: a line break, whitespace or an ignored run is not enough", () => {
+    const nodes = normalizeNativeAX([
+      raw("1", "main", { childIds: ["2", "4", "6", "8"] }),
+      raw("2", "generic", { parentId: "1", childIds: ["3"] }),
+      raw("3", "LineBreak", { parentId: "2", name: "\n" }),
+      raw("4", "generic", { parentId: "1", childIds: ["5"] }),
+      raw("5", "StaticText", { parentId: "4", name: "  " }),
+      raw("6", "generic", { parentId: "1", childIds: ["7"] }),
+      raw("7", "StaticText", { parentId: "6", name: "hidden", ignored: true }),
+      raw("8", "button", { parentId: "1", name: "Save" }),
+    ]);
+    expect(serializeNativeAX(nodes)).toBe('main\n  button "Save"');
+  });
+
+  it("is no ignored generic", () => {
+    const nodes = normalizeNativeAX([
+      raw("1", "main", { childIds: ["2", "4"] }),
+      raw("2", "generic", { parentId: "1", ignored: true, childIds: ["3"] }),
+      raw("3", "StaticText", { parentId: "2", name: "Ignored block" }),
+      raw("4", "button", { parentId: "1", name: "Save" }),
+    ]);
+    expect(serializeNativeAX(nodes)).toBe('main\n  button "Save"');
+  });
+});
+
+describe("text-owning roles", () => {
+  // The author-named roles a sentence of prose sits in: its text is content.
+  const CONTENT_CONTAINERS = [
+    "dialog",
+    "alertdialog",
+    "banner",
+    "complementary",
+    "contentinfo",
+    "form",
+    "main",
+    "navigation",
+    "region",
+    "search",
+    "sectionheader",
+    "sectionfooter",
+  ];
+
+  it("are the vocabulary's text-owning table", () => {
+    expect(NATIVE_AX_TEXT_OWNING_ROLES).toEqual(new Set(TEXT_OWNING_ROLES));
+  });
+
+  it("cover every author-named role but the content containers", () => {
+    // A field, a range widget or an image added to the author-named table
+    // must not start keeping the text inside it as blocks.
+    for (const role of NATIVE_AX_AUTHOR_NAMED_ROLES) {
+      expect(NATIVE_AX_TEXT_OWNING_ROLES.has(role)).toBe(
+        !CONTENT_CONTAINERS.includes(role),
+      );
+    }
   });
 });
 

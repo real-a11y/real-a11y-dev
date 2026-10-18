@@ -149,6 +149,16 @@ because that text is the value: what was typed into a
 that rule, so none of them can leak typed text into a name by forgetting to
 strip it.
 
+A `<div>` of text is an unnamed `generic` in Chromium's tree, with its text on
+a `StaticText` child. As the only content of its kept ancestor, its text names
+that ancestor (`listitem "Alpha"`). Anywhere else, beside a kept sibling or
+under an ancestor that takes no name from it, the `<div>` is kept as a
+`generic` named from its own text, as the DOM producer keeps it:
+`generic "A window splitter is a moveable separator."`. Never inside a role in
+`NATIVE_AX_TEXT_OWNING_ROLES`, whose text is already a name (a link's, a
+cell's), names another node (a `<label>`'s), or is a value (a field's), nor
+inside anything editable or carrying a value.
+
 ```ts
 import { normalizeNativeAX, serializeNativeAX } from "@real-a11y-dev/core";
 

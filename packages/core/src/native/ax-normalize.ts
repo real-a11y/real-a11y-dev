@@ -27,6 +27,7 @@ import {
   NATIVE_AX_EXPOSING_PROPERTIES,
   NATIVE_AX_NAME_SOURCE_ROLES,
   NATIVE_AX_OWN_TEXT_ROLES,
+  NATIVE_AX_TEXT_OWNING_ROLES,
 } from "./ax-vocabulary.js";
 
 /** The subset of CDP `Accessibility.AXNode` this normalizer consumes. */
@@ -188,7 +189,8 @@ function carriesValue(node: RawNativeAXNode): boolean {
  * {@link NATIVE_AX_OWN_TEXT_ROLES}: a dialog or landmark with a loose sentence
  * beside its buttons has no accessible name, and must keep reading that way.
  * It never runs for {@link NATIVE_AX_AUTHOR_NAMED_ROLES}, even on a leaf, nor
- * for a node that {@link carriesValue}.
+ * for a node that {@link carriesValue}. It also names a block of text that is
+ * kept for holding it — see {@link textBlock}.
  */
 function directText(
   node: RawNativeAXNode,
@@ -223,6 +225,11 @@ function directText(
  * with a `<text>` inside, stays as unnamed as Chromium left it. Nor for a node
  * that {@link carriesValue}: an editor's typed text is not its name.
  * And the search never enters a dropped descendant that carries a value.
+ *
+ * When promotion can name a leaf, the blocks of text in its subtree stay
+ * dropped, and it carries the first one's text: `<li><div>Alpha</div></li>`
+ * reads `listitem "Alpha"`. Anywhere else a block is kept as a node of its
+ * own — see {@link textBlock}.
  */
 function promoteNameFromDroppedDescendants(
   node: RawNativeAXNode,
@@ -250,34 +257,132 @@ function promoteNameFromDroppedDescendants(
 }
 
 /**
+ * Whether the text inside `node` is its own, so no block of it is loose: a
+ * role in {@link NATIVE_AX_TEXT_OWNING_ROLES} (named from that text, naming
+ * another node with it, holding it as a value, or keeping it presentational),
+ * or a node that {@link carriesValue} or is editable, whatever its role, since
+ * an editor's text is what was typed into it. It holds for the whole subtree,
+ * through kept nodes and dropped ones alike.
+ */
+function ownsText(node: RawNativeAXNode): boolean {
+  return (
+    NATIVE_AX_TEXT_OWNING_ROLES.has(node.role?.value ?? "") ||
+    carriesValue(node) ||
+    isEditable(node)
+  );
+}
+
+/**
+ * The text of a block that holds text of its own, or `""` for anything else:
+ * a bare `generic` (the `<div>` around a sentence) with text on its own
+ * `StaticText` children ({@link directText}).
+ *
+ * Chromium names no generic, so the normalizer drops one as a wrapper, and with
+ * it the text runs only it carried. As the only content of the kept ancestor it
+ * flattens into, the block usually names that ancestor (see
+ * {@link promoteNameFromDroppedDescendants}). Anywhere else its text vanished:
+ * beside a kept sibling (an APG pattern card's description beside the link to
+ * the pattern, a sentence beside a button in `main` or in a dialog), and under
+ * an ancestor that takes no name from it (a `<main>` holding nothing but a
+ * `<div>` of text). So there the block is kept, named from its own text:
+ * `generic "A window splitter is a moveable separator."`, the line the DOM
+ * producer prints for the same `<div>`. So is a block with no kept ancestor at
+ * all. A kept child, such as an inline link, nests beneath it. Which ancestors
+ * keep their blocks is `keepsBlocks` in {@link normalizeNativeAX}.
+ *
+ * Never inside a node that {@link ownsText}. Nor is an ignored node a block,
+ * even with text of its own: Chromium ignores a `<div>` that mixes text with
+ * blocks, and a `<span>` that is a flex or grid item, and their text is still
+ * dropped beside a kept sibling.
+ */
+function textBlock(
+  node: RawNativeAXNode,
+  byId: Map<string, RawNativeAXNode>,
+): string {
+  if (
+    node.ignored ||
+    !NATIVE_AX_DROP_UNLESS_NAMED.has(node.role?.value ?? "")
+  ) {
+    return "";
+  }
+  return directText(node, byId);
+}
+
+/**
  * Normalize a flat `getFullAXTree` node list: drop vocabulary noise and
  * ignored nodes, re-parent surviving descendants to the nearest kept
- * ancestor, promote names off dropped text children, and map Blink roles to
- * engine roles. Returns kept nodes in document order (parents before their
- * children).
+ * ancestor, keep a block of text wherever its text would otherwise be lost,
+ * promote names off dropped text children, and map Blink roles to engine
+ * roles. Returns kept nodes in document order (parents before their children).
  */
 export function normalizeNativeAX(rawNodes: RawNativeAXNode[]): NativeAXNode[] {
   const byId = new Map(rawNodes.map((n) => [n.nodeId, n]));
   const out: NativeAXNode[] = [];
   const rawOf = new Map<NativeAXNode, RawNativeAXNode>();
 
+  // Whether `raw` has a kept node anywhere below it, reached through dropped
+  // ones, so that it is no leaf whatever blocks of text are kept beneath it.
+  // Memoized, since every block under it asks.
+  const keptBelow = new Map<string, boolean>();
+  const hasKeptBelow = (raw: RawNativeAXNode): boolean => {
+    let known = keptBelow.get(raw.nodeId);
+    if (known === undefined) {
+      known = (raw.childIds ?? []).some((childId) => {
+        const child = byId.get(childId);
+        return (
+          child !== undefined && (isKept(child, byId) || hasKeptBelow(child))
+        );
+      });
+      keptBelow.set(raw.nodeId, known);
+    }
+    return known;
+  };
+
+  // Whether a block of text under `parent`, the kept node it would flatten
+  // into, is kept: whether its text is lost if it isn't, and keeping it leaves
+  // every other name as it is. That holds at the top level, and beside a kept
+  // node, since `parent` is no leaf then. Under a node that would be a leaf, it
+  // holds when that node never takes the text below it as its name: one with a
+  // name already (Chromium's, or a block's own text when a block holds
+  // another), one named by its author only, and a prose role with text of its
+  // own, which it keeps beside kept children. Otherwise the leaf is named after
+  // the block, as before: `listitem "Alpha"`.
+  const keepsBlocks = (parent: NativeAXNode | null): boolean => {
+    if (parent === null) return true;
+    const parentRaw = rawOf.get(parent);
+    if (parentRaw === undefined) return false;
+    if (parent.name !== "" || hasKeptBelow(parentRaw)) return true;
+    const role = parentRaw.role?.value ?? "";
+    return (
+      NATIVE_AX_AUTHOR_NAMED_ROLES.has(role) ||
+      (NATIVE_AX_OWN_TEXT_ROLES.has(role) && directText(parentRaw, byId) !== "")
+    );
+  };
+
   const visit = (
     nodeId: string,
     depth: number,
     parent: NativeAXNode | null,
+    inOwner: boolean,
   ): void => {
     const raw = byId.get(nodeId);
     if (!raw) return;
-    if (!isKept(raw, byId)) {
+    const owned = inOwner || ownsText(raw);
+    const kept = isKept(raw, byId);
+    const text = kept || owned ? "" : textBlock(raw, byId);
+    const block = text !== "" && keepsBlocks(parent);
+    if (!kept && !block) {
       // Flattened: children re-parent to the nearest kept ancestor,
       // at the same depth.
-      for (const childId of raw.childIds ?? []) visit(childId, depth, parent);
+      for (const childId of raw.childIds ?? []) {
+        visit(childId, depth, parent, owned);
+      }
       return;
     }
     const node: NativeAXNode = {
       id: idOf(raw),
       role: mapNativeAXRole(raw.role?.value ?? ""),
-      name: collapseWhitespace(raw.name?.value ?? ""),
+      name: block ? text : collapseWhitespace(raw.name?.value ?? ""),
       depth,
       backendDOMNodeId:
         typeof raw.backendDOMNodeId === "number" ? raw.backendDOMNodeId : null,
@@ -286,7 +391,9 @@ export function normalizeNativeAX(rawNodes: RawNativeAXNode[]): NativeAXNode[] {
     out.push(node);
     rawOf.set(node, raw);
     parent?.childIds.push(node.id);
-    for (const childId of raw.childIds ?? []) visit(childId, depth + 1, node);
+    for (const childId of raw.childIds ?? []) {
+      visit(childId, depth + 1, node, owned);
+    }
   };
 
   // Multi-frame note: every raw node without a parentId is treated as a
@@ -297,14 +404,15 @@ export function normalizeNativeAX(rawNodes: RawNativeAXNode[]): NativeAXNode[] {
   // and grafts it with `graftNativeFrame` (./frames.ts), as the extension's
   // debugger mode does. This pure module never sees more than one document.
   for (const root of rawNodes.filter((n) => !n.parentId)) {
-    visit(root.nodeId, 0, null);
+    visit(root.nodeId, 0, null, false);
   }
 
   // Name promotion is a post-pass so the leaf guard can see the normalized
   // shape. An unnamed leaf takes the text on its own StaticText children
   // (directText), else the first text in its dropped subtree
   // (promoteNameFromDroppedDescendants). A node with kept children takes its
-  // own text only if it is a prose role — see NATIVE_AX_OWN_TEXT_ROLES.
+  // own text only if it is a prose role — see NATIVE_AX_OWN_TEXT_ROLES. A
+  // block of text was named from its own text as it was kept.
   for (const node of out) {
     if (node.name) continue;
     const raw = rawOf.get(node);
