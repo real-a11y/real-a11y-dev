@@ -151,13 +151,16 @@ strip it.
 
 A `<div>` of text is an unnamed `generic` in Chromium's tree, with its text on
 a `StaticText` child. As the only content of its kept ancestor, its text names
-that ancestor (`listitem "Alpha"`). Anywhere else, beside a kept sibling or
-under an ancestor that takes no name from it, the `<div>` is kept as a
-`generic` named from its own text, as the DOM producer keeps it:
+that ancestor (`listitem "Alpha"`). Anywhere else (beside a kept sibling, beside
+another block, or under an ancestor that takes no name from it) the `<div>` is
+kept as a `generic` named from its own text, as the DOM producer keeps it:
 `generic "A window splitter is a moveable separator."`. Never inside a role in
-`NATIVE_AX_TEXT_OWNING_ROLES`, whose text is already a name (a link's, a
-cell's), names another node (a `<label>`'s), or is a value (a field's), nor
-inside anything editable or carrying a value.
+`NATIVE_AX_TEXT_OWNING_ROLES`, whose text names another node (a `<label>`'s) or
+is a value (a field's), inside one in `NATIVE_AX_NAME_FROM_CONTENT_ROLES` that
+Chromium named from it (a link, a cell), nor inside anything editable or
+carrying a value. A form control draws its value in its own user-agent shadow
+root, which no AX node marks: each transport reads the document for it and
+blanks that text first (`withholdFieldInternalText`).
 
 ```ts
 import { normalizeNativeAX, serializeNativeAX } from "@real-a11y-dev/core";
