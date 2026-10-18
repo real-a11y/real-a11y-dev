@@ -1148,10 +1148,10 @@ describe("a block of text beside other content", () => {
     expect(serializeNativeAX(nodes)).toBe('listitem "Alpha"');
   });
 
-  it("keeps every block of a leaf that holds more than one", () => {
+  it("keeps a leaf's name, and every block it isn't named after", () => {
     // `<li><div>Alice</div><div>Engineer</div></li>`: named after the first,
-    // the item lost the second. Both are kept now, and the item is unnamed,
-    // as the DOM producer reads it.
+    // the item lost the second. It still reads its name, as a leaf, and the
+    // second block is kept.
     const nodes = normalizeNativeAX([
       raw("1", "listitem", { childIds: ["2", "4"] }),
       raw("2", "generic", { parentId: "1", childIds: ["3"] }),
@@ -1160,7 +1160,7 @@ describe("a block of text beside other content", () => {
       raw("5", "StaticText", { parentId: "4", name: "Engineer" }),
     ]);
     expect(serializeNativeAX(nodes)).toBe(
-      ["listitem", '  generic "Alice"', '  generic "Engineer"'].join("\n"),
+      ['listitem "Alice"', '  generic "Engineer"'].join("\n"),
     );
   });
 
@@ -1195,8 +1195,7 @@ describe("a block of text beside other content", () => {
 
   it("keeps the block of a leaf named after something else", () => {
     // `<li><label>Hint</label><div>Body</div></li>`: the item was named
-    // after the label that labels nothing, and "Body" was lost. The block is
-    // kept, and the label's text is left out, as the DOM producer leaves it.
+    // after the label that labels nothing, and "Body" was lost.
     const nodes = normalizeNativeAX([
       raw("1", "listitem", { childIds: ["2", "4"] }),
       raw("2", "LabelText", { parentId: "1", childIds: ["3"] }),
@@ -1205,7 +1204,7 @@ describe("a block of text beside other content", () => {
       raw("5", "StaticText", { parentId: "4", name: "Body" }),
     ]);
     expect(serializeNativeAX(nodes)).toBe(
-      ["listitem", '  generic "Body"'].join("\n"),
+      ['listitem "Hint"', '  generic "Body"'].join("\n"),
     );
   });
 
@@ -1251,16 +1250,84 @@ describe("a block of text beside other content", () => {
     );
   });
 
-  it("never costs a leaf the name its own text gives it", () => {
-    // An alert takes its own text as a name only as a leaf: kept, the block
-    // would leave it unnamed, so it stays dropped.
+  it("keeps a leaf named after its own text, and its blocks with it", () => {
+    // `<div role="alert">Error: <div>Card declined</div></div>`: an alert
+    // takes its own text as a name as a leaf, and holding only a block it
+    // still is one.
     const nodes = normalizeNativeAX([
       raw("1", "alert", { childIds: ["2", "3"] }),
       raw("2", "StaticText", { parentId: "1", name: "Error:" }),
       raw("3", "generic", { parentId: "1", childIds: ["4"] }),
       raw("4", "StaticText", { parentId: "3", name: "Card declined" }),
     ]);
-    expect(serializeNativeAX(nodes)).toBe('alert "Error:"');
+    expect(serializeNativeAX(nodes)).toBe(
+      ['alert "Error:"', '  generic "Card declined"'].join("\n"),
+    );
+  });
+
+  it.each([
+    ["listitem", "Title", "Description"],
+    ["alert", "Error:", "Card declined"],
+    ["status", "Saved", "2 min ago"],
+  ])(
+    "keeps a %s named after text in an ignored wrapper",
+    (role, name, block) => {
+      // `<li style="display:flex"><span>Title</span><div>Description</div></li>`:
+      // the flex item's `<span>` is ignored, and promotion still reads it.
+      const nodes = normalizeNativeAX([
+        raw("1", role, { childIds: ["2", "4"] }),
+        raw("2", "none", { parentId: "1", ignored: true, childIds: ["3"] }),
+        raw("3", "StaticText", { parentId: "2", name }),
+        raw("4", "generic", { parentId: "1", childIds: ["5"] }),
+        raw("5", "StaticText", { parentId: "4", name: block }),
+      ]);
+      expect(serializeNativeAX(nodes)).toBe(
+        [`${role} "${name}"`, `  generic "${block}"`].join("\n"),
+      );
+    },
+  );
+
+  it("keeps a block before a leaf's own text, which names it", () => {
+    // `<li><div>Alpha</div> tail</li>`: the item's own text names it, even
+    // after the block that promotion would read first.
+    const nodes = normalizeNativeAX([
+      raw("1", "listitem", { childIds: ["2", "4"] }),
+      raw("2", "generic", { parentId: "1", childIds: ["3"] }),
+      raw("3", "StaticText", { parentId: "2", name: "Alpha" }),
+      raw("4", "StaticText", { parentId: "1", name: " tail" }),
+    ]);
+    expect(serializeNativeAX(nodes)).toBe(
+      ['listitem "tail"', '  generic "Alpha"'].join("\n"),
+    );
+  });
+
+  it("names no node after a block that holds a kept node", () => {
+    // `<li><div>See <a>docs</a></div></li>`: the item holds a link, so it is
+    // no leaf, and takes no name from the block's text.
+    const nodes = normalizeNativeAX([
+      raw("1", "listitem", { childIds: ["2"] }),
+      raw("2", "generic", { parentId: "1", childIds: ["3", "4"] }),
+      raw("3", "StaticText", { parentId: "2", name: "See " }),
+      raw("4", "link", { parentId: "2", name: "docs" }),
+    ]);
+    expect(serializeNativeAX(nodes)).toBe(
+      ["listitem", '  generic "See"', '    link "docs"'].join("\n"),
+    );
+  });
+
+  it("keeps a leaf named after a mixed wrapper's text, and the block inside it", () => {
+    // `<li><div>Alice <div>Engineer</div></div></li>`: Chromium ignores a
+    // `<div>` mixing text with a block.
+    const nodes = normalizeNativeAX([
+      raw("1", "listitem", { childIds: ["2"] }),
+      raw("2", "none", { parentId: "1", ignored: true, childIds: ["3", "4"] }),
+      raw("3", "StaticText", { parentId: "2", name: "Alice " }),
+      raw("4", "generic", { parentId: "2", childIds: ["5"] }),
+      raw("5", "StaticText", { parentId: "4", name: "Engineer" }),
+    ]);
+    expect(serializeNativeAX(nodes)).toBe(
+      ['listitem "Alice"', '  generic "Engineer"'].join("\n"),
+    );
   });
 
   it("keeps one with no kept ancestor at all", () => {
