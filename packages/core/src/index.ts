@@ -135,6 +135,7 @@ export {
   NATIVE_AX_NAME_SOURCE_ROLES,
   NATIVE_AX_OWN_TEXT_ROLES,
   NATIVE_AX_AUTHOR_NAMED_ROLES,
+  NATIVE_AX_NAME_FROM_CONTENT_ROLES,
   NATIVE_AX_TEXT_OWNING_ROLES,
   mapNativeAXRole,
   NATIVE_AX_CHOICE_STATES,
@@ -169,6 +170,7 @@ export {
   nonEmptyAXText,
   valueRegions,
   winningNameSource,
+  withholdFieldInternalText,
   withholdRegionNames,
   withholdSensitiveFieldNames,
 } from "./native/value-regions.js";

@@ -58,6 +58,7 @@ import {
   normalizeNativeAX,
   REDACTED_VALUE,
   serializeNativeAX,
+  withholdFieldInternalText,
   withholdSensitiveFieldNames,
   type A11yInfo,
   type NativeAXNode,
@@ -784,13 +785,26 @@ export function withholdInsideSensitive(
 }
 
 /** The raw nodes some node is labelled or described by that the normalized
- *  tree doesn't keep. */
+ *  tree doesn't keep, or keeps as no more than a block of text: a `<div>` the
+ *  tree keeps for the text it holds is looked into as it was when the tree
+ *  dropped it, Chromium having named it nothing. */
 function referencedOutsideTree(
   rawNodes: RawAXNode[],
   index: NativeAXIndex<RawAXNode>,
   kept: readonly NativeAXNode[],
 ): RawAXNode[] {
-  const keptIds = new Set(kept.map((n) => n.id));
+  const rawByNativeId = new Map(rawNodes.map((raw) => [nativeIdOf(raw), raw]));
+  const keptIds = new Set(
+    kept
+      .filter((n) => {
+        const raw = rawByNativeId.get(n.id);
+        return !(
+          raw?.role?.value === "generic" &&
+          cleanAXText(String(raw.name?.value ?? "")) === ""
+        );
+      })
+      .map((n) => n.id),
+  );
   const out = new Map<string, RawAXNode>();
   for (const raw of rawNodes) {
     for (const property of raw.properties ?? []) {
@@ -880,6 +894,59 @@ async function fieldsWithin(
   } catch {
     return undefined;
   }
+}
+
+/**
+ * The backend ids of every DOM node in a form control's own internals: the
+ * user-agent shadow root of an `<input>`, `<textarea>` or `<select>`, where it
+ * draws what it holds. Read over the document `transport` reads, or, given
+ * `owner`, the document that `<iframe>` (by backend id) shows: a frame in the
+ * same renderer is read through the top frame's session. Core's
+ * `withholdFieldInternalText` keeps their text out of the tree, since nothing
+ * in the AX tree tells such a node from a `<div>`. `undefined` when the DOM
+ * agent can't list them, which fails closed there. Never into a frame's
+ * document: each frame is read, and walked, on its own.
+ */
+async function fieldInternals(
+  transport: CdpTransport,
+  owner?: number,
+): Promise<Set<number> | undefined> {
+  let root: CdpDomNode | undefined;
+  try {
+    root =
+      owner === undefined
+        ? (
+            await transport.send<{ root?: CdpDomNode }>("DOM.getDocument", {
+              depth: -1,
+              pierce: true,
+            })
+          ).root
+        : (
+            await transport.send<{ node?: CdpDomNode }>("DOM.describeNode", {
+              backendNodeId: owner,
+              depth: -1,
+              pierce: true,
+            })
+          ).node?.contentDocument;
+  } catch {
+    return undefined;
+  }
+  if (!root) return undefined;
+  const ids = new Set<number>();
+  const stack: Array<[CdpDomNode, boolean]> = [[root, false]];
+  while (stack.length > 0) {
+    const [node, inField] = stack.pop()!;
+    if (inField) ids.add(node.backendNodeId);
+    for (const child of node.children ?? []) stack.push([child, inField]);
+    const field = FIELD_TAGS.has(node.localName ?? "");
+    for (const sub of node.shadowRoots ?? []) {
+      stack.push([
+        sub,
+        inField || (field && sub.shadowRootType === "user-agent"),
+      ]);
+    }
+  }
+  return ids;
 }
 
 /**
@@ -1294,8 +1361,20 @@ async function keyPageRows(
 async function readDocument(
   transport: CdpTransport,
   rawDocument: RawAXNode[],
+  // The `<iframe>` showing it, by backend id, for a frame read through the
+  // session of the document around it.
+  owner?: number,
 ): Promise<EnrichedNativeNode[]> {
-  const full = { nodes: rawDocument };
+  // First of all, the text a form control draws inside itself, which the AX
+  // tree can't tell from a `<div>` of the page's: see `fieldInternals`.
+  await transport.send("DOM.enable");
+  const internals = await fieldInternals(transport, owner);
+  const full = {
+    nodes: withholdFieldInternalText(
+      rawDocument,
+      internals && ((backendDOMNodeId) => internals.has(backendDOMNodeId)),
+    ),
+  };
   // Which fields are sensitive is known only after reading them in the page,
   // and the reads are chosen from the normalized tree. So: normalize once to
   // pick and classify the fields, keep their values out of every OTHER
@@ -1314,7 +1393,6 @@ async function readDocument(
   // value: its `aria-valuetext`, which CDP never carries, may be all it has.
   // Every remote object the pass resolves joins one group, released after it
   // — otherwise each read would pin its elements for the life of the session.
-  await transport.send("DOM.enable");
   const objectGroup = `sn-field-values-${++fieldReadCount}`;
   const sensitiveIds: string[] = [];
   const facetsById = new Map<string, Partial<EnrichedNativeNode>>();
@@ -1534,12 +1612,12 @@ async function readFrames(
 ): Promise<FrameDocument[]> {
   if (depth >= NATIVE_MAX_FRAME_DEPTH) return [];
   const out: FrameDocument[] = [];
-  const owner = async (frameId: string): Promise<string | undefined> => {
+  const owner = async (frameId: string): Promise<number | undefined> => {
     const res = await transport
       .send<{ backendNodeId?: number }>("DOM.getFrameOwner", { frameId })
       .catch(() => undefined);
     return typeof res?.backendNodeId === "number"
-      ? nativeIdForBackendNode(res.backendNodeId)
+      ? res.backendNodeId
       : undefined;
   };
   const iframes = new Set(
@@ -1562,7 +1640,11 @@ async function readFrames(
   };
   if (tree?.frameTree) walk(tree.frameTree, 0);
   for (const { id: frameId, url } of local) {
-    const ownerId = await owner(frameId);
+    const ownerBackendNodeId = await owner(frameId);
+    const ownerId =
+      ownerBackendNodeId !== undefined
+        ? nativeIdForBackendNode(ownerBackendNodeId)
+        : undefined;
     if (ownerId) localOwners.add(ownerId);
     // A frame whose row the tree drops (a hidden ad frame) would be read in
     // full only to be thrown away: its owner always comes before it, so the
@@ -1577,7 +1659,11 @@ async function readFrames(
     if (!raw?.nodes) continue;
     // A frame that fails partway (removed, navigated) is left out; the rest
     // of the tree still reads.
-    const nodes = await readDocument(transport, raw.nodes).catch(() => null);
+    const nodes = await readDocument(
+      transport,
+      raw.nodes,
+      ownerBackendNodeId,
+    ).catch(() => null);
     if (!nodes) continue;
     for (const n of nodes) if (isNativeIframeRole(n.role)) iframes.add(n.id);
     out.push({
@@ -1610,7 +1696,13 @@ async function readFrames(
   const learnOwners = async (found: FrameSession[]) => {
     for (const session of found) {
       if (!owners.has(session.frameId)) {
-        owners.set(session.frameId, await owner(session.frameId));
+        const backendNodeId = await owner(session.frameId);
+        owners.set(
+          session.frameId,
+          backendNodeId !== undefined
+            ? nativeIdForBackendNode(backendNodeId)
+            : undefined,
+        );
       }
     }
   };

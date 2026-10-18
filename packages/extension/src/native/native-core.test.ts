@@ -220,11 +220,14 @@ describe("readNativeTree's page keys", () => {
     expect(res.pageKeyed).toBe(true);
   });
 
-  it("asks for no document when nothing numbers the page", async () => {
+  it("asks for no document to number when nothing numbers the page", async () => {
     const t = transport();
     const res = await readNativeTree(t);
     expect(res.pageKeyed).toBeUndefined();
-    expect(t.calls.some((c) => c.method === "DOM.getDocument")).toBe(false);
+    // Only the read's own walk for what form controls draw inside themselves.
+    expect(t.calls.filter((c) => c.method === "DOM.getDocument")).toHaveLength(
+      1,
+    );
   });
 });
 
@@ -3680,10 +3683,12 @@ describe("readNativeTree's page keys across frames", () => {
       expect([frame.pageKey, frame.pageFrame]).toEqual([4, undefined]);
       expect(frame.embedsPageFrame).toBe(3);
       expect(byId(res.nodes, "ax-dom-9").pageKey).toBe(5);
-      // One document read for both: they share the session.
+      // One document read numbers both, as they share the session; the other
+      // is the read's own walk for what form controls draw inside themselves.
+      // The frame's is its <iframe>'s, described.
       expect(
         t.calls.filter((c) => c.method === "DOM.getDocument"),
-      ).toHaveLength(1);
+      ).toHaveLength(2);
     });
 
     it("numbers neither of two frames showing the same page alike: their reports can't be told apart", async () => {
@@ -4515,5 +4520,257 @@ describe("dispatchNative in a frame", () => {
       error: "the frame is gone — re-read the tree",
     });
     expect(top.calls.some((c) => c.method === "DOM.resolveNode")).toBe(false);
+  });
+});
+
+// Chromium 141 for `<main><input disabled role="none" autocomplete="cc-number"
+// value="4111…"><div>Loose block</div><button>Pay</button></main>`: the role
+// applies to a disabled field, its node is gone, and its inner text box (DOM
+// 7, in the input's user-agent shadow root) reads like the `<div>` beside it.
+// Only the DOM agent tells them apart.
+describe("a form control's inner text box, with the field's node gone", () => {
+  const CARD = "4111111111111111";
+  const ax = (prefix = ""): RawNativeAXNode[] => [
+    {
+      nodeId: `${prefix}1`,
+      backendDOMNodeId: 1,
+      role: { value: "RootWebArea" },
+      childIds: [`${prefix}2`],
+    },
+    {
+      nodeId: `${prefix}2`,
+      parentId: `${prefix}1`,
+      backendDOMNodeId: 6,
+      role: { value: "main" },
+      childIds: [`${prefix}7`, `${prefix}8`, `${prefix}9`],
+    },
+    {
+      nodeId: `${prefix}7`,
+      parentId: `${prefix}2`,
+      backendDOMNodeId: 7,
+      role: { value: "generic" },
+      childIds: [`${prefix}70`],
+    },
+    {
+      nodeId: `${prefix}70`,
+      parentId: `${prefix}7`,
+      backendDOMNodeId: 70,
+      role: { value: "StaticText" },
+      name: { value: CARD },
+    },
+    {
+      nodeId: `${prefix}8`,
+      parentId: `${prefix}2`,
+      backendDOMNodeId: 8,
+      role: { value: "generic" },
+      childIds: [`${prefix}80`],
+    },
+    {
+      nodeId: `${prefix}80`,
+      parentId: `${prefix}8`,
+      backendDOMNodeId: 80,
+      role: { value: "StaticText" },
+      name: { value: "Loose block" },
+    },
+    {
+      nodeId: `${prefix}9`,
+      parentId: `${prefix}2`,
+      backendDOMNodeId: 9,
+      role: { value: "button" },
+      name: { value: "Pay" },
+    },
+  ];
+  const node = (
+    localName: string,
+    backendNodeId: number,
+    extra: Partial<CdpDomNode> = {},
+  ): CdpDomNode => ({ nodeType: 1, backendNodeId, localName, ...extra });
+  const text = (backendNodeId: number): CdpDomNode => ({
+    nodeType: 3,
+    backendNodeId,
+  });
+  const main = node("main", 6, {
+    children: [
+      node("input", 2, {
+        shadowRoots: [
+          {
+            nodeType: 11,
+            backendNodeId: 3,
+            shadowRootType: "user-agent",
+            children: [node("div", 7, { children: [text(70)] })],
+          },
+        ],
+      }),
+      node("div", 8, { children: [text(80)] }),
+      node("button", 9),
+    ],
+  });
+  const dom: CdpDomNode = {
+    nodeType: 9,
+    backendNodeId: 1,
+    children: [
+      node("html", 4, { children: [node("body", 5, { children: [main] })] }),
+    ],
+  };
+
+  it("keeps the value out of the tree, and the page's own block in", async () => {
+    const t = new FakeTransport((method) =>
+      method === "Accessibility.getFullAXTree"
+        ? { nodes: ax() }
+        : method === "DOM.getDocument"
+          ? { root: dom }
+          : {},
+    );
+    const res = await readNativeTree(t);
+    expect(JSON.stringify(res)).not.toContain(CARD);
+    expect(res.serialized).toContain('generic "Loose block"');
+  });
+
+  it("keeps every block's text out when the document can't be listed", async () => {
+    // Failing closed: the page's own block goes with the field's.
+    const t = new FakeTransport((method) => {
+      if (method === "Accessibility.getFullAXTree") return { nodes: ax() };
+      if (method === "DOM.getDocument") throw new Error("No node found");
+      return {};
+    });
+    const res = await readNativeTree(t);
+    expect(JSON.stringify(res)).not.toContain(CARD);
+    expect(res.serialized).not.toContain("Loose block");
+    expect(res.serialized).toContain('button "Pay"');
+  });
+
+  it("reads a frame in the page's renderer through its <iframe>", async () => {
+    // The frame's document is listed under the `<iframe>` (DOM 50) that shows
+    // it, which the DOM agent describes in full.
+    const top: RawNativeAXNode[] = [
+      {
+        nodeId: "1",
+        backendDOMNodeId: 1,
+        role: { value: "RootWebArea" },
+        childIds: ["2"],
+      },
+      {
+        nodeId: "2",
+        parentId: "1",
+        backendDOMNodeId: 50,
+        role: { value: "Iframe" },
+      },
+    ];
+    const t = new FakeTransport((method, params) => {
+      const { frameId, backendNodeId } = (params ?? {}) as {
+        frameId?: string;
+        backendNodeId?: number;
+      };
+      if (method === "Accessibility.getFullAXTree") {
+        return { nodes: frameId === "SAME" ? ax("f") : top };
+      }
+      if (method === "Page.getFrameTree") {
+        return {
+          frameTree: {
+            frame: { id: "TOP" },
+            childFrames: [{ frame: { id: "SAME", url: "https://a.test/f" } }],
+          },
+        };
+      }
+      if (method === "DOM.getFrameOwner") return { backendNodeId: 50 };
+      if (method === "DOM.getDocument") {
+        return { root: { nodeType: 9, backendNodeId: 1, children: [] } };
+      }
+      if (method === "DOM.describeNode" && backendNodeId === 50) {
+        return { node: node("iframe", 50, { contentDocument: dom }) };
+      }
+      return {};
+    });
+    const res = await readNativeTree(t);
+    expect(res.serialized).toContain('generic "Loose block"');
+    expect(JSON.stringify(res)).not.toContain(CARD);
+  });
+
+  it("still looks into a block of text a name points at, as when it was dropped", async () => {
+    // `<div id="lbl">Card <input aria-hidden="true" autocomplete="cc-number"
+    // value="4111…"></div>` labelling a region: the `<div>` is kept now, for
+    // its text, and the hidden field inside it is still read.
+    const raw = [
+      {
+        nodeId: "1",
+        backendDOMNodeId: 1,
+        role: { value: "RootWebArea" },
+        childIds: ["9", "11"],
+      },
+      {
+        nodeId: "9",
+        parentId: "1",
+        backendDOMNodeId: 9,
+        role: { value: "generic" },
+        childIds: ["90", "10"],
+      },
+      {
+        nodeId: "90",
+        parentId: "9",
+        backendDOMNodeId: 90,
+        role: { value: "StaticText" },
+        name: { value: "Card " },
+      },
+      {
+        nodeId: "10",
+        parentId: "9",
+        backendDOMNodeId: 10,
+        ignored: true,
+        role: { value: "none" },
+      },
+      {
+        nodeId: "11",
+        parentId: "1",
+        backendDOMNodeId: 11,
+        role: { value: "region" },
+        name: {
+          value: `Card ${CARD}`,
+          sources: [
+            { type: "relatedElement", value: { value: `Card ${CARD}` } },
+          ],
+        },
+        properties: [
+          {
+            name: "labelledby",
+            value: { relatedNodes: [{ backendDOMNodeId: 9 }] },
+          },
+        ],
+      },
+    ];
+    const t = new FakeTransport((method, params) => {
+      if (method === "Accessibility.getFullAXTree") return { nodes: raw };
+      if (method === "DOM.getDocument") {
+        return { root: { nodeType: 9, backendNodeId: 1, children: [] } };
+      }
+      if (method === "DOM.describeNode") {
+        return {
+          node: {
+            backendNodeId: 9,
+            localName: "div",
+            children: [{ backendNodeId: 10, localName: "input" }],
+          },
+        };
+      }
+      if (method === "DOM.resolveNode") {
+        const id = (params as { backendNodeId: number }).backendNodeId;
+        return { object: { objectId: `obj-${id}` } };
+      }
+      if (method === "Runtime.callFunctionOn") {
+        const { objectId } = params as { objectId: string };
+        return {
+          result: {
+            value:
+              objectId === "obj-10"
+                ? { classified: true, sensitive: true, redacted: true }
+                : {},
+          },
+        };
+      }
+      return {};
+    });
+    const res = await readNativeTree(t);
+    expect(res.serialized).toContain('generic "Card"');
+    expect(findNative(res.nodes, "region")?.name).toBe("[redacted]");
+    expect(JSON.stringify(res)).not.toContain(CARD);
   });
 });

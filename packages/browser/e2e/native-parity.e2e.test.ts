@@ -464,6 +464,40 @@ describe("a block of text beside other content", () => {
     }
   });
 
+  it("is never made of what a field holds, its own node gone", async () => {
+    // `role="none"` on a disabled field takes the field's node out of
+    // Chromium's tree, and leaves its inner text box as a bare generic: the
+    // AX tree can't tell it from a `<div>`, so the DOM walk does.
+    await session.open(
+      dataUrl(
+        `<main>` +
+          `<input disabled role="none" autocomplete="cc-number" value="4111111111111111">` +
+          `<input type="password" disabled role="presentation" value="hunter2">` +
+          `<textarea disabled role="none">private note</textarea>` +
+          `<input type="date" disabled role="none" value="2026-10-18">` +
+          `<ul><li><input disabled role="none" value="item-secret"></li></ul>` +
+          `<div>Loose block</div><button>Pay</button>` +
+          `</main>`,
+      ),
+    );
+    for (const redactInput of [false, true]) {
+      const tree = serializeTree(await session.nativeTree({ redactInput }), {
+        markFocus: false,
+        includeGeneric: true,
+      });
+      for (const held of [
+        "4111111111111111",
+        "•",
+        "private note",
+        "/",
+        "item-secret",
+      ]) {
+        expect(tree, `${held} (strict: ${redactInput})`).not.toContain(held);
+      }
+      expect(tree).toContain('generic "Loose block"');
+    }
+  });
+
   it("is never kept where its text is already a name, a value or typed", async () => {
     await session.open(
       dataUrl(

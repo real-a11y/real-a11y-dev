@@ -386,3 +386,74 @@ export function withholdSensitiveFieldNames<T extends RawAXNameNode>(
   }
   return withholdRegionNames(rawNodes, valueRegions(index, roots));
 }
+
+/**
+ * Copies of `rawNodes` with no text from inside a form control. A text field,
+ * a text area or a date input draws what it holds in its own user-agent shadow
+ * root, and Chromium hangs that text on `StaticText` nodes there. The field's
+ * own node owns them, so they never name anything, until a `role="none"` or
+ * `"presentation"` on a disabled control takes the field's node out of the
+ * tree. Its inner text box is then a bare `generic` holding the value, which
+ * looks to {@link normalizeNativeAX} like any `<div>` of text: kept beside
+ * other content and named after the card number, or promoted into the name of
+ * the list item around it. Nothing in the AX tree tells the two apart, so the
+ * transport reads it off the document.
+ *
+ * `internal` says whether the DOM node with a backend id sits in such a root.
+ * Every text run that does, or sits below an AX node that does, loses its
+ * name. With no answer (`undefined`: the document couldn't be read), every
+ * text run a bare `generic` holds directly loses its name instead, which takes
+ * in every field's inner box at the cost of the page's own blocks of text:
+ * failing closed.
+ *
+ * Returns copies; never mutates.
+ */
+export function withholdFieldInternalText<T extends RawAXNameNode>(
+  rawNodes: T[],
+  internal: ((backendDOMNodeId: number) => boolean) | undefined,
+): T[] {
+  const byId = new Map(rawNodes.map((raw) => [raw.nodeId, raw]));
+  // nodeId → whether it or an AX ancestor is a field's internals. Memoized
+  // along each walk, as in `valueRegions`.
+  const memo = new Map<string, boolean>();
+  const insideField = (raw: T): boolean => {
+    const chain: string[] = [];
+    let result = false;
+    for (const cur of nativeAncestry(raw, byId)) {
+      const known = memo.get(cur.nodeId);
+      if (known !== undefined) {
+        result = known;
+        break;
+      }
+      chain.push(cur.nodeId);
+      if (
+        typeof cur.backendDOMNodeId === "number" &&
+        internal?.(cur.backendDOMNodeId) === true
+      ) {
+        result = true;
+        break;
+      }
+    }
+    for (const id of chain) memo.set(id, result);
+    return result;
+  };
+  const inBareGeneric = (raw: T): boolean => {
+    const parent = raw.parentId ? byId.get(raw.parentId) : undefined;
+    return (
+      parent?.role?.value === "generic" &&
+      !parent.ignored &&
+      cleanAXText(String(parent.name?.value ?? "")) === "" &&
+      !carriesAXValue(parent)
+    );
+  };
+
+  let changed = false;
+  const out = rawNodes.map((raw) => {
+    if (raw.role?.value !== "StaticText") return raw;
+    if (cleanAXText(String(raw.name?.value ?? "")) === "") return raw;
+    if (!(internal ? insideField(raw) : inBareGeneric(raw))) return raw;
+    changed = true;
+    return { ...raw, name: { value: "" } };
+  });
+  return changed ? out : rawNodes;
+}
