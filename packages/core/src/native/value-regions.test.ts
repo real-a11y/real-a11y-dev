@@ -241,6 +241,15 @@ describe("withholdFieldInternalText", () => {
     ).toBe("listitem");
   });
 
+  it("blanks the text of a bare generic the walk never saw", () => {
+    // The page put the field in after the walk read the document.
+    const seenOnly = (backendDOMNodeId: number) =>
+      backendDOMNodeId === 8 || backendDOMNodeId === 80 ? false : undefined;
+    const out = withholdFieldInternalText(page(), seenOnly);
+    expect(out[2].name?.value).toBe("");
+    expect(out[4].name?.value).toBe("Loose block");
+  });
+
   it("fails closed with no answer: no bare generic's text survives", () => {
     const nodes = [
       ...page(),

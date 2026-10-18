@@ -540,6 +540,19 @@ describe("buildNativeTree — R1: a field's inner text box, with the field gone"
       expect(nativeAXView(raw, dom, { redactInput }).tree).not.toContain(CARD);
     },
   );
+
+  it("keeps the value out when the DOM walk never saw the box", () => {
+    // The page put the field in between the AX read and the DOM walk: what
+    // the walk didn't see may be a field's internals, so it fails closed.
+    const unseen = new Map(dom);
+    unseen.delete(7);
+    unseen.delete(70);
+    const printed = serializeTree(buildNativeTree(raw, unseen), {
+      includeGeneric: true,
+    });
+    expect(printed).not.toContain(CARD);
+    expect(printed).toContain('generic "Loose block"');
+  });
 });
 
 describe("buildNativeTree — R1: unlabeled field value must not leak via the name", () => {

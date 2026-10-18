@@ -4639,9 +4639,9 @@ describe("a form control's inner text box, with the field's node gone", () => {
     expect(res.serialized).toContain('button "Pay"');
   });
 
-  it("reads a frame in the page's renderer through its <iframe>", async () => {
-    // The frame's document is listed under the `<iframe>` (DOM 50) that shows
-    // it, which the DOM agent describes in full.
+  it("reads a frame in the page's renderer from the page's own walk", async () => {
+    // The top document's walk lists the frame's document under the `<iframe>`
+    // (DOM 50) that shows it, so one walk serves both.
     const top: RawNativeAXNode[] = [
       {
         nodeId: "1",
@@ -4657,10 +4657,7 @@ describe("a form control's inner text box, with the field's node gone", () => {
       },
     ];
     const t = new FakeTransport((method, params) => {
-      const { frameId, backendNodeId } = (params ?? {}) as {
-        frameId?: string;
-        backendNodeId?: number;
-      };
+      const { frameId } = (params ?? {}) as { frameId?: string };
       if (method === "Accessibility.getFullAXTree") {
         return { nodes: frameId === "SAME" ? ax("f") : top };
       }
@@ -4674,16 +4671,57 @@ describe("a form control's inner text box, with the field's node gone", () => {
       }
       if (method === "DOM.getFrameOwner") return { backendNodeId: 50 };
       if (method === "DOM.getDocument") {
-        return { root: { nodeType: 9, backendNodeId: 1, children: [] } };
-      }
-      if (method === "DOM.describeNode" && backendNodeId === 50) {
-        return { node: node("iframe", 50, { contentDocument: dom }) };
+        return {
+          root: {
+            nodeType: 9,
+            backendNodeId: 1,
+            children: [node("iframe", 50, { contentDocument: dom })],
+          },
+        };
       }
       return {};
     });
     const res = await readNativeTree(t);
     expect(res.serialized).toContain('generic "Loose block"');
     expect(JSON.stringify(res)).not.toContain(CARD);
+    expect(t.calls.filter((c) => c.method === "DOM.getDocument")).toHaveLength(
+      1,
+    );
+  });
+
+  it("keeps the value out when the walk never saw the box", async () => {
+    // The page put the field in after the walk: what the walk didn't see may
+    // be a field's internals, so it fails closed.
+    const t = new FakeTransport((method) =>
+      method === "Accessibility.getFullAXTree"
+        ? { nodes: ax() }
+        : method === "DOM.getDocument"
+          ? {
+              root: {
+                ...dom,
+                children: [
+                  node("html", 4, {
+                    children: [
+                      node("body", 5, {
+                        children: [
+                          node("main", 6, {
+                            children: [
+                              node("div", 8, { children: [text(80)] }),
+                              node("button", 9),
+                            ],
+                          }),
+                        ],
+                      }),
+                    ],
+                  }),
+                ],
+              },
+            }
+          : {},
+    );
+    const res = await readNativeTree(t);
+    expect(JSON.stringify(res)).not.toContain(CARD);
+    expect(res.serialized).toContain('generic "Loose block"');
   });
 
   it("still looks into a block of text a name points at, as when it was dropped", async () => {
@@ -4740,7 +4778,16 @@ describe("a form control's inner text box, with the field's node gone", () => {
     const t = new FakeTransport((method, params) => {
       if (method === "Accessibility.getFullAXTree") return { nodes: raw };
       if (method === "DOM.getDocument") {
-        return { root: { nodeType: 9, backendNodeId: 1, children: [] } };
+        return {
+          root: {
+            nodeType: 9,
+            backendNodeId: 1,
+            children: [
+              node("div", 9, { children: [text(90), node("input", 10)] }),
+              node("section", 11),
+            ],
+          },
+        };
       }
       if (method === "DOM.describeNode") {
         return {

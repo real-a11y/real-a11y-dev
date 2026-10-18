@@ -387,6 +387,30 @@ export function withholdSensitiveFieldNames<T extends RawAXNameNode>(
   return withholdRegionNames(rawNodes, valueRegions(index, roots));
 }
 
+/** The elements that draw what they hold in their own user-agent shadow root. */
+const FIELD_HOSTS: ReadonlySet<string> = new Set([
+  "input",
+  "textarea",
+  "select",
+]);
+
+/**
+ * Whether a shadow root, hosted by an element named `hostName`, is a form
+ * control's own internals: the user-agent root of an `<input>`, `<textarea>`
+ * or `<select>`, where it draws what it holds. Every native transport's DOM
+ * walk marks the nodes below one for {@link withholdFieldInternalText}, by this
+ * one rule.
+ */
+export function opensFieldInternals(
+  hostName: string | undefined,
+  shadowRootType: string | undefined,
+): boolean {
+  return (
+    shadowRootType === "user-agent" &&
+    FIELD_HOSTS.has((hostName ?? "").toLowerCase())
+  );
+}
+
 /**
  * Copies of `rawNodes` with no text from inside a form control. A text field,
  * a text area or a date input draws what it holds in its own user-agent shadow
@@ -397,20 +421,24 @@ export function withholdSensitiveFieldNames<T extends RawAXNameNode>(
  * looks to {@link normalizeNativeAX} like any `<div>` of text: kept beside
  * other content and named after the card number, or promoted into the name of
  * the list item around it. Nothing in the AX tree tells the two apart, so the
- * transport reads it off the document.
+ * transport reads it off the document ({@link opensFieldInternals}).
  *
- * `internal` says whether the DOM node with a backend id sits in such a root.
- * Every text run that does, or sits below an AX node that does, loses its
- * name. With no answer (`undefined`: the document couldn't be read), every
- * text run a bare `generic` holds directly loses its name instead, which takes
- * in every field's inner box at the cost of the page's own blocks of text:
- * failing closed.
+ * `internal` says, by backend id, whether the transport's walk of the
+ * document found a DOM node in such a root (`true`), elsewhere (`false`), or
+ * never saw it (`undefined`: the page changed between the two reads). Every
+ * text run that is, or sits below an AX node that is, in such a root loses its
+ * name. So does one a bare `generic` the walk never saw holds directly: it may
+ * be a field's inner box the page put in after the walk, and failing closed
+ * costs that block's text for one read. With no walk at all (`internal`
+ * itself `undefined`), every text run a bare `generic` holds directly loses its
+ * name, which takes in every field's inner box at the cost of the page's own
+ * blocks of text.
  *
  * Returns copies; never mutates.
  */
 export function withholdFieldInternalText<T extends RawAXNameNode>(
   rawNodes: T[],
-  internal: ((backendDOMNodeId: number) => boolean) | undefined,
+  internal: ((backendDOMNodeId: number) => boolean | undefined) | undefined,
 ): T[] {
   const byId = new Map(rawNodes.map((raw) => [raw.nodeId, raw]));
   // nodeId → whether it or an AX ancestor is a field's internals. Memoized
@@ -437,13 +465,24 @@ export function withholdFieldInternalText<T extends RawAXNameNode>(
     for (const id of chain) memo.set(id, result);
     return result;
   };
-  const inBareGeneric = (raw: T): boolean => {
+  // The bare generic holding `raw` directly, if one does.
+  const bareGenericOf = (raw: T): T | undefined => {
     const parent = raw.parentId ? byId.get(raw.parentId) : undefined;
-    return (
-      parent?.role?.value === "generic" &&
+    return parent?.role?.value === "generic" &&
       !parent.ignored &&
       cleanAXText(String(parent.name?.value ?? "")) === "" &&
       !carriesAXValue(parent)
+      ? parent
+      : undefined;
+  };
+  const withheld = (raw: T): boolean => {
+    const generic = bareGenericOf(raw);
+    if (internal === undefined) return generic !== undefined;
+    if (insideField(raw)) return true;
+    return (
+      generic !== undefined &&
+      typeof generic.backendDOMNodeId === "number" &&
+      internal(generic.backendDOMNodeId) === undefined
     );
   };
 
@@ -451,7 +490,7 @@ export function withholdFieldInternalText<T extends RawAXNameNode>(
   const out = rawNodes.map((raw) => {
     if (raw.role?.value !== "StaticText") return raw;
     if (cleanAXText(String(raw.name?.value ?? "")) === "") return raw;
-    if (!(internal ? insideField(raw) : inBareGeneric(raw))) return raw;
+    if (!withheld(raw)) return raw;
     changed = true;
     return { ...raw, name: { value: "" } };
   });

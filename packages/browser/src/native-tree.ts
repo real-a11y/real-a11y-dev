@@ -78,6 +78,7 @@ import {
   isNativePasswordMask,
   nonEmptyAXText,
   nativeAXProperty,
+  opensFieldInternals,
   valueRegions,
   winningNameSource,
   withholdFieldInternalText,
@@ -557,9 +558,12 @@ function prepareRawNodes(
   const index = indexNativeAX(rawNodes);
   const sensitivity = fieldSensitivity(rawNodes, index, enrichment);
   const named = withholdRegionNames(rawNodes, sensitivity.regions);
-  // Last: it blanks text runs only, which no step above keeps by identity.
-  const fieldText = (backendDOMNodeId: number) =>
-    enrichment.get(backendDOMNodeId)?.fieldInternal === true;
+  // Last: it blanks text runs only, which no step above keeps by identity. A
+  // node the DOM walk never saw is `undefined`: see withholdFieldInternalText.
+  const fieldText = (backendDOMNodeId: number): boolean | undefined => {
+    const info = enrichment.get(backendDOMNodeId);
+    return info === undefined ? undefined : info.fieldInternal === true;
+  };
   if (options.redactInput !== true) {
     return {
       nodes: withholdFieldInternalText(named, fieldText),
@@ -739,12 +743,11 @@ async function enrichFromDom(
         editableRoots.has(node.backendNodeId));
     for (const child of node.children ?? []) walk(child, below, inField);
     if (node.contentDocument) walk(node.contentDocument, below, false);
-    const field = FIELD_TAGS.has((node.nodeName ?? "").toLowerCase());
     for (const sub of node.shadowRoots ?? []) {
       walk(
         sub,
         below,
-        inField || (field && sub.shadowRootType === "user-agent"),
+        inField || opensFieldInternals(node.nodeName, sub.shadowRootType),
       );
     }
   };
@@ -780,18 +783,12 @@ export interface NativeDomInfo {
   ariaValueText?: string;
   /**
    * The node sits in the user-agent shadow root of an `<input>`, `<textarea>`
-   * or `<select>`, where the control draws what it holds. Its text never
-   * reaches the tree: core's `withholdFieldInternalText`, which says why.
+   * or `<select>`, where the control draws what it holds (core's
+   * `opensFieldInternals`). Its text never reaches the tree: core's
+   * `withholdFieldInternalText`, which says why.
    */
   fieldInternal?: boolean;
 }
-
-/** The elements whose user-agent shadow root holds their value. */
-const FIELD_TAGS: ReadonlySet<string> = new Set([
-  "input",
-  "textarea",
-  "select",
-]);
 
 interface DomNode {
   backendNodeId?: number;

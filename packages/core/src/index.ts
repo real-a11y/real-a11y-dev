@@ -168,6 +168,7 @@ export {
   nativeAncestry,
   nativeAXProperty,
   nonEmptyAXText,
+  opensFieldInternals,
   valueRegions,
   winningNameSource,
   withholdFieldInternalText,
