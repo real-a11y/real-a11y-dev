@@ -241,43 +241,29 @@ export const NATIVE_AX_AUTHOR_NAMED_ROLES: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * Roles that own every text inside them, so no block of text among their
- * descendants is loose. Elsewhere, a bare `generic` holding text of its own (a
- * `<div>` around a sentence) is kept wherever its text would otherwise be
- * lost, named from that text — see `textBlock` in the normalizer. Inside one
- * of these its text is already said, or must not be:
+ * Roles Chromium names from their content: it reads every descendant's text
+ * into the node's own name. So a block of text inside one is already said —
+ * `<a><div>Card title</div><div>Card desc</div><img alt="pic"></a>` is
+ * `link "Card title Card desc pic"`, and a `generic "Card desc"` beneath it
+ * would say it twice — and is never kept as a node of its own (see
+ * `textBlock` in the normalizer). That holds whatever the name's source: a
+ * link with an `aria-label` is read by its label, not by the text inside it.
  *
- * - **Named from their content.** Chromium reads every descendant's text into
- *   the node's own name: `<a><div>Card title</div><div>Card desc</div><img
- *   alt="pic"></a>` is `link "Card title Card desc pic"`, and a
- *   `generic "Card desc"` beneath it would say it twice. That holds whatever
- *   the name's source: a link with an `aria-label` is read by its label, not
- *   by the text inside it.
- * - **Naming another node.** A `<label>`'s text names its field
- *   (`textbox "Email hint"`), and a `<legend>`'s its fieldset.
- * - **A value, or fallback for one.** A field's text is what it holds, down to
- *   the `/` and `:` a date or time input shows between its parts. A range
- *   widget's text is fallback for its value (see
- *   {@link NATIVE_AX_AUTHOR_NAMED_ROLES}). So is any node that carries a value
- *   or is editable, whatever its role — the normalizer checks those itself.
- * - **Presentational, or the browser's own.** An image's children are
- *   presentational, and a media element's are its player's controls.
+ * Only while the node HAS a name, though. One Chromium leaves unnamed took no
+ * text into it: a row in a table (not a grid) and a `LayoutTableRow` come back
+ * unnamed, so a block straight inside one, outside any cell, is kept.
  *
- * The content containers among the author-named roles are not here: a
- * sentence beside a button in `main` or in a dialog is content, and is kept as
- * a node of its own. The dialog stays unnamed.
- *
- * Checked against Chromium 141 (`__fixtures__/ax-text-owning.json`): every role
- * named from content here came back named after the `<div>` inside it. Raw
- * Blink role strings.
+ * Checked against Chromium 141 (`__fixtures__/ax-text-owning.json`): each came
+ * back named after the `<div>` inside it. Raw Blink role strings.
  */
-export const NATIVE_AX_TEXT_OWNING_ROLES: ReadonlySet<string> = new Set([
-  // Named from their content.
+export const NATIVE_AX_NAME_FROM_CONTENT_ROLES: ReadonlySet<string> = new Set([
   "button",
   "cell",
   "checkbox",
   "columnheader",
+  // A `<summary>`, and one in a `<details name>` accordion.
   "DisclosureTriangle",
+  "DisclosureTriangleGrouped",
   "doc-backlink",
   "doc-biblioref",
   "doc-glossref",
@@ -300,6 +286,35 @@ export const NATIVE_AX_TEXT_OWNING_ROLES: ReadonlySet<string> = new Set([
   "term",
   "tooltip",
   "treeitem",
+]);
+
+/**
+ * Roles that own every text inside them, named or not, so no block of text
+ * among their descendants is loose. Elsewhere, a bare `generic` holding text
+ * of its own (a `<div>` around a sentence) is kept wherever its text would
+ * otherwise be lost, named from that text — see `textBlock` in the
+ * normalizer. Inside one of these its text must not be:
+ *
+ * - **Naming another node.** A `<label>`'s text names its field
+ *   (`textbox "Email hint"`), and a `<legend>`'s its fieldset.
+ * - **A value, or fallback for one.** A field's text is what it holds, down to
+ *   the `/` and `:` a date or time input shows between its parts, even while
+ *   it holds nothing. A range widget's text is fallback for its value (see
+ *   {@link NATIVE_AX_AUTHOR_NAMED_ROLES}). So is any node that carries a value
+ *   or is editable, whatever its role — the normalizer checks those itself.
+ * - **Presentational, or the browser's own.** An image's children are
+ *   presentational, and a media element's are its player's controls.
+ *
+ * The content containers among the author-named roles are not here: a
+ * sentence beside a button in `main` or in a dialog is content, and is kept as
+ * a node of its own. The dialog stays unnamed. Nor are the roles named from
+ * their content, which own their text only while named — see
+ * {@link NATIVE_AX_NAME_FROM_CONTENT_ROLES}.
+ *
+ * Checked against Chromium 141 (`__fixtures__/ax-text-owning.json`). Raw Blink
+ * role strings.
+ */
+export const NATIVE_AX_TEXT_OWNING_ROLES: ReadonlySet<string> = new Set([
   // Naming another node.
   "LabelText",
   "Legend",

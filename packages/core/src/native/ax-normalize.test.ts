@@ -24,6 +24,7 @@ import {
   NATIVE_AX_DROP_ROLES,
   NATIVE_AX_DROP_UNLESS_NAMED,
   NATIVE_AX_DROP_WHEN_BARE,
+  NATIVE_AX_NAME_FROM_CONTENT_ROLES,
   NATIVE_AX_OWN_TEXT_ROLES,
   NATIVE_AX_TEXT_OWNING_ROLES,
   NATIVE_AX_VOCABULARY_VERSION,
@@ -819,12 +820,13 @@ describe("normalizeNativeAX (recorded loose text)", () => {
 });
 
 // Recorded from Chromium 141 on a page holding `<div>… text</div><img alt="k">`
-// in every role of NATIVE_AX_TEXT_OWNING_ROLES but the media elements and the
-// colour input, which hold no text of the page's: each as a widget with a value
+// in every role of the two text-owning tables but the media elements and the
+// colour input, which hold no text of the page's: each widget with a value
 // and, where Chromium gives one none, without (an indeterminate progress bar,
 // a static separator, an empty date or time input, whose `/`, `:` and "Week"
-// are still shown). A `role="group"` and a `role="caption"` hold the same
-// block, and keep it.
+// are still shown), and a summary in a `<details name>` accordion as well as
+// one outside it. A `role="group"`, a row in a `role="table"` (which Chromium
+// names nothing) and a `role="caption"` hold the same block, and keep it.
 describe("normalizeNativeAX (recorded text-owning roles)", () => {
   const rawNodes = textOwningFixture.nodes as RawNativeAXNode[];
   const nodes = normalizeNativeAX(rawNodes);
@@ -832,7 +834,7 @@ describe("normalizeNativeAX (recorded text-owning roles)", () => {
   it("keeps no block of text inside any of them", () => {
     expect(
       nodes.filter((n) => n.role === "generic" && n.name).map((n) => n.name),
-    ).toEqual(["Control text", "Caption text"]);
+    ).toEqual(["Control text", "Tablerow text", "Caption text"]);
   });
 
   it("puts a block of text in every one of them", () => {
@@ -856,7 +858,10 @@ describe("normalizeNativeAX (recorded text-owning roles)", () => {
     const holding = new Set(
       rawNodes.filter(holdsBlock).map((n) => n.role?.value),
     );
-    for (const role of NATIVE_AX_TEXT_OWNING_ROLES) {
+    for (const role of [
+      ...NATIVE_AX_NAME_FROM_CONTENT_ROLES,
+      ...NATIVE_AX_TEXT_OWNING_ROLES,
+    ]) {
       if (["Audio", "Video", "ColorWell"].includes(role)) continue;
       expect(holding.has(role), role).toBe(true);
     }
@@ -1024,15 +1029,15 @@ describe("named container preservation (generic)", () => {
   });
 });
 
-// Every role whose text is its own, spelled out (raw Blink role strings) so a
-// role taken off NATIVE_AX_TEXT_OWNING_ROLES fails a case below: the table
-// itself can't say what it has lost.
-const TEXT_OWNING_ROLES = [
+// The two text-owning tables, spelled out (raw Blink role strings) so a role
+// taken off one fails a case below: a table itself can't say what it has lost.
+const NAME_FROM_CONTENT_ROLES = [
   "button",
   "cell",
   "checkbox",
   "columnheader",
   "DisclosureTriangle",
+  "DisclosureTriangleGrouped",
   "doc-backlink",
   "doc-biblioref",
   "doc-glossref",
@@ -1054,6 +1059,8 @@ const TEXT_OWNING_ROLES = [
   "term",
   "tooltip",
   "treeitem",
+];
+const TEXT_OWNING_ROLES = [
   "LabelText",
   "Legend",
   "ColorWell",
@@ -1131,23 +1138,75 @@ describe("a block of text beside other content", () => {
   });
 
   it("still names a leaf after its only content instead", () => {
-    // The leaf guard: with nothing kept beside them, a leaf's blocks are never
-    // nodes of their own, and promotion takes the first one's text, as before.
-    const one = normalizeNativeAX([
+    // The leaf guard: a leaf whose one block names it keeps that block
+    // dropped, as before.
+    const nodes = normalizeNativeAX([
       raw("1", "listitem", { childIds: ["2"] }),
       raw("2", "generic", { parentId: "1", childIds: ["3"] }),
       raw("3", "StaticText", { parentId: "2", name: "Alpha" }),
     ]);
-    expect(serializeNativeAX(one)).toBe('listitem "Alpha"');
+    expect(serializeNativeAX(nodes)).toBe('listitem "Alpha"');
+  });
 
-    const two = normalizeNativeAX([
+  it("keeps every block of a leaf that holds more than one", () => {
+    // `<li><div>Alice</div><div>Engineer</div></li>`: named after the first,
+    // the item lost the second. Both are kept now, and the item is unnamed,
+    // as the DOM producer reads it.
+    const nodes = normalizeNativeAX([
       raw("1", "listitem", { childIds: ["2", "4"] }),
       raw("2", "generic", { parentId: "1", childIds: ["3"] }),
       raw("3", "StaticText", { parentId: "2", name: "Alice" }),
       raw("4", "generic", { parentId: "1", childIds: ["5"] }),
       raw("5", "StaticText", { parentId: "4", name: "Engineer" }),
     ]);
-    expect(serializeNativeAX(two)).toBe('listitem "Alice"');
+    expect(serializeNativeAX(nodes)).toBe(
+      ["listitem", '  generic "Alice"', '  generic "Engineer"'].join("\n"),
+    );
+  });
+
+  it("keeps the block of a leaf that promotion can't name", () => {
+    // `<li><header><div>Card title</div></header></li>`: promotion never
+    // takes a byline in a bare header, so the item took no name from it and
+    // the text was lost.
+    const nodes = normalizeNativeAX([
+      raw("1", "listitem", { childIds: ["2"] }),
+      raw("2", "sectionheader", { parentId: "1", childIds: ["3"] }),
+      raw("3", "generic", { parentId: "2", childIds: ["4"] }),
+      raw("4", "StaticText", { parentId: "3", name: "Card title" }),
+    ]);
+    expect(serializeNativeAX(nodes)).toBe(
+      ["listitem", '  generic "Card title"'].join("\n"),
+    );
+  });
+
+  it("counts no block a label in the leaf owns", () => {
+    // `<li><div>Alpha</div><label><div>hint</div></label></li>`: the label's
+    // block is the label's, so the item's one block still names it.
+    const nodes = normalizeNativeAX([
+      raw("1", "listitem", { childIds: ["2", "4"] }),
+      raw("2", "generic", { parentId: "1", childIds: ["3"] }),
+      raw("3", "StaticText", { parentId: "2", name: "Alpha" }),
+      raw("4", "LabelText", { parentId: "1", childIds: ["5"] }),
+      raw("5", "generic", { parentId: "4", childIds: ["6"] }),
+      raw("6", "StaticText", { parentId: "5", name: "hint" }),
+    ]);
+    expect(serializeNativeAX(nodes)).toBe('listitem "Alpha"');
+  });
+
+  it("keeps the block of a leaf named after something else", () => {
+    // `<li><label>Hint</label><div>Body</div></li>`: the item was named
+    // after the label that labels nothing, and "Body" was lost. The block is
+    // kept, and the label's text is left out, as the DOM producer leaves it.
+    const nodes = normalizeNativeAX([
+      raw("1", "listitem", { childIds: ["2", "4"] }),
+      raw("2", "LabelText", { parentId: "1", childIds: ["3"] }),
+      raw("3", "StaticText", { parentId: "2", name: "Hint" }),
+      raw("4", "generic", { parentId: "1", childIds: ["5"] }),
+      raw("5", "StaticText", { parentId: "4", name: "Body" }),
+    ]);
+    expect(serializeNativeAX(nodes)).toBe(
+      ["listitem", '  generic "Body"'].join("\n"),
+    );
   });
 
   it.each(["main", "dialog", "navigation"])(
@@ -1290,7 +1349,7 @@ describe("a block of text beside other content", () => {
   });
 
   it.each(TEXT_OWNING_ROLES)(
-    "never keeps one inside a %s, which owns its text",
+    "never keeps one inside a %s, which owns its text, named or not",
     (role) => {
       // Kept beside a sibling anywhere else.
       const nodes = normalizeNativeAX([
@@ -1304,6 +1363,42 @@ describe("a block of text beside other content", () => {
       expect(nodes.map((n) => n.role)).not.toContain("generic");
     },
   );
+
+  it.each(NAME_FROM_CONTENT_ROLES)(
+    "never keeps one inside a %s named from its content",
+    (role) => {
+      const nodes = normalizeNativeAX([
+        raw("1", "main", { childIds: ["2"] }),
+        raw("2", role, {
+          parentId: "1",
+          name: "Inner text Kept",
+          childIds: ["3", "5"],
+        }),
+        raw("3", "generic", { parentId: "2", childIds: ["4"] }),
+        raw("4", "StaticText", { parentId: "3", name: "Inner text" }),
+        raw("5", "button", { parentId: "2", name: "Kept" }),
+      ]);
+      expect(nodes.map((n) => n.role)).not.toContain("generic");
+    },
+  );
+
+  it("keeps one in a table row, which Chromium names nothing", () => {
+    // `<div role="table"><div role="row"><div>Row note</div><div
+    // role="cell">c</div></div></div>`: only a grid's rows are named from
+    // their content, so a block outside the cells is said nowhere else.
+    const nodes = normalizeNativeAX([
+      raw("1", "table", { name: "T", childIds: ["2"] }),
+      raw("2", "row", { parentId: "1", childIds: ["3", "5"] }),
+      raw("3", "generic", { parentId: "2", childIds: ["4"] }),
+      raw("4", "StaticText", { parentId: "3", name: "Row note" }),
+      raw("5", "cell", { parentId: "2", name: "c" }),
+    ]);
+    expect(serializeNativeAX(nodes)).toBe(
+      ['table "T"', "  row", '    generic "Row note"', '    cell "c"'].join(
+        "\n",
+      ),
+    );
+  });
 
   it("never keeps one deeper inside a node that owns its text", () => {
     // `<a><ul><li><div>Inner text</div><img alt="i"></li></ul></a>`: the
@@ -1410,7 +1505,10 @@ describe("text-owning roles", () => {
     "sectionfooter",
   ];
 
-  it("are the vocabulary's text-owning table", () => {
+  it("are the vocabulary's two tables", () => {
+    expect(NATIVE_AX_NAME_FROM_CONTENT_ROLES).toEqual(
+      new Set(NAME_FROM_CONTENT_ROLES),
+    );
     expect(NATIVE_AX_TEXT_OWNING_ROLES).toEqual(new Set(TEXT_OWNING_ROLES));
   });
 
