@@ -732,6 +732,66 @@ describe("buildNativeTree — R1: what stands in for a field with no node of its
     ).not.toContain("plain-value");
   });
 
+  it("withholds what references such a field, its node gone", () => {
+    // `<input id="cc" disabled role="none" autocomplete="cc-number"
+    // value="4111…">` (DOM 13) labels a region and describes a button, and
+    // `<input id="pv" disabled role="none" value="plain-value">` (DOM 16)
+    // labels another region. Each reference points at an input with no node,
+    // its inner box standing in for it.
+    const nodes = [
+      node("1", "RootWebArea", undefined, { childIds: ["22"] }),
+      node("22", "main", "1", { childIds: ["14", "20", "21", "17", "23"] }),
+      node("14", "generic", "22", { childIds: ["38"] }),
+      node("38", "StaticText", "14", { name: contents("4111111111111111") }),
+      node("20", "region", "22", {
+        name: by("relatedElement", "4111111111111111", "aria-labelledby"),
+        properties: labelledby(13),
+      }),
+      node("21", "button", "22", {
+        name: contents("Pay"),
+        description: { value: "4111111111111111" },
+        properties: [
+          {
+            name: "describedby",
+            value: { relatedNodes: [{ backendDOMNodeId: 13 }] },
+          },
+        ],
+      }),
+      node("17", "generic", "22", { childIds: ["39"] }),
+      node("39", "StaticText", "17", { name: contents("plain-value") }),
+      node("23", "region", "22", {
+        name: by("relatedElement", "plain-value", "aria-labelledby"),
+        properties: labelledby(16),
+      }),
+    ];
+    const enrichment = new Map<number, NativeDomInfo>([
+      [22, domOf("main")],
+      [13, domOf("input", { autocomplete: "cc-number" })],
+      [14, inside(13)],
+      [38, inside(13, "#text")],
+      [20, domOf("div", { role: "region" })],
+      [21, domOf("button")],
+      [16, domOf("input")],
+      [17, inside(16)],
+      [39, inside(16, "#text")],
+      [23, domOf("div", { role: "region" })],
+    ]);
+    const tree = buildNativeTree(nodes, enrichment);
+    const text = serializeTree(tree, { markFocus: false });
+    expect(text).not.toContain("4111");
+    expect(text).toContain('region "[redacted]"');
+    expect(tree.nodes.get("ax-dom-21")?.a11y.description).toBe("");
+    // A field that isn't sensitive still names what references it, except in
+    // strict mode.
+    expect(text).toContain('region "plain-value"');
+    const strict = buildNativeTree(nodes, enrichment, undefined, {
+      redactInput: true,
+    });
+    expect(serializeTree(strict, { markFocus: false })).not.toContain(
+      "plain-value",
+    );
+  });
+
   it("names a link after its `::after`, which the walk sees", () => {
     // `a::after { content: " ↗"; display: inline-block }`: a box of its own
     // in the tree, keyed to the pseudo-element, which has no element.

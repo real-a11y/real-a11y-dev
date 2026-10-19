@@ -327,7 +327,7 @@ function fieldSensitivity(
       for (const id of nodeIds) fields.add(id);
     }
   }
-  const regions = valueRegions(index, fields);
+  const regions = valueRegions(index, fields, standIns);
   return {
     regions,
     withholdsValue: (raw) =>
@@ -620,7 +620,7 @@ function prepareRawNodes(
   });
   const strict = withholdRegionNames(
     named,
-    valueRegions(index, strictValueRoots(rawNodes, index, entered)),
+    valueRegions(index, strictValueRoots(rawNodes, index, entered), entered),
   );
   const { nodes, inside } = redactEditableContent(strict);
   return {

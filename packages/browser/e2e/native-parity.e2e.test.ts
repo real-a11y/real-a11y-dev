@@ -556,6 +556,65 @@ describe("a block of text beside other content", () => {
     expect(strict).not.toContain("label-secret");
   });
 
+  it("never names what references a field after its value, the field's node gone", async () => {
+    // `aria-labelledby` and `aria-describedby` still read a disabled
+    // `role="none"` field, which has no node of its own to point at: what
+    // stands in for it answers for it. And a field masked by CSS in circles
+    // or squares gives its length away as bullets do.
+    await session.open(
+      dataUrl(
+        `<main>` +
+          `<div role="region" aria-labelledby="cc">Saved card</div>` +
+          `<p><input id="cc" disabled role="none" autocomplete="cc-number" value="4111111111111111"></p>` +
+          `<div role="region" aria-labelledby="ta">Saved note</div>` +
+          `<p><textarea id="ta" disabled role="none" autocomplete="cc-number">4222222222222222</textarea></p>` +
+          `<div role="region" aria-labelledby="exp">Expiry</div>` +
+          `<p><input id="exp" type="month" disabled role="none" autocomplete="cc-exp" value="2030-04"></p>` +
+          `<div role="region" aria-labelledby="pw">Vault</div>` +
+          `<p><input id="pw" disabled role="none" type="password" value="hunter2"></p>` +
+          `<button aria-describedby="cvc">Pay</button>` +
+          `<p><input id="cvc" disabled role="none" autocomplete="cc-csc" value="321"></p>` +
+          `<div role="region" aria-labelledby="pv">Plain</div>` +
+          `<p><input id="pv" disabled role="none" value="plain-value"></p>` +
+          `<table>` +
+          `<tr><td><input disabled role="none" style="-webkit-text-security: circle" value="482913"></td></tr>` +
+          `<tr><td><input disabled role="none" style="-webkit-text-security: square" value="482913"></td></tr>` +
+          `</table>` +
+          `</main>`,
+      ),
+    );
+    for (const redactInput of [false, true]) {
+      const tree = await session.nativeTree({ redactInput });
+      const text = serializeTree(tree, { markFocus: false, values: true });
+      for (const held of [
+        "4111",
+        "4222",
+        "April",
+        "2030",
+        "321",
+        "•",
+        "◦",
+        "■",
+      ]) {
+        expect(text, `${held} (strict: ${redactInput})`).not.toContain(held);
+      }
+      const pay = [...tree.nodes.values()].find(
+        (n) => n.a11y.role === "button",
+      );
+      expect(pay?.a11y.description, `strict: ${redactInput}`).toBe("");
+    }
+    // A field that isn't sensitive names what references it, except in
+    // strict mode.
+    expect(
+      serializeTree(await session.nativeTree(), { markFocus: false }),
+    ).toContain('region "plain-value"');
+    expect(
+      serializeTree(await session.nativeTree({ redactInput: true }), {
+        markFocus: false,
+      }),
+    ).not.toContain("plain-value");
+  });
+
   it("keeps a field's mask, a button's label and a pseudo-element apart", async () => {
     // A field masked by CSS gives its length away as bullets whatever its
     // markup. A button's internals hold the page's label. And a `::before` or
