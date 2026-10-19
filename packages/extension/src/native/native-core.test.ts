@@ -4821,3 +4821,121 @@ describe("a form control's inner text box, with the field's node gone", () => {
     expect(JSON.stringify(res)).not.toContain(CARD);
   });
 });
+
+// Chromium 141 for `<td><input disabled role="none" autocomplete="cc-number"
+// value="4111…"></td>`: no node for the input (DOM 2), and Chromium names the
+// cell after its inner box (DOM 7). What stands in for the field there is read
+// in the page, which climbs out of the field's internals to classify it.
+describe("what stands in for a field with no node of its own", () => {
+  const CARD = "4111111111111111";
+  const ax = (held: string): RawNativeAXNode[] => [
+    {
+      nodeId: "1",
+      backendDOMNodeId: 1,
+      role: { value: "RootWebArea" },
+      childIds: ["27"],
+    },
+    {
+      nodeId: "27",
+      parentId: "1",
+      backendDOMNodeId: 27,
+      role: { value: "LayoutTableCell" },
+      name: {
+        value: held,
+        sources: [{ type: "contents", value: { value: held } }],
+      },
+      childIds: ["7"],
+    } as RawNativeAXNode,
+    {
+      nodeId: "7",
+      parentId: "27",
+      backendDOMNodeId: 7,
+      role: { value: "generic" },
+      childIds: ["70"],
+    },
+    {
+      nodeId: "70",
+      parentId: "7",
+      backendDOMNodeId: 70,
+      role: { value: "StaticText" },
+      name: { value: held },
+    },
+  ];
+  const dom: CdpDomNode = {
+    nodeType: 9,
+    backendNodeId: 1,
+    children: [
+      {
+        nodeType: 1,
+        backendNodeId: 27,
+        localName: "td",
+        children: [
+          {
+            nodeType: 1,
+            backendNodeId: 2,
+            localName: "input",
+            shadowRoots: [
+              {
+                nodeType: 11,
+                backendNodeId: 3,
+                shadowRootType: "user-agent",
+                children: [
+                  {
+                    nodeType: 1,
+                    backendNodeId: 7,
+                    localName: "div",
+                    children: [{ nodeType: 3, backendNodeId: 70 }],
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  };
+  const read = (held: string, verdict: unknown, listed = true) =>
+    new FakeTransport((method, params) => {
+      if (method === "Accessibility.getFullAXTree") return { nodes: ax(held) };
+      if (method === "DOM.getDocument") {
+        if (!listed) throw new Error("No node found");
+        return { root: dom };
+      }
+      return resolving(
+        `obj-${(params as { backendNodeId?: number } | undefined)?.backendNodeId}`,
+        verdict,
+      )(method, params);
+    });
+  const readsOf = (t: FakeTransport) =>
+    t.calls
+      .filter((c) => c.method === "DOM.resolveNode")
+      .map((c) => (c.params as { backendNodeId: number }).backendNodeId);
+
+  it("withholds the cell's name when the page reads the field as sensitive", async () => {
+    const t = read(CARD, { classified: true, sensitive: true });
+    const res = await readNativeTree(t);
+    expect(findNative(res.nodes, "LayoutTableCell")?.name).toBe("[redacted]");
+    expect(JSON.stringify(res)).not.toContain(CARD);
+    // Read through the inner box, never the cell.
+    expect(readsOf(t)).toEqual([7]);
+  });
+
+  it("keeps the cell's name around a field that isn't sensitive", async () => {
+    const res = await readNativeTree(read("plain-value", { classified: true }));
+    expect(findNative(res.nodes, "LayoutTableCell")?.name).toBe("plain-value");
+  });
+
+  it("withholds the cell's name when the field's read fails", async () => {
+    const res = await readNativeTree(read(CARD, {}));
+    expect(findNative(res.nodes, "LayoutTableCell")?.name).toBe("[redacted]");
+  });
+
+  it("withholds it unread when the document can't be listed", async () => {
+    // With no walk, any bare generic holding text may be a field's inner box.
+    const t = read(CARD, { classified: true }, false);
+    const res = await readNativeTree(t);
+    expect(findNative(res.nodes, "LayoutTableCell")?.name).toBe("[redacted]");
+    expect(JSON.stringify(res)).not.toContain(CARD);
+    expect(readsOf(t)).toEqual([]);
+  });
+});

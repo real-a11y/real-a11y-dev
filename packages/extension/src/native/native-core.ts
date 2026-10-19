@@ -42,6 +42,7 @@
 
 import {
   cleanAXText,
+  fieldStandIns,
   graftNativeFrame,
   isNativeIframeRole,
   NATIVE_MAX_FRAME_DEPTH,
@@ -62,6 +63,7 @@ import {
   withholdFieldInternalText,
   withholdSensitiveFieldNames,
   type A11yInfo,
+  type FieldHostOf,
   type NativeAXNode,
   type RawAXNameNode,
   type NativeAXIndex,
@@ -898,10 +900,10 @@ async function fieldsWithin(
 }
 
 /** What a walk of a session's documents found, by backend id: every DOM node
- *  it saw, and those in a form control's own internals. */
+ *  it saw, and for each in a form control's own internals, that control. */
 interface FieldInternals {
   seen: ReadonlySet<number>;
-  internal: ReadonlySet<number>;
+  hosts: ReadonlyMap<number, number>;
 }
 
 /**
@@ -909,11 +911,13 @@ interface FieldInternals {
  * own internals: the user-agent shadow root of an `<input>`, `<textarea>` or
  * `<select>` (core's `opensFieldInternals`), where it draws what it holds.
  * Core's `withholdFieldInternalText` keeps their text out of the tree, since
- * nothing in the AX tree tells such a node from a `<div>`. One walk serves the
- * session's top document and every frame it reads in the same renderer, which
- * `DOM.getDocument` lists under its `<iframe>`; a node one of them added since
- * is one the walk never saw, which fails closed. `undefined` when the DOM
- * agent can't list them, which fails closed throughout.
+ * nothing in the AX tree tells such a node from a `<div>`, and when the tree
+ * has no node of the control's own, `fieldStandIns` finds what stands in for
+ * it. One walk serves the session's top document and every frame it reads in
+ * the same renderer, which `DOM.getDocument` lists under its `<iframe>`; a
+ * node one of them added since is one the walk never saw, which fails closed.
+ * `undefined` when the DOM agent can't list them, which fails closed
+ * throughout.
  */
 async function fieldInternals(
   transport: CdpTransport,
@@ -932,22 +936,26 @@ async function fieldInternals(
   }
   if (!root) return undefined;
   const seen = new Set<number>();
-  const internal = new Set<number>();
-  const stack: Array<[CdpDomNode, boolean]> = [[root, false]];
+  const hosts = new Map<number, number>();
+  // Each node, and the control whose internals hold it.
+  const stack: Array<[CdpDomNode, number | undefined]> = [[root, undefined]];
   while (stack.length > 0) {
-    const [node, inField] = stack.pop()!;
+    const [node, host] = stack.pop()!;
     seen.add(node.backendNodeId);
-    if (inField) internal.add(node.backendNodeId);
-    for (const child of node.children ?? []) stack.push([child, inField]);
-    if (node.contentDocument) stack.push([node.contentDocument, false]);
+    if (host !== undefined) hosts.set(node.backendNodeId, host);
+    for (const child of node.children ?? []) stack.push([child, host]);
+    if (node.contentDocument) stack.push([node.contentDocument, undefined]);
     for (const sub of node.shadowRoots ?? []) {
       stack.push([
         sub,
-        inField || opensFieldInternals(node.localName, sub.shadowRootType),
+        host ??
+          (opensFieldInternals(node.localName, sub.shadowRootType)
+            ? node.backendNodeId
+            : undefined),
       ]);
     }
   }
-  return { seen, internal };
+  return { seen, hosts };
 }
 
 /** {@link fieldInternals}, walked once per session for the whole of a read. */
@@ -1384,18 +1392,16 @@ async function readDocument(
   // First of all, the text a form control draws inside itself, which the AX
   // tree can't tell from a `<div>` of the page's.
   const internals = await walk;
-  const full = {
-    nodes: withholdFieldInternalText(
-      rawDocument,
-      internals &&
-        ((backendDOMNodeId) =>
-          internals.internal.has(backendDOMNodeId)
-            ? true
-            : internals.seen.has(backendDOMNodeId)
-              ? false
-              : undefined),
-    ),
-  };
+  const hostOf: FieldHostOf | undefined =
+    internals &&
+    ((backendDOMNodeId) =>
+      internals.hosts.get(backendDOMNodeId) ??
+      (internals.seen.has(backendDOMNodeId) ? null : undefined));
+  // What stands in for a field the tree has no node of its own for, found
+  // before its text is blanked: it counts by what it holds.
+  const rawIndex = indexNativeAX(rawDocument);
+  const standIns = fieldStandIns(rawIndex, hostOf);
+  const full = { nodes: withholdFieldInternalText(rawDocument, hostOf) };
   // Which fields are sensitive is known only after reading them in the page,
   // and the reads are chosen from the normalized tree. So: normalize once to
   // pick and classify the fields, keep their values out of every OTHER
@@ -1422,9 +1428,27 @@ async function readDocument(
   // value must stay out of names around them (see below).
   const read = new Set<string>();
   const withheld = new Set<string>();
+  // The raw ids of what stands in for a field withheld, read in the same round.
+  const standInRoots: string[] = [];
   try {
-    await Promise.all(
-      firstPass.map(async (node) => {
+    await Promise.all([
+      // A field the tree has no node of its own for (core's `fieldStandIns`)
+      // is read through what stands in for it: the in-page read climbs out of
+      // the field's internals and classifies the field. One the walk can't
+      // name is withheld unread.
+      ...standIns.map(async ({ host, nodeIds }) => {
+        const backendNodeId = rawIndex.byId.get(nodeIds[0]!)?.backendDOMNodeId;
+        if (host !== undefined && typeof backendNodeId === "number") {
+          const verdict = await readFieldValue(
+            transport,
+            backendNodeId,
+            objectGroup,
+          );
+          if (!fieldValueWithheld(verdict)) return;
+        }
+        standInRoots.push(...nodeIds);
+      }),
+      ...firstPass.map(async (node) => {
         if (STATE_ONLY_ROLES.has(node.role)) return;
         const axValue = announcedAXValue(firstRawById.get(node.id));
         if (
@@ -1450,7 +1474,7 @@ async function readDocument(
           valueWithheld: fieldValueWithheld(read),
         });
       }),
-    );
+    ]);
     // A node the tree drops is never a candidate above, but `aria-labelledby`
     // and `aria-describedby` still read it: an `aria-hidden` card input names
     // the region labelled by it after the card, and Chromium sends no value
@@ -1513,6 +1537,7 @@ async function readDocument(
       [...sensitiveIds, ...withheld],
       read,
     ),
+    standInRoots,
   );
   const nodes =
     rawNodes === full.nodes ? firstPass : normalizeNativeAX(rawNodes);
