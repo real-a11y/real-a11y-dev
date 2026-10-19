@@ -85,22 +85,27 @@ test("NATIVE_READ keeps a field's value out of every name, the field's node gone
     "4111111111111111",
     "4222222222222222",
     "4444444444444444",
+    "4555555555555555",
     "4321",
+    "9876",
     "hunter2",
     "April",
     "2030",
   ]) {
     expect(wire).not.toContain(secret);
   }
-  expect(wire).not.toMatch(/[•●]/);
+  expect(wire).not.toMatch(/[•●◦■]/);
 
   const named = (role: string, name: string) =>
     nodes.filter((n) => n.role === role && n.name === name);
   // The cells holding the card number, the password, the card text area and
-  // the field masked by CSS.
-  expect(named("LayoutTableCell", "[redacted]")).toHaveLength(4);
+  // the two fields masked by CSS.
+  expect(named("LayoutTableCell", "[redacted]")).toHaveLength(5);
   expect(named("link", "[redacted]")).toHaveLength(1);
-  expect(named("region", "[redacted]")).toHaveLength(1);
+  // The region labelled by what holds a card field, and the one labelled by
+  // the field itself.
+  expect(named("region", "[redacted]")).toHaveLength(2);
+  expect(named("button", "Pay")[0]?.description ?? "").toBe("");
   // An empty card field's placeholder names its cell, and a value that isn't
   // sensitive still does.
   expect(named("LayoutTableCell", "Card number")).toHaveLength(1);

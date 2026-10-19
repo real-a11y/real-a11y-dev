@@ -4930,6 +4930,58 @@ describe("what stands in for a field with no node of its own", () => {
     expect(findNative(res.nodes, "LayoutTableCell")?.name).toBe("[redacted]");
   });
 
+  it("withholds a region's name taken from the field by reference", async () => {
+    // `aria-labelledby` points at the input (DOM 2), which has no node of its
+    // own: what stands in for it answers for it.
+    const nodes: RawNativeAXNode[] = [
+      { ...ax(CARD)[0]!, childIds: ["27", "30"] },
+      ...ax(CARD).slice(1),
+      {
+        nodeId: "30",
+        parentId: "1",
+        backendDOMNodeId: 30,
+        role: { value: "region" },
+        name: {
+          value: CARD,
+          sources: [
+            {
+              type: "relatedElement",
+              attribute: "aria-labelledby",
+              value: { value: CARD },
+            },
+          ],
+        },
+        properties: [
+          {
+            name: "labelledby",
+            value: {
+              type: "nodeList",
+              relatedNodes: [{ backendDOMNodeId: 2 }],
+            },
+          },
+        ],
+      } as RawNativeAXNode,
+    ];
+    const listed: CdpDomNode = {
+      ...dom,
+      children: [
+        ...(dom.children ?? []),
+        { nodeType: 1, backendNodeId: 30, localName: "div" },
+      ],
+    };
+    const t = new FakeTransport((method, params) => {
+      if (method === "Accessibility.getFullAXTree") return { nodes };
+      if (method === "DOM.getDocument") return { root: listed };
+      return resolving(
+        `obj-${(params as { backendNodeId?: number } | undefined)?.backendNodeId}`,
+        { classified: true, sensitive: true },
+      )(method, params);
+    });
+    const res = await readNativeTree(t);
+    expect(findNative(res.nodes, "region")?.name).toBe("[redacted]");
+    expect(JSON.stringify(res)).not.toContain(CARD);
+  });
+
   it("withholds a box holding Chromium's password mask unread", async () => {
     // `-webkit-text-security: disc` masks a field its markup doesn't call a
     // password: the bullets give its length away, whatever the read says.

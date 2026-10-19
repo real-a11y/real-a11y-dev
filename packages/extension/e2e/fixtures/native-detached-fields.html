@@ -64,6 +64,16 @@
           />
         </td>
       </tr>
+      <tr>
+        <td>
+          <input
+            disabled
+            role="none"
+            style="-webkit-text-security: circle"
+            value="482913"
+          />
+        </td>
+      </tr>
     </table>
     <!-- A pseudo-element laid out as a box is the page's, not a field's. -->
     <a class="ext" href="#docs">Docs</a>
@@ -89,5 +99,20 @@
       />
     </div>
     <div role="region" aria-labelledby="lbl">Saved card</div>
+    <!-- A reference to a field with no node of its own reads the field. -->
+    <div role="region" aria-labelledby="ref">Card on file</div>
+    <p>
+      <input
+        id="ref"
+        disabled
+        role="none"
+        autocomplete="cc-number"
+        value="4555555555555555"
+      />
+    </p>
+    <button aria-describedby="cvc">Pay</button>
+    <p>
+      <input id="cvc" disabled role="none" autocomplete="cc-csc" value="9876" />
+    </p>
   </body>
 </html>

@@ -64,6 +64,7 @@ import {
   withholdSensitiveFieldNames,
   type A11yInfo,
   type FieldHostOf,
+  type FieldStandIn,
   type NativeAXNode,
   type RawAXNameNode,
   type NativeAXIndex,
@@ -1431,15 +1432,16 @@ async function readDocument(
   // value must stay out of names around them (see below).
   const read = new Set<string>();
   const withheld = new Set<string>();
-  // The raw ids of what stands in for a field withheld, read in the same round.
-  const standInRoots: string[] = [];
+  // What stands in for each field withheld, read in the same round.
+  const withheldStandIns: FieldStandIn[] = [];
   try {
     await Promise.all([
       // A field the tree has no node of its own for (core's `fieldStandIns`)
       // is read through what stands in for it: the in-page read climbs out of
       // the field's internals and classifies the field. One the walk can't
       // name is withheld unread.
-      ...standIns.map(async ({ host, nodeIds, masked }) => {
+      ...standIns.map(async (standIn) => {
+        const { host, nodeIds, masked } = standIn;
         const backendNodeId = rawIndex.byId.get(nodeIds[0]!)?.backendDOMNodeId;
         // Chromium's password mask makes it a password, whatever the read says.
         if (
@@ -1454,7 +1456,7 @@ async function readDocument(
           );
           if (!fieldValueWithheld(verdict)) return;
         }
-        standInRoots.push(...nodeIds);
+        withheldStandIns.push(standIn);
       }),
       ...firstPass.map(async (node) => {
         if (STATE_ONLY_ROLES.has(node.role)) return;
@@ -1545,7 +1547,7 @@ async function readDocument(
       [...sensitiveIds, ...withheld],
       read,
     ),
-    standInRoots,
+    withheldStandIns,
   );
   const nodes =
     rawNodes === full.nodes ? firstPass : normalizeNativeAX(rawNodes);
