@@ -19,6 +19,18 @@
 
 ## Unreleased
 
+## 0.1.16
+
+### Patch Changes
+
+- **This update asks every existing user to approve new permissions.**
+  Native mode reads Chromium's own accessibility tree over
+  `chrome.debugger`, so the extension now requests `debugger`, `tabs` and
+  `storage`, and Chrome disables it on update until you accept them.
+  `chrome.debugger` can't be requested as an optional permission. The
+  entry on native mode leaving the dogfood build, below, has the details
+  ([#386](https://github.com/real-a11y/real-a11y-dev/pull/386)).
+
 - **Native mode is on by default.** The side panel reads Chromium's own
   accessibility tree from the first page it connects to, with nothing to set
   up. The first time it does, a note below the toolbar explains the bar
@@ -333,12 +345,10 @@
 
 - **The native tree reads a new page by itself.** When the tab it has read
   navigates, the native tree reads the new page once it has loaded, instead
-  of staying empty until **Refresh native tree**. Other page changes still
-  wait for Refresh, an action or a key, unless you turn on **Follow page
-  changes** (the native toolbar's ⟳ toggle): then it reads after every burst
-  of changes once the page goes quiet, backing off to once every 48 s the
-  longer it runs without you. It never follows a tab you switch to, and only
-  the top frame's changes count. A failed read, or pressing **Cancel** on
+  of staying empty until you refresh it. With **Follow page changes** (the
+  native toolbar's ⟳ toggle) on, it reads after every burst of changes once
+  the page goes quiet, backing off to once every 48 s the longer it runs
+  without you. It never follows a tab you switch to. A failed read, or pressing **Cancel** on
   Chrome's debugging bar during any read, action or pick, pauses it; the
   status line says so, and Refresh resumes it.
   ([#478](https://github.com/real-a11y/real-a11y-dev/pull/478))

@@ -1,5 +1,55 @@
 # @real-a11y-dev/mcp
 
+## 0.1.0-beta.9
+
+### Patch Changes
+
+- 1e2ff32: Internal: the native producer reads which choice states it withholds inside a sensitive field (an option's `selected`) from one list in core, shared with the Chrome extension. The output is unchanged.
+- eae10a5: The native tree no longer names what holds a field after the field's value when the field has no node of its own. A `role="none"` or `"presentation"` on a disabled field takes the field's node out of Chromium's tree. Chromium still names the cell, link, button or `<label>` holding the field from what it holds, and still names or describes a node whose `aria-labelledby` or `aria-describedby` points at the field, or at what holds it. The value policy looked for the field's node and found nothing to withhold:
+
+  - `<td><input disabled role="none" autocomplete="cc-number" value="4111…"></td>` read `LayoutTableCell "4111111111111111"`;
+  - a password inside a button gave its length away as `button "•••••••"`;
+  - a disabled card-expiry `<input type="month" role="none">` printed `spinbutton "Month" = "April"` and `spinbutton "Year" = "2030"`, in MCP's default output too, and a region it labelled read `region "April 2030"`.
+
+  What stands in for such a field in the tree, its inner box or its parts, is now classified by the field's own markup, as the field would be. Around a sensitive field, those names read `[redacted]`, and so do the parts' values. A description that points at one is left out. A field masked by CSS (`-webkit-text-security`) counts as a password, since what Chromium names after it is a bullet, circle or square per character. In strict mode (`--redact-input`, `REAL_A11Y_REDACT_INPUT`) every such field counts: `<label><input type="checkbox"> Use <input disabled role="none" value="…"></label>` no longer names the checkbox after the value. An empty field still gives nothing away, so a cell Chromium names after its placeholder keeps that name.
+
+  A text box the DOM walk never saw, because the page replaced it between the two reads, may be such a field's, and is withheld the same way: a name built around it reads `[redacted]` for that read.
+
+  **Expect snapshot changes** only on pages with such fields.
+
+- 555a3a0: The native tree no longer names a node after a hidden sensitive field. An `aria-hidden` (or otherwise ignored) card or password input still labels whatever points at it with `aria-labelledby`, and Chromium names that node after the field's value, so `<div role="region" aria-labelledby="card">` around a hidden `<input id="card" autocomplete="cc-number">` read `region "378282246310005"`. Chromium sends no value for an ignored field, so it was taken for empty and its name left alone; it now reads `[redacted]`, as a visible field's already did.
+- f7d2c3a: In the native tree, a `<div>` of text no longer vanishes when something sits beside it. It is kept as a `generic` named from its own text, the line the DOM producer already prints for it.
+
+  Chromium names no `generic`, so it hangs a `<div>`'s text on a text run beneath it, and the native normalizer dropped both. As the only content of the element around it, the text still named that element: `<li><div>Alpha</div></li>` reads `listitem "Alpha"`, as before. Anywhere else it was lost. Each card on the APG patterns page is `<li><a><h2>Window Splitter</h2></a><div>A window splitter is a moveable separator…</div></li>`, and the description printed nowhere. It now reads `generic "A window splitter is a moveable separator…"` in the list item, after the link.
+
+  The same goes for:
+
+  - a sentence beside a button in `<main>` or in a dialog;
+  - a `<main>`, `<nav>` or dialog holding nothing but a `<div>` of text, which never took that text as its name;
+  - a second `<div>` of text in a list item, an alert or a status message, such as a job title under a name. The item was named after the first, and the second was lost. It keeps that name, and the second is kept inside it: `listitem "Alice"` holding `generic "Engineer"`. The same goes for a `<div>` beside the label, the flex item or the item's own text it is named after;
+  - a byline in a bare `<header>` inside a list item or an article;
+  - a `<div>` of text straight inside a table row, outside any cell;
+  - text outside every landmark.
+
+  A link inside the `<div>` nests beneath it: `<div>See the <a>docs</a> for more.</div>` reads `generic "See the for more."` with `link "docs"` under it.
+
+  Keeping them changes no name. A dialog's message isn't its name, so `<div role="dialog"><div>Delete this project?</div><button>Cancel</button></div>` is still an unnamed `dialog`, and the `dialog-labeled` audit still reports it.
+
+  Text that is already said somewhere, or must not be, is left out:
+
+  - **Named from their content.** A link, a button, a heading, a table cell, an option, a tab or a `<summary>` takes its name from everything inside it, so its `<div>`s would only repeat it.
+  - **Labels.** A `<label>`'s text names its field, and a `<legend>`'s its fieldset.
+  - **Values.** Nothing inside a text field, an editor, a select, a slider, a progress bar or a date or time input becomes a node, not even the `/` between a date's parts. What was typed stays out of the tree.
+  - **Images and media players.** What is inside them is presentational, or the player's own controls.
+
+  This also fixes a leak of what a field holds. A `role="none"` or `"presentation"` on a disabled field takes the field's own node out of Chromium's tree, and leaves the text box inside it holding the value, which reads like any `<div>` of text. As a list item's only content it named the item, so `<li><input disabled role="none" value="…"></li>` printed the value as the item's name. The native tree now reads the document to find each field's own text box and keeps its text out, in strict mode too.
+
+  A `generic` prints only with `--include-generic`, or the MCP tools' `includeGeneric`. So the default text of `real-a11y tree`, a snapshot artifact and the MCP tree tools changes in one case: a page whose tree had a single top-level node, with a block of text outside it, now gets a `document` root around both, so every line moves one level in. The blocks are in the tree itself, though. The diff an action reports lists them like any other node: a status message in a `<div>` that changes after a click now shows in the click's diff. And the node count an empty `list` / `list_elements` answer gives (`matched 0 of N nodes`) counts them too.
+
+  This affects the native tree only: `real-a11y tree` and the other native CLI commands, the MCP tools, and `testing`'s native producer. `NATIVE_AX_VOCABULARY_VERSION` goes to 9.
+
+  **Expect snapshot changes** in native trees printed with generics, and in a native tree whose page has a block of text outside its only top-level node. A tree checkpoint exported before this release diffs against a new read with these blocks as added.
+
 ## 0.1.0-beta.8
 
 ### Minor Changes

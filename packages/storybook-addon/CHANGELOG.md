@@ -1,5 +1,51 @@
 # @real-a11y-dev/storybook-addon
 
+## 0.1.0-beta.19
+
+### Minor Changes
+
+- c2936c2: The tree panel's `aria-controls` jump chips get a keyboard path. `Alt`+`J` follows the selected row's first link to the row it controls (`tab` → `tabpanel`), and pressed again moves on to its next link, so every chip is reachable. `Alt`+`Shift`+`J` goes back to the row the jump came from, or to the first row that controls this one. The chips sit outside the Tab order, so until now a keyboard user could not follow them at all. The key is matched on the physical `J` key or the character, so it works with macOS Option, which types a symbol, and on Dvorak or Colemak. The tree keeps its name, "Semantic tree", and lists the keys in `aria-keyshortcuts`; a jump to a row the search hides clears the search.
+
+  A jump, by key or by clicking a chip, is now a selection like any other: it calls `onSelect` and `onNodeSelect`, so with `scrollHostOnSelect` the host page scrolls to the target, as it does for a click on its row.
+
+### Patch Changes
+
+- 7ba1177: Internal: the tree's `aria-controls` index is now built from a link list it shares with the Chrome extension's native tree. The tree's jump chips are unchanged.
+- d40365c: Follow a `<dialog>` that opens or closes outside the root a live tree observes. A panel scoped to part of the page — `inspector`'s `root`, React's `<SemanticNavigator root>` and `useSemanticTree`, the Storybook addon's story root — re-roots its tree onto a dialog opened with `showModal()`, wherever on the page that dialog sits. But a dialog mounted once beside the root, which is the usual shape:
+
+  ```html
+  <main id="app">…</main>
+  <dialog id="confirm">…</dialog>
+  ```
+
+  opens and closes without mounting anything. `showModal()` and `close()` change only its `open` attribute, outside the root, and nothing the live tree watches reported that. So the tree stayed on the page while the modal was open, and on the dialog after it closed, until some unrelated change inside the root refreshed it.
+
+  The live tree now watches the `open` attribute of every `<dialog>` outside the root and refreshes in full when one changes, so it follows a modal dialog in and out within one debounce. While such a dialog is open as a modal, a change inside it — content swapped in, a field typed into — refreshes the tree too, as it already did for a dialog mounted into `<body>` after the panel started. One opened with `show()` gets no new watch, since it never becomes the tree's root. One mounted into `<body>` after the panel started keeps the watch it got then, since a `role="dialog"` or `role="alertdialog"` brings it into the tree.
+
+  What this changes for you, on a page with such a dialog:
+
+  - **Panels:** `inspector`, `react` and `storybook-addon` show the dialog as the tree's root while it is open, and the page again once it closes.
+  - **`useActiveModal()`:** returns the dialog's node while it is open and `null` once it closes. It returned `null` while the dialog was open, and could keep returning it after it closed.
+  - **`waitForMutations()` and `flow()`:** a step whose action only opens or closes such a dialog now settles one debounce after it, instead of waiting out its `timeout` / `waitTimeout`.
+  - **Unmounting while open:** a modal dialog removed from the page while still open, as `{open && createPortal(<dialog …/>, modalRoot)}` does when `open` turns false, now hands the tree back to the page too. Still not heard: one that leaves with an ancestor other than its parent or a child of `<body>`, which the tree catches up with on the next refresh anything else causes. A dialog inside a shadow tree, beside a root in the same shadow tree, is not watched either, since it never takes the scope.
+
+  The Chrome extension observes the whole document, so it already followed these dialogs. `cli` and `mcp` don't keep a live tree, so nothing they print changes.
+
+- a26d4e6: `DomObserver.start()` is now idempotent, instead of stranding a whole set of observers on every call after the first.
+
+  `start()` builds the primary `MutationObserver`, the portal and popover observers, and the `input`/`change`/`toggle` listeners, assigning each to a field it overwrites unconditionally. Calling it again on an already-armed observer therefore left the previous set connected with nothing holding a reference to it:
+
+  - **`stop()` could not stop it.** It only ever disconnects the set from the most recent `start()`, so the earlier observers kept recording mutations and re-arming the shared debounce — firing `onTreeChange` after the consumer had torn the observer down, for the life of the document, unreachable.
+  - The stranded `input`/`change` listeners stayed on the root for the same reason: `stop()` removes the listener identity it currently holds, and the later `start()` had already replaced it.
+  - While armed, every stranded set recorded the same mutation into the same `pendingMutations` buffer, so one DOM mutation arrived as **duplicate entries in `change.mutations`**. The callback still fired once per batch — the sets share one debounce timer, and each reset it — so the symptom is a payload describing one change N times, not N callbacks.
+
+  `start()` now returns early when it is already armed. A consumer that starts once is unaffected, and re-arming after a real `stop()` behaves as before.
+
+  It is a no-op rather than an internal restart on purpose: `root` is fixed at construction, so a restart has nothing new to pick up, while tearing down first would drop the deep observers for overlays that are **already open** — the portal observer adopts an overlay only on the `childList` record that mounts it, so an open one would never be re-adopted, and clearing the portal map also loses the identity-keyed teardown that an overlay emptied by an exit animation relies on.
+
+- 547a1a8: Internal: `DomObserver`'s default debounce (300 ms) and ceiling (1000 ms) are now named constants, shared with the Chrome extension's native auto-refresh. The values, and when the tree refreshes, are unchanged.
+- fa2ddad: Add `.sn-native-consent-banner`, `.sn-native-consent-actions` and `.sn-native-consent-error` classes (with dark-mode variants) to the shared tree stylesheet (`@real-a11y-dev/semantic-navigator-ui`'s `tree.css`), for the note the extension's side panel shows about Chrome's debugging bar the first time native mode reads a page. The `-error` class is styled but no longer rendered. Every consumer of that package bundles `tree.css` as a side effect regardless of which classes it actually renders, so this ships as a changeset even though the note itself is only ever rendered by the extension's side panel — not by anything `inspector` or `storybook-addon` render. A toolbar button marked `aria-disabled="true"` now looks and hovers like a disabled one. No visible change for either package, which mark none that way; recorded because real bytes ship into both bundles.
+
 ## 0.1.0-beta.18
 
 ### Minor Changes

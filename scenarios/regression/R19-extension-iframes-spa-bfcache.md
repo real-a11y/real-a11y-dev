@@ -6,7 +6,7 @@ area: Extension
 type: Manual
 priority: P1
 status: Active
-validFrom: "extension ≥ 0.1.8; steps 15–19 from the first release after 0.1.15. Manual only — bfcache restore cannot be reproduced reliably in an automated harness"
+validFrom: "extension ≥ 0.1.8; steps 15–19 from 0.1.16. Manual only — bfcache restore cannot be reproduced reliably in an automated harness"
 validUntil: ""
 expected: "iframe subtrees appear under their iframe node, blank and script-written frames included, each under its own; after Back the panel shows the RESTORED page and actions hit the right elements"
 notion: "https://app.notion.com/p/3aa1c354b0b5811eaea8e3ddfde1467b"
@@ -92,8 +92,8 @@ for (const label of ["One", "Two"]) {
 - **14** — the iframe subtrees are still there after the tree redraws. They must not
   disappear and wait for you to interact inside each iframe to come back
 - **15** — each frame's content sits under **its own** iframe node: `One button`
-  under `One`, `Two button` under `Two`, never both under one or swapped. Before the
-  first release after 0.1.15 these nodes are empty, which is a Blocked, not a Fail
+  under `One`, `Two button` under `Two`, never both under one or swapped. Before 0.1.16
+  these nodes are empty, which is a Blocked, not a Fail
 - **16** — the action lands in the frame the node is in
 - **17** — the tree shows the new content, under the same iframe node, without a
   reload

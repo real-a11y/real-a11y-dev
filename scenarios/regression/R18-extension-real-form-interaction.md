@@ -6,7 +6,7 @@ area: Extension
 type: Manual
 priority: P0
 status: Active
-validFrom: "extension ≥ 0.1.8. The dispatch-fidelity expectations mirror core's ActionDispatcher, which the CDP backend also mirrors — a fix in one belongs in both. Step 6b (a sensitive textarea's markup text): extension ≥ 0.1.15 (unreleased)"
+validFrom: "extension ≥ 0.1.8. The dispatch-fidelity expectations mirror core's ActionDispatcher, which the CDP backend also mirrors — a fix in one belongs in both. Step 6b (a sensitive textarea's markup text): extension ≥ 0.1.15"
 validUntil: ""
 expected: "click/type/select dispatch on the real page; a sensitive field's value is NEVER shown in the panel — a password's, or a sensitive textarea's markup text in the live-announcement log or an editor's input panel; Send-Tab/Esc behave or fail visibly"
 twin: D6

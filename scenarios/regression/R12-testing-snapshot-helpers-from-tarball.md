@@ -6,7 +6,7 @@ area: Testing
 type: Automated
 priority: P0
 status: Active
-validFrom: "testing ≥ 0.1.0-beta.11 (installed from the packed tarball, not a workspace link). Step 10 (values): testing ≥ 0.1.0-beta.17. Step 10b (a sensitive textarea's text): testing ≥ 0.1.0-beta.18 (unreleased)"
+validFrom: "testing ≥ 0.1.0-beta.11 (installed from the packed tarball, not a workspace link). Step 10 (values): testing ≥ 0.1.0-beta.17. Step 10b (a sensitive textarea's text): testing ≥ 0.1.0-beta.18"
 validUntil: ""
 expected: "all three produce stable deterministic strings; redact masks EVERY occurrence; [focused] appears only when something is focused; values are absent unless asked, and a sensitive field's value never prints — a password's, or a sensitive textarea's markup text"
 twin: D5

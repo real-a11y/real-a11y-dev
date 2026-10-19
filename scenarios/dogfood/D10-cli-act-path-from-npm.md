@@ -6,7 +6,7 @@ area: CLI
 type: Automated
 priority: P0
 status: Active
-validFrom: "cli ≥ 0.1.0-beta.2 (unreleased). Not runnable until interact/click/type/focus + --step-settle actually publish — mark N/A for earlier releases. Steps 9–10 as written (field values, --redact-input): cli ≥ 0.1.0-beta.7"
+validFrom: "cli ≥ 0.1.0-beta.2 — mark N/A for earlier releases. Steps 9–10 as written (field values, --redact-input): cli ≥ 0.1.0-beta.7"
 validUntil: ""
 expected: "Against a real site: real-a11y click <url> --role … --name … exits 0 and prints a tree diff that plainly describes what the click did. A target that role+name can't reach exits 2 with a message that reads as an accessibility finding, not a tool failure. A click that navigates says where it landed and still exits 0. Then the sentinel check: type a secret into a password field and grep stdout, stderr and --format json — zero hits, the field reading only [redacted]; typed into a plain field it is never echoed but shows as the field's value in the diff, and --redact-input withholds it."
 twin:

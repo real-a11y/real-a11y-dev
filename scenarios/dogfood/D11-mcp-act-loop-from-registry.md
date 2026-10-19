@@ -6,7 +6,7 @@ area: MCP
 type: Automated
 priority: P0
 status: Active
-validFrom: "mcp ≥ 0.1.0-beta.2 (unreleased). Not runnable until click_element / type_text / focus_element publish — mark N/A for earlier releases"
+validFrom: "mcp ≥ 0.1.0-beta.2 — mark N/A for earlier releases"
 validUntil: ""
 expected: "Against the published server via npx: open_page → checkpoint_tree → click_element → diff_tree returns a diff naming the real change. The agent should be able to do this from the tool DESCRIPTIONS alone, without being told the order — if it can't, the descriptions are the bug. Ambiguity must be recoverable from what the error prints (the nth candidates). type_text never echoes its value; diff_tree then shows what the field holds (a sensitive field only as [redacted])."
 twin: R25
