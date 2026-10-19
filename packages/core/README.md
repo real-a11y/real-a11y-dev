@@ -164,6 +164,8 @@ text first (`withholdFieldInternalText`), failing closed for a node its walk
 never saw. When the tree has no node of the control's own, `fieldStandIns`
 names the nodes standing in for it, which the transport classifies as the
 control, so a cell Chromium names after a card number reads `[redacted]`.
+`valueRegions` takes them too, so the same goes for a region whose
+`aria-labelledby` points at the control itself.
 
 ```ts
 import { normalizeNativeAX, serializeNativeAX } from "@real-a11y-dev/core";

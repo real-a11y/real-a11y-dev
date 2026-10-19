@@ -42,10 +42,11 @@ is native now — so these are plain invocations. An earlier version of this row
      `real-a11y tree <url> --redact-input`, the same with `-f json`, and
      `real-a11y audit <url> -f json --redact-input`
    - **6c** — add `<table><tr><td><input disabled role="none"
-     autocomplete="cc-number" value="<card sentinel>"></td></tr></table>` and
-     `<p><input type="month" disabled role="none" autocomplete="cc-exp"
-     value="2030-04"></p>`, then `real-a11y tree <url>` and
-     `real-a11y tree <url> --redact-input`
+     autocomplete="cc-number" value="<card sentinel>"></td></tr></table>`,
+     `<p><input id="exp" type="month" disabled role="none"
+     autocomplete="cc-exp" value="2030-04"></p>` and
+     `<div role="region" aria-labelledby="exp">Expiry</div>`, then
+     `real-a11y tree <url>` and `real-a11y tree <url> --redact-input`
 7. `real-a11y audit <url> --root main`
 8. `pnpm --filter @real-a11y-dev/browser test:e2e`
 
@@ -84,9 +85,11 @@ is native now — so these are plain invocations. An earlier version of this row
   Chromium's tree, and still nothing around it is named after what it holds: the
   cell prints `LayoutTableCell "[redacted]"` and the card sentinel appears
   **nowhere**; the month input's parts print `spinbutton "Month" = "[redacted]"`
-  and `spinbutton "Year" = "[redacted]"`, and bare with `--redact-input`. cli
-  0.1.0-beta.8 printed the cell as `LayoutTableCell "<card sentinel>"` and the
-  parts as `= "April"` and `= "2030"`, which is the old behaviour, not a fail
+  and `spinbutton "Year" = "[redacted]"`, and bare with `--redact-input`; the
+  region it labels prints `region "[redacted]"` in both. cli 0.1.0-beta.8
+  printed the cell as `LayoutTableCell "<card sentinel>"`, the parts as
+  `= "April"` and `= "2030"`, and the region as `region "April 2030"`, which is
+  the old behaviour, not a fail
 - **4** — locators on every entry. Native `list_elements` used to carry none, and
   three docs stated that as intended; both were fixed together
 - **7** — refused: the read is whole-document, so it cannot be combined with a root
