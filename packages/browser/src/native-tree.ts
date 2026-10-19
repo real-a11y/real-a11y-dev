@@ -32,7 +32,9 @@
  * it holds anything — never Chromium's masking bullets, which give away the
  * length. So does anything inside such a field (a month input's UA-shadow
  * spinbuttons) or around it, and a container Chromium named from contents that
- * include one: see {@link fieldSensitivity}.
+ * include one: see {@link fieldSensitivity}. That holds for a field the tree
+ * has no node of its own for, too: what stands in for it there is classified
+ * by the field's own markup (core's `fieldStandIns`).
  *
  * Nothing here reads an element's live `.value`, and the `dom` facet still
  * copies only an allowlist of structural / a11y attributes (never `value`): the
@@ -71,6 +73,7 @@ import {
   nativeAncestry,
   carriesAXValue,
   cleanAXText,
+  fieldStandIns,
   givesValueAway,
   holdsContent,
   holdsUnclassifiedValue,
@@ -84,6 +87,8 @@ import {
   withholdFieldInternalText,
   withholdRegionNames,
   type CssPathAdapter,
+  type FieldHostOf,
+  type FieldStandIn,
   type RawAXNameNode as RawAXNode,
   type NativeAXIndex,
   type ValueRegions,
@@ -270,11 +275,17 @@ interface FieldSensitivity {
  * UA-shadow `spinbutton`s backed by a `<div>`: their own markup says nothing,
  * their ancestor says everything); or CONTAINS one (an editor or ARIA combobox
  * around a credential field may build its value from it).
+ *
+ * A field the tree has no node of its own for (a disabled one with
+ * `role="none"`) is classified by its own markup all the same, and withholds
+ * through what stands in for it there, its inner box or its parts (core's
+ * `fieldStandIns`). One the DOM walk can't name is unclassified.
  */
 function fieldSensitivity(
   rawNodes: RawAXNode[],
   index: NativeAXIndex,
   enrichment: ReadonlyMap<number, NativeDomInfo>,
+  standIns: readonly FieldStandIn[],
 ): FieldSensitivity {
   const fields = new Set<string>();
   for (const raw of rawNodes) {
@@ -300,6 +311,19 @@ function fieldSensitivity(
   for (const id of fields) {
     const field = index.byId.get(id);
     if (!field || !givesValueAway(field, index.byId)) fields.delete(id);
+  }
+  // Stand-ins only come back when they give the field's value away.
+  for (const { host, nodeIds } of standIns) {
+    const enriched = host === undefined ? undefined : enrichment.get(host);
+    if (
+      enriched === undefined ||
+      isSensitiveFieldAttributes(enriched.tagName, {
+        type: enriched.attributes.type,
+        autocomplete: enriched.attributes.autocomplete,
+      })
+    ) {
+      for (const id of nodeIds) fields.add(id);
+    }
   }
   const regions = valueRegions(index, fields);
   return {
@@ -364,10 +388,15 @@ const PAGE_STATE_VALUE_ROLES: ReadonlySet<string> = new Set([
  * An EMPTY field or editor is not a root (see {@link holdsContent}): it
  * contributes nothing to a name built around it, and counting it would
  * withhold every row and cell name in a table of empty inputs.
+ *
+ * A field the tree has no node of its own for counts through what stands in
+ * for it there, whatever its markup (core's `fieldStandIns`), so the value of
+ * a disabled `role="none"` text field names no cell or label around it.
  */
 function strictValueRoots(
   rawNodes: RawAXNode[],
   index: NativeAXIndex,
+  standIns: readonly FieldStandIn[],
 ): Set<string> {
   // What a user entered, not what the page reports: a progress bar, a meter
   // and a scrollbar hold the page's own state, and a media element's timeline
@@ -398,6 +427,12 @@ function strictValueRoots(
     // An editing root counts only once something was typed into it: an empty
     // editor, like an empty text field, has nothing a name could borrow.
     if (holdsContent(root, index.byId, true)) roots.add(root.nodeId);
+  }
+  for (const { nodeIds } of standIns) {
+    for (const id of nodeIds) {
+      const raw = index.byId.get(id);
+      if (raw && !inMedia(raw)) roots.add(id);
+    }
   }
   return roots;
 }
@@ -543,7 +578,7 @@ function editableRootBackendIds(rawNodes: RawAXNode[]): Set<number> {
  * {@link fieldSensitivity}); in strict mode, every field value and all editor
  * content too ({@link withholdRegionNames} over {@link strictValueRoots}, then
  * {@link redactEditableContent}). And always, the text a form control draws
- * inside itself, which the DOM walk marks (`fieldInternal`; core's
+ * inside itself, which the DOM walk marks (`fieldHost`; core's
  * `withholdFieldInternalText`).
  */
 function prepareRawNodes(
@@ -556,28 +591,30 @@ function prepareRawNodes(
   insideEditor: Set<RawAXNode>;
 } {
   const index = indexNativeAX(rawNodes);
-  const sensitivity = fieldSensitivity(rawNodes, index, enrichment);
-  const named = withholdRegionNames(rawNodes, sensitivity.regions);
-  // Last: it blanks text runs only, which no step above keeps by identity. A
-  // node the DOM walk never saw is `undefined`: see withholdFieldInternalText.
-  const fieldText = (backendDOMNodeId: number): boolean | undefined => {
+  // A node the DOM walk never saw is `undefined`: see core's FieldHostOf.
+  const hostOf: FieldHostOf = (backendDOMNodeId) => {
     const info = enrichment.get(backendDOMNodeId);
-    return info === undefined ? undefined : info.fieldInternal === true;
+    return info === undefined ? undefined : (info.fieldHost ?? null);
   };
+  // Read before any text is blanked: a stand-in counts by what it holds.
+  const standIns = fieldStandIns(index, hostOf);
+  const sensitivity = fieldSensitivity(rawNodes, index, enrichment, standIns);
+  const named = withholdRegionNames(rawNodes, sensitivity.regions);
+  // Last: it blanks text runs only, which no step above keeps by identity.
   if (options.redactInput !== true) {
     return {
-      nodes: withholdFieldInternalText(named, fieldText),
+      nodes: withholdFieldInternalText(named, hostOf),
       sensitivity,
       insideEditor: new Set(),
     };
   }
   const strict = withholdRegionNames(
     named,
-    valueRegions(index, strictValueRoots(rawNodes, index)),
+    valueRegions(index, strictValueRoots(rawNodes, index, standIns)),
   );
   const { nodes, inside } = redactEditableContent(strict);
   return {
-    nodes: withholdFieldInternalText(nodes, fieldText),
+    nodes: withholdFieldInternalText(nodes, hostOf),
     sensitivity,
     insideEditor: inside,
   };
@@ -722,9 +759,13 @@ async function enrichFromDom(
       (n.nodeName ?? "").toLowerCase() === "html",
   };
 
-  // `inField`: below the user-agent shadow root of a form control, where it
-  // draws its value (`NativeDomInfo.fieldInternal`).
-  const walk = (node: DomNode, inside: boolean, inField: boolean): void => {
+  // `host`: the form control whose user-agent shadow root, where it draws its
+  // value, holds this node (`NativeDomInfo.fieldHost`).
+  const walk = (
+    node: DomNode,
+    inside: boolean,
+    host: number | undefined,
+  ): void => {
     if (inside) insideEditable.add(node);
     for (const child of elementChildren(node)) parents.set(child, node);
     if (typeof node.backendNodeId === "number" && node.nodeName) {
@@ -734,24 +775,27 @@ async function enrichFromDom(
         attributes: allowlistAttributes(node.attributes ?? []),
         locator: buildCssPath(node, adapter),
         ...(ariaValueText !== null ? { ariaValueText } : {}),
-        ...(inField ? { fieldInternal: true } : {}),
+        ...(host !== undefined ? { fieldHost: host } : {}),
       });
     }
     const below =
       inside ||
       (typeof node.backendNodeId === "number" &&
         editableRoots.has(node.backendNodeId));
-    for (const child of node.children ?? []) walk(child, below, inField);
-    if (node.contentDocument) walk(node.contentDocument, below, false);
+    for (const child of node.children ?? []) walk(child, below, host);
+    if (node.contentDocument) walk(node.contentDocument, below, undefined);
     for (const sub of node.shadowRoots ?? []) {
       walk(
         sub,
         below,
-        inField || opensFieldInternals(node.nodeName, sub.shadowRootType),
+        host ??
+          (opensFieldInternals(node.nodeName, sub.shadowRootType)
+            ? node.backendNodeId
+            : undefined),
       );
     }
   };
-  walk(root, false, false);
+  walk(root, false, undefined);
   return out;
 }
 
@@ -782,12 +826,14 @@ export interface NativeDomInfo {
    */
   ariaValueText?: string;
   /**
-   * The node sits in the user-agent shadow root of an `<input>`, `<textarea>`
-   * or `<select>`, where the control draws what it holds (core's
-   * `opensFieldInternals`). Its text never reaches the tree: core's
-   * `withholdFieldInternalText`, which says why.
+   * The backend id of the `<input>`, `<textarea>` or `<select>` whose
+   * user-agent shadow root holds the node, where the control draws what it
+   * holds (core's `opensFieldInternals`). Its text never reaches the tree
+   * (core's `withholdFieldInternalText`, which says why), and when the tree
+   * has no node of the control's own, the node stands in for it, classified
+   * by the control's markup (core's `fieldStandIns`).
    */
-  fieldInternal?: boolean;
+  fieldHost?: number;
 }
 
 interface DomNode {

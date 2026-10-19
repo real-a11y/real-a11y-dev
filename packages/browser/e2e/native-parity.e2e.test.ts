@@ -498,6 +498,64 @@ describe("a block of text beside other content", () => {
     }
   });
 
+  it("never names what holds a field after its value, the field's node gone", async () => {
+    // Chromium still names a cell, a link, a button or a labelled region from
+    // what a disabled `role="none"` field holds, and a month input's parts
+    // still announce the month and year. What stands in for the field is
+    // classified by its own markup.
+    await session.open(
+      dataUrl(
+        `<main><table>` +
+          `<tr><td><input disabled role="none" autocomplete="cc-number" value="4111111111111111"></td></tr>` +
+          `<tr><td><input disabled role="presentation" type="password" value="hunter2"></td></tr>` +
+          `<tr><td><textarea disabled role="none" autocomplete="cc-number">4222222222222222</textarea></td></tr>` +
+          `<tr><td><input disabled role="none" autocomplete="cc-number" placeholder="Card number"></td></tr>` +
+          `<tr><td><input disabled role="none" value="plain-value"></td></tr>` +
+          `</table>` +
+          `<a href="#x"><input disabled role="none" autocomplete="cc-csc" value="321"> card code</a>` +
+          `<label><input type="checkbox"> Use <input disabled role="none" value="label-secret"></label>` +
+          `<p><input type="month" disabled role="none" autocomplete="cc-exp" value="2030-04"></p>` +
+          `<div id="lbl"><input disabled role="none" autocomplete="cc-number" value="4444444444444444"></div>` +
+          `<div role="region" aria-labelledby="lbl">Region</div>` +
+          `</main>`,
+      ),
+    );
+    for (const redactInput of [false, true]) {
+      const tree = serializeTree(await session.nativeTree({ redactInput }), {
+        markFocus: false,
+        values: true,
+      });
+      for (const held of [
+        "4111",
+        "4222",
+        "4444",
+        "321",
+        "•",
+        "April",
+        "2030",
+      ]) {
+        expect(tree, `${held} (strict: ${redactInput})`).not.toContain(held);
+      }
+      // An empty field gives nothing away: its placeholder names its cell.
+      expect(tree).toContain('LayoutTableCell "Card number"');
+      expect(tree).toContain('region "[redacted]"');
+      expect(tree).toContain('link "[redacted]"');
+    }
+    // A value that isn't sensitive is page content by default, and withheld
+    // in strict mode.
+    const shown = serializeTree(await session.nativeTree(), {
+      markFocus: false,
+    });
+    expect(shown).toContain('LayoutTableCell "plain-value"');
+    expect(shown).toContain('checkbox "Use label-secret"');
+    const strict = serializeTree(
+      await session.nativeTree({ redactInput: true }),
+      { markFocus: false },
+    );
+    expect(strict).not.toContain("plain-value");
+    expect(strict).not.toContain("label-secret");
+  });
+
   it("is never kept where its text is already a name, a value or typed", async () => {
     await session.open(
       dataUrl(
