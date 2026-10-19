@@ -2868,15 +2868,13 @@ export function App() {
           source: "native",
           // Mask the retyped replacement the same way InputPanel already
           // masks a DOM password field (inputType, checked in InputPanel.tsx).
-          // The wire never carries the raw `type` attribute behind a field's
-          // verdict, and the policy isn't only type="password" (R1: a
-          // sensitive-autocomplete text field is sensitive too), so this goes
-          // by the verdict itself rather than by which rule fired: `redacted`
-          // for a sensitive field that holds something, and `valueWithheld`
-          // for every field whose value is withheld, an empty one included —
-          // `redacted` alone left an empty password field's retype in plain
-          // text. An absent `valueWithheld` counts as withheld
-          // (`masksRetype`). Erring toward masking more, never less.
+          // The wire carries each field's verdict (`valueWithheld`, beside
+          // `redacted`), never the raw `type` attribute behind it, and the
+          // policy isn't only type="password" (R1: a sensitive-autocomplete
+          // text field is sensitive too). So this masks by the verdict: every
+          // field whose value is withheld, an empty one included, not only
+          // one that reads `[redacted]` — see the gate's own doc. Erring
+          // toward masking more, never less.
           inputType: masksRetype(node) ? "password" : undefined,
           blockEmptySubmit: unprefillable,
         });

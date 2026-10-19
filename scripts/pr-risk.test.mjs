@@ -664,9 +664,11 @@ describe("field-value redaction covers the native edit box", () => {
     // only the gate it narrows.
     const path = "packages/extension/src/native/native-actions.ts";
     const base = `export function masksRetype(node) {\n  return node.redacted === true || node.valueWithheld !== false;\n}\n`;
-    const result = await grade(
-      { [path]: base.replace(" || node.valueWithheld !== false", "") },
-      { base: { [path]: base } },
+    const result = await gradeEdit(
+      path,
+      base,
+      " || node.valueWithheld !== false",
+      "",
     );
     assert.equal(result.tier, "high");
     assert.deepEqual(evidenceFor(result, "field-value-redaction"), [

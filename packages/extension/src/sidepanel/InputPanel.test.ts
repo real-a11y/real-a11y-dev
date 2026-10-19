@@ -281,6 +281,50 @@ describe("InputPanel focus restoration", () => {
  * submit is blocked — that one says nothing about the value — while typing
  * and then clearing the field is how a user deliberately empties it.
  */
+describe("InputPanel masking", () => {
+  const field = () =>
+    container.querySelector<HTMLInputElement>("input.sn-input-panel-field")!;
+  const typeInto = (text: string) =>
+    act(() => {
+      field().value = text;
+      field().dispatchEvent(new Event("input", { bubbles: true }));
+    });
+
+  it("masks what is typed when the state asks for a password field", () => {
+    open({ ...TEXT_STATE, inputType: "password" });
+    expect(field().type).toBe("password");
+  });
+
+  it("shows what is typed otherwise", () => {
+    open(TEXT_STATE);
+    expect(field().type).toBe("text");
+  });
+
+  it("opens another field's box afresh, so nothing typed carries over", () => {
+    // Opening a second row's box while one is open re-renders the panel in
+    // place. Reused, the editor kept the password typed for the first field,
+    // unmasked now, for Enter to type into the second.
+    open({
+      ...TEXT_STATE,
+      nodeId: "ax-dom-1",
+      label: "Enter your password",
+      value: "",
+      inputType: "password",
+      source: "native",
+    });
+    typeInto("hunter2");
+    open({
+      ...TEXT_STATE,
+      nodeId: "ax-dom-2",
+      label: "Full name",
+      value: "Jane",
+      source: "native",
+    });
+    expect(field().type).toBe("text");
+    expect(field().value).toBe("Jane");
+  });
+});
+
 describe("InputPanel blockEmptySubmit", () => {
   const BLOCKED: InputPanelState = {
     type: "text",

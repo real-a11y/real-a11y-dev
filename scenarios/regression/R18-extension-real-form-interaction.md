@@ -8,7 +8,7 @@ priority: P0
 status: Active
 validFrom: "extension ≥ 0.1.8. The dispatch-fidelity expectations mirror core's ActionDispatcher, which the CDP backend also mirrors — a fix in one belongs in both. Step 6a (an empty field's edit box in Chrome's tree): the first extension release with #510 — 0.1.16 as tagged fails it, which is the bug #510 fixes. Step 6b (a sensitive textarea's markup text): extension ≥ 0.1.15"
 validUntil: ""
-expected: "click/type/select dispatch on the real page; a sensitive field's value is NEVER shown in the panel — a password's, what is typed into an empty password or card field's edit box, or a sensitive textarea's markup text in the live-announcement log or an editor's input panel; Send-Tab/Esc behave or fail visibly"
+expected: "click/type/select dispatch on the real page; a sensitive field's value is NEVER shown in the panel — a password's, what is typed into an empty password or card field's edit box in Chrome's tree, or a sensitive textarea's markup text in the live-announcement log or an editor's input panel; Send-Tab/Esc behave or fail visibly"
 twin: D6
 notion: "https://app.notion.com/p/3aa1c354b0b5819e89f7de2edeb18fcb"
 ---
@@ -41,9 +41,13 @@ point is behaviour against handlers you didn't write.
      );
      ```
 
+     Then type into the password's edit box again and, without closing it,
+     open another field's edit box from its row
+
    - **6b** — a fixture, since no real form puts a field in a live region. With
      the panel open on any page, run this in the page's DevTools console, then
-     select the `Note` textbox in the tree and open its inline input panel:
+     select the `Note` textbox in the **In-page tree** (**Settings ▾** →
+     **Show**) and open its inline input panel:
 
      ```js
      document.body.insertAdjacentHTML(
@@ -73,10 +77,12 @@ point is behaviour against handlers you didn't write.
 - **6** — the password value is **NEVER** displayed in the panel, in any view, at any
   time
 - **6a** — the edit box shows dots, not what you type, for both empty fields, as it
-  does for a password field that already holds something. Before #510, Chrome's tree
-  opened both in plain text
+  does for a password field that already holds something, and the other field's box
+  opens without what you typed. Before #510, Chrome's tree opened both in plain
+  text, and the other field's box showed the password
 - **6b** — neither sentinel shows in the live-announcement log or the input panel:
   the log reads `status` `Code sent`, and the input panel opens holding `Pay now`.
+  Chrome's tree opens it empty, since the editor holds a card field.
   Extension 0.1.14 and earlier logged `Code sent OTP-SENTINEL` and opened the input
   panel holding `Pay CARD-SENTINELnow`
 - **7** — Tab/Escape either work or fail **visibly**. Silently doing nothing is the

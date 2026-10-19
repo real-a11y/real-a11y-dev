@@ -284,7 +284,9 @@ export function pickerCurrentOption(
  * because only a sensitive field that holds something reads `[redacted]`.
  * Fails closed, as {@link pickerCurrentOption} does: only a field classified
  * as not sensitive (`valueWithheld === false`) shows its typing, and a row
- * never read as a field counts as withheld.
+ * never read as a field counts as withheld. A row that reads `[redacted]`
+ * masks whatever its verdict says, although the read never sends the two
+ * apart.
  * A redaction gate — `scripts/pr-risk.mjs` grades a change to it as such.
  *
  * @internal

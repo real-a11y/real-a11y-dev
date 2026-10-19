@@ -154,6 +154,10 @@ describe("masksRetype", () => {
     expect(masksRetype(password)).toBe(true);
   });
 
+  it("masks a row that reads [redacted], whatever its verdict says", () => {
+    expect(masksRetype({ redacted: true, valueWithheld: false })).toBe(true);
+  });
+
   it("fails closed on a field the in-page read couldn't classify", () => {
     // What the read answers when the node didn't resolve or the call threw.
     expect(masksRetype(row({}))).toBe(true);

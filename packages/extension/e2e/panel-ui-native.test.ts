@@ -22,7 +22,9 @@
  *  - That mask keyed on `redacted`, which a sensitive field carries only
  *    once it holds something, so an EMPTY password (a sign-in page's "Enter
  *    your password" step) or card field still opened its retype panel in
- *    plaintext — reported from real use. It keys on `valueWithheld` now.
+ *    plaintext — reported from real use. It keys on `valueWithheld` now. And
+ *    another row's panel opened over an open one reused it, keeping the
+ *    password typed there while dropping its mask.
  *  - Activating a link through the native tree left the panel on a blank
  *    tree after the navigation it caused: `dispatchNativeAction`'s own
  *    post-action re-read got cancelled by the very `PAGE_NAVIGATED` its
@@ -156,18 +158,25 @@ test("an empty sensitive field's retype panel masks it too, and an ordinary fiel
   await expect(
     nav.panel.getByRole("treeitem", { name: "Enter your password" }),
   ).not.toContainText("[redacted]");
-  for (const name of ["Enter your password", "Card number"]) {
+  for (const [name, type] of [
+    ["Enter your password", "password"],
+    ["Card number", "password"],
+    // Nothing withholds an ordinary field's value, or an editor's.
+    ["Full name", "text"],
+    ["Notes", "text"],
+  ]) {
     await retype(name);
-    await expect(field, name).toHaveAttribute("type", "password");
+    await expect(field, name).toHaveAttribute("type", type);
     await field.press("Escape");
   }
 
-  // Nothing withholds an ordinary field's value, or an editor's.
-  for (const name of ["Full name", "Notes"]) {
-    await retype(name);
-    await expect(field, name).toHaveAttribute("type", "text");
-    await field.press("Escape");
-  }
+  // Another row's box opened over this one starts afresh: the password typed
+  // here doesn't follow it there, unmasked, for Enter to type into that field.
+  await retype("Enter your password");
+  await field.fill("hunter2");
+  await retype("Full name");
+  await expect(field).toHaveAttribute("type", "text");
+  await field.press("Escape");
 });
 
 test("activating a link through the native tree re-reads the page it navigated to", async ({
