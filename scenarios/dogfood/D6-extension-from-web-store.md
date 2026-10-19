@@ -25,7 +25,7 @@ updated yet, this row is **Blocked**, not Pass — a local build is a different 
 1. Install from the store listing; note the version shown
 2. Confirm it matches the version just submitted
 3. Read the permissions prompt as a first-time user would
-   - **3b** — from the first release after 0.1.15. Open the side panel on any
+   - **3b** — from 0.1.16. Open the side panel on any
      ordinary page: with nothing asked first, it reads Chrome's own tree, and
      Chrome's bar appears while it reads, naming the extension the way the listing
      does (“Semantic Navigator” started debugging this browser). A note below the

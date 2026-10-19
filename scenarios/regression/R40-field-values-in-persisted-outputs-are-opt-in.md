@@ -6,7 +6,7 @@ area: CLI
 type: Automated
 priority: P1
 status: Active
-validFrom: "cli ≥ 0.1.0-beta.7 · mcp ≥ 0.1.0-beta.7 (unreleased)"
+validFrom: "cli ≥ 0.1.0-beta.7 · mcp ≥ 0.1.0-beta.7"
 validUntil: ""
 expected: "A snapshot artifact and an exported MCP checkpoint carry no field value by default, though the live tree of the same page shows them. snapshot --values (or defaults.values) puts them in the tree view and records meta.values: true; a password still reads [redacted]. export_checkpoint refuses a checkpoint captured with values unless it too is passed values: true. diff warns when only one side carries values. --redact-input / REAL_A11Y_REDACT_INPUT=1 beat the opt-in."
 covers:

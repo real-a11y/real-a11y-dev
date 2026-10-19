@@ -6,7 +6,7 @@ area: CLI
 type: Automated
 priority: P0
 status: Active
-validFrom: "cli ≥ 0.1.0-beta.2 · mcp ≥ 0.1.0-beta.2 (the echo checks). The password-field tree check, the plain-field value check and step 7 as written (values shown, --redact-input / REAL_A11Y_REDACT_INPUT): cli ≥ 0.1.0-beta.7 · mcp ≥ 0.1.0-beta.7 (unreleased)"
+validFrom: "cli ≥ 0.1.0-beta.2 · mcp ≥ 0.1.0-beta.2 (the echo checks). The password-field tree check, the plain-field value check and step 7 as written (values shown, --redact-input / REAL_A11Y_REDACT_INPUT): cli ≥ 0.1.0-beta.7 · mcp ≥ 0.1.0-beta.7"
 validUntil: ""
 expected: "Type a sentinel secret into a type=password field, then grep for it in: CLI stdout, CLI stderr, --format json (the step renders = ‹hidden›), the MCP tool result, and any subsequent diff / get_semantic_tree / audit output. Zero hits anywhere, and no bullets — the field reads [redacted] — including the FAILURE paths (bad nth, unknown role, unterminated quote, trailing input). Typed into a plain field, the text is never ECHOED on any path, but the diff and tree show it as the field's value; into a rich-text editor, it shows by default and is withheld under --redact-input / REAL_A11Y_REDACT_INPUT=1. Prove delivery separately, via a page that echoes only the value's LENGTH."
 twin: D10

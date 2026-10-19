@@ -6,7 +6,7 @@ area: Extension
 type: Manual
 priority: P0
 status: Active
-validFrom: "extension ≥ the first release after 0.1.15. Native mode is in the `Unreleased` section of packages/extension/CHANGELOG.md until then; on 0.1.15 or earlier there is no native mode, so this row is Blocked, not Fail. Load unpacked from packages/extension/dist"
+validFrom: "extension ≥ 0.1.16. On 0.1.15 or earlier there is no native mode, so this row is Blocked, not Fail. Load unpacked from packages/extension/dist"
 validUntil: ""
 expected: "a fresh profile reads the native tree with nothing asked, and Chrome's bar names the extension; a note explains the bar once; Settings holds the choice of tree, leaving the toolbar at most one DOM button; Turn off and Settings turn native mode off, and nothing attaches while it is off; the setting survives reopening the panel and restarting Chrome; Cancel on the bar is respected; a change in one window holds in every window, and each window's panel shows only its own window's tab, or a popup opened from it; page focus selects its row in Chrome's tree without the bar, inside frames too; what a click through the tree loads a moment later, and a change inside a shown frame with Follow page changes on, reach Chrome's tree without Refresh; its state badges take the in-page tree's colours"
 twin: D6

@@ -3,8 +3,6 @@
 "@real-a11y-dev/inspector": patch
 "@real-a11y-dev/react": patch
 "@real-a11y-dev/storybook-addon": patch
-"@real-a11y-dev/cli": patch
-"@real-a11y-dev/mcp": patch
 ---
 
 `DomObserver.start()` is now idempotent, instead of stranding a whole set of observers on every call after the first.
