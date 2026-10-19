@@ -1,5 +1,88 @@
 # @real-a11y-dev/testing
 
+## 0.1.0-beta.19
+
+### Patch Changes
+
+- d40365c: Follow a `<dialog>` that opens or closes outside the root a live tree observes. A panel scoped to part of the page — `inspector`'s `root`, React's `<SemanticNavigator root>` and `useSemanticTree`, the Storybook addon's story root — re-roots its tree onto a dialog opened with `showModal()`, wherever on the page that dialog sits. But a dialog mounted once beside the root, which is the usual shape:
+
+  ```html
+  <main id="app">…</main>
+  <dialog id="confirm">…</dialog>
+  ```
+
+  opens and closes without mounting anything. `showModal()` and `close()` change only its `open` attribute, outside the root, and nothing the live tree watches reported that. So the tree stayed on the page while the modal was open, and on the dialog after it closed, until some unrelated change inside the root refreshed it.
+
+  The live tree now watches the `open` attribute of every `<dialog>` outside the root and refreshes in full when one changes, so it follows a modal dialog in and out within one debounce. While such a dialog is open as a modal, a change inside it — content swapped in, a field typed into — refreshes the tree too, as it already did for a dialog mounted into `<body>` after the panel started. One opened with `show()` gets no new watch, since it never becomes the tree's root. One mounted into `<body>` after the panel started keeps the watch it got then, since a `role="dialog"` or `role="alertdialog"` brings it into the tree.
+
+  What this changes for you, on a page with such a dialog:
+
+  - **Panels:** `inspector`, `react` and `storybook-addon` show the dialog as the tree's root while it is open, and the page again once it closes.
+  - **`useActiveModal()`:** returns the dialog's node while it is open and `null` once it closes. It returned `null` while the dialog was open, and could keep returning it after it closed.
+  - **`waitForMutations()` and `flow()`:** a step whose action only opens or closes such a dialog now settles one debounce after it, instead of waiting out its `timeout` / `waitTimeout`.
+  - **Unmounting while open:** a modal dialog removed from the page while still open, as `{open && createPortal(<dialog …/>, modalRoot)}` does when `open` turns false, now hands the tree back to the page too. Still not heard: one that leaves with an ancestor other than its parent or a child of `<body>`, which the tree catches up with on the next refresh anything else causes. A dialog inside a shadow tree, beside a root in the same shadow tree, is not watched either, since it never takes the scope.
+
+  The Chrome extension observes the whole document, so it already followed these dialogs. `cli` and `mcp` don't keep a live tree, so nothing they print changes.
+
+- a26d4e6: `DomObserver.start()` is now idempotent, instead of stranding a whole set of observers on every call after the first.
+
+  `start()` builds the primary `MutationObserver`, the portal and popover observers, and the `input`/`change`/`toggle` listeners, assigning each to a field it overwrites unconditionally. Calling it again on an already-armed observer therefore left the previous set connected with nothing holding a reference to it:
+
+  - **`stop()` could not stop it.** It only ever disconnects the set from the most recent `start()`, so the earlier observers kept recording mutations and re-arming the shared debounce — firing `onTreeChange` after the consumer had torn the observer down, for the life of the document, unreachable.
+  - The stranded `input`/`change` listeners stayed on the root for the same reason: `stop()` removes the listener identity it currently holds, and the later `start()` had already replaced it.
+  - While armed, every stranded set recorded the same mutation into the same `pendingMutations` buffer, so one DOM mutation arrived as **duplicate entries in `change.mutations`**. The callback still fired once per batch — the sets share one debounce timer, and each reset it — so the symptom is a payload describing one change N times, not N callbacks.
+
+  `start()` now returns early when it is already armed. A consumer that starts once is unaffected, and re-arming after a real `stop()` behaves as before.
+
+  It is a no-op rather than an internal restart on purpose: `root` is fixed at construction, so a restart has nothing new to pick up, while tearing down first would drop the deep observers for overlays that are **already open** — the portal observer adopts an overlay only on the `childList` record that mounts it, so an open one would never be re-adopted, and clearing the portal map also loses the identity-keyed teardown that an overlay emptied by an exit animation relies on.
+
+- 547a1a8: Internal: `DomObserver`'s default debounce (300 ms) and ceiling (1000 ms) are now named constants, shared with the Chrome extension's native auto-refresh. The values, and when the tree refreshes, are unchanged.
+- 1e2ff32: Internal: the native producer reads which choice states it withholds inside a sensitive field (an option's `selected`) from one list in core, shared with the Chrome extension. The output is unchanged.
+- eae10a5: The native tree no longer names what holds a field after the field's value when the field has no node of its own. A `role="none"` or `"presentation"` on a disabled field takes the field's node out of Chromium's tree. Chromium still names the cell, link, button or `<label>` holding the field from what it holds, and still names or describes a node whose `aria-labelledby` or `aria-describedby` points at the field, or at what holds it. The value policy looked for the field's node and found nothing to withhold:
+
+  - `<td><input disabled role="none" autocomplete="cc-number" value="4111…"></td>` read `LayoutTableCell "4111111111111111"`;
+  - a password inside a button gave its length away as `button "•••••••"`;
+  - a disabled card-expiry `<input type="month" role="none">` printed `spinbutton "Month" = "April"` and `spinbutton "Year" = "2030"`, in MCP's default output too, and a region it labelled read `region "April 2030"`.
+
+  What stands in for such a field in the tree, its inner box or its parts, is now classified by the field's own markup, as the field would be. Around a sensitive field, those names read `[redacted]`, and so do the parts' values. A description that points at one is left out. A field masked by CSS (`-webkit-text-security`) counts as a password, since what Chromium names after it is a bullet, circle or square per character. In strict mode (`--redact-input`, `REAL_A11Y_REDACT_INPUT`) every such field counts: `<label><input type="checkbox"> Use <input disabled role="none" value="…"></label>` no longer names the checkbox after the value. An empty field still gives nothing away, so a cell Chromium names after its placeholder keeps that name.
+
+  A text box the DOM walk never saw, because the page replaced it between the two reads, may be such a field's, and is withheld the same way: a name built around it reads `[redacted]` for that read.
+
+  **Expect snapshot changes** only on pages with such fields.
+
+- 555a3a0: The native tree no longer names a node after a hidden sensitive field. An `aria-hidden` (or otherwise ignored) card or password input still labels whatever points at it with `aria-labelledby`, and Chromium names that node after the field's value, so `<div role="region" aria-labelledby="card">` around a hidden `<input id="card" autocomplete="cc-number">` read `region "378282246310005"`. Chromium sends no value for an ignored field, so it was taken for empty and its name left alone; it now reads `[redacted]`, as a visible field's already did.
+- f7d2c3a: In the native tree, a `<div>` of text no longer vanishes when something sits beside it. It is kept as a `generic` named from its own text, the line the DOM producer already prints for it.
+
+  Chromium names no `generic`, so it hangs a `<div>`'s text on a text run beneath it, and the native normalizer dropped both. As the only content of the element around it, the text still named that element: `<li><div>Alpha</div></li>` reads `listitem "Alpha"`, as before. Anywhere else it was lost. Each card on the APG patterns page is `<li><a><h2>Window Splitter</h2></a><div>A window splitter is a moveable separator…</div></li>`, and the description printed nowhere. It now reads `generic "A window splitter is a moveable separator…"` in the list item, after the link.
+
+  The same goes for:
+
+  - a sentence beside a button in `<main>` or in a dialog;
+  - a `<main>`, `<nav>` or dialog holding nothing but a `<div>` of text, which never took that text as its name;
+  - a second `<div>` of text in a list item, an alert or a status message, such as a job title under a name. The item was named after the first, and the second was lost. It keeps that name, and the second is kept inside it: `listitem "Alice"` holding `generic "Engineer"`. The same goes for a `<div>` beside the label, the flex item or the item's own text it is named after;
+  - a byline in a bare `<header>` inside a list item or an article;
+  - a `<div>` of text straight inside a table row, outside any cell;
+  - text outside every landmark.
+
+  A link inside the `<div>` nests beneath it: `<div>See the <a>docs</a> for more.</div>` reads `generic "See the for more."` with `link "docs"` under it.
+
+  Keeping them changes no name. A dialog's message isn't its name, so `<div role="dialog"><div>Delete this project?</div><button>Cancel</button></div>` is still an unnamed `dialog`, and the `dialog-labeled` audit still reports it.
+
+  Text that is already said somewhere, or must not be, is left out:
+
+  - **Named from their content.** A link, a button, a heading, a table cell, an option, a tab or a `<summary>` takes its name from everything inside it, so its `<div>`s would only repeat it.
+  - **Labels.** A `<label>`'s text names its field, and a `<legend>`'s its fieldset.
+  - **Values.** Nothing inside a text field, an editor, a select, a slider, a progress bar or a date or time input becomes a node, not even the `/` between a date's parts. What was typed stays out of the tree.
+  - **Images and media players.** What is inside them is presentational, or the player's own controls.
+
+  This also fixes a leak of what a field holds. A `role="none"` or `"presentation"` on a disabled field takes the field's own node out of Chromium's tree, and leaves the text box inside it holding the value, which reads like any `<div>` of text. As a list item's only content it named the item, so `<li><input disabled role="none" value="…"></li>` printed the value as the item's name. The native tree now reads the document to find each field's own text box and keeps its text out, in strict mode too.
+
+  A `generic` prints only with `--include-generic`, or the MCP tools' `includeGeneric`. So the default text of `real-a11y tree`, a snapshot artifact and the MCP tree tools changes in one case: a page whose tree had a single top-level node, with a block of text outside it, now gets a `document` root around both, so every line moves one level in. The blocks are in the tree itself, though. The diff an action reports lists them like any other node: a status message in a `<div>` that changes after a click now shows in the click's diff. And the node count an empty `list` / `list_elements` answer gives (`matched 0 of N nodes`) counts them too.
+
+  This affects the native tree only: `real-a11y tree` and the other native CLI commands, the MCP tools, and `testing`'s native producer. `NATIVE_AX_VOCABULARY_VERSION` goes to 9.
+
+  **Expect snapshot changes** in native trees printed with generics, and in a native tree whose page has a block of text outside its only top-level node. A tree checkpoint exported before this release diffs against a new read with these blocks as added.
+
 ## 0.1.0-beta.18
 
 ### Minor Changes

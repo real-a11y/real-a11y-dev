@@ -19,6 +19,10 @@
 
 ## Unreleased
 
+## 0.1.16
+
+### Patch Changes
+
 - **Native mode is on by default.** The side panel reads Chromium's own
   accessibility tree from the first page it connects to, with nothing to set
   up. The first time it does, a note below the toolbar explains the bar
