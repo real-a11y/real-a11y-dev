@@ -160,6 +160,7 @@ export type { NativeAXNode, RawNativeAXNode } from "./native/ax-normalize.js";
 export {
   carriesAXValue,
   cleanAXText,
+  fieldStandIns,
   givesValueAway,
   holdsContent,
   holdsUnclassifiedValue,
@@ -176,6 +177,8 @@ export {
   withholdSensitiveFieldNames,
 } from "./native/value-regions.js";
 export type {
+  FieldHostOf,
+  FieldStandIn,
   NativeAXIndex,
   RawAXNameNode,
   ValueRegions,

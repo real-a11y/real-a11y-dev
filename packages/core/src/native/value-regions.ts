@@ -373,16 +373,23 @@ export function givesValueAway<T extends RawAXNameNode>(
  * {@link withholdRegionNames} for a producer's sensitive fields: `fieldIds` are
  * the raw ids of the fields it classified as sensitive (or could not
  * classify). Only a field that {@link givesValueAway} withholds names.
+ * `standIns` are the raw ids of the nodes standing in for such a field that
+ * has no node of its own in the tree ({@link fieldStandIns}), which already
+ * give its value away.
  */
 export function withholdSensitiveFieldNames<T extends RawAXNameNode>(
   rawNodes: T[],
   fieldIds: Iterable<string>,
+  standIns: Iterable<string> = [],
 ): T[] {
   const index = indexNativeAX(rawNodes);
   const roots = new Set<string>();
   for (const id of fieldIds) {
     const field = index.byId.get(id);
     if (field && givesValueAway(field, index.byId)) roots.add(id);
+  }
+  for (const id of standIns) {
+    if (index.byId.has(id)) roots.add(id);
   }
   return withholdRegionNames(rawNodes, valueRegions(index, roots));
 }
@@ -398,8 +405,7 @@ const FIELD_HOSTS: ReadonlySet<string> = new Set([
  * Whether a shadow root, hosted by an element named `hostName`, is a form
  * control's own internals: the user-agent root of an `<input>`, `<textarea>`
  * or `<select>`, where it draws what it holds. Every native transport's DOM
- * walk marks the nodes below one for {@link withholdFieldInternalText}, by this
- * one rule.
+ * walk marks the nodes below one ({@link FieldHostOf}), by this one rule.
  */
 export function opensFieldInternals(
   hostName: string | undefined,
@@ -408,6 +414,34 @@ export function opensFieldInternals(
   return (
     shadowRootType === "user-agent" &&
     FIELD_HOSTS.has((hostName ?? "").toLowerCase())
+  );
+}
+
+/**
+ * What a transport's walk of the document found of a DOM node, by backend
+ * id: the backend id of the form control whose own internals hold it
+ * ({@link opensFieldInternals}), `null` for a node it found anywhere else, or
+ * `undefined` for one it never saw (the page changed between the two reads).
+ */
+export type FieldHostOf = (
+  backendDOMNodeId: number,
+) => number | null | undefined;
+
+/** A `<div>` to Chromium: an unignored `generic` with no name and no value. */
+function isBareGeneric(raw: RawAXNameNode | undefined): boolean {
+  return (
+    raw?.role?.value === "generic" &&
+    !raw.ignored &&
+    cleanAXText(String(raw.name?.value ?? "")) === "" &&
+    !carriesAXValue(raw)
+  );
+}
+
+/** `raw` is a text run with text. */
+function isTextRun(raw: RawAXNameNode | undefined): boolean {
+  return (
+    raw?.role?.value === "StaticText" &&
+    cleanAXText(String(raw.name?.value ?? "")) !== ""
   );
 }
 
@@ -421,24 +455,21 @@ export function opensFieldInternals(
  * looks to {@link normalizeNativeAX} like any `<div>` of text: kept beside
  * other content and named after the card number, or promoted into the name of
  * the list item around it. Nothing in the AX tree tells the two apart, so the
- * transport reads it off the document ({@link opensFieldInternals}).
+ * transport reads it off the document ({@link FieldHostOf}).
  *
- * `internal` says, by backend id, whether the transport's walk of the
- * document found a DOM node in such a root (`true`), elsewhere (`false`), or
- * never saw it (`undefined`: the page changed between the two reads). Every
- * text run that is, or sits below an AX node that is, in such a root loses its
- * name. So does one a bare `generic` the walk never saw holds directly: it may
- * be a field's inner box the page put in after the walk, and failing closed
- * costs that block's text for one read. With no walk at all (`internal`
- * itself `undefined`), every text run a bare `generic` holds directly loses its
- * name, which takes in every field's inner box at the cost of the page's own
- * blocks of text.
+ * Every text run that is, or sits below an AX node that is, in a control's
+ * internals loses its name. So does one a bare `generic` the walk never saw
+ * holds directly: it may be a field's inner box the page put in after the
+ * walk, and failing closed costs that block's text for one read. With no walk
+ * at all (`hostOf` itself `undefined`), every text run a bare `generic` holds
+ * directly loses its name, which takes in every field's inner box at the cost
+ * of the page's own blocks of text.
  *
  * Returns copies; never mutates.
  */
 export function withholdFieldInternalText<T extends RawAXNameNode>(
   rawNodes: T[],
-  internal: ((backendDOMNodeId: number) => boolean | undefined) | undefined,
+  hostOf: FieldHostOf | undefined,
 ): T[] {
   const byId = new Map(rawNodes.map((raw) => [raw.nodeId, raw]));
   // nodeId → whether it or an AX ancestor is a field's internals. Memoized
@@ -456,7 +487,7 @@ export function withholdFieldInternalText<T extends RawAXNameNode>(
       chain.push(cur.nodeId);
       if (
         typeof cur.backendDOMNodeId === "number" &&
-        internal?.(cur.backendDOMNodeId) === true
+        typeof hostOf?.(cur.backendDOMNodeId) === "number"
       ) {
         result = true;
         break;
@@ -465,34 +496,113 @@ export function withholdFieldInternalText<T extends RawAXNameNode>(
     for (const id of chain) memo.set(id, result);
     return result;
   };
-  // The bare generic holding `raw` directly, if one does.
-  const bareGenericOf = (raw: T): T | undefined => {
-    const parent = raw.parentId ? byId.get(raw.parentId) : undefined;
-    return parent?.role?.value === "generic" &&
-      !parent.ignored &&
-      cleanAXText(String(parent.name?.value ?? "")) === "" &&
-      !carriesAXValue(parent)
-      ? parent
-      : undefined;
-  };
   const withheld = (raw: T): boolean => {
-    const generic = bareGenericOf(raw);
-    if (internal === undefined) return generic !== undefined;
+    const parent = raw.parentId ? byId.get(raw.parentId) : undefined;
+    const inBareGeneric = isBareGeneric(parent);
+    if (hostOf === undefined) return inBareGeneric;
     if (insideField(raw)) return true;
     return (
-      generic !== undefined &&
-      typeof generic.backendDOMNodeId === "number" &&
-      internal(generic.backendDOMNodeId) === undefined
+      inBareGeneric &&
+      typeof parent?.backendDOMNodeId === "number" &&
+      hostOf(parent.backendDOMNodeId) === undefined
     );
   };
 
   let changed = false;
   const out = rawNodes.map((raw) => {
-    if (raw.role?.value !== "StaticText") return raw;
-    if (cleanAXText(String(raw.name?.value ?? "")) === "") return raw;
-    if (!withheld(raw)) return raw;
+    if (!isTextRun(raw) || !withheld(raw)) return raw;
     changed = true;
     return { ...raw, name: { value: "" } };
   });
   return changed ? out : rawNodes;
+}
+
+/**
+ * A form control the tree has no node of its own for, and the nodes standing
+ * in for it there ({@link fieldStandIns}). `host` is the control's backend id,
+ * `undefined` when the walk can't say whether any control is behind them.
+ */
+export interface FieldStandIn {
+  host: number | undefined;
+  nodeIds: string[];
+}
+
+/**
+ * The nodes to withhold a form control's value by when the tree has no node
+ * of the control's own to withhold it by. A `role="none"` or `"presentation"`
+ * on a disabled control takes its node out of Chromium's tree, or leaves it
+ * ignored, and leaves its internals: the inner box holding a text field's
+ * value, a month input's spinbuttons. Chromium still builds names from content
+ * that include them, so `<td><input disabled role="none"
+ * autocomplete="cc-number" value="4111…"></td>` reads `cell "4111…"`, and a
+ * card-expiry month input's spinbuttons announce its parts. The policy keys on
+ * the control's node and finds nothing. The transport classifies the control
+ * (`host`) as it does any field, and when it counts, makes the stand-ins value
+ * roots ({@link valueRegions}).
+ *
+ * Per control with no unignored node of its own, its stand-ins are the topmost
+ * of its internals in the tree. They count when they hold a value or a text
+ * run with text ({@link holdsContent}), which is what Chromium builds a name
+ * from. An empty field gives nothing away, nor does its placeholder, which
+ * Chromium ignores beside the empty box. A field whose internals Chromium
+ * ignores whole, as for an `aria-hidden` one, keeps an ignored node of its own,
+ * which the transport classifies as any field ({@link givesValueAway}).
+ *
+ * With `host` `undefined`, each bare `generic` that holds a text run directly
+ * and that the walk never saw stands in for a control the walk can't name, as
+ * {@link withholdFieldInternalText} blanks its text: it may be a control's
+ * inner box. So does every such `generic` with no walk at all (`hostOf`
+ * itself `undefined`). Failing closed costs the names built around them for
+ * one read. One inside a node that carries a value or is editable is that
+ * field's own, and the field's node stands for it.
+ */
+export function fieldStandIns<T extends RawAXNameNode>(
+  index: NativeAXIndex<T>,
+  hostOf: FieldHostOf | undefined,
+): FieldStandIn[] {
+  const { byId, byBackendId } = index;
+  const hostOfNode = (raw: T | undefined): number | null | undefined =>
+    typeof raw?.backendDOMNodeId === "number"
+      ? hostOf?.(raw.backendDOMNodeId)
+      : null;
+  // A node around `raw` is a field: it carries a value, or is editable.
+  const inField = (raw: T): boolean => {
+    for (const cur of nativeAncestry(raw, byId)) {
+      if (
+        cur !== raw &&
+        (carriesAXValue(cur) ||
+          (cur.properties ?? []).some((p) => p.name === "editable"))
+      ) {
+        return true;
+      }
+    }
+    return false;
+  };
+  const topmost = new Map<number, T[]>();
+  const out: FieldStandIn[] = [];
+  for (const raw of byId.values()) {
+    const host = hostOfNode(raw);
+    if (typeof host === "number") {
+      const parent = raw.parentId ? byId.get(raw.parentId) : undefined;
+      if (hostOfNode(parent) === host) continue;
+      const own = byBackendId.get(host);
+      if (own !== undefined && own.ignored !== true) continue;
+      const tops = topmost.get(host);
+      if (tops) tops.push(raw);
+      else topmost.set(host, [raw]);
+    } else if (
+      host === undefined &&
+      isBareGeneric(raw) &&
+      (raw.childIds ?? []).some((id) => isTextRun(byId.get(id))) &&
+      !inField(raw)
+    ) {
+      out.push({ host: undefined, nodeIds: [raw.nodeId] });
+    }
+  }
+  for (const [host, tops] of topmost) {
+    if (tops.some((top) => holdsContent(top, byId, true))) {
+      out.push({ host, nodeIds: tops.map((top) => top.nodeId) });
+    }
+  }
+  return out;
 }

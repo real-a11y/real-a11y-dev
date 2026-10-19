@@ -4,8 +4,11 @@ import { REDACTED_VALUE } from "../extraction/dom-extractor.js";
 
 import { normalizeNativeAX, serializeNativeAX } from "./ax-normalize.js";
 import {
+  fieldStandIns,
+  indexNativeAX,
   withholdFieldInternalText,
   withholdSensitiveFieldNames,
+  type FieldHostOf,
   type RawAXNameNode,
 } from "./value-regions.js";
 
@@ -178,6 +181,28 @@ describe("withholdSensitiveFieldNames", () => {
     const nodes = cell();
     expect(withholdSensitiveFieldNames(nodes, [])).toBe(nodes);
   });
+
+  it("withholds through what stands in for a field with no node of its own", () => {
+    // Chromium 141 for `<td><input disabled role="none"
+    // autocomplete="cc-number" value="4111…"></td>`: the input's node is
+    // gone, and its inner box (DOM 28) stands in for it.
+    const nodes = [
+      raw("27", "LayoutTableCell", {
+        name: { value: "4111111111111111" },
+        named: "contents",
+        childIds: ["28"],
+      }),
+      raw("28", "generic", { parentId: "27", childIds: ["80"] }),
+      raw("80", "StaticText", {
+        parentId: "28",
+        name: { value: "4111111111111111" },
+      }),
+    ];
+    // As a field it would give nothing away: it holds no value.
+    expect(withholdSensitiveFieldNames(nodes, ["28"])).toBe(nodes);
+    const out = withholdSensitiveFieldNames(nodes, [], ["28"]);
+    expect(out[0].name?.value).toBe(REDACTED_VALUE);
+  });
 });
 
 describe("withholdFieldInternalText", () => {
@@ -199,12 +224,13 @@ describe("withholdFieldInternalText", () => {
     }),
     raw("9", "button", { parentId: "1", name: { value: "Pay" } }),
   ];
-  const internal = (backendDOMNodeId: number) =>
-    backendDOMNodeId === 7 || backendDOMNodeId === 70;
+  // DOM 7 and 70 are in the input's (DOM 3) internals, the rest the page's.
+  const hostOf: FieldHostOf = (backendDOMNodeId) =>
+    backendDOMNodeId === 7 || backendDOMNodeId === 70 ? 3 : null;
 
   it("keeps the text a field draws inside itself out of the tree", () => {
     const tree = serializeNativeAX(
-      normalizeNativeAX(withholdFieldInternalText(page(), internal)),
+      normalizeNativeAX(withholdFieldInternalText(page(), hostOf)),
     );
     expect(tree).toBe(
       ["main", '  generic "Loose block"', '  button "Pay"'].join("\n"),
@@ -215,7 +241,7 @@ describe("withholdFieldInternalText", () => {
     // A text run with no DOM node of its own the transport knows.
     const nodes = page();
     nodes[2] = { ...nodes[2], backendDOMNodeId: undefined };
-    const out = withholdFieldInternalText(nodes, (id) => id === 7);
+    const out = withholdFieldInternalText(nodes, (id) => (id === 7 ? 3 : null));
     expect(out[2].name?.value).toBe("");
     expect(out[4].name?.value).toBe("Loose block");
   });
@@ -236,15 +262,15 @@ describe("withholdFieldInternalText", () => {
     );
     expect(
       serializeNativeAX(
-        normalizeNativeAX(withholdFieldInternalText(item, internal)),
+        normalizeNativeAX(withholdFieldInternalText(item, hostOf)),
       ),
     ).toBe("listitem");
   });
 
   it("blanks the text of a bare generic the walk never saw", () => {
     // The page put the field in after the walk read the document.
-    const seenOnly = (backendDOMNodeId: number) =>
-      backendDOMNodeId === 8 || backendDOMNodeId === 80 ? false : undefined;
+    const seenOnly: FieldHostOf = (backendDOMNodeId) =>
+      backendDOMNodeId === 8 || backendDOMNodeId === 80 ? null : undefined;
     const out = withholdFieldInternalText(page(), seenOnly);
     expect(out[2].name?.value).toBe("");
     expect(out[4].name?.value).toBe("Loose block");
@@ -272,6 +298,180 @@ describe("withholdFieldInternalText", () => {
 
   it("returns the nodes untouched with nothing inside a field", () => {
     const nodes = page();
-    expect(withholdFieldInternalText(nodes, () => false)).toBe(nodes);
+    expect(withholdFieldInternalText(nodes, () => null)).toBe(nodes);
+  });
+});
+
+describe("fieldStandIns", () => {
+  const standIns = (nodes: RawAXNameNode[], hostOf: FieldHostOf | undefined) =>
+    fieldStandIns(indexNativeAX(nodes), hostOf);
+  /** DOM ids `ids` sit in the internals of control `host`, the rest outside. */
+  const internals =
+    (host: number, ...ids: number[]): FieldHostOf =>
+    (backendDOMNodeId) =>
+      ids.includes(backendDOMNodeId) ? host : null;
+
+  // Chromium 141 for `<td><input disabled role="none" autocomplete="cc-number"
+  // value="4111…"></td>`: no node for the input (DOM 2), its inner box in the
+  // cell instead.
+  const cell = () => [
+    raw("27", "LayoutTableCell", {
+      name: { value: "4111111111111111" },
+      named: "contents",
+      childIds: ["28"],
+    }),
+    raw("28", "generic", { parentId: "27", childIds: ["80"] }),
+    raw("80", "StaticText", {
+      parentId: "28",
+      name: { value: "4111111111111111" },
+    }),
+  ];
+
+  it("stands a field's inner box in for it when its node is gone", () => {
+    expect(standIns(cell(), internals(2, 28, 80))).toEqual([
+      { host: 2, nodeIds: ["28"] },
+    ]);
+  });
+
+  it("leaves a field its own node stands for alone", () => {
+    const nodes = [
+      raw("2", "textbox", {
+        value: { value: "4111111111111111" },
+        childIds: ["28"],
+      }),
+      ...cell().slice(1),
+    ];
+    nodes[1] = { ...nodes[1], parentId: "2" };
+    expect(standIns(nodes, internals(2, 28, 80))).toEqual([]);
+  });
+
+  it("stands in for a field Chromium keeps an ignored node for", () => {
+    // `<label><input type="checkbox"> Use <input disabled role="none"
+    // value="…"></label>`: the input (DOM 8) is ignored, its box below it.
+    const nodes = [
+      raw("42", "LabelText", { childIds: ["7", "8"] }),
+      raw("7", "checkbox", {
+        parentId: "42",
+        name: { value: " Use label-secret" },
+      }),
+      raw("8", "none", { parentId: "42", ignored: true, childIds: ["43"] }),
+      raw("43", "generic", { parentId: "8", childIds: ["85"] }),
+      raw("85", "StaticText", {
+        parentId: "43",
+        name: { value: "label-secret" },
+      }),
+    ];
+    expect(standIns(nodes, internals(8, 43, 85))).toEqual([
+      { host: 8, nodeIds: ["43"] },
+    ]);
+  });
+
+  it("counts a part with a value: a month input's spinbuttons", () => {
+    // `<p><input type="month" disabled role="none" autocomplete="cc-exp"
+    // value="2030-04"></p>`: the parts hang below an ignored container.
+    const nodes = [
+      raw("46", "paragraph", { childIds: ["47"] }),
+      raw("47", "none", { parentId: "46", ignored: true, childIds: ["48"] }),
+      raw("48", "generic", { parentId: "47", childIds: ["50", "52"] }),
+      raw("50", "spinbutton", { parentId: "48", value: { value: 4 } }),
+      raw("52", "spinbutton", { parentId: "48", value: { value: 2030 } }),
+    ];
+    expect(standIns(nodes, internals(11, 47, 48, 50, 52))).toEqual([
+      { host: 11, nodeIds: ["47"] },
+    ]);
+  });
+
+  it("gives nothing away for an empty field, its placeholder shown", () => {
+    // `<td><input disabled role="none" autocomplete="cc-number"
+    // placeholder="Card number"></td>`: Chromium names the cell after the
+    // placeholder, ignored beside the empty box. Nothing to withhold.
+    const nodes = [
+      raw("30", "LayoutTableCell", {
+        name: { value: "Card number" },
+        named: "contents",
+        childIds: ["31", "32"],
+      }),
+      raw("31", "none", { parentId: "30", ignored: true }),
+      raw("32", "generic", { parentId: "30" }),
+    ];
+    expect(standIns(nodes, internals(3, 31, 32))).toEqual([]);
+  });
+
+  it("stands nothing in for a field whose internals are all ignored", () => {
+    // Chromium 141 keeps an ignored node for an `aria-hidden` field, which is
+    // classified as any field; and a media player's fullscreen button, ignored
+    // with its hover background, holds no value to give away.
+    const nodes = [
+      raw("6", "none", { ignored: true, childIds: ["66"] }),
+      raw("66", "none", { parentId: "6", ignored: true, childIds: ["76"] }),
+      raw("76", "none", { parentId: "66", ignored: true }),
+    ];
+    expect(standIns(nodes, internals(6, 66, 76))).toEqual([]);
+  });
+
+  it("gives nothing away for a select listing its options", () => {
+    // `<td><select disabled role="none">…</select></td>`: the cell lists
+    // every option, and none says which is chosen.
+    const nodes = [
+      raw("21", "LayoutTableCell", {
+        name: { value: "04 05" },
+        named: "contents",
+        childIds: ["24"],
+      }),
+      raw("24", "none", {
+        parentId: "21",
+        ignored: true,
+        childIds: ["28", "31"],
+      }),
+      raw("28", "option", { parentId: "24", name: { value: "04" } }),
+      raw("31", "option", { parentId: "24", name: { value: "05" } }),
+    ];
+    expect(standIns(nodes, internals(2, 24))).toEqual([]);
+  });
+
+  it("stands a box the walk never saw in for a control it can't name", () => {
+    const nodes = [
+      raw("1", "main", { childIds: ["7", "8"] }),
+      raw("7", "generic", { parentId: "1", childIds: ["70"] }),
+      raw("70", "StaticText", { parentId: "7", name: { value: "4111" } }),
+      raw("8", "generic", { parentId: "1", childIds: ["80"] }),
+      raw("80", "StaticText", { parentId: "8", name: { value: "Seen" } }),
+    ];
+    const seenOnly: FieldHostOf = (id) =>
+      id === 1 || id >= 8 ? null : undefined;
+    expect(standIns(nodes, seenOnly)).toEqual([
+      { host: undefined, nodeIds: ["7"] },
+    ]);
+  });
+
+  it("leaves a box the walk never saw to the field around it", () => {
+    // A `<textarea>`'s own node carries its value, and a recording with no
+    // walk of its internals stands in nothing for it.
+    const nodes = [
+      raw("5", "textbox", {
+        value: { value: "notes" },
+        properties: [{ name: "editable", value: { value: "plaintext" } }],
+        childIds: ["7"],
+      }),
+      raw("7", "generic", { parentId: "5", childIds: ["70"] }),
+      raw("70", "StaticText", { parentId: "7", name: { value: "notes" } }),
+    ];
+    expect(standIns(nodes, undefined)).toEqual([]);
+    nodes[0] = { ...nodes[0], value: undefined };
+    expect(standIns(nodes, undefined)).toEqual([]);
+  });
+
+  it("stands every box of text in for one with no walk at all", () => {
+    const nodes = [
+      raw("1", "main", { childIds: ["7", "8", "9"] }),
+      raw("7", "generic", { parentId: "1", childIds: ["70"] }),
+      raw("70", "StaticText", { parentId: "7", name: { value: "4111" } }),
+      // Named, or holding no text: no box of text.
+      raw("8", "generic", { parentId: "1", name: { value: "Player" } }),
+      raw("9", "generic", { parentId: "1" }),
+    ];
+    expect(standIns(nodes, undefined)).toEqual([
+      { host: undefined, nodeIds: ["7"] },
+    ]);
   });
 });
