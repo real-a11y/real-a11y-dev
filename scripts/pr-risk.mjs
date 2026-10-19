@@ -882,7 +882,8 @@ const FIELD_VALUE_GATES = [
   // withheld select (`pickerCurrentOption`), and the feedback after a choice
   // names the field rather than the option (`describeSelection`), in both
   // producers' panels, and so does selecting an option row straight from the
-  // native tree (`selectFeedback`).
+  // native tree (`selectFeedback`). The edit box a typable native row opens
+  // masks what is typed into a withheld field, empty or not (`masksRetype`).
   "withholdInsideSensitive",
   "controlledRegion",
   "NATIVE_AX_CHOICE_STATES",
@@ -898,6 +899,7 @@ const FIELD_VALUE_GATES = [
   "pickerCurrentOption",
   "describeSelection",
   "selectFeedback",
+  "masksRetype",
   // The text reads that must skip a control's child text, which for a
   // `<textarea>` is its markup default — the secret itself, for a sensitive
   // field: the extension's `pageText` (the live-region line it sends the panel,

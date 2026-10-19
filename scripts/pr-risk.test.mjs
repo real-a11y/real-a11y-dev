@@ -657,6 +657,24 @@ describe("field-value redaction covers selecting an option row", () => {
   });
 });
 
+describe("field-value redaction covers the native edit box", () => {
+  it("grades unmasking a withheld field's edit box 🔴 high", async () => {
+    // An empty password reads no `[redacted]`, so an edit box masked by
+    // `redacted` alone shows the password as it is typed. The edit names
+    // only the gate it narrows.
+    const path = "packages/extension/src/native/native-actions.ts";
+    const base = `export function masksRetype(node) {\n  return node.redacted === true || node.valueWithheld !== false;\n}\n`;
+    const result = await grade(
+      { [path]: base.replace(" || node.valueWithheld !== false", "") },
+      { base: { [path]: base } },
+    );
+    assert.equal(result.tier, "high");
+    assert.deepEqual(evidenceFor(result, "field-value-redaction"), [
+      `${path} → masksRetype`,
+    ]);
+  });
+});
+
 describe("field-value redaction covers the redactInput strict mode", () => {
   it("grades narrowing strictValueRoots or dropping the switch 🔴 high", async () => {
     // Under `redactInput` the native producer withholds all an editing root

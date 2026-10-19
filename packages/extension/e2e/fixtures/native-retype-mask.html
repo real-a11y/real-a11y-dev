@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Native retype mask</title>
+  </head>
+  <body>
+    <h1>Sign in</h1>
+
+    <!--
+      The edit box a typable native row opens must hide what is typed into
+      every field whose value is withheld (ADR-0001), not only into one that
+      holds something: a sensitive field reads [redacted] only once it is
+      filled. The password stands in for a sign-in page's "Enter your
+      password" step, where this was reported (Google's): empty until the
+      user types it. The card field is the one Chromium does not mask
+      itself. The name field and the editor are the controls: their values
+      aren't withheld, so their edit boxes show what is typed.
+    -->
+    <label for="pw">Enter your password</label>
+    <input id="pw" type="password" autocomplete="current-password" />
+
+    <label for="card">Card number</label>
+    <input id="card" type="text" autocomplete="cc-number" />
+
+    <label for="name">Full name</label>
+    <input id="name" type="text" />
+
+    <div
+      id="notes"
+      role="textbox"
+      contenteditable="true"
+      aria-label="Notes"
+    ></div>
+  </body>
+</html>

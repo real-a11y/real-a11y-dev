@@ -19,6 +19,10 @@
  *    `inputType` set, so a retyped replacement for a password field rendered
  *    in plaintext — masking only ever applied to the DOM producer's own
  *    password fields before this.
+ *  - That mask keyed on `redacted`, which a sensitive field carries only
+ *    once it holds something, so an EMPTY password (a sign-in page's "Enter
+ *    your password" step) or card field still opened its retype panel in
+ *    plaintext — reported from real use. It keys on `valueWithheld` now.
  *  - Activating a link through the native tree left the panel on a blank
  *    tree after the navigation it caused: `dispatchNativeAction`'s own
  *    post-action re-read got cancelled by the very `PAGE_NAVIGATED` its
@@ -130,6 +134,40 @@ test("a redacted field's retype panel never shows the real value, and masks it",
   await nav.panel.getByRole("button", { name: "Refresh native tree" }).click();
   await expect(pwRow).toContainText("[redacted]");
   await expect(pwRow).not.toContainText("newpass456");
+});
+
+test("an empty sensitive field's retype panel masks it too, and an ordinary field's doesn't", async ({
+  nav,
+}) => {
+  await nav.showNative("native-retype-mask.html");
+  await nav.panel.getByRole("button", { name: "Expand all" }).click();
+
+  const field = nav.panel.locator(".sn-input-panel-field");
+  const retype = async (name: string) => {
+    await nav.panel
+      .getByRole("treeitem", { name })
+      .getByTitle("Type (Enter)")
+      .click();
+    await expect(field).toHaveValue("");
+  };
+
+  // Nothing typed yet, so nothing to redact: the mask can't wait for
+  // `[redacted]`, which a sensitive field shows only once it holds something.
+  await expect(
+    nav.panel.getByRole("treeitem", { name: "Enter your password" }),
+  ).not.toContainText("[redacted]");
+  for (const name of ["Enter your password", "Card number"]) {
+    await retype(name);
+    await expect(field, name).toHaveAttribute("type", "password");
+    await field.press("Escape");
+  }
+
+  // Nothing withholds an ordinary field's value, or an editor's.
+  for (const name of ["Full name", "Notes"]) {
+    await retype(name);
+    await expect(field, name).toHaveAttribute("type", "text");
+    await field.press("Escape");
+  }
 });
 
 test("activating a link through the native tree re-reads the page it navigated to", async ({

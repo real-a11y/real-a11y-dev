@@ -26,6 +26,14 @@
   debugging bar that replaced that step has no failure line, so nothing
   rendered the class.
 
+- In Chrome's tree, the edit box for a password, one-time-code or card field
+  hides what you type into it even while the field is empty. It used to hide
+  it only once the field held something, so typing a password into the empty
+  "Enter your password" step of a sign-in page, or a number into an empty
+  card field, showed it in plain text. A field the panel couldn't check hides
+  it too, since it may be one of those
+  ([#510](https://github.com/real-a11y/real-a11y-dev/pull/510)).
+
 ## 0.1.16
 
 ### Patch Changes
