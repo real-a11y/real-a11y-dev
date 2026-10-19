@@ -556,6 +556,44 @@ describe("a block of text beside other content", () => {
     expect(strict).not.toContain("label-secret");
   });
 
+  it("keeps a field's mask, a button's label and a pseudo-element apart", async () => {
+    // A field masked by CSS gives its length away as bullets whatever its
+    // markup. A button's internals hold the page's label. And a `::before` or
+    // `::after` laid out as a box has a node of its own, keyed to the
+    // pseudo-element, which the DOM walk must see as the page's.
+    await session.open(
+      dataUrl(
+        `<style>` +
+          `a.ext::after { content: " (opens)"; display: inline-block; }` +
+          `td.req::before { content: "Required: "; display: block; }` +
+          `button.ico::before { content: "+"; display: inline-block; }` +
+          `</style>` +
+          `<main><table>` +
+          `<tr><td><input disabled role="none" style="-webkit-text-security: disc" value="482913"></td></tr>` +
+          `<tr><td><input type="submit" disabled role="none" value="Pay now"></td></tr>` +
+          `<tr><td class="req">Name</td></tr>` +
+          `</table>` +
+          `<a class="ext" href="#docs">Docs</a>` +
+          `<button class="ico">Add</button>` +
+          `</main>`,
+      ),
+    );
+    for (const redactInput of [false, true]) {
+      const tree = serializeTree(await session.nativeTree({ redactInput }), {
+        markFocus: false,
+      });
+      expect(tree, `strict: ${redactInput}`).not.toMatch(/[•●]/);
+      expect(tree, `strict: ${redactInput}`).toContain(
+        'LayoutTableCell "Pay now"',
+      );
+      expect(tree, `strict: ${redactInput}`).toContain(
+        'LayoutTableCell "Required: Name"',
+      );
+      expect(tree, `strict: ${redactInput}`).toContain('link "Docs (opens)"');
+      expect(tree, `strict: ${redactInput}`).toContain('button "+ Add"');
+    }
+  });
+
   it("is never kept where its text is already a name, a value or typed", async () => {
     await session.open(
       dataUrl(

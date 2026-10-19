@@ -732,6 +732,84 @@ describe("buildNativeTree — R1: what stands in for a field with no node of its
     ).not.toContain("plain-value");
   });
 
+  it("names a link after its `::after`, which the walk sees", () => {
+    // `a::after { content: " ↗"; display: inline-block }`: a box of its own
+    // in the tree, keyed to the pseudo-element, which has no element.
+    const link = [
+      node("1", "RootWebArea", undefined, { childIds: ["10"] }),
+      node("10", "link", "1", {
+        name: contents("Docs ↗"),
+        childIds: ["18", "19"],
+      }),
+      node("18", "StaticText", "10", { name: contents("Docs") }),
+      node("19", "generic", "10", { childIds: ["20"] }),
+      {
+        nodeId: "20",
+        parentId: "19",
+        role: { value: "StaticText" },
+        name: contents("↗"),
+      } as Raw,
+    ];
+    const enrichment = new Map<number, NativeDomInfo>([
+      [10, domOf("a", { href: "#docs" })],
+      [18, domOf("#text")],
+      [19, { tagName: "::after", attributes: {}, pseudo: true }],
+    ]);
+    const tree = buildNativeTree(link, enrichment);
+    expect(serializeTree(tree, { markFocus: false })).toBe('link "Docs ↗"');
+    // The pseudo-element is no element: no `dom` facet for it.
+    expect(tree.nodes.get("ax-dom-19")?.dom).toBeUndefined();
+  });
+
+  it("withholds through a field whose box holds Chromium's password mask", () => {
+    // `-webkit-text-security: disc` masks a field that isn't a password by
+    // its markup: the bullets give its length away.
+    const masked = [
+      node("1", "RootWebArea", undefined, { childIds: ["27"] }),
+      node("27", "LayoutTableCell", "1", {
+        name: contents("••••••"),
+        childIds: ["28"],
+      }),
+      node("28", "generic", "27", { childIds: ["80"] }),
+      node("80", "StaticText", "28", { name: contents("••••••") }),
+    ];
+    const enrichment = new Map<number, NativeDomInfo>([
+      [27, domOf("td")],
+      [2, domOf("input")],
+      [28, inside(2)],
+      [80, inside(2, "#text")],
+    ]);
+    expect(
+      serializeTree(buildNativeTree(masked, enrichment), { markFocus: false }),
+    ).toBe('LayoutTableCell "[redacted]"');
+  });
+
+  it("keeps a button's own label in strict mode", () => {
+    // `<td><input type="submit" disabled role="none" value="Pay now"></td>`:
+    // its internals hold the page's label, not what a user entered.
+    const button = [
+      node("1", "RootWebArea", undefined, { childIds: ["27"] }),
+      node("27", "LayoutTableCell", "1", {
+        name: contents("Pay now"),
+        childIds: ["28"],
+      }),
+      node("28", "generic", "27", { childIds: ["80"] }),
+      node("80", "StaticText", "28", { name: contents("Pay now") }),
+    ];
+    const enrichment = new Map<number, NativeDomInfo>([
+      [27, domOf("td")],
+      [2, domOf("input", { type: "submit" })],
+      [28, inside(2)],
+      [80, inside(2, "#text")],
+    ]);
+    const tree = buildNativeTree(button, enrichment, undefined, {
+      redactInput: true,
+    });
+    expect(serializeTree(tree, { markFocus: false })).toBe(
+      'LayoutTableCell "Pay now"',
+    );
+  });
+
   it("leaves a media player's own controls out of strict mode, as ever", () => {
     // A player's controls are playback, not input: a part of one that held
     // text would otherwise withhold the player's name.

@@ -70,6 +70,7 @@ import {
   RANGE_VALUE_ROLES,
   REDACTED_VALUE,
   STATE_ONLY_ROLES,
+  VALUELESS_INPUT_TYPES,
   nativeAncestry,
   carriesAXValue,
   cleanAXText,
@@ -313,9 +314,10 @@ function fieldSensitivity(
     if (!field || !givesValueAway(field, index.byId)) fields.delete(id);
   }
   // Stand-ins only come back when they give the field's value away.
-  for (const { host, nodeIds } of standIns) {
+  for (const { host, nodeIds, masked } of standIns) {
     const enriched = host === undefined ? undefined : enrichment.get(host);
     if (
+      masked ||
       enriched === undefined ||
       isSensitiveFieldAttributes(enriched.tagName, {
         type: enriched.attributes.type,
@@ -608,9 +610,17 @@ function prepareRawNodes(
       insideEditor: new Set(),
     };
   }
+  // A button's internals hold its label, the page's, not what a user entered.
+  const entered = standIns.filter(({ host }) => {
+    const info = host === undefined ? undefined : enrichment.get(host);
+    return !(
+      info?.tagName === "input" &&
+      VALUELESS_INPUT_TYPES.has((info.attributes.type ?? "text").toLowerCase())
+    );
+  });
   const strict = withholdRegionNames(
     named,
-    valueRegions(index, strictValueRoots(rawNodes, index, standIns)),
+    valueRegions(index, strictValueRoots(rawNodes, index, entered)),
   );
   const { nodes, inside } = redactEditableContent(strict);
   return {
@@ -794,6 +804,17 @@ async function enrichFromDom(
             : undefined),
       );
     }
+    // A `::before` or `::after` Chromium lays out as a box has a node of its
+    // own in the tree: recorded as seen, with no element to describe.
+    for (const pseudo of node.pseudoElements ?? []) {
+      if (typeof pseudo.backendNodeId !== "number") continue;
+      out.set(pseudo.backendNodeId, {
+        tagName: (pseudo.nodeName ?? "").toLowerCase(),
+        attributes: {},
+        pseudo: true,
+        ...(host !== undefined ? { fieldHost: host } : {}),
+      });
+    }
   };
   walk(root, false, undefined);
   return out;
@@ -834,6 +855,12 @@ export interface NativeDomInfo {
    * by the control's markup (core's `fieldStandIns`).
    */
   fieldHost?: number;
+  /**
+   * A pseudo-element (`::before`, `::after`, `::marker`): content the page's
+   * CSS generates, with no element of its own. The walk records it so its
+   * node in the tree counts as seen, and gives it no `dom` facet.
+   */
+  pseudo?: boolean;
 }
 
 interface DomNode {
@@ -846,6 +873,7 @@ interface DomNode {
   shadowRoots?: DomNode[];
   /** On a shadow root: `open`, `closed` or `user-agent`. */
   shadowRootType?: string;
+  pseudoElements?: DomNode[];
 }
 
 /** Both CDP reads a native tree is built from, over one session. */
@@ -995,21 +1023,22 @@ export function buildNativeTree(
       isExposedToAT: true,
     };
 
-    const dom: DomInfo | undefined = enriched
-      ? {
-          tagName: enriched.tagName,
-          attributes: withoutSelection(
-            raw && insideEditor.has(raw)
-              ? withoutEditableContent(enriched.attributes)
-              : enriched.attributes,
-            withholdSelection,
-          ),
-          textContent: null,
-          descendantText: "",
-          isHidden: false,
-          ...(enriched.locator ? { locator: enriched.locator } : {}),
-        }
-      : undefined;
+    const dom: DomInfo | undefined =
+      enriched && enriched.pseudo !== true
+        ? {
+            tagName: enriched.tagName,
+            attributes: withoutSelection(
+              raw && insideEditor.has(raw)
+                ? withoutEditableContent(enriched.attributes)
+                : enriched.attributes,
+              withholdSelection,
+            ),
+            textContent: null,
+            descendantText: "",
+            isHidden: false,
+            ...(enriched.locator ? { locator: enriched.locator } : {}),
+          }
+        : undefined;
 
     const node: SemanticNode = {
       id: nn.id,
