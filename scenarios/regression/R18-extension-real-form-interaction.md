@@ -6,9 +6,9 @@ area: Extension
 type: Manual
 priority: P0
 status: Active
-validFrom: "extension ≥ 0.1.8. The dispatch-fidelity expectations mirror core's ActionDispatcher, which the CDP backend also mirrors — a fix in one belongs in both. Step 6b (a sensitive textarea's markup text): extension ≥ 0.1.15"
+validFrom: "extension ≥ 0.1.8. The dispatch-fidelity expectations mirror core's ActionDispatcher, which the CDP backend also mirrors — a fix in one belongs in both. Step 6a (an empty field's edit box in Chrome's tree): the first extension release with #510 — 0.1.16 as tagged fails it, which is the bug #510 fixes. Step 6b (a sensitive textarea's markup text): extension ≥ 0.1.15"
 validUntil: ""
-expected: "click/type/select dispatch on the real page; a sensitive field's value is NEVER shown in the panel — a password's, or a sensitive textarea's markup text in the live-announcement log or an editor's input panel; Send-Tab/Esc behave or fail visibly"
+expected: "click/type/select dispatch on the real page; a sensitive field's value is NEVER shown in the panel — a password's, what is typed into an empty password or card field's edit box, or a sensitive textarea's markup text in the live-announcement log or an editor's input panel; Send-Tab/Esc behave or fail visibly"
 twin: D6
 notion: "https://app.notion.com/p/3aa1c354b0b5819e89f7de2edeb18fcb"
 ---
@@ -27,6 +27,20 @@ point is behaviour against handlers you didn't write.
    state reflects it — not just the DOM value
 5. Type into a rich-text / contenteditable editor (ProseMirror, Lexical, Draft)
 6. Focus a **password** field and type into it
+   - **6a** — a sign-in page's password step while the field is still
+     **empty**, as on Google's "Enter your password". On **Chrome's tree**, open
+     the field's edit box from its row (**TYPE**, or `Enter`) and type a few
+     characters. Do the same on an empty card number field, from a checkout
+     form or from this, run in the page's DevTools console before pressing
+     **↻** (Refresh native tree):
+
+     ```js
+     document.body.insertAdjacentHTML(
+       "beforeend",
+       '<label>Card number <input autocomplete="cc-number"></label>',
+     );
+     ```
+
    - **6b** — a fixture, since no real form puts a field in a live region. With
      the panel open on any page, run this in the page's DevTools console, then
      select the `Note` textbox in the tree and open its inline input panel:
@@ -58,6 +72,9 @@ point is behaviour against handlers you didn't write.
   model-driven editors; a cancelable `beforeinput` must go first
 - **6** — the password value is **NEVER** displayed in the panel, in any view, at any
   time
+- **6a** — the edit box shows dots, not what you type, for both empty fields, as it
+  does for a password field that already holds something. Before #510, Chrome's tree
+  opened both in plain text
 - **6b** — neither sentinel shows in the live-announcement log or the input panel:
   the log reads `status` `Code sent`, and the input panel opens holding `Pay now`.
   Extension 0.1.14 and earlier logged `Code sent OTP-SENTINEL` and opened the input
@@ -82,3 +99,8 @@ markup text is its default value, and the panel read two things as raw
 `textContent` — a live region's announcement and an editor's current text — so a
 sensitive textarea inside either one put its secret on the extension's message
 channel. Step 6 can't catch it: a password `<input>` has no text to read.
+
+6a is the same rule on the way in. A password field is empty until you type into
+it, so every sign-in goes through an empty one, and Chrome's tree masked the edit
+box only for a field that read `[redacted]`, which an empty field doesn't. Step 6
+alone passes on a field filled in earlier.
