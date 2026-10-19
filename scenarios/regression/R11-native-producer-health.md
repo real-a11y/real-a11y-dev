@@ -6,7 +6,7 @@ area: MCP
 type: Automated
 priority: P1
 status: Active
-validFrom: "browser ≥ 0.1.0-beta.12 · cli ≥ 0.1.0-beta.2 (locators + focusedId unreleased). The native producer itself: browser ≥ 0.1.0-beta.11. Steps 6 / 6b as written (field values shown, sensitive ones redacted, --redact-input): cli ≥ 0.1.0-beta.7 (unreleased)"
+validFrom: "browser ≥ 0.1.0-beta.12 · cli ≥ 0.1.0-beta.2 (locators + focusedId unreleased). The native producer itself: browser ≥ 0.1.0-beta.11. Steps 6 / 6b as written (field values shown, sensitive ones redacted, --redact-input): cli ≥ 0.1.0-beta.7 (unreleased). Step 6c (a field with no node of its own): cli ≥ 0.1.0-beta.9"
 validUntil: ""
 expected: "native tree returns a document tree reaching UA-shadow media controls the in-page walk misses; every native FINDING carries a CSS locator identical to the DOM producer's for the same element (a shadow-root element stops its path at the boundary rather than faking a selector); the tree sets focusedId so [focused] renders; a field shows what it holds the way a screen reader announces it, while a sensitive field (password, one-time code, payment) only ever reads [redacted]; --redact-input withholds every value and all rich-text editor content."
 covers:
@@ -41,6 +41,11 @@ is native now — so these are plain invocations. An earlier version of this row
      heading (and one into the link's `href`), then `real-a11y tree <url>`; then
      `real-a11y tree <url> --redact-input`, the same with `-f json`, and
      `real-a11y audit <url> -f json --redact-input`
+   - **6c** — add `<table><tr><td><input disabled role="none"
+     autocomplete="cc-number" value="<card sentinel>"></td></tr></table>` and
+     `<p><input type="month" disabled role="none" autocomplete="cc-exp"
+     value="2030-04"></p>`, then `real-a11y tree <url>` and
+     `real-a11y tree <url> --redact-input`
 7. `real-a11y audit <url> --root main`
 8. `pnpm --filter @real-a11y-dev/browser test:e2e`
 
@@ -75,6 +80,13 @@ is native now — so these are plain invocations. An earlier version of this row
   withheld link as `no-unlabeled-interactive` — it is named, just not shown. cli
   0.1.0-beta.6 printed the editor text as those nodes' names and had no strict
   mode
+- **6c** — a disabled field with `role="none"` has no node of its own in
+  Chromium's tree, and still nothing around it is named after what it holds: the
+  cell prints `LayoutTableCell "[redacted]"` and the card sentinel appears
+  **nowhere**; the month input's parts print `spinbutton "Month" = "[redacted]"`
+  and `spinbutton "Year" = "[redacted]"`, and bare with `--redact-input`. cli
+  0.1.0-beta.8 printed the cell as `LayoutTableCell "<card sentinel>"` and the
+  parts as `= "April"` and `= "2030"`, which is the old behaviour, not a fail
 - **4** — locators on every entry. Native `list_elements` used to carry none, and
   three docs stated that as intended; both were fixed together
 - **7** — refused: the read is whole-document, so it cannot be combined with a root
@@ -113,7 +125,9 @@ rich-text editor is its value too: Chromium reports it as the host's AX `value`
 *and* names the nodes inside the editor from it, so `--redact-input` has to close
 both paths or the strict mode leaks through names. A test with a plain `<input>`
 can never see the second path: it needs content-named nodes under an editable
-host.
+host. Step 6c is the policy for a field Chromium keeps no node for: the policy
+keyed on the field's node, so a cell named from the card field inside it went
+unredacted until what stands in for the field was classified as the field.
 
 Parity itself is now a standing automated gate, so this row checks the things that
 gate can't see.
