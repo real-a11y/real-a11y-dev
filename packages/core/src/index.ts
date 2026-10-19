@@ -44,6 +44,7 @@ export {
   SENSITIVE_AUTOCOMPLETE_TOKENS,
   STATE_ONLY_ROLES,
   PANEL_HOST_ATTRIBUTE,
+  VALUELESS_INPUT_TYPES,
 } from "./extraction/dom-extractor.js";
 export { buildA11yTree, extractA11yTree } from "./extraction/a11y-extractor.js";
 // For a walk up the page's own DOM outside core, such as the extension's focus
@@ -160,6 +161,7 @@ export type { NativeAXNode, RawNativeAXNode } from "./native/ax-normalize.js";
 export {
   carriesAXValue,
   cleanAXText,
+  fieldStandIns,
   givesValueAway,
   holdsContent,
   holdsUnclassifiedValue,
@@ -176,6 +178,8 @@ export {
   withholdSensitiveFieldNames,
 } from "./native/value-regions.js";
 export type {
+  FieldHostOf,
+  FieldStandIn,
   NativeAXIndex,
   RawAXNameNode,
   ValueRegions,

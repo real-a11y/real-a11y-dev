@@ -154,6 +154,19 @@
   every `<div>` of text rather than guess
   ([#506](https://github.com/real-a11y/real-a11y-dev/pull/506)).
 
+- Chrome's tree no longer names a row after a card field or a password
+  that has no row of its own. A disabled field marked `role="none"` or
+  `"presentation"` has no row, and Chromium still names the table cell,
+  link or button holding it from what it holds, and a region whose
+  `aria-labelledby` points at it or at what holds it: a cell holding
+  `<input disabled role="none" autocomplete="cc-number" value="4111…">`
+  was named after the card number, and one holding a password showed its
+  length as bullets. Those rows now read `[redacted]`, and a description
+  that points at such a field is left out. A field masked by CSS
+  (`-webkit-text-security`) counts as a password. An empty field, or one
+  that isn't sensitive, still names its cell
+  ([#507](https://github.com/real-a11y/real-a11y-dev/pull/507)).
+
 - Hardened the shared mutation observer so that re-arming it can no longer
   strand the previous observers and event listeners
   ([#487](https://github.com/real-a11y/real-a11y-dev/pull/487)). No

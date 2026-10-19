@@ -1,5 +1,6 @@
 import {
   SENSITIVE_AUTOCOMPLETE_TOKENS,
+  type RawAXNameNode,
   type RawNativeAXNode,
 } from "@real-a11y-dev/core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -4819,5 +4820,254 @@ describe("a form control's inner text box, with the field's node gone", () => {
     expect(res.serialized).toContain('generic "Card"');
     expect(findNative(res.nodes, "region")?.name).toBe("[redacted]");
     expect(JSON.stringify(res)).not.toContain(CARD);
+  });
+});
+
+// Chromium 141 for `<td><input disabled role="none" autocomplete="cc-number"
+// value="4111…"></td>`: no node for the input (DOM 2), and Chromium names the
+// cell after its inner box (DOM 7). What stands in for the field there is read
+// in the page, which climbs out of the field's internals to classify it.
+describe("what stands in for a field with no node of its own", () => {
+  const CARD = "4111111111111111";
+  const ax = (held: string): RawNativeAXNode[] => [
+    {
+      nodeId: "1",
+      backendDOMNodeId: 1,
+      role: { value: "RootWebArea" },
+      childIds: ["27"],
+    },
+    {
+      nodeId: "27",
+      parentId: "1",
+      backendDOMNodeId: 27,
+      role: { value: "LayoutTableCell" },
+      name: {
+        value: held,
+        sources: [{ type: "contents", value: { value: held } }],
+      },
+      childIds: ["7"],
+    } as RawNativeAXNode,
+    {
+      nodeId: "7",
+      parentId: "27",
+      backendDOMNodeId: 7,
+      role: { value: "generic" },
+      childIds: ["70"],
+    },
+    {
+      nodeId: "70",
+      parentId: "7",
+      backendDOMNodeId: 70,
+      role: { value: "StaticText" },
+      name: { value: held },
+    },
+  ];
+  const dom: CdpDomNode = {
+    nodeType: 9,
+    backendNodeId: 1,
+    children: [
+      {
+        nodeType: 1,
+        backendNodeId: 27,
+        localName: "td",
+        children: [
+          {
+            nodeType: 1,
+            backendNodeId: 2,
+            localName: "input",
+            shadowRoots: [
+              {
+                nodeType: 11,
+                backendNodeId: 3,
+                shadowRootType: "user-agent",
+                children: [
+                  {
+                    nodeType: 1,
+                    backendNodeId: 7,
+                    localName: "div",
+                    children: [{ nodeType: 3, backendNodeId: 70 }],
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  };
+  const read = (held: string, verdict: unknown, listed = true) =>
+    new FakeTransport((method, params) => {
+      if (method === "Accessibility.getFullAXTree") return { nodes: ax(held) };
+      if (method === "DOM.getDocument") {
+        if (!listed) throw new Error("No node found");
+        return { root: dom };
+      }
+      return resolving(
+        `obj-${(params as { backendNodeId?: number } | undefined)?.backendNodeId}`,
+        verdict,
+      )(method, params);
+    });
+  const readsOf = (t: FakeTransport) =>
+    t.calls
+      .filter((c) => c.method === "DOM.resolveNode")
+      .map((c) => (c.params as { backendNodeId: number }).backendNodeId);
+
+  it("withholds the cell's name when the page reads the field as sensitive", async () => {
+    const t = read(CARD, { classified: true, sensitive: true });
+    const res = await readNativeTree(t);
+    expect(findNative(res.nodes, "LayoutTableCell")?.name).toBe("[redacted]");
+    expect(JSON.stringify(res)).not.toContain(CARD);
+    // Read through the inner box, never the cell.
+    expect(readsOf(t)).toEqual([7]);
+  });
+
+  it("keeps the cell's name around a field that isn't sensitive", async () => {
+    const res = await readNativeTree(read("plain-value", { classified: true }));
+    expect(findNative(res.nodes, "LayoutTableCell")?.name).toBe("plain-value");
+  });
+
+  it("withholds the cell's name when the field's read fails", async () => {
+    const res = await readNativeTree(read(CARD, {}));
+    expect(findNative(res.nodes, "LayoutTableCell")?.name).toBe("[redacted]");
+  });
+
+  it("withholds a region's name taken from the field by reference", async () => {
+    // `aria-labelledby` points at the input (DOM 2), which has no node of its
+    // own: what stands in for it answers for it.
+    const nodes: RawAXNameNode[] = [
+      { ...ax(CARD)[0]!, childIds: ["27", "30"] },
+      ...ax(CARD).slice(1),
+      {
+        nodeId: "30",
+        parentId: "1",
+        backendDOMNodeId: 30,
+        role: { value: "region" },
+        name: {
+          value: CARD,
+          sources: [
+            {
+              type: "relatedElement",
+              attribute: "aria-labelledby",
+              value: { value: CARD },
+            },
+          ],
+        },
+        properties: [
+          {
+            name: "labelledby",
+            value: {
+              type: "nodeList",
+              relatedNodes: [{ backendDOMNodeId: 2 }],
+            },
+          },
+        ],
+      },
+    ];
+    const listed: CdpDomNode = {
+      ...dom,
+      children: [
+        ...(dom.children ?? []),
+        { nodeType: 1, backendNodeId: 30, localName: "div" },
+      ],
+    };
+    const t = new FakeTransport((method, params) => {
+      if (method === "Accessibility.getFullAXTree") return { nodes };
+      if (method === "DOM.getDocument") return { root: listed };
+      return resolving(
+        `obj-${(params as { backendNodeId?: number } | undefined)?.backendNodeId}`,
+        { classified: true, sensitive: true },
+      )(method, params);
+    });
+    const res = await readNativeTree(t);
+    expect(findNative(res.nodes, "region")?.name).toBe("[redacted]");
+    expect(JSON.stringify(res)).not.toContain(CARD);
+  });
+
+  it("withholds a box holding Chromium's password mask unread", async () => {
+    // `-webkit-text-security: disc` masks a field its markup doesn't call a
+    // password: the bullets give its length away, whatever the read says.
+    const t = read("••••••", { classified: true });
+    const res = await readNativeTree(t);
+    expect(findNative(res.nodes, "LayoutTableCell")?.name).toBe("[redacted]");
+    expect(readsOf(t)).toEqual([]);
+  });
+
+  it("keeps a link's name after its `::after`, which the walk lists", async () => {
+    // `a::after { content: " ↗"; display: inline-block }` is a box of its own
+    // in the tree, keyed to the pseudo-element: seen, so no stand-in.
+    const t = new FakeTransport((method) => {
+      if (method === "Accessibility.getFullAXTree") {
+        return {
+          nodes: [
+            {
+              nodeId: "1",
+              backendDOMNodeId: 1,
+              role: { value: "RootWebArea" },
+              childIds: ["10"],
+            },
+            {
+              nodeId: "10",
+              parentId: "1",
+              backendDOMNodeId: 10,
+              role: { value: "link" },
+              name: {
+                value: "Docs ↗",
+                sources: [{ type: "contents", value: { value: "Docs ↗" } }],
+              },
+              childIds: ["18", "19"],
+            },
+            {
+              nodeId: "18",
+              parentId: "10",
+              backendDOMNodeId: 18,
+              role: { value: "StaticText" },
+              name: { value: "Docs" },
+            },
+            {
+              nodeId: "19",
+              parentId: "10",
+              backendDOMNodeId: 19,
+              role: { value: "generic" },
+              childIds: ["20"],
+            },
+            {
+              nodeId: "20",
+              parentId: "19",
+              role: { value: "StaticText" },
+              name: { value: "↗" },
+            },
+          ],
+        };
+      }
+      if (method === "DOM.getDocument") {
+        return {
+          root: {
+            nodeType: 9,
+            backendNodeId: 1,
+            children: [
+              {
+                nodeType: 1,
+                backendNodeId: 10,
+                localName: "a",
+                children: [{ nodeType: 3, backendNodeId: 18 }],
+                pseudoElements: [{ nodeType: 1, backendNodeId: 19 }],
+              },
+            ],
+          },
+        };
+      }
+      return {};
+    });
+    const res = await readNativeTree(t);
+    expect(findNative(res.nodes, "link")?.name).toBe("Docs ↗");
+  });
+
+  it("withholds it unread when the document can't be listed", async () => {
+    // With no walk, any bare generic holding text may be a field's inner box.
+    const t = read(CARD, { classified: true }, false);
+    const res = await readNativeTree(t);
+    expect(findNative(res.nodes, "LayoutTableCell")?.name).toBe("[redacted]");
+    expect(JSON.stringify(res)).not.toContain(CARD);
+    expect(readsOf(t)).toEqual([]);
   });
 });

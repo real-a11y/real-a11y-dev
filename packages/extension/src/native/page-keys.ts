@@ -201,6 +201,8 @@ export interface CdpDomNode {
   shadowRoots?: CdpDomNode[];
   /** On a shadow root: `open`, `closed` or `user-agent`. */
   shadowRootType?: string;
+  /** An element's `::before`, `::after` and `::marker`. */
+  pseudoElements?: CdpDomNode[];
   /** On a frame's `<iframe>`, the document it shows, when the frame shares
    *  the renderer of the document the `<iframe>` is in. */
   contentDocument?: CdpDomNode;

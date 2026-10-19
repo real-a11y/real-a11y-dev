@@ -161,7 +161,11 @@ cell), nor inside anything editable or carrying a value. A form control draws
 its value in its own user-agent shadow root, which no AX node marks: each
 transport reads the document for it (`opensFieldInternals`) and blanks that
 text first (`withholdFieldInternalText`), failing closed for a node its walk
-never saw.
+never saw. When the tree has no node of the control's own, `fieldStandIns`
+names the nodes standing in for it, which the transport classifies as the
+control, so a cell Chromium names after a card number reads `[redacted]`.
+`valueRegions` takes them too, so the same goes for a region whose
+`aria-labelledby` points at the control itself.
 
 ```ts
 import { normalizeNativeAX, serializeNativeAX } from "@real-a11y-dev/core";

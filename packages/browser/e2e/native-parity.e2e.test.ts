@@ -498,6 +498,161 @@ describe("a block of text beside other content", () => {
     }
   });
 
+  it("never names what holds a field after its value, the field's node gone", async () => {
+    // Chromium still names a cell, a link, a button or a labelled region from
+    // what a disabled `role="none"` field holds, and a month input's parts
+    // still announce the month and year. What stands in for the field is
+    // classified by its own markup.
+    await session.open(
+      dataUrl(
+        `<main><table>` +
+          `<tr><td><input disabled role="none" autocomplete="cc-number" value="4111111111111111"></td></tr>` +
+          `<tr><td><input disabled role="presentation" type="password" value="hunter2"></td></tr>` +
+          `<tr><td><textarea disabled role="none" autocomplete="cc-number">4222222222222222</textarea></td></tr>` +
+          `<tr><td><input disabled role="none" autocomplete="cc-number" placeholder="Card number"></td></tr>` +
+          `<tr><td><input disabled role="none" value="plain-value"></td></tr>` +
+          `</table>` +
+          `<a href="#x"><input disabled role="none" autocomplete="cc-csc" value="321"> card code</a>` +
+          `<label><input type="checkbox"> Use <input disabled role="none" value="label-secret"></label>` +
+          `<p><input type="month" disabled role="none" autocomplete="cc-exp" value="2030-04"></p>` +
+          `<div id="lbl"><input disabled role="none" autocomplete="cc-number" value="4444444444444444"></div>` +
+          `<div role="region" aria-labelledby="lbl">Region</div>` +
+          `</main>`,
+      ),
+    );
+    for (const redactInput of [false, true]) {
+      const tree = serializeTree(await session.nativeTree({ redactInput }), {
+        markFocus: false,
+        values: true,
+      });
+      for (const held of [
+        "4111",
+        "4222",
+        "4444",
+        "321",
+        "•",
+        "April",
+        "2030",
+      ]) {
+        expect(tree, `${held} (strict: ${redactInput})`).not.toContain(held);
+      }
+      // An empty field gives nothing away: its placeholder names its cell.
+      expect(tree).toContain('LayoutTableCell "Card number"');
+      expect(tree).toContain('region "[redacted]"');
+      expect(tree).toContain('link "[redacted]"');
+    }
+    // A value that isn't sensitive is page content by default, and withheld
+    // in strict mode.
+    const shown = serializeTree(await session.nativeTree(), {
+      markFocus: false,
+    });
+    expect(shown).toContain('LayoutTableCell "plain-value"');
+    expect(shown).toContain('checkbox "Use label-secret"');
+    const strict = serializeTree(
+      await session.nativeTree({ redactInput: true }),
+      { markFocus: false },
+    );
+    expect(strict).not.toContain("plain-value");
+    expect(strict).not.toContain("label-secret");
+  });
+
+  it("never names what references a field after its value, the field's node gone", async () => {
+    // `aria-labelledby` and `aria-describedby` still read a disabled
+    // `role="none"` field, which has no node of its own to point at: what
+    // stands in for it answers for it. And a field masked by CSS in circles
+    // or squares gives its length away as bullets do.
+    await session.open(
+      dataUrl(
+        `<main>` +
+          `<div role="region" aria-labelledby="cc">Saved card</div>` +
+          `<p><input id="cc" disabled role="none" autocomplete="cc-number" value="4111111111111111"></p>` +
+          `<div role="region" aria-labelledby="ta">Saved note</div>` +
+          `<p><textarea id="ta" disabled role="none" autocomplete="cc-number">4222222222222222</textarea></p>` +
+          `<div role="region" aria-labelledby="exp">Expiry</div>` +
+          `<p><input id="exp" type="month" disabled role="none" autocomplete="cc-exp" value="2030-04"></p>` +
+          `<div role="region" aria-labelledby="pw">Vault</div>` +
+          `<p><input id="pw" disabled role="none" type="password" value="hunter2"></p>` +
+          `<button aria-describedby="cvc">Pay</button>` +
+          `<p><input id="cvc" disabled role="none" autocomplete="cc-csc" value="321"></p>` +
+          `<div role="region" aria-labelledby="pv">Plain</div>` +
+          `<p><input id="pv" disabled role="none" value="plain-value"></p>` +
+          `<table>` +
+          `<tr><td><input disabled role="none" style="-webkit-text-security: circle" value="482913"></td></tr>` +
+          `<tr><td><input disabled role="none" style="-webkit-text-security: square" value="482913"></td></tr>` +
+          `</table>` +
+          `</main>`,
+      ),
+    );
+    for (const redactInput of [false, true]) {
+      const tree = await session.nativeTree({ redactInput });
+      const text = serializeTree(tree, { markFocus: false, values: true });
+      for (const held of [
+        "4111",
+        "4222",
+        "April",
+        "2030",
+        "321",
+        "•",
+        "◦",
+        "■",
+      ]) {
+        expect(text, `${held} (strict: ${redactInput})`).not.toContain(held);
+      }
+      const pay = [...tree.nodes.values()].find(
+        (n) => n.a11y.role === "button",
+      );
+      expect(pay?.a11y.description, `strict: ${redactInput}`).toBe("");
+    }
+    // A field that isn't sensitive names what references it, except in
+    // strict mode.
+    expect(
+      serializeTree(await session.nativeTree(), { markFocus: false }),
+    ).toContain('region "plain-value"');
+    expect(
+      serializeTree(await session.nativeTree({ redactInput: true }), {
+        markFocus: false,
+      }),
+    ).not.toContain("plain-value");
+  });
+
+  it("keeps a field's mask, a button's label and a pseudo-element apart", async () => {
+    // A field masked by CSS gives its length away as bullets whatever its
+    // markup. A button's internals hold the page's label. And a `::before` or
+    // `::after` laid out as a box has a node of its own, keyed to the
+    // pseudo-element, which the DOM walk must see as the page's.
+    await session.open(
+      dataUrl(
+        `<style>` +
+          `a.ext::after { content: " (opens)"; display: inline-block; }` +
+          `td.req::before { content: "Required: "; display: block; }` +
+          `button.ico::before { content: "+"; display: inline-block; }` +
+          `</style>` +
+          `<main><table>` +
+          `<tr><td><input disabled role="none" style="-webkit-text-security: disc" value="482913"></td></tr>` +
+          `<tr><td><input type="submit" disabled role="none" value="Pay now"></td></tr>` +
+          `<tr><td class="req">Name</td></tr>` +
+          `</table>` +
+          `<a class="ext" href="#docs">Docs</a>` +
+          `<button class="ico">Add</button>` +
+          `</main>`,
+      ),
+    );
+    for (const redactInput of [false, true]) {
+      const tree = serializeTree(await session.nativeTree({ redactInput }), {
+        markFocus: false,
+      });
+      expect(tree, `strict: ${redactInput}`).not.toMatch(/[•●]/);
+      expect(tree, `strict: ${redactInput}`).toContain(
+        'LayoutTableCell "Pay now"',
+      );
+      expect(tree, `strict: ${redactInput}`).toContain(
+        'LayoutTableCell "Required: Name"',
+      );
+      expect(tree, `strict: ${redactInput}`).toContain('link "Docs (opens)"');
+      expect(tree, `strict: ${redactInput}`).toContain('button "+ Add"');
+    }
+  });
+
   it("is never kept where its text is already a name, a value or typed", async () => {
     await session.open(
       dataUrl(

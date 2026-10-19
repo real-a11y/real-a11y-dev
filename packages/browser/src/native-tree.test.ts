@@ -523,8 +523,9 @@ describe("buildNativeTree — R1: a field's inner text box, with the field gone"
   ] as Parameters<typeof buildNativeTree>[0];
   const dom = new Map<number, NativeDomInfo>([
     [6, domOf("main")],
-    [7, { ...domOf("div"), fieldInternal: true }],
-    [70, { ...domOf("#text"), fieldInternal: true }],
+    [5, domOf("input", { autocomplete: "cc-number" })],
+    [7, { ...domOf("div"), fieldHost: 5 }],
+    [70, { ...domOf("#text"), fieldHost: 5 }],
     [8, domOf("div")],
     [80, domOf("#text")],
     [9, domOf("button")],
@@ -552,6 +553,356 @@ describe("buildNativeTree — R1: a field's inner text box, with the field gone"
     });
     expect(printed).not.toContain(CARD);
     expect(printed).toContain('generic "Loose block"');
+  });
+});
+
+// Chromium 141, with no node of the field's own: a disabled field with
+// `role="none"` loses it in a cell, a `<p>` or a `<div>`, and keeps an ignored
+// one in a `<label>`. Chromium still names what holds the field from the inner
+// box's text, and a month input's parts still announce the month and year.
+// What stands in for the field there is classified by the field's markup.
+describe("buildNativeTree — R1: what stands in for a field with no node of its own", () => {
+  const contents = (value: string) => ({
+    value,
+    sources: [{ type: "contents", value: { value } }],
+  });
+  const by = (type: string, value: string, attribute?: string) => ({
+    value,
+    sources: [{ type, ...(attribute ? { attribute } : {}), value: { value } }],
+  });
+  const labelledby = (backendDOMNodeId: number) => [
+    { name: "labelledby", value: { relatedNodes: [{ backendDOMNodeId }] } },
+  ];
+  type Raw = Parameters<typeof buildNativeTree>[0][number];
+  const node = (
+    id: string,
+    role: string,
+    parentId: string | undefined,
+    extra: Partial<Raw> = {},
+  ): Raw => ({
+    nodeId: id,
+    role: { value: role },
+    backendDOMNodeId: Number(id),
+    ...(parentId ? { parentId } : {}),
+    ...extra,
+  });
+  const raw = (): Raw[] => [
+    node("1", "RootWebArea", undefined, { childIds: ["22"] }),
+    node("22", "main", "1", {
+      childIds: ["27", "30", "40", "42", "46", "76", "78"],
+    }),
+    // <td><input disabled role="none" autocomplete="cc-number" value="4111…"></td>
+    node("27", "LayoutTableCell", "22", {
+      name: contents("4111111111111111"),
+      childIds: ["28"],
+    }),
+    node("28", "generic", "27", { childIds: ["80"] }),
+    node("80", "StaticText", "28", { name: contents("4111111111111111") }),
+    // The same, empty, with a placeholder Chromium names the cell after.
+    node("30", "LayoutTableCell", "22", {
+      name: contents("Card number"),
+      childIds: ["31", "32"],
+    }),
+    node("31", "none", "30", { ignored: true }),
+    node("32", "generic", "30"),
+    // A field that isn't sensitive: <input disabled role="none" value="plain-value">
+    node("40", "LayoutTableCell", "22", {
+      name: contents("plain-value"),
+      childIds: ["41"],
+    }),
+    node("41", "generic", "40", { childIds: ["83"] }),
+    node("83", "StaticText", "41", { name: contents("plain-value") }),
+    // <label><input type="checkbox"> Use <input disabled role="none" value="label-secret"></label>
+    node("42", "LabelText", "22", { childIds: ["7", "84", "8"] }),
+    node("7", "checkbox", "42", {
+      name: by("relatedElement", " Use label-secret"),
+      properties: labelledby(42),
+    }),
+    node("84", "StaticText", "42", { name: contents(" Use ") }),
+    node("8", "none", "42", { ignored: true, childIds: ["43"] }),
+    node("43", "generic", "8", { childIds: ["85"] }),
+    node("85", "StaticText", "43", { name: contents("label-secret") }),
+    // <p><input type="month" disabled role="none" autocomplete="cc-exp" value="2030-04"></p>
+    node("46", "paragraph", "22", { childIds: ["47"] }),
+    node("47", "none", "46", { ignored: true, childIds: ["48"] }),
+    node("48", "generic", "47", { childIds: ["50", "52"] }),
+    node("50", "spinbutton", "48", {
+      name: by("attribute", "Month", "aria-label"),
+      value: { value: 4 },
+    }),
+    node("52", "spinbutton", "48", {
+      name: by("attribute", "Year", "aria-label"),
+      value: { value: 2030 },
+    }),
+    // <div id="lbl"><input disabled role="none" autocomplete="cc-number" value="4444…"></div>
+    // <div role="region" aria-labelledby="lbl">Region</div>
+    node("76", "generic", "22", { childIds: ["77"] }),
+    node("77", "generic", "76", { childIds: ["95"] }),
+    node("95", "StaticText", "77", { name: contents("4444444444444444") }),
+    node("78", "region", "22", {
+      name: by("relatedElement", "4444444444444444", "aria-labelledby"),
+      properties: labelledby(76),
+      childIds: ["96"],
+    }),
+    node("96", "StaticText", "78", { name: contents("Region") }),
+  ];
+  const inside = (fieldHost: number, tagName = "div") => ({
+    ...domOf(tagName),
+    fieldHost,
+  });
+  const dom = (): Map<number, NativeDomInfo> =>
+    new Map<number, NativeDomInfo>([
+      [22, domOf("main")],
+      [27, domOf("td")],
+      [2, domOf("input", { autocomplete: "cc-number" })],
+      [28, inside(2)],
+      [80, inside(2, "#text")],
+      [30, domOf("td")],
+      [
+        3,
+        domOf("input", {
+          autocomplete: "cc-number",
+          placeholder: "Card number",
+        }),
+      ],
+      [31, inside(3)],
+      [32, inside(3)],
+      [40, domOf("td")],
+      [6, domOf("input", { role: "none" })],
+      [41, inside(6)],
+      [83, inside(6, "#text")],
+      [42, domOf("label")],
+      [7, domOf("input", { type: "checkbox" })],
+      [84, domOf("#text")],
+      [8, domOf("input", { role: "none" })],
+      [43, inside(8)],
+      [85, inside(8, "#text")],
+      [46, domOf("p")],
+      [11, domOf("input", { type: "month", autocomplete: "cc-exp" })],
+      [47, inside(11)],
+      [48, inside(11)],
+      [50, inside(11, "span")],
+      [52, inside(11, "span")],
+      [76, domOf("div", { id: "lbl" })],
+      [14, domOf("input", { autocomplete: "cc-number" })],
+      [77, inside(14)],
+      [95, inside(14, "#text")],
+      [78, domOf("div", { role: "region" })],
+      [96, domOf("#text")],
+    ]);
+  const print = (
+    enrichment: Map<number, NativeDomInfo>,
+    redactInput: boolean,
+  ): string =>
+    serializeTree(
+      buildNativeTree(raw(), enrichment, undefined, { redactInput }),
+      {
+        markFocus: false,
+        values: true,
+      },
+    );
+
+  it("withholds a sensitive field's value from every name and part around it", () => {
+    const tree = print(dom(), false);
+    for (const held of ["4111", "4444", "April", "2030", '= "4"']) {
+      expect(tree, held).not.toContain(held);
+    }
+    expect(tree).toContain('LayoutTableCell "[redacted]"');
+    expect(tree).toContain('region "[redacted]"');
+    expect(tree).toContain('spinbutton "Month" = "[redacted]"');
+    expect(tree).toContain('spinbutton "Year" = "[redacted]"');
+    // An empty field gives nothing away, and a value that isn't sensitive
+    // still names what holds it.
+    expect(tree).toContain('LayoutTableCell "Card number"');
+    expect(tree).toContain('LayoutTableCell "plain-value"');
+    expect(tree).toContain('checkbox "Use label-secret"');
+    // So does nativeAXView, which shares the redactions.
+    expect(nativeAXView(raw(), dom()).tree).not.toContain("4111");
+  });
+
+  it("withholds every such field's value in strict mode", () => {
+    const tree = print(dom(), true);
+    for (const held of ["4111", "4444", "plain-value", "label-secret"]) {
+      expect(tree, held).not.toContain(held);
+    }
+    expect(tree).toContain('checkbox "[redacted]"');
+    expect(tree).toContain('LayoutTableCell "Card number"');
+    expect(
+      nativeAXView(raw(), dom(), { redactInput: true }).tree,
+    ).not.toContain("plain-value");
+  });
+
+  it("withholds what references such a field, its node gone", () => {
+    // `<input id="cc" disabled role="none" autocomplete="cc-number"
+    // value="4111…">` (DOM 13) labels a region and describes a button, and
+    // `<input id="pv" disabled role="none" value="plain-value">` (DOM 16)
+    // labels another region. Each reference points at an input with no node,
+    // its inner box standing in for it.
+    const nodes = [
+      node("1", "RootWebArea", undefined, { childIds: ["22"] }),
+      node("22", "main", "1", { childIds: ["14", "20", "21", "17", "23"] }),
+      node("14", "generic", "22", { childIds: ["38"] }),
+      node("38", "StaticText", "14", { name: contents("4111111111111111") }),
+      node("20", "region", "22", {
+        name: by("relatedElement", "4111111111111111", "aria-labelledby"),
+        properties: labelledby(13),
+      }),
+      node("21", "button", "22", {
+        name: contents("Pay"),
+        description: { value: "4111111111111111" },
+        properties: [
+          {
+            name: "describedby",
+            value: { relatedNodes: [{ backendDOMNodeId: 13 }] },
+          },
+        ],
+      }),
+      node("17", "generic", "22", { childIds: ["39"] }),
+      node("39", "StaticText", "17", { name: contents("plain-value") }),
+      node("23", "region", "22", {
+        name: by("relatedElement", "plain-value", "aria-labelledby"),
+        properties: labelledby(16),
+      }),
+    ];
+    const enrichment = new Map<number, NativeDomInfo>([
+      [22, domOf("main")],
+      [13, domOf("input", { autocomplete: "cc-number" })],
+      [14, inside(13)],
+      [38, inside(13, "#text")],
+      [20, domOf("div", { role: "region" })],
+      [21, domOf("button")],
+      [16, domOf("input")],
+      [17, inside(16)],
+      [39, inside(16, "#text")],
+      [23, domOf("div", { role: "region" })],
+    ]);
+    const tree = buildNativeTree(nodes, enrichment);
+    const text = serializeTree(tree, { markFocus: false });
+    expect(text).not.toContain("4111");
+    expect(text).toContain('region "[redacted]"');
+    expect(tree.nodes.get("ax-dom-21")?.a11y.description).toBe("");
+    // A field that isn't sensitive still names what references it, except in
+    // strict mode.
+    expect(text).toContain('region "plain-value"');
+    const strict = buildNativeTree(nodes, enrichment, undefined, {
+      redactInput: true,
+    });
+    expect(serializeTree(strict, { markFocus: false })).not.toContain(
+      "plain-value",
+    );
+  });
+
+  it("names a link after its `::after`, which the walk sees", () => {
+    // `a::after { content: " ↗"; display: inline-block }`: a box of its own
+    // in the tree, keyed to the pseudo-element, which has no element.
+    const link = [
+      node("1", "RootWebArea", undefined, { childIds: ["10"] }),
+      node("10", "link", "1", {
+        name: contents("Docs ↗"),
+        childIds: ["18", "19"],
+      }),
+      node("18", "StaticText", "10", { name: contents("Docs") }),
+      node("19", "generic", "10", { childIds: ["20"] }),
+      {
+        nodeId: "20",
+        parentId: "19",
+        role: { value: "StaticText" },
+        name: contents("↗"),
+      } as Raw,
+    ];
+    const enrichment = new Map<number, NativeDomInfo>([
+      [10, domOf("a", { href: "#docs" })],
+      [18, domOf("#text")],
+      [19, { tagName: "::after", attributes: {}, pseudo: true }],
+    ]);
+    const tree = buildNativeTree(link, enrichment);
+    expect(serializeTree(tree, { markFocus: false })).toBe('link "Docs ↗"');
+    // The pseudo-element is no element: no `dom` facet for it.
+    expect(tree.nodes.get("ax-dom-19")?.dom).toBeUndefined();
+  });
+
+  it("withholds through a field whose box holds Chromium's password mask", () => {
+    // `-webkit-text-security: disc` masks a field that isn't a password by
+    // its markup: the bullets give its length away.
+    const masked = [
+      node("1", "RootWebArea", undefined, { childIds: ["27"] }),
+      node("27", "LayoutTableCell", "1", {
+        name: contents("••••••"),
+        childIds: ["28"],
+      }),
+      node("28", "generic", "27", { childIds: ["80"] }),
+      node("80", "StaticText", "28", { name: contents("••••••") }),
+    ];
+    const enrichment = new Map<number, NativeDomInfo>([
+      [27, domOf("td")],
+      [2, domOf("input")],
+      [28, inside(2)],
+      [80, inside(2, "#text")],
+    ]);
+    expect(
+      serializeTree(buildNativeTree(masked, enrichment), { markFocus: false }),
+    ).toBe('LayoutTableCell "[redacted]"');
+  });
+
+  it("keeps a button's own label in strict mode", () => {
+    // `<td><input type="submit" disabled role="none" value="Pay now"></td>`:
+    // its internals hold the page's label, not what a user entered.
+    const button = [
+      node("1", "RootWebArea", undefined, { childIds: ["27"] }),
+      node("27", "LayoutTableCell", "1", {
+        name: contents("Pay now"),
+        childIds: ["28"],
+      }),
+      node("28", "generic", "27", { childIds: ["80"] }),
+      node("80", "StaticText", "28", { name: contents("Pay now") }),
+    ];
+    const enrichment = new Map<number, NativeDomInfo>([
+      [27, domOf("td")],
+      [2, domOf("input", { type: "submit" })],
+      [28, inside(2)],
+      [80, inside(2, "#text")],
+    ]);
+    const tree = buildNativeTree(button, enrichment, undefined, {
+      redactInput: true,
+    });
+    expect(serializeTree(tree, { markFocus: false })).toBe(
+      'LayoutTableCell "Pay now"',
+    );
+  });
+
+  it("leaves a media player's own controls out of strict mode, as ever", () => {
+    // A player's controls are playback, not input: a part of one that held
+    // text would otherwise withhold the player's name.
+    const player = [
+      node("1", "RootWebArea", undefined, { childIds: ["4"] }),
+      node("4", "Video", "1", { name: contents("Tour"), childIds: ["57"] }),
+      node("57", "none", "4", { ignored: true, childIds: ["58"] }),
+      node("58", "generic", "57", { childIds: ["59"] }),
+      node("59", "StaticText", "58", { name: contents("0:42") }),
+    ];
+    const enrichment = new Map<number, NativeDomInfo>([
+      [4, domOf("video")],
+      [57, domOf("input", { type: "range" })],
+      [58, inside(57)],
+      [59, inside(57, "#text")],
+    ]);
+    const tree = serializeTree(
+      buildNativeTree(player, enrichment, undefined, { redactInput: true }),
+      { markFocus: false },
+    );
+    expect(tree).toBe('video "Tour"');
+  });
+
+  it("withholds through a box the DOM walk never saw", () => {
+    // The page replaced the field between the AX read and the DOM walk: what
+    // the walk didn't see may be a field's inner box, so it fails closed.
+    const unseen = dom();
+    unseen.delete(28);
+    unseen.delete(80);
+    const tree = print(unseen, false);
+    expect(tree).not.toContain("4111");
+    expect(tree).toContain('LayoutTableCell "[redacted]"');
+    expect(tree).toContain('LayoutTableCell "plain-value"');
   });
 });
 

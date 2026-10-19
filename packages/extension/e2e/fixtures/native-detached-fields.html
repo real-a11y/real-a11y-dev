@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Fields with no node of their own</title>
+    <style>
+      a.ext::after {
+        content: " ↗";
+        display: inline-block;
+      }
+    </style>
+  </head>
+  <body>
+    <!--
+      A role="none" or "presentation" on a disabled field takes the field's
+      own node out of Chromium's tree, and Chromium still names what holds it
+      from what the field holds. What stands in for each field is read in the
+      page, as the field. The plain field and the empty card field are the
+      controls: a value that isn't sensitive still names its cell, and an
+      empty card field's placeholder gives nothing away.
+    -->
+    <table>
+      <tr>
+        <td>
+          <input
+            disabled
+            role="none"
+            autocomplete="cc-number"
+            value="4111111111111111"
+          />
+        </td>
+      </tr>
+      <tr>
+        <td>
+          <input disabled role="presentation" type="password" value="hunter2" />
+        </td>
+      </tr>
+      <tr>
+        <td>
+          <textarea disabled role="none" autocomplete="cc-number">
+4222222222222222</textarea>
+        </td>
+      </tr>
+      <tr>
+        <td>
+          <input
+            disabled
+            role="none"
+            autocomplete="cc-number"
+            placeholder="Card number"
+          />
+        </td>
+      </tr>
+      <tr>
+        <td><input disabled role="none" value="plain-value" /></td>
+      </tr>
+      <tr>
+        <td>
+          <input
+            disabled
+            role="none"
+            style="-webkit-text-security: disc"
+            value="482913"
+          />
+        </td>
+      </tr>
+      <tr>
+        <td>
+          <input
+            disabled
+            role="none"
+            style="-webkit-text-security: circle"
+            value="482913"
+          />
+        </td>
+      </tr>
+    </table>
+    <!-- A pseudo-element laid out as a box is the page's, not a field's. -->
+    <a class="ext" href="#docs">Docs</a>
+    <a href="#code"
+      ><input disabled role="none" autocomplete="cc-csc" value="4321" /> card
+      code</a
+    >
+    <p>
+      <input
+        type="month"
+        disabled
+        role="none"
+        autocomplete="cc-exp"
+        value="2030-04"
+      />
+    </p>
+    <div id="lbl">
+      <input
+        disabled
+        role="none"
+        autocomplete="cc-number"
+        value="4444444444444444"
+      />
+    </div>
+    <div role="region" aria-labelledby="lbl">Saved card</div>
+    <!-- A reference to a field with no node of its own reads the field. -->
+    <div role="region" aria-labelledby="ref">Card on file</div>
+    <p>
+      <input
+        id="ref"
+        disabled
+        role="none"
+        autocomplete="cc-number"
+        value="4555555555555555"
+      />
+    </p>
+    <button aria-describedby="cvc">Pay</button>
+    <p>
+      <input id="cvc" disabled role="none" autocomplete="cc-csc" value="9876" />
+    </p>
+  </body>
+</html>
