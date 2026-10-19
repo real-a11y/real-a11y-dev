@@ -3,6 +3,12 @@
   <head>
     <meta charset="utf-8" />
     <title>Fields with no node of their own</title>
+    <style>
+      a.ext::after {
+        content: " ↗";
+        display: inline-block;
+      }
+    </style>
   </head>
   <body>
     <!--
@@ -48,7 +54,19 @@
       <tr>
         <td><input disabled role="none" value="plain-value" /></td>
       </tr>
+      <tr>
+        <td>
+          <input
+            disabled
+            role="none"
+            style="-webkit-text-security: disc"
+            value="482913"
+          />
+        </td>
+      </tr>
     </table>
+    <!-- A pseudo-element laid out as a box is the page's, not a field's. -->
+    <a class="ext" href="#docs">Docs</a>
     <a href="#code"
       ><input disabled role="none" autocomplete="cc-csc" value="4321" /> card
       code</a

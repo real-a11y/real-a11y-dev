@@ -96,14 +96,17 @@ test("NATIVE_READ keeps a field's value out of every name, the field's node gone
 
   const named = (role: string, name: string) =>
     nodes.filter((n) => n.role === role && n.name === name);
-  // The cells holding the card number, the password and the card text area.
-  expect(named("LayoutTableCell", "[redacted]")).toHaveLength(3);
+  // The cells holding the card number, the password, the card text area and
+  // the field masked by CSS.
+  expect(named("LayoutTableCell", "[redacted]")).toHaveLength(4);
   expect(named("link", "[redacted]")).toHaveLength(1);
   expect(named("region", "[redacted]")).toHaveLength(1);
   // An empty card field's placeholder names its cell, and a value that isn't
   // sensitive still does.
   expect(named("LayoutTableCell", "Card number")).toHaveLength(1);
   expect(named("LayoutTableCell", "plain-value")).toHaveLength(1);
+  // A link's `::after` is the page's, and its name keeps it.
+  expect(named("link", "Docs ↗")).toHaveLength(1);
 });
 
 test("the panel shows no card number in any row", async ({ nav }) => {

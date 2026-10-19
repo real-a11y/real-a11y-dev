@@ -954,6 +954,9 @@ async function fieldInternals(
             : undefined),
       ]);
     }
+    // A `::before` or `::after` Chromium lays out as a box has a node of its
+    // own in the tree, seen here like any other.
+    for (const pseudo of node.pseudoElements ?? []) stack.push([pseudo, host]);
   }
   return { seen, hosts };
 }
@@ -1436,9 +1439,14 @@ async function readDocument(
       // is read through what stands in for it: the in-page read climbs out of
       // the field's internals and classifies the field. One the walk can't
       // name is withheld unread.
-      ...standIns.map(async ({ host, nodeIds }) => {
+      ...standIns.map(async ({ host, nodeIds, masked }) => {
         const backendNodeId = rawIndex.byId.get(nodeIds[0]!)?.backendDOMNodeId;
-        if (host !== undefined && typeof backendNodeId === "number") {
+        // Chromium's password mask makes it a password, whatever the read says.
+        if (
+          !masked &&
+          host !== undefined &&
+          typeof backendNodeId === "number"
+        ) {
           const verdict = await readFieldValue(
             transport,
             backendNodeId,

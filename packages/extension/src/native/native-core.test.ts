@@ -4930,6 +4930,85 @@ describe("what stands in for a field with no node of its own", () => {
     expect(findNative(res.nodes, "LayoutTableCell")?.name).toBe("[redacted]");
   });
 
+  it("withholds a box holding Chromium's password mask unread", async () => {
+    // `-webkit-text-security: disc` masks a field its markup doesn't call a
+    // password: the bullets give its length away, whatever the read says.
+    const t = read("••••••", { classified: true });
+    const res = await readNativeTree(t);
+    expect(findNative(res.nodes, "LayoutTableCell")?.name).toBe("[redacted]");
+    expect(readsOf(t)).toEqual([]);
+  });
+
+  it("keeps a link's name after its `::after`, which the walk lists", async () => {
+    // `a::after { content: " ↗"; display: inline-block }` is a box of its own
+    // in the tree, keyed to the pseudo-element: seen, so no stand-in.
+    const t = new FakeTransport((method) => {
+      if (method === "Accessibility.getFullAXTree") {
+        return {
+          nodes: [
+            {
+              nodeId: "1",
+              backendDOMNodeId: 1,
+              role: { value: "RootWebArea" },
+              childIds: ["10"],
+            },
+            {
+              nodeId: "10",
+              parentId: "1",
+              backendDOMNodeId: 10,
+              role: { value: "link" },
+              name: {
+                value: "Docs ↗",
+                sources: [{ type: "contents", value: { value: "Docs ↗" } }],
+              },
+              childIds: ["18", "19"],
+            },
+            {
+              nodeId: "18",
+              parentId: "10",
+              backendDOMNodeId: 18,
+              role: { value: "StaticText" },
+              name: { value: "Docs" },
+            },
+            {
+              nodeId: "19",
+              parentId: "10",
+              backendDOMNodeId: 19,
+              role: { value: "generic" },
+              childIds: ["20"],
+            },
+            {
+              nodeId: "20",
+              parentId: "19",
+              role: { value: "StaticText" },
+              name: { value: "↗" },
+            },
+          ],
+        };
+      }
+      if (method === "DOM.getDocument") {
+        return {
+          root: {
+            nodeType: 9,
+            backendNodeId: 1,
+            children: [
+              {
+                nodeType: 1,
+                backendNodeId: 10,
+                localName: "a",
+                children: [{ nodeType: 3, backendNodeId: 18 }],
+                pseudoElements: [{ nodeType: 1, backendNodeId: 19 }],
+              },
+            ],
+          },
+        };
+      }
+      return {};
+    });
+    const res = await readNativeTree(t);
+    expect(findNative(res.nodes, "link")?.name).toBe("Docs ↗");
+  });
+
   it("withholds it unread when the document can't be listed", async () => {
     // With no walk, any bare generic holding text may be a field's inner box.
     const t = read(CARD, { classified: true }, false);
