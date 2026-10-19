@@ -1,5 +1,6 @@
 import {
   SENSITIVE_AUTOCOMPLETE_TOKENS,
+  type RawAXNameNode,
   type RawNativeAXNode,
 } from "@real-a11y-dev/core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -4933,7 +4934,7 @@ describe("what stands in for a field with no node of its own", () => {
   it("withholds a region's name taken from the field by reference", async () => {
     // `aria-labelledby` points at the input (DOM 2), which has no node of its
     // own: what stands in for it answers for it.
-    const nodes: RawNativeAXNode[] = [
+    const nodes: RawAXNameNode[] = [
       { ...ax(CARD)[0]!, childIds: ["27", "30"] },
       ...ax(CARD).slice(1),
       {
@@ -4960,7 +4961,7 @@ describe("what stands in for a field with no node of its own", () => {
             },
           },
         ],
-      } as RawNativeAXNode,
+      },
     ];
     const listed: CdpDomNode = {
       ...dom,
