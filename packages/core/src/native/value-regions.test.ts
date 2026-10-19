@@ -329,8 +329,30 @@ describe("fieldStandIns", () => {
 
   it("stands a field's inner box in for it when its node is gone", () => {
     expect(standIns(cell(), internals(2, 28, 80))).toEqual([
-      { host: 2, nodeIds: ["28"] },
+      { host: 2, nodeIds: ["28"], masked: false },
     ]);
+  });
+
+  it("says when a stand-in holds Chromium's password mask", () => {
+    // `<td><input disabled role="none" style="-webkit-text-security: disc"
+    // value="482913"></td>`: no password in the markup, but its bullets.
+    const nodes = cell();
+    nodes[2] = { ...nodes[2], name: { value: "••••••" } };
+    expect(standIns(nodes, internals(2, 28, 80))).toEqual([
+      { host: 2, nodeIds: ["28"], masked: true },
+    ]);
+  });
+
+  it("leaves a field alone when any node of its own is exposed", () => {
+    // An index keeps one node per backend id: an ignored one sharing the
+    // field's must not hide the field's exposed node.
+    const nodes = [
+      raw("2", "textbox", { value: { value: "4111" }, childIds: ["28"] }),
+      ...cell().slice(1),
+      { ...raw("2", "none", { ignored: true }), nodeId: "2b" },
+    ];
+    nodes[1] = { ...nodes[1], parentId: "2" };
+    expect(standIns(nodes, internals(2, 28, 80))).toEqual([]);
   });
 
   it("leaves a field its own node stands for alone", () => {
@@ -362,7 +384,7 @@ describe("fieldStandIns", () => {
       }),
     ];
     expect(standIns(nodes, internals(8, 43, 85))).toEqual([
-      { host: 8, nodeIds: ["43"] },
+      { host: 8, nodeIds: ["43"], masked: false },
     ]);
   });
 
@@ -377,7 +399,7 @@ describe("fieldStandIns", () => {
       raw("52", "spinbutton", { parentId: "48", value: { value: 2030 } }),
     ];
     expect(standIns(nodes, internals(11, 47, 48, 50, 52))).toEqual([
-      { host: 11, nodeIds: ["47"] },
+      { host: 11, nodeIds: ["47"], masked: false },
     ]);
   });
 
@@ -440,7 +462,7 @@ describe("fieldStandIns", () => {
     const seenOnly: FieldHostOf = (id) =>
       id === 1 || id >= 8 ? null : undefined;
     expect(standIns(nodes, seenOnly)).toEqual([
-      { host: undefined, nodeIds: ["7"] },
+      { host: undefined, nodeIds: ["7"], masked: false },
     ]);
   });
 
@@ -471,7 +493,7 @@ describe("fieldStandIns", () => {
       raw("9", "generic", { parentId: "1" }),
     ];
     expect(standIns(nodes, undefined)).toEqual([
-      { host: undefined, nodeIds: ["7"] },
+      { host: undefined, nodeIds: ["7"], masked: false },
     ]);
   });
 });

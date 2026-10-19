@@ -521,10 +521,13 @@ export function withholdFieldInternalText<T extends RawAXNameNode>(
  * A form control the tree has no node of its own for, and the nodes standing
  * in for it there ({@link fieldStandIns}). `host` is the control's backend id,
  * `undefined` when the walk can't say whether any control is behind them.
+ * `masked` when what they hold is Chromium's password mask, which makes the
+ * control a password whatever its markup says ({@link isNativePasswordMask}).
  */
 export interface FieldStandIn {
   host: number | undefined;
   nodeIds: string[];
+  masked: boolean;
 }
 
 /**
@@ -560,20 +563,63 @@ export function fieldStandIns<T extends RawAXNameNode>(
   index: NativeAXIndex<T>,
   hostOf: FieldHostOf | undefined,
 ): FieldStandIn[] {
-  const { byId, byBackendId } = index;
+  const { byId } = index;
   const hostOfNode = (raw: T | undefined): number | null | undefined =>
     typeof raw?.backendDOMNodeId === "number"
       ? hostOf?.(raw.backendDOMNodeId)
       : null;
-  // A node around `raw` is a field: it carries a value, or is editable.
+  // The DOM nodes with an unignored node in the tree, of every node that
+  // shares one: an index keeps one node per backend id.
+  const exposed = new Set<number>();
+  for (const raw of byId.values()) {
+    if (!raw.ignored && typeof raw.backendDOMNodeId === "number") {
+      exposed.add(raw.backendDOMNodeId);
+    }
+  }
+  // nodeId → whether a node around it carries a value or is editable, a
+  // field's own. Memoized along each walk, as in `valueRegions`.
+  const fieldMemo = new Map<string, boolean>();
   const inField = (raw: T): boolean => {
-    for (const cur of nativeAncestry(raw, byId)) {
+    const chain: string[] = [];
+    let result = false;
+    for (const cur of nativeAncestry(
+      raw.parentId ? byId.get(raw.parentId) : undefined,
+      byId,
+    )) {
+      const known = fieldMemo.get(cur.nodeId);
+      if (known !== undefined) {
+        result = known;
+        break;
+      }
+      chain.push(cur.nodeId);
       if (
-        cur !== raw &&
-        (carriesAXValue(cur) ||
-          (cur.properties ?? []).some((p) => p.name === "editable"))
+        carriesAXValue(cur) ||
+        nativeAXProperty(cur, "editable") !== undefined
+      ) {
+        result = true;
+        break;
+      }
+    }
+    for (const id of chain) fieldMemo.set(id, result);
+    return result;
+  };
+  // Whether a value or text run at or below `raw` is Chromium's password mask.
+  const masks = (raw: T): boolean => {
+    const stack = [raw];
+    const seen = new Set<string>();
+    while (stack.length > 0) {
+      const cur = stack.pop()!;
+      if (seen.has(cur.nodeId)) continue;
+      seen.add(cur.nodeId);
+      if (
+        isNativePasswordMask(cur.value?.value) ||
+        (isTextRun(cur) && isNativePasswordMask(cur.name?.value))
       ) {
         return true;
+      }
+      for (const id of cur.childIds ?? []) {
+        const child = byId.get(id);
+        if (child) stack.push(child);
       }
     }
     return false;
@@ -584,9 +630,7 @@ export function fieldStandIns<T extends RawAXNameNode>(
     const host = hostOfNode(raw);
     if (typeof host === "number") {
       const parent = raw.parentId ? byId.get(raw.parentId) : undefined;
-      if (hostOfNode(parent) === host) continue;
-      const own = byBackendId.get(host);
-      if (own !== undefined && own.ignored !== true) continue;
+      if (hostOfNode(parent) === host || exposed.has(host)) continue;
       const tops = topmost.get(host);
       if (tops) tops.push(raw);
       else topmost.set(host, [raw]);
@@ -596,12 +640,16 @@ export function fieldStandIns<T extends RawAXNameNode>(
       (raw.childIds ?? []).some((id) => isTextRun(byId.get(id))) &&
       !inField(raw)
     ) {
-      out.push({ host: undefined, nodeIds: [raw.nodeId] });
+      out.push({ host: undefined, nodeIds: [raw.nodeId], masked: masks(raw) });
     }
   }
   for (const [host, tops] of topmost) {
     if (tops.some((top) => holdsContent(top, byId, true))) {
-      out.push({ host, nodeIds: tops.map((top) => top.nodeId) });
+      out.push({
+        host,
+        nodeIds: tops.map((top) => top.nodeId),
+        masked: tops.some(masks),
+      });
     }
   }
   return out;

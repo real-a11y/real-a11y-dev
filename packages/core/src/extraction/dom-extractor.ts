@@ -1692,7 +1692,7 @@ const TEXT_VALUE_ROLES: ReadonlySet<string> = new Set([
 ]);
 
 /** `<input>` types with no announced value: a state, a name, or nothing. */
-const VALUELESS_INPUT_TYPES: ReadonlySet<string> = new Set([
+export const VALUELESS_INPUT_TYPES: ReadonlySet<string> = new Set([
   "checkbox",
   "radio",
   "button",
