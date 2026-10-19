@@ -52,7 +52,8 @@ export function InputPanel({ state, onSubmit, onCancel }: InputPanelProps) {
   // re-renders the panel in place, and an editor reused for it would keep what
   // was typed for the first field while taking the second's mask: a password
   // typed into a masked box would show in the next, unmasked one, and Enter
-  // would type it into that field.
+  // would type it into that field. A reused picker would keep the first
+  // list's place.
   const field = `${state.source ?? "dom"}:${state.nodeId}`;
   if (state.type === "text") {
     return (

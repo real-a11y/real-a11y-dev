@@ -36,8 +36,8 @@ updated yet, this row is **Blocked**, not Pass — a local build is a different 
 5. **An SPA** — client-side routes: navigate, confirm the panel follows; use Back
 6. **A real form** — click, type, toggle; confirm the page's own handlers ran
 7. On that form, focus a **password** field and type — check every panel view.
-   Then, from an **empty** password field, type through its edit box in the tree
-   (**R18**'s step 6a)
+   Then type into an **empty** password field's edit box in the tree: it shows
+   dots, as in **R18**'s step 6a
 8. **A heavy page** — a large table or an infinite feed: is the panel usable, or does it stall?
 9. Keyboard-only pass, with a screen reader running
 10. Leave it installed and browse normally for a while

@@ -34,10 +34,11 @@
   it too, since it may be one of those
   ([#510](https://github.com/real-a11y/real-a11y-dev/pull/510)).
 
-- Opening another field's edit box while one is open now opens it with that
-  field's own value, in either tree. It kept what you had typed into the
-  first, so a password typed into a masked edit box showed in the next one in
-  plain text, and Enter typed it into that field
+- Opening another field's edit box or option picker while one is open now
+  starts it on that field's own value, in either tree. An edit box kept what
+  you had typed into the first, so a password typed into a masked edit box
+  showed in the next one in plain text, and Enter typed it into that field. A
+  picker kept the first one's place in its list
   ([#510](https://github.com/real-a11y/real-a11y-dev/pull/510)).
 
 ## 0.1.16

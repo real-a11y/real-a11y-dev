@@ -275,12 +275,6 @@ describe("InputPanel focus restoration", () => {
   });
 });
 
-/**
- * `blockEmptySubmit` opens a field empty in place of a value the panel can't
- * show (a redacted field, a native editor's content). Only the UNTOUCHED
- * submit is blocked — that one says nothing about the value — while typing
- * and then clearing the field is how a user deliberately empties it.
- */
 describe("InputPanel masking", () => {
   const field = () =>
     container.querySelector<HTMLInputElement>("input.sn-input-panel-field")!;
@@ -325,6 +319,12 @@ describe("InputPanel masking", () => {
   });
 });
 
+/**
+ * `blockEmptySubmit` opens a field empty in place of a value the panel can't
+ * show (a redacted field, a native editor's content). Only the UNTOUCHED
+ * submit is blocked — that one says nothing about the value — while typing
+ * and then clearing the field is how a user deliberately empties it.
+ */
 describe("InputPanel blockEmptySubmit", () => {
   const BLOCKED: InputPanelState = {
     type: "text",
@@ -440,6 +440,32 @@ describe("InputPanel select picker selection state", () => {
     });
     expect(activeLabel()).toBe("Germany");
     expect(selectedLabels()).toEqual(["France"]);
+  });
+
+  it("starts another select's picker on that select's own option", () => {
+    // Opening a second select's picker while one is open re-renders the panel
+    // in place. Reused, the picker kept the first one's place, for Enter to
+    // choose that position in the second list.
+    open(SELECT_STATE);
+    act(() => {
+      container
+        .querySelector('[role="listbox"]')!
+        .dispatchEvent(
+          new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }),
+        );
+    });
+    expect(activeLabel()).toBe("Germany");
+    open({
+      ...SELECT_STATE,
+      nodeId: "n3",
+      label: "Currency",
+      value: "eur",
+      options: [
+        { value: "eur", label: "Euro", selected: true },
+        { value: "usd", label: "Dollar", selected: false },
+      ],
+    });
+    expect(activeLabel()).toBe("Euro");
   });
 
   it("announces no option as selected when the current one is withheld", () => {
