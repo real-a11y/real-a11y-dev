@@ -200,8 +200,62 @@ describe("withholdSensitiveFieldNames", () => {
     ];
     // As a field it would give nothing away: it holds no value.
     expect(withholdSensitiveFieldNames(nodes, ["28"])).toBe(nodes);
-    const out = withholdSensitiveFieldNames(nodes, [], ["28"]);
+    const out = withholdSensitiveFieldNames(
+      nodes,
+      [],
+      [{ host: 2, nodeIds: ["28"], masked: false }],
+    );
     expect(out[0].name?.value).toBe(REDACTED_VALUE);
+  });
+
+  it("withholds what references a field with no node of its own", () => {
+    // Chromium 141 for `<input id="cc" disabled role="none"
+    // autocomplete="cc-number" value="4111…">` (DOM 13), labelling a region
+    // and describing a button. Both point at the input, which has no node:
+    // its inner box (DOM 14) stands in for it.
+    const nodes = [
+      raw("12", "main", { childIds: ["14", "15", "16"] }),
+      raw("14", "generic", { parentId: "12", childIds: ["38"] }),
+      raw("38", "StaticText", {
+        parentId: "14",
+        name: { value: "4111111111111111" },
+      }),
+      raw("15", "region", {
+        parentId: "12",
+        name: { value: "4111111111111111" },
+        named: "relatedElement",
+        properties: [
+          {
+            name: "labelledby",
+            value: { relatedNodes: [{ backendDOMNodeId: 13 }] },
+          },
+        ],
+      }),
+      raw("16", "button", {
+        parentId: "12",
+        name: { value: "Pay" },
+        named: "contents",
+        description: { value: "4111111111111111" },
+        properties: [
+          {
+            name: "describedby",
+            value: { relatedNodes: [{ backendDOMNodeId: 13 }] },
+          },
+        ],
+      }),
+    ];
+    const standIn = { host: 13, nodeIds: ["14"], masked: false };
+    const out = withholdSensitiveFieldNames(nodes, [], [standIn]);
+    expect(out[3].name?.value).toBe(REDACTED_VALUE);
+    expect(out[4].description).toBeUndefined();
+    expect(out[4].name?.value).toBe("Pay");
+    // A stand-in the walk can't name a control for answers no reference.
+    const unnamed = withholdSensitiveFieldNames(
+      nodes,
+      [],
+      [{ ...standIn, host: undefined }],
+    );
+    expect(unnamed[3].name?.value).toBe("4111111111111111");
   });
 });
 
@@ -341,6 +395,13 @@ describe("fieldStandIns", () => {
     expect(standIns(nodes, internals(2, 28, 80))).toEqual([
       { host: 2, nodeIds: ["28"], masked: true },
     ]);
+    // `circle` and `square` draw the same count, as other shapes.
+    for (const mask of ["◦◦◦◦◦◦", "■■■■■■"]) {
+      nodes[2] = { ...nodes[2], name: { value: mask } };
+      expect(standIns(nodes, internals(2, 28, 80))).toEqual([
+        { host: 2, nodeIds: ["28"], masked: true },
+      ]);
+    }
   });
 
   it("leaves a field alone when any node of its own is exposed", () => {

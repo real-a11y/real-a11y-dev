@@ -56,6 +56,16 @@ export function cleanAXText(text: string): string {
 /** Chromium's password mask: a value made only of these is a password field. */
 const PASSWORD_MASK = /^[•●]+$/;
 
+/** What `-webkit-text-security` draws a field's text as, one per character:
+ *  `disc` (the password mask), `circle` or `square`. */
+const TEXT_SECURITY_MASK = /^[•●◦■]+$/;
+
+function isTextSecurityMask(text: unknown): boolean {
+  return (
+    typeof text === "string" && TEXT_SECURITY_MASK.test(text.replace(/\s/g, ""))
+  );
+}
+
 /**
  * `value` is Chromium's password mask — the AX value of a password field,
  * one bullet per character. Treat it as a sensitive field's whatever the
@@ -206,9 +216,11 @@ export interface ValueRegions {
    * `raw` takes its label or description by reference — `aria-labelledby` /
    * `aria-describedby`, and the `labelledby` Chromium reports for a `<label>` —
    * from a root other than its own: the referenced node is, is inside, or
-   * contains one. A field wrapped in its own `<label>` references that label,
-   * but the label's only root is the field itself, whose value never names
-   * it; that is no reference to a value.
+   * contains one. A referenced form control the tree has no node of its own
+   * for is reached through what stands in for it ({@link fieldStandIns}). A
+   * field wrapped in its own `<label>` references that label, but the label's
+   * only root is the field itself, whose value never names it; that is no
+   * reference to a value.
    */
   references(
     raw: RawAXNameNode,
@@ -219,8 +231,20 @@ export interface ValueRegions {
 export function valueRegions<T extends RawAXNameNode>(
   index: NativeAXIndex<T>,
   roots: ReadonlySet<string>,
+  standIns: readonly FieldStandIn[] = [],
 ): ValueRegions {
   const { byId, byBackendId } = index;
+  // A control's backend id → what stands in for it. Chromium still names a
+  // region `aria-labelledby` points at such a control after its value.
+  const standInsOf = new Map<number, T[]>();
+  for (const { host, nodeIds } of standIns) {
+    if (host === undefined) continue;
+    const nodes = nodeIds.flatMap((id) => {
+      const raw = byId.get(id);
+      return raw ? [raw] : [];
+    });
+    standInsOf.set(host, [...(standInsOf.get(host) ?? []), ...nodes]);
+  }
   const containing = new Set<string>();
   const rootsUnder = new Map<string, string[]>();
   for (const id of roots) {
@@ -276,17 +300,21 @@ export function valueRegions<T extends RawAXNameNode>(
     inside: (raw) => rootOf(raw) !== null,
     references: (raw, property) =>
       (nativeAXProperty(raw, property)?.relatedNodes ?? []).some((related) => {
-        const target =
-          typeof related.backendDOMNodeId === "number"
-            ? byBackendId.get(related.backendDOMNodeId)
-            : undefined;
-        if (target === undefined) return false;
-        const around = rootOf(target);
-        const reached = [
-          ...(around !== null ? [around] : []),
-          ...(rootsUnder.get(target.nodeId) ?? []),
+        const id = related.backendDOMNodeId;
+        if (typeof id !== "number") return false;
+        const own = byBackendId.get(id);
+        const targets = [
+          ...(own !== undefined ? [own] : []),
+          ...(standInsOf.get(id) ?? []),
         ];
-        return reached.some((root) => !ownRoot(root, raw));
+        return targets.some((target) => {
+          const around = rootOf(target);
+          const reached = [
+            ...(around !== null ? [around] : []),
+            ...(rootsUnder.get(target.nodeId) ?? []),
+          ];
+          return reached.some((root) => !ownRoot(root, raw));
+        });
       }),
   };
 }
@@ -373,14 +401,13 @@ export function givesValueAway<T extends RawAXNameNode>(
  * {@link withholdRegionNames} for a producer's sensitive fields: `fieldIds` are
  * the raw ids of the fields it classified as sensitive (or could not
  * classify). Only a field that {@link givesValueAway} withholds names.
- * `standIns` are the raw ids of the nodes standing in for such a field that
- * has no node of its own in the tree ({@link fieldStandIns}), which already
- * give its value away.
+ * `standIns` stand in for such fields that have no node of their own in the
+ * tree ({@link fieldStandIns}), and already give their value away.
  */
 export function withholdSensitiveFieldNames<T extends RawAXNameNode>(
   rawNodes: T[],
   fieldIds: Iterable<string>,
-  standIns: Iterable<string> = [],
+  standIns: readonly FieldStandIn[] = [],
 ): T[] {
   const index = indexNativeAX(rawNodes);
   const roots = new Set<string>();
@@ -388,10 +415,10 @@ export function withholdSensitiveFieldNames<T extends RawAXNameNode>(
     const field = index.byId.get(id);
     if (field && givesValueAway(field, index.byId)) roots.add(id);
   }
-  for (const id of standIns) {
-    if (index.byId.has(id)) roots.add(id);
+  for (const { nodeIds } of standIns) {
+    for (const id of nodeIds) if (index.byId.has(id)) roots.add(id);
   }
-  return withholdRegionNames(rawNodes, valueRegions(index, roots));
+  return withholdRegionNames(rawNodes, valueRegions(index, roots, standIns));
 }
 
 /** The elements that draw what they hold in their own user-agent shadow root. */
@@ -521,8 +548,9 @@ export function withholdFieldInternalText<T extends RawAXNameNode>(
  * A form control the tree has no node of its own for, and the nodes standing
  * in for it there ({@link fieldStandIns}). `host` is the control's backend id,
  * `undefined` when the walk can't say whether any control is behind them.
- * `masked` when what they hold is Chromium's password mask, which makes the
- * control a password whatever its markup says ({@link isNativePasswordMask}).
+ * `masked` when what they hold is Chromium's password mask, or the circles or
+ * squares `-webkit-text-security` draws instead, which make the control a
+ * password whatever its markup says: their count is its length.
  */
 export interface FieldStandIn {
   host: number | undefined;
@@ -603,7 +631,8 @@ export function fieldStandIns<T extends RawAXNameNode>(
     for (const id of chain) fieldMemo.set(id, result);
     return result;
   };
-  // Whether a value or text run at or below `raw` is Chromium's password mask.
+  // Whether a value or text run at or below `raw` is a mask: a password's, or
+  // what `-webkit-text-security` draws a field's text as.
   const masks = (raw: T): boolean => {
     const stack = [raw];
     const seen = new Set<string>();
@@ -613,7 +642,7 @@ export function fieldStandIns<T extends RawAXNameNode>(
       seen.add(cur.nodeId);
       if (
         isNativePasswordMask(cur.value?.value) ||
-        (isTextRun(cur) && isNativePasswordMask(cur.name?.value))
+        (isTextRun(cur) && isTextSecurityMask(cur.name?.value))
       ) {
         return true;
       }
