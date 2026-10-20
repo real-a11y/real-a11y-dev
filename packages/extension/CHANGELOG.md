@@ -19,6 +19,13 @@
 
 ## Unreleased
 
+- Dropped the shared tree stylesheet's rules for `.sn-native-consent-error`,
+  the failure line of the opt-in step native mode had before it was on by
+  default ([#509](https://github.com/real-a11y/real-a11y-dev/pull/509)). No
+  behaviour change in the shipped extension: the note about Chrome's
+  debugging bar that replaced that step has no failure line, so nothing
+  rendered the class.
+
 ## 0.1.16
 
 ### Patch Changes
