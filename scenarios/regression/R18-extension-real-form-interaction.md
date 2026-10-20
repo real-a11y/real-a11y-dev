@@ -6,9 +6,9 @@ area: Extension
 type: Manual
 priority: P0
 status: Active
-validFrom: "extension ≥ 0.1.8. The dispatch-fidelity expectations mirror core's ActionDispatcher, which the CDP backend also mirrors — a fix in one belongs in both. Step 6a (an empty field's edit box in Chrome's tree): the first extension release with #510 — 0.1.16 as tagged fails it, which is the bug #510 fixes. Step 6b (a sensitive textarea's markup text): extension ≥ 0.1.15"
+validFrom: "extension ≥ 0.1.8. The dispatch-fidelity expectations mirror core's ActionDispatcher, which the CDP backend also mirrors — a fix in one belongs in both. Step 6a (a withheld field's edit box): in Chrome's tree, the first extension release with #510; in the in-page tree, the first with #512 — 0.1.16 as tagged fails both, which are the bugs those two fix. Step 6b (a sensitive textarea's markup text): extension ≥ 0.1.15, and its input panel opening empty in the in-page tree: the first extension release with #512"
 validUntil: ""
-expected: "click/type/select dispatch on the real page; a sensitive field's value is NEVER shown in the panel — a password's, what is typed into an empty password or card field's edit box in Chrome's tree, or a sensitive textarea's markup text in the live-announcement log or an editor's input panel; Send-Tab/Esc behave or fail visibly"
+expected: "click/type/select dispatch on the real page; a sensitive field's value is NEVER shown in the panel — a password's, what is typed into a password or card field's edit box, empty or not, or a sensitive textarea's markup text in the live-announcement log or an editor's input panel; an untouched Enter in that edit box leaves the field as it was; Send-Tab/Esc behave or fail visibly"
 twin: D6
 notion: "https://app.notion.com/p/3aa1c354b0b5819e89f7de2edeb18fcb"
 ---
@@ -28,11 +28,11 @@ point is behaviour against handlers you didn't write.
 5. Type into a rich-text / contenteditable editor (ProseMirror, Lexical, Draft)
 6. Focus a **password** field and type into it
    - **6a** — a sign-in page's password step while the field is still
-     **empty**, as on Google's "Enter your password". On **Chrome's tree**, open
-     the field's edit box from its row (**TYPE**, or `Enter`) and type a few
-     characters. Do the same on an empty card number field, from a checkout
-     form or from this, run in the page's DevTools console before pressing
-     **↻** (Refresh native tree):
+     **empty**, as on Google's "Enter your password". In each tree
+     (**Settings ▾** → **Show**), open the field's edit box from its row
+     (**TYPE**, or `Enter`) and type a few characters. Do the same on an empty
+     card number field, from a checkout form or from this, run in the page's
+     DevTools console before pressing **↻** to refresh the tree:
 
      ```js
      document.body.insertAdjacentHTML(
@@ -42,7 +42,9 @@ point is behaviour against handlers you didn't write.
      ```
 
      Then type into the password's edit box again and, without closing it,
-     open another field's edit box from its row
+     open another field's edit box from its row. Last, open the edit box of a
+     password field that already holds something, and press `Enter` without
+     typing
 
    - **6b** — a fixture, since no real form puts a field in a live region. With
      the panel open on any page, run this in the page's DevTools console, then
@@ -77,14 +79,19 @@ point is behaviour against handlers you didn't write.
 - **6** — the password value is **NEVER** displayed in the panel, in any view, at any
   time
 - **6a** — the edit box shows dots, not what you type, for both empty fields, as it
-  does for a password field that already holds something, and the other field's box
-  opens without what you typed. Before #510, Chrome's tree opened both in plain
-  text, and the other field's box showed the password
+  does for a password field that already holds something, in both trees, and the
+  other field's box opens without what you typed. `Enter` without typing closes the
+  filled field's box and leaves the field as it was. Before #510, Chrome's tree
+  opened both empty fields' boxes in plain text, and the other field's box showed
+  the password. Before #512, the in-page tree showed what you typed into the card
+  field in plain text, and that `Enter` typed an empty value over the password,
+  blanking it
 - **6b** — neither sentinel shows in the live-announcement log or the input panel:
-  the log reads `status` `Code sent`, and the input panel opens holding `Pay now`.
-  Chrome's tree opens it empty, since the editor holds a card field.
+  the log reads `status` `Code sent`, and the input panel opens empty, as Chrome's
+  tree's does, since the editor holds a card field, and shows dots as you type.
   Extension 0.1.14 and earlier logged `Code sent OTP-SENTINEL` and opened the input
-  panel holding `Pay CARD-SENTINELnow`
+  panel holding `Pay CARD-SENTINELnow`; 0.1.15 and 0.1.16 opened it holding
+  `Pay now`
 - **7** — Tab/Escape either work or fail **visibly**. Silently doing nothing is the
   failure
 - **8** — state changes and is reflected
@@ -107,6 +114,10 @@ sensitive textarea inside either one put its secret on the extension's message
 channel. Step 6 can't catch it: a password `<input>` has no text to read.
 
 6a is the same rule on the way in. A password field is empty until you type into
-it, so every sign-in goes through an empty one, and Chrome's tree masked the edit
-box only for a field that read `[redacted]`, which an empty field doesn't. Step 6
-alone passes on a field filled in earlier.
+it, so every sign-in goes through an empty one. Chrome's tree masked the edit box
+only for a field that read `[redacted]`, which an empty field doesn't. The in-page
+tree masked it by the field's own type, so a card or one-time-code field, which is
+an ordinary text or number input, showed what you typed into it. And a filled
+field's box opens empty in place of the value it can't show, so in the in-page tree
+an untouched `Enter` used to type that empty value over the field. Step 6 alone
+passes on a password field filled in earlier, whose own type hides it.

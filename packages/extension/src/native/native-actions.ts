@@ -277,8 +277,8 @@ export function pickerCurrentOption(
 
 /**
  * Whether the panel's edit box for a typable row hides what is typed into it,
- * as `InputPanel` hides a DOM password field: for every field whose value is
- * withheld (ADR-0001), empty or not. That takes in a password nobody has
+ * as the DOM tree's box does (`domTextInputState`): for every field whose
+ * value is withheld (ADR-0001), empty or not. That takes in a password nobody has
  * typed yet, an empty card field, a field inside a sensitive one, and one the
  * in-page read couldn't classify. `redacted` alone misses every empty one,
  * because only a sensitive field that holds something reads `[redacted]`.

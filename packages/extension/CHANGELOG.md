@@ -41,6 +41,20 @@
   picker kept the first one's place in its list
   ([#510](https://github.com/real-a11y/real-a11y-dev/pull/510)).
 
+- In the in-page tree, the edit box for a card number, security code or
+  one-time-code field hides what you type into it, as it already did for a
+  password field. Those fields are ordinary text or number inputs, so the box
+  showed what you typed in plain text, empty field or not. A rich-text editor
+  that holds one of them is treated the same way, and its box opens empty, as
+  in Chrome's tree
+  ([#512](https://github.com/real-a11y/real-a11y-dev/pull/512)).
+
+- In the in-page tree, pressing Enter in a password or card field's edit box
+  without typing anything now just closes it. The box opens empty because the
+  panel doesn't show what the field holds, and Enter used to type that empty
+  value over the field, wiping a password or card number already entered
+  ([#512](https://github.com/real-a11y/real-a11y-dev/pull/512)).
+
 ## 0.1.16
 
 ### Patch Changes

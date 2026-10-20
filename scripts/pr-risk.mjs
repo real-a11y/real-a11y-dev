@@ -908,6 +908,13 @@ const FIELD_VALUE_GATES = [
   "pageText",
   "ignoresChildText",
   "CONTROL_TEXT_TAGS",
+  // The in-page tree's edit box: the field state the content script reads for
+  // it withholds a sensitive field's value, and an editor's that holds one,
+  // and says so (`computeFieldState`); the box hides what is typed into every
+  // such field, empty or not, and cancels an untouched Enter rather than type
+  // "" over the value it couldn't show (`domTextInputState`).
+  "computeFieldState",
+  "domTextInputState",
   // The act path: `pageType` in `browser` and its in-page mirror in the
   // extension return a marker, never the value; the CLI masks a `type` step.
   "pageType",

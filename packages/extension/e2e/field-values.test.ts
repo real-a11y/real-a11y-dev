@@ -42,8 +42,11 @@ async function press(
 }
 
 /** The fixture in the foreground and the panel freshly mounted on it. */
-async function showFixture(nav: NativeHarness): Promise<PanelPage> {
-  const { page } = await nav.open("field-values.html");
+async function showFixture(
+  nav: NativeHarness,
+  fixture = "field-values.html",
+): Promise<PanelPage> {
+  const { page } = await nav.open(fixture);
   await page.bringToFront();
   await nav.panel.reload();
   return page;
@@ -205,4 +208,97 @@ test("DOM mode: the A11y view shows the announced label, the DOM view the raw va
       chrome.storage.local.set({ "settings.nativeModeEnabled": true }),
     );
   }
+});
+
+test("In-page tree: a withheld field's edit box masks what is typed, empty or not, and an untouched Enter types nothing", async ({
+  nav,
+}) => {
+  const page = await showFixture(nav, "retype-mask.html");
+  await nav.chooseTree("In-page tree");
+  await expect
+    .poll(() => nav.panel.locator(".sn-node").count(), { timeout: 20_000 })
+    .toBeGreaterThan(0);
+  await press(nav.panel, "Expand all");
+  // The edit box opens on its field's state, which it asks the page for.
+  await nav.routeToPage(["GET_FIELD_STATE", "DISPATCH_ACTION"]);
+
+  // Everything from inside the panel, as `press` does: a Playwright click or
+  // keypress would bring the panel's own tab to the front first.
+  const box = nav.panel.locator(".sn-input-panel-field");
+  const openBox = async (name: string) => {
+    await nav.panel.evaluate((want) => {
+      // A row's text runs its role into its name, `textboxCard number`; the
+      // quotes around the name are the stylesheet's.
+      const flat = (text: string) => text.replace(/\s+/g, "");
+      const row = [...document.querySelectorAll(".sn-node")].find((r) =>
+        flat(r.textContent ?? "").includes(flat(want)),
+      );
+      const button = row?.querySelector<HTMLButtonElement>(
+        'button[title="Type (Enter)"]',
+      );
+      if (!button) throw new Error(`no Type button on ${want}`);
+      button.click();
+    }, `textbox ${name}`);
+    await expect(box, name).toBeVisible();
+  };
+  const key = (k: "Enter" | "Escape") =>
+    nav.panel.evaluate((which) => {
+      document
+        .querySelector(".sn-input-panel-field")!
+        .dispatchEvent(
+          new KeyboardEvent("keydown", { key: which, bubbles: true }),
+        );
+    }, k);
+  const typeIntoBox = (text: string) =>
+    nav.panel.evaluate((value) => {
+      const input = document.querySelector<HTMLInputElement>(
+        ".sn-input-panel-field",
+      )!;
+      input.value = value;
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    }, text);
+
+  // Each opens empty, in place of a value it can't show, and hides what is
+  // typed: a password nobody has typed yet as well as a filled one, a card
+  // number and a security code that are text and tel inputs, and an editor
+  // holding a card field.
+  for (const name of [
+    "Enter your password",
+    "Current password",
+    "Card number",
+    "Security code",
+    "Payment note",
+  ]) {
+    await openBox(name);
+    await expect(box, name).toHaveAttribute("type", "password");
+    await expect(box, name).toHaveValue("");
+    await key("Escape");
+    await expect(box).toHaveCount(0);
+  }
+  // Nothing withholds an ordinary field's value, or an editor's.
+  for (const [name, value] of [
+    ["Full name", "Jane"],
+    ["Notes", "Hello"],
+  ]) {
+    await openBox(name);
+    await expect(box, name).toHaveAttribute("type", "text");
+    await expect(box, name).toHaveValue(value);
+    await key("Escape");
+    await expect(box).toHaveCount(0);
+  }
+
+  // An untouched Enter cancels: it used to type "" over the password the box
+  // couldn't show.
+  await openBox("Current password");
+  await key("Enter");
+  await expect(box).toHaveCount(0);
+
+  // What the user types still goes in.
+  await openBox("Enter your password");
+  await typeIntoBox("s3cret");
+  await key("Enter");
+  await expect(page.locator("#pw")).toHaveValue("s3cret");
+  // Sent after the cancelled Enter above, so a type it had sent would have
+  // landed by now.
+  await expect(page.locator("#old")).toHaveValue("hunter2");
 });
