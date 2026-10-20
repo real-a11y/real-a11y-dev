@@ -40,6 +40,8 @@ run — the whole scenario is `npx tsc --noEmit`.
 8. Re-run 1 on **TypeScript 5.9**, changing nothing else
 9. Read the RETURN type in each shape: `const x: 1 = expect(el).toHaveValidLandmarks()`
    and read what the error says the actual type is
+10. Repeat 1 against **`vitest@latest`** — the major a stranger's `npm i vitest` installs
+    that day, not the one this repo pins — and record the version
 
 ## Expected
 
@@ -91,6 +93,12 @@ run — the whole scenario is `npx tsc --noEmit`.
   `jest.Matchers<void, T>`. TS2320 says "not identical" because they were not
   identical. Opt-in decides who loads which augmentation; agreeing on `void` is
   what stops the two from conflicting when something loads both
+- **10** — zero errors. An interface merge must repeat the declaration's type
+  parameters exactly, so this breaks whenever Vitest changes them: Vitest 5
+  declares `Assertion<R extends void | Promise<void> = void, T = unknown>`, and on
+  testing 0.1.0-beta.19 our `Assertion<T = any>` reports `TS2428` three times — the
+  known defect the beta.19 dogfood filed (twin: D5 step 8). Steps 1–9, on the
+  repo's pinned Vitest, keep their own expectations through it
 
 ## Why this exists
 

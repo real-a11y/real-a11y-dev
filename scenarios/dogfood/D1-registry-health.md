@@ -8,7 +8,7 @@ priority: P0
 status: Active
 validFrom: "every published release. While pre-mode `beta` is active, BOTH `beta` and `latest` move to the new prerelease — `scripts/advance-latest.mjs` advances `latest` deliberately, and self-disables once `changeset pre exit` puts a stable there. After that day this inverts and a beta must leave `latest` alone. For any package that has gone PRIVATE, every assertion here INVERTS too — npm keeps serving its last published version, so assert nothing moved. Read that set from `private: true` in the manifests."
 validUntil: ""
-expected: "npm view shows the new version + intended tag; a fresh install of each package imports (ESM + CJS) with types"
+expected: "npm view shows the new version + intended tag; a fresh install of each package imports in every module system it ships (mcp is ESM-only, cli is a bin) with types, and every value its types export exists at runtime"
 twin:
   - R1
   - R2
@@ -40,13 +40,26 @@ monorepo.
    moved with it**. Read the rule from `.changeset/pre.json`, not from this line:
    `mode: "pre"` means both tags advance; once that file is gone, a beta must leave
    the stable `latest` where it is
-3. `npm view <pkg> files` / inspect the packed contents — no source maps or fixtures that
-   shouldn't ship
+3. List what each tarball actually holds — `npm pack <pkg>@<version> --dry-run --json`, or
+   `tar -tzf` on the downloaded tarball. `npm view <pkg> files` prints nothing: registry
+   version documents have no `files` field. No fixtures; source maps are expected (every
+   `tsup.config.ts` sets `sourcemap: true`). Every entry in the manifest's `files` matched at
+   least one packed file, and no JS chunk is an orphan — a chunk whose file name no other
+   file in the tarball mentions. Source maps and declaration files pair with their chunk and
+   don't count; the cli's `dist/daemon/entry.js` is started by path, and that path is in
+   `dist/index.js`
 4. Fresh scratch project: `npm i <pkg>@<new-version>` for each
-5. Import each as **ESM**; `require()` each as **CJS**
-6. Type-resolve each entry
-7. `npx real-a11y@<version> --version` and `npx @real-a11y-dev/mcp@<version>` — with **no**
-   local install
+5. Import each entry as **ESM**, and `require()` it as **CJS** where the package ships CJS.
+   `mcp` is ESM-only by design (`require()` fails with "No "exports" main defined") and `cli`
+   is a bin with no library entry
+6. Type-resolve each entry in a TypeScript consumer with `strict`, **`skipLibCheck: false`**
+   and **TypeScript 7**. For `testing/matchers/vitest`, install `vitest@latest` — the
+   augmentation has to match whatever major a stranger gets today. Then diff each entry's
+   declared **value** exports against what it exports at runtime: a name the `.d.ts` declares
+   as a value that the module doesn't export compiles, then fails at import
+7. With **no** local install and `NODE_PATH` unset: `npx -y @real-a11y-dev/cli@<version> --version`,
+   and start `npx -y @real-a11y-dev/mcp@<version>` and drive `initialize` + `tools/list` over
+   stdio — assert `serverInfo.version` and the tool count. A bare `npx` start proves nothing
 8. Repeat 5 on Node 24
 9. Check the linked family members **this release moved** share one version, and that
    `cli`/`mcp` are at their own (correct) versions. `linked` aligns only packages
@@ -55,9 +68,10 @@ monorepo.
 10. For every package that has gone **private**, the check inverts — assert nothing
     moved. Take the set from `private: true` in `packages/*/package.json` rather than
     from a list here; it grows each release. For each, `npm view` still reports the
-    version it was last published at, its dist-tags sit where that release left them,
-    and `npm i` of a pinned old version still resolves. Do not unpublish, do not
-    re-point a tag — `npm deprecate` is the only thing that should have changed
+    version it was last published at, `npm view <pkg> time --json` shows its `modified`
+    before this release went out (that is the reference point for "nothing moved"), and
+    `npm i` of a pinned old version still resolves. Do not unpublish, do not re-point a
+    tag — `npm deprecate` is the only thing that should have changed
 
 ## Expected
 
@@ -65,8 +79,16 @@ monorepo.
 - Pre-1.0, a beta publish takes `latest` with it — someone running
   `npm i @real-a11y-dev/cli` with no tag gets the newest beta, because there is no stable
   to fall back to. Once one exists, the same publish must leave `latest` untouched
-- Fresh installs import cleanly under both module systems, with types
-- `npx` works with nothing installed locally — this is how most people will first run it
+- Fresh installs import cleanly under every module system the package ships, with types
+  that compile under `skipLibCheck: false` — `vitest@latest` included
+- Every value a `.d.ts` exports exists at runtime
+- Every manifest `files` entry ships something, and no JS chunk is an orphan
+- On the beta.19 release four of these fail as known defects the beta.19 dogfood filed, not
+  new ones: `testing`'s orphan `magic-string` chunk, `storybook-addon`'s two `files`
+  entries that match nothing, `./matchers/vitest` against Vitest 5 (`TS2428`), and `mcp`'s
+  `SessionRecord`
+- `npx` works with nothing installed locally — this is how most people will first run it.
+  Only the scoped names exist: `real-a11y` unscoped is not one of our packages
 - No package the release **moved** is left behind within the linked family — but a member
   with no changeset staying at its previous version is correct, not a miss
 - A package that went internal stays exactly where it was left — same version, same
@@ -106,3 +128,14 @@ Unpublishing them, or re-pointing a tag to look consistent, breaks installs that
 today and cannot be undone any more than step 2 can. `npm deprecate` is the tool if
 they should stop being recommended: every existing install keeps working, and anyone
 installing one gets a message pointing at the package that bundles it now.
+
+Steps 3, 5, 6 and 7 were rewritten after the beta.19 dogfood, because each passed or
+failed for the wrong reason. Step 3's `npm view <pkg> files` always prints nothing, so it
+could never fail — while `testing` shipped an orphan chunk and `storybook-addon` listed
+two `files` entries that don't exist. Step 7's `npx real-a11y@…` is an E404: the
+unscoped name was never ours, and nobody has claimed it. Step 5 asserted CJS for a
+package that is ESM-only on purpose. And step 6 as written — type-resolve each entry —
+passed on a release whose `./matchers/vitest` fails to compile against the Vitest major
+`npm i vitest` installs that day, and whose `mcp` types declare a `SessionRecord` value
+the module doesn't export. A compile alone or an import alone catches neither; the
+`vitest@latest` install and the types-versus-runtime diff do.

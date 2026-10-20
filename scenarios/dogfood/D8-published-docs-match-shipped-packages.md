@@ -17,10 +17,18 @@ notion: "https://app.notion.com/p/3aa1c354b0b581b4ba99d6d7b218098d"
 Read the **published** site, and run what it tells you to, against the **just-published**
 versions.
 
-1. Work through every quick-start on real-a11y.dev, in a scratch project each time
+1. Work through every quick-start on real-a11y.dev, in a scratch project each time — and
+   each one on a machine with **only** what that page installs. The MCP onboarding never
+   installs the CLI, so any `npx real-a11y …` it tells you to run has to work there
 2. Copy-paste each code block verbatim — no silent corrections
-3. For the CLI reference: check every command and flag documented actually exists
-   (`real-a11y <cmd> --help`)
+3. For the CLI reference: check every command and flag documented actually exists, both
+   ways. `--help` is not a complete inventory — it omits flags the parser accepts, and it
+   short-circuits strict parsing (`tree --bogus-flag --help` exits 0). Probe acceptance
+   without a browser instead: run `real-a11y <cmd> <flag>` with no URL, giving a
+   value-taking flag a value. `Unknown option '<flag>'` means the parser doesn't accept
+   it; any other error — a missing URL ("takes exactly one URL", "no URL given"), a
+   refusal that names the flag, as `--root` gets on a native command — means it does.
+   Then list what it accepts that `--help` and the reference don't mention
 4. For the MCP reference: check every tool name and parameter documented actually exists in
    `tools/list`
 5. Check the stated **counts** — "Fourteen commands", "twenty tools" — against reality
@@ -32,12 +40,16 @@ versions.
    tags move while pre-mode is on
 8. Note anything documented that no longer exists, and anything shipping that isn't documented
 9. For every block that shows **output** — a tree, an audit report, a diff — run the command
-   above it and compare. Not "does it look right": compare
+   above it and compare. Not "does it look right": compare. A block whose input you can't
+   reproduce (a `localhost:3000` nobody committed) is a finding of its own: it needs a
+   committed fixture, or an explicit "illustrative" marker
 
 ## Expected
 
-- Every quick-start runs as written, against the versions just published
-- Every documented name, flag and tool exists; no documented flag is an unimplemented error
+- Every quick-start runs as written, against the versions just published, with nothing
+  installed that the page didn't install
+- Every documented name, flag and tool exists; no documented flag is an unimplemented error;
+  and every flag the parser accepts is in its command's `--help`
 - Counts match reality
 - Nothing shipped is undocumented, and nothing documented is unshipped
 - **7** — a sentence that says `latest` is unpublished is false while pre-mode
@@ -65,6 +77,13 @@ counts and names, and the only one with no automated gate.
 
 Step 2 is the discipline that makes this worth running: silently fixing a broken snippet as you
 go is how a broken snippet survives every release.
+
+Steps 1, 3 and 9 were sharpened by the beta.19 dogfood. Its MCP onboarding told users to run
+`npx real-a11y install`, which only works where the CLI is already installed — anywhere else it
+is an E404, for a package name nobody has claimed. Checking flags through `--help` passed while
+three flags every browser command accepts appeared in no help text. And the CLI's audit output
+block could not be produced by the shipped CLI from any input, which a block with a committed
+fixture would have shown the day it drifted.
 
 ## Notes
 
