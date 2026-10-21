@@ -174,6 +174,13 @@ function publish(change?: TreeChange) {
   lastPublished = signature;
 }
 
+/** Switches the extraction mode, re-extracting in it if the panel is open. */
+function applyMode(mode: TreeMode) {
+  currentMode = mode;
+  liveExtractor?.setMode(liveExtractorMode(currentMode));
+  publish();
+}
+
 function start() {
   if (observer) return;
   const root = getStoryRoot();
@@ -218,14 +225,18 @@ function stop() {
 if (typeof document !== "undefined") {
   const channel = addons.getChannel();
 
-  // Manager mounted / became visible → start observing and send the tree.
-  channel.on(EVENTS.REQUEST_TREE, () => {
+  // Manager mounted / became visible → start observing and send the tree, in
+  // the mode the request carries: this module starts over in "a11y" on every
+  // canvas reload, whatever mode the panel is showing.
+  channel.on(EVENTS.REQUEST_TREE, (mode?: TreeMode) => {
     panelWantsTree = true;
+    if (mode !== undefined && mode !== currentMode) applyMode(mode);
     if (!observer) {
       start();
     }
-    // Already running: skip a second publish — storyRendered/start already
-    // sent TREE_UPDATED. Re-REQUEST while idle is what resumes after reload.
+    // Already running (in that mode, by now): skip a second publish —
+    // storyRendered/start already sent TREE_UPDATED. Re-REQUEST while idle is
+    // what resumes after reload.
   });
 
   // Manager unmounted / switched away → stop paying extract + channel cost.
@@ -235,11 +246,7 @@ if (typeof document !== "undefined") {
   });
 
   // Manager requests a mode change → re-extract with the new mode.
-  channel.on(EVENTS.SET_MODE, (mode: TreeMode) => {
-    currentMode = mode;
-    liveExtractor?.setMode(liveExtractorMode(currentMode));
-    publish();
-  });
+  channel.on(EVENTS.SET_MODE, (mode: TreeMode) => applyMode(mode));
 
   // Manager selected a node → highlight it in the story.
   channel.on(EVENTS.HIGHLIGHT_NODE, (nodeId: string) => {

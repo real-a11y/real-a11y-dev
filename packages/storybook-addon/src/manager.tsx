@@ -52,7 +52,11 @@ function Panel() {
   // serializable channel message (always reset to the preview's heuristic),
   // so we must re-apply expansion from this ref on every TREE_UPDATED.
   const liveTreeRef = useRef<ExtractionResult | null>(null);
+  // The mode the preview extracts in, sent with every REQUEST_TREE: the last
+  // one picked other than "tab", which is a view of whichever tree is current.
+  const extractionModeRef = useRef<TreeViewMode>("a11y");
   const [isReady, setIsReady] = useState(false);
+  const [isVisible, setIsVisible] = useState(false);
   const [payload, setPayload] = useState<TreeUpdatePayload | null>(null);
   const [viewMode, setViewMode] = useState<TreeViewMode>("a11y");
 
@@ -62,6 +66,7 @@ function Panel() {
     setViewMode(mode);
     // "tab" is a client-side transform of the current a11y tree — no re-extraction.
     if (mode !== "tab") {
+      extractionModeRef.current = mode;
       addons.getChannel().emit(EVENTS.SET_MODE, mode);
     }
   }, []);
@@ -98,6 +103,25 @@ function Panel() {
       // Unmount Preact tree cleanly when the panel is hidden / component unmounts.
       if (host) render(null, host);
     };
+  }, []);
+
+  // ── Visibility — read off the panel's own box ──────────────────────────────
+
+  // Storybook hides an addon panel without unmounting it. From 10.1 every panel
+  // stays mounted with `active: true`, the unselected ones `display: none`; and
+  // on every version a collapsed addon panel keeps its tab mounted at zero
+  // width or height. So the preview is asked for a tree only while this box has
+  // an area, and a hidden panel keeps its tree, expansion and search for when
+  // it comes back.
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    const observer = new ResizeObserver(([entry]) => {
+      const { width, height } = entry.contentRect;
+      setIsVisible(width > 0 && height > 0);
+    });
+    observer.observe(container);
+    return () => observer.disconnect();
   }, []);
 
   // ── Re-render Preact TreePanel whenever data or view mode changes ───────────
@@ -151,9 +175,10 @@ function Panel() {
     );
   }, [isReady, payload, viewMode, handleViewModeChange]);
 
-  // ── Channel subscription ───────────────────────────────────────────────────
+  // ── Channel subscription — while the panel can be seen ─────────────────────
 
   useEffect(() => {
+    if (!isVisible) return;
     const channel = addons.getChannel();
 
     const handler = (next: TreeUpdatePayload) => setPayload(next);
@@ -162,7 +187,10 @@ function Panel() {
     // Ask the preview for the current tree immediately — otherwise the panel
     // shows "Waiting…" until the next DOM mutation in the story. Also starts
     // the preview-side DomObserver (extraction is lazy until this request).
-    const requestTree = () => channel.emit(EVENTS.REQUEST_TREE);
+    // The mode rides along: the preview keeps the last one it was sent, and
+    // starts over in "a11y" whenever the canvas reloads.
+    const requestTree = () =>
+      channel.emit(EVENTS.REQUEST_TREE, extractionModeRef.current);
     requestTree();
 
     // The preview module holds `panelWantsTree` in iframe memory. A canvas
@@ -180,14 +208,17 @@ function Panel() {
       // extracting and postMessage-ing full trees across the iframe boundary.
       channel.emit(EVENTS.STOP_TREE);
     };
-  }, []);
+  }, [isVisible]);
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
+  // In flow, not `position: absolute`: from Storybook 10.1 the tab panel has no
+  // positioning of its own, so an absolute box resolves against the whole addon
+  // region and covers the tab bar.
   return (
     <div
       ref={containerRef}
-      style={{ position: "absolute", inset: 0, overflow: "hidden" }}
+      style={{ position: "relative", height: "100%", overflow: "hidden" }}
     />
   );
 }

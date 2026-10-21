@@ -48,10 +48,13 @@ const { channel, observerState, extractorState } = vi.hoisted(() => {
        * leave it alone to simulate one that did not.
        */
       rootName: "",
+      /** The mode the extractor was constructed with or last switched to. */
+      mode: "",
       reset() {
         this.constructed = 0;
         this.refreshCalls = 0;
         this.rootName = "";
+        this.mode = "";
       },
     },
   };
@@ -80,8 +83,9 @@ vi.mock("@real-a11y-dev/core", () => {
   }
 
   class LiveTreeExtractor {
-    constructor() {
+    constructor(_root: Element, options: { mode: string }) {
       extractorState.constructed += 1;
+      extractorState.mode = options.mode;
     }
     refresh() {
       extractorState.refreshCalls += 1;
@@ -112,7 +116,9 @@ vi.mock("@real-a11y-dev/core", () => {
         rootId: "root",
       };
     }
-    setMode() {}
+    setMode(mode: string) {
+      extractorState.mode = mode;
+    }
   }
 
   class FocusManager {
@@ -235,6 +241,47 @@ describe("preview channel bootstrap", () => {
     channel.emit(EVENTS.REQUEST_TREE);
     expect(updates).toHaveLength(1);
     expect(observerState.started).toBe(1);
+  });
+
+  it("starts the extractor in the mode REQUEST_TREE carries", () => {
+    // A reloaded preview starts over in "a11y"; the panel may be showing DOM.
+    channel.emit(EVENTS.SET_MODE, "a11y");
+    const updates: TreeUpdatePayload[] = [];
+    channel.on(EVENTS.TREE_UPDATED, (payload) =>
+      updates.push(payload as TreeUpdatePayload),
+    );
+
+    channel.emit(EVENTS.REQUEST_TREE, "dom");
+
+    expect(extractorState.mode).toBe("dom");
+    expect(updates).toHaveLength(1);
+    expect(updates[0]!.mode).toBe("dom");
+  });
+
+  it("does not re-publish for a REQUEST_TREE in the mode it is already in", () => {
+    channel.emit(EVENTS.REQUEST_TREE, "dom");
+    const updates: unknown[] = [];
+    channel.on(EVENTS.TREE_UPDATED, (payload) => updates.push(payload));
+
+    channel.emit(EVENTS.REQUEST_TREE, "dom");
+
+    expect(updates).toHaveLength(0);
+    expect(observerState.started).toBe(1);
+  });
+
+  it("re-extracts in the mode a REQUEST_TREE carries while already running", () => {
+    channel.emit(EVENTS.REQUEST_TREE, "a11y");
+    const updates: TreeUpdatePayload[] = [];
+    channel.on(EVENTS.TREE_UPDATED, (payload) =>
+      updates.push(payload as TreeUpdatePayload),
+    );
+
+    channel.emit(EVENTS.REQUEST_TREE, "dom");
+
+    expect(observerState.started).toBe(1);
+    expect(extractorState.mode).toBe("dom");
+    expect(updates).toHaveLength(1);
+    expect(updates[0]!.mode).toBe("dom");
   });
 });
 
