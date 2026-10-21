@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Fields in a host's shadow root</title>
+  </head>
+  <body>
+    <h1>Fields in a host's shadow root</h1>
+
+    <!--
+      A custom element that is a textbox itself, around the input it types
+      into, in a shadow root of its own: `role="textbox"` on the host, or
+      ElementInternals' `role` on a form-associated one. Chromium's tree has
+      a row for the host with the input's under it, and the side panel's
+      edit box opens on the host's. The in-page read looks for a field in the
+      host's light DOM only, so the native read withholds every row a
+      withheld field sits under in Chromium's tree, and every element the
+      document has one in, through shadow roots and slots. Chromium keeps an
+      ignored node, and no row, for a hidden field at a shadow root's top or
+      in a slot, and no node at all for one below a hidden wrapper. Every
+      host around a password or card input reads valueWithheld: true, empty
+      or not, however its input is hidden or shown through a <slot>; so do a
+      combobox aria-owns moves a card field under and an editor holding such
+      a host. A host around an ordinary input reads false, hidden or slotted
+      or not.
+    -->
+    <x-field
+      role="textbox"
+      aria-label="Open root password"
+      data-mode="open"
+      data-field="password"
+    ></x-field>
+    <x-field
+      role="textbox"
+      aria-label="Closed root password"
+      data-mode="closed"
+      data-field="password"
+    ></x-field>
+    <x-field
+      role="textbox"
+      aria-label="Empty password"
+      data-mode="closed"
+      data-field="empty-password"
+    ></x-field>
+    <x-field
+      role="textbox"
+      aria-label="Closed root card"
+      data-mode="closed"
+      data-field="card"
+    ></x-field>
+    <x-field
+      role="textbox"
+      aria-label="Hidden input password"
+      data-mode="closed"
+      data-field="hidden-password"
+    ></x-field>
+    <x-field
+      role="textbox"
+      aria-label="Deeper hidden password"
+      data-mode="closed"
+      data-field="deeper-password"
+    ></x-field>
+    <x-field
+      role="textbox"
+      aria-label="Undisplayed password"
+      data-mode="closed"
+      data-field="undisplayed-password"
+    ></x-field>
+    <x-internals-field aria-label="Internals password"></x-internals-field>
+    <!-- The textbox is a <div> in the closed root, and the password its
+         <slot> shows is the host's own child, hidden from assistive
+         technology: only the slot puts it inside the textbox. -->
+    <x-slotting data-label="Slotted password" data-field="hidden-password"
+      ><span class="slotted"></span
+    ></x-slotting>
+    <!-- The same, with the password below an aria-hidden wrapper the slot
+         shows: Chromium's tree has no node for it, so only the slot places
+         it in the textbox. -->
+    <x-slotting
+      data-label="Slotted deeper password"
+      data-field="deeper-password"
+      ><span class="slotted"></span
+    ></x-slotting>
+    <!-- An editor whose own content holds a custom element with a password
+         in its closed root: nothing in the editor's light DOM says so, and
+         this edit box does type into the page. -->
+    <div
+      role="textbox"
+      contenteditable="true"
+      aria-label="Editor around a shadow password"
+    >
+      <x-field data-mode="closed" data-field="password"></x-field>
+    </div>
+    <!-- No part of the combobox in the document, but under its row in
+         Chromium's tree: aria-owns moves the card field there (Chromium 153
+         moves nothing under a textbox). -->
+    <div
+      role="combobox"
+      aria-label="Combobox owning a card"
+      aria-owns="owned-card"
+    ></div>
+    <x-field
+      role="textbox"
+      aria-label="Closed root name"
+      data-mode="closed"
+      data-field="name"
+    ></x-field>
+    <x-field
+      role="textbox"
+      aria-label="Hidden input name"
+      data-mode="closed"
+      data-field="hidden-name"
+    ></x-field>
+    <x-slotting data-label="Slotted name" data-field="hidden-name"
+      ><span class="slotted"></span
+    ></x-slotting>
+    <p>Elsewhere on the page: <span id="owned-card-slot"></span></p>
+
+    <script>
+      // What each host's own input is. The values live here rather than in
+      // the markup, so only the inputs themselves hold them.
+      const FIELDS = {
+        password: { type: "password", value: "hunter2" },
+        "empty-password": { type: "password", value: "" },
+        card: {
+          type: "text",
+          autocomplete: "cc-number",
+          value: "4111111111111111",
+        },
+        "hidden-password": { type: "password", value: "hunter2", hidden: true },
+        // In an aria-hidden wrapper, so Chromium's tree has no node for it.
+        "deeper-password": { type: "password", value: "hunter2", deeper: true },
+        "undisplayed-password": {
+          type: "password",
+          value: "hunter2",
+          undisplayed: true,
+        },
+        name: { type: "text", value: "Jane" },
+        "hidden-name": { type: "text", value: "Jane", hidden: true },
+      };
+
+      function inputFor(spec) {
+        const input = document.createElement("input");
+        input.type = spec.type;
+        if (spec.autocomplete) input.autocomplete = spec.autocomplete;
+        if (spec.hidden) input.setAttribute("aria-hidden", "true");
+        if (spec.undisplayed) input.style.display = "none";
+        input.value = spec.value;
+        if (!spec.deeper) return input;
+        const wrapper = document.createElement("div");
+        wrapper.setAttribute("aria-hidden", "true");
+        wrapper.append(input);
+        return wrapper;
+      }
+
+      customElements.define(
+        "x-field",
+        class extends HTMLElement {
+          connectedCallback() {
+            if (this.input) return;
+            const root = this.attachShadow({ mode: this.dataset.mode });
+            this.input = inputFor(FIELDS[this.dataset.field]);
+            root.append(this.input);
+          }
+        },
+      );
+
+      // A form-associated custom element, which says it is a textbox through
+      // its ElementInternals rather than an attribute.
+      customElements.define(
+        "x-internals-field",
+        class extends HTMLElement {
+          static formAssociated = true;
+          constructor() {
+            super();
+            this.internals = this.attachInternals();
+            this.internals.role = "textbox";
+            this.attachShadow({ mode: "closed" }).append(
+              inputFor(FIELDS.password),
+            );
+          }
+        },
+      );
+
+      // A textbox inside its own closed root, showing the host's own input
+      // through a <slot>.
+      customElements.define(
+        "x-slotting",
+        class extends HTMLElement {
+          connectedCallback() {
+            if (this.input) return;
+            const textbox = document.createElement("div");
+            textbox.setAttribute("role", "textbox");
+            textbox.setAttribute("aria-label", this.dataset.label);
+            textbox.append(document.createElement("slot"));
+            this.attachShadow({ mode: "closed" }).append(textbox);
+            this.input = inputFor(FIELDS[this.dataset.field]);
+            this.querySelector(".slotted").replaceWith(this.input);
+          }
+        },
+      );
+
+      const owned = inputFor(FIELDS.card);
+      owned.id = "owned-card";
+      document.getElementById("owned-card-slot").replaceWith(owned);
+    </script>
+  </body>
+</html>
