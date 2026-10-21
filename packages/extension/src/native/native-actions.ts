@@ -286,7 +286,9 @@ export function pickerCurrentOption(
  * as not sensitive (`valueWithheld === false`) shows its typing, and a row
  * never read as a field counts as withheld. A row that reads `[redacted]`
  * masks whatever its verdict says, although the read never sends the two
- * apart.
+ * apart. The same rows open the box empty, and an untouched Enter there
+ * cancels rather than type `""` over what the field holds, which the tree
+ * may not show at all (`handleNativeActivate` in `App.tsx`).
  * A redaction gate — `scripts/pr-risk.mjs` grades a change to it as such.
  *
  * @internal

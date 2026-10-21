@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Native withheld submit</title>
+  </head>
+  <body>
+    <h1>Checkout</h1>
+
+    <!--
+      A field whose value is withheld (ADR-0001) can hold something Chrome's
+      tree doesn't show, so its edit box opens empty, and an untouched Enter
+      there must cancel rather than type "" over what it holds. The card field
+      withholds the editor's whole value: the editor reads no value, not even
+      [redacted], although it holds text. Typing "" into it cleared that text
+      and removed both fields inside it. The name field sits inside the
+      editor, so it loses its own value with the editor's.
+    -->
+    <div
+      id="note"
+      role="textbox"
+      contenteditable="true"
+      aria-label="Payment note"
+    >
+      Pay by card
+      <input id="card" aria-label="Card number" autocomplete="cc-number" />
+      <input id="holder" aria-label="Name on card" value="Jane Doe" />
+    </div>
+  </body>
+</html>
