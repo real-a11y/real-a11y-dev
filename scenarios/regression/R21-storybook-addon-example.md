@@ -21,19 +21,27 @@ notion: "https://app.notion.com/p/3aa1c354b0b5811995bec631b35d4c46"
 pnpm --filter @real-a11y-dev/example-storybook storybook
 ```
 
-1. Open any story — does the a11y panel appear in the addons tray?
-2. Switch between stories; the panel should re-read each one
-3. Change a **control** that alters the rendered DOM (a label, a `disabled` toggle) —
-   does the panel update?
+1. Open any story — does the a11y panel appear in the addons tray? Select it, then click
+   another addon tab (Controls) **with the mouse** — does the tray stay usable?
+2. Switch between stories whose trees differ; the panel should re-read each one
+3. Change a **control** that alters the rendered DOM (a label, a `disabled` toggle) by
+   clicking the Controls tab with the panel open, then back — does the panel update?
 4. A story whose content renders asynchronously
 5. A story with **multiple roots** / no single wrapper element
 6. A story rendering into a portal (a modal or tooltip)
 7. `pnpm --filter @real-a11y-dev/example-storybook build-storybook`, then serve the
    static build and repeat 1–3
+8. With another addon tab selected, and with the addon panel hidden, count
+   `real-a11y/semantic-navigator/tree-updated` events on the channel for three seconds on
+   a story whose content changes (twin: D9 step 8)
 
 ## Expected
 
-- **1** — the panel renders per story with no per-story configuration
+- **1** — the panel renders per story with no per-story configuration, and selecting it
+  never takes the tray away: the mouse click selects Controls. The example takes
+  `storybook ^10.6.0`, which is always 10.1 or later, so with storybook-addon
+  0.1.0-beta.19 the panel covers the tab bar on every run — the known defect the beta.19
+  dogfood filed
 - **2/3** — it tracks story and control changes rather than showing the first story's
   tree forever
 - **4** — late content appears
@@ -41,6 +49,8 @@ pnpm --filter @real-a11y-dev/example-storybook storybook
 - **6** — portal content is reachable
 - **7** — works in the **static build** too, which is where the addon's `exports`
   subpaths actually get resolved by a real Storybook builder
+- **8** — `0` both times. The addon promises no extraction while another tab is active;
+  on Storybook 10.1 and later, 0.1.0-beta.19 extracts regardless (known defect)
 
 ## Why this exists
 
