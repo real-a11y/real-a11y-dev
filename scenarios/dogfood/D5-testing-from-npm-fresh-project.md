@@ -45,9 +45,9 @@ the monorepo; if a step is missing from the docs, that is the finding.
    Optionally add one test against `https://real-a11y.dev` — a live site changes with
    every deploy, so it can't carry step 5
 4. Run it
-5. Add a snapshot assertion and run with `CI=1` (so a missing snapshot fails instead of
-   being written), in shuffled order, and once more on a second Node major — confirm it's
-   stable
+5. Add a snapshot assertion, run once to record it, and read what it recorded. Then re-run
+   with `CI=1` (so a missing or changed snapshot fails instead of being written), in
+   shuffled order, and once more on a second Node major — confirm it's stable
 6. Make each of the matchers fail deliberately, plus one failure through the Playwright
    handle, and read every message — not just the one with the best output
 7. Do the same in a **Jest** project, using the `/matchers` entry from a plain CommonJS

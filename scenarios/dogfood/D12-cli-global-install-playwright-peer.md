@@ -56,8 +56,12 @@ Then try the obvious unblock, still as a **global** user:
      the layout that tells the resolvers apart — ESM `import("playwright")` throws
      there and `createRequire` resolves — and the only one where plain npm on Linux
      reproduces the beta.5 regression, since a global sibling is found by both;
-   - a partial install: the global layout with `playwright/node_modules/playwright-core`
-     removed
+   - a partial install: the global layout with the `playwright-core` that the global
+     `playwright` resolves removed. Find it with
+     `require.resolve("playwright-core/package.json", { paths: [<global playwright dir>] })`
+     rather than assuming where it sits — npm's global layout nests it under
+     `playwright/node_modules/`, another installer may hoist it — and confirm `audit` can
+     no longer load the driver before reading the result
 4. Once more with a proxy in the environment: `HTTPS_PROXY` set and
    `NO_PROXY=localhost`, against the same localhost fixture. Run it with the newest
    Playwright and with 1.58.2 — inside the CLI's peer range, and the last release

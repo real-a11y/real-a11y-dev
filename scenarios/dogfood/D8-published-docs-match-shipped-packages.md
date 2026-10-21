@@ -26,9 +26,11 @@ versions.
    short-circuits strict parsing (`tree --bogus-flag --help` exits 0). Probe acceptance
    without a browser instead: run `real-a11y <cmd> <flag>` with no URL, giving a
    value-taking flag a value. `Unknown option '<flag>'` means the parser doesn't accept
-   it; any other error — a missing URL ("takes exactly one URL", "no URL given"), a
-   refusal that names the flag, as `--root` gets on a native command — means it does.
-   Then list what it accepts that `--help` and the reference don't mention
+   it. A refusal that names the flag means that command doesn't take it either — `--root`
+   on a native command, which only `tabs` takes — so the reference must not document it
+   there. Any other error, a missing URL ("takes exactly one URL", "no URL given"), means
+   the flag is accepted. Then list what it accepts that `--help` and the reference don't
+   mention
 4. For the MCP reference: check every tool name and parameter documented actually exists in
    `tools/list`
 5. Check the stated **counts** — "Fourteen commands", "twenty tools" — against reality
