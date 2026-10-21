@@ -48,9 +48,17 @@ interface InputPanelProps {
 }
 
 export function InputPanel({ state, onSubmit, onCancel }: InputPanelProps) {
+  // One editor per field. Opening another field's box while this one is open
+  // re-renders the panel in place, and an editor reused for it would keep what
+  // was typed for the first field while taking the second's mask: a password
+  // typed into a masked box would show in the next, unmasked one, and Enter
+  // would type it into that field. A reused picker would keep the first
+  // list's place.
+  const field = `${state.source ?? "dom"}:${state.nodeId}`;
   if (state.type === "text") {
     return (
       <TextInput
+        key={field}
         state={state}
         onSubmit={(v) => onSubmit(state.nodeId, v)}
         onCancel={onCancel}
@@ -60,6 +68,7 @@ export function InputPanel({ state, onSubmit, onCancel }: InputPanelProps) {
 
   return (
     <SelectPicker
+      key={field}
       state={state}
       onSubmit={(v) => onSubmit(state.nodeId, v)}
       onCancel={onCancel}

@@ -50,6 +50,7 @@ import {
 } from "../native/capability.js";
 import {
   isTypableRole,
+  masksRetype,
   nativeSelectOptions,
   pickerCurrentOption,
   type NativeNode,
@@ -2866,14 +2867,15 @@ export function App() {
           placeholder: node.placeholder,
           source: "native",
           // Mask the retyped replacement the same way InputPanel already
-          // masks a DOM password field (inputType, checked in InputPanel.tsx)
-          // — the wire only carries a redacted/not-redacted boolean (as the
-          // sentinel), never the raw `type` attribute that produced it (R1:
-          // it's not just type="password" — a sensitive-autocomplete text
-          // field redacts too), so this masks every redacted field's retype
-          // rather than trying to distinguish which specific rule fired.
-          // Erring toward masking more, never less.
-          inputType: isRedacted ? "password" : undefined,
+          // masks a DOM password field (inputType, checked in InputPanel.tsx).
+          // The wire carries each field's verdict (`valueWithheld`, beside
+          // `redacted`), never the raw `type` attribute behind it, and the
+          // policy isn't only type="password" (R1: a sensitive-autocomplete
+          // text field is sensitive too). So this masks by the verdict: every
+          // field whose value is withheld, an empty one included, not only
+          // one that reads `[redacted]` — see the gate's own doc. Erring
+          // toward masking more, never less.
+          inputType: masksRetype(node) ? "password" : undefined,
           blockEmptySubmit: unprefillable,
         });
         return;

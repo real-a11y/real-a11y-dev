@@ -35,7 +35,9 @@ updated yet, this row is **Blocked**, not Pass — a local build is a different 
 4. **A docs site** — long content, many headings: open the panel, browse the tree, use search
 5. **An SPA** — client-side routes: navigate, confirm the panel follows; use Back
 6. **A real form** — click, type, toggle; confirm the page's own handlers ran
-7. On that form, focus a **password** field and type — check every panel view
+7. On that form, focus a **password** field and type — check every panel view.
+   Then type into an **empty** password field's edit box in the tree: it shows
+   dots, as in **R18**'s step 6a
 8. **A heavy page** — a large table or an infinite feed: is the panel usable, or does it stall?
 9. Keyboard-only pass, with a screen reader running
 10. Leave it installed and browse normally for a while
@@ -49,7 +51,8 @@ updated yet, this row is **Blocked**, not Pass — a local build is a different 
   names the extension, and the note explains the bar
 - Panel works across all three site shapes; SPA routes and Back are followed
 - Real handlers fire on the form
-- **The password value never appears**, in any view
+- **The password value never appears**, in any view, nor in the edit box as you type
+  it into an empty field (from the first release with #510)
 - The heavy page stays usable
 - Keyboard + screen reader work (see **R17** for the detail)
 - **10** — no console noise, no memory growth, no breakage of the sites themselves

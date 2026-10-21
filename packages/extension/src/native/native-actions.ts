@@ -274,3 +274,25 @@ export function pickerCurrentOption(
     options.find((o) => o.name === select.value)
   );
 }
+
+/**
+ * Whether the panel's edit box for a typable row hides what is typed into it,
+ * as `InputPanel` hides a DOM password field: for every field whose value is
+ * withheld (ADR-0001), empty or not. That takes in a password nobody has
+ * typed yet, an empty card field, a field inside a sensitive one, and one the
+ * in-page read couldn't classify. `redacted` alone misses every empty one,
+ * because only a sensitive field that holds something reads `[redacted]`.
+ * Fails closed, as {@link pickerCurrentOption} does: only a field classified
+ * as not sensitive (`valueWithheld === false`) shows its typing, and a row
+ * never read as a field counts as withheld. A row that reads `[redacted]`
+ * masks whatever its verdict says, although the read never sends the two
+ * apart.
+ * A redaction gate — `scripts/pr-risk.mjs` grades a change to it as such.
+ *
+ * @internal
+ */
+export function masksRetype(
+  node: Pick<NativeNode, "redacted" | "valueWithheld">,
+): boolean {
+  return node.redacted === true || node.valueWithheld !== false;
+}

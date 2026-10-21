@@ -19,6 +19,12 @@
  *    `inputType` set, so a retyped replacement for a password field rendered
  *    in plaintext — masking only ever applied to the DOM producer's own
  *    password fields before this.
+ *  - That mask keyed on `redacted`, which a sensitive field carries only
+ *    once it holds something, so an EMPTY password (a sign-in page's "Enter
+ *    your password" step) or card field still opened its retype panel in
+ *    plaintext — reported from real use. It keys on `valueWithheld` now. And
+ *    another row's panel opened over an open one reused it, keeping the
+ *    password typed there while dropping its mask.
  *  - Activating a link through the native tree left the panel on a blank
  *    tree after the navigation it caused: `dispatchNativeAction`'s own
  *    post-action re-read got cancelled by the very `PAGE_NAVIGATED` its
@@ -130,6 +136,47 @@ test("a redacted field's retype panel never shows the real value, and masks it",
   await nav.panel.getByRole("button", { name: "Refresh native tree" }).click();
   await expect(pwRow).toContainText("[redacted]");
   await expect(pwRow).not.toContainText("newpass456");
+});
+
+test("an empty sensitive field's retype panel masks it too, and an ordinary field's doesn't", async ({
+  nav,
+}) => {
+  await nav.showNative("native-retype-mask.html");
+  await nav.panel.getByRole("button", { name: "Expand all" }).click();
+
+  const field = nav.panel.locator(".sn-input-panel-field");
+  const retype = async (name: string) => {
+    await nav.panel
+      .getByRole("treeitem", { name })
+      .getByTitle("Type (Enter)")
+      .click();
+    await expect(field).toHaveValue("");
+  };
+
+  // Nothing typed yet, so nothing to redact: the mask can't wait for
+  // `[redacted]`, which a sensitive field shows only once it holds something.
+  await expect(
+    nav.panel.getByRole("treeitem", { name: "Enter your password" }),
+  ).not.toContainText("[redacted]");
+  for (const [name, type] of [
+    ["Enter your password", "password"],
+    ["Card number", "password"],
+    // Nothing withholds an ordinary field's value, or an editor's.
+    ["Full name", "text"],
+    ["Notes", "text"],
+  ]) {
+    await retype(name);
+    await expect(field, name).toHaveAttribute("type", type);
+    await field.press("Escape");
+  }
+
+  // Another row's box opened over this one starts afresh: the password typed
+  // here doesn't follow it there, unmasked, for Enter to type into that field.
+  await retype("Enter your password");
+  await field.fill("hunter2");
+  await retype("Full name");
+  await expect(field).toHaveAttribute("type", "text");
+  await field.press("Escape");
 });
 
 test("activating a link through the native tree re-reads the page it navigated to", async ({

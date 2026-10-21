@@ -275,6 +275,50 @@ describe("InputPanel focus restoration", () => {
   });
 });
 
+describe("InputPanel masking", () => {
+  const field = () =>
+    container.querySelector<HTMLInputElement>("input.sn-input-panel-field")!;
+  const typeInto = (text: string) =>
+    act(() => {
+      field().value = text;
+      field().dispatchEvent(new Event("input", { bubbles: true }));
+    });
+
+  it("masks what is typed when the state asks for a password field", () => {
+    open({ ...TEXT_STATE, inputType: "password" });
+    expect(field().type).toBe("password");
+  });
+
+  it("shows what is typed otherwise", () => {
+    open(TEXT_STATE);
+    expect(field().type).toBe("text");
+  });
+
+  it("opens another field's box afresh, so nothing typed carries over", () => {
+    // Opening a second row's box while one is open re-renders the panel in
+    // place. Reused, the editor kept the password typed for the first field,
+    // unmasked now, for Enter to type into the second.
+    open({
+      ...TEXT_STATE,
+      nodeId: "ax-dom-1",
+      label: "Enter your password",
+      value: "",
+      inputType: "password",
+      source: "native",
+    });
+    typeInto("hunter2");
+    open({
+      ...TEXT_STATE,
+      nodeId: "ax-dom-2",
+      label: "Full name",
+      value: "Jane",
+      source: "native",
+    });
+    expect(field().type).toBe("text");
+    expect(field().value).toBe("Jane");
+  });
+});
+
 /**
  * `blockEmptySubmit` opens a field empty in place of a value the panel can't
  * show (a redacted field, a native editor's content). Only the UNTOUCHED
@@ -396,6 +440,32 @@ describe("InputPanel select picker selection state", () => {
     });
     expect(activeLabel()).toBe("Germany");
     expect(selectedLabels()).toEqual(["France"]);
+  });
+
+  it("starts another select's picker on that select's own option", () => {
+    // Opening a second select's picker while one is open re-renders the panel
+    // in place. Reused, the picker kept the first one's place, for Enter to
+    // choose that position in the second list.
+    open(SELECT_STATE);
+    act(() => {
+      container
+        .querySelector('[role="listbox"]')!
+        .dispatchEvent(
+          new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }),
+        );
+    });
+    expect(activeLabel()).toBe("Germany");
+    open({
+      ...SELECT_STATE,
+      nodeId: "n3",
+      label: "Currency",
+      value: "eur",
+      options: [
+        { value: "eur", label: "Euro", selected: true },
+        { value: "usd", label: "Dollar", selected: false },
+      ],
+    });
+    expect(activeLabel()).toBe("Euro");
   });
 
   it("announces no option as selected when the current one is withheld", () => {
