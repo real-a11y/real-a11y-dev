@@ -90,6 +90,10 @@ function isTitleOnlyFormControl(node: SemanticNode): boolean {
     if (el.getAttribute("aria-label")?.trim()) return false;
     if (labelledByResolvesToText(el)) return false;
     if (hasAssociatedLabelText(el)) return false;
+    // A label or a reference can name the field with no text of its own:
+    // `<label for="e"><img alt="Email"></label>` names its field "Email" from
+    // the image's alt. The computed name says so, as it does for a native tree.
+    if (namedBeyondTitle(node, dom)) return false;
     return !!(
       el.getAttribute("title")?.trim() ||
       el.getAttribute("aria-describedby")?.trim()
@@ -97,23 +101,31 @@ function isTitleOnlyFormControl(node: SemanticNode): boolean {
   }
 
   // Native trees have no live element, so labelledby IDs cannot be resolved.
-  // Chromium already did that work: a name that is not the title and not the
-  // placeholder came from a `<label>` / labelledby / aria-label. Description
-  // is how AX exposes aria-describedby (title becomes description only when
-  // some other source already supplied the name — those pass via the name
-  // check above).
+  // Chromium already did that work (see namedBeyondTitle). Description is how
+  // AX exposes aria-describedby (title becomes description only when some
+  // other source already supplied the name — those pass via the name check).
   if (dom.attributes["aria-label"]?.trim()) return false;
-  const title = (dom.attributes["title"] ?? "").trim();
-  const placeholder = (dom.attributes["placeholder"] ?? "").trim();
-  const name = node.a11y.name.trim();
-  const namedFromControl =
-    name !== "" && name !== title && name !== placeholder;
-  if (namedFromControl) return false;
+  if (namedBeyondTitle(node, dom)) return false;
   return !!(
-    title ||
+    dom.attributes["title"]?.trim() ||
     node.a11y.description.trim() ||
     dom.attributes["aria-describedby"]?.trim()
   );
+}
+
+/**
+ * Whether a control's name came from something other than its `title` or
+ * `placeholder`: a name that is neither came from a `<label>`, a reference or
+ * an aria-label.
+ */
+function namedBeyondTitle(
+  node: SemanticNode,
+  dom: NonNullable<SemanticNode["dom"]>,
+): boolean {
+  const title = (dom.attributes["title"] ?? "").trim();
+  const placeholder = (dom.attributes["placeholder"] ?? "").trim();
+  const name = node.a11y.name.trim();
+  return name !== "" && name !== title && name !== placeholder;
 }
 
 /** True when at least one `aria-labelledby` id points at an element with text. */

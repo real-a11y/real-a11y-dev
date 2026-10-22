@@ -33,7 +33,7 @@ Each child now lends its own text alternative before its content, as accname §2
 
 What this changes for you:
 
-- **Assertions and audits:** `assertNoUnlabeledInteractive` and the unlabeled-control findings stop flagging logo links and icon buttons whose image has an `alt`, and `image-alt` stops reporting an `<svg>` its `<title>` names. A button whose only content is an unlabelled `role="img"` glyph, or SVG `<text>`, is now unnamed and flagged, as it is in Chromium.
+- **Assertions and audits:** `assertNoUnlabeledInteractive` and the unlabeled-control findings stop flagging logo links and icon buttons whose image has an `alt`, `image-alt` stops reporting an `<svg>` its `<title>` names, and `label-title-only` stops warning about a field that a `<label>` or an `aria-labelledby` names through an image. A button whose only content is an unlabelled `role="img"` glyph, or SVG `<text>`, is now unnamed and flagged, as it is in Chromium.
 - **Queries:** `findByRole("link", { name: "Home" })` now finds `<a href="/"><img alt="Home"></a>`.
 - **Snapshots and diffs:** the names of links, buttons, headings, cells and labelled fields that hold images, labelled children or SVG titles change. Re-record those snapshots.
 - **Panels:** `inspector`, `react` and `storybook-addon` show the new names.
