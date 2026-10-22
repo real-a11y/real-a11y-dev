@@ -1036,10 +1036,22 @@ function labelledByText(
     .join(" ");
 }
 
-/** The text of an `<svg>`'s first `<title>` child, which names it (SVG-AAM). */
-function svgTitle(element: Element): string {
+/**
+ * The text of an `<svg>`'s first `<title>` child, which names it (SVG-AAM).
+ * Read with the same walk as any name, never `textContent`: a `<textarea>`'s
+ * markup text inside the title is its default value, and no name may carry it
+ * (see flat-tree's `isTextarea`).
+ */
+function svgTitle(
+  element: Element,
+  visited: Set<Element>,
+  styleCache: StyleCache | null | undefined,
+  walk: NameWalk,
+): string {
   for (const child of element.children) {
-    if (safeTagName(child) === "title") return child.textContent?.trim() ?? "";
+    if (safeTagName(child) === "title") {
+      return getAccessibleTextContent(child, visited, styleCache, walk).trim();
+    }
   }
   return "";
 }
@@ -1324,7 +1336,7 @@ function computeRawAccessibleName(
   //     aria-label: Chromium names `<svg><title>Close</title></svg>` "Close",
   //     and `<svg aria-label="Shut"><title>Close</title></svg>` "Shut".
   if (tag === "svg") {
-    const title = svgTitle(element);
+    const title = svgTitle(element, visited, styleCache, { inReference });
     if (title) return title;
   }
 

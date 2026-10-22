@@ -4214,6 +4214,23 @@ describe("a <textarea>'s markup text is its default value, never text (ADR-0001)
     }
   });
 
+  it("keeps it out of an <svg>'s <title>, which names the svg and what holds it", () => {
+    // In the document, so the IDREF resolves.
+    const root = createPage(
+      `<button id="pay">Pay <svg><title>Code <textarea autocomplete="cc-number">${SECRET}</textarea></title></svg></button>` +
+        `<button id="ref" aria-labelledby="pic">x</button>` +
+        `<svg id="pic"><title>Card <textarea autocomplete="cc-number">${SECRET}</textarea></title></svg>`,
+    );
+    document.body.appendChild(root);
+    try {
+      expect(nodeFor(root, "#pay").a11y.name).toBe("Pay Code");
+      expect(nodeFor(root, "#ref").a11y.name).toBe("Card");
+      expect(extracted(root)).not.toContain(SECRET);
+    } finally {
+      root.remove();
+    }
+  });
+
   it("keeps it out whatever role the author gives the field", () => {
     const root = createPage(
       `<h2>Pay <textarea role="generic" autocomplete="cc-number">${SECRET}</textarea></h2>`,
