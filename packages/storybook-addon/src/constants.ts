@@ -10,7 +10,7 @@ export const EVENTS = {
   TREE_UPDATED: `${ADDON_ID}/tree-updated`,
   /** Preview → manager: preview iframe (re)booted — re-send REQUEST_TREE if the panel is still open. */
   PREVIEW_READY: `${ADDON_ID}/preview-ready`,
-  /** Manager → preview: start observing (if needed) and send the current tree (panel mount). */
+  /** Manager → preview: start observing, in the mode it carries, and send the current tree (panel shown). A no-op while already observing in that mode. */
   REQUEST_TREE: `${ADDON_ID}/request-tree`,
   /** Manager → preview: tear down the observer — panel unmounted / hidden. */
   STOP_TREE: `${ADDON_ID}/stop-tree`,

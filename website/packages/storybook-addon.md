@@ -83,19 +83,19 @@ The addon follows Storybook's manager/preview split:
 
 - **Preview** (`@real-a11y-dev/storybook-addon/preview`) runs inside the story iframe. Extraction is **lazy**: it only stands up a `DomObserver` (200ms debounce) after the manager emits `REQUEST_TREE` (panel open), and tears it down on `STOP_TREE` (panel hidden). While active it re-extracts on every debounced DOM mutation, but emits `TREE_UPDATED` over the Storybook channel **only when that extraction differs from the last one it published** — so a mutation that extracts to an identical tree (an animation frame rewriting inline `style`, a change inside an `aria-hidden` subtree) costs no `postMessage` and no panel re-render at all. And because the observer only exists while the panel is open, animating or Controls-driven stories pay no extract and no `postMessage` cost at all while you're on another addon tab.
 
-- **Manager** (`@real-a11y-dev/storybook-addon/manager`) runs in the Storybook UI shell (React). It mounts only when the Semantic Navigator tab is active, subscribes to `TREE_UPDATED` events, deserializes the tree (the `[id, node][]` array back into a `Map`), re-applies the user's expand/collapse via `preserveExpandedState` (so a Controls tweak or animation does not snap open every row), and renders the interactive `TreePanel` from `@real-a11y-dev/semantic-navigator-ui` inside a shadow root.
+- **Manager** (`@real-a11y-dev/storybook-addon/manager`) runs in the Storybook UI shell (React). It asks for a tree only while its tab is selected and the addon panel is showing — read off its own box, since from Storybook 10.1 every addon panel stays mounted — subscribes to `TREE_UPDATED` events, deserializes the tree (the `[id, node][]` array back into a `Map`), re-applies the user's expand/collapse via `preserveExpandedState` (so a Controls tweak or animation does not snap open every row), and renders the interactive `TreePanel` from `@real-a11y-dev/semantic-navigator-ui` inside a shadow root.
 
 ```
 Preview iframe                              Manager (Storybook UI)
 ────────────────                            ──────────────────────
-(idle until panel opens)                    Panel mounts → REQUEST_TREE
+(idle until panel opens)                    Panel shown → REQUEST_TREE (mode)
 ←──────────────────────────────────────────
 start DomObserver + extract
 → TREE_UPDATED ───────── channel ─────────▶ deserialize tree (array → Map)
    { tree, mode, extractedAt }              → render <TreePanel/> in a shadow root
-canvas reload → PREVIEW_READY ────────────▶ Panel still open → REQUEST_TREE
+canvas reload → PREVIEW_READY ────────────▶ Panel still open → REQUEST_TREE (mode)
 ←──────────────────────────────────────────
-Panel unmounts → STOP_TREE
+Panel hidden → STOP_TREE
 ←──────────────────────────────────────────
 stop DomObserver (no further extracts)
 ```
@@ -139,8 +139,9 @@ import { addons } from "storybook/manager-api";
 //                            altered the tree, while the panel is open)
 //   EVENTS.PREVIEW_READY   — preview iframe (re)booted; manager re-sends REQUEST_TREE if still open
 // Manager → preview:
-//   EVENTS.REQUEST_TREE    — start observing (if needed) and send the current tree (panel mount)
-//   EVENTS.STOP_TREE       — tear down the observer (panel unmount / hidden)
+//   EVENTS.REQUEST_TREE    — start observing, in the mode it carries, and send the current tree
+//                            (panel shown); a no-op while already observing in that mode
+//   EVENTS.STOP_TREE       — tear down the observer (panel hidden or unmounted)
 //   EVENTS.SET_MODE        — re-extract with a new view mode
 //   EVENTS.HIGHLIGHT_NODE  — highlight a node in the story by id
 //   EVENTS.CLEAR_HIGHLIGHT — clear the highlight overlay

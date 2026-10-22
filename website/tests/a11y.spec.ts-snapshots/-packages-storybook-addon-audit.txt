@@ -114,7 +114,7 @@ main
         code "postMessage"
         code "postMessage"
     listitem
-      paragraph "() runs in the Storybook UI shell (React). It mounts only when the Semantic Navigator tab is active, subscribes to events, deserializes the tree (the array back into a ), re-applies the user's expand/collapse via (so a Controls tweak or animation does not snap open every row), and renders the interactive from inside a shadow root."
+      paragraph "() runs in the Storybook UI shell (React). It asks for a tree only while its tab is selected and the addon panel is showing — read off its own box, since from Storybook 10.1 every addon panel stays mounted — subscribes to events, deserializes the tree (the array back into a ), re-applies the user's expand/collapse via (so a Controls tweak or animation does not snap open every row), and renders the interactive from inside a shadow root."
         strong "Manager"
         code "@real-a11y-dev/storybook-addon/manager"
         code "TREE_UPDATED"

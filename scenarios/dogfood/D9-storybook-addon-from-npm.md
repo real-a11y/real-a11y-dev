@@ -36,7 +36,11 @@ Then install the addon with the command the docs give, as written.
    group every story is the same `button "Button"` tree, so a stale panel looks identical
 4. Change the **`label`** control by clicking the Controls tab with the panel open, then
    switching back. `primary`, `size` and `backgroundColor` change only class or style, which
-   the A11Y view does not show
+   the A11Y view does not show. Then switch the panel to **DOM**, go to Controls and back,
+   select **DOM** again if the panel came back on A11Y, and reload the canvas. Log the mode of
+   every tree the manager receives — row labels follow the pressed toggle whatever the tree, so
+   this is the only way to see a mismatch:
+   `__STORYBOOK_ADDONS_CHANNEL__.on('real-a11y/semantic-navigator/tree-updated',(p)=>console.log(p.mode))`
 5. `npm run build-storybook`, serve the static output, repeat 2–4
 6. Check the browser console in both dev and static builds, against a **baseline**: the same
    project with the addon's line removed. Storybook logs warnings of its own; only the
@@ -57,13 +61,20 @@ Then install the addon with the command the docs give, as written.
 - The panel appears and tracks stories and controls
 - **2/4** — selecting the panel never takes the tray away: a mouse click on Controls selects
   it. On storybook-addon 0.1.0-beta.19 with Storybook 10.1 or later the panel paints over the
-  tab bar — the known defect the beta.19 dogfood filed, not a new one
+  tab bar — the known defect the beta.19 dogfood filed, fixed in the first release after it
+- **4** — every tree the panel logs matches its pressed toggle: `dom` under DOM, `a11y` under
+  A11Y. After the tab switch it is still on DOM on Storybook 10.1 and later; on Storybook 9 it
+  comes back on A11Y, as it always has. After the reload it is still on DOM, on every version.
+  On 0.1.0-beta.19, Storybook 9 comes back on A11Y over `dom` trees, and every version logs
+  `a11y` under DOM after the reload (known defects, fixed in the first release after it)
 - **The static build works** — this is where the addon's `exports` subpaths get resolved by
   Storybook's production builder
 - No console errors from the addon in either mode — nothing beyond the baseline's
 - The docs match the Storybook version people will actually be on
 - **8** — `0` both times: the docs promise no extract and no `postMessage` while another tab is
-  active. On 0.1.0-beta.19 with Storybook 10.1 or later it streams regardless (known defect)
+  active. On 0.1.0-beta.19 it streams with another tab selected on Storybook 10.1 or later,
+  and with the panel hidden on every version (known defect, fixed in the first release after
+  it)
 - Step 10 prints `(empty)`, from the first release after `0.1.0-beta.17`: the addon has no
   runtime dependency of its own. Up to `0.1.0-beta.17` it listed `@real-a11y-dev/testing`,
   which it never imported, so there `npm ls` shows it — that is the old behaviour, not a fail
@@ -82,4 +93,7 @@ panel and started rendering every addon panel as active, which put the panel ove
 and kept it extracting in the background. Neither showed in a run that switched tabs by
 keyboard, changed only style-only controls, or stayed inside the Button stories — which is why
 steps 2–4 now say which interaction and which stories, and step 8 measures the laziness the docs
-promise.
+promise. The mode check in step 4 came with the fix for both: a panel that goes idle has to ask
+for its tree again, and the beta.19 panel never said in which mode — so a canvas reload restarted
+the preview in A11Y under a DOM toggle, and on Storybook 9 a tab switch brought the panel back on
+A11Y over a DOM-mode tree.

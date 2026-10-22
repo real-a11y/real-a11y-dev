@@ -25,7 +25,9 @@ pnpm --filter @real-a11y-dev/example-storybook storybook
    another addon tab (Controls) **with the mouse** — does the tray stay usable?
 2. Switch between stories whose trees differ; the panel should re-read each one
 3. Change a **control** that alters the rendered DOM (a label, a `disabled` toggle) by
-   clicking the Controls tab with the panel open, then back — does the panel update?
+   clicking the Controls tab with the panel open, then back — does the panel update? Then
+   switch the panel to **DOM**, go to Controls and back, and reload the canvas, logging each
+   tree's mode in the manager console (twin: D9 step 4)
 4. A story whose content renders asynchronously
 5. A story with **multiple roots** / no single wrapper element
 6. A story rendering into a portal (a modal or tooltip)
@@ -39,18 +41,20 @@ pnpm --filter @real-a11y-dev/example-storybook storybook
 
 - **1** — the panel renders per story with no per-story configuration, and selecting it
   never takes the tray away: the mouse click selects Controls. The example takes
-  `storybook ^10.6.0`, which is always 10.1 or later, so with storybook-addon
-  0.1.0-beta.19 the panel covers the tab bar on every run — the known defect the beta.19
+  `storybook ^10.6.0`, which is always 10.1 or later, so up to storybook-addon
+  0.1.0-beta.19 the panel covered the tab bar on every run — the defect the beta.19
   dogfood filed
 - **2/3** — it tracks story and control changes rather than showing the first story's
-  tree forever
+  tree forever, and comes back in the mode it was left in: **DOM** after the tab switch
+  and after the reload, with every tree it logs saying `dom`
 - **4** — late content appears
 - **5** — a multi-rooted story is handled, not silently truncated to the first root
 - **6** — portal content is reachable
 - **7** — works in the **static build** too, which is where the addon's `exports`
   subpaths actually get resolved by a real Storybook builder
 - **8** — `0` both times. The addon promises no extraction while another tab is active;
-  on Storybook 10.1 and later, 0.1.0-beta.19 extracts regardless (known defect)
+  up to 0.1.0-beta.19 it extracted regardless — with another tab selected on Storybook
+  10.1 and later, and with the panel hidden on every version
 
 ## Why this exists
 
