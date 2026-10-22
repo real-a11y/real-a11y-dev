@@ -328,7 +328,9 @@ test("In-page tree: an untouched Enter in a rich-text editor's edit box leaves t
   const contents = () =>
     page
       .locator('[role="textbox"][contenteditable]')
-      .evaluateAll((editors) => editors.map((e) => e.innerHTML));
+      .evaluateAll((editors) =>
+        Object.fromEntries(editors.map((e) => [e.id, e.innerHTML])),
+      );
   const before = await contents();
 
   // Each box opens on the editor's text alone, which a retype would put in
@@ -357,7 +359,12 @@ test("In-page tree: an untouched Enter in a rich-text editor's edit box leaves t
   await expect(page.locator("#signature")).toHaveText("Best, Jane");
   await expect(page.locator("#signature img")).toHaveCount(0);
 
-  expect((await contents()).slice(1)).toEqual(before.slice(1));
+  // Every other editor is as it was.
+  const after = await contents();
+  expect(Object.keys(after)).toEqual(Object.keys(before));
+  for (const id of Object.keys(before)) {
+    if (id !== "signature") expect(after[id], id).toBe(before[id]);
+  }
   await expect(page.locator("#order-note input")).toHaveValue("3");
   await expect(page.locator("#divider hr")).toHaveCount(1);
   await expect(page.locator("#motto b")).toHaveText("Stay");
