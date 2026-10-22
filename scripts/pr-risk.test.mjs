@@ -734,6 +734,43 @@ describe("field-value redaction covers the DOM producer's flat tree", () => {
   });
 });
 
+describe("field-value redaction covers the in-page tree's edit box", () => {
+  it("grades dropping a field state's withheld flag 🔴 high", async () => {
+    // A card field is a text input, so its edit box hides what is typed only
+    // because its field state says the value is withheld. The edit names no
+    // gate on a changed line, only in the hunk's header.
+    const path = "packages/extension/src/field-state.ts";
+    const base = `export function computeFieldState(el) {\n  const sensitive = classify(el);\n  return {\n    value: sensitive ? "" : el.value,\n    ...(sensitive ? { valueWithheld: true } : {}),\n  };\n}\n`;
+    const result = await gradeEdit(
+      path,
+      base,
+      `    ...(sensitive ? { valueWithheld: true } : {}),\n`,
+      ``,
+    );
+
+    assert.equal(result.tier, "high");
+    assert.deepEqual(evidenceFor(result, "field-value-redaction"), [
+      `${path} → computeFieldState`,
+    ]);
+  });
+
+  it("grades unmasking a withheld field's edit box 🔴 high", async () => {
+    const path = "packages/extension/src/sidepanel/InputPanel.tsx";
+    const base = `export function domTextInputState(nodeId, label, field) {\n  const withheld = field.valueWithheld === true;\n  return {\n    inputType: withheld ? "password" : field.type,\n  };\n}\n`;
+    const result = await gradeEdit(
+      path,
+      base,
+      `withheld ? "password" : field.type`,
+      `field.type`,
+    );
+
+    assert.equal(result.tier, "high");
+    assert.deepEqual(evidenceFor(result, "field-value-redaction"), [
+      `${path} → domTextInputState`,
+    ]);
+  });
+});
+
 describe("field-value redaction stays on the gates, not the files", () => {
   it("leaves an unrelated comment edit in native-tree.ts 🟡 medium", async () => {
     // Why this rule matches the gates by name rather than native-tree.ts by

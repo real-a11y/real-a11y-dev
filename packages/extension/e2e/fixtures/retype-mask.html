@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Retype mask — in-page tree</title>
+  </head>
+  <body>
+    <h1>Sign in</h1>
+
+    <!--
+      The edit box a typable row opens in the in-page tree must hide what is
+      typed into every field whose value is withheld (ADR-0001), empty or
+      not. A field's own type doesn't decide it: the card number and the
+      security code are text and tel inputs, which hide nothing themselves,
+      and the payment note is an editor holding a card field, withheld whole.
+      The empty password stands in for a sign-in page's "Enter your password"
+      step. The name field and the notes editor are the controls: nothing
+      withholds their values, so their boxes open on them, unmasked.
+    -->
+    <label for="pw">Enter your password</label>
+    <input id="pw" type="password" autocomplete="current-password" />
+
+    <label for="old">Current password</label>
+    <input id="old" type="password" value="hunter2" />
+
+    <label for="card">Card number</label>
+    <input id="card" type="text" autocomplete="cc-number" />
+
+    <label for="code">Security code</label>
+    <input id="code" type="tel" autocomplete="cc-csc" value="123" />
+
+    <div
+      id="pay"
+      role="textbox"
+      contenteditable="true"
+      aria-label="Payment note"
+    >
+      Pay
+      <textarea autocomplete="cc-number" aria-label="Card in note">
+4111111111111111</textarea>
+      now
+    </div>
+
+    <label for="name">Full name</label>
+    <input id="name" type="text" value="Jane" />
+
+    <div id="notes" role="textbox" contenteditable="true" aria-label="Notes">
+      Hello
+    </div>
+  </body>
+</html>

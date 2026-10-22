@@ -3,6 +3,7 @@ import { render, h } from "preact";
 import { act } from "preact/test-utils";
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 
+import type { FieldState } from "../field-state.js";
 import type { ContentToPanel } from "../types.js";
 
 import { App } from "./App.js";
@@ -31,6 +32,8 @@ interface FieldSpec {
   isEditable?: boolean;
   /** `dom.descendantText` — the leaf-text preview the A11y view prints. */
   text?: string;
+  /** `interaction.actions`: `["type"]` gives the row its edit box. */
+  actions?: string[];
 }
 
 function field(spec: FieldSpec): [string, SemanticNode] {
@@ -61,7 +64,7 @@ function field(spec: FieldSpec): [string, SemanticNode] {
       },
       interaction: {
         isInteractive: true,
-        actions: [],
+        actions: spec.actions ?? [],
         isEditable: spec.isEditable ?? false,
         isFocusable: true,
       },
@@ -347,6 +350,158 @@ describe("field values in the DOM producer's tree", () => {
     for (const value of ["Spain", "es", "jane@example.com", "Loud"]) {
       expect(copied[0]).not.toContain(`"${value}"`);
     }
+  });
+});
+
+/**
+ * The edit box a DOM tree row opens, through the panel's own opener: what the
+ * content script's `computeFieldState` replies for the row's field decides
+ * it. A withheld field's box must hide what is typed, empty or not, and an
+ * untouched Enter must not type "" over the value the box couldn't show.
+ */
+describe("the DOM producer's edit box", () => {
+  /** What `computeFieldState` replies for each row's field. */
+  const STATES: Record<string, FieldState> = {
+    // Empty, as on a sign-in page's "Enter your password" step.
+    pin: {
+      success: true,
+      type: "password",
+      value: "",
+      placeholder: "",
+      valueWithheld: true,
+    },
+    // A card field is a text input: its own type hides nothing.
+    card: {
+      success: true,
+      type: "text",
+      value: "",
+      placeholder: "",
+      valueWithheld: true,
+    },
+    name: { success: true, type: "text", value: "Jane", placeholder: "" },
+  };
+  const ROWS: FieldSpec[] = [
+    {
+      id: "pin",
+      role: "textbox",
+      name: "Enter your password",
+      tagName: "input",
+      type: "password",
+      isEditable: true,
+      actions: ["type"],
+    },
+    {
+      id: "card",
+      role: "textbox",
+      name: "Card number",
+      tagName: "input",
+      type: "text",
+      isEditable: true,
+      actions: ["type"],
+    },
+    {
+      id: "name",
+      role: "textbox",
+      name: "Full name",
+      tagName: "input",
+      type: "text",
+      announced: "Jane",
+      raw: "Jane",
+      isEditable: true,
+      actions: ["type"],
+    },
+  ];
+
+  let container: HTMLDivElement;
+  let chromeMock: ChromeMock;
+
+  beforeEach(() => {
+    stubMatchMedia();
+    chromeMock = installChromeMock({
+      respond: (m) =>
+        m.type === "GET_FIELD_STATE" ? STATES[m.payload.nodeId] : undefined,
+    });
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    act(() => {
+      render(h(App, {}), container);
+    });
+    act(() => {
+      chromeMock.emit({
+        type: "ACTIVE_TAB_CHANGED",
+        tabId: TAB_ID,
+      } as unknown as ContentToPanel);
+    });
+    act(() => {
+      chromeMock.emit(treeData(ROWS));
+    });
+  });
+
+  afterEach(() => {
+    render(null, container);
+    container.remove();
+  });
+
+  /** Open a row's edit box from its Type button. */
+  function openBox(nodeId: string): HTMLInputElement {
+    const button = container.querySelector<HTMLButtonElement>(
+      `[data-node-id="${nodeId}"] button.sn-action`,
+    );
+    if (!button) throw new Error(`no Type button on ${nodeId}`);
+    act(() => {
+      button.click();
+    });
+    const box = container.querySelector<HTMLInputElement>(
+      ".sn-input-panel-field",
+    );
+    if (!box) throw new Error(`no edit box for ${nodeId}`);
+    return box;
+  }
+
+  function enter(box: HTMLInputElement): void {
+    act(() => {
+      box.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Enter", bubbles: true }),
+      );
+    });
+  }
+
+  const typed = () =>
+    chromeMock.sent.filter((m) => m.type === "DISPATCH_ACTION");
+
+  it("masks a withheld field's box, empty or not, and an untouched Enter types nothing", () => {
+    for (const id of ["pin", "card"]) {
+      const box = openBox(id);
+      expect(box.type, id).toBe("password");
+      expect(box.value, id).toBe("");
+      enter(box);
+      expect(container.querySelector(".sn-input-panel-field"), id).toBeNull();
+    }
+    expect(typed()).toEqual([]);
+  });
+
+  it("types what the user enters into a withheld field", () => {
+    const box = openBox("card");
+    act(() => {
+      box.value = "4111111111111111";
+      box.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    enter(box);
+    expect(typed()).toEqual([
+      expect.objectContaining({
+        payload: {
+          nodeId: "card",
+          action: "type",
+          payload: { value: "4111111111111111" },
+        },
+      }),
+    ]);
+  });
+
+  it("leaves an ordinary field's box prefilled and unmasked", () => {
+    const box = openBox("name");
+    expect(box.type).toBe("text");
+    expect(box.value).toBe("Jane");
   });
 });
 

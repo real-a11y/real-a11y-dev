@@ -111,34 +111,6 @@ async function countItem16Clicks(
     );
 }
 
-/**
- * Route the panel's DOM `DISPATCH_ACTION` to the page's top frame, as the
- * background does for a real side panel. This harness loads the panel as a
- * tab, so the background reads its messages as a content script's and never
- * forwards an action to the page (see `harness.ts`). Native actions go over
- * `chrome.debugger` and need no routing.
- */
-async function routeDomActionsToPage(panel: PanelPage): Promise<void> {
-  await panel.evaluate(() => {
-    const real = chrome.runtime.sendMessage.bind(chrome.runtime) as (
-      message: unknown,
-      ...rest: unknown[]
-    ) => Promise<unknown>;
-    chrome.runtime.sendMessage = ((message: unknown, ...rest: unknown[]) => {
-      const m = message as { type?: unknown; tabId?: unknown } | null;
-      if (m?.type !== "DISPATCH_ACTION" || typeof m.tabId !== "number") {
-        return real(message, ...rest);
-      }
-      const callback = rest.find((r) => typeof r === "function") as
-        ((response: unknown) => void) | undefined;
-      chrome.tabs.sendMessage(m.tabId, m, { frameId: 0 }, (response) => {
-        callback?.(chrome.runtime.lastError ? undefined : response);
-      });
-      return undefined;
-    }) as typeof chrome.runtime.sendMessage;
-  });
-}
-
 const itemsRow = (panel: PanelPage) =>
   panel.getByRole("treeitem", { name: /region.*"Items"/ });
 const scopeBar = (panel: PanelPage) => panel.locator(".sn-scope-bar");
@@ -294,7 +266,7 @@ for (const producer of ["DOM", "NATIVE"] as const) {
     }) => {
       const page = await show(nav, "native-panel.html", producer);
       const clicks = await countItem16Clicks(page);
-      if (producer === "DOM") await routeDomActionsToPage(nav.panel);
+      if (producer === "DOM") await nav.routeToPage(["DISPATCH_ACTION"]);
       await itemsRow(nav.panel).dblclick({ position: { x: 5, y: 5 } });
       await nav.panel
         .getByRole("button", { name: "Buttons", exact: true })

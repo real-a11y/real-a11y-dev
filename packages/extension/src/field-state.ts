@@ -13,12 +13,14 @@ export type FieldState =
        *  (`"text"`, `"email"`, …). Custom contenteditable widgets report
        *  `"text"`. */
       type: string;
-      /** Current value. Always `""` for a sensitive field (see below). */
+      /** Current value. Always `""` when `valueWithheld` is set. */
       value: string;
       placeholder?: string;
       options?: SelectOption[];
-      /** Set for a sensitive field, whose value `value` leaves out — for a
-       *  `<select>`, which option is chosen. */
+      /** Set for a field whose value `value` leaves out (ADR-0001): a
+       *  sensitive field, empty or not, and an editor holding one. For a
+       *  `<select>` that includes which option is chosen. The panel's edit
+       *  box hides what is typed into such a field. */
       valueWithheld?: true;
     };
 
@@ -43,13 +45,27 @@ function isEditableHost(el: Element): boolean {
 }
 
 /**
+ * Does a sensitive field sit inside this element? An editor's value is the
+ * text it holds, so one holding a card input is withheld whole, as the native
+ * read withholds it (`pageReadValue`): a value read from around a secret
+ * fails closed.
+ */
+function holdsSensitiveField(el: Element): boolean {
+  return Array.from(el.querySelectorAll("input, textarea, select")).some(
+    (control) => isSensitiveField(control),
+  );
+}
+
+/**
  * Compute the side panel's inline-input state for a field element. Pure and
  * DOM-only, so it is unit-tested directly. Returns `{ success: false }` for
  * anything that isn't a fillable field.
  *
  * A sensitive field (password, credit-card, etc.) never reveals its current
- * value to the panel — it reports `value: ""`. The field can still be typed
- * into, since the panel overwrites; it just can't read back the secret.
+ * value to the panel — it reports `value: ""` — and says so with
+ * `valueWithheld`, empty or not, so the panel's edit box hides what is typed
+ * into it. The field can still be typed into, since the panel overwrites; it
+ * just can't read back the secret.
  */
 export function computeFieldState(el: Element): FieldState {
   const tag = el.tagName.toLowerCase();
@@ -79,26 +95,31 @@ export function computeFieldState(el: Element): FieldState {
 
   if (tag === "input" || tag === "textarea") {
     const input = el as HTMLInputElement;
+    const sensitive = isSensitiveField(input);
     return {
       success: true,
       type: input.type || "text",
-      value: isSensitiveField(input) ? "" : input.value,
+      value: sensitive ? "" : input.value,
       placeholder: input.placeholder || "",
+      ...(sensitive ? { valueWithheld: true as const } : {}),
     };
   }
 
   // Custom text widget (contenteditable). There is no `.value`; the current
   // text is its text content, less any control's child text — a nested
-  // `<textarea>`'s is its default, the secret for a sensitive one, which the
-  // host's own sensitivity check can't see. Trim to shed the framework
-  // whitespace these editors leave behind (e.g. Quill's trailing newline / an
-  // empty `<p><br></p>`), which would otherwise show as blank-but-not-empty.
+  // `<textarea>`'s is its default, which for a sensitive one is the secret.
+  // An editor holding a sensitive field is withheld whole (see
+  // `holdsSensitiveField`). Trim to shed the framework whitespace these
+  // editors leave behind (e.g. Quill's trailing newline / an empty
+  // `<p><br></p>`), which would otherwise show as blank-but-not-empty.
   if (isEditableHost(el)) {
+    const sensitive = holdsSensitiveField(el);
     return {
       success: true,
       type: "text",
-      value: isSensitiveField(el) ? "" : pageText(el).trim(),
+      value: sensitive ? "" : pageText(el).trim(),
       placeholder: el.getAttribute("aria-placeholder") ?? "",
+      ...(sensitive ? { valueWithheld: true as const } : {}),
     };
   }
 

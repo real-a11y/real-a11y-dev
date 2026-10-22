@@ -721,7 +721,12 @@ export class NativeHarness {
   async domFieldState(
     tabId: number,
     nodeId: string,
-  ): Promise<{ success?: boolean; value?: string; error?: string }> {
+  ): Promise<{
+    success?: boolean;
+    value?: string;
+    valueWithheld?: boolean;
+    error?: string;
+  }> {
     const { frameId, localId } = splitNodeId(nodeId);
     return await this.toFrame(tabId, frameId, {
       type: "GET_FIELD_STATE",
@@ -810,11 +815,14 @@ export class NativeHarness {
 
   /**
    * Send the panel's messages of these `types` straight to the bound tab's
-   * top frame, the way the background forwards them for a real side panel.
-   * This harness loads the panel in a tab, and the background reads a
-   * message from a tab as a content frame's, so it never forwards these to
-   * the page. Everything else goes through untouched. Install it after the
-   * panel's last reload, which would drop it.
+   * top frame, the way the background forwards them for a real side panel,
+   * and hand the frame's reply back the way the panel asked for it: to its
+   * callback, or as the returned promise. This harness loads the panel in a
+   * tab, and the background reads a message from a tab as a content frame's,
+   * so it never forwards these to the page, and answers a request itself:
+   * `GET_FIELD_STATE` came back with no field state, so no edit box opened.
+   * Everything else goes through untouched. Install it after the panel's
+   * last reload, which would drop it.
    */
   async routeToPage(types: readonly string[]): Promise<void> {
     await this.panel.evaluate((routed) => {
@@ -831,9 +839,14 @@ export class NativeHarness {
         ) {
           return real(message, ...rest);
         }
-        return chrome.tabs
+        const reply = chrome.tabs
           .sendMessage(m.tabId, m, { frameId: 0 })
           .catch(() => undefined);
+        const callback = rest.find((r) => typeof r === "function") as
+          ((response: unknown) => void) | undefined;
+        if (!callback) return reply;
+        void reply.then(callback);
+        return undefined;
       }) as typeof chrome.runtime.sendMessage;
     }, types);
   }

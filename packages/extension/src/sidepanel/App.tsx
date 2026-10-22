@@ -99,7 +99,7 @@ import {
   NOT_FOLLOWING,
   type FollowWindow,
 } from "./follow-window.js";
-import { InputPanel } from "./InputPanel.js";
+import { InputPanel, domTextInputState } from "./InputPanel.js";
 import type { InputPanelState } from "./InputPanel.js";
 import {
   AUTO_REFRESH_QUIET_MS,
@@ -2094,14 +2094,13 @@ export function App() {
           { type: "GET_FIELD_STATE", payload: { nodeId: id } },
           (response: unknown) => {
             if (!isFieldStateSuccess(response)) return;
-            setInputState({
-              type: "text",
-              nodeId: id,
-              label: node.a11y.name || node.dom.tagName,
-              value: response.value || "",
-              inputType: response.type,
-              placeholder: response.placeholder,
-            });
+            setInputState(
+              domTextInputState(
+                id,
+                node.a11y.name || node.dom.tagName,
+                response,
+              ),
+            );
           },
         );
         return;
@@ -2866,8 +2865,9 @@ export function App() {
           value: isRedacted ? "" : (node.rawValue ?? ""),
           placeholder: node.placeholder,
           source: "native",
-          // Mask the retyped replacement the same way InputPanel already
-          // masks a DOM password field (inputType, checked in InputPanel.tsx).
+          // Mask the retyped replacement the same way the DOM tree's box is
+          // masked (inputType, set by `domTextInputState`, checked in
+          // InputPanel.tsx).
           // The wire carries each field's verdict (`valueWithheld`, beside
           // `redacted`), never the raw `type` attribute behind it, and the
           // policy isn't only type="password" (R1: a sensitive-autocomplete

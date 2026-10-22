@@ -90,13 +90,45 @@ describe("computeFieldState", () => {
       });
     });
 
-    it("never reveals a password value (but still allows typing)", () => {
-      const el = mount(`<input type="password" value="hunter2" />`);
-      expect(computeFieldState(el)).toMatchObject({
-        success: true,
-        type: "password",
-        value: "",
-      });
+    it("never reveals a password value, and says so, empty or not (but still allows typing)", () => {
+      for (const html of [
+        `<input type="password" value="hunter2" />`,
+        `<input type="password" />`,
+      ]) {
+        expect(computeFieldState(mount(html)), html).toEqual({
+          success: true,
+          type: "password",
+          value: "",
+          placeholder: "",
+          valueWithheld: true,
+        });
+      }
+    });
+
+    // Their own type hides nothing, so the flag is all the edit box has to
+    // hide what is typed into one.
+    it("withholds a card, CVC or one-time-code field's value, empty or not", () => {
+      for (const [html, type] of [
+        [
+          `<input type="text" autocomplete="cc-number" value="4111111111111111" />`,
+          "text",
+        ],
+        [`<input type="text" autocomplete="cc-number" />`, "text"],
+        [`<input type="tel" autocomplete="cc-csc" value="123" />`, "tel"],
+        [`<input inputmode="numeric" autocomplete="one-time-code" />`, "text"],
+        [
+          `<textarea autocomplete="one-time-code">123456</textarea>`,
+          "textarea",
+        ],
+      ]) {
+        expect(computeFieldState(mount(html)), html).toEqual({
+          success: true,
+          type,
+          value: "",
+          placeholder: "",
+          valueWithheld: true,
+        });
+      }
     });
   });
 
@@ -159,23 +191,31 @@ describe("computeFieldState", () => {
 
     // A <textarea>'s child text is its markup DEFAULT value, never text the
     // page shows — and for a sensitive field (ADR-0001) it is the secret. The
-    // host isn't the sensitive one, so its own check can't withhold it.
-    it("leaves a sensitive textarea inside the editor out of its value", () => {
-      const el = mount(
-        `<div contenteditable="true" role="textbox">Pay ` +
-          `<textarea autocomplete="cc-number">4111111111111111</textarea>now</div>`,
-      );
-      expect(computeFieldState(el)).toEqual({
-        success: true,
-        type: "text",
-        value: "Pay now",
-        placeholder: "",
-      });
+    // editor's value is read from around the field, so it is withheld whole,
+    // as Chrome's tree withholds it, and its edit box hides what is typed.
+    it("withholds the editor's whole value when a sensitive field sits inside it", () => {
+      for (const control of [
+        `<textarea autocomplete="cc-number">4111111111111111</textarea>`,
+        `<input autocomplete="cc-csc" value="123" />`,
+        `<input type="password" />`,
+      ]) {
+        const el = mount(
+          `<div contenteditable="true" role="textbox">Pay ${control}now</div>`,
+        );
+        expect(computeFieldState(el), control).toEqual({
+          success: true,
+          type: "text",
+          value: "",
+          placeholder: "",
+          valueWithheld: true,
+        });
+      }
     });
 
     it("reads no control's child text as the editor's", () => {
       // An ordinary textarea's default is stale once the user types, and a
-      // <select>'s child text is every option, not the one it shows.
+      // <select>'s child text is every option, not the one it shows. None of
+      // them is sensitive, so the editor's own text is not withheld.
       const el = mount(
         `<div contenteditable="true" role="textbox">Notes ` +
           `<textarea>first draft</textarea>` +
@@ -183,7 +223,12 @@ describe("computeFieldState", () => {
           `<datalist><option>Plum</option></datalist>end</div>`,
       );
       el.querySelector("textarea")!.value = "edited";
-      expect(computeFieldState(el)).toMatchObject({ value: "Notes end" });
+      expect(computeFieldState(el)).toEqual({
+        success: true,
+        type: "text",
+        value: "Notes end",
+        placeholder: "",
+      });
     });
 
     it("reads only the text the editor renders", () => {

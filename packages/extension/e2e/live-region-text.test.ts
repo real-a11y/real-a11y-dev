@@ -48,13 +48,23 @@ test("an editor's inline input panel opens without a nested textarea's markup te
 }) => {
   const tab = await nav.open("live-region-text.html");
   const tree = await nav.domTree(tab.tabId);
-  const editor = tree.nodes.find(
-    ([, n]) => n.dom?.attributes?.["id"] === "editor",
-  );
-  if (!editor) throw new Error("no node for #editor in the merged tree");
+  const stateOf = async (id: string) => {
+    const found = tree.nodes.find(([, n]) => n.dom?.attributes?.["id"] === id);
+    if (!found) throw new Error(`no node for #${id} in the merged tree`);
+    return await nav.domFieldState(tab.tabId, found[0]);
+  };
 
-  const state = await nav.domFieldState(tab.tabId, editor[0]);
+  // An ordinary textarea's markup text is its default, stale once typed into.
+  const draft = await stateOf("draft");
+  expect(draft.success).toBe(true);
+  expect(draft.value).toBe("Dear Sam");
+  expect(draft.valueWithheld).toBeUndefined();
 
-  expect(state.success).toBe(true);
-  expect(state.value).toBe("Pay now");
+  // A sensitive one's is the secret. The editor's value is read from around
+  // it, so it is withheld whole, as Chrome's tree withholds it.
+  const editor = await stateOf("editor");
+  expect(editor.success).toBe(true);
+  expect(editor.value).toBe("");
+  expect(editor.valueWithheld).toBe(true);
+  expect(JSON.stringify(editor)).not.toContain("CARD-SENTINEL");
 });

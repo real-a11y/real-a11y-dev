@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback, useId } from "preact/hooks";
 
+import type { FieldState } from "../field-state.js";
 import type { SelectOption } from "../types.js";
 
 import { useFocusTrap, useRestoreFocusOnClose } from "./focus-hooks.js";
@@ -23,8 +24,9 @@ export interface InputPanelState {
    */
   source?: "dom" | "native";
   /**
-   * Set only when `value` was substituted empty for a native field whose
-   * real value is redacted (R1), or that a retype cannot start from (an
+   * Set only when `value` was substituted empty for a field whose real value
+   * is withheld (R1) — a DOM field's (see {@link domTextInputState}) or a
+   * native one's — or for a native field a retype cannot start from (an
    * editor's content) — see `App.tsx`'s `handleNativeActivate`.
    * Submitting with NO edit (still empty) cancels instead of dispatching:
    * without this, a click-through submit would silently blank the user's
@@ -39,6 +41,34 @@ export interface InputPanelState {
    * the option chosen.
    */
   valueWithheld?: boolean;
+}
+
+/**
+ * The edit box a DOM tree row opens, from its field's `GET_FIELD_STATE` reply
+ * (`computeFieldState`). A field whose value is withheld (ADR-0001) arrives
+ * without it, so its box opens empty in its place: it hides what is typed,
+ * for every such field, empty or not (a password field's own type used to be
+ * the only thing that hid it), and an untouched Enter cancels rather than
+ * type `""` over the real value. A redaction gate — `scripts/pr-risk.mjs`
+ * grades a change to it as such.
+ *
+ * @internal
+ */
+export function domTextInputState(
+  nodeId: string,
+  label: string,
+  field: Extract<FieldState, { success: true }>,
+): InputPanelState {
+  const withheld = field.valueWithheld === true;
+  return {
+    type: "text",
+    nodeId,
+    label,
+    value: withheld ? "" : field.value || "",
+    inputType: withheld ? "password" : field.type,
+    placeholder: field.placeholder,
+    ...(withheld ? { blockEmptySubmit: true } : {}),
+  };
 }
 
 interface InputPanelProps {

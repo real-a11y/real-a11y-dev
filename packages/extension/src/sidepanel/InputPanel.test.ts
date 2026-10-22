@@ -10,7 +10,7 @@ import {
 } from "vitest";
 
 import { FOCUSABLE_SELECTOR } from "./focus-hooks.js";
-import { InputPanel } from "./InputPanel.js";
+import { InputPanel, domTextInputState } from "./InputPanel.js";
 import type { InputPanelState } from "./InputPanel.js";
 
 /**
@@ -515,5 +515,112 @@ describe("InputPanel select picker disabled options", () => {
       );
     });
     expect(submitted).toEqual([]);
+  });
+});
+
+/**
+ * The edit box a DOM tree row opens. A field whose value is withheld arrives
+ * without it, and its box has to hide what is typed whatever the field's own
+ * type says: a card or one-time-code field is a text or tel input. Nor may an
+ * untouched Enter type "" over the value the box couldn't show.
+ */
+describe("domTextInputState", () => {
+  const withheld = (type: string) =>
+    domTextInputState("n1", "Card number", {
+      success: true,
+      type,
+      value: "",
+      placeholder: "",
+      valueWithheld: true,
+    });
+
+  function mount(state: InputPanelState) {
+    const submitted: string[] = [];
+    let cancelled = 0;
+    act(() => {
+      render(
+        h(InputPanel, {
+          state,
+          onSubmit: (_id: string, value: string) => submitted.push(value),
+          onCancel: () => {
+            cancelled += 1;
+          },
+        }),
+        container,
+      );
+    });
+    const input = container.querySelector<HTMLInputElement>(
+      "input.sn-input-panel-field",
+    )!;
+    return {
+      input,
+      submitted,
+      cancelled: () => cancelled,
+      type: (text: string) =>
+        act(() => {
+          input.value = text;
+          input.dispatchEvent(new Event("input", { bubbles: true }));
+        }),
+      enter: () =>
+        act(() => {
+          input.dispatchEvent(
+            new KeyboardEvent("keydown", { key: "Enter", bubbles: true }),
+          );
+        }),
+    };
+  }
+
+  it("masks a withheld field's box whatever the field's own type", () => {
+    for (const type of ["text", "tel", "textarea", "password"]) {
+      const panel = mount(withheld(type));
+      expect(panel.input.type, type).toBe("password");
+      expect(panel.input.value, type).toBe("");
+      close();
+    }
+  });
+
+  it("cancels an untouched Enter on a withheld field instead of blanking it", () => {
+    const panel = mount(withheld("password"));
+    panel.enter();
+    expect(panel.submitted).toEqual([]);
+    expect(panel.cancelled()).toBe(1);
+  });
+
+  it("types what the user enters into a withheld field", () => {
+    const panel = mount(withheld("text"));
+    panel.type("4111111111111111");
+    panel.enter();
+    expect(panel.submitted).toEqual(["4111111111111111"]);
+  });
+
+  it("never prefills a withheld field, even from a reply that held a value", () => {
+    const state = domTextInputState("n1", "Password", {
+      success: true,
+      type: "password",
+      value: "hunter2",
+      valueWithheld: true,
+    });
+    expect(state.value).toBe("");
+  });
+
+  it("leaves an ordinary field's box as it was: prefilled and unmasked", () => {
+    const state = domTextInputState("n1", "Email", {
+      success: true,
+      type: "email",
+      value: "a@b.com",
+      placeholder: "you@example.com",
+    });
+    expect(state).toEqual({
+      type: "text",
+      nodeId: "n1",
+      label: "Email",
+      value: "a@b.com",
+      inputType: "email",
+      placeholder: "you@example.com",
+    });
+    const panel = mount(state);
+    expect(panel.input.type).toBe("text");
+    panel.enter();
+    expect(panel.submitted).toEqual(["a@b.com"]);
   });
 });
