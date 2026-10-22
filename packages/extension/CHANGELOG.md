@@ -64,6 +64,14 @@
   check, were emptied the same way
   ([#516](https://github.com/real-a11y/real-a11y-dev/pull/516)).
 
+- In the in-page tree, pressing Enter in a rich-text editor's edit box
+  without typing anything now just closes it. The box shows only the
+  editor's text, and Enter used to type that text back
+  in place of everything in the editor: its formatting, an image or a field
+  in it were lost, and an editor holding nothing but an image, a field or a
+  divider was emptied. What you type still replaces the editor's content
+  ([#PR](https://github.com/real-a11y/real-a11y-dev/pull/PR)).
+
 ## 0.1.16
 
 ### Patch Changes

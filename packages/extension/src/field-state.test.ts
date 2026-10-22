@@ -147,6 +147,7 @@ describe("computeFieldState", () => {
         type: "text",
         value: "",
         placeholder: "",
+        editor: true,
       });
     });
 
@@ -163,6 +164,7 @@ describe("computeFieldState", () => {
         type: "text",
         value: "in:new-channel",
         placeholder: "",
+        editor: true,
       });
     });
 
@@ -175,6 +177,7 @@ describe("computeFieldState", () => {
         type: "text",
         value: "hi there",
         placeholder: "Search",
+        editor: true,
       });
     });
 
@@ -208,6 +211,7 @@ describe("computeFieldState", () => {
           value: "",
           placeholder: "",
           valueWithheld: true,
+          editor: true,
         });
       }
     });
@@ -228,7 +232,37 @@ describe("computeFieldState", () => {
         type: "text",
         value: "Notes end",
         placeholder: "",
+        editor: true,
       });
+    });
+
+    // An editor's value is only the text it holds, which may be none at all,
+    // and a retype replaces everything in it with what the edit box sends:
+    // images, controls and formatting go too. The flag is how the box knows.
+    it("says it is an editor, whatever it holds", () => {
+      for (const [html, value] of [
+        [
+          `<div contenteditable="true" role="textbox">Hello <img alt="Smile"></div>`,
+          "Hello",
+        ],
+        [
+          `<div contenteditable="true" role="textbox"><img alt="Signature"></div>`,
+          "",
+        ],
+        [
+          `<div contenteditable="true" role="textbox"><input value="kept"></div>`,
+          "",
+        ],
+        [`<div contenteditable="true" role="textbox"><hr></div>`, ""],
+      ]) {
+        expect(computeFieldState(mount(html)), html).toEqual({
+          success: true,
+          type: "text",
+          value,
+          placeholder: "",
+          editor: true,
+        });
+      }
     });
 
     it("reads only the text the editor renders", () => {

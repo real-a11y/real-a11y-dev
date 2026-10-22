@@ -379,6 +379,14 @@ describe("the DOM producer's edit box", () => {
       valueWithheld: true,
     },
     name: { success: true, type: "text", value: "Jane", placeholder: "" },
+    // `Hello <img alt="Smile">`: the box opens on its text alone.
+    greeting: {
+      success: true,
+      type: "text",
+      value: "Hello",
+      placeholder: "",
+      editor: true,
+    },
   };
   const ROWS: FieldSpec[] = [
     {
@@ -407,6 +415,15 @@ describe("the DOM producer's edit box", () => {
       type: "text",
       announced: "Jane",
       raw: "Jane",
+      isEditable: true,
+      actions: ["type"],
+    },
+    {
+      id: "greeting",
+      role: "textbox",
+      name: "Greeting",
+      tagName: "div",
+      announced: "Hello",
       isEditable: true,
       actions: ["type"],
     },
@@ -502,6 +519,33 @@ describe("the DOM producer's edit box", () => {
     const box = openBox("name");
     expect(box.type).toBe("text");
     expect(box.value).toBe("Jane");
+  });
+
+  // A retype replaces everything in an editor with the box's text, so an
+  // untouched Enter typed "Hello" back over `Hello <img>` and lost the image.
+  it("opens an editor's box on its text, and an untouched Enter types nothing", () => {
+    let box = openBox("greeting");
+    expect(box.type).toBe("text");
+    expect(box.value).toBe("Hello");
+    enter(box);
+    expect(container.querySelector(".sn-input-panel-field")).toBeNull();
+    expect(typed()).toEqual([]);
+
+    box = openBox("greeting");
+    act(() => {
+      box.value = "Goodbye";
+      box.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    enter(box);
+    expect(typed()).toEqual([
+      expect.objectContaining({
+        payload: {
+          nodeId: "greeting",
+          action: "type",
+          payload: { value: "Goodbye" },
+        },
+      }),
+    ]);
   });
 });
 

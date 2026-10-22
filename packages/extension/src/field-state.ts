@@ -22,6 +22,11 @@ export type FieldState =
        *  `<select>` that includes which option is chosen. The panel's edit
        *  box hides what is typed into such a field. */
       valueWithheld?: true;
+      /** Set for a contenteditable editor, whose `value` is only the text it
+       *  holds: a retype replaces everything in it — formatting, images,
+       *  controls — with what is typed. The panel's edit box takes a submit
+       *  with no edit as no change for it. */
+      editor?: true;
     };
 
 /**
@@ -111,7 +116,8 @@ export function computeFieldState(el: Element): FieldState {
   // An editor holding a sensitive field is withheld whole (see
   // `holdsSensitiveField`). Trim to shed the framework whitespace these
   // editors leave behind (e.g. Quill's trailing newline / an empty
-  // `<p><br></p>`), which would otherwise show as blank-but-not-empty.
+  // `<p><br></p>`), which would otherwise show as blank-but-not-empty. That
+  // text is all of the editor the edit box gets, hence `editor`.
   if (isEditableHost(el)) {
     const sensitive = holdsSensitiveField(el);
     return {
@@ -120,6 +126,7 @@ export function computeFieldState(el: Element): FieldState {
       value: sensitive ? "" : pageText(el).trim(),
       placeholder: el.getAttribute("aria-placeholder") ?? "",
       ...(sensitive ? { valueWithheld: true as const } : {}),
+      editor: true,
     };
   }
 

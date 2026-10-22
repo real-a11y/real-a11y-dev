@@ -405,6 +405,47 @@ describe("InputPanel blockEmptySubmit", () => {
     panel.enter();
     expect(panel.submitted).toEqual([""]);
   });
+
+  /**
+   * `blockUntouchedSubmit` is for a box that holds less than its field: an
+   * in-page editor's box opens on its text, but a retype replaces its images,
+   * controls and formatting too. Any submit with no edit cancels, prefilled
+   * or not; any edit submits, as above.
+   */
+  describe("blockUntouchedSubmit", () => {
+    const PREFILLED: InputPanelState = {
+      type: "text",
+      nodeId: "n1",
+      label: "Greeting",
+      value: "Hello",
+      blockUntouchedSubmit: true,
+    };
+
+    it("cancels an untouched submit, though the box holds text", () => {
+      const panel = mount(PREFILLED);
+      panel.enter();
+      act(() => panel.setValueButton().click());
+      expect(panel.submitted).toEqual([]);
+      expect(panel.cancelled()).toBe(2);
+    });
+
+    it("cancels an untouched submit of an empty box", () => {
+      const panel = mount({ ...PREFILLED, value: "" });
+      panel.enter();
+      expect(panel.submitted).toEqual([]);
+      expect(panel.cancelled()).toBe(1);
+    });
+
+    it("submits an edit, an emptied box included", () => {
+      const panel = mount(PREFILLED);
+      panel.type("Goodbye");
+      panel.enter();
+      panel.type("");
+      panel.enter();
+      expect(panel.submitted).toEqual(["Goodbye", ""]);
+      expect(panel.cancelled()).toBe(0);
+    });
+  });
 });
 
 describe("InputPanel select picker selection state", () => {
@@ -622,5 +663,63 @@ describe("domTextInputState", () => {
     expect(panel.input.type).toBe("text");
     panel.enter();
     expect(panel.submitted).toEqual(["a@b.com"]);
+  });
+
+  // An editor's box opens on its text alone, and a retype replaces everything
+  // in it with what the box sends. An untouched Enter typed "Hello" back over
+  // `Hello <img>`, losing the image, and "" over an editor holding only an
+  // image, a control or a rule, losing it.
+  const editor = (value: string) =>
+    domTextInputState("n1", "Greeting", {
+      success: true,
+      type: "text",
+      value,
+      placeholder: "",
+      editor: true,
+    });
+
+  it("opens an editor's box on its text, and an untouched Enter changes nothing", () => {
+    for (const value of ["Hello", ""]) {
+      const panel = mount(editor(value));
+      expect(panel.input.type, value).toBe("text");
+      expect(panel.input.value, value).toBe(value);
+      panel.enter();
+      expect(panel.submitted, value).toEqual([]);
+      expect(panel.cancelled(), value).toBe(1);
+      close();
+    }
+  });
+
+  it("types an edit into an editor, and empties one the user cleared", () => {
+    let panel = mount(editor("Hello"));
+    panel.type("Goodbye");
+    panel.enter();
+    expect(panel.submitted).toEqual(["Goodbye"]);
+    close();
+
+    panel = mount(editor(""));
+    panel.type("x");
+    panel.type("");
+    panel.enter();
+    expect(panel.submitted).toEqual([""]);
+  });
+
+  it("still masks an editor holding a sensitive field, and opens it empty", () => {
+    const state = domTextInputState("n1", "Payment note", {
+      success: true,
+      type: "text",
+      value: "",
+      placeholder: "",
+      valueWithheld: true,
+      editor: true,
+    });
+    const panel = mount(state);
+    expect(panel.input.type).toBe("password");
+    expect(panel.input.value).toBe("");
+    panel.enter();
+    expect(panel.submitted).toEqual([]);
+    panel.type("4111111111111111");
+    panel.enter();
+    expect(panel.submitted).toEqual(["4111111111111111"]);
   });
 });

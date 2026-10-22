@@ -36,6 +36,15 @@ export interface InputPanelState {
    */
   blockEmptySubmit?: boolean;
   /**
+   * Set when the box holds less than its field: a DOM tree editor's box opens
+   * on its text alone (see {@link domTextInputState}), and a retype replaces
+   * everything in the editor — its formatting, images and controls too.
+   * Submitting with NO edit cancels instead of dispatching, prefilled or
+   * empty: it would type that text back over them. Any edit submits
+   * normally, as for `blockEmptySubmit`.
+   */
+  blockUntouchedSubmit?: boolean;
+  /**
    * The field's value is withheld (ADR-0001): a sensitive select marks no
    * current option, and the feedback after a choice names the field, never
    * the option chosen.
@@ -49,8 +58,10 @@ export interface InputPanelState {
  * without it, so its box opens empty in its place: it hides what is typed,
  * for every such field, empty or not (a password field's own type used to be
  * the only thing that hid it), and an untouched Enter cancels rather than
- * type `""` over the real value. A redaction gate — `scripts/pr-risk.mjs`
- * grades a change to it as such.
+ * type `""` over the real value. An editor's box opens on its text, which is
+ * all of the editor the box can hold, so an untouched Enter cancels there
+ * too, rather than type that text back in place of everything in it. A
+ * redaction gate — `scripts/pr-risk.mjs` grades a change to it as such.
  *
  * @internal
  */
@@ -68,6 +79,7 @@ export function domTextInputState(
     inputType: withheld ? "password" : field.type,
     placeholder: field.placeholder,
     ...(withheld ? { blockEmptySubmit: true } : {}),
+    ...(field.editor === true ? { blockUntouchedSubmit: true } : {}),
   };
 }
 
@@ -116,10 +128,11 @@ function TextInput({
   onCancel: () => void;
 }) {
   const [value, setValue] = useState(state.value);
-  // Whether the user has typed at all. `blockEmptySubmit` guards only the
-  // UNTOUCHED submit: a field that opened empty in place of a value it can't
-  // show says nothing about that value until the user types, but typing and
-  // then clearing it is a deliberate "empty this field".
+  // Whether the user has typed at all. `blockEmptySubmit` and
+  // `blockUntouchedSubmit` guard only the UNTOUCHED submit: a box that opened
+  // empty in place of a value it can't show, or on less than its field holds,
+  // says nothing about the field until the user types, but typing and then
+  // clearing it is a deliberate "empty this field".
   const [edited, setEdited] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
@@ -134,9 +147,18 @@ function TextInput({
   }, []);
 
   const submit = useCallback(() => {
-    if (state.blockEmptySubmit && !edited && value === "") onCancel();
+    const untouchedCancels =
+      state.blockUntouchedSubmit || (state.blockEmptySubmit && value === "");
+    if (!edited && untouchedCancels) onCancel();
     else onSubmit(value);
-  }, [state.blockEmptySubmit, edited, value, onSubmit, onCancel]);
+  }, [
+    state.blockUntouchedSubmit,
+    state.blockEmptySubmit,
+    edited,
+    value,
+    onSubmit,
+    onCancel,
+  ]);
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {

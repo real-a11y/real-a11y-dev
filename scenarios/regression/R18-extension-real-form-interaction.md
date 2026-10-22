@@ -6,9 +6,9 @@ area: Extension
 type: Manual
 priority: P0
 status: Active
-validFrom: "extension ≥ 0.1.8. The dispatch-fidelity expectations mirror core's ActionDispatcher, which the CDP backend also mirrors — a fix in one belongs in both. Step 6a (a withheld field's edit box): in Chrome's tree, the first extension release with #510; in the in-page tree, the first with #512 — 0.1.16 as tagged fails both, which are the bugs those two fix. Step 6b (a sensitive textarea's markup text): extension ≥ 0.1.15; its input panel opening empty in the in-page tree: the first extension release with #512; and an untouched Enter in its edit box in Chrome's tree: the first with #516 — 0.1.16 as tagged fails both"
+validFrom: "extension ≥ 0.1.8. The dispatch-fidelity expectations mirror core's ActionDispatcher, which the CDP backend also mirrors — a fix in one belongs in both. Step 6a (a withheld field's edit box): in Chrome's tree, the first extension release with #510; in the in-page tree, the first with #512 — 0.1.16 as tagged fails both, which are the bugs those two fix. Step 6b (a sensitive textarea's markup text): extension ≥ 0.1.15; its input panel opening empty in the in-page tree: the first extension release with #512; and an untouched Enter in its edit box in Chrome's tree: the first with #516 — 0.1.16 as tagged fails both. Step 5a (an untouched Enter in an editor's edit box, in the in-page tree): the first extension release with #PR — 0.1.16 as tagged fails it"
 validUntil: ""
-expected: "click/type/select dispatch on the real page; a sensitive field's value is NEVER shown in the panel — a password's, what is typed into a password or card field's edit box, empty or not, or a sensitive textarea's markup text in the live-announcement log or an editor's input panel; an untouched Enter in that edit box leaves the field as it was; Send-Tab/Esc behave or fail visibly"
+expected: "click/type/select dispatch on the real page; a sensitive field's value is NEVER shown in the panel — a password's, what is typed into a password or card field's edit box, empty or not, or a sensitive textarea's markup text in the live-announcement log or an editor's input panel; an untouched Enter in that edit box, or in a rich-text editor's in the in-page tree, leaves the field as it was; Send-Tab/Esc behave or fail visibly"
 twin: D6
 notion: "https://app.notion.com/p/3aa1c354b0b5819e89f7de2edeb18fcb"
 ---
@@ -26,6 +26,10 @@ point is behaviour against handlers you didn't write.
 4. Type into a **framework-controlled** input (React/Vue), then check the app's own
    state reflects it — not just the DOM value
 5. Type into a rich-text / contenteditable editor (ProseMirror, Lexical, Draft)
+   - **5a** — in an editor whose content isn't only plain text (some bold, a
+     link or an image), open the editor's edit box from its row in the
+     **In-page tree** (**Settings ▾** → **Show**) and press `Enter` without
+     typing
 6. Focus a **password** field and type into it
    - **6a** — a sign-in page's password step while the field is still
      **empty**, as on Google's "Enter your password". In each tree
@@ -79,6 +83,10 @@ point is behaviour against handlers you didn't write.
   just the DOM
 - **5** — the editor keeps the text. A raw `textContent` write gets reverted by
   model-driven editors; a cancelable `beforeinput` must go first
+- **5a** — the box opens on the editor's text, and `Enter` closes it and leaves
+  the editor as it was: its formatting, links and images are all still there.
+  Before #PR, that `Enter` typed the box's text back into the editor in place of
+  its content, losing whatever wasn't text
 - **6** — the password value is **NEVER** displayed in the panel, in any view, at any
   time
 - **6a** — the edit box shows dots, not what you type, for both empty fields, as it
@@ -108,7 +116,9 @@ The panel writes to pages the user didn't build, which makes both halves risky.
 
 - **Dispatch fidelity** (1–5): each of these is a real site pattern that a naive
   implementation silently no-ops on. The user sees "nothing happened" and blames the
-  page.
+  page. 5a is the opposite failure, a write nobody asked for: the edit box holds
+  plain text, and a retype replaces an editor's whole content with it, so an
+  `Enter` that changed nothing in the box still changed the editor.
 - **Redaction** (6) is absolute and unconditional. There is no view, no debug mode,
   and no error path where a password value may appear. This is the same invariant the
   act path enforces (**R24**) — same rule, different surface.
