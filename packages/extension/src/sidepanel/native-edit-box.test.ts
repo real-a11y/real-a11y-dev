@@ -46,6 +46,7 @@ const NODES: NativeNode[] = [
       "ax-dom-4",
       "ax-dom-5",
       "ax-dom-6",
+      "ax-dom-7",
       "ax-dom-8",
       "ax-dom-9",
     ],
@@ -71,6 +72,14 @@ const NODES: NativeNode[] = [
   // An editor nothing withholds: its text shows, but a retype replaces it
   // whole, so there is nothing to start from.
   field("ax-dom-6", "Message", { value: "Hello world", valueWithheld: false }),
+  // A textarea: its announced value collapses its lines, its raw value keeps
+  // them, and Chromium says it takes lines.
+  field("ax-dom-7", "Letter", {
+    value: "Dear Sam, Thanks!",
+    rawValue: "Dear Sam,\nThanks!",
+    valueWithheld: false,
+    states: { multiline: true },
+  }),
   // Two rows nothing withholds that show no value, which the wire can't tell
   // apart: an editor holding only an image (Chromium gives it no value at
   // all, and says it takes lines) and an empty field.
@@ -236,6 +245,20 @@ describe("Chrome's tree: the edit box a typable row opens", () => {
     await enter(input);
     expect(typed()).toEqual([
       { nodeId: "ax-dom-5", action: "type", value: "Jane Doe" },
+    ]);
+  });
+
+  // A one-line box strips line breaks, so an edit typed the letter back as
+  // one line.
+  it("opens a textarea's box multi-line on its raw value, and an edit keeps its lines", async () => {
+    await showNative();
+    const area = await open("ax-dom-7");
+    expect(area.localName).toBe("textarea");
+    expect(area.value).toBe("Dear Sam,\nThanks!");
+    typeInto(area, `${area.value}\nJo`);
+    await enter(area);
+    expect(typed()).toEqual([
+      { nodeId: "ax-dom-7", action: "type", value: "Dear Sam,\nThanks!\nJo" },
     ]);
   });
 

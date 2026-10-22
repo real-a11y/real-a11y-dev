@@ -105,6 +105,17 @@
   Typing and then clearing the box still empties the field
   ([#522](https://github.com/real-a11y/real-a11y-dev/pull/522)).
 
+- The edit box for a field that takes more than one line, such as a textarea
+  or a rich-text editor, now has room for more than one line, in either tree,
+  and keeps the field's line breaks. Shift+Enter starts a new line in it, and
+  Enter still sets the value. The box was one line, which drops line breaks:
+  typing anything into a textarea's box ran its lines together, and Enter
+  typed them into the page that way. The in-page tree also opens an editor's
+  box on its text line by line, where its paragraphs used to run together,
+  as in `Dear Sam,Thanks!`. An editor that doesn't keep line breaks in its
+  text still shows the new ones as spaces
+  ([#523](https://github.com/real-a11y/real-a11y-dev/pull/523)).
+
 ## 0.1.16
 
 ### Patch Changes

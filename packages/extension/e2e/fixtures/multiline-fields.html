@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Multi-line fields</title>
+  </head>
+  <body>
+    <h1>Write back</h1>
+
+    <!--
+      Fields that hold more than one line. The panel's edit box was a one-line
+      input, which strips line breaks from what it holds: an edit typed the
+      letter back as one line, and the card's paragraphs read as one run of
+      text, "Dear Sam,Thanks!". The list keeps line breaks in its own text
+      (white-space: pre-wrap), as most editors do, so a line typed into it
+      shows as one.
+    -->
+    <label for="letter">Letter</label>
+    <textarea id="letter" rows="6">
+Dear Sam,
+Thanks for the books.
+
+Best,
+Jo</textarea>
+
+    <div id="card" role="textbox" contenteditable="true" aria-label="Card">
+      <p>Dear Sam,</p>
+      <p>Thanks!</p>
+    </div>
+
+    <!-- prettier-ignore -->
+    <div id="list" role="textbox" contenteditable="true" aria-label="Shopping list" style="white-space: pre-wrap">Milk
+Eggs</div>
+  </body>
+</html>

@@ -52,6 +52,17 @@ export interface InputPanelState {
    * the option chosen.
    */
   valueWithheld?: boolean;
+  /**
+   * The field takes more than one line — a `<textarea>`, an editor: its
+   * field state's `multiline` (see `computeFieldState`) or Chromium's state
+   * of that name. The box is then a `<textarea>`, where Shift+Enter starts a
+   * new line and Enter still sets the value. A one-line `<input>` strips line
+   * breaks from what it holds, so an edit used to type the field's lines
+   * back as one. A box whose `value` holds a line break is multi-line however
+   * this is set, and a masked box never is: only a password input hides what
+   * is typed.
+   */
+  multiline?: boolean;
 }
 
 /**
@@ -79,6 +90,7 @@ export function domTextInputState(
     label,
     value: withheld ? "" : field.value || "",
     inputType: withheld ? "password" : field.type,
+    ...(field.multiline === true ? { multiline: true } : {}),
     placeholder: field.placeholder,
     ...(withheld ? { blockEmptySubmit: true } : {}),
     ...(field.editor === true ? { blockUntouchedSubmit: true } : {}),
@@ -137,15 +149,23 @@ function TextInput({
   // clearing it is a deliberate "empty this field".
   const [edited, setEdited] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const areaRef = useRef<HTMLTextAreaElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
   const fieldId = useId();
+  const hintId = useId();
+  const masked = state.inputType === "password";
+  // A one-line input would strip the line breaks from what the box holds, so
+  // holding one makes the box multi-line whatever the field says.
+  const multiline =
+    !masked && (state.multiline === true || /[\r\n]/.test(state.value));
 
   useRestoreFocusOnClose(dialogRef);
   useFocusTrap(dialogRef);
 
   useEffect(() => {
-    inputRef.current?.focus();
-    inputRef.current?.select();
+    const field = inputRef.current ?? areaRef.current;
+    field?.focus();
+    field?.select();
   }, []);
 
   const submit = useCallback(() => {
@@ -165,6 +185,8 @@ function TextInput({
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
       if (e.key === "Enter") {
+        // Shift+Enter starts a new line in a multi-line box.
+        if (multiline && e.shiftKey) return;
         e.preventDefault();
         submit();
       } else if (e.key === "Escape") {
@@ -172,8 +194,13 @@ function TextInput({
         onCancel();
       }
     },
-    [submit, onCancel],
+    [multiline, submit, onCancel],
   );
+
+  const handleInput = (e: Event) => {
+    setValue((e.target as HTMLInputElement | HTMLTextAreaElement).value);
+    setEdited(true);
+  };
 
   return (
     <div
@@ -186,19 +213,32 @@ function TextInput({
       <label class="sn-input-panel-label" for={fieldId}>
         {state.label}
       </label>
-      <input
-        ref={inputRef}
-        id={fieldId}
-        class="sn-input-panel-field"
-        type={state.inputType === "password" ? "password" : "text"}
-        value={value}
-        placeholder={state.placeholder || ""}
-        onInput={(e) => {
-          setValue((e.target as HTMLInputElement).value);
-          setEdited(true);
-        }}
-        onKeyDown={handleKeyDown}
-      />
+      {multiline ? (
+        // Enter sets the value here too, which a multi-line field's own
+        // Enter wouldn't, so the hint that says so is its description.
+        <textarea
+          ref={areaRef}
+          id={fieldId}
+          class="sn-input-panel-field"
+          rows={4}
+          value={value}
+          placeholder={state.placeholder || ""}
+          aria-describedby={hintId}
+          onInput={handleInput}
+          onKeyDown={handleKeyDown}
+        />
+      ) : (
+        <input
+          ref={inputRef}
+          id={fieldId}
+          class="sn-input-panel-field"
+          type={masked ? "password" : "text"}
+          value={value}
+          placeholder={state.placeholder || ""}
+          onInput={handleInput}
+          onKeyDown={handleKeyDown}
+        />
+      )}
       <div class="sn-input-panel-actions">
         <button class="sn-input-panel-btn" onClick={onCancel}>
           Cancel
@@ -210,8 +250,14 @@ function TextInput({
           Set value
         </button>
       </div>
-      <div class="sn-input-panel-hint">
-        <kbd>Enter</kbd> set value &middot; <kbd>Esc</kbd> cancel
+      <div id={hintId} class="sn-input-panel-hint">
+        <kbd>Enter</kbd> set value &middot;{" "}
+        {multiline && (
+          <>
+            <kbd>Shift+Enter</kbd> new line &middot;{" "}
+          </>
+        )}
+        <kbd>Esc</kbd> cancel
       </div>
     </div>
   );

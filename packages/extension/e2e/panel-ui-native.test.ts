@@ -169,12 +169,13 @@ test("an empty sensitive field's retype panel masks it too, and an ordinary fiel
   for (const [name, type] of [
     ["Enter your password", "password"],
     ["Card number", "password"],
-    // Nothing withholds an ordinary field's value, or an editor's.
+    // Nothing withholds an ordinary field's value, or an editor's, whose box
+    // takes lines.
     ["Full name", "text"],
-    ["Notes", "text"],
+    ["Notes", "textarea"],
   ]) {
     await retype(name);
-    await expect(field, name).toHaveAttribute("type", type);
+    await expect(field, name).toHaveJSProperty("type", type);
     await field.press("Escape");
   }
 

@@ -1,4 +1,8 @@
-import { isSensitiveField } from "@real-a11y-dev/core";
+import {
+  getExplicitRole,
+  isSensitiveField,
+  safeGetAttribute,
+} from "@real-a11y-dev/core";
 
 import { pageText } from "./page-text.js";
 import type { SelectOption } from "./types.js";
@@ -13,6 +17,10 @@ export type FieldState =
        *  (`"text"`, `"email"`, …). Custom contenteditable widgets report
        *  `"text"`. */
       type: string;
+      /** Set for a field that takes more than one line (see
+       *  {@link takesLines}). Its `value` keeps its line breaks, and the
+       *  panel's edit box keeps them too. */
+      multiline?: true;
       /** Current value. Always `""` when `valueWithheld` is set. */
       value: string;
       placeholder?: string;
@@ -62,6 +70,23 @@ function holdsSensitiveField(el: Element): boolean {
 }
 
 /**
+ * Does this field take more than one line? Chromium's answer, which Chrome's
+ * tree carries as the `multiline` state, so both trees' edit boxes agree: a
+ * `<textarea>`, or an editor that is a textbox, unless `aria-multiline="false"`
+ * says otherwise. An `<input>` takes one, whatever it says, and so does a
+ * searchbox, combobox or spinbutton. An editor with no role, which Chrome's
+ * tree offers no edit box for, counts as a textbox.
+ */
+function takesLines(el: Element, tag: string): boolean {
+  if (tag === "input") return false;
+  const multiline = safeGetAttribute(el, "aria-multiline");
+  if (multiline?.trim().toLowerCase() === "false") return false;
+  if (tag === "textarea") return true;
+  const role = getExplicitRole(el);
+  return role !== "searchbox" && role !== "combobox" && role !== "spinbutton";
+}
+
+/**
  * Compute the side panel's inline-input state for a field element. Pure and
  * DOM-only, so it is unit-tested directly. Returns `{ success: false }` for
  * anything that isn't a fillable field.
@@ -104,6 +129,7 @@ export function computeFieldState(el: Element): FieldState {
     return {
       success: true,
       type: input.type || "text",
+      ...(takesLines(el, tag) ? { multiline: true as const } : {}),
       value: sensitive ? "" : input.value,
       placeholder: input.placeholder || "",
       ...(sensitive ? { valueWithheld: true as const } : {}),
@@ -111,9 +137,9 @@ export function computeFieldState(el: Element): FieldState {
   }
 
   // Custom text widget (contenteditable). There is no `.value`; the current
-  // text is its text content, less any control's child text — a nested
-  // `<textarea>`'s is its default, which for a sensitive one is the secret.
-  // An editor holding a sensitive field is withheld whole (see
+  // text is its text content, line by line, less any control's child text —
+  // a nested `<textarea>`'s is its default, which for a sensitive one is the
+  // secret. An editor holding a sensitive field is withheld whole (see
   // `holdsSensitiveField`). Trim to shed the framework whitespace these
   // editors leave behind (e.g. Quill's trailing newline / an empty
   // `<p><br></p>`), which would otherwise show as blank-but-not-empty. That
@@ -123,7 +149,8 @@ export function computeFieldState(el: Element): FieldState {
     return {
       success: true,
       type: "text",
-      value: sensitive ? "" : pageText(el).trim(),
+      ...(takesLines(el, tag) ? { multiline: true as const } : {}),
+      value: sensitive ? "" : pageText(el, { lines: true }).trim(),
       placeholder: el.getAttribute("aria-placeholder") ?? "",
       ...(sensitive ? { valueWithheld: true as const } : {}),
       editor: true,

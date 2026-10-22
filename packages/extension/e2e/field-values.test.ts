@@ -292,13 +292,14 @@ test("In-page tree: a withheld field's edit box masks what is typed, empty or no
     await key("Escape");
     await expect(box).toHaveCount(0);
   }
-  // Nothing withholds an ordinary field's value, or an editor's.
-  for (const [name, value] of [
-    ["Full name", "Jane"],
-    ["Notes", "Hello"],
+  // Nothing withholds an ordinary field's value, or an editor's, whose box
+  // takes lines.
+  for (const [name, value, type] of [
+    ["Full name", "Jane", "text"],
+    ["Notes", "Hello", "textarea"],
   ]) {
     await openBox(name);
-    await expect(box, name).toHaveAttribute("type", "text");
+    await expect(box, name).toHaveJSProperty("type", type);
     await expect(box, name).toHaveValue(value);
     await key("Escape");
     await expect(box).toHaveCount(0);
@@ -336,6 +337,7 @@ test("In-page tree: an untouched Enter in a rich-text editor's edit box leaves t
   // Each box opens on the editor's text alone, which a retype would put in
   // place of everything in it: an untouched Enter used to type "" over an
   // image, a field or a divider, and the text back over bold or an image.
+  // An editor's box takes lines, and it is unmasked.
   for (const [name, text] of [
     ["Signature", ""],
     ["Order note", ""],
@@ -344,7 +346,7 @@ test("In-page tree: an untouched Enter in a rich-text editor's edit box leaves t
     ["Greeting", "Hello"],
   ]) {
     await open(name);
-    await expect(box, name).toHaveAttribute("type", "text");
+    await expect(box, name).toHaveJSProperty("type", "textarea");
     await expect(box, name).toHaveValue(text);
     await key("Enter");
     await expect(box, name).toHaveCount(0);

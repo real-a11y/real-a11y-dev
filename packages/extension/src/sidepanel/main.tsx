@@ -5,6 +5,7 @@ import { DogfoodPanel } from "./DogfoodPanel.js";
 import "@ui-styles/tree.css";
 import "./export-menu.css";
 import "./empty-state.css";
+import "./input-panel.css";
 import "./select-picker.css";
 import "./toolbar.css";
 
