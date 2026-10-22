@@ -70,7 +70,7 @@
   in place of everything in the editor: its formatting, an image or a field
   in it were lost, and an editor holding nothing but an image, a field or a
   divider was emptied. What you type still replaces the editor's content
-  ([#PR](https://github.com/real-a11y/real-a11y-dev/pull/PR)).
+  ([#519](https://github.com/real-a11y/real-a11y-dev/pull/519)).
 
 ## 0.1.16
 
