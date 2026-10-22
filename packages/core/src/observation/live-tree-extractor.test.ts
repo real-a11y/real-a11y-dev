@@ -1898,6 +1898,27 @@ describe("LiveTreeExtractor", () => {
       expect(svg?.a11y.name).toBe("New");
     });
 
+    it("re-names a field when the image in its <label for> changes", () => {
+      document.body.innerHTML = `
+        <main id="app"><label for="q"><img alt="Old"></label><input id="q"></main>`;
+      const root = document.getElementById("app")!;
+      const img = root.querySelector("img")!;
+      const live = new LiveTreeExtractor(root, { mode: "a11y" });
+      img.alt = "New";
+
+      const result = live.refresh({
+        mutations: [
+          { type: "attributes", target: img, attributeName: "alt" },
+        ] as unknown as MutationRecord[],
+      });
+
+      expect(result.nodes).toEqual(extractA11yTree(root).nodes);
+      const field = [...result.nodes.values()].find(
+        (n) => n.a11y.role === "textbox",
+      );
+      expect(field?.a11y.name).toBe("New");
+    });
+
     it("re-names a link when its image's alt changes", () => {
       document.body.innerHTML = `
         <main id="app"><a href="/"><img alt="Old"></a></main>`;

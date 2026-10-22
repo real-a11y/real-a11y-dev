@@ -6212,6 +6212,16 @@ describe("a child lends its own text alternative to a name from content", () => 
         `<button id="target" aria-labelledby="a">x</button><span id="a">A <span aria-labelledby="b">ignored</span></span><span id="b">B</span>`,
         "A ignored",
       ],
+      [
+        "an image target with no name lends its content",
+        `<button id="target" aria-labelledby="t">x</button><span id="t" role="img">Revenue up</span>`,
+        "Revenue up",
+      ],
+      [
+        "an <svg> target with no <title> lends its text",
+        `<button id="target" aria-labelledby="t">x</button><svg id="t"><text>Go</text></svg>`,
+        "Go",
+      ],
     ])("%s", (_label, html, expected) => {
       expect(nameOf(html)).toBe(expected);
     });
@@ -6231,6 +6241,11 @@ describe("a child lends its own text alternative to a name from content", () => 
         "a nested aria-labelledby is ignored",
         `<button id="target" aria-describedby="d">Go</button><span id="d">A <span aria-labelledby="b">ignored</span></span><span id="b">B</span>`,
         "A ignored",
+      ],
+      [
+        "an image target with no name",
+        `<button id="target" aria-describedby="d">Go</button><div id="d" role="img">Revenue up 4%</div>`,
+        "Revenue up 4%",
       ],
     ])("describes from %s", (_label, html, expected) => {
       expect(target(html).a11y.description).toBe(expected);
@@ -6279,6 +6294,11 @@ describe("a child lends its own text alternative to a name from content", () => 
     expect(
       nameOf(`<label><input id="target" type="image" alt="Go"> now</label>`),
     ).toBe("now");
+    // A blank alt still stops there: Chromium leaves this one unnamed rather
+    // than fall back to its title.
+    expect(
+      nameOf(`<input id="target" type="image" alt=" " title="Search">`),
+    ).toBe("");
   });
 
   it("names a <textarea> by its placeholder, after its title", () => {
@@ -6359,6 +6379,21 @@ describe("a child lends its own text alternative to a name from content", () => 
         "a child labelled by its own host",
         `<h2 id="target">Title <span aria-labelledby="target">x</span></h2>`,
         "Title Title x",
+      ],
+      [
+        "the label of a control a reference holds, which follows its own references",
+        `<button id="target" aria-labelledby="g">B</button><span id="g">Opt <input type="checkbox" id="c"></span><label for="c"><span aria-labelledby="z">x</span></label><b id="z">Zed</b>`,
+        "Opt Zed",
+      ],
+      [
+        "a titled checkbox read after its label, which then names it",
+        `<h2 id="target"><label for="c">Agree</label><input type="checkbox" id="c" title="Tick to agree"></h2>`,
+        "Agree Tick to agree",
+      ],
+      [
+        "a titled checkbox read before its label",
+        `<h2 id="target"><input type="checkbox" id="c" title="Tick to agree"><label for="c">Agree</label></h2>`,
+        "Agree",
       ],
     ])("%s", (_label, html, expected) => {
       expect(nameOf(html)).toBe(expected);

@@ -700,6 +700,7 @@ describe("a name from content reads each child's text alternative", () => {
           <div id="who">Name <span id="req"><img alt="star"> required</span></div>
           <input aria-labelledby="who req">
           <h4>Go to<a href="/next"><img alt="Next"></a>now</h4>
+          <button aria-labelledby="chart">x</button><span id="chart" role="img">Revenue up</span>
         </main>`,
       ),
     );
@@ -727,6 +728,7 @@ describe("a name from content reads each child's text alternative", () => {
         'link "Logo"',
         'textbox "Name star required star required"',
         'heading "Go toNextnow" (level 4)',
+        'button "Revenue up"',
       ]) {
         expect(lines).toContain(expected);
       }

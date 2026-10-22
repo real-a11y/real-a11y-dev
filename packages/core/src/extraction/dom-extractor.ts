@@ -994,6 +994,11 @@ function textAlternative(
  * as "Direct", and over `<span id="s" aria-label="Lab">content</span>` as "Lab".
  * The target itself is read even when hidden — accname's "directly referenced"
  * carve-out — while hidden content inside it still contributes nothing.
+ *
+ * Unlike a descendant, a target with no name lends its content even when it
+ * is an image, since accname §2F reads the content of any element a reference
+ * names: Chromium reads `<span id="t" role="img">Revenue up</span>` as
+ * "Revenue up", as a label or a description.
  */
 function referenceText(
   target: Element,
@@ -1008,7 +1013,7 @@ function referenceText(
       visited,
       styleCache,
       walk,
-    ) ?? getAccessibleTextContent(target, visited, styleCache, walk)
+    ) || getAccessibleTextContent(target, visited, styleCache, walk)
   ).trim();
 }
 
