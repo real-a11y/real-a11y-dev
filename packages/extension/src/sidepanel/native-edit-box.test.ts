@@ -21,6 +21,9 @@ import {
  * field holds. That covers every field whose value is withheld, not only one
  * that reads `[redacted]`. An editor around a card field reads no value at
  * all, and typing `""` into it cleared its text and the card field with it.
+ * Nor does it take a withheld value: a row nothing withholds that shows no
+ * value isn't necessarily empty. Chromium gives an editor holding only an
+ * image no value at all, and typing `""` into it deleted the image.
  */
 
 const PAGE_URL = "https://example.test/";
@@ -37,7 +40,15 @@ const NODES: NativeNode[] = [
     role: "document",
     name: "",
     depth: 0,
-    childIds: ["ax-dom-2", "ax-dom-3", "ax-dom-4", "ax-dom-5", "ax-dom-6"],
+    childIds: [
+      "ax-dom-2",
+      "ax-dom-3",
+      "ax-dom-4",
+      "ax-dom-5",
+      "ax-dom-6",
+      "ax-dom-7",
+      "ax-dom-8",
+    ],
   },
   // A sensitive field that holds something.
   field("ax-dom-2", "Password", {
@@ -60,6 +71,17 @@ const NODES: NativeNode[] = [
   // An editor nothing withholds: its text shows, but a retype replaces it
   // whole, so there is nothing to start from.
   field("ax-dom-6", "Message", { value: "Hello world", valueWithheld: false }),
+  // Two rows nothing withholds that show no value, which the wire can't tell
+  // apart: an editor holding only an image (Chromium gives it no value at
+  // all) and an empty field.
+  field("ax-dom-7", "Signature pad", {
+    valueWithheld: false,
+    states: { editable: "richtext", multiline: true },
+  }),
+  field("ax-dom-8", "Nickname", {
+    valueWithheld: false,
+    states: { editable: "plaintext" },
+  }),
 ];
 
 describe("Chrome's tree: the edit box a typable row opens", () => {
@@ -214,5 +236,32 @@ describe("Chrome's tree: the edit box a typable row opens", () => {
     await enter(input);
     expect(box()).toBeNull();
     expect(typed()).toEqual([]);
+  });
+
+  it.each([
+    ["an editor holding only an image", "ax-dom-7"],
+    ["an empty field", "ax-dom-8"],
+  ])(
+    "%s shows no value: opens empty and unmasked, and an untouched Enter types nothing",
+    async (_, id) => {
+      await showNative();
+      const input = await open(id);
+      expect(input.value).toBe("");
+      expect(input.type).toBe("text");
+      await enter(input);
+      expect(box()).toBeNull();
+      expect(typed()).toEqual([]);
+    },
+  );
+
+  it("still empties a field that shows no value once the user typed into it and cleared it", async () => {
+    await showNative();
+    const input = await open("ax-dom-7");
+    typeInto(input, "x");
+    typeInto(input, "");
+    await enter(input);
+    expect(typed()).toEqual([
+      { nodeId: "ax-dom-7", action: "type", value: "" },
+    ]);
   });
 });

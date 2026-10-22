@@ -98,6 +98,13 @@
   that holds a checkbox and its label reads the label once, not twice
   ([#521](https://github.com/real-a11y/real-a11y-dev/pull/521)).
 
+- In Chrome's tree, pressing Enter in an edit box that opened empty, without
+  typing anything, now just closes it. A rich-text editor holding only an
+  image, a checkbox or another field shows no value, as an empty field does,
+  so its edit box opened empty and Enter there deleted what the editor held.
+  Typing and then clearing the box still empties the field
+  ([#522](https://github.com/real-a11y/real-a11y-dev/pull/522)).
+
 ## 0.1.16
 
 ### Patch Changes
