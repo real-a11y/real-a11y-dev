@@ -1,0 +1,218 @@
+import { render, h } from "preact";
+import { act } from "preact/test-utils";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+
+import type { NativeNode } from "../native/native-actions.js";
+import type { ContentToPanel } from "../types.js";
+
+import { App } from "./App.js";
+import type { ChromeMock } from "./panel-harness.js";
+import {
+  TAB_ID,
+  installChromeMock,
+  stubMatchMedia,
+  treeData,
+} from "./panel-harness.js";
+
+/**
+ * The edit box a typable row of Chrome's tree opens (`handleNativeActivate`).
+ * A box that opens empty in place of a value it can't show or start from
+ * must cancel an untouched Enter: dispatched, it types `""` over what the
+ * field holds. That covers every field whose value is withheld, not only one
+ * that reads `[redacted]`. An editor around a card field reads no value at
+ * all, and typing `""` into it cleared its text and the card field with it.
+ */
+
+const PAGE_URL = "https://example.test/";
+
+const field = (
+  id: string,
+  name: string,
+  facets: Partial<NativeNode>,
+): NativeNode => ({ id, role: "textbox", name, depth: 1, ...facets });
+
+const NODES: NativeNode[] = [
+  {
+    id: "ax-root",
+    role: "document",
+    name: "",
+    depth: 0,
+    childIds: ["ax-dom-2", "ax-dom-3", "ax-dom-4", "ax-dom-5", "ax-dom-6"],
+  },
+  // A sensitive field that holds something.
+  field("ax-dom-2", "Password", {
+    value: "[redacted]",
+    redacted: true,
+    valueWithheld: true,
+  }),
+  // Withheld with nothing to show: an editor around a card field, a field
+  // inside a sensitive one, and one the in-page read couldn't classify all
+  // arrive like this, and each can still hold text.
+  field("ax-dom-3", "Payment note", { valueWithheld: true }),
+  // A row the in-page read never answered for carries no verdict at all.
+  field("ax-dom-4", "Reference", {}),
+  // An ordinary field, with its raw value for a retype to start from.
+  field("ax-dom-5", "Full name", {
+    value: "Jane Doe",
+    rawValue: "Jane Doe",
+    valueWithheld: false,
+  }),
+  // An editor nothing withholds: its text shows, but a retype replaces it
+  // whole, so there is nothing to start from.
+  field("ax-dom-6", "Message", { value: "Hello world", valueWithheld: false }),
+];
+
+describe("Chrome's tree: the edit box a typable row opens", () => {
+  let container: HTMLDivElement;
+  let chromeMock: ChromeMock;
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    stubMatchMedia();
+    chromeMock = installChromeMock({
+      respond: (message) => {
+        const type = (message as { type: string }).type;
+        if (type === "NATIVE_FLAG_GET") return { enabled: true };
+        if (type === "NATIVE_READ") {
+          return {
+            ok: true,
+            url: PAGE_URL,
+            rootId: "ax-root",
+            nodes: structuredClone(NODES),
+          };
+        }
+        return undefined;
+      },
+    });
+    // An action first checks the tab is still on the page the tree came from.
+    Object.assign((globalThis as unknown as { chrome: object }).chrome, {
+      tabs: { get: async () => ({ id: TAB_ID, url: PAGE_URL }) },
+    });
+    container = document.createElement("div");
+    document.body.appendChild(container);
+  });
+
+  afterEach(() => {
+    render(null, container);
+    container.remove();
+    vi.useRealTimers();
+  });
+
+  async function flush(): Promise<void> {
+    for (let i = 0; i < 5; i++) {
+      await act(async () => {
+        await Promise.resolve();
+      });
+    }
+  }
+
+  async function showNative(): Promise<void> {
+    act(() => {
+      render(h(App, {}), container);
+    });
+    await flush();
+    act(() => {
+      chromeMock.emit({
+        type: "ACTIVE_TAB_CHANGED",
+        tabId: TAB_ID,
+      } as unknown as ContentToPanel);
+    });
+    act(() => {
+      chromeMock.emit(treeData());
+    });
+    await flush();
+    expect(container.querySelector('[data-node-id="ax-dom-6"]')).not.toBeNull();
+  }
+
+  const box = () =>
+    container.querySelector<HTMLInputElement>("input.sn-input-panel-field");
+
+  /** Open a row's edit box from its Type button. */
+  async function open(id: string): Promise<HTMLInputElement> {
+    const type = container.querySelector<HTMLButtonElement>(
+      `[data-node-id="${id}"] button[title="Type (Enter)"]`,
+    );
+    expect(type, id).not.toBeNull();
+    act(() => type!.click());
+    await flush();
+    expect(box(), id).not.toBeNull();
+    return box()!;
+  }
+
+  function typeInto(input: HTMLInputElement, text: string): void {
+    act(() => {
+      input.value = text;
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+  }
+
+  async function enter(input: HTMLInputElement): Promise<void> {
+    act(() => {
+      input.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Enter", bubbles: true }),
+      );
+    });
+    await flush();
+  }
+
+  const typed = () =>
+    chromeMock.sent
+      .filter((m) => (m as { type: string }).type === "NATIVE_ACT")
+      .map((m) => {
+        const { nodeId, action, value } = m as {
+          nodeId?: string;
+          action?: string;
+          value?: string;
+        };
+        return { nodeId, action, value };
+      });
+
+  it.each([
+    ["a field that reads [redacted]", "ax-dom-2"],
+    ["a withheld field with no value to show", "ax-dom-3"],
+    ["a row the in-page read never answered for", "ax-dom-4"],
+  ])(
+    "%s: opens empty and masked, and an untouched Enter types nothing",
+    async (_, id) => {
+      await showNative();
+      const input = await open(id);
+      expect(input.value).toBe("");
+      expect(input.type).toBe("password");
+      await enter(input);
+      expect(box()).toBeNull();
+      expect(typed()).toEqual([]);
+    },
+  );
+
+  it("still empties a withheld field the user typed into and then cleared", async () => {
+    await showNative();
+    const input = await open("ax-dom-3");
+    typeInto(input, "x");
+    typeInto(input, "");
+    await enter(input);
+    expect(typed()).toEqual([
+      { nodeId: "ax-dom-3", action: "type", value: "" },
+    ]);
+  });
+
+  it("starts an ordinary field's box on its raw value, and an untouched Enter types it back", async () => {
+    await showNative();
+    const input = await open("ax-dom-5");
+    expect(input.value).toBe("Jane Doe");
+    expect(input.type).toBe("text");
+    await enter(input);
+    expect(typed()).toEqual([
+      { nodeId: "ax-dom-5", action: "type", value: "Jane Doe" },
+    ]);
+  });
+
+  it("opens an editor nothing withholds empty and unmasked, and an untouched Enter types nothing", async () => {
+    await showNative();
+    const input = await open("ax-dom-6");
+    expect(input.value).toBe("");
+    expect(input.type).toBe("text");
+    await enter(input);
+    expect(box()).toBeNull();
+    expect(typed()).toEqual([]);
+  });
+});

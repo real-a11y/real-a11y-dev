@@ -55,6 +55,15 @@
   value over the field, wiping a password or card number already entered
   ([#512](https://github.com/real-a11y/real-a11y-dev/pull/512)).
 
+- In Chrome's tree, pressing Enter in a field's edit box without typing
+  anything leaves the field as it was whenever the panel withholds that
+  field's value. It used to do so only for a field that read `[redacted]`. A
+  rich-text editor holding a card number field shows no value at all, so
+  Enter in its empty edit box deleted the editor's text and the card field
+  inside it. A field inside such an editor, and a field the panel couldn't
+  check, were emptied the same way
+  ([#516](https://github.com/real-a11y/real-a11y-dev/pull/516)).
+
 ## 0.1.16
 
 ### Patch Changes

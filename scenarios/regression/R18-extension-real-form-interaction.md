@@ -6,7 +6,7 @@ area: Extension
 type: Manual
 priority: P0
 status: Active
-validFrom: "extension ≥ 0.1.8. The dispatch-fidelity expectations mirror core's ActionDispatcher, which the CDP backend also mirrors — a fix in one belongs in both. Step 6a (a withheld field's edit box): in Chrome's tree, the first extension release with #510; in the in-page tree, the first with #512 — 0.1.16 as tagged fails both, which are the bugs those two fix. Step 6b (a sensitive textarea's markup text): extension ≥ 0.1.15, and its input panel opening empty in the in-page tree: the first extension release with #512"
+validFrom: "extension ≥ 0.1.8. The dispatch-fidelity expectations mirror core's ActionDispatcher, which the CDP backend also mirrors — a fix in one belongs in both. Step 6a (a withheld field's edit box): in Chrome's tree, the first extension release with #510; in the in-page tree, the first with #512 — 0.1.16 as tagged fails both, which are the bugs those two fix. Step 6b (a sensitive textarea's markup text): extension ≥ 0.1.15; its input panel opening empty in the in-page tree: the first extension release with #512; and an untouched Enter in its edit box in Chrome's tree: the first with #516 — 0.1.16 as tagged fails both"
 validUntil: ""
 expected: "click/type/select dispatch on the real page; a sensitive field's value is NEVER shown in the panel — a password's, what is typed into a password or card field's edit box, empty or not, or a sensitive textarea's markup text in the live-announcement log or an editor's input panel; an untouched Enter in that edit box leaves the field as it was; Send-Tab/Esc behave or fail visibly"
 twin: D6
@@ -61,6 +61,9 @@ point is behaviour against handlers you didn't write.
      document.querySelector('[role="status"]').innerHTML =
        'Code sent <textarea autocomplete="one-time-code">OTP-SENTINEL</textarea>';
      ```
+
+     Then go back to **Chrome's tree** (**Settings ▾** → **Show**), open the same
+     textbox's edit box from its row, and press `Enter` without typing
 7. Send Tab and Escape through the panel
 8. Toggle a checkbox and change a `<select>`
 
@@ -88,10 +91,13 @@ point is behaviour against handlers you didn't write.
   blanking it
 - **6b** — neither sentinel shows in the live-announcement log or the input panel:
   the log reads `status` `Code sent`, and the input panel opens empty, as Chrome's
-  tree's does, since the editor holds a card field, and shows dots as you type.
-  Extension 0.1.14 and earlier logged `Code sent OTP-SENTINEL` and opened the input
-  panel holding `Pay CARD-SENTINELnow`; 0.1.15 and 0.1.16 opened it holding
-  `Pay now`
+  tree's does, since the editor holds a card field, and shows dots as you type. In
+  Chrome's tree, `Enter` in that box without typing closes it and leaves the editor
+  as it was, card field and all. Extension 0.1.14 and earlier logged
+  `Code sent OTP-SENTINEL` and opened the input panel holding
+  `Pay CARD-SENTINELnow`; 0.1.15 and 0.1.16 opened it holding `Pay now`.
+  Before #516, that `Enter` in Chrome's tree emptied the editor and removed the card
+  field
 - **7** — Tab/Escape either work or fail **visibly**. Silently doing nothing is the
   failure
 - **8** — state changes and is reflected

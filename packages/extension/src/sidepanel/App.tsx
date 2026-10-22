@@ -2847,6 +2847,14 @@ export function App() {
       // half: an unedited (still empty) submit must not blank the real
       // value either, since that's just as silent and just as destructive.
       //
+      // That holds for every field whose value is withheld (`masksRetype`),
+      // not only one that reads `[redacted]`. A withheld field can hold
+      // something the tree doesn't show at all: an editor around a card field
+      // reads no value, not even `[redacted]`, a field inside a sensitive one
+      // loses its own, and one the in-page read couldn't classify shows none.
+      // An unedited submit would type "" over all of it — for the editor, its
+      // text and the card field inside it.
+      //
       // Prefilled from `rawValue`, not `value`: `value` is what a screen
       // reader announces, whitespace-collapsed and capped at 240 characters,
       // so an unedited submit of it would flatten a textarea's line breaks
@@ -2854,15 +2862,15 @@ export function App() {
       // text as it is. An editor has none — the tree shows its text, but a
       // retype replaces the whole of it — so it opens empty too, and gets
       // the same empty-submit block: an unedited Enter must not wipe it.
-      const isRedacted = node.redacted === true;
+      const withheld = masksRetype(node);
       const unprefillable =
-        isRedacted || (node.value !== undefined && node.rawValue === undefined);
+        withheld || (node.value !== undefined && node.rawValue === undefined);
       if (isTypableRole(node.role, node.states)) {
         setInputState({
           type: "text",
           nodeId: node.id,
           label: node.name || node.role,
-          value: isRedacted ? "" : (node.rawValue ?? ""),
+          value: unprefillable ? "" : (node.rawValue ?? ""),
           placeholder: node.placeholder,
           source: "native",
           // Mask the retyped replacement the same way the DOM tree's box is
@@ -2875,7 +2883,7 @@ export function App() {
           // field whose value is withheld, an empty one included, not only
           // one that reads `[redacted]` — see the gate's own doc. Erring
           // toward masking more, never less.
-          inputType: masksRetype(node) ? "password" : undefined,
+          inputType: withheld ? "password" : undefined,
           blockEmptySubmit: unprefillable,
         });
         return;
@@ -2919,9 +2927,13 @@ export function App() {
           });
           return;
         }
-        // An untouched empty submit never gets here: InputPanel cancels it
-        // when `blockEmptySubmit` is set (see its doc). An empty value that
-        // does arrive was typed and cleared on purpose — "empty this field".
+        // An untouched empty submit gets here only from a box that opened
+        // empty because its field showed no value and isn't withheld: an
+        // empty field, as far as the tree can tell. A box that opened empty in
+        // place of a value it can't show or start from sets
+        // `blockEmptySubmit`, and InputPanel cancels an untouched submit from
+        // it (see `handleNativeActivate`). Any other empty value was typed and
+        // cleared on purpose — "empty this field".
         void dispatchNativeAction(nodeId, "type", value);
         return;
       }

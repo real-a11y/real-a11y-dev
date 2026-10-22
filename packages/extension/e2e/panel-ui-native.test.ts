@@ -25,6 +25,10 @@
  *    plaintext — reported from real use. It keys on `valueWithheld` now. And
  *    another row's panel opened over an open one reused it, keeping the
  *    password typed there while dropping its mask.
+ *  - A withheld field that reads no value at all (an editor around a card
+ *    field, a field inside one) opened its retype panel empty, but only one
+ *    reading `[redacted]` blocked the untouched Enter, so that Enter typed
+ *    `""` over the editor's text and removed the fields inside it.
  *  - Activating a link through the native tree left the panel on a blank
  *    tree after the navigation it caused: `dispatchNativeAction`'s own
  *    post-action re-read got cancelled by the very `PAGE_NAVIGATED` its
@@ -177,6 +181,56 @@ test("an empty sensitive field's retype panel masks it too, and an ordinary fiel
   await retype("Full name");
   await expect(field).toHaveAttribute("type", "text");
   await field.press("Escape");
+});
+
+/** How long a test waits for an action that should NOT be sent. The panel
+ *  sends NATIVE_ACT within milliseconds of a submit, and this counts the
+ *  messages sent, not the actions finished. */
+const NO_ACT_WINDOW_MS = 1_500;
+
+test("an untouched Enter in a withheld field's empty edit box types nothing over what it holds", async ({
+  nav,
+}) => {
+  const page = await nav.showNative("native-withheld-submit.html");
+  await nav.panel.getByRole("button", { name: "Expand all" }).click();
+
+  // The card field inside withholds the editor's whole value, so its row
+  // shows none, not even `[redacted]`: nothing there says it holds text.
+  const note = nav.panel.getByRole("treeitem", { name: "Payment note" });
+  await expect(note).toBeVisible();
+  await expect(note).not.toContainText("Pay by card");
+  await expect(note).not.toContainText("[redacted]");
+
+  const field = nav.panel.locator(".sn-input-panel-field");
+  const typeButton = (name: string) =>
+    nav.panel.getByRole("treeitem", { name }).getByTitle("Type (Enter)");
+  /** Open a row's edit box, press Enter in it without typing, and check
+   *  nothing was typed and the page still holds all it did. */
+  const enterUntouched = async (name: string) => {
+    await typeButton(name).click();
+    await expect(field, name).toHaveValue("");
+    await field.press("Enter");
+    await expect(field, name).toHaveCount(0);
+    await nav.panel.waitForTimeout(NO_ACT_WINDOW_MS);
+    await expect(page.locator("#note"), name).toContainText("Pay by card");
+    await expect(page.locator("#card"), name).toHaveCount(1);
+    await expect(page.locator("#holder"), name).toHaveValue("Jane Doe");
+    // A hover's outline is an act of its own, so only typing counts.
+    const typed = (await nav.nativeActs()).filter((a) => a.action === "type");
+    expect(typed, name).toEqual([]);
+  };
+
+  await enterUntouched("Payment note");
+  // The name field inside it loses its own value with the editor's.
+  await enterUntouched("Name on card");
+
+  // Typing and then clearing is still how a user empties the field.
+  await typeButton("Name on card").click();
+  await field.fill("x");
+  await field.fill("");
+  await field.press("Enter");
+  await expect(page.locator("#holder")).toHaveValue("");
+  await expect(page.locator("#note")).toContainText("Pay by card");
 });
 
 test("activating a link through the native tree re-reads the page it navigated to", async ({
