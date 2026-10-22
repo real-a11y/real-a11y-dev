@@ -72,6 +72,14 @@
   divider was emptied. What you type still replaces the editor's content
   ([#519](https://github.com/real-a11y/real-a11y-dev/pull/519)).
 
+- With native mode off, the in-page tree names a link, button or heading from
+  what its children say about themselves, as Chrome's own tree does: an
+  image's `alt`, a child's `aria-label`, an SVG's `<title>`. A logo link used
+  to show unnamed and an icon button by its glyph. A `<textarea>` is named by
+  its placeholder, a blank `aria-label` no longer blanks a name, and an icon
+  labelled by the text beside it doesn't read that text twice
+  ([#521](https://github.com/real-a11y/real-a11y-dev/pull/521)).
+
 ## 0.1.16
 
 ### Patch Changes
