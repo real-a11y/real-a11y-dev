@@ -237,13 +237,29 @@ jobs:
             // payload, which is the same record, in case the listing hasn't
             // caught up with it yet.
             const headRepo = pr.head.repo?.full_name ?? null;
+            // GitHub lists at most 1,000 runs for a filtered search, however
+            // far you page. Past that, the oldest runs at a commit — its review
+            // among them, perhaps — are out of reach, so a history that long
+            // answers "can't tell", never "it wasn't applied".
+            const LISTABLE = 1000;
             const histories = new Map();
             async function history(sha) {
-              const runs = await github.paginate(github.rest.actions.listWorkflowRuns, {
-                owner, repo, workflow_id: 'pr-risk.yml', event: 'pull_request',
-                head_sha: sha, exclude_pull_requests: true, per_page: 100,
-              });
-              const records = runs
+              const runs = new Map();
+              let complete = false;
+              for (let page = 1; page * 100 <= LISTABLE; page++) {
+                const { data } = await github.rest.actions.listWorkflowRuns({
+                  owner, repo, workflow_id: 'pr-risk.yml', event: 'pull_request',
+                  head_sha: sha, exclude_pull_requests: true, per_page: 100, page,
+                });
+                // By id: a run made while this pages pushes the rest down one,
+                // and the page boundary then hands one of them back twice.
+                for (const run of data.workflow_runs) runs.set(run.id, run);
+                if (data.workflow_runs.length < 100) {
+                  complete = true;
+                  break;
+                }
+              }
+              const records = [...runs.values()]
                 .filter((run) =>
                   run.id !== context.runId &&
                   run.event === 'pull_request' &&
@@ -268,22 +284,33 @@ jobs:
               // By run number, which GitHub assigns as it creates runs. Not the
               // listing's order: two runs created in the same second can come
               // back either way round.
-              return records.sort((a, b) => b.number - a.number || b.id - a.id);
+              records.sort((a, b) => b.number - a.number || b.id - a.id);
+              return { records, complete };
             }
 
-            // Who has applied `label` to this PR, from its issue events — which
-            // GitHub writes, and only someone with triage access can cause.
+            // The PR's issue events, which GitHub writes — and only someone
+            // with triage access can cause a `labeled` one. Kept once read;
+            // `fresh` reads them again.
             let events;
+            async function issueEvents({ fresh = false } = {}) {
+              if (fresh || !events) {
+                events = await github.paginate(github.rest.issues.listEvents, {
+                  owner, repo, issue_number, per_page: 100,
+                });
+              }
+              return events;
+            }
+            const labelled = (e, label) => e.event === 'labeled' && e.label?.name === label;
+
+            // Whether someone who has applied `label` to this PR is `actor`.
             async function appliedBy(label, actor) {
-              events ??= await github.paginate(github.rest.issues.listEvents, {
-                owner, repo, issue_number, per_page: 100,
-              });
-              return Boolean(actor) && events.some((e) =>
-                e.event === 'labeled' && e.label?.name === label && e.actor?.login === actor);
+              return Boolean(actor) &&
+                (await issueEvents()).some((e) => labelled(e, label) && e.actor?.login === actor);
             }
 
-            // Whether `label` was applied at `sha` and not taken off since: the
-            // newest run at `sha` that applied or removed it, applied it.
+            // Whether `label` was applied at `sha` and not taken off since —
+            // the newest run at `sha` that applied or removed it, applied it —
+            // as 'yes', 'no', or 'unknown' when that run is past LISTABLE.
             //
             // A record of applying it has to name its own run id (see
             // `run-name`) AND come from someone who has applied it here. Either
@@ -293,12 +320,13 @@ jobs:
             // someone who applied a label.
             async function appliedAt(label, sha) {
               if (!histories.has(sha)) histories.set(sha, await history(sha));
-              for (const { id, title, actor, own } of histories.get(sha)) {
-                if (title === titled('unlabeled', label, id)) return false;
+              const { records, complete } = histories.get(sha);
+              for (const { id, title, actor, own } of records) {
+                if (title === titled('unlabeled', label, id)) return 'no';
                 if (title !== titled('labeled', label, id)) continue;
-                if (own || (await appliedBy(label, actor))) return true;
+                if (own || (await appliedBy(label, actor))) return 'yes';
               }
-              return false;
+              return complete ? 'no' : 'unknown';
             }
 
             // The PR as it is now. The payload's labels are as old as the event,
@@ -309,9 +337,27 @@ jobs:
             const sameRepo = headRepo === `${owner}/${repo}`;
             const short = (sha) => sha.slice(0, 7);
 
+            // Taken off only when the history shows it doesn't describe the
+            // PR's head — never on 'unknown' — and only after reading the
+            // issue events once more, as late as possible. Between this run
+            // looking and removing, a maintainer who has reviewed the new head
+            // can take the old label off and put it back, and removing it then
+            // takes the new review. GitHub can't remove one application of a
+            // label, only the label, so a label applied in the last minute is
+            // left to its own run, which may not be listed yet.
+            const SETTLING_MS = 60_000;
             for (const name of Object.values(GATES)) {
               if (!sameRepo || !present.has(name)) continue;
-              if (await appliedAt(name, live.head.sha)) continue;
+              if ((await appliedAt(name, live.head.sha)) !== 'no') continue;
+              // An event with no readable time counts as just now: the grace
+              // is the safe side to be wrong on.
+              const newest = (await issueEvents({ fresh: true }))
+                .filter((e) => labelled(e, name))
+                .reduce((at, e) => Math.max(at, Date.parse(e.created_at) || Date.now()), 0);
+              if (Date.now() - newest < SETTLING_MS) {
+                core.notice(`Left ${name} on — it was applied less than a minute ago, so its own run decides whether it counts.`);
+                continue;
+              }
               let removed = 'Removed';
               try {
                 await github.rest.issues.removeLabel({ owner, repo, issue_number, name });
@@ -332,13 +378,23 @@ jobs:
             // Exactly 'true' or 'false', and set on every path that gets here:
             // the Gate counts nothing but 'true'.
             for (const [output, name] of Object.entries(GATES)) {
-              const counts = present.has(name) && (await appliedAt(name, pr.head.sha));
-              core.setOutput(output, String(counts));
-              if (present.has(name) && !counts) {
-                core.notice(`Not counting ${name} — it wasn't applied at ${short(pr.head.sha)}, the commit this run graded. ` + (
+              if (!present.has(name)) {
+                core.setOutput(output, 'false');
+                continue;
+              }
+              const verdict = await appliedAt(name, pr.head.sha);
+              core.setOutput(output, String(verdict === 'yes'));
+              if (verdict === 'unknown') {
+                // As conditional as the 'no' notice: anyone can pile runs on a
+                // commit, so this must not read as a review GitHub lost.
+                core.notice(`Not counting ${name} — ${short(pr.head.sha)} has more runs than GitHub will list (${LISTABLE}), which is unusual, so whether it was applied there can't be read. Take it off and apply it again only once ${short(pr.head.sha)} itself is reviewed: a review of another commit doesn't carry over.`);
+              } else if (verdict === 'no') {
+                core.notice(`Not counting ${name} — it wasn't applied at ${short(pr.head.sha)}, the commit this run graded.` + (
                   live.head.sha !== pr.head.sha
-                    ? `The PR has moved on to ${short(live.head.sha)} since this event fired.`
-                    : `A fork's token is read-only, so it stays on the PR: remove it, then apply it again once this commit is reviewed.`
+                    ? ` The PR has moved on to ${short(live.head.sha)} since this event fired.`
+                    : sameRepo
+                      ? ''
+                      : ` A fork's token is read-only, so it stays on the PR: remove it, then apply it again once this commit is reviewed.`
                 ));
               }
             }

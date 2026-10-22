@@ -294,7 +294,10 @@ Four properties worth knowing before you change it:
   afterwards costs nothing. Apply the label once the new head's run has
   started: one applied the instant a push lands can beat GitHub moving the PR
   to that head, and re-applying one still on the PR fires no event at all.
-  Change `run-name` and the step that reads it back together. A `risk-override` reason that names rule ids waives only those, in
+  GitHub lists at most 1,000 runs per commit, so past that many events on one
+  head a review can't be read back: the label then neither counts nor comes
+  off, and re-applying it puts a new run on record. Change `run-name` and the
+  step that reads it back together. A `risk-override` reason that names rule ids waives only those, in
   CI as well as locally.
 
 ### Testing the Chrome extension

@@ -196,6 +196,7 @@ const bindStep = () => stepBlock("Bind review labels to the head", "script");
 const NUMBER = 7;
 const AUTHOR = "someone";
 const MAINTAINER = "darcusfenix";
+const LONG_AGO = "2026-10-08T00:00:00Z";
 const [A, B] = ["a", "b"].map((c) => c.repeat(40));
 
 /**
@@ -214,10 +215,13 @@ const [A, B] = ["a", "b"].map((c) => c.repeat(40));
  * `"deleted"` is a fork that no longer exists, which GitHub reports as null.
  * Runs are made by `AUTHOR` unless said otherwise, and labels applied by
  * `MAINTAINER`, who also shows up in the PR's issue events for it.
+ * Issue events are stamped `LONG_AGO` unless said otherwise, so the step's
+ * one-minute grace never applies by accident. `onEvents(state, call)` runs
+ * before each read of them, so a case can change them between two reads.
  * `onRemove(name, state)` runs before each removal, so a case can stand in for
  * another run getting there first (delete the label) or GitHub failing (throw).
  */
-function simulate({ fork = false, onRemove } = {}) {
+function simulate({ fork = false, onRemove, onEvents } = {}) {
   const headRepo =
     fork === "deleted" ? null : fork ? `someone/${REPO}` : `${OWNER}/${REPO}`;
   const asRepo = () => headRepo && { full_name: headRepo };
@@ -228,6 +232,7 @@ function simulate({ fork = false, onRemove } = {}) {
     removals: [],
     events: [],
     listings: 0,
+    eventReads: 0,
   };
   const asLabels = () => [...state.labels].map((name) => ({ name }));
   const head = () => ({
@@ -290,6 +295,7 @@ function simulate({ fork = false, onRemove } = {}) {
         event: "labeled",
         label: { name },
         actor: { login: by },
+        created_at: LONG_AGO,
       });
       return fire("labeled", name, by);
     },
@@ -299,6 +305,7 @@ function simulate({ fork = false, onRemove } = {}) {
         event: "unlabeled",
         label: { name },
         actor: { login: by },
+        created_at: LONG_AGO,
       });
       return fire("unlabeled", name, by);
     },
@@ -319,25 +326,41 @@ function simulate({ fork = false, onRemove } = {}) {
           get: async () => ({ data: { head: head(), labels: asLabels() } }),
         },
         actions: {
-          listWorkflowRuns: async ({ workflow_id, event, head_sha }) => {
+          listWorkflowRuns: async ({
+            workflow_id,
+            event,
+            head_sha,
+            per_page = 30,
+            page = 1,
+          }) => {
             assert.equal(workflow_id, "pr-risk.yml");
             state.listings++;
-            // Oldest first. GitHub lists newest first — except that two runs
-            // made in the same second can come back either way round, as
-            // #494's 1423 and 1424 did. A step trusting the order would be
-            // right nearly always; this makes it wrong every time instead.
-            const workflow_runs = state.runs.filter(
+            const matched = state.runs.filter(
               (r) =>
                 (!event || r.event === event) &&
                 (!head_sha || r.head_sha === head_sha),
             );
-            return {
-              data: { total_count: workflow_runs.length, workflow_runs },
-            };
+            // The newest 1,000, as GitHub caps a filtered search — served
+            // oldest first. GitHub lists newest first, except that two runs
+            // made in the same second can come back either way round, as
+            // #494's 1423 and 1424 did. A step trusting the order would be
+            // right nearly always; this makes it wrong every time instead.
+            const listable = [...matched]
+              .sort((a, b) => b.id - a.id)
+              .slice(0, 1000)
+              .reverse();
+            const workflow_runs = listable.slice(
+              (page - 1) * per_page,
+              page * per_page,
+            );
+            return { data: { total_count: matched.length, workflow_runs } };
           },
         },
         issues: {
-          listEvents: async () => ({ data: state.events }),
+          listEvents: async () => {
+            onEvents?.(state, ++state.eventReads);
+            return { data: state.events };
+          },
           removeLabel: async ({ name }) => {
             state.removals.push(name);
             onRemove?.(name, state);
@@ -698,6 +721,94 @@ describe("which commit a review label describes", () => {
     pr.push(B);
 
     await assert.rejects(bind(pr, pr.edit()), { status: 403 });
+  });
+
+  it("neither counts nor removes a review past the runs GitHub will list", async () => {
+    // GitHub lists at most 1,000 runs for a filtered search, so a thousand
+    // later events at one commit push its review out of reach. That has to
+    // read as "can't tell", not "never applied": the second would take a
+    // valid review off a head nobody changed.
+    const pr = simulate();
+    await bind(pr, pr.push(B));
+    await bind(pr, pr.label("reviewed:deep"));
+    for (let i = 0; i < 1000; i++) pr.edit();
+
+    const before = pr.state.listings;
+    const { reviewed, notices } = await bind(pr, pr.edit());
+    assert.equal(reviewed, "false");
+    assert.deepEqual(pr.state.removals, []);
+    assert.ok(pr.state.labels.has("reviewed:deep"));
+    assert.match(
+      notices.join("\n"),
+      /more runs than GitHub will list \(1000\)/,
+    );
+    // Anyone can pile runs on a commit, so the notice must not invite
+    // re-applying a review of some other one.
+    assert.match(notices.join("\n"), /only once bbbbbbb itself is reviewed/);
+    assert.equal(
+      pr.state.listings - before,
+      10,
+      "pages to the cap, no further",
+    );
+  });
+
+  it("leaves a label applied in the last minute to its own run", async () => {
+    // The race a check-then-remove can't close: this run finds the old
+    // label and no record of it at the new head, and before it removes it,
+    // the maintainer — having reviewed the new head — takes it off and puts
+    // it back. Removing now would take the new review. GitHub can only
+    // remove the label, not one application of it, so a fresh one is left
+    // for the run its `labeled` made.
+    const now = () => new Date().toISOString();
+    const pr = simulate({
+      onEvents: (state, read) => {
+        if (read !== 1) return;
+        for (const event of ["unlabeled", "labeled"]) {
+          state.events.push({
+            event,
+            label: { name: "reviewed:deep" },
+            actor: { login: MAINTAINER },
+            created_at: now(),
+          });
+        }
+      },
+    });
+    await bind(pr, pr.label("reviewed:deep"));
+    const late = pr.push(B);
+
+    const { reviewed, notices } = await bind(pr, late);
+    assert.equal(reviewed, "false");
+    assert.deepEqual(pr.state.removals, []);
+    assert.match(notices.join("\n"), /Left reviewed:deep on/);
+    // …and the run the maintainer's `labeled` made counts it.
+    assert.equal((await bind(pr, pr.label("reviewed:deep"))).reviewed, "true");
+  });
+
+  it("reads the events again right before removing", async () => {
+    // Not the copy it read earlier in the run. A forged record at the head
+    // makes it read them once, for the actor check; the maintainer puts the
+    // label back after that and before the removal.
+    const pr = simulate({
+      onEvents: (state, read) => {
+        if (read !== 2) return;
+        state.events.push({
+          event: "labeled",
+          label: { name: "reviewed:deep" },
+          actor: { login: MAINTAINER },
+          created_at: new Date().toISOString(),
+        });
+      },
+    });
+    await bind(pr, pr.label("reviewed:deep"));
+    pr.push(B);
+    pr.made({
+      display_title: (id) =>
+        `PR risk #${NUMBER} labeled reviewed:deep (run ${id})`,
+    });
+
+    await bind(pr, pr.edit());
+    assert.equal(pr.state.eventReads, 2);
+    assert.deepEqual(pr.state.removals, []);
   });
 });
 
