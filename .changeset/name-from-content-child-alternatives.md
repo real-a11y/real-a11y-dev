@@ -29,7 +29,7 @@ Each child now lends its own text alternative before its content, as accname §2
 - An `<svg>` with a `<title>` is named by it, an `<input type="image">` by its `alt` (after a label), and a `<textarea>` falls back to its `placeholder` as an `<input>` does.
 - A `<select>`'s options are still named by their text alone.
 - A blank `aria-label`, only spaces, is skipped as if absent, on the element and on a child, so the name falls through to the next source.
-- Each element counts once in a name, as in Chromium. An icon labelled by the text beside it, `<a href="/"><svg aria-labelledby="t"></svg><span id="t">Docs</span></a>`, is "Docs", not "Docs Docs", and a heading that holds a checkbox and its label reads the label once. Each IDREF of an `aria-labelledby` still reads its whole target, so two overlapping targets repeat what they share, as they do in Chromium.
+- Each element counts once in a name, as in Chromium. A heading that holds a checkbox and its label reads the label once, and an icon labelled by the text beside it lends that text in its place: `<a href="/"><svg aria-labelledby="t"></svg><span id="t">Docs</span></a>` is "Docs". Each IDREF of an `aria-labelledby` still reads its whole target, so two overlapping targets repeat what they share, as they do in Chromium.
 
 What this changes for you:
 

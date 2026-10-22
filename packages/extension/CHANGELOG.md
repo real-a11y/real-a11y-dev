@@ -76,8 +76,8 @@
   what its children say about themselves, as Chrome's own tree does: an
   image's `alt`, a child's `aria-label`, an SVG's `<title>`. A logo link used
   to show unnamed and an icon button by its glyph. A `<textarea>` is named by
-  its placeholder, a blank `aria-label` no longer blanks a name, and an icon
-  labelled by the text beside it doesn't read that text twice
+  its placeholder, a blank `aria-label` no longer blanks a name, and a heading
+  that holds a checkbox and its label reads the label once, not twice
   ([#521](https://github.com/real-a11y/real-a11y-dev/pull/521)).
 
 ## 0.1.16
