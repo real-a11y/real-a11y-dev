@@ -62,9 +62,9 @@ the monorepo; if a step is missing from the docs, that is the finding.
 - A brand-new project reaches a passing a11y test in **minutes**, not an afternoon
 - **3** — the accessible page passes every assertion, logo link and icon button included,
   and a subtree assertion reports only what is inside the subtree. On testing
-  0.1.0-beta.19 both fail — an `<img alt>` never names its link, and a status region or
-  modal elsewhere silently widens the root — which are the known defects the beta.19
-  dogfood filed, not new ones
+  0.1.0-beta.19 both fail. There an `<img alt>` never names its link, fixed in the first
+  release after it, and a status region or modal elsewhere silently widens the root,
+  the known defect the beta.19 dogfood filed, not a new one
 - Snapshots are stable across runs
 - Every deliberate failure produces a message that names the offending element — someone
   new to the library should be able to act on it without reading source. Through

@@ -568,6 +568,23 @@ export class LiveTreeExtractor {
     set.add(el);
   }
 
+  /**
+   * Seeds `ref`, which points at #`id`, into `dirty`, and the name-from-content
+   * host it lends its name to when it is named by #`id`: `<button><span
+   * aria-labelledby="x">` is named by #x, so the button goes stale with it. A
+   * description or a `list` reaches no ancestor's name, so neither climbs.
+   * Returns whether anything was added.
+   */
+  private markReferrer(ref: Element, id: string, dirty: Set<Element>): boolean {
+    const before = dirty.size;
+    dirty.add(ref);
+    const labelledBy = safeGetAttribute(ref, "aria-labelledby");
+    if (labelledBy?.split(/\s+/).includes(id)) {
+      dirty.add(this.nameRelevantAncestor(ref));
+    }
+    return dirty.size !== before;
+  }
+
   private processChildList(
     record: MutationRecord,
     dirty: Set<Element>,
@@ -599,7 +616,7 @@ export class LiveTreeExtractor {
       if (id) {
         const referrers = this.referrersById.get(id);
         if (referrers) {
-          for (const ref of referrers) dirty.add(ref);
+          for (const ref of referrers) this.markReferrer(ref, id, dirty);
         }
       }
 
@@ -744,10 +761,7 @@ export class LiveTreeExtractor {
             const referrers = this.referrersById.get(id);
             if (referrers) {
               for (const ref of referrers) {
-                if (!dirty.has(ref)) {
-                  dirty.add(ref);
-                  changed = true;
-                }
+                if (this.markReferrer(ref, id, dirty)) changed = true;
               }
             }
             // An aria-describedby target is suppressed only while it holds no

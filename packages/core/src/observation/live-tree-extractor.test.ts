@@ -1790,6 +1790,136 @@ describe("LiveTreeExtractor", () => {
     }
   });
 
+  // A child's text alternative is part of its host's name (accname §2F.iii),
+  // so whatever that alternative is read from has to re-name the host.
+  describe("a name host whose child lends it an alternative", () => {
+    it("re-names the host when its child's aria-labelledby target changes", () => {
+      document.body.innerHTML = `
+        <main id="app">
+          <button><span aria-labelledby="lbl">x</span></button>
+          <b id="lbl">Old</b>
+        </main>`;
+      const root = document.getElementById("app")!;
+      const live = new LiveTreeExtractor(root, { mode: "a11y" });
+      const text = document.getElementById("lbl")!.firstChild!;
+      text.textContent = "New";
+
+      const result = live.refresh({
+        mutations: [
+          { type: "characterData", target: text },
+        ] as unknown as MutationRecord[],
+      });
+
+      expect(result.nodes).toEqual(extractA11yTree(root).nodes);
+      const button = [...result.nodes.values()].find(
+        (n) => n.a11y.role === "button",
+      );
+      expect(button?.a11y.name).toBe("New");
+    });
+
+    it("re-names the host when its child's aria-labelledby target is added", () => {
+      document.body.innerHTML = `
+        <main id="app">
+          <button><span aria-labelledby="lbl">x</span></button>
+          <div id="slot"></div>
+        </main>`;
+      const root = document.getElementById("app")!;
+      const live = new LiveTreeExtractor(root, { mode: "a11y" });
+      const slot = document.getElementById("slot")!;
+      const label = document.createElement("b");
+      label.id = "lbl";
+      label.textContent = "Added";
+      slot.appendChild(label);
+
+      const result = live.refresh({
+        mutations: [
+          {
+            type: "childList",
+            target: slot,
+            addedNodes: [label],
+            removedNodes: [],
+          },
+        ] as unknown as MutationRecord[],
+      });
+
+      expect(result.nodes).toEqual(extractA11yTree(root).nodes);
+      const button = [...result.nodes.values()].find(
+        (n) => n.a11y.role === "button",
+      );
+      expect(button?.a11y.name).toBe("Added");
+    });
+
+    it("re-names the host when its child's aria-labelledby target is removed", () => {
+      document.body.innerHTML = `
+        <main id="app">
+          <button><span aria-labelledby="lbl">x</span></button>
+          <div id="slot"><b id="lbl">Gone</b></div>
+        </main>`;
+      const root = document.getElementById("app")!;
+      const live = new LiveTreeExtractor(root, { mode: "a11y" });
+      const slot = document.getElementById("slot")!;
+      const label = document.getElementById("lbl")!;
+      label.remove();
+
+      const result = live.refresh({
+        mutations: [
+          {
+            type: "childList",
+            target: slot,
+            addedNodes: [],
+            removedNodes: [label],
+          },
+        ] as unknown as MutationRecord[],
+      });
+
+      expect(result.nodes).toEqual(extractA11yTree(root).nodes);
+      const button = [...result.nodes.values()].find(
+        (n) => n.a11y.role === "button",
+      );
+      expect(button?.a11y.name).toBe("x");
+    });
+
+    it("re-names an <svg> when its <title> text changes", () => {
+      document.body.innerHTML = `
+        <main id="app"><div><svg><title>Old</title></svg></div></main>`;
+      const root = document.getElementById("app")!;
+      const live = new LiveTreeExtractor(root, { mode: "a11y" });
+      const text = root.querySelector("title")!.firstChild!;
+      text.textContent = "New";
+
+      const result = live.refresh({
+        mutations: [
+          { type: "characterData", target: text },
+        ] as unknown as MutationRecord[],
+      });
+
+      expect(result.nodes).toEqual(extractA11yTree(root).nodes);
+      const svg = [...result.nodes.values()].find((n) => n.a11y.role === "img");
+      expect(svg?.a11y.name).toBe("New");
+    });
+
+    it("re-names a link when its image's alt changes", () => {
+      document.body.innerHTML = `
+        <main id="app"><a href="/"><img alt="Old"></a></main>`;
+      const root = document.getElementById("app")!;
+      const img = root.querySelector("img")!;
+      const live = new LiveTreeExtractor(root, { mode: "a11y" });
+      img.alt = "New";
+
+      const result = live.refresh({
+        mutations: [
+          { type: "attributes", target: img, attributeName: "alt" },
+        ] as unknown as MutationRecord[],
+      });
+
+      expect(result.nodes).toEqual(extractA11yTree(root).nodes);
+      const link = [...result.nodes.values()].find(
+        (n) => n.a11y.role === "link",
+      );
+      expect(link?.a11y.name).toBe("New");
+    });
+  });
+
   // The id a referrer points at often sits on a plain wrapper several levels
   // above the text that actually changed. That wrapper is neither the text's
   // direct parent nor a name-from-content host, so nothing seeds it into the

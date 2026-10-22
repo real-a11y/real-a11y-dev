@@ -6011,3 +6011,402 @@ describe("the sr-only clip-path signature", () => {
     expect(isHiddenOf("Announced only")).toBe(true);
   });
 });
+
+// Accname §2F.iii computes each child's text alternative "beginning with step
+// 2", so a child lends its aria-labelledby, its aria-label or an image's alt
+// before anything is read from its content. The DOM producer once read only
+// content (and named widgets' names), so every logo link was unnamed and every
+// icon button named after its glyph. Every expectation below is Chromium's own
+// name for the same markup, read over CDP.
+describe("a child lends its own text alternative to a name from content", () => {
+  // Attached so getComputedStyle resolves default display values, which decide
+  // the spacing of a child named by its content.
+  function target(html: string): SemanticNode {
+    document.body.innerHTML = html;
+    return [...extractDomTree(document.body).nodes.values()].find(
+      (n) => n.dom?.attributes["id"] === "target",
+    )!;
+  }
+  const nameOf = (html: string): string => target(html).a11y.name;
+
+  afterEach(() => {
+    document.body.innerHTML = "";
+  });
+
+  it.each([
+    [
+      "an image's alt names a link",
+      `<a id="target" href="/"><img alt="Home"></a>`,
+      "Home",
+    ],
+    [
+      "an image's alt names a button",
+      `<button id="target"><img alt="Print"></button>`,
+      "Print",
+    ],
+    [
+      "an image's alt names a heading",
+      `<h2 id="target"><img alt="Acme"></h2>`,
+      "Acme",
+    ],
+    [
+      "an alt joins the text beside it",
+      `<a id="target" href="/kb"><img alt="Help"> center</a>`,
+      "Help center",
+    ],
+    [
+      "a child's aria-label replaces its glyph",
+      `<button id="target"><span aria-label="Close">×</span></button>`,
+      "Close",
+    ],
+    [
+      "an aria-label wins over the content under it",
+      `<a id="target" href="/"><span aria-label="Home"><img alt="Logo"></span></a>`,
+      "Home",
+    ],
+    [
+      "an image nested in a wrapper still lends its alt",
+      `<a id="target" href="/"><span><img alt="Home"></span></a>`,
+      "Home",
+    ],
+    [
+      "an empty alt lends nothing",
+      `<a id="target" href="/"><img alt=""> Home</a>`,
+      "Home",
+    ],
+    [
+      "an empty alt with a title lends the title",
+      `<button id="target"><img alt="" title="Print"></button>`,
+      "Print",
+    ],
+    [
+      "an alt wins over a title",
+      `<button id="target"><img alt="Print" title="Print this page"></button>`,
+      "Print",
+    ],
+    [
+      "an aria-hidden image lends nothing",
+      `<a id="target" href="/"><img alt="Logo" aria-hidden="true"> Home</a>`,
+      "Home",
+    ],
+    [
+      "a presentational image lends no alt",
+      `<button id="target"><img role="presentation" alt="Print"></button>`,
+      "",
+    ],
+    [
+      "aria-label voids role=none",
+      `<button id="target"><span role="none" aria-label="X">Y</span></button>`,
+      "X",
+    ],
+    [
+      "a role=img lends no content",
+      `<button id="target"><span role="img">★</span> Favourite</button>`,
+      "Favourite",
+    ],
+    [
+      "a role=img lends its aria-label",
+      `<button id="target"><span role="img" aria-label="Star">★</span></button>`,
+      "Star",
+    ],
+    [
+      "a role=img lends its title",
+      `<a id="target" href="/"><span role="img" title="Home"></span></a>`,
+      "Home",
+    ],
+    [
+      "a generic child's title lends nothing",
+      `<a id="target" href="/"><span title="Home"></span></a>`,
+      "",
+    ],
+    [
+      "an SVG lends its <title>",
+      `<button id="target"><svg><title>Close</title><path d="M0 0h8v8z"/></svg></button>`,
+      "Close",
+    ],
+    [
+      "an SVG's aria-label wins over its <title>",
+      `<button id="target"><svg aria-label="Shut"><title>Close</title></svg></button>`,
+      "Shut",
+    ],
+    [
+      "an SVG lends no <text> content",
+      `<button id="target"><svg><text>Go</text></svg></button>`,
+      "",
+    ],
+    [
+      "a child's aria-labelledby is followed",
+      `<button id="target"><span aria-labelledby="x">foo</span></button><b id="x">Bar</b>`,
+      "Bar",
+    ],
+    [
+      "an aria-labelledby that names nothing falls back to content",
+      `<button id="target"><span aria-labelledby="missing">Text</span></button>`,
+      "Text",
+    ],
+  ])("%s", (_label, html, expected) => {
+    expect(nameOf(html)).toBe(expected);
+  });
+
+  describe("spacing follows where the text came from", () => {
+    it.each([
+      [
+        "an alt between words",
+        `<a id="target" href="/"><img alt="Help">center</a>`,
+        "Help center",
+      ],
+      [
+        "two alts side by side",
+        `<a id="target" href="/"><img alt="Home"><img alt="Page"></a>`,
+        "Home Page",
+      ],
+      [
+        "an aria-label inline",
+        `<a id="target" href="/"><span aria-label="Docs">D</span>site</a>`,
+        "Docs site",
+      ],
+      [
+        "a link named by aria-label",
+        `<h2 id="target">Go to<a href="/" aria-label="Home">H</a>now</h2>`,
+        "Go to Home now",
+      ],
+      [
+        "a link named by title",
+        `<h2 id="target">Go to<a href="/" title="Home"></a>now</h2>`,
+        "Go to Home now",
+      ],
+      [
+        "a link named by its text stays unspaced",
+        `<h2 id="target">Go to<a href="/">Home</a>now</h2>`,
+        "Go toHomenow",
+      ],
+      [
+        "a link named by its image is named by its content too",
+        `<h2 id="target">Go to<a href="/"><img alt="Home"></a>now</h2>`,
+        "Go toHomenow",
+      ],
+    ])("%s", (_label, html, expected) => {
+      expect(nameOf(html)).toBe(expected);
+    });
+  });
+
+  describe("a reference borrows its target's own alternative", () => {
+    it.each([
+      [
+        "an image target lends its alt",
+        `<button id="target" aria-labelledby="i">x</button><img id="i" alt="Direct">`,
+        "Direct",
+      ],
+      [
+        "an aria-label wins over the target's content",
+        `<button id="target" aria-labelledby="s">x</button><span id="s" aria-label="Lab">content</span>`,
+        "Lab",
+      ],
+      [
+        "an image inside the target lends its alt",
+        `<input id="target" aria-labelledby="l"><span id="l"><img alt="Search"> terms</span>`,
+        "Search terms",
+      ],
+      [
+        "a nested aria-labelledby is ignored",
+        `<button id="target" aria-labelledby="a">x</button><span id="a">A <span aria-labelledby="b">ignored</span></span><span id="b">B</span>`,
+        "A ignored",
+      ],
+    ])("%s", (_label, html, expected) => {
+      expect(nameOf(html)).toBe(expected);
+    });
+
+    it.each([
+      [
+        "an image inside the target",
+        `<button id="target" aria-describedby="d">Go</button><span id="d"><img alt="Warning"> irreversible</span>`,
+        "Warning irreversible",
+      ],
+      [
+        "the target's own aria-label",
+        `<button id="target" aria-describedby="d">Go</button><span id="d" aria-label="Lab">content</span>`,
+        "Lab",
+      ],
+      [
+        "a nested aria-labelledby is ignored",
+        `<button id="target" aria-describedby="d">Go</button><span id="d">A <span aria-labelledby="b">ignored</span></span><span id="b">B</span>`,
+        "A ignored",
+      ],
+    ])("describes from %s", (_label, html, expected) => {
+      expect(target(html).a11y.description).toBe(expected);
+    });
+  });
+
+  it.each([
+    [
+      "a <label for>",
+      `<label for="target"><img alt="Search"></label><input id="target">`,
+      "Search",
+    ],
+    [
+      "a <label for> with text around",
+      `<label for="target">Find <img alt="Search"> now</label><input id="target">`,
+      "Find Search now",
+    ],
+    [
+      "a wrapping <label>",
+      `<label><img alt="Email"> <input id="target"></label>`,
+      "Email",
+    ],
+  ])("labels a field through an image in %s", (_label, html, expected) => {
+    expect(nameOf(html)).toBe(expected);
+  });
+
+  it("reads a <select>'s option by its text alone", () => {
+    // Built by hand: the parser drops an <img> inside a classic <option>.
+    document.body.innerHTML = "<select><option id='target'></option></select>";
+    const option = document.getElementById("target")!;
+    const img = document.createElement("img");
+    img.alt = "Flag";
+    option.append(img, " France");
+    const node = [...extractDomTree(document.body).nodes.values()].find(
+      (n) => n.dom?.attributes["id"] === "target",
+    )!;
+    expect(node.a11y.name).toBe("France");
+  });
+
+  it("names an <svg> by its first <title>", () => {
+    expect(nameOf(`<svg id="target"><title>Close</title></svg>`)).toBe("Close");
+  });
+
+  it("names an image button by its alt, after a label", () => {
+    expect(nameOf(`<input id="target" type="image" alt="Go">`)).toBe("Go");
+    expect(
+      nameOf(`<label><input id="target" type="image" alt="Go"> now</label>`),
+    ).toBe("now");
+  });
+
+  it("names a <textarea> by its placeholder, after its title", () => {
+    expect(
+      nameOf(`<textarea id="target" placeholder="Your reply"></textarea>`),
+    ).toBe("Your reply");
+    expect(
+      nameOf(`<textarea id="target" placeholder="P" title="T"></textarea>`),
+    ).toBe("T");
+  });
+
+  it.each([
+    [
+      "on the element itself",
+      `<button id="target" aria-label=" ">Save</button>`,
+      "Save",
+    ],
+    [
+      "on an image, which keeps its alt",
+      `<img id="target" aria-label=" " alt="Home">`,
+      "Home",
+    ],
+    [
+      "on the image a link is named by",
+      `<a id="target" href="/"><img aria-label="  " alt="Home"></a>`,
+      "Home",
+    ],
+    [
+      "on a child, which lends its text",
+      `<button id="target"><span aria-label=" ">Save</span></button>`,
+      "Save",
+    ],
+  ])("ignores a blank aria-label %s", (_label, html, expected) => {
+    expect(nameOf(html)).toBe(expected);
+  });
+
+  // Chromium reads each element once per name, so an element a reference has
+  // already read lends nothing when the walk reaches it. Inside a reference it
+  // reads every target afresh, so an element two IDREFs reach counts twice.
+  describe("each element is read once, except across a reference's IDREFs", () => {
+    it.each([
+      [
+        "an icon labelled by the text beside it",
+        `<a id="target" href="/"><svg role="img" aria-labelledby="t"></svg><span id="t">Docs</span></a>`,
+        "Docs",
+      ],
+      [
+        "an image labelled by the text after it",
+        `<button id="target"><img aria-labelledby="s" src="data:,"><span id="s">Save</span></button>`,
+        "Save",
+      ],
+      [
+        "a reference read after the text it borrows",
+        `<a id="target" href="/"><span id="t">Docs</span><span aria-labelledby="t"></span></a>`,
+        "Docs Docs",
+      ],
+      [
+        "an image two IDREFs reach",
+        `<input id="target" aria-labelledby="i i"><img id="i" alt="Star">`,
+        "Star Star",
+      ],
+      [
+        "an image inside two overlapping targets",
+        `<input id="target" aria-labelledby="a b"><div id="a">Name <span id="b"><img alt="star"> required</span></div>`,
+        "Name star required star required",
+      ],
+      [
+        "a link inside a target two IDREFs reach",
+        `<button id="target" aria-labelledby="a a">X</button><span id="a">Pick <a href="/">Docs</a></span>`,
+        "Pick Docs Pick Docs",
+      ],
+      [
+        "a widget inside the container that labels it",
+        `<div id="x"><span>Label</span> <button id="target" aria-labelledby="x">Go</button></div>`,
+        "Label Go",
+      ],
+      [
+        "a child labelled by its own host",
+        `<h2 id="target">Title <span aria-labelledby="target">x</span></h2>`,
+        "Title Title x",
+      ],
+    ])("%s", (_label, html, expected) => {
+      expect(nameOf(html)).toBe(expected);
+    });
+
+    it.each([
+      [
+        "before its label",
+        `<h2 id="target"><input type="checkbox" id="c"><label for="c">Agree <b>now</b></label></h2>`,
+        "Agree now",
+      ],
+      [
+        "after its label",
+        `<h2 id="target"><label for="c">Agree <b>now</b></label><input type="checkbox" id="c"></h2>`,
+        "Agree now",
+      ],
+      [
+        "inside its label",
+        `<h2 id="target"><label>Agree <input type="checkbox"></label></h2>`,
+        "Agree",
+      ],
+    ])(
+      "reads a label once in a heading that holds its checkbox %s",
+      (_label, html, expected) => {
+        expect(nameOf(html)).toBe(expected);
+      },
+    );
+
+    // A reference reads its targets without the visit-once check, and a
+    // control's label is the one way such a read leaves the subtree it walks.
+    // Two labels holding each other's controls loop there forever unless the
+    // label's content is read with the check on.
+    it("stops at labels that hold each other's controls inside a reference", () => {
+      document.body.innerHTML = `
+        <button id="target" aria-labelledby="w">x</button>
+        <div id="w">
+          <label for="c1">A <input type="checkbox" id="c2"></label>
+          <label for="c2">B <input type="checkbox" id="c1"></label>
+        </div>`;
+      let nodes: SemanticNode[] = [];
+      expect(() => {
+        nodes = [...extractDomTree(document.body).nodes.values()];
+      }).not.toThrow();
+      for (const node of nodes) {
+        expect(node.a11y.name.length).toBeLessThan(200);
+      }
+      const button = nodes.find((n) => n.dom?.attributes["id"] === "target");
+      expect(button?.a11y.name).toBeTruthy();
+    });
+  });
+});
