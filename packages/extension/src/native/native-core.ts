@@ -738,6 +738,8 @@ export function fieldValueWithheld(read: PageFieldRead): boolean {
  * Each read's own verdict still decides the names around it.
  *
  * Exported for its tests.
+ *
+ * @internal
  */
 export function withholdAboveWithheld(
   verdicts: ReadonlyMap<string, PageFieldRead>,
@@ -774,6 +776,8 @@ export function withholdAboveWithheld(
  * text.
  *
  * Exported for its tests.
+ *
+ * @internal
  */
 export function withheldFields(
   verdicts: ReadonlyMap<string, PageFieldRead>,
