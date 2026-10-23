@@ -60,7 +60,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
 
 `root` is the element the panel observes: here, the `<div>` that holds your pages. It has to be attached to an element that holds them. A ref that never reaches an element, or one on an empty `<div>`, leaves the panel blank, and nothing is logged.
 
-The wrapper is `display: contents`, so it takes no part in layout: a flex or grid layout on `<body>` still lays out your pages' top-level elements as if they were its own children. A selector that names them as `<body>`'s children, such as `body > main`, no longer matches.
+The wrapper is `display: contents`, so it takes no part in layout: a flex or grid layout on `<body>` still lays out your pages' top-level elements as if they were its own children. A selector that names them as `<body>`'s children, such as `body > main`, no longer matches. Having no box of its own, the wrapper is the one row in the panel that hover can't highlight.
 
 The `floating` mode portals into `document.body`. The library already guards against SSR — the portal only activates after the first client commit — so you can render this component from a Server Component without a crash.
 
