@@ -83,14 +83,15 @@ const SemanticNavigator = dynamic(
 export function A11yPanel({ children }: { children: ReactNode }) {
   const rootRef = useRef<HTMLDivElement>(null);
 
-  // In a production build this branch is statically dead: the layout renders
-  // your pages alone, and the inspector chunk is never requested.
-  if (process.env.NODE_ENV !== "development") return <>{children}</>;
-
+  // The wrapper renders in every build, so your pages sit in the same DOM in
+  // development and production. In a production build the condition is
+  // statically false: the panel never renders, and its chunk is never requested.
   return (
     <div ref={rootRef}>
       {children}
-      <SemanticNavigator root={rootRef} floating />
+      {process.env.NODE_ENV === "development" && (
+        <SemanticNavigator root={rootRef} floating />
+      )}
     </div>
   );
 }
@@ -100,10 +101,12 @@ Note: `dynamic(..., { ssr: false })` has to live **inside a Client Component** i
 
 ### Option 2 — environment flag
 
-For staging deployments where you want to toggle the panel with an env var, use the component from Option 1 with this gate in place of its `NODE_ENV` check:
+For staging deployments where you want to toggle the panel with an env var, use the component from Option 1 with this condition in place of its `NODE_ENV` check:
 
 ```tsx
-if (process.env.NEXT_PUBLIC_A11Y !== "1") return <>{children}</>;
+{process.env.NEXT_PUBLIC_A11Y === "1" && (
+  <SemanticNavigator root={rootRef} floating />
+)}
 ```
 
 This ships the panel chunk in the production bundle as a separate chunk — it just doesn't run. Cheaper DX, more bytes.
