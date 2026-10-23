@@ -2862,15 +2862,23 @@ export function App() {
       // text as it is. An editor has none — the tree shows its text, but a
       // retype replaces the whole of it — so it opens empty too, and gets
       // the same empty-submit block: an unedited Enter must not wipe it.
+      //
+      // The block goes with the box opening empty, whatever the reason: a
+      // field nothing withholds that shows no value isn't necessarily empty.
+      // Chromium gives an editor no value at all when it holds no text, only
+      // an image or a nested control, and an unedited submit would type ""
+      // over it, deleting them. A field that really is empty loses nothing
+      // when that submit cancels instead.
       const withheld = masksRetype(node);
       const unprefillable =
         withheld || (node.value !== undefined && node.rawValue === undefined);
+      const prefill = unprefillable ? "" : (node.rawValue ?? "");
       if (isTypableRole(node.role, node.states)) {
         setInputState({
           type: "text",
           nodeId: node.id,
           label: node.name || node.role,
-          value: unprefillable ? "" : (node.rawValue ?? ""),
+          value: prefill,
           placeholder: node.placeholder,
           source: "native",
           // Mask the retyped replacement the same way the DOM tree's box is
@@ -2884,7 +2892,7 @@ export function App() {
           // one that reads `[redacted]` — see the gate's own doc. Erring
           // toward masking more, never less.
           inputType: withheld ? "password" : undefined,
-          blockEmptySubmit: unprefillable,
+          blockEmptySubmit: prefill === "",
         });
         return;
       }
@@ -2927,13 +2935,11 @@ export function App() {
           });
           return;
         }
-        // An untouched empty submit gets here only from a box that opened
-        // empty because its field showed no value and isn't withheld: an
-        // empty field, as far as the tree can tell. A box that opened empty in
-        // place of a value it can't show or start from sets
-        // `blockEmptySubmit`, and InputPanel cancels an untouched submit from
-        // it (see `handleNativeActivate`). Any other empty value was typed and
-        // cleared on purpose — "empty this field".
+        // An untouched empty submit never gets here: every native box that
+        // opens empty sets `blockEmptySubmit`, and InputPanel cancels an
+        // untouched submit from it (see `handleNativeActivate`). An empty
+        // value that does arrive was typed and cleared on purpose — "empty
+        // this field".
         void dispatchNativeAction(nodeId, "type", value);
         return;
       }

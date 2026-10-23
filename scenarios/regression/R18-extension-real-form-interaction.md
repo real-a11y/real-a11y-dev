@@ -6,9 +6,9 @@ area: Extension
 type: Manual
 priority: P0
 status: Active
-validFrom: "extension ≥ 0.1.8. The dispatch-fidelity expectations mirror core's ActionDispatcher, which the CDP backend also mirrors — a fix in one belongs in both. Step 6a (a withheld field's edit box): in Chrome's tree, the first extension release with #510; in the in-page tree, the first with #512 — 0.1.16 as tagged fails both, which are the bugs those two fix. Step 6b (a sensitive textarea's markup text): extension ≥ 0.1.15; its input panel opening empty in the in-page tree: the first extension release with #512; and an untouched Enter in its edit box in Chrome's tree: the first with #516 — 0.1.16 as tagged fails both. Step 5a (an untouched Enter in an editor's edit box, in the in-page tree): the first extension release with #519 — 0.1.16 as tagged fails it. Step 6c (a custom textbox around a password in its shadow root): the first extension release with #520 — 0.1.16 as tagged fails it, and so does a release with #510 alone"
+validFrom: "extension ≥ 0.1.8. The dispatch-fidelity expectations mirror core's ActionDispatcher, which the CDP backend also mirrors — a fix in one belongs in both. Step 6a (a withheld field's edit box): in Chrome's tree, the first extension release with #510; in the in-page tree, the first with #512 — 0.1.16 as tagged fails both, which are the bugs those two fix. Step 6b (a sensitive textarea's markup text): extension ≥ 0.1.15; its input panel opening empty in the in-page tree: the first extension release with #512; and an untouched Enter in its edit box in Chrome's tree: the first with #516 — 0.1.16 as tagged fails both. Step 5a (an untouched Enter in an editor's edit box, in the in-page tree): the first extension release with #519 — 0.1.16 as tagged fails it. Step 5b (an untouched Enter in the edit box of an editor holding only an image, in Chrome's tree): the first extension release with #522 — 0.1.16 as tagged fails it. Step 6c (a custom textbox around a password in its shadow root): the first extension release with #520 — 0.1.16 as tagged fails it, and so does a release with #510 alone"
 validUntil: ""
-expected: "click/type/select dispatch on the real page; a sensitive field's value is NEVER shown in the panel — a password's, what is typed into a password or card field's edit box, empty or not, or into the edit box Chrome's tree opens on a custom textbox around a password in its shadow root, or a sensitive textarea's markup text in the live-announcement log or an editor's input panel; an untouched Enter in that edit box, or in a rich-text editor's in the in-page tree, leaves the field as it was; Send-Tab/Esc behave or fail visibly"
+expected: "click/type/select dispatch on the real page; a sensitive field's value is NEVER shown in the panel — a password's, what is typed into a password or card field's edit box, empty or not, or into the edit box Chrome's tree opens on a custom textbox around a password in its shadow root, or a sensitive textarea's markup text in the live-announcement log or an editor's input panel; an untouched Enter in that edit box, or in a rich-text editor's in either tree, leaves the field as it was; Send-Tab/Esc behave or fail visibly"
 twin: D6
 notion: "https://app.notion.com/p/3aa1c354b0b5819e89f7de2edeb18fcb"
 ---
@@ -30,6 +30,22 @@ point is behaviour against handlers you didn't write.
      link or an image), open the editor's edit box from its row in the
      **In-page tree** (**Settings ▾** → **Show**) and press `Enter` without
      typing
+
+   - **5b** — an editor holding only an image, no text: a real editor you
+     pasted a single image into, or this, run in the page's DevTools console
+     before pressing **↻** to refresh the tree:
+
+     ```js
+     document.body.insertAdjacentHTML(
+       "beforeend",
+       '<div contenteditable="true" role="textbox" aria-label="Signature">' +
+         '<img alt="Signature" width="80" height="24" src="data:image/gif;base64,' +
+         'R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"></div>',
+     );
+     ```
+
+     In **Chrome's tree** (**Settings ▾** → **Show**), open the `Signature`
+     textbox's edit box from its row and press `Enter` without typing
 6. Focus a **password** field and type into it
    - **6a** — a sign-in page's password step while the field is still
      **empty**, as on Google's "Enter your password". In each tree
@@ -112,6 +128,9 @@ point is behaviour against handlers you didn't write.
   the editor as it was: its formatting, links and images are all still there.
   Before #519, that `Enter` typed the box's text back into the editor in place of
   its content, losing whatever wasn't text
+- **5b** — the editor's row shows no value, as an empty field's does, and its edit
+  box opens empty. `Enter` closes it and leaves the image in the editor. Before
+  #522, that `Enter` typed an empty value over the editor and deleted the image
 - **6** — the password value is **NEVER** displayed in the panel, in any view, at any
   time
 - **6a** — the edit box shows dots, not what you type, for both empty fields, as it
@@ -146,7 +165,10 @@ The panel writes to pages the user didn't build, which makes both halves risky.
   implementation silently no-ops on. The user sees "nothing happened" and blames the
   page. 5a is the opposite failure, a write nobody asked for: the edit box holds
   plain text, and a retype replaces an editor's whole content with it, so an
-  `Enter` that changed nothing in the box still changed the editor.
+  `Enter` that changed nothing in the box still changed the editor. 5b is the same
+  failure in Chrome's tree, where such a box opens empty instead: an editor that
+  holds no text, only an image, reads no value there, as an empty field does, so
+  an untouched `Enter` typed that empty value over it and deleted the image.
 - **Redaction** (6) is absolute and unconditional. There is no view, no debug mode,
   and no error path where a password value may appear. This is the same invariant the
   act path enforces (**R24**) — same rule, different surface.

@@ -24,10 +24,12 @@ export interface InputPanelState {
    */
   source?: "dom" | "native";
   /**
-   * Set only when `value` was substituted empty for a field whose real value
-   * is withheld (R1) — a DOM field's (see {@link domTextInputState}) or a
-   * native one's — or for a native field a retype cannot start from (an
-   * editor's content) — see `App.tsx`'s `handleNativeActivate`.
+   * Set when `value` was substituted empty for a field whose real value is
+   * withheld (R1) — a DOM field's (see {@link domTextInputState}) or a
+   * native one's — and on every native box that opens empty, since a native
+   * row doesn't show all its field holds: an editor's content can't be
+   * retyped from, and an editor holding only an image shows no value at
+   * all — see `App.tsx`'s `handleNativeActivate`.
    * Submitting with NO edit (still empty) cancels instead of dispatching:
    * without this, a click-through submit would silently blank the user's
    * real, still-live value on the page for a field they never touched. Any

@@ -29,6 +29,10 @@
  *    field, a field inside one) opened its retype panel empty, but only one
  *    reading `[redacted]` blocked the untouched Enter, so that Enter typed
  *    `""` over the editor's text and removed the fields inside it.
+ *  - A field nothing withholds that showed no value opened its box empty
+ *    with no block at all, as for an empty field. But Chromium gives an
+ *    editor holding only an image no value either, so the untouched Enter
+ *    typed `""` over it and deleted the image.
  *  - Activating a link through the native tree left the panel on a blank
  *    tree after the navigation it caused: `dispatchNativeAction`'s own
  *    post-action re-read got cancelled by the very `PAGE_NAVIGATED` its
@@ -231,6 +235,40 @@ test("an untouched Enter in a withheld field's empty edit box types nothing over
   await field.press("Enter");
   await expect(page.locator("#holder")).toHaveValue("");
   await expect(page.locator("#note")).toContainText("Pay by card");
+});
+
+test("an untouched Enter in the empty edit box of an editor holding only an image keeps the image", async ({
+  nav,
+}) => {
+  const page = await nav.showNative("native-empty-editor.html");
+  await nav.panel.getByRole("button", { name: "Expand all" }).click();
+
+  // Nothing withholds the editor's value, yet its row shows none: Chromium
+  // gives an editor that holds no text no value at all, as for an empty field.
+  const editor = nav.panel.getByRole("treeitem", { name: "Signature pad" });
+  await expect(editor).toBeVisible();
+  await expect(editor.locator(".sn-field-value")).toHaveCount(0);
+
+  const field = nav.panel.locator(".sn-input-panel-field");
+  await editor.getByTitle("Type (Enter)").click();
+  await expect(field).toHaveValue("");
+  // Unmasked, whether the box is an input or, for a field that takes lines
+  // as an editor does, a textarea, which has no `type` at all.
+  await expect(field).not.toHaveAttribute("type", "password");
+  await field.press("Enter");
+  await expect(field).toHaveCount(0);
+  await nav.panel.waitForTimeout(NO_ACT_WINDOW_MS);
+  await expect(page.locator("#signature-image")).toHaveCount(1);
+  // A hover's outline is an act of its own, so only typing counts.
+  const typed = (await nav.nativeActs()).filter((a) => a.action === "type");
+  expect(typed).toEqual([]);
+
+  // Typing and then clearing is still how a user empties it.
+  await editor.getByTitle("Type (Enter)").click();
+  await field.fill("x");
+  await field.fill("");
+  await field.press("Enter");
+  await expect(page.locator("#signature-image")).toHaveCount(0);
 });
 
 test("activating a link through the native tree re-reads the page it navigated to", async ({

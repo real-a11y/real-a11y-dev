@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Native empty editor</title>
+  </head>
+  <body>
+    <h1>Sign here</h1>
+
+    <!--
+      Nothing withholds this editor's value, yet Chrome's tree shows none:
+      Chromium gives a contenteditable textbox no value at all when it holds
+      no text, only an image. Its row reads like an empty field's, so its edit
+      box opens empty, and an untouched Enter there must cancel rather than
+      type "" over the image. Typing "" into it deleted the image.
+    -->
+    <div
+      id="signature"
+      role="textbox"
+      contenteditable="true"
+      aria-label="Signature pad"
+    >
+      <img
+        id="signature-image"
+        alt="Signature"
+        width="80"
+        height="24"
+        src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='24'%3E%3Cpath d='M4 18 C20 2 30 22 46 8 S70 16 76 6' stroke='navy' fill='none'/%3E%3C/svg%3E"
+      />
+    </div>
+  </body>
+</html>
