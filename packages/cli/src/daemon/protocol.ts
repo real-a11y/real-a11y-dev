@@ -49,3 +49,25 @@ export function encodeRpc(message: RpcMessage): string {
 export function decodeRpc(line: string): RpcMessage {
   return JSON.parse(line) as RpcMessage;
 }
+
+/**
+ * Reassemble newline-terminated lines from a socket's `data` chunks. Call the
+ * returned function with each chunk and iterate the complete, trimmed,
+ * non-empty lines it yields; a trailing partial line stays buffered for the
+ * next chunk.
+ *
+ * @internal
+ */
+export function createLineReader(): (chunk: Buffer) => Generator<string> {
+  let buffer = "";
+  return function* (chunk) {
+    buffer += chunk.toString("utf8");
+    let index: number;
+    while ((index = buffer.indexOf("\n")) >= 0) {
+      const line = buffer.slice(0, index).trim();
+      buffer = buffer.slice(index + 1);
+      if (!line) continue;
+      yield line;
+    }
+  };
+}

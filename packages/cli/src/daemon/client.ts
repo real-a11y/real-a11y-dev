@@ -26,6 +26,7 @@ import { CLI_VERSION } from "../version.js";
 import {
   type RpcRequest,
   type RpcResponse,
+  createLineReader,
   encodeRpc,
   decodeRpc,
 } from "./protocol.js";
@@ -192,7 +193,7 @@ export class DaemonClient {
       const socket = createConnection(this.socketPath);
       const stdout: string[] = [];
       const stderr: string[] = [];
-      let buffer = "";
+      const readLines = createLineReader();
       let connected = false;
 
       const clear = () => {
@@ -216,12 +217,7 @@ export class DaemonClient {
       });
 
       socket.on("data", (data) => {
-        buffer += data.toString("utf8");
-        let index: number;
-        while ((index = buffer.indexOf("\n")) >= 0) {
-          const line = buffer.slice(0, index).trim();
-          buffer = buffer.slice(index + 1);
-          if (!line) continue;
+        for (const line of readLines(data)) {
           let response: RpcResponse;
           try {
             response = decodeRpc(line) as RpcResponse;

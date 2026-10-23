@@ -38,6 +38,7 @@ import {
   type RpcMessage,
   type RpcRequest,
   type RpcStream,
+  createLineReader,
   encodeRpc,
   decodeRpc,
 } from "./protocol.js";
@@ -438,14 +439,9 @@ export class DaemonServer {
   private handleConnection(socket: Socket): void {
     this.sockets.add(socket);
     socket.on("close", () => this.sockets.delete(socket));
-    let buffer = "";
+    const readLines = createLineReader();
     socket.on("data", (data) => {
-      buffer += data.toString("utf8");
-      let index: number;
-      while ((index = buffer.indexOf("\n")) >= 0) {
-        const line = buffer.slice(0, index).trim();
-        buffer = buffer.slice(index + 1);
-        if (!line) continue;
+      for (const line of readLines(data)) {
         this.handleLine(line, socket).catch((err: unknown) => {
           this.log(`handler error: ${String(err)}`);
           socket.end();
