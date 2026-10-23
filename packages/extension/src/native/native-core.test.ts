@@ -1,4 +1,5 @@
 import {
+  indexNativeAX,
   SENSITIVE_AUTOCOMPLETE_TOKENS,
   type RawAXNameNode,
   type RawNativeAXNode,
@@ -26,11 +27,14 @@ import {
   fieldValueWithheld,
   rootIdOf,
   SYNTHETIC_ROOT_ID,
+  withheldFields,
+  withholdAboveWithheld,
   withholdInsideSensitive,
   controlledRegion,
   type CdpTransport,
   type EnrichedNativeNode,
   type FrameSession,
+  type PageFieldRead,
 } from "./native-core.js";
 import {
   cdpPageKeys,
@@ -5069,5 +5073,931 @@ describe("what stands in for a field with no node of its own", () => {
     expect(findNative(res.nodes, "LayoutTableCell")?.name).toBe("[redacted]");
     expect(JSON.stringify(res)).not.toContain(CARD);
     expect(readsOf(t)).toEqual([]);
+  });
+});
+
+/**
+ * A custom element that is a textbox itself — `role="textbox"`, or
+ * `ElementInternals`' `role` — around a password input in a shadow root of
+ * its own. The in-page read looks for a field in the element's light DOM
+ * only, and the page can't see into a closed root at all. Chromium's tree
+ * has the page as it is laid out, so the read withholds every candidate a
+ * withheld field sits in there (`withholdAboveWithheld`), counting a field
+ * with no row of its own by the markup its walk of the document found.
+ */
+describe("readNativeTree: a field in a host's shadow root", () => {
+  // Each closed root a test attaches, by its host: jsdom keeps none on the
+  // host, and the fake's walk finds them here.
+  const closedRoots = new Map<Element, ShadowRoot>();
+  beforeEach(() => {
+    document.body.innerHTML = "";
+    closedRoots.clear();
+  });
+
+  const CARD = "4111111111111111";
+
+  const closedRoot = (el: Element) => {
+    const root = el.attachShadow({ mode: "closed" });
+    closedRoots.set(el, root);
+    return root;
+  };
+
+  type AX = (idOf: (node: Node) => number) => RawAXNameNode[];
+
+  /**
+   * CDP over this test's jsdom document, as far as a native read uses it:
+   * `ax(idOf)` as the AX tree; `DOM.getDocument` describing the document as
+   * `pierce: true` does — with the closed roots, the `<slot>` that shows each
+   * of a host's elements (its root's unnamed one, here), a user-agent root
+   * holding `userAgent`'s part for a field, and a frame's document, but not
+   * `unwalked`, as if the page added it since; `DOM.resolveNode` to the node
+   * itself, but for `unresolvable`; `Runtime.callFunctionOn` running the
+   * source it is handed on that node, as the page would; and each frame of
+   * `frames`, read in this same session, by its owner and its own AX tree.
+   * Backend ids count from 100, so no AX node id is one.
+   */
+  function overJsdom(
+    ax: AX,
+    options: {
+      listable?: boolean;
+      unwalked?: Node;
+      unresolvable?: Node;
+      userAgent?: ReadonlyMap<Element, Element>;
+      frames?: ReadonlyMap<string, { owner: HTMLIFrameElement; ax: AX }>;
+    } = {},
+  ) {
+    const ids = new Map<Node, number>();
+    const byId = new Map<number, Node>();
+    const idOf = (node: Node): number => {
+      let id = ids.get(node);
+      if (id === undefined) {
+        id = 100 + ids.size;
+        ids.set(node, id);
+        byId.set(id, node);
+      }
+      return id;
+    };
+    const rootOf = (el: Element) => el.shadowRoot ?? closedRoots.get(el);
+    const toCdp = (node: Node): CdpDomNode => {
+      const out: CdpDomNode = {
+        nodeType: node.nodeType,
+        backendNodeId: idOf(node),
+      };
+      if (node.nodeType === Node.ELEMENT_NODE) {
+        const el = node as HTMLElement;
+        out.localName = el.localName;
+        const attributes = [...el.attributes].flatMap((a) => [a.name, a.value]);
+        if (attributes.length > 0) out.attributes = attributes;
+        const host = el.parentElement;
+        const slot = host && rootOf(host)?.querySelector("slot:not([name])");
+        if (slot) out.assignedSlot = { backendNodeId: idOf(slot) };
+        const root = rootOf(el);
+        const part = options.userAgent?.get(el);
+        if (root) {
+          out.shadowRoots = [{ ...toCdp(root), shadowRootType: root.mode }];
+        } else if (part) {
+          out.shadowRoots = [
+            {
+              nodeType: Node.DOCUMENT_FRAGMENT_NODE,
+              backendNodeId: idOf(part.ownerDocument.createDocumentFragment()),
+              shadowRootType: "user-agent",
+              children: [toCdp(part)],
+            },
+          ];
+        }
+        const frame = (el as HTMLIFrameElement).contentDocument;
+        if (el.localName === "iframe" && frame) {
+          out.contentDocument = toCdp(frame);
+        }
+      }
+      const children = [...node.childNodes]
+        .filter((child) => child !== options.unwalked)
+        .map(toCdp);
+      if (children.length > 0) out.children = children;
+      return out;
+    };
+    const t = new FakeTransport((method, params) => {
+      const p = (params ?? {}) as Record<string, unknown>;
+      const frame =
+        typeof p["frameId"] === "string"
+          ? options.frames?.get(p["frameId"])
+          : undefined;
+      if (method === "Page.getFrameTree" && options.frames) {
+        return {
+          frameTree: {
+            frame: { id: "TOP" },
+            childFrames: [...options.frames.keys()].map((id) => ({
+              frame: { id },
+            })),
+          },
+        };
+      }
+      if (method === "DOM.getFrameOwner") {
+        return frame ? { backendNodeId: idOf(frame.owner) } : {};
+      }
+      if (method === "Accessibility.getFullAXTree") {
+        return { nodes: (frame?.ax ?? ax)(idOf) };
+      }
+      if (method === "DOM.getDocument") {
+        if (options.listable === false) throw new Error("No node found");
+        return { root: toCdp(document) };
+      }
+      if (method === "DOM.resolveNode") {
+        const node = byId.get(p["backendNodeId"] as number);
+        return node && node !== options.unresolvable
+          ? { object: { objectId: `obj-${idOf(node)}` } }
+          : {};
+      }
+      if (method === "Runtime.callFunctionOn") {
+        const source = String(p["functionDeclaration"]);
+        const fn = new Function(`return (${source})`)() as (
+          this: Node | undefined,
+        ) => unknown;
+        const target = byId.get(
+          Number(String(p["objectId"]).slice("obj-".length)),
+        );
+        return { result: { value: fn.call(target) } };
+      }
+      return {};
+    });
+    return { t, idOf };
+  }
+
+  function input(attributes: Record<string, string>, value = "") {
+    const field = document.createElement("input");
+    for (const [name, v] of Object.entries(attributes)) {
+      field.setAttribute(name, v);
+    }
+    field.value = value;
+    return field;
+  }
+  /** `<x-field role="textbox" aria-label=label>` holding `field` in a
+   *  closed shadow root. */
+  function host(label: string, field: Element, doc = document) {
+    const el = doc.createElement("x-field");
+    el.setAttribute("role", "textbox");
+    el.setAttribute("aria-label", label);
+    const root = closedRoot(el);
+    root.appendChild(field);
+    doc.body.appendChild(el);
+    return { el, root, field };
+  }
+  /** `field` one element below a wrapper with `attributes`. */
+  function below(field: Element, attributes: Record<string, string>) {
+    const wrapper = field.ownerDocument.createElement("div");
+    for (const [name, v] of Object.entries(attributes)) {
+      wrapper.setAttribute(name, v);
+    }
+    wrapper.appendChild(field);
+    return wrapper;
+  }
+  /** `<x-slotting>` holding `slotted`, whose closed root is
+   *  `<div role=textbox aria-label=label><slot></slot></div>`: in the
+   *  document, `slotted` is the host's; as laid out, it sits in the div. */
+  function slotting(label: string, slotted: Element) {
+    const el = document.createElement("x-slotting");
+    el.appendChild(slotted);
+    const box = document.createElement("div");
+    box.setAttribute("role", "textbox");
+    box.setAttribute("aria-label", label);
+    box.appendChild(document.createElement("slot"));
+    closedRoot(el).appendChild(box);
+    document.body.appendChild(el);
+    return { el: box, field: slotted };
+  }
+  /** A name from `aria-label`, as Chromium traces it. */
+  const labelled = (label: string) => ({
+    value: label,
+    sources: [
+      { type: "attribute", attribute: "aria-label", value: { value: label } },
+    ],
+  });
+  /** A name and its `labelledby` relation, from `aria-labelledby` naming
+   *  `target`. */
+  const labelledBy = (text: string, target: number) => ({
+    name: {
+      value: text,
+      sources: [
+        {
+          type: "relatedElement",
+          attribute: "aria-labelledby",
+          value: { value: text },
+        },
+      ],
+    },
+    properties: [
+      {
+        name: "labelledby",
+        value: { relatedNodes: [{ backendDOMNodeId: target }] },
+      },
+    ],
+  });
+  /** One node of the AX tree, backed by `node`. Its id is `n<nodeId>`. */
+  const axNode = (
+    idOf: (node: Node) => number,
+    node: Node,
+    nodeId: string,
+    role: string,
+    extra: Partial<RawAXNameNode> = {},
+  ): RawAXNameNode => ({
+    nodeId: `n${nodeId}`,
+    backendDOMNodeId: idOf(node),
+    role: { value: role },
+    ...extra,
+  });
+  const under = (parent: string) => ({ parentId: `n${parent}` });
+  const kids = (...ids: string[]) => ({ childIds: ids.map((id) => `n${id}`) });
+  /** A host whose own row sits over a field's (or the field's ignored
+   *  node, for one hidden from assistive technology). */
+  const hostRows = (
+    idOf: (node: Node) => number,
+    at: string,
+    parent: string,
+    { el, field }: { el: Element; field: Element },
+    label: string,
+    fieldRow: Partial<RawAXNameNode>,
+  ): RawAXNameNode[] => [
+    axNode(idOf, el, at, "textbox", {
+      ...under(parent),
+      name: labelled(label),
+      ...kids(`${at}f`),
+    }),
+    axNode(idOf, field, `${at}f`, "textbox", { ...under(at), ...fieldRow }),
+  ];
+  const hidden = { role: { value: "none" }, ignored: true };
+
+  /** A password host, an ordinary one, and an email field of the page's,
+   *  as Chromium's tree has them: each host a textbox around its field. */
+  function page(): AX {
+    const password = host("Password", input({ type: "password" }, "hunter2"));
+    const name = host("Name", input({}, "Jane"));
+    const email = input({ "aria-label": "Email" }, "ada@example.com");
+    document.body.appendChild(email);
+    return (idOf) => [
+      axNode(idOf, document, "1", "RootWebArea", kids("2", "4", "6")),
+      ...hostRows(idOf, "2", "1", password, "Password", {
+        value: { value: "•••••••" },
+      }),
+      ...hostRows(idOf, "4", "1", name, "Name", { value: { value: "Jane" } }),
+      axNode(idOf, email, "6", "textbox", {
+        ...under("1"),
+        name: labelled("Email"),
+        value: { value: "ada@example.com" },
+      }),
+    ];
+  }
+
+  const row = (nodes: EnrichedNativeNode[], name: string, role = "textbox") =>
+    findNative(nodes, role, name)!;
+  const inside = (nodes: EnrichedNativeNode[], name: string) => {
+    const host = row(nodes, name);
+    return nodes.find((n) => host.childIds.includes(n.id))!;
+  };
+
+  it("withholds a host whose closed shadow root holds a password, and only that host", async () => {
+    const { nodes } = await readNativeTree(overJsdom(page()).t);
+
+    expect(row(nodes, "Password").valueWithheld).toBe(true);
+    expect(row(nodes, "Password").value).toBeUndefined();
+    // The password's own row says it once.
+    expect(inside(nodes, "Password").value).toBe("[redacted]");
+
+    // An ordinary host, and the page's own field, are as they were.
+    expect(row(nodes, "Name").valueWithheld).toBe(false);
+    expect(inside(nodes, "Name").value).toBe("Jane");
+    expect(row(nodes, "Email").value).toBe("ada@example.com");
+    expect(JSON.stringify(nodes)).not.toContain("hunter2");
+  });
+
+  it("withholds what sits in a host withheld for its field, as in an editor around one", async () => {
+    // A name field beside the password in the host's root shows no value
+    // either, as a node inside a sensitive one never does.
+    const both = host("Sign in", input({ type: "password" }, "hunter2"));
+    const name = input({ "aria-label": "Name" }, "Jane");
+    both.root.appendChild(name);
+    const ax: AX = (idOf) => [
+      axNode(idOf, document, "1", "RootWebArea", kids("2")),
+      axNode(idOf, both.el, "2", "textbox", {
+        ...under("1"),
+        name: labelled("Sign in"),
+        ...kids("2f", "2n"),
+      }),
+      axNode(idOf, both.field, "2f", "textbox", {
+        ...under("2"),
+        value: { value: "•••••••" },
+      }),
+      axNode(idOf, name, "2n", "textbox", {
+        ...under("2"),
+        name: labelled("Name"),
+        value: { value: "Jane" },
+      }),
+    ];
+    const { nodes } = await readNativeTree(overJsdom(ax).t);
+    expect(row(nodes, "Sign in").valueWithheld).toBe(true);
+    expect(row(nodes, "Name").valueWithheld).toBe(true);
+    expect(row(nodes, "Name").value).toBeUndefined();
+    expect(JSON.stringify(nodes)).not.toContain("Jane");
+  });
+
+  it("hands the page nothing new: no argument, and no shadow root resolved", async () => {
+    const { t, idOf } = overJsdom(page());
+    await readNativeTree(t);
+
+    for (const call of t.calls) {
+      if (call.method === "Runtime.callFunctionOn") {
+        expect(call.params).not.toHaveProperty("arguments");
+      }
+    }
+    const resolved = t.calls
+      .filter((c) => c.method === "DOM.resolveNode")
+      .map((c) => (c.params as { backendNodeId: number }).backendNodeId);
+    expect(closedRoots.size).toBe(2);
+    for (const root of closedRoots.values()) {
+      expect(resolved).not.toContain(idOf(root));
+    }
+  });
+
+  it("withholds a host around a field with no row of its own, by the field's markup", async () => {
+    // Each field is `aria-hidden`: Chromium keeps an ignored node for it
+    // under the host, and nothing reads it. Every token counts, in a
+    // textarea and a select too, and so does every `type` or `autocomplete`
+    // attribute, in either order: a namespaced one goes by the same name in
+    // CDP's list, so which one the field goes by can't be told there.
+    const doubled = input({}, "pw");
+    doubled.setAttributeNS("urn:x", "type", "text");
+    doubled.setAttributeNS(null, "type", "password");
+    expect(doubled.type).toBe("password");
+    const reversed = input({}, "pw");
+    reversed.setAttributeNS("urn:x", "type", "password");
+    reversed.setAttributeNS(null, "type", "text");
+    const twice = input({}, CARD);
+    twice.setAttributeNS("urn:x", "autocomplete", "off");
+    twice.setAttributeNS(null, "autocomplete", "cc-number");
+    const textarea = document.createElement("textarea");
+    textarea.setAttribute("autocomplete", "one-time-code");
+    const select = document.createElement("select");
+    select.setAttribute("autocomplete", "cc-exp-month");
+    const hosts = [
+      host("Card", input({ autocomplete: "cc-number" }, CARD)),
+      host("Code", textarea),
+      host("Month", select),
+      host("Doubled", doubled),
+      host("Reversed", reversed),
+      host("Autocomplete twice", twice),
+      host("Plain", input({}, "Jane")),
+    ];
+    for (const { field } of hosts) field.setAttribute("aria-hidden", "true");
+    const ax: AX = (idOf) => [
+      axNode(idOf, document, "1", "RootWebArea", {
+        ...kids(...hosts.map((_, i) => `${10 + i}`)),
+      }),
+      ...hosts.flatMap((h, i) =>
+        hostRows(idOf, `${10 + i}`, "1", h, h.el.getAttribute("aria-label")!, {
+          ...hidden,
+        }),
+      ),
+    ];
+    const { nodes } = await readNativeTree(overJsdom(ax).t);
+    for (const name of [
+      "Card",
+      "Code",
+      "Month",
+      "Doubled",
+      "Reversed",
+      "Autocomplete twice",
+    ]) {
+      expect(row(nodes, name).valueWithheld, name).toBe(true);
+    }
+    expect(row(nodes, "Plain").valueWithheld).toBe(false);
+  });
+
+  it("withholds a host around a field with no node at all, by the document", async () => {
+    // Chromium keeps an ignored node for a hidden element at a shadow root's
+    // top or in a slot, and none for one below it: here an `aria-hidden` or
+    // `display: none` wrapper in a closed root, and an element a slot shows,
+    // with a hidden password in it. So only the document says where each
+    // field is. Each host's row is all the tree has.
+    const hosts = [
+      host(
+        "Deeper",
+        below(input({ type: "password" }, "pw"), { "aria-hidden": "true" }),
+      ),
+      host(
+        "Undisplayed",
+        below(input({ type: "password" }, "pw"), { style: "display: none" }),
+      ),
+      slotting(
+        "Slotted deeper",
+        below(input({ type: "password", "aria-hidden": "true" }, "pw"), {}),
+      ),
+      host("Plain deeper", below(input({}, "Jane"), { "aria-hidden": "true" })),
+    ];
+    const ax: AX = (idOf) => [
+      axNode(idOf, document, "1", "RootWebArea", {
+        ...kids(...hosts.map((_, i) => `${10 + i}`)),
+      }),
+      ...hosts.map((h, i) =>
+        axNode(idOf, h.el, `${10 + i}`, "textbox", {
+          ...under("1"),
+          name: labelled(h.el.getAttribute("aria-label")!),
+        }),
+      ),
+    ];
+    const { nodes } = await readNativeTree(overJsdom(ax).t);
+    for (const name of ["Deeper", "Undisplayed", "Slotted deeper"]) {
+      expect(row(nodes, name).valueWithheld, name).toBe(true);
+    }
+    expect(row(nodes, "Plain deeper").valueWithheld).toBe(false);
+  });
+
+  it("withholds a row Chromium's tree puts a withheld field under, wherever the document has it", async () => {
+    // <div role=combobox aria-owns="cc"></div> … <input id=cc …>: no part of
+    // the div in the document, under it in Chromium's tree, which reads the
+    // combobox's value off it (Chromium 153 moves nothing under a textbox).
+    // A field with a row of its own is what its read says; one with only an
+    // ignored node, what its markup says; and one with no node at all (a
+    // disabled `role="none"` one), what stands in for it: here, the inner
+    // box drawing a password's mask.
+    const owner = (label: string) => {
+      const el = document.createElement("div");
+      el.setAttribute("role", "combobox");
+      el.setAttribute("aria-label", label);
+      return el;
+    };
+    const labels = [
+      "Owns a card field",
+      "Owns an ignored card field",
+      "Owns what stands in for a password",
+      "Owns a card field, and hints",
+    ];
+    const owners = labels.map(owner);
+    const card = input({ autocomplete: "cc-number" }, CARD);
+    const ignored = input(
+      { autocomplete: "cc-number", role: "none", disabled: "" },
+      "5555444433332222",
+    );
+    const password = input(
+      { type: "password", role: "none", disabled: "" },
+      "hunter2",
+    );
+    const box = document.createElement("div");
+    box.textContent = "•••••••";
+    // An input combobox keeps its page-authored hint, as a withheld field
+    // does: no value of the field's is in it.
+    const hinting = input({
+      role: "combobox",
+      "aria-label": labels[3]!,
+      placeholder: "Search saved cards",
+    });
+    const hinted = input({ autocomplete: "cc-number" }, CARD);
+    document.body.append(...owners, hinting, card, ignored, password, hinted);
+    const ax: AX = (idOf) => [
+      axNode(idOf, document, "1", "RootWebArea", kids("2", "3", "4", "5")),
+      axNode(idOf, hinting, "5", "combobox", {
+        ...under("1"),
+        name: labelled(labels[3]!),
+        ...kids("5f"),
+      }),
+      axNode(idOf, hinted, "5f", "textbox", {
+        ...under("5"),
+        value: { value: CARD },
+      }),
+      axNode(idOf, owners[0]!, "2", "combobox", {
+        ...under("1"),
+        name: labelled(labels[0]!),
+        value: { value: CARD },
+        ...kids("2f"),
+      }),
+      axNode(idOf, card, "2f", "textbox", {
+        ...under("2"),
+        value: { value: CARD },
+      }),
+      axNode(idOf, owners[1]!, "3", "combobox", {
+        ...under("1"),
+        name: labelled(labels[1]!),
+        value: { value: "5555444433332222" },
+        ...kids("3f"),
+      }),
+      axNode(idOf, ignored, "3f", "none", { ...under("3"), ignored: true }),
+      axNode(idOf, owners[2]!, "4", "combobox", {
+        ...under("1"),
+        name: labelled(labels[2]!),
+        ...kids("4s"),
+      }),
+      axNode(idOf, box, "4s", "generic", { ...under("4"), ...kids("4t") }),
+      axNode(idOf, box.firstChild!, "4t", "StaticText", {
+        ...under("4s"),
+        name: { value: "•••••••" },
+      }),
+    ];
+    const { nodes } = await readNativeTree(
+      overJsdom(ax, { userAgent: new Map([[password, box]]) }).t,
+    );
+    for (const label of labels) {
+      const combobox = row(nodes, label, "combobox");
+      expect(combobox.valueWithheld, label).toBe(true);
+      expect(combobox.value, label).toBeUndefined();
+    }
+    expect(row(nodes, labels[3]!, "combobox").placeholder).toBe(
+      "Search saved cards",
+    );
+    const wire = JSON.stringify(nodes);
+    expect(wire).not.toContain(CARD);
+    expect(wire).not.toContain("5555444433332222");
+  });
+
+  it("withholds a host around a field whose read failed", async () => {
+    // Not classified is withheld, and withholds what it sits in: it may be
+    // a password.
+    const unread = host("Unread", input({}, "Jane"));
+    const ax: AX = (idOf) => [
+      axNode(idOf, document, "1", "RootWebArea", kids("2")),
+      ...hostRows(idOf, "2", "1", unread, "Unread", {
+        value: { value: "Jane" },
+      }),
+    ];
+    const { nodes } = await readNativeTree(
+      overJsdom(ax, { unresolvable: unread.field }).t,
+    );
+    expect(inside(nodes, "Unread").valueWithheld).toBe(true);
+    expect(row(nodes, "Unread").valueWithheld).toBe(true);
+    expect(JSON.stringify(nodes)).not.toContain("Jane");
+  });
+
+  it("withholds a row the walk never saw, which the page added since", async () => {
+    // As for a frame in the page's renderer, read after the session's walk:
+    // nothing says what a host the walk missed holds.
+    const late = host("Late", below(input({ type: "password" }, "pw"), {}));
+    const seen = host("Seen", input({}, "Jane"));
+    const ax: AX = (idOf) => [
+      axNode(idOf, document, "1", "RootWebArea", kids("2", "3")),
+      axNode(idOf, late.el, "2", "textbox", {
+        ...under("1"),
+        name: labelled("Late"),
+      }),
+      ...hostRows(idOf, "3", "1", seen, "Seen", { value: { value: "Jane" } }),
+    ];
+    const { nodes } = await readNativeTree(
+      overJsdom(ax, { unwalked: late.el }).t,
+    );
+    expect(row(nodes, "Late").valueWithheld).toBe(true);
+    expect(row(nodes, "Seen").valueWithheld).toBe(false);
+    expect(inside(nodes, "Seen").value).toBe("Jane");
+  });
+
+  it("keeps the name of a host labelled by its own content withheld", async () => {
+    // <x-field aria-labelledby=itself>: Chromium names it after what it
+    // holds, the card field's number included. The card field withholds
+    // that name; the host, withheld for the card field, is no field of its
+    // own to pass its own label by.
+    const card = host("", input({ autocomplete: "cc-number" }, CARD));
+    card.el.removeAttribute("aria-label");
+    card.el.id = "card-host";
+    card.el.setAttribute("aria-labelledby", "card-host");
+    const ax: AX = (idOf) => [
+      axNode(idOf, document, "1", "RootWebArea", kids("2")),
+      axNode(idOf, card.el, "2", "textbox", {
+        ...under("1"),
+        ...labelledBy(CARD, idOf(card.el)),
+        ...kids("2f"),
+      }),
+      axNode(idOf, card.field, "2f", "textbox", {
+        ...under("2"),
+        value: { value: CARD },
+      }),
+    ];
+    const { nodes } = await readNativeTree(overJsdom(ax).t);
+    expect(row(nodes, "[redacted]").valueWithheld).toBe(true);
+    expect(JSON.stringify(nodes)).not.toContain(CARD);
+  });
+
+  it("keeps the name a field in a host has from a label beside it", async () => {
+    // <span id=caption>Card number</span><input aria-labelledby=caption>,
+    // both in the host's root: the label holds no field, so the field keeps
+    // its name, though the host around both is withheld.
+    const card = host(
+      "Card",
+      input({ autocomplete: "cc-number", "aria-labelledby": "caption" }, CARD),
+    );
+    const caption = document.createElement("span");
+    caption.id = "caption";
+    caption.textContent = "Card number";
+    card.root.insertBefore(caption, card.field);
+    const ax: AX = (idOf) => [
+      axNode(idOf, document, "1", "RootWebArea", kids("2")),
+      axNode(idOf, card.el, "2", "textbox", {
+        ...under("1"),
+        name: labelled("Card"),
+        ...kids("2c", "2f"),
+      }),
+      axNode(idOf, caption, "2c", "generic", { ...under("2") }),
+      axNode(idOf, card.field, "2f", "textbox", {
+        ...under("2"),
+        ...labelledBy("Card number", idOf(caption)),
+        value: { value: CARD },
+      }),
+    ];
+    const { nodes } = await readNativeTree(overJsdom(ax).t);
+    expect(row(nodes, "Card").valueWithheld).toBe(true);
+    expect(row(nodes, "Card number").value).toBe("[redacted]");
+  });
+
+  it("withholds a host in a frame by the frame's own fields, and nothing outside it", async () => {
+    // A textbox around an <iframe> in the page's renderer. The frame is read
+    // in this session, through the session's walk, as a document of its own:
+    // its password doesn't withhold the textbox around it, while its own host
+    // around a password below a hidden wrapper is withheld, and an ordinary
+    // one is not.
+    const outer = document.createElement("div");
+    outer.setAttribute("role", "textbox");
+    const frame = document.createElement("iframe");
+    outer.appendChild(frame);
+    document.body.appendChild(outer);
+    const framed = frame.contentDocument!;
+    const password = framed.createElement("input");
+    password.setAttribute("type", "password");
+    framed.body.appendChild(password);
+    const field = (type?: string) => {
+      const el = framed.createElement("input");
+      if (type) el.setAttribute("type", type);
+      el.value = "pw";
+      return below(el, { "aria-hidden": "true" });
+    };
+    const secret = host("In the frame", field("password"), framed);
+    const plain = host("Plain in the frame", field(), framed);
+    const ax: AX = (idOf) => [
+      axNode(idOf, document, "1", "RootWebArea", kids("2")),
+      axNode(idOf, outer, "2", "textbox", {
+        ...under("1"),
+        name: labelled("Framed"),
+        ...kids("3"),
+      }),
+      axNode(idOf, frame, "3", "Iframe", under("2")),
+    ];
+    const frameAx: AX = (idOf) => [
+      axNode(idOf, framed, "10", "RootWebArea", kids("11", "12")),
+      axNode(idOf, secret.el, "11", "textbox", {
+        ...under("10"),
+        name: labelled("In the frame"),
+      }),
+      axNode(idOf, plain.el, "12", "textbox", {
+        ...under("10"),
+        name: labelled("Plain in the frame"),
+      }),
+    ];
+    const { nodes } = await readNativeTree(
+      overJsdom(ax, {
+        frames: new Map([["SAME", { owner: frame, ax: frameAx }]]),
+      }).t,
+    );
+    expect(row(nodes, "Framed").valueWithheld).toBe(false);
+    expect(row(nodes, "In the frame").valueWithheld).toBe(true);
+    expect(row(nodes, "Plain in the frame").valueWithheld).toBe(false);
+  });
+
+  it("keeps each host to its own rows when the document can't be walked", async () => {
+    // With no walk, a field with a row of its own is still read. An ignored
+    // node beside it (a decorative icon) withholds nothing, and nor does a
+    // box of text: with no walk, any may be a control's inner box, so it
+    // withholds the names around it, never the rows above it.
+    const ax = page();
+    const decorated = host("Decorated", input({}, "Jane"));
+    const icon = document.createElement("span");
+    icon.setAttribute("aria-hidden", "true");
+    const hint = document.createElement("div");
+    hint.textContent = "3 of 20";
+    decorated.root.append(icon, hint);
+    const withDecorated: AX = (idOf) => {
+      const nodes = ax(idOf);
+      nodes[0]!.childIds = [...nodes[0]!.childIds!, "n8"];
+      return [
+        ...nodes,
+        axNode(idOf, decorated.el, "8", "textbox", {
+          ...under("1"),
+          name: labelled("Decorated"),
+          ...kids("8f", "8i", "8h"),
+        }),
+        axNode(idOf, decorated.field, "8f", "textbox", {
+          ...under("8"),
+          value: { value: "Jane" },
+        }),
+        axNode(idOf, icon, "8i", "none", { ...under("8"), ignored: true }),
+        axNode(idOf, hint, "8h", "generic", { ...under("8"), ...kids("8t") }),
+        axNode(idOf, hint.firstChild!, "8t", "StaticText", {
+          ...under("8h"),
+          name: { value: "3 of 20" },
+        }),
+      ];
+    };
+    const { nodes } = await readNativeTree(
+      overJsdom(withDecorated, { listable: false }).t,
+    );
+    expect(row(nodes, "Password").valueWithheld).toBe(true);
+    for (const name of ["Name", "Decorated"]) {
+      expect(row(nodes, name).valueWithheld, name).toBe(false);
+      expect(inside(nodes, name).value, name).toBe("Jane");
+    }
+    expect(row(nodes, "Email").value).toBe("ada@example.com");
+  });
+
+  it("reads the document again on each read", async () => {
+    // The walk belongs to one read: a field made sensitive since the last
+    // one counts on the next.
+    const later = host("Later", input({ "aria-hidden": "true" }, "pw"));
+    const ax: AX = (idOf) => [
+      axNode(idOf, document, "1", "RootWebArea", kids("2")),
+      ...hostRows(idOf, "2", "1", later, "Later", hidden),
+    ];
+    const { t } = overJsdom(ax);
+    expect(row((await readNativeTree(t)).nodes, "Later").valueWithheld).toBe(
+      false,
+    );
+    later.field.setAttribute("type", "password");
+    expect(row((await readNativeTree(t)).nodes, "Later").valueWithheld).toBe(
+      true,
+    );
+  });
+
+  it("leaves a field above its own parts to its own read", async () => {
+    // A date input's spinbuttons sit in its user-agent root. A part whose
+    // read failed says nothing about anything the field sits in, and the
+    // field above it is classified by its own read.
+    const date = input({ type: "date", "aria-label": "Due" }, "2026-10-18");
+    document.body.appendChild(date);
+    const month = document.createElement("div");
+    const ax: AX = (idOf) => [
+      axNode(idOf, document, "1", "RootWebArea", kids("2")),
+      axNode(idOf, date, "2", "Date", {
+        ...under("1"),
+        name: labelled("Due"),
+        value: { value: "2026-10-18" },
+        ...kids("3"),
+      }),
+      axNode(idOf, month, "3", "spinbutton", {
+        ...under("2"),
+        name: labelled("Month"),
+        value: { value: 10 },
+      }),
+    ];
+    const { nodes } = await readNativeTree(
+      overJsdom(ax, {
+        userAgent: new Map([[date, month]]),
+        unresolvable: month,
+      }).t,
+    );
+    const due = findNative(nodes, "Date", "Due")!;
+    expect(due.valueWithheld).toBe(false);
+    expect(due.value).toBe("2026-10-18");
+  });
+});
+
+describe("withholdAboveWithheld", () => {
+  // 1 > 2 > 3 > 4, and 1 > 5; backend ids 101–105. Rows 1, 2, 4 and 5 were
+  // read, and 3 wasn't (a `<div>`).
+  const parents: Record<number, number | undefined> = {
+    2: 1,
+    3: 2,
+    4: 3,
+    5: 1,
+  };
+  const nodes = [1, 2, 3, 4, 5].map((n): RawAXNameNode => ({
+    nodeId: `n${n}`,
+    backendDOMNodeId: 100 + n,
+    ...(parents[n] ? { parentId: `n${parents[n]}` } : {}),
+  }));
+  const index = indexNativeAX(nodes);
+  const rawById = new Map(
+    nodes.map((n) => [`ax-dom-${n.backendDOMNodeId}`, n]),
+  );
+  const verdicts = (leaf: PageFieldRead) =>
+    new Map<string, PageFieldRead>([
+      ["ax-dom-101", { classified: true }],
+      ["ax-dom-102", { classified: true, valuetext: "Loud" }],
+      ["ax-dom-104", leaf],
+      ["ax-dom-105", { classified: true }],
+    ]);
+  const walked = {
+    seen: new Set([101, 102, 103, 104, 105]),
+    holdsSensitive: new Set<number>(),
+  };
+
+  it("withholds every read above a field, past nodes that weren't read", () => {
+    const leaf = { classified: true, sensitive: true, redacted: true };
+    const above = verdicts(leaf);
+    expect(
+      withholdAboveWithheld(above, rawById, index, new Set(["n4"]), walked),
+    ).toEqual(["ax-dom-101", "ax-dom-102"]);
+    // Each read's own verdict is as it was.
+    expect(above).toEqual(verdicts(leaf));
+  });
+
+  it("withholds nothing below a field, or beside one", () => {
+    expect(
+      withholdAboveWithheld(
+        verdicts({ classified: true }),
+        rawById,
+        index,
+        new Set(["n2"]),
+        walked,
+      ),
+    ).toEqual(["ax-dom-101"]);
+  });
+
+  it("climbs from every field", () => {
+    expect(
+      withholdAboveWithheld(
+        verdicts({ classified: true }),
+        rawById,
+        index,
+        new Set(["n5", "n4"]),
+        walked,
+      ),
+    ).toEqual(["ax-dom-101", "ax-dom-102"]);
+  });
+
+  it("withholds a read whose element the document says holds a field", () => {
+    expect(
+      withholdAboveWithheld(
+        verdicts({ classified: true }),
+        rawById,
+        index,
+        new Set(),
+        { ...walked, holdsSensitive: new Set([102]) },
+      ),
+    ).toEqual(["ax-dom-102"]);
+  });
+
+  it("withholds a read whose element the walk never saw, but only with a walk", () => {
+    const unseen = { ...walked, seen: new Set([101, 102, 103, 104]) };
+    expect(
+      withholdAboveWithheld(
+        verdicts({ classified: true }),
+        rawById,
+        index,
+        new Set(),
+        unseen,
+      ),
+    ).toEqual(["ax-dom-105"]);
+    expect(
+      withholdAboveWithheld(
+        verdicts({ classified: true }),
+        rawById,
+        index,
+        new Set(),
+        undefined,
+      ),
+    ).toEqual([]);
+  });
+
+  it("changes nothing with no field", () => {
+    expect(
+      withholdAboveWithheld(
+        verdicts({ classified: true }),
+        rawById,
+        index,
+        new Set(),
+        walked,
+      ),
+    ).toEqual([]);
+  });
+});
+
+describe("withheldFields", () => {
+  const nodes = [1, 2, 3, 4, 5].map((n): RawAXNameNode => ({
+    nodeId: `n${n}`,
+    backendDOMNodeId: 100 + n,
+  }));
+  const rawById = new Map(
+    nodes.map((n) => [`ax-dom-${n.backendDOMNodeId}`, n]),
+  );
+  // 1 is withheld, 2 is withheld but a part of 1's field (in its user-agent
+  // root), and 3 is classified as not sensitive.
+  const verdicts = new Map<string, PageFieldRead>([
+    ["ax-dom-101", { classified: true, sensitive: true }],
+    ["ax-dom-102", {}],
+    ["ax-dom-103", { classified: true }],
+  ]);
+  // What stands in for a control the walk names, one drawing a password's
+  // mask, and a box of text the walk can't name.
+  const standIns = [
+    { host: 104, nodeIds: ["n9"], masked: false },
+    { host: undefined, nodeIds: ["n8"], masked: true },
+    { host: undefined, nodeIds: ["n7"], masked: false },
+  ];
+
+  it("takes each withheld read but a part of a field, each stand-in for a control or a mask, and each field the walk says is sensitive", () => {
+    const internals = {
+      hosts: new Map([[102, 101]]),
+      sensitive: new Set([105]),
+    };
+    expect([
+      ...withheldFields(verdicts, rawById, standIns, nodes, internals),
+    ]).toEqual(["n1", "n9", "n8", "n5"]);
+  });
+
+  it("takes the reads and the stand-ins it can, with no walk", () => {
+    expect([
+      ...withheldFields(verdicts, rawById, standIns, nodes, undefined),
+    ]).toEqual(["n1", "n2", "n9", "n8"]);
   });
 });

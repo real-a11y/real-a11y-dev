@@ -37,7 +37,9 @@
  * Field VALUES follow ADR-0001: a node's value is what a screen reader
  * announces — Chromium's own AX value — and a sensitive field's is withheld.
  * Sensitivity is classified in-page by `pageReadValue` before any value is
- * used, and a node it could not classify shows none (see `fieldFacets`).
+ * used, and a node it could not classify shows none (see `fieldFacets`). A
+ * node a withheld field sits in shows none either, wherever the page keeps
+ * the field (see `withholdAboveWithheld`).
  */
 
 import {
@@ -54,12 +56,14 @@ import {
   holdsUnclassifiedValue,
   indexNativeAX,
   isNativePasswordMask,
+  isSensitiveFieldAttributes,
   NATIVE_AX_CHOICE_STATES,
   nativeAXStateValue,
   normalizeNativeAX,
   opensFieldInternals,
   REDACTED_VALUE,
   serializeNativeAX,
+  valueRegions,
   withholdFieldInternalText,
   withholdSensitiveFieldNames,
   type A11yInfo,
@@ -397,10 +401,11 @@ export type EnrichedNativeNode = NativeAXNode &
     /**
      * Whether this field's value (and which of its options is chosen) must
      * be withheld from anything shown: true for a sensitive field, for one
-     * inside a sensitive field, and for one the in-page read could not
-     * classify. False only for a field classified as not sensitive. Absent
-     * on a node that was never read as a field, which a consumer treats as
-     * withheld too — see {@link fieldValueWithheld}.
+     * inside a sensitive field or around a withheld one, and for one the
+     * in-page read could not classify. False only for a field classified as
+     * not sensitive, with no withheld field in it. Absent on a node that was
+     * never read as a field, which a consumer treats as withheld too — see
+     * {@link fieldValueWithheld}.
      */
     valueWithheld?: boolean;
     /** Its element's number in its document's walk (`page-keys.ts`), which
@@ -710,6 +715,99 @@ export function fieldValueWithheld(read: PageFieldRead): boolean {
 }
 
 /**
+ * The candidates a withheld field sits in, which are withheld for it, as a
+ * node around a sensitive field always is: the field's value may be part of
+ * its own, and what is typed into its edit box may be the field's. The
+ * in-page read looks for a field in the element's own light DOM only. A
+ * closed shadow root is out of the page's reach, and what a `<slot>` shows,
+ * or an `aria-owns` moves in, is no part of the element there.
+ *
+ * So two other places say where a field sits. Chromium's tree has the page as
+ * laid out: each candidate a node of `fields` sits under there (raw ids, from
+ * {@link withheldFields}) is withheld, by core's `valueRegions`. Chromium
+ * keeps an ignored node for a hidden element at a shadow root's top or in a
+ * slot, and none for one below it, so a field below a hidden wrapper only the
+ * document places: each candidate whose element is in the walk's
+ * `holdsSensitive` is withheld. So is one whose element the walk never saw,
+ * which the page added since (a frame in the page's renderer is read after
+ * the session's walk): nothing says what it holds. A field in a frame
+ * withholds nothing outside its own document: each is read as a document of
+ * its own.
+ *
+ * Returns the ids of the candidates it withholds that their own reads didn't.
+ * Each read's own verdict still decides the names around it.
+ *
+ * Exported for its tests.
+ *
+ * @internal
+ */
+export function withholdAboveWithheld(
+  verdicts: ReadonlyMap<string, PageFieldRead>,
+  rawById: ReadonlyMap<string, RawAXNode>,
+  index: NativeAXIndex<RawAXNode>,
+  fields: ReadonlySet<string>,
+  internals: Pick<FieldInternals, "seen" | "holdsSensitive"> | undefined,
+): string[] {
+  const { containing } = valueRegions(index, fields);
+  const held: string[] = [];
+  for (const [id, verdict] of verdicts) {
+    const raw = rawById.get(id);
+    if (!raw || fieldValueWithheld(verdict)) continue;
+    const element = raw.backendDOMNodeId;
+    const byDocument =
+      typeof element === "number" &&
+      internals !== undefined &&
+      (internals.holdsSensitive.has(element) || !internals.seen.has(element));
+    if (containing.has(raw.nodeId) || byDocument) held.push(id);
+  }
+  return held;
+}
+
+/**
+ * The raw ids of the withheld fields a candidate above one is withheld for
+ * ({@link withholdAboveWithheld}): each read withheld, but for a part of a
+ * field (a date input's spinbuttons), which only says what its own field is;
+ * each stand-in withheld, for a control the walk names or drawing a
+ * password's mask; and each node of a field the walk says is sensitive by its
+ * markup: an `aria-hidden` field has no row to be read, only the ignored node
+ * Chromium keeps for it. A stand-in for a control the walk can't name (a box
+ * of text it never saw, or any with no walk) is withheld unread, which costs
+ * the names around it; counted here, it would withhold every row above any
+ * text.
+ *
+ * Exported for its tests.
+ *
+ * @internal
+ */
+export function withheldFields(
+  verdicts: ReadonlyMap<string, PageFieldRead>,
+  rawById: ReadonlyMap<string, RawAXNode>,
+  standIns: readonly FieldStandIn[],
+  rawNodes: readonly RawAXNode[],
+  internals: Pick<FieldInternals, "hosts" | "sensitive"> | undefined,
+): Set<string> {
+  const fields = new Set<string>();
+  for (const [id, verdict] of verdicts) {
+    const raw = rawById.get(id);
+    const element = raw?.backendDOMNodeId;
+    const part =
+      typeof element === "number" && internals?.hosts.has(element) === true;
+    if (raw && fieldValueWithheld(verdict) && !part) fields.add(raw.nodeId);
+  }
+  for (const { host, nodeIds, masked } of standIns) {
+    if (host === undefined && !masked) continue;
+    for (const id of nodeIds) fields.add(id);
+  }
+  for (const raw of rawNodes) {
+    const element = raw.backendDOMNodeId;
+    if (typeof element === "number" && internals?.sensitive.has(element)) {
+      fields.add(raw.nodeId);
+    }
+  }
+  return fields;
+}
+
+/**
  * The structural backstop behind `pageReadValue`'s own shadow-host walk: no
  * node inside a sensitive one in the tree shows a value, whatever its own
  * verdict said. A sensitive field's parts (a month input's "Month" and "Year"
@@ -900,11 +998,42 @@ async function fieldsWithin(
   }
 }
 
+/** A field whose markup says it is sensitive (core's
+ *  `isSensitiveFieldAttributes`), as `DOM.getDocument` describes it. Any
+ *  `type` or `autocomplete` attribute counts: a namespaced one reads the same
+ *  name, and the first need not be the one the field goes by. */
+function isSensitiveMarkup(node: CdpDomNode): boolean {
+  const tag = node.localName ?? "";
+  if (!FIELD_TAGS.has(tag)) return false;
+  const attributes = node.attributes ?? [];
+  for (let i = 0; i + 1 < attributes.length; i += 2) {
+    const name = attributes[i];
+    const value = attributes[i + 1];
+    if (
+      (name === "type" && isSensitiveFieldAttributes(tag, { type: value })) ||
+      (name === "autocomplete" &&
+        isSensitiveFieldAttributes(tag, { autocomplete: value }))
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
 /** What a walk of a session's documents found, by backend id: every DOM node
- *  it saw, and for each in a form control's own internals, that control. */
+ *  it saw, for each in a form control's own internals that control, every
+ *  field whose markup says it is sensitive, and every node one sits in. */
 interface FieldInternals {
   seen: ReadonlySet<number>;
   hosts: ReadonlyMap<number, number>;
+  sensitive: ReadonlySet<number>;
+  /**
+   * Every node a sensitive field sits inside as Chromium lays the page out:
+   * through shadow roots, open or closed, and what a `<slot>` shows, but
+   * never out of a frame's document. A field below a hidden wrapper has no
+   * node in Chromium's tree at all, so only the document places it.
+   */
+  holdsSensitive: ReadonlySet<number>;
 }
 
 /**
@@ -914,11 +1043,15 @@ interface FieldInternals {
  * Core's `withholdFieldInternalText` keeps their text out of the tree, since
  * nothing in the AX tree tells such a node from a `<div>`, and when the tree
  * has no node of the control's own, `fieldStandIns` finds what stands in for
- * it. One walk serves the session's top document and every frame it reads in
- * the same renderer, which `DOM.getDocument` lists under its `<iframe>`; a
- * node one of them added since is one the walk never saw, which fails closed.
- * `undefined` when the DOM agent can't list them, which fails closed
- * throughout.
+ * it. The same walk finds every sensitive field by its markup, and every
+ * element one sits in (`holdsSensitive`), which the in-page read can't see
+ * past a shadow root. One walk serves the session's top document and every
+ * frame it reads in the same renderer, which `DOM.getDocument` lists under
+ * its `<iframe>`. A node one of them added since is one the walk never saw:
+ * its text fails closed, and so does a row of its own; a field added since
+ * inside a node the walk saw counts from the next read. `undefined` when the
+ * DOM agent can't list them: text fails closed throughout, and a field with
+ * no row of its own is left to the in-page read's light-DOM look.
  */
 async function fieldInternals(
   transport: CdpTransport,
@@ -938,15 +1071,30 @@ async function fieldInternals(
   if (!root) return undefined;
   const seen = new Set<number>();
   const hosts = new Map<number, number>();
+  const sensitive = new Set<number>();
+  // What each node sits in as Chromium lays it out: its parent, a shadow
+  // root's host, and the `<slot>` that shows it. A frame's document sits in
+  // nothing here: its fields are its own.
+  const parentOf = new Map<number, number>();
+  const slotOf = new Map<number, number>();
   // Each node, and the control whose internals hold it.
   const stack: Array<[CdpDomNode, number | undefined]> = [[root, undefined]];
   while (stack.length > 0) {
     const [node, host] = stack.pop()!;
-    seen.add(node.backendNodeId);
-    if (host !== undefined) hosts.set(node.backendNodeId, host);
-    for (const child of node.children ?? []) stack.push([child, host]);
+    const id = node.backendNodeId;
+    seen.add(id);
+    if (isSensitiveMarkup(node)) sensitive.add(id);
+    if (host !== undefined) hosts.set(id, host);
+    // eslint-disable-next-line no-restricted-properties -- a field of CDP's plain object, not the element's: nothing on the page shadows it
+    const slot = node.assignedSlot;
+    if (slot) slotOf.set(id, slot.backendNodeId);
+    for (const child of node.children ?? []) {
+      if (child.nodeType === 1) parentOf.set(child.backendNodeId, id);
+      stack.push([child, host]);
+    }
     if (node.contentDocument) stack.push([node.contentDocument, undefined]);
     for (const sub of node.shadowRoots ?? []) {
+      parentOf.set(sub.backendNodeId, id);
       stack.push([
         sub,
         host ??
@@ -959,7 +1107,24 @@ async function fieldInternals(
     // own in the tree, seen here like any other.
     for (const pseudo of node.pseudoElements ?? []) stack.push([pseudo, host]);
   }
-  return { seen, hosts };
+  // Up from each sensitive field, through everything it sits in, climbing
+  // from each node once.
+  const holdsSensitive = new Set<number>();
+  const up: number[] = [];
+  const climb = (id: number) => {
+    const parent = parentOf.get(id);
+    if (parent !== undefined) up.push(parent);
+    const slot = slotOf.get(id);
+    if (slot !== undefined) up.push(slot);
+  };
+  for (const id of sensitive) climb(id);
+  while (up.length > 0) {
+    const id = up.pop()!;
+    if (holdsSensitive.has(id)) continue;
+    holdsSensitive.add(id);
+    climb(id);
+  }
+  return { seen, hosts, sensitive, holdsSensitive };
 }
 
 /** {@link fieldInternals}, walked once per session for the whole of a read. */
@@ -1434,6 +1599,10 @@ async function readDocument(
   const withheld = new Set<string>();
   // What stands in for each field withheld, read in the same round.
   const withheldStandIns: FieldStandIn[] = [];
+  // Each candidate's own in-page read, and the rows withheld for a field
+  // they sit in besides.
+  const verdicts = new Map<string, PageFieldRead>();
+  let held: string[];
   try {
     await Promise.all([
       // A field the tree has no node of its own for (core's `fieldStandIns`)
@@ -1475,6 +1644,7 @@ async function readDocument(
           backendNodeId,
           objectGroup,
         );
+        verdicts.set(node.id, read);
         // A field whose value is withheld — sensitive, or one whose in-page
         // read failed, which may be — has nothing inside it say which of it
         // is chosen either.
@@ -1485,6 +1655,31 @@ async function readDocument(
         });
       }),
     ]);
+    // A row a withheld field sits in where its own read couldn't see it, in a
+    // shadow root or a slot or moved in by `aria-owns`, is withheld too, and
+    // shows nothing at all ({@link withholdAboveWithheld}).
+    const index = indexNativeAX(full.nodes);
+    held = withholdAboveWithheld(
+      verdicts,
+      firstRawById,
+      index,
+      withheldFields(
+        verdicts,
+        firstRawById,
+        withheldStandIns,
+        full.nodes,
+        internals,
+      ),
+      internals,
+    );
+    for (const id of held) {
+      // As a withheld field's own row: no value, its page-authored hint kept.
+      const placeholder = verdicts.get(id)?.placeholder;
+      facetsById.set(id, {
+        ...(placeholder ? { placeholder } : {}),
+        valueWithheld: true,
+      });
+    }
     // A node the tree drops is never a candidate above, but `aria-labelledby`
     // and `aria-describedby` still read it: an `aria-hidden` card input names
     // the region labelled by it after the card, and Chromium sends no value
@@ -1503,7 +1698,6 @@ async function readDocument(
     // DOM agent can't list, or that has no AX node to withhold by, leaves the
     // target withholding instead — failing closed.
     for (const id of facetsById.keys()) read.add(id);
-    const index = indexNativeAX(full.nodes);
     await Promise.all(
       referencedOutsideTree(full.nodes, index, firstPass, firstRawById)
         .filter((target) => hidesUnreadNode(target, index.byId, read))
@@ -1539,6 +1733,11 @@ async function readDocument(
       .catch(() => {});
   }
 
+  // Names are withheld by the reads' own verdicts. A row withheld above only
+  // for a field it sits over has that field withholding the names around it
+  // already; counted as a field itself, a name it takes by reference would
+  // pass as a field's own label (core's `valueRegions`), with the field's
+  // value in it.
   const rawNodes = withholdSensitiveFieldNames(
     full.nodes,
     nameWithholdingRoots(
@@ -1573,10 +1772,11 @@ async function readDocument(
       ...facetsById.get(node.id),
     };
   });
+  const withheldIds = [...sensitiveIds, ...held];
   withholdInsideSensitive(
     enriched,
-    sensitiveIds,
-    sensitiveIds.flatMap((id) => {
+    withheldIds,
+    withheldIds.flatMap((id) => {
       const raw = rawById.get(id);
       return raw ? controlledRegion(raw, rawNodes, keptIds) : [];
     }),
@@ -2287,11 +2487,16 @@ export function pageType(this: Element, text: string): Marker {
  * not just form fields — `{ classified: true }` for a contenteditable editor
  * or an ARIA widget, which the policy never counts as sensitive (it covers
  * only `input`/`textarea`/`select`, as core's `isSensitiveFieldAttributes`
- * does) unless a sensitive field sits inside it — and it classifies an EMPTY
- * sensitive field too, so a value Chromium reported a moment earlier can
- * never stand in for it. For an `<input>` or `<textarea>` it also returns the
- * text the field announces (`announced`), read in this same call, so the
- * verdict and the value can't come from two different moments. The raw
+ * does) unless a sensitive field sits inside it, in its light DOM. A field
+ * it can't see from there (in a shadow root, shown by a `<slot>`, moved under
+ * it by `aria-owns`) is placed outside the page instead, by Chromium's tree
+ * and the document walk ({@link withholdAboveWithheld}): a closed root is out
+ * of the page's reach, and handing one in here would hand it to any DOM
+ * method the page has patched too. It classifies an EMPTY sensitive field
+ * too, so a value Chromium reported a moment earlier can never stand in for
+ * it. For an `<input>` or `<textarea>` it also returns the text the field
+ * announces (`announced`), read in this same call, so the verdict and the
+ * value can't come from two different moments. The raw
  * `.value` it returns for a non-sensitive field is for a retype's prefill,
  * never for display.
  *

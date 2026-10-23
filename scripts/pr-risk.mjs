@@ -896,6 +896,27 @@ const FIELD_VALUE_GATES = [
   "referencedOutsideTree",
   "hidesUnreadNode",
   "fieldsWithin",
+  // What a withheld field withholds above it, where the in-page read can't
+  // see: a closed shadow root, what a `<slot>` shows, what `aria-owns` moves
+  // in. Every candidate a withheld field sits in is withheld
+  // (`withholdAboveWithheld`): up Chromium's tree from the fields
+  // `withheldFields` gathers (core's `valueRegions`, by the climb every value
+  // rule there rides, `nativeAncestry`), among them what stands in for a
+  // field with no node of its own (core's `fieldStandIns`), but never a part
+  // of a field's own internals (core's `opensFieldInternals`, over
+  // `FIELD_HOSTS`), and every element the document has one in
+  // (`holdsSensitive`, from `fieldInternals`'s walk, by the markup
+  // `isSensitiveMarkup` reads on the tags in `FIELD_TAGS`).
+  "withholdAboveWithheld",
+  "withheldFields",
+  "nativeAncestry",
+  "fieldStandIns",
+  "opensFieldInternals",
+  "FIELD_HOSTS",
+  "fieldInternals",
+  "holdsSensitive",
+  "isSensitiveMarkup",
+  "FIELD_TAGS",
   "pickerCurrentOption",
   "describeSelection",
   "selectFeedback",

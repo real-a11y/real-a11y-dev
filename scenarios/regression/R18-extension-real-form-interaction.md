@@ -6,9 +6,9 @@ area: Extension
 type: Manual
 priority: P0
 status: Active
-validFrom: "extension ≥ 0.1.8. The dispatch-fidelity expectations mirror core's ActionDispatcher, which the CDP backend also mirrors — a fix in one belongs in both. Step 6a (a withheld field's edit box): in Chrome's tree, the first extension release with #510; in the in-page tree, the first with #512 — 0.1.16 as tagged fails both, which are the bugs those two fix. Step 6b (a sensitive textarea's markup text): extension ≥ 0.1.15; its input panel opening empty in the in-page tree: the first extension release with #512; and an untouched Enter in its edit box in Chrome's tree: the first with #516 — 0.1.16 as tagged fails both. Step 5a (an untouched Enter in an editor's edit box, in the in-page tree): the first extension release with #519 — 0.1.16 as tagged fails it"
+validFrom: "extension ≥ 0.1.8. The dispatch-fidelity expectations mirror core's ActionDispatcher, which the CDP backend also mirrors — a fix in one belongs in both. Step 6a (a withheld field's edit box): in Chrome's tree, the first extension release with #510; in the in-page tree, the first with #512 — 0.1.16 as tagged fails both, which are the bugs those two fix. Step 6b (a sensitive textarea's markup text): extension ≥ 0.1.15; its input panel opening empty in the in-page tree: the first extension release with #512; and an untouched Enter in its edit box in Chrome's tree: the first with #516 — 0.1.16 as tagged fails both. Step 5a (an untouched Enter in an editor's edit box, in the in-page tree): the first extension release with #519 — 0.1.16 as tagged fails it. Step 6c (a custom textbox around a password in its shadow root): the first extension release with #520 — 0.1.16 as tagged fails it, and so does a release with #510 alone"
 validUntil: ""
-expected: "click/type/select dispatch on the real page; a sensitive field's value is NEVER shown in the panel — a password's, what is typed into a password or card field's edit box, empty or not, or a sensitive textarea's markup text in the live-announcement log or an editor's input panel; an untouched Enter in that edit box, or in a rich-text editor's in the in-page tree, leaves the field as it was; Send-Tab/Esc behave or fail visibly"
+expected: "click/type/select dispatch on the real page; a sensitive field's value is NEVER shown in the panel — a password's, what is typed into a password or card field's edit box, empty or not, or into the edit box Chrome's tree opens on a custom textbox around a password in its shadow root, or a sensitive textarea's markup text in the live-announcement log or an editor's input panel; an untouched Enter in that edit box, or in a rich-text editor's in the in-page tree, leaves the field as it was; Send-Tab/Esc behave or fail visibly"
 twin: D6
 notion: "https://app.notion.com/p/3aa1c354b0b5819e89f7de2edeb18fcb"
 ---
@@ -68,6 +68,31 @@ point is behaviour against handlers you didn't write.
 
      Then go back to **Chrome's tree** (**Settings ▾** → **Show**), open the same
      textbox's edit box from its row, and press `Enter` without typing
+   - **6c** — a custom element that is a textbox itself, around the password
+     input it types into in a closed shadow root of its own. Run this in the
+     page's DevTools console, press **↻** (Refresh native tree), then on
+     **Chrome's tree** open the edit box on the `Shadow password` row (**TYPE**,
+     or `Enter`) and type a few characters:
+
+     ```js
+     {
+       customElements.define(
+         "x-shadow-password",
+         class extends HTMLElement {
+           connectedCallback() {
+             if (this.input) return;
+             this.input = document.createElement("input");
+             this.input.type = "password";
+             this.attachShadow({ mode: "closed" }).append(this.input);
+           }
+         },
+       );
+       const host = document.createElement("x-shadow-password");
+       host.setAttribute("role", "textbox");
+       host.setAttribute("aria-label", "Shadow password");
+       document.body.append(host);
+     }
+     ```
 7. Send Tab and Escape through the panel
 8. Toggle a checkbox and change a `<select>`
 
@@ -106,6 +131,9 @@ point is behaviour against handlers you didn't write.
   `Pay CARD-SENTINELnow`; 0.1.15 and 0.1.16 opened it holding `Pay now`.
   Before #516, that `Enter` in Chrome's tree emptied the editor and removed the card
   field
+- **6c** — the edit box shows dots, as the one on the password's own row does.
+  Before #520 it opened in plain text, #510's mask included: nothing in the element's
+  own light DOM said the row held a password
 - **7** — Tab/Escape either work or fail **visibly**. Silently doing nothing is the
   failure
 - **8** — state changes and is reflected
@@ -137,3 +165,14 @@ an ordinary text or number input, showed what you typed into it. And a filled
 field's box opens empty in place of the value it can't show, so in the in-page tree
 an untouched `Enter` used to type that empty value over the field. Step 6 alone
 passes on a password field filled in earlier, whose own type hides it.
+
+6c is step 6 through a shadow root. A custom element can be the textbox itself,
+by `role="textbox"` or by its `ElementInternals`, and keep the input it types
+into in its own shadow root. Chrome's tree shows the element's row over the
+input's, and the panel looked for a password only in the element's own light
+DOM, which a shadow root is no part of, so the element's edit box didn't mask.
+The panel now withholds every row a withheld field sits under in Chrome's tree,
+and every element its own reading of the page's document has one in, through
+shadow roots and slots: page script can't see into a closed shadow root at all,
+and the tree has no row for a field hidden from assistive technology or not laid
+out.

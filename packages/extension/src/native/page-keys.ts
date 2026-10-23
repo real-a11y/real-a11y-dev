@@ -208,6 +208,8 @@ export interface CdpDomNode {
   contentDocument?: CdpDomNode;
   /** On a document, its URL. */
   documentURL?: string;
+  /** On a node a shadow root's `<slot>` shows, that slot. */
+  assignedSlot?: { backendNodeId: number };
 }
 
 const ELEMENT_NODE = 1;

@@ -107,6 +107,9 @@ export interface NativeNode {
   description?: string;
   /** Ids of the rows this node controls (`aria-controls`). */
   controls?: string[];
+  /** This row's value is withheld: by its in-page read, or for a withheld
+   *  field it sits in. */
+  valueWithheld?: boolean;
   /** Its element's number in the read's walk of its document (focus sync). */
   pageKey?: number;
   /** The frame whose document numbered `pageKey`, when not the top one. */

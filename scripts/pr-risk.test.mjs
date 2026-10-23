@@ -642,6 +642,88 @@ describe("field-value redaction covers the extension's option picker", () => {
   });
 });
 
+describe("field-value redaction covers what a withheld field withholds above it", () => {
+  it("grades narrowing the climb, the fields it climbs from or the walk's markup 🔴 high", async () => {
+    // The in-page read can't see into a closed shadow root, so a custom
+    // textbox around a password there is withheld outside the page: every
+    // candidate a withheld field sits in (`withholdAboveWithheld`), up
+    // Chromium's tree (core's `valueRegions`, by `nativeAncestry`) from the
+    // fields `withheldFields` gathers, among them what stands in for one
+    // (core's `fieldStandIns`) but no part of a field's own internals (core's
+    // `opensFieldInternals`), and every element the document has one in
+    // (`holdsSensitive`, from `fieldInternals`'s walk, by the markup
+    // `isSensitiveMarkup` reads over `FIELD_TAGS`). Each edit below leaves
+    // such a host unwithheld, and none names the in-page gate.
+    const extension = "packages/extension/src/native/native-core.ts";
+    const extensionBase = [
+      `const FIELD_TAGS = new Set(["input", "textarea", "select"]);`,
+      ``,
+      `function isSensitiveMarkup(node) {`,
+      `  const tag = node.localName ?? "";`,
+      `  if (!FIELD_TAGS.has(tag)) return false;`,
+      `  return hasSensitiveAttribute(node, tag);`,
+      `}`,
+      ``,
+      `async function fieldInternals(transport) {`,
+      `  const found = await walk(transport);`,
+      `  return { ...found, holdsSensitive: climb(found) };`,
+      `}`,
+      ``,
+      `export function withheldFields(reads, standIns, rawNodes) {`,
+      `  return new Set([...rootsOf(reads), ...idsOf(standIns), ...markedIn(rawNodes)]);`,
+      `}`,
+      ``,
+      `export function withholdAboveWithheld(reads, byNodeId, fields, elements) {`,
+      `  markEach(reads, climbFrom(fields, byNodeId), elements);`,
+      `}`,
+      ``,
+    ].join("\n");
+    const core = "packages/core/src/native/value-regions.ts";
+    const coreBase = [
+      `export function* nativeAncestry(raw, byId) {`,
+      `  for (let cur = raw; cur; cur = cur.parentId ? byId.get(cur.parentId) : undefined) {`,
+      `    yield cur;`,
+      `  }`,
+      `}`,
+      ``,
+      `export function fieldStandIns(index, hostOf) {`,
+      `  return topmostInternals(index, hostOf);`,
+      `}`,
+      ``,
+      `export function opensFieldInternals(tag, type) {`,
+      `  return type === "user-agent" && isFieldHost(tag);`,
+      `}`,
+      ``,
+    ].join("\n");
+    const result = await grade(
+      {
+        [extension]: extensionBase
+          .replace(`"input", "textarea", "select"`, `"input", "textarea"`)
+          .replace(
+            `  return hasSensitiveAttribute(node, tag);`,
+            `  return false;`,
+          )
+          .replace(`holdsSensitive: climb(found)`, `holdsSensitive: new Set()`)
+          .replace(`...idsOf(standIns), `, ``)
+          .replace(`climbFrom(fields, byNodeId)`, `new Set()`),
+        [core]: coreBase
+          .replace(
+            `cur = cur.parentId ? byId.get(cur.parentId) : undefined`,
+            `cur = undefined`,
+          )
+          .replace(`  return topmostInternals(index, hostOf);`, `  return [];`)
+          .replace(`isFieldHost(tag)`, `tag !== "slot"`),
+      },
+      { base: { [extension]: extensionBase, [core]: coreBase } },
+    );
+    assert.equal(result.tier, "high");
+    assert.deepEqual(evidenceFor(result, "field-value-redaction").sort(), [
+      `${core} → nativeAncestry, fieldStandIns, opensFieldInternals`,
+      `${extension} → FIELD_TAGS, isSensitiveMarkup, fieldInternals, holdsSensitive, withheldFields, withholdAboveWithheld`,
+    ]);
+  });
+});
+
 describe("field-value redaction covers selecting an option row", () => {
   it("grades naming a withheld select's option from its row 🔴 high", async () => {
     // A sensitive select's chosen option IS its value: the feedback after a
