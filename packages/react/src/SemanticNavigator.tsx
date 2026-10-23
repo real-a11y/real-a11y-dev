@@ -12,7 +12,10 @@ import {
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
-import { resolveTarget, type SemanticTreeTarget } from "./useSemanticTree.js";
+import {
+  useTargetElement,
+  type SemanticTreeTarget,
+} from "./useSemanticTree.js";
 
 // ─── Panel constants ──────────────────────────────────────────────────────────
 
@@ -36,8 +39,9 @@ export interface SemanticNavigatorProps {
    *
    * A ref is read after every commit of this component, so a root that mounts
    * later, after a loading state or a lazy route, attaches once the component
-   * re-renders. When the root can appear without anything re-rendering the
-   * navigator, pass the element instead, from a callback ref kept in state.
+   * re-renders. When the root can mount or be replaced without anything
+   * re-rendering the navigator, pass the element instead, from a callback ref
+   * kept in state.
    */
   root: SemanticTreeTarget;
 
@@ -487,17 +491,11 @@ export function SemanticNavigator({
     if (floating) setPortalReady(true);
   }, [floating]);
 
-  // The observed root, resolved after every commit and kept in state. A ref's
-  // `.current` attaches during a commit, after render has run, so neither a
-  // render-time read nor a dependency on the ref sees a root that mounts later
-  // than this component: the create effect below used to depend on
-  // `root.current` as read during render, and never ran for one. With no
-  // dependency list this runs after each commit, and setting an unchanged
-  // element is a no-op.
-  const [rootEl, setRootEl] = useState<Element | null>(null);
-  useEffect(() => {
-    setRootEl(resolveTarget(root));
-  });
+  // The observed root: the element itself, or what a ref holds, read after
+  // every commit (see useTargetElement). The create effect below used to
+  // depend on `root.current` as read while rendering, which never saw a root
+  // that mounts later than this component.
+  const rootEl = useTargetElement(root);
 
   // Build / tear down when the observed root, mount mode, host, or inspector
   // config flags change. `mode` is intentionally omitted — setViewMode below

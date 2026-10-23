@@ -417,6 +417,70 @@ describe("useSemanticTree", () => {
     }, WAIT);
   });
 
+  it("attaches to a ref whose root mounts after the first commit", async () => {
+    // The same shape with a ref object. Nothing tells the hook `.current`
+    // changed, and an effect that depends on the ref never runs again for a
+    // stable one, so the ref is read after every commit of its component.
+    let latest: ReturnType<typeof useSemanticTree> = null;
+    function Subject() {
+      const ref = useRef<HTMLDivElement>(null);
+      const [show, setShow] = useState(false);
+      latest = useSemanticTree(ref);
+      return (
+        <>
+          <button onClick={() => setShow(true)}>show</button>
+          {show && (
+            <div ref={ref}>
+              <button>Late</button>
+            </div>
+          )}
+        </>
+      );
+    }
+
+    const { getByText } = render(<Subject />);
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 10));
+    });
+    expect(latest).toBeNull();
+
+    await act(async () => {
+      getByText("show").click();
+    });
+    await waitFor(() => {
+      const names = Array.from(latest?.nodes.values() ?? []).map(
+        (n) => n.a11y.name,
+      );
+      expect(names).toContain("Late");
+    }, WAIT);
+  });
+
+  it("observes an element that has a `current` property of its own", async () => {
+    // A custom element can define `current`, a carousel's slide index say.
+    // Telling a ref from an element by `current` read such a root as a ref.
+    const root = document.createElement("div");
+    Object.defineProperty(root, "current", { value: 0 });
+    root.innerHTML = "<button>Slide</button>";
+    document.body.appendChild(root);
+    let latest: ReturnType<typeof useSemanticTree> = null;
+    function Subject() {
+      latest = useSemanticTree(root);
+      return null;
+    }
+
+    try {
+      render(<Subject />);
+      await waitFor(() => {
+        const names = Array.from(latest?.nodes.values() ?? []).map(
+          (n) => n.a11y.name,
+        );
+        expect(names).toContain("Slide");
+      }, WAIT);
+    } finally {
+      root.remove();
+    }
+  });
+
   it("re-attaches when the root element is replaced", async () => {
     // A `key` change swaps the DOM node. The observer must move to the new
     // element instead of continuing to watch the detached one.

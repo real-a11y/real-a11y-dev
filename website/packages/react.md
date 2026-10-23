@@ -52,7 +52,7 @@ function App() {
 
 | Prop | Type | Default | Description |
 |---|---|---|---|
-| `root` | `Element \| RefObject<Element \| null> \| null` | — | **Required.** The DOM element to observe, or a ref holding it. A ref is read after every render of the navigator, so a root behind a loading state attaches once it mounts. If the root can mount without the navigator re-rendering, for example inside another component, pass the element from a callback ref kept in state instead: `const [root, setRoot] = useState<HTMLElement \| null>(null)` and `<main ref={setRoot}>`. |
+| `root` | `Element \| RefObject<Element \| null> \| null` | — | **Required.** The DOM element to observe, or a ref holding it. A ref is read after every render of the navigator, so a root behind a loading state attaches once it mounts. If the root can mount, or be replaced, without the navigator re-rendering, for example inside another component, pass the element from a callback ref kept in state instead: `const [root, setRoot] = useState<HTMLElement \| null>(null)` and `<main ref={setRoot}>`. |
 | `mode` | `"a11y" \| "dom"` | `"a11y"` | Tree extraction mode. Can be changed at runtime. |
 | `mount` | `"shadow" \| "light"` | `"shadow"` | Shadow DOM isolation mode. |
 | `theme` | `"light" \| "dark" \| "auto"` | `"auto"` | Panel color theme. |
@@ -103,6 +103,8 @@ function FocusAnnouncer({ rootRef }) {
 ```
 
 **Returns:** `ExtractionResult | null` — `null` before the first extraction.
+
+`rootRef` takes a ref or the element itself, as `<SemanticNavigator />`'s `root` does. A ref is read after every render of the component that calls the hook, so a root behind a loading state is observed once it mounts. If the root can mount, or be replaced, without that component re-rendering, pass the element from a callback ref kept in state.
 
 **Options:**
 

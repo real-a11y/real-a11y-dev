@@ -5,7 +5,7 @@ import {
   type TreeChange,
   type TreeViewMode,
 } from "@real-a11y-dev/core";
-import { useEffect, useRef, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 
 export interface UseSemanticTreeOptions {
   /** `"a11y"` (default) or `"dom"`. */
@@ -17,8 +17,11 @@ export interface UseSemanticTreeOptions {
 /**
  * The root to observe: the element itself, or a React ref object holding it.
  *
- * Prefer passing the **element** when the root can mount later than this hook
- * or be replaced — e.g. from a callback ref stored in state:
+ * A ref is read after every commit of the component that passes it, so a root
+ * that mounts later than that component, behind a loading state say, attaches
+ * as soon as the component re-renders. Pass the **element** when the root can
+ * mount or be replaced without that component re-rendering, such as inside a
+ * child with state of its own — e.g. from a callback ref stored in state:
  *
  * ```tsx
  * const [root, setRoot] = useState<HTMLElement | null>(null);
@@ -26,17 +29,43 @@ export interface UseSemanticTreeOptions {
  * return <main ref={setRoot}>…</main>;
  * ```
  *
- * An element changes identity when it is created or swapped, so the observer
- * re-attaches. A ref OBJECT is stable by design, so React cannot notify this
- * hook when `ref.current` changes — passing a ref only re-attaches when some
- * other state change re-renders the component.
+ * An element changes identity when it is created or swapped, and setting it
+ * re-renders whatever holds the state, so the observer re-attaches. A ref
+ * OBJECT is stable by design, so React cannot notify anything when
+ * `ref.current` changes: the change is seen at the next commit, whatever
+ * causes one.
  */
 export type SemanticTreeTarget = Element | { current: Element | null } | null;
 
-/** The element `target` names now. Read after commit, never during render. */
-export function resolveTarget(target: SemanticTreeTarget): Element | null {
-  if (!target) return null;
-  return "current" in target ? target.current : target;
+/**
+ * Whether `target` is an element rather than a ref holding one. Asked through
+ * `nodeType`, which no ref has, rather than `current`, which a custom element
+ * can define for itself. `in` reads no value, so a `<form>` whose control is
+ * named `nodeType` still answers, and unlike `instanceof Element` it holds for
+ * an element from another frame.
+ */
+function isElement(
+  target: Element | { current: Element | null },
+): target is Element {
+  return "nodeType" in target;
+}
+
+/**
+ * The element `target` names, for an effect to observe. An element is used as
+ * it is. A ref's `.current` attaches during a commit, after render has run, so
+ * a read while rendering, or an effect that depends on the ref, misses a root
+ * that mounts later than the caller: it is read after every commit instead,
+ * and kept in state.
+ */
+export function useTargetElement(target: SemanticTreeTarget): Element | null {
+  const ref = target === null || isElement(target) ? null : target;
+  const [fromRef, setFromRef] = useState<Element | null>(null);
+  // No dependency list: this runs after every commit, and storing the element
+  // the state already holds is a no-op.
+  useEffect(() => {
+    setFromRef(ref ? ref.current : null);
+  });
+  return ref ? fromRef : (target as Element | null);
 }
 
 /**
@@ -56,6 +85,7 @@ export function useSemanticTree(
 ): ExtractionResult | null {
   const { mode = "a11y", debounceMs = 300 } = options;
   const liveMode: "dom" | "a11y" = mode === "dom" ? "dom" : "a11y";
+  const root = useTargetElement(target);
 
   // A per-mount store. It is created once and kept for the life of the
   // component; only the OBSERVER is torn down and recreated when the root
@@ -74,9 +104,6 @@ export function useSemanticTree(
   // Wire an observer that re-extracts on mutations and notifies React.
   useEffect(() => {
     const store = storeRef.current!;
-    // Resolve HERE, not during render: a ref's `.current` is populated after
-    // the commit, so reading it during render would see `null` on first paint.
-    const root = resolveTarget(target);
     if (!root) {
       // The root went away (element unmounted, or a ref was cleared). The
       // store's tree is only ever written by `flush()` below, so returning
@@ -106,11 +133,11 @@ export function useSemanticTree(
       store.observer?.stop();
       store.observer = null;
     };
-    // `target` in the deps is what makes a REPLACED or LATE-MOUNTED root
-    // re-attach: when an element is passed, its identity changes and the
-    // observer is rebuilt on the new node. (A ref object is stable by design,
-    // so React cannot signal a `.current` change — see SemanticTreeTarget.)
-  }, [target, mode, debounceMs]);
+    // `root` in the deps is what makes a REPLACED or LATE-MOUNTED root
+    // re-attach: it is the element itself, whichever form `target` took, so it
+    // changes with the node and the observer is rebuilt on the new one (see
+    // useTargetElement for when a ref's change is seen).
+  }, [root, mode, debounceMs]);
 
   return useSyncExternalStore(
     (onChange) => {
