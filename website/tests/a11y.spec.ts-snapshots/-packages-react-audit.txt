@@ -63,11 +63,13 @@ main
       row
         cell "root"
           code "root"
-        cell "RefObject<Element | null>"
-          code "RefObject<Element | null>"
+        cell "Element | RefObject<Element | null> | null"
+          code "Element | RefObject<Element | null> | null"
         cell "—"
-        cell "Required. Ref to the DOM element to observe."
+        cell "Required. The DOM element to observe, or a ref holding it. A ref is read after every render of the navigator, so a root behind a loading state attaches once it mounts. If the root can mount without the navigator re-rendering, for example inside another component, pass the element from a callback ref kept in state instead: const [root, setRoot] = useState<HTMLElement | null>(null) and <main ref={setRoot}>."
           strong "Required."
+          code "const [root, setRoot] = useState<HTMLElement | null>(null)"
+          code "<main ref={setRoot}>"
       row
         cell "mode"
           code "mode"

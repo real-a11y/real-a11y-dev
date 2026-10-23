@@ -30,6 +30,13 @@ main
     code "document.body"
   button "Copy Code"
   code
+  paragraph "Wrap your pages with it in the root layout, so the panel observes what they render:"
+  button "Copy Code"
+  code
+  paragraph "is the element the panel observes: here, the that holds your pages. It has to be attached to an element that holds them. A ref that never reaches an element, or one on an empty , leaves the panel blank, and nothing is logged."
+    code "root"
+    code "<div>"
+    code "<div>"
   paragraph "The mode portals into . The library already guards against SSR — the portal only activates after the first client commit — so you can render this component from a Server Component without a crash."
     code "floating"
     code "document.body"
@@ -42,7 +49,8 @@ main
     code "dynamic(..., { ssr: false })"
     strong "inside a Client Component"
   heading "Option 2 — environment flag" (level 3)
-  paragraph "For staging deployments where you want to toggle the panel with an env var:"
+  paragraph "For staging deployments where you want to toggle the panel with an env var, use the component from Option 1 with this gate in place of its check:"
+    code "NODE_ENV"
   button "Copy Code"
   code
   paragraph "This ships the panel chunk in the production bundle as a separate chunk — it just doesn't run. Cheaper DX, more bytes."
