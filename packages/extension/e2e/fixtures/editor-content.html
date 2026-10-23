@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Editor content — in-page tree</title>
+  </head>
+  <body>
+    <h1>Compose</h1>
+
+    <!--
+      A rich-text editor's edit box in the in-page tree opens on the text the
+      editor holds, and a retype replaces everything in the editor with what
+      the box sends. So Enter in the box without typing must leave each of
+      these as it is, though the box shows only their text: a signature that
+      is only an image, a note holding a field, a divider, a motto that is
+      partly bold, and a greeting with an image after its text.
+    -->
+    <div
+      id="signature"
+      role="textbox"
+      contenteditable="true"
+      aria-label="Signature"
+    >
+      <img
+        alt="Signed J. Doe"
+        width="40"
+        height="20"
+        src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='40' height='20'><rect width='40' height='20' fill='navy'/></svg>"
+      />
+    </div>
+
+    <div
+      id="order-note"
+      role="textbox"
+      contenteditable="true"
+      aria-label="Order note"
+    >
+      <input aria-label="Quantity" value="3" />
+    </div>
+
+    <div
+      id="divider"
+      role="textbox"
+      contenteditable="true"
+      aria-label="Divider"
+    >
+      <hr />
+    </div>
+
+    <div id="motto" role="textbox" contenteditable="true" aria-label="Motto">
+      <b>Stay</b> curious
+    </div>
+
+    <div
+      id="greeting"
+      role="textbox"
+      contenteditable="true"
+      aria-label="Greeting"
+    >
+      Hello
+      <img
+        alt="Smile"
+        width="20"
+        height="20"
+        src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='20' height='20'><rect width='20' height='20' fill='gold'/></svg>"
+      />
+    </div>
+  </body>
+</html>

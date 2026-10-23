@@ -52,6 +52,65 @@ async function showFixture(
   return page;
 }
 
+/** The fixture with the in-page tree on screen, all of it expanded. */
+async function showInPageTree(
+  nav: NativeHarness,
+  fixture: string,
+): Promise<PanelPage> {
+  const page = await showFixture(nav, fixture);
+  await nav.chooseTree("In-page tree");
+  await expect
+    .poll(() => nav.panel.locator(".sn-node").count(), { timeout: 20_000 })
+    .toBeGreaterThan(0);
+  await press(nav.panel, "Expand all");
+  // The edit box opens on its field's state, which it asks the page for.
+  await nav.routeToPage(["GET_FIELD_STATE", "DISPATCH_ACTION"]);
+  return page;
+}
+
+/**
+ * The in-page tree's edit box. Everything from inside the panel, as `press`
+ * does: a Playwright click or keypress would bring the panel's own tab to the
+ * front first.
+ */
+function inPageEditBox(nav: NativeHarness) {
+  const box = nav.panel.locator(".sn-input-panel-field");
+  /** Open the edit box of the textbox named `name`. */
+  const open = async (name: string) => {
+    await nav.panel.evaluate((want) => {
+      // A row's text runs its role into its name, `textboxCard number`; the
+      // quotes around the name are the stylesheet's.
+      const flat = (text: string) => text.replace(/\s+/g, "");
+      const row = [...document.querySelectorAll(".sn-node")].find((r) =>
+        flat(r.textContent ?? "").includes(flat(want)),
+      );
+      const button = row?.querySelector<HTMLButtonElement>(
+        'button[title="Type (Enter)"]',
+      );
+      if (!button) throw new Error(`no Type button on ${want}`);
+      button.click();
+    }, `textbox ${name}`);
+    await expect(box, name).toBeVisible();
+  };
+  const key = (k: "Enter" | "Escape") =>
+    nav.panel.evaluate((which) => {
+      document
+        .querySelector(".sn-input-panel-field")!
+        .dispatchEvent(
+          new KeyboardEvent("keydown", { key: which, bubbles: true }),
+        );
+    }, k);
+  const type = (text: string) =>
+    nav.panel.evaluate((value) => {
+      const input = document.querySelector<HTMLInputElement>(
+        ".sn-input-panel-field",
+      )!;
+      input.value = value;
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    }, text);
+  return { box, open, key, type };
+}
+
 test("NATIVE: a select reads its label, a sensitive field [redacted], over the wire", async ({
   nav,
 }) => {
@@ -213,50 +272,8 @@ test("DOM mode: the A11y view shows the announced label, the DOM view the raw va
 test("In-page tree: a withheld field's edit box masks what is typed, empty or not, and an untouched Enter types nothing", async ({
   nav,
 }) => {
-  const page = await showFixture(nav, "retype-mask.html");
-  await nav.chooseTree("In-page tree");
-  await expect
-    .poll(() => nav.panel.locator(".sn-node").count(), { timeout: 20_000 })
-    .toBeGreaterThan(0);
-  await press(nav.panel, "Expand all");
-  // The edit box opens on its field's state, which it asks the page for.
-  await nav.routeToPage(["GET_FIELD_STATE", "DISPATCH_ACTION"]);
-
-  // Everything from inside the panel, as `press` does: a Playwright click or
-  // keypress would bring the panel's own tab to the front first.
-  const box = nav.panel.locator(".sn-input-panel-field");
-  const openBox = async (name: string) => {
-    await nav.panel.evaluate((want) => {
-      // A row's text runs its role into its name, `textboxCard number`; the
-      // quotes around the name are the stylesheet's.
-      const flat = (text: string) => text.replace(/\s+/g, "");
-      const row = [...document.querySelectorAll(".sn-node")].find((r) =>
-        flat(r.textContent ?? "").includes(flat(want)),
-      );
-      const button = row?.querySelector<HTMLButtonElement>(
-        'button[title="Type (Enter)"]',
-      );
-      if (!button) throw new Error(`no Type button on ${want}`);
-      button.click();
-    }, `textbox ${name}`);
-    await expect(box, name).toBeVisible();
-  };
-  const key = (k: "Enter" | "Escape") =>
-    nav.panel.evaluate((which) => {
-      document
-        .querySelector(".sn-input-panel-field")!
-        .dispatchEvent(
-          new KeyboardEvent("keydown", { key: which, bubbles: true }),
-        );
-    }, k);
-  const typeIntoBox = (text: string) =>
-    nav.panel.evaluate((value) => {
-      const input = document.querySelector<HTMLInputElement>(
-        ".sn-input-panel-field",
-      )!;
-      input.value = value;
-      input.dispatchEvent(new Event("input", { bubbles: true }));
-    }, text);
+  const page = await showInPageTree(nav, "retype-mask.html");
+  const { box, open: openBox, key, type: typeIntoBox } = inPageEditBox(nav);
 
   // Each opens empty, in place of a value it can't show, and hides what is
   // typed: a password nobody has typed yet as well as a filled one, a card
@@ -301,4 +318,63 @@ test("In-page tree: a withheld field's edit box masks what is typed, empty or no
   // Sent after the cancelled Enter above, so a type it had sent would have
   // landed by now.
   await expect(page.locator("#old")).toHaveValue("hunter2");
+});
+
+test("In-page tree: an untouched Enter in a rich-text editor's edit box leaves the editor as it was", async ({
+  nav,
+}) => {
+  const page = await showInPageTree(nav, "editor-content.html");
+  const { box, open, key, type } = inPageEditBox(nav);
+  const contents = () =>
+    page
+      .locator('[role="textbox"][contenteditable]')
+      .evaluateAll((editors) =>
+        Object.fromEntries(editors.map((e) => [e.id, e.innerHTML])),
+      );
+  const before = await contents();
+
+  // Each box opens on the editor's text alone, which a retype would put in
+  // place of everything in it: an untouched Enter used to type "" over an
+  // image, a field or a divider, and the text back over bold or an image.
+  for (const [name, text] of [
+    ["Signature", ""],
+    ["Order note", ""],
+    ["Divider", ""],
+    ["Motto", "Stay curious"],
+    ["Greeting", "Hello"],
+  ]) {
+    await open(name);
+    await expect(box, name).toHaveAttribute("type", "text");
+    await expect(box, name).toHaveValue(text);
+    await key("Enter");
+    await expect(box, name).toHaveCount(0);
+  }
+
+  // What the user types still goes in, in place of what the editor held.
+  // Sent after the Enters above, so a type one of them had sent would have
+  // landed by now.
+  await open("Signature");
+  await type("Best, Jane");
+  await key("Enter");
+  await expect(page.locator("#signature")).toHaveText("Best, Jane");
+  await expect(page.locator("#signature img")).toHaveCount(0);
+
+  // Every other editor is as it was.
+  const after = await contents();
+  expect(Object.keys(after)).toEqual(Object.keys(before));
+  for (const id of Object.keys(before)) {
+    if (id !== "signature") expect(after[id], id).toBe(before[id]);
+  }
+  await expect(page.locator("#order-note input")).toHaveValue("3");
+  await expect(page.locator("#divider hr")).toHaveCount(1);
+  await expect(page.locator("#motto b")).toHaveText("Stay");
+  await expect(page.locator("#greeting")).toHaveText("Hello");
+  await expect(page.locator("#greeting img")).toHaveCount(1);
+
+  // Typing and then clearing is how a user empties an editor on purpose.
+  await open("Divider");
+  await type("x");
+  await type("");
+  await key("Enter");
+  await expect(page.locator("#divider hr")).toHaveCount(0);
 });
