@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  createLineReader,
   DAEMON_PROTOCOL_VERSION,
   decodeRpc,
   encodeRpc,
@@ -25,5 +26,34 @@ describe("daemon protocol", () => {
 
   it("exposes a protocol version", () => {
     expect(DAEMON_PROTOCOL_VERSION).toMatch(/^\d+$/);
+  });
+});
+
+describe("createLineReader", () => {
+  const buf = (s: string) => Buffer.from(s, "utf8");
+
+  it("yields complete trimmed lines and skips blank ones", () => {
+    const read = createLineReader();
+    expect([...read(buf('a\n  \n b \r\n\n{"c":1}\n'))]).toEqual([
+      "a",
+      "b",
+      '{"c":1}',
+    ]);
+  });
+
+  it("buffers a partial line across chunks", () => {
+    const read = createLineReader();
+    expect([...read(buf("hel"))]).toEqual([]);
+    expect([...read(buf("lo\nwor"))]).toEqual(["hello"]);
+    expect([...read(buf("ld\n"))]).toEqual(["world"]);
+  });
+
+  it("keeps unread lines buffered when the consumer stops early", () => {
+    const read = createLineReader();
+    for (const line of read(buf("one\ntwo\n"))) {
+      expect(line).toBe("one");
+      break;
+    }
+    expect([...read(buf("three\n"))]).toEqual(["two", "three"]);
   });
 });
