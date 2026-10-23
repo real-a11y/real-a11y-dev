@@ -32,7 +32,7 @@ export function A11yPanel({ children }: { children: ReactNode }) {
   const rootRef = useRef<HTMLDivElement>(null);
 
   return (
-    <div ref={rootRef}>
+    <div ref={rootRef} style={{ display: "contents" }}>
       {children}
       <SemanticNavigator root={rootRef} floating highlightOnHover />
     </div>
@@ -60,6 +60,8 @@ export default function RootLayout({ children }: { children: ReactNode }) {
 
 `root` is the element the panel observes: here, the `<div>` that holds your pages. It has to be attached to an element that holds them. A ref that never reaches an element, or one on an empty `<div>`, leaves the panel blank, and nothing is logged.
 
+The wrapper is `display: contents`, so it takes no part in layout: a flex or grid layout on `<body>` still lays out your pages' top-level elements as if they were its own children. A selector that names them as `<body>`'s children, such as `body > main`, no longer matches.
+
 The `floating` mode portals into `document.body`. The library already guards against SSR — the portal only activates after the first client commit — so you can render this component from a Server Component without a crash.
 
 ## Gate it out of production
@@ -85,9 +87,10 @@ export function A11yPanel({ children }: { children: ReactNode }) {
 
   // The wrapper renders in every build, so your pages sit in the same DOM in
   // development and production. In a production build the condition is
-  // statically false: the panel never renders, and its chunk is never requested.
+  // statically false: the panel never renders, and its chunk is never
+  // requested.
   return (
-    <div ref={rootRef}>
+    <div ref={rootRef} style={{ display: "contents" }}>
       {children}
       {process.env.NODE_ENV === "development" && (
         <SemanticNavigator root={rootRef} floating />
