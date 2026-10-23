@@ -573,8 +573,11 @@ function computeAccessibleDescription(
       .filter(Boolean)
       .map((id) => {
         const target = safeGetElementById(doc, id);
+        // The same borrowing as aria-labelledby: Chromium describes
+        // `<button aria-describedby="d">` over `<span id="d"><img alt="Warning">
+        // irreversible</span>` as "Warning irreversible".
         return target
-          ? getAccessibleTextContent(target, new Set(), styleCache).trim()
+          ? referenceText(target, new Set(), styleCache)
           : undefined;
       })
       .filter((t): t is string => !!t);
@@ -620,7 +623,9 @@ function computeAccessibleDescription(
  *   - generic, presentation, none — transparent.
  *   - Inline formatting roles: strong, emphasis, code, mark, deletion,
  *     insertion, subscript, superscript, term, definition, paragraph,
- *     blockquote, caption, figcaption, time, separator, img.
+ *     blockquote, caption, figcaption, time, separator.
+ *   - img — it lends its name (alt, an SVG's title) instead of its content;
+ *     see textAlternative.
  *   - heading — kept walkable so a button/tab whose label is a heading
  *     still picks up the heading's text (e.g. `<button><h3>X</h3>`).
  *   - Named widgets (link, button, checkbox, radio, switch) — handled by
@@ -908,6 +913,149 @@ function isImplicitDetailsGroup(element: Element): boolean {
   );
 }
 
+/** How a name-from-content walk was reached. */
+interface NameWalk {
+  /**
+   * Inside an aria-labelledby or aria-describedby traversal, where a
+   * descendant's own aria-labelledby is ignored (accname §2B: "not already part
+   * of an aria-labelledby traversal"). Chromium reads `<span id="a">A <span
+   * aria-labelledby="b">x</span></span>`, referenced as a label or a
+   * description, as "A x".
+   */
+  readonly inReference?: boolean;
+  /**
+   * Text only: no descendant lends an alternative of its own. A `<select>`'s
+   * option is named by its text alone in Chromium — `<option><img alt="Flag">
+   * France</option>` is option "France".
+   */
+  readonly textOnly?: boolean;
+}
+
+/** Where a computed name came from, for the caller that needs to know. */
+interface NameSource {
+  /** The name is the element's own text, not an attribute or a reference. */
+  fromContent?: boolean;
+}
+
+/**
+ * What a descendant lends an ancestor's name ahead of its content, or `null`
+ * when it has nothing of its own and its content is walked instead. Accname
+ * §2F.iii computes each child's text alternative "beginning with step 2", and
+ * Chromium does: `<a href="/"><img alt="Home"></a>` is link "Home",
+ * `<button><span aria-label="Close">×</span></button>` is button "Close".
+ *
+ * - An image lends its name and never its content: its aria-labelledby or
+ *   aria-label, its alt, an SVG's `<title>`, or its title; a nameless one lends
+ *   "". Chromium reads `<button><span role="img">★</span> Favourite</button>`
+ *   as "Favourite" and `<button><svg><text>Go</text></svg></button>` as an
+ *   unnamed button. A presentational image (`<img alt="">`, `role="none"`) is
+ *   not an image here, and has no content either.
+ * - Anything else lends its aria-labelledby, outside a reference traversal,
+ *   when that names anything, else its aria-label when it isn't blank. Its
+ *   title is ignored: `<a href="/"><span title="Home"></span></a>` is an
+ *   unnamed link in Chromium.
+ *
+ * Each element is read once, under the visit-once rule in
+ * computeRawAccessibleName: outside a reference traversal, one this
+ * computation has already read lends "". So `<a href="/"><svg
+ * aria-labelledby="t"></svg><span id="t">Docs</span></a>` is "Docs" in
+ * Chromium, not "Docs Docs": the svg's reference read the span first.
+ */
+function textAlternative(
+  element: Element,
+  role: string,
+  visited: Set<Element>,
+  styleCache: StyleCache | null | undefined,
+  walk: NameWalk,
+): string | null {
+  if (role === "img") {
+    return computeAccessibleName(
+      element,
+      visited,
+      styleCache,
+      walk.inReference,
+    );
+  }
+  if (visited.has(element) && !walk.inReference) return "";
+  visited.add(element);
+  if (!walk.inReference) {
+    const labelledBy = labelledByText(element, visited, styleCache);
+    if (labelledBy) return labelledBy;
+  }
+  const ariaLabel = element.getAttribute("aria-label")?.trim();
+  if (ariaLabel) return ariaLabel;
+  return null;
+}
+
+/**
+ * The text an aria-labelledby (or aria-describedby) reference borrows from its
+ * target: the target's own alternative where it has one, else its content.
+ * Chromium reads `<button aria-labelledby="i">` over `<img id="i" alt="Direct">`
+ * as "Direct", and over `<span id="s" aria-label="Lab">content</span>` as "Lab".
+ * The target itself is read even when hidden — accname's "directly referenced"
+ * carve-out — while hidden content inside it still contributes nothing.
+ *
+ * Unlike a descendant, a target with no name lends its content even when it
+ * is an image, since accname §2F reads the content of any element a reference
+ * names: Chromium reads `<span id="t" role="img">Revenue up</span>` as
+ * "Revenue up", as a label or a description.
+ */
+function referenceText(
+  target: Element,
+  visited: Set<Element>,
+  styleCache?: StyleCache | null,
+): string {
+  const walk: NameWalk = { inReference: true };
+  return (
+    textAlternative(
+      target,
+      getImplicitRole(target),
+      visited,
+      styleCache,
+      walk,
+    ) || getAccessibleTextContent(target, visited, styleCache, walk)
+  ).trim();
+}
+
+/** The names of every element `element`'s aria-labelledby resolves to. */
+function labelledByText(
+  element: Element,
+  visited: Set<Element>,
+  styleCache?: StyleCache | null,
+): string {
+  const labelledBy = element.getAttribute("aria-labelledby");
+  if (!labelledBy) return "";
+  const doc = idScope(element);
+  return labelledBy
+    .split(/\s+/)
+    .map((id) => {
+      const target = safeGetElementById(doc, id);
+      return target ? referenceText(target, visited, styleCache) : "";
+    })
+    .filter(Boolean)
+    .join(" ");
+}
+
+/**
+ * The text of an `<svg>`'s first `<title>` child, which names it (SVG-AAM).
+ * Read with the same walk as any name, never `textContent`: a `<textarea>`'s
+ * markup text inside the title is its default value, and no name may carry it
+ * (see flat-tree's `isTextarea`).
+ */
+function svgTitle(
+  element: Element,
+  visited: Set<Element>,
+  styleCache: StyleCache | null | undefined,
+  walk: NameWalk,
+): string {
+  for (const child of element.children) {
+    if (safeTagName(child) === "title") {
+      return getAccessibleTextContent(child, visited, styleCache, walk).trim();
+    }
+  }
+  return "";
+}
+
 /**
  * Recursive text-content walker for accessible name/description computation.
  *
@@ -923,6 +1071,11 @@ function isImplicitDetailsGroup(element: Element): boolean {
  * see the set's docstring for the reasoning (treeitem-in-group, nested
  * widgets, etc.).
  *
+ * Every other child lends its own text alternative ahead of its content
+ * (accname §2F.iii): its aria-labelledby, its aria-label, an image's alt — see
+ * {@link textAlternative}. Only a child with none of those is walked for its
+ * text.
+ *
  * Walks `flatChildNodes`, which gives a closed `<details>` its summary alone.
  * Its body isn't hidden by any style on its own nodes (a UA slot does it), so
  * the per-child hidden check couldn't catch it: a bare text node there would
@@ -937,6 +1090,7 @@ function getAccessibleTextContent(
   element: Element,
   visited: Set<Element>,
   styleCache?: StyleCache | null,
+  walk: NameWalk = {},
 ): string {
   let text = "";
   for (const child of flatChildNodes(element)) {
@@ -982,22 +1136,33 @@ function getAccessibleTextContent(
           continue;
         }
         const role = getImplicitRole(childEl);
-        // Named widgets contribute their computed name (accname §2F.iii), spaced
-        // by the same box rule as everything else: Chromium reads
-        // `<h2>Signed in as <a href="/u">Ada</a>'s profile</h2>` as
-        // "Signed in as Ada's profile", not "… Ada 's profile", and only spaces
-        // the link when it renders as its own block.
+        // Named widgets contribute their computed name (accname §2F.iii). One
+        // named by its text is spaced by the same box rule as everything else:
+        // Chromium reads `<h2>Signed in as <a href="/u">Ada</a>'s profile</h2>`
+        // as "Signed in as Ada's profile", not "… Ada 's profile", and only
+        // spaces the link when it renders as its own block. One named by an
+        // attribute is always spaced, like any other attribute-borne text
+        // (see textAlternative): `<h2>Go to<a href="/" aria-label="Home">H</a>now</h2>`
+        // is "Go to Home now", the same link named by its text "Go toHomenow".
         if (NAMED_WIDGET_ROLES.has(role)) {
+          const source: NameSource = {};
+          const named = computeAccessibleName(
+            childEl,
+            visited,
+            styleCache,
+            walk.inReference,
+            source,
+          );
           // An editing host takes no name from its own content, but Chromium
           // still reads that text into an ancestor's name:
           // `<h2>Before <button contenteditable>Save</button></h2>` is
           // heading "Before Save".
           const name =
-            computeAccessibleName(childEl, visited, styleCache) ||
+            named ||
             (isEditingHost(childEl)
-              ? getAccessibleTextContent(childEl, visited, styleCache)
+              ? getAccessibleTextContent(childEl, visited, styleCache, walk)
               : "");
-          text += spaced ? ` ${name} ` : name;
+          text += spaced || (named && !source.fromContent) ? ` ${name} ` : name;
           continue;
         }
         if (NAME_BARRIER_ROLES.has(role) && !isImplicitDetailsGroup(childEl)) {
@@ -1007,7 +1172,22 @@ function getAccessibleTextContent(
           if (spaced) text += " ";
           continue;
         }
-        const inner = getAccessibleTextContent(childEl, visited, styleCache);
+        const alternative = walk.textOnly
+          ? null
+          : textAlternative(childEl, role, visited, styleCache, walk);
+        if (alternative !== null) {
+          // Spaced whatever the box: Chromium reads `<a><img alt="Help">center</a>`
+          // as "Help center" and `<a><span aria-label="Docs">D</span>site</a>`
+          // as "Docs site". A nameless image lends no text, only its box.
+          text += alternative ? ` ${alternative} ` : spaced ? " " : "";
+          continue;
+        }
+        const inner = getAccessibleTextContent(
+          childEl,
+          visited,
+          styleCache,
+          walk,
+        );
         // Padded per accname §2F, which appends each descendant's result "with a
         // space"; the final normalization collapses the doubles. A child that
         // flows inline is NOT padded, because that is what Chromium reads:
@@ -1086,8 +1266,16 @@ function computeAccessibleName(
   element: Element,
   visited: Set<Element> = new Set(),
   styleCache?: StyleCache | null,
+  inReference = false,
+  source?: NameSource,
 ): string {
-  return computeRawAccessibleName(element, visited, styleCache)
+  return computeRawAccessibleName(
+    element,
+    visited,
+    styleCache,
+    inReference,
+    source,
+  )
     .replace(/\s+/g, " ")
     .trim();
 }
@@ -1095,37 +1283,39 @@ function computeAccessibleName(
 function computeRawAccessibleName(
   element: Element,
   visited: Set<Element>,
-  styleCache?: StyleCache | null,
+  styleCache: StyleCache | null | undefined,
+  inReference: boolean,
+  source: NameSource | undefined,
 ): string {
-  // accname visit-once guard (§4.3.2): an element already on the current
-  // name-computation path contributes the empty string when reached again.
+  // accname visit-once guard (§4.3.2): an element the current name computation
+  // has already read contributes the empty string when reached again.
   // Without this, an aria-labelledby that points at an ancestor containing the
   // element cycles between labelledby resolution and name-from-content until
   // the stack overflows (seen on real pages, e.g. the mercadolibre signup).
-  if (visited.has(element)) return "";
+  //
+  // Not inside a reference traversal, where Chromium skips it too: an element
+  // two IDREFs reach is read for each, so `aria-labelledby="a a"` over
+  // `<span id="a">Pick <a href="/">Docs</a></span>` is "Pick Docs Pick Docs".
+  // That cannot cycle. A traversal follows no aria-labelledby (step 1), and
+  // the only way out of the subtree it walks is a control's <label> (step 4),
+  // whose content is read with this guard on.
+  if (visited.has(element) && !inReference) return "";
   visited.add(element);
 
   // 1. aria-labelledby is resolved before aria-label (accname-1.2 §2B
   //    precedes §2D): concatenate the accessible names of every referenced
   //    IDREF, in order. The visit-once guard above breaks reference cycles.
-  const labelledBy = element.getAttribute("aria-labelledby");
-  if (labelledBy) {
-    const doc = idScope(element);
-    const names = labelledBy
-      .split(/\s+/)
-      .map((id) => {
-        const target = safeGetElementById(doc, id);
-        return target
-          ? getAccessibleTextContent(target, visited, styleCache).trim()
-          : "";
-      })
-      .filter(Boolean);
-    if (names.length) return names.join(" ");
+  //    Not inside another reference traversal, where it is ignored (§2B).
+  if (!inReference) {
+    const labelledBy = labelledByText(element, visited, styleCache);
+    if (labelledBy) return labelledBy;
   }
 
-  // 2. aria-label
-  const ariaLabel = element.getAttribute("aria-label");
-  if (ariaLabel) return ariaLabel.trim();
+  // 2. aria-label, unless it is blank: accname skips one that is only
+  //    whitespace, as Chromium does. `<button aria-label=" ">Save</button>` is
+  //    "Save", `<img aria-label=" " alt="Home">` "Home".
+  const ariaLabel = element.getAttribute("aria-label")?.trim();
+  if (ariaLabel) return ariaLabel;
 
   const tag = safeTagName(element);
 
@@ -1142,19 +1332,32 @@ function computeRawAccessibleName(
     if (alt !== null && !titleNamesEmptyAlt) return alt;
   }
 
-  // 4. Label element for form controls
+  // 3a. An <svg> is named by its first <title> child (SVG-AAM), after
+  //     aria-label: Chromium names `<svg><title>Close</title></svg>` "Close",
+  //     and `<svg aria-label="Shut"><title>Close</title></svg>` "Shut".
+  if (tag === "svg") {
+    const title = svgTitle(element, visited, styleCache, { inReference });
+    if (title) return title;
+  }
+
+  // 4. Label element for form controls. A label is read once per computation,
+  //    like any element under the visit-once guard: a heading that holds a
+  //    checkbox and its label is "Agree" in Chromium, not "Agree Agree".
   if (tag === "input" || tag === "select" || tag === "textarea") {
     const id = element.getAttribute("id");
     if (id) {
       const label = safeQuerySelector(idScope(element), `label[for="${id}"]`);
-      if (label)
+      if (label && !visited.has(label)) {
+        visited.add(label);
         return getAccessibleTextContent(label, visited, styleCache).trim();
+      }
     }
     // Wrapping label pattern: <label>Full name<input /></label>
     // Walk the label's child nodes and collect text from everything that is
     // NOT the form control itself (skips input/textarea/select siblings too).
     const wrappingLabel = element.closest("label");
-    if (wrappingLabel) {
+    if (wrappingLabel && !visited.has(wrappingLabel)) {
+      visited.add(wrappingLabel);
       const FORM_CONTROL_TAGS = new Set(["input", "select", "textarea"]);
       const parts: string[] = [];
       for (const child of wrappingLabel.childNodes) {
@@ -1179,10 +1382,17 @@ function computeRawAccessibleName(
             ) {
               continue;
             }
-            const text = getAccessibleTextContent(
-              childEl,
-              visited,
-              styleCache,
+            // Each child's own alternative first, as in any name walk:
+            // Chromium names `<label><img alt="Email"> <input></label>`
+            // "Email".
+            const text = (
+              textAlternative(
+                childEl,
+                getImplicitRole(childEl),
+                visited,
+                styleCache,
+                {},
+              ) ?? getAccessibleTextContent(childEl, visited, styleCache)
             ).trim();
             if (text) parts.push(text);
           } catch (error) {
@@ -1244,15 +1454,24 @@ function computeRawAccessibleName(
     ) {
       return input.value;
     }
+    // An image button is named by its alt — after a label, which Chromium
+    // prefers: `<label><input type="image" alt="Go"> now</label>` is "now".
+    if (type === "image") {
+      const alt = input.getAttribute("alt");
+      if (alt) return alt;
+    }
   }
 
   // 6. title attribute (HTML-AAM orders title before placeholder)
   const title = element.getAttribute("title");
   if (title) return title;
 
-  // 7. placeholder — a text input's last-resort name, after title.
-  if (tag === "input") {
-    const placeholder = (element as HTMLInputElement).placeholder;
+  // 7. placeholder — a text field's last-resort name, after title. A
+  //    <textarea>'s too: Chromium names `<textarea placeholder="Your reply">`
+  //    "Your reply".
+  if (tag === "input" || tag === "textarea") {
+    const placeholder = (element as HTMLInputElement | HTMLTextAreaElement)
+      .placeholder;
     if (placeholder) return placeholder;
   }
 
@@ -1268,12 +1487,14 @@ function computeRawAccessibleName(
   //    options — see NAMES_FROM_CONTENT_ROLES). NOT for generic containers
   //    (div, span, p) which would grab huge text blobs.
   if (isNameFromContentHost(element)) {
-    const fullText = getAccessibleTextContent(
-      element,
-      visited,
-      styleCache,
-    ).trim();
-    if (fullText) return fullText;
+    const fullText = getAccessibleTextContent(element, visited, styleCache, {
+      inReference,
+      textOnly: tag === "option",
+    }).trim();
+    if (fullText) {
+      if (source) source.fromContent = true;
+      return fullText;
+    }
   }
 
   // 9. Fallback: direct text content only — for generics and prose, never for
@@ -1291,6 +1512,7 @@ function computeRawAccessibleName(
     !AUTHOR_NAMED_ROLES.has(getImplicitRole(element)) &&
     !isEditingHost(element)
   ) {
+    if (source) source.fromContent = true;
     return directText;
   }
 

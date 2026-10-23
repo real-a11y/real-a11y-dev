@@ -46,6 +46,10 @@ once on markup that should fail:
 8. `assertNoUnlabeledInteractive` on the three icon-button shapes that ship in
    real products: an `<svg>` child, a glyph or emoji as the button's text
    (`⬇`, `🗑`), and `title=` with no other name
+   - **8b** — the same on controls named by an image inside them: a logo link
+     `<a href="/"><img alt="Home"></a>`, a button holding
+     `<svg><title>Close</title></svg>`, and a glyph marked as an image with no
+     label, `<button><span role="img">★</span></button>`
 9. `assertDialogsLabeled` on
    `<div role="dialog">Delete this project? <button>Cancel</button></div>`, then
    on the same dialog with `aria-labelledby` pointing at an `<h2>` holding that
@@ -73,6 +77,12 @@ once on markup that should fail:
   `<label>` is `label-title-only` (warning), not this assertion — that rule is
   **R37**. The table above used to say this assertion "fails on an icon-only
   `<button>`"; that is only true for an empty name.
+- **8b** — the logo link and the `<svg>` button **pass**: an image lends the
+  name its `alt` or `<title>` gives it, as in Chromium. The `role="img"` glyph is
+  **caught**, because an image lends its name, never its content. From testing ≥
+  the first release after 0.1.0-beta.19. On 0.1.0-beta.19 and earlier the link
+  and the `<svg>` button throw and the glyph passes. That is the old behaviour
+  reproduced, not a fail of this row.
 - **9** — the loose-text dialog **throws**
   `Dialog (role dialog) has no accessible name.` with its locator; the
   `aria-labelledby` one passes. From testing ≥ the first release after
@@ -84,6 +94,9 @@ once on markup that should fail:
 
 An assertion library's failure message _is_ its product — the pass path is trivially
 right and tells nobody anything. Step 2 is the real test.
+
+Step 8b guards the opposite error. The DOM producer read only a link's text,
+so every logo link threw: the first defect the beta.19 dogfood found from npm.
 
 Step 9 guards a false pass of the same shape. A dialog with a sentence beside
 its buttons looks labeled, and the DOM producer used to agree, naming it from

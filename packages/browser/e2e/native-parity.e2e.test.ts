@@ -675,3 +675,63 @@ describe("a block of text beside other content", () => {
     expect(nativeTree).not.toContain("typed");
   });
 });
+
+// A child lends an ancestor's name its own text alternative — an image's alt,
+// an aria-label, an SVG's <title> — before anything is read from its content
+// (accname §2F.iii). The DOM producer once read content only, so a logo link
+// came out unnamed and an icon button was named after its glyph.
+describe("a name from content reads each child's text alternative", () => {
+  it("names the same in both producers", async () => {
+    await session.open(
+      dataUrl(
+        `<meta charset="utf-8"><main>
+          <a href="/"><img alt="Home"></a>
+          <button><img alt="Print"></button>
+          <a href="/kb"><img alt="Help"> center</a>
+          <button><span aria-label="Close">×</span></button>
+          <h2><img alt="Acme"></h2>
+          <button><span role="img">★</span> Favourite</button>
+          <button><svg width="8" height="8"><title>Settings</title></svg></button>
+          <h3>Go to<a href="/docs" aria-label="Docs">D</a>now</h3>
+          <label for="q"><img alt="Search"></label><input id="q">
+          <textarea placeholder="Your reply"></textarea>
+          <a href="/start"><svg role="img" aria-labelledby="start" width="8" height="8"></svg><span id="start">Start</span></a>
+          <a href="/logo"><img aria-label=" " alt="Logo"></a>
+          <div id="who">Name <span id="req"><img alt="star"> required</span></div>
+          <input aria-labelledby="who req">
+          <h4>Go to<a href="/next"><img alt="Next"></a>now</h4>
+          <button aria-labelledby="chart">x</button><span id="chart" role="img">Revenue up</span>
+        </main>`,
+      ),
+    );
+    const domTree = await session.call<string>("treeSnapshot", "body", [
+      { markFocus: false },
+    ]);
+    const nativeTree = serializeTree(await session.nativeTree(), {
+      markFocus: false,
+    });
+
+    for (const tree of [domTree, nativeTree]) {
+      const lines = tree.split("\n").map((l) => l.trim());
+      for (const expected of [
+        'link "Home"',
+        'button "Print"',
+        'link "Help center"',
+        'button "Close"',
+        'heading "Acme" (level 2)',
+        'button "Favourite"',
+        'button "Settings"',
+        'heading "Go to Docs now" (level 3)',
+        'textbox "Search"',
+        'textbox "Your reply"',
+        'link "Start"',
+        'link "Logo"',
+        'textbox "Name star required star required"',
+        'heading "Go toNextnow" (level 4)',
+        'button "Revenue up"',
+      ]) {
+        expect(lines).toContain(expected);
+      }
+    }
+  });
+});

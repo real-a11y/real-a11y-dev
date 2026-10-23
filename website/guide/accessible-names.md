@@ -16,13 +16,13 @@ Every `SemanticNode.a11y.name` in a Real A11y tree comes from this algorithm.
 For any element, the accessible name is picked from the **first non-empty source** in this list:
 
 1. `aria-labelledby` — references another element's text content
-2. `aria-label` — literal string on the element itself
+2. `aria-label` — literal string on the element itself. One that is only spaces is skipped
 3. Native host-language label:
    - `<label for="…">` or ancestor `<label>` for form controls
    - `<fieldset><legend>` for grouped controls
    - `<caption>` for tables
-   - `alt` for images, `title` for iframes
-4. **Text content** — inner text, including text inside descendants. Only for roles named from their content (buttons, links, headings, cells, options…): a dialog, image, landmark or text field is named by its author alone, never by its text
+   - `alt` for images and `<input type="image">`, the first `<title>` for an `<svg>`, `title` for iframes
+4. **Text content** — inner text, including text inside descendants. A descendant with a name of its own lends that name instead of its text: an image its `alt`, an `<svg>` its `<title>`, any element its `aria-label`. A `<select>`'s `<option>` is the exception, named by its text alone. Only for roles named from their content (buttons, links, headings, cells, options…): a dialog, image, landmark or text field is named by its author alone, never by its text
 5. `title` attribute — last-resort fallback
 6. Empty string (element has no accessible name)
 
@@ -68,6 +68,16 @@ If #1 resolves to a non-empty string, #2–#5 are ignored — even if #2 looks "
   <svg aria-hidden="true">…</svg>
 </button>
 ```
+
+### Link with only an image
+
+```html
+<a href="/">
+  <img src="/logo.svg" alt="Acme home" />
+</a>
+```
+
+→ `"Acme home"` (from #4). The link is named from its content, and what the image contributes is its `alt`. Any child with a name of its own lends that name rather than its text, so `<button><span aria-label="Close">×</span></button>` is `"Close"`, not `"×"`.
 
 ### Dialog with text but no label
 
@@ -136,6 +146,8 @@ If #1 resolves to a non-empty string, #2–#5 are ignored — even if #2 looks "
 
 → input's name is `"First name (required)"`.
 
+A referenced element with an `aria-label` of its own lends that instead of its text, and so does an image with its `alt`. `aria-describedby` reads its targets the same way.
+
 ---
 
 ## What does *not* contribute
@@ -144,6 +156,7 @@ If #1 resolves to a non-empty string, #2–#5 are ignored — even if #2 looks "
 - **`title`** — the last fallback. It surfaces as a tooltip in desktop browsers, but many AT users (mobile, voice control) never see it. Treat it as documentation, not a label.
 - **Text inside `aria-hidden="true"` subtrees** — excluded from name computation. As in Chromium, any value but `false`, an empty value or `undefined` hides, in any case: `aria-hidden="TRUE"` and `aria-hidden="yes"` hide too.
 - **CSS-generated content** (`::before`, `::after` `content`) — spec says it *should* contribute, but engine support is inconsistent. Don't rely on it for critical labels.
+- **What is inside an image** — an `<img>`, an `<svg>` or a `role="img"` element lends its name, never its content. `<button><span role="img">★</span></button>` has no name, nor does a button whose only content is SVG `<text>`. Give the image an `aria-label`, or the button one.
 - **`<img alt="">` with empty alt** — the image is treated as decorative and contributes no name. Unless it also has a `title`: HTML-AAM keeps such an image in the tree and names it from the title, so `<img alt="" title="Company logo">` is an `img` named `"Company logo"`.
 
 ---
@@ -166,6 +179,13 @@ same rule Chromium applies. So `<button><div>Save</div><div>now</div></button>`
 is `"Save now"`, while `<button><span>Sa</span><span>ve</span></button>` is one
 word, `"Save"`. A child that lends no text still separates the text around it if
 it renders: `<h1>Save<input>now</h1>` is `"Save now"`.
+
+Text a child lends from an attribute is spaced off even when the child flows
+inline: an image's `alt`, a child's `aria-label`, a nested link's `aria-label`.
+So `<a href="/kb"><img alt="Help">center</a>` is `"Help center"`, as in
+Chromium. The rule is about the child itself, not what lies inside it: a link
+whose only content is an image is still named by its content, so
+`<h2>Go to<a href="/"><img alt="Home"></a>now</h2>` is `"Go toHomenow"`.
 
 Because the rule reads **computed** `display`, the same markup can produce a
 different name in jsdom than in a real browser wherever jsdom's CSS engine

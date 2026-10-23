@@ -110,6 +110,31 @@ describe("collectFindings — label-title-only", () => {
     ).toEqual([]);
   });
 
+  // The label or reference names the field from an image's alt, with no text
+  // of its own: Chromium names each of these fields "Email".
+  it("passes a label or a reference that names the field through an image", () => {
+    expect(
+      collectFindings(
+        mount(
+          `<label for="e"><img alt="Email"></label><input id="e" title="Your email">`,
+        ),
+        ["label-title-only"],
+      ),
+    ).toEqual([]);
+    expect(
+      collectFindings(
+        mount(`<label><img alt="Email"> <input title="Your email"></label>`),
+        ["label-title-only"],
+      ),
+    ).toEqual([]);
+    expect(
+      collectFindings(
+        mount(`<img id="i" alt="Email"><input aria-labelledby="i" title="t">`),
+        ["label-title-only"],
+      ),
+    ).toEqual([]);
+  });
+
   it("flags title when aria-labelledby does not resolve to text", () => {
     expect(
       collectFindings(
