@@ -1,8 +1,12 @@
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
 import type { Finding } from "@real-a11y-dev/audit";
 import { fingerprintFindings } from "@real-a11y-dev/snapshot";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { emitAnnotations } from "./annotations.js";
+import { appendStepSummary, emitAnnotations } from "./annotations.js";
 import { colorEnabled } from "./color.js";
 import { renderJson, summarize, type PageReport } from "./json.js";
 import { renderPretty } from "./pretty.js";
@@ -173,6 +177,32 @@ describe("emitAnnotations", () => {
       lines.push(l),
     );
     expect(lines[0]).toMatch(/^::error title=real-a11y::/);
+  });
+});
+
+describe("appendStepSummary", () => {
+  afterEach(() => vi.unstubAllEnvs());
+
+  it("writes one line per severity+rule+message group with sample locators", () => {
+    const dir = mkdtempSync(join(tmpdir(), "real-a11y-summary-"));
+    const file = join(dir, "summary.md");
+    try {
+      vi.stubEnv("GITHUB_STEP_SUMMARY", file);
+      appendStepSummary("audit", [
+        page({ findings: fingerprintFindings("p", findings) }),
+      ]);
+      const body = readFileSync(file, "utf8");
+      expect(body).toContain("### real-a11y audit");
+      expect(body).toContain("3 issue(s): 2 error(s), 1 warning(s)");
+      expect(body).toContain(
+        "[error] no-unlabeled-interactive: 2 × Unlabeled interactive element: button <button> — body > main > button, body > main > button:nth-of-type(2)",
+      );
+      expect(body).toContain(
+        "[warning] image-alt: 1 × Image has no accessible name: <img> — add alt text. — img",
+      );
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
 

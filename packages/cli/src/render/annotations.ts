@@ -29,6 +29,22 @@ function escapeProperty(s: string): string {
   return escapeData(s).replace(/:/g, "%3A").replace(/,/g, "%2C");
 }
 
+type PageFinding = PageReport["findings"][number];
+
+/** Group by `severity|rule|message`, in first-seen order. */
+function groupFindings(
+  findings: readonly PageFinding[],
+): Map<string, PageFinding[]> {
+  const groups = new Map<string, PageFinding[]>();
+  for (const finding of findings) {
+    const key = `${finding.severity}|${finding.rule}|${finding.message}`;
+    const group = groups.get(key);
+    if (group) group.push(finding);
+    else groups.set(key, [finding]);
+  }
+  return groups;
+}
+
 export function shouldAnnotate(flags: FlagValues): boolean {
   return process.env.GITHUB_ACTIONS === "true" && flags["no-annotate"] !== true;
 }
@@ -50,14 +66,7 @@ export function emitAnnotations(
     // distinct templates that co-occur, and "3 × Missing <h1>" for one
     // missing-h1 plus two skipped levels would be a lie. Distinct messages
     // per rule are bounded, so the runner's annotation caps are still safe.
-    const groups = new Map<string, typeof page.findings>();
-    for (const finding of page.findings) {
-      const key = `${finding.severity}|${finding.rule}|${finding.message}`;
-      const group = groups.get(key);
-      if (group) group.push(finding);
-      else groups.set(key, [finding]);
-    }
-    for (const [key, findings] of groups) {
+    for (const [key, findings] of groupFindings(page.findings)) {
       const [severity, rule] = key.split("|") as ["error" | "warning", string];
       const locators = findings
         .map((f) => f.locator)
@@ -109,14 +118,7 @@ export function appendStepSummary(
     const lines = [
       `${page.name} — ${s.total} issue(s): ${s.errors} error(s), ${s.warnings} warning(s)`,
     ];
-    const groups = new Map<string, typeof page.findings>();
-    for (const finding of page.findings) {
-      const key = `${finding.severity}|${finding.rule}|${finding.message}`;
-      const group = groups.get(key);
-      if (group) group.push(finding);
-      else groups.set(key, [finding]);
-    }
-    for (const [key, findings] of groups) {
+    for (const [key, findings] of groupFindings(page.findings)) {
       const [severity, rule] = key.split("|");
       const locators = findings
         .map((f) => f.locator)
