@@ -23,6 +23,8 @@ function App() {
 }
 ```
 
+`root` takes a ref, as here, or the element itself. A ref is read after every render, so a root behind a loading state attaches once it mounts. When the root can mount, or be replaced, without the component that holds the panel re-rendering, for example inside another component, pass the element from a callback ref kept in state: `const [root, setRoot] = useState<HTMLElement | null>(null)` and `<main ref={setRoot}>`. The hooks take either form too.
+
 ## What's in the box
 
 - `<SemanticNavigator />` — drop-in tree panel (inline or floating mode, Shadow DOM isolated)

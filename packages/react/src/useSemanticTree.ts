@@ -55,17 +55,32 @@ function isElement(
  * it is. A ref's `.current` attaches during a commit, after render has run, so
  * a read while rendering, or an effect that depends on the ref, misses a root
  * that mounts later than the caller: it is read after every commit instead,
- * and kept in state.
+ * and kept in state with the ref it came from. A ref passed in place of
+ * another names nothing until it has been read, never the element the other
+ * one held.
  */
 export function useTargetElement(target: SemanticTreeTarget): Element | null {
-  const ref = target === null || isElement(target) ? null : target;
-  const [fromRef, setFromRef] = useState<Element | null>(null);
-  // No dependency list: this runs after every commit, and storing the element
-  // the state already holds is a no-op.
+  // `!target`, not `=== null`: plain JS, or a `useState<HTMLElement>()`
+  // passed through a cast, hands this `undefined`.
+  const ref = !target || isElement(target) ? null : target;
+  // Two plain values, never one object holding both. React can replay an
+  // update onto an older state, and an updater that builds an object then
+  // returns a new one on every replay: the state never settles, and this
+  // effect, which runs after every commit, loops. Measured in Next.js dev,
+  // where it did; jsdom never replays it. Setting a value replays as itself.
+  const [readFrom, setReadFrom] = useState<{ current: Element | null } | null>(
+    null,
+  );
+  const [element, setElement] = useState<Element | null>(null);
+  // No dependency list: this runs after every commit, and setting what the
+  // state already holds is a no-op. The ref goes in through a function so it
+  // is stored as it is, whatever it is.
   useEffect(() => {
-    setFromRef(ref ? ref.current : null);
+    setReadFrom(() => ref);
+    setElement(ref ? ref.current : null);
   });
-  return ref ? fromRef : (target as Element | null);
+  if (!ref) return target ? (target as Element) : null;
+  return readFrom === ref ? element : null;
 }
 
 /**

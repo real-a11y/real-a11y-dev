@@ -57,4 +57,34 @@ describe("<SemanticNavigator /> builds", () => {
       second.remove();
     }
   });
+
+  it("never builds on the old ref's element when the ref and theme change together", async () => {
+    // A ref is read only after a commit, so for one render the new ref has not
+    // been read yet. It names nothing until then: naming the old ref's element
+    // instead rebuilt the panel on the old root for the theme change.
+    const first = document.createElement("main");
+    first.innerHTML = "<h1>First</h1>";
+    const second = document.createElement("main");
+    second.innerHTML = "<h1>Second</h1>";
+    document.body.append(first, second);
+    const firstRef = { current: first };
+    const secondRef = { current: second };
+
+    try {
+      const { rerender } = render(
+        <SemanticNavigator root={firstRef} theme="light" />,
+      );
+      await waitFor(() => expect(builds).toEqual([first]));
+
+      rerender(<SemanticNavigator root={secondRef} theme="dark" />);
+      await waitFor(() => expect(builds.at(-1)).toBe(second));
+      await act(async () => {
+        await new Promise((r) => setTimeout(r, 50));
+      });
+      expect(builds).toEqual([first, second]);
+    } finally {
+      first.remove();
+      second.remove();
+    }
+  });
 });

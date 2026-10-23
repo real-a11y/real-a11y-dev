@@ -481,6 +481,22 @@ describe("useSemanticTree", () => {
     }
   });
 
+  it("returns null for an undefined target instead of throwing", async () => {
+    // Plain JS, or a `useState<HTMLElement>()` passed through a cast, hands
+    // the hook `undefined` before the element exists.
+    let latest: ReturnType<typeof useSemanticTree> | undefined;
+    function Subject() {
+      latest = useSemanticTree(undefined as unknown as null);
+      return null;
+    }
+
+    render(<Subject />);
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 10));
+    });
+    expect(latest).toBeNull();
+  });
+
   it("re-attaches when the root element is replaced", async () => {
     // A `key` change swaps the DOM node. The observer must move to the new
     // element instead of continuing to watch the detached one.
