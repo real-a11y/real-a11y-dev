@@ -55,6 +55,8 @@ export function decodeRpc(line: string): RpcMessage {
  * returned function with each chunk and iterate the complete, trimmed,
  * non-empty lines it yields; a trailing partial line stays buffered for the
  * next chunk.
+ *
+ * @internal
  */
 export function createLineReader(): (chunk: Buffer) => Generator<string> {
   let buffer = "";
