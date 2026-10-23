@@ -2,6 +2,8 @@ import { act, cleanup, render, waitFor } from "@testing-library/react";
 import { useRef, useState } from "react";
 import { describe, it, expect, afterEach } from "vitest";
 
+import { useTargetElement } from "./useSemanticTree.js";
+
 import { SemanticNavigator, useSemanticTree, useActiveModal } from "./index.js";
 
 afterEach(() => cleanup());
@@ -299,6 +301,23 @@ describe("<SemanticNavigator />", () => {
     }, WAIT);
   });
 
+  it("renders an empty panel for an undefined root instead of throwing", async () => {
+    // Reading `root.current` threw on `undefined`, which plain JS, or a
+    // `useState<HTMLElement>()` passed through a cast, hands the navigator
+    // before the element exists.
+    const { getByTestId } = render(
+      <div data-testid="panel">
+        <SemanticNavigator root={undefined as unknown as null} />
+      </div>,
+    );
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 10));
+    });
+    const host = getByTestId("panel").querySelector("div");
+    expect(host).not.toBeNull();
+    expect(host!.shadowRoot).toBeNull();
+  });
+
   it("keeps the floating panel's own chrome out of a tree widened to the body", async () => {
     // A live region outside the root widens the tree to <body>, where the
     // floating panel is portaled. Only the inspector's container inside the
@@ -479,6 +498,32 @@ describe("useSemanticTree", () => {
     } finally {
       root.remove();
     }
+  });
+
+  it("costs the caller no extra render per update", async () => {
+    // The effect that reads a ref runs after every commit. Setting state there
+    // even to the value it holds rendered the caller a second time after every
+    // update, which useSemanticTree's consumers paid on every DOM flush.
+    const root = document.createElement("main");
+    let renders = 0;
+    function Subject() {
+      const [count, setCount] = useState(0);
+      useTargetElement(root);
+      renders++;
+      return <button onClick={() => setCount(count + 1)}>bump</button>;
+    }
+
+    const { getByText } = render(<Subject />);
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 10));
+    });
+    const afterMount = renders;
+    for (let i = 0; i < 5; i++) {
+      await act(async () => {
+        getByText("bump").click();
+      });
+    }
+    expect(renders - afterMount).toBe(5);
   });
 
   it("returns null for an undefined target instead of throwing", async () => {

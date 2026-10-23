@@ -58,30 +58,47 @@ describe("<SemanticNavigator /> builds", () => {
     }
   });
 
-  it("never builds on the old ref's element when the ref and theme change together", async () => {
-    // A ref is read only after a commit, so for one render the new ref has not
-    // been read yet. It names nothing until then: naming the old ref's element
-    // instead rebuilt the panel on the old root for the theme change.
+  it("keeps one inspector while the parent passes a new ref object for the same element", async () => {
+    // `createRef()` in a function component, or `{ current: el }` inline,
+    // makes a new ref on every render. It still names the same element, so
+    // the panel, with its selection and expanded rows, must not be rebuilt.
+    const root = document.createElement("main");
+    root.innerHTML = "<h1>Stable</h1>";
+    document.body.append(root);
+
+    try {
+      const { rerender } = render(
+        <SemanticNavigator root={{ current: root }} />,
+      );
+      await waitFor(() => expect(builds).toEqual([root]));
+
+      for (let i = 0; i < 3; i++) {
+        rerender(<SemanticNavigator root={{ current: root }} />);
+      }
+      await act(async () => {
+        await new Promise((r) => setTimeout(r, 50));
+      });
+      expect(builds).toEqual([root]);
+    } finally {
+      root.remove();
+    }
+  });
+
+  it("moves to the new element when the ref is swapped for another", async () => {
     const first = document.createElement("main");
     first.innerHTML = "<h1>First</h1>";
     const second = document.createElement("main");
     second.innerHTML = "<h1>Second</h1>";
     document.body.append(first, second);
-    const firstRef = { current: first };
-    const secondRef = { current: second };
 
     try {
       const { rerender } = render(
-        <SemanticNavigator root={firstRef} theme="light" />,
+        <SemanticNavigator root={{ current: first }} />,
       );
       await waitFor(() => expect(builds).toEqual([first]));
 
-      rerender(<SemanticNavigator root={secondRef} theme="dark" />);
-      await waitFor(() => expect(builds.at(-1)).toBe(second));
-      await act(async () => {
-        await new Promise((r) => setTimeout(r, 50));
-      });
-      expect(builds).toEqual([first, second]);
+      rerender(<SemanticNavigator root={{ current: second }} />);
+      await waitFor(() => expect(builds).toEqual([first, second]));
     } finally {
       first.remove();
       second.remove();

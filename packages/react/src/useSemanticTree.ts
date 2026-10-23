@@ -32,8 +32,8 @@ export interface UseSemanticTreeOptions {
  * An element changes identity when it is created or swapped, and setting it
  * re-renders whatever holds the state, so the observer re-attaches. A ref
  * OBJECT is stable by design, so React cannot notify anything when
- * `ref.current` changes: the change is seen at the next commit, whatever
- * causes one.
+ * `ref.current` changes: the change is seen the next time the component that
+ * passes the ref commits, and not before.
  */
 export type SemanticTreeTarget = Element | { current: Element | null } | null;
 
@@ -55,32 +55,32 @@ function isElement(
  * it is. A ref's `.current` attaches during a commit, after render has run, so
  * a read while rendering, or an effect that depends on the ref, misses a root
  * that mounts later than the caller: it is read after every commit instead,
- * and kept in state with the ref it came from. A ref passed in place of
- * another names nothing until it has been read, never the element the other
- * one held.
+ * and the element kept in state.
+ *
+ * Keyed by the element, never by the ref object: a ref made anew on every
+ * render (`createRef()` in a function component, `{ current: el }` inline)
+ * still names the same element, so nothing observing it is rebuilt. The cost
+ * is that a ref swapped for another names the old one's element until the
+ * next commit.
  */
 export function useTargetElement(target: SemanticTreeTarget): Element | null {
   // `!target`, not `=== null`: plain JS, or a `useState<HTMLElement>()`
   // passed through a cast, hands this `undefined`.
   const ref = !target || isElement(target) ? null : target;
-  // Two plain values, never one object holding both. React can replay an
-  // update onto an older state, and an updater that builds an object then
-  // returns a new one on every replay: the state never settles, and this
-  // effect, which runs after every commit, loops. Measured in Next.js dev,
-  // where it did; jsdom never replays it. Setting a value replays as itself.
-  const [readFrom, setReadFrom] = useState<{ current: Element | null } | null>(
-    null,
-  );
-  const [element, setElement] = useState<Element | null>(null);
-  // No dependency list: this runs after every commit, and setting what the
-  // state already holds is a no-op. The ref goes in through a function so it
-  // is stored as it is, whatever it is.
+  // A plain value, never an object built per read: React can replay an update
+  // onto an older state, and a new object on every replay never settles, so
+  // this effect, which runs after every commit, would loop. Seen in Next.js
+  // dev; jsdom never replays it.
+  const [fromRef, setFromRef] = useState<Element | null>(null);
+  // No dependency list: this runs after every commit. It sets state only on a
+  // change, because even setting the value state holds can cost the caller a
+  // second render after a render an update caused.
   useEffect(() => {
-    setReadFrom(() => ref);
-    setElement(ref ? ref.current : null);
+    const current = ref ? ref.current : null;
+    if (current !== fromRef) setFromRef(current);
   });
   if (!ref) return target ? (target as Element) : null;
-  return readFrom === ref ? element : null;
+  return fromRef;
 }
 
 /**
