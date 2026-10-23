@@ -46,8 +46,8 @@ const NODES: NativeNode[] = [
       "ax-dom-4",
       "ax-dom-5",
       "ax-dom-6",
-      "ax-dom-7",
       "ax-dom-8",
+      "ax-dom-9",
     ],
   },
   // A sensitive field that holds something.
@@ -73,12 +73,12 @@ const NODES: NativeNode[] = [
   field("ax-dom-6", "Message", { value: "Hello world", valueWithheld: false }),
   // Two rows nothing withholds that show no value, which the wire can't tell
   // apart: an editor holding only an image (Chromium gives it no value at
-  // all) and an empty field.
-  field("ax-dom-7", "Signature pad", {
+  // all, and says it takes lines) and an empty field.
+  field("ax-dom-8", "Signature pad", {
     valueWithheld: false,
     states: { editable: "richtext", multiline: true },
   }),
-  field("ax-dom-8", "Nickname", {
+  field("ax-dom-9", "Nickname", {
     valueWithheld: false,
     states: { editable: "plaintext" },
   }),
@@ -146,11 +146,17 @@ describe("Chrome's tree: the edit box a typable row opens", () => {
     expect(container.querySelector('[data-node-id="ax-dom-6"]')).not.toBeNull();
   }
 
+  /** The open edit box, whichever element it is: a one-line input, or a
+   *  textarea for a field that takes lines. */
   const box = () =>
-    container.querySelector<HTMLInputElement>("input.sn-input-panel-field");
+    container.querySelector<HTMLInputElement | HTMLTextAreaElement>(
+      ".sn-input-panel-field",
+    );
 
   /** Open a row's edit box from its Type button. */
-  async function open(id: string): Promise<HTMLInputElement> {
+  async function open(
+    id: string,
+  ): Promise<HTMLInputElement | HTMLTextAreaElement> {
     const type = container.querySelector<HTMLButtonElement>(
       `[data-node-id="${id}"] button[title="Type (Enter)"]`,
     );
@@ -161,14 +167,19 @@ describe("Chrome's tree: the edit box a typable row opens", () => {
     return box()!;
   }
 
-  function typeInto(input: HTMLInputElement, text: string): void {
+  function typeInto(
+    input: HTMLInputElement | HTMLTextAreaElement,
+    text: string,
+  ): void {
     act(() => {
       input.value = text;
       input.dispatchEvent(new Event("input", { bubbles: true }));
     });
   }
 
-  async function enter(input: HTMLInputElement): Promise<void> {
+  async function enter(
+    input: HTMLInputElement | HTMLTextAreaElement,
+  ): Promise<void> {
     act(() => {
       input.dispatchEvent(
         new KeyboardEvent("keydown", { key: "Enter", bubbles: true }),
@@ -239,15 +250,17 @@ describe("Chrome's tree: the edit box a typable row opens", () => {
   });
 
   it.each([
-    ["an editor holding only an image", "ax-dom-7"],
-    ["an empty field", "ax-dom-8"],
+    ["an editor holding only an image", "ax-dom-8"],
+    ["an empty field", "ax-dom-9"],
   ])(
     "%s shows no value: opens empty and unmasked, and an untouched Enter types nothing",
     async (_, id) => {
       await showNative();
       const input = await open(id);
       expect(input.value).toBe("");
-      expect(input.type).toBe("text");
+      // Unmasked, in whichever box the field gets: an input's type is
+      // `text`, a textarea's `textarea`.
+      expect(input.type).not.toBe("password");
       await enter(input);
       expect(box()).toBeNull();
       expect(typed()).toEqual([]);
@@ -256,12 +269,12 @@ describe("Chrome's tree: the edit box a typable row opens", () => {
 
   it("still empties a field that shows no value once the user typed into it and cleared it", async () => {
     await showNative();
-    const input = await open("ax-dom-7");
+    const input = await open("ax-dom-8");
     typeInto(input, "x");
     typeInto(input, "");
     await enter(input);
     expect(typed()).toEqual([
-      { nodeId: "ax-dom-7", action: "type", value: "" },
+      { nodeId: "ax-dom-8", action: "type", value: "" },
     ]);
   });
 });

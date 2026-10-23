@@ -252,7 +252,9 @@ test("an untouched Enter in the empty edit box of an editor holding only an imag
   const field = nav.panel.locator(".sn-input-panel-field");
   await editor.getByTitle("Type (Enter)").click();
   await expect(field).toHaveValue("");
-  await expect(field).toHaveAttribute("type", "text");
+  // Unmasked, whether the box is an input or, for a field that takes lines
+  // as an editor does, a textarea, which has no `type` at all.
+  await expect(field).not.toHaveAttribute("type", "password");
   await field.press("Enter");
   await expect(field).toHaveCount(0);
   await nav.panel.waitForTimeout(NO_ACT_WINDOW_MS);
