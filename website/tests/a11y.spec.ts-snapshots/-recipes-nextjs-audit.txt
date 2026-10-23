@@ -37,6 +37,11 @@ main
     code "root"
     code "<div>"
     code "<div>"
+  paragraph "The wrapper is , so it takes no part in layout: a flex or grid layout on still lays out your pages' top-level elements as if they were its own children. A selector that names them as 's children, such as , no longer matches. Having no box of its own, the wrapper is the one row in the panel that hover can't highlight."
+    code "display: contents"
+    code "<body>"
+    code "<body>"
+    code "body > main"
   paragraph "The mode portals into . The library already guards against SSR — the portal only activates after the first client commit — so you can render this component from a Server Component without a crash."
     code "floating"
     code "document.body"
@@ -49,7 +54,7 @@ main
     code "dynamic(..., { ssr: false })"
     strong "inside a Client Component"
   heading "Option 2 — environment flag" (level 3)
-  paragraph "For staging deployments where you want to toggle the panel with an env var, use the component from Option 1 with this gate in place of its check:"
+  paragraph "For staging deployments where you want to toggle the panel with an env var, use the component from Option 1 with this condition in place of its check:"
     code "NODE_ENV"
   button "Copy Code"
   code
