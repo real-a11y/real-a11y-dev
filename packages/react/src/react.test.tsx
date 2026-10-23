@@ -218,6 +218,129 @@ describe("<SemanticNavigator />", () => {
       expect(mounted).toBe(true);
     }, WAIT);
   });
+
+  it("attaches to a root that mounts after it", async () => {
+    // The root sits behind a loading state, so it attaches in a later commit
+    // than the navigator's first. The create effect used to depend on
+    // `root.current` as read during render, which was null on every render,
+    // so it never ran and the panel stayed blank with nothing logged.
+    function App() {
+      const rootRef = useRef<HTMLElement>(null);
+      const [ready, setReady] = useState(false);
+      return (
+        <>
+          {ready ? (
+            <main ref={rootRef}>
+              <h1>Loaded</h1>
+            </main>
+          ) : (
+            <p>Loading…</p>
+          )}
+          <button type="button" onClick={() => setReady(true)}>
+            load
+          </button>
+          <div data-testid="panel">
+            <SemanticNavigator root={rootRef} />
+          </div>
+        </>
+      );
+    }
+
+    const { getByText, getByTestId } = render(<App />);
+    const host = getByTestId("panel").firstElementChild!;
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 10));
+    });
+    expect(host.shadowRoot).toBeNull(); // nothing to observe yet
+
+    await act(async () => {
+      getByText("load").click();
+    });
+    await waitFor(() => {
+      expect(host.shadowRoot?.textContent).toContain("Loaded");
+    }, WAIT);
+  });
+
+  it("attaches to a root element that a sibling mounts later", async () => {
+    // A ref object only re-resolves when the navigator re-renders. A root
+    // another component mounts on its own state change doesn't re-render it,
+    // so that case passes the element, from a callback ref kept in state.
+    function Lazy({ onRoot }: { onRoot: (el: HTMLElement | null) => void }) {
+      const [ready, setReady] = useState(false);
+      return ready ? (
+        <main ref={onRoot}>
+          <h1>From a sibling</h1>
+        </main>
+      ) : (
+        <button type="button" onClick={() => setReady(true)}>
+          load
+        </button>
+      );
+    }
+    function App() {
+      const [root, setRoot] = useState<HTMLElement | null>(null);
+      return (
+        <>
+          <Lazy onRoot={setRoot} />
+          <div data-testid="panel">
+            <SemanticNavigator root={root} />
+          </div>
+        </>
+      );
+    }
+
+    const { getByText, getByTestId } = render(<App />);
+    const host = getByTestId("panel").firstElementChild!;
+    await act(async () => {
+      getByText("load").click();
+    });
+    await waitFor(() => {
+      expect(host.shadowRoot?.textContent).toContain("From a sibling");
+    }, WAIT);
+  });
+
+  it("keeps the floating panel's own chrome out of a tree widened to the body", async () => {
+    // A live region outside the root widens the tree to <body>, where the
+    // floating panel is portaled. Only the inspector's container inside the
+    // panel was marked as panel chrome, so the wrapper's landmark and its
+    // Collapse button were listed as rows of the page.
+    function App() {
+      const rootRef = useRef<HTMLDivElement>(null);
+      return (
+        <>
+          <p role="status">Saved</p>
+          <div ref={rootRef}>
+            <button>Go</button>
+          </div>
+          <SemanticNavigator root={rootRef} floating />
+        </>
+      );
+    }
+
+    render(<App />);
+    const panel = await waitFor(() => {
+      const el = document.querySelector(
+        '[aria-label="Semantic Navigator panel"]',
+      );
+      expect(el).not.toBeNull();
+      return el!;
+    }, WAIT);
+    const host = await waitFor(() => {
+      const el = Array.from(panel.querySelectorAll("div")).find(
+        (d) => d.shadowRoot !== null,
+      );
+      expect(el).toBeDefined();
+      return el!;
+    }, WAIT);
+
+    await waitFor(() => {
+      const text = host.shadowRoot!.textContent ?? "";
+      // The tree did widen: the status region outside the root is in it.
+      expect(text).toContain("Saved");
+      expect(text).not.toContain("Semantic Navigator panel");
+      expect(text).not.toContain("Collapse panel");
+    }, WAIT);
+  });
 });
 
 describe("useSemanticTree", () => {

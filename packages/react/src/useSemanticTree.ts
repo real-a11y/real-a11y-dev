@@ -33,7 +33,8 @@ export interface UseSemanticTreeOptions {
  */
 export type SemanticTreeTarget = Element | { current: Element | null } | null;
 
-function resolveTarget(target: SemanticTreeTarget): Element | null {
+/** The element `target` names now. Read after commit, never during render. */
+export function resolveTarget(target: SemanticTreeTarget): Element | null {
   if (!target) return null;
   return "current" in target ? target.current : target;
 }

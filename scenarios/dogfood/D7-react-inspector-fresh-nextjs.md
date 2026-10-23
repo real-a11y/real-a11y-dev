@@ -31,7 +31,10 @@ template turned on (16.4 enables `cacheComponents`). Then install
 
 1. Follow the **Next.js recipe** (`website/recipes/nextjs.md`) exactly: its first snippet,
    then its Option 1
-2. `npm run dev` — load a page with the inspector mounted
+2. `npm run dev` — load a page with the inspector mounted. Then portal a
+   `<p role="status">Saved</p>` into `<body>` from that page, as a toast library does: a
+   live region outside the root widens the tree to `<body>`, which is where the floating
+   panel itself sits
 3. Watch the **server** console as well as the browser one
 4. Check specifically for hydration mismatch warnings. Add one route with a deliberate
    mismatch (a `typeof window` branch) first, and confirm it **is** reported — in dev,
@@ -43,7 +46,7 @@ template turned on (16.4 enables `cacheComponents`). Then install
 6. Mount the inspector inside a component that only renders client-side. Then mount the
    observed root **after** the navigator (behind a loading state)
 7. `npm run build && npm start` — the **production** build. The recipe's gate renders
-   nothing in production, so use an ungated mount, or Option 2 built with
+   your pages without the panel in production, so use an ungated mount, or Option 2 built with
    `NEXT_PUBLIC_A11Y=1`. With the gate on, check the network log: the inspector chunk is
    never requested
 8. Repeat 2–5 against the production build
@@ -55,13 +58,19 @@ template turned on (16.4 enables `cacheComponents`). Then install
 - **2** — renders client-side without extra ceremony beyond what the docs describe, and the
   panel's tree **contains the page**: search the panel for the page's `<h1>` and its
   landmarks. A blank panel, or a lone `generic` row, is a fail. The recipe as published
-  when the beta.19 dogfood ran never attaches the observed root — a docs defect, so it
-  lasts until `website/recipes/nextjs.md` changes, whatever react version you install
+  when the beta.19 dogfood ran never attaches the observed root — a docs defect, whatever
+  react version you install. Its fix (unreleased) reaches real-a11y.dev with the next
+  release, and next.real-a11y.dev serves it now. Once the toast is up, the tree holds
+  `Saved` and nothing of the panel's own: a search for `Collapse panel` finds nothing, and
+  TAB view lists no panel control. On react 0.1.0-beta.19 both find the panel's title
+  bar, the known defect
 - **3/4** — **no** hydration errors, no "window is not defined", no SSR crash. This is the whole
   risk of this row. The deliberate mismatch is reported, so the silence is real
 - **5** — works as in the example app: nothing the picker lands on opens, takes focus, or
   sees its capture-phase handler run
-- **6** — a root that mounts after the navigator still populates (twin: R20 step 6b)
+- **6** — a root that mounts after the navigator still populates (twin: R20 step 6b). On
+  react 0.1.0-beta.19 and earlier it stays empty, the known defect; the release after it
+  (unreleased) attaches it
 - **7/8** — the production build behaves like dev. React's dev build tolerates things production
   does not
 - **9** — a clear error or documented guidance, not an inscrutable stack trace, in dev and
