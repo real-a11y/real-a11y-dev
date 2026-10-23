@@ -4,7 +4,12 @@ import { describe, it, expect, afterEach } from "vitest";
 
 import { useTargetElement } from "./useSemanticTree.js";
 
-import { SemanticNavigator, useSemanticTree, useActiveModal } from "./index.js";
+import {
+  SemanticNavigator,
+  useSemanticTree,
+  useActiveModal,
+  type SemanticTreeTarget,
+} from "./index.js";
 
 afterEach(() => cleanup());
 
@@ -524,6 +529,33 @@ describe("useSemanticTree", () => {
       });
     }
     expect(renders - afterMount).toBe(5);
+  });
+
+  it("keeps observing when an element target is handed over as a ref to it", async () => {
+    // Only the form naming the root changes, so the observer, and the tree it
+    // built, must stay rather than be cleared and extracted again.
+    const root = document.createElement("div");
+    root.innerHTML = "<button>Same</button>";
+    document.body.appendChild(root);
+    let latest: ReturnType<typeof useSemanticTree> = null;
+    function Subject({ target }: { target: SemanticTreeTarget }) {
+      latest = useSemanticTree(target);
+      return null;
+    }
+
+    try {
+      const { rerender } = render(<Subject target={root} />);
+      await waitFor(() => expect(latest).not.toBeNull(), WAIT);
+      const before = latest;
+
+      rerender(<Subject target={{ current: root }} />);
+      await act(async () => {
+        await new Promise((r) => setTimeout(r, 50));
+      });
+      expect(latest).toBe(before);
+    } finally {
+      root.remove();
+    }
   });
 
   it("returns null for an undefined target instead of throwing", async () => {

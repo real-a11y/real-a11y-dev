@@ -59,9 +59,11 @@ function isElement(
  *
  * Keyed by the element, never by the ref object: a ref made anew on every
  * render (`createRef()` in a function component, `{ current: el }` inline)
- * still names the same element, so nothing observing it is rebuilt. The cost
- * is that a ref swapped for another names the old one's element until the
- * next commit.
+ * still names the same element, so nothing observing it is rebuilt. The state
+ * records the element of the last commit whichever form named it, so a ref
+ * that takes over from an element starts from that element: one holding the
+ * same element changes nothing. The cost is that a ref swapped in for another
+ * root names the old one's element until the next commit.
  */
 export function useTargetElement(target: SemanticTreeTarget): Element | null {
   // `!target`, not `=== null`: plain JS, or a `useState<HTMLElement>()`
@@ -71,16 +73,16 @@ export function useTargetElement(target: SemanticTreeTarget): Element | null {
   // onto an older state, and a new object on every replay never settles, so
   // this effect, which runs after every commit, would loop. Seen in Next.js
   // dev; jsdom never replays it.
-  const [fromRef, setFromRef] = useState<Element | null>(null);
+  const [committed, setCommitted] = useState<Element | null>(null);
   // No dependency list: this runs after every commit. It sets state only on a
   // change, because even setting the value state holds can cost the caller a
   // second render after a render an update caused.
   useEffect(() => {
-    const current = ref ? ref.current : null;
-    if (current !== fromRef) setFromRef(current);
+    const current = ref ? ref.current : target ? (target as Element) : null;
+    if (current !== committed) setCommitted(current);
   });
   if (!ref) return target ? (target as Element) : null;
-  return fromRef;
+  return committed;
 }
 
 /**

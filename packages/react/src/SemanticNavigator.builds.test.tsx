@@ -84,6 +84,46 @@ describe("<SemanticNavigator /> builds", () => {
     }
   });
 
+  it("keeps its inspector when an element root is handed over as a ref to it", async () => {
+    // The root does not change, only the form naming it, so neither must the
+    // panel: rebuilding it would drop its selection and expanded rows.
+    const root = document.createElement("main");
+    root.innerHTML = "<h1>Same</h1>";
+    document.body.append(root);
+
+    try {
+      const { rerender } = render(<SemanticNavigator root={root} />);
+      await waitFor(() => expect(builds).toEqual([root]));
+
+      rerender(<SemanticNavigator root={{ current: root }} />);
+      await act(async () => {
+        await new Promise((r) => setTimeout(r, 50));
+      });
+      expect(builds).toEqual([root]);
+    } finally {
+      root.remove();
+    }
+  });
+
+  it("moves to the new element when an element root is handed over as a ref to another", async () => {
+    const first = document.createElement("main");
+    first.innerHTML = "<h1>First</h1>";
+    const second = document.createElement("main");
+    second.innerHTML = "<h1>Second</h1>";
+    document.body.append(first, second);
+
+    try {
+      const { rerender } = render(<SemanticNavigator root={first} />);
+      await waitFor(() => expect(builds).toEqual([first]));
+
+      rerender(<SemanticNavigator root={{ current: second }} />);
+      await waitFor(() => expect(builds).toEqual([first, second]));
+    } finally {
+      first.remove();
+      second.remove();
+    }
+  });
+
   it("moves to the new element when the ref is swapped for another", async () => {
     const first = document.createElement("main");
     first.innerHTML = "<h1>First</h1>";
