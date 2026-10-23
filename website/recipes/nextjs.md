@@ -25,20 +25,40 @@ Any component that renders the inspector must be a **Client Component**. The ins
 // app/components/A11yPanel.tsx
 "use client";
 
-import { useRef } from "react";
+import { useRef, type ReactNode } from "react";
 import { SemanticNavigator } from "@real-a11y-dev/react";
 
-export function A11yPanel() {
+export function A11yPanel({ children }: { children: ReactNode }) {
   const rootRef = useRef<HTMLDivElement>(null);
 
   return (
     <div ref={rootRef}>
-      {/* your page content */}
+      {children}
       <SemanticNavigator root={rootRef} floating highlightOnHover />
     </div>
   );
 }
 ```
+
+Wrap your pages with it in the root layout, so the panel observes what they render:
+
+```tsx
+// app/layout.tsx
+import type { ReactNode } from "react";
+import { A11yPanel } from "./components/A11yPanel";
+
+export default function RootLayout({ children }: { children: ReactNode }) {
+  return (
+    <html lang="en">
+      <body>
+        <A11yPanel>{children}</A11yPanel>
+      </body>
+    </html>
+  );
+}
+```
+
+`root` is the element the panel observes: here, the `<div>` that holds your pages. It has to be attached to an element that holds them. A ref that never reaches an element, or one on an empty `<div>`, leaves the panel blank, and nothing is logged.
 
 The `floating` mode portals into `document.body`. The library already guards against SSR — the portal only activates after the first client commit — so you can render this component from a Server Component without a crash.
 
@@ -52,7 +72,7 @@ Two options — pick the one that matches your toolchain.
 // app/components/A11yPanel.tsx
 "use client";
 
-import { useRef } from "react";
+import { useRef, type ReactNode } from "react";
 import dynamic from "next/dynamic";
 
 const SemanticNavigator = dynamic(
@@ -60,14 +80,19 @@ const SemanticNavigator = dynamic(
   { ssr: false },
 );
 
-export function A11yPanel() {
+export function A11yPanel({ children }: { children: ReactNode }) {
   const rootRef = useRef<HTMLDivElement>(null);
 
-  // In a production build this branch is statically dead; Next.js won't
-  // include the inspector chunk at all.
-  if (process.env.NODE_ENV !== "development") return null;
+  // In a production build this branch is statically dead: the layout renders
+  // your pages alone, and the inspector chunk is never requested.
+  if (process.env.NODE_ENV !== "development") return <>{children}</>;
 
-  return <SemanticNavigator root={rootRef} floating />;
+  return (
+    <div ref={rootRef}>
+      {children}
+      <SemanticNavigator root={rootRef} floating />
+    </div>
+  );
 }
 ```
 
@@ -75,11 +100,10 @@ Note: `dynamic(..., { ssr: false })` has to live **inside a Client Component** i
 
 ### Option 2 — environment flag
 
-For staging deployments where you want to toggle the panel with an env var:
+For staging deployments where you want to toggle the panel with an env var, use the component from Option 1 with this gate in place of its `NODE_ENV` check:
 
 ```tsx
-"use client";
-if (process.env.NEXT_PUBLIC_A11Y !== "1") return null;
+if (process.env.NEXT_PUBLIC_A11Y !== "1") return <>{children}</>;
 ```
 
 This ships the panel chunk in the production bundle as a separate chunk — it just doesn't run. Cheaper DX, more bytes.
