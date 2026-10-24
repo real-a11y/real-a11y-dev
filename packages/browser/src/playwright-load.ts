@@ -81,6 +81,23 @@ function playwrightNamespace(loaded: unknown): typeof Playwright | undefined {
   return undefined;
 }
 
+/**
+ * Whether `err` says Playwright itself can't be found from here: the error
+ * `loadPlaywright` throws when `playwright` doesn't resolve, or Node's own for
+ * a bare `import` (`ERR_MODULE_NOT_FOUND`) or `require` (`MODULE_NOT_FOUND`).
+ * The match is on the quoted name at the start of the message, so a missing
+ * dependency of an installed Playwright, or any module a `playwright-load`
+ * chunk imports, isn't taken for it.
+ */
+export function isPlaywrightMissing(err: unknown): boolean {
+  if (!(err instanceof Error)) return false;
+  const code = (err as NodeJS.ErrnoException).code;
+  if (code !== "ERR_MODULE_NOT_FOUND" && code !== "MODULE_NOT_FOUND") {
+    return false;
+  }
+  return /^Cannot find (package|module) 'playwright'/.test(err.message);
+}
+
 function hasChromium(value: unknown): boolean {
   return (
     !!value &&

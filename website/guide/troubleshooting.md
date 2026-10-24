@@ -199,7 +199,7 @@ Playwright is required to drive a browser, but it isn't installed.
 
 Its hint names the commands for how it was installed: those above for a project dependency, `npm i -g playwright && real-a11y install` for a global install, and for a run through `npx -y @real-a11y-dev/cli`, an install of both in the project, since npx sees only what it installed beside the CLI.
 
-Of the MCP server it is a required peer: npm and pnpm install it with the server, `npx -y @real-a11y-dev/mcp` included. Yarn and a `--legacy-peer-deps` install leave it out, as npx did for `@real-a11y-dev/mcp` 0.1.0-beta.9 and earlier, which listed it as optional. The server's tools then answer `Cannot find package 'playwright'`. Install the two together, and launch the server as:
+Of the MCP server it is a required peer: npm installs it with the server, `npx -y @real-a11y-dev/mcp` included, and so does pnpm by default. Yarn, pnpm with `auto-install-peers` off, and a `--legacy-peer-deps` install leave it out, as npx did for `@real-a11y-dev/mcp` 0.1.0-beta.9 and earlier, which listed it as optional. The server's tools then answer `Cannot find package 'playwright'`. Install the two together, and launch the server as:
 
 ```sh
 npx -y -p @real-a11y-dev/mcp -p playwright real-a11y-mcp

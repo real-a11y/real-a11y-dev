@@ -154,7 +154,7 @@ It reuses the exact pieces the testing package already ships:
 
 ## Install & run
 
-Playwright is a peer dependency, which npm and pnpm install with the server, `npx -y` included; with Yarn, add `playwright` yourself. A Chrome binary is required too:
+Playwright is a peer dependency, which npm installs with the server, `npx -y` included, as does pnpm by default; with Yarn, add `playwright` yourself. A Chrome binary is required too:
 
 ```bash
 npx -y @real-a11y-dev/cli install   # downloads Chrome for Testing, first time only

@@ -19,6 +19,7 @@ import type { A11yRule, Finding, RoleFilter } from "@real-a11y-dev/audit";
 import {
   captureNativeCheckpoint,
   diffNativeCheckpoint,
+  isPlaywrightMissing,
   resolveTarget,
 } from "@real-a11y-dev/browser";
 import type { A11ySession, TargetCandidate } from "@real-a11y-dev/browser";
@@ -150,21 +151,14 @@ function text(body: string, hint?: string) {
 }
 
 /**
- * Playwright is a peer of this package. npm and pnpm install it with the
- * server, under npx too, but Yarn and a `--legacy-peer-deps` install leave it
- * out. The module error alone names no fix, so a tool that needs a browser
- * answers with one.
+ * Playwright is a peer of this package. npm installs it with the server, under
+ * npx too, and so does pnpm with its default `auto-install-peers`. Yarn, pnpm
+ * with that setting off, and a `--legacy-peer-deps` install leave it out. The
+ * module error alone names no fix, so a tool that needs a browser answers with
+ * one.
  */
 const PLAYWRIGHT_MISSING_HINT =
   "Playwright isn't installed beside the server. Launch it as `npx -y -p @real-a11y-dev/mcp -p playwright real-a11y-mcp`, or install `playwright` next to `@real-a11y-dev/mcp` in the project the client starts it from.";
-
-function isPlaywrightMissing(err: Error): boolean {
-  const code = (err as NodeJS.ErrnoException).code;
-  if (code !== "ERR_MODULE_NOT_FOUND" && code !== "MODULE_NOT_FOUND") {
-    return false;
-  }
-  return /'playwright'/.test(err.message);
-}
 
 // The three levers that survive the migration, named once so a tool can't
 // advertise one it doesn't take.

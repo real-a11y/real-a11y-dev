@@ -234,7 +234,7 @@ That's it. A **Semantic Navigator** panel appears next to Controls and A11y for 
 | `@real-a11y-dev/react` | ≥ 20 | React 18 or 19, modern browser |
 | `@real-a11y-dev/storybook-addon` | ≥ 20 | Storybook 9.x, 10.x or 11.x |
 | `@real-a11y-dev/cli` | ≥ 22.12 | Real browser via optional peer `playwright` (lazily imported) |
-| `@real-a11y-dev/mcp` | ≥ 20 | Real browser via peer `playwright`, which npm and pnpm install with it (lazily imported); runs in any MCP client |
+| `@real-a11y-dev/mcp` | ≥ 20 | Real browser via peer `playwright`, which npm installs with it (lazily imported); runs in any MCP client |
 
 ---
 
