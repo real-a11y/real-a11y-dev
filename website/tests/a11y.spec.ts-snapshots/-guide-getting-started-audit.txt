@@ -200,7 +200,7 @@ main
         cell "@real-a11y-dev/mcp"
           code "@real-a11y-dev/mcp"
         cell "≥ 20"
-        cell "Real browser via optional peer playwright (lazily imported); runs in any MCP client"
+        cell "Real browser via peer playwright, which npm installs with it (lazily imported); runs in any MCP client"
           code "playwright"
   separator
   heading "Keep it out of production" (level 2)
