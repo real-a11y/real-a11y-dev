@@ -35,6 +35,7 @@ import {
   nativeTree as computeNativeTree,
   type NativeTreeOptions,
 } from "./native-tree.js";
+import { withLoopbackBypass } from "./proxy-bypass.js";
 
 /**
  * The injected IIFE page-bundle, as SOURCE TEXT — lazily, and cached.
@@ -147,7 +148,10 @@ export interface BrowserSessionOptions {
    * Network proxy for the launched browser. Chromium does not honor
    * `HTTP_PROXY`/`HTTPS_PROXY` env vars on its own, so callers on corporate
    * networks must pass one explicitly. Ignored when `cdpEndpoint` is set (the
-   * running browser already has its own network config).
+   * running browser already has its own network config). A `bypass` that
+   * names a loopback host keeps every loopback host off the proxy, on every
+   * Playwright version: up to 1.58, Playwright sent loopback through the proxy
+   * whatever the list said.
    */
   proxy?: {
     server: string;
@@ -690,7 +694,9 @@ export class BrowserSession implements A11ySession {
         ...(this.opts.executablePath
           ? { executablePath: this.opts.executablePath }
           : {}),
-        ...(this.opts.proxy ? { proxy: this.opts.proxy } : {}),
+        ...(this.opts.proxy
+          ? { proxy: withLoopbackBypass(this.opts.proxy) }
+          : {}),
       });
     }
 

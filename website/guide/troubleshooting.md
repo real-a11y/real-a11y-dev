@@ -190,23 +190,30 @@ Every assertion is documented with an example in [`@real-a11y-dev/testing`](/pac
 
 ## The CLI or MCP says Playwright isn't installed
 
-Both `@real-a11y-dev/cli` and `@real-a11y-dev/mcp` list Playwright as an **optional** peer dependency and import it lazily — the library API (types, `buildServer`) loads without a browser, but the moment a command actually drives one, Playwright has to be present. If it isn't, you'll see:
+Both `@real-a11y-dev/cli` and `@real-a11y-dev/mcp` list Playwright as an **optional** peer dependency and import it lazily — the library API (types, `buildServer`) loads without a browser, but the moment a command actually drives one, Playwright has to be present. If it isn't, the CLI says:
 
 ```
 Playwright is required to drive a browser, but it isn't installed.
   npm i -D playwright && npx real-a11y install
 ```
 
-The CLI's hint names the commands for how it was installed: those above for a project dependency, `npm i -g playwright && real-a11y install` for a global install, and a project install of both for a run through `npx -y @real-a11y-dev/cli`, which sees only what npx installed beside it. For the MCP server, install the peer and a browser:
+Its hint names the commands for how it was installed: those above for a project dependency, `npm i -g playwright && real-a11y install` for a global install, and for a run through `npx -y @real-a11y-dev/cli`, an install of both in the project, since npx sees only what it installed beside the CLI.
+
+The MCP server's tools answer `Cannot find package 'playwright'` instead. npx doesn't install an optional peer, so a server launched with `npx -y @real-a11y-dev/mcp` has no Playwright beside it. Have npx install the two together, and launch the server as:
 
 ```sh
-npm i -D playwright
+npx -y -p @real-a11y-dev/mcp -p playwright real-a11y-mcp
+```
+
+In a client's config file that is `"command": "npx"` with `"args": ["-y", "-p", "@real-a11y-dev/mcp", "-p", "playwright", "real-a11y-mcp"]`. Or install both in a project (`npm i -D @real-a11y-dev/mcp playwright`) and point the client at that install. Either way, the server needs a browser once:
+
+```sh
 npx -y @real-a11y-dev/cli install   # downloads Chrome for Testing, first time only
 ```
 
-Use the scoped name there: `npx real-a11y` reaches the CLI only in a project that installed it, and anywhere else asks the registry for an unscoped package that isn't ours.
+That is the CLI's installer, which needs Node.js 22.12 or newer. Use the scoped name there: `npx real-a11y` reaches the CLI only in a project that installed it, and anywhere else asks the registry for an unscoped package that isn't ours.
 
-A separate "No browser is downloaded yet." error means Playwright itself is installed but no browser binary is — run just the install step the hint names, the same `install` command for that layout.
+A separate "No browser is downloaded yet." error means Playwright itself is installed but no browser binary is — run just the install step the hint names.
 
 ## Chrome fails to launch with a shared-library error
 

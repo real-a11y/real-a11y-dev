@@ -42,67 +42,13 @@ export interface ProxyConfig {
   password?: string;
 }
 
-/**
- * Hosts whose presence in a bypass list tells Playwright 1.59 and later to
- * keep loopback off the proxy: its own list, less `<-loopback>`, which
- * `loopbackSafeBypass` handles first. Plus `*`, which Playwright does not
- * count: a list that bypasses every host still sent loopback to the proxy on
- * every version, which no one setting `NO_PROXY=*` means.
- */
-const LOOPBACK_BYPASS_HOSTS = new Set([
-  "localhost",
-  "127.0.0.1",
-  "::1",
-  "[::]",
-  "[::1]",
-  "<loopback>",
-  "*",
-]);
-
-/**
- * Chromium's implicit bypass rules: loopback and link-local hosts skip any
- * proxy unless a `<-loopback>` rule takes them away.
- */
-const IMPLICIT_BYPASS_RULES = [
-  "localhost",
-  "*.localhost",
-  "127.0.0.1/8",
-  "[::1]",
-  "169.254.0.0/16",
-  "fe80::/10",
-];
-
-/**
- * The bypass list to hand Playwright, so that a `NO_PROXY` naming loopback
- * keeps it off the proxy on every Playwright the peer range admits.
- *
- * From 1.59, Playwright leaves Chromium's implicit loopback bypass alone when
- * the list names a loopback host. Up to 1.58.2 it appended `<-loopback>` to
- * any list without one, and in Chromium a later rule overrides an earlier
- * one, so `NO_PROXY=localhost` still sent localhost to the proxy: to a dead
- * proxy that is a failed run, to a live one, its error page audited as the
- * page. Such a list now leads with `<-loopback>`, which stops 1.58 appending
- * its own, then gives back the implicit rules that takes away, so every
- * version bypasses what 1.59 does — and `*` bypasses loopback too, on all of
- * them. A list naming no loopback host, or holding `<-loopback>` already, is
- * passed on as it is: there, both lines agree.
- */
-export function loopbackSafeBypass(
-  bypass: string | undefined,
-): string | undefined {
-  if (!bypass) return bypass;
-  const hosts = bypass.split(",").map((host) => host.trim());
-  if (hosts.includes("<-loopback>")) return bypass;
-  if (!hosts.some((host) => LOOPBACK_BYPASS_HOSTS.has(host))) return bypass;
-  return ["<-loopback>", ...IMPLICIT_BYPASS_RULES, bypass].join(",");
-}
-
 export function proxyFromEnv(): ProxyConfig | undefined {
   const env = process.env;
   const raw =
     env.HTTPS_PROXY ?? env.https_proxy ?? env.HTTP_PROXY ?? env.http_proxy;
   if (!raw) return undefined;
-  const bypass = loopbackSafeBypass(env.NO_PROXY ?? env.no_proxy);
+  // BrowserSession makes a bypass naming loopback safe for every Playwright.
+  const bypass = env.NO_PROXY ?? env.no_proxy;
   // Corporate proxies embed credentials in the env URL, but Chromium only
   // authenticates via explicit username/password launch fields.
   try {
@@ -180,7 +126,7 @@ export async function createSession(
       const message = err instanceof Error ? err.message : String(err);
       throw new CliError(
         message,
-        `re-run: ${installCommand()} — or fix/unset --chrome-path / REAL_A11Y_CHROME_PATH.`,
+        `re-run: ${installCommand(flags.cwd ?? process.cwd())} — or fix/unset --chrome-path / REAL_A11Y_CHROME_PATH.`,
       );
     }
     if (chrome && flags.verbose) {

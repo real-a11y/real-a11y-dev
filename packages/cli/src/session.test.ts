@@ -1,14 +1,19 @@
+import {
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  symlinkSync,
+  unlinkSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
 import type { BrowserSession } from "@real-a11y-dev/browser";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { CliError } from "./exit.js";
-import { installCommand } from "./playwright-resolve.js";
-import {
-  createSession,
-  loopbackSafeBypass,
-  openPage,
-  proxyFromEnv,
-} from "./session.js";
+import { cliPackageRoot, installCommand } from "./playwright-resolve.js";
+import { createSession, openPage, proxyFromEnv } from "./session.js";
 
 function fakeSessionThatThrows(message: string): BrowserSession {
   return {
@@ -93,6 +98,35 @@ describe("openPage — error catalog", () => {
     expect(err.hint).toBe(
       `re-run: ${installCommand()} — or fix/unset --chrome-path / REAL_A11Y_CHROME_PATH.`,
     );
+  });
+
+  it("reads that layout from the session's cwd, not the process's", async () => {
+    // A project whose node_modules links to the running CLI, as an install
+    // there would, so `npx real-a11y` reaches it from the project.
+    const project = mkdtempSync(join(tmpdir(), "real-a11y-session-cwd-"));
+    const link = join(project, "node_modules", "@real-a11y-dev", "cli");
+    mkdirSync(join(link, ".."), { recursive: true });
+    // A junction needs no privilege on Windows; elsewhere the type is ignored.
+    symlinkSync(cliPackageRoot(), link, "junction");
+    try {
+      const err = await createSession({
+        chromePath: "/definitely/not/a/chrome",
+        cwd: project,
+      }).then(
+        () => {
+          throw new Error("expected the call to reject, but it resolved");
+        },
+        (e: unknown) => e as CliError,
+      );
+      expect(err).toBeInstanceOf(CliError);
+      expect(err.hint).toBe(
+        "re-run: npx real-a11y install — or fix/unset --chrome-path / REAL_A11Y_CHROME_PATH.",
+      );
+    } finally {
+      // The link first, so removing the project can't reach into the CLI.
+      unlinkSync(link);
+      rmSync(project, { recursive: true, force: true });
+    }
   });
 });
 
@@ -209,51 +243,6 @@ it("ignores an ERR_ token echoed back from the URL itself", async () => {
   expect(err.hint).toMatch(/nothing is listening there/);
 });
 
-describe("loopbackSafeBypass", () => {
-  // What Chromium's implicit rules cover, given back after `<-loopback>`.
-  const IMPLICIT =
-    "localhost,*.localhost,127.0.0.1/8,[::1],169.254.0.0/16,fe80::/10";
-
-  it("leads a list naming loopback with <-loopback> and the implicit rules", () => {
-    // Up to Playwright 1.58.2, a list without `<-loopback>` got one appended,
-    // and that later rule sent localhost to the proxy whatever NO_PROXY said.
-    expect(loopbackSafeBypass("localhost")).toBe(
-      `<-loopback>,${IMPLICIT},localhost`,
-    );
-    expect(loopbackSafeBypass(".corp.example, 127.0.0.1")).toBe(
-      `<-loopback>,${IMPLICIT},.corp.example, 127.0.0.1`,
-    );
-    expect(loopbackSafeBypass("[::1]")).toBe(`<-loopback>,${IMPLICIT},[::1]`);
-  });
-
-  it("treats * as naming loopback, since it bypasses every host", () => {
-    // Playwright doesn't count `*`, so this differs on every version: before,
-    // a list bypassing every host still sent loopback to the proxy.
-    expect(loopbackSafeBypass("*")).toBe(`<-loopback>,${IMPLICIT},*`);
-  });
-
-  it("passes a list naming no loopback host on as it is", () => {
-    // Every Playwright sends loopback through the proxy here, so they agree.
-    expect(loopbackSafeBypass(".corp.example,intranet")).toBe(
-      ".corp.example,intranet",
-    );
-    // A port makes it a different rule, as it does to Playwright.
-    expect(loopbackSafeBypass("localhost:3000")).toBe("localhost:3000");
-  });
-
-  it("passes a list that already holds <-loopback> on as it is", () => {
-    // Asking for loopback through the proxy is honoured, as Playwright does.
-    expect(loopbackSafeBypass("<-loopback>,localhost")).toBe(
-      "<-loopback>,localhost",
-    );
-  });
-
-  it("has nothing to add without a NO_PROXY", () => {
-    expect(loopbackSafeBypass(undefined)).toBeUndefined();
-    expect(loopbackSafeBypass("")).toBe("");
-  });
-});
-
 describe("proxyFromEnv", () => {
   afterEach(() => {
     vi.unstubAllEnvs();
@@ -278,20 +267,22 @@ describe("proxyFromEnv", () => {
     for (const [name, value] of Object.entries(env)) vi.stubEnv(name, value);
   }
 
-  it("keeps loopback named in NO_PROXY off the proxy", () => {
+  it("reads the proxy, its credentials and NO_PROXY from the environment", () => {
     stubProxyEnv({
       HTTPS_PROXY: "http://user:p%40ss@proxy.corp.example:3128",
       NO_PROXY: "localhost,.corp.example",
     });
+    // NO_PROXY goes on as it is: BrowserSession is what keeps the loopback
+    // hosts it names off the proxy, for every caller.
     expect(proxyFromEnv()).toEqual({
       server: "http://proxy.corp.example:3128",
       username: "user",
       password: "p@ss",
-      bypass: loopbackSafeBypass("localhost,.corp.example"),
+      bypass: "localhost,.corp.example",
     });
   });
 
-  it("passes a NO_PROXY naming no loopback host on unchanged", () => {
+  it("falls back to the lowercase no_proxy", () => {
     stubProxyEnv({
       HTTPS_PROXY: "http://proxy.corp.example:3128",
       no_proxy: ".corp.example",

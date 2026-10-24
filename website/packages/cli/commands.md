@@ -50,6 +50,11 @@ they exit `0` when every step lands, and `2` when one can't be reached.
   [`urls`](/packages/cli/configuration#urls).
 - **`A11Y_SNAPSHOT_OUT`** — default output path for [`snapshot`](#snapshot-url)
   when [`-o`](#o-output-file) is omitted.
+- **`HTTPS_PROXY`**, else **`HTTP_PROXY`** (either in lowercase too) — the proxy
+  a launched Chrome uses, credentials in the URL included; ignored with
+  [`--cdp`](#cdp-endpoint). The hosts in **`NO_PROXY`** skip it, and a `NO_PROXY`
+  that names a loopback host (`localhost`, `127.0.0.1`, …) keeps every loopback
+  host off it. One that names none sends loopback through the proxy too.
 
 Human (`pretty`) output is **English-only** and may be reworded between
 releases. The machine formats — `json`, `sarif`, `junit`, `jsonl`, and the

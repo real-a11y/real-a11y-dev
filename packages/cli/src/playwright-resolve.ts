@@ -60,6 +60,19 @@ export function cliPackageRoot(fromUrl: string = import.meta.url): string {
 }
 
 /**
+ * `cliPackageRoot()`, or undefined where it can't be found. The hints below
+ * are built while handling an error, so they must not throw a second one over
+ * it.
+ */
+function findCliPackageRoot(): string | undefined {
+  try {
+    return cliPackageRoot();
+  } catch {
+    return undefined;
+  }
+}
+
+/**
  * How the running CLI was installed, which decides the commands that repair it.
  *
  * - `local` — a project dependency: the running binary lives under `cwd`'s (or
@@ -70,15 +83,17 @@ export function cliPackageRoot(fromUrl: string = import.meta.url): string {
  *   `real-a11y` on PATH, and `npx real-a11y` asks the registry for an unscoped
  *   package that is not ours.
  * - `global` — anything else. Other on-demand runners (`pnpm dlx`, `bunx`)
- *   land here too: the plain `real-a11y` it names at worst isn't found, and
- *   never sends anyone to the registry.
+ *   land here too, as does a CLI whose root can't be found: the plain
+ *   `real-a11y` it names at worst isn't found, and never sends anyone to the
+ *   registry.
  */
 export type CliLayout = "local" | "npx" | "global";
 
 export function cliLayout(
   cwd: string = process.cwd(),
-  runningCliRoot: string = cliPackageRoot(),
+  runningCliRoot: string | undefined = findCliPackageRoot(),
 ): CliLayout {
+  if (runningCliRoot === undefined) return "global";
   if (cliIsLocalTo(cwd, runningCliRoot)) return "local";
   // npm runs `npx <pkg>` from `<npm cache>/_npx/<hash>/node_modules`.
   if (runningCliRoot.split(/[\\/]/).includes("_npx")) return "npx";
@@ -90,7 +105,8 @@ export function cliLayout(
  * read: a bare name would fetch whatever the dist-tag points at now, and a
  * second CLI would do the installing.
  */
-function runningCliSpec(runningCliRoot: string): string {
+function runningCliSpec(runningCliRoot: string | undefined): string {
+  if (runningCliRoot === undefined) return "@real-a11y-dev/cli";
   try {
     const { version } = JSON.parse(
       readFileSync(join(runningCliRoot, "package.json"), "utf8"),
@@ -102,7 +118,10 @@ function runningCliSpec(runningCliRoot: string): string {
   return "@real-a11y-dev/cli";
 }
 
-function installCommandFor(layout: CliLayout, runningCliRoot: string): string {
+function installCommandFor(
+  layout: CliLayout,
+  runningCliRoot: string | undefined,
+): string {
   switch (layout) {
     case "local":
       return "npx real-a11y install";
@@ -116,7 +135,7 @@ function installCommandFor(layout: CliLayout, runningCliRoot: string): string {
 /** The command that downloads a browser for the running CLI, in its layout. */
 export function installCommand(
   cwd: string = process.cwd(),
-  runningCliRoot: string = cliPackageRoot(),
+  runningCliRoot: string | undefined = findCliPackageRoot(),
 ): string {
   return installCommandFor(cliLayout(cwd, runningCliRoot), runningCliRoot);
 }
@@ -130,7 +149,7 @@ export function installCommand(
  */
 export function missingPlaywrightHint(
   cwd: string = process.cwd(),
-  runningCliRoot: string = cliPackageRoot(),
+  runningCliRoot: string | undefined = findCliPackageRoot(),
 ): string {
   const layout = cliLayout(cwd, runningCliRoot);
   switch (layout) {
