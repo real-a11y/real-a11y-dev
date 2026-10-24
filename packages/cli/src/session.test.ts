@@ -3,7 +3,12 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { CliError } from "./exit.js";
 import { installCommand } from "./playwright-resolve.js";
-import { loopbackSafeBypass, openPage, proxyFromEnv } from "./session.js";
+import {
+  createSession,
+  loopbackSafeBypass,
+  openPage,
+  proxyFromEnv,
+} from "./session.js";
 
 function fakeSessionThatThrows(message: string): BrowserSession {
   return {
@@ -34,8 +39,9 @@ describe("openPage — error catalog", () => {
     // The install command for this layout, never the unscoped
     // `npx real-a11y` outside a project, nor `npx playwright install
     // chromium`, which fetches some other Playwright's revision.
-    expect(err.hint).toMatch(new RegExp(`^${installCommand()}  `));
-    expect(err.hint).not.toMatch(/playwright install chromium/);
+    expect(err.hint).toBe(
+      `${installCommand()}  (CI on Linux may also need: npx playwright install-deps chromium)`,
+    );
   });
 
   it("maps a shared-library load failure to an install-deps hint", async () => {
@@ -71,7 +77,22 @@ describe("openPage — error catalog", () => {
       (e: unknown) => e as CliError,
     );
     expect(err).toBeInstanceOf(CliError);
-    expect(err.hint).toMatch(/install --force/);
+    expect(err.hint).toContain(`re-run: ${installCommand()} --force`);
+  });
+
+  it("names this layout's install command for a --chrome-path that isn't there", async () => {
+    const err = await createSession({
+      chromePath: "/definitely/not/a/chrome",
+    }).then(
+      () => {
+        throw new Error("expected the call to reject, but it resolved");
+      },
+      (e: unknown) => e as CliError,
+    );
+    expect(err).toBeInstanceOf(CliError);
+    expect(err.hint).toBe(
+      `re-run: ${installCommand()} — or fix/unset --chrome-path / REAL_A11Y_CHROME_PATH.`,
+    );
   });
 });
 
@@ -206,6 +227,8 @@ describe("loopbackSafeBypass", () => {
   });
 
   it("treats * as naming loopback, since it bypasses every host", () => {
+    // Playwright doesn't count `*`, so this differs on every version: before,
+    // a list bypassing every host still sent loopback to the proxy.
     expect(loopbackSafeBypass("*")).toBe(`<-loopback>,${IMPLICIT},*`);
   });
 
@@ -236,8 +259,11 @@ describe("proxyFromEnv", () => {
     vi.unstubAllEnvs();
   });
 
-  // Every proxy variable set as given and the rest unset, not empty: an empty
-  // value is not nullish, so it would hide the lowercase spelling behind it.
+  // Every proxy variable unset, then the given ones set. Unset rather than
+  // empty, since an empty value is not nullish and would hide the lowercase
+  // spelling behind it; and all unset first, since Windows treats the two
+  // spellings as one variable, so unsetting `https_proxy` after setting
+  // `HTTPS_PROXY` would undo it.
   function stubProxyEnv(env: Record<string, string>): void {
     for (const name of [
       "HTTPS_PROXY",
@@ -247,8 +273,9 @@ describe("proxyFromEnv", () => {
       "NO_PROXY",
       "no_proxy",
     ]) {
-      vi.stubEnv(name, env[name]);
+      vi.stubEnv(name, undefined);
     }
+    for (const [name, value] of Object.entries(env)) vi.stubEnv(name, value);
   }
 
   it("keeps loopback named in NO_PROXY off the proxy", () => {

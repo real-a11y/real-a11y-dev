@@ -44,8 +44,10 @@ export interface ProxyConfig {
 
 /**
  * Hosts whose presence in a bypass list tells Playwright 1.59 and later to
- * keep loopback off the proxy (its own list), and `*`, which bypasses every
- * host, loopback included.
+ * keep loopback off the proxy: its own list, less `<-loopback>`, which
+ * `loopbackSafeBypass` handles first. Plus `*`, which Playwright does not
+ * count: a list that bypasses every host still sent loopback to the proxy on
+ * every version, which no one setting `NO_PROXY=*` means.
  */
 const LOOPBACK_BYPASS_HOSTS = new Set([
   "localhost",
@@ -54,7 +56,6 @@ const LOOPBACK_BYPASS_HOSTS = new Set([
   "[::]",
   "[::1]",
   "<loopback>",
-  "<-loopback>",
   "*",
 ]);
 
@@ -82,8 +83,9 @@ const IMPLICIT_BYPASS_RULES = [
  * proxy that is a failed run, to a live one, its error page audited as the
  * page. Such a list now leads with `<-loopback>`, which stops 1.58 appending
  * its own, then gives back the implicit rules that takes away, so every
- * version bypasses what 1.59 does. A list naming no loopback host, or holding
- * `<-loopback>` already, is passed on as it is: there, both lines agree.
+ * version bypasses what 1.59 does — and `*` bypasses loopback too, on all of
+ * them. A list naming no loopback host, or holding `<-loopback>` already, is
+ * passed on as it is: there, both lines agree.
  */
 export function loopbackSafeBypass(
   bypass: string | undefined,
@@ -178,7 +180,7 @@ export async function createSession(
       const message = err instanceof Error ? err.message : String(err);
       throw new CliError(
         message,
-        "re-run: real-a11y install — or fix/unset --chrome-path / REAL_A11Y_CHROME_PATH.",
+        `re-run: ${installCommand()} — or fix/unset --chrome-path / REAL_A11Y_CHROME_PATH.`,
       );
     }
     if (chrome && flags.verbose) {
@@ -240,7 +242,7 @@ const NAVIGATION_HINTS: ReadonlyArray<readonly [RegExp, string]> = [
   ],
   [
     /net::ERR_(INTERNET_DISCONNECTED|NETWORK_CHANGED|ADDRESS_UNREACHABLE|PROXY_CONNECTION_FAILED)/,
-    "the network is unreachable from here — check connectivity, or the proxy in HTTPS_PROXY (hosts listed in NO_PROXY skip it).",
+    "the network is unreachable from here — check connectivity, or the proxy a launched Chrome uses: HTTPS_PROXY or HTTP_PROXY, skipped for the hosts in NO_PROXY.",
   ],
   [
     /net::ERR_(CERT_|SSL_)/,
@@ -313,7 +315,7 @@ export async function openPage(
     if (/spawn .*EACCES|ENOEXEC|Failed to launch/i.test(raw)) {
       throw new CliError(
         message,
-        "the configured Chrome binary looks broken — re-run: real-a11y install --force (or check --chrome-path / REAL_A11Y_CHROME_PATH).",
+        `the configured Chrome binary looks broken — re-run: ${installCommand()} --force (or check --chrome-path / REAL_A11Y_CHROME_PATH).`,
       );
     }
     if (/Unknown device/.test(raw)) {

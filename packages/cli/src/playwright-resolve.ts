@@ -69,7 +69,9 @@ export function cliPackageRoot(fromUrl: string = import.meta.url): string {
  * - `npx` — npm's on-demand cache, from `npx @real-a11y-dev/cli`. There is no
  *   `real-a11y` on PATH, and `npx real-a11y` asks the registry for an unscoped
  *   package that is not ours.
- * - `global` — anything else.
+ * - `global` — anything else. Other on-demand runners (`pnpm dlx`, `bunx`)
+ *   land here too: the plain `real-a11y` it names at worst isn't found, and
+ *   never sends anyone to the registry.
  */
 export type CliLayout = "local" | "npx" | "global";
 
@@ -83,38 +85,61 @@ export function cliLayout(
   return "global";
 }
 
+/**
+ * The running CLI as an npm spec, pinned to its own version where it can be
+ * read: a bare name would fetch whatever the dist-tag points at now, and a
+ * second CLI would do the installing.
+ */
+function runningCliSpec(runningCliRoot: string): string {
+  try {
+    const { version } = JSON.parse(
+      readFileSync(join(runningCliRoot, "package.json"), "utf8"),
+    ) as { version?: unknown };
+    if (typeof version === "string") return `@real-a11y-dev/cli@${version}`;
+  } catch {
+    /* unreadable: fall back to the bare name */
+  }
+  return "@real-a11y-dev/cli";
+}
+
+function installCommandFor(layout: CliLayout, runningCliRoot: string): string {
+  switch (layout) {
+    case "local":
+      return "npx real-a11y install";
+    case "npx":
+      return `npx -y ${runningCliSpec(runningCliRoot)} install`;
+    case "global":
+      return "real-a11y install";
+  }
+}
+
 /** The command that downloads a browser for the running CLI, in its layout. */
 export function installCommand(
   cwd: string = process.cwd(),
   runningCliRoot: string = cliPackageRoot(),
 ): string {
-  switch (cliLayout(cwd, runningCliRoot)) {
-    case "local":
-      return "npx real-a11y install";
-    case "npx":
-      return "npx -y @real-a11y-dev/cli install";
-    case "global":
-      return "real-a11y install";
-  }
+  return installCommandFor(cliLayout(cwd, runningCliRoot), runningCliRoot);
 }
 
 /**
  * Name commands that repair THIS layout. A global CLI is not unblocked by
  * `npm i -D playwright` in an arbitrary project directory, and an npx run is
  * not unblocked by a global Playwright: it resolves only what was installed
- * beside it (or `NODE_PATH`), so it needs both in a project.
+ * beside it (or `NODE_PATH`), so it needs both in a project, after which the
+ * project's own CLI does the installing.
  */
 export function missingPlaywrightHint(
   cwd: string = process.cwd(),
   runningCliRoot: string = cliPackageRoot(),
 ): string {
-  switch (cliLayout(cwd, runningCliRoot)) {
+  const layout = cliLayout(cwd, runningCliRoot);
+  switch (layout) {
     case "local":
-      return "npm i -D playwright && npx real-a11y install";
+      return `npm i -D playwright && ${installCommandFor(layout, runningCliRoot)}`;
     case "npx":
-      return "npm i -D @real-a11y-dev/cli playwright && npx real-a11y install";
+      return `npm i -D ${runningCliSpec(runningCliRoot)} playwright && ${installCommandFor("local", runningCliRoot)}`;
     case "global":
-      return "npm i -g playwright && real-a11y install";
+      return `npm i -g playwright && ${installCommandFor(layout, runningCliRoot)}`;
   }
 }
 
