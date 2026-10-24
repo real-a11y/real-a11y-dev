@@ -1,8 +1,19 @@
+import {
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  symlinkSync,
+  unlinkSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
 import type { BrowserSession } from "@real-a11y-dev/browser";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { CliError } from "./exit.js";
-import { openPage } from "./session.js";
+import { cliPackageRoot, installCommand } from "./playwright-resolve.js";
+import { createSession, openPage, proxyFromEnv } from "./session.js";
 
 function fakeSessionThatThrows(message: string): BrowserSession {
   return {
@@ -30,7 +41,12 @@ describe("openPage — error catalog", () => {
     );
     expect(err).toBeInstanceOf(CliError);
     expect(err.message).toBe("No browser is downloaded yet.");
-    expect(err.hint).toMatch(/real-a11y install/);
+    // The install command for this layout, never the unscoped
+    // `npx real-a11y` outside a project, nor `npx playwright install
+    // chromium`, which fetches some other Playwright's revision.
+    expect(err.hint).toBe(
+      `${installCommand()}  (CI on Linux may also need: npx playwright install-deps chromium)`,
+    );
   });
 
   it("maps a shared-library load failure to an install-deps hint", async () => {
@@ -66,7 +82,51 @@ describe("openPage — error catalog", () => {
       (e: unknown) => e as CliError,
     );
     expect(err).toBeInstanceOf(CliError);
-    expect(err.hint).toMatch(/install --force/);
+    expect(err.hint).toContain(`re-run: ${installCommand()} --force`);
+  });
+
+  it("names this layout's install command for a --chrome-path that isn't there", async () => {
+    const err = await createSession({
+      chromePath: "/definitely/not/a/chrome",
+    }).then(
+      () => {
+        throw new Error("expected the call to reject, but it resolved");
+      },
+      (e: unknown) => e as CliError,
+    );
+    expect(err).toBeInstanceOf(CliError);
+    expect(err.hint).toBe(
+      `re-run: ${installCommand()} — or fix/unset --chrome-path / REAL_A11Y_CHROME_PATH.`,
+    );
+  });
+
+  it("reads that layout from the session's cwd, not the process's", async () => {
+    // A project whose node_modules links to the running CLI, as an install
+    // there would, so `npx real-a11y` reaches it from the project.
+    const project = mkdtempSync(join(tmpdir(), "real-a11y-session-cwd-"));
+    const link = join(project, "node_modules", "@real-a11y-dev", "cli");
+    mkdirSync(join(link, ".."), { recursive: true });
+    // A junction needs no privilege on Windows; elsewhere the type is ignored.
+    symlinkSync(cliPackageRoot(), link, "junction");
+    try {
+      const err = await createSession({
+        chromePath: "/definitely/not/a/chrome",
+        cwd: project,
+      }).then(
+        () => {
+          throw new Error("expected the call to reject, but it resolved");
+        },
+        (e: unknown) => e as CliError,
+      );
+      expect(err).toBeInstanceOf(CliError);
+      expect(err.hint).toBe(
+        "re-run: npx real-a11y install — or fix/unset --chrome-path / REAL_A11Y_CHROME_PATH.",
+      );
+    } finally {
+      // The link first, so removing the project can't reach into the CLI.
+      unlinkSync(link);
+      rmSync(project, { recursive: true, force: true });
+    }
   });
 });
 
@@ -132,6 +192,16 @@ describe("openPage — navigation hints name the failure", () => {
     },
   );
 
+  it("names the proxy's env vars for a proxy failure, not a --proxy flag", async () => {
+    // There is no --proxy flag: the proxy comes from HTTPS_PROXY and NO_PROXY.
+    const hint = await hintFor(
+      "page.goto: net::ERR_PROXY_CONNECTION_FAILED at http://localhost:8712/",
+    );
+    expect(hint).toMatch(/HTTPS_PROXY/);
+    expect(hint).toMatch(/NO_PROXY/);
+    expect(hint).not.toMatch(/--proxy/);
+  });
+
   it("keeps the wait-until hint for a genuine timeout", async () => {
     expect(
       await hintFor(
@@ -171,4 +241,60 @@ it("ignores an ERR_ token echoed back from the URL itself", async () => {
     (e: unknown) => e as CliError,
   );
   expect(err.hint).toMatch(/nothing is listening there/);
+});
+
+describe("proxyFromEnv", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  // Every proxy variable unset, then the given ones set. Unset rather than
+  // empty, since an empty value is not nullish and would hide the lowercase
+  // spelling behind it; and all unset first, since Windows treats the two
+  // spellings as one variable, so unsetting `https_proxy` after setting
+  // `HTTPS_PROXY` would undo it.
+  function stubProxyEnv(env: Record<string, string>): void {
+    for (const name of [
+      "HTTPS_PROXY",
+      "https_proxy",
+      "HTTP_PROXY",
+      "http_proxy",
+      "NO_PROXY",
+      "no_proxy",
+    ]) {
+      vi.stubEnv(name, undefined);
+    }
+    for (const [name, value] of Object.entries(env)) vi.stubEnv(name, value);
+  }
+
+  it("reads the proxy, its credentials and NO_PROXY from the environment", () => {
+    stubProxyEnv({
+      HTTPS_PROXY: "http://user:p%40ss@proxy.corp.example:3128",
+      NO_PROXY: "localhost,.corp.example",
+    });
+    // NO_PROXY goes on as it is: BrowserSession is what keeps the loopback
+    // hosts it names off the proxy, for every caller.
+    expect(proxyFromEnv()).toEqual({
+      server: "http://proxy.corp.example:3128",
+      username: "user",
+      password: "p@ss",
+      bypass: "localhost,.corp.example",
+    });
+  });
+
+  it("falls back to the lowercase no_proxy", () => {
+    stubProxyEnv({
+      HTTPS_PROXY: "http://proxy.corp.example:3128",
+      no_proxy: ".corp.example",
+    });
+    expect(proxyFromEnv()).toEqual({
+      server: "http://proxy.corp.example:3128",
+      bypass: ".corp.example",
+    });
+  });
+
+  it("returns nothing without a proxy in the environment", () => {
+    stubProxyEnv({ NO_PROXY: "localhost" });
+    expect(proxyFromEnv()).toBeUndefined();
+  });
 });

@@ -29,6 +29,7 @@ import {
 import { registerCleanup } from "./cleanup.js";
 import { CliError } from "./exit.js";
 import {
+  installCommand,
   missingPlaywrightHint,
   readPlaywrightVersion,
 } from "./playwright-resolve.js";
@@ -46,6 +47,7 @@ export function proxyFromEnv(): ProxyConfig | undefined {
   const raw =
     env.HTTPS_PROXY ?? env.https_proxy ?? env.HTTP_PROXY ?? env.http_proxy;
   if (!raw) return undefined;
+  // BrowserSession makes a bypass naming loopback safe for every Playwright.
   const bypass = env.NO_PROXY ?? env.no_proxy;
   // Corporate proxies embed credentials in the env URL, but Chromium only
   // authenticates via explicit username/password launch fields.
@@ -124,7 +126,7 @@ export async function createSession(
       const message = err instanceof Error ? err.message : String(err);
       throw new CliError(
         message,
-        "re-run: real-a11y install — or fix/unset --chrome-path / REAL_A11Y_CHROME_PATH.",
+        `re-run: ${installCommand(flags.cwd ?? process.cwd())} — or fix/unset --chrome-path / REAL_A11Y_CHROME_PATH.`,
       );
     }
     if (chrome && flags.verbose) {
@@ -186,7 +188,7 @@ const NAVIGATION_HINTS: ReadonlyArray<readonly [RegExp, string]> = [
   ],
   [
     /net::ERR_(INTERNET_DISCONNECTED|NETWORK_CHANGED|ADDRESS_UNREACHABLE|PROXY_CONNECTION_FAILED)/,
-    "the network is unreachable from here — check connectivity, or the proxy you passed to --proxy.",
+    "the network is unreachable from here — check connectivity, or the proxy a launched Chrome uses: HTTPS_PROXY or HTTP_PROXY, skipped for the hosts in NO_PROXY.",
   ],
   [
     /net::ERR_(CERT_|SSL_)/,
@@ -240,9 +242,14 @@ export async function openPage(
     // all) inside its messages — redact before the message reaches any sink.
     const message = sanitizeText(redactUrlsIn(raw), { singleLine: true });
     if (/Executable doesn't exist/i.test(raw)) {
+      // The command for the layout this CLI runs in: `npx real-a11y` is an
+      // E404 outside a project that installed it, and an unscoped name that
+      // anyone could publish. Not `npx playwright install chromium` either,
+      // which downloads the revision of whichever Playwright npx fetches, not
+      // the one this CLI loaded.
       throw new CliError(
         "No browser is downloaded yet.",
-        "npx real-a11y install  (or: npx playwright install chromium — CI on Linux may also need: npx playwright install-deps chromium)",
+        `${installCommand()}  (CI on Linux may also need: npx playwright install-deps chromium)`,
       );
     }
     if (/error while loading shared libraries/i.test(raw)) {
@@ -254,7 +261,7 @@ export async function openPage(
     if (/spawn .*EACCES|ENOEXEC|Failed to launch/i.test(raw)) {
       throw new CliError(
         message,
-        "the configured Chrome binary looks broken — re-run: real-a11y install --force (or check --chrome-path / REAL_A11Y_CHROME_PATH).",
+        `the configured Chrome binary looks broken — re-run: ${installCommand()} --force (or check --chrome-path / REAL_A11Y_CHROME_PATH).`,
       );
     }
     if (/Unknown device/.test(raw)) {

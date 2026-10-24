@@ -565,5 +565,5 @@ Set to `1` for the strict mode: **no field value and no rich-text editor content
 "env": { "REAL_A11Y_REDACT_INPUT": "1" }
 ```
 
-There is no `REAL_A11Y_MCP_PROXY` variable — Chromium doesn't honor `HTTP_PROXY`/`HTTPS_PROXY` on its own, and a proxy is a **programmatic** `BrowserSession` constructor option, not read from the environment by the stdio server. Configure it only if you embed `BrowserSession` directly.
+There is no `REAL_A11Y_MCP_PROXY` variable — Chromium doesn't honor `HTTP_PROXY`/`HTTPS_PROXY` on its own, and a proxy is a **programmatic** `BrowserSession` constructor option, not read from the environment by the stdio server. Configure it only if you embed `BrowserSession` directly. There, a `bypass` that names a loopback host (`localhost`, `127.0.0.1`, …) keeps every loopback host off the proxy, whichever Playwright you run.
 :::

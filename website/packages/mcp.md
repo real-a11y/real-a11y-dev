@@ -24,9 +24,11 @@ server drives a real browser (via Playwright) rather than parsing markup. You
 need:
 
 - **Node.js 20+** — the server runs under Node and is fetched with `npx`.
-- **A Chrome binary** — install one with `npx real-a11y install` (downloads
-  [Chrome for Testing](https://developer.chrome.com/blog/chrome-for-testing);
-  `npx playwright install chromium` also works).
+- **A Chrome binary** — install one with `npx -y @real-a11y-dev/cli install`,
+  which downloads
+  [Chrome for Testing](https://developer.chrome.com/blog/chrome-for-testing)
+  and, being the CLI's installer, needs Node.js 22.12+;
+  `npx playwright install chromium` also works.
 - **An MCP client** — Claude Code, Claude Desktop, Cursor, VS Code, Windsurf, or
   any other MCP-capable tool.
 
@@ -69,8 +71,12 @@ For clients configured by file, add the `mcpServers` block above to:
 Then install a browser once:
 
 ```sh
-npx real-a11y install
+npx -y @real-a11y-dev/cli install
 ```
+
+Use the scoped name here: `npx real-a11y` runs the CLI only where it is already
+installed, and anywhere else asks the registry for an unscoped package that
+isn't ours.
 
 To pin a version instead of tracking the latest, add it to your project
 (`npm install -D @real-a11y-dev/mcp playwright`) and point `command` / `args` at
