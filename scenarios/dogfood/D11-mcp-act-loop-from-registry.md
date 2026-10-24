@@ -21,8 +21,8 @@ notion: "https://app.notion.com/p/3ab1c354b0b581278b90f3a52ddd18d9"
 
 ## Steps
 
-Published server via `npx`, driven by a real MCP client. Two passes, and the second is the one that
-counts.
+Published server via `npx`, driven by a real MCP client, with `NODE_PATH` unset as D4 says.
+Two passes, and the second is the one that counts.
 
 **Pass 1 — scripted, does it work**
 

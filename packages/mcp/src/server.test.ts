@@ -358,6 +358,48 @@ describe("MCP server wiring", () => {
     expect(out).toContain("access_token=%5BREDACTED%5D");
   });
 
+  it("names the fix when the server can't load Playwright", async () => {
+    // npm and pnpm install the Playwright peer with the server, but Yarn and a
+    // `--legacy-peer-deps` install don't, and the module error on its own
+    // gives the agent nothing to tell the user.
+    const missing = new FakeSession();
+    missing.openError = Object.assign(
+      new Error(
+        "Cannot find package 'playwright' imported from file:///cache/_npx/1a2b/node_modules/@real-a11y-dev/mcp/dist/playwright-load.js",
+      ),
+      { code: "ERR_MODULE_NOT_FOUND" },
+    );
+    const res = (await (
+      await connect(missing)
+    ).callTool({
+      name: "open_page",
+      arguments: { url: "https://example.com/" },
+    })) as { isError?: boolean };
+    expect(res.isError).toBe(true);
+    const out = textOf(res as never);
+    expect(out).toContain("Cannot find package 'playwright'");
+    expect(out).toContain(
+      "Launch it as `npx -y -p @real-a11y-dev/mcp -p playwright real-a11y-mcp`",
+    );
+
+    // Any other missing module keeps the plain error.
+    const other = new FakeSession();
+    other.openError = Object.assign(
+      new Error("Cannot find package 'playwright-core' imported from x.js"),
+      { code: "ERR_MODULE_NOT_FOUND" },
+    );
+    const plain = textOf(
+      (await (
+        await connect(other)
+      ).callTool({
+        name: "open_page",
+        arguments: { url: "https://example.com/" },
+      })) as never,
+    );
+    expect(plain).toContain("Cannot find package 'playwright-core'");
+    expect(plain).not.toContain("real-a11y-mcp");
+  });
+
   it("sanitizes the page-controlled title beside the URL", async () => {
     // `document.title` is page-controlled. Redacting the URL and leaving this
     // raw let a page inject an OSC-8 terminal hyperlink and forge extra result

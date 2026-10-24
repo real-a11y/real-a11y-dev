@@ -149,6 +149,23 @@ function text(body: string, hint?: string) {
   return { content: [{ type: "text" as const, text: bounded(body, hint) }] };
 }
 
+/**
+ * Playwright is a peer of this package. npm and pnpm install it with the
+ * server, under npx too, but Yarn and a `--legacy-peer-deps` install leave it
+ * out. The module error alone names no fix, so a tool that needs a browser
+ * answers with one.
+ */
+const PLAYWRIGHT_MISSING_HINT =
+  "Playwright isn't installed beside the server. Launch it as `npx -y -p @real-a11y-dev/mcp -p playwright real-a11y-mcp`, or install `playwright` next to `@real-a11y-dev/mcp` in the project the client starts it from.";
+
+function isPlaywrightMissing(err: Error): boolean {
+  const code = (err as NodeJS.ErrnoException).code;
+  if (code !== "ERR_MODULE_NOT_FOUND" && code !== "MODULE_NOT_FOUND") {
+    return false;
+  }
+  return /'playwright'/.test(err.message);
+}
+
 // The three levers that survive the migration, named once so a tool can't
 // advertise one it doesn't take.
 /** The one tool still built on the in-page walk: `get_tab_order`. */
@@ -480,6 +497,10 @@ export function buildServer(
       throw new Error(
         redactUrlsIn(sanitizeText(String(err), { singleLine: true })),
       );
+    }
+    // An install problem the user can fix, so a tool error with the remedy.
+    if (isPlaywrightMissing(err)) {
+      return errText(`${err.message} — ${PLAYWRIGHT_MISSING_HINT}`);
     }
     // Anything else escapes as a protocol error, and the SDK relays its message
     // to the client verbatim. Playwright quotes the full target URL in a

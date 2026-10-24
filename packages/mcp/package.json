@@ -61,11 +61,6 @@
   "peerDependencies": {
     "playwright": ">=1.49.0 <2"
   },
-  "peerDependenciesMeta": {
-    "playwright": {
-      "optional": true
-    }
-  },
   "devDependencies": {
     "@real-a11y-dev/audit": "workspace:*",
     "@real-a11y-dev/browser": "workspace:*",
