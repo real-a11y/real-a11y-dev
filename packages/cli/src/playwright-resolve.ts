@@ -60,21 +60,62 @@ export function cliPackageRoot(fromUrl: string = import.meta.url): string {
 }
 
 /**
- * Name commands that repair THIS layout. A global CLI is not unblocked by
- * `npm i -D playwright` in an arbitrary project directory.
+ * How the running CLI was installed, which decides the commands that repair it.
  *
- * "Local" means the running binary lives under `cwd`'s (or an ancestor's)
- * `node_modules/@real-a11y-dev/cli`. Resolving the package name from cwd is
- * not enough: `NODE_PATH` makes a global install visible from everywhere.
+ * - `local` — a project dependency: the running binary lives under `cwd`'s (or
+ *   an ancestor's) `node_modules/@real-a11y-dev/cli`, and `npx real-a11y`
+ *   reaches it. Resolving the package name from cwd is not enough to say so:
+ *   `NODE_PATH` makes a global install visible from everywhere.
+ * - `npx` — npm's on-demand cache, from `npx @real-a11y-dev/cli`. There is no
+ *   `real-a11y` on PATH, and `npx real-a11y` asks the registry for an unscoped
+ *   package that is not ours.
+ * - `global` — anything else.
+ */
+export type CliLayout = "local" | "npx" | "global";
+
+export function cliLayout(
+  cwd: string = process.cwd(),
+  runningCliRoot: string = cliPackageRoot(),
+): CliLayout {
+  if (cliIsLocalTo(cwd, runningCliRoot)) return "local";
+  // npm runs `npx <pkg>` from `<npm cache>/_npx/<hash>/node_modules`.
+  if (runningCliRoot.split(/[\\/]/).includes("_npx")) return "npx";
+  return "global";
+}
+
+/** The command that downloads a browser for the running CLI, in its layout. */
+export function installCommand(
+  cwd: string = process.cwd(),
+  runningCliRoot: string = cliPackageRoot(),
+): string {
+  switch (cliLayout(cwd, runningCliRoot)) {
+    case "local":
+      return "npx real-a11y install";
+    case "npx":
+      return "npx -y @real-a11y-dev/cli install";
+    case "global":
+      return "real-a11y install";
+  }
+}
+
+/**
+ * Name commands that repair THIS layout. A global CLI is not unblocked by
+ * `npm i -D playwright` in an arbitrary project directory, and an npx run is
+ * not unblocked by a global Playwright: it resolves only what was installed
+ * beside it (or `NODE_PATH`), so it needs both in a project.
  */
 export function missingPlaywrightHint(
   cwd: string = process.cwd(),
   runningCliRoot: string = cliPackageRoot(),
 ): string {
-  if (cliIsLocalTo(cwd, runningCliRoot)) {
-    return "npm i -D playwright && npx real-a11y install";
+  switch (cliLayout(cwd, runningCliRoot)) {
+    case "local":
+      return "npm i -D playwright && npx real-a11y install";
+    case "npx":
+      return "npm i -D @real-a11y-dev/cli playwright && npx real-a11y install";
+    case "global":
+      return "npm i -g playwright && real-a11y install";
   }
-  return "npm i -g playwright && real-a11y install";
 }
 
 function cliIsLocalTo(cwd: string, cliRoot: string): boolean {

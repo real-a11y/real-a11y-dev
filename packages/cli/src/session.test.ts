@@ -1,8 +1,9 @@
 import type { BrowserSession } from "@real-a11y-dev/browser";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { CliError } from "./exit.js";
-import { openPage } from "./session.js";
+import { installCommand } from "./playwright-resolve.js";
+import { loopbackSafeBypass, openPage, proxyFromEnv } from "./session.js";
 
 function fakeSessionThatThrows(message: string): BrowserSession {
   return {
@@ -30,7 +31,11 @@ describe("openPage — error catalog", () => {
     );
     expect(err).toBeInstanceOf(CliError);
     expect(err.message).toBe("No browser is downloaded yet.");
-    expect(err.hint).toMatch(/real-a11y install/);
+    // The install command for this layout, never the unscoped
+    // `npx real-a11y` outside a project, nor `npx playwright install
+    // chromium`, which fetches some other Playwright's revision.
+    expect(err.hint).toMatch(new RegExp(`^${installCommand()}  `));
+    expect(err.hint).not.toMatch(/playwright install chromium/);
   });
 
   it("maps a shared-library load failure to an install-deps hint", async () => {
@@ -132,6 +137,16 @@ describe("openPage — navigation hints name the failure", () => {
     },
   );
 
+  it("names the proxy's env vars for a proxy failure, not a --proxy flag", async () => {
+    // There is no --proxy flag: the proxy comes from HTTPS_PROXY and NO_PROXY.
+    const hint = await hintFor(
+      "page.goto: net::ERR_PROXY_CONNECTION_FAILED at http://localhost:8712/",
+    );
+    expect(hint).toMatch(/HTTPS_PROXY/);
+    expect(hint).toMatch(/NO_PROXY/);
+    expect(hint).not.toMatch(/--proxy/);
+  });
+
   it("keeps the wait-until hint for a genuine timeout", async () => {
     expect(
       await hintFor(
@@ -171,4 +186,97 @@ it("ignores an ERR_ token echoed back from the URL itself", async () => {
     (e: unknown) => e as CliError,
   );
   expect(err.hint).toMatch(/nothing is listening there/);
+});
+
+describe("loopbackSafeBypass", () => {
+  // What Chromium's implicit rules cover, given back after `<-loopback>`.
+  const IMPLICIT =
+    "localhost,*.localhost,127.0.0.1/8,[::1],169.254.0.0/16,fe80::/10";
+
+  it("leads a list naming loopback with <-loopback> and the implicit rules", () => {
+    // Up to Playwright 1.58.2, a list without `<-loopback>` got one appended,
+    // and that later rule sent localhost to the proxy whatever NO_PROXY said.
+    expect(loopbackSafeBypass("localhost")).toBe(
+      `<-loopback>,${IMPLICIT},localhost`,
+    );
+    expect(loopbackSafeBypass(".corp.example, 127.0.0.1")).toBe(
+      `<-loopback>,${IMPLICIT},.corp.example, 127.0.0.1`,
+    );
+    expect(loopbackSafeBypass("[::1]")).toBe(`<-loopback>,${IMPLICIT},[::1]`);
+  });
+
+  it("treats * as naming loopback, since it bypasses every host", () => {
+    expect(loopbackSafeBypass("*")).toBe(`<-loopback>,${IMPLICIT},*`);
+  });
+
+  it("passes a list naming no loopback host on as it is", () => {
+    // Every Playwright sends loopback through the proxy here, so they agree.
+    expect(loopbackSafeBypass(".corp.example,intranet")).toBe(
+      ".corp.example,intranet",
+    );
+    // A port makes it a different rule, as it does to Playwright.
+    expect(loopbackSafeBypass("localhost:3000")).toBe("localhost:3000");
+  });
+
+  it("passes a list that already holds <-loopback> on as it is", () => {
+    // Asking for loopback through the proxy is honoured, as Playwright does.
+    expect(loopbackSafeBypass("<-loopback>,localhost")).toBe(
+      "<-loopback>,localhost",
+    );
+  });
+
+  it("has nothing to add without a NO_PROXY", () => {
+    expect(loopbackSafeBypass(undefined)).toBeUndefined();
+    expect(loopbackSafeBypass("")).toBe("");
+  });
+});
+
+describe("proxyFromEnv", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  // Every proxy variable set as given and the rest unset, not empty: an empty
+  // value is not nullish, so it would hide the lowercase spelling behind it.
+  function stubProxyEnv(env: Record<string, string>): void {
+    for (const name of [
+      "HTTPS_PROXY",
+      "https_proxy",
+      "HTTP_PROXY",
+      "http_proxy",
+      "NO_PROXY",
+      "no_proxy",
+    ]) {
+      vi.stubEnv(name, env[name]);
+    }
+  }
+
+  it("keeps loopback named in NO_PROXY off the proxy", () => {
+    stubProxyEnv({
+      HTTPS_PROXY: "http://user:p%40ss@proxy.corp.example:3128",
+      NO_PROXY: "localhost,.corp.example",
+    });
+    expect(proxyFromEnv()).toEqual({
+      server: "http://proxy.corp.example:3128",
+      username: "user",
+      password: "p@ss",
+      bypass: loopbackSafeBypass("localhost,.corp.example"),
+    });
+  });
+
+  it("passes a NO_PROXY naming no loopback host on unchanged", () => {
+    stubProxyEnv({
+      HTTPS_PROXY: "http://proxy.corp.example:3128",
+      no_proxy: ".corp.example",
+    });
+    expect(proxyFromEnv()).toEqual({
+      server: "http://proxy.corp.example:3128",
+      bypass: ".corp.example",
+    });
+  });
+
+  it("returns nothing without a proxy in the environment", () => {
+    stubProxyEnv({ NO_PROXY: "localhost" });
+    expect(proxyFromEnv()).toBeUndefined();
+  });
 });

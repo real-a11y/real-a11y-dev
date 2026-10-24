@@ -29,6 +29,7 @@ import {
 import { registerCleanup } from "./cleanup.js";
 import { CliError } from "./exit.js";
 import {
+  installCommand,
   missingPlaywrightHint,
   readPlaywrightVersion,
 } from "./playwright-resolve.js";
@@ -41,12 +42,65 @@ export interface ProxyConfig {
   password?: string;
 }
 
+/**
+ * Hosts whose presence in a bypass list tells Playwright 1.59 and later to
+ * keep loopback off the proxy (its own list), and `*`, which bypasses every
+ * host, loopback included.
+ */
+const LOOPBACK_BYPASS_HOSTS = new Set([
+  "localhost",
+  "127.0.0.1",
+  "::1",
+  "[::]",
+  "[::1]",
+  "<loopback>",
+  "<-loopback>",
+  "*",
+]);
+
+/**
+ * Chromium's implicit bypass rules: loopback and link-local hosts skip any
+ * proxy unless a `<-loopback>` rule takes them away.
+ */
+const IMPLICIT_BYPASS_RULES = [
+  "localhost",
+  "*.localhost",
+  "127.0.0.1/8",
+  "[::1]",
+  "169.254.0.0/16",
+  "fe80::/10",
+];
+
+/**
+ * The bypass list to hand Playwright, so that a `NO_PROXY` naming loopback
+ * keeps it off the proxy on every Playwright the peer range admits.
+ *
+ * From 1.59, Playwright leaves Chromium's implicit loopback bypass alone when
+ * the list names a loopback host. Up to 1.58.2 it appended `<-loopback>` to
+ * any list without one, and in Chromium a later rule overrides an earlier
+ * one, so `NO_PROXY=localhost` still sent localhost to the proxy: to a dead
+ * proxy that is a failed run, to a live one, its error page audited as the
+ * page. Such a list now leads with `<-loopback>`, which stops 1.58 appending
+ * its own, then gives back the implicit rules that takes away, so every
+ * version bypasses what 1.59 does. A list naming no loopback host, or holding
+ * `<-loopback>` already, is passed on as it is: there, both lines agree.
+ */
+export function loopbackSafeBypass(
+  bypass: string | undefined,
+): string | undefined {
+  if (!bypass) return bypass;
+  const hosts = bypass.split(",").map((host) => host.trim());
+  if (hosts.includes("<-loopback>")) return bypass;
+  if (!hosts.some((host) => LOOPBACK_BYPASS_HOSTS.has(host))) return bypass;
+  return ["<-loopback>", ...IMPLICIT_BYPASS_RULES, bypass].join(",");
+}
+
 export function proxyFromEnv(): ProxyConfig | undefined {
   const env = process.env;
   const raw =
     env.HTTPS_PROXY ?? env.https_proxy ?? env.HTTP_PROXY ?? env.http_proxy;
   if (!raw) return undefined;
-  const bypass = env.NO_PROXY ?? env.no_proxy;
+  const bypass = loopbackSafeBypass(env.NO_PROXY ?? env.no_proxy);
   // Corporate proxies embed credentials in the env URL, but Chromium only
   // authenticates via explicit username/password launch fields.
   try {
@@ -186,7 +240,7 @@ const NAVIGATION_HINTS: ReadonlyArray<readonly [RegExp, string]> = [
   ],
   [
     /net::ERR_(INTERNET_DISCONNECTED|NETWORK_CHANGED|ADDRESS_UNREACHABLE|PROXY_CONNECTION_FAILED)/,
-    "the network is unreachable from here — check connectivity, or the proxy you passed to --proxy.",
+    "the network is unreachable from here — check connectivity, or the proxy in HTTPS_PROXY (hosts listed in NO_PROXY skip it).",
   ],
   [
     /net::ERR_(CERT_|SSL_)/,
@@ -240,9 +294,14 @@ export async function openPage(
     // all) inside its messages — redact before the message reaches any sink.
     const message = sanitizeText(redactUrlsIn(raw), { singleLine: true });
     if (/Executable doesn't exist/i.test(raw)) {
+      // The command for the layout this CLI runs in: `npx real-a11y` is an
+      // E404 outside a project that installed it, and an unscoped name that
+      // anyone could publish. Not `npx playwright install chromium` either,
+      // which downloads the revision of whichever Playwright npx fetches, not
+      // the one this CLI loaded.
       throw new CliError(
         "No browser is downloaded yet.",
-        "npx real-a11y install  (or: npx playwright install chromium — CI on Linux may also need: npx playwright install-deps chromium)",
+        `${installCommand()}  (CI on Linux may also need: npx playwright install-deps chromium)`,
       );
     }
     if (/error while loading shared libraries/i.test(raw)) {
