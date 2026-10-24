@@ -559,71 +559,56 @@ export function summarizeViews(input: SummarizeViewsInput): ViewChange[] {
     }
   }
   // 2b: landmark add/remove.
-  for (const [key, n] of [...treeRemoved]) {
-    const { role, name = "" } = parseRoleLine(key);
-    if (!LANDMARK_ROLES.has(role)) continue;
-    take(treeRemoved, key, n);
-    const message =
+  const drainTreeRoles = (
+    ms: Multiset,
+    roles: ReadonlySet<string>,
+    kind: ViewChangeKind,
+    describe: (role: string, name: string) => string,
+  ) => {
+    for (const [key, n] of [...ms]) {
+      const { role, name = "" } = parseRoleLine(key);
+      if (!roles.has(role)) continue;
+      take(ms, key, n);
+      changes.push({
+        kind,
+        view: "tree",
+        message: withCount(describe(role, name), n),
+        role,
+        ...(name !== "" ? { name } : {}),
+        ...(n > 1 ? { count: n } : {}),
+      });
+    }
+  };
+  drainTreeRoles(
+    treeRemoved,
+    LANDMARK_ROLES,
+    "landmark-removed",
+    (role, name) =>
       role === "main"
         ? 'Landmark removed: main — skip-to-content and "jump to main" navigation may break'
-        : `Landmark removed: ${landmarkDesc(role, name)}`;
-    changes.push({
-      kind: "landmark-removed",
-      view: "tree",
-      message: withCount(message, n),
-      role,
-      ...(name !== "" ? { name } : {}),
-      ...(n > 1 ? { count: n } : {}),
-    });
-  }
-  for (const [key, n] of [...treeAdded]) {
-    const { role, name = "" } = parseRoleLine(key);
-    if (!LANDMARK_ROLES.has(role)) continue;
-    take(treeAdded, key, n);
-    changes.push({
-      kind: "landmark-added",
-      view: "tree",
-      message: withCount(`New landmark: ${landmarkDesc(role, name)}`, n),
-      role,
-      ...(name !== "" ? { name } : {}),
-      ...(n > 1 ? { count: n } : {}),
-    });
-  }
+        : `Landmark removed: ${landmarkDesc(role, name)}`,
+  );
+  drainTreeRoles(
+    treeAdded,
+    LANDMARK_ROLES,
+    "landmark-added",
+    (role, name) => `New landmark: ${landmarkDesc(role, name)}`,
+  );
   // 2c: interactive elements the tabs view can't see (menuitem, option, tab —
   // arrow-key targets inside composite widgets). Focusable ones were already
   // consumed by the tabs stage.
-  for (const [key, n] of [...treeRemoved]) {
-    const { role, name = "" } = parseRoleLine(key);
-    if (!INTERACTIVE_ROLES.has(role)) continue;
-    take(treeRemoved, key, n);
-    changes.push({
-      kind: "interactive-removed",
-      view: "tree",
-      message: withCount(
-        `Interactive element removed: ${controlDesc(role, name)}`,
-        n,
-      ),
-      role,
-      ...(name !== "" ? { name } : {}),
-      ...(n > 1 ? { count: n } : {}),
-    });
-  }
-  for (const [key, n] of [...treeAdded]) {
-    const { role, name = "" } = parseRoleLine(key);
-    if (!INTERACTIVE_ROLES.has(role)) continue;
-    take(treeAdded, key, n);
-    changes.push({
-      kind: "interactive-added",
-      view: "tree",
-      message: withCount(
-        `Interactive element added: ${controlDesc(role, name)}`,
-        n,
-      ),
-      role,
-      ...(name !== "" ? { name } : {}),
-      ...(n > 1 ? { count: n } : {}),
-    });
-  }
+  drainTreeRoles(
+    treeRemoved,
+    INTERACTIVE_ROLES,
+    "interactive-removed",
+    (role, name) => `Interactive element removed: ${controlDesc(role, name)}`,
+  );
+  drainTreeRoles(
+    treeAdded,
+    INTERACTIVE_ROLES,
+    "interactive-added",
+    (role, name) => `Interactive element added: ${controlDesc(role, name)}`,
+  );
 
   // 3 — outline stage (authoritative for headings; consumes the matching tree
   // `heading` lines).
