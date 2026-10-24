@@ -1,0 +1,6 @@
+/* The edit box's own additions to `tree.css`'s `.sn-input-panel-field`. */
+
+/* A multi-line field's box: taller on demand, never wider than the panel. */
+textarea.sn-input-panel-field {
+  resize: vertical;
+}

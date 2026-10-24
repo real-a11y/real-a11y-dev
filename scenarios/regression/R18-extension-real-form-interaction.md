@@ -6,9 +6,9 @@ area: Extension
 type: Manual
 priority: P0
 status: Active
-validFrom: "extension ≥ 0.1.8. The dispatch-fidelity expectations mirror core's ActionDispatcher, which the CDP backend also mirrors — a fix in one belongs in both. Step 6a (a withheld field's edit box): in Chrome's tree, the first extension release with #510; in the in-page tree, the first with #512 — 0.1.16 as tagged fails both, which are the bugs those two fix. Step 6b (a sensitive textarea's markup text): extension ≥ 0.1.15; its input panel opening empty in the in-page tree: the first extension release with #512; and an untouched Enter in its edit box in Chrome's tree: the first with #516 — 0.1.16 as tagged fails both. Step 5a (an untouched Enter in an editor's edit box, in the in-page tree): the first extension release with #519 — 0.1.16 as tagged fails it. Step 5b (an untouched Enter in the edit box of an editor holding only an image, in Chrome's tree): the first extension release with #522 — 0.1.16 as tagged fails it. Step 6c (a custom textbox around a password in its shadow root): the first extension release with #520 — 0.1.16 as tagged fails it, and so does a release with #510 alone"
+validFrom: "extension ≥ 0.1.8. The dispatch-fidelity expectations mirror core's ActionDispatcher, which the CDP backend also mirrors — a fix in one belongs in both. Step 6a (a withheld field's edit box): in Chrome's tree, the first extension release with #510; in the in-page tree, the first with #512 — 0.1.16 as tagged fails both, which are the bugs those two fix. Step 6b (a sensitive textarea's markup text): extension ≥ 0.1.15; its input panel opening empty in the in-page tree: the first extension release with #512; and an untouched Enter in its edit box in Chrome's tree: the first with #516 — 0.1.16 as tagged fails both. Step 5a (an untouched Enter in an editor's edit box, in the in-page tree): the first extension release with #519 — 0.1.16 as tagged fails it. Step 5b (an untouched Enter in the edit box of an editor holding only an image, in Chrome's tree): the first extension release with #522 — 0.1.16 as tagged fails it. Step 6c (a custom textbox around a password in its shadow root): the first extension release with #520 — 0.1.16 as tagged fails it, and so does a release with #510 alone. Step 9 (a multi-line field's edit box): the first extension release with #523 — 0.1.16 as tagged fails it"
 validUntil: ""
-expected: "click/type/select dispatch on the real page; a sensitive field's value is NEVER shown in the panel — a password's, what is typed into a password or card field's edit box, empty or not, or into the edit box Chrome's tree opens on a custom textbox around a password in its shadow root, or a sensitive textarea's markup text in the live-announcement log or an editor's input panel; an untouched Enter in that edit box, or in a rich-text editor's in either tree, leaves the field as it was; Send-Tab/Esc behave or fail visibly"
+expected: "click/type/select dispatch on the real page; a sensitive field's value is NEVER shown in the panel — a password's, what is typed into a password or card field's edit box, empty or not, or into the edit box Chrome's tree opens on a custom textbox around a password in its shadow root, or a sensitive textarea's markup text in the live-announcement log or an editor's input panel; an untouched Enter in that edit box, or in a rich-text editor's in either tree, leaves the field as it was; a multi-line field's edit box keeps its line breaks; Send-Tab/Esc behave or fail visibly"
 twin: D6
 notion: "https://app.notion.com/p/3aa1c354b0b5819e89f7de2edeb18fcb"
 ---
@@ -111,6 +111,10 @@ point is behaviour against handlers you didn't write.
      ```
 7. Send Tab and Escape through the panel
 8. Toggle a checkbox and change a `<select>`
+9. Edit a **multi-line** field: a `<textarea>` holding a few lines (a comment or
+   an address box), and a rich-text editor holding two paragraphs. In each tree
+   (**Settings ▾** → **Show**), open the field's edit box from its row, go to
+   the end, add a line with `Shift+Enter`, type a few words, and press `Enter`
 
 ## Expected
 
@@ -156,6 +160,14 @@ point is behaviour against handlers you didn't write.
 - **7** — Tab/Escape either work or fail **visibly**. Silently doing nothing is the
   failure
 - **8** — state changes and is reflected
+- **9** — the edit box has room for several lines and shows the textarea's own
+  lines. In the in-page tree it shows the editor's paragraphs as lines too;
+  Chrome's tree opens an editor's box empty. `Shift+Enter` starts a new line rather
+  than setting the value, and after `Enter` the textarea holds its lines and the
+  new one. An editor whose style keeps line breaks shows the new line, and one that
+  doesn't shows it as a space. Before #523 the box was one line: it ran the
+  textarea's lines together, showed the editor's paragraphs as `Dear Sam,Thanks!`,
+  and `Shift+Enter` set the value, so the textarea ended up on one line
 
 ## Why this exists
 
@@ -198,3 +210,8 @@ and every element its own reading of the page's document has one in, through
 shadow roots and slots: page script can't see into a closed shadow root at all,
 and the tree has no row for a field hidden from assistive technology or not laid
 out.
+
+9 is dispatch fidelity for what the edit box holds rather than what it sends. A
+one-line box drops line breaks from its text, so an edit of a multi-line field
+typed it back as one line, and nothing on the page said why. Steps 4 and 5 pass on
+a single line of text.

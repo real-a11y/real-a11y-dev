@@ -1,0 +1,151 @@
+/**
+ * A field that holds more than one line, through the side panel's edit box,
+ * in both trees: the box shows the field's lines, and an edit keeps them.
+ *
+ * The box was a one-line `<input>`, which strips line breaks from what it
+ * holds. The first keystroke put a textarea's lines back as one, so Enter
+ * typed them into the page that way, Shift+Enter set the value rather than
+ * starting a line, and the in-page tree read an editor's paragraphs as one
+ * run of text, `Dear Sam,Thanks!`.
+ */
+
+import { expect, test, type NativeHarness } from "./harness";
+
+const LETTER = "Dear Sam,\nThanks for the books.\n\nBest,\nJo";
+
+test("Chrome's tree: an edit keeps a textarea's lines, and Shift+Enter starts one", async ({
+  nav,
+}) => {
+  const page = await nav.showNative("multiline-fields.html");
+  await nav.panel.getByRole("button", { name: "Expand all" }).click();
+  const box = nav.panel.locator(".sn-input-panel-field");
+  const open = async (name: string) => {
+    await nav.panel
+      .getByRole("treeitem", { name })
+      .getByTitle("Type (Enter)")
+      .click();
+    // The box takes focus once it has rendered: a key pressed before then
+    // lands before its text is selected, and typing replaces it all.
+    await expect(box, name).toBeFocused();
+  };
+
+  await open("Letter");
+  await expect(box).toHaveValue(LETTER);
+  await box.press("Control+End");
+  await box.press("Shift+Enter");
+  await box.pressSequentially("PS: more soon");
+  await box.press("Enter");
+  await expect(box).toHaveCount(0);
+  await expect(page.locator("#letter")).toHaveValue(`${LETTER}\nPS: more soon`);
+
+  // An editor's box opens empty, and takes lines too.
+  await open("Shopping list");
+  await expect(box).toHaveValue("");
+  for (const item of ["Bread", "Butter"]) {
+    await box.pressSequentially(item);
+    await box.press("Shift+Enter");
+  }
+  await box.pressSequentially("Jam");
+  await box.press("Enter");
+  await expect(box).toHaveCount(0);
+  await expect
+    .poll(() =>
+      page.locator("#list").evaluate((el) => (el as HTMLElement).innerText),
+    )
+    .toBe("Bread\nButter\nJam");
+});
+
+/** Click a panel control from inside the panel, as `field-values.test.ts`'s
+ *  `press` does: a Playwright click would bring the panel's own tab to the
+ *  front, and the in-page tree acts on the active tab. */
+async function pressInPanel(nav: NativeHarness, label: string): Promise<void> {
+  await nav.panel.evaluate((want) => {
+    const button = [...document.querySelectorAll("button")].find(
+      (b) =>
+        b.textContent?.trim() === want || b.getAttribute("aria-label") === want,
+    );
+    if (!button) throw new Error(`no button "${want}"`);
+    button.click();
+  }, label);
+}
+
+test("In-page tree: the edit box shows a textarea's lines and an editor's, and an edit keeps them", async ({
+  nav,
+}) => {
+  const { page } = await nav.open("multiline-fields.html");
+  await page.bringToFront();
+  await nav.panel.reload();
+  await nav.chooseTree("In-page tree");
+  await expect
+    .poll(() => nav.panel.locator(".sn-node").count(), { timeout: 20_000 })
+    .toBeGreaterThan(0);
+  await pressInPanel(nav, "Expand all");
+  // The edit box opens on its field's state, which it asks the page for.
+  await nav.routeToPage(["GET_FIELD_STATE", "DISPATCH_ACTION"]);
+
+  // Everything from inside the panel, as `pressInPanel` does.
+  const box = nav.panel.locator(".sn-input-panel-field");
+  const open = async (name: string) => {
+    await nav.panel.evaluate((want) => {
+      // A row's text runs its role into its name, `textboxLetter`.
+      const flat = (text: string) => text.replace(/\s+/g, "");
+      const row = [...document.querySelectorAll(".sn-node")].find((r) =>
+        flat(r.textContent ?? "").includes(flat(want)),
+      );
+      const button = row?.querySelector<HTMLButtonElement>(
+        'button[title="Type (Enter)"]',
+      );
+      if (!button) throw new Error(`no Type button on ${want}`);
+      button.click();
+    }, `textbox ${name}`);
+    await expect(box, name).toBeVisible();
+  };
+  /** Type at the end of the box, as a user adding a line does. */
+  const append = (text: string) =>
+    nav.panel.evaluate((more) => {
+      const field = document.querySelector<
+        HTMLInputElement | HTMLTextAreaElement
+      >(".sn-input-panel-field")!;
+      field.value += more;
+      field.dispatchEvent(new Event("input", { bubbles: true }));
+    }, text);
+  const enter = () =>
+    nav.panel.evaluate(() => {
+      document
+        .querySelector(".sn-input-panel-field")!
+        .dispatchEvent(
+          new KeyboardEvent("keydown", { key: "Enter", bubbles: true }),
+        );
+    });
+
+  await open("Letter");
+  await expect(box).toHaveValue(LETTER);
+  await append("\nPS");
+  await enter();
+  await expect(box).toHaveCount(0);
+  await expect(page.locator("#letter")).toHaveValue(`${LETTER}\nPS`);
+
+  // An editor's text, line by line: its paragraphs used to run together. The
+  // in-page write is text, not markup, so a plain editor like this one shows
+  // a line break in it as a space, and one whose style keeps line breaks, as
+  // the list's does, shows lines.
+  await open("Card");
+  await expect(box).toHaveValue("Dear Sam,\nThanks!");
+  await append("\nPS");
+  await enter();
+  await expect(box).toHaveCount(0);
+  await expect
+    .poll(() => page.locator("#card").textContent())
+    .toBe("Dear Sam,\nThanks!\nPS");
+
+  await open("Shopping list");
+  await expect(box).toHaveValue("Milk\nEggs");
+  await append("\nBread");
+  await enter();
+  await expect(box).toHaveCount(0);
+  await expect
+    .poll(() =>
+      page.locator("#list").evaluate((el) => (el as HTMLElement).innerText),
+    )
+    .toBe("Milk\nEggs\nBread");
+});

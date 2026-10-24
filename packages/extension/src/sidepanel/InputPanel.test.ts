@@ -320,6 +320,166 @@ describe("InputPanel masking", () => {
 });
 
 /**
+ * A field that takes more than one line — a textarea, an editor — gets a
+ * multi-line box. The box was a one-line input, which strips line breaks from
+ * what it holds: the first keystroke put the field's lines back as one, and
+ * Enter typed them into the page that way.
+ */
+describe("InputPanel multi-line fields", () => {
+  const LETTER: InputPanelState = {
+    type: "text",
+    nodeId: "n1",
+    label: "Letter",
+    value: "Dear Sam,\nThanks!",
+    multiline: true,
+  };
+
+  function mount(state: InputPanelState) {
+    const submitted: string[] = [];
+    let cancelled = 0;
+    act(() => {
+      render(
+        h(InputPanel, {
+          state,
+          onSubmit: (_id: string, value: string) => submitted.push(value),
+          onCancel: () => {
+            cancelled += 1;
+          },
+        }),
+        container,
+      );
+    });
+    const field = container.querySelector<
+      HTMLInputElement | HTMLTextAreaElement
+    >(".sn-input-panel-field")!;
+    const key = (init: KeyboardEventInit) => {
+      const event = new KeyboardEvent("keydown", {
+        bubbles: true,
+        cancelable: true,
+        ...init,
+      });
+      act(() => {
+        field.dispatchEvent(event);
+      });
+      return event;
+    };
+    return {
+      field,
+      submitted,
+      cancelled: () => cancelled,
+      // What typing at the end of the box does: the box's own text, and more.
+      typeAtEnd: (text: string) =>
+        act(() => {
+          field.value += text;
+          field.dispatchEvent(new Event("input", { bubbles: true }));
+        }),
+      key,
+    };
+  }
+
+  it("keeps the field's line breaks through an edit", () => {
+    const panel = mount(LETTER);
+    expect(panel.field.localName).toBe("textarea");
+    expect(panel.field.value).toBe("Dear Sam,\nThanks!");
+    panel.typeAtEnd("\nJo");
+    panel.key({ key: "Enter" });
+    expect(panel.submitted).toEqual(["Dear Sam,\nThanks!\nJo"]);
+  });
+
+  it("starts a new line on Shift+Enter, and sets the value on Enter", () => {
+    const panel = mount(LETTER);
+    const shiftEnter = panel.key({ key: "Enter", shiftKey: true });
+    expect(shiftEnter.defaultPrevented).toBe(false);
+    expect(panel.submitted).toEqual([]);
+    expect(panel.cancelled()).toBe(0);
+    const enter = panel.key({ key: "Enter" });
+    expect(enter.defaultPrevented).toBe(true);
+    expect(panel.submitted).toEqual(["Dear Sam,\nThanks!"]);
+  });
+
+  it("says so in the box's description", () => {
+    const panel = mount(LETTER);
+    const hint = document.getElementById(
+      panel.field.getAttribute("aria-describedby")!,
+    );
+    expect(hint?.textContent).toBe(
+      "Enter set value · Shift+Enter new line · Esc cancel",
+    );
+    const label = container.querySelector("label.sn-input-panel-label");
+    expect(label?.getAttribute("for")).toBe(panel.field.id);
+  });
+
+  it("keeps a one-line field's box as it was", () => {
+    const panel = mount(TEXT_STATE);
+    expect(panel.field.localName).toBe("input");
+    expect(panel.field.hasAttribute("aria-describedby")).toBe(false);
+    expect(container.querySelector(".sn-input-panel-hint")?.textContent).toBe(
+      "Enter set value · Esc cancel",
+    );
+    panel.key({ key: "Enter", shiftKey: true });
+    expect(panel.submitted).toEqual(["hello"]);
+  });
+
+  it("is multi-line whenever it holds a line break, whatever the field says", () => {
+    const panel = mount({ ...LETTER, multiline: undefined });
+    expect(panel.field.localName).toBe("textarea");
+    expect(panel.field.value).toBe("Dear Sam,\nThanks!");
+  });
+
+  it("masks a withheld multi-line field in a one-line password box", () => {
+    const panel = mount({
+      ...LETTER,
+      value: "",
+      inputType: "password",
+      blockEmptySubmit: true,
+    });
+    expect(panel.field.localName).toBe("input");
+    expect((panel.field as HTMLInputElement).type).toBe("password");
+    panel.key({ key: "Enter" });
+    expect(panel.submitted).toEqual([]);
+    expect(panel.cancelled()).toBe(1);
+  });
+
+  it("still cancels an untouched empty submit, and sends one typed and cleared", () => {
+    const blocked = { ...LETTER, value: "", blockEmptySubmit: true };
+    let panel = mount(blocked);
+    expect(panel.field.localName).toBe("textarea");
+    panel.key({ key: "Enter" });
+    expect(panel.submitted).toEqual([]);
+    expect(panel.cancelled()).toBe(1);
+    close();
+
+    panel = mount(blocked);
+    panel.typeAtEnd("x");
+    act(() => {
+      panel.field.value = "";
+      panel.field.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    panel.key({ key: "Enter" });
+    expect(panel.submitted).toEqual([""]);
+  });
+
+  // An in-page editor's box: multi-line, and an untouched submit types its
+  // text back over formatting and images, so it cancels instead.
+  it("starts a line in an editor's box without submitting, and an untouched Enter still cancels", () => {
+    const editor = { ...LETTER, blockUntouchedSubmit: true };
+    const panel = mount(editor);
+    panel.key({ key: "Enter", shiftKey: true });
+    expect(panel.submitted).toEqual([]);
+    expect(panel.cancelled()).toBe(0);
+    panel.key({ key: "Enter" });
+    expect(panel.submitted).toEqual([]);
+    expect(panel.cancelled()).toBe(1);
+    close();
+
+    const edited = mount(editor);
+    edited.typeAtEnd("\nJo");
+    edited.key({ key: "Enter" });
+    expect(edited.submitted).toEqual(["Dear Sam,\nThanks!\nJo"]);
+  });
+});
+
+/**
  * `blockEmptySubmit` opens a field empty in place of a value the panel can't
  * show (a redacted field, a native editor's content). Only the UNTOUCHED
  * submit is blocked — that one says nothing about the value — while typing
@@ -642,6 +802,57 @@ describe("domTextInputState", () => {
       valueWithheld: true,
     });
     expect(state.value).toBe("");
+  });
+
+  // A one-line box strips line breaks: the first keystroke put a textarea's
+  // lines, or an editor's, back as one, and Enter typed them that way.
+  it("opens a multi-line field's box on its lines, and an edit keeps them", () => {
+    for (const [type, value] of [
+      ["textarea", "Dear Sam,\nThanks!"],
+      ["text", "Milk\nEggs"],
+    ]) {
+      const panel = mount(
+        domTextInputState("n1", "Letter", {
+          success: true,
+          type,
+          multiline: true,
+          value,
+          placeholder: "",
+        }),
+      );
+      const box = container.querySelector<HTMLTextAreaElement>(
+        "textarea.sn-input-panel-field",
+      );
+      expect(box?.value, type).toBe(value);
+      act(() => {
+        box!.value += "\nJo";
+        box!.dispatchEvent(new Event("input", { bubbles: true }));
+      });
+      act(() => {
+        box!.dispatchEvent(
+          new KeyboardEvent("keydown", { key: "Enter", bubbles: true }),
+        );
+      });
+      expect(panel.submitted, type).toEqual([`${value}\nJo`]);
+      close();
+    }
+  });
+
+  it("masks a withheld multi-line field as any other", () => {
+    const panel = mount(
+      domTextInputState("n1", "Recovery codes", {
+        success: true,
+        type: "textarea",
+        multiline: true,
+        value: "",
+        placeholder: "",
+        valueWithheld: true,
+      }),
+    );
+    expect(panel.input.type).toBe("password");
+    expect(panel.input.value).toBe("");
+    panel.enter();
+    expect(panel.submitted).toEqual([]);
   });
 
   it("leaves an ordinary field's box as it was: prefilled and unmasked", () => {

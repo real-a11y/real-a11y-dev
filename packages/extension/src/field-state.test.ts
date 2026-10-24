@@ -35,6 +35,31 @@ describe("computeFieldState", () => {
       });
     });
 
+    // An input box strips line breaks, so an edit typed a textarea's lines
+    // back as one. `multiline` is how the edit box knows to keep them.
+    it("reads a textarea's lines as they are, and says it takes lines", () => {
+      const el = mount(`<textarea>Dear Sam,\nThanks!\n\nJo</textarea>`);
+      expect(computeFieldState(el)).toEqual({
+        success: true,
+        type: "textarea",
+        multiline: true,
+        value: "Dear Sam,\nThanks!\n\nJo",
+        placeholder: "",
+      });
+    });
+
+    // Chromium's own answer, so the two trees' boxes agree.
+    it("says a textarea takes one line only if it says so, and an input never takes more", () => {
+      for (const html of [
+        `<textarea aria-multiline="false">a</textarea>`,
+        `<input aria-multiline="true" value="a" />`,
+      ]) {
+        expect(computeFieldState(mount(html)), html).not.toHaveProperty(
+          "multiline",
+        );
+      }
+    });
+
     it("reads a select with its options", () => {
       const el = mount(
         `<select><option value="a">A</option><option value="b" selected>B</option></select>`,
@@ -124,6 +149,7 @@ describe("computeFieldState", () => {
         expect(computeFieldState(mount(html)), html).toEqual({
           success: true,
           type,
+          ...(type === "textarea" ? { multiline: true } : {}),
           value: "",
           placeholder: "",
           valueWithheld: true,
@@ -145,6 +171,7 @@ describe("computeFieldState", () => {
       expect(computeFieldState(el)).toEqual({
         success: true,
         type: "text",
+        multiline: true,
         value: "",
         placeholder: "",
         editor: true,
@@ -175,6 +202,7 @@ describe("computeFieldState", () => {
       expect(computeFieldState(el)).toEqual({
         success: true,
         type: "text",
+        multiline: true,
         value: "hi there",
         placeholder: "Search",
         editor: true,
@@ -208,6 +236,7 @@ describe("computeFieldState", () => {
         expect(computeFieldState(el), control).toEqual({
           success: true,
           type: "text",
+          multiline: true,
           value: "",
           placeholder: "",
           valueWithheld: true,
@@ -230,6 +259,7 @@ describe("computeFieldState", () => {
       expect(computeFieldState(el)).toEqual({
         success: true,
         type: "text",
+        multiline: true,
         value: "Notes end",
         placeholder: "",
         editor: true,
@@ -258,6 +288,7 @@ describe("computeFieldState", () => {
         expect(computeFieldState(mount(html)), html).toEqual({
           success: true,
           type: "text",
+          multiline: true,
           value,
           placeholder: "",
           editor: true,
@@ -278,6 +309,60 @@ describe("computeFieldState", () => {
           `<span aria-hidden="true">@</span>world</div>`,
       );
       expect(computeFieldState(el)).toMatchObject({ value: "Hello @world" });
+    });
+
+    // Read as one run of text, an editor's paragraphs ran together — "Dear
+    // Sam,Thanks!" — in the box and in what an edit typed back.
+    it("reads an editor's text line by line, as the page lays it out", () => {
+      for (const [html, value] of [
+        [`<p>Dear Sam,</p><p>Thanks!</p>`, "Dear Sam,\nThanks!"],
+        [`Line one<br>Line two`, "Line one\nLine two"],
+        [`First<div>Second</div><div>Third</div>`, "First\nSecond\nThird"],
+        [`<ul><li>Milk</li><li>Eggs</li></ul>`, "Milk\nEggs"],
+        // An empty line is an empty block holding a <br>; a <br> that only
+        // ends a block adds none.
+        [`<p>A</p><p><br></p><p>B</p>`, "A\n\nB"],
+        [`<div>Hello<br></div><div>World</div>`, "Hello\nWorld"],
+        // The markup's own indenting is no text, and inline elements are no
+        // lines.
+        [`\n  <p>Dear  Sam,</p>\n  <p>Thanks!</p>\n`, "Dear Sam,\nThanks!"],
+        [`<span>Hello</span> <b>world</b>`, "Hello world"],
+      ]) {
+        const el = mount(
+          `<div contenteditable="true" role="textbox">${html}</div>`,
+        );
+        expect(computeFieldState(el), html).toMatchObject({
+          multiline: true,
+          value,
+        });
+      }
+    });
+
+    it("keeps the white space an editor's own style keeps", () => {
+      const el = mount(
+        `<div contenteditable="true" role="textbox" style="white-space: pre-wrap">Alpha\n  Beta</div>`,
+      );
+      expect(computeFieldState(el)).toMatchObject({ value: "Alpha\n  Beta" });
+      el.setAttribute("style", "white-space: pre-line");
+      expect(computeFieldState(el)).toMatchObject({ value: "Alpha\nBeta" });
+    });
+
+    // Chromium's answer, as Chrome's tree carries it: a textbox takes lines,
+    // unless it says otherwise, and these roles take one.
+    it("says an editor takes lines unless it says it takes one", () => {
+      for (const [attributes, multiline] of [
+        [`role="textbox"`, true],
+        [`role="textbox" aria-multiline="true"`, true],
+        [``, true],
+        [`role="textbox" aria-multiline="false"`, false],
+        [`role="searchbox"`, false],
+        [`role="combobox" aria-expanded="false"`, false],
+      ] as const) {
+        const el = mount(`<div contenteditable="true" ${attributes}>a</div>`);
+        const state = computeFieldState(el);
+        if (multiline) expect(state, attributes).toHaveProperty("multiline");
+        else expect(state, attributes).not.toHaveProperty("multiline");
+      }
     });
   });
 

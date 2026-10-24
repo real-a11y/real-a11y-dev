@@ -2881,6 +2881,9 @@ export function App() {
           value: prefill,
           placeholder: node.placeholder,
           source: "native",
+          // A textarea's or an editor's box keeps line breaks, as typed and
+          // as `rawValue` holds them.
+          ...(node.states?.["multiline"] === true ? { multiline: true } : {}),
           // Mask the retyped replacement the same way the DOM tree's box is
           // masked (inputType, set by `domTextInputState`, checked in
           // InputPanel.tsx).
