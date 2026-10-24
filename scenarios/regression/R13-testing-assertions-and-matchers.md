@@ -80,7 +80,7 @@ once on markup that should fail:
 - **8b** — the logo link and the `<svg>` button **pass**: an image lends the
   name its `alt` or `<title>` gives it, as in Chromium. The `role="img"` glyph is
   **caught**, because an image lends its name, never its content. From testing ≥
-  the first release after 0.1.0-beta.19. On 0.1.0-beta.19 and earlier the link
+  0.1.0-beta.20. On 0.1.0-beta.19 and earlier the link
   and the `<svg>` button throw and the glyph passes. That is the old behaviour
   reproduced, not a fail of this row.
 - **9** — the loose-text dialog **throws**

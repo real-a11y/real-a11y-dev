@@ -95,8 +95,8 @@ run — the whole scenario is `npx tsc --noEmit`.
   what stops the two from conflicting when something loads both
 - **10** — zero errors. An interface merge must repeat the declaration's type
   parameters exactly, so this breaks whenever Vitest changes them: Vitest 5
-  declares `Assertion<R extends void | Promise<void> = void, T = unknown>`, and on
-  testing 0.1.0-beta.19 our `Assertion<T = any>` reports `TS2428` three times — the
+  declares `Assertion<R extends void | Promise<void> = void, T = unknown>`, and
+  through testing 0.1.0-beta.20 our `Assertion<T = any>` reports `TS2428` three times — the
   known defect the beta.19 dogfood filed (twin: D5 step 8). Steps 1–9, on the
   repo's pinned Vitest, keep their own expectations through it
 
