@@ -35,8 +35,8 @@ need:
 ## Connect it to your client
 
 The server speaks MCP over stdio — point your client at
-`npx -y @real-a11y-dev/mcp`. No install step is needed; `npx` fetches it on first
-run.
+`npx -y @real-a11y-dev/mcp`. No install step is needed: `npx` fetches it on first
+run, and Playwright, the browser driver, with it.
 
 ::: code-group
 
@@ -229,9 +229,10 @@ stands alone. For automation verbs it doesn't ship (hover, drag, uploads,
 multi-tab), pair the two: drive with Playwright MCP, judge with Real A11y.
 
 ::: tip Two different "Playwrights"
-This package is _built on_ **Playwright the library** — the browser driver you
-install as a peer dependency. It _complements_ **Playwright MCP**, the automation
-server above. Same underlying engine, different jobs.
+This package is _built on_ **Playwright the library** — the browser driver it
+takes as a peer dependency, which npm installs with it. It _complements_
+**Playwright MCP**, the automation server above. Same underlying engine,
+different jobs.
 :::
 
 ## Limitations

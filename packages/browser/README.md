@@ -6,9 +6,10 @@ Drive a real browser for Real A11y. This package is the **one way** the toolkit 
 > `real-a11y` CLI, the MCP server, and `@real-a11y-dev/testing`'s Playwright
 > adapter — the three surfaces that drive a real browser, and every one of them
 > already carries it. There is nothing to install and nothing to import by this
-> name; `playwright` stays an optional peer of whichever of the three you
-> installed. The examples below are written from inside the workspace, for
-> anyone working on the driver itself.
+> name; `playwright` stays a peer of whichever of the three you installed,
+> required by the MCP server and optional for the other two. The examples
+> below are written from inside the workspace, for anyone working on the
+> driver itself.
 >
 > It was published up to `0.1.0-beta.13` before becoming internal. Five names
 > keep a published home: [`@real-a11y-dev/mcp`](../mcp) re-exports

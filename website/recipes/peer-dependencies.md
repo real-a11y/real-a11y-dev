@@ -17,11 +17,11 @@ Real A11y is a lean dev-time audit suite. It relies on a small set of peers you 
 | `@real-a11y-dev/testing/playwright` | ≥ 20 | — | — | ≥ 1.49 |
 | `@real-a11y-dev/storybook-addon` | ≥ 20 | 18 or 19 | ≥ 8.0 | — |
 | `@real-a11y-dev/cli` | ≥ 22.12 | — | — | ≥ 1.49 (optional) |
-| `@real-a11y-dev/mcp` | ≥ 20 | — | — | ≥ 1.49 (optional) |
+| `@real-a11y-dev/mcp` | ≥ 20 | — | — | ≥ 1.49 |
 
 `@real-a11y-dev/inspector` has no runtime peers — it uses standard DOM APIs, and the extraction engine it bundles has none either. `@real-a11y-dev/testing` takes any `Element` root, so your test runner and component renderer are entirely your choice.
 
-Playwright is an **optional** peer of `@real-a11y-dev/cli` and `@real-a11y-dev/mcp` — install it (`npm i -D playwright`) only when you audit real URLs: the CLI's `audit`, `inspect`, `snapshot`, `tree`, and `login` commands, or the MCP server's browser tools. Static and DOM-root usage needs nothing extra. Note both packages peer on `playwright` (not `@playwright/test`) and pin it to `>=1.49 <2`, so Playwright 2.x emits a peer warning — `@real-a11y-dev/testing` pins the same `>=1.49 <2` range — it used to accept any version, inheriting nothing but a `*` while the browser driver was a real dependency of it, and states the range directly now that the driver is bundled.
+Playwright is an **optional** peer of `@real-a11y-dev/cli` — install it (`npm i -D playwright`) only when you audit real URLs: the `audit`, `inspect`, `snapshot`, `tree`, and `login` commands. Static and DOM-root usage needs nothing extra. Of `@real-a11y-dev/mcp` it is a **required** peer, since every browser tool needs it: npm installs it with the server, `npx -y @real-a11y-dev/mcp` included, and so does pnpm with its default `auto-install-peers`. With Yarn, or pnpm with that setting off, you add it yourself. Note both packages peer on `playwright` (not `@playwright/test`) and pin it to `>=1.49 <2`. npm moves a Playwright your own range allows into that range, and stops with `ERESOLVE` on one pinned outside it, 2.x included, rather than warning. `@real-a11y-dev/testing` pins the same `>=1.49 <2` range — it used to accept any version, inheriting nothing but a `*` while the browser driver was a real dependency of it, and states the range directly now that the driver is bundled.
 
 ---
 

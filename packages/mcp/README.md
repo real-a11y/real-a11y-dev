@@ -154,7 +154,7 @@ It reuses the exact pieces the testing package already ships:
 
 ## Install & run
 
-Playwright is a peer dependency and a Chrome binary is required:
+Playwright is a peer dependency, which npm installs with the server, `npx -y` included, as does pnpm by default; with Yarn, add `playwright` yourself. A Chrome binary is required too:
 
 ```bash
 npx -y @real-a11y-dev/cli install   # downloads Chrome for Testing, first time only
@@ -163,8 +163,9 @@ npx -y @real-a11y-dev/cli install   # downloads Chrome for Testing, first time o
 That runs the CLI's installer, which needs Node.js 22.12 or newer; the server finds the browser it installs. Use the scoped name: `npx real-a11y install` works only where `@real-a11y-dev/cli` is already installed, and anywhere else asks the registry for an unscoped package that isn't ours. (`npx playwright install chromium` also works — `install` just sidesteps the version-mismatch pitfall that command can hit.) The server also honors `REAL_A11Y_CHROME_PATH` to launch a specific binary directly, and `REAL_A11Y_BROWSERS_DIR` to point at a non-default cache directory.
 
 Wire it into an MCP client — no install step needed, `npx -y` fetches the
-package on first run (use the package name, not the bare `real-a11y-mcp` bin,
-since the client launches it from an arbitrary working directory):
+package, and Playwright with it, on first run (use the package name, not the
+bare `real-a11y-mcp` bin, since the client launches it from an arbitrary
+working directory):
 
 ```json
 {

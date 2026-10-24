@@ -6,12 +6,13 @@ area: MCP
 type: Automated
 priority: P0
 status: Active
-validFrom: "mcp ≥ 0.1.0-beta.1 via npx on the `beta` tag. Tool list: 20 from mcp 0.1.0-beta.2 (act tools); 19 from the producer migration (#258) — `compare_producers` removed, `get_tab_order` kept; **20** from mcp ≥ 0.1.0-beta.3, which adds `list_sessions`. Assert names. Step 5's named `generic` lines from mcp ≥ 0.1.0-beta.9."
+validFrom: "mcp ≥ 0.1.0-beta.1 via npx on the `beta` tag. Tool list: 20 from mcp 0.1.0-beta.2 (act tools); 19 from the producer migration (#258) — `compare_producers` removed, `get_tab_order` kept; **20** from mcp ≥ 0.1.0-beta.3, which adds `list_sessions`. Assert names. Step 5's named `generic` lines from mcp ≥ 0.1.0-beta.9. Step 3 with no Playwright installed beforehand from mcp ≥ 0.1.0-beta.10 (unreleased); earlier releases fail it, the known defect."
 validUntil: ""
 expected: "npx starts the published server; tools/list matches the documented set EXACTLY (assert the names, not the count); perception + audit tools return real data for the live site"
 twin:
   - R8
   - R9
+  - R43
 covers:
   - packages.@real-a11y-dev/mcp
   - mcp.tools.open_page
@@ -36,6 +37,11 @@ Point a real MCP client (Claude Code, Claude Desktop, Cursor) at the **published
 { "command": "npx", "args": ["-y", "@real-a11y-dev/mcp@beta"] }
 ```
 
+Run the client somewhere nothing else makes Playwright resolvable: no Playwright in its
+working directory or above it, and `NODE_PATH` unset. The agent container sets `NODE_PATH`
+to a directory holding a global Playwright, which hid a missing peer through mcp
+0.1.0-beta.9.
+
 1. Confirm the server starts and handshakes over stdio
 2. `tools/list` — compare the sorted names to the documented set
 3. `open_page https://real-a11y.dev`
@@ -54,6 +60,10 @@ Point a real MCP client (Claude Code, Claude Desktop, Cursor) at the **published
 - **1** — `npx` starts the published server on a machine with nothing installed
 - **2** — names match the docs exactly (assert the list, not the count). 20 today;
   `get_tab_order` and `list_sessions` present, `compare_producers` absent
+- **3** — `open_page` opens the page with nothing installed beforehand: npx installs the
+  Playwright peer with the server. Through mcp 0.1.0-beta.9 the peer was optional, and
+  there `open_page` answers `Cannot find package 'playwright'` — the known defect, not a
+  new one
 - **3–6** — real data for the live site, not empty shells
 - **5** — with `includeGeneric`, the tree gains `generic` lines. From mcp ≥ 0.1.0-beta.9, a
   named one is a block of text the page shows, such as a `<div>` of text beside a link, and
@@ -82,3 +92,8 @@ migration (#258) dropped `compare_producers`; `get_tab_order` was predicted to g
 survived, so the "back to 18" arithmetic was wrong while the reasoning (assert names, not the
 count) was right. Step 5 also loses its `producer: "native"` half — the param is gone and the
 schema now rejects it.
+
+Through mcp 0.1.0-beta.9 this row passed in the agent container while the documented
+launch failed everywhere else. The peer was optional, so npx never installed Playwright,
+and the container's `NODE_PATH` supplied a global one, which `createRequire` honours.
+Hence the `NODE_PATH` rule in Steps, and R43 as the pre-publish twin.

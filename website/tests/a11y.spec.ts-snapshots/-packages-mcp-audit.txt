@@ -39,7 +39,7 @@ main
     listitem "— Claude Code, Claude Desktop, Cursor, VS Code, Windsurf, or any other MCP-capable tool."
       strong "An MCP client"
   heading "Connect it to your client" (level 2)
-  paragraph "The server speaks MCP over stdio — point your client at . No install step is needed; fetches it on first run."
+  paragraph "The server speaks MCP over stdio — point your client at . No install step is needed: fetches it on first run, and Playwright, the browser driver, with it."
     code "npx -y @real-a11y-dev/mcp"
     code "npx"
   radio "Claude Code"
@@ -199,7 +199,7 @@ main
       emphasis "broken"
   paragraph "For an accessibility flow — open the dialog, judge the dialog — Real A11y now stands alone. For automation verbs it doesn't ship (hover, drag, uploads, multi-tab), pair the two: drive with Playwright MCP, judge with Real A11y."
   paragraph "Two different "Playwrights""
-  paragraph "This package is — the browser driver you install as a peer dependency. It , the automation server above. Same underlying engine, different jobs."
+  paragraph "This package is — the browser driver it takes as a peer dependency, which npm installs with it. It , the automation server above. Same underlying engine, different jobs."
     emphasis "built on"
     strong "Playwright the library"
     emphasis "complements"

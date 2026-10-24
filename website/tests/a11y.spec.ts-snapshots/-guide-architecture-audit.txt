@@ -99,7 +99,7 @@ main
           code "real-a11y-mcp"
           code "BrowserSession"
           code "buildServer"
-        cell "@modelcontextprotocol/sdk (bundles the internal core, browser, audit, serialize, snapshot, and session-registry; optional peer: playwright)"
+        cell "@modelcontextprotocol/sdk (bundles the internal core, browser, audit, serialize, snapshot, and session-registry; peer: playwright, which npm installs with it)"
           code "@modelcontextprotocol/sdk"
           code "core"
           code "browser"
@@ -393,7 +393,7 @@ main
     code "-o"
     code "bin"
   heading "The real browser lives in one place" (level 3)
-  paragraph "Driving a real Chromium — launching Playwright, injecting the page-bundle, marshalling calls across — is the one genuinely heavyweight dependency in the stack. It all lives in : the and the injected bundle it ships, inlining / and depending on plus an peer. The CLI, the MCP server, and the testing Playwright adapter all drive the browser through this single package, so there is exactly one place the bundle is built and one contract for injecting it — a tree captured by any of the three is identical. Everything above is browserless and Node- or jsdom-safe; a consumer that only needs the engine never pulls Playwright into its graph. That package is internal now, which changes who installs it — nobody. The CLI, the server, and the testing adapter each inline it, so is an optional peer of whichever of the three you installed. re-exports and the session types (, , , ) so an embedder can build a session to hand ; the rest of the driver — , , , the Chrome-resolution helpers — is reached by running a surface, not importing one."
+  paragraph "Driving a real Chromium — launching Playwright, injecting the page-bundle, marshalling calls across — is the one genuinely heavyweight dependency in the stack. It all lives in : the and the injected bundle it ships, inlining / and depending on plus an peer. The CLI, the MCP server, and the testing Playwright adapter all drive the browser through this single package, so there is exactly one place the bundle is built and one contract for injecting it — a tree captured by any of the three is identical. Everything above is browserless and Node- or jsdom-safe; a consumer that only needs the engine never pulls Playwright into its graph. That package is internal now, which changes who installs it — nobody. The CLI, the server, and the testing adapter each inline it, so is a peer of whichever of the three you installed: required by the MCP server, which npm installs it with, and optional for the CLI and the testing adapter. re-exports and the session types (, , , ) so an embedder can build a session to hand ; the rest of the driver — , , , the Chrome-resolution helpers — is reached by running a surface, not importing one."
     code "page.evaluate()"
     code "@real-a11y-dev/browser"
     code "BrowserSession"
