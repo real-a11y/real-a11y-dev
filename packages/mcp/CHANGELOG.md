@@ -1,5 +1,51 @@
 # @real-a11y-dev/mcp
 
+## 0.1.0-beta.10
+
+### Patch Changes
+
+- bfe23ec: Behind a proxy, a bypass list that names loopback now keeps it off the proxy on every Playwright the peer range admits.
+
+  On Playwright 1.49 to 1.58.2, localhost, 127.0.0.1 and the other loopback hosts went through the proxy even when the bypass list named them. For the CLI, that is `HTTPS_PROXY` with a `NO_PROXY` naming them: an audit of a local server failed with `net::ERR_PROXY_CONNECTION_FAILED` behind a dead proxy, and behind a live one, audited the proxy's error page as the page. A list that names a loopback host now bypasses every loopback host on those versions, as it does from Playwright 1.59. The fix is in `BrowserSession`, so code that embeds it from `@real-a11y-dev/mcp` with a `proxy.bypass` gets it too.
+
+  It counts more spellings as loopback than Playwright does: any case, the rest of 127/8, with or without a prefix length, `::1/128`, `.localhost` and `*.localhost`. `*` counts too, since it bypasses every host: Playwright sent loopback through the proxy even then, on every version. A list naming no loopback host is passed on as before, and loopback still goes through the proxy then, as Playwright has always done.
+
+- d94bf7e: `npx -y @real-a11y-dev/mcp` now installs Playwright with the server, so its browser tools work on a machine with nothing else installed.
+
+  Playwright was an optional peer, and npm never installs an optional peer, npx included. So the documented launch started a server that answered `tools/list`, then failed its first browser tool with `Cannot find package 'playwright'`, unless something else on the machine made Playwright resolvable. It is now a required peer: npm installs it with the server, in a project too, and so does pnpm with its default `auto-install-peers`. Yarn, pnpm with that setting off, and a `--legacy-peer-deps` install still leave it out. There, a browser tool now answers with the fix instead of the bare module error: launch the server as `npx -y -p @real-a11y-dev/mcp -p playwright real-a11y-mcp`, or install `playwright` next to it.
+
+- 2682040: Name links, buttons and headings from what their children say about themselves, the way Chromium does. When an element was named from its content, the DOM producer read only its children's text, so an image's `alt`, a child's `aria-label` and an SVG's `<title>` never reached the name:
+
+  | Markup                                                                | Before                  | Now                    |
+  | --------------------------------------------------------------------- | ----------------------- | ---------------------- |
+  | `<a href="/"><img alt="Home"></a>`                                    | `link`                  | `link "Home"`          |
+  | `<button><span aria-label="Close">×</span></button>`                  | `button "×"`            | `button "Close"`       |
+  | `<a href="/kb"><img alt="Help"> center</a>`                           | `link "center"`         | `link "Help center"`   |
+  | `<button><span role="img">★</span> Favourite</button>`                | `button "★ Favourite"`  | `button "Favourite"`   |
+  | `<textarea placeholder="Your reply"></textarea>`                      | `textbox`               | `textbox "Your reply"` |
+  | `<button aria-label=" ">Save</button>`                                | `button`                | `button "Save"`        |
+  | `<h2><input type="checkbox" id="c"><label for="c">Agree</label></h2>` | `heading "Agree Agree"` | `heading "Agree"`      |
+
+  Each child now lends its own text alternative before its content, as accname §2F.iii and Chromium's own tree do:
+
+  - **An image** lends its `alt`, an `<svg>` its first `<title>`, and either one its `title` when it has nothing else, never its content. `<svg><text>Go</text></svg>` inside a button lends nothing, as in Chromium. An empty `alt`, `aria-hidden` and `role="presentation"` still lend nothing.
+  - **Any child** lends its `aria-label`, and its `aria-labelledby` unless it sits inside another reference.
+  - **`aria-labelledby` and `aria-describedby`** borrow the referenced element's own `aria-label` or `alt` before its content, and images inside it lend their `alt`.
+  - **A `<label>`** that holds an image names its field from the image's `alt`.
+  - Text an attribute lends is spaced off even inline: `<a><img alt="Help">center</a>` is "Help center", and a link named by `aria-label` inside a heading is spaced the same way.
+  - An `<svg>` with a `<title>` is named by it, an `<input type="image">` by its `alt` (after a label), and a `<textarea>` falls back to its `placeholder` as an `<input>` does.
+  - A `<select>`'s options are still named by their text alone.
+  - A blank `aria-label`, only spaces, is skipped as if absent, on the element and on a child, so the name falls through to the next source.
+  - Each element counts once in a name, as in Chromium. A heading that holds a checkbox and its label reads the label once, and an icon labelled by the text beside it lends that text in its place: `<a href="/"><svg aria-labelledby="t"></svg><span id="t">Docs</span></a>` is "Docs". Each IDREF of an `aria-labelledby` still reads its whole target, so two overlapping targets repeat what they share, as they do in Chromium.
+
+  What this changes for you:
+
+  - **Assertions and audits:** `assertNoUnlabeledInteractive` and the unlabeled-control findings stop flagging logo links and icon buttons whose image has an `alt`, `image-alt` stops reporting an `<svg>` its `<title>` names, and `label-title-only` stops warning about a field that a `<label>` or an `aria-labelledby` names through an image. A button whose only content is an unlabelled `role="img"` glyph, or SVG `<text>`, is now unnamed and flagged, as it is in Chromium.
+  - **Queries:** `findByRole("link", { name: "Home" })` now finds `<a href="/"><img alt="Home"></a>`.
+  - **Snapshots and diffs:** the names of links, buttons, headings, cells and labelled fields that hold images, labelled children or SVG titles change. Re-record those snapshots.
+  - **Panels:** `inspector`, `react` and `storybook-addon` show the new names.
+  - **`cli` / `mcp`:** only `real-a11y tabs` and `get_tab_order` change, because only they read the in-page tree. Everything else they print comes from Chromium's own tree, which already named these.
+
 ## 0.1.0-beta.9
 
 ### Patch Changes

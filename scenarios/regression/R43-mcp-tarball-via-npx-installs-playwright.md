@@ -6,7 +6,7 @@ area: Packaging
 type: Automated
 priority: P0
 status: Active
-validFrom: "mcp ≥ 0.1.0-beta.10 (unreleased — mcp-playwright-required-peer is a pending changeset)"
+validFrom: "mcp ≥ 0.1.0-beta.10"
 validUntil: ""
 expected: "npx runs the packed MCP tarball from an empty directory with a fresh npm cache and NODE_PATH unset: Playwright lands beside the server and open_page opens a local page. With --legacy-peer-deps it doesn't, and open_page answers with the launch that installs it"
 twin: D4

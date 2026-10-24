@@ -17,7 +17,9 @@
   also touches dogfood code.
 -->
 
-## Unreleased
+## 0.1.17
+
+### Patch Changes
 
 - Dropped the shared tree stylesheet's rules for `.sn-native-consent-error`,
   the failure line of the opt-in step native mode had before it was on by

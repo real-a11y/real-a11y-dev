@@ -77,8 +77,8 @@ page — a stale service worker is the usual cause of "it didn't change".)
 - **One press is enough** (step 11). A tree request that is delivered but never
   answered looks exactly like a page still loading, and it never resolves on its own —
   a content script re-announces only when its own DOM next mutates
-- **A page Chrome won't run a content script on says so.** From the next extension
-  release (the `Unreleased` entry in `packages/extension/CHANGELOG.md`) step 9 shows
+- **A page Chrome won't run a content script on says so.** From extension 0.1.12,
+  step 9 shows
   "This page can't be inspected" with a **Try again** button; on an earlier build the
   panel shows "Connecting to page…" indefinitely there, which is the defect this step
   exists for, not a new one
