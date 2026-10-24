@@ -157,10 +157,10 @@ It reuses the exact pieces the testing package already ships:
 Playwright is a peer dependency and a Chrome binary is required:
 
 ```bash
-npx real-a11y install   # downloads Chrome for Testing, first time only
+npx -y @real-a11y-dev/cli install   # downloads Chrome for Testing, first time only
 ```
 
-(`npx playwright install chromium` also works — `install` just sidesteps the version-mismatch pitfall that command can hit.) The server also honors `REAL_A11Y_CHROME_PATH` to launch a specific binary directly, and `REAL_A11Y_BROWSERS_DIR` to point at a non-default cache directory.
+That runs the CLI's installer, which needs Node.js 22.12 or newer; the server finds the browser it installs. Use the scoped name: `npx real-a11y install` works only in a project that installed `@real-a11y-dev/cli`, and anywhere else asks the registry for an unscoped package that isn't ours. (`npx playwright install chromium` also works — `install` just sidesteps the version-mismatch pitfall that command can hit.) The server also honors `REAL_A11Y_CHROME_PATH` to launch a specific binary directly, and `REAL_A11Y_BROWSERS_DIR` to point at a non-default cache directory.
 
 Wire it into an MCP client — no install step needed, `npx -y` fetches the
 package on first run (use the package name, not the bare `real-a11y-mcp` bin,

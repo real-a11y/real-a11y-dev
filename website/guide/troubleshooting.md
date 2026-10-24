@@ -197,14 +197,16 @@ Playwright is required to drive a browser, but it isn't installed.
   npm i -D playwright && npx real-a11y install
 ```
 
-Install the peer and a browser:
+The CLI's hint names the commands for how it was installed: those above for a project dependency, `npm i -g playwright && real-a11y install` for a global install, and a project install of both for a run through `npx -y @real-a11y-dev/cli`, which sees only what npx installed beside it. For the MCP server, install the peer and a browser:
 
 ```sh
 npm i -D playwright
-npx real-a11y install   # downloads Chrome for Testing, first time only
+npx -y @real-a11y-dev/cli install   # downloads Chrome for Testing, first time only
 ```
 
-A separate "No browser is downloaded yet." error means Playwright itself is installed but no browser binary is — run just the `real-a11y install` step (or `npx playwright install chromium`, which works too).
+Use the scoped name there: `npx real-a11y` reaches the CLI only in a project that installed it, and anywhere else asks the registry for an unscoped package that isn't ours.
+
+A separate "No browser is downloaded yet." error means Playwright itself is installed but no browser binary is — run just the install step the hint names, the same `install` command for that layout.
 
 ## Chrome fails to launch with a shared-library error
 
