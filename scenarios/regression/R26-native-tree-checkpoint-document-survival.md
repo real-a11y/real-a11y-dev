@@ -6,7 +6,7 @@ area: CLI
 type: Automated
 priority: P1
 status: Active
-validFrom: "browser ≥ 0.1.0-beta.12 · cli ≥ 0.1.0-beta.2 (both unreleased — native-tree-checkpoint is a pending changeset)"
+validFrom: "browser ≥ 0.1.0-beta.12 · cli ≥ 0.1.0-beta.2"
 validUntil: ""
 expected: "Five scenarios, each giving the right verdict: same-document mutation → diff; SPA pushState → diff; hash change → diff; reload (SAME url) → no diff, document replaced; real navigation → no diff, document replaced. The two that matter are the ones a URL comparison gets wrong: a hash/SPA change moves the URL while the document lives, and a reload keeps the URL while replacing it."
 covers:

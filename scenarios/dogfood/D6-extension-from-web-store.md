@@ -52,7 +52,7 @@ updated yet, this row is **Blocked**, not Pass — a local build is a different 
 - Panel works across all three site shapes; SPA routes and Back are followed
 - Real handlers fire on the form
 - **The password value never appears**, in any view, nor in the edit box as you type
-  it into an empty field (from the first release with #510)
+  it into an empty field (from extension 0.1.17)
 - The heavy page stays usable
 - Keyboard + screen reader work (see **R17** for the detail)
 - **10** — no console noise, no memory growth, no breakage of the sites themselves

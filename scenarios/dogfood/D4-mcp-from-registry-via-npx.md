@@ -6,7 +6,7 @@ area: MCP
 type: Automated
 priority: P0
 status: Active
-validFrom: "mcp ≥ 0.1.0-beta.1 via npx on the `beta` tag. Tool list: 20 from mcp 0.1.0-beta.2 (act tools); 19 from the producer migration (#258) — `compare_producers` removed, `get_tab_order` kept; **20** from mcp ≥ 0.1.0-beta.3, which adds `list_sessions`. Assert names. Step 5's named `generic` lines from mcp ≥ 0.1.0-beta.9. Step 3 with no Playwright installed beforehand from mcp ≥ 0.1.0-beta.10 (unreleased); earlier releases fail it, the known defect."
+validFrom: "mcp ≥ 0.1.0-beta.1 via npx on the `beta` tag. Tool list: 20 from mcp 0.1.0-beta.2 (act tools); 19 from the producer migration (#258) — `compare_producers` removed, `get_tab_order` kept; **20** from mcp ≥ 0.1.0-beta.3, which adds `list_sessions`. Assert names. Step 5's named `generic` lines from mcp ≥ 0.1.0-beta.9. Step 3 with no Playwright installed beforehand from mcp ≥ 0.1.0-beta.10; earlier releases fail it, the known defect."
 validUntil: ""
 expected: "npx starts the published server; tools/list matches the documented set EXACTLY (assert the names, not the count); perception + audit tools return real data for the live site"
 twin:

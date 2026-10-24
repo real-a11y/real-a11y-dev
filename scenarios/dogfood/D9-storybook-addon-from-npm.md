@@ -61,20 +61,19 @@ Then install the addon with the command the docs give, as written.
 - The panel appears and tracks stories and controls
 - **2/4** — selecting the panel never takes the tray away: a mouse click on Controls selects
   it. On storybook-addon 0.1.0-beta.19 with Storybook 10.1 or later the panel paints over the
-  tab bar — the known defect the beta.19 dogfood filed, fixed in the first release after it
+  tab bar — the known defect the beta.19 dogfood filed, fixed in 0.1.0-beta.20
 - **4** — every tree the panel logs matches its pressed toggle: `dom` under DOM, `a11y` under
   A11Y. After the tab switch it is still on DOM on Storybook 10.1 and later; on Storybook 9 it
   comes back on A11Y, as it always has. After the reload it is still on DOM, on every version.
   On 0.1.0-beta.19, Storybook 9 comes back on A11Y over `dom` trees, and every version logs
-  `a11y` under DOM after the reload (known defects, fixed in the first release after it)
+  `a11y` under DOM after the reload (known defects, fixed in 0.1.0-beta.20)
 - **The static build works** — this is where the addon's `exports` subpaths get resolved by
   Storybook's production builder
 - No console errors from the addon in either mode — nothing beyond the baseline's
 - The docs match the Storybook version people will actually be on
 - **8** — `0` both times: the docs promise no extract and no `postMessage` while another tab is
   active. On 0.1.0-beta.19 it streams with another tab selected on Storybook 10.1 or later,
-  and with the panel hidden on every version (known defect, fixed in the first release after
-  it)
+  and with the panel hidden on every version (known defect, fixed in 0.1.0-beta.20)
 - Step 10 prints `(empty)`, from the first release after `0.1.0-beta.17`: the addon has no
   runtime dependency of its own. Up to `0.1.0-beta.17` it listed `@real-a11y-dev/testing`,
   which it never imported, so there `npm ls` shows it — that is the old behaviour, not a fail

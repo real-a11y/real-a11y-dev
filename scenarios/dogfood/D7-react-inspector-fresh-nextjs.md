@@ -59,8 +59,8 @@ template turned on (16.4 enables `cacheComponents`). Then install
   panel's tree **contains the page**: search the panel for the page's `<h1>` and its
   landmarks. A blank panel, or a lone `generic` row, is a fail. The recipe as published
   when the beta.19 dogfood ran never attaches the observed root — a docs defect, whatever
-  react version you install. Its fix (unreleased) reaches real-a11y.dev with the next
-  release, and next.real-a11y.dev serves it now. Once the toast is up, the tree holds
+  react version you install. Its fix reaches real-a11y.dev with the beta.20 release;
+  next.real-a11y.dev served it first. Once the toast is up, the tree holds
   `Saved` and nothing of the panel's own: a search for `Collapse panel` finds nothing, and
   TAB view lists no panel control. On react 0.1.0-beta.19 both find the panel's title
   bar, the known defect
@@ -69,8 +69,8 @@ template turned on (16.4 enables `cacheComponents`). Then install
 - **5** — works as in the example app: nothing the picker lands on opens, takes focus, or
   sees its capture-phase handler run
 - **6** — a root that mounts after the navigator still populates (twin: R20 step 6b). On
-  react 0.1.0-beta.19 and earlier it stays empty, the known defect; the release after it
-  (unreleased) attaches it
+  react 0.1.0-beta.19 and earlier it stays empty, the known defect; react 0.1.0-beta.20
+  attaches it
 - **7/8** — the production build behaves like dev. React's dev build tolerates things production
   does not
 - **9** — a clear error or documented guidance, not an inscrutable stack trace, in dev and

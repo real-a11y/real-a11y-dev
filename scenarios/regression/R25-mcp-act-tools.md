@@ -6,7 +6,7 @@ area: MCP
 type: Automated
 priority: P0
 status: Active
-validFrom: "mcp ≥ 0.1.0-beta.2 (unreleased — mcp-act-by-role is a pending changeset)"
+validFrom: "mcp ≥ 0.1.0-beta.2"
 validUntil: ""
 expected: "checkpoint_tree → act → diff_tree reports exactly the introduced delta. Each tool resolves role + name against a FRESH native tree immediately before dispatch, so no node id ever crosses the wire. Ambiguity lists nth candidates with NO dispatch; a disabled target is refused; a stale/mid-action miss says the page mutated and to retry. focus_element surfaces whether the target accepts text entry. Annotations are correct (click: idempotent false, openWorld true)."
 twin: D11

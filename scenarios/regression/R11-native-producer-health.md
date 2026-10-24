@@ -6,7 +6,7 @@ area: MCP
 type: Automated
 priority: P1
 status: Active
-validFrom: "browser ≥ 0.1.0-beta.12 · cli ≥ 0.1.0-beta.2 (locators + focusedId unreleased). The native producer itself: browser ≥ 0.1.0-beta.11. Steps 6 / 6b as written (field values shown, sensitive ones redacted, --redact-input): cli ≥ 0.1.0-beta.7. Step 6c (a field with no node of its own): cli ≥ 0.1.0-beta.9"
+validFrom: "browser ≥ 0.1.0-beta.12 · cli ≥ 0.1.0-beta.2 (locators + focusedId). The native producer itself: browser ≥ 0.1.0-beta.11. Steps 6 / 6b as written (field values shown, sensitive ones redacted, --redact-input): cli ≥ 0.1.0-beta.7. Step 6c (a field with no node of its own): cli ≥ 0.1.0-beta.9"
 validUntil: ""
 expected: "native tree returns a document tree reaching UA-shadow media controls the in-page walk misses; every native FINDING carries a CSS locator identical to the DOM producer's for the same element (a shadow-root element stops its path at the boundary rather than faking a selector); the tree sets focusedId so [focused] renders; a field shows what it holds the way a screen reader announces it, while a sensitive field (password, one-time code, payment) only ever reads [redacted]; --redact-input withholds every value and all rich-text editor content."
 covers:

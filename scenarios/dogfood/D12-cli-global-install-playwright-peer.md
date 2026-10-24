@@ -81,25 +81,25 @@ Then try the obvious unblock, still as a **global** user:
   the partial install in step 3 is the layout where those two disagree
 - `npm i -g playwright` unblocks the global binary (`audit` loads the driver).
   Chrome still needs `real-a11y install` if it is not already cached. Behind a
-  mandatory proxy, `real-a11y install` on cli 0.1.0-beta.9 also needs `proxy-agent`,
+  mandatory proxy, `real-a11y install` through cli 0.1.0-beta.10 also needs `proxy-agent`,
   which nothing installs or documents — the known defect, not a new one
 - The defect fixture reports exactly its one finding and exits `1`; the clean twin
   exits `0`; the server log shows both requests
 - **3** — `--version` prints a version exactly when `audit` loads the driver, in all
   three layouts. The partial install fails with an error that says the install is
-  incomplete, not a version followed by "is the server running?" (the known defect on
-  cli 0.1.0-beta.9, found by the beta.19 dogfood)
+  incomplete, not a version followed by "is the server running?" (the known defect
+  through cli 0.1.0-beta.10, found by the beta.19 dogfood)
 - **4** — the proxied run reaches the fixture directly (`NO_PROXY` holds) on both
   Playwright versions. On cli 0.1.0-beta.9 with Playwright 1.58.2 (and anything from
-  1.49), loopback goes to the proxy — the known defect, not a new one. The release
-  after it (unreleased) keeps loopback direct on both
+  1.49), loopback goes to the proxy — the known defect, not a new one. cli
+  0.1.0-beta.10 keeps loopback direct on both
 - **5** — the follow-up hint names the command for **this** layout:
   `real-a11y install`, not `npx real-a11y install`. npx finds a global CLI only in
   npm's own global prefix. A global anywhere else, such as a `--prefix` install or a
   version manager like Volta that keeps globals in its own directory, sends it to the
   registry for the unscoped name: an E404. cli 0.1.0-beta.9 prints `npx real-a11y install` in every
-  layout — the known defect the beta.19 dogfood filed, not a new one. The release
-  after it (unreleased) names each layout's own command
+  layout — the known defect the beta.19 dogfood filed, not a new one. cli
+  0.1.0-beta.10 names each layout's own command
 
 ## Why this exists
 

@@ -1,5 +1,59 @@
 # @real-a11y-dev/cli
 
+## 0.1.0-beta.10
+
+### Patch Changes
+
+- bfe23ec: Behind a proxy, a bypass list that names loopback now keeps it off the proxy on every Playwright the peer range admits.
+
+  On Playwright 1.49 to 1.58.2, localhost, 127.0.0.1 and the other loopback hosts went through the proxy even when the bypass list named them. For the CLI, that is `HTTPS_PROXY` with a `NO_PROXY` naming them: an audit of a local server failed with `net::ERR_PROXY_CONNECTION_FAILED` behind a dead proxy, and behind a live one, audited the proxy's error page as the page. A list that names a loopback host now bypasses every loopback host on those versions, as it does from Playwright 1.59. The fix is in `BrowserSession`, so code that embeds it from `@real-a11y-dev/mcp` with a `proxy.bypass` gets it too.
+
+  It counts more spellings as loopback than Playwright does: any case, the rest of 127/8, with or without a prefix length, `::1/128`, `.localhost` and `*.localhost`. `*` counts too, since it bypasses every host: Playwright sent loopback through the proxy even then, on every version. A list naming no loopback host is passed on as before, and loopback still goes through the proxy then, as Playwright has always done.
+
+- bfe23ec: The CLI's hints name commands that work where it runs.
+
+  - **Install hints name the command for how the CLI was installed.** That covers "No browser is downloaded yet.", a `--chrome-path` that isn't there, and a broken Chrome binary:
+    - `npx real-a11y install` in a project that installed it;
+    - `real-a11y install` for a global install;
+    - `npx -y @real-a11y-dev/cli@<its version> install` for a run through npx.
+
+    The first always said `npx real-a11y install`, and the others `real-a11y install`. In a run through npx neither works: `npx real-a11y` asks the registry for an unscoped package that isn't ours, and `real-a11y` isn't on PATH. `npx real-a11y` misses a global install too, unless it sits in npm's own global prefix. "No browser is downloaded yet." also no longer suggests `npx playwright install chromium`, which downloads the browser revision of whichever Playwright npx fetches, not the one the CLI loaded.
+
+  - **Playwright missing, in a run through npx:** the hint now says to install the CLI and Playwright in the project. The global Playwright it suggested isn't visible to an npx run.
+  - **A proxy failure's hint** names `HTTPS_PROXY`, `HTTP_PROXY` and `NO_PROXY` rather than a `--proxy` flag, which doesn't exist.
+
+- 2682040: Name links, buttons and headings from what their children say about themselves, the way Chromium does. When an element was named from its content, the DOM producer read only its children's text, so an image's `alt`, a child's `aria-label` and an SVG's `<title>` never reached the name:
+
+  | Markup                                                                | Before                  | Now                    |
+  | --------------------------------------------------------------------- | ----------------------- | ---------------------- |
+  | `<a href="/"><img alt="Home"></a>`                                    | `link`                  | `link "Home"`          |
+  | `<button><span aria-label="Close">×</span></button>`                  | `button "×"`            | `button "Close"`       |
+  | `<a href="/kb"><img alt="Help"> center</a>`                           | `link "center"`         | `link "Help center"`   |
+  | `<button><span role="img">★</span> Favourite</button>`                | `button "★ Favourite"`  | `button "Favourite"`   |
+  | `<textarea placeholder="Your reply"></textarea>`                      | `textbox`               | `textbox "Your reply"` |
+  | `<button aria-label=" ">Save</button>`                                | `button`                | `button "Save"`        |
+  | `<h2><input type="checkbox" id="c"><label for="c">Agree</label></h2>` | `heading "Agree Agree"` | `heading "Agree"`      |
+
+  Each child now lends its own text alternative before its content, as accname §2F.iii and Chromium's own tree do:
+
+  - **An image** lends its `alt`, an `<svg>` its first `<title>`, and either one its `title` when it has nothing else, never its content. `<svg><text>Go</text></svg>` inside a button lends nothing, as in Chromium. An empty `alt`, `aria-hidden` and `role="presentation"` still lend nothing.
+  - **Any child** lends its `aria-label`, and its `aria-labelledby` unless it sits inside another reference.
+  - **`aria-labelledby` and `aria-describedby`** borrow the referenced element's own `aria-label` or `alt` before its content, and images inside it lend their `alt`.
+  - **A `<label>`** that holds an image names its field from the image's `alt`.
+  - Text an attribute lends is spaced off even inline: `<a><img alt="Help">center</a>` is "Help center", and a link named by `aria-label` inside a heading is spaced the same way.
+  - An `<svg>` with a `<title>` is named by it, an `<input type="image">` by its `alt` (after a label), and a `<textarea>` falls back to its `placeholder` as an `<input>` does.
+  - A `<select>`'s options are still named by their text alone.
+  - A blank `aria-label`, only spaces, is skipped as if absent, on the element and on a child, so the name falls through to the next source.
+  - Each element counts once in a name, as in Chromium. A heading that holds a checkbox and its label reads the label once, and an icon labelled by the text beside it lends that text in its place: `<a href="/"><svg aria-labelledby="t"></svg><span id="t">Docs</span></a>` is "Docs". Each IDREF of an `aria-labelledby` still reads its whole target, so two overlapping targets repeat what they share, as they do in Chromium.
+
+  What this changes for you:
+
+  - **Assertions and audits:** `assertNoUnlabeledInteractive` and the unlabeled-control findings stop flagging logo links and icon buttons whose image has an `alt`, `image-alt` stops reporting an `<svg>` its `<title>` names, and `label-title-only` stops warning about a field that a `<label>` or an `aria-labelledby` names through an image. A button whose only content is an unlabelled `role="img"` glyph, or SVG `<text>`, is now unnamed and flagged, as it is in Chromium.
+  - **Queries:** `findByRole("link", { name: "Home" })` now finds `<a href="/"><img alt="Home"></a>`.
+  - **Snapshots and diffs:** the names of links, buttons, headings, cells and labelled fields that hold images, labelled children or SVG titles change. Re-record those snapshots.
+  - **Panels:** `inspector`, `react` and `storybook-addon` show the new names.
+  - **`cli` / `mcp`:** only `real-a11y tabs` and `get_tab_order` change, because only they read the in-page tree. Everything else they print comes from Chromium's own tree, which already named these.
+
 ## 0.1.0-beta.9
 
 ### Patch Changes
