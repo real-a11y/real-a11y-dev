@@ -994,13 +994,16 @@ main
     code "false"
   button "Copy Code"
   code
-  paragraph "There is no variable — Chromium doesn't honor / on its own, and a proxy is a constructor option, not read from the environment by the stdio server. Configure it only if you embed directly."
+  paragraph "There is no variable — Chromium doesn't honor / on its own, and a proxy is a constructor option, not read from the environment by the stdio server. Configure it only if you embed directly. There, a that names a loopback host (, , …) keeps every loopback host off the proxy, whichever Playwright you run."
     code "REAL_A11Y_MCP_PROXY"
     code "HTTP_PROXY"
     code "HTTPS_PROXY"
     strong "programmatic"
     code "BrowserSession"
     code "BrowserSession"
+    code "bypass"
+    code "localhost"
+    code "127.0.0.1"
 contentinfo
   link "Edit this page on GitHub"
   paragraph "Last updated:"

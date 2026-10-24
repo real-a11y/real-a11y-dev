@@ -122,6 +122,18 @@ main
         code "snapshot"
       link "-o"
         code "-o"
+    listitem ", else (either in lowercase too) — the proxy a launched Chrome uses, credentials in the URL included; ignored with . The hosts in skip it, and a that names a loopback host (, , …) keeps every loopback host off it. One that names none sends loopback through the proxy too."
+      strong
+        code "HTTPS_PROXY"
+      strong
+        code "HTTP_PROXY"
+      link "--cdp"
+        code "--cdp"
+      strong
+        code "NO_PROXY"
+      code "NO_PROXY"
+      code "localhost"
+      code "127.0.0.1"
   paragraph "Human () output is and may be reworded between releases. The machine formats — , , , , and the fingerprints — are a : within , changes are additive-only. Never rely on the wording of a line; key on the JSON."
     code "pretty"
     strong "English-only"

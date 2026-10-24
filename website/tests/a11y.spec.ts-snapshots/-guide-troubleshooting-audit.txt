@@ -196,19 +196,30 @@ main
       code "@real-a11y-dev/testing"
   separator
   heading "The CLI or MCP says Playwright isn't installed" (level 2)
-  paragraph "Both and list Playwright as an peer dependency and import it lazily — the library API (types, ) loads without a browser, but the moment a command actually drives one, Playwright has to be present. If it isn't, you'll see:"
+  paragraph "Both and list Playwright as an peer dependency and import it lazily — the library API (types, ) loads without a browser, but the moment a command actually drives one, Playwright has to be present. If it isn't, the CLI says:"
     code "@real-a11y-dev/cli"
     code "@real-a11y-dev/mcp"
     strong "optional"
     code "buildServer"
   button "Copy Code"
   code
-  paragraph "Install the peer and a browser:"
+  paragraph "Its hint names the commands for how it was installed: those above for a project dependency, for a global install, and for a run through , an install of both in the project, since npx sees only what it installed beside the CLI."
+    code "npm i -g playwright && real-a11y install"
+    code "npx -y @real-a11y-dev/cli"
+  paragraph "The MCP server's tools answer instead. npx doesn't install an optional peer, so a server launched with has no Playwright beside it. Have npx install the two together, and launch the server as:"
+    code "Cannot find package 'playwright'"
+    code "npx -y @real-a11y-dev/mcp"
   button "Copy Code"
   code
-  paragraph "A separate "No browser is downloaded yet." error means Playwright itself is installed but no browser binary is — run just the step (or , which works too)."
-    code "real-a11y install"
-    code "npx playwright install chromium"
+  paragraph "In a client's config file that is with . Or install both in a project () and point the client at that install. Either way, the server needs a browser once:"
+    code ""command": "npx""
+    code ""args": ["-y", "-p", "@real-a11y-dev/mcp", "-p", "playwright", "real-a11y-mcp"]"
+    code "npm i -D @real-a11y-dev/mcp playwright"
+  button "Copy Code"
+  code
+  paragraph "That is the CLI's installer, which needs Node.js 22.12 or newer. Use the scoped name there: reaches the CLI only in a project that installed it, and anywhere else asks the registry for an unscoped package that isn't ours."
+    code "npx real-a11y"
+  paragraph "A separate "No browser is downloaded yet." error means Playwright itself is installed but no browser binary is — run just the install step the hint names."
   heading "Chrome fails to launch with a shared-library error" (level 2)
   paragraph "downloads a plain Chrome binary — unlike , it doesn't install any OS-level packages. On a bare Linux container you may see something like . Install just the system dependencies, without downloading another browser:"
     code "real-a11y install"

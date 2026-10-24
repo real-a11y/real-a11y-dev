@@ -37,6 +37,7 @@ link "snapshot"
 link "urls"
 link "snapshot"
 link "-o"
+link "--cdp"
 link "tabs"
 link "--root"
 table

@@ -33,6 +33,8 @@ button "Copy Code"
 generic
 button "Copy Code"
 generic
+button "Copy Code"
+generic
 link "Peer Dependencies"
 link "Next.js"
 link "Storybook + React 19"
