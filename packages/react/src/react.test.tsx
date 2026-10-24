@@ -2,7 +2,14 @@ import { act, cleanup, render, waitFor } from "@testing-library/react";
 import { useRef, useState } from "react";
 import { describe, it, expect, afterEach } from "vitest";
 
-import { SemanticNavigator, useSemanticTree, useActiveModal } from "./index.js";
+import { useTargetElement } from "./useSemanticTree.js";
+
+import {
+  SemanticNavigator,
+  useSemanticTree,
+  useActiveModal,
+  type SemanticTreeTarget,
+} from "./index.js";
 
 afterEach(() => cleanup());
 
@@ -218,6 +225,146 @@ describe("<SemanticNavigator />", () => {
       expect(mounted).toBe(true);
     }, WAIT);
   });
+
+  it("attaches to a root that mounts after it", async () => {
+    // The root sits behind a loading state, so it attaches in a later commit
+    // than the navigator's first. The create effect used to depend on
+    // `root.current` as read during render, which was null on every render,
+    // so it never ran and the panel stayed blank with nothing logged.
+    function App() {
+      const rootRef = useRef<HTMLElement>(null);
+      const [ready, setReady] = useState(false);
+      return (
+        <>
+          {ready ? (
+            <main ref={rootRef}>
+              <h1>Loaded</h1>
+            </main>
+          ) : (
+            <p>Loading…</p>
+          )}
+          <button type="button" onClick={() => setReady(true)}>
+            load
+          </button>
+          <div data-testid="panel">
+            <SemanticNavigator root={rootRef} />
+          </div>
+        </>
+      );
+    }
+
+    const { getByText, getByTestId } = render(<App />);
+    const host = getByTestId("panel").firstElementChild!;
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 10));
+    });
+    expect(host.shadowRoot).toBeNull(); // nothing to observe yet
+
+    await act(async () => {
+      getByText("load").click();
+    });
+    await waitFor(() => {
+      expect(host.shadowRoot?.textContent).toContain("Loaded");
+    }, WAIT);
+  });
+
+  it("attaches to a root element that a sibling mounts later", async () => {
+    // A ref object only re-resolves when the navigator re-renders. A root
+    // another component mounts on its own state change doesn't re-render it,
+    // so that case passes the element, from a callback ref kept in state.
+    function Lazy({ onRoot }: { onRoot: (el: HTMLElement | null) => void }) {
+      const [ready, setReady] = useState(false);
+      return ready ? (
+        <main ref={onRoot}>
+          <h1>From a sibling</h1>
+        </main>
+      ) : (
+        <button type="button" onClick={() => setReady(true)}>
+          load
+        </button>
+      );
+    }
+    function App() {
+      const [root, setRoot] = useState<HTMLElement | null>(null);
+      return (
+        <>
+          <Lazy onRoot={setRoot} />
+          <div data-testid="panel">
+            <SemanticNavigator root={root} />
+          </div>
+        </>
+      );
+    }
+
+    const { getByText, getByTestId } = render(<App />);
+    const host = getByTestId("panel").firstElementChild!;
+    await act(async () => {
+      getByText("load").click();
+    });
+    await waitFor(() => {
+      expect(host.shadowRoot?.textContent).toContain("From a sibling");
+    }, WAIT);
+  });
+
+  it("renders an empty panel for an undefined root instead of throwing", async () => {
+    // Reading `root.current` threw on `undefined`, which plain JS, or a
+    // `useState<HTMLElement>()` passed through a cast, hands the navigator
+    // before the element exists.
+    const { getByTestId } = render(
+      <div data-testid="panel">
+        <SemanticNavigator root={undefined as unknown as null} />
+      </div>,
+    );
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 10));
+    });
+    const host = getByTestId("panel").querySelector("div");
+    expect(host).not.toBeNull();
+    expect(host!.shadowRoot).toBeNull();
+  });
+
+  it("keeps the floating panel's own chrome out of a tree widened to the body", async () => {
+    // A live region outside the root widens the tree to <body>, where the
+    // floating panel is portaled. Only the inspector's container inside the
+    // panel was marked as panel chrome, so the wrapper's landmark and its
+    // Collapse button were listed as rows of the page.
+    function App() {
+      const rootRef = useRef<HTMLDivElement>(null);
+      return (
+        <>
+          <p role="status">Saved</p>
+          <div ref={rootRef}>
+            <button>Go</button>
+          </div>
+          <SemanticNavigator root={rootRef} floating />
+        </>
+      );
+    }
+
+    render(<App />);
+    const panel = await waitFor(() => {
+      const el = document.querySelector(
+        '[aria-label="Semantic Navigator panel"]',
+      );
+      expect(el).not.toBeNull();
+      return el!;
+    }, WAIT);
+    const host = await waitFor(() => {
+      const el = Array.from(panel.querySelectorAll("div")).find(
+        (d) => d.shadowRoot !== null,
+      );
+      expect(el).toBeDefined();
+      return el!;
+    }, WAIT);
+
+    await waitFor(() => {
+      const text = host.shadowRoot!.textContent ?? "";
+      // The tree did widen: the status region outside the root is in it.
+      expect(text).toContain("Saved");
+      expect(text).not.toContain("Semantic Navigator panel");
+      expect(text).not.toContain("Collapse panel");
+    }, WAIT);
+  });
 });
 
 describe("useSemanticTree", () => {
@@ -292,6 +439,139 @@ describe("useSemanticTree", () => {
       const names = Array.from(latest!.nodes.values()).map((n) => n.a11y.name);
       expect(names).toContain("Late");
     }, WAIT);
+  });
+
+  it("attaches to a ref whose root mounts after the first commit", async () => {
+    // The same shape with a ref object. Nothing tells the hook `.current`
+    // changed, and an effect that depends on the ref never runs again for a
+    // stable one, so the ref is read after every commit of its component.
+    let latest: ReturnType<typeof useSemanticTree> = null;
+    function Subject() {
+      const ref = useRef<HTMLDivElement>(null);
+      const [show, setShow] = useState(false);
+      latest = useSemanticTree(ref);
+      return (
+        <>
+          <button onClick={() => setShow(true)}>show</button>
+          {show && (
+            <div ref={ref}>
+              <button>Late</button>
+            </div>
+          )}
+        </>
+      );
+    }
+
+    const { getByText } = render(<Subject />);
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 10));
+    });
+    expect(latest).toBeNull();
+
+    await act(async () => {
+      getByText("show").click();
+    });
+    await waitFor(() => {
+      const names = Array.from(latest?.nodes.values() ?? []).map(
+        (n) => n.a11y.name,
+      );
+      expect(names).toContain("Late");
+    }, WAIT);
+  });
+
+  it("observes an element that has a `current` property of its own", async () => {
+    // A custom element can define `current`, a carousel's slide index say.
+    // Telling a ref from an element by `current` read such a root as a ref.
+    const root = document.createElement("div");
+    Object.defineProperty(root, "current", { value: 0 });
+    root.innerHTML = "<button>Slide</button>";
+    document.body.appendChild(root);
+    let latest: ReturnType<typeof useSemanticTree> = null;
+    function Subject() {
+      latest = useSemanticTree(root);
+      return null;
+    }
+
+    try {
+      render(<Subject />);
+      await waitFor(() => {
+        const names = Array.from(latest?.nodes.values() ?? []).map(
+          (n) => n.a11y.name,
+        );
+        expect(names).toContain("Slide");
+      }, WAIT);
+    } finally {
+      root.remove();
+    }
+  });
+
+  it("costs the caller no extra render per update", async () => {
+    // The effect that reads a ref runs after every commit. Setting state there
+    // even to the value it holds rendered the caller a second time after every
+    // update, which useSemanticTree's consumers paid on every DOM flush.
+    const root = document.createElement("main");
+    let renders = 0;
+    function Subject() {
+      const [count, setCount] = useState(0);
+      useTargetElement(root);
+      renders++;
+      return <button onClick={() => setCount(count + 1)}>bump</button>;
+    }
+
+    const { getByText } = render(<Subject />);
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 10));
+    });
+    const afterMount = renders;
+    for (let i = 0; i < 5; i++) {
+      await act(async () => {
+        getByText("bump").click();
+      });
+    }
+    expect(renders - afterMount).toBe(5);
+  });
+
+  it("keeps observing when an element target is handed over as a ref to it", async () => {
+    // Only the form naming the root changes, so the observer, and the tree it
+    // built, must stay rather than be cleared and extracted again.
+    const root = document.createElement("div");
+    root.innerHTML = "<button>Same</button>";
+    document.body.appendChild(root);
+    let latest: ReturnType<typeof useSemanticTree> = null;
+    function Subject({ target }: { target: SemanticTreeTarget }) {
+      latest = useSemanticTree(target);
+      return null;
+    }
+
+    try {
+      const { rerender } = render(<Subject target={root} />);
+      await waitFor(() => expect(latest).not.toBeNull(), WAIT);
+      const before = latest;
+
+      rerender(<Subject target={{ current: root }} />);
+      await act(async () => {
+        await new Promise((r) => setTimeout(r, 50));
+      });
+      expect(latest).toBe(before);
+    } finally {
+      root.remove();
+    }
+  });
+
+  it("returns null for an undefined target instead of throwing", async () => {
+    // Plain JS, or a `useState<HTMLElement>()` passed through a cast, hands
+    // the hook `undefined` before the element exists.
+    let latest: ReturnType<typeof useSemanticTree> | undefined;
+    function Subject() {
+      latest = useSemanticTree(undefined as unknown as null);
+      return null;
+    }
+
+    render(<Subject />);
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 10));
+    });
+    expect(latest).toBeNull();
   });
 
   it("re-attaches when the root element is replaced", async () => {

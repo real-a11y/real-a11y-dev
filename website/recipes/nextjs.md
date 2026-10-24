@@ -25,20 +25,42 @@ Any component that renders the inspector must be a **Client Component**. The ins
 // app/components/A11yPanel.tsx
 "use client";
 
-import { useRef } from "react";
+import { useRef, type ReactNode } from "react";
 import { SemanticNavigator } from "@real-a11y-dev/react";
 
-export function A11yPanel() {
+export function A11yPanel({ children }: { children: ReactNode }) {
   const rootRef = useRef<HTMLDivElement>(null);
 
   return (
-    <div ref={rootRef}>
-      {/* your page content */}
+    <div ref={rootRef} style={{ display: "contents" }}>
+      {children}
       <SemanticNavigator root={rootRef} floating highlightOnHover />
     </div>
   );
 }
 ```
+
+Wrap your pages with it in the root layout, so the panel observes what they render:
+
+```tsx
+// app/layout.tsx
+import type { ReactNode } from "react";
+import { A11yPanel } from "./components/A11yPanel";
+
+export default function RootLayout({ children }: { children: ReactNode }) {
+  return (
+    <html lang="en">
+      <body>
+        <A11yPanel>{children}</A11yPanel>
+      </body>
+    </html>
+  );
+}
+```
+
+`root` is the element the panel observes: here, the `<div>` that holds your pages. It has to be attached to an element that holds them. A ref that never reaches an element, or one on an empty `<div>`, leaves the panel blank, and nothing is logged.
+
+The wrapper is `display: contents`, so it takes no part in layout: a flex or grid layout on `<body>` still lays out your pages' top-level elements as if they were its own children. A selector that names them as `<body>`'s children, such as `body > main`, no longer matches. Having no box of its own, the wrapper is the one row in the panel that hover can't highlight.
 
 The `floating` mode portals into `document.body`. The library already guards against SSR — the portal only activates after the first client commit — so you can render this component from a Server Component without a crash.
 
@@ -52,7 +74,7 @@ Two options — pick the one that matches your toolchain.
 // app/components/A11yPanel.tsx
 "use client";
 
-import { useRef } from "react";
+import { useRef, type ReactNode } from "react";
 import dynamic from "next/dynamic";
 
 const SemanticNavigator = dynamic(
@@ -60,14 +82,21 @@ const SemanticNavigator = dynamic(
   { ssr: false },
 );
 
-export function A11yPanel() {
+export function A11yPanel({ children }: { children: ReactNode }) {
   const rootRef = useRef<HTMLDivElement>(null);
 
-  // In a production build this branch is statically dead; Next.js won't
-  // include the inspector chunk at all.
-  if (process.env.NODE_ENV !== "development") return null;
-
-  return <SemanticNavigator root={rootRef} floating />;
+  // The wrapper renders in every build, so your pages sit in the same DOM in
+  // development and production. In a production build the condition is
+  // statically false: the panel never renders, and its chunk is never
+  // requested.
+  return (
+    <div ref={rootRef} style={{ display: "contents" }}>
+      {children}
+      {process.env.NODE_ENV === "development" && (
+        <SemanticNavigator root={rootRef} floating />
+      )}
+    </div>
+  );
 }
 ```
 
@@ -75,11 +104,12 @@ Note: `dynamic(..., { ssr: false })` has to live **inside a Client Component** i
 
 ### Option 2 — environment flag
 
-For staging deployments where you want to toggle the panel with an env var:
+For staging deployments where you want to toggle the panel with an env var, use the component from Option 1 with this condition in place of its `NODE_ENV` check:
 
 ```tsx
-"use client";
-if (process.env.NEXT_PUBLIC_A11Y !== "1") return null;
+{process.env.NEXT_PUBLIC_A11Y === "1" && (
+  <SemanticNavigator root={rootRef} floating />
+)}
 ```
 
 This ships the panel chunk in the production bundle as a separate chunk — it just doesn't run. Cheaper DX, more bytes.

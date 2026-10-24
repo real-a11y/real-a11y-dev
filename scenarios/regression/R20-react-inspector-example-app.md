@@ -46,10 +46,11 @@ pnpm --filter @real-a11y-dev/example-react-app dev
   Before `inspector 0.1.0-beta.12` only the `click` was cancelled, so on a run against
   an earlier release a menu opening here is the known defect, not a new one
 - **5/6** — a root or subtree that mounts later still populates. It must not require a
-  remount or a manual refresh. **6b** is the case unit tests don't cover: on react
-  0.1.0-beta.19 the navigator never attaches to a root that mounts after it, because it
-  reads `root.current` while rendering — the known defect the beta.19 dogfood filed (twin:
-  D7 step 6)
+  remount or a manual refresh. Through react 0.1.0-beta.19 the navigator read
+  `root.current` while rendering, before a root that mounts after it exists, so on a run
+  against one of those releases an empty panel in **6b** is the known defect the beta.19
+  dogfood filed, not a new one (twin: D7 step 6). The release after it (unreleased) reads
+  the ref after every commit, and a unit test now pins 6b as well
 - **7** — live prop changes are reflected
 - **8** — no errors, and specifically no hydration warnings
 

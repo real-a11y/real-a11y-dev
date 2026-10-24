@@ -1,21 +1,21 @@
-import type {
-  SemanticNode,
-  TreeViewMode,
-  ActionRequest,
-  ActionResult,
+import {
+  PANEL_HOST_ATTRIBUTE,
+  type SemanticNode,
+  type TreeViewMode,
+  type ActionRequest,
+  type ActionResult,
 } from "@real-a11y-dev/core";
 import {
   createInspector,
   type InspectorInstance,
 } from "@real-a11y-dev/inspector";
-import {
-  type RefObject,
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-} from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+
+import {
+  useTargetElement,
+  type SemanticTreeTarget,
+} from "./useSemanticTree.js";
 
 // ─── Panel constants ──────────────────────────────────────────────────────────
 
@@ -23,16 +23,27 @@ const PANEL_GAP = 16; // px gap from viewport edges
 const TITLE_H = 40; // px — title bar height
 const HANDLE_SIZE = 6; // px — resize grip thickness
 
+// Marks the whole floating panel as this project's own chrome, which the walk
+// skips. The inspector marks only its container inside the panel, so once the
+// tree widened to <body> (a toast or a menu portaled outside the root), the
+// wrapper's landmark, title and Collapse button showed up as page content, in
+// search and in TAB view. `react` already bundles core, so this costs no copy.
+const PANEL_HOST_PROPS = { [PANEL_HOST_ATTRIBUTE]: "" };
+
 // ─── Props ────────────────────────────────────────────────────────────────────
 
 export interface SemanticNavigatorProps {
   /**
-   * A React ref pointing to the root element whose subtree is extracted.
-   * Use `useRef<HTMLDivElement>(null)` in the parent and pass the ref object
-   * directly — the component reads `.current` inside the effect, after the
-   * DOM has been committed.
+   * The root element whose subtree is extracted: the element itself, or a
+   * React ref holding it (see {@link SemanticTreeTarget}).
+   *
+   * A ref is read after every commit of this component, so a root that mounts
+   * later, after a loading state or a lazy route, attaches once the component
+   * re-renders. When the root can mount or be replaced without anything
+   * re-rendering the navigator, pass the element instead, from a callback ref
+   * kept in state.
    */
-  root: RefObject<Element | null>;
+  root: SemanticTreeTarget;
 
   /** Initial view mode. Default "a11y". */
   mode?: TreeViewMode;
@@ -251,6 +262,7 @@ function FloatingPanel({
   return (
     <div
       ref={wrapperRef}
+      {...PANEL_HOST_PROPS}
       role="complementary"
       aria-label="Semantic Navigator panel"
       style={{
@@ -479,15 +491,20 @@ export function SemanticNavigator({
     if (floating) setPortalReady(true);
   }, [floating]);
 
+  // The observed root: the element itself, or what a ref holds, read after
+  // every commit (see useTargetElement). The create effect below used to
+  // depend on `root.current` as read while rendering, which never saw a root
+  // that mounts later than this component.
+  const rootEl = useTargetElement(root);
+
   // Build / tear down when the observed root, mount mode, host, or inspector
   // config flags change. `mode` is intentionally omitted — setViewMode below
   // swaps it without remounting. Callbacks use the stable wrappers above.
   useEffect(() => {
-    const el = root.current;
-    if (!el || !hostEl) return;
+    if (!rootEl || !hostEl) return;
 
     const instance = createInspector({
-      root: el,
+      root: rootEl,
       container: hostEl,
       viewMode: mode,
       mount,
@@ -514,10 +531,8 @@ export function SemanticNavigator({
     // current `mode`. `styleNonce` is mount-only: createInspector injects
     // <style nonce> once into a reused shadow root (or once into #sn-styles in
     // light mount), so a remount on the same host cannot change it.
-    // `root.current` is read after commit (same pattern as before — the ref
-    // object identity is stable).
   }, [
-    root.current,
+    rootEl,
     mount,
     hostEl,
     theme,
