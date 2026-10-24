@@ -217,7 +217,7 @@ main
     code "npm i -D @real-a11y-dev/mcp playwright"
   button "Copy Code"
   code
-  paragraph "That is the CLI's installer, which needs Node.js 22.12 or newer. Use the scoped name there: reaches the CLI only in a project that installed it, and anywhere else asks the registry for an unscoped package that isn't ours."
+  paragraph "That is the CLI's installer, which needs Node.js 22.12 or newer. Use the scoped name there: runs the CLI only where it is already installed, and anywhere else asks the registry for an unscoped package that isn't ours."
     code "npx real-a11y"
   paragraph "A separate "No browser is downloaded yet." error means Playwright itself is installed but no browser binary is — run just the install step the hint names."
   heading "Chrome fails to launch with a shared-library error" (level 2)

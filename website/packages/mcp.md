@@ -74,9 +74,9 @@ Then install a browser once:
 npx -y @real-a11y-dev/cli install
 ```
 
-Use the scoped name here: `npx real-a11y` reaches the CLI only in a project
-that installed it, and anywhere else asks the registry for an unscoped package
-that isn't ours.
+Use the scoped name here: `npx real-a11y` runs the CLI only where it is already
+installed, and anywhere else asks the registry for an unscoped package that
+isn't ours.
 
 To pin a version instead of tracking the latest, add it to your project
 (`npm install -D @real-a11y-dev/mcp playwright`) and point `command` / `args` at

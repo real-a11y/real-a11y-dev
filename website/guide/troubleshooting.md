@@ -211,7 +211,7 @@ In a client's config file that is `"command": "npx"` with `"args": ["-y", "-p", 
 npx -y @real-a11y-dev/cli install   # downloads Chrome for Testing, first time only
 ```
 
-That is the CLI's installer, which needs Node.js 22.12 or newer. Use the scoped name there: `npx real-a11y` reaches the CLI only in a project that installed it, and anywhere else asks the registry for an unscoped package that isn't ours.
+That is the CLI's installer, which needs Node.js 22.12 or newer. Use the scoped name there: `npx real-a11y` runs the CLI only where it is already installed, and anywhere else asks the registry for an unscoped package that isn't ours.
 
 A separate "No browser is downloaded yet." error means Playwright itself is installed but no browser binary is — run just the install step the hint names.
 

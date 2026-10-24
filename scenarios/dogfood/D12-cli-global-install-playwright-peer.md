@@ -94,8 +94,10 @@ Then try the obvious unblock, still as a **global** user:
   1.49), loopback goes to the proxy — the known defect, not a new one. The release
   after it (unreleased) keeps loopback direct on both
 - **5** — the follow-up hint names the command for **this** layout:
-  `real-a11y install`, not `npx real-a11y install`, which is an E404 wherever the CLI
-  isn't installed locally. cli 0.1.0-beta.9 prints `npx real-a11y install` in every
+  `real-a11y install`, not `npx real-a11y install`. npx finds a global CLI only in
+  npm's own global prefix. A global anywhere else, such as a `--prefix` install or a
+  version manager like Volta that keeps globals in its own directory, sends it to the
+  registry for the unscoped name: an E404. cli 0.1.0-beta.9 prints `npx real-a11y install` in every
   layout — the known defect the beta.19 dogfood filed, not a new one. The release
   after it (unreleased) names each layout's own command
 

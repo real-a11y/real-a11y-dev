@@ -39,8 +39,8 @@ landmark roots at that instead (`main`); the ordinary `<header>` / `<main>` /
 > A global `npm i -g @real-a11y-dev/cli` does not pull the Playwright peer.
 > Add `npm i -g playwright` in that same layout, then `real-a11y install`.
 > A run through `npx -y @real-a11y-dev/cli` sees only what npx installed beside
-> it, so install it and Playwright in the project instead. Outside such a
-> project, fetch a browser with `npx -y @real-a11y-dev/cli install`, never
+> it, so install it and Playwright in the project instead. Where the CLI isn't
+> installed, fetch a browser with `npx -y @real-a11y-dev/cli install`, never
 > `npx real-a11y install`, which there asks the registry for an unscoped package
 > that isn't ours.
 
