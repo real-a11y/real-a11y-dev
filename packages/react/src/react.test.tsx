@@ -1,3 +1,4 @@
+import { realmSingleton } from "@real-a11y-dev/core";
 import { act, cleanup, render, waitFor } from "@testing-library/react";
 import { useRef, useState } from "react";
 import { describe, it, expect, afterEach } from "vitest";
@@ -11,7 +12,16 @@ import {
   type SemanticTreeTarget,
 } from "./index.js";
 
-afterEach(() => cleanup());
+afterEach(() => {
+  cleanup();
+  // The user's Show full names choice holds for the page (the inspector's
+  // `fullNamesChoice`), so a test that makes one must not hand it to the next.
+  delete realmSingleton<{ on?: boolean }>(
+    "inspector.full-names-choice",
+    "full-names-choice@1",
+    () => ({}),
+  ).on;
+});
 
 // Wait on the condition, never on a fixed sleep. The panel's tree renders only
 // after Preact's deferred effect chain (next frame, or its 35ms fallback
@@ -137,15 +147,21 @@ describe("<SemanticNavigator />", () => {
     expect(onTree.classList.contains("sn-tree--full-names")).toBe(true);
   });
 
-  it("keeps the user's Show full names through a remount", async () => {
-    function App({ theme }: { theme: "light" | "dark" }) {
+  it("keeps the user's Show full names through a remount, its own included", async () => {
+    function App({
+      theme,
+      shown = true,
+    }: {
+      theme: "light" | "dark";
+      shown?: boolean;
+    }) {
       const rootRef = useRef<HTMLDivElement>(null);
       return (
         <>
           <div ref={rootRef}>
             <a href="#a">A link whose name runs well past the panel's edge</a>
           </div>
-          <SemanticNavigator root={rootRef} theme={theme} />
+          {shown && <SemanticNavigator root={rootRef} theme={theme} />}
         </>
       );
     }
@@ -174,13 +190,22 @@ describe("<SemanticNavigator />", () => {
       ).toBe(true);
     }, WAIT);
 
-    // …and a theme change, which remounts the navigator, keeps it on.
+    // …a theme change, which remounts the navigator, keeps it on…
     view.rerender(<App theme="dark" />);
     await waitFor(() => {
       const tree = host.shadowRoot!.querySelector('[role="tree"]');
       expect(tree?.closest(".sn-theme-dark")).not.toBeNull();
       expect(tree?.classList.contains("sn-tree--full-names")).toBe(true);
     }, WAIT);
+
+    // …and so does unmounting the component and mounting it again, which
+    // gives the navigator a new host.
+    view.rerender(<App theme="dark" shown={false} />);
+    view.rerender(<App theme="dark" />);
+    const newHost = view.container.querySelectorAll("div")[1];
+    expect(newHost).not.toBe(host);
+    const tree = await findInPanel(newHost, '[role="tree"]');
+    expect(tree.classList.contains("sn-tree--full-names")).toBe(true);
   });
 
   it("picks up enablePicker toggled after mount", async () => {

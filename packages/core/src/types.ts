@@ -243,8 +243,8 @@ export interface SemanticNavigatorConfig {
    * long one and scrolling sideways. Default `false`: a long name ends in an
    * ellipsis, and the tree fits the panel. Only where the panel starts: the
    * user turns it on and off from the panel's Settings (⚙), and their choice
-   * then holds for this container for the life of the page, through
-   * `refresh()`, `setRoot()` and another `createInspector()` on it.
+   * then holds for the life of the page, in every inspector on it: through
+   * `refresh()`, `setRoot()` and every later `createInspector()`.
    */
   defaultShowFullNames?: boolean;
   /** Optional CSP nonce applied to the injected `<style>` element. */

@@ -36,10 +36,13 @@
   tree, so the panel no longer scrolls sideways on pages whose names run to a
   sentence, such as es.wikipedia.org's
   ([#535](https://github.com/real-a11y/real-a11y-dev/pull/535)). The name
-  carries its whole text as a tooltip, a row's role and name come first, and
-  its badges show once there is room for them. A row nested deeper than the
-  panel is wide still scrolls the tree, by just enough to show the start of
-  its label. **Settings ▾** → **Show full names** brings back the wide tree,
+  carries its whole text as a tooltip, and so does a value, a placeholder or
+  a description that ends in one. A row's role, name and key states come
+  first: a state that changes what the element is or does (disabled,
+  collapsed, checked, required, …) stays beside the name, in either layout,
+  and the row's other badges show once there is room for them. A row nested
+  deeper than the panel is wide still scrolls the tree, by just enough to
+  show the start of its label. **Settings ▾** → **Show full names** brings back the wide tree,
   in every window's side panel (`settings.showFullNames` in
   `chrome.storage.local`). **Settings ▾** and **Copy ▾** also close now when
   focus moves out of them, rather than staying open over what it moved to.

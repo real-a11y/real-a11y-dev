@@ -2,6 +2,7 @@ import {
   extractDomTree,
   extractA11yTree,
   PANEL_HOST_ATTRIBUTE,
+  realmSingleton,
   type SemanticNode,
   type TreeViewMode,
   type ActionRequest,
@@ -28,14 +29,26 @@ declare const __SN_STYLES__: string;
 const SN_STYLES: string = __SN_STYLES__;
 
 /**
- * The user's "Show full names" choice from a panel's Settings, by the
- * container it was made in. It outlives the panel: `refresh()` and
- * `setRoot()` re-key the TreeView, which holds the choice itself, and the
- * React wrapper creates a new inspector on the same container whenever one
- * of its props changes. A container is only ever the page's own element, so
- * the entry goes with it.
+ * The user's last "Show full names" choice from any panel's Settings, for the
+ * life of the page. It outlives every panel: `refresh()` and `setRoot()`
+ * re-key the TreeView, which holds the choice itself, and the React wrapper
+ * makes a new inspector whenever one of its props changes, and a new host
+ * whenever it remounts. One slot per realm (`realmSingleton`), so every copy
+ * of this package loaded in the page reads the same choice.
  */
-const fullNamesChoice = new WeakMap<Element, boolean>();
+interface FullNamesChoice {
+  on?: boolean;
+}
+const FULL_NAMES_CHOICE_SHAPE = "full-names-choice@1";
+const fullNamesChoice = (): FullNamesChoice =>
+  realmSingleton(
+    "inspector.full-names-choice",
+    FULL_NAMES_CHOICE_SHAPE,
+    () => ({}),
+  );
+const rememberShowFullNames = (on: boolean) => {
+  fullNamesChoice().on = on;
+};
 
 // Re-export core types for convenience
 export type {
@@ -106,9 +119,6 @@ export function createInspector(
 
   let currentRoot = config.root;
   let currentViewMode = viewMode;
-  const rememberShowFullNames = (on: boolean) => {
-    fullNamesChoice.set(container, on);
-  };
   let mounted = false;
   let renderTarget: Element | ShadowRoot | null = null;
   let renderHost: HTMLElement | null = null;
@@ -193,8 +203,7 @@ export function createInspector(
         scrollHostOnSelect,
         focusHostOnActivate,
         enablePicker,
-        defaultShowFullNames:
-          fullNamesChoice.get(container) ?? defaultShowFullNames,
+        defaultShowFullNames: fullNamesChoice().on ?? defaultShowFullNames,
         onShowFullNamesChange: rememberShowFullNames,
         onNodeSelect,
         onAction,

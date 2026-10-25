@@ -130,4 +130,49 @@ describe("TreePanel — Show full names", () => {
     );
     expect(text?.getAttribute("title")).toBe(LONG_NAME);
   });
+
+  it("keeps a row's key states with its name, and the other badges after its text", () => {
+    host
+      .querySelector("main")!
+      .insertAdjacentHTML(
+        "beforeend",
+        `<button aria-pressed="true">${LONG_NAME}</button>`,
+      );
+    const badges = (row: Element | undefined, selector: string) =>
+      [...(row?.querySelectorAll(selector) ?? [])].map((b) => b.textContent);
+    const buttonRow = (match: (row: Element) => boolean) =>
+      [...container.querySelectorAll('[role="treeitem"]')].find(match);
+
+    panel();
+    const row = buttonRow(
+      (r) => r.querySelector(".sn-role")?.textContent === "button",
+    );
+    expect(badges(row, ".sn-head > .sn-name ~ .sn-badges > .sn-badge")).toEqual(
+      ["pressed"],
+    );
+    expect(badges(row, ".sn-label > .sn-badges > .sn-badge")).toEqual([
+      "interactive",
+      "focusable",
+    ]);
+
+    // The DOM view has no head: there they all follow the element's text.
+    act(() => {
+      render(
+        <TreePanel
+          treeData={extractDomTree(host)}
+          viewMode="dom"
+          onViewModeChange={() => {}}
+        />,
+        container,
+      );
+    });
+    const domRow = buttonRow(
+      (r) => r.querySelector(".sn-tag")?.textContent === "<button",
+    );
+    expect(badges(domRow, ".sn-label > .sn-badges > .sn-badge")).toEqual([
+      "interactive",
+      "focusable",
+      "pressed",
+    ]);
+  });
 });

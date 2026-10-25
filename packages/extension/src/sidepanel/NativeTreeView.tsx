@@ -1218,6 +1218,9 @@ export function NativeTreeView({
                   node.role === "heading"
                     ? node.properties?.["level"]
                     : undefined;
+                const badges = nativeStateBadges(node.states, node.properties, {
+                  headingLevel,
+                });
 
                 return (
                   <div
@@ -1301,9 +1304,9 @@ export function NativeTreeView({
                     </button>
 
                     <span class="sn-label">
-                      {/* The role and name stay together on a narrow row,
-                          which clips the name and drops what follows it
-                          (tree.css, "Long labels"). */}
+                      {/* The role, name and key states stay together on a
+                          narrow row, which clips the name and drops what
+                          follows it (tree.css, "Long labels"). */}
                       <span class="sn-head">
                         <span class="sn-role">{node.role}</span>
                         {headingLevel && (
@@ -1316,6 +1319,9 @@ export function NativeTreeView({
                             {node.name}
                           </span>
                         )}
+                        <StateBadges
+                          badges={badges.filter((b) => b.keyState)}
+                        />
                       </span>
                       {node.description && (
                         <span class="sn-description" title={node.description}>
@@ -1327,23 +1333,23 @@ export function NativeTreeView({
                       {/* What a screen reader announces (ADR-0001) — a
                           select's option label, not its raw `value`. */}
                       {node.value !== undefined && (
-                        <span class="sn-field-value">
+                        <span
+                          class="sn-field-value"
+                          title={announcedValueLabel(node.value)}
+                        >
                           {announcedValueLabel(node.value)}
                         </span>
                       )}
                       {node.value === undefined && node.placeholder && (
-                        <span class="sn-field-value" title="Placeholder hint">
+                        <span
+                          class="sn-field-value"
+                          title={`Placeholder hint: ${JSON.stringify(node.placeholder)}`}
+                        >
                           {"placeholder: "}
                           {JSON.stringify(node.placeholder)}
                         </span>
                       )}
-                      <StateBadges
-                        badges={nativeStateBadges(
-                          node.states,
-                          node.properties,
-                          { headingLevel },
-                        )}
-                      />
+                      <StateBadges badges={badges.filter((b) => !b.keyState)} />
                       {/* Jump chips: to the rows this one controls, and back
                           to the rows that control it. */}
                       {controlsIndex.forward.get(id)?.map((targetId) => {

@@ -21,6 +21,10 @@ const PANEL_WIDTH = 360;
 const LONG_NAME =
   "Wikipedia, la enciclopedia libre que cualquiera puede editar en español";
 
+/** The fixture's disabled toggle: its states are what must stay in view. */
+const TOGGLE_NAME =
+  "Mostrar los nombres completos de los artículos de la enciclopedia";
+
 /** Bring the fixture forward, reload the panel and show `producer`'s tree. */
 async function show(
   nav: NativeHarness,
@@ -41,19 +45,44 @@ async function show(
     .toBeGreaterThan(0);
 }
 
-/** Whether the tree scrolls sideways, and how the long name's row shows it. */
+/**
+ * Whether the tree scrolls sideways, how the long name's row shows it, and
+ * which of the toggle's state badges are in view: inside its label's box,
+ * which clips what doesn't fit, rather than on the line it hides.
+ */
 function layout(nav: NativeHarness) {
-  return nav.panel.evaluate((name) => {
-    const container = document.querySelector(".sn-tree-container")!;
-    const span = [...document.querySelectorAll<HTMLElement>(".sn-name")].find(
-      (el) => el.textContent === name,
-    );
-    return {
-      scrollsSideways: container.scrollWidth > container.clientWidth,
-      nameClipped: span ? span.scrollWidth > span.clientWidth : null,
-      tooltip: span?.title ?? null,
-    };
-  }, LONG_NAME);
+  return nav.panel.evaluate(
+    ([name, toggleName]) => {
+      const container = document.querySelector(".sn-tree-container")!;
+      const nameSpan = (text: string) =>
+        [...document.querySelectorAll<HTMLElement>(".sn-name")].find(
+          (el) => el.textContent?.trim() === text,
+        );
+      const span = nameSpan(name);
+      const label = nameSpan(toggleName)?.closest(".sn-label");
+      const box = label?.getBoundingClientRect();
+      const statesInView = [
+        ...(label?.querySelectorAll<HTMLElement>(".sn-state-badge") ?? []),
+      ]
+        .filter((badge) => {
+          const r = badge.getBoundingClientRect();
+          return (
+            r.width > 0 &&
+            r.right <= box!.right + 0.5 &&
+            r.bottom <= box!.bottom + 0.5
+          );
+        })
+        .map((badge) => badge.textContent)
+        .sort();
+      return {
+        scrollsSideways: container.scrollWidth > container.clientWidth,
+        nameClipped: span ? span.scrollWidth > span.clientWidth : null,
+        tooltip: span?.title ?? null,
+        statesInView,
+      };
+    },
+    [LONG_NAME, TOGGLE_NAME] as const,
+  );
 }
 
 /** Turn "Show full names" on or off, as the user does, from Settings ▾. */
@@ -80,6 +109,8 @@ for (const producer of ["NATIVE", "DOM"] as const) {
           scrollsSideways: false,
           nameClipped: true,
           tooltip: LONG_NAME,
+          // A key state never gives way to the name.
+          statesInView: ["disabled", "pressed"],
         });
 
       await setFullNames(nav, true);

@@ -4270,6 +4270,7 @@ export function App() {
                 const displayDepth = scopedRootId
                   ? node.depth - scopedDepthOffset
                   : node.depth;
+                const badges = domStateBadges(node.a11y.states);
 
                 return (
                   <div
@@ -4339,7 +4340,10 @@ export function App() {
                               its label. A sensitive field's is already
                               `[redacted]`. */}
                           {node.dom.attributes.value !== undefined && (
-                            <span class="sn-field-value">
+                            <span
+                              class="sn-field-value"
+                              title={rawValueLabel(node.dom.attributes.value)}
+                            >
                               {rawValueLabel(node.dom.attributes.value)}
                             </span>
                           )}
@@ -4354,9 +4358,9 @@ export function App() {
                         </>
                       ) : (
                         <>
-                          {/* The role and name stay together on a narrow
-                              row, which clips the name and drops what
-                              follows it (tree.css, "Long labels"). */}
+                          {/* The role, name and key states stay together on
+                              a narrow row, which clips the name and drops
+                              what follows it (tree.css, "Long labels"). */}
                           <span class="sn-head">
                             {/* Role — semantic display name */}
                             <span class="sn-role">{getDisplayRole(node)}</span>
@@ -4377,6 +4381,9 @@ export function App() {
                                 {node.a11y.name}
                               </span>
                             )}
+                            <StateBadges
+                              badges={badges.filter((b) => b.keyState)}
+                            />
                           </span>
                           {/* Descendant-text preview — leaf-only to avoid
                               duplicating what's already in child rows
@@ -4415,12 +4422,15 @@ export function App() {
                               slider's valuetext, an editor's text. A
                               sensitive field's is already `[redacted]`. */}
                           {node.a11y.value !== undefined && (
-                            <span class="sn-field-value">
+                            <span
+                              class="sn-field-value"
+                              title={announcedValueLabel(node.a11y.value)}
+                            >
                               {announcedValueLabel(node.a11y.value)}
                             </span>
                           )}
                           <StateBadges
-                            badges={domStateBadges(node.a11y.states)}
+                            badges={badges.filter((b) => !b.keyState)}
                           />
                           {/* Cross-links (aria-controls or heuristic): to the
                               rows this one controls, and back to those that

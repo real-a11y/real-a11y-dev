@@ -9,6 +9,7 @@ import type { NodeDiffStatus } from "../diff.js";
 
 import { JUMP_KEYS } from "../hooks/jumpKeys.js";
 import { treeRowDomId, useInstanceId } from "../hooks/useInstanceId.js";
+import { isKeyState } from "../key-states.js";
 
 import type { ControlsLink } from "./TreePanel.js";
 
@@ -141,9 +142,9 @@ function renderA11yLabel(node: DomSemanticNode) {
 
   return (
     <>
-      {/* The role and name stay together on a narrow row, which clips the
-          name and drops what follows it (tree.css, "Long labels"). Each
-          part that can end in an ellipsis carries its whole text as a
+      {/* The role, name and key states stay together on a narrow row, which
+          clips the name and drops what follows it (tree.css, "Long labels").
+          Each part that can end in an ellipsis carries its whole text as a
           tooltip (see renderDomLabel). */}
       <span class="sn-head">
         <span class="sn-role">{role}</span>
@@ -153,6 +154,7 @@ function renderA11yLabel(node: DomSemanticNode) {
             {name}
           </span>
         )}
+        {renderBadges(stateBadges(node, "key"))}
       </span>
       {showPreview && (
         <span class="sn-name-preview" title={descendantText}>
@@ -163,26 +165,44 @@ function renderA11yLabel(node: DomSemanticNode) {
   );
 }
 
-function renderBadges(node: DomSemanticNode) {
-  const badges: Array<{ label: string; className: string }> = [];
+interface Badge {
+  label: string;
+  className: string;
+}
 
+/** The interaction badges: what the element takes, a click or focus. */
+function interactionBadges(node: DomSemanticNode): Badge[] {
+  const badges: Badge[] = [];
   if (node.interaction.isInteractive) {
     badges.push({ label: "interactive", className: "sn-badge--interactive" });
   }
-
   if (node.interaction.isFocusable) {
     badges.push({ label: "focusable", className: "sn-badge--interactive" });
   }
+  return badges;
+}
 
-  // State badges
+/**
+ * A row's state badges: all of them, or only its key states (`isKeyState`),
+ * which the A11Y view keeps with the name, or only the rest.
+ */
+function stateBadges(
+  node: DomSemanticNode,
+  which: "all" | "key" | "rest",
+): Badge[] {
+  const badges: Badge[] = [];
   for (const [key, val] of Object.entries(node.a11y.states)) {
+    if (which !== "all" && isKeyState(key) !== (which === "key")) continue;
     if (val === true) {
       badges.push({ label: key, className: "sn-badge--state" });
     } else if (val !== false && val !== "") {
       badges.push({ label: `${key}=${val}`, className: "sn-badge--state" });
     }
   }
+  return badges;
+}
 
+function renderBadges(badges: Badge[]) {
   if (badges.length === 0) return null;
 
   return (
@@ -349,7 +369,12 @@ export function TreeNode({
       {/* Label */}
       <span class="sn-label">
         {viewMode === "dom" ? renderDomLabel(node) : renderA11yLabel(node)}
-        {renderBadges(node)}
+        {/* The A11Y view keeps a row's key states in its head; the DOM view
+            has no head, and shows them here with the rest. */}
+        {renderBadges([
+          ...interactionBadges(node),
+          ...stateBadges(node, viewMode === "dom" ? "all" : "rest"),
+        ])}
         {/* Cross-link chips for disclosure pairs (button ↔ menu, tab ↔ panel) */}
         {onJumpToNode &&
           controlsLinks?.map((link) =>

@@ -1,3 +1,4 @@
+import type { DomSemanticNode } from "@real-a11y-dev/core";
 import { render, h } from "preact";
 import { act } from "preact/test-utils";
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
@@ -9,6 +10,7 @@ import { SHOW_FULL_NAMES_KEY } from "./full-names.js";
 import type { ChromeMock } from "./panel-harness.js";
 import {
   installChromeMock,
+  node,
   stubMatchMedia,
   treeData,
 } from "./panel-harness.js";
@@ -18,15 +20,19 @@ import {
  * ends in an ellipsis and the tree fits the panel; on, the tree widens to
  * fit it (`.sn-tree--full-names`, tree.css). Kept in `chrome.storage.local`
  * and followed by every open panel, as the other settings are. jsdom has no
- * layout, so what is checked here is the switch, the storage and the class.
+ * layout, so what is checked here is the switch, the storage and the class,
+ * and the markup the layout relies on: a tooltip on each part that can end
+ * in an ellipsis, and a row's key states inside its head, with its name.
  */
 
 const NATIVE_MODE = "settings.nativeModeEnabled";
 
 const LONG_NAME =
   "Página principal de la enciclopedia libre y políglota de la Fundación Wikimedia";
+const LONG_VALUE =
+  "https://es.wikipedia.org/wiki/Wikipedia:Portada?uselang=es&variant=es-mx";
 
-/** A native read with a long-named link in it. */
+/** A native read with a long-named link, a stated button, and two fields. */
 const NATIVE_TREE = {
   ok: true,
   nodes: [
@@ -35,7 +41,7 @@ const NATIVE_TREE = {
       role: "RootWebArea",
       name: "Test page",
       depth: 0,
-      childIds: ["a1"],
+      childIds: ["a1", "b1", "t1", "s1"],
       states: {},
       properties: {},
     },
@@ -48,11 +54,63 @@ const NATIVE_TREE = {
       states: {},
       properties: {},
     },
+    {
+      id: "b1",
+      role: "button",
+      name: LONG_NAME,
+      depth: 1,
+      childIds: [],
+      states: { focusable: true, disabled: true, expanded: false },
+      properties: { hasPopup: "menu" },
+    },
+    {
+      id: "t1",
+      role: "textbox",
+      name: "Address",
+      depth: 1,
+      childIds: [],
+      states: {},
+      properties: {},
+      value: LONG_VALUE,
+    },
+    {
+      id: "s1",
+      role: "searchbox",
+      name: "Find",
+      depth: 1,
+      childIds: [],
+      states: {},
+      properties: {},
+      placeholder: LONG_VALUE,
+    },
   ],
   rootId: "r1",
   url: "https://example.test/",
   documentId: "doc-1",
 };
+
+/** An in-page read with a stated, long-named button and a long-valued field. */
+function fieldTreeData(): ContentToPanel {
+  const nodes = [
+    node("n1", null, 0, "document", "Page", ["b1", "t1"]),
+    node("b1", "n1", 1, "button", LONG_NAME, [], "button"),
+    node("t1", "n1", 1, "textbox", "Address", [], "input"),
+  ];
+  const button = nodes[1]![1] as DomSemanticNode;
+  button.a11y.states = { disabled: true, expanded: false };
+  const field = nodes[2]![1] as DomSemanticNode;
+  field.a11y.value = LONG_VALUE;
+  field.dom.attributes = { value: LONG_VALUE };
+  return {
+    ...treeData(),
+    payload: {
+      nodes,
+      rootId: "n1",
+      pageTitle: "Test page",
+      pageUrl: "https://example.test/",
+    },
+  } as unknown as ContentToPanel;
+}
 
 describe("Show full names", () => {
   let container: HTMLDivElement;
@@ -97,8 +155,8 @@ describe("Show full names", () => {
     }
   }
 
-  /** The panel's bound tab becomes 7, and its page connects. */
-  async function showPage(): Promise<void> {
+  /** The panel's bound tab becomes 7, and its page connects with `data`. */
+  async function showPage(data = treeData()): Promise<void> {
     act(() => {
       chromeMock.emit({
         type: "ACTIVE_TAB_CHANGED",
@@ -106,7 +164,7 @@ describe("Show full names", () => {
       } as unknown as ContentToPanel);
     });
     act(() => {
-      chromeMock.emit({ ...treeData(), tabId: 7 } as ContentToPanel);
+      chromeMock.emit({ ...data, tabId: 7 } as ContentToPanel);
     });
     await flush();
   }
@@ -212,5 +270,73 @@ describe("Show full names", () => {
     await flush();
     await showPage();
     expect(names()).toContainEqual([LONG_NAME, LONG_NAME]);
+  });
+
+  it("gives a field's value, and a placeholder, its whole text as a tooltip", async () => {
+    const value = (row: Element | null) => {
+      const el = row?.querySelector(".sn-field-value");
+      return [el?.textContent, el?.getAttribute("title")];
+    };
+    const announced = `= ${JSON.stringify(LONG_VALUE)}`;
+    const raw = `value=${JSON.stringify(LONG_VALUE)}`;
+
+    mount({ [NATIVE_MODE]: false });
+    await flush();
+    await showPage(fieldTreeData());
+    expect(value(container.querySelector("#snrow-t1"))).toEqual([
+      announced,
+      announced,
+    ]);
+    const domView = [
+      ...container.querySelectorAll('[aria-label="Tree view mode"] button'),
+    ].find((b) => b.textContent?.trim() === "DOM") as HTMLButtonElement;
+    act(() => domView.click());
+    await flush();
+    expect(value(container.querySelector("#snrow-t1"))).toEqual([raw, raw]);
+
+    render(null, container);
+    mount();
+    await flush();
+    await showPage();
+    expect(value(container.querySelector('[data-node-id="t1"]'))).toEqual([
+      announced,
+      announced,
+    ]);
+    expect(value(container.querySelector('[data-node-id="s1"]'))).toEqual([
+      `placeholder: ${JSON.stringify(LONG_VALUE)}`,
+      `Placeholder hint: ${JSON.stringify(LONG_VALUE)}`,
+    ]);
+  });
+
+  it("keeps a row's key states with its name, in either tree", async () => {
+    /** Row `row`'s state badges: those in its head, after the name, and the
+     *  rest, which a narrow row drops first. */
+    const badges = (row: Element | null) => ({
+      head: [
+        ...(row?.querySelectorAll(
+          ".sn-head > .sn-name ~ .sn-state-badges > *",
+        ) ?? []),
+      ].map((b) => b.textContent),
+      rest: [
+        ...(row?.querySelectorAll(".sn-label > .sn-state-badges > *") ?? []),
+      ].map((b) => b.textContent),
+    });
+
+    mount({ [NATIVE_MODE]: false });
+    await flush();
+    await showPage(fieldTreeData());
+    expect(badges(container.querySelector("#snrow-b1"))).toEqual({
+      head: ["disabled", "collapsed"],
+      rest: [],
+    });
+
+    render(null, container);
+    mount();
+    await flush();
+    await showPage();
+    expect(badges(container.querySelector('[data-node-id="b1"]'))).toEqual({
+      head: ["disabled", "collapsed"],
+      rest: ["focusable", "hasPopup=menu"],
+    });
   });
 });

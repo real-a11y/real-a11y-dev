@@ -630,9 +630,9 @@
    containment keeps its content out of the row's width: only a row nested
    deeper than the panel is wide grows, by its label's 8ch floor, and alone.
    The label is one line; a part that doesn't fit moves, whole and with what
-   follows it, onto a second line its max-height hides. The head (role and
-   name) comes first, so it always shows, if only in part: it starts at up
-   to 32ch and its name ends in an ellipsis, however long the role. The text
+   follows it, onto a second line its max-height hides. The head (role, name
+   and key states) comes first, so it always shows, if only in part: it
+   starts at up to 32ch, and only its name shrinks, to an ellipsis. The text
    parts after it (and DOM view's) start at up to 8ch. Each grows into the
    room left, and a part after them shows only once they have that much. */
 .sn-tree:not(.sn-tree--full-names) {

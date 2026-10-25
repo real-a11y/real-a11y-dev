@@ -84,7 +84,7 @@ export interface SemanticNavigatorProps {
    * long one and scrolling sideways. Default `false`: a long name ends in an
    * ellipsis, and the tree fits the panel. Only where the panel starts: the
    * user turns it on and off from the panel's Settings (⚙), and their choice
-   * then holds for the life of the page, a remount included.
+   * then holds for the life of the page, whatever remounts the component.
    */
   defaultShowFullNames?: boolean;
   /** Optional CSP nonce applied to the injected style. */

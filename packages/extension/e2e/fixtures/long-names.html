@@ -12,7 +12,8 @@
       scrolled it sideways. Nothing here nests deeper than a side panel fits,
       so any sideways scroll in the default layout comes from a name. The
       heading is what the suite reads: Chrome's tree opens with the list
-      collapsed, so the link's row isn't on screen until it is expanded.
+      collapsed, so the link's row isn't on screen until it is expanded. The
+      disabled toggle's states must stay in view beside its long name.
     -->
     <nav aria-label="Navegación principal">
       <ul>
@@ -35,6 +36,9 @@
         del mundo.
       </p>
       <button type="button">Buscar</button>
+      <button type="button" aria-pressed="true" disabled>
+        Mostrar los nombres completos de los artículos de la enciclopedia
+      </button>
     </main>
   </body>
 </html>

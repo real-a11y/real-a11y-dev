@@ -1,3 +1,4 @@
+import { realmSingleton } from "@real-a11y-dev/core";
 import { describe, it, expect, beforeEach } from "vitest";
 
 import {
@@ -5,6 +6,14 @@ import {
   type ActionRequest,
   type ActionResult,
 } from "./index.js";
+
+/** The page's Show full names choice: the slot every copy of the inspector reads. */
+const pageChoice = () =>
+  realmSingleton<{ on?: boolean }>(
+    "inspector.full-names-choice",
+    "full-names-choice@1",
+    () => ({}),
+  );
 
 function mountDoc(html: string): { root: HTMLElement; container: HTMLElement } {
   document.body.innerHTML = "";
@@ -19,6 +28,7 @@ function mountDoc(html: string): { root: HTMLElement; container: HTMLElement } {
 describe("createInspector", () => {
   beforeEach(() => {
     document.body.innerHTML = "";
+    delete pageChoice().on;
   });
 
   it.each(["shadow", "light"] as const)(
@@ -155,7 +165,7 @@ describe("createInspector", () => {
     nav.unmount();
   });
 
-  it("defaultShowFullNames sets how the panel starts; the user's choice outlives a re-key", async () => {
+  it("defaultShowFullNames sets how a panel starts; the user's choice holds for the page", async () => {
     const { root, container } = mountDoc(
       `<main><a href="#a">A link whose name runs well past the panel's edge</a></main>`,
     );
@@ -171,25 +181,44 @@ describe("createInspector", () => {
       shadowOf(el).querySelector<HTMLElement>('[role="tree"]');
     const fullNames = (el: HTMLElement) =>
       tree(el)?.classList.contains("sn-tree--full-names");
+    const toggleInSettings = async (el: HTMLElement) => {
+      shadowOf(el)
+        .querySelector<HTMLButtonElement>('button[aria-label="Settings"]')!
+        .click();
+      await waitUntil(
+        () =>
+          shadowOf(el).querySelector(
+            '[role="group"][aria-label="Settings"]',
+          ) !== null,
+      );
+      shadowOf(el)
+        .querySelector<HTMLInputElement>('input[type="checkbox"]')!
+        .click();
+    };
+    const newContainer = () =>
+      document.body.appendChild(document.createElement("div"));
 
+    // Until the user chooses, `defaultShowFullNames: true` starts a panel
+    // with them on…
+    const first = newContainer();
+    const full = createInspector({
+      root,
+      container: first,
+      defaultShowFullNames: true,
+    });
+    full.mount();
+    await waitUntil(() => tree(first) !== null);
+    expect(fullNames(first)).toBe(true);
+    full.unmount();
+
+    // …and a panel without it starts with names clipped.
     const nav = createInspector({ root, container });
     nav.mount();
     await waitUntil(() => tree(container) !== null);
     expect(fullNames(container)).toBe(false);
 
-    // The user turns it on in Settings…
-    shadowOf(container)
-      .querySelector<HTMLButtonElement>('button[aria-label="Settings"]')!
-      .click();
-    await waitUntil(
-      () =>
-        shadowOf(container).querySelector(
-          '[role="group"][aria-label="Settings"]',
-        ) !== null,
-    );
-    shadowOf(container)
-      .querySelector<HTMLInputElement>('input[type="checkbox"]')!
-      .click();
+    // The user turns them on in Settings…
+    await toggleInSettings(container);
     await waitUntil(() => fullNames(container) === true);
     expect(fullNames(container)).toBe(true);
 
@@ -202,26 +231,31 @@ describe("createInspector", () => {
     expect(fullNames(container)).toBe(true);
     nav.unmount();
 
-    // So does another inspector on the same container, as React makes when
-    // one of its props changes, whatever its default.
-    const again = createInspector({ root, container });
+    // So does every inspector made after it, on any container: React makes
+    // a new one whenever a prop changes, and a new host whenever it remounts.
+    const remounted = newContainer();
+    const again = createInspector({ root, container: remounted });
     again.mount();
-    await waitUntil(() => tree(container) !== null);
-    expect(fullNames(container)).toBe(true);
-    again.unmount();
+    await waitUntil(() => tree(remounted) !== null);
+    expect(fullNames(remounted)).toBe(true);
 
-    // `defaultShowFullNames: true` starts a panel with them on.
-    const other = document.createElement("div");
-    document.body.appendChild(other);
-    const full = createInspector({
+    // The user's choice also wins over a panel's default.
+    await toggleInSettings(remounted);
+    await waitUntil(() => fullNames(remounted) === false);
+    again.unmount();
+    const latest = newContainer();
+    const defaultOn = createInspector({
       root,
-      container: other,
+      container: latest,
       defaultShowFullNames: true,
     });
-    full.mount();
-    await waitUntil(() => tree(other) !== null);
-    expect(fullNames(other)).toBe(true);
-    full.unmount();
+    defaultOn.mount();
+    await waitUntil(() => tree(latest) !== null);
+    expect(fullNames(latest)).toBe(false);
+    defaultOn.unmount();
+
+    // It is the page's choice, which another copy of this package reads too.
+    expect(pageChoice().on).toBe(false);
   });
 
   it("unmount() is idempotent and clears the shadow render", () => {
