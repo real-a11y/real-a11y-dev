@@ -1,12 +1,6 @@
-import fs from "fs";
-import path from "path";
-
 import { defineConfig } from "tsup";
 
-const stylesDir = path.resolve(__dirname, "../../packages/ui/src/styles");
-const treeCSS = fs.readFileSync(path.join(stylesDir, "tree.css"), "utf-8");
-const themesCSS = fs.readFileSync(path.join(stylesDir, "themes.css"), "utf-8");
-const allCSS = JSON.stringify(themesCSS + "\n" + treeCSS);
+import { buildInlineStyles } from "../ui/src/styles/inline.js";
 
 /**
  * Peer deps that must NEVER be bundled.
@@ -104,7 +98,8 @@ export default defineConfig([
       options.jsxFragment = "React.Fragment";
     },
     define: {
-      __SN_STYLES__: allCSS,
+      // Minified here: nothing minifies a string literal later.
+      __SN_STYLES__: JSON.stringify(buildInlineStyles()),
     },
   },
 ]);
