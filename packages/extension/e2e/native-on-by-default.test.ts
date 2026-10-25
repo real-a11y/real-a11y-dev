@@ -184,7 +184,7 @@ test("Settings stays on screen in a narrow side panel", async ({ nav }) => {
   await freshPanel(nav);
   await expect(nav.nativeTree()).toBeVisible({ timeout: 20_000 });
   // The in-page tree, whose DOM / A11Y / TAB views make the widest toolbar
-  // there is; its controls don't wrap.
+  // there is.
   await nav.chooseTree("In-page tree");
   const size = nav.panel.viewportSize();
   await nav.panel.setViewportSize({ width: 320, height: size?.height ?? 720 });
@@ -214,9 +214,12 @@ test("Settings holds the choice of tree, leaving the toolbar a single DOM button
 
   await nav.treeChoice("In-page tree").click();
   await expect(nav.viewToggle()).toBeVisible();
-  const toolbar = nav.panel.getByRole("toolbar", { name: "Tree controls" });
+  // The in-page tree's own view, the panel's one DOM button.
   await expect(
-    toolbar.getByRole("button", { name: "DOM", exact: true }),
+    nav.panel.getByRole("button", { name: "DOM", exact: true }),
+  ).toHaveCount(1);
+  await expect(
+    nav.viewToggle().getByRole("button", { name: "DOM", exact: true }),
   ).toHaveCount(1);
   await expect(
     nav.panel.getByRole("button", { name: "NATIVE", exact: true }),

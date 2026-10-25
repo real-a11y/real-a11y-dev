@@ -537,8 +537,8 @@ describe("native mode on by default", () => {
       await showTab(7);
       const button = buttonNamed("Settings ▾")!;
 
-      // The toolbar's controls don't wrap, and run past a narrow panel's
-      // edge; the header's don't.
+      // The header is drawn whether or not a page is connected; the
+      // toolbar only once one is.
       expect(button.closest(".sn-page-header")).not.toBeNull();
       expect(button.closest('[role="toolbar"]')).toBeNull();
       // What it opens is a switch, not a menu.

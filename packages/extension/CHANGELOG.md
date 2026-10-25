@@ -17,6 +17,20 @@
   also touches dogfood code.
 -->
 
+## Unreleased
+
+### Patch Changes
+
+- The in-page tree's toolbar now fits a side panel. At the 320–400px a side
+  panel usually has, its search box shrank to a sliver, its DOM / A11Y / TAB
+  views were squeezed out of sight, so a click on one of them landed on
+  another control, and **Copy ▾** ran past the panel's edge. The in-page
+  tree's own controls, its search box, views, ↻, + and -, now have a row of
+  their own under the one both trees share, as Chrome's tree's always have,
+  and a search's match count ends that row, or drops under it when there's
+  no room. A narrower panel wraps both rows rather than squeezing a control
+  ([#533](https://github.com/real-a11y/real-a11y-dev/pull/533)).
+
 ## 0.1.17
 
 ### Patch Changes

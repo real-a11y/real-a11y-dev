@@ -102,6 +102,13 @@ sidesteps the question entirely.
   a query, and the `/`-focuses-search shortcut. `native-search.test.ts` (in
   `src/native/`) covers the matching logic itself at the unit level; this
   file is only for what a unit test can't see — the actual toolbar wiring.
+- `panel-ui-dom-toolbar.test.ts` — the in-page tree's toolbars at a side
+  panel's 320, 360 and 400px: every control whole on screen and the element a
+  click at its middle reaches, with a search's match count showing too, and
+  DOM, A11Y and TAB each taking a real click. Layout, which jsdom doesn't do.
+  It reads the controls' geometry in one pass in the page: with the fixture
+  page in front, the panel draws about one frame a second, so each of
+  Playwright's own checks that waits on frames can take two seconds.
 - `panel-ui-native-focus-sync.test.ts` — Focus sync over Chrome's tree: page
   focus selects the focused element's row with nothing read or acted on. Its
   fixture holds everything the read's two walks of the page (over CDP, and the
