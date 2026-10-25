@@ -13,6 +13,7 @@ link "Keep it out of production"
 button "Copy Code"
 generic
 table
+link "Long names"
 link "Panel interaction vs. host side effects"
 button "Copy Code"
 generic
