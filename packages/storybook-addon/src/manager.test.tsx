@@ -14,8 +14,9 @@ import {
 import { EVENTS, PANEL_ID } from "./constants.js";
 
 // In-memory stand-ins for the manager channel, the panels Storybook registers,
-// and the ResizeObserver the panel reads its own visibility from. Created via
-// vi.hoisted so they exist before the (hoisted) vi.mock factories run.
+// the manager's addon state, and the ResizeObserver the panel reads its own
+// visibility from. Created via vi.hoisted so they exist before the (hoisted)
+// vi.mock factories run.
 const sb = vi.hoisted(() => {
   type Listener = (...args: unknown[]) => void;
   const listeners = new Map<string, Set<Listener>>();
@@ -27,6 +28,11 @@ const sb = vi.hoisted(() => {
       string,
       { render: (props: { active?: boolean }) => React.ReactElement | null }
     >(),
+    /**
+     * What `useAddonState` keeps in the manager's store, by id. It outlives
+     * every panel, so a panel mounted afresh reads back what the last one set.
+     */
+    addonState: new Map<string, unknown>(),
     channel: {
       on(event: string, cb: Listener) {
         const set = listeners.get(event) ?? new Set();
@@ -56,6 +62,20 @@ vi.mock("storybook/manager-api", () => ({
     getChannel: () => sb.channel,
   },
   types: { PANEL: "panel" },
+  useAddonState<S>(id: string, initial: S) {
+    const [state, setState] = React.useState<S>(() =>
+      sb.addonState.has(id) ? (sb.addonState.get(id) as S) : initial,
+    );
+    // Stable, like Storybook's own setter.
+    const set = React.useCallback(
+      (next: S) => {
+        sb.addonState.set(id, next);
+        setState(next);
+      },
+      [id],
+    );
+    return [state, set] as const;
+  },
 }));
 
 // The real TreePanel is a Preact app; what these tests are about is when the
@@ -162,6 +182,9 @@ beforeAll(async () => {
 
 beforeEach(() => {
   sb.emitted.length = 0;
+  // A fresh manager per test: the store would otherwise carry one test's mode
+  // into the next.
+  sb.addonState.clear();
   observers.clear();
   ui.props = null;
   ui.preserveExpandedState.mockClear();
@@ -298,5 +321,41 @@ describe("extraction mode", () => {
     // A canvas reload re-runs the preview module, whose mode starts at "a11y".
     await fromPreview(EVENTS.PREVIEW_READY);
     expect(requests()).toEqual(["request-tree:dom"]);
+  });
+
+  /** Storybook unmounting the panel and mounting a new one, then showing it. */
+  async function remount() {
+    await renderPanel(false);
+    // The props the old panel last rendered with must not pass for the new one's.
+    ui.props = null;
+    clear();
+    await renderPanel(true);
+    await resize(600, 300);
+  }
+
+  // Storybook unmounts the panel on a docs page, and Storybook 9 behind another
+  // addon tab as well, so the panel mounted on the way back has to read its
+  // mode from the manager's store.
+  it("comes back in its mode when Storybook mounts it afresh", async () => {
+    await openWithTree();
+    await act(async () => ui.props!.onViewModeChange("dom"));
+    await remount();
+    // The first request already carries it: the preview would otherwise
+    // extract an A11Y tree under the DOM toggle.
+    expect(requests()).toEqual(["request-tree:dom"]);
+
+    await fromPreview(EVENTS.TREE_UPDATED, treeUpdate("dom"));
+    expect(ui.props?.viewMode).toBe("dom");
+  });
+
+  it("comes back on the tab view over the extraction it was showing", async () => {
+    await openWithTree();
+    await act(async () => ui.props!.onViewModeChange("dom"));
+    await act(async () => ui.props!.onViewModeChange("tab"));
+    await remount();
+    expect(requests()).toEqual(["request-tree:dom"]);
+
+    await fromPreview(EVENTS.TREE_UPDATED, treeUpdate("dom"));
+    expect(ui.props?.viewMode).toBe("tab");
   });
 });

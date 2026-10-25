@@ -20,7 +20,7 @@ import {
 import { render, h } from "preact";
 import * as React from "react";
 import { useEffect, useRef, useState, useCallback } from "react";
-import { addons, types } from "storybook/manager-api";
+import { addons, types, useAddonState } from "storybook/manager-api";
 
 import {
   ADDON_ID,
@@ -52,24 +52,42 @@ function Panel() {
   // serializable channel message (always reset to the preview's heuristic),
   // so we must re-apply expansion from this ref on every TREE_UPDATED.
   const liveTreeRef = useRef<ExtractionResult | null>(null);
-  // The mode the preview extracts in, sent with every REQUEST_TREE: the last
-  // one picked other than "tab", which is a view of whichever tree is current.
-  const extractionModeRef = useRef<TreeViewMode>("a11y");
   const [isReady, setIsReady] = useState(false);
   const [isVisible, setIsVisible] = useState(false);
   const [payload, setPayload] = useState<TreeUpdatePayload | null>(null);
-  const [viewMode, setViewMode] = useState<TreeViewMode>("a11y");
+  // Both modes live in the manager's store, not in this component: Storybook
+  // unmounts the panel on a docs page (Storybook 9 behind another addon tab as
+  // well), and the panel it mounts on the way back has to come back in the
+  // mode the old one was in.
+  const [viewMode, setViewMode] = useAddonState<TreeViewMode>(
+    `${ADDON_ID}/view-mode`,
+    "a11y",
+  );
+  // The mode the preview extracts in, sent with every REQUEST_TREE: the last
+  // one picked other than "tab", which is a view of whichever tree is current.
+  const [extractionMode, setExtractionMode] = useAddonState<
+    Exclude<TreeViewMode, "tab">
+  >(`${ADDON_ID}/extraction-mode`, "a11y");
+  // Read through a ref, so a mode change doesn't re-run the channel
+  // subscription; seeded from the store, so this panel's first REQUEST_TREE
+  // already carries the kept mode and the preview never extracts an A11Y tree
+  // under a DOM toggle.
+  const extractionModeRef = useRef(extractionMode);
 
   // ── Mode handler (defined early so effects can reference it) ───────────────
 
-  const handleViewModeChange = useCallback((mode: TreeViewMode) => {
-    setViewMode(mode);
-    // "tab" is a client-side transform of the current a11y tree — no re-extraction.
-    if (mode !== "tab") {
-      extractionModeRef.current = mode;
-      addons.getChannel().emit(EVENTS.SET_MODE, mode);
-    }
-  }, []);
+  const handleViewModeChange = useCallback(
+    (mode: TreeViewMode) => {
+      setViewMode(mode);
+      // "tab" is a client-side transform of the current a11y tree — no re-extraction.
+      if (mode !== "tab") {
+        extractionModeRef.current = mode;
+        setExtractionMode(mode);
+        addons.getChannel().emit(EVENTS.SET_MODE, mode);
+      }
+    },
+    [setViewMode, setExtractionMode],
+  );
 
   // ── Shadow root setup — runs once on mount ─────────────────────────────────
 
