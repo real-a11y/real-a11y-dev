@@ -160,13 +160,19 @@ function makeProgressCallback(
  * folder that exists but has no executable in it, so clear that one buildId
  * and retry once rather than surfacing a confusing nested error.
  */
-async function installFresh(
-  deps: InstallerDeps,
-  cacheDir: string,
-  platform: BrowserPlatform,
-  buildId: string,
-  quiet: boolean,
-): Promise<{ executablePath: string }> {
+async function installFresh({
+  deps,
+  cacheDir,
+  platform,
+  buildId,
+  quiet,
+}: {
+  deps: InstallerDeps;
+  cacheDir: string;
+  platform: BrowserPlatform;
+  buildId: string;
+  quiet: boolean;
+}): Promise<{ executablePath: string }> {
   const onProgress = makeProgressCallback(quiet);
   try {
     return await deps.install({ buildId, cacheDir, platform, onProgress });
@@ -177,13 +183,19 @@ async function installFresh(
 }
 
 /** Best-effort: never fail the install itself over cache cleanup. */
-async function pruneOtherBuilds(
-  deps: InstallerDeps,
-  cacheDir: string,
-  platform: BrowserPlatform,
-  keepBuildId: string,
-  quiet: boolean,
-): Promise<void> {
+async function pruneOtherBuilds({
+  deps,
+  cacheDir,
+  platform,
+  keepBuildId,
+  quiet,
+}: {
+  deps: InstallerDeps;
+  cacheDir: string;
+  platform: BrowserPlatform;
+  keepBuildId: string;
+  quiet: boolean;
+}): Promise<void> {
   let others: string[];
   try {
     others = (await deps.installedBuildIds(cacheDir)).filter(
@@ -308,13 +320,13 @@ export async function runInstall(
   });
   let installed: { executablePath: string };
   try {
-    installed = await installFresh(
+    installed = await installFresh({
       deps,
       cacheDir,
       platform,
       buildId,
-      req.quiet,
-    );
+      quiet: req.quiet,
+    });
   } catch (err) {
     throw new CliError(
       `could not install Chrome ${buildId}: ${errMessage(err)}`,
@@ -332,7 +344,13 @@ export async function runInstall(
   };
   writeManifest(env, manifest);
 
-  await pruneOtherBuilds(deps, cacheDir, platform, buildId, req.quiet);
+  await pruneOtherBuilds({
+    deps,
+    cacheDir,
+    platform,
+    keepBuildId: buildId,
+    quiet: req.quiet,
+  });
 
   progress(`installed Chrome ${buildId} → ${installed.executablePath}`, {
     quiet: req.quiet,
