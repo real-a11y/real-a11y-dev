@@ -102,10 +102,10 @@ export interface TreeViewProps {
   enableDiff?: boolean;
   /**
    * Start with names in the tree shown in full, the tree widening to fit a
-   * long one, rather than ending it in an ellipsis. Defaults to `false`. The
-   * starting state only: the user changes it from the panel's Settings.
+   * long one, rather than ending it in an ellipsis. Defaults to `false`. Read
+   * when the panel mounts: after that the user changes it from Settings.
    */
-  showFullNames?: boolean;
+  defaultShowFullNames?: boolean;
   /** Called when the user turns "Show full names" on or off in Settings. */
   onShowFullNamesChange?: (showFullNames: boolean) => void;
   /** Callback when a node is selected */
@@ -129,7 +129,7 @@ export function TreeView({
   focusHostOnActivate = false,
   enablePicker = false,
   enableDiff = true,
-  showFullNames = false,
+  defaultShowFullNames = false,
   onShowFullNamesChange,
   onNodeSelect,
   onAction,
@@ -390,7 +390,7 @@ export function TreeView({
       onTogglePickMode={togglePickMode}
       pickedNodeId={pickedNodeId}
       onPickedNodeHandled={() => setPickedNodeId(null)}
-      defaultShowFullNames={showFullNames}
+      defaultShowFullNames={defaultShowFullNames}
       onShowFullNamesChange={onShowFullNamesChange}
     />
   );

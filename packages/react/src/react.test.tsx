@@ -104,15 +104,18 @@ describe("<SemanticNavigator />", () => {
     expect(pickBtn.getAttribute("aria-label")).toBe("Pick element in page");
   });
 
-  it("starts the tree with full names only when showFullNames is set", async () => {
-    function App({ showFullNames }: { showFullNames?: boolean }) {
+  it("starts the tree with full names only when defaultShowFullNames is set", async () => {
+    function App({ defaultShowFullNames }: { defaultShowFullNames?: boolean }) {
       const rootRef = useRef<HTMLDivElement>(null);
       return (
         <>
           <div ref={rootRef}>
             <a href="#a">A link whose name runs well past the panel's edge</a>
           </div>
-          <SemanticNavigator root={rootRef} showFullNames={showFullNames} />
+          <SemanticNavigator
+            root={rootRef}
+            defaultShowFullNames={defaultShowFullNames}
+          />
         </>
       );
     }
@@ -126,12 +129,58 @@ describe("<SemanticNavigator />", () => {
     expect(offTree.classList.contains("sn-tree--full-names")).toBe(false);
     off.unmount();
 
-    const on = render(<App showFullNames />);
+    const on = render(<App defaultShowFullNames />);
     const onTree = await findInPanel(
       on.container.querySelectorAll("div")[1],
       '[role="tree"]',
     );
     expect(onTree.classList.contains("sn-tree--full-names")).toBe(true);
+  });
+
+  it("keeps the user's Show full names through a remount", async () => {
+    function App({ theme }: { theme: "light" | "dark" }) {
+      const rootRef = useRef<HTMLDivElement>(null);
+      return (
+        <>
+          <div ref={rootRef}>
+            <a href="#a">A link whose name runs well past the panel's edge</a>
+          </div>
+          <SemanticNavigator root={rootRef} theme={theme} />
+        </>
+      );
+    }
+    const view = render(<App theme="light" />);
+    const host = view.container.querySelectorAll("div")[1];
+    await findInPanel(host, '[role="tree"]');
+
+    // The user turns it on in Settings…
+    act(() => {
+      host
+        .shadowRoot!.querySelector<HTMLButtonElement>(
+          'button[aria-label="Settings"]',
+        )!
+        .click();
+    });
+    const box = (await findInPanel(
+      host,
+      '[role="group"][aria-label="Settings"] input[type="checkbox"]',
+    )) as HTMLInputElement;
+    act(() => box.click());
+    await waitFor(() => {
+      expect(
+        host
+          .shadowRoot!.querySelector('[role="tree"]')
+          ?.classList.contains("sn-tree--full-names"),
+      ).toBe(true);
+    }, WAIT);
+
+    // …and a theme change, which remounts the navigator, keeps it on.
+    view.rerender(<App theme="dark" />);
+    await waitFor(() => {
+      const tree = host.shadowRoot!.querySelector('[role="tree"]');
+      expect(tree?.closest(".sn-theme-dark")).not.toBeNull();
+      expect(tree?.classList.contains("sn-tree--full-names")).toBe(true);
+    }, WAIT);
   });
 
   it("picks up enablePicker toggled after mount", async () => {

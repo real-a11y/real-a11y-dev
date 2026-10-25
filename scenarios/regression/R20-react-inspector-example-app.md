@@ -38,8 +38,9 @@ pnpm --filter @real-a11y-dev/example-react-app dev
 8. Open the browser console throughout
 9. Give an element in the app a name far wider than the panel (a long link text): does
    it end in "…" with no sideways scroll, and show in full on hover? Open the toolbar's
-   **⚙** and turn on **Show full names**: does the tree widen and scroll sideways? Then
-   pass `showFullNames` and reload: does the panel start that way?
+   **⚙** and turn on **Show full names**: does the tree widen and scroll sideways? Change
+   `theme`, which remounts the navigator: is it still on? Then pass
+   `defaultShowFullNames` and reload: does the panel start that way?
 
 ## Expected
 

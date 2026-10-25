@@ -76,10 +76,15 @@ function Panel() {
   // "Show full names", from the panel's Settings. In Storybook's addon state
   // rather than the panel's own: Storybook mounts this panel afresh on a
   // story switch, and a choice the panel held would start over each time.
+  // Read through a ref by the render below, which hands it to TreePanel only
+  // as where it starts: TreePanel applies a change itself, and re-running the
+  // render for one would rebuild the whole tree.
   const [showFullNames, setShowFullNames] = useAddonState<boolean>(
     `${ADDON_ID}/show-full-names`,
     false,
   );
+  const showFullNamesRef = useRef(showFullNames);
+  showFullNamesRef.current = showFullNames;
 
   // ── Mode handler (defined early so effects can reference it) ───────────────
 
@@ -195,19 +200,12 @@ function Panel() {
           if (nodeId) channel.emit(EVENTS.HIGHLIGHT_NODE, nodeId);
           else channel.emit(EVENTS.CLEAR_HIGHLIGHT);
         },
-        defaultShowFullNames: showFullNames,
+        defaultShowFullNames: showFullNamesRef.current,
         onShowFullNamesChange: setShowFullNames,
       }),
       host,
     );
-  }, [
-    isReady,
-    payload,
-    viewMode,
-    handleViewModeChange,
-    showFullNames,
-    setShowFullNames,
-  ]);
+  }, [isReady, payload, viewMode, handleViewModeChange, setShowFullNames]);
 
   // ── Channel subscription — while the panel can be seen ─────────────────────
 

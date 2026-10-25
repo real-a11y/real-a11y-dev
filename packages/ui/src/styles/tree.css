@@ -569,6 +569,13 @@
   font-weight: 600;
 }
 
+/* A row's role, heading level and name (see "Long labels"). */
+.sn-head {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
 .sn-name {
   color: var(--sn-text-name);
 }
@@ -623,10 +630,11 @@
    containment keeps its content out of the row's width: only a row nested
    deeper than the panel is wide grows, by its label's 8ch floor, and alone.
    The label is one line; a part that doesn't fit moves, whole and with what
-   follows it, onto a second line its max-height hides. The name (and a text
-   preview, and DOM attributes) starts at up to 16ch, less in a narrow label
-   so it still fits beside the role, and grows into the room left: what
-   follows it shows only once it has that much. */
+   follows it, onto a second line its max-height hides. The head (role and
+   name) comes first, so it always shows, if only in part: it starts at up
+   to 32ch and its name ends in an ellipsis, however long the role. The text
+   parts after it (and DOM view's) start at up to 8ch. Each grows into the
+   room left, and a part after them shows only once they have that much. */
 .sn-tree:not(.sn-tree--full-names) {
   min-width: 0;
 }
@@ -647,13 +655,34 @@
   overflow: clip;
 }
 
-.sn-tree:not(.sn-tree--full-names) .sn-name,
+.sn-tree:not(.sn-tree--full-names) .sn-head {
+  flex: 1 1 min(32ch, 100%);
+  min-width: 0;
+  max-width: max-content;
+  overflow: hidden;
+}
+
+.sn-tree:not(.sn-tree--full-names) .sn-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .sn-tree:not(.sn-tree--full-names) .sn-name-preview,
+.sn-tree:not(.sn-tree--full-names) .sn-description,
+.sn-tree:not(.sn-tree--full-names) .sn-field-value,
+.sn-tree:not(.sn-tree--full-names) .sn-text-content,
 .sn-tree:not(.sn-tree--full-names) .sn-attr {
-  flex: 1 1 clamp(2ch, 100% - 16ch, 16ch);
+  flex: 1 1 8ch;
+  min-width: 0;
   max-width: max-content;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* An element's attributes come before its text: they start smaller. */
+.sn-tree:not(.sn-tree--full-names) .sn-attr {
+  flex-basis: 4ch;
 }
 
 /* Badges */

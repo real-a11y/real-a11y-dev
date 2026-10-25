@@ -27,6 +27,16 @@ declare const __SN_STYLES__: string;
  */
 const SN_STYLES: string = __SN_STYLES__;
 
+/**
+ * The user's "Show full names" choice from a panel's Settings, by the
+ * container it was made in. It outlives the panel: `refresh()` and
+ * `setRoot()` re-key the TreeView, which holds the choice itself, and the
+ * React wrapper creates a new inspector on the same container whenever one
+ * of its props changes. A container is only ever the page's own element, so
+ * the entry goes with it.
+ */
+const fullNamesChoice = new WeakMap<Element, boolean>();
+
 // Re-export core types for convenience
 export type {
   SemanticNode,
@@ -88,7 +98,7 @@ export function createInspector(
     scrollHostOnSelect = false,
     focusHostOnActivate = false,
     enablePicker = false,
-    showFullNames = false,
+    defaultShowFullNames = false,
     styleNonce,
     onNodeSelect,
     onAction,
@@ -96,12 +106,8 @@ export function createInspector(
 
   let currentRoot = config.root;
   let currentViewMode = viewMode;
-  // The user's "Show full names" choice from the panel's Settings, carried
-  // into the TreeView that `refresh()` and `setRoot()` re-key: the panel holds
-  // it itself, and a re-keyed panel would start over from the config's.
-  let currentShowFullNames = showFullNames;
   const rememberShowFullNames = (on: boolean) => {
-    currentShowFullNames = on;
+    fullNamesChoice.set(container, on);
   };
   let mounted = false;
   let renderTarget: Element | ShadowRoot | null = null;
@@ -187,7 +193,8 @@ export function createInspector(
         scrollHostOnSelect,
         focusHostOnActivate,
         enablePicker,
-        showFullNames: currentShowFullNames,
+        defaultShowFullNames:
+          fullNamesChoice.get(container) ?? defaultShowFullNames,
         onShowFullNamesChange: rememberShowFullNames,
         onNodeSelect,
         onAction,

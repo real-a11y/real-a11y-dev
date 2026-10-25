@@ -19,6 +19,7 @@ import {
 import {
   JUMP_KEYS,
   JUMP_KEYSHORTCUTS,
+  ShowFullNamesSetting,
   useDismissible,
   useTreeKeyboard,
   useInputModality,
@@ -135,6 +136,7 @@ import {
   sendKeySpec,
 } from "./SendKeyBar.js";
 import { TabSequenceView } from "./TabSequenceView.js";
+import { useStoredFlag } from "./use-stored-flag.js";
 import { useNativeOverlay } from "./useNativeOverlay.js";
 
 /** What the panel keeps of an ACTIVE_TAB_CHANGED. */
@@ -686,7 +688,10 @@ export function App() {
     signalSince: null,
     inFlight: null,
   });
-  const [followPageChanges, setFollowPageChanges] = useState(false);
+  // The "Follow page changes" setting, kept with native mode's own.
+  const [followPageChanges, setFollowPageChanges] = useStoredFlag(
+    FOLLOW_PAGE_CHANGES_KEY,
+  );
   const followPageChangesRef = useRef(followPageChanges);
   followPageChangesRef.current = followPageChanges;
   // Set below, once `loadNativeTree` exists; the timer calls it.
@@ -735,64 +740,13 @@ export function App() {
     }
   }, [scheduleAutoRefresh]);
   useEffect(() => cancelAutoRefreshTimer, [cancelAutoRefreshTimer]);
-  // The "Follow page changes" setting, kept in `chrome.storage.local` with
-  // native mode's own, and followed while the panel is open.
-  useEffect(() => {
-    // Absent where the panel runs without extension storage (unit tests).
-    if (!chrome.storage?.local || !chrome.storage.onChanged) return;
-    const read = (value: unknown) => setFollowPageChanges(value === true);
-    void chrome.storage.local
-      .get(FOLLOW_PAGE_CHANGES_KEY)
-      .then((r) => read(r[FOLLOW_PAGE_CHANGES_KEY]))
-      .catch(() => {});
-    const onChanged = (
-      changes: Record<string, chrome.storage.StorageChange>,
-      area: string,
-    ) => {
-      if (area === "local" && FOLLOW_PAGE_CHANGES_KEY in changes) {
-        read(changes[FOLLOW_PAGE_CHANGES_KEY]!.newValue);
-      }
-    };
-    chrome.storage.onChanged.addListener(onChanged);
-    return () => chrome.storage.onChanged.removeListener(onChanged);
-  }, []);
-  const toggleFollowPageChanges = useCallback(() => {
-    const next = !followPageChangesRef.current;
-    setFollowPageChanges(next);
-    void chrome.storage?.local
-      ?.set({ [FOLLOW_PAGE_CHANGES_KEY]: next })
-      .catch(() => {});
-  }, []);
+  const toggleFollowPageChanges = useCallback(
+    () => setFollowPageChanges(!followPageChangesRef.current),
+    [setFollowPageChanges],
+  );
   // The "Show full names" setting (in Settings), for both trees: off, a long
-  // name ends in an ellipsis and the tree fits the panel. Kept in
-  // `chrome.storage.local` with the others, and followed while the panel is
-  // open, so every panel shows names the same way.
-  const [showFullNames, setShowFullNames] = useState(false);
-  useEffect(() => {
-    // Absent where the panel runs without extension storage (unit tests).
-    if (!chrome.storage?.local || !chrome.storage.onChanged) return;
-    const read = (value: unknown) => setShowFullNames(value === true);
-    void chrome.storage.local
-      .get(SHOW_FULL_NAMES_KEY)
-      .then((r) => read(r[SHOW_FULL_NAMES_KEY]))
-      .catch(() => {});
-    const onChanged = (
-      changes: Record<string, chrome.storage.StorageChange>,
-      area: string,
-    ) => {
-      if (area === "local" && SHOW_FULL_NAMES_KEY in changes) {
-        read(changes[SHOW_FULL_NAMES_KEY]!.newValue);
-      }
-    };
-    chrome.storage.onChanged.addListener(onChanged);
-    return () => chrome.storage.onChanged.removeListener(onChanged);
-  }, []);
-  const changeShowFullNames = useCallback((on: boolean) => {
-    setShowFullNames(on);
-    void chrome.storage?.local
-      ?.set({ [SHOW_FULL_NAMES_KEY]: on })
-      .catch(() => {});
-  }, []);
+  // name ends in an ellipsis and the tree fits the panel.
+  const [showFullNames, setShowFullNames] = useStoredFlag(SHOW_FULL_NAMES_KEY);
   // What had focus as this render began, before its commit could take it
   // away. Turning native mode off, here or in another window, takes away the
   // native tree and the tree choice in Settings; so does a default read that
@@ -3743,21 +3697,11 @@ export function App() {
             </div>
           )}
           {/* Either tree, as the shared panel's Settings has it. */}
-          <label class="sn-settings-item">
-            <input
-              type="checkbox"
-              checked={showFullNames}
-              aria-describedby="sn-settings-full-names-hint"
-              onChange={(e) =>
-                changeShowFullNames((e.target as HTMLInputElement).checked)
-              }
-            />
-            <span>Show full names</span>
-          </label>
-          <p id="sn-settings-full-names-hint" class="sn-settings-hint">
-            Rows widen to fit a long name, and the tree scrolls sideways. Off,
-            the name ends in “…”: hover it to read the rest.
-          </p>
+          <ShowFullNamesSetting
+            checked={showFullNames}
+            onChange={setShowFullNames}
+            hintId="sn-settings-full-names-hint"
+          />
         </div>
       )}
     </div>
@@ -4410,25 +4354,30 @@ export function App() {
                         </>
                       ) : (
                         <>
-                          {/* Role — semantic display name */}
-                          <span class="sn-role">{getDisplayRole(node)}</span>
-                          {/* Heading level badge */}
-                          {node.a11y.properties.level && (
-                            <span class="sn-level-badge">
-                              H{node.a11y.properties.level}
-                            </span>
-                          )}
-                          {node.dom.tagName === "iframe" && !isParent && (
-                            <EmbeddedBadge />
-                          )}
-                          {/* With its whole text as a tooltip, for when
-                              the row is too narrow for it and it ends in an
-                              ellipsis; so does the preview below. */}
-                          {node.a11y.name && (
-                            <span class="sn-name" title={node.a11y.name}>
-                              {node.a11y.name}
-                            </span>
-                          )}
+                          {/* The role and name stay together on a narrow
+                              row, which clips the name and drops what
+                              follows it (tree.css, "Long labels"). */}
+                          <span class="sn-head">
+                            {/* Role — semantic display name */}
+                            <span class="sn-role">{getDisplayRole(node)}</span>
+                            {/* Heading level badge */}
+                            {node.a11y.properties.level && (
+                              <span class="sn-level-badge">
+                                H{node.a11y.properties.level}
+                              </span>
+                            )}
+                            {node.dom.tagName === "iframe" && !isParent && (
+                              <EmbeddedBadge />
+                            )}
+                            {/* With its whole text as a tooltip, for when
+                                it ends in an ellipsis; so does the preview
+                                below. */}
+                            {node.a11y.name && (
+                              <span class="sn-name" title={node.a11y.name}>
+                                {node.a11y.name}
+                              </span>
+                            )}
+                          </span>
                           {/* Descendant-text preview — leaf-only to avoid
                               duplicating what's already in child rows
                               (table/rowgroup, paragraphs with strong/em

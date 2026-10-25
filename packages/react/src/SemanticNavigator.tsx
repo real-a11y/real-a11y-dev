@@ -82,10 +82,11 @@ export interface SemanticNavigatorProps {
   /**
    * Start with names in the tree shown in full, the tree widening to fit a
    * long one and scrolling sideways. Default `false`: a long name ends in an
-   * ellipsis, and the tree fits the panel. The starting state only: the user
-   * turns it on and off from the panel's Settings (⚙).
+   * ellipsis, and the tree fits the panel. Only where the panel starts: the
+   * user turns it on and off from the panel's Settings (⚙), and their choice
+   * then holds for the life of the page, a remount included.
    */
-  showFullNames?: boolean;
+  defaultShowFullNames?: boolean;
   /** Optional CSP nonce applied to the injected style. */
   styleNonce?: string;
 
@@ -452,7 +453,7 @@ export function SemanticNavigator({
   scrollHostOnSelect = false,
   focusHostOnActivate = false,
   enablePicker = false,
-  showFullNames = false,
+  defaultShowFullNames = false,
   styleNonce,
   onNodeSelect,
   onAction,
@@ -522,7 +523,7 @@ export function SemanticNavigator({
       scrollHostOnSelect,
       focusHostOnActivate,
       enablePicker,
-      showFullNames,
+      defaultShowFullNames,
       styleNonce,
       onNodeSelect: handleNodeSelect,
       onAction: handleAction,
@@ -534,15 +535,15 @@ export function SemanticNavigator({
       instance.unmount();
       instanceRef.current = null;
     };
-    // `mode` / `styleNonce` / `showFullNames` are intentionally omitted from
-    // deps (no react-hooks exhaustive-deps rule in this repo). `mode` is
+    // `mode` / `styleNonce` / `defaultShowFullNames` are intentionally omitted
+    // from deps (no react-hooks exhaustive-deps rule in this repo). `mode` is
     // applied via setViewMode (no remount); on remount from other deps the
     // effect still closes over the current `mode`. `styleNonce` is mount-only:
     // createInspector injects <style nonce> once into a reused shadow root (or
     // once into #sn-styles in light mount), so a remount on the same host
-    // cannot change it. `showFullNames` is only where the panel starts: after
-    // that the setting is the user's, and a remount to change it would also
-    // throw away their tree.
+    // cannot change it. `defaultShowFullNames` is only where the panel starts:
+    // after that the setting is the user's, which the inspector keeps for
+    // this host across a remount.
   }, [
     rootEl,
     mount,

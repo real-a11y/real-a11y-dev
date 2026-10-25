@@ -155,7 +155,7 @@ describe("createInspector", () => {
     nav.unmount();
   });
 
-  it("showFullNames sets how the panel starts; the user's choice survives a re-key", async () => {
+  it("defaultShowFullNames sets how the panel starts; the user's choice outlives a re-key", async () => {
     const { root, container } = mountDoc(
       `<main><a href="#a">A link whose name runs well past the panel's edge</a></main>`,
     );
@@ -182,7 +182,10 @@ describe("createInspector", () => {
       .querySelector<HTMLButtonElement>('button[aria-label="Settings"]')!
       .click();
     await waitUntil(
-      () => shadowOf(container).querySelector('[role="group"]') !== null,
+      () =>
+        shadowOf(container).querySelector(
+          '[role="group"][aria-label="Settings"]',
+        ) !== null,
     );
     shadowOf(container)
       .querySelector<HTMLInputElement>('input[type="checkbox"]')!
@@ -199,13 +202,21 @@ describe("createInspector", () => {
     expect(fullNames(container)).toBe(true);
     nav.unmount();
 
-    // `showFullNames: true` starts the panel with them on.
+    // So does another inspector on the same container, as React makes when
+    // one of its props changes, whatever its default.
+    const again = createInspector({ root, container });
+    again.mount();
+    await waitUntil(() => tree(container) !== null);
+    expect(fullNames(container)).toBe(true);
+    again.unmount();
+
+    // `defaultShowFullNames: true` starts a panel with them on.
     const other = document.createElement("div");
     document.body.appendChild(other);
     const full = createInspector({
       root,
       container: other,
-      showFullNames: true,
+      defaultShowFullNames: true,
     });
     full.mount();
     await waitUntil(() => tree(other) !== null);

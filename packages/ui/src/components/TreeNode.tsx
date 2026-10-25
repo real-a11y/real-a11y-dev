@@ -141,15 +141,19 @@ function renderA11yLabel(node: DomSemanticNode) {
 
   return (
     <>
-      <span class="sn-role">{role}</span>
-      {level && <span class="sn-text-muted"> level {level}</span>}
-      {/* Each with its whole text as a tooltip, for when it ends in an
-          ellipsis (see renderDomLabel). */}
-      {name && (
-        <span class="sn-name" title={name}>
-          {name}
-        </span>
-      )}
+      {/* The role and name stay together on a narrow row, which clips the
+          name and drops what follows it (tree.css, "Long labels"). Each
+          part that can end in an ellipsis carries its whole text as a
+          tooltip (see renderDomLabel). */}
+      <span class="sn-head">
+        <span class="sn-role">{role}</span>
+        {level && <span class="sn-text-muted"> level {level}</span>}
+        {name && (
+          <span class="sn-name" title={name}>
+            {name}
+          </span>
+        )}
+      </span>
       {showPreview && (
         <span class="sn-name-preview" title={descendantText}>
           {descendantText}

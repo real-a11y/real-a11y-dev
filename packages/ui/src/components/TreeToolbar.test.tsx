@@ -257,6 +257,27 @@ describe("TreeToolbar Settings", () => {
     expect(popup(container)).toBeNull();
   });
 
+  it("closes when focus moves out of it, not when focus goes nowhere", () => {
+    toolbar(container);
+    act(() => gear(container).click());
+    const box = checkbox(container);
+    act(() => box.focus());
+
+    // A press on the popup's own text sends focus to the body: it stays.
+    act(() => {
+      box.dispatchEvent(
+        new FocusEvent("focusout", { bubbles: true, relatedTarget: null }),
+      );
+    });
+    expect(popup(container)).not.toBeNull();
+
+    // Tab on to the role filters, which the popup lies over: it closes.
+    act(() =>
+      container.querySelector<HTMLButtonElement>(".sn-filter-btn")!.focus(),
+    );
+    expect(popup(container)).toBeNull();
+  });
+
   // The inspector mounts the panel in a shadow root, where a listener on the
   // document sees a press inside it retargeted to the host: read naively, a
   // press on the popup's own checkbox would be "outside" and close it.
@@ -270,6 +291,32 @@ describe("TreeToolbar Settings", () => {
     press(checkbox(shadow));
     expect(popup(shadow)).not.toBeNull();
 
+    press(document.body);
+    expect(popup(shadow)).toBeNull();
+    render(null, mount);
+  });
+
+  // A closed shadow root hides its nodes from the document altogether, and
+  // a page can put the inspector's own (open) root inside one.
+  it("tells inside from outside within shadow roots nested in a closed one", () => {
+    const outer = container.attachShadow({ mode: "closed" });
+    const host = document.createElement("div");
+    const sibling = document.createElement("button");
+    outer.append(host, sibling);
+    const shadow = host.attachShadow({ mode: "open" });
+    const mount = document.createElement("div");
+    shadow.appendChild(mount);
+    toolbar(mount);
+    act(() => gear(shadow).click());
+
+    press(checkbox(shadow));
+    expect(popup(shadow)).not.toBeNull();
+
+    // Inside the closed root, but outside the panel's.
+    press(sibling);
+    expect(popup(shadow)).toBeNull();
+
+    act(() => gear(shadow).click());
     press(document.body);
     expect(popup(shadow)).toBeNull();
     render(null, mount);

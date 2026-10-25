@@ -141,15 +141,15 @@ An entry's text is what a screen reader could announce: nothing hidden or `aria-
 
 ## Long names
 
-A name longer than the panel is wide ends in an ellipsis, and the tree stays as wide as the panel: a long link text or paragraph no longer sizes every row to itself and scrolls the tree sideways. Hover the name to read all of it. What follows the name on its row (badges, a description, a value, jump chips) shows as long as there is room beside the start of the name, and the role always shows. A row nested deeper than the panel is wide still widens the tree, by just enough to show the start of its label, and only that row.
+A name longer than the panel is wide ends in an ellipsis, and the tree stays as wide as the panel: a long link text or paragraph no longer sizes every row to itself and scrolls the tree sideways. Hover the name to read all of it. A row's role and name come first; the text after them (a description, a value, a text preview) ends in an ellipsis the same way, and badges and jump chips show whole once there is room for them, or not at all. In the DOM view, attributes and text content shorten the same way. A row nested deeper than the panel is wide still widens the tree, by just enough to show the start of its label, and only that row.
 
 To see names in full instead, turn on **Show full names** in the panel's Settings: rows widen to fit the longest name, and the tree scrolls sideways. It is the tree's setting: the TAB view and the role-filter lists end a long name in an ellipsis either way.
 
 | Surface | Where the switch is | How long it holds |
 |---|---|---|
 | Chrome extension | **Settings ▾**, next to the page's title | Kept in the extension's storage, for every window's side panel |
-| `inspector` | **⚙** at the end of the toolbar | The life of the panel, through `refresh()` and `setRoot()`. `showFullNames: true` starts it on |
-| React `<SemanticNavigator />` | **⚙** at the end of the toolbar | Until the navigator remounts. The `showFullNames` prop starts it on |
+| `inspector` | **⚙** at the end of the toolbar | For the container, the life of the page: through `refresh()`, `setRoot()` and another `createInspector()` on it. `defaultShowFullNames: true` starts it on |
+| React `<SemanticNavigator />` | **⚙** at the end of the toolbar | The life of the page, a remount included. The `defaultShowFullNames` prop starts it on |
 | Storybook addon | **⚙** at the end of the toolbar | Across stories, until Storybook reloads |
 
 ---

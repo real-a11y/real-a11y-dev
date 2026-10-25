@@ -6,6 +6,8 @@ import { useCallback, useRef, useState } from "preact/hooks";
 import { useDismissible } from "../hooks/useDismissible.js";
 import { useInstanceId } from "../hooks/useInstanceId.js";
 
+import { ShowFullNamesSetting } from "./ShowFullNamesSetting.js";
+
 interface TreeToolbarProps {
   viewMode: TreeViewMode;
   onViewModeChange: (mode: TreeViewMode) => void;
@@ -193,23 +195,11 @@ export function TreeToolbar({
               role="group"
               aria-label="Settings"
             >
-              <label class="sn-settings-item">
-                <input
-                  type="checkbox"
-                  checked={showFullNames}
-                  aria-describedby={`${settingsId}-full-names-hint`}
-                  onChange={(e) =>
-                    onShowFullNamesChange?.(
-                      (e.target as HTMLInputElement).checked,
-                    )
-                  }
-                />
-                <span>Show full names</span>
-              </label>
-              <p id={`${settingsId}-full-names-hint`} class="sn-settings-hint">
-                Rows widen to fit a long name, and the tree scrolls sideways.
-                Off, the name ends in “…”: hover it to read the rest.
-              </p>
+              <ShowFullNamesSetting
+                checked={showFullNames}
+                onChange={(on) => onShowFullNamesChange?.(on)}
+                hintId={`${settingsId}-full-names-hint`}
+              />
             </div>
           )}
         </div>

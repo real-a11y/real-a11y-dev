@@ -1301,18 +1301,22 @@ export function NativeTreeView({
                     </button>
 
                     <span class="sn-label">
-                      <span class="sn-role">{node.role}</span>
-                      {headingLevel && (
-                        <span class="sn-level-badge">H{headingLevel}</span>
-                      )}
-                      {isNativeIframeRole(node.role) && !hasChildren(node) && (
-                        <EmbeddedBadge />
-                      )}
-                      {node.name && (
-                        <span class="sn-name" title={node.name}>
-                          {node.name}
-                        </span>
-                      )}
+                      {/* The role and name stay together on a narrow row,
+                          which clips the name and drops what follows it
+                          (tree.css, "Long labels"). */}
+                      <span class="sn-head">
+                        <span class="sn-role">{node.role}</span>
+                        {headingLevel && (
+                          <span class="sn-level-badge">H{headingLevel}</span>
+                        )}
+                        {isNativeIframeRole(node.role) &&
+                          !hasChildren(node) && <EmbeddedBadge />}
+                        {node.name && (
+                          <span class="sn-name" title={node.name}>
+                            {node.name}
+                          </span>
+                        )}
+                      </span>
                       {node.description && (
                         <span class="sn-description" title={node.description}>
                           {node.description.length > 80
