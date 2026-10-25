@@ -153,10 +153,13 @@
 }
 
 /* ---- Toolbar ---- */
+/* In a panel too narrow for one row, the controls that don't fit move onto
+   a second, rather than off its edge. */
 .sn-toolbar {
   --sn-toolbar-gap: 8px;
 
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--sn-toolbar-gap);
   padding: 8px 12px;
@@ -165,9 +168,11 @@
   flex-shrink: 0;
 }
 
+/* It takes the room the controls leave, but never less than this: the
+   controls after it wrap first. */
 .sn-search {
   flex: 1;
-  min-width: 0;
+  min-width: 10ch;
   padding: 4px 8px;
   border: 1px solid var(--sn-search-border);
   border-radius: 4px;

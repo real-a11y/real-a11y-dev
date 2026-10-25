@@ -46,6 +46,9 @@
   in every window's side panel (`settings.showFullNames` in
   `chrome.storage.local`). **Settings ▾** and **Copy ▾** also close now when
   focus moves out of them, rather than staying open over what it moved to.
+  And in a side panel too narrow for one row, a tree's toolbar wraps onto a
+  second, where the in-page tree's used to squeeze its search box to a
+  sliver and its DOM / A11Y / TAB toggle to nothing.
 
 ## 0.1.17
 

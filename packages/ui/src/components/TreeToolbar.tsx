@@ -34,7 +34,10 @@ interface TreeToolbarProps {
   searchInputRef?: Ref<HTMLInputElement>;
   /** Whether the tree shows names in full — drives the Settings checkbox. */
   showFullNames?: boolean;
-  /** Called when the Settings checkbox is turned on or off. */
+  /**
+   * Called when the Settings checkbox is turned on or off. Without it the
+   * toolbar has no Settings: the switch it holds would change nothing.
+   */
   onShowFullNamesChange?: (showFullNames: boolean) => void;
 }
 
@@ -175,34 +178,36 @@ export function TreeToolbar({
             the line that explains it, as the extension's Settings does. A
             gear rather than the extension's "Settings ▾", which sits in a
             header: this toolbar has no room to spare beside the search. */}
-        <div class="sn-dropdown" ref={settingsRef}>
-          <button
-            ref={settingsButtonRef}
-            class="sn-toolbar-btn sn-settings-btn"
-            aria-expanded={settingsOpen}
-            aria-controls={settingsOpen ? settingsId : undefined}
-            aria-label="Settings"
-            title="Settings"
-            onClick={() => setSettingsOpen((open) => !open)}
-          >
-            {"⚙"}
-          </button>
-          {settingsOpen && (
-            <div
-              id={settingsId}
-              class="sn-dropdown-popup sn-settings-menu"
-              data-sn-popup
-              role="group"
+        {onShowFullNamesChange && (
+          <div class="sn-dropdown" ref={settingsRef}>
+            <button
+              ref={settingsButtonRef}
+              class="sn-toolbar-btn sn-settings-btn"
+              aria-expanded={settingsOpen}
+              aria-controls={settingsOpen ? settingsId : undefined}
               aria-label="Settings"
+              title="Settings"
+              onClick={() => setSettingsOpen((open) => !open)}
             >
-              <ShowFullNamesSetting
-                checked={showFullNames}
-                onChange={(on) => onShowFullNamesChange?.(on)}
-                hintId={`${settingsId}-full-names-hint`}
-              />
-            </div>
-          )}
-        </div>
+              {"⚙"}
+            </button>
+            {settingsOpen && (
+              <div
+                id={settingsId}
+                class="sn-dropdown-popup sn-settings-menu"
+                data-sn-popup
+                role="group"
+                aria-label="Settings"
+              >
+                <ShowFullNamesSetting
+                  checked={showFullNames}
+                  onChange={onShowFullNamesChange}
+                  hintId={`${settingsId}-full-names-hint`}
+                />
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Role filters — disabled in tab sequence view */}

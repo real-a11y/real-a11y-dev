@@ -173,6 +173,7 @@ describe("TreeToolbar Settings", () => {
           onCollapseAll={noop}
           roleFilter={null}
           onRoleFilterChange={noop}
+          onShowFullNamesChange={noop}
           {...props}
         />,
         into,
@@ -216,6 +217,11 @@ describe("TreeToolbar Settings", () => {
 
     act(() => button.click());
     expect(popup(container)).toBeNull();
+  });
+
+  it("has no Settings without a handler for its switch", () => {
+    toolbar(container, { onShowFullNamesChange: undefined });
+    expect(container.querySelector('button[aria-label="Settings"]')).toBeNull();
   });
 
   it("mirrors showFullNames and reports a change", () => {

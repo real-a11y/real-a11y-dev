@@ -48,11 +48,33 @@ async function show(
 /**
  * Whether the tree scrolls sideways, how the long name's row shows it, and
  * which of the toggle's state badges are in view: inside its label's box,
- * which clips what doesn't fit, rather than on the line it hides.
+ * which clips what doesn't fit, rather than on the line it hides. Also
+ * whether the toolbar shows every control whole, and its search box at a
+ * usable width, rather than pushing one off the panel's edge.
  */
 function layout(nav: NativeHarness) {
   return nav.panel.evaluate(
     ([name, toggleName]) => {
+      const within = (inner: DOMRect, outer: DOMRect) =>
+        inner.width > 0 &&
+        inner.left >= outer.left - 0.5 &&
+        inner.right <= outer.right + 0.5;
+      const viewport = new DOMRect(0, 0, innerWidth, innerHeight);
+      const toolbarFits = [
+        ...document.querySelectorAll<HTMLElement>(
+          '[role="toolbar"].sn-toolbar button',
+        ),
+      ].every((control) => {
+        const group = control.closest(".sn-toggle-group");
+        const box = control.getBoundingClientRect();
+        return (
+          within(box, viewport) &&
+          (!group || within(box, group.getBoundingClientRect()))
+        );
+      });
+      const search = document.querySelector(".sn-toolbar .sn-search");
+      const searchUsable =
+        !search || search.getBoundingClientRect().width >= 60;
       const container = document.querySelector(".sn-tree-container")!;
       const nameSpan = (text: string) =>
         [...document.querySelectorAll<HTMLElement>(".sn-name")].find(
@@ -79,6 +101,7 @@ function layout(nav: NativeHarness) {
         nameClipped: span ? span.scrollWidth > span.clientWidth : null,
         tooltip: span?.title ?? null,
         statesInView,
+        toolbarFits: toolbarFits && searchUsable,
       };
     },
     [LONG_NAME, TOGGLE_NAME] as const,
@@ -111,6 +134,8 @@ for (const producer of ["NATIVE", "DOM"] as const) {
           tooltip: LONG_NAME,
           // A key state never gives way to the name.
           statesInView: ["disabled", "pressed"],
+          // Nor does a toolbar control to the panel's edge: they wrap.
+          toolbarFits: true,
         });
 
       await setFullNames(nav, true);
