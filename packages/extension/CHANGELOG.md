@@ -27,8 +27,9 @@
   another control, and **Copy ▾** ran past the panel's edge. The in-page
   tree's own controls, its search box, views, ↻, + and -, now have a row of
   their own under the one both trees share, as Chrome's tree's always have,
-  and a search's match count ends that row, or drops under it when there's
-  no room. A narrower panel wraps both rows rather than squeezing a control
+  so `Tab` reaches the search box after **Copy ▾**, as it does there. A
+  search's match count ends that row, or drops under it when there's no
+  room. A narrower panel wraps both rows rather than squeezing a control
   ([#533](https://github.com/real-a11y/real-a11y-dev/pull/533)).
 
 ## 0.1.17
