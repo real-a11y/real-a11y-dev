@@ -28,6 +28,8 @@ export type { TypeAheadBuffer } from "./hooks/typeAhead.js";
 export { useSearch } from "./hooks/useSearch.js";
 export { buildTreeDiffView, EMPTY_DIFF_VIEW } from "./diff.js";
 export type { TreeDiffView, NodeDiffStatus } from "./diff.js";
+// @internal — shared with the extension's own popups; not a stability promise.
+export { FOCUSABLE_SELECTOR, useDismissible } from "./hooks/useDismissible.js";
 export { useInputModality } from "./hooks/useInputModality.js";
 export type { InputModality } from "./hooks/useInputModality.js";
 export { useVirtualTree } from "./hooks/useVirtualTree.js";

@@ -79,6 +79,13 @@ export interface SemanticNavigatorProps {
    * clicks at the document level while active, so opt-in only.
    */
   enablePicker?: boolean;
+  /**
+   * Start with names in the tree shown in full, the tree widening to fit a
+   * long one and scrolling sideways. Default `false`: a long name ends in an
+   * ellipsis, and the tree fits the panel. The starting state only: the user
+   * turns it on and off from the panel's Settings (⚙).
+   */
+  showFullNames?: boolean;
   /** Optional CSP nonce applied to the injected style. */
   styleNonce?: string;
 
@@ -445,6 +452,7 @@ export function SemanticNavigator({
   scrollHostOnSelect = false,
   focusHostOnActivate = false,
   enablePicker = false,
+  showFullNames = false,
   styleNonce,
   onNodeSelect,
   onAction,
@@ -514,6 +522,7 @@ export function SemanticNavigator({
       scrollHostOnSelect,
       focusHostOnActivate,
       enablePicker,
+      showFullNames,
       styleNonce,
       onNodeSelect: handleNodeSelect,
       onAction: handleAction,
@@ -525,12 +534,15 @@ export function SemanticNavigator({
       instance.unmount();
       instanceRef.current = null;
     };
-    // `mode` / `styleNonce` are intentionally omitted from deps (no react-hooks
-    // exhaustive-deps rule in this repo). `mode` is applied via setViewMode (no
-    // remount); on remount from other deps the effect still closes over the
-    // current `mode`. `styleNonce` is mount-only: createInspector injects
-    // <style nonce> once into a reused shadow root (or once into #sn-styles in
-    // light mount), so a remount on the same host cannot change it.
+    // `mode` / `styleNonce` / `showFullNames` are intentionally omitted from
+    // deps (no react-hooks exhaustive-deps rule in this repo). `mode` is
+    // applied via setViewMode (no remount); on remount from other deps the
+    // effect still closes over the current `mode`. `styleNonce` is mount-only:
+    // createInspector injects <style nonce> once into a reused shadow root (or
+    // once into #sn-styles in light mount), so a remount on the same host
+    // cannot change it. `showFullNames` is only where the panel starts: after
+    // that the setting is the user's, and a remount to change it would also
+    // throw away their tree.
   }, [
     rootEl,
     mount,

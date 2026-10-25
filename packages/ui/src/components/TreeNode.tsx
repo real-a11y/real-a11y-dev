@@ -97,8 +97,14 @@ function renderDomLabel(node: DomSemanticNode) {
         {"<"}
         {tagName}
       </span>
+      {/* A label the row is too narrow for ends in an ellipsis, so each
+          part that can (see tree.css) carries its whole text as a tooltip. */}
       {displayAttrs.map((attr) => (
-        <span key={attr.key}>
+        <span
+          key={attr.key}
+          class="sn-attr"
+          title={`${attr.key}="${attr.val}"`}
+        >
           {" "}
           <span class="sn-attr-key">{attr.key}</span>
           {"="}
@@ -106,7 +112,11 @@ function renderDomLabel(node: DomSemanticNode) {
         </span>
       ))}
       <span class="sn-tag">{">"}</span>
-      {textContent && <span class="sn-text-content">{textContent}</span>}
+      {textContent && (
+        <span class="sn-text-content" title={textContent}>
+          {textContent}
+        </span>
+      )}
     </>
   );
 }
@@ -133,8 +143,18 @@ function renderA11yLabel(node: DomSemanticNode) {
     <>
       <span class="sn-role">{role}</span>
       {level && <span class="sn-text-muted"> level {level}</span>}
-      {name && <span class="sn-name">{name}</span>}
-      {showPreview && <span class="sn-name-preview">{descendantText}</span>}
+      {/* Each with its whole text as a tooltip, for when it ends in an
+          ellipsis (see renderDomLabel). */}
+      {name && (
+        <span class="sn-name" title={name}>
+          {name}
+        </span>
+      )}
+      {showPreview && (
+        <span class="sn-name-preview" title={descendantText}>
+          {descendantText}
+        </span>
+      )}
     </>
   );
 }

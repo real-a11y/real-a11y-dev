@@ -57,7 +57,7 @@ async function copyEverything(nav: NativeHarness): Promise<string> {
   await stubClipboard(nav);
   await nav.panel.getByRole("button", { name: "Copy ▾" }).click();
   await nav.panel
-    .locator(".sn-export-menu")
+    .locator(".sn-dropdown-popup")
     .getByRole("button", { name: "Everything" })
     .click();
   let copied: string | undefined;

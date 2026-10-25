@@ -51,6 +51,7 @@ inspector.destroy();
 | `scrollHostOnSelect` | `boolean` | `false` | Scroll element into view on select |
 | `focusHostOnActivate` | `boolean` | `false` | Gate actions that move focus on the host (`focus`, `increment`, `decrement`). When `false`, those actions silently no-op so the panel doesn't pull focus off itself in same-document mounts. |
 | `enablePicker` | `boolean` | `false` | Surface a DevTools-style "select an element in the page" picker (toolbar button + Ctrl/Cmd+Shift+C); off by default because it captures document-level clicks. |
+| `showFullNames` | `boolean` | `false` | Start the tree with names in full, widening to fit the longest and scrolling sideways, instead of ending a long name in an ellipsis. Only where the panel starts: the user switches it from the toolbar's Settings (⚙), and their choice holds through `refresh()` and `setRoot()`. See [Long names](https://real-a11y.dev/guide/panel-features#long-names). |
 | `styleNonce` | `string` | — | CSP nonce applied to the injected `<style>` element. |
 | `onNodeSelect` | `(node) => void` | — | Callback when a node is selected |
 | `onAction` | `(request, result) => void` | — | Callback when an action is dispatched, with the dispatcher's own result. Check `result.success` — a failed action reports `{ success: false, error }` (e.g. the element left the DOM). Not called when nothing was dispatched (`interactive: false`, or a focus-moving action gated by `focusHostOnActivate`). |

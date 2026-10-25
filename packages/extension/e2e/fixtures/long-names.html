@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <title>Long names — panel layout fixture</title>
+  </head>
+  <body>
+    <!--
+      Names far longer than a side panel is wide, as Spanish Wikipedia's are:
+      a link, and a heading and a paragraph whose names run to a sentence.
+      Before the panel clipped names, rows this long sized the whole tree and
+      scrolled it sideways. Nothing here nests deeper than a side panel fits,
+      so any sideways scroll in the default layout comes from a name. The
+      heading is what the suite reads: Chrome's tree opens with the list
+      collapsed, so the link's row isn't on screen until it is expanded.
+    -->
+    <nav aria-label="Navegación principal">
+      <ul>
+        <li>
+          <a href="#portada"
+            >Página principal de la enciclopedia libre y políglota de la
+            Fundación Wikimedia</a
+          >
+        </li>
+        <li><a href="#aleatoria">Aleatoria</a></li>
+      </ul>
+    </nav>
+    <main>
+      <h1>
+        Wikipedia, la enciclopedia libre que cualquiera puede editar en español
+      </h1>
+      <p>
+        La Wikipedia en español es una enciclopedia libre y políglota de la
+        Fundación Wikimedia, que cualquiera puede editar desde cualquier parte
+        del mundo.
+      </p>
+      <button type="button">Buscar</button>
+    </main>
+  </body>
+</html>

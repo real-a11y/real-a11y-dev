@@ -758,7 +758,7 @@ test("Copy on the native tree offers no Tab sequence — native has no tab-order
   // `title` — accname prefers content over title, so a `title`-shaped
   // locator here never resolves.
   await nav.panel.getByRole("button", { name: "Copy ▾" }).click();
-  const menu = nav.panel.locator(".sn-export-menu");
+  const menu = nav.panel.locator(".sn-dropdown-popup");
   await expect(menu).toBeVisible();
   await expect(menu.getByRole("button", { name: "Native tree" })).toBeVisible();
   await expect(menu.getByRole("button", { name: "Headings" })).toBeVisible();
@@ -773,7 +773,7 @@ async function copyNative(nav: NativeHarness, item: string): Promise<string> {
   await stubClipboard(nav);
   await nav.panel.getByRole("button", { name: "Copy ▾" }).click();
   await nav.panel
-    .locator(".sn-export-menu")
+    .locator(".sn-dropdown-popup")
     .getByRole("button", { name: item })
     .click();
   await expect.poll(() => readClipboardStub(nav)).toBeDefined();

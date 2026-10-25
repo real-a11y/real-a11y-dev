@@ -247,6 +247,62 @@
   cursor: not-allowed;
 }
 
+/* The gear: legible at 13px, and as tall as its neighbours. */
+.sn-settings-btn {
+  padding: 3px 6px;
+  font-size: 13px;
+  line-height: 13px;
+}
+
+/* ---- Dropdowns: Settings, and the extension's Copy menu ----
+   The popup lies over the tree: `.sn-root` clips whatever leaves it. */
+.sn-dropdown {
+  position: relative;
+  display: inline-flex;
+}
+
+.sn-dropdown-popup {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 20;
+  display: flex;
+  min-width: 140px;
+  flex-direction: column;
+  padding: 4px;
+  background: var(--sn-bg);
+  border: 1px solid var(--sn-border);
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgb(0 0 0 / 0.18);
+}
+
+/* Each switch with the line that explains it. */
+.sn-settings-menu {
+  width: 260px;
+  gap: 4px;
+  padding: 8px;
+}
+
+.sn-settings-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  color: var(--sn-text);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.sn-settings-item input {
+  margin: 1px 0 0;
+}
+
+.sn-settings-hint {
+  margin: 0 0 0 19px;
+  color: var(--sn-text-muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
 /* ---- Filter bar ---- */
 .sn-filters {
   display: flex;
@@ -298,6 +354,8 @@
   padding: 4px 0;
 }
 
+/* As wide as its widest row: "Show full names". By default a long name ends
+   in an ellipsis instead (see "Long labels"). */
 .sn-tree {
   min-width: max-content;
 }
@@ -555,6 +613,45 @@
   color: var(--sn-text-muted);
   font-style: italic;
   max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ---- Long labels ----
+   Unless "Show full names" is on (`.sn-tree--full-names`), a row is as wide
+   as the panel and a long name ends in an ellipsis. The label's inline-size
+   containment keeps its content out of the row's width: only a row nested
+   deeper than the panel is wide grows, by its label's 8ch floor, and alone.
+   The label is one line; a part that doesn't fit moves, whole and with what
+   follows it, onto a second line its max-height hides. The name (and a text
+   preview, and DOM attributes) starts at up to 16ch, less in a narrow label
+   so it still fits beside the role, and grows into the room left: what
+   follows it shows only once it has that much. */
+.sn-tree:not(.sn-tree--full-names) {
+  min-width: 0;
+}
+
+.sn-tree:not(.sn-tree--full-names) .sn-node {
+  box-sizing: border-box;
+  min-width: 100%;
+  width: max-content;
+}
+
+.sn-tree:not(.sn-tree--full-names) .sn-label {
+  min-width: 8ch;
+  contain: inline-size;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  max-height: var(--sn-line-height);
+  /* Not `hidden`: a clipped label must never scroll to a chip taking focus. */
+  overflow: clip;
+}
+
+.sn-tree:not(.sn-tree--full-names) .sn-name,
+.sn-tree:not(.sn-tree--full-names) .sn-name-preview,
+.sn-tree:not(.sn-tree--full-names) .sn-attr {
+  flex: 1 1 clamp(2ch, 100% - 16ch, 16ch);
+  max-width: max-content;
   overflow: hidden;
   text-overflow: ellipsis;
 }

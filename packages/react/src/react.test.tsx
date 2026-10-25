@@ -104,6 +104,36 @@ describe("<SemanticNavigator />", () => {
     expect(pickBtn.getAttribute("aria-label")).toBe("Pick element in page");
   });
 
+  it("starts the tree with full names only when showFullNames is set", async () => {
+    function App({ showFullNames }: { showFullNames?: boolean }) {
+      const rootRef = useRef<HTMLDivElement>(null);
+      return (
+        <>
+          <div ref={rootRef}>
+            <a href="#a">A link whose name runs well past the panel's edge</a>
+          </div>
+          <SemanticNavigator root={rootRef} showFullNames={showFullNames} />
+        </>
+      );
+    }
+
+    // By default a long name ends in an ellipsis: no full-names class.
+    const off = render(<App />);
+    const offTree = await findInPanel(
+      off.container.querySelectorAll("div")[1],
+      '[role="tree"]',
+    );
+    expect(offTree.classList.contains("sn-tree--full-names")).toBe(false);
+    off.unmount();
+
+    const on = render(<App showFullNames />);
+    const onTree = await findInPanel(
+      on.container.querySelectorAll("div")[1],
+      '[role="tree"]',
+    );
+    expect(onTree.classList.contains("sn-tree--full-names")).toBe(true);
+  });
+
   it("picks up enablePicker toggled after mount", async () => {
     // Regression: config flags used to be frozen in the createInspector effect
     // (deps were only root/mount/host), so flipping enablePicker at runtime

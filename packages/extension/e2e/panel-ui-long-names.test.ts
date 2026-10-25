@@ -1,0 +1,108 @@
+/**
+ * Long names in a side panel's width, in both producers' trees.
+ *
+ * A name longer than the panel is wide used to size the whole tree to it, so
+ * the panel scrolled sideways and every other row's end sat off screen. Now
+ * a long name ends in an ellipsis, carrying its whole text as a tooltip, and
+ * the tree fits the panel; "Show full names" in Settings brings the old
+ * layout back for whoever wants it, kept in storage like the other settings.
+ *
+ * Layout is the point, so this runs in a real Chromium at a side panel's
+ * width: jsdom, where the unit tests run, lays nothing out.
+ */
+
+import { expect, test, type NativeHarness } from "./harness";
+
+/** About what Chrome opens a side panel at. */
+const PANEL_WIDTH = 360;
+
+/** The fixture's heading: on screen in both trees as they open, with no
+ *  row to expand first. */
+const LONG_NAME =
+  "Wikipedia, la enciclopedia libre que cualquiera puede editar en español";
+
+/** Bring the fixture forward, reload the panel and show `producer`'s tree. */
+async function show(
+  nav: NativeHarness,
+  producer: "DOM" | "NATIVE",
+): Promise<void> {
+  const { page } = await nav.open("long-names.html");
+  await page.bringToFront();
+  await nav.panel.reload();
+  await nav.chooseTree(producer === "DOM" ? "In-page tree" : "Chrome's tree");
+  if (producer === "DOM") {
+    // The A11Y view, its default, so a row shows its name as native's does.
+    await expect(
+      nav.viewToggle().getByRole("button", { name: "A11Y", exact: true }),
+    ).toHaveAttribute("aria-pressed", "true");
+  }
+  await expect
+    .poll(() => nav.panel.locator(".sn-node").count(), { timeout: 20_000 })
+    .toBeGreaterThan(0);
+}
+
+/** Whether the tree scrolls sideways, and how the long name's row shows it. */
+function layout(nav: NativeHarness) {
+  return nav.panel.evaluate((name) => {
+    const container = document.querySelector(".sn-tree-container")!;
+    const span = [...document.querySelectorAll<HTMLElement>(".sn-name")].find(
+      (el) => el.textContent === name,
+    );
+    return {
+      scrollsSideways: container.scrollWidth > container.clientWidth,
+      nameClipped: span ? span.scrollWidth > span.clientWidth : null,
+      tooltip: span?.title ?? null,
+    };
+  }, LONG_NAME);
+}
+
+/** Turn "Show full names" on or off, as the user does, from Settings ▾. */
+async function setFullNames(nav: NativeHarness, on: boolean): Promise<void> {
+  const settings = nav.panel.getByRole("button", { name: "Settings ▾" });
+  await settings.click();
+  const box = nav.panel.getByRole("checkbox", { name: "Show full names" });
+  await box.setChecked(on);
+  await settings.click();
+  await expect(box).toHaveCount(0);
+}
+
+for (const producer of ["NATIVE", "DOM"] as const) {
+  test(`${producer}: a long name ends in an ellipsis, and Show full names widens the tree instead`, async ({
+    nav,
+  }) => {
+    const before = nav.panel.viewportSize();
+    await nav.panel.setViewportSize({ width: PANEL_WIDTH, height: 720 });
+    try {
+      await show(nav, producer);
+      await expect
+        .poll(() => layout(nav))
+        .toEqual({
+          scrollsSideways: false,
+          nameClipped: true,
+          tooltip: LONG_NAME,
+        });
+
+      await setFullNames(nav, true);
+      await expect
+        .poll(() => layout(nav))
+        .toMatchObject({ scrollsSideways: true, nameClipped: false });
+
+      // Kept in storage: a panel opened afresh starts with full names.
+      await show(nav, producer);
+      await expect
+        .poll(() => layout(nav))
+        .toMatchObject({ scrollsSideways: true, nameClipped: false });
+
+      await setFullNames(nav, false);
+      await expect
+        .poll(() => layout(nav))
+        .toMatchObject({ scrollsSideways: false, nameClipped: true });
+    } finally {
+      // The worker's panel is shared: leave it as the next test expects.
+      await nav.panel.evaluate(() =>
+        chrome.storage.local.remove("settings.showFullNames"),
+      );
+      if (before) await nav.panel.setViewportSize(before);
+    }
+  });
+}

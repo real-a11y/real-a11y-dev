@@ -36,6 +36,10 @@ pnpm --filter @real-a11y-dev/example-react-app dev
      loading state)
 7. Change props that feed the navigator and confirm it re-reads
 8. Open the browser console throughout
+9. Give an element in the app a name far wider than the panel (a long link text): does
+   it end in "…" with no sideways scroll, and show in full on hover? Open the toolbar's
+   **⚙** and turn on **Show full names**: does the tree widen and scroll sideways? Then
+   pass `showFullNames` and reload: does the panel start that way?
 
 ## Expected
 
@@ -53,6 +57,9 @@ pnpm --filter @real-a11y-dev/example-react-app dev
   the ref after every commit, and a unit test now pins 6b as well
 - **7** — live prop changes are reflected
 - **8** — no errors, and specifically no hydration warnings
+- **9** — from inspector and react 0.1.0-beta.21 (unreleased; panel-clip-long-names is a
+  pending changeset) a long name never scrolls the panel sideways unless **Show full
+  names** is on. Earlier releases widen the tree for it and have no ⚙
 
 ## Why this exists
 

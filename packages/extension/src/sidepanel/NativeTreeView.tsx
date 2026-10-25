@@ -185,6 +185,9 @@ export interface NativeTreeViewProps {
    *  toggle is left out without `onToggleFollowPageChanges`. */
   followPageChanges?: boolean;
   onToggleFollowPageChanges?: () => void;
+  /** The "Show full names" setting: a long name widens the tree, rather than
+   *  ending in an ellipsis with the tree fitting the panel. */
+  showFullNames?: boolean;
 }
 
 /** A node is worth a click/Enter action, a select action, or both never — the
@@ -259,6 +262,7 @@ export function NativeTreeView({
   onDialogEscape,
   followPageChanges = false,
   onToggleFollowPageChanges,
+  showFullNames = false,
 }: NativeTreeViewProps) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -1176,7 +1180,7 @@ export function NativeTreeView({
           >
             <div
               ref={treeRef}
-              class="sn-tree"
+              class={`sn-tree${showFullNames ? " sn-tree--full-names" : ""}`}
               role="tree"
               aria-label={`Native accessibility tree — press Enter to activate (a slider steps up, a spinbutton opens its edit box), +/− or Shift+Enter to step sliders and spinbuttons, arrows to navigate, ${SCOPE_KEY_HINT}, Alt+J to follow a row's aria-controls links one by one and Alt+Shift+J to go back`}
               aria-keyshortcuts={JUMP_KEYSHORTCUTS}

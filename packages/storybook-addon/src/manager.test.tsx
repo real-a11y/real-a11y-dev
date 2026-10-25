@@ -85,6 +85,8 @@ const ui = vi.hoisted(() => ({
     treeData: unknown;
     viewMode: string;
     onViewModeChange: (mode: string) => void;
+    defaultShowFullNames?: boolean;
+    onShowFullNamesChange?: (showFullNames: boolean) => void;
   },
   preserveExpandedState: vi.fn(),
 }));
@@ -276,6 +278,26 @@ describe("panel visibility", () => {
     const style = container()!.style;
     expect(style.position).toBe("relative");
     expect(style.height).toBe("100%");
+  });
+});
+
+describe("Show full names", () => {
+  // Storybook mounts the panel afresh on a story switch, so a choice only the
+  // panel held would start over on every story.
+  it("keeps the choice when Storybook mounts the panel again", async () => {
+    await renderPanel(true);
+    await resize(600, 300);
+    await fromPreview(EVENTS.TREE_UPDATED, treeUpdate());
+    expect(ui.props!.defaultShowFullNames).toBe(false);
+
+    await act(async () => ui.props!.onShowFullNamesChange!(true));
+
+    await renderPanel(false);
+    ui.props = null;
+    await renderPanel(true);
+    await resize(600, 300);
+    await fromPreview(EVENTS.TREE_UPDATED, treeUpdate());
+    expect(ui.props!.defaultShowFullNames).toBe(true);
   });
 });
 

@@ -57,6 +57,11 @@ page — a stale service worker is the usual cause of "it didn't change".)
    extension's service worker (`chrome://extensions` shows "service worker (inactive)",
    usually ~30s), then navigate to an ordinary page and press **Try again** — does the
    tree arrive on the FIRST press?
+12. On a page with long names (Spanish Wikipedia's front page) with the panel at its
+   default width, in both trees: does a long name end in "…" with no sideways scroll,
+   and does hovering it show the whole name? Turn on **Settings ▾** → **Show full
+   names**: does the tree widen to fit the names and scroll sideways? Open the panel in
+   a second window: is it on there too? Turn it off again.
 
 ## Expected
 
@@ -82,6 +87,11 @@ page — a stale service worker is the usual cause of "it didn't change".)
   "This page can't be inspected" with a **Try again** button; on an earlier build the
   panel shows "Connecting to page…" indefinitely there, which is the defect this step
   exists for, not a new one
+
+- **A long name doesn't scroll the panel sideways** (step 12). From extension 0.1.18
+  (unreleased) it ends in "…" with a tooltip, and **Show full names** brings back the
+  wide tree in every window. On 0.1.17 and earlier a long name always widens the tree,
+  and Settings has no such switch
 
 ## Why this exists
 

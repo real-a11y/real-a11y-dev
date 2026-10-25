@@ -19,6 +19,7 @@ import {
 import {
   JUMP_KEYS,
   JUMP_KEYSHORTCUTS,
+  useDismissible,
   useTreeKeyboard,
   useInputModality,
   useVirtualTree,
@@ -87,7 +88,7 @@ import {
 import type { ExportMeta, ExportView, ExportViews } from "./export.js";
 import { announcedValueLabel, rawValueLabel } from "./field-value.js";
 import { FilteredList } from "./FilteredList.js";
-import { FOCUSABLE_SELECTOR, useDismissible } from "./focus-hooks.js";
+import { FOCUSABLE_SELECTOR } from "./focus-hooks.js";
 import {
   followAfterRead,
   followChange,
@@ -99,6 +100,7 @@ import {
   NOT_FOLLOWING,
   type FollowWindow,
 } from "./follow-window.js";
+import { SHOW_FULL_NAMES_KEY } from "./full-names.js";
 import { InputPanel, domTextInputState } from "./InputPanel.js";
 import type { InputPanelState } from "./InputPanel.js";
 import {
@@ -759,6 +761,36 @@ export function App() {
     setFollowPageChanges(next);
     void chrome.storage?.local
       ?.set({ [FOLLOW_PAGE_CHANGES_KEY]: next })
+      .catch(() => {});
+  }, []);
+  // The "Show full names" setting (in Settings), for both trees: off, a long
+  // name ends in an ellipsis and the tree fits the panel. Kept in
+  // `chrome.storage.local` with the others, and followed while the panel is
+  // open, so every panel shows names the same way.
+  const [showFullNames, setShowFullNames] = useState(false);
+  useEffect(() => {
+    // Absent where the panel runs without extension storage (unit tests).
+    if (!chrome.storage?.local || !chrome.storage.onChanged) return;
+    const read = (value: unknown) => setShowFullNames(value === true);
+    void chrome.storage.local
+      .get(SHOW_FULL_NAMES_KEY)
+      .then((r) => read(r[SHOW_FULL_NAMES_KEY]))
+      .catch(() => {});
+    const onChanged = (
+      changes: Record<string, chrome.storage.StorageChange>,
+      area: string,
+    ) => {
+      if (area === "local" && SHOW_FULL_NAMES_KEY in changes) {
+        read(changes[SHOW_FULL_NAMES_KEY]!.newValue);
+      }
+    };
+    chrome.storage.onChanged.addListener(onChanged);
+    return () => chrome.storage.onChanged.removeListener(onChanged);
+  }, []);
+  const changeShowFullNames = useCallback((on: boolean) => {
+    setShowFullNames(on);
+    void chrome.storage?.local
+      ?.set({ [SHOW_FULL_NAMES_KEY]: on })
       .catch(() => {});
   }, []);
   // What had focus as this render began, before its commit could take it
@@ -3622,10 +3654,10 @@ export function App() {
   // A disclosure, not a menu: what it opens is a switch and a line about it,
   // and, while native mode is on, which tree this panel shows.
   const settingsDisclosure = (
-    <div class="sn-export" ref={settingsRef}>
+    <div class="sn-dropdown" ref={settingsRef}>
       <button
         ref={settingsButtonRef}
-        class="sn-toolbar-btn sn-export-btn"
+        class="sn-toolbar-btn"
         aria-expanded={settingsOpen}
         aria-controls={settingsOpen ? "sn-settings-menu" : undefined}
         onClick={() => togglePopup("settings")}
@@ -3636,7 +3668,7 @@ export function App() {
       {settingsOpen && (
         <div
           id="sn-settings-menu"
-          class="sn-export-menu sn-settings-menu"
+          class="sn-dropdown-popup sn-settings-menu"
           data-sn-popup
           role="group"
           aria-label="Settings"
@@ -3710,6 +3742,22 @@ export function App() {
               </p>
             </div>
           )}
+          {/* Either tree, as the shared panel's Settings has it. */}
+          <label class="sn-settings-item">
+            <input
+              type="checkbox"
+              checked={showFullNames}
+              aria-describedby="sn-settings-full-names-hint"
+              onChange={(e) =>
+                changeShowFullNames((e.target as HTMLInputElement).checked)
+              }
+            />
+            <span>Show full names</span>
+          </label>
+          <p id="sn-settings-full-names-hint" class="sn-settings-hint">
+            Rows widen to fit a long name, and the tree scrolls sideways. Off,
+            the name ends in “…”: hover it to read the rest.
+          </p>
         </div>
       )}
     </div>
@@ -3945,7 +3993,7 @@ export function App() {
           {focusTrackerOn ? "Focus sync" : "Focus OFF"}
         </button>
 
-        <div class="sn-export" ref={exportRef}>
+        <div class="sn-dropdown" ref={exportRef}>
           <button
             ref={exportButtonRef}
             class="sn-toolbar-btn sn-export-btn"
@@ -3958,7 +4006,7 @@ export function App() {
           </button>
           {exportMenuOpen && (
             <div
-              class="sn-export-menu"
+              class="sn-dropdown-popup"
               data-sn-popup
               aria-label="Copy which view"
             >
@@ -4166,6 +4214,7 @@ export function App() {
           onDialogEscape={handleNativeDialogEscape}
           followPageChanges={followPageChanges}
           onToggleFollowPageChanges={toggleFollowPageChanges}
+          showFullNames={showFullNames}
         />
       ) : viewMode === "tab" ? (
         /* ---- Tab sequence view ---- */
@@ -4204,7 +4253,7 @@ export function App() {
           >
             <div
               ref={treeRef}
-              class="sn-tree"
+              class={`sn-tree${showFullNames ? " sn-tree--full-names" : ""}`}
               role="tree"
               aria-label={`Semantic tree — press Enter to activate interactive elements; +/− or Shift+Enter to step sliders and spinbuttons; ${SCOPE_KEY_HINT}; Alt+J to follow a row's aria-controls links one by one and Alt+Shift+J to go back`}
               aria-keyshortcuts={JUMP_KEYSHORTCUTS}
@@ -4351,7 +4400,10 @@ export function App() {
                             </span>
                           )}
                           {node.dom.textContent && showsTextContent(node) && (
-                            <span class="sn-text-content">
+                            <span
+                              class="sn-text-content"
+                              title={node.dom.textContent}
+                            >
                               {node.dom.textContent}
                             </span>
                           )}
@@ -4369,8 +4421,13 @@ export function App() {
                           {node.dom.tagName === "iframe" && !isParent && (
                             <EmbeddedBadge />
                           )}
+                          {/* With its whole text as a tooltip, for when
+                              the row is too narrow for it and it ends in an
+                              ellipsis; so does the preview below. */}
                           {node.a11y.name && (
-                            <span class="sn-name">{node.a11y.name}</span>
+                            <span class="sn-name" title={node.a11y.name}>
+                              {node.a11y.name}
+                            </span>
                           )}
                           {/* Descendant-text preview — leaf-only to avoid
                               duplicating what's already in child rows
@@ -4385,7 +4442,10 @@ export function App() {
                             node.dom.descendantText !== "" &&
                             node.dom.descendantText !== node.a11y.name &&
                             showsTextPreview(node) && (
-                              <span class="sn-name-preview">
+                              <span
+                                class="sn-name-preview"
+                                title={node.dom.descendantText}
+                              >
                                 {node.dom.descendantText}
                               </span>
                             )}

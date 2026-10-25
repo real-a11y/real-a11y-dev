@@ -88,6 +88,7 @@ export function createInspector(
     scrollHostOnSelect = false,
     focusHostOnActivate = false,
     enablePicker = false,
+    showFullNames = false,
     styleNonce,
     onNodeSelect,
     onAction,
@@ -95,6 +96,13 @@ export function createInspector(
 
   let currentRoot = config.root;
   let currentViewMode = viewMode;
+  // The user's "Show full names" choice from the panel's Settings, carried
+  // into the TreeView that `refresh()` and `setRoot()` re-key: the panel holds
+  // it itself, and a re-keyed panel would start over from the config's.
+  let currentShowFullNames = showFullNames;
+  const rememberShowFullNames = (on: boolean) => {
+    currentShowFullNames = on;
+  };
   let mounted = false;
   let renderTarget: Element | ShadowRoot | null = null;
   let renderHost: HTMLElement | null = null;
@@ -179,6 +187,8 @@ export function createInspector(
         scrollHostOnSelect,
         focusHostOnActivate,
         enablePicker,
+        showFullNames: currentShowFullNames,
+        onShowFullNamesChange: rememberShowFullNames,
         onNodeSelect,
         onAction,
       }),

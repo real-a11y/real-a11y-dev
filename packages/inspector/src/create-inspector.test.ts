@@ -155,6 +155,64 @@ describe("createInspector", () => {
     nav.unmount();
   });
 
+  it("showFullNames sets how the panel starts; the user's choice survives a re-key", async () => {
+    const { root, container } = mountDoc(
+      `<main><a href="#a">A link whose name runs well past the panel's edge</a></main>`,
+    );
+    const waitUntil = async (fn: () => boolean, timeoutMs = 2000) => {
+      const deadline = Date.now() + timeoutMs;
+      while (Date.now() < deadline) {
+        if (fn()) return;
+        await new Promise((r) => setTimeout(r, 5));
+      }
+    };
+    const shadowOf = (el: HTMLElement) => el.shadowRoot!;
+    const tree = (el: HTMLElement) =>
+      shadowOf(el).querySelector<HTMLElement>('[role="tree"]');
+    const fullNames = (el: HTMLElement) =>
+      tree(el)?.classList.contains("sn-tree--full-names");
+
+    const nav = createInspector({ root, container });
+    nav.mount();
+    await waitUntil(() => tree(container) !== null);
+    expect(fullNames(container)).toBe(false);
+
+    // The user turns it on in Settings…
+    shadowOf(container)
+      .querySelector<HTMLButtonElement>('button[aria-label="Settings"]')!
+      .click();
+    await waitUntil(
+      () => shadowOf(container).querySelector('[role="group"]') !== null,
+    );
+    shadowOf(container)
+      .querySelector<HTMLInputElement>('input[type="checkbox"]')!
+      .click();
+    await waitUntil(() => fullNames(container) === true);
+    expect(fullNames(container)).toBe(true);
+
+    // …and `refresh()` / `setRoot()`, which re-key the panel, keep it on.
+    nav.refresh();
+    await waitUntil(() => tree(container) !== null);
+    expect(fullNames(container)).toBe(true);
+    nav.setRoot(root.querySelector("main")!);
+    await waitUntil(() => tree(container) !== null);
+    expect(fullNames(container)).toBe(true);
+    nav.unmount();
+
+    // `showFullNames: true` starts the panel with them on.
+    const other = document.createElement("div");
+    document.body.appendChild(other);
+    const full = createInspector({
+      root,
+      container: other,
+      showFullNames: true,
+    });
+    full.mount();
+    await waitUntil(() => tree(other) !== null);
+    expect(fullNames(other)).toBe(true);
+    full.unmount();
+  });
+
   it("unmount() is idempotent and clears the shadow render", () => {
     const { root, container } = mountDoc("<h1>Hi</h1>");
     const nav = createInspector({ root, container });
