@@ -343,7 +343,7 @@ main
         cell "Not available"
   separator
   heading "Long names" (level 2)
-  paragraph "A name longer than the panel is wide ends in an ellipsis, and the tree stays as wide as the panel: a long link text or paragraph no longer sizes every row to itself and scrolls the tree sideways. Hover the name to read all of it. A row's role and name come first; the text after them (a description, a value, a text preview) ends in an ellipsis the same way, and badges and jump chips show whole once there is room for them, or not at all. In the DOM view, attributes and text content shorten the same way. A row nested deeper than the panel is wide still widens the tree, by just enough to show the start of its label, and only that row."
+  paragraph "A name longer than the panel is wide ends in an ellipsis, and the tree stays as wide as the panel: a long link text or paragraph no longer sizes every row to itself and scrolls the tree sideways. Hover the name to read all of it. A row's role, name and key states come first: a state that changes what the element is or does (disabled, checked, pressed, selected, collapsed, required, invalid, read-only, busy, current) stays beside the name, which ends in an ellipsis to make room for it. The text after them (a description, a value, a text preview) ends in an ellipsis the same way, with its whole text as a tooltip, and the other badges and jump chips show whole once there is room for them, or not at all. In the DOM view, attributes and text content shorten the same way. A row nested deeper than the panel is wide still widens the tree, by just enough to show the start of its label, and only that row."
   paragraph "To see names in full instead, turn on in the panel's Settings: rows widen to fit the longest name, and the tree scrolls sideways. It is the tree's setting: the TAB view and the role-filter lists end a long name in an ellipsis either way."
     strong "Show full names"
   table
@@ -363,7 +363,7 @@ main
           code "inspector"
         cell "⚙ at the end of the toolbar"
           strong "⚙"
-        cell "For the container, the life of the page: through refresh(), setRoot() and another createInspector() on it. defaultShowFullNames: true starts it on"
+        cell "The life of the page, in every inspector on it: through refresh(), setRoot() and every later createInspector(). defaultShowFullNames: true starts it on"
           code "refresh()"
           code "setRoot()"
           code "createInspector()"
@@ -373,7 +373,7 @@ main
           code "<SemanticNavigator />"
         cell "⚙ at the end of the toolbar"
           strong "⚙"
-        cell "The life of the page, a remount included. The defaultShowFullNames prop starts it on"
+        cell "The life of the page, whatever remounts the component. The defaultShowFullNames prop starts it on"
           code "defaultShowFullNames"
       row
         cell "Storybook addon"
