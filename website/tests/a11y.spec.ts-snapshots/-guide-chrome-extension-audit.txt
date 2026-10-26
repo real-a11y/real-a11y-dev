@@ -74,7 +74,7 @@ main
     strong "In-page tree"
     strong "Show"
     strong "Settings ▾"
-  paragraph "A name longer than the panel is wide ends in an ellipsis, and the tree stays as wide as the panel: hover the name to read the rest. A row's states, such as disabled or collapsed, stay beside its name. To have the tree widen to fit names and scroll sideways instead, turn on in ; like , it holds in every window's side panel. See ."
+  paragraph "A name longer than the panel is wide ends in an ellipsis, and the tree stays as wide as the panel: hover the name to read the rest. A row's states, such as disabled or collapsed, are never cut off: they end the row's label, and a row too narrow for them widens the tree on its own. To have the tree widen to fit names and scroll sideways instead, turn on in ; like , it holds in every window's side panel. See ."
     strong "Show full names"
     strong "Settings ▾"
     strong "Read pages through Chrome"
