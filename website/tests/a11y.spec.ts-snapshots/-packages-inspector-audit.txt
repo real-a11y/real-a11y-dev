@@ -150,7 +150,7 @@ main
           code "boolean"
         cell "false"
           code "false"
-        cell "Start the tree with names in full, widening to fit the longest and scrolling sideways, instead of ending a long name in an ellipsis. Only where the panel starts: the user switches it from the toolbar's Settings (⚙), and their choice then holds for the life of the page, in every inspector on it: through refresh(), setRoot() and every later createInspector(). See Long names."
+        cell "Start the tree with names in full, widening to fit the longest and scrolling sideways, instead of ending a long name in an ellipsis. Only where the panel starts: the user switches it from the toolbar's Settings (⚙), and their choice then holds for the life of the page, in every inspector on it: those open follow it at once, and it holds through refresh(), setRoot() and every later createInspector(). See Long names."
           code "refresh()"
           code "setRoot()"
           code "createInspector()"

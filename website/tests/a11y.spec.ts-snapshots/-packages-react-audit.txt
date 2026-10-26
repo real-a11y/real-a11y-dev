@@ -141,7 +141,7 @@ main
           code "boolean"
         cell "false"
           code "false"
-        cell "Start the tree with names in full, widening to fit the longest and scrolling sideways, instead of ending a long name in an ellipsis. Only where the panel starts: the user switches it from the toolbar's Settings (⚙), and their choice holds for the life of the page, whatever remounts the component. See Long names."
+        cell "Start the tree with names in full, widening to fit the longest and scrolling sideways, instead of ending a long name in an ellipsis. Only where the panel starts: the user switches it from the toolbar's Settings (⚙), and their choice holds for the life of the page, in every navigator on it, whatever remounts the component. See Long names."
           link "Long names"
       row
         cell "styleNonce"

@@ -363,7 +363,7 @@ main
           code "inspector"
         cell "⚙ at the end of the toolbar"
           strong "⚙"
-        cell "The life of the page, in every inspector on it: through refresh(), setRoot() and every later createInspector(). defaultShowFullNames: true starts it on"
+        cell "The life of the page, in every inspector on it: those open follow it at once, and it holds through refresh(), setRoot() and every later createInspector(). defaultShowFullNames: true starts it on"
           code "refresh()"
           code "setRoot()"
           code "createInspector()"
@@ -373,7 +373,7 @@ main
           code "<SemanticNavigator />"
         cell "⚙ at the end of the toolbar"
           strong "⚙"
-        cell "The life of the page, whatever remounts the component. The defaultShowFullNames prop starts it on"
+        cell "The life of the page, in every navigator on it, whatever remounts the component. The defaultShowFullNames prop starts it on"
           code "defaultShowFullNames"
       row
         cell "Storybook addon"
