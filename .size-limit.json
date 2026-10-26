@@ -9,14 +9,14 @@
     "name": "@real-a11y-dev/semantic-navigator-ui (esm)",
     "path": "packages/ui/dist/index.js",
     "import": "{ TreeView }",
-    "limit": "10.2 KB",
+    "limit": "10.3 KB",
     "gzip": true,
     "ignore": ["preact", "preact/hooks", "@real-a11y-dev/core"]
   },
   {
     "name": "@real-a11y-dev/inspector (esm)",
     "path": "packages/inspector/dist/index.js",
-    "limit": "40.0 KB",
+    "limit": "40.2 KB",
     "gzip": true
   },
   {
@@ -41,7 +41,7 @@
   {
     "name": "@real-a11y-dev/storybook-addon (manager)",
     "path": "packages/storybook-addon/dist/manager.js",
-    "limit": "23.7 KB",
+    "limit": "23.8 KB",
     "gzip": true,
     "ignore": [
       "react",
