@@ -37,13 +37,14 @@
   sentence, such as es.wikipedia.org's
   ([#535](https://github.com/real-a11y/real-a11y-dev/pull/535)). The name
   carries its whole text as a tooltip, and so does a value, a placeholder or
-  a description that ends in one. A row's role, name and key states come
-  first: a state that changes what the element is or does (disabled,
-  collapsed, checked, required, …) stays beside the name, in either layout,
-  and the row's other badges show once there is room for them. A row nested
-  deeper than the panel is wide still scrolls the tree, by just enough to
-  show the start of its label. **Settings ▾** → **Show full names** brings back the wide tree,
-  in every window's side panel (`settings.showFullNames` in
+  a description that ends in one. A row's role and name come first, and its
+  key states, those that change what the element is or does (disabled,
+  collapsed, checked, required, …), are never cut off: they end the row's
+  label, and its other badges show once there is room for them. A row too
+  narrow for the start of its label and its key states, such as one nested
+  deeper than the panel is wide, still scrolls the tree, by just enough, and
+  alone. **Settings ▾** → **Show full names** brings back the wide tree, in
+  every window's side panel (`settings.showFullNames` in
   `chrome.storage.local`). **Settings ▾** and **Copy ▾** also close now when
   focus moves out of them, rather than staying open over what it moved to.
   And in a side panel too narrow for one row, a tree's toolbar wraps onto a

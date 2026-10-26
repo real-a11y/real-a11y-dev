@@ -308,14 +308,13 @@ describe("Show full names", () => {
     ]);
   });
 
-  it("keeps a row's key states with its name, in either tree", async () => {
-    /** Row `row`'s state badges: those in its head, after the name, and the
-     *  rest, which a narrow row drops first. */
+  it("shows a row's key states after its label, where nothing clips them, in either tree", async () => {
+    /** Row `row`'s state badges: its key states, after its label, which a
+     *  row too narrow for them widens to show (tree.css, "Long labels"), and
+     *  the rest, in the label, which a narrow row drops first. */
     const badges = (row: Element | null) => ({
-      head: [
-        ...(row?.querySelectorAll(
-          ".sn-head > .sn-name ~ .sn-state-badges > *",
-        ) ?? []),
+      key: [
+        ...(row?.querySelectorAll(".sn-label + .sn-key-states > *") ?? []),
       ].map((b) => b.textContent),
       rest: [
         ...(row?.querySelectorAll(".sn-label > .sn-state-badges > *") ?? []),
@@ -326,7 +325,7 @@ describe("Show full names", () => {
     await flush();
     await showPage(fieldTreeData());
     expect(badges(container.querySelector("#snrow-b1"))).toEqual({
-      head: ["disabled", "collapsed"],
+      key: ["disabled", "collapsed"],
       rest: [],
     });
 
@@ -335,7 +334,7 @@ describe("Show full names", () => {
     await flush();
     await showPage();
     expect(badges(container.querySelector('[data-node-id="b1"]'))).toEqual({
-      head: ["disabled", "collapsed"],
+      key: ["disabled", "collapsed"],
       rest: ["focusable", "hasPopup=menu"],
     });
   });

@@ -37,10 +37,12 @@ pnpm --filter @real-a11y-dev/example-react-app dev
 7. Change props that feed the navigator and confirm it re-reads
 8. Open the browser console throughout
 9. Give an element in the app a name far wider than the panel (a long link text): does
-   it end in "…" with no sideways scroll, and show in full on hover? Open the toolbar's
-   **⚙** and turn on **Show full names**: does the tree widen and scroll sideways? Change
-   `theme`, which remounts the navigator: is it still on? Then pass
-   `defaultShowFullNames` and reload: does the panel start that way?
+   it end in "…" with no sideways scroll, and show in full on hover? Give a button with
+   a long name `aria-pressed="true"` and narrow the floating panel to its 260px minimum:
+   does PRESSED still show whole? Open the toolbar's **⚙** and turn on **Show full
+   names**: does the tree widen and scroll sideways? Change `theme`, which remounts the
+   navigator: is it still on? Then pass `defaultShowFullNames` and reload: does the
+   panel start that way?
 
 ## Expected
 
@@ -60,7 +62,9 @@ pnpm --filter @real-a11y-dev/example-react-app dev
 - **8** — no errors, and specifically no hydration warnings
 - **9** — from inspector and react 0.1.0-beta.21 (unreleased; panel-clip-long-names is a
   pending changeset) a long name never scrolls the panel sideways unless **Show full
-  names** is on. Earlier releases widen the tree for it and have no ⚙
+  names** is on, and a key state such as PRESSED is never cut off: a row too narrow for
+  it scrolls the tree sideways, alone. Earlier releases widen the tree for every long
+  name and have no ⚙
 
 ## Why this exists
 

@@ -16,12 +16,17 @@ import { expect, test, type NativeHarness } from "./harness";
 /** About what Chrome opens a side panel at. */
 const PANEL_WIDTH = 360;
 
+/** Too narrow for the toggle's row to fit its role, the start of its name
+ *  and both its key states. */
+const NARROW_WIDTH = 200;
+
 /** The fixture's heading: on screen in both trees as they open, with no
  *  row to expand first. */
 const LONG_NAME =
   "Wikipedia, la enciclopedia libre que cualquiera puede editar en español";
 
-/** The fixture's disabled toggle: its states are what must stay in view. */
+/** The fixture's disabled toggle: its key states are what must stay in
+ *  view. */
 const TOGGLE_NAME =
   "Mostrar los nombres completos de los artículos de la enciclopedia";
 
@@ -46,11 +51,12 @@ async function show(
 }
 
 /**
- * Whether the tree scrolls sideways, how the long name's row shows it, and
- * which of the toggle's state badges are in view: inside its label's box,
- * which clips what doesn't fit, rather than on the line it hides. Also
- * whether the toolbar shows every control whole, and its search box at a
- * usable width, rather than pushing one off the panel's edge.
+ * Whether the tree scrolls sideways, which rows are wider than the panel,
+ * how the long name's row shows it, and which of the toggle's state badges
+ * show: painted once scrolled to, rather than clipped by the label they
+ * used to sit in. Also whether the toolbar shows every control whole, and
+ * its search box at a usable width, rather than pushing one off the panel's
+ * edge.
  */
 function layout(nav: NativeHarness) {
   return nav.panel.evaluate(
@@ -81,23 +87,43 @@ function layout(nav: NativeHarness) {
           (el) => el.textContent?.trim() === text,
         );
       const span = nameSpan(name);
-      const label = nameSpan(toggleName)?.closest(".sn-label");
-      const box = label?.getBoundingClientRect();
+      const toggleRow = nameSpan(toggleName)?.closest(".sn-node");
       const statesInView = [
-        ...(label?.querySelectorAll<HTMLElement>(".sn-state-badge") ?? []),
+        ...(toggleRow?.querySelectorAll<HTMLElement>(".sn-state-badge") ?? []),
       ]
         .filter((badge) => {
+          // Scroll the tree to it, and only the tree: `scrollIntoView` would
+          // also scroll a clipping box, which no user can.
+          const view = container.getBoundingClientRect();
+          const at = badge.getBoundingClientRect();
+          const right = view.left + container.clientWidth;
+          const bottom = view.top + container.clientHeight;
+          if (at.right > right) container.scrollLeft += at.right - right;
+          else if (at.left < view.left)
+            container.scrollLeft -= view.left - at.left;
+          if (at.bottom > bottom) container.scrollTop += at.bottom - bottom;
+          else if (at.top < view.top) container.scrollTop -= view.top - at.top;
           const r = badge.getBoundingClientRect();
-          return (
-            r.width > 0 &&
-            r.right <= box!.right + 0.5 &&
-            r.bottom <= box!.bottom + 0.5
+          const hit = document.elementFromPoint(
+            r.left + r.width / 2,
+            r.top + r.height / 2,
           );
+          return r.width > 0 && hit !== null && badge.contains(hit);
         })
         .map((badge) => badge.textContent)
         .sort();
+      container.scrollLeft = 0;
+      container.scrollTop = 0;
+      const wideRows = [...document.querySelectorAll<HTMLElement>(".sn-node")]
+        .filter((row) => row.offsetWidth > container.clientWidth)
+        .map(
+          (row) =>
+            row.querySelector(".sn-name")?.textContent?.trim() ??
+            row.querySelector(".sn-role")?.textContent,
+        );
       return {
         scrollsSideways: container.scrollWidth > container.clientWidth,
+        wideRows,
         nameClipped: span ? span.scrollWidth > span.clientWidth : null,
         tooltip: span?.title ?? null,
         statesInView,
@@ -130,6 +156,7 @@ for (const producer of ["NATIVE", "DOM"] as const) {
         .poll(() => layout(nav))
         .toEqual({
           scrollsSideways: false,
+          wideRows: [],
           nameClipped: true,
           tooltip: LONG_NAME,
           // A key state never gives way to the name.
@@ -158,6 +185,27 @@ for (const producer of ["NATIVE", "DOM"] as const) {
       await nav.panel.evaluate(() =>
         chrome.storage.local.remove("settings.showFullNames"),
       );
+      if (before) await nav.panel.setViewportSize(before);
+    }
+  });
+
+  test(`${producer}: a row too narrow for its key states widens, alone, rather than clip them`, async ({
+    nav,
+  }) => {
+    const before = nav.panel.viewportSize();
+    await nav.panel.setViewportSize({ width: NARROW_WIDTH, height: 720 });
+    try {
+      await show(nav, producer);
+      await expect
+        .poll(() => layout(nav))
+        .toMatchObject({
+          scrollsSideways: true,
+          // The toggle's row, by just enough for its states; no other.
+          wideRows: [TOGGLE_NAME],
+          nameClipped: true,
+          statesInView: ["disabled", "pressed"],
+        });
+    } finally {
       if (before) await nav.panel.setViewportSize(before);
     }
   });

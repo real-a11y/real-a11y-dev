@@ -554,14 +554,20 @@
   visibility: hidden;
 }
 
-/* Node label */
+/* Node label. No wider than what it holds: a row's key states follow it. */
 .sn-label {
   display: inline-flex;
   align-items: center;
   gap: 4px;
   flex: 1;
   min-width: 0;
+  max-width: max-content;
   padding: 0 4px;
+}
+
+/* The A11Y view's key states, after the label (see "Long labels"). */
+.sn-key-states {
+  flex: none;
 }
 
 .sn-tag {
@@ -631,15 +637,18 @@
 
 /* ---- Long labels ----
    Unless "Show full names" is on (`.sn-tree--full-names`), a row is as wide
-   as the panel and a long name ends in an ellipsis. The label's inline-size
-   containment keeps its content out of the row's width: only a row nested
-   deeper than the panel is wide grows, by its label's 8ch floor, and alone.
-   The label is one line; a part that doesn't fit moves, whole and with what
-   follows it, onto a second line its max-height hides. The head (role, name
-   and key states) comes first, so it always shows, if only in part: it
-   starts at up to 32ch, and only its name shrinks, to an ellipsis. The text
-   parts after it (and DOM view's) start at up to 8ch. Each grows into the
-   room left, and a part after them shows only once they have that much. */
+   as the panel and a long name ends in an ellipsis. A label counts toward its
+   row's width as its `width`, 8ch, rather than as its content, and grows from
+   there into the room the row has, up to its content. So a row grows past the
+   panel, and alone, only when it can't fit its indent, 8ch of its label, and
+   its key states (`.sn-key-states`): those follow the label rather than sit
+   in it, because nothing may clip them. The label is one line; a part that
+   doesn't fit moves, whole and with what follows it, onto a second line its
+   max-height hides. The head (role and name) comes first, so it always
+   shows, if only in part: it starts at up to 32ch, and only its name
+   shrinks, to an ellipsis. The text parts after it (and DOM view's) start at
+   up to 8ch. Each grows into the room left, and a part after them shows only
+   once they have that much. */
 .sn-tree:not(.sn-tree--full-names) {
   min-width: 0;
 }
@@ -651,8 +660,11 @@
 }
 
 .sn-tree:not(.sn-tree--full-names) .sn-label {
-  min-width: 8ch;
-  contain: inline-size;
+  /* Not `contain: inline-size`, which would hide the content from
+     `max-width: max-content` as well. The `auto` basis starts the label at
+     that width, so a label shorter than 8ch is only as wide as it is. */
+  flex: 1 1 auto;
+  width: 8ch;
   flex-wrap: wrap;
   align-content: flex-start;
   max-height: var(--sn-line-height);

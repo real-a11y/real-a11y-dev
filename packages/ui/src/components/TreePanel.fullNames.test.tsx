@@ -131,7 +131,7 @@ describe("TreePanel — Show full names", () => {
     expect(text?.getAttribute("title")).toBe(LONG_NAME);
   });
 
-  it("keeps a row's key states with its name, and the other badges after its text", () => {
+  it("shows a row's key states after its label, where nothing clips them", () => {
     host
       .querySelector("main")!
       .insertAdjacentHTML(
@@ -147,15 +147,17 @@ describe("TreePanel — Show full names", () => {
     const row = buttonRow(
       (r) => r.querySelector(".sn-role")?.textContent === "button",
     );
-    expect(badges(row, ".sn-head > .sn-name ~ .sn-badges > .sn-badge")).toEqual(
-      ["pressed"],
-    );
+    // Outside the label, so it adds them to the row's width instead of
+    // clipping them (tree.css, "Long labels").
+    expect(badges(row, ".sn-label + .sn-key-states > .sn-badge")).toEqual([
+      "pressed",
+    ]);
     expect(badges(row, ".sn-label > .sn-badges > .sn-badge")).toEqual([
       "interactive",
       "focusable",
     ]);
 
-    // The DOM view has no head: there they all follow the element's text.
+    // The DOM view keeps them all in the label, after the element's text.
     act(() => {
       render(
         <TreePanel
@@ -174,5 +176,6 @@ describe("TreePanel — Show full names", () => {
       "focusable",
       "pressed",
     ]);
+    expect(domRow?.querySelector(".sn-key-states")).toBeNull();
   });
 });

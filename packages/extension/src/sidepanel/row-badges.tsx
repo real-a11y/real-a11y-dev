@@ -12,7 +12,7 @@ import { isKeyState } from "@real-a11y-dev/semantic-navigator-ui";
 export interface StateBadge {
   label: string;
   cls: string;
-  /** A key state (`isKeyState`), which a row keeps with its name. */
+  /** A key state (`isKeyState`), which a row never lets its label clip. */
   keyState: boolean;
 }
 
@@ -99,11 +99,22 @@ export function nativeStateBadges(
   return badges;
 }
 
-/** A row's state badges, or nothing when it has none. */
-export function StateBadges({ badges }: { badges: StateBadge[] }) {
+/**
+ * A row's state badges, or nothing when it has none. Its key states pass
+ * `keyStates`: the row shows them after its label, where nothing clips them.
+ */
+export function StateBadges({
+  badges,
+  keyStates = false,
+}: {
+  badges: StateBadge[];
+  keyStates?: boolean;
+}) {
   if (badges.length === 0) return null;
   return (
-    <span class="sn-state-badges">
+    <span
+      class={keyStates ? "sn-state-badges sn-key-states" : "sn-state-badges"}
+    >
       {badges.map((b) => (
         <span key={b.label} class={`sn-state-badge ${b.cls}`}>
           {b.label}

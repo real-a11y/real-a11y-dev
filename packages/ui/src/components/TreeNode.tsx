@@ -142,10 +142,10 @@ function renderA11yLabel(node: DomSemanticNode) {
 
   return (
     <>
-      {/* The role, name and key states stay together on a narrow row, which
-          clips the name and drops what follows it (tree.css, "Long labels").
-          Each part that can end in an ellipsis carries its whole text as a
-          tooltip (see renderDomLabel). */}
+      {/* The role and name stay together on a narrow row, which clips the
+          name and drops what follows it (tree.css, "Long labels"). Each part
+          that can end in an ellipsis carries its whole text as a tooltip
+          (see renderDomLabel). */}
       <span class="sn-head">
         <span class="sn-role">{role}</span>
         {level && <span class="sn-text-muted"> level {level}</span>}
@@ -154,7 +154,6 @@ function renderA11yLabel(node: DomSemanticNode) {
             {name}
           </span>
         )}
-        {renderBadges(stateBadges(node, "key"))}
       </span>
       {showPreview && (
         <span class="sn-name-preview" title={descendantText}>
@@ -184,7 +183,8 @@ function interactionBadges(node: DomSemanticNode): Badge[] {
 
 /**
  * A row's state badges: all of them, or only its key states (`isKeyState`),
- * which the A11Y view keeps with the name, or only the rest.
+ * which the A11Y view shows after the label, where nothing clips them, or
+ * only the rest.
  */
 function stateBadges(
   node: DomSemanticNode,
@@ -202,11 +202,11 @@ function stateBadges(
   return badges;
 }
 
-function renderBadges(badges: Badge[]) {
+function renderBadges(badges: Badge[], className = "sn-badges") {
   if (badges.length === 0) return null;
 
   return (
-    <span class="sn-badges">
+    <span class={className}>
       {badges.map((b) => (
         <span key={b.label} class={`sn-badge ${b.className}`}>
           {b.label}
@@ -369,8 +369,8 @@ export function TreeNode({
       {/* Label */}
       <span class="sn-label">
         {viewMode === "dom" ? renderDomLabel(node) : renderA11yLabel(node)}
-        {/* The A11Y view keeps a row's key states in its head; the DOM view
-            has no head, and shows them here with the rest. */}
+        {/* The A11Y view shows a row's key states after the label; the DOM
+            view shows them here with the rest. */}
         {renderBadges([
           ...interactionBadges(node),
           ...stateBadges(node, viewMode === "dom" ? "all" : "rest"),
@@ -396,6 +396,12 @@ export function TreeNode({
             ),
           )}
       </span>
+
+      {/* Key states: after the label, which can clip them, rather than in
+          it. A row too narrow for them widens instead (tree.css, "Long
+          labels"). */}
+      {viewMode !== "dom" &&
+        renderBadges(stateBadges(node, "key"), "sn-badges sn-key-states")}
 
       {/* Action button */}
       {primaryAction && (

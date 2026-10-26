@@ -176,6 +176,16 @@ describe("StateBadges and EmbeddedBadge", () => {
     ]);
   });
 
+  it("marks a row's key states, which the row shows after its label", () => {
+    const badges = domStateBadges({ disabled: true });
+    render(<StateBadges badges={badges} />, container);
+    expect(container.firstElementChild?.className).toBe("sn-state-badges");
+    render(<StateBadges keyStates badges={badges} />, container);
+    expect(container.firstElementChild?.className).toBe(
+      "sn-state-badges sn-key-states",
+    );
+  });
+
   it("says embedded, and what that means to a screen reader", () => {
     render(<EmbeddedBadge />, container);
     const badge = container.querySelector(".sn-iframe-badge")!;

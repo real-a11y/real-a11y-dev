@@ -4358,9 +4358,9 @@ export function App() {
                         </>
                       ) : (
                         <>
-                          {/* The role, name and key states stay together on
-                              a narrow row, which clips the name and drops
-                              what follows it (tree.css, "Long labels"). */}
+                          {/* The role and name stay together on a narrow
+                              row, which clips the name and drops what
+                              follows it (tree.css, "Long labels"). */}
                           <span class="sn-head">
                             {/* Role — semantic display name */}
                             <span class="sn-role">{getDisplayRole(node)}</span>
@@ -4381,9 +4381,6 @@ export function App() {
                                 {node.a11y.name}
                               </span>
                             )}
-                            <StateBadges
-                              badges={badges.filter((b) => b.keyState)}
-                            />
                           </span>
                           {/* Descendant-text preview — leaf-only to avoid
                               duplicating what's already in child rows
@@ -4479,6 +4476,16 @@ export function App() {
                         </span>
                       )}
                     </span>
+
+                    {/* Key states: after the label, which can clip them,
+                        rather than in it. A row too narrow for them widens
+                        instead (tree.css, "Long labels"). */}
+                    {viewMode !== "dom" && (
+                      <StateBadges
+                        keyStates
+                        badges={badges.filter((b) => b.keyState)}
+                      />
+                    )}
 
                     {primaryAction && (
                       <button

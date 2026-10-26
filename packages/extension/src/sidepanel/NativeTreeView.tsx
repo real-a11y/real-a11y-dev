@@ -1304,9 +1304,9 @@ export function NativeTreeView({
                     </button>
 
                     <span class="sn-label">
-                      {/* The role, name and key states stay together on a
-                          narrow row, which clips the name and drops what
-                          follows it (tree.css, "Long labels"). */}
+                      {/* The role and name stay together on a narrow row,
+                          which clips the name and drops what follows it
+                          (tree.css, "Long labels"). */}
                       <span class="sn-head">
                         <span class="sn-role">{node.role}</span>
                         {headingLevel && (
@@ -1319,9 +1319,6 @@ export function NativeTreeView({
                             {node.name}
                           </span>
                         )}
-                        <StateBadges
-                          badges={badges.filter((b) => b.keyState)}
-                        />
                       </span>
                       {node.description && (
                         <span class="sn-description" title={node.description}>
@@ -1385,6 +1382,14 @@ export function NativeTreeView({
                       })}
                       {label && <span class="sn-action-tag">{label}</span>}
                     </span>
+
+                    {/* Key states: after the label, which can clip them,
+                        rather than in it. A row too narrow for them widens
+                        instead (tree.css, "Long labels"). */}
+                    <StateBadges
+                      keyStates
+                      badges={badges.filter((b) => b.keyState)}
+                    />
 
                     {label && (
                       <button

@@ -59,9 +59,10 @@ page — a stale service worker is the usual cause of "it didn't change".)
    tree arrive on the FIRST press?
 12. On a page with long names (Spanish Wikipedia's front page) with the panel at its
    default width, in both trees: does a long name end in "…" with no sideways scroll,
-   and does hovering it show the whole name? Turn on **Settings ▾** → **Show full
-   names**: does the tree widen to fit the names and scroll sideways? Open the panel in
-   a second window: is it on there too? Turn it off again.
+   and does hovering it show the whole name? Does every row with a state badge
+   (collapsed, disabled, …) show it whole, however long its name? Turn on **Settings ▾**
+   → **Show full names**: does the tree widen to fit the names and scroll sideways? Open
+   the panel in a second window: is it on there too? Turn it off again.
 
 ## Expected
 
@@ -89,9 +90,10 @@ page — a stale service worker is the usual cause of "it didn't change".)
   exists for, not a new one
 
 - **A long name doesn't scroll the panel sideways** (step 12). From extension 0.1.18
-  (unreleased) it ends in "…" with a tooltip, and **Show full names** brings back the
-  wide tree in every window. On 0.1.17 and earlier a long name always widens the tree,
-  and Settings has no such switch
+  (unreleased) it ends in "…" with a tooltip, a row's key states end its label whole
+  (only a row too narrow for them widens the tree, and alone), and **Show full names**
+  brings back the wide tree in every window. On 0.1.17 and earlier a long name always
+  widens the tree, and Settings has no such switch
 
 ## Why this exists
 
