@@ -61,7 +61,7 @@ function App() {
 | `scrollHostOnSelect` | `boolean` | `false` | Scroll host element into view on selection. |
 | `focusHostOnActivate` | `boolean` | `false` | Focus host element on action activation. |
 | `enablePicker` | `boolean` | `false` | Surface a DevTools-style element picker (⦿ button + Ctrl/Cmd+Shift+C). |
-| `defaultShowFullNames` | `boolean` | `false` | Start the tree with names in full, widening to fit the longest and scrolling sideways, instead of ending a long name in an ellipsis. Only where the panel starts: the user switches it from the toolbar's Settings (⚙), and their choice holds for the life of the page, whatever remounts the component. See [Long names](/guide/panel-features#long-names). |
+| `defaultShowFullNames` | `boolean` | `false` | Start the tree with names in full, widening to fit the longest and scrolling sideways, instead of ending a long name in an ellipsis. Only where the panel starts: the user switches it from the toolbar's Settings (⚙), and their choice holds for the life of the page, in every navigator on it, whatever remounts the component. See [Long names](/guide/panel-features#long-names). |
 | `styleNonce` | `string` | — | CSP nonce for injected styles (mount-only — not updated on later prop changes). |
 | `onNodeSelect` | `(node: SemanticNode) => void` | — | Called when a tree node is selected. |
 | `onAction` | `(request: ActionRequest, result: ActionResult) => void` | — | Called after an interactive action is dispatched, with the dispatcher's own result. Check `result.success`: a failed action reports `{ success: false, error }`. Not called when nothing was dispatched — `interactive: false`, or a focus-moving action gated by `focusHostOnActivate`. |

@@ -186,6 +186,13 @@ export interface TreePanelProps {
    */
   defaultShowFullNames?: boolean;
   /**
+   * Whether the tree shows names in full now, for a caller that keeps the
+   * choice itself, as the inspector does for every panel on a page. When
+   * set, the tree follows it rather than its own state; the switch still
+   * reports through `onShowFullNamesChange`, for the caller to pass back.
+   */
+  showFullNames?: boolean;
+  /**
    * Called when the user turns "Show full names" on or off, so a caller that
    * remounts the panel can pass the choice back as `defaultShowFullNames`.
    */
@@ -213,6 +220,7 @@ export function TreePanel({
   pickedNodeId = null,
   onPickedNodeHandled,
   defaultShowFullNames = false,
+  showFullNames: shownFullNames,
   onShowFullNamesChange,
 }: TreePanelProps) {
   // Keeps row/option DOM ids unique when two panels share a light-DOM document
@@ -221,7 +229,8 @@ export function TreePanel({
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [roleFilter, setRoleFilter] = useState<RoleFilter>(null);
-  const [showFullNames, setShowFullNames] = useState(defaultShowFullNames);
+  const [ownShowFullNames, setShowFullNames] = useState(defaultShowFullNames);
+  const showFullNames = shownFullNames ?? ownShowFullNames;
   const handleShowFullNamesChange = useCallback(
     (on: boolean) => {
       setShowFullNames(on);

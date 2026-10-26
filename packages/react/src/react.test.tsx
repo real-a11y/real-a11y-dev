@@ -16,10 +16,10 @@ afterEach(() => {
   cleanup();
   // The user's Show full names choice holds for the page (the inspector's
   // `fullNamesChoice`), so a test that makes one must not hand it to the next.
-  delete realmSingleton<{ on?: boolean }>(
+  delete realmSingleton<{ on?: boolean; panels: Set<() => void> }>(
     "inspector.full-names-choice",
     "full-names-choice@1",
-    () => ({}),
+    () => ({ panels: new Set() }),
   ).on;
 });
 
@@ -206,6 +206,48 @@ describe("<SemanticNavigator />", () => {
     expect(newHost).not.toBe(host);
     const tree = await findInPanel(newHost, '[role="tree"]');
     expect(tree.classList.contains("sn-tree--full-names")).toBe(true);
+  });
+
+  it("shows the user's Show full names in every navigator on the page", async () => {
+    function App() {
+      const rootRef = useRef<HTMLDivElement>(null);
+      return (
+        <>
+          <div ref={rootRef}>
+            <a href="#a">A link whose name runs well past the panel's edge</a>
+          </div>
+          <SemanticNavigator root={rootRef} />
+          <SemanticNavigator root={rootRef} />
+        </>
+      );
+    }
+    const view = render(<App />);
+    const [, first, second] = view.container.querySelectorAll("div");
+    await findInPanel(first, '[role="tree"]');
+    await findInPanel(second, '[role="tree"]');
+    const fullNames = (host: Element) =>
+      host
+        .shadowRoot!.querySelector('[role="tree"]')
+        ?.classList.contains("sn-tree--full-names");
+
+    // Turned on in one, while both are open…
+    act(() => {
+      first
+        .shadowRoot!.querySelector<HTMLButtonElement>(
+          'button[aria-label="Settings"]',
+        )!
+        .click();
+    });
+    const box = (await findInPanel(
+      first,
+      '[role="group"][aria-label="Settings"] input[type="checkbox"]',
+    )) as HTMLInputElement;
+    act(() => box.click());
+
+    // …it is on in both.
+    await waitFor(() => {
+      expect([fullNames(first), fullNames(second)]).toEqual([true, true]);
+    }, WAIT);
   });
 
   it("picks up enablePicker toggled after mount", async () => {

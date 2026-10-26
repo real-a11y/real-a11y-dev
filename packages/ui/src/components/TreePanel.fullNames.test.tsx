@@ -99,6 +99,24 @@ describe("TreePanel — Show full names", () => {
     expect(tree().classList.contains("sn-tree--full-names")).toBe(true);
   });
 
+  it("follows a caller that keeps the choice itself", () => {
+    // As the inspector does, so every panel on a page shows the user's choice.
+    const onChange = vi.fn();
+    panel({ showFullNames: true, onShowFullNamesChange: onChange });
+    expect(tree().classList.contains("sn-tree--full-names")).toBe(true);
+
+    // The switch reports the user's change, and the tree waits for the
+    // caller to pass it back…
+    toggle(fullNamesBox());
+    expect(onChange).toHaveBeenLastCalledWith(false);
+    expect(tree().classList.contains("sn-tree--full-names")).toBe(true);
+
+    // …or a change the user made in another panel.
+    panel({ showFullNames: false, onShowFullNamesChange: onChange });
+    expect(tree().classList.contains("sn-tree--full-names")).toBe(false);
+    expect(fullNamesBox().checked).toBe(false);
+  });
+
   it("gives a name and a text preview their whole text as a tooltip", () => {
     panel();
     const name = [...container.querySelectorAll(".sn-name")].find((el) =>

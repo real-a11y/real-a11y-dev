@@ -148,8 +148,8 @@ To see names in full instead, turn on **Show full names** in the panel's Setting
 | Surface | Where the switch is | How long it holds |
 |---|---|---|
 | Chrome extension | **Settings ▾**, next to the page's title | Kept in the extension's storage, for every window's side panel |
-| `inspector` | **⚙** at the end of the toolbar | The life of the page, in every inspector on it: through `refresh()`, `setRoot()` and every later `createInspector()`. `defaultShowFullNames: true` starts it on |
-| React `<SemanticNavigator />` | **⚙** at the end of the toolbar | The life of the page, whatever remounts the component. The `defaultShowFullNames` prop starts it on |
+| `inspector` | **⚙** at the end of the toolbar | The life of the page, in every inspector on it: those open follow it at once, and it holds through `refresh()`, `setRoot()` and every later `createInspector()`. `defaultShowFullNames: true` starts it on |
+| React `<SemanticNavigator />` | **⚙** at the end of the toolbar | The life of the page, in every navigator on it, whatever remounts the component. The `defaultShowFullNames` prop starts it on |
 | Storybook addon | **⚙** at the end of the toolbar | Across stories, until Storybook reloads |
 
 ---

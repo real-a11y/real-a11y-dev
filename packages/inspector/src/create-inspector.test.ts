@@ -7,12 +7,13 @@ import {
   type ActionResult,
 } from "./index.js";
 
-/** The page's Show full names choice: the slot every copy of the inspector reads. */
+/** The page's Show full names choice, and its open panels: the slot every
+ *  copy of the inspector shares. */
 const pageChoice = () =>
-  realmSingleton<{ on?: boolean }>(
+  realmSingleton<{ on?: boolean; panels: Set<() => void> }>(
     "inspector.full-names-choice",
     "full-names-choice@1",
-    () => ({}),
+    () => ({ panels: new Set() }),
   );
 
 function mountDoc(html: string): { root: HTMLElement; container: HTMLElement } {
@@ -25,10 +26,47 @@ function mountDoc(html: string): { root: HTMLElement; container: HTMLElement } {
   return { root, container };
 }
 
+/**
+ * Preact flushes effect-driven state updates over several async hops (prop →
+ * sync effect → setState → rerender → re-extract → rerender), so poll rather
+ * than wait a fixed time — see TreeView.test.tsx.
+ */
+async function waitUntil(fn: () => boolean, timeoutMs = 2000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (fn()) return;
+    await new Promise((r) => setTimeout(r, 5));
+  }
+}
+
+const shadowOf = (el: HTMLElement) => el.shadowRoot!;
+const tree = (el: HTMLElement) =>
+  shadowOf(el).querySelector<HTMLElement>('[role="tree"]');
+/** Whether the panel in `el` shows names in full. */
+const fullNames = (el: HTMLElement) =>
+  tree(el)?.classList.contains("sn-tree--full-names");
+/** The user switching "Show full names", from the panel's Settings. */
+async function toggleInSettings(el: HTMLElement): Promise<void> {
+  const settings = () =>
+    shadowOf(el).querySelector('[role="group"][aria-label="Settings"]');
+  if (!settings()) {
+    shadowOf(el)
+      .querySelector<HTMLButtonElement>('button[aria-label="Settings"]')!
+      .click();
+    await waitUntil(() => settings() !== null);
+  }
+  shadowOf(el)
+    .querySelector<HTMLInputElement>('input[type="checkbox"]')!
+    .click();
+}
+const newContainer = () =>
+  document.body.appendChild(document.createElement("div"));
+
 describe("createInspector", () => {
   beforeEach(() => {
     document.body.innerHTML = "";
     delete pageChoice().on;
+    pageChoice().panels.clear();
   });
 
   it.each(["shadow", "light"] as const)(
@@ -139,17 +177,6 @@ describe("createInspector", () => {
       };
     };
 
-    // Preact flushes effect-driven state updates over several async hops
-    // (prop → sync effect → setState → rerender → re-extract → rerender), so
-    // poll rather than using a fixed timeout — see TreeView.test.tsx.
-    const waitUntil = async (fn: () => boolean, timeoutMs = 2000) => {
-      const deadline = Date.now() + timeoutMs;
-      while (Date.now() < deadline) {
-        if (fn()) return;
-        await new Promise((r) => setTimeout(r, 5));
-      }
-    };
-
     await waitUntil(() => pressed().a11y === "true");
     expect(pressed()).toEqual({ dom: "false", a11y: "true" });
 
@@ -169,34 +196,6 @@ describe("createInspector", () => {
     const { root, container } = mountDoc(
       `<main><a href="#a">A link whose name runs well past the panel's edge</a></main>`,
     );
-    const waitUntil = async (fn: () => boolean, timeoutMs = 2000) => {
-      const deadline = Date.now() + timeoutMs;
-      while (Date.now() < deadline) {
-        if (fn()) return;
-        await new Promise((r) => setTimeout(r, 5));
-      }
-    };
-    const shadowOf = (el: HTMLElement) => el.shadowRoot!;
-    const tree = (el: HTMLElement) =>
-      shadowOf(el).querySelector<HTMLElement>('[role="tree"]');
-    const fullNames = (el: HTMLElement) =>
-      tree(el)?.classList.contains("sn-tree--full-names");
-    const toggleInSettings = async (el: HTMLElement) => {
-      shadowOf(el)
-        .querySelector<HTMLButtonElement>('button[aria-label="Settings"]')!
-        .click();
-      await waitUntil(
-        () =>
-          shadowOf(el).querySelector(
-            '[role="group"][aria-label="Settings"]',
-          ) !== null,
-      );
-      shadowOf(el)
-        .querySelector<HTMLInputElement>('input[type="checkbox"]')!
-        .click();
-    };
-    const newContainer = () =>
-      document.body.appendChild(document.createElement("div"));
 
     // Until the user chooses, `defaultShowFullNames: true` starts a panel
     // with them on…
@@ -258,6 +257,50 @@ describe("createInspector", () => {
     expect(pageChoice().on).toBe(false);
   });
 
+  it("keeps every open inspector on the user's Show full names choice", async () => {
+    const { root } = mountDoc(
+      `<main><a href="#a">A link whose name runs well past the panel's edge</a></main>`,
+    );
+    const [one, two] = [newContainer(), newContainer()];
+    const first = createInspector({ root, container: one });
+    // Its own default holds only until the user chooses.
+    const second = createInspector({
+      root,
+      container: two,
+      defaultShowFullNames: true,
+    });
+    first.mount();
+    second.mount();
+    await waitUntil(() => tree(one) !== null && tree(two) !== null);
+    expect([fullNames(one), fullNames(two)]).toEqual([false, true]);
+
+    // A choice in either panel reaches the other, which keeps its own state:
+    // here, the row selected in it.
+    const selectedInTwo = () =>
+      shadowOf(two).querySelector('[role="treeitem"][aria-selected="true"]')
+        ?.textContent;
+    shadowOf(two).querySelector<HTMLElement>('[role="treeitem"]')!.click();
+    await waitUntil(() => selectedInTwo() !== undefined);
+    const selected = selectedInTwo();
+    expect(selected).toBeTruthy();
+    await toggleInSettings(one);
+    await waitUntil(() => fullNames(one) === true);
+    expect([fullNames(one), fullNames(two)]).toEqual([true, true]);
+    expect(selectedInTwo()).toBe(selected);
+    await toggleInSettings(two);
+    await waitUntil(() => fullNames(two) === false);
+    expect([fullNames(one), fullNames(two)]).toEqual([false, false]);
+
+    // An inspector stops following once unmounted, and leaves nothing behind.
+    first.unmount();
+    await toggleInSettings(two);
+    await waitUntil(() => fullNames(two) === true);
+    expect(tree(one)).toBeNull();
+    expect(pageChoice().panels.size).toBe(1);
+    second.unmount();
+    expect(pageChoice().panels.size).toBe(0);
+  });
+
   it("unmount() is idempotent and clears the shadow render", () => {
     const { root, container } = mountDoc("<h1>Hi</h1>");
     const nav = createInspector({ root, container });
@@ -274,19 +317,6 @@ describe("createInspector: onAction results", () => {
   beforeEach(() => {
     document.body.innerHTML = "";
   });
-
-  /**
-   * Preact flushes effect-driven state updates over several async hops, so
-   * poll for the rendered row rather than using a fixed timeout — see
-   * TreeView.test.tsx.
-   */
-  const waitUntil = async (fn: () => boolean, timeoutMs = 2000) => {
-    const deadline = Date.now() + timeoutMs;
-    while (Date.now() < deadline) {
-      if (fn()) return;
-      await new Promise((r) => setTimeout(r, 5));
-    }
-  };
 
   /** Mount an inspector over one button and return its row action button. */
   async function mountWithButton() {

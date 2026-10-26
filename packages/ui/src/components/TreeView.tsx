@@ -106,6 +106,11 @@ export interface TreeViewProps {
    * when the panel mounts: after that the user changes it from Settings.
    */
   defaultShowFullNames?: boolean;
+  /**
+   * Whether names show in full now, for a caller that keeps the choice
+   * itself (see `TreePanelProps.showFullNames`).
+   */
+  showFullNames?: boolean;
   /** Called when the user turns "Show full names" on or off in Settings. */
   onShowFullNamesChange?: (showFullNames: boolean) => void;
   /** Callback when a node is selected */
@@ -130,6 +135,7 @@ export function TreeView({
   enablePicker = false,
   enableDiff = true,
   defaultShowFullNames = false,
+  showFullNames,
   onShowFullNamesChange,
   onNodeSelect,
   onAction,
@@ -391,6 +397,7 @@ export function TreeView({
       pickedNodeId={pickedNodeId}
       onPickedNodeHandled={() => setPickedNodeId(null)}
       defaultShowFullNames={defaultShowFullNames}
+      showFullNames={showFullNames}
       onShowFullNamesChange={onShowFullNamesChange}
     />
   );
