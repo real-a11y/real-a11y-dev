@@ -26,8 +26,9 @@ pnpm --filter @real-a11y-dev/example-storybook storybook
 2. Switch between stories whose trees differ; the panel should re-read each one
 3. Change a **control** that alters the rendered DOM (a label, a `disabled` toggle) by
    clicking the Controls tab with the panel open, then back — does the panel update? Then
-   switch the panel to **DOM**, go to Controls and back, and reload the canvas, logging each
-   tree's mode in the manager console (twin: D9 step 4)
+   switch the panel to **DOM**, go to Controls and back, click another component in the
+   sidebar (Storybook opens its **Docs** page) and then one of its stories, and reload the
+   canvas, logging each tree's mode in the manager console (twin: D9 step 4)
 4. A story whose content renders asynchronously
 5. A story with **multiple roots** / no single wrapper element
 6. A story rendering into a portal (a modal or tooltip)
@@ -45,8 +46,9 @@ pnpm --filter @real-a11y-dev/example-storybook storybook
   0.1.0-beta.19 the panel covered the tab bar on every run — the defect the beta.19
   dogfood filed
 - **2/3** — it tracks story and control changes rather than showing the first story's
-  tree forever, and comes back in the mode it was left in: **DOM** after the tab switch
-  and after the reload, with every tree it logs saying `dom`
+  tree forever, and comes back in the mode it was left in: **DOM** after the tab switch,
+  the story switch and the reload, with every tree it logs saying `dom`. Up to
+  storybook-addon 0.1.0-beta.20 the story switch brought it back on **A11Y**
 - **4** — late content appears
 - **5** — a multi-rooted story is handled, not silently truncated to the first root
 - **6** — portal content is reachable
@@ -66,3 +68,8 @@ deploy.
 Steps 3 and 5 cover the two ways the panel goes quietly stale: not subscribing to
 control changes, and picking the first root of a multi-rooted story and ignoring the
 rest.
+
+Step 3 switches story by way of a **Docs** page on purpose. Storybook unmounts the panel
+there and mounts a new one for the story after it, which is where a mode the panel kept
+only in itself was lost. A switch straight from one story to another keeps the same panel
+mounted, so it passes whether or not the mode survives a new one.
