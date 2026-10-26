@@ -14,6 +14,7 @@ import {
 import {
   domStateBadges,
   EmbeddedBadge,
+  KeyStatesForReaders,
   nativeStateBadges,
   stateBadgeClass,
   StateBadges,
@@ -180,10 +181,31 @@ describe("StateBadges and EmbeddedBadge", () => {
     const badges = domStateBadges({ disabled: true });
     render(<StateBadges badges={badges} />, container);
     expect(container.firstElementChild?.className).toBe("sn-state-badges");
+    expect(container.firstElementChild?.hasAttribute("aria-hidden")).toBe(
+      false,
+    );
+    // A screen reader hears them after the name instead.
     render(<StateBadges keyStates badges={badges} />, container);
     expect(container.firstElementChild?.className).toBe(
       "sn-state-badges sn-key-states",
     );
+    expect(container.firstElementChild?.getAttribute("aria-hidden")).toBe(
+      "true",
+    );
+  });
+
+  it("gives a screen reader a row's key states as words", () => {
+    render(
+      <KeyStatesForReaders
+        badges={domStateBadges({ disabled: true, expanded: false })}
+      />,
+      container,
+    );
+    const words = container.querySelector(".sn-sr-only");
+    expect(words?.textContent).toBe("disabled, collapsed");
+
+    render(<KeyStatesForReaders badges={[]} />, container);
+    expect(container.innerHTML).toBe("");
   });
 
   it("says embedded, and what that means to a screen reader", () => {

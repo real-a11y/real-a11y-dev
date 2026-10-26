@@ -2,7 +2,6 @@ import {
   extractDomTree,
   extractA11yTree,
   PANEL_HOST_ATTRIBUTE,
-  realmSingleton,
   type SemanticNode,
   type TreeViewMode,
   type ActionRequest,
@@ -12,6 +11,8 @@ import {
 } from "@real-a11y-dev/core";
 import { TreeView } from "@real-a11y-dev/semantic-navigator-ui";
 import { render, h } from "preact";
+
+import { fullNamesChoice, rememberShowFullNames } from "./full-names-choice.js";
 
 declare const __SN_STYLES__: string;
 
@@ -27,33 +28,6 @@ declare const __SN_STYLES__: string;
  * paths read this constant instead.
  */
 const SN_STYLES: string = __SN_STYLES__;
-
-/**
- * The user's last "Show full names" choice from any panel's Settings, for the
- * life of the page, and the inspectors open on it, which all show it. It
- * outlives every panel: `refresh()` and `setRoot()` re-key the TreeView, and
- * the React wrapper makes a new inspector whenever one of its props changes,
- * and a new host whenever it remounts. One slot per realm (`realmSingleton`),
- * so every copy of this package loaded in the page shares the choice and the
- * panels.
- */
-interface FullNamesChoice {
-  on?: boolean;
-  /** Each open inspector's render, run again when the choice changes. */
-  panels: Set<() => void>;
-}
-const FULL_NAMES_CHOICE_SHAPE = "full-names-choice@1";
-const fullNamesChoice = (): FullNamesChoice =>
-  realmSingleton(
-    "inspector.full-names-choice",
-    FULL_NAMES_CHOICE_SHAPE,
-    () => ({ panels: new Set() }),
-  );
-const rememberShowFullNames = (on: boolean) => {
-  const choice = fullNamesChoice();
-  choice.on = on;
-  for (const rerender of choice.panels) rerender();
-};
 
 // Re-export core types for convenience
 export type {
@@ -226,8 +200,10 @@ export function createInspector(
       // Keep the panel out of the tree it shows: extraction walks open
       // shadow roots now, and this container hosts one.
       container.setAttribute(PANEL_HOST_ATTRIBUTE, "");
-      fullNamesChoice().panels.add(renderTree);
       renderTree();
+      // Only once it has rendered: one that can't (a container that can't
+      // host a shadow root, say) would throw again on every choice.
+      fullNamesChoice().panels.add(renderTree);
     },
 
     unmount() {

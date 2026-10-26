@@ -154,6 +154,7 @@ function renderA11yLabel(node: DomSemanticNode) {
             {name}
           </span>
         )}
+        {renderKeyStatesForReaders(stateBadges(node, "key"))}
       </span>
       {showPreview && (
         <span class="sn-name-preview" title={descendantText}>
@@ -202,17 +203,32 @@ function stateBadges(
   return badges;
 }
 
-function renderBadges(badges: Badge[], className = "sn-badges") {
+function renderBadges(
+  badges: Badge[],
+  { className = "sn-badges", hidden = false } = {},
+) {
   if (badges.length === 0) return null;
 
   return (
-    <span class={className}>
+    <span class={className} aria-hidden={hidden || undefined}>
       {badges.map((b) => (
         <span key={b.label} class={`sn-badge ${b.className}`}>
           {b.label}
         </span>
       ))}
     </span>
+  );
+}
+
+/**
+ * A row's key states as a screen reader hears them: in its head, right after
+ * the name. The badges a sighted user sees follow the label instead (see
+ * TreeNode), which would make them the last thing the row says.
+ */
+function renderKeyStatesForReaders(badges: Badge[]) {
+  if (badges.length === 0) return null;
+  return (
+    <span class="sn-sr-only">{badges.map((b) => b.label).join(", ")}</span>
   );
 }
 
@@ -399,9 +415,13 @@ export function TreeNode({
 
       {/* Key states: after the label, which can clip them, rather than in
           it. A row too narrow for them widens instead (tree.css, "Long
-          labels"). */}
+          labels"). A screen reader hears them after the name instead
+          (renderKeyStatesForReaders). */}
       {viewMode !== "dom" &&
-        renderBadges(stateBadges(node, "key"), "sn-badges sn-key-states")}
+        renderBadges(stateBadges(node, "key"), {
+          className: "sn-badges sn-key-states",
+          hidden: true,
+        })}
 
       {/* Action button */}
       {primaryAction && (

@@ -87,7 +87,12 @@ import {
   NATIVE_FOLLOW_DEBOUNCE_MS,
   NATIVE_HOVER_DWELL_MS,
 } from "./native-follow.js";
-import { EmbeddedBadge, nativeStateBadges, StateBadges } from "./row-badges.js";
+import {
+  EmbeddedBadge,
+  KeyStatesForReaders,
+  nativeStateBadges,
+  StateBadges,
+} from "./row-badges.js";
 import {
   arrowLeftStopsAtScopeRoot,
   describeNode,
@@ -1319,6 +1324,9 @@ export function NativeTreeView({
                             {node.name}
                           </span>
                         )}
+                        <KeyStatesForReaders
+                          badges={badges.filter((b) => b.keyState)}
+                        />
                       </span>
                       {node.description && (
                         <span class="sn-description" title={node.description}>
@@ -1385,7 +1393,8 @@ export function NativeTreeView({
 
                     {/* Key states: after the label, which can clip them,
                         rather than in it. A row too narrow for them widens
-                        instead (tree.css, "Long labels"). */}
+                        instead (tree.css, "Long labels"). A screen reader
+                        hears them after the name (KeyStatesForReaders). */}
                     <StateBadges
                       keyStates
                       badges={badges.filter((b) => b.keyState)}

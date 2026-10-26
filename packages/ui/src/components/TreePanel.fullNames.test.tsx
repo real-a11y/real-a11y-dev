@@ -106,15 +106,22 @@ describe("TreePanel — Show full names", () => {
     expect(tree().classList.contains("sn-tree--full-names")).toBe(true);
 
     // The switch reports the user's change, and the tree waits for the
-    // caller to pass it back…
+    // caller to pass it back, as does the switch itself…
     toggle(fullNamesBox());
     expect(onChange).toHaveBeenLastCalledWith(false);
     expect(tree().classList.contains("sn-tree--full-names")).toBe(true);
+    expect(fullNamesBox().checked).toBe(true);
 
     // …or a change the user made in another panel.
     panel({ showFullNames: false, onShowFullNamesChange: onChange });
     expect(tree().classList.contains("sn-tree--full-names")).toBe(false);
     expect(fullNamesBox().checked).toBe(false);
+  });
+
+  it("has no switch for a caller that keeps the choice and takes no change", () => {
+    panel({ showFullNames: true });
+    expect(tree().classList.contains("sn-tree--full-names")).toBe(true);
+    expect(container.querySelector('button[aria-label="Settings"]')).toBeNull();
   });
 
   it("gives a name and a text preview their whole text as a tooltip", () => {
@@ -166,8 +173,16 @@ describe("TreePanel — Show full names", () => {
       (r) => r.querySelector(".sn-role")?.textContent === "button",
     );
     // Outside the label, so it adds them to the row's width instead of
-    // clipping them (tree.css, "Long labels").
+    // clipping them (tree.css, "Long labels")…
     expect(badges(row, ".sn-label + .sn-key-states > .sn-badge")).toEqual([
+      "pressed",
+    ]);
+    // …which would make them the last thing a screen reader hears: it hears
+    // them after the name instead.
+    expect(
+      row?.querySelector(".sn-key-states")?.getAttribute("aria-hidden"),
+    ).toBe("true");
+    expect(badges(row, ".sn-head > .sn-name + .sn-sr-only")).toEqual([
       "pressed",
     ]);
     expect(badges(row, ".sn-label > .sn-badges > .sn-badge")).toEqual([

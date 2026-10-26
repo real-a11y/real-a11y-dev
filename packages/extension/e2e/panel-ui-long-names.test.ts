@@ -164,6 +164,15 @@ for (const producer of ["NATIVE", "DOM"] as const) {
           // Nor does a toolbar control to the panel's edge: they wrap.
           toolbarFits: true,
         });
+      // A screen reader hears them right after the name, though they show
+      // after the label: the badges are hidden from it.
+      await expect(
+        nav.panel.getByRole("treeitem", {
+          name: new RegExp(
+            `^button "${TOGGLE_NAME}" (disabled, pressed|pressed, disabled) `,
+          ),
+        }),
+      ).toHaveCount(1);
 
       await setFullNames(nav, true);
       await expect

@@ -188,8 +188,9 @@ export interface TreePanelProps {
   /**
    * Whether the tree shows names in full now, for a caller that keeps the
    * choice itself, as the inspector does for every panel on a page. When
-   * set, the tree follows it rather than its own state; the switch still
-   * reports through `onShowFullNamesChange`, for the caller to pass back.
+   * set, the tree and the switch follow it rather than the panel's own state.
+   * The switch reports a change through `onShowFullNamesChange`, for the
+   * caller to pass back, and without one Settings has no switch.
    */
   showFullNames?: boolean;
   /**
@@ -231,9 +232,13 @@ export function TreePanel({
   const [roleFilter, setRoleFilter] = useState<RoleFilter>(null);
   const [ownShowFullNames, setShowFullNames] = useState(defaultShowFullNames);
   const showFullNames = shownFullNames ?? ownShowFullNames;
+  // A change always renders again, so a switch whose caller keeps the choice
+  // shows the caller's value even when its own state didn't move.
+  const [, setChanges] = useState(0);
   const handleShowFullNamesChange = useCallback(
     (on: boolean) => {
       setShowFullNames(on);
+      setChanges((n) => n + 1);
       onShowFullNamesChange?.(on);
     },
     [onShowFullNamesChange],
@@ -586,7 +591,13 @@ export function TreePanel({
         onToggleDiff={onToggleDiff}
         searchInputRef={searchInputRef}
         showFullNames={showFullNames}
-        onShowFullNamesChange={handleShowFullNamesChange}
+        // No switch where it could change nothing: a caller that keeps the
+        // choice and takes no change back.
+        onShowFullNamesChange={
+          shownFullNames === undefined || onShowFullNamesChange
+            ? handleShowFullNamesChange
+            : undefined
+        }
       />
       <div
         ref={isTreeBranch ? containerRef : undefined}

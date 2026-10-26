@@ -311,14 +311,19 @@ describe("Show full names", () => {
   it("shows a row's key states after its label, where nothing clips them, in either tree", async () => {
     /** Row `row`'s state badges: its key states, after its label, which a
      *  row too narrow for them widens to show (tree.css, "Long labels"), and
-     *  the rest, in the label, which a narrow row drops first. */
+     *  the rest, in the label, which a narrow row drops first. Also what a
+     *  screen reader hears of its key states, after the name, since the
+     *  badges are hidden from it. */
     const badges = (row: Element | null) => ({
       key: [
-        ...(row?.querySelectorAll(".sn-label + .sn-key-states > *") ?? []),
+        ...(row?.querySelectorAll(
+          '.sn-label + .sn-key-states[aria-hidden="true"] > *',
+        ) ?? []),
       ].map((b) => b.textContent),
       rest: [
         ...(row?.querySelectorAll(".sn-label > .sn-state-badges > *") ?? []),
       ].map((b) => b.textContent),
+      heard: row?.querySelector(".sn-name ~ .sn-sr-only")?.textContent,
     });
 
     mount({ [NATIVE_MODE]: false });
@@ -327,6 +332,7 @@ describe("Show full names", () => {
     expect(badges(container.querySelector("#snrow-b1"))).toEqual({
       key: ["disabled", "collapsed"],
       rest: [],
+      heard: "disabled, collapsed",
     });
 
     render(null, container);
@@ -336,6 +342,7 @@ describe("Show full names", () => {
     expect(badges(container.querySelector('[data-node-id="b1"]'))).toEqual({
       key: ["disabled", "collapsed"],
       rest: ["focusable", "hasPopup=menu"],
+      heard: "disabled, collapsed",
     });
   });
 });

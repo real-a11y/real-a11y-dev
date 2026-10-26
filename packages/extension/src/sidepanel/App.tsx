@@ -116,7 +116,12 @@ import {
   nativeActionFeedback,
 } from "./native-feedback.js";
 import { NativeTreeView, type NativeReveal } from "./NativeTreeView.js";
-import { domStateBadges, EmbeddedBadge, StateBadges } from "./row-badges.js";
+import {
+  domStateBadges,
+  EmbeddedBadge,
+  KeyStatesForReaders,
+  StateBadges,
+} from "./row-badges.js";
 import {
   arrowLeftStopsAtScopeRoot,
   describeNode,
@@ -4381,6 +4386,9 @@ export function App() {
                                 {node.a11y.name}
                               </span>
                             )}
+                            <KeyStatesForReaders
+                              badges={badges.filter((b) => b.keyState)}
+                            />
                           </span>
                           {/* Descendant-text preview — leaf-only to avoid
                               duplicating what's already in child rows
@@ -4479,7 +4487,8 @@ export function App() {
 
                     {/* Key states: after the label, which can clip them,
                         rather than in it. A row too narrow for them widens
-                        instead (tree.css, "Long labels"). */}
+                        instead (tree.css, "Long labels"). A screen reader
+                        hears them after the name (KeyStatesForReaders). */}
                     {viewMode !== "dom" && (
                       <StateBadges
                         keyStates

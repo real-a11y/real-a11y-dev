@@ -1,20 +1,12 @@
-import { realmSingleton } from "@real-a11y-dev/core";
 import { describe, it, expect, beforeEach } from "vitest";
+
+import { fullNamesChoice as pageChoice } from "./full-names-choice.js";
 
 import {
   createInspector,
   type ActionRequest,
   type ActionResult,
 } from "./index.js";
-
-/** The page's Show full names choice, and its open panels: the slot every
- *  copy of the inspector shares. */
-const pageChoice = () =>
-  realmSingleton<{ on?: boolean; panels: Set<() => void> }>(
-    "inspector.full-names-choice",
-    "full-names-choice@1",
-    () => ({ panels: new Set() }),
-  );
 
 function mountDoc(html: string): { root: HTMLElement; container: HTMLElement } {
   document.body.innerHTML = "";
@@ -299,6 +291,24 @@ describe("createInspector", () => {
     expect(pageChoice().panels.size).toBe(1);
     second.unmount();
     expect(pageChoice().panels.size).toBe(0);
+  });
+
+  it("leaves an inspector that failed to mount out of the open panels", async () => {
+    const { root } = mountDoc(`<main><a href="#a">A link</a></main>`);
+    // A <form> can't host a shadow root.
+    const form = document.body.appendChild(document.createElement("form"));
+    expect(() => createInspector({ root, container: form }).mount()).toThrow();
+    expect(pageChoice().panels.size).toBe(0);
+
+    // So the next one's switch still works, rather than throw on its behalf.
+    const host = newContainer();
+    const nav = createInspector({ root, container: host });
+    nav.mount();
+    await waitUntil(() => tree(host) !== null);
+    await toggleInSettings(host);
+    await waitUntil(() => fullNames(host) === true);
+    expect(fullNames(host)).toBe(true);
+    nav.unmount();
   });
 
   it("unmount() is idempotent and clears the shadow render", () => {

@@ -101,7 +101,9 @@ export function nativeStateBadges(
 
 /**
  * A row's state badges, or nothing when it has none. Its key states pass
- * `keyStates`: the row shows them after its label, where nothing clips them.
+ * `keyStates`: the row shows them after its label, where nothing clips them,
+ * and hides them from a screen reader, which hears `KeyStatesForReaders`
+ * after the name instead.
  */
 export function StateBadges({
   badges,
@@ -114,6 +116,7 @@ export function StateBadges({
   return (
     <span
       class={keyStates ? "sn-state-badges sn-key-states" : "sn-state-badges"}
+      aria-hidden={keyStates || undefined}
     >
       {badges.map((b) => (
         <span key={b.label} class={`sn-state-badge ${b.cls}`}>
@@ -121,6 +124,18 @@ export function StateBadges({
         </span>
       ))}
     </span>
+  );
+}
+
+/**
+ * A row's key states as a screen reader hears them: in its head, right after
+ * the name. The badges a sighted user sees follow the label instead, which
+ * would make them the last thing the row says.
+ */
+export function KeyStatesForReaders({ badges }: { badges: StateBadge[] }) {
+  if (badges.length === 0) return null;
+  return (
+    <span class="sn-sr-only">{badges.map((b) => b.label).join(", ")}</span>
   );
 }
 
