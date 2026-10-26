@@ -45,6 +45,7 @@ import {
   isTypeAheadKey,
   JUMP_KEYS,
   JUMP_KEYSHORTCUTS,
+  KeyStatesForReaders,
   nextJump,
   resolveStepperKeyAction,
   useInputModality,
@@ -87,12 +88,7 @@ import {
   NATIVE_FOLLOW_DEBOUNCE_MS,
   NATIVE_HOVER_DWELL_MS,
 } from "./native-follow.js";
-import {
-  EmbeddedBadge,
-  KeyStatesForReaders,
-  nativeStateBadges,
-  StateBadges,
-} from "./row-badges.js";
+import { EmbeddedBadge, nativeStateBadges, StateBadges } from "./row-badges.js";
 import {
   arrowLeftStopsAtScopeRoot,
   describeNode,
@@ -1226,6 +1222,7 @@ export function NativeTreeView({
                 const badges = nativeStateBadges(node.states, node.properties, {
                   headingLevel,
                 });
+                const keyBadges = badges.filter((b) => b.keyState);
 
                 return (
                   <div
@@ -1325,7 +1322,7 @@ export function NativeTreeView({
                           </span>
                         )}
                         <KeyStatesForReaders
-                          badges={badges.filter((b) => b.keyState)}
+                          labels={keyBadges.map((b) => b.label)}
                         />
                       </span>
                       {node.description && (
@@ -1395,10 +1392,7 @@ export function NativeTreeView({
                         rather than in it. A row too narrow for them widens
                         instead (tree.css, "Long labels"). A screen reader
                         hears them after the name (KeyStatesForReaders). */}
-                    <StateBadges
-                      keyStates
-                      badges={badges.filter((b) => b.keyState)}
-                    />
+                    <StateBadges keyStates badges={keyBadges} />
 
                     {label && (
                       <button

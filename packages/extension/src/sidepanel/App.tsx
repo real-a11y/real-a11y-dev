@@ -19,6 +19,7 @@ import {
 import {
   JUMP_KEYS,
   JUMP_KEYSHORTCUTS,
+  KeyStatesForReaders,
   ShowFullNamesSetting,
   useDismissible,
   useTreeKeyboard,
@@ -116,12 +117,7 @@ import {
   nativeActionFeedback,
 } from "./native-feedback.js";
 import { NativeTreeView, type NativeReveal } from "./NativeTreeView.js";
-import {
-  domStateBadges,
-  EmbeddedBadge,
-  KeyStatesForReaders,
-  StateBadges,
-} from "./row-badges.js";
+import { domStateBadges, EmbeddedBadge, StateBadges } from "./row-badges.js";
 import {
   arrowLeftStopsAtScopeRoot,
   describeNode,
@@ -4276,6 +4272,7 @@ export function App() {
                   ? node.depth - scopedDepthOffset
                   : node.depth;
                 const badges = domStateBadges(node.a11y.states);
+                const keyBadges = badges.filter((b) => b.keyState);
 
                 return (
                   <div
@@ -4387,7 +4384,7 @@ export function App() {
                               </span>
                             )}
                             <KeyStatesForReaders
-                              badges={badges.filter((b) => b.keyState)}
+                              labels={keyBadges.map((b) => b.label)}
                             />
                           </span>
                           {/* Descendant-text preview — leaf-only to avoid
@@ -4490,10 +4487,7 @@ export function App() {
                         instead (tree.css, "Long labels"). A screen reader
                         hears them after the name (KeyStatesForReaders). */}
                     {viewMode !== "dom" && (
-                      <StateBadges
-                        keyStates
-                        badges={badges.filter((b) => b.keyState)}
-                      />
+                      <StateBadges keyStates badges={keyBadges} />
                     )}
 
                     {primaryAction && (

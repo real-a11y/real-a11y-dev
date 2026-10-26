@@ -13,7 +13,7 @@ export interface FullNamesChoice {
   on?: boolean;
   /**
    * Each open inspector's render, run again when the choice changes. An
-   * inspector joins once it has rendered, and leaves on `unmount()`.
+   * inspector joins each time it renders, and leaves on `unmount()`.
    */
   panels: Set<() => void>;
 }
@@ -29,7 +29,8 @@ export const fullNamesChoice = (): FullNamesChoice =>
 
 /**
  * Keep the user's choice for the page, and render every open panel with it:
- * all of them, even past one that throws, whose error then surfaces.
+ * all of them, even past one that throws. The error then surfaces: the one,
+ * or an `AggregateError` of each.
  */
 export function rememberShowFullNames(on: boolean): void {
   const choice = fullNamesChoice();
@@ -42,5 +43,11 @@ export function rememberShowFullNames(on: boolean): void {
       failures.push(error);
     }
   }
-  if (failures.length > 0) throw failures[0];
+  if (failures.length === 1) throw failures[0];
+  if (failures.length > 1) {
+    throw new AggregateError(
+      failures,
+      "Panels failed to render the Show full names choice",
+    );
+  }
 }

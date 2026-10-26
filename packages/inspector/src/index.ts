@@ -191,6 +191,10 @@ export function createInspector(
       }),
       mountPoint,
     );
+    // Rendered, so one of the page's open panels, which all show the user's
+    // choice. One that can't render (a container that can't host a shadow
+    // root, say) stays out, rather than throw again on every choice.
+    fullNamesChoice().panels.add(renderTree);
   }
 
   const instance: InspectorInstance = {
@@ -201,9 +205,6 @@ export function createInspector(
       // shadow roots now, and this container hosts one.
       container.setAttribute(PANEL_HOST_ATTRIBUTE, "");
       renderTree();
-      // Only once it has rendered: one that can't (a container that can't
-      // host a shadow root, say) would throw again on every choice.
-      fullNamesChoice().panels.add(renderTree);
     },
 
     unmount() {

@@ -11,6 +11,7 @@ import { JUMP_KEYS } from "../hooks/jumpKeys.js";
 import { treeRowDomId, useInstanceId } from "../hooks/useInstanceId.js";
 import { isKeyState } from "../key-states.js";
 
+import { KeyStatesForReaders } from "./KeyStatesForReaders.js";
 import type { ControlsLink } from "./TreePanel.js";
 
 interface TreeNodeProps {
@@ -122,7 +123,7 @@ function renderDomLabel(node: DomSemanticNode) {
   );
 }
 
-function renderA11yLabel(node: DomSemanticNode) {
+function renderA11yLabel(node: DomSemanticNode, keyStates: Badge[]) {
   const { role, name } = node.a11y;
   const level = node.a11y.properties["level"];
   // Show a muted preview of descendant text only when the element is a
@@ -154,7 +155,7 @@ function renderA11yLabel(node: DomSemanticNode) {
             {name}
           </span>
         )}
-        {renderKeyStatesForReaders(stateBadges(node, "key"))}
+        <KeyStatesForReaders labels={keyStates.map((b) => b.label)} />
       </span>
       {showPreview && (
         <span class="sn-name-preview" title={descendantText}>
@@ -220,18 +221,6 @@ function renderBadges(
   );
 }
 
-/**
- * A row's key states as a screen reader hears them: in its head, right after
- * the name. The badges a sighted user sees follow the label instead (see
- * TreeNode), which would make them the last thing the row says.
- */
-function renderKeyStatesForReaders(badges: Badge[]) {
-  if (badges.length === 0) return null;
-  return (
-    <span class="sn-sr-only">{badges.map((b) => b.label).join(", ")}</span>
-  );
-}
-
 function renderControlsChip(
   link: ControlsLink,
   direction: "forward" | "reverse",
@@ -289,6 +278,9 @@ export function TreeNode({
   const prefix = idPrefix ?? autoPrefix;
 
   const hasChildren = node.childIds.length > 0;
+  // The A11Y view's key states, which it shows after the label and a screen
+  // reader hears after the name; the DOM view shows them with the rest.
+  const keyStates = viewMode === "dom" ? [] : stateBadges(node, "key");
   const actions = node.interaction.actions;
   // Slider / spinbutton rows surface a paired ▲/▼ control instead of a
   // single primary-action button — so users can step the value in either
@@ -384,7 +376,9 @@ export function TreeNode({
 
       {/* Label */}
       <span class="sn-label">
-        {viewMode === "dom" ? renderDomLabel(node) : renderA11yLabel(node)}
+        {viewMode === "dom"
+          ? renderDomLabel(node)
+          : renderA11yLabel(node, keyStates)}
         {/* The A11Y view shows a row's key states after the label; the DOM
             view shows them here with the rest. */}
         {renderBadges([
@@ -416,12 +410,11 @@ export function TreeNode({
       {/* Key states: after the label, which can clip them, rather than in
           it. A row too narrow for them widens instead (tree.css, "Long
           labels"). A screen reader hears them after the name instead
-          (renderKeyStatesForReaders). */}
-      {viewMode !== "dom" &&
-        renderBadges(stateBadges(node, "key"), {
-          className: "sn-badges sn-key-states",
-          hidden: true,
-        })}
+          (KeyStatesForReaders). */}
+      {renderBadges(keyStates, {
+        className: "sn-badges sn-key-states",
+        hidden: true,
+      })}
 
       {/* Action button */}
       {primaryAction && (
