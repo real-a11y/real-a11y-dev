@@ -193,11 +193,22 @@ export function createInspector(
     mount() {
       if (mounted) return;
       mounted = true;
-      // Keep the panel out of the tree it shows: extraction walks open
-      // shadow roots now, and this container hosts one.
-      ownsMarker = !container.hasAttribute(PANEL_HOST_ATTRIBUTE);
-      if (ownsMarker) container.setAttribute(PANEL_HOST_ATTRIBUTE, "");
       try {
+        // Keep the panel out of the tree it shows: extraction walks open
+        // shadow roots now, and this container hosts one. Through
+        // Element.prototype, as the extractor reads it: a <form> container's
+        // controls shadow its methods (`<input name="setAttribute">`).
+        ownsMarker = !Element.prototype.hasAttribute.call(
+          container,
+          PANEL_HOST_ATTRIBUTE,
+        );
+        if (ownsMarker) {
+          Element.prototype.setAttribute.call(
+            container,
+            PANEL_HOST_ATTRIBUTE,
+            "",
+          );
+        }
         renderTree();
       } catch (error) {
         // A container that can't take the panel (a <form> can't host a shadow
@@ -216,7 +227,10 @@ export function createInspector(
       mounted = false;
       const mountPoint = renderHost ?? (renderTarget as Element | null);
       if (mountPoint) render(null, mountPoint);
-      if (ownsMarker) container.removeAttribute(PANEL_HOST_ATTRIBUTE);
+      if (ownsMarker) {
+        Element.prototype.removeAttribute.call(container, PANEL_HOST_ATTRIBUTE);
+      }
+      ownsMarker = false;
       // Drop references so the next mount() rebuilds cleanly.
       renderHost = null;
       renderTarget = null;

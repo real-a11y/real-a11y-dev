@@ -224,6 +224,35 @@ describe("createInspector", () => {
     expect(form.hasAttribute("data-real-a11y-panel")).toBe(false);
     document.getElementById("sn-styles")?.remove();
   });
+
+  it("marks a <form> container whose controls shadow its methods", () => {
+    const methods = ["hasAttribute", "setAttribute", "removeAttribute"];
+    document.body.innerHTML = `<main><form>${methods
+      .map((m) => `<input name="${m}">`)
+      .join("")}</form></main>`;
+    const form = document.querySelector("form")!;
+    // In a browser a form's control shadows the form's own member of the
+    // same name, so `form.setAttribute` is the <input>. jsdom doesn't, so
+    // stand in for it.
+    for (const method of methods) {
+      const named = form.querySelector(`[name="${method}"]`)!;
+      Object.defineProperty(form, method, {
+        configurable: true,
+        get: () => named,
+      });
+    }
+    const nav = createInspector({
+      root: document.body,
+      container: form,
+      mount: "light",
+    });
+
+    nav.mount();
+    expect(form.getAttribute("data-real-a11y-panel")).toBe("");
+    nav.unmount();
+    expect(form.getAttribute("data-real-a11y-panel")).toBeNull();
+    document.getElementById("sn-styles")?.remove();
+  });
 });
 
 describe("createInspector: onAction results", () => {
