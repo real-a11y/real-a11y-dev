@@ -165,6 +165,30 @@ describe("createInspector", () => {
       nav.destroy();
     }).not.toThrow();
   });
+
+  it("undoes a mount() whose first render throws", () => {
+    const { root, container } = mountDoc(
+      '<form><input aria-label="Email"></form>',
+    );
+    const form = root.querySelector("form")!;
+    const nav = createInspector({ root, container: form });
+
+    // A <form> can't host a shadow root, so the default mount throws.
+    const notSupported = expect.objectContaining({ name: "NotSupportedError" });
+    expect(() => nav.mount()).toThrow(notSupported);
+
+    // Still marked, the form would read as panel chrome: every other tree on
+    // the page would leave it, and everything in it, out.
+    expect(form.hasAttribute("data-real-a11y-panel")).toBe(false);
+    const names = Array.from(
+      createInspector({ root, container }).getTree().nodes.values(),
+    ).map((n) => n.a11y.name);
+    expect(names).toContain("Email");
+
+    // Nor is the instance left half-mounted: mount() tries again, rather than
+    // return as though the first attempt had worked.
+    expect(() => nav.mount()).toThrow(notSupported);
+  });
 });
 
 describe("createInspector: onAction results", () => {

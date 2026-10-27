@@ -193,7 +193,18 @@ export function createInspector(
       // Keep the panel out of the tree it shows: extraction walks open
       // shadow roots now, and this container hosts one.
       container.setAttribute(PANEL_HOST_ATTRIBUTE, "");
-      renderTree();
+      try {
+        renderTree();
+      } catch (error) {
+        // A container that can't take the panel (a <form> can't host a shadow
+        // root) mustn't stay marked as one, or every other tree on the page
+        // leaves it out, nor this instance read as mounted, which turns the
+        // next mount() into a no-op. unmount() also tears down whatever the
+        // render got through. A shadow root it did attach stays: none can be
+        // removed, and the next mount() reuses it.
+        instance.unmount();
+        throw error;
+      }
     },
 
     unmount() {
