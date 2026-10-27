@@ -96,6 +96,9 @@ export function createInspector(
   let currentRoot = config.root;
   let currentViewMode = viewMode;
   let mounted = false;
+  // Whether mount() put the panel marker on the container. One already there
+  // is another panel's, or the host's, and unmount() leaves it in place.
+  let ownsMarker = false;
   let renderTarget: Element | ShadowRoot | null = null;
   let renderHost: HTMLElement | null = null;
   // Monotonic counter used to force a re-extraction when `refresh()` is called.
@@ -192,7 +195,8 @@ export function createInspector(
       mounted = true;
       // Keep the panel out of the tree it shows: extraction walks open
       // shadow roots now, and this container hosts one.
-      container.setAttribute(PANEL_HOST_ATTRIBUTE, "");
+      ownsMarker = !container.hasAttribute(PANEL_HOST_ATTRIBUTE);
+      if (ownsMarker) container.setAttribute(PANEL_HOST_ATTRIBUTE, "");
       try {
         renderTree();
       } catch (error) {
@@ -212,7 +216,7 @@ export function createInspector(
       mounted = false;
       const mountPoint = renderHost ?? (renderTarget as Element | null);
       if (mountPoint) render(null, mountPoint);
-      container.removeAttribute(PANEL_HOST_ATTRIBUTE);
+      if (ownsMarker) container.removeAttribute(PANEL_HOST_ATTRIBUTE);
       // Drop references so the next mount() rebuilds cleanly.
       renderHost = null;
       renderTarget = null;

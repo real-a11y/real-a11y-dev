@@ -189,6 +189,41 @@ describe("createInspector", () => {
     // return as though the first attempt had worked.
     expect(() => nav.mount()).toThrow(notSupported);
   });
+
+  it("leaves another panel's marker when its own mount() throws", async () => {
+    document.body.innerHTML = "<main><h1>App</h1><form></form></main>";
+    const form = document.querySelector("form")!;
+    // mount: "light" renders into a <form>; the default shadow mount can't.
+    const light = createInspector({
+      root: document.body,
+      container: form,
+      mount: "light",
+    });
+    light.mount();
+    // Preact fills the panel in over several async hops; wait for its
+    // buttons, which are what would leak into the tree.
+    const deadline = Date.now() + 2000;
+    while (!form.querySelector("button") && Date.now() < deadline) {
+      await new Promise((r) => setTimeout(r, 5));
+    }
+    expect(form.querySelector("button")).not.toBeNull();
+
+    expect(() =>
+      createInspector({ root: document.body, container: form }).mount(),
+    ).toThrow(expect.objectContaining({ name: "NotSupportedError" }));
+
+    // The light panel still renders in the form, so it stays out of the tree.
+    expect(form.hasAttribute("data-real-a11y-panel")).toBe(true);
+    const roles = Array.from(light.getTree().nodes.values()).map(
+      (n) => n.a11y.role,
+    );
+    expect(roles).toContain("main");
+    expect(roles).not.toContain("button");
+
+    light.unmount();
+    expect(form.hasAttribute("data-real-a11y-panel")).toBe(false);
+    document.getElementById("sn-styles")?.remove();
+  });
 });
 
 describe("createInspector: onAction results", () => {
