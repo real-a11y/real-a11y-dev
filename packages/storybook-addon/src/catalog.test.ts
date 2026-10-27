@@ -5,7 +5,7 @@
 // default Storybook icon, or the addon lands in no category. The rules come
 // from https://storybook.js.org/docs/addons/integration-catalog.
 
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -55,6 +55,19 @@ const FRAMEWORKS = [
 const RAW_MAIN =
   "https://raw.githubusercontent.com/real-a11y/real-a11y-dev/main/";
 
+/**
+ * `existsSync` with the case check GitHub makes: raw.githubusercontent.com is
+ * case-sensitive, and the Windows and macOS filesystems are not.
+ */
+function existsWithExactCase(root: string, relative: string): boolean {
+  let dir = root;
+  for (const segment of relative.split("/")) {
+    if (!existsSync(dir) || !readdirSync(dir).includes(segment)) return false;
+    dir = join(dir, segment);
+  }
+  return true;
+}
+
 describe("Storybook catalog metadata", () => {
   it("leads its keywords with storybook-addon, then a catalog category", () => {
     expect(pkg.keywords[0]).toBe("storybook-addon");
@@ -68,17 +81,24 @@ describe("Storybook catalog metadata", () => {
   // The catalog renders no SVG, and an icon URL that 404s because its file
   // moved just shows the default icon. The URL is pinned to main, so the file
   // has to exist at that path in the repo.
-  it("points the icon at a PNG that exists in this repo", () => {
+  it("points the icon at a raster image that exists in this repo", () => {
     const { icon } = pkg.storybook;
-    expect(icon).toMatch(/\.png$/);
+    expect(icon).not.toMatch(/\.svg$/i);
     expect(icon.startsWith(RAW_MAIN)).toBe(true);
-    expect(existsSync(join(repoRoot, icon.slice(RAW_MAIN.length)))).toBe(true);
+    const path = icon.slice(RAW_MAIN.length);
+    expect(
+      existsWithExactCase(repoRoot, path),
+      `storybook-addon's package.json#storybook.icon hotlinks ${path} for ` +
+        "the Storybook catalog card; move the URL along with the file",
+    ).toBe(true);
   });
 
-  it("names only frameworks the catalog indexes", () => {
+  // With neither list, the catalog drops the card's "Works with" section.
+  it("names its frameworks, using only names the catalog indexes", () => {
     const { supportedFrameworks = [], unsupportedFrameworks = [] } =
       pkg.storybook;
-    for (const framework of [...supportedFrameworks, ...unsupportedFrameworks])
-      expect(FRAMEWORKS).toContain(framework);
+    const named = [...supportedFrameworks, ...unsupportedFrameworks];
+    expect(named.length).toBeGreaterThan(0);
+    for (const framework of named) expect(FRAMEWORKS).toContain(framework);
   });
 });
