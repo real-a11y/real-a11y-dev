@@ -442,6 +442,21 @@ describe("preview: the beforeAll annotation", () => {
     expect(updates).toHaveLength(1);
   });
 
+  it("does nothing outside a DOM, and leaves a later beforeAll free to wire", () => {
+    // Portable stories under a Node test environment compose it too.
+    cleanup!();
+    vi.stubGlobal("document", undefined);
+    try {
+      expect(preview.beforeAll()).toBeUndefined();
+      expect(channel.count(EVENTS.REQUEST_TREE)).toBe(0);
+    } finally {
+      vi.unstubAllGlobals();
+      cleanup = preview.beforeAll();
+    }
+    expect(cleanup).toBeTypeOf("function");
+    expect(channel.count(EVENTS.REQUEST_TREE)).toBe(1);
+  });
+
   it("forgets an open panel on cleanup, so it waits for the next REQUEST_TREE", () => {
     channel.emit(EVENTS.REQUEST_TREE);
 

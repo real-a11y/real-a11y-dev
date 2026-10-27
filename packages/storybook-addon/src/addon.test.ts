@@ -38,8 +38,15 @@ describe("preview annotations", () => {
     return ready;
   }
 
-  it("hands a CSF Next preview the preview entry's own beforeAll", () => {
-    expect(realA11y().beforeAll).toBe(previewEntry.beforeAll);
+  it("hands a CSF Next preview the preview entry's own beforeAll", async () => {
+    addons.setChannel(new Channel({}));
+    const cleanup = await realA11y().beforeAll();
+    try {
+      // Already wired, by the same module instance the entry exports.
+      expect(previewEntry.beforeAll()).toBeUndefined();
+    } finally {
+      cleanup?.();
+    }
   });
 
   it("comes alive once in a definePreview that names it", async () => {

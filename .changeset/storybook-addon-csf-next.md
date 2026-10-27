@@ -2,7 +2,7 @@
 "@real-a11y-dev/storybook-addon": minor
 ---
 
-Support CSF Next previews (`definePreview`), the default for new Storybook 11 projects.
+Support CSF Next previews (`definePreview`), which Storybook 11 makes the default.
 
 A `definePreview` preview composes only the addons it names in `addons`. Storybook's Vite builder does not even import the preview entry of an addon listed only in `main.ts`, so the panel sat on "Waiting for story to render…" on every story. The package root now has a default export to name there:
 

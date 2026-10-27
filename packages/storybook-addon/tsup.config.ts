@@ -25,12 +25,13 @@ const PEER_EXTERNALS = ["react", "react-dom", /^storybook(\/|$)/];
 export default defineConfig([
   // ── Public barrel + preview (runs inside the story iframe) ─────────────────
   // One config for both, because the barrel's default export (`realA11y()`,
-  // for a CSF Next `definePreview`) hands Storybook the preview's own
-  // `beforeAll`. Built together, the ESM output keeps that code in one shared
-  // chunk — tsup splits ESM by default — so an iframe that loads both entries
-  // gets one copy of core and one copy of the preview's state. Webpack does
-  // that: it imports `./preview` for every addon in `main.ts` even when a CSF
-  // Next preview also imports the barrel. CJS does not split.
+  // for a CSF Next `definePreview`) loads the preview with `import()`. Built
+  // together, the ESM barrel's `import()` points at the preview entry itself
+  // — tsup splits ESM by default — rather than at a bundled copy, so an iframe
+  // that loads both gets one copy of core and of the preview's state. Webpack
+  // does that: it imports `./preview` for every addon in `main.ts` even when a
+  // CSF Next preview also imports the barrel. CJS does not split, so the CJS
+  // barrel carries its own lazy copy.
   //
   // Bundles @real-a11y-dev/core so the iframe doesn't need it as a separate
   // script tag. The preview extracts, observes and acts on the tree with core

@@ -65,8 +65,8 @@ That's it for a classic `.storybook/preview.ts`. No decorator, no parameters req
 
 ### CSF Next (`definePreview`)
 
-If your `.storybook/preview.ts` calls `definePreview` — CSF Next, the default
-for new Storybook 11 projects — name the addon there too:
+If your `.storybook/preview.ts` calls `definePreview` — CSF Next, which
+Storybook 11 makes the default — name the addon there too:
 
 ```ts
 // .storybook/preview.ts

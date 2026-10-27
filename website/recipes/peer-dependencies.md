@@ -80,8 +80,8 @@ currently install. An advisory CI job re-checks the addon against
 `storybook@next` — `tsc` against Storybook 11's own declarations, plus the tests
 that compose the addon through Storybook's real `definePreview` — and the panel
 was checked by hand on `11.0.0-alpha.8`. Treat 11 support as provisional until
-11 ships stable. A CSF Next preview (`definePreview`, the default for new
-Storybook 11 projects) has one extra setup line — see
+11 ships stable. A CSF Next preview (`definePreview`, which Storybook 11
+makes the default) has one extra setup line — see
 [CSF Next](/packages/storybook-addon#csf-next-definepreview).
 
 Note that a **single** `storybook` dependency is all you need now: if

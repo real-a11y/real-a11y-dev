@@ -25,9 +25,9 @@ That's it for a classic `.storybook/preview.ts`. A **Semantic Navigator** tab ap
 
 ### CSF Next (`definePreview`)
 
-If your `.storybook/preview.ts` calls `definePreview` — the default for new
-Storybook 11 projects — Storybook composes only the addons it names, so name
-this one there too. Keep it in `main.ts` as well: that is what adds the panel.
+If your `.storybook/preview.ts` calls `definePreview` — CSF Next, which
+Storybook 11 makes the default — Storybook composes only the addons it names,
+so name this one there too. Keep it in `main.ts` as well: that is what adds the panel.
 
 ```ts
 // .storybook/preview.ts

@@ -78,6 +78,7 @@
         {
           "subpath": ".",
           "types": [
+            "RealA11yPreviewAnnotations",
             "TreeMode",
             "TreeUpdatePayload"
           ],

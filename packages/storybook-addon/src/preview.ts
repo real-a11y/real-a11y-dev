@@ -239,8 +239,8 @@ let wired = false;
  * every addon in `main.ts` and composes its annotations. With a `definePreview`
  * one, it composes only what the user's preview names in `addons` — the Vite
  * builder never imports this entry at all, and webpack imports it but ignores
- * its exports. So the root export (`realA11y()`) hands Storybook this same
- * annotation, and it runs exactly once on either path.
+ * its exports. So the root export (`realA11y()`) hands Storybook an annotation
+ * that runs this one, and it runs exactly once on either path.
  *
  * Storybook calls the returned cleanup before running `beforeAll` again when
  * the project annotations hot-reload, so the listeners are never doubled.
