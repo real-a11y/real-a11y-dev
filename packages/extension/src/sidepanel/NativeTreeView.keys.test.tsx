@@ -1,10 +1,20 @@
-import { render } from "preact";
+import { render, type ComponentProps } from "preact";
 import { act } from "preact/test-utils";
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import {
+  describe,
+  it,
+  expect,
+  beforeEach,
+  afterEach,
+  vi,
+  type Mock,
+} from "vitest";
 
 import type { NativeNode } from "../native/native-actions.js";
 
 import { NativeTreeView } from "./NativeTreeView.js";
+
+type TreeProps = ComponentProps<typeof NativeTreeView>;
 
 /**
  * What the native tree gained to match the DOM tree: type-ahead and `*`,
@@ -60,9 +70,9 @@ describe("NativeTreeView keyboard and row parity", () => {
   function mount(
     options: {
       nodes?: Map<string, NativeNode>;
-      onActivate?: ReturnType<typeof vi.fn>;
-      onSendKey?: ReturnType<typeof vi.fn>;
-      onDialogEscape?: ReturnType<typeof vi.fn>;
+      onActivate?: Mock<TreeProps["onActivate"]>;
+      onSendKey?: Mock<NonNullable<TreeProps["onSendKey"]>>;
+      onDialogEscape?: Mock<NonNullable<TreeProps["onDialogEscape"]>>;
       roleFilter?: string;
     } = {},
   ) {

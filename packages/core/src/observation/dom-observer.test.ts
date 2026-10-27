@@ -1,4 +1,12 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import {
+  describe,
+  it,
+  expect,
+  beforeEach,
+  afterEach,
+  vi,
+  type Mock,
+} from "vitest";
 
 import { isModal } from "../extraction/dom-extractor.js";
 import { clobber, shadow } from "../test-support/clobber.js";
@@ -16,7 +24,7 @@ async function settleObserver(debounceMs = 300) {
 }
 
 describe("DomObserver", () => {
-  let onTreeChange: ReturnType<typeof vi.fn>;
+  let onTreeChange: Mock<(change?: TreeChange) => void>;
   let observer: DomObserver;
 
   beforeEach(() => {
@@ -63,7 +71,7 @@ describe("DomObserver", () => {
     await settleObserver(100);
 
     expect(onTreeChange).toHaveBeenCalledTimes(1);
-    const change = onTreeChange.mock.calls[0]![0];
+    const change = onTreeChange.mock.calls[0]![0]!;
     expect(
       change.mutations?.some((m: MutationRecord) => m.attributeName === "for"),
     ).toBe(true);
@@ -83,7 +91,7 @@ describe("DomObserver", () => {
       await settleObserver(100);
 
       expect(onTreeChange).toHaveBeenCalledTimes(1);
-      const change = onTreeChange.mock.calls[0]![0];
+      const change = onTreeChange.mock.calls[0]![0]!;
       expect(
         change.mutations?.some((m: MutationRecord) => m.attributeName === attr),
       ).toBe(true);
@@ -1214,7 +1222,7 @@ describe("DomObserver", () => {
       vi.advanceTimersByTime(110);
 
       expect(onTreeChange).toHaveBeenCalledTimes(1);
-      expect(onTreeChange.mock.calls[0][0].dirtyRoots).toEqual([menu]);
+      expect(onTreeChange.mock.calls[0][0]!.dirtyRoots).toEqual([menu]);
     });
 
     it("fires with the popover as a dirty root", () => {
@@ -1227,7 +1235,7 @@ describe("DomObserver", () => {
       vi.advanceTimersByTime(110);
 
       expect(onTreeChange).toHaveBeenCalledTimes(1);
-      expect(onTreeChange.mock.calls[0][0].dirtyRoots).toEqual([menu]);
+      expect(onTreeChange.mock.calls[0][0]!.dirtyRoots).toEqual([menu]);
     });
 
     it("hears a popover outside the root", () => {
@@ -1269,7 +1277,7 @@ describe("DomObserver", () => {
       await settleObserver(100);
 
       expect(onTreeChange).toHaveBeenCalledTimes(1);
-      expect(onTreeChange.mock.calls[0][0].full).toBe(true);
+      expect(onTreeChange.mock.calls[0][0]!.full).toBe(true);
     });
 
     it("leaves a popover attribute inside the root to the incremental path", async () => {
@@ -1281,7 +1289,7 @@ describe("DomObserver", () => {
       await settleObserver(100);
 
       expect(onTreeChange).toHaveBeenCalledTimes(1);
-      expect(onTreeChange.mock.calls[0][0].full).toBeUndefined();
+      expect(onTreeChange.mock.calls[0][0]!.full).toBeUndefined();
     });
 
     it("stops listening on stop()", async () => {
@@ -1359,7 +1367,7 @@ describe("DomObserver", () => {
       await settleObserver(100);
 
       expect(onTreeChange).toHaveBeenCalledTimes(1);
-      expect(onTreeChange.mock.calls[0][0].full).toBe(true);
+      expect(onTreeChange.mock.calls[0][0]!.full).toBe(true);
     });
 
     it("asks for a full extraction when it closes", async () => {
@@ -1370,7 +1378,7 @@ describe("DomObserver", () => {
       await settleObserver(100);
 
       expect(onTreeChange).toHaveBeenCalledTimes(1);
-      expect(onTreeChange.mock.calls[0][0].full).toBe(true);
+      expect(onTreeChange.mock.calls[0][0]!.full).toBe(true);
     });
 
     it("hears one inside a container rather than directly in <body>", async () => {
@@ -1381,7 +1389,7 @@ describe("DomObserver", () => {
       await settleObserver(100);
 
       expect(onTreeChange).toHaveBeenCalledTimes(1);
-      expect(onTreeChange.mock.calls[0][0].full).toBe(true);
+      expect(onTreeChange.mock.calls[0][0]!.full).toBe(true);
     });
 
     // An open modal IS the tree, so a change inside it has to refresh it, as
@@ -1399,7 +1407,7 @@ describe("DomObserver", () => {
       await settleObserver(100);
 
       expect(onTreeChange).toHaveBeenCalledTimes(1);
-      expect(onTreeChange.mock.calls[0][0].mutations).toHaveLength(1);
+      expect(onTreeChange.mock.calls[0][0]!.mutations).toHaveLength(1);
     });
 
     it("hears typing inside it while it is open as a modal", async () => {
@@ -1416,7 +1424,7 @@ describe("DomObserver", () => {
       await settleObserver(100);
 
       expect(onTreeChange).toHaveBeenCalledTimes(1);
-      expect(onTreeChange.mock.calls[0][0].dirtyRoots).toEqual([input]);
+      expect(onTreeChange.mock.calls[0][0]!.dirtyRoots).toEqual([input]);
     });
 
     it("watches inside one that was already a modal when observing started", async () => {
@@ -1498,7 +1506,7 @@ describe("DomObserver", () => {
       await settleObserver(100);
 
       expect(onTreeChange).toHaveBeenCalledTimes(1);
-      expect(onTreeChange.mock.calls[0][0].full).toBe(true);
+      expect(onTreeChange.mock.calls[0][0]!.full).toBe(true);
 
       // And it is no longer watched.
       onTreeChange.mockClear();
@@ -1542,7 +1550,7 @@ describe("DomObserver", () => {
         dlg.remove();
         await settleObserver(100);
         expect(onTreeChange).toHaveBeenCalledTimes(1);
-        expect(onTreeChange.mock.calls[0][0].full).toBe(true);
+        expect(onTreeChange.mock.calls[0][0]!.full).toBe(true);
       },
     );
 
@@ -1578,14 +1586,14 @@ describe("DomObserver", () => {
       document.getElementById("app")!.appendChild(document.createElement("p"));
       await settleObserver(100);
       expect(onTreeChange).toHaveBeenCalledTimes(1);
-      expect(onTreeChange.mock.calls[0][0].mutations).toHaveLength(1);
+      expect(onTreeChange.mock.calls[0][0]!.mutations).toHaveLength(1);
 
       // Its closing still refreshes in full: the scope moves off it.
       onTreeChange.mockClear();
       dlg.removeAttribute("open");
       await settleObserver(100);
       expect(onTreeChange).toHaveBeenCalledTimes(1);
-      expect(onTreeChange.mock.calls[0][0].full).toBe(true);
+      expect(onTreeChange.mock.calls[0][0]!.full).toBe(true);
     });
 
     it("stops watching inside it once it moves into the root", async () => {
@@ -1602,7 +1610,7 @@ describe("DomObserver", () => {
       dlg.appendChild(document.createElement("p"));
       await settleObserver(100);
       expect(onTreeChange).toHaveBeenCalledTimes(1);
-      expect(onTreeChange.mock.calls[0][0].mutations).toHaveLength(1);
+      expect(onTreeChange.mock.calls[0][0]!.mutations).toHaveLength(1);
     });
 
     it("leaves a <dialog> inside the root to the incremental path", async () => {
@@ -1613,7 +1621,7 @@ describe("DomObserver", () => {
       await settleObserver(100);
 
       expect(onTreeChange).toHaveBeenCalledTimes(1);
-      expect(onTreeChange.mock.calls[0][0].full).toBeUndefined();
+      expect(onTreeChange.mock.calls[0][0]!.full).toBeUndefined();
     });
 
     // Bounded: only a <dialog> can take the scope by opening. A <details>
