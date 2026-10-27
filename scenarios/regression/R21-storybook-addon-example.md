@@ -39,7 +39,8 @@ pnpm --filter @real-a11y-dev/example-storybook storybook
    a story whose content changes (twin: D9 step 8)
 9. A story with a name far wider than the panel (a long button label or link text): does
    it end in "…" with no sideways scroll? Open the panel's **⚙**, turn on **Show full
-   names**, and switch stories: is it still on?
+   names**, then open a component's **Docs** page and one of its stories (Storybook
+   mounts a new panel there, as D9 step 4 notes): is it still on?
 
 ## Expected
 
@@ -62,8 +63,8 @@ pnpm --filter @real-a11y-dev/example-storybook storybook
   10.1 and later, and with the panel hidden on every version
 - **9** — from storybook-addon 0.1.0-beta.21 (unreleased; panel-clip-long-names is a
   pending changeset) a long name never scrolls the panel sideways unless **Show full
-  names** is on, and the choice holds across stories. Earlier releases widen the tree
-  for it and have no ⚙
+  names** is on, and the choice holds in the panel Storybook mounts after the Docs page,
+  and across stories. Earlier releases widen the tree for it and have no ⚙
 
 ## Why this exists
 

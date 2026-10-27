@@ -282,8 +282,8 @@ describe("panel visibility", () => {
 });
 
 describe("Show full names", () => {
-  // Storybook mounts the panel afresh on a story switch, so a choice only the
-  // panel held would start over on every story.
+  // Storybook unmounts the panel on a docs page (Storybook 9 behind another
+  // addon tab as well), so a choice only the panel held would start over.
   it("keeps the choice when Storybook mounts the panel again", async () => {
     await renderPanel(true);
     await resize(600, 300);
