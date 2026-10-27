@@ -42,8 +42,6 @@
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "sideEffects": [
-    "./dist/preview.js",
-    "./dist/preview.cjs",
     "./dist/manager.js",
     "./dist/manager.cjs"
   ],

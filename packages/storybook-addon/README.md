@@ -4,10 +4,9 @@ A Storybook panel that shows the semantic tree, heading outline, and tab sequenc
 
 Requires **Storybook 9, 10 or 11**. Storybook 9 folded `@storybook/manager-api`
 and `@storybook/preview-api` into the `storybook` package, so 8.x is not
-supported. Storybook 11 is still prerelease, which is why the peer range is
-`^11.0.0-0` — a plain `^11.0.0` would not match `11.0.0-alpha.0`. Support for 11
-is verified by type-checking and building against it, and is provisional while
-it is in alpha.
+supported. Storybook 11 has only published prereleases so far, which is why the
+peer range is `^11.0.0-0` — a plain `^11.0.0` would not match `11.0.0-alpha.8`.
+Support for 11 is provisional until it ships stable.
 
 ```sh
 npm install -D @real-a11y-dev/storybook-addon
@@ -22,7 +21,25 @@ export default {
 };
 ```
 
-That's it. A **Semantic Navigator** tab appears alongside Controls and A11y for every story.
+That's it for a classic `.storybook/preview.ts`. A **Semantic Navigator** tab appears alongside Controls and A11y for every story.
+
+### CSF Next (`definePreview`)
+
+If your `.storybook/preview.ts` calls `definePreview` — CSF Next, which
+Storybook 11 makes the default — Storybook composes only the addons it names,
+so name this one there too. Keep it in `main.ts` as well: that is what adds the panel.
+
+```ts
+// .storybook/preview.ts
+import { realA11y } from "@real-a11y-dev/storybook-addon";
+import { definePreview } from "@storybook/react-vite";
+
+export default definePreview({
+  addons: [realA11y()],
+});
+```
+
+Without it the panel stays on "Waiting for story to render…".
 
 ## Docs
 

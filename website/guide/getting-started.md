@@ -221,7 +221,7 @@ export default {
 };
 ```
 
-That's it. A **Semantic Navigator** panel appears next to Controls and A11y for every story, showing the tree, heading outline, and tab sequence — updated live while the panel is open.
+That's it. A **Semantic Navigator** panel appears next to Controls and A11y for every story, showing the tree, heading outline, and tab sequence — updated live while the panel is open. If your `.storybook/preview.ts` uses `definePreview` (CSF Next), add one more line there — see [CSF Next](/packages/storybook-addon#csf-next-definepreview).
 
 ---
 

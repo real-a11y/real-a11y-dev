@@ -23,34 +23,30 @@ import { buildInlineStyles } from "../ui/src/styles/inline.js";
 const PEER_EXTERNALS = ["react", "react-dom", /^storybook(\/|$)/];
 
 export default defineConfig([
-  // ── Public re-export (constants only) ──────────────────────────────────────
-  // This entry used to list `@real-a11y-dev/core` as EXTERNAL, which was right
-  // while core was published and is wrong now that it isn't: npm cannot resolve
-  // a private package, in the JS or in the types. Both halves move together.
+  // ── Public barrel + preview (runs inside the story iframe) ─────────────────
+  // One config for both, because the barrel's default export (`realA11y()`,
+  // for a CSF Next `definePreview`) loads the preview with `import()`. Built
+  // together, the ESM barrel's `import()` points at the preview entry itself
+  // — tsup splits ESM by default — rather than at a bundled copy, so an iframe
+  // that loads both gets one copy of core and of the preview's state. Webpack
+  // does that: it imports `./preview` for every addon in `main.ts` even when a
+  // CSF Next preview also imports the barrel. CJS does not split, so the CJS
+  // barrel carries its own lazy copy.
   //
-  // It is not defensive here. `index.ts` re-exports `TreeMode` and
-  // `TreeUpdatePayload` from `constants.ts`, and both are written in terms of
-  // core's `TreeViewMode` (`TreeMode` IS `TreeViewMode`) — so the emitted
-  // `index.d.ts` names core directly on the package's public surface.
-  {
-    entry: { index: "src/index.ts" },
-    format: ["esm", "cjs"],
-    dts: { resolve: ["@real-a11y-dev/core"] },
-    sourcemap: true,
-    clean: false,
-    noExternal: ["@real-a11y-dev/core"],
-    external: [...PEER_EXTERNALS, "preact"],
-  },
-
-  // ── Preview (runs inside the story iframe) ─────────────────────────────────
   // Bundles @real-a11y-dev/core so the iframe doesn't need it as a separate
   // script tag. The preview extracts, observes and acts on the tree with core
   // alone; it never imports `@real-a11y-dev/testing`, which is why the addon
   // doesn't depend on it.
+  //
+  // `dts.resolve` with `noExternal`, because core is private: npm cannot
+  // resolve it, in the JS or in the types. It is not defensive here. `index.ts`
+  // re-exports `TreeMode` and `TreeUpdatePayload` from `constants.ts`, and both
+  // are written in terms of core's `TreeViewMode` (`TreeMode` IS
+  // `TreeViewMode`) — so the emitted `index.d.ts` names core directly on the
+  // package's public surface.
   {
-    entry: { preview: "src/preview.ts" },
+    entry: { index: "src/index.ts", preview: "src/preview.ts" },
     format: ["esm", "cjs"],
-    // core is private, so its declarations are inlined too.
     dts: { resolve: ["@real-a11y-dev/core"] },
     sourcemap: true,
     clean: false,

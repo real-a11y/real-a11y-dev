@@ -159,8 +159,11 @@ main
     code ".storybook/main.ts"
   button "Copy Code"
   code
-  paragraph "That's it. A panel appears next to Controls and A11y for every story, showing the tree, heading outline, and tab sequence — updated live while the panel is open."
+  paragraph "That's it. A panel appears next to Controls and A11y for every story, showing the tree, heading outline, and tab sequence — updated live while the panel is open. If your uses (CSF Next), add one more line there — see ."
     strong "Semantic Navigator"
+    code ".storybook/preview.ts"
+    code "definePreview"
+    link "CSF Next"
   separator
   heading "Requirements" (level 2)
   table

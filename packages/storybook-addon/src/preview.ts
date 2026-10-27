@@ -1,11 +1,12 @@
 /**
  * Preview-side entry for the Semantic Navigator Storybook addon.
  *
- * Runs inside the story iframe. Extraction is **lazy**: the DomObserver and
- * LiveTreeExtractor only run while the manager panel is open (from the first
- * `REQUEST_TREE` until `STOP_TREE`). That keeps animating / Controls-driven
- * stories from paying extract + postMessage cost when the developer is on
- * another tab.
+ * Runs inside the story iframe, from the `beforeAll` annotation at the bottom
+ * of this file — importing the module has no side effects. Extraction is
+ * **lazy**: the DomObserver and LiveTreeExtractor only run while the manager
+ * panel is open (from the first `REQUEST_TREE` until `STOP_TREE`). That keeps
+ * animating / Controls-driven stories from paying extract + postMessage cost
+ * when the developer is on another tab.
  *
  * While active, re-extracts on debounced DOM mutations and broadcasts the
  * result as structured JSON over the Storybook channel — but only when that
@@ -222,65 +223,116 @@ function stop() {
 
 // ── Bootstrap ────────────────────────────────────────────────────────────────
 
-if (typeof document !== "undefined") {
+/**
+ * True from a `beforeAll` until its cleanup. A CSF Next preview can name the
+ * addon twice — `storybook add` writes `import * as … from "…/preview"` into
+ * `addons`, and the docs show `realA11y()` — and Storybook then runs both
+ * hooks; the second must not double every listener and every extraction.
+ */
+let wired = false;
+
+/**
+ * Project-level `beforeAll` annotation: wires this module to the channel.
+ *
+ * It is an annotation rather than code that runs on import because of CSF
+ * Next. With a classic `.storybook/preview.ts`, Storybook loads this entry for
+ * every addon in `main.ts` and composes its annotations. With a `definePreview`
+ * one, it composes only what the user's preview names in `addons` — the Vite
+ * builder never imports this entry at all, and webpack imports it but ignores
+ * its exports. So the root export (`realA11y()`) hands Storybook an annotation
+ * that runs this one, and it runs exactly once on either path.
+ *
+ * Storybook calls the returned cleanup before running `beforeAll` again when
+ * the project annotations hot-reload, so the listeners are never doubled.
+ */
+export function beforeAll(): (() => void) | undefined {
+  if (typeof document === "undefined" || wired) return undefined;
+  wired = true;
   const channel = addons.getChannel();
 
-  // Manager mounted / became visible → start observing and send the tree, in
-  // the mode the request carries: this module starts over in "a11y" on every
-  // canvas reload, whatever mode the panel is showing.
-  channel.on(EVENTS.REQUEST_TREE, (mode?: TreeMode) => {
-    panelWantsTree = true;
-    if (mode !== undefined && mode !== currentMode) applyMode(mode);
-    if (!observer) {
-      start();
-    }
-    // Already running (in that mode, by now): skip a second publish —
-    // storyRendered/start already sent TREE_UPDATED. Re-REQUEST while idle is
-    // what resumes after reload.
-  });
+  const listeners: [string, Parameters<typeof channel.on>[1]][] = [
+    // Manager mounted / became visible → start observing and send the tree, in
+    // the mode the request carries: this module starts over in "a11y" on every
+    // canvas reload, whatever mode the panel is showing.
+    [
+      EVENTS.REQUEST_TREE,
+      (mode?: TreeMode) => {
+        panelWantsTree = true;
+        if (mode !== undefined && mode !== currentMode) applyMode(mode);
+        if (!observer) {
+          start();
+        }
+        // Already running (in that mode, by now): skip a second publish —
+        // storyRendered/start already sent TREE_UPDATED. Re-REQUEST while idle
+        // is what resumes after reload.
+      },
+    ],
 
-  // Manager unmounted / switched away → stop paying extract + channel cost.
-  channel.on(EVENTS.STOP_TREE, () => {
-    panelWantsTree = false;
-    stop();
-  });
+    // Manager unmounted / switched away → stop paying extract + channel cost.
+    [
+      EVENTS.STOP_TREE,
+      () => {
+        panelWantsTree = false;
+        stop();
+      },
+    ],
 
-  // Manager requests a mode change → re-extract with the new mode.
-  channel.on(EVENTS.SET_MODE, (mode: TreeMode) => applyMode(mode));
+    // Manager requests a mode change → re-extract with the new mode.
+    [EVENTS.SET_MODE, (mode: TreeMode) => applyMode(mode)],
 
-  // Manager selected a node → highlight it in the story.
-  channel.on(EVENTS.HIGHLIGHT_NODE, (nodeId: string) => {
-    focusManager?.highlightElement(nodeId, { scroll: false, overlay: true });
-  });
+    // Manager selected a node → highlight it in the story.
+    [
+      EVENTS.HIGHLIGHT_NODE,
+      (nodeId: string) => {
+        focusManager?.highlightElement(nodeId, {
+          scroll: false,
+          overlay: true,
+        });
+      },
+    ],
 
-  // Manager cleared selection → remove highlight overlay.
-  channel.on(EVENTS.CLEAR_HIGHLIGHT, () => {
-    focusManager?.clearHighlight();
-  });
+    // Manager cleared selection → remove highlight overlay.
+    [EVENTS.CLEAR_HIGHLIGHT, () => focusManager?.clearHighlight()],
 
-  // Manager activated a node → dispatch the action in the story.
-  channel.on(
-    EVENTS.ACTIVATE_NODE,
-    ({ nodeId, action }: { nodeId: string; action: string }) => {
-      dispatcher?.dispatch({ nodeId, action: action as never });
-    },
-  );
+    // Manager activated a node → dispatch the action in the story.
+    [
+      EVENTS.ACTIVATE_NODE,
+      ({ nodeId, action }: { nodeId: string; action: string }) => {
+        dispatcher?.dispatch({ nodeId, action: action as never });
+      },
+    ],
 
-  channel.on("storyRendered", () => {
-    stop();
-    if (panelWantsTree) start();
-  });
-  channel.on("storyChanged", () => {
-    stop();
-    if (panelWantsTree) {
-      setTimeout(() => {
-        // Panel may have closed during the delay.
+    [
+      "storyRendered",
+      () => {
+        stop();
         if (panelWantsTree) start();
-      }, 50);
-    }
-  });
+      },
+    ],
+    [
+      "storyChanged",
+      () => {
+        stop();
+        if (panelWantsTree) {
+          setTimeout(() => {
+            // Panel may have closed during the delay.
+            if (panelWantsTree) start();
+          }, 50);
+        }
+      },
+    ],
+  ];
+  for (const [event, listener] of listeners) channel.on(event, listener);
 
   // Tell an already-open manager panel that this preview iframe is ready so it
-  // can re-send REQUEST_TREE after a canvas reload (module state was reset).
+  // can re-send REQUEST_TREE after a canvas reload (module state was reset) or
+  // after a hot reload ran the cleanup below.
   channel.emit(EVENTS.PREVIEW_READY);
+
+  return () => {
+    for (const [event, listener] of listeners) channel.off(event, listener);
+    panelWantsTree = false;
+    stop();
+    wired = false;
+  };
 }

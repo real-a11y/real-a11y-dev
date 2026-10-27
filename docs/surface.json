@@ -78,19 +78,22 @@
         {
           "subpath": ".",
           "types": [
+            "RealA11yPreviewAnnotations",
             "TreeMode",
             "TreeUpdatePayload"
           ],
           "values": [
             "ADDON_ID",
             "EVENTS",
-            "PANEL_ID"
+            "PANEL_ID",
+            "realA11y"
           ]
         },
         {
           "subpath": "./preview",
           "types": [],
           "values": [
+            "beforeAll",
             "pickStoryRoot"
           ]
         },

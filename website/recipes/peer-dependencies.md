@@ -73,14 +73,16 @@ publishing at 8.6, and `storybook@8` exposes no equivalent subpath. So the
 supported range is **Storybook 9.x, 10.x or 11.x**; 8 and earlier will not work,
 and there is no build that can serve both sides of that split.
 
-The 11 half of that range is written `^11.0.0-0`, not `^11.0.0`. Storybook 11 is
-still prerelease — `11.0.0-alpha.0` is the only 11.x published — and npm ranges
-exclude prereleases unless the range itself names one, so `^11.0.0` would have
-matched nothing you can currently install. Support for 11 is verified against
-that alpha — `tsc` checks the addon against Storybook 11's own declarations —
-and re-checked by an advisory CI job. The unit tests mock the Storybook API, so
-they are not part of that evidence. Treat 11 support as provisional until 11
-ships stable.
+The 11 half of that range is written `^11.0.0-0`, not `^11.0.0`. Storybook 11 has
+only published prereleases so far, and npm ranges exclude prereleases unless the
+range itself names one, so `^11.0.0` would have matched nothing you can
+currently install. An advisory CI job re-checks the addon against
+`storybook@next` — `tsc` against Storybook 11's own declarations, plus the tests
+that compose the addon through Storybook's real `definePreview` — and the panel
+was checked by hand on `11.0.0-alpha.8`. Treat 11 support as provisional until
+11 ships stable. A CSF Next preview (`definePreview`, which Storybook 11
+makes the default) has one extra setup line — see
+[CSF Next](/packages/storybook-addon#csf-next-definepreview).
 
 Note that a **single** `storybook` dependency is all you need now: if
 your project still carries `@storybook/manager-api` or `@storybook/preview-api`
