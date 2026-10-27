@@ -70,7 +70,7 @@ Storybook 11 makes the default — name the addon there too:
 
 ```ts
 // .storybook/preview.ts
-import realA11y from "@real-a11y-dev/storybook-addon";
+import { realA11y } from "@real-a11y-dev/storybook-addon";
 import { definePreview } from "@storybook/react-vite";
 
 export default definePreview({

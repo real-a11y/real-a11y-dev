@@ -85,7 +85,8 @@
           "values": [
             "ADDON_ID",
             "EVENTS",
-            "PANEL_ID"
+            "PANEL_ID",
+            "realA11y"
           ]
         },
         {

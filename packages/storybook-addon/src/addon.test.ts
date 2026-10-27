@@ -5,7 +5,7 @@ import { describe, it, expect, vi } from "vitest";
 
 import * as previewEntry from "./preview.js";
 
-import realA11y, { ADDON_ID, EVENTS, PANEL_ID } from "./index.js";
+import { ADDON_ID, EVENTS, PANEL_ID, realA11y } from "./index.js";
 
 describe("addon constants", () => {
   it("exposes a unique addon id and panel id", () => {

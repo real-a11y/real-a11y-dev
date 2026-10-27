@@ -31,7 +31,7 @@ so name this one there too. Keep it in `main.ts` as well: that is what adds the 
 
 ```ts
 // .storybook/preview.ts
-import realA11y from "@real-a11y-dev/storybook-addon";
+import { realA11y } from "@real-a11y-dev/storybook-addon";
 import { definePreview } from "@storybook/react-vite";
 
 export default definePreview({

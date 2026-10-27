@@ -235,11 +235,7 @@ export async function extractApi(repoRoot, packages) {
           const dtsAbs = resolve(dir, dts);
           if (existsSync(dtsAbs)) {
             const declText = await readFile(dtsAbs, "utf8");
-            // `default` out of this half too: a default export is absent from
-            // `values` by the choice above, not because it is type-only.
-            types = declaredNames(declText).filter(
-              (n) => n !== "default" && !values.includes(n),
-            );
+            types = declaredNames(declText).filter((n) => !values.includes(n));
 
             for (const { specifier, owner } of unpublishableRefs(
               declText,

@@ -2,7 +2,7 @@
  * Public entry. Consumers reference the package name in their
  * `.storybook/main.ts` `addons` array, and Storybook auto-loads the `./preview`
  * and `./manager` entrypoints. A CSF Next preview (`definePreview`) also calls
- * the default export below.
+ * `realA11y()` below.
  *
  * This file exports the shared constants + types so tests and custom
  * tooling can decode the channel payload without re-declaring it.
@@ -19,7 +19,7 @@ export {
  * The addon's preview annotations, for a CSF Next `.storybook/preview.ts`:
  *
  * ```ts
- * import realA11y from "@real-a11y-dev/storybook-addon";
+ * import { realA11y } from "@real-a11y-dev/storybook-addon";
  *
  * export default definePreview({ addons: [realA11y()] });
  * ```
@@ -27,6 +27,10 @@ export {
  * A `definePreview` preview composes only the addons it names, so without this
  * the panel waits for a tree that never comes. The addon stays in `main.ts` as
  * well — that is what registers the panel.
+ *
+ * Named rather than the default export Storybook's addon kit uses: this barrel
+ * also ships as CJS, and a default export there is `exports.default` under
+ * types that say `export default`, which `attw` rightly rejects.
  *
  * This is what Storybook's `definePreviewAddon` would return — that helper only
  * returns its argument — written without it: `storybook@9.0` exports neither
@@ -37,7 +41,7 @@ export {
  * is also where manager-side tooling gets `EVENTS`, and a static import would
  * pull core and `storybook/preview-api` into the manager with it.
  */
-export default function realA11y(): RealA11yPreviewAnnotations {
+export function realA11y(): RealA11yPreviewAnnotations {
   return {
     beforeAll: async () => (await import("./preview.js")).beforeAll(),
   };
