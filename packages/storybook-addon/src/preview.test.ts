@@ -9,7 +9,7 @@ import {
 } from "vitest";
 
 // In-memory stand-in for the Storybook preview channel so we can drive the
-// preview-side event handlers registered at import time. Created via
+// preview-side event handlers its `beforeAll` annotation registers. Created via
 // vi.hoisted so it exists before the (hoisted) vi.mock factory references it.
 const { channel, observerState, extractorState } = vi.hoisted(() => {
   const handlers = new Map<string, ((...args: unknown[]) => void)[]>();
@@ -20,9 +20,18 @@ const { channel, observerState, extractorState } = vi.hoisted(() => {
         list.push(cb);
         handlers.set(event, list);
       },
-      emit: (event: string, ...args: unknown[]) => {
-        for (const cb of handlers.get(event) ?? []) cb(...args);
+      off: (event: string, cb: (...args: unknown[]) => void) => {
+        handlers.set(
+          event,
+          (handlers.get(event) ?? []).filter((listener) => listener !== cb),
+        );
       },
+      emit: (event: string, ...args: unknown[]) => {
+        // A copy, so a listener that unsubscribes mid-emit can't skip another.
+        for (const cb of [...(handlers.get(event) ?? [])]) cb(...args);
+      },
+      /** How many listeners `event` has. */
+      count: (event: string) => handlers.get(event)?.length ?? 0,
     },
     observerState: {
       constructed: 0,
@@ -143,12 +152,25 @@ vi.mock("@real-a11y-dev/core", () => {
 import type { TreeUpdatePayload } from "./constants.js";
 
 let EVENTS: typeof import("./constants.js").EVENTS;
+let preview: typeof import("./preview.js");
+/** What importing the module, before any `beforeAll` ran, left on the channel. */
+let onImport: { requestTreeListeners: number; readyEmitted: boolean };
+/** The cleanup the module's `beforeAll` annotation returned. */
+let cleanup: (() => void) | undefined;
 
 beforeAll(async () => {
-  // Dynamic import so the bootstrap (which calls getChannel()) runs after the
-  // mocked channel is in place and registers its handlers against it.
-  await import("./preview.js");
   ({ EVENTS } = await import("./constants.js"));
+  let readyEmitted = false;
+  channel.on(EVENTS.PREVIEW_READY, () => {
+    readyEmitted = true;
+  });
+  preview = await import("./preview.js");
+  onImport = {
+    requestTreeListeners: channel.count(EVENTS.REQUEST_TREE),
+    readyEmitted,
+  };
+  // What Storybook does once it has composed the project annotations.
+  cleanup = preview.beforeAll();
 });
 
 beforeEach(() => {
@@ -372,5 +394,63 @@ describe("preview: redundant tree publishes", () => {
     channel.emit("storyRendered");
 
     expect(updates).toHaveLength(2);
+  });
+});
+
+describe("preview: the beforeAll annotation", () => {
+  it("leaves the channel alone on import, so only a composed annotation wires it", () => {
+    // A CSF Next preview composes only the addons it names. Code that ran on
+    // import would run whether or not Storybook composed it, and twice when it
+    // is both imported by `main.ts` and named in `definePreview`.
+    expect(onImport).toEqual({ requestTreeListeners: 0, readyEmitted: false });
+  });
+
+  it("hands back a cleanup that unsubscribes and stops the observer", () => {
+    channel.emit(EVENTS.REQUEST_TREE);
+    expect(observerState.started).toBe(1);
+
+    cleanup!();
+    try {
+      expect(observerState.stopped).toBe(1);
+      expect(channel.count(EVENTS.REQUEST_TREE)).toBe(0);
+
+      observerState.reset();
+      channel.emit(EVENTS.REQUEST_TREE);
+      channel.emit("storyRendered");
+      expect(observerState.constructed).toBe(0);
+    } finally {
+      cleanup = preview.beforeAll();
+    }
+  });
+
+  it("re-wires once after a hot reload, without doubling the listeners", () => {
+    const ready = vi.fn();
+    channel.on(EVENTS.PREVIEW_READY, ready);
+
+    // Storybook runs the previous cleanup, then the reloaded `beforeAll`.
+    cleanup!();
+    cleanup = preview.beforeAll();
+
+    // The announcement is what makes an open panel re-send REQUEST_TREE.
+    expect(ready).toHaveBeenCalledTimes(1);
+    expect(channel.count(EVENTS.REQUEST_TREE)).toBe(1);
+
+    const updates: unknown[] = [];
+    channel.on(EVENTS.TREE_UPDATED, (payload) => updates.push(payload));
+    channel.emit(EVENTS.REQUEST_TREE);
+    expect(observerState.started).toBe(1);
+    expect(updates).toHaveLength(1);
+  });
+
+  it("forgets an open panel on cleanup, so it waits for the next REQUEST_TREE", () => {
+    channel.emit(EVENTS.REQUEST_TREE);
+
+    cleanup!();
+    cleanup = preview.beforeAll();
+    observerState.reset();
+    extractorState.reset();
+
+    channel.emit("storyRendered");
+    expect(observerState.constructed).toBe(0);
   });
 });

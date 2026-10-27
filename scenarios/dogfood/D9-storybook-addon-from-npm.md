@@ -28,7 +28,10 @@ npx storybook@latest init
 
 Then install the addon with the command the docs give, as written.
 
-1. Register the addon exactly as the docs describe
+1. Register the addon exactly as the docs describe. Record which kind of
+   `.storybook/preview.ts` `init` scaffolded: a classic one, or one that calls
+   `definePreview` (CSF Next, the Storybook 11 default). On CSF Next the docs give a
+   second line, in `definePreview`
 2. `npm run storybook` — does the panel appear in the addons tray? Select it, then click
    **Controls** with the mouse: the tray stays usable and Controls becomes selected
 3. Switch between stories whose trees **differ** — the init template's Header "Logged In" ↔
@@ -57,10 +60,19 @@ Then install the addon with the command the docs give, as written.
    `let n=0; __STORYBOOK_ADDONS_CHANNEL__.on('real-a11y/semantic-navigator/tree-updated',()=>n++); setTimeout(()=>console.log(n),3000)`
 9. Note anything the docs omit that you needed
 10. `npm ls @real-a11y-dev/testing` — the addon should not have brought it in
+11. CSF Next preview only. Remove `realA11y()` from `definePreview`, restart, and open
+    the panel on any story. Then put it back **and** add the form `storybook add`
+    writes, `import * as realA11yPreview from "@real-a11y-dev/storybook-addon/preview"`
+    with `realA11yPreview` in the same `addons` array, and run step 8's counter in the
+    manager console across one story switch, against the same switch named once
 
 ## Expected
 
 - The addon registers per the docs, with no undocumented extra config
+- **1** — on a CSF Next preview the panel shows trees with the docs' `definePreview` line,
+  from the first release after 0.1.0-beta.20. Up to 0.1.0-beta.20 there was no such line to
+  add, and on a Vite Storybook the panel waited on every story (confirmed on
+  `11.0.0-alpha.8`)
 - The panel appears and tracks stories and controls
 - **2/4** — selecting the panel never takes the tray away: a mouse click on Controls selects
   it. On storybook-addon 0.1.0-beta.19 with Storybook 10.1 or later the panel paints over the
@@ -84,6 +96,9 @@ Then install the addon with the command the docs give, as written.
 - Step 10 prints `(empty)`, from the first release after `0.1.0-beta.17`: the addon has no
   runtime dependency of its own. Up to `0.1.0-beta.17` it listed `@real-a11y-dev/testing`,
   which it never imported, so there `npm ls` shows it — that is the old behaviour, not a fail
+- **11** — without the line, "Waiting for story to render…" on every story, the cause the
+  docs' troubleshooting entry names. Named both ways, the counter reads what it reads named
+  once: the second one is ignored, not run twice
 
 ## Why this exists
 
@@ -103,6 +118,13 @@ promise. The mode check in step 4 came with the fix for both: a panel that goes 
 for its tree again, and the beta.19 panel never said in which mode — so a canvas reload restarted
 the preview in A11Y under a DOM toggle, and on Storybook 9 a tab switch brought the panel back on
 A11Y over a DOM-mode tree.
+
+Step 1's preview check and step 11 came with Storybook 11, which makes CSF Next the default.
+A `definePreview` preview composes only the addons it names, and Storybook's Vite builder
+never even imports the preview entry of an addon listed only in `main.ts` — so a project
+`init` scaffolds on 11 is broken by the classic one-line setup, with nothing in any console
+to say why. Step 11 is there because the docs show one way to name the addon and
+`storybook add` writes another, and a project can end up with both.
 
 The Docs page in step 4 came later. Storybook unmounts the panel on a Docs page and mounts a new
 one for the story after it, and up to 0.1.0-beta.20 that panel started over on A11Y, because the

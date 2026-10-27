@@ -26,17 +26,19 @@ equivalent subpath — so no single build can serve both. On Storybook 8, stay o
 `@real-a11y-dev/storybook-addon@0.1.0-beta.16`.
 
 Storybook 11 **is** in the peer range, as `^11.0.0-0`. The `-0` is load-bearing:
-`11.0.0-alpha.0` is the only 11.x published so far, and a plain `^11.0.0` does
+Storybook 11 has only published prereleases so far, and a plain `^11.0.0` does
 not match a prerelease — the range would have excluded every Storybook 11 that
-actually exists. The addon type-checks, builds and passes its tests against that
-alpha, and an advisory CI job re-runs that check against `storybook@next` so a
-breaking change in 11 surfaces here rather than in your install.
+actually exists. An advisory CI job installs `storybook@next` and re-runs the
+addon's type-check, build and tests against it, so a breaking change in 11
+surfaces here rather than in your install.
 
-Be precise about what that verifies: `tsc` resolves Storybook 11's own
-`manager-api` and `preview-api` declarations and checks every API the addon
-uses against them, and the build resolves those same specifiers as externals.
-The unit tests mock `storybook/preview-api`, so their passing is not evidence
-about 11 at runtime. Treat 11 support as provisional while 11 is in alpha.
+Be precise about what that verifies. `tsc` checks every Storybook API the addon
+uses against 11's own declarations, and the build resolves the same specifiers
+as externals. Of the tests, the ones that carry an 11 signal are those that
+compose the addon through Storybook's real `definePreview` and `composeConfigs`
+— the rest mock the Storybook API. Nothing in CI renders the panel on 11; that
+was checked by hand, on `11.0.0-alpha.8` with Vite, under both a classic and a
+CSF Next preview. Treat 11 support as provisional until 11 ships stable.
 :::
 
 ---
@@ -59,7 +61,42 @@ const config: StorybookConfig = {
 export default config;
 ```
 
-That's it. No decorator, no parameters required. A **Semantic Navigator** panel appears next to Controls, Actions, and A11y for every story.
+That's it for a classic `.storybook/preview.ts`. No decorator, no parameters required. A **Semantic Navigator** panel appears next to Controls, Actions, and A11y for every story.
+
+### CSF Next (`definePreview`)
+
+If your `.storybook/preview.ts` calls `definePreview` — CSF Next, the default
+for new Storybook 11 projects — name the addon there too:
+
+```ts
+// .storybook/preview.ts
+import realA11y from "@real-a11y-dev/storybook-addon";
+import { definePreview } from "@storybook/react-vite";
+
+export default definePreview({
+  addons: [realA11y()],
+});
+```
+
+Keep it in `main.ts` as well. The two do different jobs: `main.ts` adds the
+panel to Storybook's UI, and `definePreview` runs the half that lives in the
+story iframe. A classic preview gets that half from `main.ts` automatically; a
+`definePreview` one composes only the addons it names, so without this line the
+panel stays on "Waiting for story to render…".
+
+`storybook add` writes the other form Storybook supports for a third-party
+addon, a namespace import of its preview entry. That works too:
+
+```ts
+import * as realA11yPreview from "@real-a11y-dev/storybook-addon/preview";
+
+export default definePreview({
+  addons: [realA11yPreview],
+});
+```
+
+Name it one way, not both. Naming it twice is harmless — the second is ignored —
+but it is redundant.
 
 ---
 
@@ -81,7 +118,7 @@ Switching between **A11y** and **DOM** re-extracts the story via the channel; **
 
 The addon follows Storybook's manager/preview split:
 
-- **Preview** (`@real-a11y-dev/storybook-addon/preview`) runs inside the story iframe. Extraction is **lazy**: it only stands up a `DomObserver` (200ms debounce) after the manager emits `REQUEST_TREE` (panel open), and tears it down on `STOP_TREE` (panel hidden). While active it re-extracts on every debounced DOM mutation, but emits `TREE_UPDATED` over the Storybook channel **only when that extraction differs from the last one it published** — so a mutation that extracts to an identical tree (an animation frame rewriting inline `style`, a change inside an `aria-hidden` subtree) costs no `postMessage` and no panel re-render at all. And because the observer only exists while the panel is open, animating or Controls-driven stories pay no extract and no `postMessage` cost at all while you're on another addon tab.
+- **Preview** (`@real-a11y-dev/storybook-addon/preview`) runs inside the story iframe, as a project-level `beforeAll` annotation: Storybook runs it once when the preview starts, whichever way the addon reached the project's annotations (from `main.ts`, or named in `definePreview`). Extraction is **lazy**: it only stands up a `DomObserver` (200ms debounce) after the manager emits `REQUEST_TREE` (panel open), and tears it down on `STOP_TREE` (panel hidden). While active it re-extracts on every debounced DOM mutation, but emits `TREE_UPDATED` over the Storybook channel **only when that extraction differs from the last one it published** — so a mutation that extracts to an identical tree (an animation frame rewriting inline `style`, a change inside an `aria-hidden` subtree) costs no `postMessage` and no panel re-render at all. And because the observer only exists while the panel is open, animating or Controls-driven stories pay no extract and no `postMessage` cost at all while you're on another addon tab.
 
 - **Manager** (`@real-a11y-dev/storybook-addon/manager`) runs in the Storybook UI shell (React). It asks for a tree only while its tab is selected and the addon panel is showing — read off its own box, since from Storybook 10.1 every addon panel stays mounted — subscribes to `TREE_UPDATED` events, deserializes the tree (the `[id, node][]` array back into a `Map`), re-applies the user's expand/collapse via `preserveExpandedState` (so a Controls tweak or animation does not snap open every row), and renders the interactive `TreePanel` from `@real-a11y-dev/semantic-navigator-ui` inside a shadow root.
 
@@ -180,6 +217,7 @@ place de-duplicates.
 **Panel shows "Waiting for story to render…"**
 
 This means the preview hasn't emitted a `TREE_UPDATED` event yet. Check:
+- If `.storybook/preview.ts` calls `definePreview`, it names the addon in `addons` — see [CSF Next](#csf-next-definepreview). This is the cause when the panel waits on every story.
 - The story is in `story` view mode (not `docs`)
 - `#storybook-root` exists in the iframe DOM
 - No errors in the Storybook preview console
