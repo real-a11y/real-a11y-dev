@@ -43,13 +43,14 @@
   label, and its other badges show once there is room for them. A screen
   reader hears the key states right after the name. A row too narrow for the
   start of its label and its key states, such as one nested deeper than the
-  panel is wide, still scrolls the tree, by just enough, and alone. **Settings ▾** → **Show full names** brings back the wide tree, in
-  every window's side panel (`settings.showFullNames` in
-  `chrome.storage.local`). **Settings ▾** and **Copy ▾** also close now when
-  focus moves out of them, rather than staying open over what it moved to.
-  And in a side panel too narrow for one row, a tree's toolbar wraps onto a
-  second, where the in-page tree's used to squeeze its search box to a
-  sliver and its DOM / A11Y / TAB toggle to nothing.
+  panel is wide, still scrolls the tree, by just enough, and alone.
+  **Settings ▾** → **Show full names** brings back the wide tree, in every
+  window's side panel (`settings.showFullNames` in `chrome.storage.local`).
+  **Settings ▾** and **Copy ▾** also close now when focus moves out of them,
+  rather than staying open over what it moved to. And Chrome's tree's own
+  toolbar wraps onto a second row in a side panel too narrow for it, as the
+  in-page tree's do since
+  [#533](https://github.com/real-a11y/real-a11y-dev/pull/533).
 
 ## 0.1.17
 
