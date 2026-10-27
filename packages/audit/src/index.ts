@@ -276,6 +276,83 @@ function locate(node: SemanticNode): Pick<Finding, "locator" | "context"> {
   return context ? { locator: cssPath(el), context } : { locator: cssPath(el) };
 }
 
+/** `heading-order`: exactly one `<h1>`, and no skipped heading levels. Appends to `findings`. */
+function headingOrderFindings(
+  tree: ExtractionResult,
+  findings: Finding[],
+): void {
+  const outline = getOutline(tree);
+  const h1s = outline.filter((e) => e.level === 1);
+  if (h1s.length === 0) {
+    findings.push({
+      rule: "heading-order",
+      severity: "warning",
+      message:
+        "Missing <h1>: every document should have exactly one top-level heading.",
+    });
+  } else if (h1s.length > 1) {
+    findings.push({
+      rule: "heading-order",
+      severity: "warning",
+      message: `Expected exactly one <h1>, found ${h1s.length}: ${h1s
+        .map((h) => `"${h.name}"`)
+        .join(", ")}`,
+    });
+  }
+
+  let prev = 0;
+  for (const entry of outline) {
+    if (entry.level > prev + 1 && prev !== 0) {
+      findings.push({
+        rule: "heading-order",
+        severity: "warning",
+        name: entry.name,
+        message: `Heading level skipped: "${entry.name}" is h${entry.level} but the previous heading was h${prev}.`,
+      });
+    }
+    prev = entry.level;
+  }
+}
+
+/** `landmark-structure`: one `main`, and at most one top-level banner / contentinfo. Appends to `findings`. */
+function landmarkStructureFindings(
+  tree: ExtractionResult,
+  findings: Finding[],
+): void {
+  const mains = findAllByRole(tree, "main");
+  if (mains.length === 0) {
+    findings.push({
+      rule: "landmark-structure",
+      severity: "error",
+      message: "Missing <main>: every page needs a main landmark.",
+    });
+  } else if (mains.length > 1) {
+    findings.push({
+      rule: "landmark-structure",
+      severity: "warning",
+      message: `Expected exactly one <main> landmark, found ${mains.length}.`,
+    });
+  }
+
+  const banners = findAllByRole(tree, "banner");
+  if (banners.length > 1) {
+    findings.push({
+      rule: "landmark-structure",
+      severity: "warning",
+      message: `More than one top-level <header> (banner landmark): found ${banners.length}.`,
+    });
+  }
+
+  const footers = findAllByRole(tree, "contentinfo");
+  if (footers.length > 1) {
+    findings.push({
+      rule: "landmark-structure",
+      severity: "warning",
+      message: `More than one top-level <footer> (contentinfo landmark): found ${footers.length}.`,
+    });
+  }
+}
+
 /**
  * Run the requested audit rules against `root` and return every problem found.
  *
@@ -362,39 +439,7 @@ export function collectFindings(
     }
   }
 
-  if (want.has("heading-order")) {
-    const outline = getOutline(tree);
-    const h1s = outline.filter((e) => e.level === 1);
-    if (h1s.length === 0) {
-      findings.push({
-        rule: "heading-order",
-        severity: "warning",
-        message:
-          "Missing <h1>: every document should have exactly one top-level heading.",
-      });
-    } else if (h1s.length > 1) {
-      findings.push({
-        rule: "heading-order",
-        severity: "warning",
-        message: `Expected exactly one <h1>, found ${h1s.length}: ${h1s
-          .map((h) => `"${h.name}"`)
-          .join(", ")}`,
-      });
-    }
-
-    let prev = 0;
-    for (const entry of outline) {
-      if (entry.level > prev + 1 && prev !== 0) {
-        findings.push({
-          rule: "heading-order",
-          severity: "warning",
-          name: entry.name,
-          message: `Heading level skipped: "${entry.name}" is h${entry.level} but the previous heading was h${prev}.`,
-        });
-      }
-      prev = entry.level;
-    }
-  }
+  if (want.has("heading-order")) headingOrderFindings(tree, findings);
 
   if (want.has("dialog-labeled")) {
     const dialogs = [
@@ -414,40 +459,7 @@ export function collectFindings(
     }
   }
 
-  if (want.has("landmark-structure")) {
-    const mains = findAllByRole(tree, "main");
-    if (mains.length === 0) {
-      findings.push({
-        rule: "landmark-structure",
-        severity: "error",
-        message: "Missing <main>: every page needs a main landmark.",
-      });
-    } else if (mains.length > 1) {
-      findings.push({
-        rule: "landmark-structure",
-        severity: "warning",
-        message: `Expected exactly one <main> landmark, found ${mains.length}.`,
-      });
-    }
-
-    const banners = findAllByRole(tree, "banner");
-    if (banners.length > 1) {
-      findings.push({
-        rule: "landmark-structure",
-        severity: "warning",
-        message: `More than one top-level <header> (banner landmark): found ${banners.length}.`,
-      });
-    }
-
-    const footers = findAllByRole(tree, "contentinfo");
-    if (footers.length > 1) {
-      findings.push({
-        rule: "landmark-structure",
-        severity: "warning",
-        message: `More than one top-level <footer> (contentinfo landmark): found ${footers.length}.`,
-      });
-    }
-  }
+  if (want.has("landmark-structure")) landmarkStructureFindings(tree, findings);
 
   return findings;
 }
