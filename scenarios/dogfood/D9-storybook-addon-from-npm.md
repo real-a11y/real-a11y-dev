@@ -37,7 +37,10 @@ Then install the addon with the command the docs give, as written.
 4. Change the **`label`** control by clicking the Controls tab with the panel open, then
    switching back. `primary`, `size` and `backgroundColor` change only class or style, which
    the A11Y view does not show. Then switch the panel to **DOM**, go to Controls and back,
-   select **DOM** again if the panel came back on A11Y, and reload the canvas. Log the mode of
+   click another component in the sidebar that has a **Docs** entry (Storybook opens its Docs
+   page first; if none has one, add `tags: ['autodocs']` to a story file's meta) and then one
+   of its stories, and reload the canvas. Wherever the panel comes
+   back on A11Y, note where and select **DOM** again before the next move. Log the mode of
    every tree the manager receives — row labels follow the pressed toggle whatever the tree, so
    this is the only way to see a mismatch:
    `__STORYBOOK_ADDONS_CHANNEL__.on('real-a11y/semantic-navigator/tree-updated',(p)=>console.log(p.mode))`
@@ -63,10 +66,14 @@ Then install the addon with the command the docs give, as written.
   it. On storybook-addon 0.1.0-beta.19 with Storybook 10.1 or later the panel paints over the
   tab bar — the known defect the beta.19 dogfood filed, fixed in 0.1.0-beta.20
 - **4** — every tree the panel logs matches its pressed toggle: `dom` under DOM, `a11y` under
-  A11Y. After the tab switch it is still on DOM on Storybook 10.1 and later; on Storybook 9 it
-  comes back on A11Y, as it always has. After the reload it is still on DOM, on every version.
-  On 0.1.0-beta.19, Storybook 9 comes back on A11Y over `dom` trees, and every version logs
-  `a11y` under DOM after the reload (known defects, fixed in 0.1.0-beta.20)
+  A11Y. From the first release after 0.1.0-beta.20 the panel is still on DOM after the tab
+  switch, after the Docs page and after the reload — confirmed so far on Storybook 10.6.2
+  only, so record the version you saw it on. **Unconfirmed on Storybook 9**: it unmounts the
+  panel behind another addon tab, so it should now keep DOM after the tab switch too, where it
+  used to come back on A11Y — record what it does. Up to 0.1.0-beta.20 the panel comes back on
+  A11Y after the Docs page on every version, and after the tab switch on Storybook 9. On
+  0.1.0-beta.19 both come back on A11Y over `dom` trees, and every version logs `a11y` under
+  DOM after the reload (the mismatches are known defects, fixed in 0.1.0-beta.20)
 - **The static build works** — this is where the addon's `exports` subpaths get resolved by
   Storybook's production builder
 - No console errors from the addon in either mode — nothing beyond the baseline's
@@ -96,3 +103,8 @@ promise. The mode check in step 4 came with the fix for both: a panel that goes 
 for its tree again, and the beta.19 panel never said in which mode — so a canvas reload restarted
 the preview in A11Y under a DOM toggle, and on Storybook 9 a tab switch brought the panel back on
 A11Y over a DOM-mode tree.
+
+The Docs page in step 4 came later. Storybook unmounts the panel on a Docs page and mounts a new
+one for the story after it, and up to 0.1.0-beta.20 that panel started over on A11Y, because the
+mode lived only in the panel. A switch straight from one story to another keeps the same panel
+mounted, so a run that never leaves the stories passes whether or not the mode survives.
