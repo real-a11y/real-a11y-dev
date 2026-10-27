@@ -139,6 +139,21 @@ An entry's text is what a screen reader could announce: nothing hidden or `aria-
 
 ---
 
+## Long names
+
+A name longer than the panel is wide ends in an ellipsis, and the tree stays as wide as the panel: a long link text or paragraph no longer sizes every row to itself and scrolls the tree sideways. Hover the name to read all of it. A row's role and name come first. Its key states, those that change what the element is or does (disabled, checked, pressed, selected, collapsed, required, invalid, read-only, busy, current), end its label and are never cut off: the name ends in an ellipsis to make room for them. A screen reader hears them right after the name. The text after the name (a description, a value, a text preview) ends in an ellipsis the same way, with its whole text as a tooltip, and the other badges and jump chips show whole once there is room for them, or not at all. In the DOM view, attributes and text content shorten the same way, and the states are badges like the others. A row too narrow for the start of its label and its key states, such as one nested deeper than the panel is wide, still widens the tree, by just enough, and only that row.
+
+To see names in full instead, turn on **Show full names** in the panel's Settings: rows widen to fit the longest name, and the tree scrolls sideways. It is the tree's setting: the TAB view and the role-filter lists end a long name in an ellipsis either way.
+
+| Surface | Where the switch is | How long it holds |
+|---|---|---|
+| Chrome extension | **Settings ▾**, next to the page's title | Kept in the extension's storage, for every window's side panel |
+| `inspector` | **⚙** at the end of the toolbar | The life of the page, in every inspector on it: those open follow it at once, and it holds through `refresh()`, `setRoot()` and every later `createInspector()`. `defaultShowFullNames: true` starts it on |
+| React `<SemanticNavigator />` | **⚙** at the end of the toolbar | The life of the page, in every navigator on it, whatever remounts the component. The `defaultShowFullNames` prop starts it on |
+| Storybook addon | **⚙** at the end of the toolbar | Across stories, until Storybook reloads |
+
+---
+
 ## Keyboard navigation
 
 The panel itself is fully keyboard-operable.

@@ -9,6 +9,7 @@ h1 Panel features
   h2 Scoping
     h3 Dialog auto-scope
   h2 Live region monitoring
+  h2 Long names
   h2 Keyboard navigation
   h2 Panel interaction vs. host side effects
     h3 Why the in-page surfaces default to off

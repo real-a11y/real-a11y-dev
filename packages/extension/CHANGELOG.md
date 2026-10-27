@@ -32,6 +32,26 @@
   room. A narrower panel wraps both rows rather than squeezing a control
   ([#533](https://github.com/real-a11y/real-a11y-dev/pull/533)).
 
+- A long name in either tree ends in an ellipsis instead of widening the
+  tree, so the panel no longer scrolls sideways on pages whose names run to a
+  sentence, such as es.wikipedia.org's
+  ([#535](https://github.com/real-a11y/real-a11y-dev/pull/535)). The name
+  carries its whole text as a tooltip, and so does a value, a placeholder or
+  a description that ends in one. A row's role and name come first, and its
+  key states, those that change what the element is or does (disabled,
+  collapsed, checked, required, …), are never cut off: they end the row's
+  label, and its other badges show once there is room for them. A screen
+  reader hears the key states right after the name. A row too narrow for the
+  start of its label and its key states, such as one nested deeper than the
+  panel is wide, still scrolls the tree, by just enough, and alone.
+  **Settings ▾** → **Show full names** brings back the wide tree, in every
+  window's side panel (`settings.showFullNames` in `chrome.storage.local`).
+  **Settings ▾** and **Copy ▾** also close now when focus moves out of them,
+  rather than staying open over what it moved to. And Chrome's tree's own
+  toolbar wraps onto a second row in a side panel too narrow for it, as the
+  in-page tree's do since
+  [#533](https://github.com/real-a11y/real-a11y-dev/pull/533).
+
 ## 0.1.17
 
 ### Patch Changes

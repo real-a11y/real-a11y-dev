@@ -1,6 +1,12 @@
 import type { TreeViewMode, RoleFilter } from "@real-a11y-dev/core";
 import { ROLE_FILTER_LABELS } from "@real-a11y-dev/core";
 import type { Ref } from "preact";
+import { useCallback, useRef, useState } from "preact/hooks";
+
+import { useDismissible } from "../hooks/useDismissible.js";
+import { useInstanceId } from "../hooks/useInstanceId.js";
+
+import { ShowFullNamesSetting } from "./ShowFullNamesSetting.js";
 
 interface TreeToolbarProps {
   viewMode: TreeViewMode;
@@ -26,6 +32,13 @@ interface TreeToolbarProps {
   onToggleDiff?: () => void;
   /** Ref to the search input — used by the `/` keyboard shortcut. */
   searchInputRef?: Ref<HTMLInputElement>;
+  /** Whether the tree shows names in full — drives the Settings checkbox. */
+  showFullNames?: boolean;
+  /**
+   * Called when the Settings checkbox is turned on or off. Without it the
+   * toolbar has no Settings: the switch it holds would change nothing.
+   */
+  onShowFullNamesChange?: (showFullNames: boolean) => void;
 }
 
 export function TreeToolbar({
@@ -45,7 +58,17 @@ export function TreeToolbar({
   diffActive = false,
   onToggleDiff,
   searchInputRef,
+  showFullNames = false,
+  onShowFullNamesChange,
 }: TreeToolbarProps) {
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const settingsRef = useRef<HTMLDivElement>(null);
+  const settingsButtonRef = useRef<HTMLButtonElement>(null);
+  const closeSettings = useCallback(() => setSettingsOpen(false), []);
+  useDismissible(settingsOpen, closeSettings, settingsRef, settingsButtonRef);
+  // Per panel, since two panels can share a document (light-DOM mounts).
+  const settingsId = `sn-settings-${useInstanceId("set")}`;
+
   return (
     <>
       <div class="sn-toolbar" role="toolbar" aria-label="Tree controls">
@@ -150,6 +173,41 @@ export function TreeToolbar({
         >
           -
         </button>
+
+        {/* Settings. A disclosure, not a menu: what it opens is a switch and
+            the line that explains it, as the extension's Settings does. A
+            gear rather than the extension's "Settings ▾", which sits in a
+            header: this toolbar has no room to spare beside the search. */}
+        {onShowFullNamesChange && (
+          <div class="sn-dropdown" ref={settingsRef}>
+            <button
+              ref={settingsButtonRef}
+              class="sn-toolbar-btn sn-settings-btn"
+              aria-expanded={settingsOpen}
+              aria-controls={settingsOpen ? settingsId : undefined}
+              aria-label="Settings"
+              title="Settings"
+              onClick={() => setSettingsOpen((open) => !open)}
+            >
+              {"⚙"}
+            </button>
+            {settingsOpen && (
+              <div
+                id={settingsId}
+                class="sn-dropdown-popup sn-settings-menu"
+                data-sn-popup
+                role="group"
+                aria-label="Settings"
+              >
+                <ShowFullNamesSetting
+                  checked={showFullNames}
+                  onChange={onShowFullNamesChange}
+                  hintId={`${settingsId}-full-names-hint`}
+                />
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Role filters — disabled in tab sequence view */}

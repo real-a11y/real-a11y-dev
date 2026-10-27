@@ -9,6 +9,7 @@ link "Install"
 link "Add to Chrome"
 link "View on GitHub"
 link "native mode"
+link "Long names"
 button "Copy Code"
 generic
 link "the test"

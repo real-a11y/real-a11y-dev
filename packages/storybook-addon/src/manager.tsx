@@ -73,6 +73,18 @@ function Panel() {
   // already carries the kept mode and the preview never extracts an A11Y tree
   // under a DOM toggle.
   const extractionModeRef = useRef(extractionMode);
+  // "Show full names", from the panel's Settings. In the manager's store, as
+  // the modes are, for the same reason: the panel Storybook mounts on the way
+  // back from a docs page (Storybook 9: another addon tab) would otherwise
+  // start over. Read through a ref by the render below, which hands it to
+  // TreePanel only as where it starts: TreePanel applies a change itself, and
+  // re-running the render for one would rebuild the whole tree.
+  const [showFullNames, setShowFullNames] = useAddonState<boolean>(
+    `${ADDON_ID}/show-full-names`,
+    false,
+  );
+  const showFullNamesRef = useRef(showFullNames);
+  showFullNamesRef.current = showFullNames;
 
   // ── Mode handler (defined early so effects can reference it) ───────────────
 
@@ -188,10 +200,12 @@ function Panel() {
           if (nodeId) channel.emit(EVENTS.HIGHLIGHT_NODE, nodeId);
           else channel.emit(EVENTS.CLEAR_HIGHLIGHT);
         },
+        defaultShowFullNames: showFullNamesRef.current,
+        onShowFullNamesChange: setShowFullNames,
       }),
       host,
     );
-  }, [isReady, payload, viewMode, handleViewModeChange]);
+  }, [isReady, payload, viewMode, handleViewModeChange, setShowFullNames]);
 
   // ── Channel subscription — while the panel can be seen ─────────────────────
 

@@ -45,6 +45,7 @@ import {
   isTypeAheadKey,
   JUMP_KEYS,
   JUMP_KEYSHORTCUTS,
+  KeyStatesForReaders,
   nextJump,
   resolveStepperKeyAction,
   useInputModality,
@@ -185,6 +186,9 @@ export interface NativeTreeViewProps {
    *  toggle is left out without `onToggleFollowPageChanges`. */
   followPageChanges?: boolean;
   onToggleFollowPageChanges?: () => void;
+  /** The "Show full names" setting: a long name widens the tree, rather than
+   *  ending in an ellipsis with the tree fitting the panel. */
+  showFullNames?: boolean;
 }
 
 /** A node is worth a click/Enter action, a select action, or both never — the
@@ -259,6 +263,7 @@ export function NativeTreeView({
   onDialogEscape,
   followPageChanges = false,
   onToggleFollowPageChanges,
+  showFullNames = false,
 }: NativeTreeViewProps) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -1176,7 +1181,7 @@ export function NativeTreeView({
           >
             <div
               ref={treeRef}
-              class="sn-tree"
+              class={`sn-tree${showFullNames ? " sn-tree--full-names" : ""}`}
               role="tree"
               aria-label={`Native accessibility tree — press Enter to activate (a slider steps up, a spinbutton opens its edit box), +/− or Shift+Enter to step sliders and spinbuttons, arrows to navigate, ${SCOPE_KEY_HINT}, Alt+J to follow a row's aria-controls links one by one and Alt+Shift+J to go back`}
               aria-keyshortcuts={JUMP_KEYSHORTCUTS}
@@ -1214,6 +1219,10 @@ export function NativeTreeView({
                   node.role === "heading"
                     ? node.properties?.["level"]
                     : undefined;
+                const badges = nativeStateBadges(node.states, node.properties, {
+                  headingLevel,
+                });
+                const keyBadges = badges.filter((b) => b.keyState);
 
                 return (
                   <div
@@ -1297,18 +1306,25 @@ export function NativeTreeView({
                     </button>
 
                     <span class="sn-label">
-                      <span class="sn-role">{node.role}</span>
-                      {headingLevel && (
-                        <span class="sn-level-badge">H{headingLevel}</span>
-                      )}
-                      {isNativeIframeRole(node.role) && !hasChildren(node) && (
-                        <EmbeddedBadge />
-                      )}
-                      {node.name && (
-                        <span class="sn-name" title={node.name}>
-                          {node.name}
-                        </span>
-                      )}
+                      {/* The role and name stay together on a narrow row,
+                          which clips the name and drops what follows it
+                          (tree.css, "Long labels"). */}
+                      <span class="sn-head">
+                        <span class="sn-role">{node.role}</span>
+                        {headingLevel && (
+                          <span class="sn-level-badge">H{headingLevel}</span>
+                        )}
+                        {isNativeIframeRole(node.role) &&
+                          !hasChildren(node) && <EmbeddedBadge />}
+                        {node.name && (
+                          <span class="sn-name" title={node.name}>
+                            {node.name}
+                          </span>
+                        )}
+                        <KeyStatesForReaders
+                          labels={keyBadges.map((b) => b.label)}
+                        />
+                      </span>
                       {node.description && (
                         <span class="sn-description" title={node.description}>
                           {node.description.length > 80
@@ -1319,23 +1335,23 @@ export function NativeTreeView({
                       {/* What a screen reader announces (ADR-0001) — a
                           select's option label, not its raw `value`. */}
                       {node.value !== undefined && (
-                        <span class="sn-field-value">
+                        <span
+                          class="sn-field-value"
+                          title={announcedValueLabel(node.value)}
+                        >
                           {announcedValueLabel(node.value)}
                         </span>
                       )}
                       {node.value === undefined && node.placeholder && (
-                        <span class="sn-field-value" title="Placeholder hint">
+                        <span
+                          class="sn-field-value"
+                          title={`Placeholder hint: ${JSON.stringify(node.placeholder)}`}
+                        >
                           {"placeholder: "}
                           {JSON.stringify(node.placeholder)}
                         </span>
                       )}
-                      <StateBadges
-                        badges={nativeStateBadges(
-                          node.states,
-                          node.properties,
-                          { headingLevel },
-                        )}
-                      />
+                      <StateBadges badges={badges.filter((b) => !b.keyState)} />
                       {/* Jump chips: to the rows this one controls, and back
                           to the rows that control it. */}
                       {controlsIndex.forward.get(id)?.map((targetId) => {
@@ -1371,6 +1387,12 @@ export function NativeTreeView({
                       })}
                       {label && <span class="sn-action-tag">{label}</span>}
                     </span>
+
+                    {/* Key states: after the label, which can clip them,
+                        rather than in it. A row too narrow for them widens
+                        instead (tree.css, "Long labels"). A screen reader
+                        hears them after the name (KeyStatesForReaders). */}
+                    <StateBadges keyStates badges={keyBadges} />
 
                     {label && (
                       <button

@@ -98,6 +98,8 @@ Click the extension icon in your Chrome toolbar. The side panel opens next to th
 **2. See the semantic structure**
 The page renders as an interactive tree: by default, Chromium's own accessibility tree, which is what assistive technology perceives (see [native mode](#native-mode-—-chromium-s-own-accessibility-tree)). **In-page tree**, under **Show** in **Settings ▾**, shows this extension's own reading of the page instead, as a DOM view (raw HTML elements) or an A11y view (roles, accessible names, states), picked in the toolbar.
 
+A name longer than the panel is wide ends in an ellipsis, and the tree stays as wide as the panel: hover the name to read the rest. A row's states, such as disabled or collapsed, are never cut off: they end the row's label, and a row too narrow for them widens the tree on its own. To have the tree widen to fit names and scroll sideways instead, turn on **Show full names** in **Settings ▾**; like **Read pages through Chrome**, it holds in every window's side panel. See [Long names](/guide/panel-features#long-names).
+
 A form field shows its value in both views. The A11y view shows the value a screen reader announces, and the DOM view shows the raw DOM value. For a `<select>` whose chosen option is "Spain" with `value="es"`:
 
 ```

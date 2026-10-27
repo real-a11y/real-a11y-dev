@@ -108,6 +108,7 @@ export {
   type CssPathAdapter,
 } from "./utils/css-path.js";
 export { getNodeId, resetIdCounter } from "./utils/id-generator.js";
+export { realmSingleton } from "./utils/realm-singleton.js";
 export {
   buildControlsIndex,
   indexControlLinks,

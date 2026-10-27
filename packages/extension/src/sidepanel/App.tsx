@@ -19,6 +19,9 @@ import {
 import {
   JUMP_KEYS,
   JUMP_KEYSHORTCUTS,
+  KeyStatesForReaders,
+  ShowFullNamesSetting,
+  useDismissible,
   useTreeKeyboard,
   useInputModality,
   useVirtualTree,
@@ -87,7 +90,7 @@ import {
 import type { ExportMeta, ExportView, ExportViews } from "./export.js";
 import { announcedValueLabel, rawValueLabel } from "./field-value.js";
 import { FilteredList } from "./FilteredList.js";
-import { FOCUSABLE_SELECTOR, useDismissible } from "./focus-hooks.js";
+import { FOCUSABLE_SELECTOR } from "./focus-hooks.js";
 import {
   followAfterRead,
   followChange,
@@ -99,6 +102,7 @@ import {
   NOT_FOLLOWING,
   type FollowWindow,
 } from "./follow-window.js";
+import { SHOW_FULL_NAMES_KEY } from "./full-names.js";
 import { InputPanel, domTextInputState } from "./InputPanel.js";
 import type { InputPanelState } from "./InputPanel.js";
 import {
@@ -133,6 +137,7 @@ import {
   sendKeySpec,
 } from "./SendKeyBar.js";
 import { TabSequenceView } from "./TabSequenceView.js";
+import { useStoredFlag } from "./use-stored-flag.js";
 import { useNativeOverlay } from "./useNativeOverlay.js";
 
 /** What the panel keeps of an ACTIVE_TAB_CHANGED. */
@@ -684,7 +689,10 @@ export function App() {
     signalSince: null,
     inFlight: null,
   });
-  const [followPageChanges, setFollowPageChanges] = useState(false);
+  // The "Follow page changes" setting, kept with native mode's own.
+  const [followPageChanges, setFollowPageChanges] = useStoredFlag(
+    FOLLOW_PAGE_CHANGES_KEY,
+  );
   const followPageChangesRef = useRef(followPageChanges);
   followPageChangesRef.current = followPageChanges;
   // Set below, once `loadNativeTree` exists; the timer calls it.
@@ -733,34 +741,13 @@ export function App() {
     }
   }, [scheduleAutoRefresh]);
   useEffect(() => cancelAutoRefreshTimer, [cancelAutoRefreshTimer]);
-  // The "Follow page changes" setting, kept in `chrome.storage.local` with
-  // native mode's own, and followed while the panel is open.
-  useEffect(() => {
-    // Absent where the panel runs without extension storage (unit tests).
-    if (!chrome.storage?.local || !chrome.storage.onChanged) return;
-    const read = (value: unknown) => setFollowPageChanges(value === true);
-    void chrome.storage.local
-      .get(FOLLOW_PAGE_CHANGES_KEY)
-      .then((r) => read(r[FOLLOW_PAGE_CHANGES_KEY]))
-      .catch(() => {});
-    const onChanged = (
-      changes: Record<string, chrome.storage.StorageChange>,
-      area: string,
-    ) => {
-      if (area === "local" && FOLLOW_PAGE_CHANGES_KEY in changes) {
-        read(changes[FOLLOW_PAGE_CHANGES_KEY]!.newValue);
-      }
-    };
-    chrome.storage.onChanged.addListener(onChanged);
-    return () => chrome.storage.onChanged.removeListener(onChanged);
-  }, []);
-  const toggleFollowPageChanges = useCallback(() => {
-    const next = !followPageChangesRef.current;
-    setFollowPageChanges(next);
-    void chrome.storage?.local
-      ?.set({ [FOLLOW_PAGE_CHANGES_KEY]: next })
-      .catch(() => {});
-  }, []);
+  const toggleFollowPageChanges = useCallback(
+    () => setFollowPageChanges(!followPageChangesRef.current),
+    [setFollowPageChanges],
+  );
+  // The "Show full names" setting (in Settings), for both trees: off, a long
+  // name ends in an ellipsis and the tree fits the panel.
+  const [showFullNames, setShowFullNames] = useStoredFlag(SHOW_FULL_NAMES_KEY);
   // What had focus as this render began, before its commit could take it
   // away. Turning native mode off, here or in another window, takes away the
   // native tree and the tree choice in Settings; so does a default read that
@@ -3622,10 +3609,10 @@ export function App() {
   // A disclosure, not a menu: what it opens is a switch and a line about it,
   // and, while native mode is on, which tree this panel shows.
   const settingsDisclosure = (
-    <div class="sn-export" ref={settingsRef}>
+    <div class="sn-dropdown" ref={settingsRef}>
       <button
         ref={settingsButtonRef}
-        class="sn-toolbar-btn sn-export-btn"
+        class="sn-toolbar-btn"
         aria-expanded={settingsOpen}
         aria-controls={settingsOpen ? "sn-settings-menu" : undefined}
         onClick={() => togglePopup("settings")}
@@ -3636,7 +3623,7 @@ export function App() {
       {settingsOpen && (
         <div
           id="sn-settings-menu"
-          class="sn-export-menu sn-settings-menu"
+          class="sn-dropdown-popup sn-settings-menu"
           data-sn-popup
           role="group"
           aria-label="Settings"
@@ -3710,6 +3697,12 @@ export function App() {
               </p>
             </div>
           )}
+          {/* Either tree, as the shared panel's Settings has it. */}
+          <ShowFullNamesSetting
+            checked={showFullNames}
+            onChange={setShowFullNames}
+            hintId="sn-settings-full-names-hint"
+          />
         </div>
       )}
     </div>
@@ -3945,7 +3938,7 @@ export function App() {
           {focusTrackerOn ? "Focus sync" : "Focus OFF"}
         </button>
 
-        <div class="sn-export" ref={exportRef}>
+        <div class="sn-dropdown" ref={exportRef}>
           <button
             ref={exportButtonRef}
             class="sn-toolbar-btn sn-export-btn"
@@ -3958,7 +3951,7 @@ export function App() {
           </button>
           {exportMenuOpen && (
             <div
-              class="sn-export-menu"
+              class="sn-dropdown-popup"
               data-sn-popup
               aria-label="Copy which view"
             >
@@ -4166,6 +4159,7 @@ export function App() {
           onDialogEscape={handleNativeDialogEscape}
           followPageChanges={followPageChanges}
           onToggleFollowPageChanges={toggleFollowPageChanges}
+          showFullNames={showFullNames}
         />
       ) : viewMode === "tab" ? (
         /* ---- Tab sequence view ---- */
@@ -4204,7 +4198,7 @@ export function App() {
           >
             <div
               ref={treeRef}
-              class="sn-tree"
+              class={`sn-tree${showFullNames ? " sn-tree--full-names" : ""}`}
               role="tree"
               aria-label={`Semantic tree — press Enter to activate interactive elements; +/− or Shift+Enter to step sliders and spinbuttons; ${SCOPE_KEY_HINT}; Alt+J to follow a row's aria-controls links one by one and Alt+Shift+J to go back`}
               aria-keyshortcuts={JUMP_KEYSHORTCUTS}
@@ -4277,6 +4271,8 @@ export function App() {
                 const displayDepth = scopedRootId
                   ? node.depth - scopedDepthOffset
                   : node.depth;
+                const badges = domStateBadges(node.a11y.states);
+                const keyBadges = badges.filter((b) => b.keyState);
 
                 return (
                   <div
@@ -4346,32 +4342,51 @@ export function App() {
                               its label. A sensitive field's is already
                               `[redacted]`. */}
                           {node.dom.attributes.value !== undefined && (
-                            <span class="sn-field-value">
+                            <span
+                              class="sn-field-value"
+                              title={rawValueLabel(node.dom.attributes.value)}
+                            >
                               {rawValueLabel(node.dom.attributes.value)}
                             </span>
                           )}
                           {node.dom.textContent && showsTextContent(node) && (
-                            <span class="sn-text-content">
+                            <span
+                              class="sn-text-content"
+                              title={node.dom.textContent}
+                            >
                               {node.dom.textContent}
                             </span>
                           )}
                         </>
                       ) : (
                         <>
-                          {/* Role — semantic display name */}
-                          <span class="sn-role">{getDisplayRole(node)}</span>
-                          {/* Heading level badge */}
-                          {node.a11y.properties.level && (
-                            <span class="sn-level-badge">
-                              H{node.a11y.properties.level}
-                            </span>
-                          )}
-                          {node.dom.tagName === "iframe" && !isParent && (
-                            <EmbeddedBadge />
-                          )}
-                          {node.a11y.name && (
-                            <span class="sn-name">{node.a11y.name}</span>
-                          )}
+                          {/* The role and name stay together on a narrow
+                              row, which clips the name and drops what
+                              follows it (tree.css, "Long labels"). */}
+                          <span class="sn-head">
+                            {/* Role — semantic display name */}
+                            <span class="sn-role">{getDisplayRole(node)}</span>
+                            {/* Heading level badge */}
+                            {node.a11y.properties.level && (
+                              <span class="sn-level-badge">
+                                H{node.a11y.properties.level}
+                              </span>
+                            )}
+                            {node.dom.tagName === "iframe" && !isParent && (
+                              <EmbeddedBadge />
+                            )}
+                            {/* With its whole text as a tooltip, for when
+                                it ends in an ellipsis; so does the preview
+                                below. */}
+                            {node.a11y.name && (
+                              <span class="sn-name" title={node.a11y.name}>
+                                {node.a11y.name}
+                              </span>
+                            )}
+                            <KeyStatesForReaders
+                              labels={keyBadges.map((b) => b.label)}
+                            />
+                          </span>
                           {/* Descendant-text preview — leaf-only to avoid
                               duplicating what's already in child rows
                               (table/rowgroup, paragraphs with strong/em
@@ -4385,7 +4400,10 @@ export function App() {
                             node.dom.descendantText !== "" &&
                             node.dom.descendantText !== node.a11y.name &&
                             showsTextPreview(node) && (
-                              <span class="sn-name-preview">
+                              <span
+                                class="sn-name-preview"
+                                title={node.dom.descendantText}
+                              >
                                 {node.dom.descendantText}
                               </span>
                             )}
@@ -4406,12 +4424,15 @@ export function App() {
                               slider's valuetext, an editor's text. A
                               sensitive field's is already `[redacted]`. */}
                           {node.a11y.value !== undefined && (
-                            <span class="sn-field-value">
+                            <span
+                              class="sn-field-value"
+                              title={announcedValueLabel(node.a11y.value)}
+                            >
                               {announcedValueLabel(node.a11y.value)}
                             </span>
                           )}
                           <StateBadges
-                            badges={domStateBadges(node.a11y.states)}
+                            badges={badges.filter((b) => !b.keyState)}
                           />
                           {/* Cross-links (aria-controls or heuristic): to the
                               rows this one controls, and back to those that
@@ -4460,6 +4481,14 @@ export function App() {
                         </span>
                       )}
                     </span>
+
+                    {/* Key states: after the label, which can clip them,
+                        rather than in it. A row too narrow for them widens
+                        instead (tree.css, "Long labels"). A screen reader
+                        hears them after the name (KeyStatesForReaders). */}
+                    {viewMode !== "dom" && (
+                      <StateBadges keyStates badges={keyBadges} />
+                    )}
 
                     {primaryAction && (
                       <button

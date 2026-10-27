@@ -238,6 +238,15 @@ export interface SemanticNavigatorConfig {
    * `preventDefault`s them while active, so opt-in only.
    */
   enablePicker?: boolean;
+  /**
+   * Start with names in the tree shown in full, the tree widening to fit a
+   * long one and scrolling sideways. Default `false`: a long name ends in an
+   * ellipsis, and the tree fits the panel. Only where the panel starts: the
+   * user turns it on and off from the panel's Settings (⚙), and their choice
+   * then holds for the life of the page, in every inspector on it: through
+   * `refresh()`, `setRoot()` and every later `createInspector()`.
+   */
+  defaultShowFullNames?: boolean;
   /** Optional CSP nonce applied to the injected `<style>` element. */
   styleNonce?: string;
 

@@ -177,6 +177,27 @@ export interface TreePanelProps {
   pickedNodeId?: string | null;
   /** Called once the panel has applied a pickedNodeId. */
   onPickedNodeHandled?: () => void;
+
+  // ── Settings ────────────────────────────────────────────────────────────────
+  /**
+   * Whether the tree starts out showing names in full, rather than ending a
+   * long one in an ellipsis. Default `false`. Read when the panel mounts:
+   * after that it is the user's, from the toolbar's Settings.
+   */
+  defaultShowFullNames?: boolean;
+  /**
+   * Whether the tree shows names in full now, for a caller that keeps the
+   * choice itself, as the inspector does for every panel on a page. When
+   * set, the tree and the switch follow it rather than the panel's own state.
+   * The switch reports a change through `onShowFullNamesChange`, for the
+   * caller to pass back, and without one Settings has no switch.
+   */
+  showFullNames?: boolean;
+  /**
+   * Called when the user turns "Show full names" on or off, so a caller that
+   * remounts the panel can pass the choice back as `defaultShowFullNames`.
+   */
+  onShowFullNamesChange?: (showFullNames: boolean) => void;
 }
 
 // ─── Component ───────────────────────────────────────────────────────────────
@@ -199,6 +220,9 @@ export function TreePanel({
   onTogglePickMode,
   pickedNodeId = null,
   onPickedNodeHandled,
+  defaultShowFullNames = false,
+  showFullNames: shownFullNames,
+  onShowFullNamesChange,
 }: TreePanelProps) {
   // Keeps row/option DOM ids unique when two panels share a light-DOM document
   // — aria-activedescendant is a document-wide IDREF.
@@ -206,6 +230,19 @@ export function TreePanel({
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [roleFilter, setRoleFilter] = useState<RoleFilter>(null);
+  const [ownShowFullNames, setShowFullNames] = useState(defaultShowFullNames);
+  const showFullNames = shownFullNames ?? ownShowFullNames;
+  // A change always renders again, so a switch whose caller keeps the choice
+  // shows the caller's value even when its own state didn't move.
+  const [, setChanges] = useState(0);
+  const handleShowFullNamesChange = useCallback(
+    (on: boolean) => {
+      setShowFullNames(on);
+      setChanges((n) => n + 1);
+      onShowFullNamesChange?.(on);
+    },
+    [onShowFullNamesChange],
+  );
   // Monotonic counter used to invalidate useMemo after in-place node mutations.
   const [renderCount, setRenderCount] = useState(0);
   const forceRender = useCallback(() => setRenderCount((c) => c + 1), []);
@@ -553,6 +590,14 @@ export function TreePanel({
         diffActive={diffActive}
         onToggleDiff={onToggleDiff}
         searchInputRef={searchInputRef}
+        showFullNames={showFullNames}
+        // No switch where it could change nothing: a caller that keeps the
+        // choice and takes no change back.
+        onShowFullNamesChange={
+          shownFullNames === undefined || onShowFullNamesChange
+            ? handleShowFullNamesChange
+            : undefined
+        }
       />
       <div
         ref={isTreeBranch ? containerRef : undefined}
@@ -581,7 +626,7 @@ export function TreePanel({
         ) : (
           <div
             ref={treeRef}
-            class="sn-tree"
+            class={`sn-tree${showFullNames ? " sn-tree--full-names" : ""}`}
             role="tree"
             aria-label="Semantic tree"
             aria-keyshortcuts={JUMP_KEYSHORTCUTS}

@@ -3,6 +3,7 @@ link "Role filters"
 link "Focus tracking"
 link "Scoping"
 link "Live region monitoring"
+link "Long names"
 link "Keyboard navigation"
 link "Panel interaction vs. host side effects"
 link "See also"
@@ -24,6 +25,7 @@ table
 link "the testing reference"
 table
 link "useActiveModal()"
+table
 table
 table
 table

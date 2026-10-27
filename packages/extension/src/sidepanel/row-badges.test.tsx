@@ -63,15 +63,15 @@ describe("domStateBadges", () => {
         focusable: true,
       }),
     ).toEqual([
-      { label: "disabled", cls: "sn-state--disabled" },
-      { label: "mixed", cls: "sn-state--mixed" },
-      { label: "pressed", cls: "sn-state--on" },
-      { label: "selected", cls: "sn-state--on" },
-      { label: "collapsed", cls: "sn-state--info" },
-      { label: "required", cls: "sn-state--required" },
-      { label: "readonly", cls: "sn-state--info" },
-      { label: "busy", cls: "sn-state--info" },
-      { label: "current: page", cls: "sn-state--info" },
+      { label: "disabled", cls: "sn-state--disabled", keyState: true },
+      { label: "mixed", cls: "sn-state--mixed", keyState: true },
+      { label: "pressed", cls: "sn-state--on", keyState: true },
+      { label: "selected", cls: "sn-state--on", keyState: true },
+      { label: "collapsed", cls: "sn-state--info", keyState: true },
+      { label: "required", cls: "sn-state--required", keyState: true },
+      { label: "readonly", cls: "sn-state--info", keyState: true },
+      { label: "busy", cls: "sn-state--info", keyState: true },
+      { label: "current: page", cls: "sn-state--info", keyState: true },
     ]);
   });
 });
@@ -91,14 +91,32 @@ describe("nativeStateBadges", () => {
         { hasPopup: "menu", level: "2" },
       ),
     ).toEqual([
-      { label: "disabled", cls: "sn-state--disabled" },
-      { label: "mixed", cls: "sn-state--mixed" },
-      { label: "collapsed", cls: "sn-state--info" },
-      { label: "required", cls: "sn-state--required" },
-      { label: "invalid=spelling", cls: "sn-state--info" },
-      { label: "hasPopup=menu", cls: "sn-state--info" },
-      { label: "level=2", cls: "sn-state--info" },
+      { label: "disabled", cls: "sn-state--disabled", keyState: true },
+      { label: "mixed", cls: "sn-state--mixed", keyState: true },
+      { label: "collapsed", cls: "sn-state--info", keyState: true },
+      { label: "required", cls: "sn-state--required", keyState: true },
+      { label: "invalid=spelling", cls: "sn-state--info", keyState: true },
+      { label: "hasPopup=menu", cls: "sn-state--info", keyState: false },
+      { label: "level=2", cls: "sn-state--info", keyState: false },
     ]);
+  });
+
+  it("tells a key state from Chrome's other states", () => {
+    const keyStates = (badges: { label: string; keyState: boolean }[]) =>
+      badges.filter((b) => b.keyState).map((b) => b.label);
+    expect(
+      keyStates(
+        nativeStateBadges(
+          {
+            focusable: true,
+            editable: "plaintext",
+            settable: true,
+            disabled: true,
+          },
+          { autocomplete: "list" },
+        ),
+      ),
+    ).toEqual(["disabled"]);
   });
 
   it("leaves a heading's level to its H badge", () => {
@@ -156,6 +174,23 @@ describe("StateBadges and EmbeddedBadge", () => {
       ["disabled", "sn-state-badge sn-state--disabled"],
       ["busy", "sn-state-badge sn-state--info"],
     ]);
+  });
+
+  it("marks a row's key states, which the row shows after its label", () => {
+    const badges = domStateBadges({ disabled: true });
+    render(<StateBadges badges={badges} />, container);
+    expect(container.firstElementChild?.className).toBe("sn-state-badges");
+    expect(container.firstElementChild?.hasAttribute("aria-hidden")).toBe(
+      false,
+    );
+    // A screen reader hears them after the name instead.
+    render(<StateBadges keyStates badges={badges} />, container);
+    expect(container.firstElementChild?.className).toBe(
+      "sn-state-badges sn-key-states",
+    );
+    expect(container.firstElementChild?.getAttribute("aria-hidden")).toBe(
+      "true",
+    );
   });
 
   it("says embedded, and what that means to a screen reader", () => {

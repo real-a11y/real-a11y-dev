@@ -153,10 +153,13 @@
 }
 
 /* ---- Toolbar ---- */
+/* In a panel too narrow for one row, the controls that don't fit move onto
+   a second, rather than off its edge. */
 .sn-toolbar {
   --sn-toolbar-gap: 8px;
 
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--sn-toolbar-gap);
   padding: 8px 12px;
@@ -165,9 +168,11 @@
   flex-shrink: 0;
 }
 
+/* It takes the room the controls leave, but never less than this: the
+   controls after it wrap first. */
 .sn-search {
   flex: 1;
-  min-width: 0;
+  min-width: 10ch;
   padding: 4px 8px;
   border: 1px solid var(--sn-search-border);
   border-radius: 4px;
@@ -247,6 +252,62 @@
   cursor: not-allowed;
 }
 
+/* The gear: legible at 13px, and as tall as its neighbours. */
+.sn-settings-btn {
+  padding: 3px 6px;
+  font-size: 13px;
+  line-height: 13px;
+}
+
+/* ---- Dropdowns: Settings, and the extension's Copy menu ----
+   The popup lies over the tree: `.sn-root` clips whatever leaves it. */
+.sn-dropdown {
+  position: relative;
+  display: inline-flex;
+}
+
+.sn-dropdown-popup {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 20;
+  display: flex;
+  min-width: 140px;
+  flex-direction: column;
+  padding: 4px;
+  background: var(--sn-bg);
+  border: 1px solid var(--sn-border);
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgb(0 0 0 / 0.18);
+}
+
+/* Each switch with the line that explains it. */
+.sn-settings-menu {
+  width: 260px;
+  gap: 4px;
+  padding: 8px;
+}
+
+.sn-settings-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  color: var(--sn-text);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.sn-settings-item input {
+  margin: 1px 0 0;
+}
+
+.sn-settings-hint {
+  margin: 0 0 0 19px;
+  color: var(--sn-text-muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
 /* ---- Filter bar ---- */
 .sn-filters {
   display: flex;
@@ -298,6 +359,8 @@
   padding: 4px 0;
 }
 
+/* As wide as its widest row: "Show full names". By default a long name ends
+   in an ellipsis instead (see "Long labels"). */
 .sn-tree {
   min-width: max-content;
 }
@@ -491,14 +554,20 @@
   visibility: hidden;
 }
 
-/* Node label */
+/* Node label. No wider than what it holds: a row's key states follow it. */
 .sn-label {
   display: inline-flex;
   align-items: center;
   gap: 4px;
   flex: 1;
   min-width: 0;
+  max-width: max-content;
   padding: 0 4px;
+}
+
+/* The A11Y view's key states, after the label (see "Long labels"). */
+.sn-key-states {
+  flex: none;
 }
 
 .sn-tag {
@@ -509,6 +578,13 @@
 .sn-role {
   color: var(--sn-text-role);
   font-weight: 600;
+}
+
+/* A row's role, heading level and name (see "Long labels"). */
+.sn-head {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .sn-name {
@@ -557,6 +633,73 @@
   max-width: 200px;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* ---- Long labels ----
+   Unless "Show full names" is on (`.sn-tree--full-names`), a row is as wide
+   as the panel and a long name ends in an ellipsis. A label counts toward its
+   row's width as its `width`, 8ch, rather than as its content, and grows from
+   there into the room the row has, up to its content. So a row grows past the
+   panel, and alone, only when it can't fit its indent, 8ch of its label, and
+   its key states (`.sn-key-states`): those follow the label rather than sit
+   in it, because nothing may clip them. The label is one line; a part that
+   doesn't fit moves, whole and with what follows it, onto a second line its
+   max-height hides. The head (role and name) comes first, so it always
+   shows, if only in part: it starts at up to 32ch, and only its name
+   shrinks, to an ellipsis. The text parts after it (and DOM view's) start at
+   up to 8ch. Each grows into the room left, and a part after them shows only
+   once they have that much. */
+.sn-tree:not(.sn-tree--full-names) {
+  min-width: 0;
+}
+
+.sn-tree:not(.sn-tree--full-names) .sn-node {
+  box-sizing: border-box;
+  min-width: 100%;
+  width: max-content;
+}
+
+.sn-tree:not(.sn-tree--full-names) .sn-label {
+  /* Not `contain: inline-size`, which would hide the content from
+     `max-width: max-content` as well. The `auto` basis starts the label at
+     that width, so a label shorter than 8ch is only as wide as it is. */
+  flex: 1 1 auto;
+  width: 8ch;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  max-height: var(--sn-line-height);
+  /* Not `hidden`: a clipped label must never scroll to a chip taking focus. */
+  overflow: clip;
+}
+
+.sn-tree:not(.sn-tree--full-names) .sn-head {
+  flex: 1 1 min(32ch, 100%);
+  min-width: 0;
+  max-width: max-content;
+  overflow: hidden;
+}
+
+.sn-tree:not(.sn-tree--full-names) .sn-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sn-tree:not(.sn-tree--full-names) .sn-name-preview,
+.sn-tree:not(.sn-tree--full-names) .sn-description,
+.sn-tree:not(.sn-tree--full-names) .sn-field-value,
+.sn-tree:not(.sn-tree--full-names) .sn-text-content,
+.sn-tree:not(.sn-tree--full-names) .sn-attr {
+  flex: 1 1 8ch;
+  min-width: 0;
+  max-width: max-content;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* An element's attributes come before its text: they start smaller. */
+.sn-tree:not(.sn-tree--full-names) .sn-attr {
+  flex-basis: 4ch;
 }
 
 /* Badges */

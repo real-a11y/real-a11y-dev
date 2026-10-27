@@ -9,7 +9,9 @@ import type { NodeDiffStatus } from "../diff.js";
 
 import { JUMP_KEYS } from "../hooks/jumpKeys.js";
 import { treeRowDomId, useInstanceId } from "../hooks/useInstanceId.js";
+import { isKeyState } from "../key-states.js";
 
+import { KeyStatesForReaders } from "./KeyStatesForReaders.js";
 import type { ControlsLink } from "./TreePanel.js";
 
 interface TreeNodeProps {
@@ -97,8 +99,14 @@ function renderDomLabel(node: DomSemanticNode) {
         {"<"}
         {tagName}
       </span>
+      {/* A label the row is too narrow for ends in an ellipsis, so each
+          part that can (see tree.css) carries its whole text as a tooltip. */}
       {displayAttrs.map((attr) => (
-        <span key={attr.key}>
+        <span
+          key={attr.key}
+          class="sn-attr"
+          title={`${attr.key}="${attr.val}"`}
+        >
           {" "}
           <span class="sn-attr-key">{attr.key}</span>
           {"="}
@@ -106,12 +114,16 @@ function renderDomLabel(node: DomSemanticNode) {
         </span>
       ))}
       <span class="sn-tag">{">"}</span>
-      {textContent && <span class="sn-text-content">{textContent}</span>}
+      {textContent && (
+        <span class="sn-text-content" title={textContent}>
+          {textContent}
+        </span>
+      )}
     </>
   );
 }
 
-function renderA11yLabel(node: DomSemanticNode) {
+function renderA11yLabel(node: DomSemanticNode, keyStates: Badge[]) {
   const { role, name } = node.a11y;
   const level = node.a11y.properties["level"];
   // Show a muted preview of descendant text only when the element is a
@@ -131,38 +143,75 @@ function renderA11yLabel(node: DomSemanticNode) {
 
   return (
     <>
-      <span class="sn-role">{role}</span>
-      {level && <span class="sn-text-muted"> level {level}</span>}
-      {name && <span class="sn-name">{name}</span>}
-      {showPreview && <span class="sn-name-preview">{descendantText}</span>}
+      {/* The role and name stay together on a narrow row, which clips the
+          name and drops what follows it (tree.css, "Long labels"). Each part
+          that can end in an ellipsis carries its whole text as a tooltip
+          (see renderDomLabel). */}
+      <span class="sn-head">
+        <span class="sn-role">{role}</span>
+        {level && <span class="sn-text-muted"> level {level}</span>}
+        {name && (
+          <span class="sn-name" title={name}>
+            {name}
+          </span>
+        )}
+        <KeyStatesForReaders labels={keyStates.map((b) => b.label)} />
+      </span>
+      {showPreview && (
+        <span class="sn-name-preview" title={descendantText}>
+          {descendantText}
+        </span>
+      )}
     </>
   );
 }
 
-function renderBadges(node: DomSemanticNode) {
-  const badges: Array<{ label: string; className: string }> = [];
+interface Badge {
+  label: string;
+  className: string;
+}
 
+/** The interaction badges: what the element takes, a click or focus. */
+function interactionBadges(node: DomSemanticNode): Badge[] {
+  const badges: Badge[] = [];
   if (node.interaction.isInteractive) {
     badges.push({ label: "interactive", className: "sn-badge--interactive" });
   }
-
   if (node.interaction.isFocusable) {
     badges.push({ label: "focusable", className: "sn-badge--interactive" });
   }
+  return badges;
+}
 
-  // State badges
+/**
+ * A row's state badges: all of them, or only its key states (`isKeyState`),
+ * which the A11Y view shows after the label, where nothing clips them, or
+ * only the rest.
+ */
+function stateBadges(
+  node: DomSemanticNode,
+  which: "all" | "key" | "rest",
+): Badge[] {
+  const badges: Badge[] = [];
   for (const [key, val] of Object.entries(node.a11y.states)) {
+    if (which !== "all" && isKeyState(key) !== (which === "key")) continue;
     if (val === true) {
       badges.push({ label: key, className: "sn-badge--state" });
     } else if (val !== false && val !== "") {
       badges.push({ label: `${key}=${val}`, className: "sn-badge--state" });
     }
   }
+  return badges;
+}
 
+function renderBadges(
+  badges: Badge[],
+  { className = "sn-badges", hidden = false } = {},
+) {
   if (badges.length === 0) return null;
 
   return (
-    <span class="sn-badges">
+    <span class={className} aria-hidden={hidden || undefined}>
       {badges.map((b) => (
         <span key={b.label} class={`sn-badge ${b.className}`}>
           {b.label}
@@ -229,6 +278,9 @@ export function TreeNode({
   const prefix = idPrefix ?? autoPrefix;
 
   const hasChildren = node.childIds.length > 0;
+  // The A11Y view's key states, which it shows after the label and a screen
+  // reader hears after the name; the DOM view shows them with the rest.
+  const keyStates = viewMode === "dom" ? [] : stateBadges(node, "key");
   const actions = node.interaction.actions;
   // Slider / spinbutton rows surface a paired ▲/▼ control instead of a
   // single primary-action button — so users can step the value in either
@@ -324,8 +376,15 @@ export function TreeNode({
 
       {/* Label */}
       <span class="sn-label">
-        {viewMode === "dom" ? renderDomLabel(node) : renderA11yLabel(node)}
-        {renderBadges(node)}
+        {viewMode === "dom"
+          ? renderDomLabel(node)
+          : renderA11yLabel(node, keyStates)}
+        {/* The A11Y view shows a row's key states after the label; the DOM
+            view shows them here with the rest. */}
+        {renderBadges([
+          ...interactionBadges(node),
+          ...stateBadges(node, viewMode === "dom" ? "all" : "rest"),
+        ])}
         {/* Cross-link chips for disclosure pairs (button ↔ menu, tab ↔ panel) */}
         {onJumpToNode &&
           controlsLinks?.map((link) =>
@@ -347,6 +406,15 @@ export function TreeNode({
             ),
           )}
       </span>
+
+      {/* Key states: after the label, which can clip them, rather than in
+          it. A row too narrow for them widens instead (tree.css, "Long
+          labels"). A screen reader hears them after the name instead
+          (KeyStatesForReaders). */}
+      {renderBadges(keyStates, {
+        className: "sn-badges sn-key-states",
+        hidden: true,
+      })}
 
       {/* Action button */}
       {primaryAction && (

@@ -1,27 +1,8 @@
-/* Export ("Copy ▾") and Settings ("Settings ▾") dropdowns — extension-only
- * UI, layered over the shared panel styles from
- * @real-a11y-dev/semantic-navigator-ui. Reuses the panel's theme variables so
- * it follows light/dark automatically. */
-
-.sn-export {
-  position: relative;
-  display: inline-flex;
-}
-
-.sn-export-menu {
-  position: absolute;
-  top: calc(100% + 4px);
-  right: 0;
-  z-index: 20;
-  display: flex;
-  min-width: 140px;
-  flex-direction: column;
-  padding: 4px;
-  background: var(--sn-bg);
-  border: 1px solid var(--sn-border);
-  border-radius: 6px;
-  box-shadow: 0 4px 16px rgb(0 0 0 / 0.18);
-}
+/* The Copy menu's items and the parts of Settings only the extension has —
+ * extension-only UI, layered over the shared panel styles from
+ * @real-a11y-dev/semantic-navigator-ui, which draw the dropdowns themselves
+ * (`.sn-dropdown`, `.sn-dropdown-popup`) and Settings' switches. Reuses the
+ * panel's theme variables so it follows light/dark automatically. */
 
 .sn-export-item {
   padding: 5px 10px;
@@ -45,35 +26,6 @@
 /* "Everything" — the common case, given a little weight. */
 .sn-export-item:first-child {
   font-weight: 600;
-}
-
-/* Settings: one switch and the line that explains it, then, while native
-   mode is on, which tree the panel shows. Wider than Copy's menu, and its
-   text wraps. */
-.sn-settings-menu {
-  width: 260px;
-  gap: 4px;
-  padding: 8px;
-}
-
-.sn-settings-item {
-  display: flex;
-  align-items: flex-start;
-  gap: 6px;
-  color: var(--sn-text);
-  font-size: 12px;
-  cursor: pointer;
-}
-
-.sn-settings-item input {
-  margin: 1px 0 0;
-}
-
-.sn-settings-hint {
-  margin: 0 0 0 19px;
-  color: var(--sn-text-muted);
-  font-size: 11px;
-  line-height: 1.4;
 }
 
 /* The tree choice, indented under the switch it depends on. */

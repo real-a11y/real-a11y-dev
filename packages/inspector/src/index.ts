@@ -12,6 +12,8 @@ import {
 import { TreeView } from "@real-a11y-dev/semantic-navigator-ui";
 import { render, h } from "preact";
 
+import { fullNamesChoice, rememberShowFullNames } from "./full-names-choice.js";
+
 declare const __SN_STYLES__: string;
 
 /**
@@ -88,6 +90,7 @@ export function createInspector(
     scrollHostOnSelect = false,
     focusHostOnActivate = false,
     enablePicker = false,
+    defaultShowFullNames = false,
     styleNonce,
     onNodeSelect,
     onAction,
@@ -179,11 +182,19 @@ export function createInspector(
         scrollHostOnSelect,
         focusHostOnActivate,
         enablePicker,
+        // The page's choice once the user has made one, in this panel or
+        // another: every open panel shows it.
+        showFullNames: fullNamesChoice().on ?? defaultShowFullNames,
+        onShowFullNamesChange: rememberShowFullNames,
         onNodeSelect,
         onAction,
       }),
       mountPoint,
     );
+    // Rendered, so one of the page's open panels, which all show the user's
+    // choice. One that can't render (a container that can't host a shadow
+    // root, say) stays out, rather than throw again on every choice.
+    fullNamesChoice().panels.add(renderTree);
   }
 
   const instance: InspectorInstance = {
@@ -199,6 +210,7 @@ export function createInspector(
     unmount() {
       if (!mounted) return;
       mounted = false;
+      fullNamesChoice().panels.delete(renderTree);
       const mountPoint = renderHost ?? (renderTarget as Element | null);
       if (mountPoint) render(null, mountPoint);
       container.removeAttribute(PANEL_HOST_ATTRIBUTE);

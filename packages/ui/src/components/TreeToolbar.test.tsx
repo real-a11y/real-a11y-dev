@@ -1,5 +1,6 @@
 import { render } from "preact";
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { act } from "preact/test-utils";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 
 import { TreeToolbar } from "./TreeToolbar.js";
 
@@ -135,5 +136,195 @@ describe("TreeToolbar (smoke)", () => {
     for (const btn of Array.from(filterButtons)) {
       expect(btn.disabled).toBe(true);
     }
+  });
+});
+
+describe("TreeToolbar Settings", () => {
+  let container: HTMLDivElement;
+
+  beforeEach(() => {
+    container = document.createElement("div");
+    document.body.appendChild(container);
+  });
+
+  afterEach(() => {
+    render(null, container);
+    container.remove();
+  });
+
+  const noop = () => {};
+
+  function toolbar(
+    into: Element,
+    props: {
+      showFullNames?: boolean;
+      onShowFullNamesChange?: (on: boolean) => void;
+    } = {},
+  ) {
+    act(() => {
+      render(
+        <TreeToolbar
+          viewMode="a11y"
+          onViewModeChange={noop}
+          query=""
+          onQueryChange={noop}
+          matchCount={0}
+          onExpandAll={noop}
+          onCollapseAll={noop}
+          roleFilter={null}
+          onRoleFilterChange={noop}
+          onShowFullNamesChange={noop}
+          {...props}
+        />,
+        into,
+      );
+    });
+  }
+
+  const gear = (root: ParentNode) =>
+    root.querySelector<HTMLButtonElement>('button[aria-label="Settings"]')!;
+  const popup = (root: ParentNode) =>
+    root.querySelector<HTMLElement>('[role="group"][aria-label="Settings"]');
+  const checkbox = (root: ParentNode) =>
+    popup(root)!.querySelector<HTMLInputElement>('input[type="checkbox"]')!;
+  /** A press, as the browser starts one: composed, so it leaves a shadow root. */
+  const press = (target: EventTarget) =>
+    act(() => {
+      target.dispatchEvent(
+        new Event("pointerdown", { bubbles: true, composed: true }),
+      );
+    });
+
+  it("opens as a disclosure holding the Show full names switch", () => {
+    toolbar(container);
+
+    const button = gear(container);
+    expect(button.getAttribute("aria-expanded")).toBe("false");
+    expect(button.hasAttribute("aria-controls")).toBe(false);
+    expect(popup(container)).toBeNull();
+
+    act(() => button.click());
+
+    expect(button.getAttribute("aria-expanded")).toBe("true");
+    const group = popup(container)!;
+    expect(button.getAttribute("aria-controls")).toBe(group.id);
+    const box = checkbox(container);
+    expect(box.closest("label")?.textContent).toBe("Show full names");
+    const hint = container.querySelector(
+      `#${box.getAttribute("aria-describedby")}`,
+    );
+    expect(hint?.textContent).toMatch(/scrolls sideways/);
+
+    act(() => button.click());
+    expect(popup(container)).toBeNull();
+  });
+
+  it("has no Settings without a handler for its switch", () => {
+    toolbar(container, { onShowFullNamesChange: undefined });
+    expect(container.querySelector('button[aria-label="Settings"]')).toBeNull();
+  });
+
+  it("mirrors showFullNames and reports a change", () => {
+    const onChange = vi.fn();
+    toolbar(container, {
+      showFullNames: true,
+      onShowFullNamesChange: onChange,
+    });
+    act(() => gear(container).click());
+
+    expect(checkbox(container).checked).toBe(true);
+    act(() => checkbox(container).click());
+    expect(onChange).toHaveBeenCalledWith(false);
+  });
+
+  it("closes on Escape from inside it, returning focus to the gear", () => {
+    toolbar(container);
+    act(() => gear(container).click());
+    checkbox(container).focus();
+
+    act(() => {
+      checkbox(container).dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
+      );
+    });
+
+    expect(popup(container)).toBeNull();
+    expect(document.activeElement).toBe(gear(container));
+  });
+
+  it("stays open for a press inside it and closes for one outside", () => {
+    toolbar(container);
+    act(() => gear(container).click());
+
+    press(container.querySelector(".sn-settings-hint")!);
+    expect(popup(container)).not.toBeNull();
+
+    press(document.body);
+    expect(popup(container)).toBeNull();
+  });
+
+  it("closes when focus moves out of it, not when focus goes nowhere", () => {
+    toolbar(container);
+    act(() => gear(container).click());
+    const box = checkbox(container);
+    act(() => box.focus());
+
+    // A press on the popup's own text sends focus to the body: it stays.
+    act(() => {
+      box.dispatchEvent(
+        new FocusEvent("focusout", { bubbles: true, relatedTarget: null }),
+      );
+    });
+    expect(popup(container)).not.toBeNull();
+
+    // Tab on to the role filters, which the popup lies over: it closes.
+    act(() =>
+      container.querySelector<HTMLButtonElement>(".sn-filter-btn")!.focus(),
+    );
+    expect(popup(container)).toBeNull();
+  });
+
+  // The inspector mounts the panel in a shadow root, where a listener on the
+  // document sees a press inside it retargeted to the host: read naively, a
+  // press on the popup's own checkbox would be "outside" and close it.
+  it("tells inside from outside within a shadow root", () => {
+    const shadow = container.attachShadow({ mode: "open" });
+    const mount = document.createElement("div");
+    shadow.appendChild(mount);
+    toolbar(mount);
+    act(() => gear(shadow).click());
+
+    press(checkbox(shadow));
+    expect(popup(shadow)).not.toBeNull();
+
+    press(document.body);
+    expect(popup(shadow)).toBeNull();
+    render(null, mount);
+  });
+
+  // A closed shadow root hides its nodes from the document altogether, and
+  // a page can put the inspector's own (open) root inside one.
+  it("tells inside from outside within shadow roots nested in a closed one", () => {
+    const outer = container.attachShadow({ mode: "closed" });
+    const host = document.createElement("div");
+    const sibling = document.createElement("button");
+    outer.append(host, sibling);
+    const shadow = host.attachShadow({ mode: "open" });
+    const mount = document.createElement("div");
+    shadow.appendChild(mount);
+    toolbar(mount);
+    act(() => gear(shadow).click());
+
+    press(checkbox(shadow));
+    expect(popup(shadow)).not.toBeNull();
+
+    // Inside the closed root, but outside the panel's.
+    press(sibling);
+    expect(popup(shadow)).toBeNull();
+
+    act(() => gear(shadow).click());
+    press(document.body);
+    expect(popup(shadow)).toBeNull();
+    render(null, mount);
   });
 });

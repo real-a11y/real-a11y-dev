@@ -6,10 +6,14 @@
  * and say the same of a frame.
  */
 
+import { isKeyState } from "@real-a11y-dev/semantic-navigator-ui";
+
 /** A state badge: its text, and the class that colours it. */
 export interface StateBadge {
   label: string;
   cls: string;
+  /** A key state (`isKeyState`), which a row never lets its label clip. */
+  keyState: boolean;
 }
 
 /** The class that colours the badge for state `key` at `value`. */
@@ -34,7 +38,11 @@ export function domStateBadges(
 ): StateBadge[] {
   const badges: StateBadge[] = [];
   const add = (label: string, key: string) =>
-    badges.push({ label, cls: stateBadgeClass(key, states[key]!) });
+    badges.push({
+      label,
+      cls: stateBadgeClass(key, states[key]!),
+      keyState: isKeyState(key),
+    });
   if (states["disabled"] === true) add("disabled", "disabled");
   if (states["checked"] === true) add("checked", "checked");
   if (states["checked"] === "mixed") add("mixed", "checked");
@@ -64,28 +72,52 @@ export function nativeStateBadges(
   const badges: StateBadge[] = [];
   for (const [key, value] of Object.entries(states ?? {})) {
     const cls = stateBadgeClass(key, value);
+    const keyState = isKeyState(key);
     if (key === "expanded") {
-      badges.push({ label: value === true ? "expanded" : "collapsed", cls });
+      badges.push({
+        label: value === true ? "expanded" : "collapsed",
+        cls,
+        keyState,
+      });
     } else if (key === "checked" && value === "mixed") {
-      badges.push({ label: "mixed", cls });
+      badges.push({ label: "mixed", cls, keyState });
     } else if (value === true) {
-      badges.push({ label: key, cls });
+      badges.push({ label: key, cls, keyState });
     } else if (value !== false) {
-      badges.push({ label: `${key}=${value}`, cls });
+      badges.push({ label: `${key}=${value}`, cls, keyState });
     }
   }
+  // A property (hasPopup, value bounds, …) is never a key state.
   for (const [key, value] of Object.entries(properties ?? {})) {
     if (key === "level" && headingLevel) continue;
-    badges.push({ label: `${key}=${value}`, cls: "sn-state--info" });
+    badges.push({
+      label: `${key}=${value}`,
+      cls: "sn-state--info",
+      keyState: false,
+    });
   }
   return badges;
 }
 
-/** A row's state badges, or nothing when it has none. */
-export function StateBadges({ badges }: { badges: StateBadge[] }) {
+/**
+ * A row's state badges, or nothing when it has none. Its key states pass
+ * `keyStates`: the row shows them after its label, where nothing clips them,
+ * and hides them from a screen reader, which hears them after the name
+ * instead, from the ui package's `KeyStatesForReaders`.
+ */
+export function StateBadges({
+  badges,
+  keyStates = false,
+}: {
+  badges: StateBadge[];
+  keyStates?: boolean;
+}) {
   if (badges.length === 0) return null;
   return (
-    <span class="sn-state-badges">
+    <span
+      class={keyStates ? "sn-state-badges sn-key-states" : "sn-state-badges"}
+      aria-hidden={keyStates || undefined}
+    >
       {badges.map((b) => (
         <span key={b.label} class={`sn-state-badge ${b.cls}`}>
           {b.label}

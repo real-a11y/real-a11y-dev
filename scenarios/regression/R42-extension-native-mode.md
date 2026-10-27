@@ -55,9 +55,10 @@ load it again** before step 1, step 9 and step 10.
 6. Make the side panel as narrow as Chrome lets it, and open **Settings ▾**, next
    to the page's title: it is fully on screen, and so is everything in it. **Read
    pages through Chrome (recommended)** is checked, with a line about the bar under
-   it, and **Show** (**Chrome's tree** / **In-page tree**) below that. Uncheck it.
-   The panel shows the in-page tree, **Show** goes, focus stays on the switch, and
-   the bar does not come back while you browse.
+   it, and **Show** (**Chrome's tree** / **In-page tree**) below that, then **Show
+   full names** (from extension 0.1.18, unreleased). Uncheck it. The panel shows the
+   in-page tree, **Show** goes while **Show full names** stays, focus stays on the
+   switch, and the bar does not come back while you browse.
 7. Close and reopen the panel, then quit Chrome and start it again: still the
    in-page tree, and still no bar.
 8. Check the switch again: the panel reads the page natively at once, and the bar

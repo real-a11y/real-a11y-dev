@@ -1,3 +1,4 @@
+import { realmSingleton } from "@real-a11y-dev/core";
 import { act, cleanup, render, waitFor } from "@testing-library/react";
 import { useRef, useState } from "react";
 import { describe, it, expect, afterEach } from "vitest";
@@ -11,7 +12,16 @@ import {
   type SemanticTreeTarget,
 } from "./index.js";
 
-afterEach(() => cleanup());
+afterEach(() => {
+  cleanup();
+  // The user's Show full names choice holds for the page (the inspector's
+  // `fullNamesChoice`), so a test that makes one must not hand it to the next.
+  delete realmSingleton<{ on?: boolean; panels: Set<() => void> }>(
+    "inspector.full-names-choice",
+    "full-names-choice@1",
+    () => ({ panels: new Set() }),
+  ).on;
+});
 
 // Wait on the condition, never on a fixed sleep. The panel's tree renders only
 // after Preact's deferred effect chain (next frame, or its 35ms fallback
@@ -102,6 +112,142 @@ describe("<SemanticNavigator />", () => {
     const pickBtn = await findInPanel(onHost, ".sn-pick-btn");
     expect(pickBtn.getAttribute("aria-pressed")).toBe("false");
     expect(pickBtn.getAttribute("aria-label")).toBe("Pick element in page");
+  });
+
+  it("starts the tree with full names only when defaultShowFullNames is set", async () => {
+    function App({ defaultShowFullNames }: { defaultShowFullNames?: boolean }) {
+      const rootRef = useRef<HTMLDivElement>(null);
+      return (
+        <>
+          <div ref={rootRef}>
+            <a href="#a">A link whose name runs well past the panel's edge</a>
+          </div>
+          <SemanticNavigator
+            root={rootRef}
+            defaultShowFullNames={defaultShowFullNames}
+          />
+        </>
+      );
+    }
+
+    // By default a long name ends in an ellipsis: no full-names class.
+    const off = render(<App />);
+    const offTree = await findInPanel(
+      off.container.querySelectorAll("div")[1],
+      '[role="tree"]',
+    );
+    expect(offTree.classList.contains("sn-tree--full-names")).toBe(false);
+    off.unmount();
+
+    const on = render(<App defaultShowFullNames />);
+    const onTree = await findInPanel(
+      on.container.querySelectorAll("div")[1],
+      '[role="tree"]',
+    );
+    expect(onTree.classList.contains("sn-tree--full-names")).toBe(true);
+  });
+
+  it("keeps the user's Show full names through a remount, its own included", async () => {
+    function App({
+      theme,
+      shown = true,
+    }: {
+      theme: "light" | "dark";
+      shown?: boolean;
+    }) {
+      const rootRef = useRef<HTMLDivElement>(null);
+      return (
+        <>
+          <div ref={rootRef}>
+            <a href="#a">A link whose name runs well past the panel's edge</a>
+          </div>
+          {shown && <SemanticNavigator root={rootRef} theme={theme} />}
+        </>
+      );
+    }
+    const view = render(<App theme="light" />);
+    const host = view.container.querySelectorAll("div")[1];
+    await findInPanel(host, '[role="tree"]');
+
+    // The user turns it on in Settings…
+    act(() => {
+      host
+        .shadowRoot!.querySelector<HTMLButtonElement>(
+          'button[aria-label="Settings"]',
+        )!
+        .click();
+    });
+    const box = (await findInPanel(
+      host,
+      '[role="group"][aria-label="Settings"] input[type="checkbox"]',
+    )) as HTMLInputElement;
+    act(() => box.click());
+    await waitFor(() => {
+      expect(
+        host
+          .shadowRoot!.querySelector('[role="tree"]')
+          ?.classList.contains("sn-tree--full-names"),
+      ).toBe(true);
+    }, WAIT);
+
+    // …a theme change, which remounts the navigator, keeps it on…
+    view.rerender(<App theme="dark" />);
+    await waitFor(() => {
+      const tree = host.shadowRoot!.querySelector('[role="tree"]');
+      expect(tree?.closest(".sn-theme-dark")).not.toBeNull();
+      expect(tree?.classList.contains("sn-tree--full-names")).toBe(true);
+    }, WAIT);
+
+    // …and so does unmounting the component and mounting it again, which
+    // gives the navigator a new host.
+    view.rerender(<App theme="dark" shown={false} />);
+    view.rerender(<App theme="dark" />);
+    const newHost = view.container.querySelectorAll("div")[1];
+    expect(newHost).not.toBe(host);
+    const tree = await findInPanel(newHost, '[role="tree"]');
+    expect(tree.classList.contains("sn-tree--full-names")).toBe(true);
+  });
+
+  it("shows the user's Show full names in every navigator on the page", async () => {
+    function App() {
+      const rootRef = useRef<HTMLDivElement>(null);
+      return (
+        <>
+          <div ref={rootRef}>
+            <a href="#a">A link whose name runs well past the panel's edge</a>
+          </div>
+          <SemanticNavigator root={rootRef} />
+          <SemanticNavigator root={rootRef} />
+        </>
+      );
+    }
+    const view = render(<App />);
+    const [, first, second] = view.container.querySelectorAll("div");
+    await findInPanel(first, '[role="tree"]');
+    await findInPanel(second, '[role="tree"]');
+    const fullNames = (host: Element) =>
+      host
+        .shadowRoot!.querySelector('[role="tree"]')
+        ?.classList.contains("sn-tree--full-names");
+
+    // Turned on in one, while both are open…
+    act(() => {
+      first
+        .shadowRoot!.querySelector<HTMLButtonElement>(
+          'button[aria-label="Settings"]',
+        )!
+        .click();
+    });
+    const box = (await findInPanel(
+      first,
+      '[role="group"][aria-label="Settings"] input[type="checkbox"]',
+    )) as HTMLInputElement;
+    act(() => box.click());
+
+    // …it is on in both.
+    await waitFor(() => {
+      expect([fullNames(first), fullNames(second)]).toEqual([true, true]);
+    }, WAIT);
   });
 
   it("picks up enablePicker toggled after mount", async () => {
