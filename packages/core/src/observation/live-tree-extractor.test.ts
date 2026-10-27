@@ -1,4 +1,12 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import {
+  describe,
+  it,
+  expect,
+  vi,
+  beforeEach,
+  afterEach,
+  type MockInstance,
+} from "vitest";
 
 import {
   LiveTreeExtractor,
@@ -2694,7 +2702,7 @@ describe("LiveTreeExtractor", () => {
   // tag is a read the splice can make safely, so these must splice without
   // falling back. (Forced: jsdom doesn't shadow a form's own members.)
   describe("a <form> whose control shadows tagName", () => {
-    let warn: ReturnType<typeof vi.spyOn>;
+    let warn: MockInstance<typeof console.warn>;
 
     beforeEach(() => {
       // The full walk warns about the form it skips; the fallback would too.
