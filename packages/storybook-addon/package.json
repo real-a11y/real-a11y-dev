@@ -1,7 +1,7 @@
 {
   "name": "@real-a11y-dev/storybook-addon",
   "version": "0.1.0-beta.20",
-  "description": "Storybook addon — Semantic Navigator A11y tree panel for every story",
+  "description": "Inspect the accessibility tree, heading outline and tab order of every story in a live panel",
   "license": "MIT",
   "author": "Juan Crisostomo (Real A11y)",
   "repository": {
@@ -14,14 +14,26 @@
     "url": "https://github.com/real-a11y/real-a11y-dev/issues"
   },
   "keywords": [
-    "storybook",
     "storybook-addon",
+    "test",
     "storybook-addons",
+    "storybook",
     "a11y",
     "accessibility",
+    "accessibility-tree",
     "aria",
-    "accessibility-tree"
+    "screen-reader",
+    "headings",
+    "tab-order",
+    "semantic-navigator"
   ],
+  "storybook": {
+    "displayName": "Semantic Navigator",
+    "icon": "https://raw.githubusercontent.com/real-a11y/real-a11y-dev/main/packages/extension/public/icons/icon-128.png",
+    "unsupportedFrameworks": [
+      "react-native"
+    ]
+  },
   "engines": {
     "node": ">=20"
   },

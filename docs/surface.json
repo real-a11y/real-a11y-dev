@@ -2637,7 +2637,7 @@
     },
     {
       "bin": [],
-      "description": "Storybook addon — Semantic Navigator A11y tree panel for every story",
+      "description": "Inspect the accessibility tree, heading outline and tab order of every story in a live panel",
       "dir": "storybook-addon",
       "exports": [
         ".",
