@@ -191,6 +191,33 @@ function prettyViewDiff(
   return out;
 }
 
+function prettyFindingEntries(page: PageDiff, c: Palette): string[] {
+  const out: string[] = [];
+  for (const e of shownEntries(page)) {
+    const f = e.finding;
+    if (e.kind === "new") {
+      const tag = f.suppressed
+        ? c.dim("+ new [baselined]")
+        : f.severity === "error"
+          ? c.red("+ new [error]")
+          : c.yellow("+ new [warning]");
+      out.push(`  ${tag} ${f.rule}: ${f.message}`);
+      if (f.locator)
+        out.push(
+          `      ${f.locator}${f.context ? `  ${c.dim(f.context)}` : ""}`,
+        );
+    } else if (e.kind === "changed") {
+      out.push(
+        `  ${c.yellow("~ changed")} ${f.rule}: ${(e.changes ?? []).join("; ")}`,
+      );
+      if (f.locator) out.push(`      ${c.dim(f.locator)}`);
+    } else if (e.kind === "removed") {
+      out.push(`  ${c.dim(`- fixed [${f.severity}]`)} ${f.rule}: ${f.message}`);
+    }
+  }
+  return out;
+}
+
 export function renderDiffPretty(
   result: DiffResult,
   options: DiffRenderOptions,
@@ -220,32 +247,7 @@ export function renderDiffPretty(
         `== ${page.name}${page.status !== "ok" ? ` (${page.status})` : ""}`,
       ),
     );
-    if (only !== "views") {
-      for (const e of shownEntries(page)) {
-        const f = e.finding;
-        if (e.kind === "new") {
-          const tag = f.suppressed
-            ? c.dim("+ new [baselined]")
-            : f.severity === "error"
-              ? c.red("+ new [error]")
-              : c.yellow("+ new [warning]");
-          lines.push(`  ${tag} ${f.rule}: ${f.message}`);
-          if (f.locator)
-            lines.push(
-              `      ${f.locator}${f.context ? `  ${c.dim(f.context)}` : ""}`,
-            );
-        } else if (e.kind === "changed") {
-          lines.push(
-            `  ${c.yellow("~ changed")} ${f.rule}: ${(e.changes ?? []).join("; ")}`,
-          );
-          if (f.locator) lines.push(`      ${c.dim(f.locator)}`);
-        } else if (e.kind === "removed") {
-          lines.push(
-            `  ${c.dim(`- fixed [${f.severity}]`)} ${f.rule}: ${f.message}`,
-          );
-        }
-      }
-    }
+    if (only !== "views") lines.push(...prettyFindingEntries(page, c));
     if (only !== "findings") {
       if (explain && page.structural.length) {
         lines.push(c.dim("  structure changed (advisory):"));
