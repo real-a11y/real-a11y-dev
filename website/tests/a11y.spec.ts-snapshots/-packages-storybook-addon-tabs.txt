@@ -12,11 +12,16 @@ button "Copy Code"
 generic
 button "Copy Code"
 generic
+button "Copy Code"
+generic
+button "Copy Code"
+generic
 table
 button "Copy Code"
 generic
 button "Copy Code"
 generic
+link "CSF Next"
 link "examples/storybook/"
 link "Storybook + React 19 recipe"
 link "live region log"

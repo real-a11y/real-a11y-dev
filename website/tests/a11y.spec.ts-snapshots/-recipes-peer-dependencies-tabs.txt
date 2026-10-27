@@ -14,6 +14,7 @@ button "Copy Code"
 generic
 button "Copy Code"
 generic
+link "CSF Next"
 link "Next.js recipe"
 button "Copy Code"
 generic

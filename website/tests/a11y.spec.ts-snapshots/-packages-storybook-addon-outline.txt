@@ -2,6 +2,7 @@
 h1 @real-a11y-dev/storybook-addon
   h2 Install
   h2 Setup
+    h3 CSF Next (definePreview)
   h2 The panel
   h2 How it works
   h2 Using the panel effectively
