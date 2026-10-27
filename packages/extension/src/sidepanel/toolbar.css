@@ -1,5 +1,22 @@
 /* The side panel's own additions to `tree.css`'s toolbar. */
 
+/* The panel's own toolbars wrap: a side panel is usually 320–400px wide. A
+ * row that doesn't fit and can't wrap shrinks whatever can shrink, so the
+ * search box went down to its padding and the DOM / A11Y / TAB views, whose
+ * `overflow: hidden` leaves them no minimum width, to nothing. */
+.sn-toolbar--wrap {
+  flex-wrap: wrap;
+}
+
+/* Below these widths the row wraps instead. */
+.sn-toolbar--wrap > .sn-search {
+  min-width: 4em;
+}
+
+.sn-toolbar--wrap > .sn-toggle-group {
+  flex-shrink: 0;
+}
+
 /* A toolbar button that stays on (Chrome's tree's "Follow page changes")
  * shows that it is, as the picker's toggle does, hovered or not. */
 .sn-toolbar-btn[aria-pressed="true"],

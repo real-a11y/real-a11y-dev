@@ -3616,9 +3616,9 @@ export function App() {
     window.matchMedia("(prefers-color-scheme: dark)").matches;
   const themeClass = prefersDark ? "sn-theme-dark" : "sn-theme-light";
 
-  // Settings, in each header rather than the toolbar, whose controls don't
-  // wrap and run past a narrow panel's edge: this is where native mode turns
-  // off and back on, so it is on screen whether or not a page is connected.
+  // Settings, in each header rather than the toolbar, which is drawn only
+  // once a page is connected: this is where native mode turns off and back
+  // on, so it is on screen whether or not a page is connected.
   // A disclosure, not a menu: what it opens is a switch and a line about it,
   // and, while native mode is on, which tree this panel shows.
   const settingsDisclosure = (
@@ -3875,55 +3875,24 @@ export function App() {
         </button>
       </div>
 
-      {/* Toolbar */}
-      <div class="sn-toolbar" role="toolbar" aria-label="Tree controls">
-        {producer === "dom" && (
-          <input
-            ref={searchInputRef}
-            class="sn-search"
-            type="search"
-            placeholder="Search nodes..."
-            aria-label="Search tree nodes"
-            value={query}
-            onInput={(e) => updateQuery((e.target as HTMLInputElement).value)}
-          />
-        )}
-        {/* Mounted before there is a count to report: a live region that
-            arrives already holding its text is not announced by most screen
-            reader / browser pairs. Only the text swaps. */}
-        {producer === "dom" && (
-          <span class="sn-search-count" aria-live="polite">
-            {(query || roleFilter) &&
-              matchCountLabel(matchCount, scopedRootId !== null)}
-          </span>
-        )}
+      {/* The toolbar both trees share. Each tree's own controls are in a
+          toolbar of their own under it: NativeTreeView's for Chrome's tree,
+          the next one for the in-page tree. On one row with these, the
+          in-page tree's left the search box no room below about 530px and
+          squeezed the DOM / A11Y / TAB views to nothing, in a side panel
+          usually 320–400px wide.
 
-        {producer === "dom" && (
-          <div class="sn-toggle-group" role="group" aria-label="Tree view mode">
-            <button
-              class="sn-toggle-btn"
-              aria-pressed={viewMode === "dom"}
-              onClick={() => handleViewModeChange("dom")}
-            >
-              DOM
-            </button>
-            <button
-              class="sn-toggle-btn"
-              aria-pressed={viewMode === "a11y"}
-              onClick={() => handleViewModeChange("a11y")}
-            >
-              A11Y
-            </button>
-            <button
-              class="sn-toggle-btn"
-              aria-pressed={viewMode === "tab"}
-              onClick={() => handleViewModeChange("tab")}
-            >
-              TAB
-            </button>
-          </div>
-        )}
-
+          Both keyed, so that the screen shown while the panel waits for a
+          page never takes over an element of either: Preact leaves a ref on
+          an element it reuses for one with no ref, so the Copy menu's
+          container would outlive its toolbar, and the menu come back open
+          (`useDismissible`). */}
+      <div
+        key="sn-toolbar"
+        class="sn-toolbar sn-toolbar--wrap"
+        role="toolbar"
+        aria-label="Tree controls"
+      >
         {(producer === "dom" ||
           (producer === "native" && nativeModeEnabled)) && (
           <button
@@ -3976,46 +3945,6 @@ export function App() {
           {focusTrackerOn ? "Focus sync" : "Focus OFF"}
         </button>
 
-        {producer === "dom" && (
-          <button
-            class="sn-toolbar-btn"
-            onClick={() => {
-              // requestTree stamps myTabId (via sendToBoundTab) so this doesn't
-              // race the background's activeTabId update — without that, hitting
-              // refresh right after a tab switch would route to the wrong tab.
-              requestTree();
-              announce("Tree refreshed", 1500);
-            }}
-            aria-label="Refresh tree"
-            title="Refresh tree"
-          >
-            {"\u21BB"}
-          </button>
-        )}
-
-        {producer === "dom" && (
-          <button
-            class="sn-toolbar-btn"
-            onClick={handleExpandAll}
-            disabled={viewMode === "tab"}
-            aria-label="Expand all"
-            title="Expand all"
-          >
-            +
-          </button>
-        )}
-        {producer === "dom" && (
-          <button
-            class="sn-toolbar-btn"
-            onClick={handleCollapseAll}
-            disabled={viewMode === "tab"}
-            aria-label="Collapse all"
-            title="Collapse all"
-          >
-            -
-          </button>
-        )}
-
         <div class="sn-export" ref={exportRef}>
           <button
             ref={exportButtonRef}
@@ -4058,6 +3987,94 @@ export function App() {
           )}
         </div>
       </div>
+
+      {producer === "dom" && (
+        <div
+          key="sn-inpage-toolbar"
+          class="sn-toolbar sn-toolbar--wrap"
+          role="toolbar"
+          aria-label="In-page tree controls"
+        >
+          <input
+            ref={searchInputRef}
+            class="sn-search"
+            type="search"
+            placeholder="Search nodes..."
+            aria-label="Search tree nodes"
+            value={query}
+            onInput={(e) => updateQuery((e.target as HTMLInputElement).value)}
+          />
+
+          <div class="sn-toggle-group" role="group" aria-label="Tree view mode">
+            <button
+              class="sn-toggle-btn"
+              aria-pressed={viewMode === "dom"}
+              onClick={() => handleViewModeChange("dom")}
+            >
+              DOM
+            </button>
+            <button
+              class="sn-toggle-btn"
+              aria-pressed={viewMode === "a11y"}
+              onClick={() => handleViewModeChange("a11y")}
+            >
+              A11Y
+            </button>
+            <button
+              class="sn-toggle-btn"
+              aria-pressed={viewMode === "tab"}
+              onClick={() => handleViewModeChange("tab")}
+            >
+              TAB
+            </button>
+          </div>
+
+          <button
+            class="sn-toolbar-btn"
+            onClick={() => {
+              // requestTree stamps myTabId (via sendToBoundTab) so this doesn't
+              // race the background's activeTabId update — without that, hitting
+              // refresh right after a tab switch would route to the wrong tab.
+              requestTree();
+              announce("Tree refreshed", 1500);
+            }}
+            aria-label="Refresh tree"
+            title="Refresh tree"
+          >
+            {"\u21BB"}
+          </button>
+
+          <button
+            class="sn-toolbar-btn"
+            onClick={handleExpandAll}
+            disabled={viewMode === "tab"}
+            aria-label="Expand all"
+            title="Expand all"
+          >
+            +
+          </button>
+          <button
+            class="sn-toolbar-btn"
+            onClick={handleCollapseAll}
+            disabled={viewMode === "tab"}
+            aria-label="Collapse all"
+            title="Collapse all"
+          >
+            -
+          </button>
+
+          {/* Mounted before there is a count to report: a live region that
+              arrives already holding its text is not announced by most screen
+              reader / browser pairs. Only the text swaps. Last in the row, so
+              that in a narrow panel a count with no room drops to a line of
+              its own rather than squeezing the search box or pushing a
+              control off the row. */}
+          <span class="sn-search-count" aria-live="polite">
+            {(query || roleFilter) &&
+              matchCountLabel(matchCount, scopedRootId !== null)}
+          </span>
+        </div>
+      )}
 
       {/* Block-level, NOT a toolbar flex child: its paragraph would otherwise
           squeeze every other toolbar control (search box, curtain, refresh,
