@@ -361,6 +361,31 @@ describe("renderDiffMarkdown", () => {
     expect(out).toMatch(/\*\*new\*\* `no-unlabeled-interactive`/);
   });
 
+  it("lists new, changed and fixed findings as bullets under the page", () => {
+    const gone: Finding = { ...button, rule: "image-alt", locator: "#gone" };
+    const worse: Finding = { ...button, rule: "dialog-labeled", locator: "#w" };
+    const out = renderDiffMarkdown(
+      diffArtifacts(
+        buildArtifact([page("Home", [gone, worse])], {
+          toolName: "c",
+          toolVersion: "0",
+        }),
+        buildArtifact(
+          [page("Home", [{ ...worse, severity: "warning" }, button])],
+          { toolName: "c", toolVersion: "0" },
+        ),
+      ),
+    );
+    const bullets = out.split("\n").filter((l) => l.startsWith("- "));
+    expect(bullets).toMatchInlineSnapshot(`
+      [
+        "- ❌ **new** \`no-unlabeled-interactive\`: Unlabeled interactive element: button <button>",
+        "- 🔁 **changed** \`dialog-labeled\`: severity error → warning",
+        "- ✅ **fixed** \`image-alt\`: Unlabeled interactive element: button <button>",
+      ]
+    `);
+  });
+
   it("says so when nothing changed", () => {
     const clean = diffArtifacts(
       buildArtifact([page("Home", [])], { toolName: "c", toolVersion: "0" }),
