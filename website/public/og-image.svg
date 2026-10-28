@@ -29,19 +29,27 @@
     </text>
   </g>
 
-  <!-- Feature strip along the bottom -->
+  <!-- Feature grid along the bottom: the six surfaces, in the home page
+       tagline's order. Two rows of three; one row of six would not fit the
+       labels at this size. -->
   <g font-family="Inter, system-ui, sans-serif" fill="#000000">
-    <text x="96" y="498" font-size="22" font-weight="700" letter-spacing="1">CHROME EXTENSION</text>
-    <text x="96" y="528" font-size="18" font-weight="400" fill="#555555">DOM · A11y · Tab views</text>
+    <text x="96" y="428" font-size="22" font-weight="700" letter-spacing="1">CHROME EXTENSION</text>
+    <text x="96" y="458" font-size="18" font-weight="400" fill="#555555">DOM · A11y · Tab views</text>
 
-    <text x="420" y="498" font-size="22" font-weight="700" letter-spacing="1">STORYBOOK</text>
-    <text x="420" y="528" font-size="18" font-weight="400" fill="#555555">Per-story a11y panel</text>
+    <text x="432" y="428" font-size="22" font-weight="700" letter-spacing="1">STORYBOOK</text>
+    <text x="432" y="458" font-size="18" font-weight="400" fill="#555555">Per-story a11y panel</text>
 
-    <text x="680" y="498" font-size="22" font-weight="700" letter-spacing="1">REACT</text>
-    <text x="680" y="528" font-size="18" font-weight="400" fill="#555555">Hooks + component</text>
+    <text x="768" y="428" font-size="22" font-weight="700" letter-spacing="1">REACT</text>
+    <text x="768" y="458" font-size="18" font-weight="400" fill="#555555">Hooks + component</text>
 
-    <text x="900" y="498" font-size="22" font-weight="700" letter-spacing="1">TESTING</text>
-    <text x="900" y="528" font-size="18" font-weight="400" fill="#555555">Vitest + Playwright</text>
+    <text x="96" y="512" font-size="22" font-weight="700" letter-spacing="1">TESTING</text>
+    <text x="96" y="542" font-size="18" font-weight="400" fill="#555555">Vitest + Playwright</text>
+
+    <text x="432" y="512" font-size="22" font-weight="700" letter-spacing="1">CLI</text>
+    <text x="432" y="542" font-size="18" font-weight="400" fill="#555555">Audit + diff in CI</text>
+
+    <text x="768" y="512" font-size="22" font-weight="700" letter-spacing="1">MCP SERVER</text>
+    <text x="768" y="542" font-size="18" font-weight="400" fill="#555555">The tree for AI agents</text>
   </g>
 
   <!-- Beta pill -->

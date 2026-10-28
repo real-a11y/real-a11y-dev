@@ -26,7 +26,7 @@ link "Accessibility for AI agents: Explore the MCP server"
     paragraph "Explore the MCP server"
 article
   heading "First-class React support" (level 2)
-  paragraph "useSemanticTree() and useActiveModal() subscribe to DOM mutations via useSyncExternalStore — concurrent-mode safe, no boilerplate. Drop in"
+  paragraph "useSemanticTree() and useActiveModal() subscribe to DOM mutations via useSyncExternalStore — concurrent-mode safe, no boilerplate. Drop in <SemanticNavigator /> and the tree panel appears."
 article
   heading "Storybook panel out of the box" (level 2)
   paragraph "Install @real-a11y-dev/storybook-addon and every story gets an A11y tree panel showing the semantic structure, heading outline, and tab sequence — updated live while the panel is open."

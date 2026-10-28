@@ -52,6 +52,16 @@ const isNext = CHANNEL === "next";
 const SITE = "https://real-a11y.dev";
 
 /**
+ * The search-result description, reused by the homepage's JSON-LD.
+ *
+ * One constant because they drifted apart: when the CLI and the MCP server
+ * shipped, the home page gained a card for each and these strings still
+ * listed four surfaces. Name all six here, in the hero tagline's order.
+ */
+const DESCRIPTION =
+  "Accessibility tooling that works in the real world — semantic tree extraction through a Chrome extension, Storybook panel, React component, testing library, CLI, and MCP server.";
+
+/**
  * The version label in the nav — read from the manifests, never hand-written.
  *
  * It replaces a hardcoded `v0.1 · Beta` that had never changed and could not:
@@ -144,8 +154,7 @@ function readJson(relative: string): {
 
 export default defineConfig({
   title: "Real A11y",
-  description:
-    "Accessibility tooling that works in the real world — semantic tree extraction, testing utilities, React integration, and Storybook panel.",
+  description: DESCRIPTION,
   lang: "en-US",
 
   // Emit sitemap.xml for search engines (matches robots.txt reference).
@@ -236,9 +245,9 @@ export default defineConfig({
   head: [
     ["link", { rel: "icon", href: "/favicon.svg", type: "image/svg+xml" }],
     ["meta", { name: "theme-color", content: "#000000" }],
-    // Social card. `og-image.svg` ships as a placeholder; replace
-    // `/og-image.png` with a 1200×630 PNG export before launch — most OG
-    // scrapers (Twitter, LinkedIn, Slack) prefer PNG over SVG.
+    // Social card. `og-image.png` is a 1200×630 export of `og-image.svg`,
+    // because most OG scrapers (Twitter, LinkedIn, Slack) prefer PNG over
+    // SVG. Edit the SVG, then run `pnpm rasterize-og` to regenerate the PNG.
     [
       "meta",
       {
@@ -263,7 +272,7 @@ export default defineConfig({
       {
         property: "og:description",
         content:
-          "Chrome extension, Storybook panel, React integration, and testing library — all powered by the same semantic engine.",
+          "Chrome extension, Storybook panel, React component, testing library, CLI, and MCP server — all powered by the same semantic engine.",
       },
     ],
     ["meta", { name: "twitter:card", content: "summary_large_image" }],
@@ -314,8 +323,7 @@ export default defineConfig({
             applicationCategory: "DeveloperApplication",
             operatingSystem: "Web, Chrome",
             url: "https://real-a11y.dev",
-            description:
-              "Accessibility tooling that works in the real world — semantic tree extraction, testing utilities, React integration, Storybook panel, and Chrome extension.",
+            description: DESCRIPTION,
             offers: {
               "@type": "Offer",
               price: "0",
