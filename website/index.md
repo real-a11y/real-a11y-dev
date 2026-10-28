@@ -40,7 +40,7 @@ features:
     linkText: Explore the MCP server
   - icon: ⚛️
     title: First-class React support
-    details: "useSemanticTree() and useActiveModal() subscribe to DOM mutations via useSyncExternalStore — concurrent-mode safe, no boilerplate. Drop in <SemanticNavigator /> and the tree panel appears."
+    details: "useSemanticTree() and useActiveModal() subscribe to DOM mutations via useSyncExternalStore — concurrent-mode safe, no boilerplate. Drop in &lt;SemanticNavigator /&gt; and the tree panel appears."
   - icon: 📖
     title: Storybook panel out of the box
     details: "Install @real-a11y-dev/storybook-addon and every story gets an A11y tree panel showing the semantic structure, heading outline, and tab sequence — updated live while the panel is open."

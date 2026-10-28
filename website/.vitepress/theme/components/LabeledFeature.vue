@@ -1,6 +1,7 @@
 <script setup lang="ts">
 /**
- * VitePress's `VPFeature`, with an accessible name on the linked cards.
+ * VitePress's `VPFeature`, with an accessible name on the linked cards and
+ * its emoji icon hidden from the accessibility tree.
  *
  * ## The defect
  *
@@ -80,8 +81,20 @@ const label = computed(() =>
     ? [props.title, props.linkText].filter(Boolean).join(": ")
     : undefined,
 );
+
+// The emoji icons are decoration: each sits above a heading that already
+// says what the card is. Left bare, the emoji is a text node in the tree, so
+// a screen reader reads its name ("deciduous tree", "puzzle piece") before
+// every card heading. `VPFeature` renders a string icon with `v-html`, so
+// wrapping the markup is enough. An image icon (`{ src, alt }`) is left to
+// its own `alt`.
+const icon = computed(() =>
+  typeof props.icon === "string"
+    ? `<span aria-hidden="true">${props.icon}</span>`
+    : props.icon,
+);
 </script>
 
 <template>
-  <VPFeature v-bind="props" :aria-label="label" />
+  <VPFeature v-bind="props" :icon="icon" :aria-label="label" />
 </template>
