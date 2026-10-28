@@ -212,11 +212,11 @@ Each one takes an `ExtractionResult` or its `nodes` Map.
 
 | Function | Returns |
 |---|---|
-| `findByRole(tree, role, options?)` | The first node with that role, in document order, or `null`. `options` narrows by `name` (a string matches case-insensitively, a RegExp is tested against it), a heading's `level`, and the `checked`, `expanded`, `selected`, `pressed` and `disabled` states. Nodes hidden from assistive technology are skipped unless `includeHidden: true`. |
+| `findByRole(tree, role, options?)` | The first node with that role, in document order, or `null`. `options` narrows by `name` (a string must match the whole name, ignoring case and extra whitespace; a RegExp is tested against it), a heading's `level`, and the `checked`, `expanded`, `selected`, `pressed` and `disabled` states. Nodes hidden from assistive technology are skipped unless `includeHidden: true`. |
 | `findAllByRole(tree, role, options?)` | Every such node, in document order. |
 | `getOutline(tree)` | `{ id, level, name }` for each heading assistive technology can reach, in document order — what `outlineSnapshot()` and `assertHeadingOrder()` read. |
 | `getTabSequence(tree)` | Focusable nodes in Tab order: positive `tabindex` ascending, then the rest in document order, leaving out `tabindex="-1"`. It doesn't model shadow roots, iframes or focus traps. |
-| `linearize(tree, options?)` | Every node in document order. |
+| `linearize(tree, options?)` | Every node in document order, except those hidden from both sight and assistive technology unless `includeHidden: true`. |
 | `diffTrees(before, after)` | `{ added, removed, changed }` between two extractions of the same document, matched by node id. Each `changed` entry lists the fields that differ as dot-paths, such as `"a11y.name"` or `"a11y.states.expanded"`. [`capture` + `a11yDiff`](/packages/testing/flow#asserting-what-an-interaction-changed) are built on it. |
 
 ## See it running

@@ -44,6 +44,7 @@ import { join } from "node:path";
  */
 const PUBLISHED_PACKAGE_DOCS = [
   "README.md",
+  "CONTRIBUTING.md",
   "SECURITY.md",
   "website/index.md",
   "website/privacy.md",
