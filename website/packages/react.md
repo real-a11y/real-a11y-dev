@@ -61,7 +61,7 @@ function App() {
 | `scrollHostOnSelect` | `boolean` | `false` | Scroll host element into view on selection. |
 | `focusHostOnActivate` | `boolean` | `false` | Focus host element on action activation. |
 | `enablePicker` | `boolean` | `false` | Surface a DevTools-style element picker (⦿ button + Ctrl/Cmd+Shift+C). |
-| `defaultShowFullNames` | `boolean` | `false` | Start the tree with names in full, widening to fit the longest and scrolling sideways, instead of ending a long name in an ellipsis. Only where the panel starts: the user switches it from the toolbar's Settings (⚙), and their choice holds for the life of the page, in every navigator on it, whatever remounts the component. See [Long names](/guide/panel-features#long-names). |
+| `defaultShowFullNames` | `boolean` | `false` | Start the tree with names in full, widening to fit the longest and scrolling sideways, instead of ending a long name in an ellipsis. Only where the panel starts: the user switches it from the toolbar's Settings (⚙), and their choice holds for the life of the page, in every navigator on it, whatever remounts the component. |
 | `styleNonce` | `string` | — | CSP nonce for injected styles (mount-only — not updated on later prop changes). |
 | `onNodeSelect` | `(node: SemanticNode) => void` | — | Called when a tree node is selected. |
 | `onAction` | `(request: ActionRequest, result: ActionResult) => void` | — | Called after an interactive action is dispatched, with the dispatcher's own result. Check `result.success`: a failed action reports `{ success: false, error }`. Not called when nothing was dispatched — `interactive: false`, or a focus-moving action gated by `focusHostOnActivate`. |
@@ -76,7 +76,7 @@ function App() {
 The component creates its own internal `<div>` host and passes it to `createInspector`. Changing `root`, `mount`, `theme`, `interactive`, `highlightOnHover`, `scrollHostOnSelect`, `focusHostOnActivate`, or `enablePicker` remounts the navigator (selection, expansion, and other in-panel UI state reset); changing `mode` uses the imperative `setViewMode()` API without remounting. `defaultShowFullNames` only sets how the panel starts, so changing it remounts nothing, and the user's Show full names choice, unlike the rest of the panel's state, survives any remount, the component's own included. `styleNonce` is applied when the stylesheet is first injected and is not updated on later prop changes (shadow mount reuses the host shadow root; light mount injects `#sn-styles` into `document.head` once). `onNodeSelect` / `onAction` always invoke the latest callback the parent passed (stable wrappers over refs — recreating the prop each render does not leave a stale closure).
 
 ::: tip Why `highlightOnHover` / `scrollHostOnSelect` / `focusHostOnActivate` default to false
-`<SemanticNavigator />` renders into the same document as your app, so activating a tree row could steal focus from the panel or scroll the page underneath you. The panel itself stays fully interactive either way — row selection, cross-link chip navigation, keyboard movement — what's gated is the side effect on the *real* DOM element. See [Panel interaction vs. host side effects](/guide/panel-features#panel-interaction-vs-host-side-effects) for the full rationale and when to flip them on.
+`<SemanticNavigator />` renders into the same document as your app, so activating a tree row could steal focus from the panel or scroll the page underneath you. The panel itself stays fully interactive either way — row selection, cross-link chip navigation, keyboard movement — what's gated is the side effect on the *real* DOM element. `highlightOnHover` is the safe one to turn on: it only paints an outline over the page. Turn on the other two when the panel is your own inspection tool, and leave them off where end users see it.
 :::
 
 ---
@@ -243,7 +243,7 @@ import type { ExtractionResult, SemanticNode } from "@real-a11y-dev/react";
 ```
 
 ::: tip Where the query helpers live
-`findByRole` and `findAllByRole` are re-exported by [`@real-a11y-dev/testing`](/packages/testing), which is where the tree-query vocabulary is published. The extraction engine that defines them is bundled rather than installed, so it has no import path of its own.
+`findByRole` and `findAllByRole` are re-exported by [`@real-a11y-dev/testing`](/packages/testing#queries), which is where the tree-query vocabulary is published. The extraction engine that defines them is bundled rather than installed, so it has no import path of its own.
 :::
 
 ---
@@ -257,6 +257,6 @@ import type { ExtractionResult, SemanticNode } from "@real-a11y-dev/react";
 
 ## Panel features
 
-`<SemanticNavigator />` exposes the in-panel behaviors it shares with the Chrome extension and Storybook addon — search, role filters, focus tracking, scoping, keyboard navigation. The props on this component (`highlightOnHover`, `scrollHostOnSelect`, `focusHostOnActivate`, `mode`, `mount`) configure them. The [live region log](/guide/panel-features#live-region-monitoring) is not one of them: only the Chrome extension has it.
+`<SemanticNavigator />` renders the same tree panel as the Chrome extension, with its search, role filters and [keyboard](/guide/chrome-extension#keyboard). The [props](#props) above configure it, and a different `root` scopes it. Focus sync, the scope breadcrumb and the [live region log](/guide/chrome-extension#live-region-monitoring) are the extension's alone.
 
-→ [Panel features reference](/guide/panel-features)
+→ [Using the panel](/guide/chrome-extension#using-the-panel)

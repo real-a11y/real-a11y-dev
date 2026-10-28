@@ -36,7 +36,7 @@ export async function extractPackages(repoRoot) {
       exports: Object.keys(manifest.exports ?? {})
         .filter((subpath) => subpath !== "./package.json")
         .sort(),
-      // Workspace edges only — the dependency graph the architecture page
+      // Workspace edges only — the dependency graph the architecture doc
       // draws. External deps churn on every lockfile bump and would make the
       // manifest diff noise rather than signal.
       workspaceDeps: Object.entries({

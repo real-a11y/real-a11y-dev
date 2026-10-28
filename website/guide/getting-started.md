@@ -338,6 +338,6 @@ This ships the inspector into the production bundle (as a separate chunk) — ac
 
 ## Next steps
 
-- [Core Concepts](/guide/core-concepts) — understand the semantic tree model, roles, and names
+- [Reading the A11y view](/guide/reading-the-a11y-view) — roles, names and states, and the two engines that build the tree
 - [Accessibility Snapshots](/guide/accessibility-snapshots) — what it means to snapshot the a11y tree, and how it complements axe and visual regression testing
-- [Why Real A11y?](/guide/why) — how this compares to axe-core, Testing Library, and other tools
+- [Snapshots vs. other tools](/guide/accessibility-snapshots-comparisons) — how this compares to axe, Playwright's ARIA snapshots and screen-reader testing

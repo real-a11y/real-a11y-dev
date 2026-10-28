@@ -1,8 +1,0 @@
-link "The gap"
-link "How they complement each other"
-link "Design principles"
-table
-link "MCP server"
-link "Edit this page on GitHub"
-link "Previous page Snapshots vs. Other Tools"
-link "Next page Understanding the Views"

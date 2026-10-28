@@ -183,7 +183,7 @@ Three forms:
 
 Calling `expectChanges` before any action throws. A `ChangeSpec` failure ends with the rendered diff, so "what *did* change?" is always answered. A string-form mismatch, like `expectTree`, names the first differing line instead of dumping both full texts.
 
-Under the hood both styles are the engine's [`diffTrees`](/guide/core-concepts#tree-diffing) rendered by `serializeTreeDiff` — an **in-realm** comparison keyed on node identity (a live before/after in one document), distinct from the [CLI's](/packages/cli) cross-process artifact diff.
+Under the hood both styles are the engine's [`diffTrees`](/packages/testing#queries) rendered by `serializeTreeDiff` — an **in-realm** comparison keyed on node identity (a live before/after in one document), distinct from the [CLI's](/packages/cli) cross-process artifact diff.
 
 ## `flow(root, options?)`
 

@@ -45,7 +45,7 @@ install. A package marked **private** below never reaches a registry — its cod
 still ships, bundled *into* whichever published package carries it, so there is
 nothing to `npm install` and no version to pin. Each `package.json`'s `private`
 field is the authority; the
-[architecture guide](./website/guide/architecture.md) carries the current
+[architecture doc](./docs/ARCHITECTURE.md) carries the current
 published/internal split with the reasoning behind every seam.
 
 ```

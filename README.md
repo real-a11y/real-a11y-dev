@@ -17,7 +17,7 @@ Rule checkers — axe, WAVE, Lighthouse — catch broken individual elements: a 
 
 Real A11y extracts that tree — roles, accessible names, states, focus, live regions — so you can read it, assert on it, diff it across a change, and act through it. If a page doesn't make sense as a tree, it doesn't make sense at all.
 
-→ [Why Real A11y?](https://real-a11y.dev/guide/why) covers the positioning against axe and Testing Library, including where they're the better tool.
+→ [Snapshots vs. other tools](https://real-a11y.dev/guide/accessibility-snapshots-comparisons) covers where it sits next to axe, Playwright's ARIA snapshots and screen-reader testing.
 
 ## Pick your surface
 
@@ -82,7 +82,7 @@ createInspector({
 }).mount();
 ```
 
-→ [Inspector docs](https://real-a11y.dev/packages/inspector) · [panel features](https://real-a11y.dev/guide/panel-features), shared by every surface that renders the tree
+→ [Inspector docs](https://real-a11y.dev/packages/inspector) · [using the panel](https://real-a11y.dev/guide/chrome-extension#using-the-panel), shared by every surface that renders the tree
 
 **Or install the Chrome extension** — [Semantic Navigator on the Web Store](https://chromewebstore.google.com/detail/semantic-navigator/gnnepgbbecnlomngfemkadnbeaopleom). Chrome may show a "Proceed with caution — not trusted by Enhanced Safe Browsing" notice on first install; that's the default for any newly listed extension, not a signal about this one. → [Extension guide](https://real-a11y.dev/guide/chrome-extension)
 
@@ -91,17 +91,16 @@ createInspector({
 | | |
 |---|---|
 | [Getting started](https://real-a11y.dev/guide/getting-started) | Install and first result, per stack |
-| [Core concepts](https://real-a11y.dev/guide/core-concepts) | The semantic tree, and how it's built |
-| [Understanding the views](https://real-a11y.dev/guide/understanding-the-views) | A11y, DOM, headings, and TAB — one page, four perspectives |
-| [Architecture](https://real-a11y.dev/guide/architecture) | What each package owns and why the seams are where they are |
+| [Reading the A11y view](https://real-a11y.dev/guide/reading-the-a11y-view) | Roles, names and states, and the two engines that build the tree |
+| [Architecture](./docs/ARCHITECTURE.md) | What each package owns and why the seams are where they are |
 | [Examples](https://real-a11y.dev/examples/vanilla) | Vanilla, React, Vitest, Playwright, Storybook |
 | [Troubleshooting](https://real-a11y.dev/guide/troubleshooting) | When the tree isn't what you expected |
 
 ## Packages
 
-Six packages are published to npm (the table above); the Chrome extension ships on the Web Store. Eight more — the extraction engine, serializers, audit rules, snapshot engine, browser driver, session registry, ARIA validation, and the Preact tree components — are **internal**: their code ships bundled inside the published packages, so there is nothing to install and no version to pin. [`packages/`](./packages) has the source, and the [architecture guide](https://real-a11y.dev/guide/architecture) explains each seam.
+Six packages are published to npm (the table above); the Chrome extension ships on the Web Store. Eight more — the extraction engine, serializers, audit rules, snapshot engine, browser driver, session registry, ARIA validation, and the Preact tree components — are **internal**: their code ships bundled inside the published packages, so there is nothing to install and no version to pin. [`packages/`](./packages) has the source, and [the architecture doc](./docs/ARCHITECTURE.md) explains each seam.
 
-> **Migrating from a direct engine import?** Seven of the eight were published before the split and are frozen at their last beta. Most of that vocabulary moved rather than vanished — `@real-a11y-dev/testing` carries the queries, diff, serializers and `assert*` primitives; `@real-a11y-dev/mcp` carries `BrowserSession`. The extractors (`extractA11yTree`, `extractDomTree`) have no published home: run `real-a11y --format json` or the MCP tools instead. → [Full migration table](https://real-a11y.dev/guide/architecture#internal-—-bundled-not-published)
+> **Migrating from a direct engine import?** Seven of the eight were published before the split and are frozen at their last beta. Most of that vocabulary moved rather than vanished — `@real-a11y-dev/testing` carries the queries, diff, serializers and `assert*` primitives; `@real-a11y-dev/mcp` carries `BrowserSession`. The extractors (`extractA11yTree`, `extractDomTree`) have no published home: run `real-a11y --format json` or the MCP tools instead. → [Full migration table](./docs/ARCHITECTURE.md#internal-bundled-not-published)
 
 ## Development
 

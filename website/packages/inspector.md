@@ -60,7 +60,7 @@ Returns an `InspectorInstance`.
 | `scrollHostOnSelect` | `boolean` | `false` | Scroll the host DOM element into view when selecting a tree node. |
 | `focusHostOnActivate` | `boolean` | `false` | Move focus to the host DOM element when activating a tree node action. |
 | `enablePicker` | `boolean` | `false` | Surface a DevTools-style "select an element in the page" picker (toolbar button + Ctrl/Cmd+Shift+C); off by default because it captures document-level clicks. |
-| `defaultShowFullNames` | `boolean` | `false` | Start the tree with names in full, widening to fit the longest and scrolling sideways, instead of ending a long name in an ellipsis. Only where the panel starts: the user switches it from the toolbar's Settings (⚙), and their choice then holds for the life of the page, in every inspector on it: those open follow it at once, and it holds through `refresh()`, `setRoot()` and every later `createInspector()`. See [Long names](/guide/panel-features#long-names). |
+| `defaultShowFullNames` | `boolean` | `false` | Start the tree with names in full, widening to fit the longest and scrolling sideways, instead of ending a long name in an ellipsis. Only where the panel starts: the user switches it from the toolbar's Settings (⚙), and their choice then holds for the life of the page, in every inspector on it: those open follow it at once, and it holds through `refresh()`, `setRoot()` and every later `createInspector()`. |
 | `styleNonce` | `string` | — | CSP nonce applied to injected `<style>` elements. |
 | `onNodeSelect` | `(node) => void` | — | Callback when a node is selected. |
 | `onAction` | `(request, result) => void` | — | Callback when an action is dispatched, carrying the dispatcher's own result. Check `result.success`: a failed action reports `{ success: false, error }` (e.g. `"Element is disconnected from the document"`). Not called when nothing was dispatched — `interactive: false`, or a focus-moving action gated by `focusHostOnActivate`. |
@@ -70,7 +70,7 @@ With `mount: "shadow"`, the panel's styles live inside the ShadowRoot and cannot
 :::
 
 ::: tip Why `highlightOnHover` / `scrollHostOnSelect` / `focusHostOnActivate` default to false
-The inspector renders into the same document as your app, so activating a tree row could steal focus from the panel or scroll the page underneath you. The panel itself stays fully interactive either way — selection, chip navigation, keyboard movement — what's gated is the side effect on the *real* DOM element. See [Panel interaction vs. host side effects](/guide/panel-features#panel-interaction-vs-host-side-effects) for the full rationale and when to flip them on.
+The inspector renders into the same document as your app, so activating a tree row could steal focus from the panel or scroll the page underneath you. The panel itself stays fully interactive either way — selection, chip navigation, keyboard movement — what's gated is the side effect on the *real* DOM element. `highlightOnHover` is the safe one to turn on: it only paints an outline over the page. Turn on the other two when the panel is your own inspection tool, and leave them off where end users see it.
 :::
 
 ---
@@ -196,6 +196,6 @@ inspector.mount();
 
 ## Panel features
 
-Once the inspector is mounted, the in-panel behaviors it shares with the Chrome extension and Storybook addon are available — search, role filters, focus tracking, scoping, keyboard navigation. The [live region log](/guide/panel-features#live-region-monitoring) is not one of them: only the Chrome extension has it.
+The inspector renders the same tree panel as the Chrome extension, with its search, role filters and [keyboard](/guide/chrome-extension#keyboard), and scopes with [`setRoot()`](#setroot-root). Focus sync, the scope breadcrumb and the [live region log](/guide/chrome-extension#live-region-monitoring) are the extension's alone.
 
-→ [Panel features reference](/guide/panel-features)
+→ [Using the panel](/guide/chrome-extension#using-the-panel)

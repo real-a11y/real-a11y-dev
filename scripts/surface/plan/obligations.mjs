@@ -47,9 +47,8 @@ const PUBLISHED_PACKAGE_DOCS = [
   "SECURITY.md",
   "website/index.md",
   "website/privacy.md",
-  "website/guide/architecture.md",
+  "docs/ARCHITECTURE.md",
   "website/guide/getting-started.md",
-  "website/guide/why.md",
   ".github/PULL_REQUEST_TEMPLATE.md",
   ".changeset/config.json",
 ];
@@ -137,7 +136,7 @@ const RULES = [
   },
   {
     match: /^packages\.[^.]+\.exports$/,
-    docs: ["website/guide/architecture.md"],
+    docs: ["docs/ARCHITECTURE.md"],
     why: "an entry point someone is told to import has to exist",
   },
 ];
@@ -229,13 +228,14 @@ function pageExists(repoRoot, doc) {
  * `validation` across half the prose in the repo, while a page that tells you to
  * install something always writes `@real-a11y-dev/<name>`, because that is the
  * string you type. What that misses is a page naming a package only in prose —
- * `why.md` has "the React, Storybook, CLI, and MCP packages".
+ * the home page's tagline has "Storybook panel, React component, testing
+ * library, CLI, or MCP server".
  *
  * The trade is deliberate, and narrower than this comment used to claim. What
  * the filter buys is that the direction is never reported as EMPTY: `README.md`
- * and `architecture.md` name every package in full, so an unpublishing always
+ * and `ARCHITECTURE.md` name every package in full, so an unpublishing always
  * produces obligations and the report never reads "nothing to do". What it does
- * NOT buy is the prose-only page itself — nothing here recovers `why.md`, and "a
+ * NOT buy is the prose-only mention itself — nothing here recovers it, and "a
  * missed page still gets found" was a non-empty direction mistaken for a
  * complete one. Two different facts. The pages that DO name the package are
  * covered by keeping PUBLISHED_PACKAGE_DOCS generous; the ones that merely allude
@@ -350,16 +350,16 @@ export function requiredDocs(changes, repoRoot) {
         );
       }
 
-      // An entry point additionally appears in the architecture page, which is
+      // An entry point additionally appears in the architecture doc, which is
       // where "you can import this, from here" is stated across the workspace.
       // An individual symbol does not: that page lists packages, not exports,
       // and sending someone there for `flow` gives them nothing to change.
       const isEntryPoint = !/^api\.@real-a11y-dev\/[^.]+\./.test(change.path);
       if (isEntryPoint) {
         require_(
-          "website/guide/architecture.md",
+          "docs/ARCHITECTURE.md",
           change.what,
-          "the architecture page lists what each package exposes and from where",
+          "the architecture doc lists what each package exposes and from where",
         );
       }
       continue;
