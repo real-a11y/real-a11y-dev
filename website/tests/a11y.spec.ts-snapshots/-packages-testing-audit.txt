@@ -171,11 +171,11 @@ main
     code ""dom""
     code "ExtractionResult"
   button "Copy Code"
-  code
+  code "interface ExtractionResult { nodes: Map<string, SemanticNode>; rootId: string; focusedId?: string; // the node that had focus, when it's in this tree source: { producer: "dom" | "native"; chrome?: string }; }"
   heading "SemanticNode" (level 3)
     code "SemanticNode"
   button "Copy Code"
-  code
+  code "interface SemanticNode { id: string; // the same element keeps its id across extractions, not across reloads parentId: string | null; // null only for the root childIds: string[]; depth: number; a11y: { role: string; name: string; description: string; value?: string; // what a screen reader announces for a field ("Spain", not "es"); // "[redacted]" for a filled password, card or one-time-code field states: Record<string, string | boolean>; // checked, expanded, pressed, disabled… properties: Record<string, string>; // aria-* properties, and a heading's "level" isExposedToAT: boolean; }; dom?: { tagName: string; attributes: Record<string, string>; textContent: string | null; // direct text-node children only descendantText: string; // truncated text of the whole subtree isHidden: boolean; }; interaction?: { isInteractive: boolean; isFocusable: boolean; isEditable: boolean; actions: ActionType[]; // click, focus, type, toggle, select… }; }"
   paragraph "and are optional in the type. The in-page walk this package runs always fills them, but a tree has no element behind some of its nodes. Roles follow , and names ."
     code "dom"
     code "interaction"
