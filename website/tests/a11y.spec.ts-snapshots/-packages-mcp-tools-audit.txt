@@ -294,7 +294,7 @@ main
       code ""default""
   paragraph "An agent calls this before any other tool, e.g. to open a signup flow's mobile layout before auditing it:"
   button "Copy Code"
-  code
+  code "{ "url": "https://example.com/signup", "waitUntil": "networkidle", "settleMs": 500, "device": "iPhone 13" }"
   paragraph "The reply reports the resolved URL — , like every URL this server prints, since a redirect chain can end on a one-time token — the page title, sanitized because it is page-controlled, any device/viewport emulation, and the — headless is the default, so without that line a human watching for a window concludes the browser never opened; over a CDP attach it reports the attach instead, since the window belongs to the browser it joined."
     strong "redacted"
     strong "browser mode"
@@ -387,7 +387,7 @@ main
     code "<video controls>"
   paragraph "An agent calls this to get the full defect list, or narrows it to the rules it cares about:"
   button "Copy Code"
-  code
+  code "{ "rules": ["dialog-labeled", "no-unlabeled-interactive"] }"
   heading "inspect_page" (level 3)
     code "inspect_page"
   paragraph
@@ -418,7 +418,7 @@ main
       code "<div>"
   paragraph "An agent calls this for a consistent whole-page picture in a single round-trip:"
   button "Copy Code"
-  code
+  code "{ "includeGeneric": false }"
   heading "Views" (level 2)
   paragraph "Token-efficient perception primitives — the individual slices of what a screen reader traverses. All are read-only. All read Chromium's own tree (whole-document) except ."
     link "get_tab_order"
@@ -436,7 +436,7 @@ main
     code "<select>"
     code "aria-valuetext"
   button "Copy Code"
-  code
+  code "textbox "Email" = "jane@example.com" textbox "Password" = "[redacted]" combobox "Country" = "France""
   paragraph "A field whose markup marks it secret — , or an of , , , , , , or — reads when it holds anything: never its text, never its length. , , and show values the same way; leave them out unless asked."
     code "type="password""
     code "autocomplete"
@@ -572,7 +572,7 @@ main
       strong "required"
   paragraph "An empty category says why, because "none" otherwise answers three different questions the same way — the page has none of these, nothing was extracted, or the category doesn't cover the role you meant:"
   button "Copy Code"
-  code
+  code "(none — filter "image" matched 0 of 412 nodes; it looks for role img) (none — the tree is empty, so nothing could match filter "image"; the page may not have loaded, or extraction failed)"
   paragraph "The role list matters more than it looks. looks for exactly , so a page whose graphics are s reports none — and includes the role while does , since that filter looks for the fields. Both read as a bug until the roles are visible."
     code "image"
     code "img"
@@ -583,7 +583,7 @@ main
     strong "not"
   paragraph "An agent calls this to review one element type without pulling the whole tree:"
   button "Copy Code"
-  code
+  code "{ "filter": "image" }"
   heading "Findings checkpoints" (level 2)
   paragraph "Give the agent the CLI's snapshot + diff power mid-session: capture the page's findings under a name, change something (deploy, feature toggle, DOM edit), then ask what's — with the same fingerprint identity the CI a11y-diff bot uses. Checkpoints are held in memory (LRU-capped at 20) and , so you can checkpoint one deploy and diff another — and they survive the closing the browser, because that workflow routinely spans more than 15 minutes. clears the store."
     strong "new / changed / fixed"
@@ -648,14 +648,14 @@ main
   paragraph "The re-snapshot carries the same rule subset the checkpoint was captured with, so rules the base never ran can't surface as spurious NEW — and captures field values only if the checkpoint did, so a filled field never reads as structural drift."
   paragraph "The header names the operation and the checkpoint it read, so an output can be traced back to its input when several are stored:"
   button "Copy Code"
-  code
+  code "Live page vs. saved checkpoint "prod": 1 new, 0 fixed, 0 changed, 12 unchanged."
   paragraph "The headline cross-deploy workflow — diff prod against a preview in one session:"
   button "Copy Code"
-  code
+  code "// open_page("https://example.com") → checkpoint_findings({ "name": "prod" }) // open_page("https://preview.example.com") → diff_findings({ "name": "prod" })"
   paragraph "That works because only the differs. Checkpoints deliberately survive navigation, so it is just as easy to check one route and diff another by accident — and there the structural summary would report the whole page as rewritten. When the two sides are different pages, the diff says so and drops that section:"
     strong "origin"
   button "Copy Code"
-  code
+  code "Live page vs. saved checkpoint "pricing": 0 new, 0 fixed, 0 changed, 3 unchanged. NOTE: different page — the base was captured at `https://example.com/pricing`, this side at `https://example.com/careers`. The structural summary is suppressed: two different pages differ almost everywhere, so it would describe a rewrite, not a regression. Findings are still matched by fingerprint."
   paragraph ""Different page" means the differs. Host, port and scheme are ignored on purpose: that is exactly the prod-vs-preview diff above, and the structural summary is the whole point of it. An address that can't be parsed is never treated as a mismatch — silently dropping the section on a guess would be worse than printing a noisy one."
     strong "path, query or fragment"
   heading "diff_checkpoints" (level 3)
@@ -675,7 +675,7 @@ main
         code "head"
   paragraph "Its header says no browser was read, so a stored-vs-stored comparison is never mistaken for a live one:"
   button "Copy Code"
-  code
+  code "Saved checkpoints: "prod" → "preview" (no re-snapshot): 0 new, 2 fixed, 0 changed, 9 unchanged."
   paragraph "Same different-page rule as — two checkpoints of unrelated routes diff their findings and skip the structural summary."
     link "diff_findings"
       code "diff_findings"
@@ -785,7 +785,7 @@ main
     link "type_text"
       code "type_text"
   button "Copy Code"
-  code
+  code "~ textbox "Email": a11y.value (unset) → "jane@example.com" ~ textbox "Password": a11y.value (unset) → "[redacted]""
   paragraph "Under no value line appears."
     link "REAL_A11Y_REDACT_INPUT=1"
       code "REAL_A11Y_REDACT_INPUT=1"
@@ -845,7 +845,7 @@ main
       code "diff_tree"
   paragraph "An agent calls this to open the dialog it is about to audit, expand a disclosure, or demonstrate that an unlabeled-but-reachable button actually does something:"
   button "Copy Code"
-  code
+  code "{ "role": "button", "name": "Save", "nth": 2 }"
   heading "type_text" (level 3)
     code "type_text"
   paragraph
@@ -876,18 +876,18 @@ main
     link "REAL_A11Y_MCP_CDP"
       code "REAL_A11Y_MCP_CDP"
   button "Copy Code"
-  code
+  code "{ "role": "textbox", "name": "Search", "text": "keyboard traps" }"
   heading "focus_element" (level 3)
     code "focus_element"
   paragraph
     emphasis "Acts on the page · moves real keyboard focus."
-  paragraph "Move keyboard focus to the matched element — what a keyboard user's journey would land on, teleported. The result says whether the target is a text field (and its input type), so the agent knows a should follow. Pairs with for focus-order work."
+  paragraph "Move keyboard focus to the matched element — what a keyboard user's Tab journey would land on, teleported. The result says whether the target is a text field (and its input type), so the agent knows a should follow. Pairs with for focus-order work."
     link "type_text"
       code "type_text"
     link "get_tab_order"
       code "get_tab_order"
   button "Copy Code"
-  code
+  code "{ "role": "searchbox", "name": "Search docs" }"
   heading "Environment" (level 2)
   paragraph "Set these on the server process — most clients accept an object alongside / . All are read by the stdio entry point at startup; the storage-state and origin values are ."
     code ""env""
@@ -902,7 +902,7 @@ main
     code "http://localhost:9222"
     strong "not"
   button "Copy Code"
-  code
+  code "chrome --remote-debugging-port=9222 --user-data-dir=/tmp/a11y-cdp"
   heading "REAL_A11Y_MCP_HEADFUL" (level 3)
     code "REAL_A11Y_MCP_HEADFUL"
   paragraph
@@ -949,7 +949,7 @@ main
       code "REAL_A11Y_MCP_STORAGE_STATE"
     emphasis "without"
   button "Copy Code"
-  code
+  code "{ "env": { "REAL_A11Y_MCP_STORAGE_STATE": "/absolute/path/to/auth.json", "REAL_A11Y_MCP_ALLOWED_ORIGINS": "https://app.example.com,https://admin.example.com" } }"
   heading "REAL_A11Y_MCP_MAX_SESSIONS" (level 3)
     code "REAL_A11Y_MCP_MAX_SESSIONS"
   paragraph
@@ -993,7 +993,7 @@ main
     code "0"
     code "false"
   button "Copy Code"
-  code
+  code ""env": { "REAL_A11Y_REDACT_INPUT": "1" }"
   paragraph "There is no variable — Chromium doesn't honor / on its own, and a proxy is a constructor option, not read from the environment by the stdio server. Configure it only if you embed directly. There, a that names a loopback host (, , …) keeps every loopback host off the proxy, whichever Playwright you run."
     code "REAL_A11Y_MCP_PROXY"
     code "HTTP_PROXY"

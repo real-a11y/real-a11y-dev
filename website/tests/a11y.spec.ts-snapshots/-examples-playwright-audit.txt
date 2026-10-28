@@ -49,13 +49,13 @@ main
       code "rootSelector"
   heading "Run it locally" (level 2)
   button "Copy Code"
-  code
+  code "git clone https://github.com/real-a11y/real-a11y-dev.git cd real-a11y-dev pnpm install # Install the Playwright browser (first time only) pnpm --filter @real-a11y-dev/testing exec playwright install chromium # Run the e2e tests pnpm --filter @real-a11y-dev/testing test:e2e"
   heading "Setup" (level 2)
   button "Copy Code"
-  code
+  code "// packages/testing/playwright.config.ts import { defineConfig, devices } from "@playwright/test"; export default defineConfig({ testDir: "./e2e", projects: [ { name: "chromium", use: { ...devices["Desktop Chrome"] } }, ], });"
   heading "Good fixture — assertions pass" (level 2)
   button "Copy Code"
-  code
+  code "test("assertHeadingOrder passes for correct structure", async ({ page }) => { await page.goto(fixtureUrl("fixture.html")); const sn = await attach(page); await expect(sn.assertHeadingOrder()).resolves.toBeUndefined(); await expect(sn.assertLandmarkStructure()).resolves.toBeUndefined(); await expect(sn.assertNoUnlabeledInteractive()).resolves.toBeUndefined(); });"
   paragraph "The good fixture has:"
   list
     listitem "One with two sections (no skipped levels)"
@@ -72,7 +72,7 @@ main
       code "aria-labelledby"
   heading "Bad fixture — assertions throw" (level 2)
   button "Copy Code"
-  code
+  code "test("assertHeadingOrder throws on missing h1", async ({ page }) => { await page.goto(fixtureUrl("fixture-bad.html")); const sn = await attach(page); await expect(sn.assertHeadingOrder()).rejects.toThrow(); await expect(sn.assertNoUnlabeledInteractive()).rejects.toThrow(); await expect(sn.assertLandmarkStructure()).rejects.toThrow(); await expect(sn.assertDialogsLabeled()).rejects.toThrow(); });"
   paragraph "The bad fixture has:"
   list
     listitem "No (starts at , then jumps to )"
@@ -90,18 +90,18 @@ main
       code "aria-labelledby"
   heading "Narrowing the audit root" (level 2)
   button "Copy Code"
-  code
+  code "test("rootSelector narrows the audit to a subtree", async ({ page }) => { await page.goto(fixtureUrl("fixture.html")); const sn = await attach(page, { rootSelector: "form" }); const snapshot = await sn.treeSnapshot(); expect(snapshot).toContain("Send message"); // inside the form expect(snapshot).not.toContain("Test fixture"); // page h1 is outside the form });"
   heading "Snapshot test" (level 2)
   button "Copy Code"
-  code
+  code "test("treeSnapshot is stable across multiple calls", async ({ page }) => { await page.goto(fixtureUrl("fixture.html")); const sn = await attach(page); const snap1 = await sn.treeSnapshot(); const snap2 = await sn.treeSnapshot(); expect(snap1).toBe(snap2); // deterministic — same DOM, same string });"
   paragraph "Commit output with to catch unintended accessibility regressions in CI:"
     code "treeSnapshot()"
     code "toMatchSnapshot()"
   button "Copy Code"
-  code
+  code "test("page a11y tree matches snapshot", async ({ page }) => { await page.goto("/dashboard"); const sn = await attach(page, { rootSelector: "main" }); expect(await sn.treeSnapshot()).toMatchSnapshot(); // Playwright stores snapshot in: e2e/snapshots/test-name-chromium.txt });"
   heading "How the adapter works" (level 2)
   button "Copy Code"
-  code
+  code "Test (Node) Browser page ────────── ──────────── attach(page) → readBundle() (cached) → page.addScriptTag(bundle) ──▶ window.__realA11y__ = { treeSnapshot, … } → returns handle sn.assertHeadingOrder() → page.evaluate( ──▶ __realA11y__.assertHeadingOrder(root) __realA11y__.fn(root) ) ◀── throws A11yAssertionError (message preserved)"
   paragraph "The bundle (30 KB) is read from disk once and cached in the Node process — subsequent calls add no I/O overhead."
     code "attach()"
   heading "See also" (level 2)

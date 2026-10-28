@@ -80,7 +80,7 @@ main
   heading "Interactive elements with no name" (level 3)
   paragraph "This is the single most common issue. An icon-only button, a link with no text, a form input with no visible label — these show up in the A11y view with a role but an empty name."
   button "Copy Code"
-  code
+  code "button (no name)"
   paragraph "A screen reader user hears: . No context. They have to guess what it does, or give up."
     emphasis ""button""
   paragraph "Add visible text, an , or link the element to a visible label with . If the button has an icon, the icon needs an or ."
@@ -96,7 +96,7 @@ main
     code "<div>"
     code "<span>"
   button "Copy Code"
-  code
+  code "generic generic generic button "Add to cart""
   paragraph "…the screen reader has no structural context around that button. No landmarks to jump to, no headings to navigate by. Sighted users can scan visually; screen reader users navigate by structure."
   paragraph "Use landmark elements (, , , ) and semantic elements (–, , , ) to give the tree shape."
     strong "The fix:"
@@ -114,7 +114,7 @@ main
     code "h1"
     code "h3"
   button "Copy Code"
-  code
+  code "heading "Our Products" (level 1) heading "Featured Items" (level 3) ← skipped level 2"
   paragraph "Heading levels should only increase by one at a time. Use CSS to control visual size — don't pick a heading level based on how big it looks."
     strong "The fix:"
   heading "Images with no name" (level 3)
@@ -158,11 +158,11 @@ main
     code "sectionheader"
     code "sectionfooter"
   button "Copy Code"
-  code
+  code "<main> <header><h1>Select-Only Combobox Example</h1></header> </main>"
   paragraph "shows the heading straight under :"
     code "main"
   button "Copy Code"
-  code
+  code "main heading "Select-Only Combobox Example" (level 1)"
   paragraph "Give the header a name (, or ) and it appears as with the heading nested inside. The DOM view always shows it."
     code "aria-label"
     code "aria-labelledby"
@@ -172,7 +172,7 @@ main
   heading "Reading a well-structured tree" (level 2)
   paragraph "A healthy A11y tree looks something like this:"
   button "Copy Code"
-  code
+  code "banner "Site header" navigation "Main" list listitem → link "Home" listitem → link "Products" listitem → link "About" main heading "Featured Products" (level 1) list listitem → article "Blue Widget" heading "Blue Widget" (level 2) button "Add to cart" contentinfo "Site footer""
   paragraph "Landmarks structure the page. Headings create hierarchy. Interactive elements have meaningful names. Nothing generic where something semantic belongs."
   separator
   heading "Quick sanity checks" (level 2)

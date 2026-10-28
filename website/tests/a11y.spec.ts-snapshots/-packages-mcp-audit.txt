@@ -46,7 +46,7 @@ main
   radio "VS Code"
   radio "Config file"
   button "Copy Code"
-  code
+  code "claude mcp add real-a11y -- npx -y @real-a11y-dev/mcp"
   paragraph "For clients configured by file, add the block above to:"
     code "mcpServers"
   list
@@ -61,7 +61,7 @@ main
       strong "Windsurf and others"
   paragraph "Then install a browser once:"
   button "Copy Code"
-  code
+  code "npx -y @real-a11y-dev/cli install"
   paragraph "Use the scoped name here: runs the CLI only where it is already installed, and anywhere else asks the registry for an unscoped package that isn't ours."
     code "npx real-a11y"
   paragraph "To pin a version instead of tracking the latest, add it to your project () and point / at the local install."
@@ -96,14 +96,14 @@ main
       paragraph "with the CLI's login helper (a one-time human step):"
         strong "Save a session"
       button "Copy Code"
-      code
+      code "npx -y @real-a11y-dev/cli login https://app.example.com --save auth.json"
       paragraph "A real browser opens; sign in by hand (passwords, SSO, MFA, and passkeys all work), then press Enter. Playwright's storage state — cookies and origin storage — is written to . Keep that file out of version control; it holds live session tokens."
         code "auth.json"
     listitem
       paragraph "with two environment variables in your MCP config:"
         strong "Point the server at it"
       button "Copy Code"
-      code
+      code "{ "mcpServers": { "real-a11y": { "command": "npx", "args": ["-y", "@real-a11y-dev/mcp"], "env": { "REAL_A11Y_MCP_STORAGE_STATE": "/absolute/path/to/auth.json", "REAL_A11Y_MCP_ALLOWED_ORIGINS": "https://app.example.com" } } } }"
     listitem
       paragraph "Every page now opens already authenticated, and tells the assistant the session is active so it won't try to log in. pins auditing to that origin, so a redirect can't route your session to another site."
         strong "Audit as usual."
@@ -127,7 +127,7 @@ main
     strong "CLI"
     code "@real-a11y-dev/cli"
   button "Copy Code"
-  code
+  code "npx -y @real-a11y-dev/cli audit https://example.com --format json -o report.json"
   list
     listitem "— exits on error-severity findings, so it gates a build with no configuration; with writes the same findings reports."
       strong "The audit itself"

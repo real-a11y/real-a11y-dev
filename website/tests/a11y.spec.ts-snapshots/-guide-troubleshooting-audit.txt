@@ -35,7 +35,7 @@ main
     code "A11yAssertionError"
   heading "My audit returned nothing" (level 2)
   button "Copy Code"
-  code
+  code "const { nodes } = extractA11yTree(document.getElementById("app")); // nodes.size === 0"
   paragraph "Three usual causes:"
   list
     listitem "If you call the extractor from a component's body (rather than inside / ), the ref may not be attached to the DOM. Extract on mount, not during render."
@@ -73,7 +73,7 @@ main
     code "redact"
     code "[redacted]"
   button "Copy Code"
-  code
+  code "import { treeSnapshot } from "@real-a11y-dev/testing"; expect( treeSnapshot(container, { redact: [ /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/, // ISO timestamps /\b\d+ (minutes?|hours?|days?) ago\b/, // relative times /[A-Za-z0-9+/=]{20,}/, // bearer tokens ], }), ).toMatchSnapshot();"
   paragraph "The same option is on the Playwright adapter: ."
     code "sn.treeSnapshot({ redact: [...] })"
   separator
@@ -84,7 +84,7 @@ main
     code "h1"
     strong "embedded content"
   button "Copy Code"
-  code
+  code "// Scope to main content const main = document.querySelector("main")!; assertHeadingOrder(main);"
   paragraph "If your page legitimately has multiple h1s (rare — usually an anti-pattern), the rule doesn't fit your design and isn't the right check."
     code "assertHeadingOrder"
   separator
@@ -116,7 +116,7 @@ main
     strong "ordinary in-page live region"
     code "<p role="status">4 tickets</p>"
   button "Copy Code"
-  code
+  code "const { container } = render(<Filters />); expect(treeSnapshot(container)).toMatchSnapshot(); // ← may be the whole page"
   paragraph "Nothing is lost — the document contains your root — but the committed snapshot becomes a page snapshot, so unrelated changes elsewhere start breaking a component test. If that is happening:"
   list
     listitem "Assert with instead of a full snapshot. It is containment-matched, so it holds the part you care about and ignores everything the pivot dragged in."
@@ -190,7 +190,7 @@ main
     strong "location in the tree"
     strong "reason"
   button "Copy Code"
-  code
+  code "try { assertNoUnlabeledInteractive(container); } catch (err) { console.log(treeSnapshot(container)); throw err; }"
   paragraph "Every assertion is documented with an example in ."
     link "@real-a11y-dev/testing"
       code "@real-a11y-dev/testing"
@@ -202,7 +202,7 @@ main
     code "buildServer"
     strong "optional"
   button "Copy Code"
-  code
+  code "Playwright is required to drive a browser, but it isn't installed. npm i -D playwright && npx real-a11y install"
   paragraph "Its hint names the commands for how it was installed: those above for a project dependency, for a global install, and for a run through , an install of both in the project, since npx sees only what it installed beside the CLI."
     code "npm i -g playwright && real-a11y install"
     code "npx -y @real-a11y-dev/cli"
@@ -213,13 +213,13 @@ main
     code "@real-a11y-dev/mcp"
     code "Cannot find package 'playwright'"
   button "Copy Code"
-  code
+  code "npx -y -p @real-a11y-dev/mcp -p playwright real-a11y-mcp"
   paragraph "In a client's config file that is with . Or install both in a project () and point the client at that install. Either way, the server needs a browser once:"
     code ""command": "npx""
     code ""args": ["-y", "-p", "@real-a11y-dev/mcp", "-p", "playwright", "real-a11y-mcp"]"
     code "npm i -D @real-a11y-dev/mcp playwright"
   button "Copy Code"
-  code
+  code "npx -y @real-a11y-dev/cli install # downloads Chrome for Testing, first time only"
   paragraph "That is the CLI's installer, which needs Node.js 22.12 or newer. Use the scoped name there: runs the CLI only where it is already installed, and anywhere else asks the registry for an unscoped package that isn't ours."
     code "npx real-a11y"
   paragraph "A separate "No browser is downloaded yet." error means Playwright itself is installed but no browser binary is — run just the install step the hint names."
@@ -229,10 +229,10 @@ main
     code "playwright install --with-deps"
     code "error while loading shared libraries: libnss3.so: cannot open shared object file"
   button "Copy Code"
-  code
+  code "npx playwright install-deps chromium # Debian/Ubuntu; needs root"
   paragraph "If a previously-working installed Chrome starts failing to launch (a corrupted or partially-written binary), reinstall it:"
   button "Copy Code"
-  code
+  code "real-a11y install --force"
   separator
   heading "An audit of a logged-in page comes back empty (or shows the login screen)" (level 2)
   paragraph "An authenticated audit needs a saved session, and it has to match the origin you're auditing:"

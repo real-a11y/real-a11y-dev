@@ -38,20 +38,20 @@ main
       code "tabSequenceSnapshot()"
   heading "Run it locally" (level 2)
   button "Copy Code"
-  code
+  code "git clone https://github.com/real-a11y/real-a11y-dev.git cd real-a11y-dev pnpm install pnpm --filter @real-a11y-dev/example-testing test"
   heading "Key code" (level 2)
   heading "Snapshot test" (level 3)
   button "Copy Code"
-  code
+  code "// examples/testing-vitest/src/snapshot.test.ts import { render } from "@testing-library/react"; import { treeSnapshot, assertNoUnlabeledInteractive } from "@real-a11y-dev/testing"; import { LoginForm } from "./LoginForm"; describe("LoginForm accessibility", () => { it("matches the a11y tree snapshot", () => { const { container } = render(<LoginForm />); expect(treeSnapshot(container)).toMatchSnapshot(); }); it("has no unlabeled interactive elements", () => { const { container } = render(<LoginForm />); assertNoUnlabeledInteractive(container); }); });"
   heading "Structural assertions" (level 3)
   button "Copy Code"
-  code
+  code "// examples/testing-vitest/src/assertions.test.ts import { render } from "@testing-library/react"; import { assertHeadingOrder, assertLandmarkStructure, outlineSnapshot, } from "@real-a11y-dev/testing"; import { Page } from "./Page"; describe("Page structure", () => { it("has correct heading order", () => { const { container } = render(<Page />); assertHeadingOrder(container); }); it("has correct landmark structure", () => { const { container } = render(<Page />); assertLandmarkStructure(container); }); it("matches the heading outline snapshot", () => { const { container } = render(<Page />); expect(outlineSnapshot(container)).toMatchSnapshot(); }); });"
   heading "Flow chain — combobox interaction" (level 3)
   button "Copy Code"
-  code
+  code "// examples/testing-vitest/src/flow.test.ts import { render } from "@testing-library/react"; import { flow, findAllByRole } from "@real-a11y-dev/testing"; import { CountrySelector } from "./CountrySelector"; test("selecting a country closes the dropdown", async () => { const { container } = render(<CountrySelector />); await flow(container) .findByRole("combobox", { name: /country/i }) .click() .findByRole("option", { name: "Spain" }) .click() .expect((tree) => { // After selection, the combobox should be collapsed const combo = findAllByRole(tree, "combobox")[0]; expect(combo?.a11y.states.expanded).toBe(false); }); });"
   heading "Tab sequence test" (level 3)
   button "Copy Code"
-  code
+  code "// examples/testing-vitest/src/tabs.test.tsx import { render } from "@testing-library/react"; import { tabSequenceSnapshot } from "@real-a11y-dev/testing"; import { Navigation } from "./Navigation"; test("navigation tab sequence is correct", () => { const { container } = render(<Navigation />); expect(tabSequenceSnapshot(container)).toMatchSnapshot(); });"
   heading "See also" (level 2)
   paragraph "jsdom runs the same audit engine as the browser, but it can't audit a real running app or gate CI on a live page set. For that:"
   list

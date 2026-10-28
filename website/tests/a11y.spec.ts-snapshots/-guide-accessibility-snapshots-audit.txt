@@ -22,7 +22,7 @@ main
   paragraph "An is a deterministic, human-readable capture of what assistive technology perceives on a page — roles, accessible names, heading outline, and tab order — serialized to a string you can commit and diff in code review."
     strong "accessibility snapshot"
   button "Copy Code"
-  code
+  code "main heading "Sign in" (level 1) form "Sign-in form" textbox "Email" button "Sign in""
   paragraph "It's the structural counterpart to rule-based audits. Where a tool like answers , an accessibility snapshot answers For how it stacks up against axe, visual regression testing, and Playwright's ARIA snapshots, see ."
     link "axe"
     emphasis ""does this violate a WCAG rule right now?""
@@ -101,7 +101,7 @@ main
     link "redact"
       code "redact"
   button "Copy Code"
-  code
+  code "expect( treeSnapshot(container, { redact: [/\d+ (minutes?|hours?) ago/] }), ).toMatchSnapshot();"
   heading "It models real AT behavior" (level 2)
   paragraph "Because the snapshot reflects the accessibility tree — not raw markup — it captures semantics a DOM dump can't. The clearest example is : when a dialog is genuinely modal, content behind it is inert to assistive tech, so it drops out of the tree. Open a modal and the snapshot (and tab order) collapse to just the dialog — a precise artifact for that state. "Genuinely modal" follows Chromium's own accessibility tree: a opened with , or a page that makes the background or the way modal libraries do. on its own is only a hint, and the page behind it stays in the tree:"
     emphasis "extracted"
@@ -112,7 +112,7 @@ main
     code "aria-hidden"
     code "aria-modal="true""
   button "Copy Code"
-  code
+  code "await flow(container).findByRole("button", { name: "Delete account" }).click(); expect(container).toHaveTabSequence(['button "Cancel"', 'button "Delete"']);"
   heading "It catches what a screenshot can't" (level 2)
   paragraph "A screenshot can be pixel-perfect while the page is broken for assistive technology. Swap a real for a styled to match: identical screenshot, gone from the accessibility tree. That regression moves , so a visual snapshot sails right past it — an accessibility snapshot catches it immediately."
     code "<button>"

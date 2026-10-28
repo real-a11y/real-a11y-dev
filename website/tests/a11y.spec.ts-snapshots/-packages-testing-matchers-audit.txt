@@ -30,7 +30,7 @@ main
     code ".not"
   paragraph "Shipped from a separate, opt-in entry so the main package stays side-effect-free:"
   button "Copy Code"
-  code
+  code "import { registerA11yMatchers } from "@real-a11y-dev/testing/matchers";"
   blockquote
     paragraph "jest-axe runs a WCAG and reports violations. These matchers assert and capture of the semantic tree — including focus order and modal scoping, which a rule engine doesn't model. The two compose well in one suite. See for the distinction."
       strong "Not the same as jest-axe."
@@ -43,14 +43,14 @@ main
     code "registerA11yMatchers(expect)"
   heading "Vitest" (level 3)
   button "Copy Code"
-  code
+  code "// vitest.setup.ts import { expect } from "vitest"; import { registerA11yMatchers } from "@real-a11y-dev/testing/matchers"; import "@real-a11y-dev/testing/matchers/vitest"; // types-only augmentation registerA11yMatchers(expect);"
   button "Copy Code"
-  code
+  code "// vitest.config.ts export default defineConfig({ test: { environment: "jsdom", setupFiles: ["./vitest.setup.ts"], }, });"
   heading "Jest" (level 3)
   button "Copy Code"
-  code
+  code "// jest.setup.ts import { registerA11yMatchers } from "@real-a11y-dev/testing/matchers"; import "@real-a11y-dev/testing/matchers/jest"; // types-only augmentation // `expect` is the Jest global. If you import it from "@jest/globals" instead, // import "…/matchers/jest-globals" — see below. registerA11yMatchers(expect);"
   button "Copy Code"
-  code
+  code "// jest.config.cjs module.exports = { preset: "ts-jest", testEnvironment: "jsdom", setupFilesAfterEnv: ["<rootDir>/jest.setup.ts"], };"
   paragraph "TypeScript module resolution (Jest + ts-jest)"
   paragraph "The subpath is exposed through the package field, so TypeScript must read it. Use (or / ) — the legacy resolver ignores and the import won't resolve. also needs under Node16."
     code "/matchers"
@@ -97,10 +97,10 @@ main
           code "banner"
           code "contentinfo"
   button "Copy Code"
-  code
+  code "expect(container).toHaveNoUnlabeledInteractive(); expect(container).toHaveValidHeadingOrder(); expect(container).toHaveLabeledDialogs(); expect(container).toHaveValidLandmarks(); // Negation comes for free expect(brokenContainer).not.toHaveValidLandmarks();"
   paragraph "On failure the matcher surfaces the underlying assertion's message:"
   button "Copy Code"
-  code
+  code "expect(element).toHaveNoUnlabeledInteractive() Found 1 accessibility issue: - Unlabeled interactive element: button <button>"
   heading "toBeValidA11yTree()" (level 2)
     code "toBeValidA11yTree()"
   paragraph "Asserts the extracted accessibility tree has no ARIA — invalid roles, roles the browser discards, missing required accessible names, and relationship violations (interactive nesting, presentational-children misuse). Backed by . Advisory don't fail it — only errors do."
@@ -108,12 +108,12 @@ main
     code "@real-a11y-dev/validate"
     strong "warnings"
   button "Copy Code"
-  code
+  code "expect(container).toBeValidA11yTree(); // Negation asserts the tree *does* have an ARIA error expect(brokenContainer).not.toBeValidA11yTree();"
   paragraph "A role that comes from the element rather than a attribute is never reported as an invalid role, and an ARIA state the browser supplies never counts as a missing required attribute — so native controls pass without you writing the ARIA the spec nominally requires:"
     strong "It judges what you authored, not what the platform gives you."
     code "role="
   button "Copy Code"
-  code
+  code "// Passes. `combobox` is the element's own role, and the browser supplies the // aria-expanded / aria-controls that an authored combobox would owe. <select aria-label="Status"><option>One</option></select> // Passes. The datalist makes the input a combobox, and its popup is the // browser's own, so there is no aria-expanded / aria-controls for you to write. <input aria-label="Fruit" list="fruits"><datalist id="fruits">…</datalist> // Passes. Browser-supplied checkedness, so no aria-checked needed. <input type="checkbox" aria-label="Agree"> // Passes. The role is authored, but the browser supplies the expanded // state of a button that invokes a popover: whether the popover shows. <button role="combobox" popovertarget="sizes" aria-controls="sizes" aria-label="Size"></button> <div id="sizes" popover role="listbox" aria-label="Sizes"></div> // Fails — missing required aria-controls, aria-expanded. // The role is authored, so the attributes are yours to supply. <div role="combobox">One</div>"
   paragraph "Note what is exempted: the above still needs an accessible name. Dropping fails with , because a label is an authoring obligation no user agent can invent."
     emphasis "not"
     code "<select>"
@@ -139,7 +139,7 @@ main
     strong "A role the browser discards is still yours."
     code "generic"
   button "Copy Code"
-  code
+  code "// Fails — generic "Close" — "foo" is not a valid ARIA role <div role="foo">Close</div> // Fails — generic "Item" — role "listitem" is discarded outside its required context (directory / list) <div role="listitem">Item</div> // Fails — the <section> ends the search for a listbox, so this is no option. <div role="listbox" aria-label="Fruit"><section><div role="option" aria-selected="false">Apple</div></section></div>"
   paragraph "A discarded role is an error, not an advisory warning: assistive tech gets a different role from the one you wrote. See for which containers count."
     link "Roles"
   paragraph "Unlike the four matchers above, this one doesn't wrap an function — it runs the semantic tree through and fails only on issues."
@@ -152,13 +152,13 @@ main
     code "role "name""
     code "tabindex"
   button "Copy Code"
-  code
+  code "expect(container).toHaveTabSequence([ 'link "Home"', 'link "About"', 'textbox "Search"', 'button "Go"', ]);"
   paragraph "This is the assertion form of . It's especially useful for checks — when a modal is open, the sequence collapses to just the dialog's controls:"
     link "tabSequenceSnapshot"
       code "tabSequenceSnapshot"
     strong "focus-trap"
   button "Copy Code"
-  code
+  code "await flow(container).findByRole("button", { name: "Delete account" }).click(); expect(container).toHaveTabSequence(['button "Cancel"', 'button "Delete"']);"
   paragraph "Names are matched with , so a plain token like matches a label the page renders with a curly apostrophe (). Curly quotes, the ellipsis character, en/em dashes, and non-breaking spaces all fold to their ASCII forms for the comparison — you never have to paste smart quotes to make a token match. (Roles and everything else compare exactly; only accessible-name typography is folded.)"
     strong "typographic punctuation normalized"
     code "button "Don't save""
@@ -171,7 +171,7 @@ main
     code "toMatchObject"
     strong "extra nodes in the implementation are allowed"
   button "Copy Code"
-  code
+  code "// The tree must CONTAIN this structure, in this order, nested this way — // but a skip link, a cookie banner, or extra wrappers don't break it. expect(container).toMatchA11yContract(` main heading "Sign in" (level 1) form "Sign in" textbox "Email address" textbox "Password" button "Sign in" link "Forgot password?" `);"
   paragraph "Matching is :"
     strong "containment with ancestor semantics"
   list
@@ -190,7 +190,7 @@ main
     code "<button>"
     code "<div onclick>"
   button "Copy Code"
-  code
+  code "a11y contract not satisfied: matched 5/7 nodes. ✓ main (line 5) ✓ heading "Sign in" (level 1) (line 6) ✓ form (line 7) ✓ textbox "Email address" (line 9) ✓ textbox "Password" (line 10) ✖ button "Sign in" ← NOT FOUND · link "Forgot password?" ✖ button "Sign in": not found under form (matched line 7), after textbox "Password" (line 10)."
   paragraph "can be a DOM Element (extracted on the spot) (a committed artifact). Names fold typographic punctuation like does, so a contract typed with plain quotes matches curly-quote labels. A contract may carry comments and a frontmatter block (e.g. a source URL) — both are ignored for matching."
     strong "Received"
     strong "or an already-serialized tree string"
@@ -202,7 +202,7 @@ main
     strong
       code "{ strict: true }"
   button "Copy Code"
-  code
+  code "// containment: everything listed must be present (default) expect(container).toMatchA11yContract(contract); // strict: the tree must equal the contract exactly, nothing more expect(inIsolation).toMatchA11yContract(contract, { strict: true });"
   paragraph "Because a serialized string is accepted, the same contract can be checked against a — not only a live test render."
     strong "committed snapshot artifact"
   heading "boxedTreeSnapshot(root, options?) — snapshot serializer" (level 2)
@@ -214,15 +214,15 @@ main
     code "-u"
     code "--update"
   button "Copy Code"
-  code
+  code "import { boxedTreeSnapshot } from "@real-a11y-dev/testing/matchers"; expect(boxedTreeSnapshot(container)).toMatchSnapshot();"
   button "Copy Code"
-  code
+  code "main heading "Sign in" (level 1) form "Sign-in form" textbox "Email" button "Sign in""
   paragraph "It accepts the same options as — including to mask dynamic text (timestamps, IDs, prices) so the snapshot stays stable in CI:"
     code "treeSnapshot"
     link "redact"
       code "redact"
   button "Copy Code"
-  code
+  code "expect( boxedTreeSnapshot(container, { redact: [/\d{4}-\d{2}-\d{2}/g] }), ).toMatchSnapshot();"
   paragraph "See for the full pattern reference and the -flag gotcha."
     link "redact"
       code "redact"
@@ -331,7 +331,7 @@ main
   paragraph "— a rule can't help you:"
     strong "Valid ARIA, but violates your intent"
   button "Copy Code"
-  code
+  code "<a href="/signin">Sign in</a> <!-- you meant a button -->"
   paragraph ": a named link is perfectly legal ARIA, and nothing in the spec says this is wrong. : you specified a button."
     code "toBeValidA11yTree()"
     strong "passes"
@@ -341,7 +341,7 @@ main
   paragraph "— a contract can't help you:"
     strong "Matches your intent, but invalid ARIA"
   button "Copy Code"
-  code
+  code "<main> <button>Save</button> <button aria-label=""></button> <!-- unnamed --> </main>"
   paragraph ": containment only checks the nodes you listed, and the extra button is an allowed extra. : requires an accessible name."
     code "toMatchA11yContract('main\n button "Save"')"
     strong "passes"

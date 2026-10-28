@@ -37,7 +37,7 @@ main
     strong "every"
     code "Finding[]"
   button "Copy Code"
-  code
+  code "import { collectFindings, ALL_RULES } from "@real-a11y-dev/testing"; const findings = collectFindings(document.body); // all rules const headingsOnly = collectFindings(document.body, ["heading-order"]);"
   paragraph "is a DOM an already-extracted tree (). Passing a pre-extracted tree runs the rules over the snapshot used for the serialized tree / outline / tab order, so a multi-view report can't be internally inconsistent on a page that changes between extractions."
     code "root"
     code "Element"
@@ -88,7 +88,7 @@ main
   paragraph "The full rule set runs by default:"
     code "collectFindings"
   button "Copy Code"
-  code
+  code "ALL_RULES; // ["no-unlabeled-interactive", "label-title-only", "image-alt", // "heading-order", "dialog-labeled", "landmark-structure"]"
   paragraph "Pass a subset as the second argument to run only some. The four helpers below are thin wrappers over for one rule each."
     code "assert*"
     code "collectFindings"
@@ -103,7 +103,7 @@ main
     code ""heading""
     code "role "name""
   button "Copy Code"
-  code
+  code "import { listByRole } from "@real-a11y-dev/testing"; console.log(listByRole(document.body, "image")); // img "Company logo" [#logo] // img [main > figure:nth-of-type(2) > img] ← no accessible name"
   heading "assertNoUnlabeledInteractive(root)" (level 2)
     code "assertNoUnlabeledInteractive(root)"
   paragraph "Throws if any interactive element (button, link, textbox, combobox, checkbox, radio, etc.) has an empty accessible name. A glyph, emoji, or on a button is a name (what a screen reader announces) and does fail this assertion — same as axe-core . Form controls labeled only by are a separate warning, , via / , not this helper."
@@ -116,10 +116,10 @@ main
     code "collectFindings"
     code "assertRules"
   button "Copy Code"
-  code
+  code "import { assertNoUnlabeledInteractive } from "@real-a11y-dev/testing"; test("all buttons are labeled", () => { render(<Toolbar />); assertNoUnlabeledInteractive(document.body); });"
   paragraph "Error message example:"
   button "Copy Code"
-  code
+  code "A11yAssertionError: Found 2 accessibility issues: - Unlabeled interactive element: button <button> [#save] - Unlabeled interactive element: textbox <input> [form > input — in <form>]"
   heading "assertHeadingOrder(root)" (level 2)
     code "assertHeadingOrder(root)"
   paragraph "Throws if:"
@@ -130,7 +130,7 @@ main
       code "h2"
       code "h4"
   button "Copy Code"
-  code
+  code "assertHeadingOrder(document.body);"
   heading "assertDialogsLabeled(root)" (level 2)
     code "assertDialogsLabeled(root)"
   paragraph "Throws if any or element has no accessible name (via or ). A dialog's own text doesn't count: has no accessible name, because a screen reader announces a dialog only by the name its author gives it, so it throws."
@@ -140,7 +140,7 @@ main
     code "aria-labelledby"
     code "<div role="dialog">Delete this project? <button>Cancel</button></div>"
   button "Copy Code"
-  code
+  code "assertDialogsLabeled(document.body);"
   heading "assertLandmarkStructure(root)" (level 2)
     code "assertLandmarkStructure(root)"
   paragraph "Throws if:"
@@ -154,12 +154,12 @@ main
     listitem "There is more than one (footer) landmark"
       code "contentinfo"
   button "Copy Code"
-  code
+  code "assertLandmarkStructure(document.body);"
   heading "A11yAssertionError" (level 2)
     code "A11yAssertionError"
   paragraph "All four assertions throw this error type on failure. Import it to catch or assert against it directly:"
   button "Copy Code"
-  code
+  code "import type { A11yAssertionError } from "@real-a11y-dev/testing";"
   heading "See also" (level 2)
   list
     listitem "— the same checks as matchers with negation"

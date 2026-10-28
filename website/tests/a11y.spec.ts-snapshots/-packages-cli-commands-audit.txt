@@ -298,7 +298,7 @@ main
     code "0"
     strong "stdout"
   button "Copy Code"
-  code
+  code "real-a11y install # latest Stable, first time only real-a11y install --channel beta # track a channel real-a11y install --version 131.0.6778.87 # exact build — works even if the # Chrome for Testing version # endpoint is unreachable real-a11y install --force # reinstall even if already present"
   paragraph "Playwright (the npm package) is still the driver — this replaces only the browser download. Every browser-driving command then picks it up automatically; see for the full resolution order. Sessions launched with attach to your own Chrome and never use this binary."
     code "npx playwright install chromium"
     link "--chrome-path"
@@ -333,7 +333,7 @@ main
     code "A11Y_PAGES"
     code "urls"
   button "Copy Code"
-  code
+  code "real-a11y audit http://localhost:3000 real-a11y audit https://stage.example.com --device "iPhone 13" --fail-on warning real-a11y audit ./dist/index.html --format json -o report.json"
   paragraph "· · · · (default ) · · no ."
     strong "Flags:"
     link "Browser & page"
@@ -359,7 +359,7 @@ main
     link "tabs"
       code "tabs"
   button "Copy Code"
-  code
+  code "real-a11y inspect http://localhost:3000"
   paragraph "· · · · (default ) · · ."
     strong "Flags:"
     link "Browser & page"
@@ -379,7 +379,7 @@ main
   paragraph "Print the semantic tree — what a screen reader perceives, role by role. Single URL; always exits ."
     code "0"
   button "Copy Code"
-  code
+  code "real-a11y tree https://example.com real-a11y tree https://example.com/player # reaches user-agent-shadow media controls"
   paragraph "A field prints what it holds, the way a screen reader announces it — a text field's text, a 's chosen option, a slider's (else its number), a file input's file names, a rich-text editor's content. A field that holds a secret — , or an of , , , , , , or — prints when it holds anything, never the text and never its length. An empty field prints no value:"
     code "<select>"
     code "aria-valuetext"
@@ -395,7 +395,7 @@ main
     code "cc-exp-year"
     code "[redacted]"
   button "Copy Code"
-  code
+  code "textbox "Email" = "jane@example.com" textbox "Password" = "[redacted]" combobox "Country" = "France" slider "Volume" = "3""
   paragraph "The same values appear in , , and the diff, and in . A committed artifact leaves them out unless you pass ."
     link "tabs"
       code "tabs"
@@ -417,7 +417,7 @@ main
     code "designMode"
     code "[redacted]"
   button "Copy Code"
-  code
+  code "textbox "Message" paragraph link "[redacted]" heading "[redacted]" (level 3) paragraph link "Mention Alice""
   paragraph "A name from the page's own markup inside the editor — an , an image's — is kept. The same holds in , , , and the diff, which all read this tree. is the in-page walk: under it prints no values. A link typed into an editor is not a Tab stop, so it never appears there; a island such as a mention chip is, and keeps its name."
     code "aria-label"
     code "alt"
@@ -446,7 +446,7 @@ main
   paragraph "Print the heading outline (h1–h6) in document order. Single URL; always exits ."
     code "0"
   button "Copy Code"
-  code
+  code "real-a11y outline https://example.com"
   paragraph "· () · · no ."
     strong "Flags:"
     link "Browser & page"
@@ -490,12 +490,12 @@ main
     code "inert"
     code "tabs"
   button "Copy Code"
-  code
+  code "real-a11y tabs https://example.com real-a11y tabs https://example.com --root "#app main""
   paragraph "A rich-text editor counts the way Chromium counts it. Each region is one stop, named by its label and never by what was typed into it. A link inside the editor is not a stop, because Chromium can't focus it, unless it sits in a island such as a mention chip:"
     code "contenteditable"
     code "contenteditable="false""
   button "Copy Code"
-  code
+  code "01. textbox "Message" 02. link "Mention Alice""
   paragraph "· () · · ."
     strong "Flags:"
     link "Browser & page"
@@ -516,10 +516,10 @@ main
     code "landmark"
     code "image"
   button "Copy Code"
-  code
+  code "real-a11y list image https://example.com"
   paragraph "An empty category reports how much it scanned and which roles it looked for, so "none" is never confusable with a page that failed to load:"
   button "Copy Code"
-  code
+  code "(none — filter "image" matched 0 of 412 nodes; it looks for role img)"
   paragraph "Worth knowing when a category surprises you: looks for exactly , so a page whose graphics are s lists none, and includes the role while does not — that one lists the fields."
     code "image"
     code "img"
@@ -542,7 +542,7 @@ main
     strong "Chromium only."
   paragraph "A step is written the way the tree prints a node:"
   button "Copy Code"
-  code
+  code "<verb> <role> ["<name>"] [nth=<n>] [= <text>]"
   list
     listitem "— , , ."
       strong "verbs"
@@ -563,7 +563,7 @@ main
       code "type"
       code "="
   button "Copy Code"
-  code
+  code "real-a11y interact http://localhost:3000 --step 'click button "Open menu"' real-a11y interact http://localhost:3000 \ --step 'type textbox "Email" = someone@example.com' \ --step 'click button "Sign in"' real-a11y interact https://example.com --step 'click button "Save" nth=2'"
   paragraph "Targets resolve against accessibility tree by role + accessible name — never a CSS selector. If a control can't be reached that way, assistive technology can't reach it either, and that is an accessibility finding rather than a targeting inconvenience. Ambiguous matches list their candidates; a target is refused, because the click would be swallowed and the resulting empty diff would read as "that button does nothing"."
     strong "Chromium's own"
     code "nth="
@@ -581,7 +581,7 @@ main
       code "--format json"
     code "= ‹hidden›"
   button "Copy Code"
-  code
+  code "~ textbox "Email": a11y.value (unset) → "someone@example.com" ~ textbox "Password": a11y.value (unset) → "[redacted]""
   paragraph "A password, one-time code or payment field only ever reads . keeps every value — and everything typed into a rich-text editor — out of the diff. Don't use to log in: a password on the command line is visible to other processes and lands in your shell history. Use ."
     code "[redacted]"
     link "--redact-input"
@@ -613,7 +613,7 @@ main
     link "interact"
       code "interact"
   button "Copy Code"
-  code
+  code "real-a11y click http://localhost:3000 --role button --name "Open menu" real-a11y click http://localhost:3000 --role button --name "Save" --nth 2 real-a11y click http://localhost:3000 --role button --name "" # unlabeled"
   paragraph "(required) · · · · (no ) · () · ."
     strong "Flags:"
     code "--role"
@@ -635,7 +635,7 @@ main
     code "input"
     code "change"
   button "Copy Code"
-  code
+  code "real-a11y type http://localhost:3000 --role textbox --name "Email" --text you@example.com"
   paragraph "The you pass is never echoed back, in any format; the diff shows what the field then holds, as describes (a password field as ). Don't use it to log in — see ."
     code "--text"
     link "interact"
@@ -663,7 +663,7 @@ main
     link "tabs"
       code "tabs"
   button "Copy Code"
-  code
+  code "real-a11y focus http://localhost:3000 --role textbox --name "Email""
   paragraph "(required) · · · · (no ) · () · ."
     strong "Flags:"
     code "--role"
@@ -709,7 +709,7 @@ main
     link "--redact-input"
       code "--redact-input"
   button "Copy Code"
-  code
+  code "real-a11y snapshot https://example.com -o base.json real-a11y snapshot --config a11y.config.json --md -o report.md real-a11y snapshot https://example.com --md --only views -o views.md real-a11y snapshot --config a11y.config.json --update-baseline real-a11y snapshot --config a11y.config.json --baseline .a11y-baseline.json --fail-on error"
   paragraph "· · · (default ) · · · () · · (, md-report-only) · · · · · · ."
     strong "Flags:"
     link "Browser & page"
@@ -775,7 +775,7 @@ main
       code "snapshot --values"
     code "diff"
   button "Copy Code"
-  code
+  code "real-a11y diff base.json pr.json real-a11y diff base.json pr.json --explain real-a11y diff base.json pr.json --only findings real-a11y diff base.json pr.json --format md --explain --max-pages 5 --max-lines 20 -o comment.md"
   paragraph "· (default ) · · () · · · · · () · · · · ."
     strong "Flags:"
     link "Config"
@@ -813,7 +813,7 @@ main
     link "--storage-state"
       code "--storage-state"
   button "Copy Code"
-  code
+  code "real-a11y login https://app.example.com --save auth.json real-a11y audit https://app.example.com/dashboard --storage-state auth.json"
   paragraph "(required) · · · · · · ."
     strong "Flags:"
     link "--save"
@@ -859,7 +859,7 @@ main
     code "stop"
     code "stop-all"
   button "Copy Code"
-  code
+  code "real-a11y session list real-a11y session list --format json real-a11y session stop checkout real-a11y session stop-all real-a11y session stop-all --strict"
   paragraph "· (list only) · (list only) · (stop-all only) · · · ."
     strong "Flags:"
     link "Config"
@@ -1415,7 +1415,7 @@ main
     strong "in the page"
     code "--root"
   button "Copy Code"
-  code
+  code "real-a11y tabs http://localhost:3000 --root "#app main""
   paragraph "A project-wide now reaches only . On any other command it is — the config loader is otherwise strict and fail-closed, and hard-erroring would red every CI that set the key, over config that was correct when it was written."
     link "defaults.root"
       code "defaults.root"
@@ -1439,7 +1439,7 @@ main
     link "--cdp"
       code "--cdp"
   button "Copy Code"
-  code
+  code "real-a11y audit http://localhost:3000 --device "iPhone 13""
   heading "--viewport <WxH>" (level 3)
     code "--viewport <WxH>"
   list
@@ -1479,7 +1479,7 @@ main
     link "--wait-until"
       code "--wait-until"
   button "Copy Code"
-  code
+  code "real-a11y audit http://localhost:3000 --wait-until networkidle --settle 500"
   heading "--step-settle <ms>" (level 3)
     code "--step-settle <ms>"
   list
@@ -1493,7 +1493,7 @@ main
   paragraph "How long to wait after each step before looking at the page again. A dispatch returning is not the same as its effect having landed: a React state update flushes on a later tick, a dialog mounts on the next frame. It gates the step's targeting as much as the final diff — a step that opens a menu has to have opened it before the step that clicks an item can find that item."
     emphasis "next"
   button "Copy Code"
-  code
+  code "real-a11y interact http://localhost:3000 --step-settle 600 \ --step 'click button "Open menu"' \ --step 'click menuitem "Settings"'"
   paragraph "opts out and reads immediately. Distinct from , which waits once after the initial page load; this one applies per step."
     code "0"
     link "--settle"
@@ -1563,7 +1563,7 @@ main
     link "install"
       code "install"
   button "Copy Code"
-  code
+  code "real-a11y audit http://localhost:3000 --chrome-path /usr/bin/google-chrome"
   heading "--allow-file" (level 3)
     code "--allow-file"
   list
@@ -1592,7 +1592,7 @@ main
       code "--cdp"
     link "Authenticated pages"
   button "Copy Code"
-  code
+  code "real-a11y login https://app.example.com --save auth.json real-a11y audit https://app.example.com/dashboard --storage-state auth.json"
   heading "--audit-origin <origin>" (level 3)
     code "--audit-origin <origin>"
   list
@@ -1604,7 +1604,7 @@ main
     link "--storage-state"
       code "--storage-state"
   button "Copy Code"
-  code
+  code "real-a11y audit https://app.example.com --storage-state auth.json \ --audit-origin https://accounts.example.com"
   heading "--session <name>" (level 3)
     code "--session <name>"
   list
@@ -1627,7 +1627,7 @@ main
     code "--allow-file"
     code "file://"
   button "Copy Code"
-  code
+  code "real-a11y tree https://app.example.com --session checkout real-a11y click https://app.example.com --session checkout --role button --name "Apply""
   paragraph "Commands that read the page (, , , , , , ) observe the at the moment they run. If you or first, a later / in the same session captures the post-interaction state. Capture baselines in a fresh session or before any act commands to avoid session-contaminated diffs."
     code "audit"
     code "inspect"
@@ -1652,7 +1652,7 @@ main
   paragraph "How long a daemon for this session stays alive with no commands. The timer resets after every completed run; when it expires the daemon exits and its socket/pidfile are removed. The value must be a positive number of milliseconds, is clamped to a minimum of 1 s, and is capped at one hour to prevent a typo from leaving a daemon alive indefinitely. is not accepted."
     code "0"
   button "Copy Code"
-  code
+  code "real-a11y tree https://app.example.com --session checkout --session-idle-timeout 600000"
   heading "--redact-input" (level 3)
     code "--redact-input"
   list
@@ -1690,7 +1690,7 @@ main
     link "--session"
       code "--session"
   button "Copy Code"
-  code
+  code "real-a11y tree https://app.example.com/compose --redact-input real-a11y interact https://app.example.com --redact-input --step 'type textbox "Message" = hello'"
   heading "--strict" (level 3)
     code "--strict"
   list
@@ -1709,7 +1709,7 @@ main
     code "session list"
     code "session stop"
   button "Copy Code"
-  code
+  code "real-a11y session stop-all --strict"
   heading "Output" (level 2)
   paragraph "Format and destination. / a pipe never suppresses progress — that always stays on stderr."
     code "-o"
@@ -1800,7 +1800,7 @@ main
     code "-q"
   paragraph "One line of it is worth knowing about before you need it — where the config came from, printed before anything depends on it:"
   button "Copy Code"
-  code
+  code "config: /work/app/a11y.config.json (auto-discovered) config: skipped (--no-config); built-in defaults only config: none found — looked for /work/app/nested/a11y.config.json auto-discovery checks the directory you run from and does not walk upward, so a config in a parent directory is not picked up. Pass --config <file> to name one."
   paragraph "The last one is the case that costs people time: the config is real, just not in the directory the command ran from, and every default silently reverts to its built-in. The path is absolute on purpose — a relative one tells you nothing you didn't already assume."
   heading "-h, --help" (level 3)
     code "-h, --help"
@@ -1859,7 +1859,7 @@ main
     code "dialog-labeled"
     code "landmark-structure"
   button "Copy Code"
-  code
+  code "real-a11y audit http://localhost:3000 --rules no-unlabeled-interactive,image-alt"
   heading "--fail-on <level>" (level 3)
     code "--fail-on <level>"
   list
@@ -2023,7 +2023,7 @@ main
     code "+N new, -N stale"
     code "note"
   button "Copy Code"
-  code
+  code "real-a11y snapshot --config a11y.config.json --update-baseline"
   heading "--explain" (level 3)
     code "--explain"
   list
@@ -2089,7 +2089,7 @@ main
       code "junit"
       code "jsonl"
   button "Copy Code"
-  code
+  code "real-a11y diff base.json pr.json --only findings real-a11y diff base.json pr.json --only views --explain real-a11y snapshot https://example.com --md --only views -o views.md real-a11y snapshot https://example.com --only views -o views.json # partial artifact (meta.only: "views")"
   heading "--ignore-view-line <regex>" (level 3)
     code "--ignore-view-line <regex>"
   list
@@ -2100,7 +2100,7 @@ main
   paragraph "Drop view lines matching the pattern before diffing — for generated content that differs on every build (a "last updated" timestamp, a build hash) and would otherwise read as drift on every page. Each value must be a valid ."
     code "RegExp"
   button "Copy Code"
-  code
+  code "real-a11y diff base.json pr.json --ignore-view-line '^time "[redacted]"
   heading "--max-lines <n>" (level 3)
     code "--max-lines <n>"
   list
@@ -2121,7 +2121,7 @@ main
   paragraph "Detail at most changed pages, then list the rest by name. For CI comments."
     emphasis "n"
   button "Copy Code"
-  code
+  code "real-a11y diff base.json pr.json --explain --max-pages 5 --max-lines 20 -o comment.md"
   heading "--save <file>" (level 3)
     code "--save <file>"
   list
@@ -2137,7 +2137,7 @@ main
     link "--cdp"
       code "--cdp"
   button "Copy Code"
-  code
+  code "real-a11y login https://app.example.com --save auth.json"
   heading "Security posture" (level 2)
   paragraph "is designed to be run in CI and on shared workstations. The daemon feature makes the trust boundary explicit:"
     code "real-a11y"

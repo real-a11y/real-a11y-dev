@@ -55,15 +55,15 @@ main
     strong "visible"
     strong "Enter"
   button "Copy Code"
-  code
+  code "real-a11y login https://app.example.com --save auth.json"
   button "Copy Code"
-  code
+  code "Log in in the browser window, then press Enter here to save. saved session state to /path/to/auth.json audit a page on https://app.example.com with it: real-a11y audit <url> --storage-state auth.json"
   paragraph "Accept cookie banners before pressing Enter"
   paragraph "If the site shows a cookie-consent dialog, accept or dismiss it in the login window before saving — otherwise the consent cookie isn't in your session and the banner reappears (and can dominate the audited tree) on every later run."
   heading "2. Audit with it" (level 3)
   paragraph "Pass the file to any browser command:"
   button "Copy Code"
-  code
+  code "real-a11y audit https://app.example.com/dashboard --storage-state auth.json real-a11y tree https://app.example.com/settings --storage-state auth.json"
   paragraph "Give single-page apps time to hydrate"
   paragraph "A logged-in SPA reads the session, calls its API, and renders — all after the initial load. If you capture a half-rendered or redirected view, settle it: ."
     code "--wait-until networkidle --settle 3000"
@@ -72,10 +72,10 @@ main
     strong "pinned to the origin you asked for"
     code "2"
   button "Copy Code"
-  code
+  code "real-a11y: error: Refusing to audit https://elsewhere.example: not an allowed audit origin under an authenticated session (a redirect may have left the intended site). hint: the page redirected off the audited origin; pass --audit-origin <origin> if that's expected."
   paragraph "This is a safeguard: a saved session carries live cookies, and a stray or hostile redirect to another cookie-matching origin could otherwise pull an unintended authenticated page into your report. If the redirect is legitimate — an SSO bounce that ends on a second origin — allow it explicitly:"
   button "Copy Code"
-  code
+  code "real-a11y audit https://app.example.com/dashboard \ --storage-state auth.json --audit-origin https://auth.example.com"
   paragraph "Refusal is also a useful signal: it usually means the and the site bounced you to a login page. Re-run to refresh ."
     strong "session expired"
     code "login"
@@ -94,7 +94,7 @@ main
     code "sessionStorage"
     strong "on a throwaway profile"
   button "Copy Code"
-  code
+  code "chrome --remote-debugging-port=9222 --user-data-dir=/tmp/a11y-cdp real-a11y audit https://app.example.com/dashboard --cdp http://localhost:9222"
   paragraph "Use a dedicated profile for CDP"
   paragraph "Attaching over CDP connects to whatever Chrome is on that port — (email, banking). Always launch a separate profile with its own , never enable remote debugging on your main profile."
     strong "including your everyday browser and its logged-in sessions"
@@ -123,7 +123,7 @@ main
   heading "In CI" (level 3)
   paragraph "Provision the file from a secret at job start; hosted runners are ephemeral, so no cleanup step is needed:"
   button "Copy Code"
-  code
+  code "- run: printf '%s' "$A11Y_STORAGE_STATE" > auth.json env: A11Y_STORAGE_STATE: ${{ secrets.A11Y_STORAGE_STATE }} - run: npx real-a11y audit https://staging.example.com/dashboard --storage-state auth.json"
   paragraph "Rotate by re-running locally and updating the secret."
     code "login"
   paragraph "Never run untrusted config with a live session"

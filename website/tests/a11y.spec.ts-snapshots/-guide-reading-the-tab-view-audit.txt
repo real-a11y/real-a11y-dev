@@ -116,13 +116,13 @@ main
   paragraph
     strong "A healthy form"
   button "Copy Code"
-  code
+  code "1 textbox "First name" <input> 2 textbox "Last name" <input> 3 textbox "Email address" <input> 4 checkbox "Subscribe" <input> 5 button "Create account" <button> 6 link "Sign in instead" <a>"
   paragraph "Clean sequence, matches visual order, every field and action reachable."
   separator
   paragraph
     strong "A broken icon toolbar"
   button "Copy Code"
-  code
+  code "1 button (no name) <button> 2 button (no name) <button> 3 button (no name) <button>"
   paragraph "Three buttons in sequence — but no names. A keyboard user tabbing through hears: Fix by adding to each icon button."
     emphasis ""button, button, button.""
     code "aria-label"
@@ -130,7 +130,7 @@ main
   paragraph
     strong "Positive tabindex disrupting flow"
   button "Copy Code"
-  code
+  code "1 button "Submit" <button> tabindex=1 ← jumps to front 2 link "Home" <a> tabindex=2 3 textbox "Search" <input> (natural order, but reaches focus 3rd)"
   paragraph "The Submit button and Home link appear first in the tab order even though they might be at the bottom of the document. Remove the tabindex values and reorder the HTML."
   separator
   heading "The relationship to the A11y view" (level 2)
