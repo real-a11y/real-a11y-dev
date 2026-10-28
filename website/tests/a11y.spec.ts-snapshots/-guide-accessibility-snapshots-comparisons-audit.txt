@@ -136,4 +136,4 @@ contentinfo
     time "[redacted]"
   navigation "Pager"
     link "Previous page Accessibility Snapshots"
-    link "Next page Why Real A11y?"
+    link "Next page DOM View"

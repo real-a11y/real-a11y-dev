@@ -142,4 +142,4 @@ contentinfo
     time "[redacted]"
   navigation "Pager"
     link "Previous page Headings View"
-    link "Next page Panel features"
+    link "Next page Overview & Install"

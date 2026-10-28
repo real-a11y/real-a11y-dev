@@ -276,4 +276,4 @@ contentinfo
   paragraph "Last updated:"
     time "[redacted]"
   navigation "Pager"
-    link "Previous page Architecture"
+    link "Previous page Accessible Names"

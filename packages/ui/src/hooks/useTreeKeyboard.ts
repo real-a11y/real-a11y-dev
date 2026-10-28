@@ -28,7 +28,10 @@ interface UseTreeKeyboardOptions {
    * increment, so a keyboard user could never lower a slider.
    */
   onActivate: (id: string, action?: ActionType) => void;
-  /** Focus the panel search input when `/` is pressed (panel-features keymap). */
+  /**
+   * Focus the panel search input when `/` is pressed (see the keyboard table in
+   * the Chrome extension guide).
+   */
   onFocusSearch?: () => void;
   /**
    * The rows' `aria-controls` links (`buildControlsIndex`) and what to do on

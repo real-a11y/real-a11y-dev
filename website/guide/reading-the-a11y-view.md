@@ -36,9 +36,46 @@ Each node represents one meaningful element in the accessibility tree. For each 
 
 The DOM view shows every HTML element. The A11y view filters and transforms:
 
-- **Presentational elements disappear.** A `<div>` used only for layout with no role or text shows up in DOM but not in A11y. Same for `<span>`, empty containers, and elements with `role="presentation"` or `aria-hidden="true"`. A focusable element, or one carrying a global ARIA property, is the exception — ARIA says to ignore `role="presentation"` there, so it stays with its implicit role.
+- **Presentational elements disappear.** A `<div>` used only for layout with no role or text shows up in DOM but not in A11y. Same for `<span>`, empty containers, and elements with `role="presentation"` or `aria-hidden="true"`. A focusable element, or one carrying a global ARIA property, keeps its role — see [How roles are resolved](#how-roles-are-resolved).
 - **Semantics win over markup.** A `<div role="navigation">` and a `<nav>` element look different in DOM but both appear as `navigation` in A11y.
 - **Names are computed, not just copied.** The name shown is the *result* of the full accessible name algorithm — not just the `aria-label` attribute, but the winner of a priority contest between label elements, `aria-labelledby`, `aria-label`, `title`, and text content.
+
+---
+
+## Two producers
+
+Two different engines can build this tree, and every tree records which one built it in `source.producer`.
+
+| Producer | What it is | Where you meet it |
+|---|---|---|
+| `dom` | This project's own in-page walk, with its own ARIA role and accessible-name rules | the inspector, `react`, the Storybook addon, `@real-a11y-dev/testing`, every surface's tab order, and the Chrome extension's whole tree with native mode off |
+| `native` | Chromium's own accessibility tree, read over the DevTools protocol | the CLI and the MCP server, and the Chrome extension's default view |
+
+They agree on most of a page, but never byte for byte, by design. Chromium names some controls differently (a file input is a `button`, `<details>` is a disclosure), places names differently, and sees content the in-page walk can't reach, such as the built-in media controls inside `<video>`. So compare a tree only with one from the same producer. Tab order is the exception that only `dom` can answer: Chromium's tree knows whether a node can take focus, but not the order Tab visits them in.
+
+---
+
+## How roles are resolved
+
+A node's role is its element's implicit ARIA role (`<nav>` is `navigation`, a `<div>` is `generic`), replaced by its `role` attribute when it has one. The DOM producer reads that attribute the way Chromium does, so the two producers agree on what the element is.
+
+**The first token Chromium recognises wins.** `role` is a token list: an unknown or abstract token is skipped for the next one, and with none left the element keeps its own role. `<div role="foo button">Save</div>` is `button "Save"`, `<div role="widget">` is a `generic`, and `<button role="foo">` is still a `button`. Tokens are compared ASCII-case-insensitively (`role="BUTTON"` is a button). `directory`, deprecated in ARIA 1.2, is a `list`, and `image`, ARIA 1.3's synonym for `img`, is an `img`, as in Chromium's tree, so role queries, snapshots and the `image-alt` rule see one role, not two.
+
+**`listitem`, `option` and `treeitem` need their container.** Chromium drops each one outside its required context, for the next token or the element's own role:
+
+| Role | Kept inside | Otherwise, for example |
+|---|---|---|
+| `listitem` | `<ul>`, `<ol>`, `<menu>` (whatever their role), `role="list"`, `role="group"` | `<div role="listitem">` alone is a `generic` |
+| `option` | `<select>`, `role="listbox"`, `role="group"` | `<li role="option">` in a list is a `listitem` |
+| `treeitem` | `role="tree"`, `role="group"`, through parent `treeitem`s | `<details role="treeitem">` alone is a `group` |
+
+The container may sit behind role-less `div`, `span` or custom-element wrappers, or behind presentational elements, and an `aria-owns` owner with one of those roles counts too. Anything else in between ends the search: `<div role="listbox"><section><div role="option">` is no option. No other role is dropped for its context — a `tab` outside a `tablist` is still a `tab`.
+
+**An `<input>` whose `list` names a `<datalist>` is a `combobox`**, because typing in it offers the datalist's suggestions in a popup. That holds for the text, search, email, tel, url, number, date and time types, as in Chromium's own tree, and the datalist has to be in the input's own document or shadow root. A `list` naming anything else leaves the input a `textbox` (or `searchbox`, or `spinbutton`).
+
+**`presentation` and `none` remove the role, not the content.** The element's children move up to its parent. An `<li>` whose `<ul>`, `<ol>` or `<menu>` carries any role but `list` goes the same way, which is how `<ul role="none">` strips its items as well as itself. Per ARIA's [presentational roles conflict resolution](https://www.w3.org/TR/wai-aria-1.2/#conflict_resolution_presentation_none), the role is ignored on an element that is focusable or carries a global ARIA state or property: `<a href="/about" role="presentation">` is a `link`, and `<h2 role="presentation" aria-label="Q3">` is still a `heading`. `aria-hidden="true"` is different: it removes the element outright.
+
+How the name is computed is its own page: [Accessible Names](/guide/accessible-names).
 
 ---
 

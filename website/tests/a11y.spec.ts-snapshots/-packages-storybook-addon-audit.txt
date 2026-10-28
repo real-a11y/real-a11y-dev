@@ -224,10 +224,14 @@ main
       code "viteFinal"
   separator
   heading "Panel features" (level 2)
-  paragraph "Inside every story's panel: search, role filters, focus tracking, scoping, keyboard navigation. Same UI as the Chrome extension and inspector — see the shared reference for what each control does and when to reach for it. The addon has no ; only the Chrome extension does."
+  paragraph "Inside every story's panel is the same tree as the Chrome extension, with its search, role filters and . Selecting or hovering a row outlines its element in the story canvas, without scrolling it, and activating a row runs its action in the story. Unlike the inspector's and , none of this is configurable. , under ⚙ at the end of the toolbar, holds across stories until Storybook reloads. The addon has no Focus sync, scope breadcrumb or ."
+    link "keyboard"
+    code "highlightOnHover"
+    code "scrollHostOnSelect"
+    strong "Show full names"
     link "live region log"
   paragraph "→"
-    link "Panel features reference"
+    link "Using the panel"
 contentinfo
   link "Edit this page on GitHub"
   paragraph "Last updated:"

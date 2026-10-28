@@ -104,7 +104,7 @@ function formatAxeViolations(violations: AxeViolationLike[]): string {
 }
 
 // Snapshot file name: route with `/` replaced by `_`, then the suffix.
-// `/` becomes `_root`, `/guide/why` becomes `_guide_why`.
+// `/` becomes `_root`, `/guide/troubleshooting` becomes `_guide_troubleshooting`.
 function slugFor(route: string): string {
   return route === "/" ? "_root" : route.replace(/\//g, "_");
 }

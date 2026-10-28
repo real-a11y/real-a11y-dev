@@ -85,13 +85,13 @@ Native mode is on by default. The panel reads Chromium's own accessibility tree 
 
 **When the tree updates.** Chrome's tree is read when you open the panel and when the page navigates. After you act, through the tree or on the page itself, it is read again for a few seconds as the page changes, so what your click opened shows up. Typing isn't followed. Other changes wait for **↻**, unless you turn on **Follow page changes** (the **⟳** button in Chrome's tree's toolbar), which reads the tree again whenever the page changes. Every read brings up Chrome's bar. Switching tabs doesn't read the new tab: press **↻**.
 
-**What's the same.** Everything else works on Chrome's tree as on the in-page tree: acting on rows, the key bar, picking an element (**⦿**, or `Ctrl`/`Cmd`+`Shift`+`C`), outlining the selected row's element on the page, Focus sync, scoping, search, jump chips and **Copy**. Frames are read too, cross-origin ones included. What Chrome's tree doesn't have is tab order: `tabindex` never reaches a native node, so there's no TAB view and no **Tab sequence** in **Copy**. The two trees will never match exactly, by design; see [Two producers](./core-concepts.md#two-producers).
+**What's the same.** Everything else works on Chrome's tree as on the in-page tree: acting on rows, the key bar, picking an element (**⦿**, or `Ctrl`/`Cmd`+`Shift`+`C`), outlining the selected row's element on the page, Focus sync, scoping, search, jump chips and **Copy**. Frames are read too, cross-origin ones included. What Chrome's tree doesn't have is tab order: `tabindex` never reaches a native node, so there's no TAB view and no **Tab sequence** in **Copy**. The two trees will never match exactly, by design; see [Two producers](./reading-the-a11y-view.md#two-producers).
 
 The [extension's README](https://github.com/real-a11y/real-a11y-dev/blob/main/packages/extension/README.md#native-mode) covers how native mode decides when to read, and how it follows focus and frames.
 
 ## What only the extension does
 
-Reading the tree, search, role filters, focus tracking and scoping work the same as in the [inspector](/packages/inspector), the [React component](/packages/react) and the [Storybook addon](/packages/storybook-addon): see [Panel features](/guide/panel-features). These need an extension:
+Search, role filters, jump chips and the keyboard work as in the other panels: see [Using the panel](#using-the-panel). These need an extension:
 
 - **The screen curtain**, [above](#the-screen-curtain).
 - **Copy as a Markdown report.** **Copy ▾** puts the current view on the clipboard as a report for a bug tracker: everything, the tree, the heading outline or the tab sequence. Field values are left out. Each report starts by saying what it shows, so nobody compares a report from one tree with a report from the other by mistake:
@@ -109,10 +109,78 @@ Reading the tree, search, role filters, focus tracking and scoping work the same
 - **Frames.** Each iframe's tree sits under its `<iframe>` row, including cross-origin frames, `about:blank` and `srcdoc` frames, and frames a script writes into, such as a rich-text editor's. The in-page tree can't reach into a sandboxed frame without `allow-same-origin`, a `data:` frame or a `blob:` frame, and marks those **embedded**.
 - **Keyboard bar.** `Esc`, `Tab`, `Shift+Tab`, `Enter`, `Space`, `↓` and `↑` send a key to whatever has focus on the page. For example: open a combobox from the tree, move through its options with `↓`, choose one with `Enter`, and close it with `Esc`.
 - **Close tab.** The **✕** next to the page's title closes the tab the panel is showing, which is handy for popups and login windows.
-- **Jump chips.** A control and what it controls, such as a menu button and its menu, are often far apart in the tree. They get a pair of chips that link them (`→ menu "Options"` and `← button "Options"`). A dashed chip is a guess from `aria-haspopup` and `aria-expanded` on a control with no `aria-controls`. `Alt`+`J` follows a chip from the keyboard.
-- **The [live region log](/guide/panel-features#live-region-monitoring)**, and the **Dialog: …** bar that names a modal dialog when the tree [re-roots to it](/guide/panel-features#dialog-auto-scope).
+- **[Focus sync](#focus-sync), the [scope breadcrumb](#scoping) and the [live region log](#live-region-monitoring)**, and the **Dialog: …** bar that names a modal dialog when the tree [re-roots to it](#dialog-auto-scope).
 
 For what each view shows, see [Reading the DOM view](/guide/reading-the-dom-view), [the A11y view](/guide/reading-the-a11y-view) and [the TAB view](/guide/reading-the-tab-view).
+
+## Using the panel
+
+The extension's in-page tree is the same panel as [`@real-a11y-dev/inspector`](/packages/inspector), [`<SemanticNavigator />`](/packages/react) and the [Storybook addon](/packages/storybook-addon), so this section holds for them too, except where it names the extension.
+
+### Search and role filters
+
+The search box keeps the rows whose tag name, role, accessible name, attributes or text contain what you type, with the rows above them, and hides the rest. `/` moves to it from the tree.
+
+The six role filters, **Headings**, **Links**, **Buttons**, **Forms**, **Landmarks** and **Images**, each replace the tree with a list of the nodes in that group. **Forms** lists textboxes, search boxes, checkboxes, radios, comboboxes, list boxes, sliders and spin buttons; **Landmarks** lists `banner`, `navigation`, `main`, `complementary`, `contentinfo`, `region`, `form` and `search`. They're off in the TAB view, which is a list already.
+
+### Jump chips
+
+A control and what it controls, such as a menu button and its menu, are often far apart in the tree. They get a pair of chips that link them (`→ menu "Options"` and `← button "Options"`). A dashed chip is a guess from `aria-haspopup` and `aria-expanded` on a control with no `aria-controls`. `Alt`+`J` follows a chip from the keyboard.
+
+### Focus sync
+
+Only the extension has it. With **Focus sync** on in the toolbar, focus moving on the page, by Tab, a click or the page's own script, selects that element's row and scrolls the tree to it. Turn it off when a page moves focus so often that the tree won't stay where you are reading.
+
+The other direction is always on. Selecting a row outlines its element on the page, scrolls it into view, and moves focus to it if it can take focus. Hovering a row outlines the element without scrolling or moving focus. The in-page panels do neither unless you opt in, with `highlightOnHover`, `scrollHostOnSelect` and `focusHostOnActivate` on the [inspector](/packages/inspector#config) or [`<SemanticNavigator />`](/packages/react#props).
+
+### Scoping
+
+In the extension, to show only part of the page, double-click a container row (a form, a landmark, a list: anything with children and no action of its own), or select any row with children and press `Ctrl`/`Cmd`+`Enter`. Double-clicking an interactive row still activates it. A breadcrumb above the tree shows the path: click a segment to scope back up, or use **Exit scope** (✕) or `Esc` to return to the whole tree. Chrome's tree scopes the same way, except that it scopes into a focusable container, such as a `tabindex="0"` region, where the in-page tree focuses it.
+
+A scope limits the search and its match count, the role-filter lists, the TAB view, and what **Copy** exports, which gains a `Scope` line naming it. Selecting an element outside the scope, or focus moving to one with Focus sync on, leaves it.
+
+The other panels have no breadcrumb, and double-clicking a row there only expands or collapses it. Scope the inspector with [`setRoot()`](/packages/inspector#setroot-root), and `<SemanticNavigator />` by passing it a different `root`.
+
+### Dialog auto-scope
+
+When the page opens a `<dialog>` with `showModal()`, the tree re-roots to that dialog: the dialog becomes the root row, and the page behind it drops out. That is what a screen reader user gets, since the browser makes the rest of the page inert. The tree re-roots back when the dialog closes or is removed. In the extension, a **Dialog: …** bar above the tree names the dialog (**Dialog: Modal** when it has no name), and its **Press ESC** button sends Escape to the page, which closes the dialog unless a page handler calls `preventDefault()`.
+
+Only a modal `<dialog>` does this, and not one inside a shadow root. A `<dialog>` opened with `show()`, or an element with `role="dialog"` or `aria-modal="true"`, stays in the tree alongside the rest of the page. Dialog libraries such as Radix, MUI and Headless UI hide the rest of the page with `aria-hidden` or `inert`, so the tree shows the dialog alone, but its root is still the page and no bar appears.
+
+The other panels re-root the same way, with no bar. An in-page panel re-roots even to a modal dialog outside its `root`; a non-modal one outside it joins the tree only when it has a `role` attribute of `dialog` or `alertdialog`, which widens the tree to the whole page, while a plain `<dialog>` opened with `show()` stays out. No dialog re-roots a panel whose root is inside a shadow root. The inspector and `<SemanticNavigator />` are part of the page, so they go inert along with it until the dialog closes; [`useActiveModal()`](/packages/react#useactivemodal-rootref) returns the dialog's node if you want your own indicator. The Storybook panel is outside the story's iframe and stays usable.
+
+The panel doesn't check that focus stays in the dialog or that Escape closes it. Tab through the dialog and press Escape, on the page or with the keyboard bar's `Tab` and `Esc`.
+
+### Live region monitoring
+
+Only the extension has a live log; the other panels don't watch live regions.
+
+While the side panel is open, when a live region on the page changes or is shown, its new text appears in the live log at the bottom of the side panel. A live region is a `role="status"`, `role="log"` or `role="alert"`, or anything with `aria-live="polite"` or `"assertive"`; `aria-live="off"` silences even an alert. Each entry shows the region's role (`status` for an `aria-live` element with no role), then its text. Assertive entries are red, polite ones blue. The log holds the last five entries, and each clears after 8 seconds.
+
+An entry's text is what a screen reader could announce: nothing hidden or `aria-hidden`, and never a form field's markup text. Text a region already held when the panel opened isn't logged until it changes. The log approximates a screen reader rather than recording one: each entry carries the region's whole text after the change, not only the part that changed, changes within 200 ms collapse into one entry, and only the top frame is watched, so a live region inside an iframe never appears.
+
+Use it to check that toasts, validation errors and result counts are announced, and that a loading indicator announces both "Loading…" and "Loaded."
+
+### Keyboard
+
+Every panel's tree takes the same keys. Chrome's tree has the differences listed under [native mode](#native-mode).
+
+| Key | In the tree |
+|---|---|
+| `↑` / `↓` | Previous / next row |
+| `→` | Expand the row, or move into it when it's already open |
+| `←` | Collapse the row, or move to its parent when it's already closed |
+| `Home` / `End` | First / last row |
+| `Enter` | Run the row's action: click a link or button, toggle a checkbox, step a slider or spin button up |
+| `Shift`+`Enter` | Step a slider or spin button down |
+| `+` or `=` / `-` or `_` | Step a slider or spin button up / down |
+| `Space` | Expand or collapse the row |
+| `*` | Expand every sibling of the row |
+| `/` | Move to the search box |
+| Letters | Jump to the next row whose name starts with what you type |
+| `Alt`+`J` / `Alt`+`Shift`+`J` | Follow the row's [jump chips](#jump-chips), and again for the next one / go back to the row you jumped from |
+| `Ctrl`/`Cmd`+`Enter` | Extension only: scope the tree to the row |
+| `Esc` | Extension only: leave the scope |
 
 ## Privacy
 

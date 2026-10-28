@@ -387,7 +387,6 @@ export default defineConfig({
         text: "Introduction",
         items: [
           { text: "Getting Started", link: "/guide/getting-started" },
-          { text: "Core Concepts", link: "/guide/core-concepts" },
           {
             text: "Accessibility Snapshots",
             link: "/guide/accessibility-snapshots",
@@ -396,21 +395,15 @@ export default defineConfig({
             text: "Snapshots vs. Other Tools",
             link: "/guide/accessibility-snapshots-comparisons",
           },
-          { text: "Why Real A11y?", link: "/guide/why" },
         ],
       },
       {
         text: "Reading the Tree",
         items: [
-          {
-            text: "Understanding the Views",
-            link: "/guide/understanding-the-views",
-          },
           { text: "DOM View", link: "/guide/reading-the-dom-view" },
           { text: "A11y View", link: "/guide/reading-the-a11y-view" },
           { text: "Headings View", link: "/guide/reading-the-headings-view" },
           { text: "TAB View", link: "/guide/reading-the-tab-view" },
-          { text: "Panel features", link: "/guide/panel-features" },
         ],
       },
       {
@@ -480,7 +473,6 @@ export default defineConfig({
             link: "/guide/authenticated-pages",
           },
           { text: "Accessible Names", link: "/guide/accessible-names" },
-          { text: "Architecture", link: "/guide/architecture" },
         ],
       },
       {

@@ -1,5 +1,7 @@
 link "What you see"
 link "How the A11y view differs from the DOM view"
+link "Two producers"
+link "How roles are resolved"
 link "What to look for"
 link "Reading a well-structured tree"
 link "Quick sanity checks"
@@ -9,6 +11,11 @@ link "Storybook addon"
 link "treeSnapshot()"
 link "real-a11y tree"
 link "get_semantic_tree"
+link "How roles are resolved"
+table
+table
+link "presentational roles conflict resolution"
+link "Accessible Names"
 button "Copy Code"
 generic
 button "Copy Code"

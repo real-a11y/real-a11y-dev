@@ -157,6 +157,68 @@ New to the idea of snapshotting the accessibility tree? Start with the concept: 
 - **Assert what an interaction _changed_** (options appeared, `aria-expanded` flipped, focus moved) → [`capture` + `a11yDiff` or `flow().expectChanges`](/packages/testing/flow#asserting-what-an-interaction-changed).
 - **Audit a real, rendered page** (not jsdom) → [Playwright adapter](/packages/testing/playwright).
 
+## The semantic tree
+
+Every helper above reads the same tree. `extract(root, mode?)` builds it from a DOM element, in `"a11y"` mode (the default) or `"dom"`, and returns an `ExtractionResult`:
+
+```ts
+interface ExtractionResult {
+  nodes: Map<string, SemanticNode>;
+  rootId: string;
+  focusedId?: string;            // the node that had focus, when it's in this tree
+  source: { producer: "dom" | "native"; chrome?: string };
+}
+```
+
+### `SemanticNode`
+
+```ts
+interface SemanticNode {
+  id: string;                    // the same element keeps its id across extractions, not across reloads
+  parentId: string | null;       // null only for the root
+  childIds: string[];
+  depth: number;
+  a11y: {
+    role: string;
+    name: string;
+    description: string;
+    value?: string;              // what a screen reader announces for a field ("Spain", not "es");
+                                 // "[redacted]" for a filled password, card or one-time-code field
+    states: Record<string, string | boolean>; // checked, expanded, pressed, disabled…
+    properties: Record<string, string>;       // aria-* properties, and a heading's "level"
+    isExposedToAT: boolean;
+  };
+  dom?: {
+    tagName: string;
+    attributes: Record<string, string>;
+    textContent: string | null;  // direct text-node children only
+    descendantText: string;      // truncated text of the whole subtree
+    isHidden: boolean;
+  };
+  interaction?: {
+    isInteractive: boolean;
+    isFocusable: boolean;
+    isEditable: boolean;
+    actions: ActionType[];       // click, focus, type, toggle, select…
+  };
+}
+```
+
+`dom` and `interaction` are optional in the type. The in-page walk this package runs always fills them, but a tree [read from Chromium](/guide/reading-the-a11y-view#two-producers) has no element behind some of its nodes. Roles follow [How roles are resolved](/guide/reading-the-a11y-view#how-roles-are-resolved), and names [Accessible Names](/guide/accessible-names).
+
+### Queries
+
+Each one takes an `ExtractionResult` or its `nodes` Map.
+
+| Function | Returns |
+|---|---|
+| `findByRole(tree, role, options?)` | The first node with that role, in document order, or `null`. `options` narrows by `name` (a string must match the whole name, ignoring case and extra whitespace; a RegExp is tested against it), a heading's `level`, and the `checked`, `expanded`, `selected`, `pressed` and `disabled` states. Nodes hidden from assistive technology are skipped unless `includeHidden: true`. |
+| `findAllByRole(tree, role, options?)` | Every such node, in document order. |
+| `getOutline(tree)` | `{ id, level, name }` for each heading assistive technology can reach, in document order — what `outlineSnapshot()` and `assertHeadingOrder()` read. |
+| `getTabSequence(tree)` | Focusable nodes in Tab order: positive `tabindex` ascending, then the rest in document order, leaving out `tabindex="-1"`. It doesn't model shadow roots, iframes or focus traps. |
+| `linearize(tree, options?)` | Every node in document order, except those hidden from both sight and assistive technology unless `includeHidden: true`. |
+| `diffTrees(before, after)` | `{ added, removed, changed }` between two extractions of the same document, matched by node id. Each `changed` entry lists the fields that differ as dot-paths, such as `"a11y.name"` or `"a11y.states.expanded"`. [`capture` + `a11yDiff`](/packages/testing/flow#asserting-what-an-interaction-changed) are built on it. |
+
 ## See it running
 
 - **Vitest + jsdom** — [`examples/testing-vitest/`](https://github.com/real-a11y/real-a11y-dev/tree/main/examples/testing-vitest): snapshot tests, the custom matchers, `flow()` interactions, tab-sequence structure assertions.

@@ -237,6 +237,6 @@ The addon listens to `storyRendered` and `storyChanged` events **while the panel
 
 ## Panel features
 
-Inside every story's panel: search, role filters, focus tracking, scoping, keyboard navigation. Same UI as the Chrome extension and inspector — see the shared reference for what each control does and when to reach for it. The addon has no [live region log](/guide/panel-features#live-region-monitoring); only the Chrome extension does.
+Inside every story's panel is the same tree as the Chrome extension, with its search, role filters and [keyboard](/guide/chrome-extension#keyboard). Selecting or hovering a row outlines its element in the story canvas, without scrolling it, and activating a row runs its action in the story. Unlike the inspector's `highlightOnHover` and `scrollHostOnSelect`, none of this is configurable. **Show full names**, under ⚙ at the end of the toolbar, holds across stories until Storybook reloads. The addon has no Focus sync, scope breadcrumb or [live region log](/guide/chrome-extension#live-region-monitoring).
 
-→ [Panel features reference](/guide/panel-features)
+→ [Using the panel](/guide/chrome-extension#using-the-panel)

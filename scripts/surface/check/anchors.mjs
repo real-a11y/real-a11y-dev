@@ -1,11 +1,11 @@
 // Every `#fragment` a doc links to must be a heading that exists.
 //
 // The VitePress build already fails on a dead *route* — a link to
-// `/guide/nowhere`. It says nothing about the fragment: `/guide/why#the-part-i-
-// renamed` builds clean and lands the reader at the top of the page with no
-// indication anything was missed. The command reference is one 1000-line page
-// held together by ~200 intra-page links, so this is the failure mode it is
-// most exposed to.
+// `/guide/nowhere`. It says nothing about the fragment:
+// `/guide/troubleshooting#the-part-i-renamed` builds clean and lands the reader
+// at the top of the page with no indication anything was missed. The command
+// reference is one 1000-line page held together by ~200 intra-page links, so
+// this is the failure mode it is most exposed to.
 
 import {
   docFiles,
@@ -21,9 +21,9 @@ const INLINE_LINK = /\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g;
 const REF_LINK = /^\s*\[[^\]]+\]:\s*(\S+)/gm;
 
 /**
- * A VitePress route → the file that serves it. `/guide/why` is
- * `website/guide/why.md`, `/` is `website/index.md`, and a trailing slash is a
- * directory index.
+ * A VitePress route → the file that serves it. `/guide/troubleshooting` is
+ * `website/guide/troubleshooting.md`, `/` is `website/index.md`, and a trailing
+ * slash is a directory index.
  */
 function routeToFile(route) {
   const path = route.replace(/\.html$/, "");

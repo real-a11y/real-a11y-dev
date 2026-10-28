@@ -6,4 +6,7 @@ h1 @real-a11y-dev/testing
     h3 Adding the expect matchers
   h2 What's in the box
   h2 Which do I reach for?
+  h2 The semantic tree
+    h3 SemanticNode
+    h3 Queries
   h2 See it running

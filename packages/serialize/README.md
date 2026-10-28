@@ -73,7 +73,7 @@ safe to commit and diff.
 ## `serializeTreeDiff(diff, options?)`
 
 Renders a `TreeDiff` from core's
-[`diffTrees`](https://real-a11y.dev/guide/core-concepts#tree-diffing) — what
+[`diffTrees`](https://real-a11y.dev/packages/testing#queries) — what
 **one interaction changed**, as a committable change list:
 
 ```ts

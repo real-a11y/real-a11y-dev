@@ -267,15 +267,15 @@ main
   separator
   heading "Next steps" (level 2)
   list
-    listitem "— understand the semantic tree model, roles, and names"
-      link "Core Concepts"
+    listitem "— roles, names and states, and the two engines that build the tree"
+      link "Reading the A11y view"
     listitem "— what it means to snapshot the a11y tree, and how it complements axe and visual regression testing"
       link "Accessibility Snapshots"
-    listitem "— how this compares to axe-core, Testing Library, and other tools"
-      link "Why Real A11y?"
+    listitem "— how this compares to axe, Playwright's ARIA snapshots and screen-reader testing"
+      link "Snapshots vs. other tools"
 contentinfo
   link "Edit this page on GitHub"
   paragraph "Last updated:"
     time "[redacted]"
   navigation "Pager"
-    link "Next page Core Concepts"
+    link "Next page Accessibility Snapshots"

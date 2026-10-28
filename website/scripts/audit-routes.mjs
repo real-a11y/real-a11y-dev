@@ -12,14 +12,9 @@ export const ROUTES = [
 
   // Guide
   "/guide/getting-started",
-  "/guide/why",
-  "/guide/core-concepts",
   "/guide/accessibility-snapshots",
   "/guide/accessibility-snapshots-comparisons",
-  "/guide/architecture",
   "/guide/accessible-names",
-  "/guide/panel-features",
-  "/guide/understanding-the-views",
   "/guide/reading-the-dom-view",
   "/guide/reading-the-a11y-view",
   "/guide/reading-the-headings-view",

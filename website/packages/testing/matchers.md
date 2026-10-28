@@ -152,7 +152,7 @@ The same rule is why `<video controls>` no longer fails: its extracted role is e
 <div role="listbox" aria-label="Fruit"><section><div role="option" aria-selected="false">Apple</div></section></div>
 ```
 
-A discarded role is an error, not an advisory warning: assistive tech gets a different role from the one you wrote. See [Roles](/guide/core-concepts#roles) for which containers count.
+A discarded role is an error, not an advisory warning: assistive tech gets a different role from the one you wrote. See [How roles are resolved](/guide/reading-the-a11y-view#how-roles-are-resolved) for which containers count.
 
 Unlike the four matchers above, this one doesn't wrap an `assert*` function — it runs the semantic tree through `@real-a11y-dev/validate` and fails only on `severity: "error"` issues.
 

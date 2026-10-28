@@ -64,7 +64,8 @@ export function isTypeAheadKey(e: KeyboardEvent): boolean {
     !e.metaKey &&
     // Space is reserved for toggle/activate in tree/listbox patterns.
     e.key !== " " &&
-    // `/` focuses the panel search input (see panel-features keyboard table).
+    // `/` focuses the panel search input (see the keyboard table in the
+    // Chrome extension guide, website/guide/chrome-extension.md).
     e.key !== "/"
   );
 }
