@@ -23,7 +23,7 @@ main
     link "@real-a11y-dev/testing"
       code "@real-a11y-dev/testing"
   button "Copy Code"
-  code
+  code "import { flow, findByRole } from "@real-a11y-dev/testing"; test("country combobox", async () => { render(<CountrySelector />); await flow(document.body) .findByRole("combobox", { name: /country/i }) .click() .findByRole("option", { name: "Spain" }) .click() .expect((tree) => { const combo = findByRole(tree, "combobox", { name: /country/i }); expect(combo?.a11y.states.expanded).toBe(false); }); });"
   heading "Why flow() (vs Testing Library)?" (level 2)
     code "flow()"
   paragraph "Testing Library asserts about the . asserts about the — the same tree screen-reader users perceive and the same tree the Real A11y panel shows. That difference changes which tests are easy to write."
@@ -38,9 +38,9 @@ main
   heading "Side-by-side: same test, both libraries" (level 3)
   paragraph "A common flow — open a confirm dialog, dismiss it, assert it closed:"
   button "Copy Code"
-  code
+  code "// Testing Library import { render, screen, within } from "@testing-library/react"; import userEvent from "@testing-library/user-event"; test("delete-confirm dialog", async () => { render(<AccountSettings />); const user = userEvent.setup(); await user.click(screen.getByRole("button", { name: /delete account/i })); const dialog = screen.getByRole("dialog"); expect(dialog).toHaveAccessibleName(/confirm/i); await user.click(within(dialog).getByRole("button", { name: /cancel/i })); expect(screen.queryByRole("dialog")).not.toBeInTheDocument(); });"
   button "Copy Code"
-  code
+  code "// flow() import { flow } from "@real-a11y-dev/testing"; test("delete-confirm dialog", async () => { render(<AccountSettings />); await flow(document.body) .findByRole("button", { name: /delete account/i }) .click() .expectActiveModal((name) => /confirm/i.test(name)) .findByRole("button", { name: /cancel/i }) .click() .expectActiveModal(null); });"
   paragraph "Both pass on the same component. The Flow version is shorter because is a single tree-level invariant — "exactly one dialog is open AND its name matches." Expressing the same in RTL stitches + + + together. And because Flow re-extracts the tree after , the next already sees the new dialog without an explicit scope."
     code "expectActiveModal"
     code "getByRole"
@@ -146,7 +146,7 @@ main
   heading "expectActiveModal — examples" (level 3)
     code "expectActiveModal"
   button "Copy Code"
-  code
+  code "// Assert a dialog is open and its name matches a string/regex await flow(root) .findByRole("button", { name: /delete/i }) .click() .expectActiveModal((name) => /confirm/i.test(name)); // Assert no dialog is open await flow(root) .findByRole("button", { name: /cancel/i }) .click() .expectActiveModal(null);"
   paragraph "The first or in document order is treated as the active modal."
     code "role="dialog""
     code "role="alertdialog""
@@ -175,7 +175,7 @@ main
     code "userEvent"
     code "fireEvent"
   button "Copy Code"
-  code
+  code "import { capture, a11yDiff } from "@real-a11y-dev/testing"; test("opening the country picker", () => { render(<CountrySelector />); const before = capture(document.body); fireEvent.click(screen.getByRole("combobox", { name: /country/i })); expect(a11yDiff(before, document.body)).toMatchInlineSnapshot(` + option "Spain" + option "France" ~ combobox "Country": a11y.states.expanded false → true ~ listbox "Countries": childIds 0 children → 2 children `); });"
   paragraph "returns a boxed value that renders through the as — register it once ( from ) and / print the change list verbatim. must be a pre-captured tree (extracting it at assert time would diff the tree against itself); can be a live , captured for you. A line appears only when both sides carry focus context (both d)."
     code "a11yDiff"
     strong "same snapshot serializer"
@@ -196,7 +196,7 @@ main
     code "expectChanges"
     code "expectChanges"
   button "Copy Code"
-  code
+  code "await flow(document.body) .findByRole("combobox", { name: /country/i }) .click() .expectChanges({ added: [ { role: "option", name: "Spain" }, { role: "option", name: "France" }, ], changed: [{ role: "combobox", changes: ["a11y.states.expanded"] }], exact: true, });"
   paragraph "Three forms:"
   list
     listitem "— the ergonomic default. / / are matched by + optional (string = case-, whitespace-, and typography-normalized exact; RegExp = tested against the folded name). A may list (dot-paths that must appear). — resilient to incidental changes; asserts nothing else changed. Two kinds of change never count as an extra on their own: a -only change on a container (the structural shadow of an add/remove), and an -only change (a field whose contents a step changed). Assert a value change explicitly with ."
@@ -256,13 +256,13 @@ main
           code "200"
         cell "Max wait for the post-action debounced mutation cycle. Increase for slow async UIs; decrease for tighter feedback in pure-DOM flows."
   button "Copy Code"
-  code
+  code "await flow(root, { waitTimeout: 500 }) .findByRole("button", { name: /save/i }) .click();"
   heading "Utilities" (level 2)
   heading "waitForMutations(root, options?)" (level 3)
     code "waitForMutations(root, options?)"
   paragraph "Resolves after the next debounced DOM mutation cycle. Useful after programmatic DOM changes."
   button "Copy Code"
-  code
+  code "import { waitForMutations } from "@real-a11y-dev/testing"; element.click(); await waitForMutations(root); // DOM has settled, re-extract"
   paragraph
     strong "Options:"
   table
@@ -291,7 +291,7 @@ main
   paragraph "Dispatches an action on a directly."
     code "SemanticNode"
   button "Copy Code"
-  code
+  code "import { dispatch } from "@real-a11y-dev/testing"; const btn = findByRole(tree, "button", { name: /submit/i }); await dispatch(btn, "click");"
   heading "See also" (level 2)
   list
     listitem "— -style assertions, including post- modal checks"

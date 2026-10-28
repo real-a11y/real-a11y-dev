@@ -23,7 +23,7 @@ main
     strong "semantic tree"
     code "SemanticNode"
   button "Copy Code"
-  code
+  code "interface SemanticNode { id: string; // stable WeakMap-based fingerprint parentId: string | null; // null only for the root node childIds: string[]; // ordered child node IDs depth: number; // 0 at the root, child = parent + 1 a11y: { role: string; // ARIA role (resolved from element + explicit role attr) name: string; // accessible name (label, aria-label, aria-labelledby…) description: string; value?: string; // what a screen reader announces for a field ("Spain", not "es"); // "[redacted]" for a filled password / card / one-time-code field states: Record<string, string | boolean>; // checked, expanded, selected, pressed… // each true/false, "mixed" (checked, pressed) // or an aria-current token ("page"…), read as // Chromium reads it: aria-disabled="TRUE" is // true, aria-disabled="" leaves it unset. // An element's own semantics win over its // attribute: a native checkbox or radio // reports its checkedness, true or false // ("mixed" when indeterminate), a drop-down // <select> is expanded only while its picker // is open, a <details>' summary follows // the details' `open`, and a button that // invokes a popover (popovertarget, or // commandfor with a popover command) is // expanded only while the popover shows — // each on a role that has the state, as // in Chromium. `expanded` exists only on // a role Chromium gives it (button, link, // tab, combobox, treeitem, row, listitem…): // any other ignores aria-expanded, and a // <details> has none, only its summary properties: Record<string, string>; // aria-* properties (incl. heading "level") isExposedToAT: boolean; // false when aria-hidden, role="presentation", etc. }; dom: { tagName: string; attributes: Record<string, string>; textContent: string | null; // direct text-node children only descendantText: string; // truncated recursive text — useful for elements whose // accessible name is empty by spec (<code>, <pre>, <svg>). // Neither reads a <textarea>'s markup text: that is its // default value, and a value lives in a11y.value alone isHidden: boolean; // not visible: visibility:hidden, or the visually-hidden // ("sr-only") pattern, which AT still reads. display:none // subtrees are never extracted at all. }; interaction: { isInteractive: boolean; isFocusable: boolean; // Chromium would focus it: never an <a> without // href, a disabled control, or a bad tabindex isEditable: boolean; actions: ActionType[]; // click, focus, type, toggle, select… }; }"
   paragraph "Heading level lives on"
     code "properties"
   paragraph "Heading level isn't a typed field — it's stored as a string (–) on . You don't usually read it directly; , , and parse it for you."
@@ -259,7 +259,7 @@ main
     listitem "attribute — last-resort fallback"
       code "title"
   button "Copy Code"
-  code
+  code "<!-- aria-label wins --> <button aria-label="Close dialog">✕</button> <!-- name: "Close dialog" --> <!-- aria-labelledby wins (even over aria-label) --> <h2 id="dlg-title">Confirm delete</h2> <dialog aria-labelledby="dlg-title">…</dialog> <!-- dialog name: "Confirm delete" -->"
   paragraph "Deep dive"
   paragraph "The full rules — including multi-ID concatenation, what contribute (placeholders, CSS generated content, subtrees), and a debugging checklist — live in ."
     code "aria-labelledby"
@@ -307,7 +307,7 @@ main
   paragraph "compares two serialized trees and returns:"
     code "diffTrees(before, after)"
   button "Copy Code"
-  code
+  code "interface TreeDiff { added: SemanticNode[]; // nodes present in after, absent in before removed: SemanticNode[]; // nodes present in before, absent in after changed: NodeChange[]; // nodes with the same ID but different properties }"
   paragraph "Changes detected: role, name, description, textContent, isHidden, isFocusable, aria states, aria properties, and child order."
   paragraph "This powers the assertion and the utility in ."
     code "flow().expectTree()"

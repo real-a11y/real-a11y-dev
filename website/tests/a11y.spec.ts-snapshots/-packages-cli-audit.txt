@@ -52,7 +52,7 @@ main
     listitem "— Playwright is an optional peer dependency, loaded only when a command needs a browser."
       strong "Playwright + a Chromium binary"
   button "Copy Code"
-  code
+  code "npm i -D @real-a11y-dev/cli@beta playwright npx real-a11y install"
   paragraph "downloads — Google's versioned, non-auto-updating Chrome build — into the CLI's own cache and uses it for every launched session from then on. Run it once; re-runs are instant no-ops. still works too, but sidesteps a real pitfall: resolves its own copy of Playwright, and Playwright's browser binaries are revision-locked to it, so a mismatched global Playwright can leave you with "Executable doesn't exist" even after — a problem that doesn't exist when the browser is a -managed download instead."
     code "real-a11y install"
     link "Chrome for Testing"
@@ -83,9 +83,9 @@ main
     code "@beta"
   heading "Your first audit" (level 2)
   button "Copy Code"
-  code
+  code "# See a page the way assistive tech does — no test file, no config: npx real-a11y tree https://example.com"
   button "Copy Code"
-  code
+  code "document heading "Example Domain" (level 1) paragraph "This domain is for use in illustrative examples in documents. You may use this domain in literature without prior coordination or asking for permission." paragraph link "More information...""
   paragraph "That is the whole tree, not a tidied version of it. The paragraphs are there because a screen reader reads them, and the root is because there is no single element to root at — plain wrappers are dropped, and what is left is a heading and two paragraphs side by side. A page whose content all sits inside one landmark roots at that instead (); the ordinary / / page has three top-level regions, so it roots at too."
     code "document"
     code "main"
@@ -97,9 +97,9 @@ main
     code "audit"
     code "1"
   button "Copy Code"
-  code
+  code "real-a11y audit http://localhost:3000"
   button "Copy Code"
-  code
+  code "[error] no-unlabeled-interactive: Unlabeled interactive element: button <button> (×2) body > main > button in <main> body > main > button:nth-of-type(2) in <main> 2 issues — 2 error(s), 0 warning(s)"
   paragraph "Because it drives a real browser, JS-heavy SPAs render fully, and any URL the browser can reach works — public sites, a , staging, or a built file ( — paths you type need no ceremony)."
     strong "local dev server"
     code "real-a11y audit ./dist/index.html"
@@ -117,9 +117,9 @@ main
     code "interact"
     strong "accessibility-tree diff"
   button "Copy Code"
-  code
+  code "real-a11y interact http://localhost:3000 --step 'click button "Open menu"'"
   button "Copy Code"
-  code
+  code "+ link "Alpha" + navigation "Main" ~ button "Open menu": a11y.states.expanded false → true ~ main: childIds 1 child → 2 children"
   paragraph "Steps are written in the tree's own vocabulary — , with verbs , , and — so a line of output is nearly a step already. Several steps run in order:"
     code "<verb> <role> ["<name>"] [nth=<n>] [= <text>]"
     code "click"
@@ -127,7 +127,7 @@ main
     code "focus"
     code "real-a11y tree"
   button "Copy Code"
-  code
+  code "real-a11y interact http://localhost:3000 \ --step 'type textbox "Email" = someone@example.com' \ --step 'click button "Sign in"'"
   paragraph "One-step cases have sugar: , plus and ."
     code "real-a11y click <url> --role button --name "Save""
     code "type"
@@ -153,13 +153,13 @@ main
     code "urls"
     code "defaults"
   button "Copy Code"
-  code
+  code "{ "defaults": { "device": "iPhone 13", "waitUntil": "networkidle", "rules": ["no-unlabeled-interactive", "image-alt"], "failOn": "error" }, "urls": [ "http://localhost:3000", { "name": "Login", "url": "http://localhost:3000/login", "rootSelector": "main" } ] }"
   paragraph "With a list, a bare (or ) audits every entry — pass a URL only for a one-off:"
     code "urls"
     code "real-a11y audit"
     code "snapshot"
   button "Copy Code"
-  code
+  code "real-a11y audit # audits every URL in the config real-a11y audit http://localhost:3000 # iPhone 13, networkidle, fail-on error — no flags"
   paragraph "It's auto-discovered as (point elsewhere, or to ignore it), fail-closed on a typo'd key, and a flag always wins over a config default. Every key — and which command each applies to — is in the ."
     code "a11y.config.json"
     code "--config"
@@ -169,7 +169,7 @@ main
   paragraph "The flagship CI feature: snapshot one page or a whole set into a diffable artifact, then diff two of them and fail the build only on findings."
     strong "new"
   button "Copy Code"
-  code
+  code "# a single page — a URL positional, like every other command real-a11y snapshot https://example.com -o base.json # or a whole set (base branch, then PR) real-a11y snapshot --config a11y.config.json -o base.json real-a11y snapshot --config a11y.config.json -o pr.json real-a11y diff base.json pr.json # exit 1 only on NEW findings real-a11y diff base.json pr.json -f md # a PR-comment-ready summary"
   paragraph "The diff is , not a line diff: each finding carries a stable fingerprint, so a renumbered locator, a re-indented subtree, or an inserted sibling is a change — only an actual new / changed / fixed violation is. Pre-existing debt never blocks a PR (REMOVED and CHANGED don't gate), and the config is strict and fail-closed — a typo'd key is an error, so a mistake can't silently un-gate CI."
     strong "finding-identity-aware"
     code "v1:"
@@ -182,20 +182,20 @@ main
     strong "real unified diff"
     emphasis "where"
   button "Copy Code"
-  code
+  code "$ real-a11y diff base.json pr.json #### home ```diff @@ -3,7 +3,8 @@ link "About" - button "Toggle theme" + button "Switch to dark mode" main + complementary "Semantic Navigator" ```"
   paragraph "Add and the shape shifts that don't trip a rule are also narrated as — a heading dropping from h2 to h3, a landmark removed, an interactive element gone from the tree, a pure reorder of the outline that no line diff would catch:"
     strong
       code "--explain"
     strong "statements any reviewer can act on"
   button "Copy Code"
-  code
+  code "$ real-a11y diff base.json pr.json --explain · Heading level changed: "Setup" h2 → h3 · Landmark removed: main — skip-to-content and "jump to main" navigation may break"
   paragraph "is opt-in because the statements are an interpretive layer; the default never makes a claim the diff can't back up. Anything the taxonomy doesn't recognize degrades to one honest rollup — never silence. Structural changes are : they never affect the exit code."
     code "--explain"
     code "Other content changed"
     strong "advisory only"
   paragraph "Generated content that differs on every build (a "last updated" timestamp, a build hash) would otherwise read as drift on every page — drop it at the source with a repeatable regex, and cap the output for a CI comment:"
   button "Copy Code"
-  code
+  code "real-a11y diff base.json pr.json --explain \ --ignore-view-line '^time "[redacted]"
   paragraph "The full diff prints to stdout regardless; the caps only shape the file you post. See the for every flag."
     link "command reference"
     code "diff"
@@ -204,7 +204,7 @@ main
     emphasis "today"
     strong "new"
   button "Copy Code"
-  code
+  code "# 1. Accept today's findings (commit the file it writes): real-a11y snapshot --config a11y.config.json --update-baseline # 2. Gate every run on NEW findings only: real-a11y snapshot --config a11y.config.json \ --baseline .a11y-baseline.json --fail-on error"
   paragraph "Three properties make this safe to rely on:"
   list
     listitem "Suppressed findings stay in every report (marked in JSON) — the baseline changes what fails the build, never what you can see."
@@ -228,7 +228,7 @@ main
     code "::error"
     code "--no-annotate"
   button "Copy Code"
-  code
+  code "- run: npm ci && npm run build && npx serve dist -l 3000 & - run: npx wait-on http://localhost:3000 - run: npx real-a11y audit http://localhost:3000 # exits 1 on errors"
   paragraph "also speaks the CI interop formats — for GitHub code scanning (Security tab), for Jenkins/GitLab test reporting, for pipelines. Wiring SARIF into GitHub code scanning is two steps:"
     code "snapshot"
     code "sarif"
@@ -236,14 +236,14 @@ main
     code "jsonl"
     code "jq"
   button "Copy Code"
-  code
+  code "- run: npx real-a11y snapshot --config a11y.config.json -f sarif -o a11y.sarif - uses: github/codeql-action/upload-sarif@v4 with: sarif_file: a11y.sarif"
   paragraph "Findings then appear as alerts in the repository's tab, tracked across runs by fingerprint. The full format matrix — what each one feeds and its caveats — is in the ."
     strong "Security"
     link "command reference"
   heading "Pages behind a login" (level 2)
   paragraph "Log in once and reuse the session — no password ever reaches the tool:"
   button "Copy Code"
-  code
+  code "real-a11y login https://app.example.com --save auth.json # log in by hand, press Enter real-a11y audit https://app.example.com/dashboard --storage-state auth.json"
   paragraph "See the guide for the full workflow, the security rules, and the interactive alternative."
     link "Authenticated pages"
     code "--cdp"
@@ -255,7 +255,7 @@ main
     code "click"
     code "tree"
   button "Copy Code"
-  code
+  code "real-a11y tree https://example.com --session checkout real-a11y click https://example.com --session checkout --role button --name "Add to cart" real-a11y tree https://example.com --session checkout"
   paragraph "Commands that read the page observe the live DOM, so a or run after a / captures the post-interaction state. Capture baselines in a fresh session (or before any act commands) to avoid session-contaminated diffs."
     code "snapshot"
     code "audit"
@@ -277,11 +277,11 @@ main
     code "snapshot"
     code "a11y.config.json"
   button "Copy Code"
-  code
+  code "{ "defaults": { "session": "checkout", "sessionIdleTimeout": 900000 } }"
   paragraph "The daemon shuts down after a period of inactivity (15 minutes by default, capped at 1 hour; is not accepted). Manage it explicitly with:"
     code "0"
   button "Copy Code"
-  code
+  code "real-a11y session list real-a11y session stop checkout real-a11y session stop-all"
   paragraph "Security note: each session gets its own socket under with / permissions, a per-session pidfile, and a version handshake so a CLI upgrade restarts a mismatched daemon. See in the command reference."
     code "~/.real-a11y/sessions/"
     code "0700"
@@ -292,7 +292,7 @@ main
     code "--format json"
     code ".pages[0].…"
   button "Copy Code"
-  code
+  code "{ "schemaVersion": 1, "command": "audit", "summary": { "total": 2, "errors": 2, "warnings": 0 }, "pages": [ { "name": "http://localhost:3000/", "url": "http://localhost:3000/", "summary": { "total": 2, "errors": 2, "warnings": 0 }, "findings": [ { "rule": "no-unlabeled-interactive", "severity": "error", "…": "…", "fingerprint": "v1:5ccd8ffcbc43cd09" } ] } ] }"
   paragraph "Each finding carries that — an identity robust to unrelated DOM churn, so a report can be diffed run-to-run without every re-indent reading as a change. What the contract guarantees:"
     code "v1:"
     strong "fingerprint"

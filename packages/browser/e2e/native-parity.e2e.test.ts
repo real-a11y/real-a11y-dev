@@ -735,3 +735,63 @@ describe("a name from content reads each child's text alternative", () => {
     }
   });
 });
+
+// A role-less inline wrapper gets no node of its own in Chromium, so its text
+// is the paragraph's. The DOM producer once read only a paragraph's own text
+// nodes, so the words in a `<span>`, a `<b>` or an unknown element went
+// missing from every printed tree: v-html's `<semanticnavigator>` cut a docs
+// card to "Drop in", and a highlighted code block printed as a bare `code`.
+describe("a paragraph's text through role-less inline wrappers", () => {
+  it("prints the same tree in both producers", async () => {
+    await session.open(
+      dataUrl(
+        `<main>
+          <p>Drop in <semanticnavigator> and the tree panel appears.</semanticnavigator></p>
+          <p>A <span>span</span> <b>b</b> <x-foo>custom</x-foo> <span role="none">none</span> B</p>
+          <p>A <a>anchor</a> <span role="">empty</span> <span role="foo">unknown</span> B</p>
+          <p><span>only</span></p>
+          <p>A<span>B</span>C</p>
+          <p>Line one<br>Line two</p>
+          <p>Hidden<br hidden>break</p>
+          <p>A <span>s1 <em>em</em> <a href="#">L</a> s2</span> B</p>
+          <p>Kept <span id="x">id</span> <span title="t">title</span> <span aria-live="polite">live</span> <label>label</label> out</p>
+          <ul><li>Item <span>text</span></li></ul>
+          <div role="status">Saved <span>3</span> files</div>
+          <pre><code><span style="color: red">import</span><span> { a } </span><span>from</span><span> "b"</span><span>;</span></code></pre>
+        </main>`,
+      ),
+    );
+    const domTree = await session.call<string>("treeSnapshot", "body", [
+      { markFocus: false },
+    ]);
+    const nativeTree = serializeTree(await session.nativeTree(), {
+      markFocus: false,
+    });
+
+    const expected = [
+      "main",
+      '  paragraph "Drop in and the tree panel appears."',
+      '  paragraph "A span b custom none B"',
+      '  paragraph "A anchor empty unknown B"',
+      '  paragraph "only"',
+      '  paragraph "ABC"',
+      '  paragraph "Line one Line two"',
+      '  paragraph "Hiddenbreak"',
+      '  paragraph "A s1 s2 B"',
+      '    emphasis "em"',
+      '    link "L"',
+      '  paragraph "Kept out"',
+      "  list",
+      '    listitem "Item text"',
+      '  status "Saved 3 files"',
+      '  code "import { a } from "b";"',
+    ];
+    expect(domTree.split("\n")).toEqual(expected);
+    // Native adds a list item's level, which the DOM producer never prints.
+    expect(nativeTree.split("\n")).toEqual(
+      expected.map((line) =>
+        line.includes("listitem") ? `${line} (level 1)` : line,
+      ),
+    );
+  });
+});

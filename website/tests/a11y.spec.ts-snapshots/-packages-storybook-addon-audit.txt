@@ -31,7 +31,7 @@ main
   paragraph "A Storybook panel that shows the semantic tree, heading outline, and tab sequence for every story — updated live while the panel is open."
   heading "Install" (level 2)
   button "Copy Code"
-  code
+  code "npm install -D @real-a11y-dev/storybook-addon"
   paragraph "(9.x, 10.x or 11.x), , ."
     strong "Peer dependencies:"
     code "storybook"
@@ -64,7 +64,7 @@ main
   paragraph "Add the addon to :"
     code ".storybook/main.ts"
   button "Copy Code"
-  code
+  code "// .storybook/main.ts import type { StorybookConfig } from "@storybook/react-vite"; const config: StorybookConfig = { addons: [ "@real-a11y-dev/storybook-addon", // ← add this ], // ... }; export default config;"
   paragraph "That's it for a classic . No decorator, no parameters required. A panel appears next to Controls, Actions, and A11y for every story."
     code ".storybook/preview.ts"
     strong "Semantic Navigator"
@@ -74,7 +74,7 @@ main
     code ".storybook/preview.ts"
     code "definePreview"
   button "Copy Code"
-  code
+  code "// .storybook/preview.ts import { realA11y } from "@real-a11y-dev/storybook-addon"; import { definePreview } from "@storybook/react-vite"; export default definePreview({ addons: [realA11y()], });"
   paragraph "Keep it in as well. The two do different jobs: adds the panel to Storybook's UI, and runs the half that lives in the story iframe. A classic preview gets that half from automatically; a one composes only the addons it names, so without this line the panel stays on "Waiting for story to render…"."
     code "main.ts"
     code "main.ts"
@@ -84,7 +84,7 @@ main
   paragraph "writes the other form Storybook supports for a third-party addon, a namespace import of its preview entry. That works too:"
     code "storybook add"
   button "Copy Code"
-  code
+  code "import * as realA11yPreview from "@real-a11y-dev/storybook-addon/preview"; export default definePreview({ addons: [realA11yPreview], });"
   paragraph "Name it one way, not both. Naming it twice is harmless — the second is ignored — but it is redundant."
   separator
   heading "The panel" (level 2)
@@ -145,7 +145,7 @@ main
         code "TreePanel"
         code "@real-a11y-dev/semantic-navigator-ui"
   button "Copy Code"
-  code
+  code "Preview iframe Manager (Storybook UI) ──────────────── ────────────────────── (idle until panel opens) Panel shown → REQUEST_TREE (mode) ←────────────────────────────────────────── start DomObserver + extract → TREE_UPDATED ───────── channel ─────────▶ deserialize tree (array → Map) { tree, mode, extractedAt } → render <TreePanel/> in a shadow root canvas reload → PREVIEW_READY ────────────▶ Panel still open → REQUEST_TREE (mode) ←────────────────────────────────────────── Panel hidden → STOP_TREE ←────────────────────────────────────────── stop DomObserver (no further extracts)"
   separator
   heading "Using the panel effectively" (level 2)
   paragraph "Open any story and click the tab. Then:"
@@ -174,7 +174,7 @@ main
   heading "Channel events" (level 2)
   paragraph "If you need to integrate with the addon from your own tooling:"
   button "Copy Code"
-  code
+  code "import { EVENTS, type TreeUpdatePayload } from "@real-a11y-dev/storybook-addon"; // From Storybook 9 on, the channel APIs live on the `storybook` package: // `storybook/manager-api` in the UI shell, `storybook/preview-api` in the iframe. import { addons } from "storybook/manager-api"; // Preview → manager: // EVENTS.TREE_UPDATED — a fresh extraction (on every debounced DOM change that // altered the tree, while the panel is open) // EVENTS.PREVIEW_READY — preview iframe (re)booted; manager re-sends REQUEST_TREE if still open // Manager → preview: // EVENTS.REQUEST_TREE — start observing, in the mode it carries, and send the current tree // (panel shown); a no-op while already observing in that mode // EVENTS.STOP_TREE — tear down the observer (panel hidden or unmounted) // EVENTS.SET_MODE — re-extract with a new view mode // EVENTS.HIGHLIGHT_NODE — highlight a node in the story by id // EVENTS.CLEAR_HIGHLIGHT — clear the highlight overlay // EVENTS.ACTIVATE_NODE — dispatch a node's primary action in the story const channel = addons.getChannel(); channel.on(EVENTS.TREE_UPDATED, (payload: TreeUpdatePayload) => { // payload.tree is a SerializableTree: { nodes: [id, node][], rootId } const { nodes, rootId } = payload.tree; console.log(rootId, `${nodes.length} nodes`); console.log(payload.mode); // "a11y" | "dom" | "tab" console.log(payload.extractedAt); // Date.now() timestamp });"
   paragraph "is de-duplicated: the preview compares each extraction against the last one it published ( included, excluded) and stays quiet when they are byte-identical. So it fires on , not on every mutation — do not use it as a DOM-mutation heartbeat, and do not expect a fresh while a story is animating without semantic effect. The first publish after the panel opens and after a story renders is always sent, as is one whose differs from the last published — re-selecting the mode the panel is already in changes nothing and stays quiet like any other no-op."
     code "TREE_UPDATED"
     code "mode"

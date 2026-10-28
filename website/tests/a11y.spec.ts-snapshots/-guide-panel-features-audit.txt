@@ -516,9 +516,9 @@ main
     emphasis "opt-in host-app side effects so audits and test harnesses don't disturb the app under test."
   heading "Opting in for the in-page surfaces" (level 3)
   button "Copy Code"
-  code
+  code "// Vanilla createInspector({ root, container, highlightOnHover: true, scrollHostOnSelect: true, focusHostOnActivate: true, });"
   button "Copy Code"
-  code
+  code "// React <SemanticNavigator root={rootRef} highlightOnHover scrollHostOnSelect focusHostOnActivate />"
   paragraph "is the safest of the three to enable — the overlay just paints over the host page without touching its layout or focus. and are the ones that affect the page underneath; turn them on when the panel is set up as an active inspection tool, leave them off when the panel is mounted in production for end users."
     code "highlightOnHover"
     code "scrollHostOnSelect"

@@ -71,7 +71,7 @@ main
   paragraph "Every page should have exactly one — the page title. Zero means there's no top-level label. More than one means the page has multiple "titles" and the hierarchy has no single root."
     code "<h1>"
   button "Copy Code"
-  code
+  code "H1 "Our Products" H1 "About Us" ← two H1s — which is the page title?"
   paragraph "Keep one for the page title. Demote the other to or restructure the page."
     strong "The fix:"
     code "<h1>"
@@ -81,7 +81,7 @@ main
     code "<h1>"
     code "<h3>"
   button "Copy Code"
-  code
+  code "H1 "Dashboard" H3 "Recent Activity" ← skipped H2"
   paragraph "Insert the missing level, or demote the deeper heading. In this case, either add an section above "Recent Activity" or make it an ."
     strong "The fix:"
     code "<h2>"
@@ -91,7 +91,7 @@ main
     code "<h3>"
     code "<h4>"
   button "Copy Code"
-  code
+  code "H1 "Settings" H2 "Account" H4 "Note: changes take 24 hours" ← not a real section H2 "Privacy""
   paragraph "Use CSS to style the text at the size you want. Don't pick a heading level based on how it looks — pick it based on where it falls in the outline."
     strong "The fix:"
   heading "Missing headings" (level 3)
@@ -102,7 +102,7 @@ main
     code "<button>"
     code "<a>"
   button "Copy Code"
-  code
+  code "H2 "Click here to expand" ← heading inside a button"
   paragraph "Remove the heading from inside the interactive element. Use or visible text instead."
     strong "The fix:"
     code "aria-label"
@@ -111,19 +111,19 @@ main
   paragraph
     strong "A healthy page outline"
   button "Copy Code"
-  code
+  code "H1 "Getting Started" H2 "Installation" H2 "Quick Start" H3 "Create a project" H3 "Run the dev server" H2 "Next steps""
   paragraph "One H1, no skipped levels, each section clearly labeled. A screen reader user can scan the H2s to get the page structure, then drill into any section."
   separator
   paragraph
     strong "A flat outline with no hierarchy"
   button "Copy Code"
-  code
+  code "H2 "Installation" H2 "Configuration" H2 "Authentication" H2 "Database" H2 "Deployment" H2 "Monitoring" H2 "Troubleshooting""
   paragraph "No H1, no subsections. Every section is at the same level. This works for short pages, but for long ones the user has no way to see which topics are related or to jump to a subtopic."
   separator
   paragraph
     strong "A deeply nested outline"
   button "Copy Code"
-  code
+  code "H1 "API Reference" H2 "Authentication" H3 "OAuth" H4 "Authorization Code Flow" H5 "Step 1: Redirect" H6 "Parameters""
   paragraph "Every heading level used, deep nesting. This is valid, but if a page reaches H5 or H6, consider whether the content would be better split across multiple pages."
   separator
   heading "The relationship to the other views" (level 2)

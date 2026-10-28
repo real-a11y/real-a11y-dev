@@ -41,7 +41,7 @@ main
     link "--verbose"
       code "--verbose"
   button "Copy Code"
-  code
+  code "$ real-a11y audit --verbose config: none found — looked for /work/app/nested/a11y.config.json auto-discovery checks the directory you run from and does not walk upward, so a config in a parent directory is not picked up. Pass --config <file> to name one."
   paragraph "is . An explicit flag always wins, so a config default is a floor you override per run, never a ceiling you can't escape. (The env layer is for the page list and for 's output — see .)"
     strong "Precedence"
     code "flag > env > config defaults > built-in"
@@ -52,7 +52,7 @@ main
       code "urls"
   paragraph "A minimal, complete config:"
   button "Copy Code"
-  code
+  code "{ "urls": [ "http://localhost:3000", { "name": "Login", "url": "http://localhost:3000/login", "rootSelector": "main" } ], "defaults": { "device": "iPhone 13", "waitUntil": "networkidle", "rules": ["no-unlabeled-interactive", "image-alt"], "failOn": "error" }, "redact": ["token=[^&]+"] }"
   heading "Top-level keys" (level 2)
   paragraph "Three keys: (what to audit), (how to audit it), and (what to strip from output). Everything else is rejected — except four back-compat aliases (the old , plus three top-level shorthands); see ."
     link "urls"
@@ -126,7 +126,7 @@ main
         code "sourcePath"
       link "SARIF"
   button "Copy Code"
-  code
+  code "{ "urls": [ "https://example.com", { "name": "Dashboard", "url": "http://localhost:3000/app", "rootSelector": "#root", "sourcePath": "src/pages/App.tsx" } ] }"
   paragraph "Precedence for the audited list: positional URLs → the env var (JSON , each entry also taking an optional ) → this list. Positionals are gated as ; env and config go through the stricter URL gate."
     code "A11Y_PAGES"
     code "[{name,url}]"
@@ -170,7 +170,7 @@ main
   paragraph "Extra regex patterns applied to URLs and text before anything is printed or written — for stripping session tokens, signed-URL query params, or PII that would otherwise land in a report or a committed snapshot. Each pattern is -compiled at load, so an invalid pattern fails on startup rather than mid-audit."
     code "new RegExp"
   button "Copy Code"
-  code
+  code "{ "redact": ["token=[^&]+", "\\bsig=[A-Za-z0-9]+"] }"
   heading "defaults keys" (level 2)
     code "defaults"
   paragraph "Every key below maps to one CLI flag. The meta line gives its JSON type, the flag it seeds, the built-in default it overrides, and the commands it reaches — a default only seeds a command that that flag. Throughout, means / / / . Order and types are exactly the loader's allowlist; anything outside it is rejected at load."
@@ -216,7 +216,7 @@ main
     code ""Pixel 7""
     code "--cdp"
   button "Copy Code"
-  code
+  code "{ "defaults": { "device": "iPhone 13" } }"
   heading "viewport" (level 3)
     code "viewport"
   paragraph "— flag · default: unset · applies to , , the view commands,"
@@ -319,7 +319,7 @@ main
     code "--cdp"
     link "Authenticated pages"
   button "Copy Code"
-  code
+  code "{ "defaults": { "storageState": "./.auth/session.json" } }"
   heading "auditOrigins" (level 3)
     code "auditOrigins"
   paragraph "— flag (repeatable) · default: the target's own origin · applies to , , the view commands,"
@@ -349,7 +349,7 @@ main
   paragraph "Reuse a long-lived browser session across invocations. The first run with this name spawns a daemon; later runs connect to the same page. Omit to keep the one-shot default. An explicit always wins over the config value."
     code "--session"
   button "Copy Code"
-  code
+  code "{ "defaults": { "session": "checkout" } }"
   heading "sessionIdleTimeout" (level 3)
     code "sessionIdleTimeout"
   paragraph "— flag · default (15 minutes) · applies to , , the view commands, , , , ,"
@@ -368,7 +368,7 @@ main
     link "session"
       code "session"
   button "Copy Code"
-  code
+  code "{ "defaults": { "session": "checkout", "sessionIdleTimeout": 600000 } }"
   heading "format" (level 3)
     code "format"
   paragraph "— flag · default ( on ) · applies to , , the view commands, ,"
@@ -413,7 +413,7 @@ main
     code "dialog-labeled"
     code "landmark-structure"
   button "Copy Code"
-  code
+  code "{ "defaults": { "rules": ["no-unlabeled-interactive", "image-alt"] } }"
   heading "failOn" (level 3)
     code "failOn"
   paragraph "— flag · default ( on ) · applies to , , ,"
@@ -484,7 +484,7 @@ main
     link "--redact-input"
       code "--redact-input"
   button "Copy Code"
-  code
+  code "{ "defaults": { "redactInput": true } }"
   heading "values" (level 3)
     code "values"
   paragraph "— flag · default · applies to"
@@ -523,7 +523,7 @@ main
     code "diff"
   paragraph "Drop view lines matching these regexes before diffing — for generated content that changes every build (a "last updated" timestamp, a build hash) and would otherwise read as drift on every page."
   button "Copy Code"
-  code
+  code "{ "defaults": { "ignoreViewLine": ["^time \""] } }"
   heading "maxLines" (level 3)
     code "maxLines"
   paragraph "— flag · default: full · applies to"

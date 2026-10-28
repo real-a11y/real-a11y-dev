@@ -29,7 +29,7 @@ main
   paragraph "Framework-agnostic interactive accessibility tree panel. Mounts into any container element, isolated via Shadow DOM by default."
   heading "Install" (level 2)
   button "Copy Code"
-  code
+  code "npm install -D @real-a11y-dev/inspector"
   paragraph "none (Preact is bundled)."
     strong "Peer dependencies:"
   paragraph "Install as a dev dependency"
@@ -42,7 +42,7 @@ main
   separator
   heading "Quick start" (level 2)
   button "Copy Code"
-  code
+  code "import { createInspector } from "@real-a11y-dev/inspector"; const inspector = createInspector({ root: document.getElementById("app")!, container: document.getElementById("inspector-panel")!, }); inspector.mount();"
   paragraph "The panel renders inside a attached to . Your app's CSS cannot leak in; the panel's CSS cannot leak out. Toggle mode, switch view, or unmount programmatically at any time."
     code "ShadowRoot"
     code "#inspector-panel"
@@ -195,7 +195,7 @@ main
   separator
   heading "Instance API" (level 2)
   button "Copy Code"
-  code
+  code "interface InspectorInstance { mount(): void; unmount(): void; destroy(): void; // alias for unmount() setViewMode(mode: "a11y" | "dom" | "tab"): void; setRoot(root: Element): void; refresh(): void; getTree(): ExtractionResult; }"
   heading "mount()" (level 3)
     code "mount()"
   paragraph "Attaches the panel to and starts observing for DOM mutations."
@@ -216,7 +216,7 @@ main
     code "setRoot(root)"
   paragraph "Swaps the observed root element. The observer is restarted on the new root; the panel re-renders immediately."
   button "Copy Code"
-  code
+  code "// Narrow the panel to just the open modal inspector.setRoot(document.querySelector("[role='dialog']")!);"
   heading "refresh()" (level 3)
     code "refresh()"
   paragraph "Forces an immediate re-extraction without waiting for the next DOM mutation. Useful in tests or after programmatic DOM changes."
@@ -225,7 +225,7 @@ main
   paragraph "Returns the most recently extracted tree as an ."
     code "ExtractionResult"
   button "Copy Code"
-  code
+  code "const tree = inspector.getTree(); const submit = findByRole(tree, "button", { name: /submit/i });"
   separator
   heading "Shadow DOM explained" (level 2)
   paragraph "When (the default), the inspector:"
@@ -241,7 +241,7 @@ main
     code "styleNonce"
   heading "Opting out" (level 3)
   button "Copy Code"
-  code
+  code "createInspector({ root, container, mount: "light", // renders directly into container, no shadow root });"
   paragraph "With , a element is injected into instead."
     code "mount: "light""
     code "<style id="sn-styles">"
@@ -250,12 +250,12 @@ main
   heading "Interaction flags" (level 2)
   paragraph "All host-side effects are opt-in:"
   button "Copy Code"
-  code
+  code "createInspector({ root, container, highlightOnHover: true, // draw a highlight ring on the host element scrollHostOnSelect: true, // scrollIntoView when a tree node is selected focusHostOnActivate: true, // focus the host element when its action fires });"
   paragraph "These are off by default so that using the panel during testing never disturbs the host app's own focus or scroll state."
   separator
   heading "Example: dev-tools overlay" (level 2)
   button "Copy Code"
-  code
+  code "// Floating overlay in the bottom-right corner of the screen. const panel = document.createElement("div"); panel.style.cssText = ` position: fixed; bottom: 0; right: 0; width: 380px; height: 50vh; z-index: 9999; border: 1px solid #ccc; background: white; overflow: hidden; `; document.body.appendChild(panel); const inspector = createInspector({ root: document.body, container: panel, highlightOnHover: true, }); inspector.mount();"
   separator
   heading "See it running" (level 2)
   list

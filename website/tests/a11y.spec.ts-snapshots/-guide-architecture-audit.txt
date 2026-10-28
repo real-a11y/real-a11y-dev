@@ -311,7 +311,7 @@ main
   separator
   heading "Dependency graph" (level 2)
   button "Copy Code"
-  code
+  code "@real-a11y-dev/core — extraction, queries, role constants (no UI, no deps) │ ├─▶ semantic-navigator-ui (Preact) ─▶ inspector ─▶ react │ └─▶ storybook-addon ├─▶ serialize (deterministic text) └─▶ audit (Finding model, rules, collectFindings, assert*) │ ├─▶ snapshot (fingerprints, artifact, findings/views diff, baselines — Node-only) │ └─▶ session-registry (named sessions, single-flight scheduling, │ identity pinning, idle timeout — takes redactUrl) ├─▶ browser (Playwright BrowserSession + the injected page-bundle) ├─▶ testing (matchers, interaction diff; adapter injects the inlined browser bundle) ├─▶ mcp (MCP server + checkpoints) ── inlines → browser, snapshot, session-registry └─▶ cli (the real-a11y shell, bin-only) ── inlines → browser, snapshot, session-registry npm resolves: cli → { core } mcp → { core } testing → { core } browser is the ONLY package that touches Playwright — everything above it is browserless, and it is inlined into all three of them now rather than installed beside them. audit is imported directly by every surface — no reaching the findings engine through the test-helper package. snapshot is Node-only (node:crypto) and never enters the page bundle; browser *builds* it. Internal: serialize, audit → inlined into browser, testing, cli, mcp (serialize also into the extension); testing re-exports their vocabulary; that is its only published home. snapshot → inlined into cli and mcp; nothing re-exports it — you run it, through real-a11y snapshot / real-a11y diff or the MCP checkpoint tools. browser → inlined into cli, mcp and testing; mcp re-exports BrowserSession and the session types an embedder must name, and nothing else — the driver you reach by running one of the three. session-registry → inlined into cli and mcp; the one scheduler behind real-a11y --session and the MCP session parameter. mcp re-exports its error contract (SessionRegistryError, RegistryShutdownError, SessionInfo) so a custom SessionManager can throw what the server recognizes; never published at all. semantic-navigator-ui → bundled into inspector and the addon's manager entry; react gets it through its inspector dependency. validate (aria-query only, no internal deps) → bundled into testing. semantic-navigator-extension — the Chrome extension, never on npm. Nothing on that list is installable; it ships inside the packages named beside it."
   paragraph "Two observations:"
   list
     listitem "Assertions, snapshots, and diffs only read the tree or operate on data; they never render. That's what makes them safe for jsdom and Node and fast enough to run in every unit test."
@@ -573,7 +573,7 @@ main
     code "@real-a11y-dev/core"
     link "Core Concepts"
   button "Copy Code"
-  code
+  code "interface SemanticNode { id: string; // stable WeakMap fingerprint parentId: string | null; childIds: string[]; depth: number; dom: { tagName, attributes, textContent, isHidden }; a11y: { role, name, description, value?, states, properties, isExposedToAT }; interaction: { isInteractive, actions, isFocusable, isEditable }; ui: { expanded, highlighted, matchesFilter, selected }; }"
   paragraph "Everything else — the UI, the assertions, the snapshots, the Storybook panel — is a projection of a . When a consumer finds a surprising output, the conversation terminates at "what does return?" That's the root of every question."
     code "Map<string, SemanticNode>"
     code "extractA11yTree(root)"

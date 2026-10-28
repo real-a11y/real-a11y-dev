@@ -27,7 +27,7 @@ main
   radio "Vitest"
   radio "Jest"
   button "Copy Code"
-  code
+  code "npm install -D @real-a11y-dev/testing vitest jsdom"
   paragraph "Nothing else is required. appears throughout these docs because it is the common way to get a container, but it is — any works as an audit root, including one you built by hand."
     code "@testing-library/react"
     strong "optional"
@@ -37,12 +37,12 @@ main
   radio "vitest.config.ts"
   radio "a11y.test.ts"
   button "Copy Code"
-  code
+  code "import { defineConfig } from "vitest/config"; export default defineConfig({ test: { // Required. Without it the helpers get no `document` and every test fails // with `document is not defined`. environment: "jsdom", }, });"
   button "Copy Code"
-  code
+  code "npx vitest run"
   paragraph "The committed snapshot is the accessibility tree, not a DOM dump:"
   button "Copy Code"
-  code
+  code "main heading "Sign in" (level 1) textbox "Email" button "Continue""
   paragraph "Delete the wrapper and throws naming the offender; rename the button and the snapshot diff is one line."
     code "<label>"
     code "assertNoUnlabeledInteractive"
@@ -50,7 +50,7 @@ main
   paragraph "needs the environment for the same reason:"
     code "jest.config.js"
   button "Copy Code"
-  code
+  code "module.exports = { testEnvironment: "jsdom" };"
   paragraph "The assertions are identical. The one difference that will stop you: A test fails with a Babel parse error until you add or , so the transform-free quick-start is a file:"
     strong "Jest does not parse TypeScript on its own."
     code ".ts"
@@ -58,7 +58,7 @@ main
     code "babel-jest"
     code ".js"
   button "Copy Code"
-  code
+  code "// a11y.test.js const { treeSnapshot, assertNoUnlabeledInteractive } = require("@real-a11y-dev/testing"); test("the sign-in form is labeled", () => { document.body.innerHTML = `<main><h1>Sign in</h1><label>Email <input /></label><button>Continue</button></main>`; const root = document.querySelector("main"); assertNoUnlabeledInteractive(root); expect(treeSnapshot(root)).toMatchSnapshot(); });"
   paragraph "Same tree, same snapshot. Keeping your tests in TypeScript is fine — add and its preset the way you would for any Jest project; nothing about this package changes."
     code "ts-jest"
   heading "Adding the expect matchers" (level 3)
@@ -68,7 +68,7 @@ main
     code "setupFiles"
     code "setupFilesAfterEnv"
   button "Copy Code"
-  code
+  code "import { expect } from "vitest"; import { registerA11yMatchers } from "@real-a11y-dev/testing/matchers"; import "@real-a11y-dev/testing/matchers/vitest"; // types registerA11yMatchers(expect);"
   paragraph "The second import is types-only, and there is one per runner: , for Jest's global , and if you — ."
     code "./matchers/vitest"
     code "./matchers/jest"

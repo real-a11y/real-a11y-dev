@@ -114,13 +114,13 @@ main
     code "16.0.0"
     code "react: ^18"
   button "Copy Code"
-  code
+  code "npm error ERESOLVE could not resolve npm error While resolving: your-app npm error Found: react@19.2.4 npm error Could not resolve dependency: npm error peer react@"^18.0.0" from @testing-library/react@16.0.0"
   paragraph "install (or later). Version 16.1 relaxed the peer to ."
     strong "Fix:"
     code "@testing-library/react@^16.1.0"
     code "react: ^18 || ^19"
   button "Copy Code"
-  code
+  code "npm install -D @testing-library/react@^16.1.0"
   heading "@playwright/test in Next.js 15 projects" (level 3)
     code "@playwright/test"
   paragraph "Next 15 declares as an . itself is happy with , but npm resolves against Next's optional peer and errors out:"
@@ -129,12 +129,12 @@ main
     code "@real-a11y-dev/testing/playwright"
     code "^1.49"
   button "Copy Code"
-  code
+  code "npm error peerOptional @playwright/test@"^1.51.1" from next@15.5.14"
   paragraph "install to satisfy both."
     strong "Fix:"
     code "@playwright/test@^1.51.1"
   button "Copy Code"
-  code
+  code "npm install -D @playwright/test@^1.51.1"
   separator
   heading "@real-a11y-dev/storybook-addon — Storybook version" (level 2)
     code "@real-a11y-dev/storybook-addon"
@@ -175,7 +175,7 @@ main
     code "@real-a11y-dev/testing/playwright"
   paragraph "After adding the package, install the Chromium engine:"
   button "Copy Code"
-  code
+  code "npx playwright install chromium # Linux CI: add --with-deps to install required system packages npx playwright install chromium --with-deps"
   paragraph "The adapter only uses Chromium — Firefox and WebKit aren't needed for the audit bundle."
   separator
   heading "Single React instance" (level 2)
@@ -183,22 +183,22 @@ main
     strong "having two copies of React resolved on the page"
   paragraph "Verify a single resolution:"
   button "Copy Code"
-  code
+  code "npm ls react react-dom"
   paragraph "One version per package, one path. If you see more than one, look at transitive deps that pin React to a specific version (often older Storybook addons or legacy test helpers) and either upgrade them or override the version via / / in ."
     code "overrides"
     code "resolutions"
     code "pnpm.overrides"
     code "package.json"
   button "Copy Code"
-  code
+  code "{ "overrides": { "react": "19.2.4", "react-dom": "19.2.4" } }"
   separator
   heading "Clean install recipe" (level 2)
   paragraph "When peer conflicts get tangled, a clean install clears the lockfile state:"
   button "Copy Code"
-  code
+  code "rm -rf node_modules package-lock.json npm install"
   paragraph "For pnpm:"
   button "Copy Code"
-  code
+  code "rm -rf node_modules pnpm-lock.yaml pnpm install"
   paragraph "Re-run / afterwards to confirm a single resolution."
     code "npm ls react"
     code "pnpm why react"

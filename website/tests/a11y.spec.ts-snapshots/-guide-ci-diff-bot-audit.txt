@@ -25,14 +25,14 @@ main
     code "real-a11y diff"
   heading "How it works" (level 2)
   button "Copy Code"
-  code
+  code "PR opened / pushed │ ┌────┴─────────────────┐ │ │ ▼ ▼ Snapshot (base) Snapshot (PR) - checkout main - checkout HEAD - install deps - install deps - start server - start server - real-a11y - real-a11y snapshot snapshot │ │ └────────┬──────────┘ ▼ real-a11y diff + comment (updated on every push)"
   paragraph "The two snapshot jobs run in parallel and upload and . A third job compares them and creates or updates a single comment on the PR."
     code "base.json"
     code "pr.json"
   heading "1. Install the CLI" (level 2)
   paragraph "The CLI drives Chrome through Playwright, which it takes as an optional peer dependency:"
   button "Copy Code"
-  code
+  code "npm i -D @real-a11y-dev/cli playwright"
   paragraph "Locally, downloads a browser. The workflow below uses instead, because on Linux it also installs the system libraries Chrome needs."
     code "npx real-a11y install"
     code "npx playwright install chromium --with-deps"
@@ -40,7 +40,7 @@ main
   paragraph "Add an at the root of the repo:"
     code "a11y.config.json"
   button "Copy Code"
-  code
+  code "{ "urls": [ "http://localhost:3000/", "http://localhost:3000/about", { "name": "Login", "url": "http://localhost:3000/login" } ] }"
   paragraph "with no URL reads this file from the directory it runs in. A page is matched between base and PR by its URL path, so the two sides can run on different hosts or ports. Entries can also take an , and the file can hold a block for flags such as and : see the ."
     code "real-a11y snapshot"
     code "id"
@@ -69,7 +69,7 @@ main
       code "real-a11y"
   heading "3. Add the workflow" (level 2)
   button "Copy Code"
-  code
+  code "# .github/workflows/a11y-diff.yml name: A11y diff on: pull_request: branches: [main] permissions: contents: read jobs: snapshot: name: Snapshot (${{ matrix.side }}) runs-on: ubuntu-latest strategy: matrix: side: [base, pr] steps: - uses: actions/checkout@v7 with: # base: the branch the PR targets. pr: empty, so the PR's merge commit. ref: ${{ matrix.side == 'base' && github.base_ref || '' }} - uses: actions/setup-node@v7 with: node-version: 22 cache: npm - run: npm ci - run: npx playwright install chromium --with-deps # Build and start your app. These are the steps to adapt. - run: npm run build - run: npx serve dist -l 3000 & - run: npx wait-on http://localhost:3000 --timeout 120000 - run: npx real-a11y snapshot -o ${{ matrix.side }}.json - uses: actions/upload-artifact@v7 with: name: ${{ matrix.side }}-snapshot path: ${{ matrix.side }}.json if-no-files-found: error diff: name: Diff & comment needs: snapshot runs-on: ubuntu-latest permissions: contents: read pull-requests: write # create and update the comment steps: # The base branch, not the PR: nothing from the PR runs with the write token. - uses: actions/checkout@v7 with: ref: ${{ github.base_ref }} - uses: actions/setup-node@v7 with: node-version: 22 cache: npm - run: npm ci # diff only reads two files: no browser needed - uses: actions/download-artifact@v8 with: pattern: "*-snapshot" merge-multiple: true # The full diff goes to the job log, and a shorter copy to the comment. - run: npx real-a11y diff base.json pr.json --explain --fail-on never - run: npx real-a11y diff base.json pr.json --format md --explain --fail-on never --max-pages 5 --max-lines 20 -o comment.md - uses: actions/github-script@v9 with: script: | const fs = require("fs"); const MARKER = "<!-- real-a11y-diff -->"; const { owner, repo } = context.repo; const issue_number = context.issue.number; const run = `${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}`; const body = `${MARKER}\n${fs.readFileSync("comment.md", "utf8")}\n[Full diff in the job log](${run})`; const { data: comments } = await github.rest.issues.listComments({ owner, repo, issue_number }); // Match the bot AND a marker on the first line: a page's text can // quote the marker, and it ends up inside the comment body. const mine = comments.find( (c) => c.user?.login === "github-actions[bot]" && c.body?.startsWith(MARKER), ); if (mine) { await github.rest.issues.updateComment({ owner, repo, comment_id: mine.id, body }); } else { await github.rest.issues.createComment({ owner, repo, issue_number, body }); }"
   paragraph "Only the diff job can write to the PR, and it checks out the base branch, so the PR's install and build scripts never run with that permission. adds the plain-language lines under in the comment. and keep a large change readable, and the comment links to the job log for the rest. If a page shows content that changes on every build, such as a timestamp, add to both diff steps so it doesn't read as a change."
     code "--explain"
     strong "Structure"
@@ -113,7 +113,7 @@ main
   paragraph "keeps the diff job green so the comment always posts. To also fail the PR, add a last step:"
     code "--fail-on never"
   button "Copy Code"
-  code
+  code "- run: npx real-a11y diff base.json pr.json # exits 1 on a new error"
   paragraph "Only findings the PR introduces can fail it. Findings already on , fixed findings and structural changes never do. Add to fail on new warnings as well."
     code "main"
     code "--fail-on warning"
@@ -123,7 +123,7 @@ main
     code "h3"
     code "diff"
   button "Copy Code"
-  code
+  code "### Accessibility diff **Findings** (gate CI): 1 new · 0 changed · 0 fixed **Structure** (advisory): changed on 1 page — new or reordered headings, landmarks, or tab stops #### Home - ❌ **new** `no-unlabeled-interactive`: Unlabeled interactive element: textbox <input> **Structure (advisory — never blocks merge):** - Heading level changed: "Setup" h2 → h3 - Interactive element removed: textbox "Email" - Interactive element added: textbox (no accessible name) _tree_ ```diff @@ -1,6 +1,6 @@ main heading "Shop" (level 1) heading "Plans" (level 2) - heading "Setup" (level 2) - textbox "Email" + heading "Setup" (level 3) + textbox button "Subscribe" ```"
   paragraph "come from the six audit rules and can fail the build. covers changes that break no rule, and never fails it. When nothing changed, both lines say so."
     strong "Findings"
     strong "Structure"

@@ -35,14 +35,14 @@ main
     code "/playwright"
   heading "Install" (level 2)
   button "Copy Code"
-  code
+  code "npm install -D @playwright/test"
   paragraph "The peer dependency is optional — only needed when using ."
     code "playwright"
     code "@real-a11y-dev/testing/playwright"
   heading "attach(page, options?)" (level 2)
     code "attach(page, options?)"
   button "Copy Code"
-  code
+  code "import { test, expect } from "@playwright/test"; import { attach } from "@real-a11y-dev/testing/playwright"; test("page heading structure", async ({ page }) => { await page.goto("https://example.com"); const sn = await attach(page); // Assertions — throw with descriptive messages on failure await sn.assertHeadingOrder(); await sn.assertNoUnlabeledInteractive(); await sn.assertLandmarkStructure(); await sn.assertDialogsLabeled(); // Snapshots — deterministic strings, safe to commit expect(await sn.treeSnapshot()).toMatchSnapshot(); expect(await sn.outlineSnapshot()).toMatchSnapshot(); expect(await sn.tabSequenceSnapshot()).toMatchSnapshot(); });"
   paragraph
     strong "options:"
       code "attach()"
@@ -83,7 +83,7 @@ main
           code "tree: "dom""
   heading "Narrowing the root" (level 2)
   button "Copy Code"
-  code
+  code "// Audit only the main content area const sn = await attach(page, { rootSelector: "main" }); await sn.assertNoUnlabeledInteractive();"
   heading "Auditing the native tree" (level 2)
   paragraph "By default uses the : it injects the page-bundle and walks the light DOM in the page. Pass to use the instead — it reads Chromium's own accessibility tree over CDP (via the internal driver's , bundled into this package) and runs the same serialize/audit helpers in Node:"
     code "attach()"
@@ -93,7 +93,7 @@ main
     code "browser"
     code "nativeTree"
   button "Copy Code"
-  code
+  code "test("native tree sees the media controls", async ({ page }) => { await page.goto("/player"); const sn = await attach(page, { tree: "native" }); // Same handle, same assertions — over Chromium's a11y tree. await sn.assertHeadingOrder(); await sn.assertLandmarkStructure(); expect(await sn.treeSnapshot()).toMatchSnapshot(); });"
   paragraph "Why a second producer: Chromium exposes structure no in-page walk can reach — most visibly a 's play/scrubber/mute controls, which live in a closed user-agent shadow root. An audit run over the native tree sees them; the DOM producer stops at the element."
     code "<video controls>"
     code "<video>"
@@ -126,14 +126,14 @@ main
     code "--redact-input"
     code "REAL_A11Y_REDACT_INPUT=1"
   button "Copy Code"
-  code
+  code "const sn = await attach(page, { tree: "native", redactInput: true }); expect(await sn.treeSnapshot({ values: true })).not.toContain("draft text");"
   paragraph "It applies to the native tree only. The DOM tree is you inspecting your own page and has no strict mode, so without throws rather than be silently ignored."
     code "{ redactInput: true }"
     code "tree: "native""
   heading "Testing that assertions fail on broken pages" (level 2)
   paragraph "Lock in the failure mode too — not just the happy path. When a new assertion lands or you refactor a page, you want confirmation that broken structure still throws:"
   button "Copy Code"
-  code
+  code "// Good page: every assertion passes test("well-structured page satisfies all audits", async ({ page }) => { await page.goto("/home"); const sn = await attach(page); await expect(sn.assertHeadingOrder()).resolves.toBeUndefined(); await expect(sn.assertLandmarkStructure()).resolves.toBeUndefined(); await expect(sn.assertNoUnlabeledInteractive()).resolves.toBeUndefined(); await expect(sn.assertDialogsLabeled()).resolves.toBeUndefined(); }); // Intentionally-broken fixture: each assertion must throw its specific failure test("broken fixture fails every audit", async ({ page }) => { await page.goto("/test-fixtures/broken.html"); const sn = await attach(page); await expect(sn.assertHeadingOrder()).rejects.toThrow(/heading/i); await expect(sn.assertLandmarkStructure()).rejects.toThrow(/main/i); await expect(sn.assertNoUnlabeledInteractive()).rejects.toThrow(/unlabeled/i); await expect(sn.assertDialogsLabeled()).rejects.toThrow(/dialog/i); });"
   paragraph "Keep a small "broken" fixture checked into your test repo with one of each pattern the assertions target (missing h1, skipped level, unlabeled button, unlabeled dialog). If a future refactor ever weakens the assertions, this test catches it immediately."
   heading "Determinism" (level 2)
   paragraph ", , and return the for the same DOM — on every run, on every machine. No timestamps, no generated IDs, no ordering surprises:"
@@ -142,7 +142,7 @@ main
     code "tabSequenceSnapshot()"
     strong "same string"
   button "Copy Code"
-  code
+  code "test("treeSnapshot is stable across repeated calls", async ({ page }) => { await page.goto("/home"); const sn = await attach(page); const snap1 = await sn.treeSnapshot(); const snap2 = await sn.treeSnapshot(); expect(snap1).toBe(snap2); });"
   paragraph "That's the property that makes safe to use in CI without flakes. If you have genuinely variable content (timestamps, locale-dependent copy), redact it — see below."
     code "expect(await sn.treeSnapshot()).toMatchSnapshot()"
   heading "Redacting variable content" (level 2)
@@ -153,7 +153,7 @@ main
     code "RegExp"
     code "[REDACTED]"
   button "Copy Code"
-  code
+  code "test("home page structure", async ({ page }) => { await page.goto("/home"); const sn = await attach(page); expect( await sn.treeSnapshot({ redact: [ /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/g, // ISO timestamps /\d+ (seconds?|minutes?|hours?) ago/g, // relative times ], }), ).toMatchSnapshot(); });"
   paragraph "A can't be passed through directly — Playwright serializes evaluate arguments and a arrives as an empty . The adapter handles this for you: it marshals each pattern to , ferries that across the boundary, and rebuilds the inside the page — so patterns behave exactly as they do in jsdom. Keep the in mind when a name can contain more than one match."
     code "RegExp"
     code "page.evaluate()"
@@ -168,7 +168,7 @@ main
     code "treeSnapshot({ values: true })"
     link "Field values"
   button "Copy Code"
-  code
+  code "await page.fill("#name", "Ada Lovelace"); const sn = await attach(page); expect(await sn.treeSnapshot({ values: true })).toContain( 'textbox "Full name" = "Ada Lovelace"', );"
   paragraph "A password field, or one with a credential or payment , prints — in both trees, and never its length. With the value is Chromium's own; under there is none to print."
     code "autocomplete"
     code ""[redacted]""
@@ -177,7 +177,7 @@ main
       code "redactInput"
   heading "How it works" (level 2)
   button "Copy Code"
-  code
+  code "Test (Node) Browser page ────────── ──────────── attach(page) → readBundle() (cached) → page.addScriptTag(bundle) ──▶ window.__realA11y__ = { treeSnapshot, … } → returns handle sn.assertHeadingOrder() → page.evaluate( ──▶ __realA11y__.assertHeadingOrder(root) __realA11y__.fn(root) ) ◀── throws A11yAssertionError (message preserved)"
   list
     listitem "carries the pre-built IIFE bundle as inlined source text (from , which is bundled into this package)."
       code "attach()"
@@ -193,11 +193,11 @@ main
   paragraph "When an assertion throws inside the page, Playwright propagates the error message back to Node. The full descriptive message (including all offending elements) is preserved."
     code "A11yAssertionError"
   button "Copy Code"
-  code
+  code "// Error message example: // "Found 2 accessibility issues: // - Unlabeled interactive element: button <button> // - Unlabeled interactive element: textbox <input>" await expect(sn.assertNoUnlabeledInteractive()).rejects.toThrow(/unlabeled/i);"
   heading "SemanticNavigatorPageHandle type" (level 2)
     code "SemanticNavigatorPageHandle"
   button "Copy Code"
-  code
+  code "import type { SemanticNavigatorPageHandle, AttachOptions, PlaywrightPage, } from "@real-a11y-dev/testing/playwright";"
   paragraph "is a minimal structural type that accepts the real Playwright object without requiring or in packages that only import the types."
     code "PlaywrightPage"
     code "Page"

@@ -20,6 +20,7 @@ import {
   nativeStates,
   resolveEffectiveRoot,
   resolveFocusedElement,
+  textRunHost,
 } from "../extraction/dom-extractor.js";
 import {
   deepQuerySelectorAll,
@@ -704,7 +705,9 @@ export class LiveTreeExtractor {
    * name-barrier role, which halts content-name propagation to ancestors.
    * HTML-AAM owner→child edges (`fieldset`/`legend`, `details`/`summary`,
    * `table`/`caption`) are included even though the owner is not a
-   * name-from-content host; without that the climb stops at the child.
+   * name-from-content host; without that the climb stops at the child. So is
+   * the paragraph around a role-less inline wrapper (`textRunHost`), which
+   * names itself from the wrapper's text.
    * Falls back to `el` when no enclosing host exists.
    */
   private nameRelevantAncestor(el: Element): Element {
@@ -719,6 +722,10 @@ export class LiveTreeExtractor {
       const owner = htmlAamNameOwner(node);
       if (owner) outermostHost = owner;
       else if (isNameFromContentHost(node)) outermostHost = node;
+      // A role-less inline wrapper's text is the paragraph's around it, so the
+      // paragraph is a host for it too, one level out.
+      const runHost = textRunHost(node);
+      if (runHost) outermostHost = runHost;
       // A name-source child is often itself a barrier (`caption`). Don't stop
       // there when its owner still needs the re-extract.
       //

@@ -22,13 +22,13 @@ main
     code "React is not defined"
   heading "Install" (level 2)
   button "Copy Code"
-  code
+  code "npm install -D @real-a11y-dev/storybook-addon"
   paragraph "Peer dependencies ( 9.x or 10.x, your framework package, and React) must already be installed in your project. Storybook 8 is not supported — see for why."
     code "storybook"
     link "the package page"
   heading "Register the addon" (level 2)
   button "Copy Code"
-  code
+  code "// .storybook/main.ts import type { StorybookConfig } from "@storybook/react-vite"; const config: StorybookConfig = { stories: ["../src/**/*.stories.@(ts|tsx)"], addons: ["@real-a11y-dev/storybook-addon"], framework: { name: "@storybook/react-vite", options: {}, }, }; export default config;"
   paragraph "A panel appears next to Controls and A11y for every story, showing the tree, heading outline, and tab sequence."
     strong "Semantic Navigator"
   separator
@@ -43,7 +43,7 @@ main
   paragraph "The one-line fix lives in :"
     code ".storybook/main.ts"
   button "Copy Code"
-  code
+  code "// .storybook/main.ts import type { StorybookConfig } from "@storybook/react-vite"; import { mergeConfig } from "vite"; const config: StorybookConfig = { stories: ["../src/**/*.stories.@(ts|tsx)"], addons: ["@real-a11y-dev/storybook-addon"], framework: { name: "@storybook/react-vite", options: {}, }, // Force esbuild's automatic JSX runtime on source .tsx files — matches // the React 19 / Next.js default so stories don't need to import React. async viteFinal(config) { return mergeConfig(config, { esbuild: { jsx: "automatic", jsxImportSource: "react" }, }); }, }; export default config;"
   paragraph "No source-file changes required — stories can keep writing JSX without ."
     code "import React from "react""
   heading "When you don't need this" (level 2)
@@ -61,14 +61,14 @@ main
   paragraph "Storybook caches its addon bundles under . If you install the addon and it doesn't appear — or if you change addon configuration and nothing updates — clear the cache:"
     code "node_modules/.cache/storybook/"
   button "Copy Code"
-  code
+  code "rm -rf node_modules/.cache/storybook"
   paragraph "Then restart ."
     code "storybook dev"
   separator
   heading "CI" (level 2)
   paragraph "Storybook's addon build is deterministic; include Storybook in your regular CI jobs."
   button "Copy Code"
-  code
+  code "- run: npm run build-storybook"
   paragraph "For accessibility-specific CI coverage on Storybook stories, pair it with the Playwright adapter — load the built Storybook and run against each story's iframe. That's more setup than most projects need; for per-story audits the panel itself + manual review is usually enough."
     code "treeSnapshot()"
   separator

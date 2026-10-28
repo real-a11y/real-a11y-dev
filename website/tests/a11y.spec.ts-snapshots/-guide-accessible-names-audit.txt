@@ -53,38 +53,51 @@ main
       code "title"
     listitem "Empty string (element has no accessible name)"
   paragraph "If #1 resolves to a non-empty string, #2–#5 are ignored — even if #2 looks "more specific" from a CSS or developer perspective."
-  paragraph "A paragraph, a list item, or a live region (, ) with text directly inside it shows that text as its name: , . That keeps its content visible in a snapshot, where the tree prints names and nothing else. A screen reader reads that text as the element's content, not as a label. It never applies to a dialog, image, landmark or text field."
+  paragraph "A paragraph, a list item, a code block, or a live region (, ) with text directly inside it shows that text as its name: , . That keeps its content visible in a snapshot, where the tree prints names and nothing else. A screen reader reads that text as the element's content, not as a label. It never applies to a dialog, image, landmark or text field."
     strong "One thing a tree shows beyond this list."
     code "alert"
     code "status"
     code "paragraph "Read the guide""
     code "status "3 results""
+  paragraph "That text includes what sits in a plain inline wrapper, which Chromium gives no node of its own: a , a , a custom or unknown element. is , and a highlighted code block is named with its code. Text in an element that has a node of its own stays out, because that node shows it: a link, a or , a , and a wrapper with an , a , an attribute or a . A reads as a space."
+    code "<span>"
+    code "<b>"
+    code "<p>Drop in <b>the panel</b> now.</p>"
+    code "paragraph "Drop in the panel now.""
+    code "<code>"
+    code "<strong>"
+    code "<label>"
+    code "id"
+    code "title"
+    code "aria-"
+    code "tabindex"
+    code "<br>"
   separator
   heading "Concrete examples" (level 2)
   heading "Button with only text" (level 3)
   button "Copy Code"
-  code
+  code "<button>Save changes</button>"
   paragraph "→ (from #4, text content)."
     code ""Save changes""
   heading "Button with an icon and hidden text" (level 3)
   button "Copy Code"
-  code
+  code "<button> <svg aria-hidden="true">…</svg> <span class="sr-only">Close dialog</span> </button>"
   paragraph "→ (from #4). The SVG contributes nothing; the visually-hidden does because screen readers read it."
     code ""Close dialog""
     code "aria-hidden"
     code "<span>"
   heading "Button with only an icon" (level 3)
   button "Copy Code"
-  code
+  code "<button> <svg aria-hidden="true">…</svg> </button>"
   paragraph "→ — no name. This fails . Fix with :"
     code """"
     code "assertNoUnlabeledInteractive()"
     code "aria-label"
   button "Copy Code"
-  code
+  code "<button aria-label="Close dialog"> <svg aria-hidden="true">…</svg> </button>"
   heading "Link with only an image" (level 3)
   button "Copy Code"
-  code
+  code "<a href="/"> <img src="/logo.svg" alt="Acme home" /> </a>"
   paragraph "→ (from #4). The link is named from its content, and what the image contributes is its . Any child with a name of its own lends that name rather than its text, so is , not ."
     code ""Acme home""
     code "alt"
@@ -93,7 +106,7 @@ main
     code ""×""
   heading "Dialog with text but no label" (level 3)
   button "Copy Code"
-  code
+  code "<div role="dialog"> Delete this project? <button>Cancel</button> </div>"
   paragraph "→ — no name. A dialog's text is its content, not its label: a screen reader announces this dialog unnamed. The same holds for an image, a landmark (, , …) and a text field, whose text is the user's value. (An unnamed is not a landmark at all — it is a generic, and a generic take its loose text.) This fails . Fix it by pointing at a visible heading:"
     code """"
     code "<nav>"
@@ -104,10 +117,10 @@ main
     code "assertDialogsLabeled()"
     code "aria-labelledby"
   button "Copy Code"
-  code
+  code "<div role="dialog" aria-labelledby="delete-title"> <h2 id="delete-title">Delete this project?</h2> <button>Cancel</button> </div>"
   heading "Form control with a wrapping label" (level 3)
   button "Copy Code"
-  code
+  code "<label> Email <input type="email" /> </label>"
   paragraph "→ input's name is (from #3 — native label association). Real A11y's label handling prunes the label text from the tree so it doesn't surface as a redundant sibling."
     code ""Email""
     code "generic "Email""
@@ -115,27 +128,27 @@ main
     code "for"
     code "id"
   button "Copy Code"
-  code
+  code "<label for="q">Search</label> <input id="q" type="search" />"
   paragraph "→ input's name is (same path)."
     code ""Search""
   heading "aria-label beats text content" (level 3)
     code "aria-label"
   button "Copy Code"
-  code
+  code "<a href="/home" aria-label="Go to homepage">Home</a>"
   paragraph "→ (from #2). The visible text is ignored by screen readers here — a classic footgun if the two drift apart."
     code ""Go to homepage""
     code ""Home""
   heading "aria-labelledby beats everything" (level 3)
     code "aria-labelledby"
   button "Copy Code"
-  code
+  code "<h2 id="section-title">Pricing plans</h2> <section aria-labelledby="section-title" aria-label="ignored"> … </section>"
   paragraph "→ region's name is (from #1). The is ignored."
     code ""Pricing plans""
     code "aria-label"
   paragraph "can reference multiple IDs — their text content is concatenated with spaces:"
     code "aria-labelledby"
   button "Copy Code"
-  code
+  code "<label id="first">First name</label> <span id="req">(required)</span> <input aria-labelledby="first req" />"
   paragraph "→ input's name is ."
     code ""First name (required)""
   paragraph "A referenced element with an of its own lends that instead of its text, and so does an image with its . reads its targets the same way."

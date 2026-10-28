@@ -52,6 +52,15 @@
   in-page tree's do since
   [#533](https://github.com/real-a11y/real-a11y-dev/pull/533).
 
+- The in-page tree names a paragraph, list item, code block or status message
+  with the words inside its plain inline wrappers, as Chrome's own tree does:
+  a `<span>`, a `<b>`, a custom or unknown element. A paragraph reading
+  `Drop in <b>the panel</b> now.` used to show as `paragraph "Drop in now."`,
+  a paragraph whose only text sat in a `<span>` showed unnamed, and a
+  syntax-highlighted code block showed as a bare `code`. A `<br>` now reads as
+  a space instead of joining the lines into one word
+  ([#546](https://github.com/real-a11y/real-a11y-dev/pull/546)).
+
 ## 0.1.17
 
 ### Patch Changes
