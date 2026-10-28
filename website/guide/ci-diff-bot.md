@@ -76,7 +76,6 @@ on:
 
 permissions:
   contents: read
-  pull-requests: write # create and update the comment
 
 jobs:
   snapshot:
@@ -113,8 +112,14 @@ jobs:
     name: Diff & comment
     needs: snapshot
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write # create and update the comment
     steps:
+      # The base branch, not the PR: nothing from the PR runs with the write token.
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.base_ref }}
       - uses: actions/setup-node@v7
         with:
           node-version: 22
@@ -134,9 +139,10 @@ jobs:
           script: |
             const fs = require("fs");
             const MARKER = "<!-- real-a11y-diff -->";
-            const body = `${MARKER}\n${fs.readFileSync("comment.md", "utf8")}`;
             const { owner, repo } = context.repo;
             const issue_number = context.issue.number;
+            const run = `${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}`;
+            const body = `${MARKER}\n${fs.readFileSync("comment.md", "utf8")}\n[Full diff in the job log](${run})`;
             const { data: comments } = await github.rest.issues.listComments({ owner, repo, issue_number });
             // Match the bot AND a marker on the first line: a page's text can
             // quote the marker, and it ends up inside the comment body.
@@ -150,7 +156,7 @@ jobs:
             }
 ```
 
-`--explain` adds the plain-language lines under **Structure** in the comment. `--max-pages` and `--max-lines` keep a large change readable; the comment then points to the job log for the rest. If a page shows content that changes on every build, such as a timestamp, add `--ignore-view-line '<regex>'` to both diff steps so it doesn't read as a change.
+Only the diff job can write to the PR, and it checks out the base branch, so the PR's install and build scripts never run with that permission. `--explain` adds the plain-language lines under **Structure** in the comment. `--max-pages` and `--max-lines` keep a large change readable, and the comment links to the job log for the rest. If a page shows content that changes on every build, such as a timestamp, add `--ignore-view-line '<regex>'` to both diff steps so it doesn't read as a change.
 
 ### Adapting it
 
