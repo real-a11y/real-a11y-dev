@@ -13,7 +13,9 @@ name: A11y Tree Diff
 #
 # Only the `comment` job can write to the PR, and it runs none of the PR's code:
 # it downloads the diff the audit job produced and posts it. The jobs that
-# install and build the PR keep a read-only token.
+# install and build the PR keep a read-only token. On a fork PR the `comment`
+# job is skipped: the token can't write there at all, and the full diff is in
+# the `Audit PR` log.
 
 on:
   pull_request:
@@ -164,6 +166,10 @@ jobs:
   comment:
     name: Comment
     needs: [audit-pr]
+    # A fork PR's `pull_request` token is read-only whatever this job asks for,
+    # so posting would fail with a 403 and turn the run red over nothing in the
+    # change. Skip it there; the `Audit PR` log still carries the full diff.
+    if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     # A job-level `permissions` block replaces the top-level one rather than
     # adding to it. Nothing here checks out or runs the PR's code, so this is the
@@ -249,11 +255,14 @@ jobs:
             // Sticky comment: match on the marker as the FIRST line AND our own
             // bot author. `includes()` is hijackable — an accessible name quoting
             // the marker inside any comment would collide; `startsWith` + author
-            // can't.
-            const { data: comments } = await github.rest.issues.listComments({
+            // can't. Every page, not the first: on a PR with more than one
+            // page of comments ours can sit past it, and a lookup that misses
+            // it posts a duplicate on every push.
+            const comments = await github.paginate(github.rest.issues.listComments, {
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: context.issue.number,
+              per_page: 100,
             });
             const mine = comments.find(
               (c) =>
