@@ -385,6 +385,30 @@ function mdStatements(page: PageDiff): string[] {
   return out;
 }
 
+/** The page's new / changed / fixed finding bullets, plus a trailing blank
+ * line when there are any. */
+function mdFindingEntries(page: PageDiff): string[] {
+  const shown = shownEntries(page);
+  const out: string[] = [];
+  for (const e of shown) {
+    const f = e.finding;
+    if (e.kind === "new")
+      out.push(
+        f.suppressed
+          ? `- ⚪ **new (baselined)** \`${f.rule}\`: ${f.message}`
+          : `- ❌ **new** \`${f.rule}\`: ${f.message}`,
+      );
+    else if (e.kind === "changed")
+      out.push(
+        `- 🔁 **changed** \`${f.rule}\`: ${(e.changes ?? []).join("; ")}`,
+      );
+    else if (e.kind === "removed")
+      out.push(`- ✅ **fixed** \`${f.rule}\`: ${f.message}`);
+  }
+  if (shown.length) out.push("");
+  return out;
+}
+
 /** Per-view unified diff, rendered inline as ```diff blocks (not in <details>
  * — email keeps the green/red coloring). */
 function mdViewDiff(page: PageDiff, maxLines: number): string[] {
@@ -470,25 +494,7 @@ export function renderDiffMarkdown(
       continue;
     }
     out.push(`#### ${mdEscape(page.name)}`, "");
-    if (only !== "views") {
-      const shown = shownEntries(page);
-      for (const e of shown) {
-        const f = e.finding;
-        if (e.kind === "new")
-          out.push(
-            f.suppressed
-              ? `- ⚪ **new (baselined)** \`${f.rule}\`: ${f.message}`
-              : `- ❌ **new** \`${f.rule}\`: ${f.message}`,
-          );
-        else if (e.kind === "changed")
-          out.push(
-            `- 🔁 **changed** \`${f.rule}\`: ${(e.changes ?? []).join("; ")}`,
-          );
-        else if (e.kind === "removed")
-          out.push(`- ✅ **fixed** \`${f.rule}\`: ${f.message}`);
-      }
-      if (shown.length) out.push("");
-    }
+    if (only !== "views") out.push(...mdFindingEntries(page));
     if (only !== "findings") {
       if (explain) out.push(...mdStatements(page));
       out.push(...mdViewDiff(page, maxLines));
