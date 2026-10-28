@@ -752,6 +752,7 @@ describe("a paragraph's text through role-less inline wrappers", () => {
           <p><span>only</span></p>
           <p>A<span>B</span>C</p>
           <p>Line one<br>Line two</p>
+          <p>Hidden<br hidden>break</p>
           <p>A <span>s1 <em>em</em> <a href="#">L</a> s2</span> B</p>
           <p>Kept <span id="x">id</span> <span title="t">title</span> <span aria-live="polite">live</span> <label>label</label> out</p>
           <ul><li>Item <span>text</span></li></ul>
@@ -775,6 +776,7 @@ describe("a paragraph's text through role-less inline wrappers", () => {
       '  paragraph "only"',
       '  paragraph "ABC"',
       '  paragraph "Line one Line two"',
+      '  paragraph "Hiddenbreak"',
       '  paragraph "A s1 s2 B"',
       '    emphasis "em"',
       '    link "L"',

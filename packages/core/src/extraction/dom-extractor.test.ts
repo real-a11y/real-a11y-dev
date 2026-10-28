@@ -3876,6 +3876,18 @@ describe("the own-text fallback reads through role-less inline wrappers", () => 
     );
   });
 
+  // A hidden break draws no line, and Chromium hangs no `LineBreak` for it.
+  it.each([
+    ["display: none", `<br style="display: none">`],
+    ["hidden", `<br hidden>`],
+    ["aria-hidden", `<br aria-hidden="true">`],
+  ])("reads nothing for a <br> hidden by %s", (_, br) => {
+    expect(target(`<p id="t">A${br}B</p>`).a11y.name).toBe("AB");
+    expect(target(`<p id="t">A<span>x${br}y</span>B</p>`).a11y.name).toBe(
+      "AxyB",
+    );
+  });
+
   it.each([
     ["listitem", `<ul><li id="t">A <span>s</span> B</li></ul>`, "A s B"],
     [

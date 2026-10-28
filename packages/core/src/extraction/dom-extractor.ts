@@ -1554,11 +1554,13 @@ function getOwnText(
       // A child that cannot be read costs its own text, not the host's name —
       // as in getAccessibleTextContent.
       try {
+        const style = getCachedComputedStyle(childEl, styleCache);
+        // A hidden child adds nothing, not even a hidden `<br>`'s space:
+        // Chromium hangs no `LineBreak` for it, so `A<br hidden>B` is "AB".
+        if (isHiddenFromAT(childEl, style)) continue;
         if (safeTagName(childEl) === "br") {
           text += " ";
-        } else if (
-          isTextRun(childEl, getCachedComputedStyle(childEl, styleCache))
-        ) {
+        } else if (isTextRun(childEl, style)) {
           text += getOwnText(childEl, styleCache);
         }
       } catch (error) {
@@ -1606,7 +1608,8 @@ const OWN_NODE_GENERIC_TAGS = new Set([
  * its own: `display: block`, `flex` or `inline-table`, or a float or an
  * absolutely positioned one, which CSS blockifies. Inline boxes — `inline`,
  * `inline-block`, `inline-flex`, `ruby` — and `display: contents` are runs. A
- * hidden one contributes nothing at all.
+ * hidden one contributes nothing at all, which {@link getOwnText} decides
+ * before it asks.
  *
  * The live extractor's climb asks {@link textRunHost} instead, which reads
  * only what an attribute change can't flip.
@@ -1616,7 +1619,6 @@ function isTextRun(
   style: CSSStyleDeclaration | null,
 ): boolean {
   if (!mayBeTextRun(element, getImplicitRole(element), style)) return false;
-  if (isHiddenFromAT(element, style)) return false;
   if (getExplicitRole(element) === "generic") return false;
   // Clobber-safe: an inline `<form>` in a list item gets this far.
   for (const name of safeGetAttributeNames(element)) {
