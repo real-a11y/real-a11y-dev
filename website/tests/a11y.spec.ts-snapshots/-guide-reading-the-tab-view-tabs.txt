@@ -14,4 +14,4 @@ button "Copy Code"
 generic
 link "Edit this page on GitHub"
 link "Previous page Headings View"
-link "Next page Panel features"
+link "Next page Overview & Install"

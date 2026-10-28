@@ -13,8 +13,6 @@ link "Keep it out of production"
 button "Copy Code"
 generic
 table
-link "Long names"
-link "Panel interaction vs. host side effects"
 button "Copy Code"
 generic
 button "Copy Code"
@@ -28,8 +26,10 @@ generic
 button "Copy Code"
 generic
 link "examples/vanilla/"
+link "keyboard"
+link "setRoot()"
 link "live region log"
-link "Panel features reference"
+link "Using the panel"
 link "Edit this page on GitHub"
 link "Previous page Overview & Install"
 link "Next page @real-a11y-dev/testing"

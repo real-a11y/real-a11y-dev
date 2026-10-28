@@ -13,8 +13,6 @@ link "Keep it out of production"
 button "Copy Code"
 generic
 table
-link "Long names"
-link "Panel interaction vs. host side effects"
 button "Copy Code"
 generic
 table
@@ -31,8 +29,10 @@ generic
 link "@real-a11y-dev/testing"
 link "examples/react-app/"
 link "Next.js recipe"
+link "keyboard"
+link "props"
 link "live region log"
-link "Panel features reference"
+link "Using the panel"
 link "Edit this page on GitHub"
 link "Previous page Playwright adapter"
 link "Next page @real-a11y-dev/storybook-addon"

@@ -2,6 +2,8 @@
 h1 Reading the A11y View
   h2 What you see
   h2 How the A11y view differs from the DOM view
+  h2 Two producers
+  h2 How roles are resolved
   h2 What to look for
     h3 Interactive elements with no name
     h3 Everything is generic

@@ -10,6 +10,8 @@ navigation "On this page"
     listitem
       link "Which do I reach for?"
     listitem
+      link "The semantic tree"
+    listitem
       link "See it running"
 main
   heading "@real-a11y-dev/testing" (level 1)
@@ -162,6 +164,80 @@ main
     listitem "(not jsdom) → ."
       strong "Audit a real, rendered page"
       link "Playwright adapter"
+  heading "The semantic tree" (level 2)
+  paragraph "Every helper above reads the same tree. builds it from a DOM element, in mode (the default) or , and returns an :"
+    code "extract(root, mode?)"
+    code ""a11y""
+    code ""dom""
+    code "ExtractionResult"
+  button "Copy Code"
+  code
+  heading "SemanticNode" (level 3)
+    code "SemanticNode"
+  button "Copy Code"
+  code
+  paragraph "and are optional in the type. The in-page walk this package runs always fills them, but a tree has no element behind some of its nodes. Roles follow , and names ."
+    code "dom"
+    code "interaction"
+    link "read from Chromium"
+    link "How roles are resolved"
+    link "Accessible Names"
+  heading "Queries" (level 3)
+  paragraph "Each one takes an or its Map."
+    code "ExtractionResult"
+    code "nodes"
+  table
+    rowgroup
+      row
+        columnheader "Function"
+        columnheader "Returns"
+    rowgroup
+      row
+        cell "findByRole(tree, role, options?)"
+          code "findByRole(tree, role, options?)"
+        cell "The first node with that role, in document order, or null. options narrows by name (a string matches case-insensitively, a RegExp is tested against it), a heading's level, and the checked, expanded, selected, pressed and disabled states. Nodes hidden from assistive technology are skipped unless includeHidden: true."
+          code "null"
+          code "options"
+          code "name"
+          code "level"
+          code "checked"
+          code "expanded"
+          code "selected"
+          code "pressed"
+          code "disabled"
+          code "includeHidden: true"
+      row
+        cell "findAllByRole(tree, role, options?)"
+          code "findAllByRole(tree, role, options?)"
+        cell "Every such node, in document order."
+      row
+        cell "getOutline(tree)"
+          code "getOutline(tree)"
+        cell "{ id, level, name } for each heading assistive technology can reach, in document order — what outlineSnapshot() and assertHeadingOrder() read."
+          code "{ id, level, name }"
+          code "outlineSnapshot()"
+          code "assertHeadingOrder()"
+      row
+        cell "getTabSequence(tree)"
+          code "getTabSequence(tree)"
+        cell "Focusable nodes in Tab order: positive tabindex ascending, then the rest in document order, leaving out tabindex="-1". It doesn't model shadow roots, iframes or focus traps."
+          code "tabindex"
+          code "tabindex="-1""
+      row
+        cell "linearize(tree, options?)"
+          code "linearize(tree, options?)"
+        cell "Every node in document order."
+      row
+        cell "diffTrees(before, after)"
+          code "diffTrees(before, after)"
+        cell "{ added, removed, changed } between two extractions of the same document, matched by node id. Each changed entry lists the fields that differ as dot-paths, such as "a11y.name" or "a11y.states.expanded". capture + a11yDiff are built on it."
+          code "{ added, removed, changed }"
+          code "changed"
+          code ""a11y.name""
+          code ""a11y.states.expanded""
+          link "capture + a11yDiff"
+            code "capture"
+            code "a11yDiff"
   heading "See it running" (level 2)
   list
     listitem "— : snapshot tests, the custom matchers, interactions, tab-sequence structure assertions."

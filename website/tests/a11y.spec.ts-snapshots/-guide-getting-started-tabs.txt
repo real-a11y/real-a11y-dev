@@ -54,8 +54,8 @@ generic
 button "Copy Code"
 generic
 table
-link "Core Concepts"
+link "Reading the A11y view"
 link "Accessibility Snapshots"
-link "Why Real A11y?"
+link "Snapshots vs. other tools"
 link "Edit this page on GitHub"
-link "Next page Core Concepts"
+link "Next page Accessibility Snapshots"

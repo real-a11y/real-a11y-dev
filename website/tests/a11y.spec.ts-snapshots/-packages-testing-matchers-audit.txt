@@ -141,7 +141,7 @@ main
   button "Copy Code"
   code "// Fails — generic "Close" — "foo" is not a valid ARIA role <div role="foo">Close</div> // Fails — generic "Item" — role "listitem" is discarded outside its required context (directory / list) <div role="listitem">Item</div> // Fails — the <section> ends the search for a listbox, so this is no option. <div role="listbox" aria-label="Fruit"><section><div role="option" aria-selected="false">Apple</div></section></div>"
   paragraph "A discarded role is an error, not an advisory warning: assistive tech gets a different role from the one you wrote. See for which containers count."
-    link "Roles"
+    link "How roles are resolved"
   paragraph "Unlike the four matchers above, this one doesn't wrap an function — it runs the semantic tree through and fails only on issues."
     code "assert*"
     code "@real-a11y-dev/validate"

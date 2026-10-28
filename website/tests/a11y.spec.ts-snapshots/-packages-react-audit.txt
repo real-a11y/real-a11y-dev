@@ -141,8 +141,7 @@ main
           code "boolean"
         cell "false"
           code "false"
-        cell "Start the tree with names in full, widening to fit the longest and scrolling sideways, instead of ending a long name in an ellipsis. Only where the panel starts: the user switches it from the toolbar's Settings (⚙), and their choice holds for the life of the page, in every navigator on it, whatever remounts the component. See Long names."
-          link "Long names"
+        cell "Start the tree with names in full, widening to fit the longest and scrolling sideways, instead of ending a long name in an ellipsis. Only where the panel starts: the user switches it from the toolbar's Settings (⚙), and their choice holds for the life of the page, in every navigator on it, whatever remounts the component."
       row
         cell "styleNonce"
           code "styleNonce"
@@ -248,10 +247,10 @@ main
     code "highlightOnHover"
     code "scrollHostOnSelect"
     code "focusHostOnActivate"
-  paragraph "renders into the same document as your app, so activating a tree row could steal focus from the panel or scroll the page underneath you. The panel itself stays fully interactive either way — row selection, cross-link chip navigation, keyboard movement — what's gated is the side effect on the DOM element. See for the full rationale and when to flip them on."
+  paragraph "renders into the same document as your app, so activating a tree row could steal focus from the panel or scroll the page underneath you. The panel itself stays fully interactive either way — row selection, cross-link chip navigation, keyboard movement — what's gated is the side effect on the DOM element. is the safe one to turn on: it only paints an outline over the page. Turn on the other two when the panel is your own inspection tool, and leave them off where end users see it."
     code "<SemanticNavigator />"
     emphasis "real"
-    link "Panel interaction vs. host side effects"
+    code "highlightOnHover"
   separator
   heading "useSemanticTree(rootRef, options?)" (level 2)
     code "useSemanticTree(rootRef, options?)"
@@ -364,16 +363,14 @@ main
       link "Next.js recipe"
   separator
   heading "Panel features" (level 2)
-  paragraph "exposes the in-panel behaviors it shares with the Chrome extension and Storybook addon — search, role filters, focus tracking, scoping, keyboard navigation. The props on this component (, , , , ) configure them. The is not one of them: only the Chrome extension has it."
+  paragraph "renders the same tree panel as the Chrome extension, with its search, role filters and . The above configure it, and a different scopes it. Focus sync, the scope breadcrumb and the are the extension's alone."
     code "<SemanticNavigator />"
-    code "highlightOnHover"
-    code "scrollHostOnSelect"
-    code "focusHostOnActivate"
-    code "mode"
-    code "mount"
+    link "keyboard"
+    link "props"
+    code "root"
     link "live region log"
   paragraph "→"
-    link "Panel features reference"
+    link "Using the panel"
 contentinfo
   link "Edit this page on GitHub"
   paragraph "Last updated:"

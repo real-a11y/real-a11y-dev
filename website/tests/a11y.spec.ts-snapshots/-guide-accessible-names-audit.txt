@@ -253,4 +253,4 @@ contentinfo
     time "[redacted]"
   navigation "Pager"
     link "Previous page Authenticated Pages"
-    link "Next page Architecture"
+    link "Next page Troubleshooting"

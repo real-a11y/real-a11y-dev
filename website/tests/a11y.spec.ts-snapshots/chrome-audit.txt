@@ -20,18 +20,12 @@ complementary
       heading "Introduction" (level 2)
     link "Getting Started"
       paragraph "Getting Started"
-    link "Core Concepts"
-      paragraph "Core Concepts"
     link "Accessibility Snapshots"
       paragraph "Accessibility Snapshots"
     link "Snapshots vs. Other Tools"
       paragraph "Snapshots vs. Other Tools"
-    link "Why Real A11y?"
-      paragraph "Why Real A11y?"
     button "Reading the Tree"
       heading "Reading the Tree" (level 2)
-    link "Understanding the Views"
-      paragraph "Understanding the Views"
     link "DOM View"
       paragraph "DOM View"
     link "A11y View"
@@ -40,8 +34,6 @@ complementary
       paragraph "Headings View"
     link "TAB View"
       paragraph "TAB View"
-    link "Panel features"
-      paragraph "Panel features"
     button "Chrome Extension"
       heading "Chrome Extension" (level 2)
     link "Overview & Install"
@@ -79,8 +71,6 @@ complementary
       paragraph "Authenticated Pages"
     link "Accessible Names"
       paragraph "Accessible Names"
-    link "Architecture"
-      paragraph "Architecture"
     link "Troubleshooting"
       paragraph "Troubleshooting"
 
