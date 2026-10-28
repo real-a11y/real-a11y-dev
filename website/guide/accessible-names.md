@@ -28,7 +28,9 @@ For any element, the accessible name is picked from the **first non-empty source
 
 If #1 resolves to a non-empty string, #2–#5 are ignored — even if #2 looks "more specific" from a CSS or developer perspective.
 
-**One thing a tree shows beyond this list.** A paragraph, a list item, or a live region (`alert`, `status`) with text directly inside it shows that text as its name: `paragraph "Read the guide"`, `status "3 results"`. That keeps its content visible in a snapshot, where the tree prints names and nothing else. A screen reader reads that text as the element's content, not as a label. It never applies to a dialog, image, landmark or text field.
+**One thing a tree shows beyond this list.** A paragraph, a list item, a code block, or a live region (`alert`, `status`) with text directly inside it shows that text as its name: `paragraph "Read the guide"`, `status "3 results"`. That keeps its content visible in a snapshot, where the tree prints names and nothing else. A screen reader reads that text as the element's content, not as a label. It never applies to a dialog, image, landmark or text field.
+
+That text includes what sits in a plain inline wrapper, which Chromium gives no node of its own: a `<span>`, a `<b>`, a custom or unknown element. `<p>Drop in <b>the panel</b> now.</p>` is `paragraph "Drop in the panel now."`, and a highlighted code block is named with its code. Text in an element that has a node of its own stays out, because that node shows it: a link, a `<code>` or `<strong>`, a `<label>`, and a wrapper with an `id`, a `title`, an `aria-` attribute or a `tabindex`. A `<br>` reads as a space.
 
 ---
 

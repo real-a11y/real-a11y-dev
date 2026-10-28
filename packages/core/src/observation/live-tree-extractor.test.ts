@@ -662,6 +662,61 @@ describe("LiveTreeExtractor", () => {
     observer.stop();
   });
 
+  // A role-less inline wrapper's text is the paragraph's own (see `isTextRun`
+  // in extraction/dom-extractor), so a change inside it, or one that gives it a
+  // node of its own, renames the paragraph — which no other climb reaches.
+  describe("a paragraph named through an inline wrapper", () => {
+    const paragraphName = (result: ExtractionResult) =>
+      [...result.nodes.values()].find((n) => n.a11y.role === "paragraph")?.a11y
+        .name;
+
+    const refreshAfter = async (mutate: () => void) => {
+      const live = new LiveTreeExtractor(document.body, { mode: "a11y" });
+      live.extract();
+      let lastChange: TreeChange | undefined;
+      const observer = new DomObserver(
+        document.body,
+        (change) => {
+          lastChange = change;
+        },
+        50,
+      );
+      observer.start();
+      mutate();
+      await vi.advanceTimersByTimeAsync(100);
+      observer.stop();
+      return live.refresh(lastChange);
+    };
+
+    beforeEach(() => {
+      document.body.innerHTML = `<main><p>Drop in <b>the panel</b> now.</p></main>`;
+    });
+
+    it("follows an edit to the wrapper's text", async () => {
+      const result = await refreshAfter(() => {
+        document.querySelector("b")!.firstChild!.nodeValue = "the tree";
+      });
+      expect(result.nodes).toEqual(extractA11yTree(document.body).nodes);
+      expect(paragraphName(result)).toBe("Drop in the tree now.");
+    });
+
+    it("drops the wrapper's text once an attribute gives it a node", async () => {
+      const result = await refreshAfter(() => {
+        document.querySelector("b")!.setAttribute("aria-label", "Panel");
+      });
+      expect(result.nodes).toEqual(extractA11yTree(document.body).nodes);
+      expect(paragraphName(result)).toBe("Drop in now.");
+    });
+
+    it("drops the wrapper's text once it is hidden", async () => {
+      const result = await refreshAfter(() => {
+        document.querySelector("b")!.setAttribute("hidden", "");
+      });
+      expect(result.nodes).toEqual(extractA11yTree(document.body).nodes);
+      expect(paragraphName(result)).toBe("Drop in now.");
+    });
+  });
+
   it("updates a name host when a descendant gains a name-barrier role", async () => {
     document.body.innerHTML = `<main><button><span>Save</span></button></main>`;
 

@@ -169,9 +169,11 @@ function carriesValue(node: RawNativeAXNode): boolean {
 /**
  * The text Chromium hung DIRECTLY on `node`: its own `StaticText` children,
  * concatenated in document order, with a `LineBreak` read as a space. The
- * native analog of the DOM producer's direct-text name fallback, which
- * concatenates an element's own text-node children and skips its child
- * elements' text.
+ * native analog of the DOM producer's own-text name fallback, which
+ * concatenates an element's own text-node children and the text of the
+ * role-less inline wrappers Chromium gives no node (`isTextRun` in
+ * extraction/dom-extractor) — the very runs Chromium hangs here — and skips
+ * every other child element's text.
  *
  * This is how a paragraph that mixes plain text with inline elements keeps its
  * words: `<p>See <a>#386</a> and <code>x</code> here.</p>` puts "See ", " and "
@@ -182,9 +184,9 @@ function carriesValue(node: RawNativeAXNode): boolean {
  *
  * Strictly direct: it never enters another node, dropped or kept. A kept child
  * owns its text; a dropped wrapper (`LabelText`, a bare `generic`, an ignored
- * span) is an element whose text the DOM producer doesn't count as direct
- * either — and crossing into an out-of-flow one glues words, because the
- * whitespace beside it has already collapsed.
+ * span) is one Chromium gave a node of its own, whose text the DOM producer
+ * keeps off the element around it too — and crossing into an out-of-flow one
+ * glues words, because the whitespace beside it has already collapsed.
  *
  * On a node with kept children it runs only for the prose roles in
  * {@link NATIVE_AX_OWN_TEXT_ROLES}: a dialog or landmark with a loose sentence

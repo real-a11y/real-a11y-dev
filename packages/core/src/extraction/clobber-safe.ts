@@ -233,6 +233,9 @@ const ownerDocumentGetter = /* @__PURE__ */ capture(() =>
 const getAttributeMethod = /* @__PURE__ */ capture(
   () => elementProto?.getAttribute,
 );
+const getAttributeNamesMethod = /* @__PURE__ */ capture(
+  () => elementProto?.getAttributeNames,
+);
 const containsMethod = /* @__PURE__ */ capture(() => nodeProto?.contains);
 const matchesMethod = /* @__PURE__ */ capture(() => elementProto?.matches);
 
@@ -298,6 +301,13 @@ export function safeGetAttribute(
   return getAttributeMethod
     ? getAttributeMethod.call(element, name)
     : element.getAttribute(name);
+}
+
+/** Clobber-immune `element.getAttributeNames()` (`<input name="getAttributeNames">`). */
+export function safeGetAttributeNames(element: Element): string[] {
+  return getAttributeNamesMethod
+    ? getAttributeNamesMethod.call(element)
+    : element.getAttributeNames();
 }
 
 /** Clobber-immune `node.contains(other)` (`<img name="contains">`). */

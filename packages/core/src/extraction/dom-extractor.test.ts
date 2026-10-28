@@ -3726,7 +3726,7 @@ describe("the direct-text fallback skips author-named roles", () => {
       "Def",
     ],
     ["code", `<code id="t">npm i <a href="#">x</a></code>`, "npm i"],
-    ["time", `<time id="t">today <b>x</b></time>`, "today"],
+    ["time", `<time id="t">today <a href="#">x</a></time>`, "today"],
     ["generic", `<div id="t">Loose text <a href="#">x</a></div>`, "Loose text"],
     [
       "alert",
@@ -3790,6 +3790,168 @@ describe("the direct-text fallback skips author-named roles", () => {
     expect(target(`<button id="t" role="tab">Tab A</button>`).a11y.name).toBe(
       "Tab A",
     );
+  });
+});
+
+// A role-less inline wrapper gets no node of its own in Chromium: its text runs
+// hang straight off the element around it, so a paragraph reads every word on
+// its line. The own-text step took text-node children only, so the words inside
+// a `<span>`, a `<b>` or an unknown tag went missing — and since the serializer
+// folds the generic that kept them, they vanished from every printed tree. A
+// literal `<SemanticNavigator />` in a VitePress `details:` string, parsed by
+// v-html into an unknown element, cut a home-page card to "Drop in".
+// Every expectation is what Chromium 153 computes for the same markup (CDP).
+describe("the own-text fallback reads through role-less inline wrappers", () => {
+  const nodesOf = (html: string) => {
+    const root = createPage(html);
+    document.body.appendChild(root);
+    try {
+      return [...extractA11yTree(root).nodes.values()];
+    } finally {
+      root.remove();
+    }
+  };
+  const target = (html: string) =>
+    nodesOf(html).find((n) => n.dom?.attributes["id"] === "t")!;
+
+  it.each([
+    [
+      "an unknown element",
+      `<p id="t">no boilerplate. Drop in <semanticnavigator> and the tree panel appears.</semanticnavigator></p>`,
+      "no boilerplate. Drop in and the tree panel appears.",
+    ],
+    ["a span", `<p id="t">A <span>span</span> B</p>`, "A span B"],
+    [
+      "the presentational phrasing tags",
+      `<p id="t">A <b>b</b> <i>i</i> <u>u</u> <small>s</small> <kbd>k</kbd> <var>v</var> <samp>sa</samp> <cite>c</cite> <bdi>bd</bdi> <data value="1">d</data> <font>f</font> B</p>`,
+      "A b i u s k v sa c bd d f B",
+    ],
+    ["a custom element", `<p id="t">A <x-foo>xfoo</x-foo> B</p>`, "A xfoo B"],
+    [
+      "nested wrappers",
+      `<p id="t">A <span><span>nested</span></span> B</p>`,
+      "A nested B",
+    ],
+    [
+      "a role=none wrapper",
+      `<p id="t">A <span role="none">rn</span> B</p>`,
+      "A rn B",
+    ],
+    [
+      "a wrapper with only styling attributes",
+      `<p id="t">A <span class="k" style="color: red" data-x="1" dir="rtl" title="">sty</span> B</p>`,
+      "A sty B",
+    ],
+    [
+      "a display: contents wrapper",
+      `<p id="t">A <span style="display: contents">dc</span> B</p>`,
+      "A dc B",
+    ],
+    [
+      "an inline-block wrapper",
+      `<p id="t">A <span style="display: inline-block">ib</span> B</p>`,
+      "A ib B",
+    ],
+    ["an anchor with no href", `<p id="t">A <a>anchor</a> B</p>`, "A anchor B"],
+    [
+      "a wrapper whose role is empty or unknown",
+      `<p id="t">A <span role="">empty</span> <span role="foo">unknown</span> B</p>`,
+      "A empty unknown B",
+    ],
+    ["a wrapper alone", `<p id="t"><span>only</span></p>`, "only"],
+    ["a wrapper inside a word", `<p id="t">A<span>B</span>C</p>`, "ABC"],
+    [
+      "a wrapper around a kept element, which keeps its own text",
+      `<p id="t">A <span>s1 <em>em</em> <a href="#">L</a> s2</span> B</p>`,
+      "A s1 s2 B",
+    ],
+  ])("names a paragraph with the text of %s", (_, html, expected) => {
+    expect(target(html).a11y.name).toBe(expected);
+  });
+
+  // Chromium reads a `<br>` as a line break between the runs either side.
+  it("reads a <br> as a space", () => {
+    expect(target(`<p id="t">Line one<br>Line two</p>`).a11y.name).toBe(
+      "Line one Line two",
+    );
+  });
+
+  it.each([
+    ["listitem", `<ul><li id="t">A <span>s</span> B</li></ul>`, "A s B"],
+    [
+      "blockquote",
+      `<blockquote id="t">A <span>s</span> B</blockquote>`,
+      "A s B",
+    ],
+    [
+      "definition",
+      `<dl><dt>t</dt><dd id="t">A <span>s</span> B</dd></dl>`,
+      "A s B",
+    ],
+    ["time", `<time id="t">today <b>x</b></time>`, "today x"],
+    [
+      "status",
+      `<div id="t" role="status">Saved <span>3</span> files</div>`,
+      "Saved 3 files",
+    ],
+    // Syntax highlighting: every token is a styled span, so a highlighted
+    // block's own text was the newlines between them and the code was unnamed.
+    [
+      "code",
+      `<pre><code id="t"><span class="line"><span style="color: red">import</span><span> { a } </span><span>from</span><span> "b"</span><span>;</span></span></code></pre>`,
+      'import { a } from "b";',
+    ],
+  ])("names a %s with its wrappers' text", (role, html, expected) => {
+    const node = target(html);
+    expect(node.a11y.role).toBe(role);
+    expect(node.a11y.name).toBe(expected);
+  });
+
+  // What gives a wrapper a node of its own in Chromium — and so the text with
+  // it: anything that could name it, focus it or point at it, a role other than
+  // none, or a box of its own. Its text stays off the paragraph's name.
+  it.each([
+    ["an id", `<span id="x">w</span>`],
+    ["a lang", `<span lang="fr">w</span>`],
+    ["a title", `<span title="tt">w</span>`],
+    ["a tabindex", `<span tabindex="-1">w</span>`],
+    ["an aria-label", `<span aria-label="lbl">w</span>`],
+    ["another aria attribute", `<span aria-live="polite">w</span>`],
+    ["role=generic", `<span role="generic">w</span>`],
+    ["an onclick", `<span onclick="void 0">w</span>`],
+    ["contenteditable", `<span contenteditable="true">w</span>`],
+    // Ours to decide: Chromium 153's tree drops this paragraph altogether.
+    ["a block box", `<span style="display: block">w</span>`],
+    ["an inline-table box", `<span style="display: inline-table">w</span>`],
+    ["a label", `<label>w</label>`],
+    // Their children are fallback, which a loaded <object> never renders.
+    ["a canvas", `<canvas>w</canvas>`],
+    ["an object", `<object>w</object>`],
+    ["an abbr", `<abbr title="t">w</abbr>`],
+    ["aria-hidden", `<span aria-hidden="true">w</span>`],
+    ["hidden", `<span hidden>w</span>`],
+  ])("leaves out a wrapper with %s", (_, wrapper) => {
+    expect(target(`<p id="t">A ${wrapper} B</p>`).a11y.name).toBe("A B");
+  });
+
+  // A generic's name decides whether the a11y view keeps it, so reading through
+  // its wrappers would add a node for every `<div><span>…</span></div>`. Its
+  // words are not lost: the wrapper keeps them, and Chromium has no paragraph
+  // there to hold them either.
+  it("leaves a generic's own text as it was", () => {
+    expect(target(`<div id="t">A <span>s</span> B</div>`).a11y.name).toBe(
+      "A B",
+    );
+    expect(target(`<div id="t"><span>only</span></div>`)).toBeUndefined();
+  });
+
+  // The wrapper keeps its node, as it does under a heading: only the name of
+  // the element around it changes.
+  it("keeps the wrapper's own node", () => {
+    const nodes = nodesOf(`<p id="t">A <span>s</span> B</p>`);
+    const paragraph = nodes.find((n) => n.a11y.role === "paragraph")!;
+    const wrapper = nodes.find((n) => n.parentId === paragraph.id)!;
+    expect(wrapper.a11y).toMatchObject({ role: "generic", name: "s" });
   });
 });
 
