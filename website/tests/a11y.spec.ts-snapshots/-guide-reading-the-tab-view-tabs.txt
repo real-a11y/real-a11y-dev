@@ -6,6 +6,7 @@ link "The relationship to the A11y view"
 link "tabSequenceSnapshot()"
 link "real-a11y tabs"
 link "get_tab_order"
+button "Enlarge image: Tab order view"
 button "Copy Code"
 generic
 button "Copy Code"

@@ -27,6 +27,7 @@ main
     code "<h1>"
     code "<h6>"
   img "Headings view: only the heading elements from the page, shown as indigo bars indented by level — one H1 at the top, followed by H2s and H3s forming the document outline."
+  button "Enlarge image: Headings view"
   paragraph "Each bar is one heading. The indentation shows the level — H1 at the top, H2 nested under it, H3 nested under H2."
   separator
   heading "What you see" (level 2)

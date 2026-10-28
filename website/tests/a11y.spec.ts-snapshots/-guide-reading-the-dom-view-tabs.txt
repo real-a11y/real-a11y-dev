@@ -6,6 +6,8 @@ link "Chrome extension"
 link "React component"
 link "Storybook addon"
 link "treeSnapshot()"
+button "Enlarge image: Visual view"
+button "Enlarge image: A11y tree diagram"
 table
 link "Edit this page on GitHub"
 link "Previous page Snapshots vs. Other Tools"

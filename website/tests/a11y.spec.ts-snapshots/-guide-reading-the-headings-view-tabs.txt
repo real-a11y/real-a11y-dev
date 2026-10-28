@@ -6,6 +6,7 @@ link "The relationship to the other views"
 link "outlineSnapshot()"
 link "real-a11y outline"
 link "get_heading_outline"
+button "Enlarge image: Headings view"
 button "Copy Code"
 generic
 button "Copy Code"
