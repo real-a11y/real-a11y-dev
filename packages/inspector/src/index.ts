@@ -99,6 +99,9 @@ export function createInspector(
   let currentRoot = config.root;
   let currentViewMode = viewMode;
   let mounted = false;
+  // Whether mount() put the panel marker on the container. One already there
+  // is another panel's, or the host's, and unmount() leaves it in place.
+  let ownsMarker = false;
   let renderTarget: Element | ShadowRoot | null = null;
   let renderHost: HTMLElement | null = null;
   // Monotonic counter used to force a re-extraction when `refresh()` is called.
@@ -201,10 +204,33 @@ export function createInspector(
     mount() {
       if (mounted) return;
       mounted = true;
-      // Keep the panel out of the tree it shows: extraction walks open
-      // shadow roots now, and this container hosts one.
-      container.setAttribute(PANEL_HOST_ATTRIBUTE, "");
-      renderTree();
+      try {
+        // Keep the panel out of the tree it shows: extraction walks open
+        // shadow roots now, and this container hosts one. Through
+        // Element.prototype, as the extractor reads it: a <form> container's
+        // controls shadow its methods (`<input name="setAttribute">`).
+        ownsMarker = !Element.prototype.hasAttribute.call(
+          container,
+          PANEL_HOST_ATTRIBUTE,
+        );
+        if (ownsMarker) {
+          Element.prototype.setAttribute.call(
+            container,
+            PANEL_HOST_ATTRIBUTE,
+            "",
+          );
+        }
+        renderTree();
+      } catch (error) {
+        // A container that can't take the panel (a <form> can't host a shadow
+        // root) mustn't stay marked as one, or every other tree on the page
+        // leaves it out, nor this instance read as mounted, which turns the
+        // next mount() into a no-op. unmount() also tears down whatever the
+        // render got through. A shadow root it did attach stays: none can be
+        // removed, and the next mount() reuses it.
+        instance.unmount();
+        throw error;
+      }
     },
 
     unmount() {
@@ -213,7 +239,10 @@ export function createInspector(
       fullNamesChoice().panels.delete(renderTree);
       const mountPoint = renderHost ?? (renderTarget as Element | null);
       if (mountPoint) render(null, mountPoint);
-      container.removeAttribute(PANEL_HOST_ATTRIBUTE);
+      if (ownsMarker) {
+        Element.prototype.removeAttribute.call(container, PANEL_HOST_ATTRIBUTE);
+      }
+      ownsMarker = false;
       // Drop references so the next mount() rebuilds cleanly.
       renderHost = null;
       renderTarget = null;

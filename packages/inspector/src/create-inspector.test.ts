@@ -321,6 +321,94 @@ describe("createInspector", () => {
       nav.destroy();
     }).not.toThrow();
   });
+
+  it("undoes a mount() whose first render throws", () => {
+    const { root, container } = mountDoc(
+      '<form><input aria-label="Email"></form>',
+    );
+    const form = root.querySelector("form")!;
+    const nav = createInspector({ root, container: form });
+
+    // A <form> can't host a shadow root, so the default mount throws.
+    const notSupported = expect.objectContaining({ name: "NotSupportedError" });
+    expect(() => nav.mount()).toThrow(notSupported);
+
+    // Still marked, the form would read as panel chrome: every other tree on
+    // the page would leave it, and everything in it, out.
+    expect(form.hasAttribute("data-real-a11y-panel")).toBe(false);
+    const names = Array.from(
+      createInspector({ root, container }).getTree().nodes.values(),
+    ).map((n) => n.a11y.name);
+    expect(names).toContain("Email");
+
+    // Nor is the instance left half-mounted: mount() tries again, rather than
+    // return as though the first attempt had worked.
+    expect(() => nav.mount()).toThrow(notSupported);
+  });
+
+  it("leaves another panel's marker when its own mount() throws", async () => {
+    document.body.innerHTML = "<main><h1>App</h1><form></form></main>";
+    const form = document.querySelector("form")!;
+    // mount: "light" renders into a <form>; the default shadow mount can't.
+    const light = createInspector({
+      root: document.body,
+      container: form,
+      mount: "light",
+    });
+    light.mount();
+    // Preact fills the panel in over several async hops; wait for its
+    // buttons, which are what would leak into the tree.
+    const deadline = Date.now() + 2000;
+    while (!form.querySelector("button") && Date.now() < deadline) {
+      await new Promise((r) => setTimeout(r, 5));
+    }
+    expect(form.querySelector("button")).not.toBeNull();
+
+    expect(() =>
+      createInspector({ root: document.body, container: form }).mount(),
+    ).toThrow(expect.objectContaining({ name: "NotSupportedError" }));
+
+    // The light panel still renders in the form, so it stays out of the tree.
+    expect(form.hasAttribute("data-real-a11y-panel")).toBe(true);
+    const roles = Array.from(light.getTree().nodes.values()).map(
+      (n) => n.a11y.role,
+    );
+    expect(roles).toContain("main");
+    expect(roles).not.toContain("button");
+
+    light.unmount();
+    expect(form.hasAttribute("data-real-a11y-panel")).toBe(false);
+    document.getElementById("sn-styles")?.remove();
+  });
+
+  it("marks a <form> container whose controls shadow its methods", () => {
+    const methods = ["hasAttribute", "setAttribute", "removeAttribute"];
+    document.body.innerHTML = `<main><form>${methods
+      .map((m) => `<input name="${m}">`)
+      .join("")}</form></main>`;
+    const form = document.querySelector("form")!;
+    // In a browser a form's control shadows the form's own member of the
+    // same name, so `form.setAttribute` is the <input>. jsdom doesn't, so
+    // stand in for it.
+    for (const method of methods) {
+      const named = form.querySelector(`[name="${method}"]`)!;
+      Object.defineProperty(form, method, {
+        configurable: true,
+        get: () => named,
+      });
+    }
+    const nav = createInspector({
+      root: document.body,
+      container: form,
+      mount: "light",
+    });
+
+    nav.mount();
+    expect(form.getAttribute("data-real-a11y-panel")).toBe("");
+    nav.unmount();
+    expect(form.getAttribute("data-real-a11y-panel")).toBeNull();
+    document.getElementById("sn-styles")?.remove();
+  });
 });
 
 describe("createInspector: onAction results", () => {
