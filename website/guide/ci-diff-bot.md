@@ -134,7 +134,9 @@ jobs:
       - run: npx real-a11y diff base.json pr.json --explain --fail-on never
       - run: npx real-a11y diff base.json pr.json --format md --explain --fail-on never --max-pages 5 --max-lines 20 -o comment.md
 
-      - uses: actions/github-script@v9
+      # A pull request from a fork gets a read-only token, so skip the comment there.
+      - if: github.event.pull_request.head.repo.full_name == github.repository
+        uses: actions/github-script@v9
         with:
           script: |
             const fs = require("fs");
@@ -143,7 +145,11 @@ jobs:
             const issue_number = context.issue.number;
             const run = `${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}`;
             const body = `${MARKER}\n${fs.readFileSync("comment.md", "utf8")}\n[Full diff in the job log](${run})`;
-            const { data: comments } = await github.rest.issues.listComments({ owner, repo, issue_number });
+            // Every page of comments: on a busy PR ours can be past the first,
+            // and missing it posts a second comment on every push.
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner, repo, issue_number, per_page: 100,
+            });
             // Match the bot AND a marker on the first line: a page's text can
             // quote the marker, and it ends up inside the comment body.
             const mine = comments.find(
@@ -156,7 +162,7 @@ jobs:
             }
 ```
 
-Only the diff job can write to the PR, and it checks out the base branch, so the PR's install and build scripts never run with that permission. `--explain` adds the plain-language lines under **Structure** in the comment. `--max-pages` and `--max-lines` keep a large change readable, and the comment links to the job log for the rest. If a page shows content that changes on every build, such as a timestamp, add `--ignore-view-line '<regex>'` to both diff steps so it doesn't read as a change.
+Only the diff job can write to the PR, and it checks out the base branch, so the PR's install and build scripts never run with that permission. On a pull request from a fork, GitHub gives the workflow a read-only token whatever it asks for, so the comment step is skipped there and the diff is only in the job log. `--explain` adds the plain-language lines under **Structure** in the comment. `--max-pages` and `--max-lines` keep a large change readable, and the comment links to the job log for the rest. If a page shows content that changes on every build, such as a timestamp, add `--ignore-view-line '<regex>'` to both diff steps so it doesn't read as a change.
 
 ### Adapting it
 
