@@ -330,3 +330,39 @@ test.describe("home feature cards", () => {
     }
   });
 });
+
+// An enlargeable docs image has to be enlargeable without a mouse, and has to
+// hand focus back when it closes. Neither shows up in a snapshot: the dialog
+// is closed when the tree is captured, and the tab sequence records the
+// trigger, not what pressing it does.
+//
+// See `.vitepress/theme/components/ZoomImage.vue`.
+test.describe("zoomable images", () => {
+  test("open from the keyboard, close with Escape, focus returns", async ({
+    page,
+  }) => {
+    await gotoHydrated(page, "/guide/reading-the-tab-view");
+
+    const trigger = page.getByRole("button", {
+      name: "Enlarge image: Tab order view",
+    });
+    const dialog = page.getByRole("dialog", { name: "Tab order view" });
+
+    await trigger.focus();
+    await page.keyboard.press("Enter");
+
+    await expect(dialog).toBeVisible();
+    // Focus starts on Close, and the enlarged image keeps the page image's
+    // alt text rather than arriving unnamed.
+    await expect(dialog.getByRole("button", { name: "Close" })).toBeFocused();
+    await expect(dialog.getByRole("img")).toHaveAttribute(
+      "alt",
+      /^Tab order view: /,
+    );
+
+    await page.keyboard.press("Escape");
+
+    await expect(dialog).toBeHidden();
+    await expect(trigger).toBeFocused();
+  });
+});

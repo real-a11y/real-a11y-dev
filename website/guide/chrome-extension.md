@@ -16,10 +16,12 @@ Most accessibility problems don't look like problems — until you remove the vi
 </div>
 
 <figure class="sn-hero">
-  <img
-    src="/semantic-navigator-curtain.png"
-    alt="A browser with the Semantic Navigator screen curtain turned on: the left half of the window is fully blacked out and labeled “Content hidden — navigate via Semantic Navigator,” while the side panel on the right shows the page's complete accessibility tree — banner, main navigation, breadcrumb, headings, and links and buttons with their roles and accessible names — still fully navigable, with a keyboard-key bar along the bottom."
-  />
+  <ZoomImage label="Screen curtain screenshot">
+    <img
+      src="/semantic-navigator-curtain.png"
+      alt="A browser with the Semantic Navigator screen curtain turned on: the left half of the window is fully blacked out and labeled “Content hidden — navigate via Semantic Navigator,” while the side panel on the right shows the page's complete accessibility tree — banner, main navigation, breadcrumb, headings, and links and buttons with their roles and accessible names — still fully navigable, with a keyboard-key bar along the bottom."
+    />
+  </ZoomImage>
   <figcaption>The screen curtain blacks out the page. The accessibility tree stays — and so does every interaction.</figcaption>
 </figure>
 

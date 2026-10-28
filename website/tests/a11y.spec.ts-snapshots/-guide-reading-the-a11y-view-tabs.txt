@@ -11,6 +11,8 @@ link "Storybook addon"
 link "treeSnapshot()"
 link "real-a11y tree"
 link "get_semantic_tree"
+button "Enlarge image: Visual view"
+button "Enlarge image: A11y tree view"
 link "How roles are resolved"
 table
 table

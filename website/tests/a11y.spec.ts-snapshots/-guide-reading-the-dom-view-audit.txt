@@ -24,8 +24,10 @@ main
   paragraph "It answers the question:"
     strong ""What did I actually write?""
   img "Visual view: a website with blue header, teal nav, purple main content, amber aside, and slate footer arranged as a spatial layout."
+  button "Enlarge image: Visual view"
   img "A11y tree diagram: the same sections shown as a tree with document as root, branching into banner, navigation, main, complementary, and contentinfo nodes with their children."
-  paragraph "Left: what sighted users see. Right: the document structure. The DOM view shows the raw HTML that produces both."
+  button "Enlarge image: A11y tree diagram"
+  paragraph "Top: what sighted users see. Bottom: the document structure. The DOM view shows the raw HTML that produces both."
   separator
   heading "What you see" (level 2)
   paragraph "Each row in the tree is one DOM element. You'll see:"

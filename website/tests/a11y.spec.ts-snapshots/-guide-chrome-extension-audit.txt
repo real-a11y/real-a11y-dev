@@ -31,6 +31,7 @@ main
   link "View on GitHub"
   figure
     img "A browser with the Semantic Navigator screen curtain turned on: the left half of the window is fully blacked out and labeled “Content hidden — navigate via Semantic Navigator,” while the side panel on the right shows the page's complete accessibility tree — banner, main navigation, breadcrumb, headings, and links and buttons with their roles and accessible names — still fully navigable, with a keyboard-key bar along the bottom."
+    button "Enlarge image: Screen curtain screenshot"
   separator
   blockquote
     paragraph "— Testing Library"
