@@ -70,7 +70,7 @@ main
   heading "3. Add the workflow" (level 2)
   button "Copy Code"
   code
-  paragraph "adds the plain-language lines under in the comment. and keep a large change readable; the comment then points to the job log for the rest. If a page shows content that changes on every build, such as a timestamp, add to both diff steps so it doesn't read as a change."
+  paragraph "Only the diff job can write to the PR, and it checks out the base branch, so the PR's install and build scripts never run with that permission. adds the plain-language lines under in the comment. and keep a large change readable, and the comment links to the job log for the rest. If a page shows content that changes on every build, such as a timestamp, add to both diff steps so it doesn't read as a change."
     code "--explain"
     strong "Structure"
     code "--max-pages"
