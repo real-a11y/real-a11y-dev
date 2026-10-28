@@ -263,6 +263,42 @@ describe("an unmeasured view is skipped, not read as emptied", () => {
     expect(diffArtifacts(native(), native()).skippedViews).toEqual(["tabs"]);
   });
 
+  it("says which side left it unmeasured, so a renderer can tell why", () => {
+    // Neither side measured it — every pair of current snapshots, where
+    // re-capturing changes nothing — versus one side that did, where it's the fix.
+    expect(diffArtifacts(native(), native()).unmeasured).toEqual({
+      base: ["tabs"],
+      pr: ["tabs"],
+    });
+    expect(diffArtifacts(domEra(), native()).unmeasured).toEqual({
+      base: [],
+      pr: ["tabs"],
+    });
+    expect(diffArtifacts(native(), domEra()).unmeasured).toEqual({
+      base: ["tabs"],
+      pr: [],
+    });
+    expect(diffArtifacts(domEra(), domEra()).unmeasured).toEqual({
+      base: [],
+      pr: [],
+    });
+  });
+
+  it("skippedViews is exactly the union of both sides' unmeasured views", () => {
+    // The renderers read a skipped view in neither list as one-sided; keep the
+    // two fields from drifting apart.
+    for (const [b, p] of [
+      [native(), native()],
+      [domEra(), native()],
+      [native(), domEra()],
+      [domEra(), domEra()],
+    ]) {
+      const { skippedViews, unmeasured } = diffArtifacts(b, p);
+      const union = new Set([...unmeasured.base, ...unmeasured.pr]);
+      expect(new Set(skippedViews)).toEqual(union);
+    }
+  });
+
   it("compares tab order normally when both sides measured it", () => {
     const base = domEra();
     const pr = artifact([

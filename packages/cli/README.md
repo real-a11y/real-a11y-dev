@@ -330,8 +330,11 @@ populated one would report every keyboard tab stop on every page as removed.
 When either side didn't measure a view, `diff` skips that axis and says so
 (`skippedViews` in `--format json`) rather than reporting it as emptied — so
 upgrading across this change doesn't fire the tool's most safety-critical
-signal on pages where nothing changed. A pre-upgrade artifact stays diffable;
-re-capture both sides to compare tab order again.
+signal on pages where nothing changed. The note says why: two current snapshots
+both lack tab order, so it points at `real-a11y tabs <url>`, the command that
+reads it. A pre-upgrade artifact that carries a tabs view stays diffable against
+a current one, and the note names the side that measured it; re-capture both
+sides with the same version so they measure the same views.
 
 Structural drift that doesn't trip a rule shows as a **real unified diff** —
 context lines, order, indentation, like a PR file diff — so you can see *where*

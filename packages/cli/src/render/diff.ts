@@ -65,14 +65,34 @@ export type DiffSection = "findings" | "views";
  * keeps a producer change from reporting every tab stop as removed. But a
  * silently skipped axis is its own hazard in the other direction: a reviewer
  * who sees no tab-order changes should not read that as "tab order is fine".
+ *
+ * The advice depends on why. A view neither side measured is the normal case —
+ * `snapshot` never captures `tabs` — and re-capturing changes nothing, so the
+ * note points at the command that does read tab order. Only a mismatched pair,
+ * one side measuring what the other didn't, is fixed by re-capturing.
+ *
+ * One line per view. `code` formats a command for the surface: quoted in the
+ * terminal, a code span in markdown (where a bare `<url>` would parse as HTML).
  */
-function skippedNote(result: DiffResult): string | undefined {
-  if (!result.skippedViews.length) return undefined;
-  const views = result.skippedViews.join(", ");
-  return (
-    `Not compared: the ${views} view — at least one snapshot didn't measure it ` +
-    `(re-capture both sides with the same version to compare it again).`
-  );
+function skippedNotes(
+  result: DiffResult,
+  code: (command: string) => string,
+): string[] {
+  const { base, pr } = result.unmeasured;
+  return result.skippedViews.map((view) => {
+    const lead = `Not compared: the ${view} view — `;
+    if (base.includes(view) && pr.includes(view)) {
+      return view === "tabs"
+        ? `${lead}${code("real-a11y snapshot")} doesn't capture tab order, so ` +
+            `neither side has one (check it with ${code("real-a11y tabs <url>")}).`
+        : `${lead}neither snapshot measured it.`;
+    }
+    const which = base.includes(view) ? "PR" : "base";
+    return (
+      `${lead}only the ${which} snapshot measured it (re-capture both sides ` +
+      `with the same version so they measure the same views).`
+    );
+  });
 }
 
 /** A page worth showing under the active filter: a finding change, a
@@ -279,8 +299,9 @@ export function renderDiffPretty(
     );
   }
   if (only !== "findings") {
-    const skipped = skippedNote(result);
-    if (skipped) lines.push(c.dim(skipped));
+    for (const note of skippedNotes(result, (cmd) => `'${cmd}'`)) {
+      lines.push(c.dim(note));
+    }
   }
 
   const { new: n, changed: ch, removed } = result.summary;
@@ -514,8 +535,9 @@ export function renderDiffMarkdown(
         "",
       );
     }
-    const skipped = skippedNote(result);
-    if (skipped) out.push(`_${skipped}_`, "");
+    for (const note of skippedNotes(result, (cmd) => `\`${cmd}\``)) {
+      out.push(`_${note}_`, "");
+    }
   }
   return `${out.join("\n")}`;
 }
