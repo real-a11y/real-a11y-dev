@@ -230,6 +230,12 @@ describe("diff", () => {
     // Neither artifact measured tab order (native carries none), so the diff
     // reports that axis as skipped rather than silently comparing "" to "".
     expect(parsed.skippedViews).toEqual(["tabs"]);
+    // …and the note says why: `snapshot` never captures tab order, so it points
+    // at the command that does instead of advising a re-capture that can't help.
+    expect(neutral.stdout).toContain(
+      "doesn't capture tab order, so neither side has one (check it with `real-a11y tabs <url>`)",
+    );
+    expect(neutral.stdout).not.toContain("re-capture");
     // LF-only output on every platform (byte-stable report promise).
     expect(json.stdout).not.toContain("\r");
   });

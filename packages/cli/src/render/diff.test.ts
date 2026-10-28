@@ -516,3 +516,92 @@ describe("renderDiffMarkdown", () => {
     expect(out).not.toContain("#### <img>");
   });
 });
+
+describe("the not-compared note says why the view was skipped", () => {
+  /** A current snapshot: native, so it measures no tab order and says so. */
+  const native = () =>
+    buildArtifact([page("Home", [], { tabs: undefined })], {
+      toolName: "cli",
+      toolVersion: "0",
+      views: ["tree", "outline"],
+    });
+  /** A DOM-era artifact: no `meta.views`, so it measured all three. */
+  const domEra = () =>
+    buildArtifact([page("Home", [], { tabs: 'link "Home"' })], {
+      toolName: "cli",
+      toolVersion: "0",
+    });
+
+  // Every diff of two current snapshots lands here: re-capturing changes
+  // nothing, so the note must not advise it.
+  const neither = diffArtifacts(native(), native());
+  const onlyBase = diffArtifacts(domEra(), native());
+  const onlyPr = diffArtifacts(native(), domEra());
+
+  it("pretty: neither side measured tabs → points at the tabs command", () => {
+    const out = renderDiffPretty(neither, { color: false });
+    expect(out).toContain(
+      "Not compared: the tabs view — 'real-a11y snapshot' doesn't capture tab " +
+        "order, so neither side has one (check it with 'real-a11y tabs <url>').",
+    );
+    expect(out).not.toContain("re-capture");
+  });
+
+  it("pretty: one side measured tabs → names it and keeps the re-capture advice", () => {
+    const base = renderDiffPretty(onlyBase, { color: false });
+    expect(base).toContain(
+      "Not compared: the tabs view — only the base snapshot measured it " +
+        "(re-capture both sides with the same version so they measure the same views).",
+    );
+    expect(base).not.toContain("real-a11y tabs");
+    expect(renderDiffPretty(onlyPr, { color: false })).toContain(
+      "only the PR snapshot measured it",
+    );
+  });
+
+  it("md: neither side measured tabs → commands as code spans, so `<url>` stays literal", () => {
+    const out = renderDiffMarkdown(neither);
+    expect(out).toContain(
+      "_Not compared: the tabs view — `real-a11y snapshot` doesn't capture tab " +
+        "order, so neither side has one (check it with `real-a11y tabs <url>`)._",
+    );
+    expect(out).not.toContain("re-capture");
+  });
+
+  it("md: one side measured tabs → keeps the re-capture advice", () => {
+    const out = renderDiffMarkdown(onlyBase);
+    expect(out).toContain(
+      "_Not compared: the tabs view — only the base snapshot measured it " +
+        "(re-capture both sides with the same version so they measure the same views)._",
+    );
+  });
+
+  it("a non-tabs view neither side measured gets the generic reason", () => {
+    const outlineless = () =>
+      buildArtifact([page("Home", [], { tabs: undefined })], {
+        toolName: "cli",
+        toolVersion: "0",
+        views: ["tree"],
+      });
+    const out = renderDiffPretty(diffArtifacts(outlineless(), outlineless()), {
+      color: false,
+    });
+    expect(out).toContain(
+      "Not compared: the outline view — neither snapshot measured it.",
+    );
+    // One line per view, each with its own reason.
+    expect(out).toContain("Not compared: the tabs view — 'real-a11y snapshot'");
+  });
+
+  it("is absent when both sides measured every view, and under --findings-only", () => {
+    expect(
+      renderDiffPretty(diffArtifacts(domEra(), domEra()), { color: false }),
+    ).not.toContain("Not compared");
+    expect(
+      renderDiffPretty(neither, { color: false, only: "findings" }),
+    ).not.toContain("Not compared");
+    expect(renderDiffMarkdown(neither, { only: "findings" })).not.toContain(
+      "Not compared",
+    );
+  });
+});

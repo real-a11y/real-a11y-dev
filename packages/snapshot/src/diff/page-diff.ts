@@ -65,6 +65,16 @@ export interface DiffResult {
    * The renderers surface it; the exit gate ignores it (views never gate).
    */
   skippedViews: SnapshotView[];
+  /**
+   * The views each side didn't measure; their union is `skippedViews`.
+   *
+   * What tells the two reasons for a skip apart. A view in both lists is one
+   * neither capture took — `tabs` on every pair of current snapshots, since the
+   * native tree carries no tab order — so re-capturing changes nothing. A view
+   * in one list is a mismatched pair, such as a DOM-era base against a native
+   * PR, and re-capturing both sides the same way is the fix.
+   */
+  unmeasured: { base: SnapshotView[]; pr: SnapshotView[] };
 }
 
 const EMPTY_VIEW: ViewDiff = { added: [], removed: [] };
@@ -200,6 +210,10 @@ export function diffArtifacts(
     SNAPSHOT_VIEWS.filter((v) => baseViews.has(v) && prViews.has(v)),
   );
   const skippedViews = SNAPSHOT_VIEWS.filter((v) => !compare.has(v));
+  const unmeasured = {
+    base: SNAPSHOT_VIEWS.filter((v) => !baseViews.has(v)),
+    pr: SNAPSHOT_VIEWS.filter((v) => !prViews.has(v)),
+  };
   const baseById = new Map(base.pages.map((p) => [p.id, p]));
   const seen = new Set<string>();
   const pages: PageDiff[] = [];
@@ -263,5 +277,5 @@ export function diffArtifacts(
   }
 
   const summary = summarize(pages.flatMap((p) => p.entries));
-  return { pages, summary, skippedViews };
+  return { pages, summary, skippedViews, unmeasured };
 }

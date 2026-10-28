@@ -42,11 +42,16 @@ notion: "https://app.notion.com/p/3aa1c354b0b581488056fb7ec111c33d"
 - **5** — **no tabs-axis entries at all**, and the report says why: `skippedViews`
   includes `tabs`, rendered as "Not compared: the tabs view". The added stop is
   invisible to `snapshot`/`diff` since #258 — that is the documented loss, and the
-  assertion is that it reads as _not measured_ rather than as nothing-focusable
+  assertion is that it reads as _not measured_ rather than as nothing-focusable.
+  Neither side measured it, so the note points at `real-a11y tabs <url>` and does
+  **not** advise re-capturing, which would change nothing (from cli 0.1.0-beta.11;
+  earlier releases print the re-capture advice here too)
 - **5b** — same: the axis is skipped, **not** reported as N stops removed. One
   side measured tab order and the other didn't; `meta.views` is what lets the
   differ tell those apart. A run that emits "Keyboard tab stop removed" here is
-  the regression this guard exists for
+  the regression this guard exists for. The note names the side that measured it
+  ("only the base snapshot measured it") and advises re-capturing both sides with
+  the same version
 - **6** — explains _why_ each entry classified as it did
 - **7** — filters to that axis only
 - **8** — readable Markdown for a PR comment
