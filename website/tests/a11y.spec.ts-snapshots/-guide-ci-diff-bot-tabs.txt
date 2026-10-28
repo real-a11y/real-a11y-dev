@@ -1,12 +1,10 @@
 link "How it works"
+link "1. Install the CLI"
+link "2. List your pages"
+link "3. Add the workflow"
+link "Fail the PR on new findings"
 link "What the comment looks like"
-link "Setup"
-link "Configuration"
-link "Workflow templates"
-link "Output format"
-link "What it catches"
-link "Findings in the Security tab (SARIF)"
-link "Combine with assertions"
+link "Other formats"
 link "@real-a11y-dev/cli"
 button "Copy Code"
 generic
@@ -14,46 +12,19 @@ button "Copy Code"
 generic
 button "Copy Code"
 generic
-link "Chrome for Testing"
-button "Copy Code"
-generic
-link "Security tab"
-link "Configuration"
-button "Copy Code"
-generic
-link "Combine with assertions"
-link "Next.js (dev server)"
-link "Vite / CRA SPA (preview server)"
-link "Static site (serve build output)"
-link "pnpm monorepo"
-table
-table
-link "the Security tab"
-link "CLI reference"
-button "Copy Code"
-generic
-link "Static site"
+link "config reference"
+link "below"
 button "Copy Code"
 generic
 button "Copy Code"
 generic
 button "Copy Code"
 generic
-button "Copy Code"
-generic
-button "Copy Code"
-generic
-button "Copy Code"
-generic
-button "Copy Code"
-generic
-table
-link "SARIF 2.1.0"
-button "Copy Code"
-generic
+link "real-a11y tabs"
+link "snapshot"
+link "diff"
+link "In CI"
 link "@real-a11y-dev/testing"
-button "Copy Code"
-generic
 link "Edit this page on GitHub"
 link "Previous page Peer Dependencies"
 link "Next page Authenticated Pages"

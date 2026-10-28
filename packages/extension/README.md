@@ -13,9 +13,9 @@ Chrome extension that adds a Side Panel with an interactive DOM/accessibility tr
 1. Clone the [monorepo](https://github.com/real-a11y/real-a11y-dev) and build the extension:
    ```bash
    git clone https://github.com/real-a11y/real-a11y-dev.git
-   cd real-a11y
+   cd real-a11y-dev
    pnpm install
-   pnpm --filter @real-a11y-dev/semantic-navigator-extension build
+   pnpm --filter "@real-a11y-dev/semantic-navigator-extension..." build
    ```
 2. Open `chrome://extensions` in Chrome
 3. Enable **Developer mode** (toggle in the top right)
