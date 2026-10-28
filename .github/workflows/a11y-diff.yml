@@ -10,6 +10,10 @@ name: A11y Tree Diff
 # real content, not just fixtures. The committed baselines in `website-a11y`
 # stay the hard gate; this is the reviewer-facing "did our code move a11y?"
 # signal. The comment is updated in place on every push, never spammed.
+#
+# Only the `comment` job can write to the PR, and it runs none of the PR's code:
+# it downloads the diff the audit job produced and posts it. The jobs that
+# install and build the PR keep a read-only token.
 
 on:
   pull_request:
@@ -24,10 +28,9 @@ on:
       - "packages/cli/src/**"
       - ".github/workflows/a11y-diff.yml"
 
+# Read-only by default; the comment job below escalates to the writes it needs.
 permissions:
   contents: read
-  pull-requests: write # post/update the sticky comment
-  actions: read # read the jobs API to deep-link the full-diff step log
 
 # One run per PR ref — a quick second push cancels the first so two jobs can't
 # race the find-or-create comment.
@@ -92,9 +95,9 @@ jobs:
           path: base.json
           if-no-files-found: error
 
-  # ── Snapshot the PR with the PR engine, diff against base, comment ──────────
+  # ── Snapshot the PR with the PR engine, diff against base ───────────────────
   audit-pr:
-    name: Audit PR & comment
+    name: Audit PR
     needs: [snapshot-base]
     runs-on: ubuntu-latest
     steps:
@@ -149,6 +152,30 @@ jobs:
           node packages/cli/dist/index.js diff base.json pr.json --format md --explain --fail-on never --ignore-view-line '^time "' --max-pages 5 --max-lines 20 -o diff.md
           node packages/cli/dist/index.js diff base.json pr.json --format json --fail-on never --ignore-view-line '^time "' -o diff.json
 
+      - uses: actions/upload-artifact@v7
+        with:
+          name: a11y-diff
+          path: |
+            diff.md
+            diff.json
+          if-no-files-found: error
+
+  # ── Post or update the sticky comment ────────────────────────────────────────
+  comment:
+    name: Comment
+    needs: [audit-pr]
+    runs-on: ubuntu-latest
+    # A job-level `permissions` block replaces the top-level one rather than
+    # adding to it. Nothing here checks out or runs the PR's code, so this is the
+    # one job that may hold a token able to write to the PR.
+    permissions:
+      pull-requests: write # post/update the sticky comment
+      actions: read # read the jobs API to deep-link the full-diff step log
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: a11y-diff
+
       - name: Post PR comment
         uses: actions/github-script@v9
         with:
@@ -158,7 +185,8 @@ jobs:
             const MARKER = '<!-- real-a11y-diff -->';
 
             // Deep-link "the full structural diff" to the exact job step that
-            // prints it uncapped — not just the run summary. Resolve the job +
+            // prints it uncapped — not just the run summary. That step is in
+            // the `audit-pr` job of this run, so resolve the job +
             // step by the step's NAME via the jobs API (so the `#step:N:1`
             // anchor follows the step even if earlier steps are reordered), and
             // fall back to the run URL if the lookup fails (API hiccup / rename).
