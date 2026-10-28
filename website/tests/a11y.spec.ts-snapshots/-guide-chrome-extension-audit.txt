@@ -399,7 +399,7 @@ main
     link "<SemanticNavigator />"
       code "<SemanticNavigator />"
   heading "Scoping" (level 3)
-  paragraph "To show only part of the page, double-click a container row (a form, a landmark, a list: anything with children and no action of its own), or select any row with children and press /+. Double-clicking an interactive row still activates it. A breadcrumb above the tree shows the path: click a segment to scope back up, or use (✕) or to return to the whole tree. Chrome's tree scopes the same way, except that it scopes into a focusable container, such as a region, where the in-page tree focuses it."
+  paragraph "In the extension, to show only part of the page, double-click a container row (a form, a landmark, a list: anything with children and no action of its own), or select any row with children and press /+. Double-clicking an interactive row still activates it. A breadcrumb above the tree shows the path: click a segment to scope back up, or use (✕) or to return to the whole tree. Chrome's tree scopes the same way, except that it scopes into a focusable container, such as a region, where the in-page tree focuses it."
     code "Ctrl"
     code "Cmd"
     code "Enter"
@@ -409,7 +409,7 @@ main
   paragraph "A scope limits the search and its match count, the role-filter lists, the TAB view, and what exports, which gains a line naming it. Selecting an element outside the scope, or focus moving to one with Focus sync on, leaves it."
     strong "Copy"
     code "Scope"
-  paragraph "The breadcrumb is the extension's. Scope the inspector with , and by passing it a different ."
+  paragraph "The other panels have no breadcrumb, and double-clicking a row there only expands or collapses it. Scope the inspector with , and by passing it a different ."
     link "setRoot()"
       code "setRoot()"
     code "<SemanticNavigator />"

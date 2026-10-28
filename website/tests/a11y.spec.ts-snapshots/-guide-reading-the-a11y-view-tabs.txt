@@ -11,6 +11,7 @@ link "Storybook addon"
 link "treeSnapshot()"
 link "real-a11y tree"
 link "get_semantic_tree"
+link "How roles are resolved"
 table
 table
 link "presentational roles conflict resolution"
