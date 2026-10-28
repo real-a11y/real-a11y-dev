@@ -186,10 +186,10 @@ jobs:
 
             // Deep-link "the full structural diff" to the exact job step that
             // prints it uncapped — not just the run summary. That step is in
-            // the `audit-pr` job of this run, so resolve the job +
-            // step by the step's NAME via the jobs API (so the `#step:N:1`
-            // anchor follows the step even if earlier steps are reordered), and
-            // fall back to the run URL if the lookup fails (API hiccup / rename).
+            // the `audit-pr` job of this run, so resolve the job + step by the
+            // step's NAME via the jobs API (so the `#step:N:1` anchor follows
+            // the step even if earlier steps are reordered), and fall back to
+            // the run URL if the lookup fails (API hiccup / rename).
             const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
             const FULL_DIFF_STEP = 'Structural diff (full — expand for the complete diff)';
             let fullDiffUrl = runUrl;
