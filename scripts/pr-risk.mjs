@@ -853,6 +853,37 @@ const addedTestDisablers = (code) =>
   );
 
 /**
+ * An ESLint comment directive and its rule list: `eslint-disable`,
+ * `-next-line`, `-line`, or an inline `/* eslint complexity: … *\/` config.
+ * The list stops at ` -- `, after which comes the directive's stated reason,
+ * so a reason that merely mentions "complexity" is not read as a rule.
+ */
+const ESLINT_DIRECTIVE =
+  /\/[/*]\s*eslint(?:-disable(?:-next-line|-line)?)?\s+((?:(?!--)[^\n])*)/g;
+
+/** The size and complexity budgets `eslint-suppressions.json` ratchets. */
+const BUDGET_RULE =
+  /(?<![\w/-])(complexity|max-depth|max-params|max-lines-per-function|max-nested-callbacks)(?![\w-])/g;
+
+/** Which budget rules each file's ADDED directives switch off. */
+function addedBudgetDirectives(code) {
+  const out = [];
+  for (const [path, text] of code) {
+    const added = text
+      .split("\n")
+      .filter((l) => l.startsWith("+"))
+      .join("\n");
+    const rules = new Set();
+    for (const [, list] of added.matchAll(ESLINT_DIRECTIVE)) {
+      for (const [rule] of list.matchAll(BUDGET_RULE)) rules.add(rule);
+    }
+    if (rules.size)
+      out.push(`${path} → eslint-disable ${[...rules].join(", ")}`);
+  }
+  return out;
+}
+
+/**
  * Which of `names` (a regex alternation) the touched code reaches, one evidence
  * line per file: `<path> → name, name`.
  *
@@ -1076,14 +1107,19 @@ const RULES = [
       ),
   },
   {
-    id: "lint-suppression-growth",
+    id: "lint-budget-raised",
     tier: "high",
-    title: "Lint suppressions added or raised",
-    why: "`eslint-suppressions.json` holds the complexity and size violations that predate those budgets, per file and per rule, and ESLint reports nothing in a file while it stays within its count. Raising a count or adding an entry is raising a budget — the same call as raising `.size-limit.json` — and it passes every check by construction, because the file is what tells ESLint not to report. Lowering one is the prune `pnpm lint` demands after a fix, and grades nothing.",
+    title: "Size or complexity budget raised",
+    why: "`eslint-suppressions.json` holds the complexity and size violations that predate those budgets, per file and per rule, and ESLint reports nothing in a file while it stays within its count. Raising a count or adding an entry is raising a budget — the same call as raising `.size-limit.json` — and it passes every check by construction, because the file is what tells ESLint not to report. An added `eslint-disable` naming one of those rules does the same for one spot. Lowering a count is the prune `pnpm lint` demands after a fix, and grades nothing.",
     // Watched, so a prune-only diff reads as considered rather than unknown:
     // `match` returns nothing when every count went down.
     watches: /^eslint-suppressions\.json$/,
-    match: (f) => f.suppressionGrowth,
+    match: (f) => [
+      ...f.suppressionGrowth,
+      ...addedBudgetDirectives(f.touchedCode),
+    ],
+    // This file and its tests name the directive in order to look for it.
+    excludeSelf: true,
   },
   {
     id: "release-config",
@@ -1109,7 +1145,7 @@ const RULES = [
     // `watches` says "considered, and deliberately not interesting" — distinct
     // from "never heard of it", which is what that section is for. Any future
     // rule that filters a watched path down to no evidence needs one too, as
-    // `lint-suppression-growth` does for a prune; every other rule today either
+    // `lint-budget-raised` does for a prune; every other rule today either
     // cites the path it matched or is scoped to a LOW_SHAPED one.
     watches: /^package\.json$/,
     match: (f) =>

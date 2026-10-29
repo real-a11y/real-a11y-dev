@@ -224,7 +224,8 @@ export default [
   // suppression ESLint calls unused, and `pnpm lint` fails until
   // `pnpm lint:prune` drops it, so the counts only go down. Raising one is the
   // same call as raising a `.size-limit.json` budget, and `pr:risk` grades a
-  // grown suppression 🔴 high for that reason.
+  // grown suppression 🔴 high for that reason, as it does an added
+  // `eslint-disable` naming one of these rules.
   //
   // `complexity` sits at 15, not the textbook 10, because ESLint counts every
   // `&&`, `||`, `??` and `?.`, and much of this code implements spec

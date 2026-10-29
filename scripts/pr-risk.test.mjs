@@ -1328,7 +1328,7 @@ describe("lint suppressions grade by direction", () => {
     );
 
     assert.equal(result.tier, "high");
-    assert.deepEqual(evidenceFor(result, "lint-suppression-growth"), [
+    assert.deepEqual(evidenceFor(result, "lint-budget-raised"), [
       `${SUPPRESSIONS} → packages/core/src/a.ts: complexity 2 → 3`,
     ]);
     assert.deepEqual(result.unrecognised, []);
@@ -1350,7 +1350,7 @@ describe("lint suppressions grade by direction", () => {
     );
 
     assert.equal(result.tier, "high");
-    assert.deepEqual(evidenceFor(result, "lint-suppression-growth"), [
+    assert.deepEqual(evidenceFor(result, "lint-budget-raised"), [
       `${SUPPRESSIONS} → packages/core/src/a.ts: max-depth 0 → 1`,
       `${SUPPRESSIONS} → packages/core/src/b.ts: complexity 0 → 1`,
     ]);
@@ -1369,7 +1369,7 @@ describe("lint suppressions grade by direction", () => {
     assert.equal(result.tier, "low");
     assert.deepEqual(result.reasons, []);
     assert.deepEqual(result.unrecognised, []);
-    assert.ok(result.shape.includes("lint-suppression-growth"));
+    assert.ok(result.shape.includes("lint-budget-raised"));
   });
 
   it("does not grade deleting the file as growth", async () => {
@@ -1389,7 +1389,7 @@ describe("lint suppressions grade by direction", () => {
       { base: { [SUPPRESSIONS]: json(BASE) } },
     );
     assert.equal(broken.tier, "high");
-    assert.deepEqual(evidenceFor(broken, "lint-suppression-growth"), [
+    assert.deepEqual(evidenceFor(broken, "lint-budget-raised"), [
       `${SUPPRESSIONS} on this branch isn't valid JSON`,
     ]);
 
@@ -1406,9 +1406,52 @@ describe("lint suppressions grade by direction", () => {
       { base: { [SUPPRESSIONS]: json(BASE) } },
     );
     assert.equal(notANumber.tier, "high");
-    assert.deepEqual(evidenceFor(notANumber, "lint-suppression-growth"), [
+    assert.deepEqual(evidenceFor(notANumber, "lint-budget-raised"), [
       `${SUPPRESSIONS} → packages/core/src/a.ts: complexity 2 → lots`,
     ]);
+  });
+
+  // The same budget, lifted for one spot instead of one file.
+  const SRC = "packages/core/src/x.ts";
+  const BODY = "export const f = () => 1;\n";
+  const DISABLE = (directive) => `// ${directive}\n${BODY}`;
+
+  it("grades an added disable naming a budget rule 🔴 high", async () => {
+    const result = await grade(
+      {
+        [SRC]: DISABLE(
+          "eslint-disable-next-line max-params, complexity -- spec algorithm",
+        ),
+      },
+      { base: { [SRC]: BODY } },
+    );
+
+    assert.equal(result.tier, "high");
+    assert.deepEqual(evidenceFor(result, "lint-budget-raised"), [
+      `${SRC} → eslint-disable max-params, complexity`,
+    ]);
+  });
+
+  it("does not read the directive's reason as a rule list", async () => {
+    const result = await grade(
+      {
+        [SRC]: DISABLE(
+          "eslint-disable-next-line no-console -- keeps complexity down",
+        ),
+      },
+      { base: { [SRC]: BODY } },
+    );
+
+    assert.ok(!ruleIds(result).includes("lint-budget-raised"));
+  });
+
+  it("does not grade a removed directive", async () => {
+    const result = await grade(
+      { [SRC]: BODY },
+      { base: { [SRC]: DISABLE("eslint-disable-next-line complexity") } },
+    );
+
+    assert.ok(!ruleIds(result).includes("lint-budget-raised"));
   });
 });
 
