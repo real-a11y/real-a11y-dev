@@ -56,4 +56,11 @@ describe("createLineReader", () => {
     }
     expect([...read(buf("three\n"))]).toEqual(["two", "three"]);
   });
+
+  it("accepts string chunks as well as Buffers", () => {
+    const read = createLineReader();
+    expect([...read("hel")]).toEqual([]);
+    expect([...read(buf("lo\nwor"))]).toEqual(["hello"]);
+    expect([...read("ld\n")]).toEqual(["world"]);
+  });
 });
