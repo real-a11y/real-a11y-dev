@@ -1610,6 +1610,40 @@ describe("lint suppressions grade by direction", () => {
     ]);
   });
 
+  it("grades two edited functions that swapped under a directive 🔴 high", async () => {
+    // Git shows a two-line replacement: paired by position, `beta` would read
+    // as the `alpha` it displaced.
+    const result = await grade(
+      {
+        [SCRIPT]: `${NEXT}\nfunction beta(b, c) {}\nfunction alpha(a, c) {}\n`,
+      },
+      {
+        base: {
+          [SCRIPT]: `${NEXT}\nfunction alpha(a) {}\nfunction beta(b) {}\n`,
+        },
+      },
+    );
+
+    assert.equal(result.tier, "high");
+    assert.deepEqual(evidenceFor(result, "lint-budget-raised"), [
+      `${SCRIPT} → eslint-disable complexity`,
+    ]);
+  });
+
+  it("grades a covered line moved away, new code left in its place 🔴 high", async () => {
+    // One way git can show it: `f` replaced by `h` one for one, and `f`
+    // added again below `g`.
+    const result = await grade(
+      { [SCRIPT]: `${NEXT}\n${H}${G}${BODY}` },
+      { base: { [SCRIPT]: `${NEXT}\n${BODY}${G}` } },
+    );
+
+    assert.equal(result.tier, "high");
+    assert.deepEqual(evidenceFor(result, "lint-budget-raised"), [
+      `${SCRIPT} → eslint-disable complexity`,
+    ]);
+  });
+
   it("grades a one-line disable widened to the rest of the file 🔴 high", async () => {
     const result = await grade(
       { [SCRIPT]: `/* eslint-disable complexity */\n${BODY}` },

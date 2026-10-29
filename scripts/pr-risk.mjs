@@ -933,9 +933,11 @@ const hunkRanges = (section) =>
 /**
  * The merge-base line a branch line came from, through the file's `hunks`, or
  * `null` for one with none. A changed line stands for the line it replaced
- * only in a hunk that adds as many lines as it removes, as an edit made in
- * place does; a line any other hunk adds is new. A hunk that adds nothing
- * sits after its `newStart`, which is why the first line after it is one on.
+ * only in a hunk that swaps one line for one, as an edit made in place does.
+ * A wider hunk would have to pair its lines by position, and two edited
+ * functions that traded places would then read as each other, so a line any
+ * other hunk adds is new. A hunk that adds nothing sits after its `newStart`,
+ * which is why the first line after it is one on.
  */
 function baseLine(hunks, line) {
   let shift = 0;
@@ -943,7 +945,7 @@ function baseLine(hunks, line) {
     const start = newCount ? newStart : newStart + 1;
     if (line < start) break;
     if (line < start + newCount) {
-      return oldCount === newCount ? oldStart + line - start : null;
+      return oldCount === 1 && newCount === 1 ? oldStart : null;
     }
     shift += oldCount - newCount;
   }
@@ -993,12 +995,13 @@ const tally = (entries) => {
  *     closed now runs on.
  *
  * That text is the merge base's wherever the line has a merge-base
- * counterpart: a branch line the diff edited in place reads as the line it
- * replaced. So renaming the function under an unchanged `-next-line` leaves
+ * counterpart: a branch line the diff edited in place, one line for one,
+ * reads as the line it replaced, unless that line is still on the branch
+ * somewhere. So renaming the function under an unchanged `-next-line` leaves
  * its key alone, while code inserted under a directive, or left under it by a
- * deletion or a move, is other text and a new key. Text rather than a line
- * number, because git may show an `eslint-enable` moved down past a line as
- * that line moved up instead, leaving the enable's own line unchanged.
+ * deletion, a move or a swap, is other text and a new key. Text rather than
+ * a line number, because git may show an `eslint-enable` moved down past a
+ * line as that line moved up instead, leaving the enable's own line unchanged.
  *
  * The other two directions, a disable gone or an enable added, only narrow an
  * exemption and lift nothing. A directive whose key changed reads as one gone
@@ -1026,10 +1029,13 @@ async function budgetDirectiveGrowth(mergeBase, touchedCode, hunks) {
     const baseText = await gitOr(["show", `${mergeBase}:${path}`], "");
     const atBase = lineTexts(baseText);
     const here = lineTexts(text);
+    const onBranch = new Set(text.split("\n").map((l) => l.trim()));
     const before = budgetDirectives(baseText, atBase);
     const after = budgetDirectives(text, (line) => {
       const from = baseLine(hunks.get(path) ?? [], line);
-      return from === null ? here(line) : atBase(from);
+      const was = from === null ? null : atBase(from);
+      // Still on the branch, the line it replaced moved rather than changed.
+      return was === null || onBranch.has(was) ? here(line) : was;
     });
     const rules = new Set([
       ...outnumbered(after, before, (k) => k !== "-enable"),
