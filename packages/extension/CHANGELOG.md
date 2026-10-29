@@ -61,6 +61,13 @@
   a space instead of joining the lines into one word
   ([#546](https://github.com/real-a11y/real-a11y-dev/pull/546)).
 
+- **Close tab** no longer leaves an error in the extension's error list when
+  the window it refocuses afterwards has already closed; it ignores that, as
+  the tree refresh right after it already did. The background, content script
+  and side panel otherwise behave as before: every promise they start is now
+  awaited or explicitly let go, which a new type-aware lint step checks
+  ([#555](https://github.com/real-a11y/real-a11y-dev/pull/555)).
+
 ## 0.1.17
 
 ### Patch Changes
