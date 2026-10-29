@@ -1,19 +1,8 @@
   h2 On this page
 h1 Semantic Navigator
-  h2 The problem
   h2 The test
-  h2 This is not a replacement for real testing
-  h2 The screen curtain
-  h2 How it works
   h2 Native mode
-  h2 What only the extension does
   h2 Using the panel
-    h3 Search and role filters
-    h3 Jump chips
-    h3 Focus sync
-    h3 Scoping
-    h3 Dialog auto-scope
-    h3 Live region monitoring
     h3 Keyboard
   h2 Privacy
   h2 Troubleshooting

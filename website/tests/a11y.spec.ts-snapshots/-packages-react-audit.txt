@@ -363,12 +363,11 @@ main
       link "Next.js recipe"
   separator
   heading "Panel features" (level 2)
-  paragraph "renders the same tree panel as the Chrome extension, with its search, role filters and . The above configure it, and a different scopes it. Focus sync, the scope breadcrumb and the are the extension's alone."
+  paragraph "renders the same tree panel as the Chrome extension, with its search, role filters and . The above configure it, and a different scopes it. Focus sync, the scope breadcrumb and the live region log are the extension's alone."
     code "<SemanticNavigator />"
     link "keyboard"
     link "props"
     code "root"
-    link "live region log"
   paragraph "→"
     link "Using the panel"
 contentinfo
