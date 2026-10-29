@@ -1549,18 +1549,65 @@ describe("lint suppressions grade by direction", () => {
     ]);
   });
 
-  it("does not grade a directive that only moved, or one already there", async () => {
-    const moved = await grade(
-      { [SCRIPT]: `${BODY}// eslint-disable-next-line complexity\n${BODY}` },
-      { base: { [SCRIPT]: `// eslint-disable-next-line complexity\n${BODY}` } },
-    );
-    assert.ok(!ruleIds(moved).includes("lint-budget-raised"));
-
-    const untouched = await grade(
+  it("does not grade a directive that was already there", async () => {
+    const result = await grade(
       { [SCRIPT]: `// eslint-disable-next-line complexity\n${BODY}${BODY}` },
       { base: { [SCRIPT]: `// eslint-disable-next-line complexity\n${BODY}` } },
     );
-    assert.ok(!ruleIds(untouched).includes("lint-budget-raised"));
+
+    assert.ok(!ruleIds(result).includes("lint-budget-raised"));
+  });
+
+  // Reach, not count: each of these lifts a budget with the number of
+  // directives in the file unchanged.
+  const NEXT = "// eslint-disable-next-line complexity";
+  const G = "export const g = () => 2;\n";
+
+  it("grades a directive that moved onto other code 🔴 high", async () => {
+    const result = await grade(
+      { [SCRIPT]: `${BODY}${NEXT}\n${G}` },
+      { base: { [SCRIPT]: `${NEXT}\n${BODY}${G}` } },
+    );
+
+    assert.equal(result.tier, "high");
+    assert.deepEqual(evidenceFor(result, "lint-budget-raised"), [
+      `${SCRIPT} → eslint-disable complexity`,
+    ]);
+  });
+
+  it("grades a one-line disable widened to the rest of the file 🔴 high", async () => {
+    const result = await grade(
+      { [SCRIPT]: `/* eslint-disable complexity */\n${BODY}` },
+      { base: { [SCRIPT]: `${NEXT}\n${BODY}` } },
+    );
+
+    assert.equal(result.tier, "high");
+    assert.deepEqual(evidenceFor(result, "lint-budget-raised"), [
+      `${SCRIPT} → eslint-disable complexity`,
+    ]);
+  });
+
+  it("grades a removed eslint-enable 🔴 high: the region now runs on", async () => {
+    const REGION = `/* eslint-disable complexity */\n${BODY}`;
+    const result = await grade(
+      { [SCRIPT]: `${REGION}${G}` },
+      { base: { [SCRIPT]: `${REGION}/* eslint-enable complexity */\n${G}` } },
+    );
+
+    assert.equal(result.tier, "high");
+    assert.deepEqual(evidenceFor(result, "lint-budget-raised"), [
+      `${SCRIPT} → eslint-disable complexity`,
+    ]);
+  });
+
+  it("does not grade an added eslint-enable: it narrows", async () => {
+    const REGION = `/* eslint-disable complexity */\n${BODY}`;
+    const result = await grade(
+      { [SCRIPT]: `${REGION}/* eslint-enable complexity */\n${G}` },
+      { base: { [SCRIPT]: `${REGION}${G}` } },
+    );
+
+    assert.ok(!ruleIds(result).includes("lint-budget-raised"));
   });
 });
 

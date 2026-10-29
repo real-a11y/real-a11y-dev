@@ -906,34 +906,78 @@ function countBudgetDirectives(text) {
 }
 
 /**
- * Budgets that more directives switch off on this branch than at the merge
- * base, per touched file.
+ * A directive on one changed line: `[1]` its keyword (`-disable…`, `-enable`,
+ * or none for a config comment), `[2]` its rule list, up to a `--` reason or
+ * the comment's close.
+ */
+const LINE_DIRECTIVE =
+  /\/[/*]\s*eslint(-disable(?:-next-line|-line)?|-enable)?(?![\w-])((?:(?!--|\*\/).)*)/;
+
+/**
+ * Budgets one changed `-U0` diff line lifts: an added disable or config
+ * comment, or a removed `eslint-enable`. The other two directions narrow an
+ * exemption, an added enable or a removed disable, and lift nothing.
  *
- * Whole files, not added lines. A directive is a comment, and a `-U0` diff
- * shows only the lines that changed: adding `complexity` to the first or a
- * middle line of an existing multi-line `/* eslint-disable … *\/` leaves its
- * opener or its closing `*\/` out of the diff, and a scan of added lines then
- * reads no directive at all. Counting both versions also means a directive
- * that merely moved, or one that was already there, is not new.
+ * Reach, not count, is what this line-level half adds. Turning
+ * `eslint-disable-next-line complexity` into `eslint-disable complexity`
+ * widens one line's exemption to the rest of the file, and deleting an
+ * `eslint-enable` lets a region run on, with the number of directives
+ * unchanged. A moved directive reads as one added here, which is right: it now
+ * exempts code it didn't before. So does any edited disable line, even one
+ * that narrows the exemption. Telling those apart is the reviewer's job, and
+ * a budget directive is rare enough that the false 🔴 costs little.
+ */
+function budgetsLiftedBy(line) {
+  if (!/^[+-]/.test(line)) return [];
+  const text = line.slice(1);
+  const m = text.match(LINE_DIRECTIVE);
+  if (!m || line.startsWith("+") === (m[1] === "-enable")) return [];
+  // A block comment still open at the end of the line continues its rule list
+  // on the next one, so an empty list here is not a bare disable. Take the
+  // names it does hold; the whole-file count reads the rest.
+  const open =
+    m[0].startsWith("/*") && !text.slice(m.index + m[0].length).includes("*/");
+  if (open) return [...m[2].matchAll(BUDGET_RULE)].map(([rule]) => rule);
+  return budgetsSwitchedOff(m[1], m[2]);
+}
+
+/**
+ * Budgets that more directives switch off in the whole file on this branch
+ * than at the merge base — the half the changed lines alone can't see. A
+ * directive is a comment, and adding `complexity` to the middle line of an
+ * existing multi-line `/* eslint-disable … *\/` changes a line that names no
+ * directive at all. A base version git can't show reads as empty, so
+ * everything in the file counts, failing toward 🔴.
+ */
+async function wholeFileGrowth(mergeBase, path) {
+  const before = countBudgetDirectives(
+    await gitOr(["show", `${mergeBase}:${path}`], ""),
+  );
+  const after = countBudgetDirectives(
+    await readFile(resolve(repoRoot, path), "utf8").catch(() => ""),
+  );
+  return [...after]
+    .filter(([rule, n]) => n > (before.get(rule) ?? 0))
+    .map(([rule]) => rule);
+}
+
+/**
+ * Budgets a touched file's `eslint` directives lift on this branch: what its
+ * changed lines widen, plus what the whole file switches off more often than
+ * at the merge base.
  *
  * Only files whose changed lines mention `eslint` or a budget rule are read,
  * so a large diff costs no extra git calls. A file the budget layer exempts is
- * skipped, since no budget applies there. A base version git can't show reads
- * as empty, so everything in the file counts — failing toward 🔴.
+ * skipped, since no budget applies there.
  */
 async function budgetDirectiveGrowth(mergeBase, touchedCode) {
   const out = [];
   for (const [path, diff] of touchedCode) {
     if (BUDGET_EXEMPT.test(path) || !MAY_TOUCH_DIRECTIVE.test(diff)) continue;
-    const before = countBudgetDirectives(
-      await gitOr(["show", `${mergeBase}:${path}`], ""),
-    );
-    const after = countBudgetDirectives(
-      await readFile(resolve(repoRoot, path), "utf8").catch(() => ""),
-    );
-    const grown = [...after].filter(([rule, n]) => n > (before.get(rule) ?? 0));
-    if (grown.length)
-      out.push(`${path} → eslint-disable ${grown.map(([r]) => r).join(", ")}`);
+    const rules = new Set(diff.split("\n").flatMap((l) => budgetsLiftedBy(l)));
+    for (const rule of await wholeFileGrowth(mergeBase, path)) rules.add(rule);
+    if (rules.size)
+      out.push(`${path} → eslint-disable ${[...rules].join(", ")}`);
   }
   return out;
 }
@@ -1165,7 +1209,7 @@ const RULES = [
     id: "lint-budget-raised",
     tier: "high",
     title: "Size or complexity budget raised",
-    why: "`eslint-suppressions.json` holds the complexity and size violations that predate those budgets, per file and per rule, and ESLint reports nothing in a file while it stays within its count. Raising a count or adding an entry is raising a budget — the same call as raising `.size-limit.json` — and it passes every check by construction, because the file is what tells ESLint not to report. An added `eslint-disable` naming one of those rules does the same for one spot, and so does one naming no rule at all, which switches every rule off. Lowering a count is the prune `pnpm lint` demands after a fix, and grades nothing.",
+    why: "`eslint-suppressions.json` holds the complexity and size violations that predate those budgets, per file and per rule, and ESLint reports nothing in a file while it stays within its count. Raising a count or adding an entry is raising a budget — the same call as raising `.size-limit.json` — and it passes every check by construction, because the file is what tells ESLint not to report. An added `eslint-disable` naming one of those rules does the same for one spot, and so does one naming no rule at all, which switches every rule off — as do moving a disable onto other code, widening a `-next-line` one to the rest of the file, and deleting the `eslint-enable` that closed a region. Lowering a count is the prune `pnpm lint` demands after a fix, and grades nothing.",
     // Watched, so a prune-only diff reads as considered rather than unknown:
     // `match` returns nothing when every count went down.
     watches: /^eslint-suppressions\.json$/,
