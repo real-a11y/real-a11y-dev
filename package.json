@@ -8,6 +8,7 @@
     "test": "pnpm -r --filter \"!@real-a11y-dev/website\" --filter \"!@real-a11y-dev/example-vanilla\" --filter \"!@real-a11y-dev/example-react\" --filter \"!@real-a11y-dev/example-storybook\" --filter \"!@real-a11y-dev/example-testing\" test",
     "lint": "eslint packages/ scripts/ website/scripts website/tests",
     "lint:fix": "eslint packages/ scripts/ website/scripts website/tests --fix",
+    "lint:prune": "eslint packages/ scripts/ website/scripts website/tests --prune-suppressions",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "typecheck": "pnpm -r --filter \"!@real-a11y-dev/website\" --filter \"!@real-a11y-dev/example-vanilla\" --filter \"!@real-a11y-dev/example-react\" --filter \"!@real-a11y-dev/example-storybook\" typecheck",
@@ -66,7 +67,7 @@
   },
   "lint-staged": {
     "*.{ts,tsx,js,jsx,mjs,cjs}": [
-      "eslint --fix --no-warn-ignored",
+      "eslint --fix --no-warn-ignored --pass-on-unpruned-suppressions",
       "prettier --write --ignore-unknown"
     ],
     "*.{json,jsonc,yml,yaml,css,scss,html,md}": "prettier --write --ignore-unknown"

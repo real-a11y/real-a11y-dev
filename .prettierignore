@@ -6,6 +6,9 @@ coverage/
 test-results/
 playwright-report/
 pnpm-lock.yaml
+# Written by ESLint on every `--suppress-*` and `--prune-suppressions`, in its
+# own format (no trailing newline), so formatting it would fail the next prune.
+eslint-suppressions.json
 *.min.js
 *.min.css
 

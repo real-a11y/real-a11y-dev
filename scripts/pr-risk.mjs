@@ -453,6 +453,7 @@ async function collectFacts(base) {
     rootPackageKeys: await changedRootPackageKeys(mergeBase),
     packageManifests: await changedPackageManifests(mergeBase, files),
     surfaceRemovals: await surfaceRemovals(mergeBase, files),
+    suppressionGrowth: await suppressionGrowth(mergeBase, files),
   };
 }
 
@@ -675,6 +676,76 @@ async function surfaceRemovals(mergeBase, files) {
   return diffManifests(a, b)
     .filter((c) => c.kind === "removed")
     .map((c) => c.path);
+}
+
+/**
+ * Lint suppressions this branch adds or raises in `eslint-suppressions.json`.
+ *
+ * The file grandfathers the size and complexity violations that existed when
+ * those budgets were switched on: `{ "<file>": { "<rule>": { "count": n } } }`,
+ * and ESLint stays quiet about a file while its violations of a rule number no
+ * more than `n`. So the direction of a change is everything. A count that went
+ * down, or an entry that went away, is code that got simpler — `pnpm lint`
+ * insists on that prune, and it is nothing to review. A count that went up, or
+ * an entry that appeared, is a budget raised for one file, and the diff passes
+ * every check by construction, because this file is what tells the check not
+ * to report.
+ *
+ * Per file and per rule, because that is what ESLint enforces: moving
+ * complexity from one file to another is growth in the second. A renamed file
+ * reads the same way, as a new entry, which costs a review rather than hiding
+ * one.
+ *
+ * Fails CLOSED like `surfaceRemovals`: unparseable on either side, or a count
+ * that isn't a number, is evidence. Deleting the file outright is not growth —
+ * every violation it held is then reported again.
+ */
+async function suppressionGrowth(mergeBase, files) {
+  const path = "eslint-suppressions.json";
+  if (!files.includes(path)) return [];
+
+  let after;
+  try {
+    after = await readFile(resolve(repoRoot, path), "utf8");
+  } catch {
+    return [];
+  }
+  const before = await gitOr(["show", `${mergeBase}:${path}`], null);
+
+  let a = {};
+  let b;
+  if (before !== null) {
+    try {
+      a = JSON.parse(before);
+    } catch {
+      return [`${path} at the merge base isn't valid JSON`];
+    }
+  }
+  try {
+    b = JSON.parse(after);
+  } catch {
+    return [`${path} on this branch isn't valid JSON`];
+  }
+
+  return grownSuppressions(a, b).map(
+    ({ file, rule, was, count }) =>
+      `${path} → ${file}: ${rule} ${was} → ${count}`,
+  );
+}
+
+/** Every file × rule whose count in `after` exceeds the one in `before`. */
+function grownSuppressions(before, after) {
+  const out = [];
+  for (const [file, rules] of Object.entries(after ?? {})) {
+    for (const [rule, entry] of Object.entries(rules ?? {})) {
+      const count = entry?.count;
+      const was = before?.[file]?.[rule]?.count ?? 0;
+      // `!(count <= was)` rather than `count > was`, so a count that isn't a
+      // number reads as growth instead of slipping past both comparisons.
+      if (!(count <= was)) out.push({ file, rule, was, count });
+    }
+  }
+  return out;
 }
 
 // ---------------------------------------------------------------------------
@@ -1005,6 +1076,16 @@ const RULES = [
       ),
   },
   {
+    id: "lint-suppression-growth",
+    tier: "high",
+    title: "Lint suppressions added or raised",
+    why: "`eslint-suppressions.json` holds the complexity and size violations that predate those budgets, per file and per rule, and ESLint reports nothing in a file while it stays within its count. Raising a count or adding an entry is raising a budget — the same call as raising `.size-limit.json` — and it passes every check by construction, because the file is what tells ESLint not to report. Lowering one is the prune `pnpm lint` demands after a fix, and grades nothing.",
+    // Watched, so a prune-only diff reads as considered rather than unknown:
+    // `match` returns nothing when every count went down.
+    watches: /^eslint-suppressions\.json$/,
+    match: (f) => f.suppressionGrowth,
+  },
+  {
     id: "release-config",
     tier: "high",
     title: "Release configuration",
@@ -1019,7 +1100,7 @@ const RULES = [
     tier: "high",
     title: "Root manifest — build/publish keys",
     why: "The root `scripts`, `packageManager`, `engines` and `pnpm` overrides define what `pnpm verify` and the pre-push hook actually run. A change here can make CI pass by doing less.",
-    // The only rule that watches a path it can then decline to fire on: the key
+    // The first rule to watch a path it can then decline to fire on: the key
     // filter below ignores everything outside the build/publish set, so a root
     // `devDependencies` bump matches no rule and is in no `LOW_SHAPED` entry.
     // It therefore landed under "paths the rubric doesn't recognise", advising
@@ -1027,9 +1108,9 @@ const RULES = [
     //
     // `watches` says "considered, and deliberately not interesting" — distinct
     // from "never heard of it", which is what that section is for. Any future
-    // rule that filters a watched path down to no evidence needs one too; every
-    // other rule today either cites the path it matched or is scoped to a
-    // LOW_SHAPED one, which is why this is the sole occurrence.
+    // rule that filters a watched path down to no evidence needs one too, as
+    // `lint-suppression-growth` does for a prune; every other rule today either
+    // cites the path it matched or is scoped to a LOW_SHAPED one.
     watches: /^package\.json$/,
     match: (f) =>
       f.rootPackageKeys

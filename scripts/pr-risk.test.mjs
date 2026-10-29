@@ -1299,6 +1299,119 @@ describe("a test switched off or deleted grades 🟡 medium", () => {
   });
 });
 
+describe("lint suppressions grade by direction", () => {
+  // `eslint-suppressions.json` is what tells ESLint not to report the budget
+  // violations that predate the budgets. A count going up passes every check by
+  // construction — that is the file's job — so the rubric is the only place
+  // such a diff can be seen. A count going down is the prune `pnpm lint` itself
+  // demands after a fix.
+  const SUPPRESSIONS = "eslint-suppressions.json";
+  const json = (value) => JSON.stringify(value, null, 2);
+  const BASE = {
+    "packages/core/src/a.ts": {
+      complexity: { count: 2 },
+      "max-params": { count: 1 },
+    },
+  };
+
+  it("grades a raised count 🔴 high, naming the file, rule and counts", async () => {
+    const result = await grade(
+      {
+        [SUPPRESSIONS]: json({
+          "packages/core/src/a.ts": {
+            complexity: { count: 3 },
+            "max-params": { count: 1 },
+          },
+        }),
+      },
+      { base: { [SUPPRESSIONS]: json(BASE) } },
+    );
+
+    assert.equal(result.tier, "high");
+    assert.deepEqual(evidenceFor(result, "lint-suppression-growth"), [
+      `${SUPPRESSIONS} → packages/core/src/a.ts: complexity 2 → 3`,
+    ]);
+    assert.deepEqual(result.unrecognised, []);
+  });
+
+  it("grades a new file or rule entry 🔴 high", async () => {
+    const result = await grade(
+      {
+        [SUPPRESSIONS]: json({
+          ...BASE,
+          "packages/core/src/a.ts": {
+            ...BASE["packages/core/src/a.ts"],
+            "max-depth": { count: 1 },
+          },
+          "packages/core/src/b.ts": { complexity: { count: 1 } },
+        }),
+      },
+      { base: { [SUPPRESSIONS]: json(BASE) } },
+    );
+
+    assert.equal(result.tier, "high");
+    assert.deepEqual(evidenceFor(result, "lint-suppression-growth"), [
+      `${SUPPRESSIONS} → packages/core/src/a.ts: max-depth 0 → 1`,
+      `${SUPPRESSIONS} → packages/core/src/b.ts: complexity 0 → 1`,
+    ]);
+  });
+
+  it("grades a prune 🟢 low, as considered rather than unrecognised", async () => {
+    const result = await grade(
+      {
+        [SUPPRESSIONS]: json({
+          "packages/core/src/a.ts": { complexity: { count: 1 } },
+        }),
+      },
+      { base: { [SUPPRESSIONS]: json(BASE) } },
+    );
+
+    assert.equal(result.tier, "low");
+    assert.deepEqual(result.reasons, []);
+    assert.deepEqual(result.unrecognised, []);
+    assert.ok(result.shape.includes("lint-suppression-growth"));
+  });
+
+  it("does not grade deleting the file as growth", async () => {
+    // Every violation the file held is reported again, so nothing was hidden.
+    const result = await grade(
+      { [SUPPRESSIONS]: null },
+      { base: { [SUPPRESSIONS]: json(BASE) } },
+    );
+
+    assert.equal(result.tier, "low");
+    assert.deepEqual(result.reasons, []);
+  });
+
+  it("fails closed on a file it can't read as counts", async () => {
+    const broken = await grade(
+      { [SUPPRESSIONS]: "{ not json" },
+      { base: { [SUPPRESSIONS]: json(BASE) } },
+    );
+    assert.equal(broken.tier, "high");
+    assert.deepEqual(evidenceFor(broken, "lint-suppression-growth"), [
+      `${SUPPRESSIONS} on this branch isn't valid JSON`,
+    ]);
+
+    // A count that isn't a number must not slip past both `>` and `<=`.
+    const notANumber = await grade(
+      {
+        [SUPPRESSIONS]: json({
+          "packages/core/src/a.ts": {
+            complexity: { count: "lots" },
+            "max-params": { count: 1 },
+          },
+        }),
+      },
+      { base: { [SUPPRESSIONS]: json(BASE) } },
+    );
+    assert.equal(notANumber.tier, "high");
+    assert.deepEqual(evidenceFor(notANumber, "lint-suppression-growth"), [
+      `${SUPPRESSIONS} → packages/core/src/a.ts: complexity 2 → lots`,
+    ]);
+  });
+});
+
 describe("the gate", () => {
   // The Bind step in `pr-risk.yml` decides whether a review label counts; this
   // decides what it buys, and CI runs the base branch's copy so a pull request
