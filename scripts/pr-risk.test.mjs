@@ -1411,6 +1411,45 @@ describe("lint suppressions grade by direction", () => {
     ]);
   });
 
+  // The length budget, which `max-lines` can't ratchet by count: each file
+  // already over it is held to its own ceiling, read as a `max-lines` count.
+  const LENGTHS = "eslint-file-lengths.json";
+  const CEILINGS = {
+    "packages/core/src/a.ts": 900,
+    "packages/core/src/b.ts": 700,
+  };
+
+  it("grades a raised or added file-length ceiling 🔴 high", async () => {
+    const result = await grade(
+      {
+        [LENGTHS]: json({
+          ...CEILINGS,
+          "packages/core/src/a.ts": 950,
+          "packages/core/src/c.ts": 600,
+        }),
+      },
+      { base: { [LENGTHS]: json(CEILINGS) } },
+    );
+
+    assert.equal(result.tier, "high");
+    assert.deepEqual(evidenceFor(result, "lint-budget-raised"), [
+      `${LENGTHS} → packages/core/src/a.ts: max-lines 900 → 950`,
+      `${LENGTHS} → packages/core/src/c.ts: max-lines 0 → 600`,
+    ]);
+    assert.deepEqual(result.unrecognised, []);
+  });
+
+  it("grades a lowered or dropped ceiling 🟢 low: it is the prune", async () => {
+    const result = await grade(
+      { [LENGTHS]: json({ "packages/core/src/a.ts": 850 }) },
+      { base: { [LENGTHS]: json(CEILINGS) } },
+    );
+
+    assert.equal(result.tier, "low");
+    assert.deepEqual(result.reasons, []);
+    assert.deepEqual(result.unrecognised, []);
+  });
+
   // The same budget, lifted for one spot instead of one file.
   const SRC = "packages/core/src/x.ts";
   const BODY = "export const f = () => 1;\n";
@@ -1429,6 +1468,20 @@ describe("lint suppressions grade by direction", () => {
     assert.equal(result.tier, "high");
     assert.deepEqual(evidenceFor(result, "lint-budget-raised"), [
       `${SRC} → eslint-disable max-params, complexity`,
+    ]);
+  });
+
+  it("tells a max-lines disable from a max-lines-per-function one", async () => {
+    const result = await grade(
+      {
+        [SRC]: `/* eslint-disable max-lines */\n${DISABLE("eslint-disable-next-line max-lines-per-function")}`,
+      },
+      { base: { [SRC]: BODY } },
+    );
+
+    assert.equal(result.tier, "high");
+    assert.deepEqual(evidenceFor(result, "lint-budget-raised"), [
+      `${SRC} → eslint-disable max-lines, max-lines-per-function`,
     ]);
   });
 
