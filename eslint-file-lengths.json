@@ -13,6 +13,6 @@
   "packages/extension/src/sidepanel/App.tsx": 3114,
   "packages/extension/src/sidepanel/NativeTreeView.tsx": 1066,
   "packages/mcp/src/server.ts": 1173,
-  "packages/snapshot/src/diff/views-summary.ts": 662,
+  "packages/snapshot/src/diff/views-summary.ts": 509,
   "scripts/pr-risk.mjs": 1183
 }
