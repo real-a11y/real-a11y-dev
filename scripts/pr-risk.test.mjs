@@ -1453,6 +1453,71 @@ describe("lint suppressions grade by direction", () => {
 
     assert.ok(!ruleIds(result).includes("lint-budget-raised"));
   });
+
+  // `website/scripts` is linted, budgets included, but grades 🟢 as docs-site
+  // paths, so it is where a directive this rule misses would pass unseen.
+  const SCRIPT = "website/scripts/x.mjs";
+
+  it("grades a disable with no rule list 🔴 high: it switches off every rule", async () => {
+    for (const comment of [
+      "// eslint-disable-next-line",
+      "/* eslint-disable */",
+      "// eslint-disable-line -- legacy",
+    ]) {
+      const result = await grade(
+        { [SCRIPT]: `${BODY.trimEnd()} ${comment}\n` },
+        { base: { [SCRIPT]: BODY } },
+      );
+
+      assert.equal(result.tier, "high", comment);
+      assert.deepEqual(
+        evidenceFor(result, "lint-budget-raised"),
+        [`${SCRIPT} → eslint-disable (every rule)`],
+        comment,
+      );
+    }
+  });
+
+  it("reads a block directive whose rule list continues onto the next line", async () => {
+    const result = await grade(
+      {
+        [SCRIPT]: `/* eslint-disable\n   no-console,\n   complexity -- spec\n */\n${BODY}`,
+      },
+      { base: { [SCRIPT]: BODY } },
+    );
+
+    assert.equal(result.tier, "high");
+    assert.deepEqual(evidenceFor(result, "lint-budget-raised"), [
+      `${SCRIPT} → eslint-disable complexity`,
+    ]);
+  });
+
+  it("leaves a directive in a test alone: no budget applies there", async () => {
+    const TEST = "packages/core/src/x.test.ts";
+    const result = await grade(
+      { [TEST]: DISABLE("eslint-disable-next-line") },
+      { base: { [TEST]: BODY } },
+    );
+
+    assert.ok(!ruleIds(result).includes("lint-budget-raised"));
+  });
+
+  it("leaves eslint-enable, eslint-env and other rules' disables alone", async () => {
+    const result = await grade(
+      {
+        [SCRIPT]: [
+          "/* eslint-env node */",
+          "// eslint-disable-next-line no-console",
+          "/* eslint-enable complexity */",
+          BODY,
+        ].join("\n"),
+      },
+      { base: { [SCRIPT]: BODY } },
+    );
+
+    assert.equal(result.tier, "low");
+    assert.ok(!ruleIds(result).includes("lint-budget-raised"));
+  });
 });
 
 describe("the gate", () => {

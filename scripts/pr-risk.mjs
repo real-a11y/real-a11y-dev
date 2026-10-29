@@ -853,29 +853,55 @@ const addedTestDisablers = (code) =>
   );
 
 /**
- * An ESLint comment directive and its rule list: `eslint-disable`,
- * `-next-line`, `-line`, or an inline `/* eslint complexity: … *\/` config.
- * The list stops at ` -- `, after which comes the directive's stated reason,
- * so a reason that merely mentions "complexity" is not read as a rule.
+ * An ESLint comment directive: `eslint-disable`, `-next-line`, `-line`, or an
+ * inline `/* eslint complexity: … *\/` config. Group 1 or 3 is the `-disable…`
+ * keyword (absent for a config comment), group 2 or 4 the rest of the comment.
+ * A block comment runs to its `*\/`, across lines, because ESLint reads a rule
+ * list that continues onto the next one. `eslint-enable` and `eslint-env` don't
+ * match: what follows `eslint` must be `-disable…` or whitespace.
  */
 const ESLINT_DIRECTIVE =
-  /\/[/*]\s*eslint(?:-disable(?:-next-line|-line)?)?\s+((?:(?!--)[^\n])*)/g;
+  /\/\*\s*eslint(-disable(?:-next-line|-line)?)?(?![\w-])([\s\S]*?)\*\/|\/\/\s*eslint(-disable(?:-next-line|-line)?)?(?![\w-])([^\n]*)/g;
 
 /** The size and complexity budgets `eslint-suppressions.json` ratchets. */
 const BUDGET_RULE =
   /(?<![\w/-])(complexity|max-depth|max-params|max-lines-per-function|max-nested-callbacks)(?![\w-])/g;
 
+/**
+ * Which budgets one directive switches off. Its rule list stops at `--`, after
+ * which comes the stated reason, so a reason that merely mentions "complexity"
+ * is not read as a rule. A disable with no rule list at all switches off every
+ * rule, budgets included.
+ */
+function budgetsSwitchedOff(keyword, body) {
+  const list = body.split("--")[0];
+  if (keyword && !list.replace(/[\s,]/g, "")) return ["(every rule)"];
+  return [...list.matchAll(BUDGET_RULE)].map(([rule]) => rule);
+}
+
+/**
+ * What the budget layer in `eslint.config.mjs` exempts — its `ignores`, kept
+ * in step by hand. A directive there lifts no budget, because none applies.
+ */
+const BUDGET_EXEMPT =
+  /\.(test|spec)\.|(^|\/)(e2e|__tests__|__fixtures__)\/|^website\/tests\//;
+
 /** Which budget rules each file's ADDED directives switch off. */
 function addedBudgetDirectives(code) {
   const out = [];
   for (const [path, text] of code) {
+    if (BUDGET_EXEMPT.test(path)) continue;
+    // The `+` comes off each added line so a block directive that spans two
+    // of them reads as one comment.
     const added = text
       .split("\n")
       .filter((l) => l.startsWith("+"))
+      .map((l) => l.slice(1))
       .join("\n");
     const rules = new Set();
-    for (const [, list] of added.matchAll(ESLINT_DIRECTIVE)) {
-      for (const [rule] of list.matchAll(BUDGET_RULE)) rules.add(rule);
+    for (const m of added.matchAll(ESLINT_DIRECTIVE)) {
+      for (const rule of budgetsSwitchedOff(m[1] ?? m[3], m[2] ?? m[4] ?? ""))
+        rules.add(rule);
     }
     if (rules.size)
       out.push(`${path} → eslint-disable ${[...rules].join(", ")}`);
@@ -1110,7 +1136,7 @@ const RULES = [
     id: "lint-budget-raised",
     tier: "high",
     title: "Size or complexity budget raised",
-    why: "`eslint-suppressions.json` holds the complexity and size violations that predate those budgets, per file and per rule, and ESLint reports nothing in a file while it stays within its count. Raising a count or adding an entry is raising a budget — the same call as raising `.size-limit.json` — and it passes every check by construction, because the file is what tells ESLint not to report. An added `eslint-disable` naming one of those rules does the same for one spot. Lowering a count is the prune `pnpm lint` demands after a fix, and grades nothing.",
+    why: "`eslint-suppressions.json` holds the complexity and size violations that predate those budgets, per file and per rule, and ESLint reports nothing in a file while it stays within its count. Raising a count or adding an entry is raising a budget — the same call as raising `.size-limit.json` — and it passes every check by construction, because the file is what tells ESLint not to report. An added `eslint-disable` naming one of those rules does the same for one spot, and so does one naming no rule at all, which switches every rule off. Lowering a count is the prune `pnpm lint` demands after a fix, and grades nothing.",
     // Watched, so a prune-only diff reads as considered rather than unknown:
     // `match` returns nothing when every count went down.
     watches: /^eslint-suppressions\.json$/,

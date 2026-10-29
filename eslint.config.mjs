@@ -225,7 +225,7 @@ export default [
   // `pnpm lint:prune` drops it, so the counts only go down. Raising one is the
   // same call as raising a `.size-limit.json` budget, and `pr:risk` grades a
   // grown suppression 🔴 high for that reason, as it does an added
-  // `eslint-disable` naming one of these rules.
+  // `eslint-disable` naming one of these rules, or naming none.
   //
   // `complexity` sits at 15, not the textbook 10, because ESLint counts every
   // `&&`, `||`, `??` and `?.`, and much of this code implements spec
@@ -234,6 +234,7 @@ export default [
   // what a readable test looks like here.
   {
     files: ["**/*.{ts,tsx,js,jsx,mjs,cjs}"],
+    // Mirrored by `BUDGET_EXEMPT` in scripts/pr-risk.mjs; keep the two in step.
     ignores: [
       "**/*.test.*",
       "**/*.spec.*",

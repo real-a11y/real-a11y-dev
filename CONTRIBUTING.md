@@ -346,7 +346,8 @@ If a hook complains, run `pnpm commitlint --edit .git/COMMIT_EDITMSG` to see the
   `pnpm lint:prune` and commit the smaller `eslint-suppressions.json`; that is
   how the counts only go down. The commit hook lets such a commit through, but
   the push hook does not. Don't regenerate the file, or add an
-  `eslint-disable` for one of these rules, to make new code pass:
+  `eslint-disable` for one of these rules (or one naming no rule, which
+  disables them all), to make new code pass:
   `pnpm pr:risk` grades either one 🔴 high, as it does a raised
   `.size-limit.json` budget.
 - Add JSDoc comments only where the intent isn't obvious from the code
