@@ -223,26 +223,28 @@ export class DaemonServer {
         if (!isNamedPipe) process.umask(oldUmask);
         reject(err);
       });
+      // Settles the start() promise itself, so it never rejects.
+      const onListening = async (): Promise<void> => {
+        try {
+          // Defense in depth: explicitly chmod the socket to owner-only. On
+          // Windows named pipes are not filesystem paths and cannot be chmod'd.
+          if (!isNamedPipe) {
+            chmodSync(this.socketPath, 0o600);
+          }
+          await this.writePidfile();
+          this.log(`daemon listening on ${this.socketPath}`);
+          resolve();
+        } catch (err) {
+          reject(err);
+        } finally {
+          if (!isNamedPipe) process.umask(oldUmask);
+        }
+      };
       // Explicit `readableAll`/`writableAll: false` tells Node to use a
       // creator-only DACL on the Windows named pipe; Unix IPC ignores these keys.
       this.server.listen(
         { path: this.socketPath, readableAll: false, writableAll: false },
-        async () => {
-          try {
-            // Defense in depth: explicitly chmod the socket to owner-only. On
-            // Windows named pipes are not filesystem paths and cannot be chmod'd.
-            if (!isNamedPipe) {
-              chmodSync(this.socketPath, 0o600);
-            }
-            await this.writePidfile();
-            this.log(`daemon listening on ${this.socketPath}`);
-            resolve();
-          } catch (err) {
-            reject(err);
-          } finally {
-            if (!isNamedPipe) process.umask(oldUmask);
-          }
-        },
+        () => void onListening(),
       );
     });
   }
@@ -611,8 +613,8 @@ export class DaemonServer {
         // The client may resolve on "done" and immediately destroy the socket,
         // which can prevent the end-callback from firing. Use a short fallback
         // so the daemon exits even when the peer is gone.
-        socket.end(doStop);
-        setTimeout(doStop, 1_000);
+        socket.end(() => void doStop());
+        setTimeout(() => void doStop(), 1_000);
         return;
       }
       case "run": {

@@ -351,7 +351,7 @@ ship with the next release without their own changeset.)
 ## 6. Verify
 
 ```bash
-pnpm verify       # build + typecheck + format:check + lint + surface:check + test + test:scripts + website build + surface:check-built
+pnpm verify       # build + typecheck + format:check + lint + lint:typed + surface:check + test + test:scripts + website build + surface:check-built
 pnpm size-limit   # the bundle budgets — blocking in CI, and `verify` does NOT run them
 ```
 

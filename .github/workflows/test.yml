@@ -166,9 +166,10 @@ jobs:
       - name: Install
         run: pnpm install --frozen-lockfile
 
-      # Single gate: build → typecheck → format:check → lint → surface:check →
-      # test → test:scripts → website build → surface:check-built. Any check
-      # added to `pnpm verify` extends CI without touching this workflow.
+      # Single gate: build → typecheck → format:check → lint → lint:typed →
+      # surface:check → test → test:scripts → website build →
+      # surface:check-built. Any check added to `pnpm verify` extends CI
+      # without touching this workflow.
       #
       # This is a strict SUPERSET of the local `pre-push` hook.
       # That hook runs `pnpm format:check` and `pnpm lint` only, so it cannot

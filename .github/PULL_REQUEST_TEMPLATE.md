@@ -118,7 +118,7 @@ Cutting a release or adding a package? There are tailored templates:
 - [ ] The steps above run clean on a fresh checkout of this branch
 - [ ] A by-hand before/after is included
 - [ ] Not needed, because: <!-- e.g. internal refactor — nothing observable changed -->
-- [ ] `pnpm verify` passes (build + typecheck + format:check + lint + surface:check + test + test:scripts + website build + surface:check-built — the gate CI runs it; the pre-push hook runs `pnpm format:check` and `pnpm lint` only, so run it yourself)
+- [ ] `pnpm verify` passes (build + typecheck + format:check + lint + lint:typed + surface:check + test + test:scripts + website build + surface:check-built — the gate CI runs it; the pre-push hook runs `pnpm format:check` and `pnpm lint` only, so run it yourself)
 - [ ] Added / updated tests where appropriate
 
 ## Changesets & release

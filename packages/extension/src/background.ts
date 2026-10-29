@@ -393,7 +393,7 @@ function scheduleMerge(tabId: number) {
   if (state.mergeTimer) clearTimeout(state.mergeTimer);
   state.mergeTimer = setTimeout(() => {
     state.mergeTimer = null;
-    mergeAndSendTree(tabId);
+    void mergeAndSendTree(tabId);
   }, 200);
 }
 
@@ -520,7 +520,7 @@ chrome.runtime.onConnect.addListener((port) => {
   void (async () => {
     if (activeTabId === null) await refreshActiveTabFromLastFocusedWindow();
     if (activeTabId !== null) {
-      broadcastToAllFrames(activeTabId, {
+      await broadcastToAllFrames(activeTabId, {
         type: "SET_OBSERVING",
         payload: { enabled: true },
       });
@@ -585,7 +585,7 @@ chrome.runtime.onConnect.addListener((port) => {
 // Open side panel when extension action is clicked
 chrome.action.onClicked.addListener((tab) => {
   if (tab.id) {
-    chrome.sidePanel.open({ tabId: tab.id });
+    void chrome.sidePanel.open({ tabId: tab.id });
   }
 });
 
@@ -984,7 +984,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           const nowActive = tabs[0]?.id;
           if (nowActive) {
             setActiveTab(nowActive);
-            chrome.windows.update(tabs[0].windowId!, { focused: true });
+            chrome.windows.update(tabs[0].windowId!, { focused: true }, () => {
+              if (chrome.runtime.lastError) {
+                /* the window closed meanwhile */
+              }
+            });
             // Request fresh tree from the now-active tab
             chrome.tabs.sendMessage(
               nowActive,
@@ -1035,7 +1039,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       activeTabId,
     );
     if (targetTabId != null) {
-      broadcastToAllFrames(targetTabId, message);
+      void broadcastToAllFrames(targetTabId, message);
     }
     sendResponse({ success: true });
     return false;
