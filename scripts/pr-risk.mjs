@@ -931,25 +931,72 @@ const hunkRanges = (section) =>
   );
 
 /**
- * The merge-base line a branch line came from, through the file's `hunks`, or
- * `null` for one with none. A changed line stands for the line it replaced
- * only in a hunk that swaps one line for one, as an edit made in place does.
- * A wider hunk would have to pair its lines by position, and two edited
- * functions that traded places would then read as each other, so a line any
- * other hunk adds is new. A hunk that adds nothing sits after its `newStart`,
- * which is why the first line after it is one on.
+ * The merge-base line an unchanged branch line sits at, through the file's
+ * `hunks`, or `null` for a line a hunk added. A hunk that adds nothing sits
+ * after its `newStart`, which is why the first line after it is one on.
  */
 function baseLine(hunks, line) {
   let shift = 0;
-  for (const [oldStart, oldCount, newStart, newCount] of hunks) {
+  for (const [, oldCount, newStart, newCount] of hunks) {
     const start = newCount ? newStart : newStart + 1;
     if (line < start) break;
-    if (line < start + newCount) {
-      return oldCount === 1 && newCount === 1 ? oldStart : null;
-    }
+    if (line < start + newCount) return null;
     shift += oldCount - newCount;
   }
   return line + shift;
+}
+
+/** The trimmed lines the file's `hunks` remove from the base and add here. */
+function changedLines(hunks, atBase, here) {
+  const removed = [];
+  const added = [];
+  for (const [oldStart, oldCount, newStart, newCount] of hunks) {
+    for (let i = 0; i < oldCount; i++) removed.push(atBase(oldStart + i));
+    for (let i = 0; i < newCount; i++) added.push(here(newStart + i));
+  }
+  return { removed, added };
+}
+
+/**
+ * How alike two lines are: the characters they share at the start plus those
+ * they share at the end, none counted twice.
+ */
+function likeness(a, b) {
+  const most = Math.min(a.length, b.length);
+  let head = 0;
+  while (head < most && a[head] === b[head]) head++;
+  let tail = 0;
+  while (tail < most - head && a.at(-1 - tail) === b.at(-1 - tail)) tail++;
+  return head + tail;
+}
+
+/** The one line of `pool` most like `line`, or `undefined` on a tie or none. */
+function closest(line, pool) {
+  let best;
+  let score = -1;
+  let tied = false;
+  for (const other of pool) {
+    const s = likeness(line, other);
+    if (s === score) tied = true;
+    if (s > score) [best, score, tied] = [other, s, false];
+  }
+  return tied ? undefined : best;
+}
+
+/**
+ * The removed line an added one is an edit of, or `null` if it is new code.
+ * It is the removed line it is most like, provided that line is in turn most
+ * like it of all the added ones and the two share at least half their text.
+ * Asking both ways is what tells an edit from a move: a line moved elsewhere
+ * is most like its own copy, so whatever took its place is new, and of two
+ * edited functions that traded places each is most like the other's old self.
+ */
+function editOf(line, { removed, added }) {
+  const was = closest(line, removed);
+  if (was === undefined || closest(was, added) !== line) return null;
+  return 2 * likeness(line, was) >= Math.max(line.length, was.length)
+    ? was
+    : null;
 }
 
 /**
@@ -995,13 +1042,13 @@ const tally = (entries) => {
  *     closed now runs on.
  *
  * That text is the merge base's wherever the line has a merge-base
- * counterpart: a branch line the diff edited in place, one line for one,
- * reads as the line it replaced, unless that line is still on the branch
- * somewhere. So renaming the function under an unchanged `-next-line` leaves
- * its key alone, while code inserted under a directive, or left under it by a
- * deletion, a move or a swap, is other text and a new key. Text rather than
- * a line number, because git may show an `eslint-enable` moved down past a
- * line as that line moved up instead, leaving the enable's own line unchanged.
+ * counterpart: an unchanged line, or an added one that `editOf` finds is an
+ * edit of a removed one. So renaming the function under an unchanged
+ * `-next-line`, alone or with the lines below it, leaves its key alone, while
+ * code inserted under a directive, or left under it by a deletion, a move or
+ * a swap, is other text and a new key. Text rather than a line number,
+ * because git may show an `eslint-enable` moved down past a line as that line
+ * moved up instead, leaving the enable's own line unchanged.
  *
  * The other two directions, a disable gone or an enable added, only narrow an
  * exemption and lift nothing. A directive whose key changed reads as one gone
@@ -1029,13 +1076,13 @@ async function budgetDirectiveGrowth(mergeBase, touchedCode, hunks) {
     const baseText = await gitOr(["show", `${mergeBase}:${path}`], "");
     const atBase = lineTexts(baseText);
     const here = lineTexts(text);
-    const onBranch = new Set(text.split("\n").map((l) => l.trim()));
+    const fileHunks = hunks.get(path) ?? [];
+    const changed = changedLines(fileHunks, atBase, here);
     const before = budgetDirectives(baseText, atBase);
     const after = budgetDirectives(text, (line) => {
-      const from = baseLine(hunks.get(path) ?? [], line);
-      const was = from === null ? null : atBase(from);
-      // Still on the branch, the line it replaced moved rather than changed.
-      return was === null || onBranch.has(was) ? here(line) : was;
+      const from = baseLine(fileHunks, line);
+      if (from !== null) return atBase(from);
+      return editOf(here(line), changed) ?? here(line);
     });
     const rules = new Set([
       ...outnumbered(after, before, (k) => k !== "-enable"),

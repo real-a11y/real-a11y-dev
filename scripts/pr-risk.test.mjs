@@ -1610,9 +1610,57 @@ describe("lint suppressions grade by direction", () => {
     ]);
   });
 
+  it("does not grade an edit to the covered line and the one below it", async () => {
+    // Git shows a two-line replacement, which this must not take for a swap.
+    const result = await grade(
+      {
+        [SCRIPT]: `${NEXT}\nfunction f(value) {\n  return value && true;\n}\n`,
+      },
+      {
+        base: {
+          [SCRIPT]: `${NEXT}\nfunction f(a) {\n  return a && true;\n}\n`,
+        },
+      },
+    );
+
+    assert.ok(!ruleIds(result).includes("lint-budget-raised"));
+  });
+
+  it("does not take an untouched copy of the covered line for a move", async () => {
+    const file = (covered) =>
+      [
+        "function first(a, b) {",
+        `  ${NEXT}`,
+        `  ${covered}`,
+        "}",
+        "function second(a, b) {",
+        "  return a && b;",
+        "}",
+        "",
+      ].join("\n");
+    const result = await grade(
+      { [SCRIPT]: file("return a || b;") },
+      { base: { [SCRIPT]: file("return a && b;") } },
+    );
+
+    assert.ok(!ruleIds(result).includes("lint-budget-raised"));
+  });
+
+  it("grades the covered line rewritten beyond recognition 🔴 high", async () => {
+    const result = await grade(
+      { [SCRIPT]: `${NEXT}\nif (process.env.CI) await main();\n` },
+      { base: { [SCRIPT]: `${NEXT}\n${BODY}` } },
+    );
+
+    assert.equal(result.tier, "high");
+    assert.deepEqual(evidenceFor(result, "lint-budget-raised"), [
+      `${SCRIPT} → eslint-disable complexity`,
+    ]);
+  });
+
   it("grades two edited functions that swapped under a directive 🔴 high", async () => {
-    // Git shows a two-line replacement: paired by position, `beta` would read
-    // as the `alpha` it displaced.
+    // Git shows a two-line replacement, and each line is most like the other
+    // function's old one: `beta` is not an edit of the `alpha` it displaced.
     const result = await grade(
       {
         [SCRIPT]: `${NEXT}\nfunction beta(b, c) {}\nfunction alpha(a, c) {}\n`,
