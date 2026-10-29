@@ -2059,6 +2059,7 @@ describe("extractDomTree", () => {
       for (const node of extractDomTree(root).nodes.values())
         if (node.dom?.attributes["id"] === id)
           return [node.a11y.states["checked"], node.a11y.states["pressed"]];
+      return undefined;
     };
     // [checked, pressed]
     expect(states("button")).toEqual([undefined, undefined]);
