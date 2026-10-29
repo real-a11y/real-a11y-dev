@@ -28,7 +28,6 @@ generic
 link "examples/vanilla/"
 link "keyboard"
 link "setRoot()"
-link "live region log"
 link "Using the panel"
 link "Edit this page on GitHub"
 link "Previous page Overview & Install"

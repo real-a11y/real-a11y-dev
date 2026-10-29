@@ -266,11 +266,10 @@ main
       code "refresh()"
   separator
   heading "Panel features" (level 2)
-  paragraph "The inspector renders the same tree panel as the Chrome extension, with its search, role filters and , and scopes with . Focus sync, the scope breadcrumb and the are the extension's alone."
+  paragraph "The inspector renders the same tree panel as the Chrome extension, with its search, role filters and , and scopes with . Focus sync, the scope breadcrumb and the live region log are the extension's alone."
     link "keyboard"
     link "setRoot()"
       code "setRoot()"
-    link "live region log"
   paragraph "→"
     link "Using the panel"
 contentinfo
