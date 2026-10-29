@@ -35,6 +35,14 @@ import base from "./eslint.config.mjs";
  * and it loads every plugin `eslint.config.mjs` loads so that a directive
  * naming one of their rules still resolves.
  *
+ * Nor other rules' suppressions. ESLint applies `eslint-suppressions.json` to
+ * every run, whatever the config, and this one runs none of the budget rules
+ * recorded there, so each entry would read as unused and fail the run. So
+ * `pnpm lint:typed` passes `--pass-on-unpruned-suppressions`; `pnpm lint` is
+ * where an unused one is caught. That is also why these rules take no
+ * suppressions of their own: `--suppress-rule` with this config would write
+ * into the same file, and `pnpm lint` would then report the entry as unused.
+ *
  * Tests are not covered yet. They hold several hundred unawaited promises, most
  * of them Preact's `act(() => …)` with a synchronous callback, which flushes
  * before it returns and leaves its promise nothing to wait for. Sorting the
