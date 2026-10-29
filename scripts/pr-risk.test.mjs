@@ -1671,6 +1671,38 @@ describe("lint suppressions grade by direction", () => {
     ]);
   });
 
+  it("does not grade a directive moved along with its function, edited", async () => {
+    // Enough between the two places that git deletes the pair at the top and
+    // adds it at the bottom, so the edited line's own hunk removed nothing.
+    const FILLER = [1, 2, 3, 4, 5].map((i) => `export const v${i} = ${i};\n`);
+    const compute = (params) =>
+      `function compute(${params}) {\n  return a;\n}\n`;
+    const result = await grade(
+      { [SCRIPT]: `${FILLER.join("")}${NEXT}\n${compute("a, b")}` },
+      { base: { [SCRIPT]: `${NEXT}\n${compute("a")}${FILLER.join("")}` } },
+    );
+
+    assert.ok(!ruleIds(result).includes("lint-budget-raised"));
+  });
+
+  it("grades a function moved in under a directive whose own was deleted 🔴 high", async () => {
+    // `computeTax(items, rate)` is most like the deleted `computeTotal` of
+    // the lines its hunk removed, but more like its own old line.
+    const result = await grade(
+      { [SCRIPT]: `${NEXT}\nfunction computeTax(items, rate) {}\n${G}` },
+      {
+        base: {
+          [SCRIPT]: `${NEXT}\nfunction computeTotal(items) {}\n${G}function computeTax(items) {}\n`,
+        },
+      },
+    );
+
+    assert.equal(result.tier, "high");
+    assert.deepEqual(evidenceFor(result, "lint-budget-raised"), [
+      `${SCRIPT} → eslint-disable complexity`,
+    ]);
+  });
+
   it("grades the covered line rewritten beyond recognition 🔴 high", async () => {
     const result = await grade(
       { [SCRIPT]: `${NEXT}\nif (process.env.CI) await main();\n` },

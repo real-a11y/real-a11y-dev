@@ -958,6 +958,12 @@ const addedBy = (hunks, here) =>
     Array.from({ length: newCount }, (_, i) => here(newStart + i)),
   );
 
+/** Whether one of the file's `hunks` removes base line `line`. */
+const removes = (hunks, line) =>
+  hunks.some(
+    ([oldStart, oldCount]) => line >= oldStart && line < oldStart + oldCount,
+  );
+
 /**
  * How alike two lines are: the characters they share at the start plus those
  * they share at the end, none counted twice.
@@ -987,31 +993,38 @@ function closest(line, pool) {
 /**
  * The base line an added one is an edit of, or `null` if it is new code.
  *
- * It is the line its own hunk removed that it is most like: the code that sat
- * where it sits now. Its own hunk, because a line inserted where nothing was
- * removed takes over no line, however like one deleted elsewhere it is, and
- * because two identical lines edited apart are told apart by where they were.
+ * It is the line of `pool` it is most like. The caller asks first of the
+ * lines its own hunk removed, the code that sat where it sits now: a line
+ * inserted where nothing was removed takes over no line, however like one
+ * deleted elsewhere it is, and two identical lines edited apart are told apart
+ * by where they were. Failing that, of the lines a merge-base directive
+ * covered that the diff removed, for a directive that moved along with the
+ * code it covers and had that code edited on the way.
  *
- * Then the other way, across the whole file: no other added line may be more
- * like that base line than this one is, and the two must share at least half
- * their text. A line moved elsewhere is most like its own copy, so whatever
- * took its place is new; of two edited functions that traded places, each is
- * most like the other's old self. A copy given the same edit is only as like
- * it, so it doesn't count against it.
+ * Then both ways across the whole file, `changed` holding every line the diff
+ * removed and every one it added. No other added line may be more like that
+ * base line than this one is: a line moved elsewhere is most like its own
+ * copy, so whatever took its place is new, and of two edited functions that
+ * traded places, each is most like the other's old self. No other removed
+ * line may be more like this one: that is where it came from. A copy as like
+ * it doesn't count against it, as when two identical lines get the same edit.
+ * And the two must share at least half their text.
  */
-function editOf(line, removed, added) {
-  const was = closest(line, removed);
+function editOf(line, pool, { removed, added }) {
+  const was = closest(line, pool);
   if (was === undefined) return null;
   const mine = likeness(was, line);
   if (added.some((other) => likeness(was, other) > mine)) return null;
+  if (removed.some((other) => likeness(line, other) > mine)) return null;
   return 2 * mine >= Math.max(line.length, was.length) ? was : null;
 }
 
 /**
  * Every budget directive in `text`, one entry per rule it names, keyed by what
  * it does and where its reach starts: `<keyword> <rule> @ <anchor>`, the
- * anchor being what `anchorOf` reads off the line the reach starts on. The
- * keyword is empty for a config comment, which reaches the whole file.
+ * anchor being what `anchorOf` reads off `line`, the line the reach starts
+ * on. The keyword is empty for a config comment, which reaches the whole file
+ * and so has no line.
  */
 function budgetDirectives(text, anchorOf) {
   const keys = [];
@@ -1020,10 +1033,37 @@ function budgetDirectives(text, anchorOf) {
     const line = reachLine(text, m, keyword);
     const anchor = line === null ? "(file)" : anchorOf(line);
     for (const rule of budgetsSwitchedOff(keyword, m[2] ?? m[4] ?? "")) {
-      keys.push({ keyword, rule, key: `${keyword} ${rule} @ ${anchor}` });
+      keys.push({ keyword, rule, line, key: `${keyword} ${rule} @ ${anchor}` });
     }
   }
   return keys;
+}
+
+/**
+ * How to read a branch line's anchor, given the file's `hunks` and the merge
+ * base's directives: the merge base's text for an unchanged line, or for an
+ * added one `editOf` finds is an edit of a base line, and the branch's own
+ * otherwise.
+ */
+function branchAnchors(hunks, atBase, here, before) {
+  const changed = {
+    removed: hunks.flatMap((hunk) => removedBy(hunk, atBase)),
+    added: addedBy(hunks, here),
+  };
+  const covered = new Set(before.map(({ line }) => line));
+  const leftBehind = [...covered]
+    .filter((line) => line !== null && removes(hunks, line))
+    .map(atBase);
+  return (line) => {
+    const { at, hunk } = baseLine(hunks, line);
+    if (!hunk) return atBase(at);
+    const now = here(line);
+    return (
+      editOf(now, removedBy(hunk, atBase), changed) ??
+      editOf(now, leftBehind, changed) ??
+      now
+    );
+  };
 }
 
 /** How many of `entries` carry each key. */
@@ -1052,9 +1092,10 @@ const tally = (entries) => {
  * That text is the merge base's wherever the line has a merge-base
  * counterpart: an unchanged line, or an added one that `editOf` finds is an
  * edit of a removed one. So renaming the function under an unchanged
- * `-next-line`, alone or with the lines below it, leaves its key alone, while
- * code inserted under a directive, or left under it by a deletion, a move or
- * a swap, is other text and a new key. Text rather than a line number,
+ * `-next-line`, alone or with the lines below it, leaves its key alone, as
+ * does moving the directive along with that function, while code inserted
+ * under a directive, or left under it by a deletion, a move or a swap, is
+ * other text and a new key. Text rather than a line number,
  * because git may show an `eslint-enable` moved down past a line as that line
  * moved up instead, leaving the enable's own line unchanged.
  *
@@ -1085,13 +1126,11 @@ async function budgetDirectiveGrowth(mergeBase, touchedCode, hunks) {
     const atBase = lineTexts(baseText);
     const here = lineTexts(text);
     const fileHunks = hunks.get(path) ?? [];
-    const added = addedBy(fileHunks, here);
     const before = budgetDirectives(baseText, atBase);
-    const after = budgetDirectives(text, (line) => {
-      const { at, hunk } = baseLine(fileHunks, line);
-      if (!hunk) return atBase(at);
-      return editOf(here(line), removedBy(hunk, atBase), added) ?? here(line);
-    });
+    const after = budgetDirectives(
+      text,
+      branchAnchors(fileHunks, atBase, here, before),
+    );
     const rules = new Set([
       ...outnumbered(after, before, (k) => k !== "-enable"),
       ...outnumbered(before, after, (k) => k === "-enable"),
