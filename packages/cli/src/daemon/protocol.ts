@@ -58,10 +58,12 @@ export function decodeRpc(line: string): RpcMessage {
  *
  * @internal
  */
-export function createLineReader(): (chunk: Buffer) => Generator<string> {
+export function createLineReader(): (
+  chunk: Buffer | string,
+) => Generator<string> {
   let buffer = "";
   return function* (chunk) {
-    buffer += chunk.toString("utf8");
+    buffer += typeof chunk === "string" ? chunk : chunk.toString("utf8");
     let index: number;
     while ((index = buffer.indexOf("\n")) >= 0) {
       const line = buffer.slice(0, index).trim();
