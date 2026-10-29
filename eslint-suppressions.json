@@ -1,7 +1,7 @@
 {
   "packages/audit/src/index.ts": {
     "complexity": {
-      "count": 2
+      "count": 1
     }
   },
   "packages/browser/src/browser.ts": {
