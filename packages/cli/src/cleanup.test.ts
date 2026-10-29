@@ -1,8 +1,14 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 
 import { registerCleanup, runCleanups } from "./cleanup.js";
 
 describe("runCleanups", () => {
+  // The registry is module-wide; drain it so a failed case can't leak into
+  // the next one.
+  afterEach(async () => {
+    await runCleanups().catch(() => {});
+  });
+
   it("runs every cleanup when one throws synchronously", async () => {
     const ran: string[] = [];
     registerCleanup(() => {
