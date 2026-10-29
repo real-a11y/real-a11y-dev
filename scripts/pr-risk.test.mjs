@@ -1518,6 +1518,50 @@ describe("lint suppressions grade by direction", () => {
     assert.equal(result.tier, "low");
     assert.ok(!ruleIds(result).includes("lint-budget-raised"));
   });
+
+  // A `-U0` diff shows only the lines that changed, so an edit to one line of
+  // an existing multi-line directive leaves the rest of the comment, opener or
+  // closing `*/`, out of the diff. The rubric reads both whole versions.
+  const BLOCK = (...list) =>
+    `/* eslint-disable\n${list.join("\n")}\n */\n${BODY}`;
+
+  it("sees a budget added to the opener of an existing multi-line directive", async () => {
+    const result = await grade(
+      { [SCRIPT]: `/* eslint-disable no-console, complexity\n */\n${BODY}` },
+      { base: { [SCRIPT]: `/* eslint-disable no-console\n */\n${BODY}` } },
+    );
+
+    assert.equal(result.tier, "high");
+    assert.deepEqual(evidenceFor(result, "lint-budget-raised"), [
+      `${SCRIPT} → eslint-disable complexity`,
+    ]);
+  });
+
+  it("sees a budget added to a middle line of an existing directive", async () => {
+    const result = await grade(
+      { [SCRIPT]: BLOCK("  no-console,", "  max-depth,", "  eqeqeq") },
+      { base: { [SCRIPT]: BLOCK("  no-console,", "  eqeqeq") } },
+    );
+
+    assert.equal(result.tier, "high");
+    assert.deepEqual(evidenceFor(result, "lint-budget-raised"), [
+      `${SCRIPT} → eslint-disable max-depth`,
+    ]);
+  });
+
+  it("does not grade a directive that only moved, or one already there", async () => {
+    const moved = await grade(
+      { [SCRIPT]: `${BODY}// eslint-disable-next-line complexity\n${BODY}` },
+      { base: { [SCRIPT]: `// eslint-disable-next-line complexity\n${BODY}` } },
+    );
+    assert.ok(!ruleIds(moved).includes("lint-budget-raised"));
+
+    const untouched = await grade(
+      { [SCRIPT]: `// eslint-disable-next-line complexity\n${BODY}${BODY}` },
+      { base: { [SCRIPT]: `// eslint-disable-next-line complexity\n${BODY}` } },
+    );
+    assert.ok(!ruleIds(untouched).includes("lint-budget-raised"));
+  });
 });
 
 describe("the gate", () => {

@@ -454,6 +454,11 @@ async function collectFacts(base) {
     packageManifests: await changedPackageManifests(mergeBase, files),
     surfaceRemovals: await surfaceRemovals(mergeBase, files),
     suppressionGrowth: await suppressionGrowth(mergeBase, files),
+    // Not this file's own: it names the directives in order to look for them.
+    budgetDirectiveGrowth: await budgetDirectiveGrowth(
+      mergeBase,
+      touchedCode.filter(([path]) => !SELF_PATHS.has(path)),
+    ),
   };
 }
 
@@ -886,25 +891,49 @@ function budgetsSwitchedOff(keyword, body) {
 const BUDGET_EXEMPT =
   /\.(test|spec)\.|(^|\/)(e2e|__tests__|__fixtures__)\/|^website\/tests\//;
 
-/** Which budget rules each file's ADDED directives switch off. */
-function addedBudgetDirectives(code) {
+/** A changed line that could touch a budget directive, opener or rule list. */
+const MAY_TOUCH_DIRECTIVE =
+  /eslint|complexity|max-depth|max-params|max-lines-per-function|max-nested-callbacks/;
+
+/** How many directives in `text` switch off each budget. */
+function countBudgetDirectives(text) {
+  const counts = new Map();
+  for (const m of text.matchAll(ESLINT_DIRECTIVE)) {
+    for (const rule of budgetsSwitchedOff(m[1] ?? m[3], m[2] ?? m[4] ?? ""))
+      counts.set(rule, (counts.get(rule) ?? 0) + 1);
+  }
+  return counts;
+}
+
+/**
+ * Budgets that more directives switch off on this branch than at the merge
+ * base, per touched file.
+ *
+ * Whole files, not added lines. A directive is a comment, and a `-U0` diff
+ * shows only the lines that changed: adding `complexity` to the first or a
+ * middle line of an existing multi-line `/* eslint-disable … *\/` leaves its
+ * opener or its closing `*\/` out of the diff, and a scan of added lines then
+ * reads no directive at all. Counting both versions also means a directive
+ * that merely moved, or one that was already there, is not new.
+ *
+ * Only files whose changed lines mention `eslint` or a budget rule are read,
+ * so a large diff costs no extra git calls. A file the budget layer exempts is
+ * skipped, since no budget applies there. A base version git can't show reads
+ * as empty, so everything in the file counts — failing toward 🔴.
+ */
+async function budgetDirectiveGrowth(mergeBase, touchedCode) {
   const out = [];
-  for (const [path, text] of code) {
-    if (BUDGET_EXEMPT.test(path)) continue;
-    // The `+` comes off each added line so a block directive that spans two
-    // of them reads as one comment.
-    const added = text
-      .split("\n")
-      .filter((l) => l.startsWith("+"))
-      .map((l) => l.slice(1))
-      .join("\n");
-    const rules = new Set();
-    for (const m of added.matchAll(ESLINT_DIRECTIVE)) {
-      for (const rule of budgetsSwitchedOff(m[1] ?? m[3], m[2] ?? m[4] ?? ""))
-        rules.add(rule);
-    }
-    if (rules.size)
-      out.push(`${path} → eslint-disable ${[...rules].join(", ")}`);
+  for (const [path, diff] of touchedCode) {
+    if (BUDGET_EXEMPT.test(path) || !MAY_TOUCH_DIRECTIVE.test(diff)) continue;
+    const before = countBudgetDirectives(
+      await gitOr(["show", `${mergeBase}:${path}`], ""),
+    );
+    const after = countBudgetDirectives(
+      await readFile(resolve(repoRoot, path), "utf8").catch(() => ""),
+    );
+    const grown = [...after].filter(([rule, n]) => n > (before.get(rule) ?? 0));
+    if (grown.length)
+      out.push(`${path} → eslint-disable ${grown.map(([r]) => r).join(", ")}`);
   }
   return out;
 }
@@ -1140,12 +1169,7 @@ const RULES = [
     // Watched, so a prune-only diff reads as considered rather than unknown:
     // `match` returns nothing when every count went down.
     watches: /^eslint-suppressions\.json$/,
-    match: (f) => [
-      ...f.suppressionGrowth,
-      ...addedBudgetDirectives(f.touchedCode),
-    ],
-    // This file and its tests name the directive in order to look for it.
-    excludeSelf: true,
+    match: (f) => [...f.suppressionGrowth, ...f.budgetDirectiveGrowth],
   },
   {
     id: "release-config",
