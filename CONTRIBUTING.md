@@ -335,7 +335,21 @@ If a hook complains, run `pnpm commitlint --edit .git/COMMIT_EDITMSG` to see the
 
 - TypeScript strict mode is enforced
 - Use meaningful variable and function names
-- Keep functions focused and small
+- Keep functions focused and small. `pnpm lint` holds code outside tests to a
+  budget: cyclomatic `complexity` 15, `max-depth` 4, `max-params` 4,
+  `max-lines-per-function` 80 (blank lines and comments not counted) and
+  `max-nested-callbacks` 3. Code that already exceeded them when they were
+  switched on is listed in `eslint-suppressions.json`, per file and per rule.
+  A file may keep its count there but not grow it.
+- When a change brings a file under its count, `pnpm lint` fails with
+  "There are suppressions left that do not occur anymore". Run
+  `pnpm lint:prune` and commit the smaller `eslint-suppressions.json`; that is
+  how the counts only go down. The commit hook lets such a commit through, but
+  the push hook does not. Don't regenerate the file, or add, move or widen an
+  `eslint-disable` for one of these rules (or one naming no rule, which
+  disables them all), to make new code pass:
+  `pnpm pr:risk` grades any of those 🔴 high, as it does a raised
+  `.size-limit.json` budget.
 - Add JSDoc comments only where the intent isn't obvious from the code
 
 ### Public vs. internal API

@@ -45,8 +45,9 @@ const CLOBBER_SAFE_PARENT_READS = [
  *   6. Clobber-safe parent reads in core and the extension
  *   7. jsx-a11y on .tsx/.jsx
  *   8. Source may not import test code or data (`pr:risk` relies on it)
- *   9. Test file relaxations (Vitest fixtures often include broken markup)
- *  10. eslint-config-prettier LAST — disables formatting rules that fight
+ *   9. Size and complexity budgets, ratcheted by `eslint-suppressions.json`
+ *  10. Test file relaxations (Vitest fixtures often include broken markup)
+ *  11. eslint-config-prettier LAST — disables formatting rules that fight
  *      Prettier
  */
 /** A module specifier naming test code or test data — see layer 8. */
@@ -212,6 +213,45 @@ export default [
           message: TEST_ONLY_MESSAGE,
         },
       ],
+    },
+  },
+
+  // Size and complexity budgets for everything but tests. The numbers bind NEW
+  // code: what already exceeded them when they were switched on is recorded,
+  // per file and per rule, in `eslint-suppressions.json`, so a file may keep
+  // its count but not grow it. Going over the count reports every violation of
+  // that rule in the file, not only the new one. Fixing one leaves a
+  // suppression ESLint calls unused, and `pnpm lint` fails until
+  // `pnpm lint:prune` drops it, so the counts only go down. Raising one is the
+  // same call as raising a `.size-limit.json` budget, and `pr:risk` grades a
+  // grown suppression 🔴 high for that reason, as it does an added
+  // `eslint-disable` naming one of these rules, or naming none.
+  //
+  // `complexity` sits at 15, not the textbook 10, because ESLint counts every
+  // `&&`, `||`, `??` and `?.`, and much of this code implements spec
+  // algorithms (AccName, role mapping) whose branches are the spec's own.
+  // Tests are exempt: a `describe` › `it` › callback nest and a long `it` are
+  // what a readable test looks like here.
+  {
+    files: ["**/*.{ts,tsx,js,jsx,mjs,cjs}"],
+    // Mirrored by `BUDGET_EXEMPT` in scripts/pr-risk.mjs; keep the two in step.
+    ignores: [
+      "**/*.test.*",
+      "**/*.spec.*",
+      "**/e2e/**",
+      "**/__tests__/**",
+      "**/__fixtures__/**",
+      "website/tests/**",
+    ],
+    rules: {
+      complexity: ["error", 15],
+      "max-depth": ["error", 4],
+      "max-params": ["error", 4],
+      "max-lines-per-function": [
+        "error",
+        { max: 80, skipBlankLines: true, skipComments: true },
+      ],
+      "max-nested-callbacks": ["error", 3],
     },
   },
 

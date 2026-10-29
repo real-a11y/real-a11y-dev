@@ -1,0 +1,656 @@
+{
+  "packages/audit/src/index.ts": {
+    "complexity": {
+      "count": 2
+    }
+  },
+  "packages/browser/src/browser.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "packages/browser/src/native-tree.ts": {
+    "complexity": {
+      "count": 3
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "packages/cli/src/chrome-install.ts": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "packages/cli/src/commands/audit.ts": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "packages/cli/src/commands/interact.ts": {
+    "complexity": {
+      "count": 1
+    },
+    "max-params": {
+      "count": 2
+    }
+  },
+  "packages/cli/src/commands/snapshot.ts": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "packages/cli/src/commands/views.ts": {
+    "max-params": {
+      "count": 1
+    }
+  },
+  "packages/cli/src/config.ts": {
+    "complexity": {
+      "count": 3
+    }
+  },
+  "packages/cli/src/daemon/client.ts": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 3
+    },
+    "max-params": {
+      "count": 2
+    }
+  },
+  "packages/cli/src/daemon/server.ts": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "packages/cli/src/daemon/spawn.ts": {
+    "complexity": {
+      "count": 4
+    },
+    "max-depth": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 2
+    }
+  },
+  "packages/cli/src/interact-step.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "packages/cli/src/render/diff.ts": {
+    "complexity": {
+      "count": 2
+    }
+  },
+  "packages/cli/src/render/pretty.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "packages/cli/src/run.ts": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "packages/cli/src/session.ts": {
+    "complexity": {
+      "count": 1
+    },
+    "max-params": {
+      "count": 1
+    }
+  },
+  "packages/core/src/extraction/a11y-extractor.ts": {
+    "complexity": {
+      "count": 1
+    },
+    "max-params": {
+      "count": 1
+    }
+  },
+  "packages/core/src/extraction/dom-extractor.ts": {
+    "complexity": {
+      "count": 9
+    },
+    "max-depth": {
+      "count": 9
+    },
+    "max-lines-per-function": {
+      "count": 3
+    },
+    "max-params": {
+      "count": 5
+    }
+  },
+  "packages/core/src/interaction/picker.ts": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "packages/core/src/native/ax-normalize.ts": {
+    "complexity": {
+      "count": 3
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "packages/core/src/native/value-regions.ts": {
+    "complexity": {
+      "count": 2
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "packages/core/src/observation/dom-observer.ts": {
+    "max-depth": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    },
+    "max-params": {
+      "count": 1
+    }
+  },
+  "packages/core/src/observation/live-tree-extractor.ts": {
+    "complexity": {
+      "count": 2
+    },
+    "max-depth": {
+      "count": 7
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "packages/core/src/query/diff.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "packages/core/src/query/find-by-role.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "packages/core/src/search/tree-search.ts": {
+    "complexity": {
+      "count": 2
+    }
+  },
+  "packages/core/src/utils/controls-index.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "packages/example-patterns/src/chart/ChartCorrect.tsx": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "packages/example-patterns/src/combobox-async/ComboboxAsyncBroken.tsx": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "packages/example-patterns/src/combobox-async/ComboboxAsyncCorrect.tsx": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "packages/example-patterns/src/combobox/ComboboxBroken.tsx": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "packages/example-patterns/src/dialog-nested/DialogNestedBroken.tsx": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "packages/example-patterns/src/dialog-nested/DialogNestedCorrect.tsx": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "packages/example-patterns/src/multi-step-form/MultiStepFormBroken.tsx": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "packages/example-patterns/src/multi-step-form/MultiStepFormCorrect.tsx": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "packages/example-patterns/src/pagination/PaginationCorrect.tsx": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "packages/example-patterns/src/tree-checkable/TreeCheckableCorrect.tsx": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 2
+    }
+  },
+  "packages/extension/src/background.ts": {
+    "complexity": {
+      "count": 3
+    },
+    "max-lines-per-function": {
+      "count": 1
+    },
+    "max-nested-callbacks": {
+      "count": 2
+    }
+  },
+  "packages/extension/src/content.ts": {
+    "complexity": {
+      "count": 2
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "packages/extension/src/field-state.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "packages/extension/src/frame-merger.ts": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "packages/extension/src/native/capability.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "packages/extension/src/native/debugger-session.ts": {
+    "max-lines-per-function": {
+      "count": 3
+    }
+  },
+  "packages/extension/src/native/index.ts": {
+    "complexity": {
+      "count": 2
+    },
+    "max-lines-per-function": {
+      "count": 3
+    },
+    "max-params": {
+      "count": 1
+    }
+  },
+  "packages/extension/src/native/native-core.ts": {
+    "complexity": {
+      "count": 7
+    },
+    "max-lines-per-function": {
+      "count": 4
+    },
+    "max-params": {
+      "count": 3
+    }
+  },
+  "packages/extension/src/native/native-search.ts": {
+    "complexity": {
+      "count": 2
+    }
+  },
+  "packages/extension/src/page-text.ts": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "packages/extension/src/sidepanel/App.tsx": {
+    "complexity": {
+      "count": 7
+    },
+    "max-depth": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 6
+    },
+    "max-nested-callbacks": {
+      "count": 2
+    },
+    "max-params": {
+      "count": 2
+    }
+  },
+  "packages/extension/src/sidepanel/DogfoodPanel.tsx": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "packages/extension/src/sidepanel/FilteredList.tsx": {
+    "complexity": {
+      "count": 2
+    },
+    "max-depth": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 2
+    }
+  },
+  "packages/extension/src/sidepanel/InputPanel.tsx": {
+    "max-lines-per-function": {
+      "count": 2
+    }
+  },
+  "packages/extension/src/sidepanel/NativeTreeView.tsx": {
+    "complexity": {
+      "count": 3
+    },
+    "max-lines-per-function": {
+      "count": 3
+    }
+  },
+  "packages/extension/src/sidepanel/TabSequenceView.tsx": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 2
+    }
+  },
+  "packages/extension/src/sidepanel/follow-window.ts": {
+    "max-params": {
+      "count": 1
+    }
+  },
+  "packages/extension/src/sidepanel/panel-harness.ts": {
+    "max-lines-per-function": {
+      "count": 1
+    },
+    "max-params": {
+      "count": 1
+    }
+  },
+  "packages/extension/src/sidepanel/useNativeOverlay.ts": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "packages/inspector/src/index.ts": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "packages/mcp/src/server.ts": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "packages/react/src/SemanticNavigator.tsx": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 2
+    }
+  },
+  "packages/session-registry/src/index.ts": {
+    "max-lines-per-function": {
+      "count": 1
+    },
+    "max-params": {
+      "count": 1
+    }
+  },
+  "packages/snapshot/src/baseline.ts": {
+    "complexity": {
+      "count": 2
+    },
+    "max-depth": {
+      "count": 1
+    }
+  },
+  "packages/snapshot/src/diff/views-summary.ts": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "packages/snapshot/src/sanitize.ts": {
+    "max-params": {
+      "count": 1
+    }
+  },
+  "packages/snapshot/src/snapshot-artifact.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "packages/storybook-addon/src/manager.tsx": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "packages/testing/src/contract.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "packages/testing/src/playwright.ts": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "packages/ui/src/components/FilteredList.tsx": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 2
+    }
+  },
+  "packages/ui/src/components/TabSequenceView.tsx": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "packages/ui/src/components/TreeNode.tsx": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "packages/ui/src/components/TreePanel.tsx": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "packages/ui/src/components/TreeToolbar.tsx": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "packages/ui/src/components/TreeView.tsx": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "packages/ui/src/hooks/jumpKeys.ts": {
+    "max-params": {
+      "count": 1
+    }
+  },
+  "packages/ui/src/hooks/useDismissible.ts": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "packages/ui/src/hooks/useTreeKeyboard.ts": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 2
+    }
+  },
+  "packages/ui/src/hooks/useVirtualTree.ts": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "packages/validate/src/validate.ts": {
+    "complexity": {
+      "count": 1
+    },
+    "max-depth": {
+      "count": 1
+    }
+  },
+  "scripts/check-examples-dev.mjs": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "scripts/pr-risk.mjs": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "scripts/surface/check/api.mjs": {
+    "complexity": {
+      "count": 1
+    },
+    "max-depth": {
+      "count": 2
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "scripts/surface/check/docs.mjs": {
+    "max-params": {
+      "count": 3
+    }
+  },
+  "scripts/surface/check/samples.mjs": {
+    "complexity": {
+      "count": 2
+    },
+    "max-depth": {
+      "count": 1
+    }
+  },
+  "scripts/surface/extract/api.mjs": {
+    "complexity": {
+      "count": 1
+    },
+    "max-depth": {
+      "count": 2
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "scripts/surface/index.mjs": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "scripts/surface/plan/diff.mjs": {
+    "complexity": {
+      "count": 3
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "scripts/surface/plan/obligations.mjs": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "scripts/surface/plan/report.mjs": {
+    "complexity": {
+      "count": 2
+    },
+    "max-lines-per-function": {
+      "count": 2
+    },
+    "max-params": {
+      "count": 1
+    }
+  },
+  "scripts/surface/released.mjs": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "scripts/surface/scenarios/check.mjs": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "scripts/surface/scenarios/load.mjs": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "scripts/surface/scenarios/paths.mjs": {
+    "complexity": {
+      "count": 1
+    }
+  }
+}

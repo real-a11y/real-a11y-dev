@@ -413,6 +413,8 @@ async function collectFacts(base) {
   // or `\`.
   const sections = codeDiff.split(/^diff --git /m).filter(Boolean);
   const touchedCode = [];
+  // Each file's hunk ranges, which `scannable` drops: see `baseLine`.
+  const hunks = new Map();
   for (const section of sections) {
     const path = headerPath(section);
     // Fails CLOSED. A section this can't attribute is a diff format this parse
@@ -429,6 +431,7 @@ async function collectFacts(base) {
       ]);
     }
     touchedCode.push([path, scannable(section)]);
+    hunks.set(path, hunkRanges(section));
   }
   // `git diff` cannot see an untracked file, so a new gate written before
   // `git add` would grade lower here than in CI. Every line of it is new.
@@ -453,6 +456,13 @@ async function collectFacts(base) {
     rootPackageKeys: await changedRootPackageKeys(mergeBase),
     packageManifests: await changedPackageManifests(mergeBase, files),
     surfaceRemovals: await surfaceRemovals(mergeBase, files),
+    suppressionGrowth: await suppressionGrowth(mergeBase, files),
+    // Not this file's own: it names the directives in order to look for them.
+    budgetDirectiveGrowth: await budgetDirectiveGrowth(
+      mergeBase,
+      touchedCode.filter(([path]) => !SELF_PATHS.has(path)),
+      hunks,
+    ),
   };
 }
 
@@ -677,6 +687,76 @@ async function surfaceRemovals(mergeBase, files) {
     .map((c) => c.path);
 }
 
+/**
+ * Lint suppressions this branch adds or raises in `eslint-suppressions.json`.
+ *
+ * The file grandfathers the size and complexity violations that existed when
+ * those budgets were switched on: `{ "<file>": { "<rule>": { "count": n } } }`,
+ * and ESLint stays quiet about a file while its violations of a rule number no
+ * more than `n`. So the direction of a change is everything. A count that went
+ * down, or an entry that went away, is code that got simpler — `pnpm lint`
+ * insists on that prune, and it is nothing to review. A count that went up, or
+ * an entry that appeared, is a budget raised for one file, and the diff passes
+ * every check by construction, because this file is what tells the check not
+ * to report.
+ *
+ * Per file and per rule, because that is what ESLint enforces: moving
+ * complexity from one file to another is growth in the second. A renamed file
+ * reads the same way, as a new entry, which costs a review rather than hiding
+ * one.
+ *
+ * Fails CLOSED like `surfaceRemovals`: unparseable on either side, or a count
+ * that isn't a number, is evidence. Deleting the file outright is not growth —
+ * every violation it held is then reported again.
+ */
+async function suppressionGrowth(mergeBase, files) {
+  const path = "eslint-suppressions.json";
+  if (!files.includes(path)) return [];
+
+  let after;
+  try {
+    after = await readFile(resolve(repoRoot, path), "utf8");
+  } catch {
+    return [];
+  }
+  const before = await gitOr(["show", `${mergeBase}:${path}`], null);
+
+  let a = {};
+  let b;
+  if (before !== null) {
+    try {
+      a = JSON.parse(before);
+    } catch {
+      return [`${path} at the merge base isn't valid JSON`];
+    }
+  }
+  try {
+    b = JSON.parse(after);
+  } catch {
+    return [`${path} on this branch isn't valid JSON`];
+  }
+
+  return grownSuppressions(a, b).map(
+    ({ file, rule, was, count }) =>
+      `${path} → ${file}: ${rule} ${was} → ${count}`,
+  );
+}
+
+/** Every file × rule whose count in `after` exceeds the one in `before`. */
+function grownSuppressions(before, after) {
+  const out = [];
+  for (const [file, rules] of Object.entries(after ?? {})) {
+    for (const [rule, entry] of Object.entries(rules ?? {})) {
+      const count = entry?.count;
+      const was = before?.[file]?.[rule]?.count ?? 0;
+      // `!(count <= was)` rather than `count > was`, so a count that isn't a
+      // number reads as growth instead of slipping past both comparisons.
+      if (!(count <= was)) out.push({ file, rule, was, count });
+    }
+  }
+  return out;
+}
+
 // ---------------------------------------------------------------------------
 // The rubric
 // ---------------------------------------------------------------------------
@@ -780,6 +860,301 @@ const addedTestDisablers = (code) =>
     TEST_DISABLER,
     (m) => m[0].replace(/\s*\($/, "").replace(/^(\w+)\s*:.*$/, "{ $1 }"),
   );
+
+/**
+ * An ESLint comment directive: `eslint-disable`, `-next-line`, `-line`,
+ * `eslint-enable`, or an inline `/* eslint complexity: … *\/` config. Group 1
+ * or 3 is the keyword (absent for a config comment), group 2 or 4 the rest of
+ * the comment. A block comment runs to its `*\/`, across lines, because ESLint
+ * reads a rule list that continues onto the next one. `eslint-env` doesn't
+ * match: what follows `eslint` must be one of those keywords or whitespace.
+ */
+const ESLINT_DIRECTIVE =
+  /\/\*\s*eslint(-disable(?:-next-line|-line)?|-enable)?(?![\w-])([\s\S]*?)\*\/|\/\/\s*eslint(-disable(?:-next-line|-line)?|-enable)?(?![\w-])([^\n]*)/g;
+
+/** The size and complexity budgets `eslint-suppressions.json` ratchets. */
+const BUDGET_RULE =
+  /(?<![\w/-])(complexity|max-depth|max-params|max-lines-per-function|max-nested-callbacks)(?![\w-])/g;
+
+/**
+ * Which budgets one directive switches off. Its rule list stops at `--`, after
+ * which comes the stated reason, so a reason that merely mentions "complexity"
+ * is not read as a rule. A disable with no rule list at all switches off every
+ * rule, budgets included.
+ */
+function budgetsSwitchedOff(keyword, body) {
+  const list = body.split("--")[0];
+  if (keyword && !list.replace(/[\s,]/g, "")) return ["(every rule)"];
+  return [...list.matchAll(BUDGET_RULE)].map(([rule]) => rule);
+}
+
+/**
+ * What the budget layer in `eslint.config.mjs` exempts — its `ignores`, kept
+ * in step by hand. A directive there lifts no budget, because none applies.
+ */
+const BUDGET_EXEMPT =
+  /\.(test|spec)\.|(^|\/)(e2e|__tests__|__fixtures__)\/|^website\/tests\//;
+
+/** A changed line that could touch a budget directive, opener or rule list. */
+const MAY_TOUCH_DIRECTIVE =
+  /eslint|complexity|max-depth|max-params|max-lines-per-function|max-nested-callbacks/;
+
+/** The 1-based line `index` falls on in `text`. */
+const lineOf = (text, index) => text.slice(0, index).split("\n").length;
+
+/**
+ * The line a directive's reach starts on: its own for `-disable-line`,
+ * otherwise the first non-blank one after the comment. A config comment
+ * configures the whole file wherever it sits, so it has none.
+ */
+function reachLine(text, m, keyword) {
+  if (!keyword) return null;
+  if (keyword === "-disable-line") return lineOf(text, m.index);
+  const end = m.index + m[0].length;
+  const next = text.slice(end).search(/\S/);
+  return lineOf(text, next < 0 ? text.length : end + next);
+}
+
+/** Each line of `text`, trimmed, by 1-based line number; past the end, "". */
+function lineTexts(text) {
+  const lines = text.split("\n");
+  return (line) => lines[line - 1]?.trim() ?? "";
+}
+
+/**
+ * Each hunk of one file's `-U0` diff, as `[oldStart, oldCount, newStart,
+ * newCount]`. A count git leaves out is 1.
+ */
+const hunkRanges = (section) =>
+  [...section.matchAll(/^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/gm)].map(
+    (m) => [Number(m[1]), Number(m[2] ?? 1), Number(m[3]), Number(m[4] ?? 1)],
+  );
+
+/**
+ * Where a branch line sits at the merge base, through the file's `hunks`:
+ * `{ at }`, the base line an unchanged one is, or `{ hunk }`, the hunk that
+ * added it. A hunk that adds nothing sits after its `newStart`, which is why
+ * the first line after it is one on.
+ */
+function baseLine(hunks, line) {
+  let shift = 0;
+  for (const hunk of hunks) {
+    const [, oldCount, newStart, newCount] = hunk;
+    const start = newCount ? newStart : newStart + 1;
+    if (line < start) break;
+    if (line < start + newCount) return { hunk };
+    shift += oldCount - newCount;
+  }
+  return { at: line + shift };
+}
+
+/** The trimmed base lines one hunk removes. */
+const removedBy = ([oldStart, oldCount], atBase) =>
+  Array.from({ length: oldCount }, (_, i) => atBase(oldStart + i));
+
+/** The trimmed branch lines every one of the file's `hunks` adds. */
+const addedBy = (hunks, here) =>
+  hunks.flatMap(([, , newStart, newCount]) =>
+    Array.from({ length: newCount }, (_, i) => here(newStart + i)),
+  );
+
+/** Whether one of the file's `hunks` removes base line `line`. */
+const removes = (hunks, line) =>
+  hunks.some(
+    ([oldStart, oldCount]) => line >= oldStart && line < oldStart + oldCount,
+  );
+
+/**
+ * How alike two lines are: the characters they share at the start plus those
+ * they share at the end, none counted twice.
+ */
+function likeness(a, b) {
+  const most = Math.min(a.length, b.length);
+  let head = 0;
+  while (head < most && a[head] === b[head]) head++;
+  let tail = 0;
+  while (tail < most - head && a.at(-1 - tail) === b.at(-1 - tail)) tail++;
+  return head + tail;
+}
+
+/** The one line of `pool` most like `line`, or `undefined` on a tie or none. */
+function closest(line, pool) {
+  let best;
+  let score = -1;
+  let tied = false;
+  for (const other of pool) {
+    const s = likeness(line, other);
+    if (s === score) tied = true;
+    if (s > score) [best, score, tied] = [other, s, false];
+  }
+  return tied ? undefined : best;
+}
+
+/**
+ * The base line an added one is an edit of, or `null` if it is new code.
+ *
+ * It is the line of `pool` it is most like. The caller asks first of the
+ * lines its own hunk removed, the code that sat where it sits now: a line
+ * inserted where nothing was removed takes over no line, however like one
+ * deleted elsewhere it is, and two identical lines edited apart are told apart
+ * by where they were. Failing that, of the lines a merge-base directive
+ * covered that the diff removed, for a directive that moved along with the
+ * code it covers and had that code edited on the way.
+ *
+ * Then both ways across the whole file, `changed` holding every line the diff
+ * removed and every one it added. No other added line may be more like that
+ * base line than this one is: a line moved elsewhere is most like its own
+ * copy, so whatever took its place is new, and of two edited functions that
+ * traded places, each is most like the other's old self. No other removed
+ * line may be more like this one: that is where it came from. A copy as like
+ * it doesn't count against it, as when two identical lines get the same edit.
+ * And the two must share at least half their text.
+ */
+function editOf(line, pool, { removed, added }) {
+  const was = closest(line, pool);
+  if (was === undefined) return null;
+  const mine = likeness(was, line);
+  if (added.some((other) => likeness(was, other) > mine)) return null;
+  if (removed.some((other) => likeness(line, other) > mine)) return null;
+  return 2 * mine >= Math.max(line.length, was.length) ? was : null;
+}
+
+/**
+ * Every budget directive in `text`, one entry per rule it names, keyed by what
+ * it does and where its reach starts: `<keyword> <rule> @ <anchor>`, the
+ * anchor being what `anchorOf` reads off `line`, the line the reach starts
+ * on. The keyword is empty for a config comment, which reaches the whole file
+ * and so has no line.
+ */
+function budgetDirectives(text, anchorOf) {
+  const keys = [];
+  for (const m of text.matchAll(ESLINT_DIRECTIVE)) {
+    const keyword = m[1] ?? m[3] ?? "";
+    const line = reachLine(text, m, keyword);
+    const anchor = line === null ? "(file)" : anchorOf(line);
+    for (const rule of budgetsSwitchedOff(keyword, m[2] ?? m[4] ?? "")) {
+      keys.push({ keyword, rule, line, key: `${keyword} ${rule} @ ${anchor}` });
+    }
+  }
+  return keys;
+}
+
+/**
+ * How to read a branch line's anchor, given the file's `hunks` and the merge
+ * base's directives: the merge base's text for an unchanged line, or for an
+ * added one `editOf` finds is an edit of a base line, and the branch's own
+ * otherwise.
+ */
+function branchAnchors(hunks, atBase, here, before) {
+  const changed = {
+    removed: hunks.flatMap((hunk) => removedBy(hunk, atBase)),
+    added: addedBy(hunks, here),
+  };
+  const covered = new Set(before.map(({ line }) => line));
+  const leftBehind = [...covered]
+    .filter((line) => line !== null && removes(hunks, line))
+    .map(atBase);
+  return (line) => {
+    const { at, hunk } = baseLine(hunks, line);
+    if (!hunk) return atBase(at);
+    const now = here(line);
+    return (
+      editOf(now, removedBy(hunk, atBase), changed) ??
+      editOf(now, leftBehind, changed) ??
+      now
+    );
+  };
+}
+
+/** How many of `entries` carry each key. */
+const tally = (entries) => {
+  const counts = new Map();
+  for (const { key } of entries) counts.set(key, (counts.get(key) ?? 0) + 1);
+  return counts;
+};
+
+/**
+ * Budgets a touched file's `eslint` directives lift on this branch.
+ *
+ * The whole file at the merge base and on the branch, not the changed lines.
+ * A directive is a comment, and a `-U0` diff shows only the lines that changed:
+ * an edit to one line of a multi-line `/* eslint-disable … *\/` or
+ * `/* eslint-enable … *\/` leaves the rest of it out of the diff. Each
+ * directive is keyed by its keyword, rule, and the text of the line its reach
+ * starts on, so the comparison sees reach as well as count:
+ *
+ *   - a disable or config comment whose key is new lifts its rule. That covers
+ *     one added, one with a rule added to its list, one moved onto other
+ *     code, and a `-next-line` one widened to the rest of the file;
+ *   - an `eslint-enable` whose key is gone lifts its rule too: the region it
+ *     closed now runs on.
+ *
+ * That text is the merge base's wherever the line has a merge-base
+ * counterpart: an unchanged line, or an added one that `editOf` finds is an
+ * edit of a removed one. So renaming the function under an unchanged
+ * `-next-line`, alone or with the lines below it, leaves its key alone, as
+ * does moving the directive along with that function, while code inserted
+ * under a directive, or left under it by a deletion, a move or a swap, is
+ * other text and a new key. Text rather than a line number,
+ * because git may show an `eslint-enable` moved down past a line as that line
+ * moved up instead, leaving the enable's own line unchanged.
+ *
+ * The other two directions, a disable gone or an enable added, only narrow an
+ * exemption and lift nothing. A directive whose key changed reads as one gone
+ * and one added, so an edit that narrows a disable still grades as lifting;
+ * telling those apart is the reviewer's job, and budget directives are rare
+ * enough that the false 🔴 costs little. A base version git can't show reads
+ * as empty, failing toward 🔴.
+ *
+ * A file's merge-base version is read only when the branch's holds a budget
+ * directive or a changed line mentions `eslint` or a budget rule, so a large
+ * diff costs few extra git calls. Code edited under a directive mentions
+ * neither, which is why the branch's directives count; a directive only the
+ * merge base has was taken out by a changed line that names it. A file the
+ * budget layer exempts is skipped, since no budget applies there.
+ */
+async function budgetDirectiveGrowth(mergeBase, touchedCode, hunks) {
+  const out = [];
+  for (const [path, diff] of touchedCode) {
+    if (BUDGET_EXEMPT.test(path)) continue;
+    const text = await readFile(resolve(repoRoot, path), "utf8").catch(
+      () => "",
+    );
+    const holdsOne = budgetDirectives(text, () => "").length > 0;
+    if (!holdsOne && !MAY_TOUCH_DIRECTIVE.test(diff)) continue;
+    const baseText = await gitOr(["show", `${mergeBase}:${path}`], "");
+    const atBase = lineTexts(baseText);
+    const here = lineTexts(text);
+    const fileHunks = hunks.get(path) ?? [];
+    const before = budgetDirectives(baseText, atBase);
+    const after = budgetDirectives(
+      text,
+      branchAnchors(fileHunks, atBase, here, before),
+    );
+    const rules = new Set([
+      ...outnumbered(after, before, (k) => k !== "-enable"),
+      ...outnumbered(before, after, (k) => k === "-enable"),
+    ]);
+    if (rules.size)
+      out.push(`${path} → eslint-disable ${[...rules].join(", ")}`);
+  }
+  return out;
+}
+
+/**
+ * Rules of the `entries` whose keyword `pick` accepts and whose key `others`
+ * holds fewer of.
+ */
+function outnumbered(entries, others, pick) {
+  const theirs = tally(others);
+  const ours = tally(entries);
+  return entries
+    .filter(
+      ({ keyword, key }) =>
+        pick(keyword) && ours.get(key) > (theirs.get(key) ?? 0),
+    )
+    .map(({ rule }) => rule);
+}
 
 /**
  * Which of `names` (a regex alternation) the touched code reaches, one evidence
@@ -1005,6 +1380,16 @@ const RULES = [
       ),
   },
   {
+    id: "lint-budget-raised",
+    tier: "high",
+    title: "Size or complexity budget raised",
+    why: "`eslint-suppressions.json` holds the complexity and size violations that predate those budgets, per file and per rule, and ESLint reports nothing in a file while it stays within its count. Raising a count or adding an entry is raising a budget — the same call as raising `.size-limit.json` — and it passes every check by construction, because the file is what tells ESLint not to report. An added `eslint-disable` naming one of those rules does the same for one spot, and so does one naming no rule at all, which switches every rule off — as do moving a disable onto other code, widening a `-next-line` one to the rest of the file, and deleting the `eslint-enable` that closed a region. Lowering a count is the prune `pnpm lint` demands after a fix, and grades nothing.",
+    // Watched, so a prune-only diff reads as considered rather than unknown:
+    // `match` returns nothing when every count went down.
+    watches: /^eslint-suppressions\.json$/,
+    match: (f) => [...f.suppressionGrowth, ...f.budgetDirectiveGrowth],
+  },
+  {
     id: "release-config",
     tier: "high",
     title: "Release configuration",
@@ -1019,7 +1404,7 @@ const RULES = [
     tier: "high",
     title: "Root manifest — build/publish keys",
     why: "The root `scripts`, `packageManager`, `engines` and `pnpm` overrides define what `pnpm verify` and the pre-push hook actually run. A change here can make CI pass by doing less.",
-    // The only rule that watches a path it can then decline to fire on: the key
+    // The first rule to watch a path it can then decline to fire on: the key
     // filter below ignores everything outside the build/publish set, so a root
     // `devDependencies` bump matches no rule and is in no `LOW_SHAPED` entry.
     // It therefore landed under "paths the rubric doesn't recognise", advising
@@ -1027,9 +1412,9 @@ const RULES = [
     //
     // `watches` says "considered, and deliberately not interesting" — distinct
     // from "never heard of it", which is what that section is for. Any future
-    // rule that filters a watched path down to no evidence needs one too; every
-    // other rule today either cites the path it matched or is scoped to a
-    // LOW_SHAPED one, which is why this is the sole occurrence.
+    // rule that filters a watched path down to no evidence needs one too, as
+    // `lint-budget-raised` does for a prune; every other rule today either
+    // cites the path it matched or is scoped to a LOW_SHAPED one.
     watches: /^package\.json$/,
     match: (f) =>
       f.rootPackageKeys

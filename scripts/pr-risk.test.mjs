@@ -1299,6 +1299,538 @@ describe("a test switched off or deleted grades 🟡 medium", () => {
   });
 });
 
+describe("lint suppressions grade by direction", () => {
+  // `eslint-suppressions.json` is what tells ESLint not to report the budget
+  // violations that predate the budgets. A count going up passes every check by
+  // construction — that is the file's job — so the rubric is the only place
+  // such a diff can be seen. A count going down is the prune `pnpm lint` itself
+  // demands after a fix.
+  const SUPPRESSIONS = "eslint-suppressions.json";
+  const json = (value) => JSON.stringify(value, null, 2);
+  const BASE = {
+    "packages/core/src/a.ts": {
+      complexity: { count: 2 },
+      "max-params": { count: 1 },
+    },
+  };
+
+  it("grades a raised count 🔴 high, naming the file, rule and counts", async () => {
+    const result = await grade(
+      {
+        [SUPPRESSIONS]: json({
+          "packages/core/src/a.ts": {
+            complexity: { count: 3 },
+            "max-params": { count: 1 },
+          },
+        }),
+      },
+      { base: { [SUPPRESSIONS]: json(BASE) } },
+    );
+
+    assert.equal(result.tier, "high");
+    assert.deepEqual(evidenceFor(result, "lint-budget-raised"), [
+      `${SUPPRESSIONS} → packages/core/src/a.ts: complexity 2 → 3`,
+    ]);
+    assert.deepEqual(result.unrecognised, []);
+  });
+
+  it("grades a new file or rule entry 🔴 high", async () => {
+    const result = await grade(
+      {
+        [SUPPRESSIONS]: json({
+          ...BASE,
+          "packages/core/src/a.ts": {
+            ...BASE["packages/core/src/a.ts"],
+            "max-depth": { count: 1 },
+          },
+          "packages/core/src/b.ts": { complexity: { count: 1 } },
+        }),
+      },
+      { base: { [SUPPRESSIONS]: json(BASE) } },
+    );
+
+    assert.equal(result.tier, "high");
+    assert.deepEqual(evidenceFor(result, "lint-budget-raised"), [
+      `${SUPPRESSIONS} → packages/core/src/a.ts: max-depth 0 → 1`,
+      `${SUPPRESSIONS} → packages/core/src/b.ts: complexity 0 → 1`,
+    ]);
+  });
+
+  it("grades a prune 🟢 low, as considered rather than unrecognised", async () => {
+    const result = await grade(
+      {
+        [SUPPRESSIONS]: json({
+          "packages/core/src/a.ts": { complexity: { count: 1 } },
+        }),
+      },
+      { base: { [SUPPRESSIONS]: json(BASE) } },
+    );
+
+    assert.equal(result.tier, "low");
+    assert.deepEqual(result.reasons, []);
+    assert.deepEqual(result.unrecognised, []);
+    assert.ok(result.shape.includes("lint-budget-raised"));
+  });
+
+  it("does not grade deleting the file as growth", async () => {
+    // Every violation the file held is reported again, so nothing was hidden.
+    const result = await grade(
+      { [SUPPRESSIONS]: null },
+      { base: { [SUPPRESSIONS]: json(BASE) } },
+    );
+
+    assert.equal(result.tier, "low");
+    assert.deepEqual(result.reasons, []);
+  });
+
+  it("fails closed on a file it can't read as counts", async () => {
+    const broken = await grade(
+      { [SUPPRESSIONS]: "{ not json" },
+      { base: { [SUPPRESSIONS]: json(BASE) } },
+    );
+    assert.equal(broken.tier, "high");
+    assert.deepEqual(evidenceFor(broken, "lint-budget-raised"), [
+      `${SUPPRESSIONS} on this branch isn't valid JSON`,
+    ]);
+
+    // A count that isn't a number must not slip past both `>` and `<=`.
+    const notANumber = await grade(
+      {
+        [SUPPRESSIONS]: json({
+          "packages/core/src/a.ts": {
+            complexity: { count: "lots" },
+            "max-params": { count: 1 },
+          },
+        }),
+      },
+      { base: { [SUPPRESSIONS]: json(BASE) } },
+    );
+    assert.equal(notANumber.tier, "high");
+    assert.deepEqual(evidenceFor(notANumber, "lint-budget-raised"), [
+      `${SUPPRESSIONS} → packages/core/src/a.ts: complexity 2 → lots`,
+    ]);
+  });
+
+  // The same budget, lifted for one spot instead of one file.
+  const SRC = "packages/core/src/x.ts";
+  const BODY = "export const f = () => 1;\n";
+  const DISABLE = (directive) => `// ${directive}\n${BODY}`;
+
+  it("grades an added disable naming a budget rule 🔴 high", async () => {
+    const result = await grade(
+      {
+        [SRC]: DISABLE(
+          "eslint-disable-next-line max-params, complexity -- spec algorithm",
+        ),
+      },
+      { base: { [SRC]: BODY } },
+    );
+
+    assert.equal(result.tier, "high");
+    assert.deepEqual(evidenceFor(result, "lint-budget-raised"), [
+      `${SRC} → eslint-disable max-params, complexity`,
+    ]);
+  });
+
+  it("does not read the directive's reason as a rule list", async () => {
+    const result = await grade(
+      {
+        [SRC]: DISABLE(
+          "eslint-disable-next-line no-console -- keeps complexity down",
+        ),
+      },
+      { base: { [SRC]: BODY } },
+    );
+
+    assert.ok(!ruleIds(result).includes("lint-budget-raised"));
+  });
+
+  it("does not grade a removed directive", async () => {
+    const result = await grade(
+      { [SRC]: BODY },
+      { base: { [SRC]: DISABLE("eslint-disable-next-line complexity") } },
+    );
+
+    assert.ok(!ruleIds(result).includes("lint-budget-raised"));
+  });
+
+  // `website/scripts` is linted, budgets included, but grades 🟢 as docs-site
+  // paths, so it is where a directive this rule misses would pass unseen.
+  const SCRIPT = "website/scripts/x.mjs";
+
+  it("grades a disable with no rule list 🔴 high: it switches off every rule", async () => {
+    for (const comment of [
+      "// eslint-disable-next-line",
+      "/* eslint-disable */",
+      "// eslint-disable-line -- legacy",
+    ]) {
+      const result = await grade(
+        { [SCRIPT]: `${BODY.trimEnd()} ${comment}\n` },
+        { base: { [SCRIPT]: BODY } },
+      );
+
+      assert.equal(result.tier, "high", comment);
+      assert.deepEqual(
+        evidenceFor(result, "lint-budget-raised"),
+        [`${SCRIPT} → eslint-disable (every rule)`],
+        comment,
+      );
+    }
+  });
+
+  it("reads a block directive whose rule list continues onto the next line", async () => {
+    const result = await grade(
+      {
+        [SCRIPT]: `/* eslint-disable\n   no-console,\n   complexity -- spec\n */\n${BODY}`,
+      },
+      { base: { [SCRIPT]: BODY } },
+    );
+
+    assert.equal(result.tier, "high");
+    assert.deepEqual(evidenceFor(result, "lint-budget-raised"), [
+      `${SCRIPT} → eslint-disable complexity`,
+    ]);
+  });
+
+  it("leaves a directive in a test alone: no budget applies there", async () => {
+    const TEST = "packages/core/src/x.test.ts";
+    const result = await grade(
+      { [TEST]: DISABLE("eslint-disable-next-line") },
+      { base: { [TEST]: BODY } },
+    );
+
+    assert.ok(!ruleIds(result).includes("lint-budget-raised"));
+  });
+
+  it("leaves eslint-enable, eslint-env and other rules' disables alone", async () => {
+    const result = await grade(
+      {
+        [SCRIPT]: [
+          "/* eslint-env node */",
+          "// eslint-disable-next-line no-console",
+          "/* eslint-enable complexity */",
+          BODY,
+        ].join("\n"),
+      },
+      { base: { [SCRIPT]: BODY } },
+    );
+
+    assert.equal(result.tier, "low");
+    assert.ok(!ruleIds(result).includes("lint-budget-raised"));
+  });
+
+  // A `-U0` diff shows only the lines that changed, so an edit to one line of
+  // an existing multi-line directive leaves the rest of the comment, opener or
+  // closing `*/`, out of the diff. The rubric reads both whole versions.
+  const BLOCK = (...list) =>
+    `/* eslint-disable\n${list.join("\n")}\n */\n${BODY}`;
+
+  it("sees a budget added to the opener of an existing multi-line directive", async () => {
+    const result = await grade(
+      { [SCRIPT]: `/* eslint-disable no-console, complexity\n */\n${BODY}` },
+      { base: { [SCRIPT]: `/* eslint-disable no-console\n */\n${BODY}` } },
+    );
+
+    assert.equal(result.tier, "high");
+    assert.deepEqual(evidenceFor(result, "lint-budget-raised"), [
+      `${SCRIPT} → eslint-disable complexity`,
+    ]);
+  });
+
+  it("sees a budget added to a middle line of an existing directive", async () => {
+    const result = await grade(
+      { [SCRIPT]: BLOCK("  no-console,", "  max-depth,", "  eqeqeq") },
+      { base: { [SCRIPT]: BLOCK("  no-console,", "  eqeqeq") } },
+    );
+
+    assert.equal(result.tier, "high");
+    assert.deepEqual(evidenceFor(result, "lint-budget-raised"), [
+      `${SCRIPT} → eslint-disable max-depth`,
+    ]);
+  });
+
+  it("does not grade a directive that was already there", async () => {
+    const result = await grade(
+      { [SCRIPT]: `// eslint-disable-next-line complexity\n${BODY}${BODY}` },
+      { base: { [SCRIPT]: `// eslint-disable-next-line complexity\n${BODY}` } },
+    );
+
+    assert.ok(!ruleIds(result).includes("lint-budget-raised"));
+  });
+
+  // Reach, not count: each of these lifts a budget with the number of
+  // directives in the file unchanged.
+  const NEXT = "// eslint-disable-next-line complexity";
+  const G = "export const g = () => 2;\n";
+
+  it("grades a directive that moved onto other code 🔴 high", async () => {
+    const result = await grade(
+      { [SCRIPT]: `${BODY}${NEXT}\n${G}` },
+      { base: { [SCRIPT]: `${NEXT}\n${BODY}${G}` } },
+    );
+
+    assert.equal(result.tier, "high");
+    assert.deepEqual(evidenceFor(result, "lint-budget-raised"), [
+      `${SCRIPT} → eslint-disable complexity`,
+    ]);
+  });
+
+  // Code edited under a directive mentions no directive, so these cover the
+  // file being read at all as well as how its lines are matched up.
+  it("does not grade an edit to the line an unchanged directive covers", async () => {
+    const result = await grade(
+      { [SCRIPT]: `${NEXT}\nfunction complexityTotal() {}\n${G}` },
+      { base: { [SCRIPT]: `${NEXT}\nfunction complexityScore() {}\n${G}` } },
+    );
+
+    assert.ok(!ruleIds(result).includes("lint-budget-raised"));
+  });
+
+  it("grades code inserted under an unchanged directive 🔴 high", async () => {
+    const result = await grade(
+      { [SCRIPT]: `${NEXT}\n${G}${BODY}` },
+      { base: { [SCRIPT]: `${NEXT}\n${BODY}` } },
+    );
+
+    assert.equal(result.tier, "high");
+    assert.deepEqual(evidenceFor(result, "lint-budget-raised"), [
+      `${SCRIPT} → eslint-disable complexity`,
+    ]);
+  });
+
+  it("grades a directive a deletion leaves on the next code 🔴 high", async () => {
+    const result = await grade(
+      { [SCRIPT]: `${NEXT}\n${G}` },
+      { base: { [SCRIPT]: `${NEXT}\n${BODY}${G}` } },
+    );
+
+    assert.equal(result.tier, "high");
+    assert.deepEqual(evidenceFor(result, "lint-budget-raised"), [
+      `${SCRIPT} → eslint-disable complexity`,
+    ]);
+  });
+
+  it("does not grade an edit to the covered line and the one below it", async () => {
+    // Git shows a two-line replacement, which this must not take for a swap.
+    const result = await grade(
+      {
+        [SCRIPT]: `${NEXT}\nfunction f(value) {\n  return value && true;\n}\n`,
+      },
+      {
+        base: {
+          [SCRIPT]: `${NEXT}\nfunction f(a) {\n  return a && true;\n}\n`,
+        },
+      },
+    );
+
+    assert.ok(!ruleIds(result).includes("lint-budget-raised"));
+  });
+
+  // Two functions, the first with `NEXT` over its `inFirst` lines.
+  const TWO = (inFirst, inSecond) =>
+    [
+      "function first(a, b) {",
+      `  ${NEXT}`,
+      ...inFirst.map((l) => `  ${l}`),
+      "}",
+      "function second(a, b) {",
+      ...inSecond.map((l) => `  ${l}`),
+      "}",
+      "",
+    ].join("\n");
+
+  it("does not take an untouched copy of the covered line for a move", async () => {
+    const result = await grade(
+      { [SCRIPT]: TWO(["return a || b;"], ["return a && b;"]) },
+      { base: { [SCRIPT]: TWO(["return a && b;"], ["return a && b;"]) } },
+    );
+
+    assert.ok(!ruleIds(result).includes("lint-budget-raised"));
+  });
+
+  it("does not grade the same edit made to the covered line and a copy", async () => {
+    const result = await grade(
+      { [SCRIPT]: TWO(["return a || b;"], ["return a || b;"]) },
+      { base: { [SCRIPT]: TWO(["return a && b;"], ["return a && b;"]) } },
+    );
+
+    assert.ok(!ruleIds(result).includes("lint-budget-raised"));
+  });
+
+  it("grades code inserted under a directive as a copy goes elsewhere 🔴 high", async () => {
+    // The inserted line is like the deleted copy, but takes over no line.
+    const LOG = "console.log(a && b);";
+    const result = await grade(
+      { [SCRIPT]: TWO(["console.log(a || b);", LOG], []) },
+      { base: { [SCRIPT]: TWO([LOG], [LOG]) } },
+    );
+
+    assert.equal(result.tier, "high");
+    assert.deepEqual(evidenceFor(result, "lint-budget-raised"), [
+      `${SCRIPT} → eslint-disable complexity`,
+    ]);
+  });
+
+  it("does not grade a directive moved along with its function, edited", async () => {
+    // Enough between the two places that git deletes the pair at the top and
+    // adds it at the bottom, so the edited line's own hunk removed nothing.
+    const FILLER = [1, 2, 3, 4, 5].map((i) => `export const v${i} = ${i};\n`);
+    const compute = (params) =>
+      `function compute(${params}) {\n  return a;\n}\n`;
+    const result = await grade(
+      { [SCRIPT]: `${FILLER.join("")}${NEXT}\n${compute("a, b")}` },
+      { base: { [SCRIPT]: `${NEXT}\n${compute("a")}${FILLER.join("")}` } },
+    );
+
+    assert.ok(!ruleIds(result).includes("lint-budget-raised"));
+  });
+
+  it("grades a function moved in under a directive whose own was deleted 🔴 high", async () => {
+    // `computeTax(items, rate)` is most like the deleted `computeTotal` of
+    // the lines its hunk removed, but more like its own old line.
+    const result = await grade(
+      { [SCRIPT]: `${NEXT}\nfunction computeTax(items, rate) {}\n${G}` },
+      {
+        base: {
+          [SCRIPT]: `${NEXT}\nfunction computeTotal(items) {}\n${G}function computeTax(items) {}\n`,
+        },
+      },
+    );
+
+    assert.equal(result.tier, "high");
+    assert.deepEqual(evidenceFor(result, "lint-budget-raised"), [
+      `${SCRIPT} → eslint-disable complexity`,
+    ]);
+  });
+
+  it("grades the covered line rewritten beyond recognition 🔴 high", async () => {
+    const result = await grade(
+      { [SCRIPT]: `${NEXT}\nif (process.env.CI) await main();\n` },
+      { base: { [SCRIPT]: `${NEXT}\n${BODY}` } },
+    );
+
+    assert.equal(result.tier, "high");
+    assert.deepEqual(evidenceFor(result, "lint-budget-raised"), [
+      `${SCRIPT} → eslint-disable complexity`,
+    ]);
+  });
+
+  it("grades two edited functions that swapped under a directive 🔴 high", async () => {
+    // Git shows a two-line replacement, and each line is most like the other
+    // function's old one: `beta` is not an edit of the `alpha` it displaced.
+    const result = await grade(
+      {
+        [SCRIPT]: `${NEXT}\nfunction beta(b, c) {}\nfunction alpha(a, c) {}\n`,
+      },
+      {
+        base: {
+          [SCRIPT]: `${NEXT}\nfunction alpha(a) {}\nfunction beta(b) {}\n`,
+        },
+      },
+    );
+
+    assert.equal(result.tier, "high");
+    assert.deepEqual(evidenceFor(result, "lint-budget-raised"), [
+      `${SCRIPT} → eslint-disable complexity`,
+    ]);
+  });
+
+  it("grades a covered line moved away, new code left in its place 🔴 high", async () => {
+    // One way git can show it: `f` replaced by `h` one for one, and `f`
+    // added again below `g`.
+    const result = await grade(
+      { [SCRIPT]: `${NEXT}\n${H}${G}${BODY}` },
+      { base: { [SCRIPT]: `${NEXT}\n${BODY}${G}` } },
+    );
+
+    assert.equal(result.tier, "high");
+    assert.deepEqual(evidenceFor(result, "lint-budget-raised"), [
+      `${SCRIPT} → eslint-disable complexity`,
+    ]);
+  });
+
+  it("grades a one-line disable widened to the rest of the file 🔴 high", async () => {
+    const result = await grade(
+      { [SCRIPT]: `/* eslint-disable complexity */\n${BODY}` },
+      { base: { [SCRIPT]: `${NEXT}\n${BODY}` } },
+    );
+
+    assert.equal(result.tier, "high");
+    assert.deepEqual(evidenceFor(result, "lint-budget-raised"), [
+      `${SCRIPT} → eslint-disable complexity`,
+    ]);
+  });
+
+  it("grades a removed eslint-enable 🔴 high: the region now runs on", async () => {
+    const REGION = `/* eslint-disable complexity */\n${BODY}`;
+    const result = await grade(
+      { [SCRIPT]: `${REGION}${G}` },
+      { base: { [SCRIPT]: `${REGION}/* eslint-enable complexity */\n${G}` } },
+    );
+
+    assert.equal(result.tier, "high");
+    assert.deepEqual(evidenceFor(result, "lint-budget-raised"), [
+      `${SCRIPT} → eslint-disable complexity`,
+    ]);
+  });
+
+  it("does not grade an added eslint-enable: it narrows", async () => {
+    const REGION = `/* eslint-disable complexity */\n${BODY}`;
+    const result = await grade(
+      { [SCRIPT]: `${REGION}/* eslint-enable complexity */\n${G}` },
+      { base: { [SCRIPT]: `${REGION}${G}` } },
+    );
+
+    assert.ok(!ruleIds(result).includes("lint-budget-raised"));
+  });
+
+  // An enable is a directive too, and a multi-line one names its rule on a
+  // line that carries no keyword.
+  const REGION = `/* eslint-disable complexity */\n${BODY}`;
+  const H = "export const h = () => 3;\n";
+
+  it("grades a removed multi-line eslint-enable 🔴 high", async () => {
+    const result = await grade(
+      { [SCRIPT]: `${REGION}${G}` },
+      {
+        base: {
+          [SCRIPT]: `${REGION}/* eslint-enable\n   complexity\n */\n${G}`,
+        },
+      },
+    );
+
+    assert.equal(result.tier, "high");
+    assert.deepEqual(evidenceFor(result, "lint-budget-raised"), [
+      `${SCRIPT} → eslint-disable complexity`,
+    ]);
+  });
+
+  it("grades an eslint-enable moved further down 🔴 high: the region grew", async () => {
+    const ENABLE = "/* eslint-enable complexity */\n";
+    const result = await grade(
+      { [SCRIPT]: `${REGION}${G}${ENABLE}${H}` },
+      { base: { [SCRIPT]: `${REGION}${ENABLE}${G}${H}` } },
+    );
+
+    assert.equal(result.tier, "high");
+  });
+
+  it("grades a removed bare eslint-enable as lifting every rule", async () => {
+    const result = await grade(
+      { [SCRIPT]: `/* eslint-disable */\n${BODY}${G}` },
+      {
+        base: {
+          [SCRIPT]: `/* eslint-disable */\n${BODY}/* eslint-enable */\n${G}`,
+        },
+      },
+    );
+
+    assert.deepEqual(evidenceFor(result, "lint-budget-raised"), [
+      `${SCRIPT} → eslint-disable (every rule)`,
+    ]);
+  });
+});
+
 describe("the gate", () => {
   // The Bind step in `pr-risk.yml` decides whether a review label counts; this
   // decides what it buys, and CI runs the base branch's copy so a pull request
