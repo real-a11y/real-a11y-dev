@@ -1575,6 +1575,41 @@ describe("lint suppressions grade by direction", () => {
     ]);
   });
 
+  // Code edited under a directive mentions no directive, so these cover the
+  // file being read at all as well as how its lines are matched up.
+  it("does not grade an edit to the line an unchanged directive covers", async () => {
+    const result = await grade(
+      { [SCRIPT]: `${NEXT}\nfunction complexityTotal() {}\n${G}` },
+      { base: { [SCRIPT]: `${NEXT}\nfunction complexityScore() {}\n${G}` } },
+    );
+
+    assert.ok(!ruleIds(result).includes("lint-budget-raised"));
+  });
+
+  it("grades code inserted under an unchanged directive 🔴 high", async () => {
+    const result = await grade(
+      { [SCRIPT]: `${NEXT}\n${G}${BODY}` },
+      { base: { [SCRIPT]: `${NEXT}\n${BODY}` } },
+    );
+
+    assert.equal(result.tier, "high");
+    assert.deepEqual(evidenceFor(result, "lint-budget-raised"), [
+      `${SCRIPT} → eslint-disable complexity`,
+    ]);
+  });
+
+  it("grades a directive a deletion leaves on the next code 🔴 high", async () => {
+    const result = await grade(
+      { [SCRIPT]: `${NEXT}\n${G}` },
+      { base: { [SCRIPT]: `${NEXT}\n${BODY}${G}` } },
+    );
+
+    assert.equal(result.tier, "high");
+    assert.deepEqual(evidenceFor(result, "lint-budget-raised"), [
+      `${SCRIPT} → eslint-disable complexity`,
+    ]);
+  });
+
   it("grades a one-line disable widened to the rest of the file 🔴 high", async () => {
     const result = await grade(
       { [SCRIPT]: `/* eslint-disable complexity */\n${BODY}` },

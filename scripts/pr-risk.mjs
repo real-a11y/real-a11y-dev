@@ -413,6 +413,8 @@ async function collectFacts(base) {
   // or `\`.
   const sections = codeDiff.split(/^diff --git /m).filter(Boolean);
   const touchedCode = [];
+  // Each file's hunk ranges, which `scannable` drops: see `baseLine`.
+  const hunks = new Map();
   for (const section of sections) {
     const path = headerPath(section);
     // Fails CLOSED. A section this can't attribute is a diff format this parse
@@ -429,6 +431,7 @@ async function collectFacts(base) {
       ]);
     }
     touchedCode.push([path, scannable(section)]);
+    hunks.set(path, hunkRanges(section));
   }
   // `git diff` cannot see an untracked file, so a new gate written before
   // `git add` would grade lower here than in CI. Every line of it is new.
@@ -458,6 +461,7 @@ async function collectFacts(base) {
     budgetDirectiveGrowth: await budgetDirectiveGrowth(
       mergeBase,
       touchedCode.filter(([path]) => !SELF_PATHS.has(path)),
+      hunks,
     ),
   };
 }
@@ -895,32 +899,69 @@ const BUDGET_EXEMPT =
 const MAY_TOUCH_DIRECTIVE =
   /eslint|complexity|max-depth|max-params|max-lines-per-function|max-nested-callbacks/;
 
+/** The 1-based line `index` falls on in `text`. */
+const lineOf = (text, index) => text.slice(0, index).split("\n").length;
+
 /**
- * Where a directive's reach starts: the code before it on its own line for
- * `-disable-line`, otherwise the first non-blank text after the comment.
+ * The line a directive's reach starts on: its own for `-disable-line`,
+ * otherwise the first non-blank one after the comment. A config comment
+ * configures the whole file wherever it sits, so it has none.
  */
-function directiveAnchor(text, m, keyword) {
-  if (keyword === "-disable-line") {
-    return text.slice(text.lastIndexOf("\n", m.index) + 1, m.index).trim();
-  }
-  return (
-    text
-      .slice(m.index + m[0].length)
-      .match(/\S[^\n]*/)?.[0]
-      .trim() ?? ""
+function reachLine(text, m, keyword) {
+  if (!keyword) return null;
+  if (keyword === "-disable-line") return lineOf(text, m.index);
+  const end = m.index + m[0].length;
+  const next = text.slice(end).search(/\S/);
+  return lineOf(text, next < 0 ? text.length : end + next);
+}
+
+/** Each line of `text`, trimmed, by 1-based line number; past the end, "". */
+function lineTexts(text) {
+  const lines = text.split("\n");
+  return (line) => lines[line - 1]?.trim() ?? "";
+}
+
+/**
+ * Each hunk of one file's `-U0` diff, as `[oldStart, oldCount, newStart,
+ * newCount]`. A count git leaves out is 1.
+ */
+const hunkRanges = (section) =>
+  [...section.matchAll(/^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/gm)].map(
+    (m) => [Number(m[1]), Number(m[2] ?? 1), Number(m[3]), Number(m[4] ?? 1)],
   );
+
+/**
+ * The merge-base line a branch line came from, through the file's `hunks`, or
+ * `null` for one with none. A changed line stands for the line it replaced
+ * only in a hunk that adds as many lines as it removes, as an edit made in
+ * place does; a line any other hunk adds is new. A hunk that adds nothing
+ * sits after its `newStart`, which is why the first line after it is one on.
+ */
+function baseLine(hunks, line) {
+  let shift = 0;
+  for (const [oldStart, oldCount, newStart, newCount] of hunks) {
+    const start = newCount ? newStart : newStart + 1;
+    if (line < start) break;
+    if (line < start + newCount) {
+      return oldCount === newCount ? oldStart + line - start : null;
+    }
+    shift += oldCount - newCount;
+  }
+  return line + shift;
 }
 
 /**
  * Every budget directive in `text`, one entry per rule it names, keyed by what
- * it does and where: `<keyword> <rule> @ <anchor>`. The keyword is empty for a
- * config comment.
+ * it does and where its reach starts: `<keyword> <rule> @ <anchor>`, the
+ * anchor being what `anchorOf` reads off the line the reach starts on. The
+ * keyword is empty for a config comment, which reaches the whole file.
  */
-function budgetDirectives(text) {
+function budgetDirectives(text, anchorOf) {
   const keys = [];
   for (const m of text.matchAll(ESLINT_DIRECTIVE)) {
     const keyword = m[1] ?? m[3] ?? "";
-    const anchor = directiveAnchor(text, m, keyword);
+    const line = reachLine(text, m, keyword);
+    const anchor = line === null ? "(file)" : anchorOf(line);
     for (const rule of budgetsSwitchedOff(keyword, m[2] ?? m[4] ?? "")) {
       keys.push({ keyword, rule, key: `${keyword} ${rule} @ ${anchor}` });
     }
@@ -942,14 +983,22 @@ const tally = (entries) => {
  * A directive is a comment, and a `-U0` diff shows only the lines that changed:
  * an edit to one line of a multi-line `/* eslint-disable … *\/` or
  * `/* eslint-enable … *\/` leaves the rest of it out of the diff. Each
- * directive is keyed by its keyword, rule, and where its reach starts, so the
- * comparison sees reach as well as count:
+ * directive is keyed by its keyword, rule, and the text of the line its reach
+ * starts on, so the comparison sees reach as well as count:
  *
  *   - a disable or config comment whose key is new lifts its rule. That covers
  *     one added, one with a rule added to its list, one moved onto other
  *     code, and a `-next-line` one widened to the rest of the file;
  *   - an `eslint-enable` whose key is gone lifts its rule too: the region it
  *     closed now runs on.
+ *
+ * That text is the merge base's wherever the line has a merge-base
+ * counterpart: a branch line the diff edited in place reads as the line it
+ * replaced. So renaming the function under an unchanged `-next-line` leaves
+ * its key alone, while code inserted under a directive, or left under it by a
+ * deletion or a move, is other text and a new key. Text rather than a line
+ * number, because git may show an `eslint-enable` moved down past a line as
+ * that line moved up instead, leaving the enable's own line unchanged.
  *
  * The other two directions, a disable gone or an enable added, only narrow an
  * exemption and lift nothing. A directive whose key changed reads as one gone
@@ -958,20 +1007,30 @@ const tally = (entries) => {
  * enough that the false 🔴 costs little. A base version git can't show reads
  * as empty, failing toward 🔴.
  *
- * Only files whose changed lines mention `eslint` or a budget rule are read,
- * so a large diff costs no extra git calls. A file the budget layer exempts is
- * skipped, since no budget applies there.
+ * A file's merge-base version is read only when the branch's holds a budget
+ * directive or a changed line mentions `eslint` or a budget rule, so a large
+ * diff costs few extra git calls. Code edited under a directive mentions
+ * neither, which is why the branch's directives count; a directive only the
+ * merge base has was taken out by a changed line that names it. A file the
+ * budget layer exempts is skipped, since no budget applies there.
  */
-async function budgetDirectiveGrowth(mergeBase, touchedCode) {
+async function budgetDirectiveGrowth(mergeBase, touchedCode, hunks) {
   const out = [];
   for (const [path, diff] of touchedCode) {
-    if (BUDGET_EXEMPT.test(path) || !MAY_TOUCH_DIRECTIVE.test(diff)) continue;
-    const before = budgetDirectives(
-      await gitOr(["show", `${mergeBase}:${path}`], ""),
+    if (BUDGET_EXEMPT.test(path)) continue;
+    const text = await readFile(resolve(repoRoot, path), "utf8").catch(
+      () => "",
     );
-    const after = budgetDirectives(
-      await readFile(resolve(repoRoot, path), "utf8").catch(() => ""),
-    );
+    const holdsOne = budgetDirectives(text, () => "").length > 0;
+    if (!holdsOne && !MAY_TOUCH_DIRECTIVE.test(diff)) continue;
+    const baseText = await gitOr(["show", `${mergeBase}:${path}`], "");
+    const atBase = lineTexts(baseText);
+    const here = lineTexts(text);
+    const before = budgetDirectives(baseText, atBase);
+    const after = budgetDirectives(text, (line) => {
+      const from = baseLine(hunks.get(path) ?? [], line);
+      return from === null ? here(line) : atBase(from);
+    });
     const rules = new Set([
       ...outnumbered(after, before, (k) => k !== "-enable"),
       ...outnumbered(before, after, (k) => k === "-enable"),
