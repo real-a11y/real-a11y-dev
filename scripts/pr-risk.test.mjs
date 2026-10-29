@@ -1609,6 +1609,52 @@ describe("lint suppressions grade by direction", () => {
 
     assert.ok(!ruleIds(result).includes("lint-budget-raised"));
   });
+
+  // An enable is a directive too, and a multi-line one names its rule on a
+  // line that carries no keyword.
+  const REGION = `/* eslint-disable complexity */\n${BODY}`;
+  const H = "export const h = () => 3;\n";
+
+  it("grades a removed multi-line eslint-enable 🔴 high", async () => {
+    const result = await grade(
+      { [SCRIPT]: `${REGION}${G}` },
+      {
+        base: {
+          [SCRIPT]: `${REGION}/* eslint-enable\n   complexity\n */\n${G}`,
+        },
+      },
+    );
+
+    assert.equal(result.tier, "high");
+    assert.deepEqual(evidenceFor(result, "lint-budget-raised"), [
+      `${SCRIPT} → eslint-disable complexity`,
+    ]);
+  });
+
+  it("grades an eslint-enable moved further down 🔴 high: the region grew", async () => {
+    const ENABLE = "/* eslint-enable complexity */\n";
+    const result = await grade(
+      { [SCRIPT]: `${REGION}${G}${ENABLE}${H}` },
+      { base: { [SCRIPT]: `${REGION}${ENABLE}${G}${H}` } },
+    );
+
+    assert.equal(result.tier, "high");
+  });
+
+  it("grades a removed bare eslint-enable as lifting every rule", async () => {
+    const result = await grade(
+      { [SCRIPT]: `/* eslint-disable */\n${BODY}${G}` },
+      {
+        base: {
+          [SCRIPT]: `/* eslint-disable */\n${BODY}/* eslint-enable */\n${G}`,
+        },
+      },
+    );
+
+    assert.deepEqual(evidenceFor(result, "lint-budget-raised"), [
+      `${SCRIPT} → eslint-disable (every rule)`,
+    ]);
+  });
 });
 
 describe("the gate", () => {

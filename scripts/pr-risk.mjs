@@ -858,15 +858,15 @@ const addedTestDisablers = (code) =>
   );
 
 /**
- * An ESLint comment directive: `eslint-disable`, `-next-line`, `-line`, or an
- * inline `/* eslint complexity: … *\/` config. Group 1 or 3 is the `-disable…`
- * keyword (absent for a config comment), group 2 or 4 the rest of the comment.
- * A block comment runs to its `*\/`, across lines, because ESLint reads a rule
- * list that continues onto the next one. `eslint-enable` and `eslint-env` don't
- * match: what follows `eslint` must be `-disable…` or whitespace.
+ * An ESLint comment directive: `eslint-disable`, `-next-line`, `-line`,
+ * `eslint-enable`, or an inline `/* eslint complexity: … *\/` config. Group 1
+ * or 3 is the keyword (absent for a config comment), group 2 or 4 the rest of
+ * the comment. A block comment runs to its `*\/`, across lines, because ESLint
+ * reads a rule list that continues onto the next one. `eslint-env` doesn't
+ * match: what follows `eslint` must be one of those keywords or whitespace.
  */
 const ESLINT_DIRECTIVE =
-  /\/\*\s*eslint(-disable(?:-next-line|-line)?)?(?![\w-])([\s\S]*?)\*\/|\/\/\s*eslint(-disable(?:-next-line|-line)?)?(?![\w-])([^\n]*)/g;
+  /\/\*\s*eslint(-disable(?:-next-line|-line)?|-enable)?(?![\w-])([\s\S]*?)\*\/|\/\/\s*eslint(-disable(?:-next-line|-line)?|-enable)?(?![\w-])([^\n]*)/g;
 
 /** The size and complexity budgets `eslint-suppressions.json` ratchets. */
 const BUDGET_RULE =
@@ -895,76 +895,68 @@ const BUDGET_EXEMPT =
 const MAY_TOUCH_DIRECTIVE =
   /eslint|complexity|max-depth|max-params|max-lines-per-function|max-nested-callbacks/;
 
-/** How many directives in `text` switch off each budget. */
-function countBudgetDirectives(text) {
-  const counts = new Map();
-  for (const m of text.matchAll(ESLINT_DIRECTIVE)) {
-    for (const rule of budgetsSwitchedOff(m[1] ?? m[3], m[2] ?? m[4] ?? ""))
-      counts.set(rule, (counts.get(rule) ?? 0) + 1);
+/**
+ * Where a directive's reach starts: the code before it on its own line for
+ * `-disable-line`, otherwise the first non-blank text after the comment.
+ */
+function directiveAnchor(text, m, keyword) {
+  if (keyword === "-disable-line") {
+    return text.slice(text.lastIndexOf("\n", m.index) + 1, m.index).trim();
   }
+  return (
+    text
+      .slice(m.index + m[0].length)
+      .match(/\S[^\n]*/)?.[0]
+      .trim() ?? ""
+  );
+}
+
+/**
+ * Every budget directive in `text`, one entry per rule it names, keyed by what
+ * it does and where: `<keyword> <rule> @ <anchor>`. The keyword is empty for a
+ * config comment.
+ */
+function budgetDirectives(text) {
+  const keys = [];
+  for (const m of text.matchAll(ESLINT_DIRECTIVE)) {
+    const keyword = m[1] ?? m[3] ?? "";
+    const anchor = directiveAnchor(text, m, keyword);
+    for (const rule of budgetsSwitchedOff(keyword, m[2] ?? m[4] ?? "")) {
+      keys.push({ keyword, rule, key: `${keyword} ${rule} @ ${anchor}` });
+    }
+  }
+  return keys;
+}
+
+/** How many of `entries` carry each key. */
+const tally = (entries) => {
+  const counts = new Map();
+  for (const { key } of entries) counts.set(key, (counts.get(key) ?? 0) + 1);
   return counts;
-}
+};
 
 /**
- * A directive on one changed line: `[1]` its keyword (`-disable…`, `-enable`,
- * or none for a config comment), `[2]` its rule list, up to a `--` reason or
- * the comment's close.
- */
-const LINE_DIRECTIVE =
-  /\/[/*]\s*eslint(-disable(?:-next-line|-line)?|-enable)?(?![\w-])((?:(?!--|\*\/).)*)/;
-
-/**
- * Budgets one changed `-U0` diff line lifts: an added disable or config
- * comment, or a removed `eslint-enable`. The other two directions narrow an
- * exemption, an added enable or a removed disable, and lift nothing.
+ * Budgets a touched file's `eslint` directives lift on this branch.
  *
- * Reach, not count, is what this line-level half adds. Turning
- * `eslint-disable-next-line complexity` into `eslint-disable complexity`
- * widens one line's exemption to the rest of the file, and deleting an
- * `eslint-enable` lets a region run on, with the number of directives
- * unchanged. A moved directive reads as one added here, which is right: it now
- * exempts code it didn't before. So does any edited disable line, even one
- * that narrows the exemption. Telling those apart is the reviewer's job, and
- * a budget directive is rare enough that the false 🔴 costs little.
- */
-function budgetsLiftedBy(line) {
-  if (!/^[+-]/.test(line)) return [];
-  const text = line.slice(1);
-  const m = text.match(LINE_DIRECTIVE);
-  if (!m || line.startsWith("+") === (m[1] === "-enable")) return [];
-  // A block comment still open at the end of the line continues its rule list
-  // on the next one, so an empty list here is not a bare disable. Take the
-  // names it does hold; the whole-file count reads the rest.
-  const open =
-    m[0].startsWith("/*") && !text.slice(m.index + m[0].length).includes("*/");
-  if (open) return [...m[2].matchAll(BUDGET_RULE)].map(([rule]) => rule);
-  return budgetsSwitchedOff(m[1], m[2]);
-}
-
-/**
- * Budgets that more directives switch off in the whole file on this branch
- * than at the merge base — the half the changed lines alone can't see. A
- * directive is a comment, and adding `complexity` to the middle line of an
- * existing multi-line `/* eslint-disable … *\/` changes a line that names no
- * directive at all. A base version git can't show reads as empty, so
- * everything in the file counts, failing toward 🔴.
- */
-async function wholeFileGrowth(mergeBase, path) {
-  const before = countBudgetDirectives(
-    await gitOr(["show", `${mergeBase}:${path}`], ""),
-  );
-  const after = countBudgetDirectives(
-    await readFile(resolve(repoRoot, path), "utf8").catch(() => ""),
-  );
-  return [...after]
-    .filter(([rule, n]) => n > (before.get(rule) ?? 0))
-    .map(([rule]) => rule);
-}
-
-/**
- * Budgets a touched file's `eslint` directives lift on this branch: what its
- * changed lines widen, plus what the whole file switches off more often than
- * at the merge base.
+ * The whole file at the merge base and on the branch, not the changed lines.
+ * A directive is a comment, and a `-U0` diff shows only the lines that changed:
+ * an edit to one line of a multi-line `/* eslint-disable … *\/` or
+ * `/* eslint-enable … *\/` leaves the rest of it out of the diff. Each
+ * directive is keyed by its keyword, rule, and where its reach starts, so the
+ * comparison sees reach as well as count:
+ *
+ *   - a disable or config comment whose key is new lifts its rule. That covers
+ *     one added, one with a rule added to its list, one moved onto other
+ *     code, and a `-next-line` one widened to the rest of the file;
+ *   - an `eslint-enable` whose key is gone lifts its rule too: the region it
+ *     closed now runs on.
+ *
+ * The other two directions, a disable gone or an enable added, only narrow an
+ * exemption and lift nothing. A directive whose key changed reads as one gone
+ * and one added, so an edit that narrows a disable still grades as lifting;
+ * telling those apart is the reviewer's job, and budget directives are rare
+ * enough that the false 🔴 costs little. A base version git can't show reads
+ * as empty, failing toward 🔴.
  *
  * Only files whose changed lines mention `eslint` or a budget rule are read,
  * so a large diff costs no extra git calls. A file the budget layer exempts is
@@ -974,12 +966,35 @@ async function budgetDirectiveGrowth(mergeBase, touchedCode) {
   const out = [];
   for (const [path, diff] of touchedCode) {
     if (BUDGET_EXEMPT.test(path) || !MAY_TOUCH_DIRECTIVE.test(diff)) continue;
-    const rules = new Set(diff.split("\n").flatMap((l) => budgetsLiftedBy(l)));
-    for (const rule of await wholeFileGrowth(mergeBase, path)) rules.add(rule);
+    const before = budgetDirectives(
+      await gitOr(["show", `${mergeBase}:${path}`], ""),
+    );
+    const after = budgetDirectives(
+      await readFile(resolve(repoRoot, path), "utf8").catch(() => ""),
+    );
+    const rules = new Set([
+      ...outnumbered(after, before, (k) => k !== "-enable"),
+      ...outnumbered(before, after, (k) => k === "-enable"),
+    ]);
     if (rules.size)
       out.push(`${path} → eslint-disable ${[...rules].join(", ")}`);
   }
   return out;
+}
+
+/**
+ * Rules of the `entries` whose keyword `pick` accepts and whose key `others`
+ * holds fewer of.
+ */
+function outnumbered(entries, others, pick) {
+  const theirs = tally(others);
+  const ours = tally(entries);
+  return entries
+    .filter(
+      ({ keyword, key }) =>
+        pick(keyword) && ours.get(key) > (theirs.get(key) ?? 0),
+    )
+    .map(({ rule }) => rule);
 }
 
 /**
