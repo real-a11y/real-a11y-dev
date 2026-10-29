@@ -35,6 +35,8 @@ export const CEILINGS = "eslint-file-lengths.json";
  * that it reports every non-empty file's length in its message.
  */
 async function lengths(files) {
+  // ESLint reads no patterns at all as the whole working directory.
+  if (!files.length) return new Map();
   const eslint = new ESLint({
     cwd: root,
     errorOnUnmatchedPattern: false,
@@ -45,6 +47,11 @@ async function lengths(files) {
   });
   const found = new Map();
   for (const result of await eslint.lintFiles(files)) {
+    // A file named outright but ignored comes back with only a notice saying
+    // so: not linted, rather than empty.
+    if (result.messages.some((m) => !m.ruleId && /ignored/i.test(m.message))) {
+      continue;
+    }
     const report = result.messages.find((m) => m.ruleId === "max-lines");
     const length = report ? Number(/\((\d+)\)/.exec(report.message)?.[1]) : 0;
     found.set(relative(root, result.filePath).replaceAll("\\", "/"), length);
@@ -102,6 +109,12 @@ async function main(prune) {
   process.exitCode = 1;
 }
 
-if (resolve(process.argv[1] ?? "") === fileURLToPath(import.meta.url)) {
+// Run as a script, not imported by its test. Windows paths compare without
+// case: a shell can report the drive as `c:` while the module URL says `C:`,
+// and a mismatch here would skip the check and pass silently.
+const self = fileURLToPath(import.meta.url);
+const invoked = resolve(process.argv[1] ?? "");
+const fold = (p) => (process.platform === "win32" ? p.toLowerCase() : p);
+if (fold(invoked) === fold(self)) {
   await main(process.argv.includes("--prune"));
 }
