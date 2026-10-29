@@ -1626,24 +1626,49 @@ describe("lint suppressions grade by direction", () => {
     assert.ok(!ruleIds(result).includes("lint-budget-raised"));
   });
 
+  // Two functions, the first with `NEXT` over its `inFirst` lines.
+  const TWO = (inFirst, inSecond) =>
+    [
+      "function first(a, b) {",
+      `  ${NEXT}`,
+      ...inFirst.map((l) => `  ${l}`),
+      "}",
+      "function second(a, b) {",
+      ...inSecond.map((l) => `  ${l}`),
+      "}",
+      "",
+    ].join("\n");
+
   it("does not take an untouched copy of the covered line for a move", async () => {
-    const file = (covered) =>
-      [
-        "function first(a, b) {",
-        `  ${NEXT}`,
-        `  ${covered}`,
-        "}",
-        "function second(a, b) {",
-        "  return a && b;",
-        "}",
-        "",
-      ].join("\n");
     const result = await grade(
-      { [SCRIPT]: file("return a || b;") },
-      { base: { [SCRIPT]: file("return a && b;") } },
+      { [SCRIPT]: TWO(["return a || b;"], ["return a && b;"]) },
+      { base: { [SCRIPT]: TWO(["return a && b;"], ["return a && b;"]) } },
     );
 
     assert.ok(!ruleIds(result).includes("lint-budget-raised"));
+  });
+
+  it("does not grade the same edit made to the covered line and a copy", async () => {
+    const result = await grade(
+      { [SCRIPT]: TWO(["return a || b;"], ["return a || b;"]) },
+      { base: { [SCRIPT]: TWO(["return a && b;"], ["return a && b;"]) } },
+    );
+
+    assert.ok(!ruleIds(result).includes("lint-budget-raised"));
+  });
+
+  it("grades code inserted under a directive as a copy goes elsewhere 🔴 high", async () => {
+    // The inserted line is like the deleted copy, but takes over no line.
+    const LOG = "console.log(a && b);";
+    const result = await grade(
+      { [SCRIPT]: TWO(["console.log(a || b);", LOG], []) },
+      { base: { [SCRIPT]: TWO([LOG], [LOG]) } },
+    );
+
+    assert.equal(result.tier, "high");
+    assert.deepEqual(evidenceFor(result, "lint-budget-raised"), [
+      `${SCRIPT} → eslint-disable complexity`,
+    ]);
   });
 
   it("grades the covered line rewritten beyond recognition 🔴 high", async () => {

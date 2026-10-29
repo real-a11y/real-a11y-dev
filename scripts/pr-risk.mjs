@@ -931,31 +931,32 @@ const hunkRanges = (section) =>
   );
 
 /**
- * The merge-base line an unchanged branch line sits at, through the file's
- * `hunks`, or `null` for a line a hunk added. A hunk that adds nothing sits
- * after its `newStart`, which is why the first line after it is one on.
+ * Where a branch line sits at the merge base, through the file's `hunks`:
+ * `{ at }`, the base line an unchanged one is, or `{ hunk }`, the hunk that
+ * added it. A hunk that adds nothing sits after its `newStart`, which is why
+ * the first line after it is one on.
  */
 function baseLine(hunks, line) {
   let shift = 0;
-  for (const [, oldCount, newStart, newCount] of hunks) {
+  for (const hunk of hunks) {
+    const [, oldCount, newStart, newCount] = hunk;
     const start = newCount ? newStart : newStart + 1;
     if (line < start) break;
-    if (line < start + newCount) return null;
+    if (line < start + newCount) return { hunk };
     shift += oldCount - newCount;
   }
-  return line + shift;
+  return { at: line + shift };
 }
 
-/** The trimmed lines the file's `hunks` remove from the base and add here. */
-function changedLines(hunks, atBase, here) {
-  const removed = [];
-  const added = [];
-  for (const [oldStart, oldCount, newStart, newCount] of hunks) {
-    for (let i = 0; i < oldCount; i++) removed.push(atBase(oldStart + i));
-    for (let i = 0; i < newCount; i++) added.push(here(newStart + i));
-  }
-  return { removed, added };
-}
+/** The trimmed base lines one hunk removes. */
+const removedBy = ([oldStart, oldCount], atBase) =>
+  Array.from({ length: oldCount }, (_, i) => atBase(oldStart + i));
+
+/** The trimmed branch lines every one of the file's `hunks` adds. */
+const addedBy = (hunks, here) =>
+  hunks.flatMap(([, , newStart, newCount]) =>
+    Array.from({ length: newCount }, (_, i) => here(newStart + i)),
+  );
 
 /**
  * How alike two lines are: the characters they share at the start plus those
@@ -984,19 +985,26 @@ function closest(line, pool) {
 }
 
 /**
- * The removed line an added one is an edit of, or `null` if it is new code.
- * It is the removed line it is most like, provided that line is in turn most
- * like it of all the added ones and the two share at least half their text.
- * Asking both ways is what tells an edit from a move: a line moved elsewhere
- * is most like its own copy, so whatever took its place is new, and of two
- * edited functions that traded places each is most like the other's old self.
+ * The base line an added one is an edit of, or `null` if it is new code.
+ *
+ * It is the line its own hunk removed that it is most like: the code that sat
+ * where it sits now. Its own hunk, because a line inserted where nothing was
+ * removed takes over no line, however like one deleted elsewhere it is, and
+ * because two identical lines edited apart are told apart by where they were.
+ *
+ * Then the other way, across the whole file: no other added line may be more
+ * like that base line than this one is, and the two must share at least half
+ * their text. A line moved elsewhere is most like its own copy, so whatever
+ * took its place is new; of two edited functions that traded places, each is
+ * most like the other's old self. A copy given the same edit is only as like
+ * it, so it doesn't count against it.
  */
-function editOf(line, { removed, added }) {
+function editOf(line, removed, added) {
   const was = closest(line, removed);
-  if (was === undefined || closest(was, added) !== line) return null;
-  return 2 * likeness(line, was) >= Math.max(line.length, was.length)
-    ? was
-    : null;
+  if (was === undefined) return null;
+  const mine = likeness(was, line);
+  if (added.some((other) => likeness(was, other) > mine)) return null;
+  return 2 * mine >= Math.max(line.length, was.length) ? was : null;
 }
 
 /**
@@ -1077,12 +1085,12 @@ async function budgetDirectiveGrowth(mergeBase, touchedCode, hunks) {
     const atBase = lineTexts(baseText);
     const here = lineTexts(text);
     const fileHunks = hunks.get(path) ?? [];
-    const changed = changedLines(fileHunks, atBase, here);
+    const added = addedBy(fileHunks, here);
     const before = budgetDirectives(baseText, atBase);
     const after = budgetDirectives(text, (line) => {
-      const from = baseLine(fileHunks, line);
-      if (from !== null) return atBase(from);
-      return editOf(here(line), changed) ?? here(line);
+      const { at, hunk } = baseLine(fileHunks, line);
+      if (!hunk) return atBase(at);
+      return editOf(here(line), removedBy(hunk, atBase), added) ?? here(line);
     });
     const rules = new Set([
       ...outnumbered(after, before, (k) => k !== "-enable"),
