@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+
 import js from "@eslint/js";
 import prettier from "eslint-config-prettier";
 import importPlugin from "eslint-plugin-import";
@@ -46,11 +48,25 @@ const CLOBBER_SAFE_PARENT_READS = [
  *   6. Clobber-safe parent reads in core and the extension
  *   7. jsx-a11y on .tsx/.jsx
  *   8. Source may not import test code or data (`pr:risk` relies on it)
- *   9. Size and complexity budgets, ratcheted by `eslint-suppressions.json`
+ *   9. Size and complexity budgets, ratcheted by `eslint-suppressions.json`,
+ *      and the per-file length ceilings in `eslint-file-lengths.json`
  *  10. Test file relaxations (Vitest fixtures often include broken markup)
  *  11. eslint-config-prettier LAST — disables formatting rules that fight
  *      Prettier
  */
+/**
+ * How long a file outside tests may be — see layer 9. `max-lines` reports a
+ * file once however far over it is, so a suppression would let a file that is
+ * already too long grow without limit. Each one gets its own ceiling instead,
+ * in `eslint-file-lengths.json`: its length when the budget was switched on.
+ * `scripts/file-lengths.mjs` reads both exports.
+ */
+export const FILE_LENGTH_BUDGET = 500;
+export const FILE_LENGTH_OPTIONS = { skipBlankLines: true, skipComments: true };
+const FILE_LENGTH_CEILINGS = JSON.parse(
+  readFileSync(new URL("./eslint-file-lengths.json", import.meta.url), "utf8"),
+);
+
 /** A module specifier naming test code or test data — see layer 8. */
 const TEST_ONLY_SPECIFIER =
   "(\\.(test|spec)(\\.[cm]?[jt]sx?)?(\\?.*)?$|(^|\\x2F)__(tests|fixtures|snapshots)__(\\x2F|$))";
@@ -233,6 +249,11 @@ export default [
   // algorithms (AccName, role mapping) whose branches are the spec's own.
   // Tests are exempt: a `describe` › `it` › callback nest and a long `it` are
   // what a readable test looks like here.
+  //
+  // File length is the one budget ratcheted differently, by a ceiling per file
+  // in `eslint-file-lengths.json` (see `FILE_LENGTH_BUDGET`), applied by the
+  // layer after this one. `pnpm lint` fails while a ceiling sits above its
+  // file's length, and `pnpm lint:prune` lowers it, so those only go down too.
   {
     files: ["**/*.{ts,tsx,js,jsx,mjs,cjs}"],
     // Mirrored by `BUDGET_EXEMPT` in scripts/pr-risk.mjs; keep the two in step.
@@ -253,8 +274,18 @@ export default [
         { max: 80, skipBlankLines: true, skipComments: true },
       ],
       "max-nested-callbacks": ["error", 3],
+      "max-lines": [
+        "error",
+        { max: FILE_LENGTH_BUDGET, ...FILE_LENGTH_OPTIONS },
+      ],
     },
   },
+
+  // Each file that was already longer than the budget, held to its own length.
+  ...Object.entries(FILE_LENGTH_CEILINGS).map(([file, max]) => ({
+    files: [file],
+    rules: { "max-lines": ["error", { max, ...FILE_LENGTH_OPTIONS }] },
+  })),
 
   // Test files: looser rules — Vitest fixtures intentionally include
   // broken markup, ad-hoc `any`, and unused locals from destructuring.

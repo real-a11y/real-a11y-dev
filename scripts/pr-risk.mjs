@@ -457,6 +457,7 @@ async function collectFacts(base) {
     packageManifests: await changedPackageManifests(mergeBase, files),
     surfaceRemovals: await surfaceRemovals(mergeBase, files),
     suppressionGrowth: await suppressionGrowth(mergeBase, files),
+    fileLengthGrowth: await fileLengthGrowth(mergeBase, files),
     // Not this file's own: it names the directives in order to look for them.
     budgetDirectiveGrowth: await budgetDirectiveGrowth(
       mergeBase,
@@ -709,8 +710,40 @@ async function surfaceRemovals(mergeBase, files) {
  * that isn't a number, is evidence. Deleting the file outright is not growth —
  * every violation it held is then reported again.
  */
-async function suppressionGrowth(mergeBase, files) {
-  const path = "eslint-suppressions.json";
+const suppressionGrowth = (mergeBase, files) =>
+  budgetFileGrowth(
+    mergeBase,
+    files,
+    "eslint-suppressions.json",
+    (json) => json,
+  );
+
+/**
+ * File-length ceilings this branch adds or raises in
+ * `eslint-file-lengths.json`.
+ *
+ * The same ratchet for the one budget a count can't hold, since `max-lines`
+ * reports a file once however long it is: `{ "<file>": <lines> }`, each file
+ * held to the length it had when the budget was switched on. Read as counts of
+ * a `max-lines` rule, so a ceiling lowered or dropped is the prune `pnpm lint`
+ * demands and one raised or added is a budget raised, exactly as above.
+ */
+const fileLengthGrowth = (mergeBase, files) =>
+  budgetFileGrowth(mergeBase, files, "eslint-file-lengths.json", (json) =>
+    Object.fromEntries(
+      Object.entries(json ?? {}).map(([file, lines]) => [
+        file,
+        { "max-lines": { count: lines } },
+      ]),
+    ),
+  );
+
+/**
+ * What `suppressionGrowth` and `fileLengthGrowth` share: `path` at the merge
+ * base and on the branch, each read through `asCounts` into the suppressions'
+ * own shape, and every count that grew.
+ */
+async function budgetFileGrowth(mergeBase, files, path, asCounts) {
   if (!files.includes(path)) return [];
 
   let after;
@@ -736,7 +769,7 @@ async function suppressionGrowth(mergeBase, files) {
     return [`${path} on this branch isn't valid JSON`];
   }
 
-  return grownSuppressions(a, b).map(
+  return grownSuppressions(asCounts(a), asCounts(b)).map(
     ({ file, rule, was, count }) =>
       `${path} → ${file}: ${rule} ${was} → ${count}`,
   );
@@ -872,9 +905,13 @@ const addedTestDisablers = (code) =>
 const ESLINT_DIRECTIVE =
   /\/\*\s*eslint(-disable(?:-next-line|-line)?|-enable)?(?![\w-])([\s\S]*?)\*\/|\/\/\s*eslint(-disable(?:-next-line|-line)?|-enable)?(?![\w-])([^\n]*)/g;
 
-/** The size and complexity budgets `eslint-suppressions.json` ratchets. */
+/**
+ * The size and complexity budgets `eslint-suppressions.json` ratchets, and the
+ * file length `eslint-file-lengths.json` does. `max-lines-per-function` comes
+ * first, since `max-lines` is the start of it.
+ */
 const BUDGET_RULE =
-  /(?<![\w/-])(complexity|max-depth|max-params|max-lines-per-function|max-nested-callbacks)(?![\w-])/g;
+  /(?<![\w/-])(complexity|max-depth|max-params|max-lines-per-function|max-lines|max-nested-callbacks)(?![\w-])/g;
 
 /**
  * Which budgets one directive switches off. Its rule list stops at `--`, after
@@ -897,7 +934,7 @@ const BUDGET_EXEMPT =
 
 /** A changed line that could touch a budget directive, opener or rule list. */
 const MAY_TOUCH_DIRECTIVE =
-  /eslint|complexity|max-depth|max-params|max-lines-per-function|max-nested-callbacks/;
+  /eslint|complexity|max-depth|max-params|max-lines|max-nested-callbacks/;
 
 /** The 1-based line `index` falls on in `text`. */
 const lineOf = (text, index) => text.slice(0, index).split("\n").length;
@@ -1383,11 +1420,15 @@ const RULES = [
     id: "lint-budget-raised",
     tier: "high",
     title: "Size or complexity budget raised",
-    why: "`eslint-suppressions.json` holds the complexity and size violations that predate those budgets, per file and per rule, and ESLint reports nothing in a file while it stays within its count. Raising a count or adding an entry is raising a budget — the same call as raising `.size-limit.json` — and it passes every check by construction, because the file is what tells ESLint not to report. An added `eslint-disable` naming one of those rules does the same for one spot, and so does one naming no rule at all, which switches every rule off — as do moving a disable onto other code, widening a `-next-line` one to the rest of the file, and deleting the `eslint-enable` that closed a region. Lowering a count is the prune `pnpm lint` demands after a fix, and grades nothing.",
+    why: "`eslint-suppressions.json` holds the complexity and size violations that predate those budgets, per file and per rule, and ESLint reports nothing in a file while it stays within its count; `eslint-file-lengths.json` holds each file that was already over the length budget to the length it had. Raising a count or a ceiling, or adding an entry to either, is raising a budget — the same call as raising `.size-limit.json` — and it passes every check by construction, because the file is what tells ESLint not to report. An added `eslint-disable` naming one of those rules does the same for one spot, and so does one naming no rule at all, which switches every rule off — as do moving a disable onto other code, widening a `-next-line` one to the rest of the file, and deleting the `eslint-enable` that closed a region. Lowering a count or a ceiling is the prune `pnpm lint` demands after a fix, and grades nothing.",
     // Watched, so a prune-only diff reads as considered rather than unknown:
     // `match` returns nothing when every count went down.
-    watches: /^eslint-suppressions\.json$/,
-    match: (f) => [...f.suppressionGrowth, ...f.budgetDirectiveGrowth],
+    watches: /^eslint-(suppressions|file-lengths)\.json$/,
+    match: (f) => [
+      ...f.suppressionGrowth,
+      ...f.fileLengthGrowth,
+      ...f.budgetDirectiveGrowth,
+    ],
   },
   {
     id: "release-config",
