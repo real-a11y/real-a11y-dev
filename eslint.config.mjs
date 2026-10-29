@@ -38,8 +38,9 @@ const CLOBBER_SAFE_PARENT_READS = [
  * Layered, in order:
  *   1. Ignores
  *   2. JS recommended
- *   3. typescript-eslint recommended (non-type-checked — full type-check
- *      requires a tsconfig project per package and slows things down)
+ *   3. typescript-eslint recommended (non-type-checked, so this config runs
+ *      without a build; the type-aware rules are in eslint.config.typed.mjs,
+ *      which `pnpm verify` runs after building)
  *   4. Browser globals for src/, Node globals for scripts/
  *   5. import-order rules
  *   6. Clobber-safe parent reads in core and the extension

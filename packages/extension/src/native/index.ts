@@ -826,11 +826,13 @@ export function registerNativeMode(): void {
             });
             return;
           }
+          // Only reached by a message this build doesn't handle (the dogfood
+          // report and clear, in the store build). Answer it rather than leave
+          // it hanging. A `default` rather than their own cases, so the store
+          // build carries neither the code nor the message names.
+          default:
+            sendResponse({ ok: false, error: "unsupported" });
         }
-        // Only reached by a message this build doesn't handle (the dogfood
-        // report and clear, in the store build). Answer it rather than leave it
-        // hanging.
-        sendResponse({ ok: false, error: "unsupported" });
       } catch {
         sendResponse({ ok: false, error: "native mode error" });
       }

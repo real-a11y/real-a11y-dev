@@ -17,5 +17,7 @@ export function registerCleanup(fn: Cleanup): () => void {
 export async function runCleanups(): Promise<void> {
   const pending = [...cleanups];
   cleanups.clear();
-  await Promise.allSettled(pending.map((fn) => fn()));
+  // `async` so a cleanup that throws synchronously becomes one rejected entry
+  // rather than throwing out of `map` and skipping every cleanup after it.
+  await Promise.allSettled(pending.map(async (fn) => fn()));
 }

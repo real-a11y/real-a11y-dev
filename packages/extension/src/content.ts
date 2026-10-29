@@ -181,7 +181,7 @@ function safeSendMessage(message: unknown): void {
       teardown();
       return;
     }
-    chrome.runtime.sendMessage(message);
+    void chrome.runtime.sendMessage(message);
   } catch (err) {
     if (
       err instanceof Error &&
@@ -552,6 +552,10 @@ chrome.runtime.onMessage.addListener(
         setTimeout(() => sendTree(undefined, { reread: true }), 200);
         break;
       }
+      case "CLOSE_TAB":
+        // The background closes the tab itself and never relays this to a
+        // frame, so there is no response coming from here.
+        return false;
     }
 
     return true;

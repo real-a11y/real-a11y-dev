@@ -1284,7 +1284,7 @@ export function App() {
       if (responseCallback) {
         chrome.runtime.sendMessage(stamped, responseCallback);
       } else {
-        chrome.runtime.sendMessage(stamped);
+        void chrome.runtime.sendMessage(stamped);
       }
     },
     [],

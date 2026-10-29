@@ -140,9 +140,9 @@ here, the failure was real.
 
 ## What `pnpm verify` does not cover
 
-`verify` is build → typecheck → format:check → lint → surface:check → test →
-test:scripts → website build → surface:check-built. What it leaves out has bitten
-this repo more than once:
+`verify` is build → typecheck → format:check → lint → lint:typed → surface:check
+→ test → test:scripts → website build → surface:check-built. What it leaves out
+has bitten this repo more than once:
 
 - **Every `test:e2e` suite.** Root `test` runs each package's `test`, not
   `test:e2e`. The CI `e2e` job separately runs `testing`, `mcp`, `cli`, and —
