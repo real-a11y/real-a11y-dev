@@ -1786,7 +1786,6 @@
         "description": "Run accessibility audits against the current page and return every violation — unlabeled interactive controls, form controls labeled only by title or aria-describedby, skipped heading levels or missing/duplicate h1, unlabeled dialogs, and broken landmark structure. Empty-name findings are what assistive tech would announce as unnamed; label-title-only is the axe-core best-practice extra (title still is a name). This is the primary tool. Audits Chromium's own accessibility tree, so it reaches structure no in-page walk can (a `<video controls>`'s user-agent-shadow media controls); findings carry CSS locators. Whole-document. Chromium only.",
         "inputSchema": {
           "$schema": "http://json-schema.org/draft-07/schema#",
-          "additionalProperties": false,
           "properties": {
             "rules": {
               "description": "Subset of rules to run. Omit to run all rules.",
@@ -1824,7 +1823,6 @@
         "description": "Snapshot the CURRENT page's accessibility findings and store them under `name`. Later call diff_findings to see which findings are new / changed / fixed — the same identity semantics (fingerprints) the CI a11y-diff uses. Checkpoints survive navigation AND the session idle timeout (the browser may close and relaunch between saving and diffing; checkpoints remain), so you can checkpoint one deploy and diff another: save 'prod', open the preview URL, then diff_findings('prod'). They are held in memory and do NOT survive close_browser — call export_checkpoint first if you need one to outlive the session. The stored tree view leaves field values out unless you pass values: true. Whole-document. Chromium only.",
         "inputSchema": {
           "$schema": "http://json-schema.org/draft-07/schema#",
-          "additionalProperties": false,
           "properties": {
             "name": {
               "description": "Checkpoint label — the in-memory store key.",
@@ -1876,7 +1874,6 @@
         "description": "Capture the CURRENT accessibility tree as a comparison point. Then interact — click, type, open a dialog — and call diff_tree to see exactly which nodes were added, removed, or changed, and where focus moved. Reads the whole document with the same native producer the act tools target, so the diff speaks one vocabulary. If a step navigates, diff_tree says the document was replaced rather than reporting the entire page as changed.",
         "inputSchema": {
           "$schema": "http://json-schema.org/draft-07/schema#",
-          "additionalProperties": false,
           "properties": {
             "session": {
               "default": "default",
@@ -1899,7 +1896,6 @@
         "description": "Dispatch a REAL click against the element matched by role + accessible name in Chromium's accessibility tree — the same view get_semantic_tree prints. Targeting is deliberately role+name only: if a control can't be reached that way, assistive technology can't reach it either, and that is itself an accessibility finding. For the full story call checkpoint_tree FIRST, then this, then diff_tree — the diff answers 'what did that click change for a screen reader?'. THE CLICK IS REAL: it can submit forms, toggle state, and NAVIGATE — if it navigates, diff_tree reports the document was replaced rather than a diff, and you re-checkpoint. If several nodes match, the error lists them; pass nth to pick one. Chromium only. See also type_text and focus_element.",
         "inputSchema": {
           "$schema": "http://json-schema.org/draft-07/schema#",
-          "additionalProperties": false,
           "properties": {
             "name": {
               "description": "Accessible name of the target — case-insensitive, whitespace-normalized EXACT match against the tree get_semantic_tree returns. Pass '' to target an unlabeled control. Omit to match any name; if several nodes match, the error lists them so you can pass nth.",
@@ -1907,6 +1903,7 @@
             },
             "nth": {
               "description": "1-based pick among the matching nodes in document order, evaluated among the role+name-filtered matches. Use after an ambiguity error lists the candidates.",
+              "maximum": 9007199254740991,
               "minimum": 1,
               "type": "integer"
             },
@@ -1939,7 +1936,6 @@
         "description": "Close a named browser session (default: the default session) and free its resources, or pass all=true to close every live session — not both. Closing a session DISCARDS its saved findings checkpoints — export_checkpoint anything you still need first. Only call it when you're done; the other tools reopen nothing on their own.",
         "inputSchema": {
           "$schema": "http://json-schema.org/draft-07/schema#",
-          "additionalProperties": false,
           "properties": {
             "all": {
               "default": false,
@@ -1965,7 +1961,6 @@
         "description": "Diff two already-stored checkpoints against each other (no re-snapshot): which findings are new / changed / fixed going from `base` to `head`.",
         "inputSchema": {
           "$schema": "http://json-schema.org/draft-07/schema#",
-          "additionalProperties": false,
           "properties": {
             "base": {
               "description": "Checkpoint label — the in-memory store key.",
@@ -1974,7 +1969,10 @@
               "type": "string"
             },
             "head": {
-              "$ref": "#/properties/base"
+              "description": "Checkpoint label — the in-memory store key.",
+              "maxLength": 64,
+              "minLength": 1,
+              "type": "string"
             },
             "session": {
               "default": "default",
@@ -2000,7 +1998,6 @@
         "description": "Re-snapshot the CURRENT page and diff it against the stored checkpoint `name`: which accessibility findings are NEW (these gate CI), CHANGED, or FIXED, plus an advisory structural summary. Use after a change (deploy, feature toggle, DOM edit) or after navigating to a different deploy of the same page.",
         "inputSchema": {
           "$schema": "http://json-schema.org/draft-07/schema#",
-          "additionalProperties": false,
           "properties": {
             "name": {
               "description": "Checkpoint label — the in-memory store key.",
@@ -2031,7 +2028,6 @@
         "description": "Diff the CURRENT accessibility tree against the one captured by checkpoint_tree: nodes added, removed, or changed, plus a focus move. This is the interaction diff — the precise answer to 'what did that click actually change for a screen reader?'. After type_text it shows what the field now holds — `~ textbox \"Email\": a11y.value (unset) → \"jane@x.com\"`, a sensitive field as \"[redacted]\".",
         "inputSchema": {
           "$schema": "http://json-schema.org/draft-07/schema#",
-          "additionalProperties": false,
           "properties": {
             "session": {
               "default": "default",
@@ -2053,7 +2049,6 @@
         "description": "Return a stored checkpoint as a Real A11y snapshot artifact — the same a11y-snapshot.json the CLI writes (same schemaVersion, same fingerprints). Persist it to your own file to diff across sessions, or feed it to the CI a11y-diff. An artifact carries no field values unless the checkpoint was captured with values: true AND you export it with values: true. Checkpoints are whole-document, and the artifact has to come back as one valid JSON string, so a large page can exceed the output cap and fail — use the CLI's `real-a11y snapshot --output` for those.",
         "inputSchema": {
           "$schema": "http://json-schema.org/draft-07/schema#",
-          "additionalProperties": false,
           "properties": {
             "name": {
               "description": "Checkpoint label — the in-memory store key.",
@@ -2090,7 +2085,6 @@
         "description": "Move REAL keyboard focus to the element matched by role + accessible name in the native accessibility tree. The result says whether the target is a text field, so a type_text can follow. Useful alongside get_tab_order for focus-order work, and for checking what a keyboard user would land on. Chromium only. See also click_element and type_text.",
         "inputSchema": {
           "$schema": "http://json-schema.org/draft-07/schema#",
-          "additionalProperties": false,
           "properties": {
             "name": {
               "description": "Accessible name of the target — case-insensitive, whitespace-normalized EXACT match against the tree get_semantic_tree returns. Pass '' to target an unlabeled control. Omit to match any name; if several nodes match, the error lists them so you can pass nth.",
@@ -2098,6 +2092,7 @@
             },
             "nth": {
               "description": "1-based pick among the matching nodes in document order, evaluated among the role+name-filtered matches. Use after an ambiguity error lists the candidates.",
+              "maximum": 9007199254740991,
               "minimum": 1,
               "type": "integer"
             },
@@ -2129,7 +2124,6 @@
         "description": "Return the page's heading outline (h1..h6 in document order) as an indented list, derived from Chromium's own accessibility tree. Whole-document. Chromium only.",
         "inputSchema": {
           "$schema": "http://json-schema.org/draft-07/schema#",
-          "additionalProperties": false,
           "properties": {
             "session": {
               "default": "default",
@@ -2151,7 +2145,6 @@
         "description": "Return the page's accessibility tree as a deterministic, indented role + accessible-name outline (what a screen reader would traverse) — read from Chromium's own accessibility tree over CDP, so it reaches user-agent-shadow media controls an in-page walk never sees. The element focused at capture time is marked `[focused]`. Each field shows what it holds, the way a screen reader announces it — `textbox \"Email\" = \"jane@x.com\"`; a password, one-time-code or payment field reads \"[redacted]\". Token-efficient and stable across runs. This is the vocabulary the act tools target in. Whole-document. Chromium only.",
         "inputSchema": {
           "$schema": "http://json-schema.org/draft-07/schema#",
-          "additionalProperties": false,
           "properties": {
             "includeGeneric": {
               "default": false,
@@ -2178,7 +2171,6 @@
         "description": "Return the focusable elements in the order a keyboard user encounters them when pressing Tab, numbered, with role + accessible name. The stop focused at capture time is marked `[focused]`. A field shows what it holds (`textbox \"Email\" = \"jane@x.com\"`; a sensitive field \"[redacted]\"). Built from the in-page DOM walk — Chromium's accessibility tree knows whether a node is focusable but not the SEQUENCE (tabindex never reaches it), so this is the only source for tab order, and the one tool `rootSelector` still scopes.",
         "inputSchema": {
           "$schema": "http://json-schema.org/draft-07/schema#",
-          "additionalProperties": false,
           "properties": {
             "rootSelector": {
               "default": "body",
@@ -2206,7 +2198,6 @@
         "description": "Load an externally-held Real A11y snapshot artifact (e.g. a CLI-generated baseline) into the store under `name`, so a live page can be diffed against it. Input is validated strictly; the artifact's first page is stored.",
         "inputSchema": {
           "$schema": "http://json-schema.org/draft-07/schema#",
-          "additionalProperties": false,
           "properties": {
             "artifact": {
               "description": "A serialized Real A11y snapshot artifact (JSON).",
@@ -2242,7 +2233,6 @@
         "description": "Return the audit findings AND the semantic tree and heading outline — all derived from ONE read of Chromium's accessibility tree, so they are guaranteed internally consistent. The element focused at capture time is marked `[focused]`. Each field shows what it holds, the way a screen reader announces it — `textbox \"Email\" = \"jane@x.com\"`; a password, one-time-code or payment field reads \"[redacted]\". Prefer this over separate audit_page + get_* calls on dynamic pages (SPAs, pages with consent dialogs) where separate calls could catch different states. That tree carries no tab order, so there is no tab-order section here — call get_tab_order for the keyboard sequence. Whole-document. Chromium only.",
         "inputSchema": {
           "$schema": "http://json-schema.org/draft-07/schema#",
-          "additionalProperties": false,
           "properties": {
             "includeGeneric": {
               "default": false,
@@ -2284,7 +2274,6 @@
         "description": "List the stored checkpoint labels with their finding counts and approximate tree sizes.",
         "inputSchema": {
           "$schema": "http://json-schema.org/draft-07/schema#",
-          "additionalProperties": false,
           "properties": {
             "session": {
               "default": "default",
@@ -2306,7 +2295,6 @@
         "description": "List every element of one category — links, buttons, form controls, landmarks, images, or headings — as role + accessible name + a CSS locator, and for a form field what it holds (a sensitive one \"[redacted]\"). A token-efficient way to review one kind of element (e.g. 'images' pairs with the image-alt rule, 'form' with labeling). Listed from Chromium's own accessibility tree, so it agrees node for node with get_semantic_tree and audit_page. Whole-document. Chromium only.",
         "inputSchema": {
           "$schema": "http://json-schema.org/draft-07/schema#",
-          "additionalProperties": false,
           "properties": {
             "filter": {
               "description": "Which category of element to list.",
@@ -2360,7 +2348,6 @@
         "description": "Navigate the browser to a URL and prepare it for accessibility queries. Call this before any audit/get_* tool. For dynamic sites (SPAs, consent dialogs) set waitUntil='networkidle' and/or settleMs so the page settles first. To audit the MOBILE or TABLET layout — which can differ substantially from desktop (hamburger nav, hidden content, touch-only controls) — pass a `device`. This server has NO saved login, so a page behind auth will open as a logged-out view. Don't try to log in through the tools — there is no credential parameter, deliberately. Tell the user to restart the server with REAL_A11Y_MCP_STORAGE_STATE (a saved session from `real-a11y login`) or REAL_A11Y_MCP_CDP (attach to a Chrome they're already signed into).",
         "inputSchema": {
           "$schema": "http://json-schema.org/draft-07/schema#",
-          "additionalProperties": false,
           "properties": {
             "device": {
               "description": "Emulate a device so the tree reflects the mobile/tablet layout. A Playwright device name, e.g. 'iPhone 13', 'Pixel 7', 'iPad Pro 11'. Omit for desktop.",
@@ -2390,15 +2377,16 @@
               "type": "string"
             },
             "viewport": {
-              "additionalProperties": false,
               "description": "Explicit viewport override, e.g. { width: 375, height: 812 }. Layered on top of `device`.",
               "properties": {
                 "height": {
                   "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991,
                   "type": "integer"
                 },
                 "width": {
                   "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991,
                   "type": "integer"
                 }
               },
@@ -2438,7 +2426,6 @@
         "description": "Set the value of the text field matched by role + accessible name in the native accessibility tree (role is usually 'textbox', 'searchbox', or 'combobox'). REPLACES the field's current value — via the prototype value setter plus input/change events, so framework-controlled inputs (React et al.) register it. The result NEVER echoes the typed text or any field content; diff_tree afterwards shows what the field holds the way a screen reader announces it (a sensitive field as \"[redacted]\"; nothing at all when the server runs with REAL_A11Y_REDACT_INPUT=1). There is deliberately NO credential parameter and this tool must NOT be used to log in — a password or token typed here would enter the agent's context; for pages behind auth the user starts the server with REAL_A11Y_MCP_STORAGE_STATE or REAL_A11Y_MCP_CDP instead. Pair with checkpoint_tree / diff_tree to see what the input changed (a combobox popping options, an inline error appearing). Chromium only.",
         "inputSchema": {
           "$schema": "http://json-schema.org/draft-07/schema#",
-          "additionalProperties": false,
           "properties": {
             "name": {
               "description": "Accessible name of the target — case-insensitive, whitespace-normalized EXACT match against the tree get_semantic_tree returns. Pass '' to target an unlabeled control. Omit to match any name; if several nodes match, the error lists them so you can pass nth.",
@@ -2446,6 +2433,7 @@
             },
             "nth": {
               "description": "1-based pick among the matching nodes in document order, evaluated among the role+name-filtered matches. Use after an ambiguity error lists the candidates.",
+              "maximum": 9007199254740991,
               "minimum": 1,
               "type": "integer"
             },

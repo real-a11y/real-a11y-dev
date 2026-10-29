@@ -66,11 +66,13 @@ Against a page seeding a known violation:
   what explains the miss. An empty tree says so in its own words instead: _"the
   tree is empty, so nothing could match…"_
 - **7** — a clear "no page open" error, not a crash or a stale result
-- **8** — **both rejected by the schema**, not by handler prose. The tools declare
-  `additionalProperties: false`, so an unknown key fails validation before any
-  browser work. This is the assertion that the axis is really gone rather than
-  accepted-and-ignored — the failure mode worth catching is a param that validates
-  and then does nothing
+- **8** — **both ignored, and neither changes the result.** The tool schemas no
+  longer declare `additionalProperties: false` (zod 4 stopped advertising it for
+  the SDK's raw-shape inputs, mcp ≥ the zod 4 upgrade; earlier releases advertised
+  it, though the server already dropped unknown keys), so the call succeeds. The
+  assertion is that the axis is really gone: the output is the whole-document
+  native tree whatever `producer`/`rootSelector` says, and `tools/list` shows
+  neither parameter
 - **9** — tab order **numbered** at render, and `rootSelector` scopes the walk.
   This is the one read that still takes it
 - **10** — 20 tools, `get_tab_order` and `list_sessions` among them,
@@ -122,7 +124,7 @@ Producer migration (#258) — `get_tab_order` SURVIVES, on the DOM producer, and
 the one tool that still takes `rootSelector`. It was expected to be deleted; it
 wasn't, because native knows per-node `focusable` but not the _sequence_. What did
 go is the `producer` param (every read is native now) and `rootSelector` on every
-other tool — both are `additionalProperties: false`, so a call passing either is
-rejected by the schema. `compare_producers` is gone too: 20 → 19 tools, and named sessions then added
+other tool — neither is declared, so a call passing either has it ignored
+(releases before the zod 4 upgrade also advertised `additionalProperties: false`). `compare_producers` is gone too: 20 → 19 tools, and named sessions then added
 `list_sessions` for 20 again. Steps
 4/6/8 rewritten accordingly.

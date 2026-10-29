@@ -1523,11 +1523,12 @@ export function buildServer(
       annotations: READ_ONLY,
       description:
         "List every live named browser session: name, current URL (redacted), created/last-used times, and whether a call is running on it right now. Sessions are created lazily by the first tool call that names them and closed by close_browser or the idle timeout (which keeps their checkpoints).",
-      // A Zod OBJECT, not the `{}` raw shape: an empty raw shape skips the
-      // strictness every other tool's schema carries (additionalProperties:
-      // false), and this is exactly the tool an agent will call with
-      // `{session: "alpha"}` expecting a filter. A rejected extra property
-      // beats one that is silently ignored.
+      // A strict Zod OBJECT, not the `{}` raw shape: the SDK wraps a raw shape
+      // in a non-strict object that drops unknown keys (the other tools rely on
+      // that, so a stale `rootSelector` from an older client still works), and
+      // this is exactly the tool an agent will call with `{session: "alpha"}`
+      // expecting a filter. A rejected extra property beats one that is
+      // silently ignored.
       inputSchema: z.object({}).strict(),
     },
     async () => {
