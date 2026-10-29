@@ -147,6 +147,8 @@ function Panel() {
     const container = containerRef.current;
     if (!container) return;
     const observer = new ResizeObserver(([entry]) => {
+      // One observed element, so one entry each time; never none.
+      if (!entry) return;
       const { width, height } = entry.contentRect;
       setIsVisible(width > 0 && height > 0);
     });

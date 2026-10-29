@@ -71,8 +71,8 @@ export function pickStoryRoot(doc: Document): Element {
   const realChildren = Array.from(sb.children).filter(
     (c) => !NON_RENDERED_TAGS.has(c.tagName.toLowerCase()),
   );
-  if (realChildren.length === 1) return realChildren[0];
-  return sb;
+  const [only, ...others] = realChildren;
+  return only && others.length === 0 ? only : sb;
 }
 
 function getStoryRoot(): Element {

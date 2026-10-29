@@ -325,8 +325,8 @@ describe("SessionRegistry", () => {
     // The run still succeeds — on a session created AFTER the sweep.
     expect(await run).toBe("page-1");
     await teardown;
-    expect(sessions[0].closed).toBe(true); // the stale creation was closed
-    expect(sessions[1].closed).toBe(false);
+    expect(sessions[0]?.closed).toBe(true); // the stale creation was closed
+    expect(sessions[1]?.closed).toBe(false);
     await registry.stopAll();
   });
 
