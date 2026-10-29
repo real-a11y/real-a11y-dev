@@ -196,6 +196,6 @@ inspector.mount();
 
 ## Panel features
 
-The inspector renders the same tree panel as the Chrome extension, with its search, role filters and [keyboard](/guide/chrome-extension#keyboard), and scopes with [`setRoot()`](#setroot-root). Focus sync, the scope breadcrumb and the [live region log](/guide/chrome-extension#live-region-monitoring) are the extension's alone.
+The inspector renders the same tree panel as the Chrome extension, with its search, role filters and [keyboard](/guide/chrome-extension#keyboard), and scopes with [`setRoot()`](#setroot-root). Focus sync, the scope breadcrumb and the live region log are the extension's alone.
 
 → [Using the panel](/guide/chrome-extension#using-the-panel)

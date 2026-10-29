@@ -257,6 +257,6 @@ import type { ExtractionResult, SemanticNode } from "@real-a11y-dev/react";
 
 ## Panel features
 
-`<SemanticNavigator />` renders the same tree panel as the Chrome extension, with its search, role filters and [keyboard](/guide/chrome-extension#keyboard). The [props](#props) above configure it, and a different `root` scopes it. Focus sync, the scope breadcrumb and the [live region log](/guide/chrome-extension#live-region-monitoring) are the extension's alone.
+`<SemanticNavigator />` renders the same tree panel as the Chrome extension, with its search, role filters and [keyboard](/guide/chrome-extension#keyboard). The [props](#props) above configure it, and a different `root` scopes it. Focus sync, the scope breadcrumb and the live region log are the extension's alone.
 
 → [Using the panel](/guide/chrome-extension#using-the-panel)
