@@ -20,7 +20,7 @@ navigation "On this page"
 main
   heading "Privacy Policy" (level 1)
   paragraph
-    emphasis "Last updated: 2026-10-15"
+    emphasis "Last updated: 2026-10-29"
   paragraph "This policy covers the Real A11y website (), the Semantic Navigator Chrome extension, and the npm packages."
     code "real-a11y.dev"
     code "@real-a11y-dev/*"
@@ -56,7 +56,7 @@ main
   list
     listitem "It does not send page content, URLs, DOM snapshots, accessibility-tree data, or any other data to any external server — everything above stays local to your browser, in both DOM and native mode."
     listitem "It does not read from or write to the clipboard."
-    listitem "It does not use cookies, local storage, or IndexedDB for any personal data. holds only the side panel's settings: whether native mode is on, whether the native tree follows page changes on its own, and whether you've dismissed the note about Chrome's debugging bar. While native mode is attached, holds content-free bookkeeping about that attachment (which tab, since when), which Chrome clears when the browser closes. No log of how you use native mode is kept."
+    listitem "It does not use cookies, local storage, or IndexedDB for any personal data. holds only the side panel's settings: whether native mode is on, whether the native tree follows page changes on its own, and whether you've dismissed the note about Chrome's debugging bar. While native mode is attached, holds content-free bookkeeping about that attachment (which tab, since when), and while the screen curtain is on, which tabs it covers, so that closing the side panel still lifts it after Chrome has stopped the extension's background worker. Chrome clears both when the browser closes. No log of how you use native mode is kept."
       code "chrome.storage.local"
       code "chrome.storage.session"
     listitem "It does not track you across sites or sessions."
@@ -95,7 +95,7 @@ main
       row
         cell "storage"
           code "storage"
-        cell "Persists the side panel's settings locally on your device, and, while native mode is attached, content-free bookkeeping about that attachment for the browser session only"
+        cell "Persists the side panel's settings locally on your device, and, for the browser session only, content-free bookkeeping about a native-mode attachment and which tabs have the screen curtain on"
   heading "npm packages" (level 2)
   paragraph "The , , , and packages are pure libraries — as is the extraction engine bundled inside each of them. They:"
     code "@real-a11y-dev/inspector"

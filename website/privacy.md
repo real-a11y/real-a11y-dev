@@ -1,6 +1,6 @@
 # Privacy Policy
 
-_Last updated: 2026-10-15_
+_Last updated: 2026-10-29_
 
 This policy covers the Real A11y website (`real-a11y.dev`), the Semantic Navigator Chrome extension, and the `@real-a11y-dev/*` npm packages.
 
@@ -32,7 +32,7 @@ You can turn native mode off at any time in the side panel's **Settings**, and t
 
 - It does not send page content, URLs, DOM snapshots, accessibility-tree data, or any other data to any external server — everything above stays local to your browser, in both DOM and native mode.
 - It does not read from or write to the clipboard.
-- It does not use cookies, local storage, or IndexedDB for any personal data. `chrome.storage.local` holds only the side panel's settings: whether native mode is on, whether the native tree follows page changes on its own, and whether you've dismissed the note about Chrome's debugging bar. While native mode is attached, `chrome.storage.session` holds content-free bookkeeping about that attachment (which tab, since when), which Chrome clears when the browser closes. No log of how you use native mode is kept.
+- It does not use cookies, local storage, or IndexedDB for any personal data. `chrome.storage.local` holds only the side panel's settings: whether native mode is on, whether the native tree follows page changes on its own, and whether you've dismissed the note about Chrome's debugging bar. While native mode is attached, `chrome.storage.session` holds content-free bookkeeping about that attachment (which tab, since when), and while the screen curtain is on, which tabs it covers, so that closing the side panel still lifts it after Chrome has stopped the extension's background worker. Chrome clears both when the browser closes. No log of how you use native mode is kept.
 - It does not track you across sites or sessions.
 - It contains no analytics, telemetry, advertising, or third-party scripts.
 
@@ -45,7 +45,7 @@ You can turn native mode off at any time in the side panel's **Settings**, and t
 | `webNavigation` | Detect iframe load events to merge subtree data from cross-origin frames                                                                                        |
 | `debugger`  | Powers native mode: reads and acts on Chromium's own accessibility tree over CDP. On by default, and attached only while the side panel reads or acts on the page it shows. Requested by every install because `chrome.debugger` cannot be an optional Chrome permission; turn native mode off in the side panel's Settings and it is never used. |
 | `tabs`      | Lets native mode read the URL of the tab the side panel is bound to, to tell whether Chrome lets the debugger attach there (it can't on `chrome://` pages or the Web Store) and whether the page has navigated since the tree was read. This is a broader grant than that use needs — Chrome does not let an extension request `tabs` scoped to a single tab, and it technically permits reading the URL and title of every open tab. The code reads only the bound tab's URL; it never enumerates other tabs. |
-| `storage`   | Persists the side panel's settings locally on your device, and, while native mode is attached, content-free bookkeeping about that attachment for the browser session only |
+| `storage`   | Persists the side panel's settings locally on your device, and, for the browser session only, content-free bookkeeping about a native-mode attachment and which tabs have the screen curtain on |
 
 ## npm packages
 

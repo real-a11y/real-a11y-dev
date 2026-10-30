@@ -5,7 +5,7 @@
   "packages/cli/src/daemon/spawn.ts": 997,
   "packages/core/src/extraction/dom-extractor.ts": 1940,
   "packages/core/src/observation/live-tree-extractor.ts": 508,
-  "packages/extension/src/background.ts": 745,
+  "packages/extension/src/background.ts": 743,
   "packages/extension/src/content.ts": 697,
   "packages/extension/src/native/debugger-session.ts": 707,
   "packages/extension/src/native/index.ts": 606,

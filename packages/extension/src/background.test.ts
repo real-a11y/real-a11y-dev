@@ -781,6 +781,147 @@ describe("background: recovery after a service-worker restart", () => {
  * signal is a tree that never arrives, it sits on "Connecting to page..."
  * forever instead of saying the page is out of reach.
  */
+/**
+ * Chrome stops the service worker after ~30s idle even while the side panel
+ * is open, and everything in its module scope goes with it. The curtain is
+ * the one piece of that state the page keeps — the content script paints it
+ * — so a revived worker that forgot which tabs it covers skips lifting it on
+ * panel close and leaves the user behind a black overlay with no UI to
+ * dismiss it. `vi.resetModules()` + re-import is the death: fresh module
+ * globals, with the same `chrome.storage.session`, which outlives the worker.
+ */
+describe("background: the screen curtain across a service-worker restart", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    delete (globalThis as { chrome?: unknown }).chrome;
+  });
+
+  /** Start a worker against `h`, as Chrome starts a fresh one. */
+  async function bootWorker(h: Harness) {
+    vi.resetModules();
+    (globalThis as { chrome?: unknown }).chrome = h.chromeMock;
+    await import("./background.js");
+    await vi.runAllTimersAsync();
+  }
+
+  /** A harness for the worker Chrome starts after `dead` was stopped. */
+  function revivedHarness(dead: Harness): Harness {
+    const h = makeHarness();
+    h.chromeMock.storage.session = dead.chromeMock.storage.session;
+    return h;
+  }
+
+  /** Connect a panel whose port can close again, unlike `connectPanel`'s. */
+  function openPanel(h: Harness) {
+    const closed: Array<() => void> = [];
+    for (const fn of h.connectListeners) {
+      fn({
+        name: "sidepanel",
+        onDisconnect: { addListener: (cb: () => void) => closed.push(cb) },
+      });
+    }
+    return { close: () => closed.forEach((cb) => cb()) };
+  }
+
+  function toggleCurtain(h: Harness, visible: boolean) {
+    for (const fn of h.messageListeners) {
+      fn(
+        { type: "TOGGLE_CURTAIN", tabId: TAB_ID, payload: { visible } },
+        { id: EXTENSION_ID },
+        () => {},
+      );
+    }
+  }
+
+  /** The curtain messages sent to the tab since `from` with this `visible`. */
+  function curtainSince(h: Harness, from: number, visible: boolean) {
+    return sentSince(h, from, "TOGGLE_CURTAIN").filter(
+      (m) =>
+        m.tabId === TAB_ID &&
+        (m.body.payload as { visible?: boolean }).visible === visible,
+    );
+  }
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  it("lifts the curtain when the panel closes", async () => {
+    const h = makeHarness();
+    await bootWorker(h);
+    const panel = openPanel(h);
+    toggleCurtain(h, true);
+    await vi.runAllTimersAsync();
+
+    const before = h.tabMessages.length;
+    panel.close();
+    await vi.runAllTimersAsync();
+
+    expect(curtainSince(h, before, false).length).toBeGreaterThan(0);
+  });
+
+  it("still lifts it when the panel closes after the worker was restarted", async () => {
+    const dead = makeHarness();
+    await bootWorker(dead);
+    openPanel(dead);
+    toggleCurtain(dead, true);
+    await vi.runAllTimersAsync();
+
+    // The page still has the curtain painted, and the panel reconnects its
+    // port to the new worker.
+    const h = revivedHarness(dead);
+    await bootWorker(h);
+    const panel = openPanel(h);
+    await vi.runAllTimersAsync();
+
+    const before = h.tabMessages.length;
+    panel.close();
+    await vi.runAllTimersAsync();
+
+    expect(curtainSince(h, before, false).length).toBeGreaterThan(0);
+  });
+
+  it("still re-applies it on the tab's next page after the worker was restarted", async () => {
+    const dead = makeHarness();
+    await bootWorker(dead);
+    openPanel(dead);
+    toggleCurtain(dead, true);
+    await vi.runAllTimersAsync();
+
+    const h = revivedHarness(dead);
+    await bootWorker(h);
+    openPanel(h);
+    await vi.runAllTimersAsync();
+
+    beginTopFrameNavigation(h);
+    const before = h.tabMessages.length;
+    announce(h, 0); // the new document's top frame
+    await vi.runAllTimersAsync();
+
+    expect(curtainSince(h, before, true).length).toBeGreaterThan(0);
+  });
+
+  it("lifts nothing after a restart once the user had turned it off", async () => {
+    const dead = makeHarness();
+    await bootWorker(dead);
+    openPanel(dead);
+    toggleCurtain(dead, true);
+    toggleCurtain(dead, false);
+    await vi.runAllTimersAsync();
+
+    const h = revivedHarness(dead);
+    await bootWorker(h);
+    const panel = openPanel(h);
+    await vi.runAllTimersAsync();
+
+    const before = h.tabMessages.length;
+    panel.close();
+    await vi.runAllTimersAsync();
+
+    expect(curtainSince(h, before, false)).toEqual([]);
+  });
+});
+
 describe("background: a frame whose place in the tree isn't known yet", () => {
   let h: Harness;
 
