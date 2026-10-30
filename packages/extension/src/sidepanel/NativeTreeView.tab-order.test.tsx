@@ -5,6 +5,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 
 import type { NativeNode } from "../native/native-actions.js";
 
+import { NATIVE_HOVER_DWELL_MS } from "./native-follow.js";
 import type { NativeTabOrder } from "./NativeTabView.js";
 import { NativeTreeView } from "./NativeTreeView.js";
 
@@ -67,6 +68,7 @@ describe("NativeTreeView — TAB view", () => {
     container.remove();
     host.remove();
     Element.prototype.scrollIntoView = originalScrollIntoView;
+    vi.useRealTimers();
   });
 
   /** The page's tab order, as App hands it over: the in-page tree, and its
@@ -256,5 +258,33 @@ describe("NativeTreeView — TAB view", () => {
 
     mount({ ...props, reveal: { nodeId: "btn", nonce: 1 } });
     expect(onViewChange).toHaveBeenLastCalledWith("a11y");
+  });
+
+  it("clears a hovered row's outline when the tab order replaces the rows", () => {
+    // TAB pressed from the keyboard, under a still pointer: the row goes away
+    // with no mouseleave.
+    vi.useFakeTimers();
+    window.dispatchEvent(new MouseEvent("mousemove"));
+    const props: Partial<TreeProps> = {
+      tabOrder: tabOrder(),
+      onViewChange: vi.fn(),
+      onHoverPreview: vi.fn(),
+    };
+    mount(props);
+    act(() => {
+      container
+        .querySelector('[data-node-id="btn"]')!
+        .dispatchEvent(new MouseEvent("mouseenter"));
+    });
+    act(() => {
+      vi.advanceTimersByTime(NATIVE_HOVER_DWELL_MS);
+    });
+    expect(props.onHoverPreview).toHaveBeenCalledExactlyOnceWith("btn");
+
+    mount({ ...props, view: "tab" });
+    expect(vi.mocked(props.onHoverPreview!).mock.calls).toEqual([
+      ["btn"],
+      [null],
+    ]);
   });
 });

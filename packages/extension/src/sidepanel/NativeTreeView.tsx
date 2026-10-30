@@ -662,10 +662,10 @@ export function NativeTreeView({
   // whatever the modality, or keyboard scrolling would strand an outline
   // already shown. A row that goes away under a still pointer gets no
   // `mouseleave` at all — collapsed, dropped by a re-read, out of the
-  // rendered slice, the tree swapped for a role filter's list, or this view
-  // unmounted — so those end its hover too. Only an outline actually asked
-  // for (`hoverShown`) is reported cleared; a preview still waiting is just
-  // cancelled.
+  // rendered slice, the tree swapped for a role filter's list or the TAB
+  // view's, or this view unmounted — so those end its hover too. Only an
+  // outline actually asked for (`hoverShown`) is reported cleared; a preview
+  // still waiting is just cancelled.
   const { isMouseModality, markKeyboard } = useInputModality();
   const onHoverPreviewRef = useRef(onHoverPreview);
   onHoverPreviewRef.current = onHoverPreview;
@@ -710,10 +710,11 @@ export function NativeTreeView({
     if (hoverRowId.current === id) endHover();
   };
   useEffect(() => endHover, [endHover]);
-  // The list a role filter shows replaces the tree's rows outright.
+  // The list a role filter shows replaces the tree's rows outright, and so
+  // does the TAB view's.
   useEffect(() => {
-    if (roleFilter !== null) endHover();
-  }, [roleFilter, endHover]);
+    if (roleFilter !== null || shownTabOrder !== undefined) endHover();
+  }, [roleFilter, shownTabOrder !== undefined, endHover]);
   // The hovered row left the rendered rows without a `mouseleave`.
   useEffect(() => {
     const id = hoverRowId.current;
