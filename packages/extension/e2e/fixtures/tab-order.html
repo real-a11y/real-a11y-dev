@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Tab order — TAB view fixture</title>
+  </head>
+  <body>
+    <h1>Tab order</h1>
+
+    <!--
+      A tab order that isn't document order, for the TAB view in Chrome's
+      tree (panel-ui-native-tab-order.test.ts): the two positive tabindexes
+      come first, lowest first, wherever they sit, then the rest in document
+      order. A tabindex="-1" element is focusable but no tab stop, and a
+      disabled or hidden button is neither.
+    -->
+    <a href="#one">One</a>
+    <button>Two</button>
+    <button tabindex="2">Second explicit</button>
+    <label>Name <input name="name" /></label>
+    <div tabindex="-1">Focusable, not a stop</div>
+    <button disabled>Disabled</button>
+    <button hidden>Hidden</button>
+    <button tabindex="1">First explicit</button>
+  </body>
+</html>
