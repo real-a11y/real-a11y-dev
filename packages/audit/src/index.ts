@@ -353,6 +353,99 @@ function landmarkStructureFindings(
   }
 }
 
+/** `no-unlabeled-interactive`: an interactive role with no accessible name. Appends to `findings`. */
+function unlabeledInteractiveFindings(
+  tree: ExtractionResult,
+  findings: Finding[],
+): void {
+  for (const node of linearize(tree)) {
+    if (!INTERACTIVE_ROLES.has(node.a11y.role)) continue;
+    if (node.a11y.name.trim().length > 0) continue;
+    // `dom` is absent on native-produced trees; the finding degrades to
+    // role-only wording rather than printing `<undefined>` (RFC v3 R5).
+    const tag = node.dom?.tagName;
+    findings.push({
+      rule: "no-unlabeled-interactive",
+      severity: "error",
+      role: node.a11y.role,
+      ...(tag ? { tagName: tag } : {}),
+      message: tag
+        ? `Unlabeled interactive element: ${node.a11y.role} <${tag}>`
+        : `Unlabeled interactive element: ${node.a11y.role}`,
+      ...locate(node),
+    });
+  }
+}
+
+/** `label-title-only`: a form control labeled only by `title` or `aria-describedby`. Appends to `findings`. */
+function labelTitleOnlyFindings(
+  tree: ExtractionResult,
+  findings: Finding[],
+): void {
+  for (const node of linearize(tree)) {
+    if (!isTitleOnlyFormControl(node)) continue;
+    const tag = node.dom?.tagName;
+    findings.push({
+      rule: "label-title-only",
+      severity: "warning",
+      role: node.a11y.role,
+      ...(node.a11y.name ? { name: node.a11y.name } : {}),
+      ...(tag ? { tagName: tag } : {}),
+      message: tag
+        ? `Form element <${tag}> is labeled only by title or aria-describedby — add a visible <label>, aria-label, or aria-labelledby.`
+        : `Form element is labeled only by title or aria-describedby — add a visible <label>, aria-label, or aria-labelledby.`,
+      ...locate(node),
+    });
+  }
+}
+
+/** `image-alt`: an `img` node with no accessible name. Appends to `findings`. */
+function imageAltFindings(tree: ExtractionResult, findings: Finding[]): void {
+  for (const node of linearize(tree)) {
+    if (node.a11y.role !== "img") continue;
+    if (node.a11y.name.trim().length > 0) continue;
+    // Decorative images (alt="") map to role presentation and never reach
+    // the a11y tree, so an img-role node with no name is a genuine missing
+    // name. An `alt=""` image that IS exposed got there by being named
+    // (title / aria-label / aria-labelledby — so it has a name and is
+    // skipped above) or by being focusable, and a focusable image with no
+    // name is exactly what this rule should report.
+    const tag = node.dom?.tagName;
+    findings.push({
+      rule: "image-alt",
+      severity: "warning",
+      role: "img",
+      ...(tag ? { tagName: tag } : {}),
+      message: tag
+        ? `Image has no accessible name: <${tag}> — add alt text, or mark it decorative with alt="".`
+        : `Image has no accessible name — add alt text, or mark it decorative with alt="".`,
+      ...locate(node),
+    });
+  }
+}
+
+/** `dialog-labeled`: a `dialog` or `alertdialog` with no accessible name. Appends to `findings`. */
+function dialogLabeledFindings(
+  tree: ExtractionResult,
+  findings: Finding[],
+): void {
+  const dialogs = [
+    ...findAllByRole(tree, "dialog"),
+    ...findAllByRole(tree, "alertdialog"),
+  ];
+  for (const d of dialogs) {
+    if (d.a11y.name.trim().length > 0) continue;
+    findings.push({
+      rule: "dialog-labeled",
+      severity: "error",
+      role: d.a11y.role,
+      ...(d.dom?.tagName ? { tagName: d.dom.tagName } : {}),
+      message: `Dialog (role ${d.a11y.role}) has no accessible name.`,
+      ...locate(d),
+    });
+  }
+}
+
 /**
  * Run the requested audit rules against `root` and return every problem found.
  *
@@ -377,87 +470,16 @@ export function collectFindings(
   const want = new Set(rules);
   const findings: Finding[] = [];
 
-  if (want.has("no-unlabeled-interactive")) {
-    for (const node of linearize(tree)) {
-      if (!INTERACTIVE_ROLES.has(node.a11y.role)) continue;
-      if (node.a11y.name.trim().length > 0) continue;
-      // `dom` is absent on native-produced trees; the finding degrades to
-      // role-only wording rather than printing `<undefined>` (RFC v3 R5).
-      const tag = node.dom?.tagName;
-      findings.push({
-        rule: "no-unlabeled-interactive",
-        severity: "error",
-        role: node.a11y.role,
-        ...(tag ? { tagName: tag } : {}),
-        message: tag
-          ? `Unlabeled interactive element: ${node.a11y.role} <${tag}>`
-          : `Unlabeled interactive element: ${node.a11y.role}`,
-        ...locate(node),
-      });
-    }
-  }
+  if (want.has("no-unlabeled-interactive"))
+    unlabeledInteractiveFindings(tree, findings);
 
-  if (want.has("label-title-only")) {
-    for (const node of linearize(tree)) {
-      if (!isTitleOnlyFormControl(node)) continue;
-      const tag = node.dom?.tagName;
-      findings.push({
-        rule: "label-title-only",
-        severity: "warning",
-        role: node.a11y.role,
-        ...(node.a11y.name ? { name: node.a11y.name } : {}),
-        ...(tag ? { tagName: tag } : {}),
-        message: tag
-          ? `Form element <${tag}> is labeled only by title or aria-describedby — add a visible <label>, aria-label, or aria-labelledby.`
-          : `Form element is labeled only by title or aria-describedby — add a visible <label>, aria-label, or aria-labelledby.`,
-        ...locate(node),
-      });
-    }
-  }
+  if (want.has("label-title-only")) labelTitleOnlyFindings(tree, findings);
 
-  if (want.has("image-alt")) {
-    for (const node of linearize(tree)) {
-      if (node.a11y.role !== "img") continue;
-      if (node.a11y.name.trim().length > 0) continue;
-      // Decorative images (alt="") map to role presentation and never reach
-      // the a11y tree, so an img-role node with no name is a genuine missing
-      // name. An `alt=""` image that IS exposed got there by being named
-      // (title / aria-label / aria-labelledby — so it has a name and is
-      // skipped above) or by being focusable, and a focusable image with no
-      // name is exactly what this rule should report.
-      const tag = node.dom?.tagName;
-      findings.push({
-        rule: "image-alt",
-        severity: "warning",
-        role: "img",
-        ...(tag ? { tagName: tag } : {}),
-        message: tag
-          ? `Image has no accessible name: <${tag}> — add alt text, or mark it decorative with alt="".`
-          : `Image has no accessible name — add alt text, or mark it decorative with alt="".`,
-        ...locate(node),
-      });
-    }
-  }
+  if (want.has("image-alt")) imageAltFindings(tree, findings);
 
   if (want.has("heading-order")) headingOrderFindings(tree, findings);
 
-  if (want.has("dialog-labeled")) {
-    const dialogs = [
-      ...findAllByRole(tree, "dialog"),
-      ...findAllByRole(tree, "alertdialog"),
-    ];
-    for (const d of dialogs) {
-      if (d.a11y.name.trim().length > 0) continue;
-      findings.push({
-        rule: "dialog-labeled",
-        severity: "error",
-        role: d.a11y.role,
-        ...(d.dom?.tagName ? { tagName: d.dom.tagName } : {}),
-        message: `Dialog (role ${d.a11y.role}) has no accessible name.`,
-        ...locate(d),
-      });
-    }
-  }
+  if (want.has("dialog-labeled")) dialogLabeledFindings(tree, findings);
 
   if (want.has("landmark-structure")) landmarkStructureFindings(tree, findings);
 
