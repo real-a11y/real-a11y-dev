@@ -190,17 +190,13 @@ describe("serializeTreeDiff", () => {
   });
 
   describe("values (ADR-0001)", () => {
-    const typed = {
-      ...empty,
-      changed: [
-        {
-          id: "sn-s",
-          before: mk("textbox", { id: "sn-s", name: "Search" }),
-          after: mk("textbox", { id: "sn-s", name: "Search", value: "hello" }),
-          changes: ["a11y.value"],
-        },
-      ],
+    const search = {
+      id: "sn-s",
+      before: mk("textbox", { id: "sn-s", name: "Search" }),
+      after: mk("textbox", { id: "sn-s", name: "Search", value: "hello" }),
+      changes: ["a11y.value"],
     };
+    const typed = { ...empty, changed: [search] };
 
     it("leaves a value change out by default — output as before values existed", () => {
       expect(serializeTreeDiff(typed)).toBe("(no changes)");
@@ -217,7 +213,7 @@ describe("serializeTreeDiff", () => {
         ...empty,
         changed: [
           {
-            ...typed.changed[0],
+            ...search,
             after: mk("textbox", {
               id: "sn-s",
               name: "Search",

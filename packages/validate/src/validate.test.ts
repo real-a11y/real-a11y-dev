@@ -42,8 +42,8 @@ describe("validateNode", () => {
     const map = buildMap([{ role: "notarole" }]);
     const issues = validateNode(find(map, "notarole"), map);
     expect(issues).toHaveLength(1);
-    expect(issues[0].severity).toBe("error");
-    expect(issues[0].message).toMatch(/not a valid ARIA role/);
+    expect(issues[0]?.severity).toBe("error");
+    expect(issues[0]?.message).toMatch(/not a valid ARIA role/);
   });
 
   it("flags a missing required attribute", () => {
