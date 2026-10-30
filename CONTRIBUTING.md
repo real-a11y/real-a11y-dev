@@ -334,13 +334,13 @@ If a hook complains, run `pnpm commitlint --edit .git/COMMIT_EDITMSG` to see the
 ### Code style
 
 - TypeScript strict mode is enforced
-- `inspector`, `serialize`, `session-registry`, `storybook-addon` and
-  `validate` also compile with `noUncheckedIndexedAccess`, so an array or
-  record read is typed as possibly `undefined` until the code shows it isn't.
-  Prefer a guard, destructuring, or `?.` in a test assertion over a `!`. More
-  packages can opt in from their own `tsconfig.json` once their errors are
-  fixed; it isn't on repo-wide because most of what it flags elsewhere is an
-  index the code already guards.
+- `audit`, `inspector`, `mcp`, `react`, `serialize`, `session-registry`,
+  `storybook-addon` and `validate` also compile with `noUncheckedIndexedAccess`,
+  so an array or record read is typed as possibly `undefined` until the code
+  shows it isn't. Prefer a guard, destructuring, or `?.` in a test assertion
+  over a `!`. More packages can opt in from their own `tsconfig.json` once
+  their errors are fixed; it isn't on repo-wide because most of what it flags
+  elsewhere is an index the code already guards.
 - Use meaningful variable and function names
 - Keep functions focused and small. `pnpm lint` holds code outside tests to a
   budget: cyclomatic `complexity` 15, `max-depth` 4, `max-params` 4,

@@ -62,7 +62,7 @@ describe("collectFindings — no-unlabeled-interactive", () => {
   ])("flags a control whose only text is its value: %s", (html, role) => {
     const findings = collectFindings(mount(html), ["no-unlabeled-interactive"]);
     expect(findings).toHaveLength(1);
-    expect(findings[0].role).toBe(role);
+    expect(findings[0]?.role).toBe(role);
   });
 });
 
@@ -192,7 +192,7 @@ describe("collectFindings — heading-order", () => {
     const root = mount(`<h2>Only</h2>`);
     const findings = collectFindings(root, ["heading-order"]);
     expect(findings).toHaveLength(1);
-    expect(findings[0].message).toMatch(/Missing <h1>/);
+    expect(findings[0]?.message).toMatch(/Missing <h1>/);
   });
 
   it("flags multiple h1s", () => {
@@ -207,8 +207,8 @@ describe("collectFindings — heading-order", () => {
     const root = mount(`<h1>A</h1><h3>B</h3>`);
     const findings = collectFindings(root, ["heading-order"]);
     expect(findings).toHaveLength(1);
-    expect(findings[0].message).toMatch(/level skipped/i);
-    expect(findings[0].name).toBe("B");
+    expect(findings[0]?.message).toMatch(/level skipped/i);
+    expect(findings[0]?.name).toBe("B");
   });
 
   it("passes a well-ordered outline", () => {
@@ -231,7 +231,7 @@ describe("collectFindings — dialog-labeled", () => {
     const root = mount(`<div role="dialog"></div>`);
     const findings = collectFindings(root, ["dialog-labeled"]);
     expect(findings).toHaveLength(1);
-    expect(findings[0].rule).toBe("dialog-labeled");
+    expect(findings[0]?.rule).toBe("dialog-labeled");
   });
 
   it("passes a labeled dialog", () => {
@@ -474,30 +474,30 @@ describe("collectFindings — locators, context & severity", () => {
   it("uses an element id as the locator when present", () => {
     const root = mount(`<button id="go"></button>`);
     const [f] = collectFindings(root, ["no-unlabeled-interactive"]);
-    expect(f.locator).toBe("#go");
+    expect(f?.locator).toBe("#go");
   });
 
   it("builds a path locator when there is no id", () => {
     const root = mount(`<div><span></span><button></button></div>`);
     const [f] = collectFindings(root, ["no-unlabeled-interactive"]);
-    expect(f.locator).toBeTruthy();
-    expect(f.locator).toMatch(/button/);
+    expect(f?.locator).toBeTruthy();
+    expect(f?.locator).toMatch(/button/);
   });
 
   it("includes href context for links", () => {
     const root = mount(`<a href="/help/faq"></a>`);
     const [f] = collectFindings(root, ["no-unlabeled-interactive"]);
-    expect(f.context).toMatch(/href="\/help\/faq"/);
+    expect(f?.context).toMatch(/href="\/help\/faq"/);
   });
 
   it("grades severity: interactive is error, heading order is warning", () => {
     const unlabeled = collectFindings(mount(`<button></button>`), [
       "no-unlabeled-interactive",
     ]);
-    expect(unlabeled[0].severity).toBe("error");
+    expect(unlabeled[0]?.severity).toBe("error");
 
     const heading = collectFindings(mount(`<h2>Only</h2>`), ["heading-order"]);
-    expect(heading[0].severity).toBe("warning");
+    expect(heading[0]?.severity).toBe("warning");
   });
 });
 
@@ -595,7 +595,7 @@ describe("collectFindings — locators on a pre-extracted tree", () => {
       ["no-unlabeled-interactive"],
     );
     expect(findings).toHaveLength(1);
-    expect(findings[0].locator).toBeUndefined();
+    expect(findings[0]?.locator).toBeUndefined();
   });
 
   it("omits context, which needs a live element the native tree never has", () => {
@@ -605,8 +605,8 @@ describe("collectFindings — locators on a pre-extracted tree", () => {
       ]),
       ["no-unlabeled-interactive"],
     );
-    expect(findings[0].locator).toBe("#help");
-    expect(findings[0].context).toBeUndefined();
+    expect(findings[0]?.locator).toBe("#help");
+    expect(findings[0]?.context).toBeUndefined();
   });
 
   it("flags title-only and describedby-only form controls without a live element", () => {

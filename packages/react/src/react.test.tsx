@@ -43,6 +43,16 @@ function findInPanel(host: Element, selector: string): Promise<Element> {
   }, WAIT);
 }
 
+/**
+ * The `index`th div in `container`, failing the test if it never rendered.
+ * The app's own root is the first; each navigator's host follows it.
+ */
+function divAt(container: ParentNode, index: number): HTMLDivElement {
+  const div = container.querySelectorAll("div")[index];
+  if (!div) throw new Error(`expected a div at index ${index}`);
+  return div;
+}
+
 function Harness({
   html,
   child,
@@ -78,9 +88,9 @@ describe("<SemanticNavigator />", () => {
       );
     }
     const { container } = render(<App />);
-    // The host div is the second div in the container.
-    const host = container.querySelectorAll("div")[1];
-    expect(host).toBeDefined();
+    // The host div is the second div in the container; `divAt` fails the
+    // test if it isn't there.
+    const host = divAt(container, 1);
     // Shadow DOM should be attached (mode: "shadow" is the default).
     await waitFor(() => expect(host.shadowRoot).not.toBeNull(), WAIT);
   });
@@ -101,14 +111,14 @@ describe("<SemanticNavigator />", () => {
     // enablePicker={false} (default) → no picker button. Wait for the toolbar
     // first: before it renders the button is absent whatever the prop says.
     const off = render(<App enablePicker={false} />);
-    const offHost = off.container.querySelectorAll("div")[1];
+    const offHost = divAt(off.container, 1);
     const offToolbar = await findInPanel(offHost, ".sn-toolbar");
     expect(offToolbar.querySelector(".sn-pick-btn")).toBeNull();
     off.unmount();
 
     // enablePicker={true} → picker button rendered with aria-pressed="false"
     const on = render(<App enablePicker={true} />);
-    const onHost = on.container.querySelectorAll("div")[1];
+    const onHost = divAt(on.container, 1);
     const pickBtn = await findInPanel(onHost, ".sn-pick-btn");
     expect(pickBtn.getAttribute("aria-pressed")).toBe("false");
     expect(pickBtn.getAttribute("aria-label")).toBe("Pick element in page");
@@ -132,18 +142,12 @@ describe("<SemanticNavigator />", () => {
 
     // By default a long name ends in an ellipsis: no full-names class.
     const off = render(<App />);
-    const offTree = await findInPanel(
-      off.container.querySelectorAll("div")[1],
-      '[role="tree"]',
-    );
+    const offTree = await findInPanel(divAt(off.container, 1), '[role="tree"]');
     expect(offTree.classList.contains("sn-tree--full-names")).toBe(false);
     off.unmount();
 
     const on = render(<App defaultShowFullNames />);
-    const onTree = await findInPanel(
-      on.container.querySelectorAll("div")[1],
-      '[role="tree"]',
-    );
+    const onTree = await findInPanel(divAt(on.container, 1), '[role="tree"]');
     expect(onTree.classList.contains("sn-tree--full-names")).toBe(true);
   });
 
@@ -166,7 +170,7 @@ describe("<SemanticNavigator />", () => {
       );
     }
     const view = render(<App theme="light" />);
-    const host = view.container.querySelectorAll("div")[1];
+    const host = divAt(view.container, 1);
     await findInPanel(host, '[role="tree"]');
 
     // The user turns it on in Settings…
@@ -202,7 +206,7 @@ describe("<SemanticNavigator />", () => {
     // gives the navigator a new host.
     view.rerender(<App theme="dark" shown={false} />);
     view.rerender(<App theme="dark" />);
-    const newHost = view.container.querySelectorAll("div")[1];
+    const newHost = divAt(view.container, 1);
     expect(newHost).not.toBe(host);
     const tree = await findInPanel(newHost, '[role="tree"]');
     expect(tree.classList.contains("sn-tree--full-names")).toBe(true);
@@ -222,7 +226,8 @@ describe("<SemanticNavigator />", () => {
       );
     }
     const view = render(<App />);
-    const [, first, second] = view.container.querySelectorAll("div");
+    const first = divAt(view.container, 1);
+    const second = divAt(view.container, 2);
     await findInPanel(first, '[role="tree"]');
     await findInPanel(second, '[role="tree"]');
     const fullNames = (host: Element) =>
@@ -271,7 +276,7 @@ describe("<SemanticNavigator />", () => {
     }
 
     const { container, getByText } = render(<App />);
-    const host = container.querySelectorAll("div")[1];
+    const host = divAt(container, 1);
     // Absent from a toolbar that has rendered — not merely from the
     // "Extracting tree…" placeholder, where it would be absent regardless.
     const toolbar = await findInPanel(host, ".sn-toolbar");
@@ -310,7 +315,7 @@ describe("<SemanticNavigator />", () => {
     }
 
     const { container, getByText } = render(<App />);
-    const host = container.querySelectorAll("div")[1];
+    const host = divAt(container, 1);
     await findInPanel(host, '[role="treeitem"]');
 
     const clickFirstRow = () => {

@@ -41,9 +41,11 @@ function node(partial: {
 }
 
 function tree(nodes: SemanticNode[]): ExtractionResult {
+  const [root] = nodes;
+  if (!root) throw new Error("tree() needs at least one node");
   return {
     nodes: new Map(nodes.map((n) => [n.id, n])),
-    rootId: nodes[0].id,
+    rootId: root.id,
     source: { producer: "native" },
   };
 }
@@ -69,8 +71,8 @@ describe("audit in a DOM-less runtime (no Element global)", () => {
       ["no-unlabeled-interactive"],
     );
     expect(findings).toHaveLength(1);
-    expect(findings[0].message).toBe("Unlabeled interactive element: button");
-    expect(findings[0].tagName).toBeUndefined();
+    expect(findings[0]?.message).toBe("Unlabeled interactive element: button");
+    expect(findings[0]?.tagName).toBeUndefined();
   });
 
   it("assertRules throws on a violation and passes on a clean tree", () => {
