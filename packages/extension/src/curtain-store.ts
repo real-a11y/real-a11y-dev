@@ -46,11 +46,17 @@ export function hydrateCurtainState(): Promise<void> {
         STORAGE_KEY
       ];
       if (!raw || typeof raw !== "object") return;
+      let overruled = false;
       for (const [key, on] of Object.entries(raw as Record<string, unknown>)) {
         const tabId = Number(key);
-        if (!Number.isInteger(tabId)) continue;
-        if (on === true && !locallyDecided.has(tabId)) curtainTabs.add(tabId);
+        if (!Number.isInteger(tabId) || on !== true) continue;
+        if (locallyDecided.has(tabId)) overruled = true;
+        else curtainTabs.add(tabId);
       }
+      // A tab this worker decided while the read was in flight — one closed
+      // then, which `forgetTab` had nothing to write for — is still in
+      // storage: write the merged state back, or the next worker reads it.
+      if (overruled) persist();
     })
     .catch(() => {
       // Session storage unavailable — degrade to memory-only (previous behaviour).

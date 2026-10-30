@@ -156,7 +156,12 @@ describe("curtain-store", () => {
     await s.hydrating;
 
     expect(s.isCurtainOn(7)).toBe(false);
-    expect(s.takeCurtainTabs()).toEqual(new Set());
+    // Nor by the next worker: the entry is gone from storage too.
+    await settle();
+    expect(s.store.tabCurtainOn).toEqual({});
+    const next = await freshStore(s.store);
+    await next.hydrateCurtainState();
+    expect(next.isCurtainOn(7)).toBe(false);
   });
 
   it("takeCurtainTabs returns the on-tabs and clears the store", async () => {
