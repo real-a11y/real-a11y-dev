@@ -134,7 +134,8 @@ load it again** before step 1, step 9 and step 10.
 **Tab order** (from extension 0.1.18, unreleased; on 0.1.17 or earlier Chrome's
 tree has no **TAB**, and the tab order is only in the in-page tree)
 
-19. On **Chrome's tree**, on a page with a positive `tabindex` if you can (or
+19. On **Chrome's tree**, on a page with a positive `tabindex` if you can, and no
+    iframe, shadow root or focus trap, which the list doesn't model (or
     `packages/extension/e2e/fixtures/tab-order.html`, served over http), wait for
     Chrome's bar to go, then press **TAB** in the native toolbar. The tree gives
     way to the page's tab stops, numbered in the order `Tab` visits them, a

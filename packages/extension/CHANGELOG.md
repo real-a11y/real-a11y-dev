@@ -87,8 +87,9 @@
   built before it is attached and are never mutated afterwards.
 
 - Chrome's tree has a TAB view: **A11Y / TAB** in its toolbar, where TAB
-  lists the page's tab stops in the tree's place, in the order `Tab` visits
-  them ([#566](https://github.com/real-a11y/real-a11y-dev/pull/566)). Chrome's
+  lists the page's tab stops in the tree's place, in tab order: a positive
+  `tabindex` first, then document order
+  ([#566](https://github.com/real-a11y/real-a11y-dev/pull/566)). Chrome's
   tree carries no tab order, so the list is the in-page reading's, as in the
   in-page tree's own TAB view: showing it reads nothing through Chrome, so
   the debugging bar doesn't come up for it, and selecting a stop outlines

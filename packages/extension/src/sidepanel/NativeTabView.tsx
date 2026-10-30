@@ -3,7 +3,9 @@
  * no tab order (`tabindex` never reaches one), so the view shows the in-page
  * walk's (`TabSequenceView`), as the CLI's `tabs` does, and its selection and
  * activation go through the content script, as in the in-page tree's own TAB
- * view. App holds which view shows: the in-page tree's view mode.
+ * view. The order is `getTabSequence`'s, which doesn't model shadow roots,
+ * iframes or focus traps. App holds which view shows: the in-page tree's view
+ * mode.
  */
 
 import type { TreeViewMode } from "@real-a11y-dev/core";
