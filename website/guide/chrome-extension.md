@@ -42,7 +42,7 @@ By default the panel reads Chromium's own accessibility tree, the one Chrome giv
 
 While it reads, Chrome shows a bar across every window: “Semantic Navigator” started debugging this browser. That's expected. Pressing **Cancel** on the bar stops the panel reading that tab until you press **↻**. To turn native mode off, switch off **Read pages through Chrome (recommended)** in **Settings ▾**, next to the page's title.
 
-Chrome's tree is read when the panel opens, when the page navigates, and for a few seconds after you act. For any other change press **↻**, or turn on **Follow page changes** (**⟳**). It has no tab order, because `tabindex` never reaches a native node, so the TAB view needs the in-page tree: **Settings ▾** → **Show** → **In-page tree**, which also has the DOM and A11Y views. The two trees never match exactly, by design: see [Two producers](./reading-the-a11y-view.md#two-producers).
+Chrome's tree is read when the panel opens, when the page navigates, and for a few seconds after you act. For any other change press **↻**, or turn on **Follow page changes** (**⟳**). It has no tab order of its own, because `tabindex` never reaches a native node, so its **TAB** view, next to **A11Y** in its toolbar, lists the in-page reading's tab stops, in the order `Tab` visits them. Showing it reads nothing through Chrome, so the bar doesn't come up for it. **Settings ▾** → **Show** → **In-page tree** has the DOM view as well. The two trees never match exactly, by design: see [Two producers](./reading-the-a11y-view.md#two-producers).
 
 ## Using the panel
 

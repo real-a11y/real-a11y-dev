@@ -8,7 +8,7 @@ priority: P0
 status: Active
 validFrom: "extension ≥ 0.1.16. On 0.1.15 or earlier there is no native mode, so this row is Blocked, not Fail. Load unpacked from packages/extension/dist"
 validUntil: ""
-expected: "a fresh profile reads the native tree with nothing asked, and Chrome's bar names the extension; a note explains the bar once; Settings holds the choice of tree, leaving the toolbar at most one DOM button; Turn off and Settings turn native mode off, and nothing attaches while it is off; the setting survives reopening the panel and restarting Chrome; Cancel on the bar is respected; a change in one window holds in every window, and each window's panel shows only its own window's tab, or a popup opened from it; page focus selects its row in Chrome's tree without the bar, inside frames too; what a click through the tree loads a moment later, and a change inside a shown frame with Follow page changes on, reach Chrome's tree without Refresh; its state badges take the in-page tree's colours"
+expected: "a fresh profile reads the native tree with nothing asked, and Chrome's bar names the extension; a note explains the bar once; Settings holds the choice of tree, leaving the toolbar at most one DOM button; Turn off and Settings turn native mode off, and nothing attaches while it is off; the setting survives reopening the panel and restarting Chrome; Cancel on the bar is respected; a change in one window holds in every window, and each window's panel shows only its own window's tab, or a popup opened from it; page focus selects its row in Chrome's tree without the bar, inside frames too; what a click through the tree loads a moment later, and a change inside a shown frame with Follow page changes on, reach Chrome's tree without Refresh; its state badges take the in-page tree's colours; its TAB view lists the page's tab stops in the order Tab visits them, with no bar"
 twin: D6
 notion: ""
 ---
@@ -28,10 +28,11 @@ load it again** before step 1, step 9 and step 10.
 1. Open the side panel on an ordinary `https://` page. Nothing is asked: the panel
    shows the native tree, **Settings ▾** has **Chrome's tree** pressed under
    **Show**, and the toolbar has no **DOM** button: the in-page tree's
-   **DOM / A11Y / TAB** views show only with that tree. While it reads, Chrome's
-   bar appears across every window: “Semantic Navigator” started debugging this
-   browser. The bar comes and goes, because native mode attaches only to read or
-   act.
+   **DOM / A11Y / TAB** views show only with that tree. (From extension 0.1.18,
+   unreleased, Chrome's tree has **A11Y / TAB** of its own: see step 19.) While
+   it reads, Chrome's bar appears across every window: “Semantic Navigator”
+   started debugging this browser. The bar comes and goes, because native mode
+   attaches only to read or act.
 2. A note below the toolbar explains the bar, with **Got it** and **Turn off**. Press
    **Got it**: the note goes, and focus moves to the tree. Close and reopen the panel,
    then quit Chrome and start it again: the note doesn't come back, and each time the
@@ -130,6 +131,22 @@ load it again** before step 1, step 9 and step 10.
     **disabled** in red and **checked** in green, and only a frame row with nothing
     read under it says **embedded**.
 
+**Tab order** (from extension 0.1.18, unreleased; on 0.1.17 or earlier Chrome's
+tree has no **TAB**, and the tab order is only in the in-page tree)
+
+19. On **Chrome's tree**, on a page with a positive `tabindex` if you can (or
+    `packages/extension/e2e/fixtures/tab-order.html`, served over http), wait for
+    Chrome's bar to go, then press **TAB** in the native toolbar. The tree gives
+    way to the page's tab stops, numbered in the order `Tab` visits them, a
+    positive `tabindex` first, and Chrome's bar doesn't come up for it. Click into
+    the page and press `Tab` through it: focus visits the stops in the list's
+    order. Type in the search box: the list narrows, and the count says how many
+    stops are left. Select a stop: the page outlines and focuses it. Arm the
+    picker and pick an element: the panel goes back to Chrome's tree, with that
+    row selected. Press **TAB** again, then choose **In-page tree** in
+    **Settings ▾**: it shows its own TAB view, and back on **Chrome's tree** TAB
+    is still on. Press **A11Y**: the tree is back.
+
 ## Expected
 
 - **The native tree with nothing asked** (step 1), and Chrome's bar names the
@@ -163,6 +180,9 @@ load it again** before step 1, step 9 and step 10.
   **Follow page changes** on, so does a change made inside a frame the page shows
 - **The two trees look alike** (step 18): the same state badge is the same colour in
   both, and **embedded** marks only a frame nothing was read from
+- **Chrome's tree shows the tab order** (step 19): its TAB view lists the stops in
+  the order `Tab` visits them, with no bar, a selected stop gets the page's focus,
+  a pick goes back to the tree, and the view holds across the choice of tree
 
 ## Why this exists
 
@@ -181,3 +201,8 @@ first.
 
 Steps 11–12 are here because each window has its own side panel, and a setting
 changed in one has to reach panels already open in the others.
+
+Step 19 is here because Chrome's tree carries no tab order (`tabindex` never reaches
+a native node): its TAB view is the in-page reading's, the one part of Chrome's tree
+that never attaches. Until it came, seeing a page's tab order with native mode on
+meant switching to the in-page tree.
