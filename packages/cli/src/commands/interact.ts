@@ -204,11 +204,14 @@ const settle = async (ms: number): Promise<void> => {
 
 async function interactOnPage(
   session: Session,
-  steps: readonly InteractStep[],
-  stepSettleMs: number,
-  quiet: boolean,
-  policy: ReturnType<typeof inputPolicy>,
+  options: {
+    steps: readonly InteractStep[];
+    stepSettleMs: number;
+    quiet: boolean;
+    policy: ReturnType<typeof inputPolicy>;
+  },
 ): Promise<InteractOutcome> {
+  const { steps, stepSettleMs, quiet, policy } = options;
   const { redactInput, liveValues } = policy;
   const before = captureNativeCheckpoint(
     await session.nativeTree({ redactInput }),
@@ -277,13 +280,12 @@ export async function runInteractStepsOnSession(
 
   progress(`opening ${target.name} …`, { quiet });
   const opened = await ensurePageOpen(session, target, flags);
-  const outcome = await interactOnPage(
-    session,
+  const outcome = await interactOnPage(session, {
     steps,
     stepSettleMs,
     quiet,
-    inputPolicy(flags),
-  );
+    policy: inputPolicy(flags),
+  });
   // Re-read AFTER the steps: a click can navigate, and `url` is contracted
   // as the final address. Reading it before acting reports where the run
   // started, which is wrong in exactly the case the report flags as a

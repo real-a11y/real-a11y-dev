@@ -38,7 +38,7 @@
       "count": 1
     },
     "max-params": {
-      "count": 2
+      "count": 1
     }
   },
   "packages/cli/src/commands/snapshot.ts": {
