@@ -116,6 +116,7 @@ import {
   nativeActionFeedback,
 } from "./native-feedback.js";
 import { extensionName, NativeModeNotice } from "./NativeModeNotice.js";
+import type { NativeView } from "./NativeTabView.js";
 import { NativeTreeView, type NativeReveal } from "./NativeTreeView.js";
 import { domStateBadges, EmbeddedBadge, StateBadges } from "./row-badges.js";
 import {
@@ -1811,6 +1812,19 @@ export function App() {
       });
     },
     [sendToBoundTab],
+  );
+
+  // Chrome's tree's A11Y is its tree, whichever of the in-page tree's DOM and
+  // A11Y views was last on: leaving TAB goes back to that one, and pressing
+  // A11Y while the tree shows changes nothing.
+  const lastTreeView = useRef<TreeViewMode>("a11y");
+  if (viewMode !== "tab") lastTreeView.current = viewMode;
+  const handleNativeViewChange = useCallback(
+    (view: NativeView) => {
+      const mode = view === "tab" ? "tab" : lastTreeView.current;
+      if (mode !== viewModeRef.current) handleViewModeChange(mode);
+    },
+    [handleViewModeChange],
   );
 
   // Apply search + role filter
@@ -4112,7 +4126,7 @@ export function App() {
             onActivate: handleActivate,
           }}
           view={viewMode === "tab" ? "tab" : "a11y"}
-          onViewChange={handleViewModeChange}
+          onViewChange={handleNativeViewChange}
         />
       ) : viewMode === "tab" ? (
         /* ---- Tab sequence view ---- */

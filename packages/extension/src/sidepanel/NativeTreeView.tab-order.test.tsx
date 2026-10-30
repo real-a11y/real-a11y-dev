@@ -118,7 +118,7 @@ describe("NativeTreeView — TAB view", () => {
     [...order.nodes.values()].find((n) => n.a11y.name === name)!.id;
   const searchBox = () =>
     container.querySelector<HTMLInputElement>(
-      'input[aria-label="Search native tree nodes"]',
+      'input[aria-label="Search tab stops"]',
     )!;
 
   it("offers A11Y and TAB only with a tab order and a way to switch", () => {

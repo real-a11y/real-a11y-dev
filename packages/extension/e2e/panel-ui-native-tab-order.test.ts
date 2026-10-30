@@ -124,7 +124,8 @@ test("a stop moves the page's focus through the content script, as in the in-pag
     .toBe("One");
 
   // A search narrows the list, and the toolbar counts what it leaves.
-  await nav.panel.getByLabel("Search native tree nodes").fill("explicit");
+  // The search box says what it searches while the tab order shows.
+  await nav.panel.getByLabel("Search tab stops").fill("explicit");
   await expect(list.locator(".sn-tab-name")).toHaveText([
     "First explicit",
     "Second explicit",

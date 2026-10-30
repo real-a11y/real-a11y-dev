@@ -6,23 +6,22 @@
  * view. App holds which view shows: the in-page tree's view mode.
  */
 
-import type { ActionType, SemanticNode } from "@real-a11y-dev/core";
+import type { TreeViewMode } from "@real-a11y-dev/core";
+import type { ComponentProps } from "preact";
 import { useMemo } from "preact/hooks";
 
 import { matchCountLabel } from "./scope.js";
-import { tabStops } from "./TabSequenceView.js";
+import { TabSequenceView, tabStops } from "./TabSequenceView.js";
 
 /** Chrome's tree, or the page's tab order in its place. */
-export type NativeView = "a11y" | "tab";
+export type NativeView = Exclude<TreeViewMode, "dom">;
 
 /** The page's tab order: the in-page tree it comes from, and what selecting
- *  and activating a stop does there. Named as `TabSequenceView`'s props. */
-export interface NativeTabOrder {
-  nodes: Map<string, SemanticNode>;
-  rootId: string;
-  onHighlight: (nodeId: string) => void;
-  onActivate: (nodeId: string, action?: ActionType) => void;
-}
+ *  and activating a stop does there. */
+export type NativeTabOrder = Pick<
+  ComponentProps<typeof TabSequenceView>,
+  "nodes" | "rootId" | "onHighlight" | "onActivate"
+>;
 
 /** The toolbar's A11Y / TAB switch. */
 export function NativeViewToggle({
@@ -54,11 +53,16 @@ export function useTabMatchLabel(
   shown: NativeTabOrder | undefined,
   query: string,
 ): string | false {
+  // Keyed on the tree, not on `shown`: App hands over a new object each
+  // render, and the walk is the in-page tree's whole tab sequence.
+  const nodes = shown?.nodes;
+  const rootId = shown?.rootId;
   return useMemo(
     () =>
-      shown !== undefined &&
+      nodes !== undefined &&
+      rootId !== undefined &&
       query.trim().length > 0 &&
-      matchCountLabel(tabStops(shown.nodes, shown.rootId, query).length, false),
-    [shown, query],
+      matchCountLabel(tabStops(nodes, rootId, query).length, false),
+    [nodes, rootId, query],
   );
 }

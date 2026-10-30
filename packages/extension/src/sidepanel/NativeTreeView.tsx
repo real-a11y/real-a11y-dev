@@ -1047,7 +1047,9 @@ export function NativeTreeView({
           class="sn-search"
           type="search"
           placeholder="Search nodes..."
-          aria-label="Search native tree nodes"
+          aria-label={
+            shownTabOrder ? "Search tab stops" : "Search native tree nodes"
+          }
           value={query}
           onInput={(e) => setQuery((e.target as HTMLInputElement).value)}
         />
