@@ -20,14 +20,14 @@
 
 const STORAGE_KEY = "tabCurtainOn";
 
-/** Synchronous mirror of the persisted state. Only `true` entries are kept. */
-const curtainTabs = new Map<number, boolean>();
+/** Synchronous mirror of the persisted state: the tabs with the curtain on. */
+const curtainTabs = new Set<number>();
 
 let hydration: Promise<void> | null = null;
 
 /**
- * Tabs whose curtain state THIS worker instance decided, via `setCurtain` or
- * `takeCurtainTabs`. A local decision always beats whatever hydration reads
+ * Tabs whose curtain state THIS worker instance decided, via `setCurtain`,
+ * `forgetTab` or `takeCurtainTabs`. A local decision always beats whatever hydration reads
  * back: the `storage.session.get` is in flight across the boot window, so a
  * user who toggles the curtain off during it would otherwise have the stale
  * persisted `true` resurrected by the late-landing read. Tracked separately
@@ -49,8 +49,7 @@ export function hydrateCurtainState(): Promise<void> {
       for (const [key, on] of Object.entries(raw as Record<string, unknown>)) {
         const tabId = Number(key);
         if (!Number.isInteger(tabId)) continue;
-        if (on === true && !locallyDecided.has(tabId))
-          curtainTabs.set(tabId, true);
+        if (on === true && !locallyDecided.has(tabId)) curtainTabs.add(tabId);
       }
     })
     .catch(() => {
@@ -59,20 +58,29 @@ export function hydrateCurtainState(): Promise<void> {
   return hydration;
 }
 
-/** Write the mirror back to session storage. Fire-and-forget by design. */
+/**
+ * Write the mirror back to session storage. Fire-and-forget by design, and
+ * not before hydration has landed: a write during the boot window would
+ * replace the persisted map with this worker's partial view of it, dropping
+ * the curtains a previous worker recorded for other tabs. Each write takes
+ * its snapshot when it runs, so writes queued behind hydration all carry the
+ * merged state.
+ */
 function persist(): void {
-  const snapshot: Record<string, true> = {};
-  for (const [tabId, on] of curtainTabs) if (on) snapshot[String(tabId)] = true;
-  void Promise.resolve(
-    chrome.storage?.session?.set({ [STORAGE_KEY]: snapshot }),
-  ).catch(() => {
-    // Best-effort: a failed write only costs us the post-SW-death cleanup.
-  });
+  void hydrateCurtainState()
+    .then(() => {
+      const snapshot: Record<string, true> = {};
+      for (const tabId of curtainTabs) snapshot[String(tabId)] = true;
+      return chrome.storage?.session?.set({ [STORAGE_KEY]: snapshot });
+    })
+    .catch(() => {
+      // Best-effort: a failed write only costs us the post-SW-death cleanup.
+    });
 }
 
 /** Record whether the curtain is currently painted on `tabId`. */
 export function setCurtain(tabId: number, on: boolean): void {
-  if (on) curtainTabs.set(tabId, true);
+  if (on) curtainTabs.add(tabId);
   else curtainTabs.delete(tabId);
   locallyDecided.add(tabId);
   persist();
@@ -80,11 +88,13 @@ export function setCurtain(tabId: number, on: boolean): void {
 
 /** True if the curtain is known to be on for `tabId` (sync mirror read). */
 export function isCurtainOn(tabId: number): boolean {
-  return curtainTabs.get(tabId) === true;
+  return curtainTabs.has(tabId);
 }
 
 /** Drop a closed tab's entry so the store doesn't grow across a session. */
 export function forgetTab(tabId: number): void {
+  // Decided here too, so a hydration still in flight can't bring it back.
+  locallyDecided.add(tabId);
   if (curtainTabs.delete(tabId)) persist();
 }
 
@@ -98,8 +108,7 @@ export function forgetTab(tabId: number): void {
  * after a service-worker death will report an empty set.
  */
 export function takeCurtainTabs(): Set<number> {
-  const on = new Set<number>();
-  for (const [tabId, isOn] of curtainTabs) if (isOn) on.add(tabId);
+  const on = new Set(curtainTabs);
   curtainTabs.clear();
   // Every lifted tab is now a local decision, so a hydration still in flight
   // can't put the curtains we just lifted back.
