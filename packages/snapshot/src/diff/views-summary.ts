@@ -388,6 +388,7 @@ export function summarizeViews(input: SummarizeViewsInput): ViewChange[] {
     tabsAdded,
     tabsRemoved,
   };
+  // Order matters: each outline stage consumes lines the previous one left.
   outlineLevelChanges(m, changes);
   outlineRenames(m, changes);
   outlineLeftovers(m, changes);
