@@ -683,9 +683,9 @@ describe("MCP server wiring", () => {
       name: "open_page",
       arguments: { url: "https://example.com/" },
     });
-    expect(session.opened[0].url).toBe("https://example.com/");
+    expect(session.opened[0]?.url).toBe("https://example.com/");
     // zod defaults are applied before the handler runs.
-    expect(session.opened[0].options).toEqual({
+    expect(session.opened[0]?.options).toEqual({
       waitUntil: "load",
       settleMs: 0,
     });
@@ -730,7 +730,7 @@ describe("MCP server wiring", () => {
         settleMs: 1500,
       },
     });
-    expect(session.opened[0].options).toEqual({
+    expect(session.opened[0]?.options).toEqual({
       waitUntil: "networkidle",
       settleMs: 1500,
     });
@@ -742,7 +742,7 @@ describe("MCP server wiring", () => {
       name: "open_page",
       arguments: { url: "https://m.example/", device: "iPhone 13" },
     });
-    expect(session.opened[0].options).toMatchObject({ device: "iPhone 13" });
+    expect(session.opened[0]?.options).toMatchObject({ device: "iPhone 13" });
     expect(textOf(res)).toMatch(/\[iPhone 13\]/);
   });
 
@@ -1066,14 +1066,14 @@ describe("checkpoints", () => {
     const artifact = parseSnapshotArtifact(exported);
     const mcpPage = artifact.pages[0];
 
-    expect(mcpPage.findings.length).toBe(2);
-    expect(mcpPage.findings.map((f) => f.fingerprint)).toEqual(
+    expect(mcpPage?.findings.length).toBe(2);
+    expect(mcpPage?.findings.map((f) => f.fingerprint)).toEqual(
       cliPage.findings.map((f) => f.fingerprint),
     );
     // …and the artifact declares what it measured, so whatever diffs it next
     // reads the missing tabs view as "not measured", not "all stops removed".
     expect(artifact.meta.views).toEqual(["tree", "outline"]);
-    expect(mcpPage.tabs).toBeUndefined();
+    expect(mcpPage?.tabs).toBeUndefined();
   });
 
   it("diff_findings re-snapshots with the rules the checkpoint was saved with", async () => {
@@ -1379,7 +1379,7 @@ describe("checkpoints", () => {
       ),
     );
     expect(round.meta.views).toEqual(["tree", "outline", "tabs"]);
-    expect(round.pages[0].tabs).toBe('link "Home"');
+    expect(round.pages[0]?.tabs).toBe('link "Home"');
   });
 
   it("says so when an imported base was captured at a narrower scope", async () => {
@@ -1596,15 +1596,16 @@ describe("act tools (click_element / type_text / focus_element)", () => {
         isExposedToAT: true,
       },
     });
-    const nodes = [
-      node("ax-1", "RootWebArea", "Fixture"),
+    const root = node("ax-1", "RootWebArea", "Fixture");
+    const children = [
       node("ax-dom-10", "button", "Save"),
       node("ax-dom-11", "button", "Save"),
       node("ax-dom-12", "button", "Go"),
       node("ax-dom-13", "textbox", "Email"),
       node("ax-dom-14", "button", "Delete", { disabled: true }),
     ];
-    nodes[0].childIds = nodes.slice(1).map((n) => n.id);
+    root.childIds = children.map((n) => n.id);
+    const nodes = [root, ...children];
     return {
       nodes: new Map(nodes.map((n) => [n.id, n])),
       rootId: "ax-1",
@@ -1625,7 +1626,7 @@ describe("act tools (click_element / type_text / focus_element)", () => {
     });
     // Resolution precedes dispatch — and no node id was ever sent by the agent.
     expect(session.calls.map((c) => c.fn)).toEqual(["nativeTree", "act"]);
-    expect(session.calls[1].args[0]).toEqual({
+    expect(session.calls[1]?.args[0]).toEqual({
       nodeId: "ax-dom-12",
       action: "click",
     });
@@ -1888,8 +1889,12 @@ describe("named sessions", () => {
       arguments: { url: "https://b.example/", session: "beta" },
     });
     expect(created.length).toBe(2);
-    expect(created[0].opened.map((o) => o.url)).toEqual(["https://a.example/"]);
-    expect(created[1].opened.map((o) => o.url)).toEqual(["https://b.example/"]);
+    expect(created[0]?.opened.map((o) => o.url)).toEqual([
+      "https://a.example/",
+    ]);
+    expect(created[1]?.opened.map((o) => o.url)).toEqual([
+      "https://b.example/",
+    ]);
 
     // Same name → same session, no new launch.
     await client.callTool({
@@ -1897,7 +1902,7 @@ describe("named sessions", () => {
       arguments: { url: "https://a2.example/", session: "alpha" },
     });
     expect(created.length).toBe(2);
-    expect(created[0].opened.map((o) => o.url)).toEqual([
+    expect(created[0]?.opened.map((o) => o.url)).toEqual([
       "https://a.example/",
       "https://a2.example/",
     ]);
@@ -1946,15 +1951,15 @@ describe("named sessions", () => {
       arguments: { session: "alpha" },
     });
     expect(textOf(one as never)).toMatch(/"alpha" closed/);
-    expect(created[0].closed).toBe(1);
-    expect(created[1].closed).toBe(0);
+    expect(created[0]?.closed).toBe(1);
+    expect(created[1]?.closed).toBe(0);
 
     const rest = await client.callTool({
       name: "close_browser",
       arguments: { all: true },
     });
     expect(textOf(rest as never)).toMatch(/Closed 1 session/);
-    expect(created[1].closed).toBe(1);
+    expect(created[1]?.closed).toBe(1);
   });
 
   it("list_sessions reports live sessions and empty state", async () => {
@@ -1999,7 +2004,7 @@ describe("named sessions", () => {
       name: "open_page",
       arguments: { url: "https://a2.example/", session: "alpha" },
     });
-    expect(created[0].opened.length).toBe(2);
+    expect(created[0]?.opened.length).toBe(2);
   });
 
   it("rejects an invalid session name as a TOOL error carrying the grammar", async () => {
@@ -2089,7 +2094,7 @@ describe("named sessions", () => {
     // Real timer, real path: SessionRegistry.fireIdleTimeout → registry
     // stopAll, which cannot reach the manager's checkpoint stores.
     await new Promise((resolve) => setTimeout(resolve, 200));
-    expect(created[0].closed).toBe(1);
+    expect(created[0]?.closed).toBe(1);
     expect(manager.list()).toHaveLength(0);
 
     const listed = await client.callTool({
@@ -2128,7 +2133,7 @@ describe("named sessions", () => {
     // A destructive tool must never quietly do MORE than it was asked.
     expect(res.isError).toBe(true);
     expect(textOf(res as never)).toMatch(/not both/);
-    expect(created[0].closed).toBe(0);
+    expect(created[0]?.closed).toBe(0);
   });
 
   it("rejects unknown arguments to list_sessions instead of ignoring them", async () => {
@@ -2162,14 +2167,14 @@ describe("named sessions", () => {
     expect(await stop("alpha")).toBe(true);
     await stopAll();
     await shutdown();
-    expect(created[0].closed).toBeGreaterThan(0);
+    expect(created[0]?.closed).toBeGreaterThan(0);
   });
 
   it("shutdown() releases the registry for good", async () => {
     const { manager, created } = makeManager();
     await manager.run("alpha", async () => 0);
     await manager.shutdown();
-    expect(created[0].closed).toBe(1);
+    expect(created[0]?.closed).toBe(1);
     await expect(manager.run("alpha", async () => 0)).rejects.toThrow(
       /shut down/,
     );
@@ -2436,7 +2441,7 @@ describe("field values (ADR-0001)", () => {
       );
       expect(exported).not.toContain("jane@x.com");
       const artifact = parseSnapshotArtifact(exported);
-      expect(artifact.pages[0].tree).toContain('textbox "Email"');
+      expect(artifact.pages[0]?.tree).toContain('textbox "Email"');
       expect(artifact.meta.values).toBeUndefined();
     });
 
@@ -2473,7 +2478,7 @@ describe("field values (ADR-0001)", () => {
       );
       const artifact = parseSnapshotArtifact(exported);
       expect(artifact.meta.values).toBe(true);
-      expect(artifact.pages[0].tree).toContain(
+      expect(artifact.pages[0]?.tree).toContain(
         'textbox "Email" = "jane@x.com"',
       );
 
