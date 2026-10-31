@@ -93,8 +93,10 @@ native-tree execution plan in Notion.
 
 Where the gates actually are:
 
-- **No setting.** `settings.nativeModeEnabled` is gone and nothing reads it, so
-  a `false` that 0.1.17 or earlier stored is ignored, and
+- **No setting.** Nothing reads `settings.nativeModeEnabled` any more: a
+  `false` that 0.1.17 or earlier stored is ignored, and the service worker
+  removes it when it starts (`forgetRetiredSettings()` in `native/setting.ts`),
+  with the note's acknowledgment, so the note explains Chrome's bar again.
   `NativeDebuggerSession.attach()` checks no flag. Where Chrome refuses an
   attach, the panel says why (`explainUnavailable` in `native/capability.ts`);
   there is no in-page tree to fall back on. The last side panel's close

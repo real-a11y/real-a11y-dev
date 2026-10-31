@@ -4,10 +4,15 @@
 export const NATIVE_NOTICE_SEEN_KEY = "settings.nativeNoticeSeen";
 
 /** Remove what the native-mode switch stored up to 0.1.17, and the key it
- *  was migrated from: nothing reads them now. */
+ *  was migrated from: nothing reads them now. Whoever had switched it off
+ *  is about to see Chrome's bar again, so the note that explains the bar
+ *  shows again too. */
 export async function forgetRetiredSettings(): Promise<void> {
+  const key = "settings.nativeModeEnabled";
+  const wasOff = (await chrome.storage.local.get(key))[key] === false;
   await chrome.storage.local.remove([
-    "settings.nativeModeEnabled",
+    key,
     "devFlags.nativeMode",
+    ...(wasOff ? [NATIVE_NOTICE_SEEN_KEY] : []),
   ]);
 }

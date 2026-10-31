@@ -65,8 +65,9 @@ load it again** before step 1, step 10 and step 11, and after step 7.
    pages through Chrome (recommended)** in **Settings ▾**. Then build this
    version into the same `dist` folder and press the reload icon on
    `chrome://extensions`, which keeps the extension's storage. Open the panel on
-   a page: Chrome's tree is read with nothing asked, and nothing offers an
-   in-page tree.
+   a page: Chrome's tree is read with nothing asked, nothing offers an in-page
+   tree, and the note about Chrome's debugging bar shows, whether or not you
+   acknowledged it on 0.1.17.
 
 **Settings**
 
@@ -187,7 +188,7 @@ and the tab order is only in the in-page tree)
 - **A refused attach says why** (step 6), from 0.1.18: no other tree in its
   place, no bar, and the TAB view still lists the tab order
 - **An old "off" no longer counts** (step 7), from 0.1.18: Chrome's tree is read
-  with nothing asked
+  with nothing asked, and the note explains the bar once more
 - **Settings fits the panel** (step 8), and holds **Show full names** alone from
   0.1.18
 - **Off means off** (steps 9–10, extension ≤ 0.1.17 only): no bar while it is

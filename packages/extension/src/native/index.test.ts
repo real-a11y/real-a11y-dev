@@ -142,6 +142,7 @@ describe("registerNativeMode: reads", () => {
     install({
       "settings.nativeModeEnabled": false,
       "devFlags.nativeMode": false,
+      "settings.nativeNoticeSeen": true,
       "settings.showFullNames": true,
     });
     await register();
@@ -149,7 +150,21 @@ describe("registerNativeMode: reads", () => {
     expect(attach).toHaveBeenCalled();
     expect("settings.nativeModeEnabled" in local.data).toBe(false);
     expect("devFlags.nativeMode" in local.data).toBe(false);
+    // Chrome's bar is back for someone who had turned it off: the note that
+    // explains it shows again.
+    expect("settings.nativeNoticeSeen" in local.data).toBe(false);
     expect(local.data["settings.showFullNames"]).toBe(true);
+  });
+
+  it("keeps the note acknowledged where native mode was left on", async () => {
+    install({
+      "settings.nativeModeEnabled": true,
+      "settings.nativeNoticeSeen": true,
+    });
+    await register();
+    await send({ type: "NATIVE_READ", tabId: 7 }, PANEL);
+    expect("settings.nativeModeEnabled" in local.data).toBe(false);
+    expect(local.data["settings.nativeNoticeSeen"]).toBe(true);
   });
 
   it("no longer answers the setting's messages", async () => {

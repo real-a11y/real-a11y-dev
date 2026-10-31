@@ -28,7 +28,8 @@
   through Chrome off (**Read pages through Chrome**), its **Show** choice of
   tree, and the debugging-bar note's **Turn off**. A switch turned off in
   0.1.17 or earlier no longer counts: the panel reads the first page through
-  Chrome, as a fresh install does. Where Chrome won't let the extension's
+  Chrome, as a fresh install does, and the note about Chrome's debugging bar
+  explains the bar again. Where Chrome won't let the extension's
   debugger attach (DevTools holds the tab, say, or it is a `chrome://` page),
   the panel says why instead of falling back to the in-page tree, and the
   TAB view still lists the page's tab order wherever the extension's content
