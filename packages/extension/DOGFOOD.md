@@ -16,7 +16,7 @@ three questions, and the findings log below is the record of that exercise.
 > `tabs` and `storage` are now required permissions in the shipped
 > `packages/extension/public/manifest.json`. It shipped behind a
 > `chrome.storage`-backed runtime setting rather than a build-time constant,
-> on by default since #496. Since #PR3 there is no setting: Chrome's tree is
+> on by default since #496. Since #572 there is no setting: Chrome's tree is
 > the side panel's only tree. Every existing user re-consented on the release
 > that carried that manifest change.
 

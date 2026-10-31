@@ -81,7 +81,7 @@ Web Store review bar. Don't add one without an explicit product sign-off.
 **The extension shows Chrome's tree, and no other.** Native mode
 (`chrome.debugger`, reading Chromium's own accessibility tree over CDP) shipped
 first as a dev-only dogfood build (#229), moved into the store build (#386),
-became the default (#496), and since #PR3 is the side panel's only tree: the
+became the default (#496), and since #572 is the side panel's only tree: the
 extension's in-page tree is gone, with the setting that chose it and the
 fallback to it. The content script still walks the page, but only for the TAB
 view's tab stops and the key bar's Tab; while the A11Y view shows, each frame

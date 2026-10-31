@@ -22,7 +22,7 @@
 ### Patch Changes
 
 - The side panel shows Chrome's tree alone
-  ([#PR3](https://github.com/real-a11y/real-a11y-dev/pull/PR3)). The
+  ([#572](https://github.com/real-a11y/real-a11y-dev/pull/572)). The
   extension's own in-page tree is gone, with its DOM / A11Y / TAB views,
   and so are the **Settings ▾** switch that turned reading
   through Chrome off (**Read pages through Chrome**), its **Show** choice of
