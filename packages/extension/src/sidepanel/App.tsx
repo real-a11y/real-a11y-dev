@@ -1162,10 +1162,9 @@ export function App() {
           // user asked for exactly this) so a real failure doesn't read as
           // Escape having silently worked.
           if (message.payload.reason) {
+            // The banner over the tree says why (`nativeCapability`).
             setNativeCapability(blockedBy(message.payload.reason));
-            setNativeStatus(
-              `native unavailable — ${explainUnavailable(message.payload.reason)}`,
-            );
+            setNativeStatus("native unavailable");
           } else {
             setNativeStatus(`pick failed: ${message.payload.error}`);
           }
@@ -1435,10 +1434,10 @@ export function App() {
           setNativeRootId("");
           nativePageKeys.current = undefined;
           if (r?.reason) {
+            // The banner over the tree says why; the status line, which a
+            // screen reader hears for certain, says only that it can't.
             setNativeCapability(blockedBy(r.reason));
-            setNativeStatus(
-              `native unavailable — ${explainUnavailable(r.reason)}`,
-            );
+            setNativeStatus("native unavailable");
           } else {
             setNativeStatus(
               r?.error === "cancelled-by-user"

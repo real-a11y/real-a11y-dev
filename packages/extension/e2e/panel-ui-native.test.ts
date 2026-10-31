@@ -672,8 +672,14 @@ test("a first read that can't happen says why, still lists the tab order, and do
   await nav.panel.reload();
 
   await expect(
-    nav.panel.getByText(/^native unavailable — DevTools is attached/),
+    nav.panel.getByRole("status").filter({
+      hasText: /^native unavailable here — DevTools is attached/,
+    }),
   ).toBeVisible({ timeout: 20_000 });
+  // Said once: the status line adds only that it can't read.
+  await expect(
+    nav.panel.locator('.sn-page-url[aria-live="polite"]'),
+  ).toHaveText("native unavailable");
   // One attempt, and no more for this tab: each retry would attach again.
   await nav.panel.waitForTimeout(NO_READ_WINDOW_MS);
   expect(await nav.nativeReads()).toHaveLength(1);

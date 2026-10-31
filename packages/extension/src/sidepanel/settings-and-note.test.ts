@@ -221,9 +221,14 @@ describe("Settings and the note about Chrome's debugging bar", () => {
     await flush();
     await showTab(7);
 
-    expect(container.textContent).toContain(
-      explainUnavailable("devtools-conflict"),
-    );
+    // Once: the banner over the tree says why, and the status line only that
+    // Chrome's tree is unavailable.
+    expect(
+      container.textContent!.split(explainUnavailable("devtools-conflict")),
+    ).toHaveLength(2);
+    expect(
+      container.querySelector('.sn-page-url[aria-live="polite"]')?.textContent,
+    ).toBe("native unavailable");
     expect(
       [...container.querySelectorAll("button.sn-toggle-btn")].map((b) =>
         b.textContent?.trim(),
