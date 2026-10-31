@@ -9,9 +9,11 @@ table
 link "matchers"
 link "Playwright's ARIA snapshots"
 table
-link "extension"
+link "inspector"
 link "React panel"
 link "Storybook addon"
+link "Playwright adapter"
+link "extension"
 link "heading outline"
 link "tab order"
 link "assertions"

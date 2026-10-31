@@ -9,7 +9,7 @@ article
 link "Chrome extension: Install the extension"
   article
     heading "Chrome extension" (level 2)
-    paragraph "Open the side panel on any website and explore its DOM, A11y, and TAB views live. Highlights elements on the page as you navigate the tree. No code, no setup."
+    paragraph "Open the side panel on any website and explore Chrome's own accessibility tree and its tab order live. Highlights elements on the page as you navigate the tree. No code, no setup."
     paragraph "Install the extension"
 article
   heading "Test what users actually experience" (level 2)

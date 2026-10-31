@@ -1,7 +1,7 @@
   h2 On this page
 h1 Semantic Navigator
   h2 The test
-  h2 Native mode
+  h2 Chrome's tree
   h2 Using the panel
     h3 Keyboard
   h2 Privacy
