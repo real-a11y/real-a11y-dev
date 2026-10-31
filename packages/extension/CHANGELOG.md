@@ -86,6 +86,20 @@
   its own, and although the curtain it injects has inner elements, they are
   built before it is attached and are never mutated afterwards.
 
+- Chrome's tree has a TAB view: **A11Y / TAB** in its toolbar, where TAB
+  lists the page's tab stops in the tree's place, in tab order: a positive
+  `tabindex` first, then document order
+  ([#566](https://github.com/real-a11y/real-a11y-dev/pull/566)). Chrome's
+  tree carries no tab order, so the list is the in-page reading's, as in the
+  in-page tree's own TAB view: showing it reads nothing through Chrome, so
+  the debugging bar doesn't come up for it, and selecting a stop outlines
+  and focuses it on the page. Until now, seeing the tab order with native
+  mode on meant switching to the in-page tree in **Settings ▾**. The two
+  trees share the view: TAB stays on across the choice of tree, leaving it
+  returns to whichever of the in-page tree's DOM and A11Y views was last on,
+  and a pick from the page goes back to Chrome's tree, with the picked row
+  selected.
+
 ## 0.1.17
 
 ### Patch Changes

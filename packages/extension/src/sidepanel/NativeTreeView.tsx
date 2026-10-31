@@ -28,6 +28,12 @@
  * lifted to `App.tsx` for the same reason: it's a native-only view concern,
  * and it naturally resets when the user switches back to the DOM producer
  * and this component unmounts.
+ *
+ * The TAB view is the one part that isn't Chrome's. A native node carries no
+ * tab order (`tabindex` never reaches one), so the view shows the in-page
+ * walk's (`tabOrder`), as the CLI's `tabs` does, and its selection and
+ * activation go through the content script, as in the in-page tree's own
+ * TAB view. App holds which view shows: the in-page tree's view mode.
  */
 
 import {
@@ -66,11 +72,8 @@ import {
   type TabCapability,
 } from "../native/capability.js";
 import {
-  ACTABLE,
   isSelectableRole,
-  nativeSelectOptions,
   isSteppableRole,
-  isTypableRole,
   type NativeNode,
 } from "../native/native-actions.js";
 import { searchNativeTree } from "../native/native-search.js";
@@ -78,16 +81,26 @@ import { nativeParentIndex } from "../native/native-tree-utils.js";
 
 import { ControlsChip, JUMP_FLASH_MS } from "./ControlsChip.js";
 import { announcedValueLabel } from "./field-value.js";
-import {
-  describeStates,
-  FilteredListView,
-  type FilteredListItem,
-} from "./FilteredList.js";
+import { FilteredListView, type FilteredListItem } from "./FilteredList.js";
 import { findNativeModalDialog } from "./native-feedback.js";
 import {
   NATIVE_FOLLOW_DEBOUNCE_MS,
   NATIVE_HOVER_DWELL_MS,
 } from "./native-follow.js";
+import {
+  emptyTreeText,
+  nativeActions,
+  nativeSelectIds,
+  primaryLabel,
+  toListItem,
+  typeAheadLabel,
+} from "./native-rows.js";
+import {
+  NativeViewToggle,
+  useTabMatchLabel,
+  type NativeTabOrder,
+  type NativeView,
+} from "./NativeTabView.js";
 import { EmbeddedBadge, nativeStateBadges, StateBadges } from "./row-badges.js";
 import {
   arrowLeftStopsAtScopeRoot,
@@ -101,6 +114,7 @@ import {
 } from "./scope.js";
 import { ScopeBar } from "./ScopeBar.js";
 import { DialogIndicator, SendKeyBar, type SendKey } from "./SendKeyBar.js";
+import { TabSequenceView } from "./TabSequenceView.js";
 import { useDwellTimer } from "./use-dwell-timer.js";
 
 const ROLE_FILTER_KEYS = Object.keys(ROLE_FILTER_LABELS) as Array<
@@ -189,58 +203,15 @@ export interface NativeTreeViewProps {
   /** The "Show full names" setting: a long name widens the tree, rather than
    *  ending in an ellipsis with the tree fitting the panel. */
   showFullNames?: boolean;
-}
-
-/** A node is worth a click/Enter action, a select action, or both never — the
- *  same three-way split `DogfoodPanel.tsx` renders from, reused here so a
- *  fix to one never silently diverges from the other. `selects` says the row
- *  selects: an option, or a real `<select>`, which opens the option picker
- *  as the DOM tree's does (see `nativeSelectIds`). */
-function primaryLabel(node: NativeNode, selects: boolean): string | undefined {
-  if (isTypableRole(node.role, node.states)) return "Type";
-  if (selects) return "Select";
-  if (ACTABLE.has(node.role)) return "Click";
-  return undefined;
-}
-
-/** The ids of the rows backed by a real `<select>`, with option rows to pick
- *  from. Worked out once per tree read rather than per row and key press. */
-function nativeSelectIds(nodes: Map<string, NativeNode>): Set<string> {
-  const ids = new Set<string>();
-  for (const node of nodes.values()) {
-    if (nativeSelectOptions(node, nodes).length > 0) ids.add(node.id);
-  }
-  return ids;
-}
-
-/** What a native row can do, in `interaction.actions`' vocabulary, so the
- *  shared filtered list can decide Enter/Activate and the stepper keys the
- *  same way it does for a DOM row. Mirrors `primaryLabel`'s precedence. */
-function nativeActions(node: NativeNode, selects: boolean): ActionType[] {
-  const actions: ActionType[] = [];
-  if (isTypableRole(node.role, node.states)) actions.push("type");
-  else if (selects) actions.push("select");
-  else if (ACTABLE.has(node.role)) actions.push("click");
-  if (isSteppableRole(node.role)) actions.push("increment", "decrement");
-  return actions;
-}
-
-function toListItem(node: NativeNode, selects: boolean): FilteredListItem {
-  const level = parseInt(node.properties?.["level"] ?? "", 10);
-  return {
-    id: node.id,
-    label: node.name || `(${node.role})`,
-    level: Number.isNaN(level) ? undefined : level,
-    states: describeStates(node.states),
-    actions: nativeActions(node, selects),
-  };
-}
-
-/** What type-ahead matches a row by — its name, else its role — the same
- *  fallback `useTreeKeyboard`'s `treeNodeTypeAheadLabel` uses for a DOM row
- *  (a native node has no text content of its own to fall between them). */
-function typeAheadLabel(node: NativeNode): string {
-  return node.name?.trim() || node.role;
+  /**
+   * The page's tab order, from the in-page walk. With it and
+   * `onViewChange`, the toolbar offers A11Y and TAB, and TAB shows the tab
+   * order in the tree's place.
+   */
+  tabOrder?: NativeTabOrder;
+  /** Which of the two shows. */
+  view?: NativeView;
+  onViewChange?: (view: NativeView) => void;
 }
 
 export function NativeTreeView({
@@ -264,7 +235,12 @@ export function NativeTreeView({
   followPageChanges = false,
   onToggleFollowPageChanges,
   showFullNames = false,
+  tabOrder,
+  view = "a11y",
+  onViewChange,
 }: NativeTreeViewProps) {
+  // The tab order, while it shows in the tree's place.
+  const shownTabOrder = view === "tab" ? tabOrder : undefined;
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [selectedId, setSelectedId] = useState<string | null>(null);
   // Bumped by an explicit gesture that re-selects a row — a click, or a pick
@@ -394,6 +370,8 @@ export function NativeTreeView({
       }
       setQuery("");
       setRoleFilter(null);
+      // The row is in the tree, which the tab order stands in for.
+      if (view === "tab") onViewChange?.("a11y");
       expandTo(nodeId);
       setSelectedId(nodeId);
       setFollowNonce((n) => n + 1);
@@ -407,7 +385,7 @@ export function NativeTreeView({
         requestAnimationFrame(() => treeRef.current?.focus());
       });
     },
-    [scopeRoot, parentOf, scopeTo, expandTo],
+    [scopeRoot, parentOf, scopeTo, expandTo, view, onViewChange],
   );
 
   // A pick result lands here from App.tsx's own message handler.
@@ -496,6 +474,9 @@ export function NativeTreeView({
     }
     return n;
   }, [search, scopeRoot, parentOf]);
+
+  // While the tab order shows, the count is of its stops the search leaves.
+  const tabMatchLabel = useTabMatchLabel(shownTabOrder, query);
 
   // With a role filter on, show the same flat list the DOM producer does
   // (`FilteredList`) instead of the tree: every direct match, in document
@@ -601,7 +582,8 @@ export function NativeTreeView({
   useEffect(() => {
     if (!pageFocus) return;
     const id = pageFocus.nodeId;
-    if (!nodes.has(id)) return;
+    // Nor while the tab order shows in the tree's place, as the list does.
+    if (!nodes.has(id) || shownTabOrder) return;
     if (roleFilter !== null || (hasFilter && !search.visibleIds.has(id))) {
       return;
     }
@@ -680,10 +662,10 @@ export function NativeTreeView({
   // whatever the modality, or keyboard scrolling would strand an outline
   // already shown. A row that goes away under a still pointer gets no
   // `mouseleave` at all — collapsed, dropped by a re-read, out of the
-  // rendered slice, the tree swapped for a role filter's list, or this view
-  // unmounted — so those end its hover too. Only an outline actually asked
-  // for (`hoverShown`) is reported cleared; a preview still waiting is just
-  // cancelled.
+  // rendered slice, the tree swapped for a role filter's list or the TAB
+  // view's, or this view unmounted — so those end its hover too. Only an
+  // outline actually asked for (`hoverShown`) is reported cleared; a preview
+  // still waiting is just cancelled.
   const { isMouseModality, markKeyboard } = useInputModality();
   const onHoverPreviewRef = useRef(onHoverPreview);
   onHoverPreviewRef.current = onHoverPreview;
@@ -728,10 +710,11 @@ export function NativeTreeView({
     if (hoverRowId.current === id) endHover();
   };
   useEffect(() => endHover, [endHover]);
-  // The list a role filter shows replaces the tree's rows outright.
+  // The list a role filter shows replaces the tree's rows outright, and so
+  // does the TAB view's.
   useEffect(() => {
-    if (roleFilter !== null) endHover();
-  }, [roleFilter, endHover]);
+    if (roleFilter !== null || shownTabOrder !== undefined) endHover();
+  }, [roleFilter, shownTabOrder !== undefined, endHover]);
   // The hovered row left the rendered rows without a `mouseleave`.
   useEffect(() => {
     const id = hoverRowId.current;
@@ -1053,13 +1036,21 @@ export function NativeTreeView({
 
   return (
     <>
-      <div class="sn-toolbar" role="toolbar" aria-label="Native tree controls">
+      {/* Wraps in a narrow panel, as the in-page tree's toolbar does
+          (toolbar.css), now that it holds a view toggle too. */}
+      <div
+        class="sn-toolbar sn-toolbar--wrap"
+        role="toolbar"
+        aria-label="Native tree controls"
+      >
         <input
           ref={searchInputRef}
           class="sn-search"
           type="search"
           placeholder="Search nodes..."
-          aria-label="Search native tree nodes"
+          aria-label={
+            shownTabOrder ? "Search tab stops" : "Search native tree nodes"
+          }
           value={query}
           onInput={(e) => setQuery((e.target as HTMLInputElement).value)}
         />
@@ -1068,8 +1059,13 @@ export function NativeTreeView({
             already holding text is not announced by most screen
             reader/browser pairs. */}
         <span class="sn-search-count" aria-live="polite">
-          {hasFilter && matchCountLabel(matchCount, scopeRoot !== null)}
+          {shownTabOrder
+            ? tabMatchLabel
+            : hasFilter && matchCountLabel(matchCount, scopeRoot !== null)}
         </span>
+        {tabOrder && onViewChange && (
+          <NativeViewToggle view={view} onViewChange={onViewChange} />
+        )}
         <button
           class="sn-toolbar-btn"
           onClick={onRefresh}
@@ -1082,7 +1078,7 @@ export function NativeTreeView({
         <button
           class="sn-toolbar-btn"
           onClick={expandAll}
-          disabled={nodes.size === 0}
+          disabled={nodes.size === 0 || shownTabOrder !== undefined}
           aria-label="Expand all"
           title="Expand all"
         >
@@ -1091,7 +1087,7 @@ export function NativeTreeView({
         <button
           class="sn-toolbar-btn"
           onClick={collapseAll}
-          disabled={nodes.size === 0}
+          disabled={nodes.size === 0 || shownTabOrder !== undefined}
           aria-label="Collapse all"
           title="Collapse all"
         >
@@ -1119,7 +1115,7 @@ export function NativeTreeView({
             key={key}
             class="sn-filter-btn"
             aria-pressed={roleFilter === key}
-            disabled={nodes.size === 0}
+            disabled={nodes.size === 0 || shownTabOrder !== undefined}
             onClick={() => setRoleFilter(roleFilter === key ? null : key)}
           >
             {ROLE_FILTER_LABELS[key]}
@@ -1141,7 +1137,8 @@ export function NativeTreeView({
         </div>
       )}
 
-      {scopeRoot && (
+      {/* The scope is the tree's; the tab order covers the whole page. */}
+      {scopeRoot && !shownTabOrder && (
         <ScopeBar
           path={scopePath(
             scopeRoot,
@@ -1157,7 +1154,14 @@ export function NativeTreeView({
         />
       )}
 
-      {roleFilter !== null ? (
+      {shownTabOrder ? (
+        <TabSequenceView
+          {...shownTabOrder}
+          query={query}
+          onFocusSearch={() => searchInputRef.current?.focus()}
+          listRef={listRef}
+        />
+      ) : roleFilter !== null ? (
         <FilteredListView
           items={listItems}
           roleFilter={roleFilter}
@@ -1445,13 +1449,7 @@ export function NativeTreeView({
 
               {visibleIds.length === 0 && (
                 <div class="sn-empty">
-                  {capability && !capability.native
-                    ? "Native unavailable on this page"
-                    : nodes.size === 0
-                      ? "No native tree loaded yet — hit refresh"
-                      : hasFilter
-                        ? `No matches${query ? ` for "${query}"` : ""}`
-                        : "Empty tree"}
+                  {emptyTreeText(capability, nodes.size, hasFilter, query)}
                 </div>
               )}
             </div>

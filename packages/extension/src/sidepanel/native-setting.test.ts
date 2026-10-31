@@ -1119,11 +1119,12 @@ describe("native mode on by default", () => {
       mount({ storage: { [NOTICE_SEEN]: true }, read: NATIVE_TREE });
       await flush();
       await showTab(7);
-      // The in-page tree is left on its Tab view, then the native tree shown.
+      // The in-page tree is left on a role filter's list, then the native
+      // tree shown. (Not on its TAB view, which Chrome's tree shares.)
       const inPage = (await treeChoice("In-page tree"))!;
       act(() => inPage.click());
       await flush();
-      act(() => buttonNamed("TAB")!.click());
+      act(() => buttonNamed("Headings")!.click());
       await flush();
       act(() => buttonNamed("Chrome's tree")!.click());
       await flush();
@@ -1136,6 +1137,87 @@ describe("native mode on by default", () => {
 
       expect(container.querySelector('[role="tree"]')).toBeNull();
       expect(document.activeElement?.getAttribute("role")).toBe("listbox");
+    });
+
+    it("keeps the TAB view across the trees, and focus on its list", async () => {
+      mount({ storage: { [NOTICE_SEEN]: true }, read: NATIVE_TREE });
+      await flush();
+      await showTab(7);
+      // The in-page tree is left on its TAB view, then the native tree shown.
+      const inPage = (await treeChoice("In-page tree"))!;
+      act(() => inPage.click());
+      await flush();
+      act(() => buttonNamed("TAB")!.click());
+      await flush();
+      act(() => buttonNamed("Chrome's tree")!.click());
+      await flush();
+      act(() => buttonNamed("Settings ▾")!.click());
+      await flush();
+
+      // Chrome's tree shows the same view: its TAB is the in-page walk's.
+      const nativeView = container.querySelector(
+        '[role="group"][aria-label="Native tree view"]',
+      );
+      expect(
+        nativeView?.querySelector('[aria-pressed="true"]')?.textContent,
+      ).toBe("TAB");
+      expect(container.querySelector('[role="tree"]')).toBeNull();
+      const list = container.querySelector<HTMLElement>(
+        '[role="listbox"][aria-label="Tab sequence"]',
+      );
+      act(() => list!.focus());
+
+      await writtenElsewhere({ [SETTING]: false });
+
+      expect(viewToggle()).not.toBeNull();
+      expect(document.activeElement?.getAttribute("aria-label")).toBe(
+        "Tab sequence",
+      );
+      expect(document.activeElement?.isConnected).toBe(true);
+    });
+
+    it("goes back from Chrome's tree's TAB to the in-page view last on", async () => {
+      mount({ storage: { [NOTICE_SEEN]: true }, read: NATIVE_TREE });
+      await flush();
+      await showTab(7);
+      // The in-page tree is left on its DOM view, then the native tree shown.
+      const inPage = (await treeChoice("In-page tree"))!;
+      act(() => inPage.click());
+      await flush();
+      act(() => buttonNamed("DOM")!.click());
+      await flush();
+      act(() => buttonNamed("Chrome's tree")!.click());
+      await flush();
+      act(() => buttonNamed("Settings ▾")!.click());
+      await flush();
+      const nativeView = (name: "A11Y" | "TAB") =>
+        [
+          ...container.querySelectorAll(
+            '[role="group"][aria-label="Native tree view"] button',
+          ),
+        ].find((b) => b.textContent === name) as HTMLButtonElement;
+      const viewModesSent = () => sentOfType("SET_VIEW_MODE").length;
+
+      // A11Y while the tree shows asks the page for nothing.
+      const sent = viewModesSent();
+      act(() => nativeView("A11Y").click());
+      await flush();
+      expect(viewModesSent()).toBe(sent);
+
+      act(() => nativeView("TAB").click());
+      await flush();
+      act(() => nativeView("A11Y").click());
+      await flush();
+      expect(container.querySelector('[role="tree"]')).not.toBeNull();
+
+      // The in-page tree's DOM view is where it was left.
+      act(() => buttonNamed("Settings ▾")!.click());
+      await flush();
+      act(() => buttonNamed("In-page tree")!.click());
+      await flush();
+      expect(
+        viewToggle()?.querySelector('[aria-pressed="true"]')?.textContent,
+      ).toBe("DOM");
     });
 
     it("puts focus back when the first read falls back to the DOM tree", async () => {

@@ -28,6 +28,34 @@ function tabindexOf(node: DomSemanticNode): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
+/**
+ * The tab stops under `rootId`, in tab order, that `query` matches by name,
+ * text, role or tag: the list this view shows, and what a toolbar's match
+ * count counts.
+ */
+export function tabStops(
+  nodes: Map<string, SemanticNode>,
+  rootId: string,
+  query: string,
+): DomSemanticNode[] {
+  // The panel only renders DOM-produced trees, so every node has all facets.
+  const seq = getTabSequence({ nodes, rootId }) as DomSemanticNode[];
+  if (!query.trim()) return seq;
+  const lq = query.toLowerCase();
+  return seq.filter((node) => {
+    const name = (node.a11y.name || "").toLowerCase();
+    const text = (node.dom.textContent || "").toLowerCase();
+    const role = (node.a11y.role || "").toLowerCase();
+    const tag = (node.dom.tagName || "").toLowerCase();
+    return (
+      name.includes(lq) ||
+      text.includes(lq) ||
+      role.includes(lq) ||
+      tag.includes(lq)
+    );
+  });
+}
+
 interface TabSequenceViewProps {
   nodes: Map<string, SemanticNode>;
   rootId: string;
@@ -66,24 +94,10 @@ export function TabSequenceView({
   );
   const typeAhead = useRef(createTypeAheadBuffer());
 
-  const items = useMemo(() => {
-    // The panel only renders DOM-produced trees, so every node has all facets.
-    const seq = getTabSequence({ nodes, rootId }) as DomSemanticNode[];
-    if (!query.trim()) return seq;
-    const lq = query.toLowerCase();
-    return seq.filter((node) => {
-      const name = (node.a11y.name || "").toLowerCase();
-      const text = (node.dom.textContent || "").toLowerCase();
-      const role = (node.a11y.role || "").toLowerCase();
-      const tag = (node.dom.tagName || "").toLowerCase();
-      return (
-        name.includes(lq) ||
-        text.includes(lq) ||
-        role.includes(lq) ||
-        tag.includes(lq)
-      );
-    });
-  }, [nodes, rootId, query]);
+  const items = useMemo(
+    () => tabStops(nodes, rootId, query),
+    [nodes, rootId, query],
+  );
 
   useEffect(() => {
     setSelectedIndex(0);
