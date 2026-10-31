@@ -19,7 +19,7 @@ const FIXTURE = "frame-placement.html";
 test("a frame lands under the <iframe> its URL names, though hidden frames announced before it", async ({
   nav,
 }) => {
-  const { page, tabId } = await nav.open(FIXTURE);
+  const { page, tabId } = await nav.openInPage(FIXTURE);
   // Both hidden frames are in the page's tree, so both announced. Asking
   // each frame for its tree again leaves the order they first announced in
   // as it was.

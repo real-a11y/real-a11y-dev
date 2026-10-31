@@ -8,7 +8,7 @@ priority: P0
 status: Active
 validFrom: "extension ≥ 0.1.16. On 0.1.15 or earlier there is no native mode, so this row is Blocked, not Fail. Load unpacked from packages/extension/dist"
 validUntil: ""
-expected: "a fresh profile reads the native tree with nothing asked, and Chrome's bar names the extension; a note explains the bar once; Settings holds the choice of tree, leaving the toolbar at most one DOM button; Turn off and Settings turn native mode off, and nothing attaches while it is off; the setting survives reopening the panel and restarting Chrome; Cancel on the bar is respected; a change in one window holds in every window, and each window's panel shows only its own window's tab, or a popup opened from it; page focus selects its row in Chrome's tree without the bar, inside frames too; what a click through the tree loads a moment later, and a change inside a shown frame with Follow page changes on, reach Chrome's tree without Refresh; its state badges take the in-page tree's colours; its TAB view lists the page's tab stops in the order Tab visits them, with no bar"
+expected: "a fresh profile reads the native tree with nothing asked, and Chrome's bar names the extension; a note explains the bar once; Settings holds the choice of tree, leaving the toolbar at most one DOM button; Turn off and Settings turn native mode off, and nothing attaches while it is off; the setting survives reopening the panel and restarting Chrome; Cancel on the bar is respected; a change in one window holds in every window, and each window's panel shows only its own window's tab, or a popup opened from it; page focus selects its row in Chrome's tree without the bar, inside frames too; what a click through the tree loads a moment later, and a change inside a shown frame with Follow page changes on, reach Chrome's tree without Refresh; its state badges take the in-page tree's colours; its TAB view lists the page's tab stops in the order Tab visits them, with no bar; the in-page tree comes back from Chrome's tree with its scope and selection"
 twin: D6
 notion: ""
 ---
@@ -139,7 +139,9 @@ tree has no **TAB**, and the tab order is only in the in-page tree)
     `packages/extension/e2e/fixtures/tab-order.html`, served over http), wait for
     Chrome's bar to go, then press **TAB** in the native toolbar. The tree gives
     way to the page's tab stops, numbered in the order `Tab` visits them, a
-    positive `tabindex` first, and Chrome's bar doesn't come up for it. Click into
+    positive `tabindex` first, and Chrome's bar doesn't come up for it. (From
+    extension 0.1.18 the list may say _Reading the page's tab order…_ for a
+    moment first: while Chrome's tree shows, the page isn't read for it.) Click into
     the page and press `Tab` through it: focus visits the stops in the list's
     order. Type in the search box: the list narrows, and the count says how many
     stops are left. Select a stop: the page outlines and focuses it. Arm the
@@ -147,6 +149,18 @@ tree has no **TAB**, and the tab order is only in the in-page tree)
     row selected. Press **TAB** again, then choose **In-page tree** in
     **Settings ▾**: it shows its own TAB view, and back on **Chrome's tree** TAB
     is still on. Press **A11Y**: the tree is back.
+
+**The in-page tree, read when it shows** (from extension 0.1.18, unreleased;
+on 0.1.17 or earlier the page is read for it whichever tree shows)
+
+20. On **Chrome's tree**, on a long page with an `<iframe>` (a news article with
+    an embedded video), choose **In-page tree** in **Settings ▾**: it says
+    _Reading the page…_ for a moment, then shows, the frame's content under its
+    `<iframe>`. Double-click a row with rows under it, so the tree shows only
+    that part, and select a row inside it. Choose **Chrome's tree**, scroll the
+    page a little, then choose **In-page tree** again: once it is read, it shows
+    the same part, with the same row selected. Back on **Chrome's tree**, with
+    **⟳** on, change something inside the frame: its rows update, as in step 17.
 
 ## Expected
 
@@ -184,6 +198,9 @@ tree has no **TAB**, and the tab order is only in the in-page tree)
 - **Chrome's tree shows the tab order** (step 19): its TAB view lists the stops in
   the order `Tab` visits them, with no bar, a selected stop gets the page's focus,
   a pick goes back to the tree, and the view holds across the choice of tree
+- **The in-page tree comes back as it was** (step 20): read when it is chosen,
+  frames and all, with the part of the tree it showed and the selected row, and
+  a change inside a frame still reaches Chrome's tree
 
 ## Why this exists
 
@@ -202,6 +219,12 @@ first.
 
 Steps 11–12 are here because each window has its own side panel, and a setting
 changed in one has to reach panels already open in the others.
+
+Step 20 is here because, from 0.1.18, the page reads the in-page tree only while
+it or a TAB view shows: while Chrome's tree shows, each frame sends only where its
+frames are and when it changed. The step checks that the in-page tree still comes
+back whole and as the user left it, and that Chrome's tree still hears a frame's
+changes from that much.
 
 Step 19 is here because Chrome's tree carries no tab order (`tabindex` never reaches
 a native node): its TAB view is the in-page reading's, the one part of Chrome's tree

@@ -5,6 +5,9 @@
  * pulling in the Chrome APIs that the background uses elsewhere.
  */
 
+import type { FieldState } from "./field-state.js";
+import type { TreeRequest } from "./types.js";
+
 // ---- Node ID prefixing to avoid collisions between frames ----
 
 /**
@@ -101,6 +104,22 @@ export interface PlannedTabMessage {
   body: { type: string; payload?: unknown };
 }
 
+/** Tell a frame to observe, sending `tree`, if given. */
+function observe(
+  tabId: number,
+  frameId: number,
+  tree: TreeRequest | undefined,
+): PlannedTabMessage {
+  return {
+    tabId,
+    frameId,
+    body: {
+      type: "SET_OBSERVING",
+      payload: { enabled: true, ...(tree ? { tree } : {}) },
+    },
+  };
+}
+
 /**
  * Decide what the background should send to a content script that just
  * announced itself via `FRAME_TREE_DATA`.
@@ -127,6 +146,8 @@ export function planFrameAnnouncementResponse(opts: {
   sidepanelConnected: boolean;
   curtainOn: boolean;
   focusTracker: boolean;
+  /** The tree the panel last asked the tab for, if it has. */
+  tree?: TreeRequest;
 }): PlannedTabMessage[] {
   const out: PlannedTabMessage[] = [];
 
@@ -141,11 +162,9 @@ export function planFrameAnnouncementResponse(opts: {
     // Re-assert observation (idempotent — content's startObserving() early-
     // returns if already observing) so a frame that keeps announcing after a
     // service-worker revival stays armed, and re-assert the focus tracker.
-    out.push({
-      tabId: opts.tabId,
-      frameId: opts.frameId,
-      body: { type: "SET_OBSERVING", payload: { enabled: true } },
-    });
+    // With the tree the panel asked for: a frame that sent another, having
+    // missed the request, sends this one.
+    out.push(observe(opts.tabId, opts.frameId, opts.tree));
     out.push({
       tabId: opts.tabId,
       frameId: opts.frameId,
@@ -176,14 +195,13 @@ export function planFrameHello(opts: {
   frameId: number;
   sidepanelConnected: boolean;
   focusTracker: boolean;
+  /** The tree the panel last asked the tab for, if it has: the one a frame
+   *  loading after the request sends. */
+  tree?: TreeRequest;
 }): PlannedTabMessage[] {
   if (!opts.sidepanelConnected) return [];
   return [
-    {
-      tabId: opts.tabId,
-      frameId: opts.frameId,
-      body: { type: "SET_OBSERVING", payload: { enabled: true } },
-    },
+    observe(opts.tabId, opts.frameId, opts.tree),
     {
       tabId: opts.tabId,
       frameId: opts.frameId,
@@ -587,4 +605,28 @@ export function isUnreachablePageResponse(response: unknown): boolean {
   if (typeof response !== "object" || response === null) return false;
   const reply = response as { success?: unknown; error?: unknown };
   return reply.success === false && reply.error === RESTRICTED_PAGE_ERROR;
+}
+
+/**
+ * Narrow a chrome.runtime.sendMessage reply that reports `{ success: true }`.
+ * The callback can receive `undefined` when chrome.runtime.lastError is set
+ * (e.g. the MV3 service worker was torn down before responding) — never
+ * dereference the reply without this (or equivalent) guard.
+ */
+export function isSuccessResponse(
+  response: unknown,
+): response is { success: true } {
+  return (
+    typeof response === "object" &&
+    response !== null &&
+    "success" in response &&
+    (response as { success: unknown }).success === true
+  );
+}
+
+/** GET_FIELD_STATE success reply — same undefined-safe gate as isSuccessResponse. */
+export function isFieldStateSuccess(
+  response: unknown,
+): response is Extract<FieldState, { success: true }> {
+  return isSuccessResponse(response);
 }

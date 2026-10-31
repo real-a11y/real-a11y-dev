@@ -70,6 +70,8 @@ interface TabSequenceViewProps {
   onExitScope?: () => void;
   /** Receives the listbox element, for a caller that hands it focus. */
   listRef?: MutableRef<HTMLElement | null>;
+  /** `nodes` is no tree yet: the page is still to send it. */
+  pending?: boolean;
 }
 
 export function TabSequenceView({
@@ -82,6 +84,7 @@ export function TabSequenceView({
   scoped = false,
   onExitScope,
   listRef: outerListRef,
+  pending = false,
 }: TabSequenceViewProps) {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const listRef = useRef<HTMLDivElement | null>(null);
@@ -280,9 +283,11 @@ export function TabSequenceView({
 
         {items.length === 0 && (
           <div class="sn-empty">
-            {query
-              ? `No tab stops matching "${query}"`
-              : "No focusable elements found"}
+            {pending
+              ? "Reading the page's tab order…"
+              : query
+                ? `No tab stops matching "${query}"`
+                : "No focusable elements found"}
           </div>
         )}
       </div>

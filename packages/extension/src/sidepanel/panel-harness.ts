@@ -23,6 +23,8 @@ export interface ChromeMock {
   writeStorage: (items: Record<string, unknown>) => void;
   /** What the stand-in `chrome.storage.local` holds right now. */
   stored: Record<string, unknown>;
+  /** Drop the panel's port, as a service worker that stops does. */
+  dropPort: () => void;
 }
 
 export interface ChromeMockOptions {
@@ -49,15 +51,23 @@ export function installChromeMock(options: ChromeMockOptions = {}): ChromeMock {
   ) => void;
   const listeners: Listener[] = [];
   const sent: PanelToContent[] = [];
+  // Each port's disconnect listeners, the latest port's last.
+  const ports: Array<Array<() => void>> = [];
 
   const runtime = {
     id: EXTENSION_ID,
     lastError: undefined,
     getManifest: () => ({ version: "0.0.0-test" }),
-    connect: () => ({
-      onDisconnect: { addListener: () => {} },
-      disconnect: () => {},
-    }),
+    connect: () => {
+      const onDisconnect: Array<() => void> = [];
+      ports.push(onDisconnect);
+      return {
+        onDisconnect: {
+          addListener: (fn: () => void) => onDisconnect.push(fn),
+        },
+        disconnect: () => {},
+      };
+    },
     sendMessage: (
       message: PanelToContent,
       responseCallback?: (response: unknown) => void,
@@ -135,6 +145,7 @@ export function installChromeMock(options: ChromeMockOptions = {}): ChromeMock {
     sent,
     writeStorage,
     stored,
+    dropPort: () => ports.at(-1)?.forEach((fn) => fn()),
     emit: (message) => {
       // The panel's trust gate reads `sender.id`; the routing gate reads
       // `sender.tab?.id` alongside the message's own `tabId`.

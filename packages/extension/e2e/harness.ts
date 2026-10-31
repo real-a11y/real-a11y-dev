@@ -248,6 +248,8 @@ async function launchDogfoodExtension(
   const serviceWorker =
     existing ?? (await context.waitForEvent("serviceworker"));
   const extensionId = new URL(serviceWorker.url()).host;
+  // Once the worker's own script has run: it can be found before then.
+  await expect.poll(() => serviceWorker.evaluate(keepPanelTrees)).toBe(true);
 
   const panel = await context.newPage();
   // Before the panel's own scripts, on every load of this page: count the
@@ -283,6 +285,44 @@ async function launchDogfoodExtension(
       await rm(userDataDir, { recursive: true, force: true });
     },
   };
+}
+
+/**
+ * Runs in the service worker, beside the background: the tree the panel
+ * asks each tab for, sent and kept the background's way. The background
+ * reads a panel-as-tab's commands as a page's (see `domTree`), so it would
+ * neither send these two to the tab's frames nor keep the tree each tab's
+ * panel last asked for, which it gives a frame that says hello after
+ * (`panelTrees`): a frame loaded since would send only its skeleton. The
+ * background still answers each hello itself, arming the frame.
+ */
+function keepPanelTrees(): boolean {
+  if (!globalThis.chrome?.runtime?.onMessage) return false;
+  const asked = new Map<number, unknown>();
+  chrome.runtime.onMessage.addListener((message, sender) => {
+    const m = message as { type?: unknown; tabId?: unknown; payload?: unknown };
+    const tabId = sender.tab?.id;
+    if (
+      (m?.type === "REQUEST_TREE" || m?.type === "SET_VIEW_MODE") &&
+      typeof m.tabId === "number"
+    ) {
+      asked.set(m.tabId, m.payload);
+      void chrome.tabs.sendMessage(m.tabId, message).catch(() => {});
+    } else if (m?.type === "FRAME_HELLO" && tabId !== undefined) {
+      const tree = asked.get(tabId);
+      if (tree === undefined) return false;
+      void chrome.tabs
+        .sendMessage(
+          tabId,
+          { type: "SET_VIEW_MODE", payload: tree },
+          { frameId: sender.frameId ?? 0 },
+        )
+        .catch(() => {});
+    }
+    // Only listens: the background's own listener answers.
+    return false;
+  });
+  return true;
 }
 
 /** How NATIVE_READ behaves for the panel, per `sessionStorage`, which
@@ -494,6 +534,23 @@ export class NativeHarness {
       .poll(() => this.panel.locator(".sn-node").count(), { timeout: 20_000 })
       .toBeGreaterThan(0);
     return page;
+  }
+
+  /**
+   * Open a fixture, bring it forward, reload the panel onto it and show the
+   * in-page tree: choose it in Settings and wait for its first rows. Its
+   * frames then send the panel their whole trees, those that load later
+   * too, where they send only their skeletons while Chrome's tree shows.
+   */
+  async openInPage(fixture: string): Promise<FixtureTab> {
+    const tab = await this.open(fixture);
+    await tab.page.bringToFront();
+    await this.panel.reload();
+    await this.chooseTree("In-page tree");
+    await expect
+      .poll(() => this.panel.locator(".sn-node").count(), { timeout: 20_000 })
+      .toBeGreaterThan(0);
+    return tab;
   }
 
   /** Chrome's tree on screen: the native producer's own. */

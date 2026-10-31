@@ -43,7 +43,6 @@ import {
   useMemo,
 } from "preact/hooks";
 
-import type { FieldState } from "../field-state.js";
 import {
   blockedBy,
   explainUnavailable,
@@ -70,15 +69,23 @@ import {
   nativeModeOn,
 } from "../native/setting.js";
 import {
+  isFieldStateSuccess,
   isPanelWindow,
+  isSuccessResponse,
   isTrustedSender,
   isUnreachablePageResponse,
   shouldPanelAcceptMessage,
 } from "../routing.js";
-import type { ContentToPanel, PanelToContent } from "../types.js";
+import type { ContentToPanel, PanelToContent, TreeRequest } from "../types.js";
 
 import { describeAction, describeSelection } from "./action-feedback.js";
 import { ControlsChip, JUMP_FLASH_MS } from "./ControlsChip.js";
+import {
+  asDom,
+  getDisplayRole,
+  showsTextContent,
+  showsTextPreview,
+} from "./dom-rows.js";
 import {
   buildExportMarkdown,
   pageLabel,
@@ -177,107 +184,9 @@ const sleep = (ms: number) => new Promise((res) => setTimeout(res, ms));
  *  waiting on a chain that never settles. */
 const MAX_NAV_RECOVERY_HOPS = 5;
 
-/**
- * Map HTML tag names to a human-readable display role when the ARIA role
- * ("generic" / "group") doesn't convey enough semantic information.
- *
- * Elements that already have a descriptive ARIA role (heading, button, link,
- * checkbox, etc.) are NOT listed here — the ARIA role is already meaningful.
- *
- * We use the HTML tag name as the display label for elements whose ARIA role
- * is "generic" or "group" but whose tag carries real semantic meaning,
- * following the principle of showing only valid HTML names (no invented labels).
- */
-const TAG_DISPLAY_OVERRIDES: Record<string, string> = {
-  // Structural elements that map to "group" in ARIA
-  details: "details",
-  address: "address",
-  hgroup: "hgroup",
-  optgroup: "optgroup",
-  // Structural wrapper that frames a self-contained piece of content
-  iframe: "iframe",
-  // Form grouping element (has its own name from <legend>)
-  fieldset: "fieldset",
-  // Inline/block elements that map to "generic" in ARIA
-  // but carry meaningful HTML semantics worth surfacing
-  pre: "pre",
-  abbr: "abbr",
-  kbd: "kbd",
-  samp: "samp",
-  q: "q",
-  var: "var",
-  data: "data",
-  small: "small",
-  b: "b",
-  i: "i",
-  u: "u",
-  s: "s",
-  figcaption: "figcaption",
-  // Media / embedded content
-  video: "video",
-  audio: "audio",
-  canvas: "canvas",
-  picture: "picture",
-};
-
-/**
- * The panel only ever renders DOM-produced trees, so every node carries all
- * facets. Narrow a looked-up node to {@link DomSemanticNode} at read sites that
- * need `dom` / `interaction` / `ui` (the `nodes` Map itself stays
- * `SemanticNode`-typed so it can still be passed to core helpers).
- */
-const asDom = (n: SemanticNode | undefined): DomSemanticNode | undefined =>
-  n as DomSemanticNode | undefined;
-
-/** Return the role label to display for a node in A11Y view */
-function getDisplayRole(node: DomSemanticNode): string {
-  const override = TAG_DISPLAY_OVERRIDES[node.dom.tagName];
-  if (override) return override;
-  return node.a11y.role;
-}
-
-/**
- * Whether a row may print the node's own text. Never a `<textarea>`'s, in
- * either view: its text content is its markup DEFAULT, not what it holds now
- * (the value line shows that), and for a sensitive field
- * (`autocomplete="one-time-code"`) the default is the secret itself.
- */
-function showsTextContent(node: DomSemanticNode): boolean {
-  return node.dom.tagName !== "textarea";
-}
-
-/**
- * Whether the A11y view may print a leaf's text preview. Not for a node with
- * an announced value (an editor, an ARIA textbox or combobox, a slider's
- * fallback text): the value line already shows what a screen reader reads,
- * and the two are computed differently (block spacing), so comparing them
- * misses and an editor's text prints twice.
- */
-function showsTextPreview(node: DomSemanticNode): boolean {
-  return node.a11y.value === undefined && showsTextContent(node);
-}
-
-/**
- * Narrow a chrome.runtime.sendMessage reply that reports `{ success: true }`.
- * The callback can receive `undefined` when chrome.runtime.lastError is set
- * (e.g. the MV3 service worker was torn down before responding) — never
- * dereference the reply without this (or equivalent) guard.
- */
-function isSuccessResponse(response: unknown): response is { success: true } {
-  return (
-    typeof response === "object" &&
-    response !== null &&
-    "success" in response &&
-    (response as { success: unknown }).success === true
-  );
-}
-
-/** GET_FIELD_STATE success reply — same undefined-safe gate as isSuccessResponse. */
-function isFieldStateSuccess(
-  response: unknown,
-): response is Extract<FieldState, { success: true }> {
-  return isSuccessResponse(response);
-}
+/** Chrome's TAB view's tree while the page is still to send it: the one
+ *  kept has the stops the page had, not those it has. */
+const NO_NODES = new Map<string, SemanticNode>();
 
 /** What turning native mode off says, here or from another window: a panel
  *  waiting for a page has no in-page tree on screen to point at. */
@@ -304,6 +213,8 @@ export function App() {
   }, [viewMode]);
   const [nodes, setNodes] = useState<Map<string, SemanticNode>>(new Map());
   const [rootId, setRootId] = useState<string>("");
+  // The page sent its frames' skeleton, not its tree (see `framesOnly`).
+  const [treePending, setTreePending] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [renderCount, forceRender] = useState(0);
   const [connected, setConnected] = useState(false);
@@ -384,8 +295,12 @@ export function App() {
   // The same value for callbacks, updated with the state rather than on the
   // next render: two storage changes can land before that render.
   const nativeModeEnabledRef = useRef(false);
+  // Whether the panel has learned the setting, or given up learning it and
+  // stays on the DOM tree: until then, it may be on.
+  const [nativeSettingKnown, setNativeSettingKnown] = useState(false);
   const setNativeModeEnabledState = useCallback((on: boolean) => {
     nativeModeEnabledRef.current = on;
+    setNativeSettingKnown(true);
     setNativeModeEnabledRaw(on);
   }, []);
   // The Settings menu (the "Read pages through Chrome" switch), and the turn
@@ -436,10 +351,11 @@ export function App() {
     // attach gate refuses what this reads as on, and the carried-over value
     // reaches this panel as a change in storage.)
     const fromStorage = () => {
-      void chrome.storage?.local
-        ?.get(NATIVE_MODE_KEY)
+      if (!chrome.storage?.local) return setNativeSettingKnown(true);
+      void chrome.storage.local
+        .get(NATIVE_MODE_KEY)
         .then((r) => apply(nativeModeOn(r[NATIVE_MODE_KEY])))
-        .catch(() => {});
+        .catch(() => setNativeSettingKnown(true));
     };
     void chrome.runtime
       .sendMessage({ type: "NATIVE_FLAG_GET" })
@@ -819,6 +735,23 @@ export function App() {
   useEffect(() => {
     myTabIdRef.current = myTabId;
   }, [myTabId]);
+  // Chrome's tree needs only each frame's skeleton (`TreeRequest`): the
+  // in-page walk's whole tree is wanted while its tree or a TAB view shows.
+  // So is Chrome's tree's, until the setting is read, and while the default
+  // may still show it on this tab.
+  const nativeAhead =
+    (!nativeSettingKnown || nativeModeEnabled) &&
+    !hasAppliedNativeDefault.current &&
+    !nativeDefaultFailedOn.current.has(myTabId ?? -1);
+  const framesOnly =
+    viewMode !== "tab" && (producer === "native" || nativeAhead);
+  const framesOnlyRef = useRef(framesOnly);
+  framesOnlyRef.current = framesOnly;
+  /** The tree the panel wants of the page now. */
+  const askedTree = (): TreeRequest => ({
+    viewMode: viewModeRef.current,
+    framesOnly: framesOnlyRef.current,
+  });
   // The window this panel is in: an ACTIVE_TAB_CHANGED for another window is
   // that window's panel's (`isPanelWindow`). `undefined` until the look-up
   // below answers. `null` where it can't be learned (no `chrome.tabs` to ask,
@@ -944,6 +877,7 @@ export function App() {
     (value: unknown) => {
       const on = nativeModeOn(value);
       settingLearned.current++;
+      setNativeSettingKnown(true);
       if (on === nativeModeEnabledRef.current) return;
       if (on) {
         // Not a gesture in this window. A panel that has shown a page
@@ -1166,8 +1100,9 @@ export function App() {
   // After every commit (`focusBeforeCommit`): if it took away the element
   // that had focus, and so left focus on the body, focus moves to the tree on
   // screen, or the list shown in its place (the Tab view, or either tree's
-  // role filter). While the panel waits for a page there is neither, and
-  // focus is left as a navigation leaves it. Focus anywhere else stays where
+  // role filter), or what holds the place of an in-page tree still to come.
+  // While the panel waits for a page there is none of them, and focus is
+  // left as a navigation leaves it. Focus anywhere else stays where
   // it is, and a panel where nothing had focus is left alone. A layout effect
   // rather than an effect, which waits for a paint: a panel in a window that
   // isn't in front can go without one for a long time.
@@ -1194,6 +1129,7 @@ export function App() {
     [
       document.querySelector<HTMLElement>('[role="tree"]'),
       document.querySelector<HTMLElement>('.sn-filtered-list[role="listbox"]'),
+      document.querySelector<HTMLElement>(".sn-tree-pending"),
     ]
       .find((el) => el?.isConnected)
       ?.focus();
@@ -1275,7 +1211,7 @@ export function App() {
   const sendTreeRequest = useCallback(
     (applyVerdict: boolean) => {
       sendToBoundTab(
-        { type: "REQUEST_TREE", payload: { viewMode: viewModeRef.current } },
+        { type: "REQUEST_TREE", payload: askedTree() },
         (response: unknown) => {
           // Read lastError even though the reply carries the verdict: an
           // unread one logs "Unchecked runtime.lastError" to the panel
@@ -1401,6 +1337,8 @@ export function App() {
           type: "SET_FOCUS_TRACKER",
           payload: { enabled: focusTrackerOnRef.current },
         });
+        // And the tree it wants, which such a worker forgot as well.
+        sendToBoundTab({ type: "SET_VIEW_MODE", payload: askedTree() });
       }
       port.onDisconnect.addListener(() => {
         // The MV3 service worker was torn down (its port drops while the panel
@@ -1509,9 +1447,10 @@ export function App() {
       }
 
       // The content script sends a tree after every burst of page changes,
-      // whichever producer the panel shows, so it is native auto-refresh's
-      // "the page changed" signal too: the top frame's, and that of every
-      // frame the page shows, which the native read covers as well.
+      // or its frame's skeleton while Chrome's tree shows, so it is native
+      // auto-refresh's "the page changed" signal too: the top frame's, and
+      // that of every frame the page shows, which the native read covers as
+      // well.
       if (
         message.type === "TREE_DATA" &&
         Array.isArray(message.payload.pageChangedAt) &&
@@ -1537,37 +1476,46 @@ export function App() {
       }
 
       if (message.type === "TREE_DATA" || message.type === "TREE_UPDATED") {
-        const nodeMap = new Map<string, SemanticNode>(message.payload.nodes);
+        // A skeleton says the page is there, its title, and where its frames
+        // are. It is no tree, and leaves the last one as it was, with its
+        // scope and selection, for the in-page tree to show again.
+        const skeleton =
+          message.type === "TREE_DATA" && message.payload.framesOnly === true;
+        setTreePending(skeleton);
+        if (!skeleton) {
+          const nodeMap = new Map<string, SemanticNode>(message.payload.nodes);
 
-        // Preserve user's expand/collapse state from previous tree
-        setNodes((prev) => {
-          for (const [id, node] of nodeMap.entries() as IterableIterator<
-            [string, DomSemanticNode]
-          >) {
-            const prevNode = asDom(prev.get(id));
-            if (prevNode) {
-              node.ui.expanded = prevNode.ui.expanded;
-              node.ui.selected = prevNode.ui.selected;
+          // Preserve user's expand/collapse state from previous tree
+          setNodes((prev) => {
+            for (const [id, node] of nodeMap.entries() as IterableIterator<
+              [string, DomSemanticNode]
+            >) {
+              const prevNode = asDom(prev.get(id));
+              if (prevNode) {
+                node.ui.expanded = prevNode.ui.expanded;
+                node.ui.selected = prevNode.ui.selected;
+              }
             }
-          }
-          return nodeMap;
-        });
+            return nodeMap;
+          });
 
-        setRootId(message.payload.rootId);
+          setRootId(message.payload.rootId);
+          // Reset scope if scoped node no longer exists in tree
+          setScopedRootId((prev) => (prev && !nodeMap.has(prev) ? null : prev));
+          // Same for the selection, and for the same reason. A selection that
+          // survives into a tree without it is worse than none: no row
+          // carries `aria-selected`, `aria-activedescendant` points at
+          // nothing, and `useTreeKeyboard` can't find an index to move from —
+          // so every key is dead until the user clicks a row. It goes stale
+          // exactly where the two views disagree, which is where switching
+          // them is useful: a generic wrapper picked in DOM view is pruned
+          // from the a11y tree.
+          setSelectedId((prev) => (prev && !nodeMap.has(prev) ? null : prev));
+        }
         setConnected(true);
         // A tree is proof of reach, whoever asked for it — a live update from
         // a frame that loaded late clears the verdict as well as a retry does.
         setPageUnreachable(false);
-        // Reset scope if scoped node no longer exists in tree
-        setScopedRootId((prev) => (prev && !nodeMap.has(prev) ? null : prev));
-        // Same for the selection, and for the same reason. A selection that
-        // survives into a tree without it is worse than none: no row carries
-        // `aria-selected`, `aria-activedescendant` points at nothing, and
-        // `useTreeKeyboard` can't find an index to move from — so every key
-        // is dead until the user clicks a row. It goes stale exactly where
-        // the two views disagree, which is where switching them is useful:
-        // a generic wrapper picked in DOM view is pruned from the a11y tree.
-        setSelectedId((prev) => (prev && !nodeMap.has(prev) ? null : prev));
         if (message.type === "TREE_DATA" && "pageTitle" in message.payload) {
           setPageTitle(message.payload.pageTitle || "");
           setPageUrl(message.payload.pageUrl || "");
@@ -1803,16 +1751,19 @@ export function App() {
     };
   }, [resetNativeState, announce, showTab, showWindowTab]);
 
-  const handleViewModeChange = useCallback(
-    (mode: TreeViewMode) => {
-      setViewMode(mode);
-      sendToBoundTab({
-        type: "SET_VIEW_MODE",
-        payload: { viewMode: mode },
-      });
-    },
-    [sendToBoundTab],
-  );
+  const handleViewModeChange = useCallback((mode: TreeViewMode) => {
+    setViewMode(mode);
+  }, []);
+  // The tree the page's frames send follows the view: a new one, or Chrome's
+  // tree shown or left. Binding a tab asks for it (`sendTreeRequest`), and
+  // until then there's nowhere to ask: with no tab named, it would go to the
+  // tab last switched to, in any window.
+  useEffect(() => {
+    if (myTabIdRef.current !== null) {
+      sendToBoundTab({ type: "SET_VIEW_MODE", payload: askedTree() });
+    }
+    // `askedTree` reads them through refs, current by now.
+  }, [viewMode, framesOnly, sendToBoundTab]);
 
   // Chrome's tree's A11Y is its tree, whichever of the in-page tree's DOM and
   // A11Y views was last on: leaving TAB goes back to that one, and pressing
@@ -4120,14 +4071,20 @@ export function App() {
           // order. One view mode for both trees, so TAB stays on when the
           // user switches tree in Settings.
           tabOrder={{
-            nodes,
+            nodes: treePending ? NO_NODES : nodes,
             rootId,
+            pending: treePending,
             onHighlight: handleSelect,
             onActivate: handleActivate,
           }}
           view={viewMode === "tab" ? "tab" : "a11y"}
           onViewChange={handleNativeViewChange}
         />
+      ) : treePending ? (
+        // Takes the focus a tree that went away left, until its own lands.
+        <div class="sn-empty sn-tree-pending" role="status" tabIndex={-1}>
+          Reading the page…
+        </div>
       ) : viewMode === "tab" ? (
         /* ---- Tab sequence view ---- */
         <TabSequenceView

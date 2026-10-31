@@ -1369,6 +1369,9 @@ describe("content: the mark a frame leaves on its <iframe>", () => {
 
   it("reports focus in a document written since the read as in this frame, naming no element", async () => {
     await load();
+    // The focus ring is drawn on the element, which jsdom can't scroll to.
+    const scrollIntoView = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = () => {};
     h.send({ type: "NATIVE_PAGE_KEYS", payload: { readId: "read-1" } });
     h.send({ type: "SET_FOCUS_TRACKER", payload: { enabled: true } });
     // What `document.open()` leaves: a root element no read has seen.
@@ -1389,6 +1392,8 @@ describe("content: the mark a frame leaves on its <iframe>", () => {
       ]);
     } finally {
       h.send({ type: "SET_FOCUS_TRACKER", payload: { enabled: false } });
+      Element.prototype.scrollIntoView = scrollIntoView;
+      document.getElementById("__sn-highlight")?.remove();
       html.remove();
       document.append(original);
       await vi.advanceTimersByTimeAsync(0);
@@ -1501,6 +1506,185 @@ describe("content: the marked frames inside a document", () => {
     h.send({ type: "REQUEST_TREE", payload: { viewMode: "a11y" } });
     const trees = h.sent.filter((m) => m.type === "FRAME_TREE_DATA");
     expect(trees[trees.length - 1]!.payload).not.toHaveProperty("embeds");
+  });
+});
+
+describe("content: the tree the panel asks for", () => {
+  let h: Harness;
+  let originalScrollIntoView: typeof Element.prototype.scrollIntoView;
+
+  beforeEach(async () => {
+    vi.useFakeTimers();
+    vi.resetModules();
+    // jsdom has no layout for the overlay's `scrollIntoView` to call into.
+    originalScrollIntoView = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = function () {};
+    document.title = "The page";
+    document.body.innerHTML =
+      `<main><h1>Title</h1><button id="save">Save</button>` +
+      `<iframe title="Video" src="https://video.test/embed"></iframe></main>`;
+    h = makeHarness();
+    (globalThis as { chrome?: unknown }).chrome = h.chromeMock;
+    await import("./content.js");
+  });
+
+  afterEach(() => {
+    h.send({ type: "SET_FOCUS_TRACKER", payload: { enabled: false } });
+    h.send({ type: "SET_OBSERVING", payload: { enabled: false } });
+    document.getElementById("__sn-highlight")?.remove();
+    vi.clearAllTimers();
+    vi.useRealTimers();
+    delete (globalThis as { chrome?: unknown }).chrome;
+    document.body.innerHTML = "";
+    document.title = "";
+    Element.prototype.scrollIntoView = originalScrollIntoView;
+  });
+
+  /** The payloads of the trees sent since the last call. */
+  function sentTrees(): Array<Record<string, unknown>> {
+    const trees = h.sent
+      .filter((m) => m.type === "FRAME_TREE_DATA")
+      .map((m) => m.payload as Record<string, unknown>);
+    h.sent.length = 0;
+    return trees;
+  }
+
+  /** The local names of a sent tree's elements. */
+  const tags = (tree: Record<string, unknown> | undefined) =>
+    (tree?.["nodes"] as Array<[string, SemanticNode]>).map(
+      ([, node]) => node.dom?.tagName,
+    );
+
+  const arm = (tree?: object) =>
+    h.send({
+      type: "SET_OBSERVING",
+      payload: { enabled: true, ...(tree ? { tree } : {}) },
+    });
+
+  /** The Save button, where only it measures itself: an overlay drawn for
+   *  it, and not for an element around it, is where it is. */
+  function saveButton(): HTMLElement {
+    const save = document.getElementById("save")!;
+    save.getBoundingClientRect = () => new DOMRect(45, 123, 67, 8);
+    return save;
+  }
+
+  /** Where the overlay was last drawn, if it was. */
+  function overlayAt() {
+    const overlay = document.getElementById("__sn-highlight");
+    if (overlay?.style.display !== "block") return undefined;
+    const { left, top, width, height } = overlay.style;
+    return { left, top, width, height };
+  }
+
+  /** The Save button's own place, as the overlay draws it. */
+  const SAVE_AT = { left: "45px", top: "123px", width: "67px", height: "8px" };
+
+  it("sends only its skeleton, with the page's title, until the panel asks for the tree", () => {
+    arm();
+    const [tree] = sentTrees();
+    expect(tree).toMatchObject({
+      framesOnly: true,
+      pageTitle: "The page",
+      frameUrl: location.href,
+    });
+    expect(tags(tree)).toEqual(["html", "iframe"]);
+  });
+
+  it("sends the whole tree the panel asks for, and its skeleton again once it asks for that", () => {
+    arm();
+    sentTrees();
+    h.send({
+      type: "SET_VIEW_MODE",
+      payload: { viewMode: "a11y", framesOnly: false },
+    });
+    let [tree] = sentTrees();
+    expect(tree).not.toHaveProperty("framesOnly");
+    expect(tags(tree)).toContain("button");
+    h.send({
+      type: "REQUEST_TREE",
+      payload: { viewMode: "dom", framesOnly: true },
+    });
+    [tree] = sentTrees();
+    expect(tree).toHaveProperty("framesOnly", true);
+    expect(tags(tree)).toEqual(["html", "iframe"]);
+  });
+
+  it("sends its skeleton for each change to the page, dated as a change", async () => {
+    arm();
+    sentTrees();
+    const changedAt = Date.now();
+    document.querySelector("main")!.append(document.createElement("iframe"));
+    await vi.advanceTimersByTimeAsync(2000);
+    const trees = sentTrees();
+    expect(trees.length).toBeGreaterThan(0);
+    expect(trees[0]).toMatchObject({ framesOnly: true, changedAt });
+    expect(tags(trees.at(-1))).toEqual(["html", "iframe", "iframe"]);
+  });
+
+  it("starts observing with the tree it is armed with", () => {
+    arm({ viewMode: "dom", framesOnly: false });
+    const trees = sentTrees();
+    expect(trees).toHaveLength(1);
+    expect(trees[0]).not.toHaveProperty("framesOnly");
+    // The DOM view: every element, the <main> around the rest among them.
+    expect(tags(trees[0])).toContain("main");
+  });
+
+  it("sends the tree it is armed with again where it sent another, and nothing more where it is the same", () => {
+    arm();
+    sentTrees();
+    arm({ viewMode: "a11y", framesOnly: true });
+    expect(sentTrees()).toEqual([]);
+    arm({ viewMode: "a11y", framesOnly: false });
+    const trees = sentTrees();
+    expect(trees).toHaveLength(1);
+    expect(trees[0]).toHaveProperty("reread", true);
+    expect(trees[0]).not.toHaveProperty("framesOnly");
+    expect(tags(trees[0])).toContain("button");
+  });
+
+  it("rings the focused element while it sends its skeleton, and names it to no tree", () => {
+    arm();
+    h.send({ type: "SET_FOCUS_TRACKER", payload: { enabled: true } });
+    h.sent.length = 0;
+    const save = saveButton();
+    save.dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
+    expect(overlayAt()).toEqual(SAVE_AT);
+    // The top frame, with no native read to number it: nothing to report.
+    expect(h.sent.filter((m) => m.type === "FOCUS_CHANGED")).toEqual([]);
+
+    // With the tree, focus names the button's node in it.
+    h.send({
+      type: "SET_VIEW_MODE",
+      payload: { viewMode: "a11y", framesOnly: false },
+    });
+    const button = (
+      sentTrees()[0]!["nodes"] as Array<[string, SemanticNode]>
+    ).find(([, node]) => node.dom?.tagName === "button")!;
+    save.dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
+    expect(
+      h.sent
+        .filter((m) => m.type === "FOCUS_CHANGED")
+        .map((m) => (m.payload as { nodeId?: string }).nodeId),
+    ).toEqual([button[0]]);
+  });
+
+  it("draws a native reveal's overlay on the element itself while it sends its skeleton", () => {
+    arm();
+    h.send({
+      type: "ARM_NATIVE_OVERLAY",
+      payload: { seq: 1, active: true, nonce: "n-1" },
+    });
+    saveButton().dispatchEvent(
+      new CustomEvent("real-a11y:native-reveal", {
+        bubbles: false,
+        composed: true,
+        detail: "n-1",
+      }),
+    );
+    expect(overlayAt()).toEqual(SAVE_AT);
+    h.send({ type: "ARM_NATIVE_OVERLAY", payload: { seq: 1, active: false } });
   });
 });
 
@@ -1905,8 +2089,12 @@ describe("content: a page that replaces its document", () => {
     h.sent.length = 0;
     await rewrite(`<button id="new">New</button>`);
     expect(h.sent).toEqual([]);
-    // Armed later, it reads the document that is there now.
-    h.send({ type: "SET_OBSERVING", payload: { enabled: true } });
+    // Armed later, it reads the document that is there now: the whole tree,
+    // as the panel last asked the tab for.
+    h.send({
+      type: "SET_OBSERVING",
+      payload: { enabled: true, tree: { viewMode: "a11y" } },
+    });
     expect(names(trees().at(-1)!)).toContain("New");
   });
 

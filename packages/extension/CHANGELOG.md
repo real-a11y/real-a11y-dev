@@ -100,6 +100,26 @@
   and a pick from the page goes back to Chrome's tree, with the picked row
   selected.
 
+- While Chrome's tree shows, the page no longer reads the in-page tree,
+  which isn't on screen then
+  ([#569](https://github.com/real-a11y/real-a11y-dev/pull/569)). Each frame
+  of the page used to walk itself and send its whole tree after every burst
+  of changes, whichever tree showed, for nothing the user could see. Now a
+  frame sends only what Chrome's tree needs of it: that the page is there,
+  its title, when it changed, and which of its frames the page shows. It
+  reads that off its root element and the elements holding frames, found in
+  one quick pass over the page, where the in-page tree works out every
+  element's role, name and states. On a page of some 2,400 elements, each
+  change cost the page about 37 ms of script and sent the extension about
+  1.2 MB; it now costs about 3 ms and sends 1 KB. So **Follow page changes**
+  and the reads after an action still see a change in a frame the page
+  shows, and still pass over one in a hidden frame, an animating ad's. A
+  hidden frame is now also found under its own `<iframe>` when another's
+  address is like its own, so its changes no longer pass for that one's. The
+  in-page tree, and either tree's TAB view, read the page when they come up,
+  and say _Reading the page…_ until it lands; the in-page tree comes back
+  with the scope, selection and expanded rows it had.
+
 ## 0.1.17
 
 ### Patch Changes
