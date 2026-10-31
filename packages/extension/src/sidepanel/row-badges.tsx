@@ -1,9 +1,8 @@
 /**
- * The badges a row of either tree carries after its name: its states, and a
- * frame's "embedded" mark. Shared, so the in-page tree and Chrome's tree
- * colour a state the same way (`tree.css`: red for disabled, green for an
- * on state, amber for a mixed one, orange for required, grey for the rest)
- * and say the same of a frame.
+ * The badges a row of Chrome's tree carries after its name: its states, and a
+ * frame's "embedded" mark. A state is coloured as the shared panel colours it
+ * (`tree.css`: red for disabled, green for an on state, amber for a mixed
+ * one, orange for required, grey for the rest).
  */
 
 import { isKeyState } from "@real-a11y-dev/semantic-navigator-ui";
@@ -30,31 +29,6 @@ export function stateBadgeClass(key: string, value: string | boolean): string {
   }
   if (key === "required" && value === true) return "sn-state--required";
   return "sn-state--info";
-}
-
-/** The in-page tree's state badges: the states it shows, by name. */
-export function domStateBadges(
-  states: Record<string, string | boolean>,
-): StateBadge[] {
-  const badges: StateBadge[] = [];
-  const add = (label: string, key: string) =>
-    badges.push({
-      label,
-      cls: stateBadgeClass(key, states[key]!),
-      keyState: isKeyState(key),
-    });
-  if (states["disabled"] === true) add("disabled", "disabled");
-  if (states["checked"] === true) add("checked", "checked");
-  if (states["checked"] === "mixed") add("mixed", "checked");
-  if (states["pressed"] === true) add("pressed", "pressed");
-  if (states["selected"] === true) add("selected", "selected");
-  if (states["expanded"] === true) add("expanded", "expanded");
-  if (states["expanded"] === false) add("collapsed", "expanded");
-  if (states["required"] === true) add("required", "required");
-  if (states["readonly"] === true) add("readonly", "readonly");
-  if (states["busy"] === true) add("busy", "busy");
-  if (states["current"]) add(`current: ${states["current"]}`, "current");
-  return badges;
 }
 
 /**

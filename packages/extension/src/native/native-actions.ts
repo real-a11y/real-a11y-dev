@@ -1,9 +1,8 @@
 /**
  * Which native-tree roles are actionable, and how — shared between the
  * dev-only `DogfoodPanel.tsx` debug harness and the production side panel's
- * native-mode integration (both dogfood-only surfaces; this module carries
- * no `chrome.debugger` use of its own, but stays under `native/` alongside
- * everything else this build tree-shakes out of the store bundle).
+ * tree. It carries no `chrome.debugger` use of its own, and stays under
+ * `native/` with the rest of Chrome's tree.
  *
  * Extracted from `DogfoodPanel.tsx`, where these predicates originated
  * across rounds 4-15 of the live dogfood exercise (see `DOGFOOD.md`'s
@@ -70,8 +69,8 @@ export type NativeNode = {
  * Sourced from the DOM producer's own role→action mapping (`getActions` in
  * `core/src/extraction/dom-extractor.ts`, the "ARIA role-based actions"
  * branch) — the authoritative answer to "is this role actionable" in this
- * codebase, since it drives `interaction.isInteractive` for the DOM/A11Y
- * tree view rendered right alongside this panel. A role missing here after
+ * codebase, since it drives `interaction.isInteractive` for the shared
+ * panel's tree. A role missing here after
  * DOM's own list carries it is exactly the "not interactive on native tree"
  * class of bug: the widget IS actionable, the panel just never learned it.
  *
@@ -167,7 +166,7 @@ export const ACTABLE = new Set([
  * `getActions`'s `tag === "input"` branch fires before it ever reaches the
  * ARIA `role === "combobox"` branch — so the DOM producer already gives
  * these `focus, type`, and always defaulting to click here left them
- * strictly worse to act on than the DOM/A11Y tree view right next to them.
+ * strictly worse to act on than the in-page tree that sat next to them.
  *
  * The native tree's own `editable` state — part of the states/properties
  * enrichment `axFacets` (`native-core.ts`) attaches to every node, not
@@ -209,8 +208,8 @@ export function isSteppableRole(role: string): boolean {
  * Live dogfood finding: "combobox options are not interactive" — Amazon's
  * department dropdown is a real `<select>`; Chromium normalizes it to
  * `combobox` → `menuListPopup` → `option` on the native tree, and each
- * `option` row had no action at all, next to the DOM/A11Y tree view's own
- * picker UI (`InputPanel.tsx`'s `SelectPicker`) for the identical element.
+ * `option` row had no action at all, next to the in-page tree's own picker
+ * UI (`InputPanel.tsx`'s `SelectPicker`) for the identical element.
  * `option` is deliberately absent from `ACTABLE` (see its own docstring) —
  * this is not a reversal of that, it's the dedicated action that exclusion
  * was always missing: `native-core.ts`'s `pageSelectOption` verifies
@@ -224,8 +223,8 @@ export function isSelectableRole(role: string): boolean {
 
 /**
  * The option rows of a native `<select>`, in document order — what the
- * panel's option picker (`InputPanel`'s `SelectPicker`) lists for it, as the
- * DOM tree's `GET_FIELD_STATE` does for the same element. Empty for every
+ * panel's option picker (`InputPanel`'s `SelectPicker`) lists for it, as a
+ * TAB row's `GET_FIELD_STATE` does for the same element. Empty for every
  * other node.
  *
  * A real `<select>` is the one `combobox` Chromium gives a `MenuListPopup`
@@ -259,7 +258,7 @@ export function nativeSelectOptions(
  * The option a native `<select>`'s picker marks as the current one — or
  * none, when the select's value is withheld (ADR-0001): a sensitive select
  * (`autocomplete="cc-exp-month"`), one inside a sensitive field, or one the
- * in-page read couldn't classify, as the DOM tree's picker
+ * in-page read couldn't classify, as a TAB row's picker
  * (`computeFieldState`) marks none for a sensitive select. Fails closed: only
  * a select classified as not sensitive (`valueWithheld === false`) shows one.
  * A redaction gate — `scripts/pr-risk.mjs` grades a change to it as such.
@@ -277,7 +276,7 @@ export function pickerCurrentOption(
 
 /**
  * Whether the panel's edit box for a typable row hides what is typed into it,
- * as the DOM tree's box does (`domTextInputState`): for every field whose
+ * as a TAB row's box does (`domTextInputState`): for every field whose
  * value is withheld (ADR-0001), empty or not. That takes in a password nobody has
  * typed yet, an empty card field, a field inside a sensitive one, and one the
  * in-page read couldn't classify. `redacted` alone misses every empty one,

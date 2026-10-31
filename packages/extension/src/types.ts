@@ -1,6 +1,5 @@
 import type {
   SemanticNode,
-  TreeViewMode,
   ActionRequest,
   ActionResult,
 } from "@real-a11y-dev/core";
@@ -8,20 +7,16 @@ import type {
 import type { NativeUnavailableReason } from "./native/capability.js";
 
 /**
- * Where the page's focus went (Focus sync), for whichever tree the panel
- * shows. Either field may be missing, never both.
+ * Where the page's focus went (Focus sync), for the native tree.
  */
 export interface FocusChangedPayload {
-  /** The DOM tree's node for the focused element, or the nearest one above
-   *  it that the tree tracks. */
-  nodeId?: string;
   /**
-   * For the native tree: by native read, the numbers the read gave the
-   * focused element and each numbered element above it in its document,
-   * nearest first (see `native/page-keys.ts`). The panel takes the first that
-   * names a row of the tree it got from that read.
+   * By native read, the numbers the read gave the focused element and each
+   * numbered element above it in its document, nearest first (see
+   * `native/page-keys.ts`). The panel takes the first that names a row of the
+   * tree it got from that read.
    */
-  pageKeys?: Record<string, number[]>;
+  pageKeys: Record<string, number[]>;
   /** The frame whose document `pageKeys` number, as the extension knows it
    *  (0: the top frame). The service worker sets it, from the sender, on
    *  what it forwards to the panel. */
@@ -162,26 +157,12 @@ export type ContentToPanel =
       type: "TAB_CLOSED";
       tabId: number;
     }
-  // Picker (DevTools-style "select an element in the page"): the user
-  // clicked an element on the page while pick mode was on. Content
-  // resolves the click target up the DOM tree to the nearest tracked
-  // node and sends its id; panel selects it, scrolls it into view, and
-  // turns pick mode back off.
-  | { type: "NODE_PICKED"; tabId?: number; payload: { nodeId: string } }
-  // Picker: content acknowledges that pick mode entered or exited (e.g.
-  // the user pressed Escape on the page). Panel mirrors its toggle so
-  // the UI doesn't drift out of sync.
-  | {
-      type: "PICK_MODE_CHANGED";
-      tabId?: number;
-      payload: { enabled: boolean };
-    }
-  // Native picker's counterpart to NODE_PICKED. Lives here (unlike the rest
-  // of the NATIVE_* messages, which stay in native/index.ts's own
-  // NativeMessage union — see that union's own comment) because it is a
-  // genuine background→panel PUSH the same shape as NODE_PICKED/
-  // PICK_MODE_CHANGED above, not a request/response call; the panel's
-  // single message handler already routes exactly this shape.
+  // The picker's result (DevTools-style "select an element in the page").
+  // Lives here (unlike the rest of the NATIVE_* messages, which stay in
+  // native/index.ts's own NativeMessage union — see that union's own
+  // comment) because it is a genuine background→panel PUSH, not a
+  // request/response call; the panel's single message handler already
+  // routes exactly this shape.
   | {
       type: "NATIVE_PICK_RESULT";
       tabId: number;
@@ -234,12 +215,11 @@ type BoundTab = { tabId?: number };
 /**
  * The tree the panel asks a tab's frames for. `framesOnly`: each frame's
  * skeleton (`frame-skeleton.ts`) in place of its tree, while Chrome's tree
- * shows and no TAB view does. A frame starts so, and sends its whole tree once
- * asked for one: for the in-page tree, and for either tree's TAB view.
+ * shows. A frame starts so, and sends its whole tree once asked for one: for
+ * the TAB view, which lists the page's tab order from it.
  */
 export interface TreeRequest {
-  viewMode: TreeViewMode;
-  framesOnly?: boolean;
+  framesOnly: boolean;
 }
 
 /**
@@ -330,11 +310,7 @@ export type PanelToContent =
        *  armed after it was asked sends. Absent, the frame's own stands. */
       payload: { enabled: boolean; tree?: TreeRequest };
     })
-  | (BoundTab & { type: "CLOSE_TAB" })
-  // Picker: toggle DevTools-style "select an element in the page" mode.
-  // Content swaps in the capture-phase click handler + cursor styling
-  // when enabled, removes them when disabled.
-  | (BoundTab & { type: "SET_PICK_MODE"; payload: { enabled: boolean } });
+  | (BoundTab & { type: "CLOSE_TAB" });
 
 export type ExtensionMessage =
   ContentToPanel | PanelToContent | FrameToBackground;

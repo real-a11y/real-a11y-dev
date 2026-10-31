@@ -62,7 +62,7 @@ export interface TreeViewProps {
   /**
    * Draw a highlight overlay on the real DOM element when the user hovers a
    * tree node. Defaults to `false` so the embedded TreeView does not disturb
-   * the host app. The Chrome extension passes `true`.
+   * the host app.
    */
   highlightOnHover?: boolean;
   /**

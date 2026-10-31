@@ -321,7 +321,7 @@ describe("NativeDebuggerSession attach bookkeeping", () => {
   it("does not let a wedged probe block the revoke path", async () => {
     // The probe sits inside the promise `detachAll` waits on. Without a bound,
     // a tab whose renderer is stuck on a synchronous `alert()` would make
-    // turning native mode off hang for as long as the page stays wedged.
+    // the last side panel's close hang for as long as the page stays wedged.
     vi.useFakeTimers();
     try {
       stubChrome();
@@ -596,9 +596,9 @@ describe("detachAll (the revoke path)", () => {
 
   it("cannot miss an attach that is still in flight", async () => {
     // The revoke reads the attach map on the storage queue; the attach writes
-    // it there too. Before the enabled-check moved inside that transaction, an
-    // attach parked in the CDP call was in neither the map nor refused — so
-    // detachAll reported 0 and the banner went up *after* the panel said off.
+    // it there too. An attach parked in the CDP call is not in the map yet, so
+    // a revoke that didn't wait for it would report 0 and the banner go up
+    // *after* the last panel closed.
     let releaseAttach: () => void = () => {};
     const attaching = new Promise<void>((r) => (releaseAttach = r));
     stubChrome();
@@ -611,37 +611,31 @@ describe("detachAll (the revoke path)", () => {
 
     const log = new FakeStorage();
     const attachStore = new FakeStorage();
-    let enabled = true;
-    const session = new NativeDebuggerSession(
-      log,
-      attachStore,
-      async () => enabled,
-    );
+    const session = new NativeDebuggerSession(log, attachStore);
 
     const op = session.withDebugger(7, async () => "ok");
     for (let i = 0; i < 10; i++) await Promise.resolve(); // parked in attach
 
-    enabled = false; // the user unticks the box mid-attach
+    // The last panel closes mid-attach.
     const revoke = session.detachAll();
     releaseAttach();
     await op;
     await revoke;
     await settle();
 
-    // Either the revoke detached it, or the attach undid itself. What must NOT
-    // happen is an attachment surviving with the flag off — and "never written"
-    // satisfies that as much as "written then emptied", so both shapes pass.
+    // Either the revoke detached it, or the operation's own detach did. What
+    // must NOT happen is an attachment surviving the revoke — and "never
+    // written" satisfies that as much as "written then emptied", so both
+    // shapes pass.
     expect(attachStore.data["dogfood.attachedTabs"] ?? {}).toEqual({});
   });
 
   it("does not resolve before an in-flight attach has settled", async () => {
     // The ORDER matters, not just the final state the previous test checks: if
-    // `detachAll()` resolved before the pending attach settled, the panel could
-    // report "native mode off — detached from 0 tab(s)" a beat before Chrome
-    // even shows the "…started debugging this browser" banner for the attach that
-    // was already on its way — a report that was true when it went out and
-    // false a moment later reads the same to the user as one that was just
-    // wrong.
+    // `detachAll()` resolved before the pending attach settled, it would count
+    // 0 tabs a beat before Chrome even shows the "…started debugging this
+    // browser" banner for the attach that was already on its way — a count
+    // that was true when it was taken and false a moment later.
     let releaseAttach: () => void = () => {};
     const attaching = new Promise<void>((r) => (releaseAttach = r));
     stubChrome();
@@ -654,12 +648,7 @@ describe("detachAll (the revoke path)", () => {
 
     const log = new FakeStorage();
     const attachStore = new FakeStorage();
-    let enabled = true;
-    const session = new NativeDebuggerSession(
-      log,
-      attachStore,
-      async () => enabled,
-    );
+    const session = new NativeDebuggerSession(log, attachStore);
 
     const order: string[] = [];
     const op = session
@@ -670,7 +659,7 @@ describe("detachAll (the revoke path)", () => {
       });
     for (let i = 0; i < 10; i++) await Promise.resolve(); // parked in attach
 
-    enabled = false; // the user unticks the box mid-attach
+    // The last panel closes mid-attach.
     const revoke = session.detachAll().then((n) => {
       order.push("revoke-resolved");
       return n;
@@ -824,7 +813,7 @@ describe("NativeDebuggerSession picker", () => {
     const session = new NativeDebuggerSession(new FakeStorage());
     // The generation is captured when the pick is asked for…
     const generation = session.pickGeneration();
-    // …native mode goes off before the pick reaches runPick…
+    // …the last panel closes before the pick reaches runPick…
     session.cancelAllPicks();
     const { outcome, value } = await session.withDebugger(7, (t) =>
       session.runPick(7, t, { requestId: 1, generation }),
@@ -1256,9 +1245,9 @@ describe("NativeDebuggerSession picker", () => {
 });
 
 /**
- * `registerNativeMode()`'s own handlers over `stubChrome()`, with native mode
- * switched on. Returns a way to start a pick the way the panel does, a way to
- * send any other message, and the `NATIVE_PICK_RESULT` pushes that come back.
+ * `registerNativeMode()`'s own handlers over `stubChrome()`. Returns a way to
+ * start a pick the way the panel does, a way to send any other message, and
+ * the `NATIVE_PICK_RESULT` pushes that come back.
  */
 /** The panel: an extension page, which is all these messages are taken from. */
 const PANEL = { id: "ext", url: "chrome-extension://ext/sidepanel/index.html" };
@@ -1266,7 +1255,6 @@ const PANEL = { id: "ext", url: "chrome-extension://ext/sidepanel/index.html" };
 function registerHandlers() {
   const stubs = stubChrome();
   const local = new FakeStorage();
-  local.data["settings.nativeModeEnabled"] = true;
   const pushed: unknown[] = [];
   let onMessage: (
     message: unknown,

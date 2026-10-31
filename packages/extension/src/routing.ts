@@ -348,18 +348,17 @@ export function isExtensionPageSender(
 // ---- Side-panel inbound message filtering ----
 
 /**
- * Message types whose payload carries a **frame-local** node id, and which the
- * background therefore re-sends with the id prefixed by its frame.
+ * Message types whose payload is **frame-local**, and which the background
+ * therefore re-sends with the frame it came from: a focus report's page keys
+ * number its own frame's document.
  *
  * A content script's `chrome.runtime.sendMessage` fans out to every extension
  * context, so each of these reaches the panel twice: once directly from the
- * frame (raw `sn-<n>`) and once relayed by the background (`f<frameId>-sn-<n>`).
- * Only the relayed copy is addressable in the merged tree — see
- * {@link shouldPanelAcceptMessage}.
+ * frame, naming no frame, and once relayed by the background, naming it. Only
+ * the relayed copy finds its rows — see {@link shouldPanelAcceptMessage}.
  */
 const BACKGROUND_RELAYED_TYPES: ReadonlySet<string> = new Set([
   "FOCUS_CHANGED",
-  "NODE_PICKED",
 ]);
 
 /**
@@ -368,18 +367,15 @@ const BACKGROUND_RELAYED_TYPES: ReadonlySet<string> = new Set([
  * Two independent rules:
  *
  *   1. **Frame-scoped events must come via the background.** `FOCUS_CHANGED`
- *      and `NODE_PICKED` are sent by the content script with a frame-LOCAL
- *      node id, and the content script's `sendMessage` reaches the panel
- *      directly as well as the background. For a subframe event the direct
- *      copy's `sn-<n>` collides with a *different*, unrelated top-frame node
- *      in the merged tree: the panel selects it and force-expands its
- *      ancestors, and although the background's prefixed forward then corrects
- *      the selection, those expansions stay. Delivery order isn't guaranteed
- *      either way round, so both orders leave the stray expansions behind.
- *      Requiring the background's `tabId` stamp drops the direct copy — the
- *      same shape as the earlier `LIVE_REGION` fix, which no-opped the
- *      *forward* because there the direct copy is the correct one (its payload
- *      is text, not an id).
+ *      is sent by the content script with page keys that number its own
+ *      frame's document, and the content script's `sendMessage` reaches the
+ *      panel directly as well as the background. For a subframe's report the
+ *      direct copy names no frame, so the panel would read its numbers as the
+ *      top frame's and follow focus to an unrelated row. Requiring the
+ *      background's `tabId` stamp drops the direct copy — the same shape as
+ *      the earlier `LIVE_REGION` fix, which no-opped the *forward* because
+ *      there the direct copy is the correct one (its payload is text, not
+ *      numbers).
  *
  *   2. **Tab scoping.** Drop broadcasts belonging to another tab. Relayed
  *      messages carry an explicit `tabId`; content-direct ones (`LIVE_REGION`)

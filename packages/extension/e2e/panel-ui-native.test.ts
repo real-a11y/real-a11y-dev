@@ -1,10 +1,8 @@
 /**
- * Production side-panel coverage for the native producer's OWN UI —
- * `NativeTreeView.tsx` and `App.tsx`'s `handleNativeActivate` — which no
- * other e2e suite touches: everything else in `e2e/` drives either the
- * message channel directly or the dev-only `DogfoodPanel` widget
- * (`panel-ui.test.ts`), never the production tree the toolbar's NATIVE
- * toggle switches to.
+ * Production side-panel coverage for Chrome's tree's own UI —
+ * `NativeTreeView.tsx` and `App.tsx`'s `handleNativeActivate` — where most
+ * of `e2e/` drives the message channel directly or the dev-only
+ * `DogfoodPanel` widget (`panel-ui.test.ts`).
  *
  * Every test here pins a real bug a review round (or a user's own
  * hands-on pass) caught that no test would have — proof this gap was worth
@@ -17,7 +15,7 @@
  *    error anywhere.
  *  - A native field whose value is redacted opened `InputPanel` with no
  *    `inputType` set, so a retyped replacement for a password field rendered
- *    in plaintext — masking only ever applied to the DOM producer's own
+ *    in plaintext — masking only ever applied to the in-page tree's own
  *    password fields before this.
  *  - That mask keyed on `redacted`, which a sensitive field carries only
  *    once it holds something, so an EMPTY password (a sign-in page's "Enter
@@ -38,8 +36,8 @@
  *    post-action re-read got cancelled by the very `PAGE_NAVIGATED` its
  *    click triggered, and nothing else was scheduled to pick it back up —
  *    see `recoverFromOwnNavigation`'s own comment in `App.tsx` for why
- *    re-reading here does NOT reopen the tab-switch anti-silent-reattach
- *    hole `hasAutoLoadedNative` exists to close.
+ *    re-reading here does NOT reopen the hole a tab switch must not open:
+ *    an attach to a tab the user hasn't read, with no gesture behind it.
  *  - The fix for the bug above only covered a single navigation: a link
  *    landing on a page that itself client-redirects onward (a login page
  *    landing on a dashboard) fires a SECOND `PAGE_NAVIGATED`, which
@@ -51,15 +49,14 @@
  *    settle window and re-checks, looping (bounded by
  *    `MAX_NAV_RECOVERY_HOPS`) until a full settle window passes with no
  *    further navigation.
- *  - Native rows had no `onDblClick` at all (the DOM tree's own row does),
- *    so double-clicking a native row silently did nothing where the DOM
- *    producer would activate it.
+ *  - Native rows had no `onDblClick` at all (the in-page tree's row had
+ *    one), so double-clicking a native row silently did nothing where the
+ *    in-page tree's activated its element.
  *  - A mouse click on a native row never moved real DOM focus onto `.sn-tree`
  *    (only `aria-activedescendant` updated), so the selected row's
  *    `:focus-visible` outline — keyed off the *container's* focus state —
- *    never appeared. The DOM tree's own `handleSelect` calls
- *    `treeRef.current?.focus()` after selecting; `NativeTreeView`'s row
- *    `onClick` never did.
+ *    never appeared. The in-page tree's select focused its container;
+ *    `NativeTreeView`'s row `onClick` never did.
  */
 
 import { NATIVE_FOLLOW_DEBOUNCE_MS } from "../src/sidepanel/native-follow.ts";
@@ -330,14 +327,15 @@ test("a busy region shows a bare busy badge, not busy=1", async ({ nav }) => {
   await nav.showNative("native-busy.html");
 
   // Chromium sends `aria-busy="true"` as `{"type":"boolean","value":1}`.
-  // Read as text, the row's badge said `busy=1`; the DOM tree says `busy`.
+  // Read as text, the row's badge said `busy=1`; the shared panel's say
+  // `busy`.
   const badges = nav.panel
     .getByRole("treeitem", { name: "Results" })
     .locator(".sn-state-badge");
   await expect(badges).toHaveText(["busy"]);
 });
 
-test("state badges take the in-page tree's colours", async ({ nav }) => {
+test("state badges take the shared panel's colours", async ({ nav }) => {
   await nav.showNative("checkbox-radio-switch.html");
   const badge = (row: RegExp, text: string) =>
     nav.panel
@@ -354,18 +352,16 @@ test("state badges take the in-page tree's colours", async ({ nav }) => {
   );
 });
 
-test("double-clicking a row activates it, same as the DOM tree's own row", async ({
-  nav,
-}) => {
+test("double-clicking a row activates it", async ({ nav }) => {
   const page = await nav.showNative("native-panel.html");
   await nav.panel.getByRole("button", { name: "Expand all" }).click();
 
   const lastRow = nav.panel.getByRole("treeitem", { name: "Item 16" });
   await expect(lastRow).toBeVisible();
 
-  // The row body, not its "Click (Enter)" action button — a plain
-  // double-click anywhere on the row is what the DOM tree's own row
-  // already honors (App.tsx's `onDblClick`).
+  // The row body, not its "Click (Enter)" action button: a plain
+  // double-click anywhere on the row activates it, as the shared panel's
+  // rows do.
   await lastRow.dblclick({ position: { x: 5, y: 5 } });
   await expect(page.locator("#item-16")).toHaveAttribute(
     "data-clicked",
@@ -604,14 +600,13 @@ test("a same-page URL change doesn't stop the selection follow", async ({
     .toBe(true);
 });
 
-// ---- Native as the default view ----
+// ---- The panel's own first read ----
 //
-// Native mode is on out of the box, and the harness leaves it that way: the
-// case where the panel opens on the native tree by itself. None of these
-// tests click NATIVE.
+// The panel reads the first page that connects by itself: none of these
+// tests ask it to.
 
-/** Bring a fixture forward and remount the panel, which then defaults to the
- *  native tree on its own. */
+/** Bring a fixture forward and remount the panel, which then reads it on its
+ *  own. */
 async function showNativeByDefault(
   nav: NativeHarness,
   fixture: string,
@@ -632,7 +627,7 @@ async function showNativeByDefault(
  *  doesn't matter here. */
 const NO_READ_WINDOW_MS = 1_500;
 
-test("native mode defaults to the native producer on first connect, with no click", async ({
+test("the panel reads the first page that connects, with no click", async ({
   nav,
 }) => {
   await showNativeByDefault(nav, "native-panel.html");
@@ -660,8 +655,7 @@ test("switching tabs after the default sends no read for the new tab", async ({
   await nav.panel.waitForTimeout(NO_READ_WINDOW_MS);
   expect(await nav.nativeReads()).toHaveLength(1);
 
-  // The panel stays on Chrome's tree, and Refresh reads normally.
-  await expect(nav.viewToggle()).toHaveCount(0);
+  // Refresh reads normally.
   await nav.panel.getByRole("button", { name: "Refresh native tree" }).click();
   await expect
     .poll(() => nav.panel.locator(".sn-node").count(), { timeout: 20_000 })
@@ -669,7 +663,7 @@ test("switching tabs after the default sends no read for the new tab", async ({
   expect(await nav.nativeReads()).toHaveLength(2);
 });
 
-test("a default that can't read the page falls back to the in-page tree, says why, and doesn't retry that tab", async ({
+test("a first read that can't happen says why, still lists the tab order, and doesn't retry that tab", async ({
   nav,
 }) => {
   await nav.setNativeReads("fail");
@@ -678,53 +672,22 @@ test("a default that can't read the page falls back to the in-page tree, says wh
   await nav.panel.reload();
 
   await expect(
-    nav.panel.getByText(/Native mode: showing the in-page tree — .*DevTools/),
+    nav.panel.getByText(/^native unavailable — DevTools is attached/),
   ).toBeVisible({ timeout: 20_000 });
-  await expect(nav.viewToggle()).toBeVisible();
   // One attempt, and no more for this tab: each retry would attach again.
   await nav.panel.waitForTimeout(NO_READ_WINDOW_MS);
   expect(await nav.nativeReads()).toHaveLength(1);
-});
 
-test("turning native mode off while the default's read is in flight leaves the panel on the in-page tree", async ({
-  nav,
-}) => {
-  await nav.setNativeReads("delay:2000");
-  const { page } = await nav.open("native-panel.html");
-  await page.bringToFront();
-  await nav.panel.reload();
-  await nav.panel.getByRole("button", { name: "Settings ▾" }).click();
-  const chromeTree = nav.treeChoice("Chrome's tree");
-  await expect(chromeTree).toHaveAttribute("aria-pressed", "true", {
-    timeout: 20_000,
-  });
+  // The TAB view is the page's own walk, which needs no debugger.
+  await nav.tabView();
+  await expect(nav.tabStops().getByRole("option").first()).toBeVisible();
   expect(await nav.nativeReads()).toHaveLength(1);
-
-  const setting = nav.panel.getByRole("checkbox", {
-    name: "Read pages through Chrome (recommended)",
-  });
-  await setting.click();
-  await expect(setting).not.toBeChecked();
-  await expect(chromeTree).toHaveCount(0);
-  // The delayed reply lands after the switch; it must not bring the native
-  // tree back or flip the view.
-  await nav.panel.waitForTimeout(2_500);
-  await expect(chromeTree).toHaveCount(0);
-  await expect(nav.viewToggle()).toBeVisible();
-  await expect(
-    nav.panel.getByRole("button", { name: "Refresh native tree" }),
-  ).toHaveCount(0);
-
-  // This worker's other tests expect native mode on, as it comes.
-  await nav.panel.evaluate(() =>
-    chrome.storage.local.remove("settings.nativeModeEnabled"),
-  );
 });
 
 // ---- Copy/export for the native tree ----
 //
-// `doExport` previously only knew the DOM producer's `nodes` state — the
-// `Copy ▾` menu was hidden entirely under `producer === "dom"`. Stubs
+// `doExport` once knew only the in-page tree's `nodes`, and the `Copy ▾`
+// menu was hidden on Chrome's tree. Stubs
 // `navigator.clipboard.writeText` rather than relying on the real OS
 // clipboard (the app itself already treats a real write as unreliable in an
 // automated context — see the "Clipboard blocked" fallback message in
@@ -749,22 +712,40 @@ async function readClipboardStub(
   );
 }
 
-test("Copy on the native tree offers no Tab sequence — native has no tab-order data", async ({
+test("Copy offers the Tab sequence only while the TAB view shows it, labelled with its own producer", async ({
   nav,
 }) => {
-  await nav.showNative("native-panel.html");
+  await nav.showNative("native-export.html");
+  await stubClipboard(nav);
 
   // The button's accessible name is its text content ("Copy ▾"), not its
   // `title` — accname prefers content over title, so a `title`-shaped
   // locator here never resolves.
-  await nav.panel.getByRole("button", { name: "Copy ▾" }).click();
+  const copy = nav.panel.getByRole("button", { name: "Copy ▾" });
+  await copy.click();
   const menu = nav.panel.locator(".sn-dropdown-popup");
   await expect(menu).toBeVisible();
   await expect(menu.getByRole("button", { name: "Native tree" })).toBeVisible();
   await expect(menu.getByRole("button", { name: "Headings" })).toBeVisible();
+  // A native node carries no tab order: it is the page's own walk's.
   await expect(menu.getByRole("button", { name: "Tab sequence" })).toHaveCount(
     0,
   );
+  await copy.click();
+
+  await nav.tabView();
+  await copy.click();
+  await menu.getByRole("button", { name: "Tab sequence" }).click();
+  await expect.poll(() => readClipboardStub(nav)).toBeDefined();
+  const markdown = (await readClipboardStub(nav))!;
+  expect(markdown).toContain("## Tab sequence");
+  expect(markdown).toMatch(/01\. textbox "Password"\n02\. button "Sign in"/);
+  // Its producer, said where it differs from the report's.
+  expect(markdown).toContain(
+    "**Producer:** dom (the extension's own in-page walk)",
+  );
+  expect(markdown).not.toContain("## Native accessibility tree");
+  expect(markdown).not.toContain("hunter2");
 });
 
 /** Open the export fixture on the native tree and copy one Copy ▾ item. */
@@ -780,7 +761,7 @@ async function copyNative(nav: NativeHarness, item: string): Promise<string> {
   const markdown = (await readClipboardStub(nav))!;
 
   // Every item says which producer built it, and where it was read from:
-  // the native read's own page, not the DOM producer's.
+  // the native read's own page, not the content script's.
   expect(markdown).toContain(
     "**Producer:** native (Chromium's own accessibility tree)",
   );
@@ -827,10 +808,8 @@ test("Copy → Headings copies the outline alone, still marked native", async ({
 
 // ---- Picker mode for the native tree ----
 //
-// The DOM producer's picker uses the content script's own capture-phase
-// click handler — nothing a native tree has, since native mode never injects
-// one. Native goes through `chrome.debugger`'s `Overlay.setInspectMode`
-// instead (the exact primitive DevTools' own "inspect element" uses), armed
+// The picker goes through `chrome.debugger`'s `Overlay.setInspectMode`
+// (the exact primitive DevTools' own "inspect element" uses), armed
 // for the whole pick session inside a SINGLE `withDebugger` span
 // (`runPick` in debugger-session.ts). These tests drive it through a real
 // page click — Playwright's own CDP input dispatch reaches the same
@@ -904,25 +883,6 @@ test("picking an element on the page selects and reveals it in the native tree",
   // ordinary row selection — the reveal effect calls the identical
   // `treeRef.current?.focus()`.
   await expect(nav.panel.locator(".sn-tree")).toBeFocused();
-});
-
-test("switching to the in-page tree and back doesn't apply an old pick again", async ({
-  nav,
-}) => {
-  const page = await nav.showNative("native-panel.html");
-  const pickButton = await armPick(nav);
-  await page.getByRole("heading", { name: "Native panel fixture" }).click();
-  await expect(pickButton).toHaveAttribute("aria-pressed", "false");
-  const selected = nav.panel.locator('[role="treeitem"][aria-selected="true"]');
-  await expect(selected).toHaveCount(1);
-
-  await nav.chooseTree("In-page tree");
-  await nav.chooseTree("Chrome's tree");
-  await expect
-    .poll(() => nav.panel.locator(".sn-node").count(), { timeout: 20_000 })
-    .toBeGreaterThan(0);
-  // A fresh tree, with nothing picked in it.
-  await expect(selected).toHaveCount(0);
 });
 
 test("picking a second time re-fires the reveal even for the same node", async ({
@@ -1015,22 +975,6 @@ test("picking an element the AX tree pruned resolves to its nearest kept ancesto
     name: /^button "Item 1" focusable/,
   });
   await expect(itemRow).toHaveAttribute("aria-selected", "true");
-});
-
-test("switching producer while a native pick is armed resets the button and cancels the pick", async ({
-  nav,
-}) => {
-  const page = await nav.showNative("native-panel.html");
-  const pickButton = await armPick(nav);
-
-  await nav.chooseTree("In-page tree");
-
-  // The same button now shows the DOM producer's own, never-armed picker.
-  await expect(pickButton).toHaveAttribute("aria-pressed", "false");
-  // And the native pick really ended: a page click reaches the page.
-  const clicks = await countPageClicks(page);
-  await page.getByRole("heading", { name: "Native panel fixture" }).click();
-  await expect.poll(clicks).toBe(1);
 });
 
 test("a pick that lands on something the tree doesn't have says so", async ({

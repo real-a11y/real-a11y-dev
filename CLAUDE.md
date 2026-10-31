@@ -33,11 +33,11 @@ one whose changes reach furthest — reason about consumer impact, not about
 This is the most important thing to know before changing anything about trees,
 and it cuts across packages rather than along them.
 
-|            | **`dom`**                                                                | **`native`**                                                                         |
-| ---------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------ |
-| What it is | in-page walk, this project's own ARIA/AccName implementation             | Chromium's own accessibility tree, read over CDP                                     |
-| Lives in   | `core/src/extraction/`                                                   | `browser/src/native-tree.ts`, `extension/src/native/`                                |
-| Reached by | extension content script, `inspector`, `react`, the injected page bundle | `cli`, `mcp` over Playwright CDP; the extension's native mode over `chrome.debugger` |
+|            | **`dom`**                                                                | **`native`**                                                                  |
+| ---------- | ------------------------------------------------------------------------ | ----------------------------------------------------------------------------- |
+| What it is | in-page walk, this project's own ARIA/AccName implementation             | Chromium's own accessibility tree, read over CDP                              |
+| Lives in   | `core/src/extraction/`                                                   | `browser/src/native-tree.ts`, `extension/src/native/`                         |
+| Reached by | `inspector`, `react`, the injected page bundle, the extension's TAB view | `cli`, `mcp` over Playwright CDP; the extension's tree over `chrome.debugger` |
 
 Both stamp `source.producer` on every `ExtractionResult`. The intent recorded on
 `TreeSource` in `core/src/types.ts` is that serializers render it into their
@@ -65,7 +65,8 @@ Four consequences that are easy to get wrong:
 - **`tabs` is the one DOM holdout, and it is not a fallback.** A native tree
   knows per-node focusability but not the _sequence_ — `tabindex` never reaches a
   native node — so an in-page walk is the only source there is. It is also why
-  `tabs` alone still takes `--root`. Do not "unify" it.
+  `tabs` alone still takes `--root`. The extension's TAB view is the same
+  holdout, for the same reason. Do not "unify" either.
 
 The normalization vocabulary lives in `core/src/native/` (`normalizeNativeAX`,
 `ax-vocabulary.ts`) rather than in the package that does the CDP read, so a
@@ -77,10 +78,14 @@ permission added to `packages/extension/public/manifest.json` forces every
 existing user to re-consent on the update that carries it, and raises the Chrome
 Web Store review bar. Don't add one without an explicit product sign-off.
 
-**The extension has a native path, gated by a runtime setting.** Native mode
+**The extension shows Chrome's tree, and no other.** Native mode
 (`chrome.debugger`, reading Chromium's own accessibility tree over CDP) shipped
-first as a dev-only dogfood build (#229), then moved into the store build
-(#386). The published manifest carries `activeTab`, `sidePanel`,
+first as a dev-only dogfood build (#229), moved into the store build (#386),
+became the default (#496), and since #PR3 is the side panel's only tree: the
+extension's in-page tree is gone, with the setting that chose it and the
+fallback to it. The content script still walks the page, but only for the TAB
+view's tab stops and the key bar's Tab; while the A11Y view shows, each frame
+sends just its skeleton (#569). The published manifest carries `activeTab`, `sidePanel`,
 `webNavigation`, `debugger`, `tabs` and `storage`, all required:
 `chrome.debugger` cannot be optional (Chrome enforces `kFlagCannotBeOptional`).
 That re-consent was signed off for #386, and the decision is recorded in the
@@ -88,16 +93,12 @@ native-tree execution plan in Notion.
 
 Where the gates actually are:
 
-- **The setting.** `settings.nativeModeEnabled` in `chrome.storage.local`. Native
-  mode is on by default (#496): only a stored `false` turns it off, so an unset
-  or non-boolean value reads as on. The user turns it off in the side panel's
-  Settings, or from the one-time note about Chrome's debugging bar. It is
-  enforced in one place: `NativeDebuggerSession.attach()` re-reads it inside
-  its storage transaction, so turning it off and attaching are mutually
-  exclusive. The message handlers in `native/index.ts` are registered in every
-  build and don't check it themselves; turning it off detaches once any
-  operation in flight finishes. Each window has its own side panel, so every
-  open panel follows the key in storage.
+- **No setting.** `settings.nativeModeEnabled` is gone and nothing reads it, so
+  a `false` that 0.1.17 or earlier stored is ignored, and
+  `NativeDebuggerSession.attach()` checks no flag. Where Chrome refuses an
+  attach, the panel says why (`explainUnavailable` in `native/capability.ts`);
+  there is no in-page tree to fall back on. The last side panel's close
+  detaches every tab still attached (`releaseDebugger()` in `native/index.ts`).
 - **The senders.** `registerNativeMode()` accepts `NATIVE_*` messages only from
   the extension's own pages (`isExtensionPageSender`), never from a content
   script, and keeps `chrome.storage.local` at `TRUSTED_CONTEXTS`.

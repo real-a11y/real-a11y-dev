@@ -179,6 +179,22 @@ describe("NativeTreeView — TAB view", () => {
     expect(onActivate).not.toHaveBeenCalled();
   });
 
+  it("acts on nothing for Ctrl+Enter, the tree's scope key", () => {
+    // The tab order covers the whole page, so there is nothing to scope to,
+    // and the key must not fall through to Enter and click the stop.
+    const order = tabOrder();
+    mount({ tabOrder: order, onViewChange: vi.fn(), view: "tab" });
+    act(() => stop("Two").click());
+    for (const mod of [{ ctrlKey: true }, { metaKey: true }]) {
+      act(() => {
+        list()!.dispatchEvent(
+          new KeyboardEvent("keydown", { key: "Enter", bubbles: true, ...mod }),
+        );
+      });
+    }
+    expect(order.onActivate).not.toHaveBeenCalled();
+  });
+
   it("searches the tab order, and counts the stops the search leaves", () => {
     mount({ tabOrder: tabOrder(), onViewChange: vi.fn(), view: "tab" });
 

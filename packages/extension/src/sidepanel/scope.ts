@@ -1,9 +1,8 @@
 /**
- * Subtree scoping, shared by both producers' trees and the lists that follow
- * them. `ScopeBar.tsx` renders the breadcrumb; everything that decides what a
- * scope contains, what a key does to it and how a scoped node reads lives
- * here, so the DOM tree (`App.tsx`) and the native one (`NativeTreeView.tsx`)
- * can't drift apart on it.
+ * Subtree scoping, shared by the tree (`NativeTreeView.tsx`) and the lists
+ * that follow it. `ScopeBar.tsx` renders the breadcrumb; everything that
+ * decides what a scope contains, what a key does to it and how a scoped node
+ * reads lives here, so the tree and its lists can't drift apart on it.
  */
 
 export interface ScopeCrumb {
@@ -84,31 +83,10 @@ export function isInScope(
   return false;
 }
 
-/**
- * The scoped subtree as its own map: `rootId` and everything under it. Lets
- * a whole-tree helper (the DOM search filter's match count) run over just the
- * scope without a scope-aware variant of its own.
- */
-export function subtreeNodes<T extends { childIds?: string[] }>(
-  nodes: Map<string, T>,
-  rootId: string,
-): Map<string, T> {
-  const out = new Map<string, T>();
-  const stack = [rootId];
-  while (stack.length > 0) {
-    const id = stack.pop()!;
-    const node = nodes.get(id);
-    if (!node || out.has(id)) continue;
-    out.set(id, node);
-    for (const childId of node.childIds ?? []) stack.push(childId);
-  }
-  return out;
-}
-
 export type ScopeAction = "scope" | "exit";
 
 /**
- * The keyboard half of scoping, shared by both trees' keydown handlers and
+ * The keyboard half of scoping, shared by the tree's keydown handler and
  * the lists'. `Ctrl`/`Cmd`+`Enter` scopes to the selected row (`Shift+Enter`
  * is already a slider's decrement); `Escape` leaves the scope, unless a pick
  * is armed, in which case Escape belongs to cancelling the pick.
@@ -140,8 +118,8 @@ export function scopeKeyAction(
 }
 
 /**
- * A list's share of the scope keys (a role filter's list, the Tab view),
- * which show a scoped subtree as flat items. `Escape` leaves the scope, as
+ * A list's share of the scope keys: a role filter's list, which shows a
+ * scoped subtree as flat items, and the TAB view, which is never scoped. `Escape` leaves the scope, as
  * in the tree. `Ctrl`/`Cmd`+`Enter` is consumed and does nothing: a list item
  * isn't a container to scope into, and letting the key fall through to plain
  * Enter would activate the item on the page by surprise. Returns whether the

@@ -240,7 +240,7 @@ function axFacets(
  * Why only `controls`: `owns` is already structure — Chromium reparents an
  * owned node under its owner in the tree it sends. `describedby` is already
  * the node's `description`, resolved to text. `flowto` and `details` have no
- * DOM-tree chip to match, so they'd be a new feature rather than parity;
+ * chip in the shared panel to match, so they'd be a new feature rather than parity;
  * they're left for a ticket of their own.
  */
 export function nativeControls(
@@ -461,7 +461,7 @@ export interface FrameSession extends NativeFrameRef {
 export interface NativeTreeResult {
   /** Normalized nodes (shared core vocabulary) plus states/properties, document order. */
   nodes: EnrichedNativeNode[];
-  /** Indented `role "name"` serialization, identical grammar to the DOM tree. */
+  /** Indented `role "name"` serialization, the same grammar as `serializeTree`'s. */
   serialized: string;
   /** Raw AX node count before normalization — a dogfood size signal. */
   rawCount: number;
@@ -2295,7 +2295,7 @@ export function pageFocus(this: Element): Marker {
 
 /**
  * Show the user where a selected native row lives on the page — the native
- * tree's counterpart to the DOM tree's `HIGHLIGHT_NODE` on select. `nonce` is
+ * tree's counterpart to a TAB row's `HIGHLIGHT_NODE` on select. `nonce` is
  * the one the content script was armed with; it honours only the event that
  * carries it.
  *
@@ -2347,11 +2347,11 @@ export function pageReveal(this: Element, nonce: string): Marker {
 }
 
 /**
- * Outline a hovered native row's element on the page, and nothing more — the
- * native tree's counterpart to the DOM tree's hover. The same content-script
+ * Outline a hovered native row's element on the page, and nothing more — a
+ * hover preview. The same content-script
  * overlay as {@link pageReveal}, under its own event name and with no focus:
  * a hover is a preview, so the page neither scrolls nor moves focus
- * (`planHighlight` in `routing.ts` has the DOM side's reasons). A separate
+ * (`planHighlight` in `routing.ts` has the reasons). A separate
  * event rather than a flag in `detail`, so the content script decides what to
  * draw by the event's name and the arm it holds, and reads nothing else a
  * page-world object carries. Like the reveal's, it doesn't bubble and carries

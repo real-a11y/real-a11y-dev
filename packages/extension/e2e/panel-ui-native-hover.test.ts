@@ -53,7 +53,7 @@ test("moving off the rows clears the outline on the page", async ({ nav }) => {
   await expect.poll(() => overlayRect(page), { timeout: 5_000 }).toBeNull();
 });
 
-test("a clicked row's outline clears when the pointer leaves, as in the DOM tree", async ({
+test("a clicked row's outline clears when the pointer leaves", async ({
   nav,
 }) => {
   const page = await nav.showNative("native-panel.html");

@@ -1,8 +1,8 @@
-import type { DomSemanticNode } from "@real-a11y-dev/core";
 import { render, h } from "preact";
 import { act } from "preact/test-utils";
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 
+import type { NativeNode } from "../native/native-actions.js";
 import type { ContentToPanel } from "../types.js";
 
 import { App } from "./App.js";
@@ -16,16 +16,16 @@ import {
 } from "./panel-harness.js";
 
 /**
- * "Show full names", in Settings: off by default, a long name in either tree
- * ends in an ellipsis and the tree fits the panel; on, the tree widens to
- * fit it (`.sn-tree--full-names`, tree.css). Kept in `chrome.storage.local`
- * and followed by every open panel, as the other settings are. jsdom has no
- * layout, so what is checked here is the switch, the storage and the class,
- * and the markup the layout relies on: a tooltip on each part that can end
- * in an ellipsis, and a row's key states inside its head, with its name.
+ * "Show full names", in Settings: off by default, a long name in Chrome's
+ * tree ends in an ellipsis and the tree fits the panel; on, the tree widens
+ * to fit it (`.sn-tree--full-names`, tree.css), and so does the TAB view's
+ * list (`.sn-filtered-list--full-names`, lists.css). Kept in
+ * `chrome.storage.local` and followed by every open panel, as the other
+ * settings are. jsdom has no layout, so what is checked here is the switch,
+ * the storage and the class, and the markup the layout relies on: a tooltip
+ * on each part that can end in an ellipsis, and a row's key states inside
+ * its head, with its name.
  */
-
-const NATIVE_MODE = "settings.nativeModeEnabled";
 
 const LONG_NAME =
   "Página principal de la enciclopedia libre y políglota de la Fundación Wikimedia";
@@ -33,74 +33,63 @@ const LONG_VALUE =
   "https://es.wikipedia.org/wiki/Wikipedia:Portada?uselang=es&variant=es-mx";
 
 /** A native read with a long-named link, a stated button, and two fields. */
-const NATIVE_TREE = {
-  ok: true,
-  nodes: [
-    {
-      id: "r1",
-      role: "RootWebArea",
-      name: "Test page",
-      depth: 0,
-      childIds: ["a1", "b1", "t1", "s1"],
-      states: {},
-      properties: {},
-    },
-    {
-      id: "a1",
-      role: "link",
-      name: LONG_NAME,
-      depth: 1,
-      childIds: [],
-      states: {},
-      properties: {},
-    },
-    {
-      id: "b1",
-      role: "button",
-      name: LONG_NAME,
-      depth: 1,
-      childIds: [],
-      states: { focusable: true, disabled: true, expanded: false },
-      properties: { hasPopup: "menu" },
-    },
-    {
-      id: "t1",
-      role: "textbox",
-      name: "Address",
-      depth: 1,
-      childIds: [],
-      states: {},
-      properties: {},
-      value: LONG_VALUE,
-    },
-    {
-      id: "s1",
-      role: "searchbox",
-      name: "Find",
-      depth: 1,
-      childIds: [],
-      states: {},
-      properties: {},
-      placeholder: LONG_VALUE,
-    },
-  ],
-  rootId: "r1",
-  url: "https://example.test/",
-  documentId: "doc-1",
-};
+const NATIVE_TREE: NativeNode[] = [
+  {
+    id: "r1",
+    role: "RootWebArea",
+    name: "Test page",
+    depth: 0,
+    childIds: ["a1", "b1", "t1", "s1"],
+    states: {},
+    properties: {},
+  },
+  {
+    id: "a1",
+    role: "link",
+    name: LONG_NAME,
+    depth: 1,
+    childIds: [],
+    states: {},
+    properties: {},
+  },
+  {
+    id: "b1",
+    role: "button",
+    name: LONG_NAME,
+    depth: 1,
+    childIds: [],
+    states: { focusable: true, disabled: true, expanded: false },
+    properties: { hasPopup: "menu" },
+  },
+  {
+    id: "t1",
+    role: "textbox",
+    name: "Address",
+    depth: 1,
+    childIds: [],
+    states: {},
+    properties: {},
+    value: LONG_VALUE,
+  },
+  {
+    id: "s1",
+    role: "searchbox",
+    name: "Find",
+    depth: 1,
+    childIds: [],
+    states: {},
+    properties: {},
+    placeholder: LONG_VALUE,
+  },
+];
 
-/** An in-page read with a stated, long-named button and a long-valued field. */
-function fieldTreeData(): ContentToPanel {
+/** The page's tree for the TAB view: one long-named button, a tab stop. */
+function tabOrderData(): ContentToPanel {
   const nodes = [
-    node("n1", null, 0, "document", "Page", ["b1", "t1"]),
+    node("n1", null, 0, "document", "Page", ["b1"]),
     node("b1", "n1", 1, "button", LONG_NAME, [], "button"),
-    node("t1", "n1", 1, "textbox", "Address", [], "input"),
   ];
-  const button = nodes[1]![1] as DomSemanticNode;
-  button.a11y.states = { disabled: true, expanded: false };
-  const field = nodes[2]![1] as DomSemanticNode;
-  field.a11y.value = LONG_VALUE;
-  field.dom.attributes = { value: LONG_VALUE };
+  (nodes[1]![1].interaction as { isFocusable: boolean }).isFocusable = true;
   return {
     ...treeData(),
     payload: {
@@ -116,27 +105,21 @@ describe("Show full names", () => {
   let container: HTMLDivElement;
   let chromeMock: ChromeMock;
 
-  /** Mount the panel over `storage`, reading natively unless the storage
-   *  turns native mode off. */
+  /** Mount the panel over `storage`, on Chrome's tree. */
   function mount(storage: Record<string, unknown> = {}): void {
-    chromeMock = installChromeMock({
-      storage,
-      respond: (message) => {
-        const m = message as unknown as { type: string };
-        if (m.type === "NATIVE_FLAG_GET") {
-          return { enabled: chromeMock.stored[NATIVE_MODE] !== false };
-        }
-        if (m.type === "NATIVE_READ") return NATIVE_TREE;
-        return undefined;
-      },
-    });
+    chromeMock = installChromeMock({ storage, nativeTree: NATIVE_TREE });
     act(() => {
       render(h(App, {}), container);
     });
   }
 
+  const scrollIntoView = Element.prototype.scrollIntoView;
+
   beforeEach(() => {
     stubMatchMedia();
+    // jsdom has no scrollIntoView, which the TAB list calls to keep its
+    // selected stop in view.
+    Element.prototype.scrollIntoView = () => {};
     container = document.createElement("div");
     document.body.appendChild(container);
   });
@@ -144,6 +127,7 @@ describe("Show full names", () => {
   afterEach(() => {
     render(null, container);
     container.remove();
+    Element.prototype.scrollIntoView = scrollIntoView;
   });
 
   /** Let the promise-form replies land and the effects they trigger run. */
@@ -194,7 +178,7 @@ describe("Show full names", () => {
   }
 
   it("starts off, and turning it on widens the tree and is kept", async () => {
-    mount({ [NATIVE_MODE]: false });
+    mount();
     await flush();
     await showPage();
 
@@ -220,7 +204,7 @@ describe("Show full names", () => {
   });
 
   it("starts on where storage says so", async () => {
-    mount({ [NATIVE_MODE]: false, [SHOW_FULL_NAMES_KEY]: true });
+    mount({ [SHOW_FULL_NAMES_KEY]: true });
     await flush();
     await showPage();
 
@@ -229,7 +213,7 @@ describe("Show full names", () => {
   });
 
   it("follows a change made in another window", async () => {
-    mount({ [NATIVE_MODE]: false });
+    mount();
     await flush();
     await showPage();
 
@@ -240,22 +224,39 @@ describe("Show full names", () => {
     expect(fullNames()).toBe(false);
   });
 
-  it("applies to Chrome's tree as well", async () => {
+  it("applies to the TAB view's list as well", async () => {
     mount({ [SHOW_FULL_NAMES_KEY]: true });
     await flush();
     await showPage();
-
-    expect(tree()?.getAttribute("aria-label")).toMatch(
-      /^Native accessibility tree/,
+    const tab = [...container.querySelectorAll("button.sn-toggle-btn")].find(
+      (b) => b.textContent?.trim() === "TAB",
+    ) as HTMLButtonElement;
+    act(() => tab.click());
+    act(() =>
+      chromeMock.emit({ ...tabOrderData(), tabId: 7 } as ContentToPanel),
     );
-    expect(fullNames()).toBe(true);
+    await flush();
+    const list = () =>
+      container.querySelector<HTMLElement>(
+        '[role="listbox"][aria-label="Tab sequence"]',
+      );
+    const stop = list()?.querySelector(".sn-filtered-name");
+    expect([stop?.textContent, stop?.getAttribute("title")]).toEqual([
+      LONG_NAME,
+      LONG_NAME,
+    ]);
+    expect(list()?.classList.contains("sn-filtered-list--full-names")).toBe(
+      true,
+    );
 
     await writtenElsewhere({ [SHOW_FULL_NAMES_KEY]: false });
-    expect(fullNames()).toBe(false);
+    expect(list()?.classList.contains("sn-filtered-list--full-names")).toBe(
+      false,
+    );
   });
 
-  it("gives a name its whole text as a tooltip, in either tree", async () => {
-    mount({ [NATIVE_MODE]: false });
+  it("gives a name its whole text as a tooltip", async () => {
+    mount();
     await flush();
     await showPage();
     const names = () =>
@@ -263,12 +264,6 @@ describe("Show full names", () => {
         el.textContent,
         el.getAttribute("title"),
       ]);
-    expect(names()).toContainEqual(["Save", "Save"]);
-
-    render(null, container);
-    mount();
-    await flush();
-    await showPage();
     expect(names()).toContainEqual([LONG_NAME, LONG_NAME]);
   });
 
@@ -278,23 +273,7 @@ describe("Show full names", () => {
       return [el?.textContent, el?.getAttribute("title")];
     };
     const announced = `= ${JSON.stringify(LONG_VALUE)}`;
-    const raw = `value=${JSON.stringify(LONG_VALUE)}`;
 
-    mount({ [NATIVE_MODE]: false });
-    await flush();
-    await showPage(fieldTreeData());
-    expect(value(container.querySelector("#snrow-t1"))).toEqual([
-      announced,
-      announced,
-    ]);
-    const domView = [
-      ...container.querySelectorAll('[aria-label="Tree view mode"] button'),
-    ].find((b) => b.textContent?.trim() === "DOM") as HTMLButtonElement;
-    act(() => domView.click());
-    await flush();
-    expect(value(container.querySelector("#snrow-t1"))).toEqual([raw, raw]);
-
-    render(null, container);
     mount();
     await flush();
     await showPage();
@@ -308,7 +287,7 @@ describe("Show full names", () => {
     ]);
   });
 
-  it("shows a row's key states after its label, where nothing clips them, in either tree", async () => {
+  it("shows a row's key states after its label, where nothing clips them", async () => {
     /** Row `row`'s state badges: its key states, after its label, which a
      *  row too narrow for them widens to show (tree.css, "Long labels"), and
      *  the rest, in the label, which a narrow row drops first. Also what a
@@ -326,16 +305,6 @@ describe("Show full names", () => {
       heard: row?.querySelector(".sn-name ~ .sn-sr-only")?.textContent,
     });
 
-    mount({ [NATIVE_MODE]: false });
-    await flush();
-    await showPage(fieldTreeData());
-    expect(badges(container.querySelector("#snrow-b1"))).toEqual({
-      key: ["disabled", "collapsed"],
-      rest: [],
-      heard: "disabled, collapsed",
-    });
-
-    render(null, container);
     mount();
     await flush();
     await showPage();

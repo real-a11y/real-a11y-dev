@@ -1,11 +1,10 @@
 /**
- * The keyboard bar under the tree, and the dialog indicator above it — shared
- * by the DOM tree (`App.tsx`) and the native one (`NativeTreeView.tsx`).
+ * The keyboard bar under the tree, and the dialog indicator above it
+ * (`NativeTreeView.tsx`).
  *
  * Both send a key to whatever has focus on the page through the content
- * script's `SEND_KEY`, which runs in native mode too: the panel reaches
- * NATIVE only after the DOM producer has connected. Which tree is showing
- * decides only what is read again afterwards, so that stays with the caller.
+ * script's `SEND_KEY`: the panel shows a tree only once the content script
+ * has connected. What is read again afterwards stays with the caller.
  */
 
 export type SendKey = (

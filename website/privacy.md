@@ -1,6 +1,6 @@
 # Privacy Policy
 
-_Last updated: 2026-10-29_
+_Last updated: 2026-10-31_
 
 This policy covers the Real A11y website (`real-a11y.dev`), the Semantic Navigator Chrome extension, and the `@real-a11y-dev/*` npm packages.
 
@@ -16,23 +16,23 @@ This policy covers the Real A11y website (`real-a11y.dev`), the Semantic Navigat
 
 The extension builds a semantic / accessibility tree of the page you're currently viewing and shows it in a side panel. It acts locally in your browser.
 
-By default it reads that tree from Chromium itself (**native mode**): Chromium's own accessibility tree, read over the `chrome.debugger` API (the same protocol DevTools uses), which includes what the page's DOM alone doesn't show, such as a media player's built-in controls. While the extension reads or acts on a page this way, Chrome itself shows its own bar across every window, reading “Semantic Navigator” started debugging this browser, independent of anything this extension displays. The first time this happens, the side panel shows a note explaining that bar, with a button to turn native mode off.
+It reads that tree from Chromium itself: Chromium's own accessibility tree, read over the `chrome.debugger` API (the same protocol DevTools uses), which includes what the page's DOM alone doesn't show, such as a media player's built-in controls. While the extension reads or acts on a page this way, Chrome itself shows its own bar across every window, reading “Semantic Navigator” started debugging this browser, independent of anything this extension displays. The first time this happens, the side panel shows a note explaining that bar.
 
-You can turn native mode off at any time in the side panel's **Settings**, and that holds in every window. The extension then reads only the page's DOM ("DOM mode"), and Chrome's bar doesn't appear. Turning it off detaches as soon as any read or action already under way finishes. Where native mode can't read a page (when DevTools is already open on it, for example), the side panel shows the DOM tree instead and says why.
+The side panel's TAB view, which lists the page's tab order, reads the page's DOM instead, and Chrome's bar doesn't appear for it. Where Chrome doesn't let the extension read a page over `chrome.debugger` (when DevTools is already open on it, for example), the side panel says why. Closing the last side panel lets go of the debugger.
 
 **What it does on the page:**
 
-- Reads the page's DOM (including iframes you can access) to extract roles, accessible names, states, and interaction info.
-- Unless you've turned native mode off, reads Chromium's accessibility tree for the active tab over `chrome.debugger`, while it's attached.
+- Reads the page's DOM (including iframes you can access): which frames the page shows, the text of its live regions, and, for the TAB view, its elements' roles, accessible names, states, and interaction info.
+- Reads Chromium's accessibility tree for the active tab over `chrome.debugger`, while it's attached.
 - On your explicit action (clicking a tree node's action button, pressing `Enter`, etc.), dispatches the corresponding event on the element — e.g. click a button, focus a field, submit a form.
 - Draws a highlight overlay on the element under the cursor in the tree.
 - While the side panel is open, notices when you click, press `Enter` or `Space`, or type on the page, and tells the side panel only that you did, and when, never what you clicked or typed, or where, so the native tree can read what the page does next, and stop once you type.
 
 **What it does NOT do:**
 
-- It does not send page content, URLs, DOM snapshots, accessibility-tree data, or any other data to any external server — everything above stays local to your browser, in both DOM and native mode.
+- It does not send page content, URLs, DOM snapshots, accessibility-tree data, or any other data to any external server — everything above stays local to your browser.
 - It does not read from or write to the clipboard.
-- It does not use cookies, local storage, or IndexedDB for any personal data. `chrome.storage.local` holds only the side panel's settings: whether native mode is on, whether the native tree follows page changes on its own, and whether you've dismissed the note about Chrome's debugging bar. While native mode is attached, `chrome.storage.session` holds content-free bookkeeping about that attachment (which tab, since when), and while the screen curtain is on, which tabs it covers, so that closing the side panel still lifts it after Chrome has stopped the extension's background worker. Chrome clears both when the browser closes. No log of how you use native mode is kept.
+- It does not use cookies, local storage, or IndexedDB for any personal data. `chrome.storage.local` holds only the side panel's settings: whether names show in full, whether the tree follows page changes on its own, and whether you've dismissed the note about Chrome's debugging bar. While the debugger is attached, `chrome.storage.session` holds content-free bookkeeping about that attachment (which tab, since when), and while the screen curtain is on, which tabs it covers, so that closing the side panel still lifts it after Chrome has stopped the extension's background worker. Chrome clears both when the browser closes. No log of how you use the extension is kept.
 - It does not track you across sites or sessions.
 - It contains no analytics, telemetry, advertising, or third-party scripts.
 
@@ -40,12 +40,12 @@ You can turn native mode off at any time in the side panel's **Settings**, and t
 
 | Permission  | Why                                                                                                                                                                  |
 | ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `activeTab` | Read the DOM of the page you're viewing to build the tree                                                                                                          |
+| `activeTab` | Read the DOM of the page you're viewing, for its tab order and its frames                                                                                           |
 | `sidePanel` | The extension's UI is a persistent side panel                                                                                                                       |
 | `webNavigation` | Detect iframe load events to merge subtree data from cross-origin frames                                                                                        |
-| `debugger`  | Powers native mode: reads and acts on Chromium's own accessibility tree over CDP. On by default, and attached only while the side panel reads or acts on the page it shows. Requested by every install because `chrome.debugger` cannot be an optional Chrome permission; turn native mode off in the side panel's Settings and it is never used. |
-| `tabs`      | Lets native mode read the URL of the tab the side panel is bound to, to tell whether Chrome lets the debugger attach there (it can't on `chrome://` pages or the Web Store) and whether the page has navigated since the tree was read. This is a broader grant than that use needs — Chrome does not let an extension request `tabs` scoped to a single tab, and it technically permits reading the URL and title of every open tab. The code reads only the bound tab's URL; it never enumerates other tabs. |
-| `storage`   | Persists the side panel's settings locally on your device, and, for the browser session only, content-free bookkeeping about a native-mode attachment and which tabs have the screen curtain on |
+| `debugger`  | Reads and acts on Chromium's own accessibility tree over CDP: the tree the side panel shows. Attached only while the side panel reads or acts on the page it shows, and let go when the last side panel closes. Requested by every install because `chrome.debugger` cannot be an optional Chrome permission. |
+| `tabs`      | Lets the side panel read the URL of the tab it is bound to, to tell whether Chrome lets the debugger attach there (it can't on `chrome://` pages or the Web Store) and whether the page has navigated since the tree was read. This is a broader grant than that use needs — Chrome does not let an extension request `tabs` scoped to a single tab, and it technically permits reading the URL and title of every open tab. The code reads only the bound tab's URL; it never enumerates other tabs. |
+| `storage`   | Persists the side panel's settings locally on your device, and, for the browser session only, content-free bookkeeping about a debugger attachment and which tabs have the screen curtain on |
 
 ## npm packages
 

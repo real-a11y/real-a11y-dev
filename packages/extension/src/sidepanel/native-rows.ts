@@ -21,7 +21,7 @@ import { describeStates, type FilteredListItem } from "./FilteredList.js";
  *  same three-way split `DogfoodPanel.tsx` renders from, reused here so a
  *  fix to one never silently diverges from the other. `selects` says the row
  *  selects: an option, or a real `<select>`, which opens the option picker
- *  as the DOM tree's does (see `nativeSelectIds`). */
+ *  as a TAB row's does (see `nativeSelectIds`). */
 export function primaryLabel(
   node: NativeNode,
   selects: boolean,

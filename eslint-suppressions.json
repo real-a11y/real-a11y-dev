@@ -299,7 +299,7 @@
   },
   "packages/extension/src/native/index.ts": {
     "complexity": {
-      "count": 2
+      "count": 1
     },
     "max-lines-per-function": {
       "count": 3
@@ -334,13 +334,13 @@
   },
   "packages/extension/src/sidepanel/App.tsx": {
     "complexity": {
-      "count": 7
+      "count": 6
     },
     "max-depth": {
       "count": 1
     },
     "max-lines-per-function": {
-      "count": 6
+      "count": 5
     },
     "max-nested-callbacks": {
       "count": 2
@@ -386,7 +386,7 @@
       "count": 1
     },
     "max-lines-per-function": {
-      "count": 2
+      "count": 1
     }
   },
   "packages/extension/src/sidepanel/follow-window.ts": {

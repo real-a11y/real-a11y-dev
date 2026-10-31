@@ -14,32 +14,31 @@ three questions, and the findings log below is the record of that exercise.
 > exports — is what the graduation PR cites as the reason native mode moved
 > from a dev-only build into the production store build: `chrome.debugger`,
 > `tabs` and `storage` are now required permissions in the shipped
-> `packages/extension/public/manifest.json`, behind a `chrome.storage`-backed
-> runtime setting (`packages/extension/src/native/index.ts`) rather than a
-> build-time constant. It is on by default (#496), and the side panel's
-> Settings turn it off. Every existing user re-consents on the release that
-> carries that manifest change.
+> `packages/extension/public/manifest.json`. It shipped behind a
+> `chrome.storage`-backed runtime setting rather than a build-time constant,
+> on by default since #496. Since #PR3 there is no setting: Chrome's tree is
+> the side panel's only tree. Every existing user re-consented on the release
+> that carried that manifest change.
 
 ## Why there's still a separate dogfood build
 
 Native mode itself — the `chrome.debugger` capability — no longer needs a
-separate build to stay out of the store listing; it ships in every build now,
-gated at runtime. What `dist-dogfood/` still exists for is narrower:
+separate build to stay out of the store listing; it ships in every build now.
+What `dist-dogfood/` still exists for is narrower:
 **`DogfoodPanel`**, the amber debug widget this exercise used for
 instrumentation (raw event log, capability-refusal counters, the "Copy dogfood
 report" button) — internal diagnostics with no reason to ship to end users,
 still gated behind the build-time `__DOGFOOD__` constant and
-dead-code-eliminated from the store build. The production side panel's own
-**native tree**, on by default (`App.tsx`, `NativeTreeView.tsx`), is the
-real, unbranded, shipped way to use native mode — it needs no separate
-build and no unpacked load; see the next section.
+dead-code-eliminated from the store build. The production side panel's tree,
+Chrome's (`App.tsx`, `NativeTreeView.tsx`), is the real, unbranded, shipped
+way to use native mode — it needs no separate build and no unpacked load;
+see the next section.
 
 If you're here to exercise native mode as a **user of the shipped product**,
 skip straight to it: `pnpm --filter
 @real-a11y-dev/semantic-navigator-extension build` (or `dev`), load
 `packages/extension/dist/` as usual, and open the side panel on a page. It
-reads the native tree by itself (if you turned native mode off before, switch
-it back on in **Settings ▾**). Everything below this point is specifically
+reads Chrome's tree by itself. Everything below this point is specifically
 about the dogfood-only telemetry build and the exercise it was built for.
 
 ## Build & load the dogfood build
@@ -61,9 +60,7 @@ Open the side panel on a real page you actually use (one with a `<video controls
 is a good test — its media controls are the thing only native mode can see).
 
 1. Expand **"⚠︎ chrome.debugger native mode — DEV dogfood"** at the top of the panel.
-2. Tick **native mode** (this is the runtime flag — the `debugger` capability is
-   still inert until you do this).
-3. **Load native tree** — attaches the debugger (you'll see Chrome's
+2. **Load native tree** — attaches the debugger (you'll see Chrome's
    "…started debugging this browser" banner), reads the tree, and lists it. Interactive
    rows are buttons; click one to dispatch a click (or type into a text field).
    The tree **re-reads itself after every successful action**, so the ids stay
@@ -74,7 +71,7 @@ is a good test — its media controls are the thing only native mode can see).
    and menu transitions but **not** a slow fetch-driven re-render — if a click
    ever seems to act on the previous state of the page, that is the case to
    note, and re-reading by hand will confirm it.
-4. **On a page native can't reach**, the panel names the reason instead of
+3. **On a page native can't reach**, the panel names the reason instead of
    reporting a bare failure. Two different moments, because they are two
    different kinds of answer:
    - **Before attaching**, from the URL alone — a `chrome://` tab, the Web
@@ -89,38 +86,34 @@ is a good test — its media controls are the thing only native mode can see).
    would keep most of the reason codes out of the Capability split entirely.
    Pressing costs nothing — the service worker refuses before it attaches.
 
-   Where the DOM producer still works (a DevTools conflict), the message points
-   you at it; where Chrome blocks every extension surface (`chrome://`, the Web
-   Store), it says _that_ rather than sending you to a panel which will also
-   never load.
+   Where the content script still runs (a DevTools conflict), the message
+   points you at the TAB view, which needs no debugger; where Chrome blocks
+   every extension surface (`chrome://`, the Web Store), it says _that_
+   rather than sending you to a view which will also never load.
 
-5. **Switching native mode off detaches.** `debugger` cannot be an optional
-   permission, so "revoked" can only mean "not attached" — unticking the box
-   drops any live attachment and reports the count, **including zero**.
-   Zero is the normal answer and is not a problem: a suspend that strands
-   bookkeeping has usually already dropped the attachment itself, so there is
-   nothing left to detach and the report records it as `detach-stale` rather
-   than as a suspend. A **non-zero** count is the one to note — it means a
-   genuinely live attachment, and its banner, outlived the switch.
-6. Use it across normal sessions for ~2 weeks. Leave DevTools open sometimes.
+4. **Closing the side panel detaches.** `debugger` cannot be an optional
+   permission, so "revoked" can only mean "not attached" — closing the last
+   side panel drops any attachment still live. Normally there is none: a
+   suspend that strands bookkeeping has usually already dropped the
+   attachment itself, so there is nothing left to detach and the report
+   records it as `detach-stale` rather than as a suspend.
+5. Use it across normal sessions for ~2 weeks. Leave DevTools open sometimes.
 
 Everything is instrumented to `chrome.storage.local` (content-free — event kinds,
 timings, counts; never page text or typed values).
 
 ### The production panel's own native tree
 
-The dogfood build's real side panel (below the amber debug widget above) now
-also shows the native tree itself, chosen under **Show** in its
-**Settings ▾** (**Chrome's tree** / **In-page tree**) — a real expand/collapse
-tree instead of the debug widget's flat list, reusing the same InputPanel the
-DOM producer uses for typing into a field. It's a second, separate way to
-exercise native mode from this SAME build, added after the three gating
-questions above were already answered; it carries no instrumentation of its
-own and isn't part of the report this file asks for. Offered only once the
-DOM producer has connected on the current tab (Settings offers no choice of
-tree while the panel shows "Connecting to page…") — a known, deliberate scope
-cut, not a bug, since every page the DOM producer can't reach is also one
-native itself can't attach to.
+The dogfood build's real side panel (below the amber debug widget above)
+shows Chrome's tree itself — a real expand/collapse tree instead of the debug
+widget's flat list, with the panel's own InputPanel for typing into a field.
+It's a second, separate way to exercise native mode from this SAME build,
+added after the three gating questions above were already answered; it
+carries no instrumentation of its own and isn't part of the report this file
+asks for. It reads a page only once the content script has connected on the
+current tab (the panel shows "Connecting to page…" until then) — a
+deliberate scope cut, not a bug, since every page the content script can't
+reach is also one native itself can't attach to.
 
 ## Report back
 
@@ -138,8 +131,9 @@ the RFC PR H thread. The RFC's three questions, plus the one that frames them:
   the debugger can never attach to (`chrome://`, the Web Store), does not.
 - **DevTools conflict** — how often attach was refused because DevTools (or
   another debugger) held the tab.
-- **Recovery abandoned** — a drop that was never retried because native mode
-  went off mid-operation. It is separated from `reattach failed` on purpose:
+- **Recovery abandoned** — a drop that was never retried: the user's Cancel on
+  Chrome's bar caused it, or a pick or an automatic read, which end instead.
+  It is separated from `reattach failed` on purpose:
   nothing was attempted, so counting it as a failure would overstate the risk,
   and counting it as nothing would leave a drop with no verdict at all.
 - **Capability** — how often native was unavailable at all, split by reason.

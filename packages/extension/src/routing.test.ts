@@ -304,7 +304,7 @@ describe("planFrameAnnouncementResponse", () => {
   });
 
   it("re-asserts observing with the tree the panel last asked the tab for, which a frame that missed the request sends", () => {
-    const tree = { viewMode: "dom", framesOnly: false } as const;
+    const tree = { framesOnly: false } as const;
     const plan = planFrameAnnouncementResponse({
       ...baseOpts,
       frameId: 4,
@@ -395,7 +395,7 @@ describe("planFrameHello", () => {
   });
 
   it("arms the frame with the tree the panel last asked the tab for, so one loading after the request sends it", () => {
-    const tree = { viewMode: "tab", framesOnly: false } as const;
+    const tree = { framesOnly: false } as const;
     const plan = planFrameHello({
       tabId: 42,
       frameId: 9,
@@ -654,13 +654,11 @@ describe("shouldPanelAcceptMessage", () => {
 
   describe("the frame-scoped events reach the panel twice", () => {
     // One `focusin` inside an iframe produces TWO deliveries to the panel:
-    // the content script's own sendMessage (frame-LOCAL id, no tabId stamp)
-    // and the background's forward (frame-PREFIXED id, tabId stamped). The
-    // panel must act on the prefixed one only — `sn-3` from frame 2 is a
-    // different, unrelated node in the merged tree's top-frame portion, and
-    // selecting it force-expands its ancestors. The prefixed forward then
-    // fixes the selection but not those expansions, whichever order the two
-    // arrive in.
+    // the content script's own sendMessage (no frame, no tabId stamp) and the
+    // background's forward (its frame and tabId stamped). The panel must act
+    // on the relayed one only: the direct copy's page keys number frame 2's
+    // document, and read as the top frame's they follow focus to an
+    // unrelated row.
     const deliveriesFor = (type: string) => [
       // direct from the iframe's content script
       { type, messageTabId: undefined, senderTabId: MY_TAB, myTabId: MY_TAB },
@@ -668,54 +666,44 @@ describe("shouldPanelAcceptMessage", () => {
       { type, messageTabId: MY_TAB, senderTabId: undefined, myTabId: MY_TAB },
     ];
 
-    it.each(["FOCUS_CHANGED", "NODE_PICKED"])(
-      "accepts exactly one of the two %s deliveries — the relayed one",
-      (type) => {
-        expect(deliveriesFor(type).map(shouldPanelAcceptMessage)).toEqual([
-          false,
-          true,
-        ]);
-      },
-    );
+    it("accepts exactly one of the two FOCUS_CHANGED deliveries — the relayed one", () => {
+      expect(
+        deliveriesFor("FOCUS_CHANGED").map(shouldPanelAcceptMessage),
+      ).toEqual([false, true]);
+    });
 
-    it.each(["FOCUS_CHANGED", "NODE_PICKED"])(
-      "drops the direct %s copy from the top frame too",
-      (type) => {
-        // Frame 0 ids are unprefixed, so the direct copy looks harmless — but
-        // accepting it still double-handles every focus change, and the rule
-        // is not worth making frame-dependent when the panel cannot tell
-        // which frame a direct copy came from.
-        expect(
-          shouldPanelAcceptMessage({
-            type,
-            senderTabId: MY_TAB,
-            myTabId: MY_TAB,
-          }),
-        ).toBe(false);
-      },
-    );
+    it("drops the direct FOCUS_CHANGED copy from the top frame too", () => {
+      // The top frame's direct copy looks harmless — but accepting it still
+      // double-handles every focus change, and the rule is not worth making
+      // frame-dependent when the panel cannot tell which frame a direct copy
+      // came from.
+      expect(
+        shouldPanelAcceptMessage({
+          type: "FOCUS_CHANGED",
+          senderTabId: MY_TAB,
+          myTabId: MY_TAB,
+        }),
+      ).toBe(false);
+    });
 
-    it.each(["FOCUS_CHANGED", "NODE_PICKED"])(
-      "drops the direct %s copy before the panel knows its tab",
-      (type) => {
-        // The duplicate is wrong regardless of tab binding, so the relay
-        // requirement is not conditional on myTabId being known.
-        expect(
-          shouldPanelAcceptMessage({
-            type,
-            senderTabId: MY_TAB,
-            myTabId: null,
-          }),
-        ).toBe(false);
-      },
-    );
+    it("drops the direct FOCUS_CHANGED copy before the panel knows its tab", () => {
+      // The duplicate is wrong regardless of tab binding, so the relay
+      // requirement is not conditional on myTabId being known.
+      expect(
+        shouldPanelAcceptMessage({
+          type: "FOCUS_CHANGED",
+          senderTabId: MY_TAB,
+          myTabId: null,
+        }),
+      ).toBe(false);
+    });
   });
 
   describe("content-direct messages that are not frame-scoped", () => {
     it("accepts LIVE_REGION straight from the content script", () => {
       // LIVE_REGION is the mirror case: the background no-ops its forward,
-      // so the direct copy is the only one — and its payload is text, not an
-      // id, so there is nothing to prefix.
+      // so the direct copy is the only one — and its payload is text, which
+      // names no frame's document.
       expect(
         shouldPanelAcceptMessage({
           type: "LIVE_REGION",

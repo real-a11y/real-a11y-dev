@@ -6,7 +6,6 @@ import {
   FocusManager,
   DomObserver,
   DOM_OBSERVER_DEBOUNCE_MS,
-  createPicker,
   getElementRefs,
   getExplicitRole,
   getNodeId,
@@ -15,7 +14,7 @@ import {
   safeNodeType,
   safeParentElement,
 } from "@real-a11y-dev/core";
-import type { TreeViewMode, TreeChange } from "@real-a11y-dev/core";
+import type { TreeChange } from "@real-a11y-dev/core";
 
 import { computeFieldState } from "./field-state.js";
 import {
@@ -44,20 +43,6 @@ import type { PanelToContent, TreeRequest } from "./types.js";
 
 const isSubFrame = window !== window.top;
 
-/**
- * Actions whose dispatch goes through `ActionDispatcher`'s synthetic
- * pointerdown→click sequence, and which an armed element picker therefore
- * swallows.
- *
- * Not `toggle`, despite its click fallback: the extractor emits it only for
- * `<details>`/`<summary>` (`dom-extractor.ts`), and both of those flip
- * `.open` directly, so the fallback is unreachable from a tree this panel
- * built. The rest — `type`, `select`, `focus`, `submit`, `scroll` and the
- * steppers, which use Arrow keys — never touch a pointer event either.
- */
-const POINTER_ACTIONS = new Set(["click", "navigate"]);
-
-let currentViewMode: TreeViewMode = "a11y";
 // While Chrome's tree shows, a frame sends its skeleton and reads no tree,
 // until the panel asks for the whole tree (`TreeRequest`).
 let framesOnly = true;
@@ -67,14 +52,9 @@ let liveExtractor: LiveTreeExtractor | null = null;
 /** Take the tree the panel asks for. Whether it is another than before. */
 function takeTreeRequest(tree: TreeRequest): boolean {
   const next = tree.framesOnly === true;
-  const changed = tree.viewMode !== currentViewMode || next !== framesOnly;
-  currentViewMode = tree.viewMode;
+  const changed = next !== framesOnly;
   framesOnly = next;
   return changed;
-}
-
-function liveMode(): "dom" | "a11y" {
-  return currentViewMode === "dom" ? "dom" : "a11y";
 }
 
 /** The extractor over the document's root element, or null while the
@@ -82,13 +62,14 @@ function liveMode(): "dom" | "a11y" {
  *  written to yet. */
 function getLiveExtractor(): LiveTreeExtractor | null {
   if (!liveExtractor && boundRoot) {
-    liveExtractor = new LiveTreeExtractor(boundRoot, { mode: liveMode() });
+    liveExtractor = new LiveTreeExtractor(boundRoot, { mode: "a11y" });
   }
   return liveExtractor;
 }
 
 // This frame's mark on the element holding it (see frame-owner.ts), which is
-// how both trees know which <iframe> this frame's document belongs under
+// how the service worker and Chrome's tree know which <iframe> this frame's
+// document belongs under
 // when its URL can't say: an `about:blank` or `srcdoc` frame, or one a
 // script wrote into. None for the top frame.
 const frameMark = isSubFrame ? newFrameMark() : null;
@@ -209,9 +190,6 @@ function teardown(): void {
   observer?.stop();
   unobserveLiveRegions();
   documentObserver.disconnect();
-  // Drop the picker listeners and restore the cursor so the page stops
-  // showing crosshair after the extension is reloaded / orphaned.
-  picker.teardown();
 }
 
 /**
@@ -257,8 +235,6 @@ function frameTree(change?: TreeChange) {
   }
   const extractor = getLiveExtractor();
   if (!extractor) return null;
-  const mode = liveMode();
-  if (extractor.mode !== mode) extractor.setMode(mode);
   const result = change ? extractor.refresh(change) : extractor.extract();
   const nodes = Array.from(result.nodes.entries());
   return { nodes, rootId: result.rootId, embeds: markedFrames(nodes) };
@@ -278,26 +254,6 @@ let observer = observerOf(boundRoot);
 // does), so this costs nothing on a page that never replaces its document.
 const documentObserver = new MutationObserver(() => rebindDocument());
 documentObserver.observe(document, { childList: true });
-
-// ─── Element picker (DevTools-style "select an element in the page") ─────────
-//
-// All behavior lives in the standalone `createPicker` factory in
-// ./picker.ts — that module is unit-tested in jsdom without chrome.runtime.
-// The wiring here just injects the runtime dependencies (FocusManager
-// highlight, the shared elementRefs, safeSendMessage for panel
-// notifications) and keeps a reference for teardown.
-const picker = createPicker({
-  doc: document,
-  isSubFrame,
-  findId: (el) => elementRefs.findId(el),
-  onHighlight: (nodeId) =>
-    focusManager.highlightElement(nodeId, { scroll: false }),
-  onClearHighlight: () => focusManager.clearHighlight(),
-  onPicked: (nodeId) =>
-    safeSendMessage({ type: "NODE_PICKED", payload: { nodeId } }),
-  onModeChange: (enabled) =>
-    safeSendMessage({ type: "PICK_MODE_CHANGED", payload: { enabled } }),
-});
 
 // Listen for messages from side panel (via background)
 chrome.runtime.onMessage.addListener(
@@ -349,30 +305,6 @@ chrome.runtime.onMessage.addListener(
       }
 
       case "DISPATCH_ACTION": {
-        // An armed picker owns the page's POINTER events, so an action that
-        // reaches the dispatcher's synthetic pointerdown→click sequence
-        // cannot land: the picker's capture-phase listeners swallow the whole
-        // sequence before the page sees any of it. Worse, that click reaches
-        // the picker's own handler, which resolves the actioned element —
-        // tracked by construction, since the action arrived as a node id —
-        // reports it as a NODE_PICKED the user never pointed at, and drops
-        // out of pick mode. Refuse instead: same page outcome as before,
-        // without the phantom pick.
-        //
-        // Only the pointer actions. The picker listens for pointer events and
-        // Escape, nothing else, so `type`, `select`, `focus`, `submit`,
-        // `scroll` and the steppers (keyboard arrows) reach the page
-        // unharmed and stay available — blocking those would strand a typed
-        // value in the input panel for no reason. `toggle` is here because it
-        // falls back to a click for anything that is not a <details>.
-        if (picker.isEnabled() && POINTER_ACTIONS.has(message.payload.action)) {
-          sendResponse({
-            success: false,
-            error: "Turn off pick mode to act on the page",
-          });
-          break;
-        }
-
         const result = dispatcher.dispatch(message.payload);
         sendResponse(result);
 
@@ -478,12 +410,6 @@ chrome.runtime.onMessage.addListener(
         break;
       }
 
-      case "SET_PICK_MODE": {
-        picker.setEnabled(message.payload.enabled);
-        sendResponse({ success: true });
-        break;
-      }
-
       case "TOGGLE_CURTAIN": {
         curtainVisible = message.payload.visible;
 
@@ -510,20 +436,12 @@ chrome.runtime.onMessage.addListener(
       }
 
       case "SEND_KEY": {
-        // No pick-mode gate here, deliberately. The picker's keydown
-        // listener acts on exactly one key — it takes Escape as "leave pick
-        // mode" — and that is a reasonable thing for Escape to do, not the
-        // silent corruption DISPATCH_ACTION suffered. Refusing it instead
-        // would leave the key bar's Esc doing nothing at all: the page never
-        // sees it either way, and the mode it used to close stays open.
-        // Every other key passes the picker untouched.
-        //
         // Synthetic KeyboardEvents are untrusted — Chrome skips their
         // default actions (Tab does not move focus; Escape does not close
         // <dialog>). sendKey dispatches the events for page listeners and
         // applies those defaults itself unless preventDefault ran. Tab
         // order reuses core getTabSequence via the live extractor — same
-        // policy as the panel's Tab Sequence view.
+        // policy as the panel's TAB view.
         const target = document.activeElement || document.body;
         sendKey(target, message.payload, {
           resolveTabSequence: () => {
@@ -601,12 +519,10 @@ function onFocusIn(
   watchFocusRoots(focused);
   if (curtainVisible) return;
 
-  // The DOM tree follows the document's view of the event, the outermost
-  // shadow host, as it always has. A move heard on a shadow root keeps that
-  // host, so it has nothing new to follow there. The focus ring goes on it:
-  // a frame that sent its skeleton has no tree for the ring's id to name.
+  // The focus ring goes on the document's view of the event, the outermost
+  // shadow host. A move heard on a shadow root keeps that host, so it has
+  // nothing new to ring there.
   const ringId = atDocument ? overlayNodeId(e.target as Element | null) : null;
-  const nodeId = framesOnly ? null : ringId;
   // For the native tree, which may hold a row for the element itself. A
   // report that numbers nothing still says which frame focus is in, and the
   // panel takes that frame's row. In the top frame it says nothing at all.
@@ -617,14 +533,8 @@ function onFocusIn(
       ? chains
       : undefined;
   if (ringId) focusManager.highlightElement(ringId);
-  if (!nodeId && !keys) return;
-  safeSendMessage({
-    type: "FOCUS_CHANGED",
-    payload: {
-      ...(nodeId ? { nodeId } : {}),
-      ...(keys ? { pageKeys: keys } : {}),
-    },
-  });
+  if (!keys) return;
+  safeSendMessage({ type: "FOCUS_CHANGED", payload: { pageKeys: keys } });
 }
 
 /** The element an event happened on. `e.target` is retargeted to the
@@ -755,9 +665,9 @@ function overlayNodeId(el: Element | null): string | null {
   return id;
 }
 
-// The native tree's selection follow asks for the same overlay the DOM tree's
-// own select draws (HIGHLIGHT_NODE → `highlightElement`, scrolled into view),
-// and its hover for the one the DOM tree's hover draws (in place: no scroll).
+// The native tree's selection follow asks for the same overlay a TAB row's
+// select draws (HIGHLIGHT_NODE → `highlightElement`, scrolled into view), and
+// its hover for an overlay drawn in place, with no scroll.
 // `pageReveal` and `pagePreview` in native/native-core.ts fire these at the
 // element from the page's main world, and DOM events reach this isolated
 // world with the same target, so the overlay lands on the element the native
@@ -1038,11 +948,10 @@ const typing = typingClock();
  * (`isPageInput`). While the panel is open, say so, and when (`actedAt`),
  * and nothing more: not what or where. Chrome's tree then reads what the
  * page does in the next few seconds, as it does after an action sent
- * through the tree. A click the picker takes is a pick, not an action on
- * the page.
+ * through the tree.
  */
 const onPageInput = (e: Event) => {
-  if (tornDown || !observingEnabled || picker.isEnabled()) return;
+  if (tornDown || !observingEnabled) return;
   // A key in a closed shadow root's field reaches the window as its host's;
   // `deepFocusTarget` finds the field.
   const target = () =>
@@ -1114,12 +1023,6 @@ function rebindDocument(): void {
   observer?.stop();
   observer = observerOf(root);
   unobserveLiveRegions();
-  // An armed picker lost its listeners with the rest: arm it again, which
-  // tells the panel nothing it doesn't know.
-  if (picker.isEnabled()) {
-    picker.teardown();
-    picker.setEnabled(true);
-  }
   // The curtain was an element of the document that is gone.
   drawCurtain();
   if (!observingEnabled) return;

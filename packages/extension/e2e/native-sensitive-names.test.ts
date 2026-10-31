@@ -118,7 +118,6 @@ test("the panel shows no card number in any row", async ({ nav }) => {
   const { page } = await nav.open("native-sensitive-names.html");
   await page.bringToFront();
   await nav.panel.reload();
-  await nav.chooseTree("Chrome's tree");
   await expect
     .poll(() => nav.panel.locator(".sn-node").count(), { timeout: 20_000 })
     .toBeGreaterThan(0);

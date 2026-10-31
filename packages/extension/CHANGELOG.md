@@ -21,18 +21,26 @@
 
 ### Patch Changes
 
-- The in-page tree's toolbar now fits a side panel. At the 320–400px a side
-  panel usually has, its search box shrank to a sliver, its DOM / A11Y / TAB
-  views were squeezed out of sight, so a click on one of them landed on
-  another control, and **Copy ▾** ran past the panel's edge. The in-page
-  tree's own controls, its search box, views, ↻, + and -, now have a row of
-  their own under the one both trees share, as Chrome's tree's always have,
-  so `Tab` reaches the search box after **Copy ▾**, as it does there. A
-  search's match count ends that row, or drops under it when there's no
-  room. A narrower panel wraps both rows rather than squeezing a control
-  ([#533](https://github.com/real-a11y/real-a11y-dev/pull/533)).
+- The side panel shows Chrome's tree alone
+  ([#PR3](https://github.com/real-a11y/real-a11y-dev/pull/PR3)). The
+  extension's own in-page tree is gone, with its DOM / A11Y / TAB views,
+  and so are the **Settings ▾** switch that turned reading
+  through Chrome off (**Read pages through Chrome**), its **Show** choice of
+  tree, and the debugging-bar note's **Turn off**. A switch turned off in
+  0.1.17 or earlier no longer counts: the panel reads the first page through
+  Chrome, as a fresh install does. Where Chrome won't let the extension's
+  debugger attach (DevTools holds the tab, say, or it is a `chrome://` page),
+  the panel says why instead of falling back to the in-page tree, and the
+  TAB view still lists the page's tab order wherever the extension's content
+  script runs. ⦿ always picks through Chrome's own inspect mode. The TAB
+  view's names no longer stop at 57 characters: a long one ends in an
+  ellipsis, with its whole text as a tooltip, and **Show full names** shows
+  it whole. **Copy ▾** offers the tab sequence while the TAB view shows it,
+  labelled as the extension's in-page walk's. And closing the last side
+  panel detaches the debugger from any tab it is still attached to, such as
+  one a restarted service worker left attached.
 
-- A long name in either tree ends in an ellipsis instead of widening the
+- A long name in Chrome's tree ends in an ellipsis instead of widening the
   tree, so the panel no longer scrolls sideways on pages whose names run to a
   sentence, such as es.wikipedia.org's
   ([#535](https://github.com/real-a11y/real-a11y-dev/pull/535)). The name
@@ -48,15 +56,13 @@
   window's side panel (`settings.showFullNames` in `chrome.storage.local`).
   **Settings ▾** and **Copy ▾** also close now when focus moves out of them,
   rather than staying open over what it moved to. And Chrome's tree's own
-  toolbar wraps onto a second row in a side panel too narrow for it, as the
-  in-page tree's do since
-  [#533](https://github.com/real-a11y/real-a11y-dev/pull/533).
+  toolbar wraps onto a second row in a side panel too narrow for it.
 
-- The in-page tree names a paragraph, list item, code block or status message
-  with the words inside its plain inline wrappers, as Chrome's own tree does:
-  a `<span>`, a `<b>`, a custom or unknown element. A paragraph reading
+- The TAB view names a focusable paragraph, list item or code block with the
+  words inside its plain inline wrappers, as Chrome's own tree does: a
+  `<span>`, a `<b>`, a custom or unknown element. A stop reading
   `Drop in <b>the panel</b> now.` used to show as `paragraph "Drop in now."`,
-  a paragraph whose only text sat in a `<span>` showed unnamed, and a
+  one whose only text sat in a `<span>` showed unnamed, and a
   syntax-highlighted code block showed as a bare `code`. A `<br>` now reads as
   a space instead of joining the lines into one word
   ([#546](https://github.com/real-a11y/real-a11y-dev/pull/546)).
@@ -90,25 +96,20 @@
   lists the page's tab stops in the tree's place, in tab order: a positive
   `tabindex` first, then document order
   ([#566](https://github.com/real-a11y/real-a11y-dev/pull/566)). Chrome's
-  tree carries no tab order, so the list is the in-page reading's, as in the
-  in-page tree's own TAB view: showing it reads nothing through Chrome, so
-  the debugging bar doesn't come up for it, and selecting a stop outlines
-  and focuses it on the page. Until now, seeing the tab order with native
-  mode on meant switching to the in-page tree in **Settings ▾**. The two
-  trees share the view: TAB stays on across the choice of tree, leaving it
-  returns to whichever of the in-page tree's DOM and A11Y views was last on,
-  and a pick from the page goes back to Chrome's tree, with the picked row
-  selected.
+  tree carries no tab order, so the list is the extension's own reading of
+  the page's: showing it reads nothing through Chrome, so the debugging bar
+  doesn't come up for it, and selecting a stop outlines and focuses it on
+  the page. A pick from the page goes back to Chrome's tree, with the picked
+  row selected.
 
-- While Chrome's tree shows, the page no longer reads the in-page tree,
-  which isn't on screen then
+- The page no longer reads a tree of its own that isn't on screen
   ([#569](https://github.com/real-a11y/real-a11y-dev/pull/569)). Each frame
   of the page used to walk itself and send its whole tree after every burst
-  of changes, whichever tree showed, for nothing the user could see. Now a
-  frame sends only what Chrome's tree needs of it: that the page is there,
+  of changes, for nothing the user could see while Chrome's tree showed. Now
+  a frame sends only what Chrome's tree needs of it: that the page is there,
   its title, when it changed, and which of its frames the page shows. It
   reads that off its root element and the elements holding frames, found in
-  one quick pass over the page, where the in-page tree works out every
+  one quick pass over the page, where its whole tree works out every
   element's role, name and states. On a page of some 2,400 elements, each
   change cost the page about 37 ms of script and sent the extension about
   1.2 MB; it now costs about 3 ms and sends 1 KB. So **Follow page changes**
@@ -116,9 +117,8 @@
   shows, and still pass over one in a hidden frame, an animating ad's. A
   hidden frame is now also found under its own `<iframe>` when another's
   address is like its own, so its changes no longer pass for that one's. The
-  in-page tree, and either tree's TAB view, read the page when they come up,
-  and say _Reading the page…_ until it lands; the in-page tree comes back
-  with the scope, selection and expanded rows it had.
+  TAB view reads the page's tree when it comes up, and says _Reading the
+  page's tab order…_ until it lands.
 
 ## 0.1.17
 
@@ -942,7 +942,7 @@
 
 - A dialog, image, landmark or text field no longer shows its loose text as
   its name in DOM mode. `<div role="dialog">Delete this project?
-  <button>Cancel</button></div>` has no accessible name, as NATIVE mode and a
+<button>Cancel</button></div>` has no accessible name, as NATIVE mode and a
   screen reader already reported, and appeared in the tree as
   `dialog "Delete this project?"`. So did a `<nav>`'s "Menu:" label, a
   `<textarea>`'s typed contents and a `<footer>`'s copyright line. Paragraphs,

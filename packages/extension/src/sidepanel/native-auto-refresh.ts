@@ -1,8 +1,9 @@
 /**
  * When the native tree reads itself again without being asked.
  *
- * The DOM tree updates live: the content script's mutation observer sends a
- * fresh `TREE_DATA` after every burst of changes. The native tree is read
+ * The page tells the panel when it changes: the content script's mutation
+ * observer sends a fresh `TREE_DATA` (or its frame's skeleton) after every
+ * burst of changes. The native tree is read
  * over `chrome.debugger`, one attach per read, and each attach shows Chrome's
  * "…started debugging this browser" bar. So it follows that signal sparingly,
  * in one of two modes:
@@ -105,16 +106,13 @@ export interface AutoRefreshState {
   mode: AutoRefreshMode;
   /**
    * The tab whose native tree refreshes itself, or `null`. Set when a read
-   * succeeds; cleared by a tab switch, by leaving native mode, and by a
-   * failed read, so a refusal or the user's Cancel on Chrome's bar is never
+   * succeeds; cleared by a tab switch and by a failed read, so a refusal or the user's Cancel on Chrome's bar is never
    * answered by another attach. A navigation does not clear it: the new page
    * on the same tab is read once it settles.
    */
   armedTab: number | null;
   /** The tab the panel is bound to now. */
   boundTab: number | null;
-  /** Native mode is on and the panel is showing the native tree. */
-  native: boolean;
   /** A same-tab navigation happened and its page hasn't been read yet. */
   navigationPending: boolean;
   /** When the page last changed, in ms: the latest date a page-change
@@ -165,7 +163,7 @@ export function decideAutoRefresh(
   s: AutoRefreshState,
   now: number,
 ): AutoRefreshDecision {
-  if (!s.native || s.armedTab === null || s.armedTab !== s.boundTab) {
+  if (s.armedTab === null || s.armedTab !== s.boundTab) {
     return { kind: "skip" };
   }
   // Nothing changed since the latest read began.

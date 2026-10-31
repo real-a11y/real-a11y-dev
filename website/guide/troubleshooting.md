@@ -20,7 +20,7 @@ Three usual causes:
 2. **Selector didn't match.** `document.querySelector("main")` returns `null` if there's no `<main>` landmark yet. Check the return value.
 3. **Whole subtree is hidden.** `display: none`, `visibility: hidden`, or `aria-hidden="true"` on an ancestor excludes the subtree from the a11y tree by design. That's what a screen reader sees — nothing.
 
-If the tree genuinely is empty but you expect content, open the Chrome extension on the same page and check the A11y view — the same extraction runs there.
+If the tree genuinely is empty but you expect content, mount the [inspector](/packages/inspector) on the same page and check its A11y view — the same extraction runs there.
 
 ---
 
@@ -136,14 +136,16 @@ the browser.
 Two cases still come up short:
 
 - **Closed shadow roots** (`attachShadow({ mode: "closed" })`) can't be read
-  from page script, so their host shows up with nothing inside it. The CLI and
-  MCP server read Chromium's own accessibility tree, which does include them. If
+  from page script, so their host shows up with nothing inside it. The CLI, the
+  MCP server and the Chrome extension read Chromium's own accessibility tree,
+  which does include them. If
   you own the component, an open root costs you nothing in encapsulation that
   matters for styling.
-- **Live views don't yet notice changes inside a shadow root.** The panel and the
-  extension re-extract on DOM mutations, and mutations inside a component's shadow
-  tree don't reach that observer yet. If a component updates and the panel
-  doesn't, press refresh. One-shot extraction (the `testing` matchers and
+- **Live views don't yet notice changes inside a shadow root.** The panel
+  re-extracts on DOM mutations, and the extension, with **Follow page changes**
+  on, reads Chrome's tree again after them, but mutations inside a component's
+  shadow tree don't reach that observer yet. If a component updates and the
+  panel doesn't, press refresh. One-shot extraction (the `testing` matchers and
   assertions, `getTree()`) always reads the current state.
 
 ---
@@ -254,4 +256,4 @@ The MCP server blocks `file://` navigation by default — an LLM that can open `
 
 - Check the [Peer Dependencies](/recipes/peer-dependencies) recipe — most "it doesn't install" issues are peer version mismatches.
 - Check the relevant recipe ([Next.js](/recipes/nextjs), [Storybook + React 19](/recipes/storybook-react-19)) if you're on one of those stacks.
-- Reproduce in the Chrome extension against the same URL — if the extension also produces the unexpected output, it's a real tree extraction question (open an issue with the minimal HTML). If the extension matches your expectation but the library disagrees, it's likely a config or environment issue.
+- Reproduce in the [inspector](/packages/inspector) on the same page — if it also produces the unexpected output, it's a real tree extraction question (open an issue with the minimal HTML). If the inspector matches your expectation but the library disagrees, it's likely a config or environment issue. The Chrome extension shows Chromium's own tree, which differs from the library's by design ([Two producers](/guide/reading-the-a11y-view#two-producers)).

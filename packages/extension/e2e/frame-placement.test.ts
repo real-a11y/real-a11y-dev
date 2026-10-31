@@ -1,5 +1,6 @@
 /**
- * Frames of another origin than the page's, in the in-page tree. Such a
+ * Frames of another origin than the page's, in the page's own walk, which
+ * the TAB view lists. Such a
  * frame can't read `window.frameElement`, so it can't mark the element
  * holding it (`src/frame-owner.ts`): the tree places it by its URL, matched
  * against each `<iframe>`'s `src` with the query string and then without,
@@ -19,7 +20,7 @@ const FIXTURE = "frame-placement.html";
 test("a frame lands under the <iframe> its URL names, though hidden frames announced before it", async ({
   nav,
 }) => {
-  const { page, tabId } = await nav.openInPage(FIXTURE);
+  const { page, tabId } = await nav.showTabOrder(FIXTURE);
   // Both hidden frames are in the page's tree, so both announced. Asking
   // each frame for its tree again leaves the order they first announced in
   // as it was.

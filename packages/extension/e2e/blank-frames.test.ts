@@ -1,8 +1,9 @@
 /**
  * Frames with no URL of their own: `about:blank` and `srcdoc` frames, and
  * the ones a page writes into with `document.open()`. The content script
- * runs in them under the manifest's `match_about_blank`, so the in-page tree
- * reads them and Chrome's tree follows focus inside them.
+ * runs in them under the manifest's `match_about_blank`, so the page's own
+ * walk, which the TAB view lists, reads them, and Chrome's tree follows focus
+ * inside them.
  *
  * What makes them their own suite is that nothing in a URL tells them apart.
  * They all show `about:blank` or `about:srcdoc`, their `<iframe>`s carry no
@@ -43,12 +44,12 @@ async function framesLoaded(page: Page): Promise<void> {
   }
 }
 
-// ---- The in-page tree ----------------------------------------------------
+// ---- The page's own walk, which the TAB view lists ------------------------
 
-test("the in-page tree reads each blank frame under its own <iframe>", async ({
+test("the page's own walk reads each blank frame under its own <iframe>", async ({
   nav,
 }) => {
-  const { page, tabId } = await nav.openInPage(FIXTURE);
+  const { page, tabId } = await nav.showTabOrder(FIXTURE);
   await framesLoaded(page);
   // More than once: the frames answer in whatever order they please, and
   // the two `srcdoc` ones can't be told apart by anything but their marks.
@@ -72,10 +73,10 @@ test("the in-page tree reads each blank frame under its own <iframe>", async ({
   }
 });
 
-test("the in-page tree follows a frame the page writes over again", async ({
+test("the page's own walk follows a frame the page writes over again", async ({
   nav,
 }) => {
-  const { page, tabId } = await nav.openInPage(FIXTURE);
+  const { page, tabId } = await nav.showTabOrder(FIXTURE);
   await framesLoaded(page);
   await nav.domTree(tabId);
 
@@ -101,12 +102,12 @@ test("the in-page tree follows a frame the page writes over again", async ({
   }
 });
 
-test("the in-page tree follows a page that writes its own document over again", async ({
+test("the page's own walk follows a page that writes its own document over again", async ({
   nav,
 }) => {
   // Not a blank frame's matter alone: any document can be replaced under
   // the script that reads it, the top one included.
-  const { page, tabId } = await nav.openInPage(FIXTURE);
+  const { page, tabId } = await nav.showTabOrder(FIXTURE);
   await framesLoaded(page);
   await nav.domTree(tabId);
 
@@ -145,7 +146,7 @@ test("the in-page tree follows a page that writes its own document over again", 
 test("blank frames a page adds while the panel is open each land under their own <iframe>", async ({
   nav,
 }) => {
-  const { page, tabId } = await nav.openInPage(FIXTURE);
+  const { page, tabId } = await nav.showTabOrder(FIXTURE);
   await framesLoaded(page);
   await nav.domTree(tabId);
 
@@ -185,7 +186,7 @@ test("a frame that loads long after the page around it was read still lands unde
   // The page's tree is sent once for the new <iframe>, before the frame's
   // script has loaded and marked it, and the page doesn't change again. The
   // frame is placed all the same, once the page is asked for its tree.
-  const { page, tabId } = await nav.openInPage(FIXTURE);
+  const { page, tabId } = await nav.showTabOrder(FIXTURE);
   await framesLoaded(page);
   await nav.domTree(tabId);
 

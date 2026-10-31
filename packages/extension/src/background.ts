@@ -7,14 +7,13 @@ import {
   mergeFrameTrees,
   unplacedFrames,
 } from "./frame-merger.js";
-import { cancelNativePicks, registerNativeMode } from "./native/index.js";
+import { registerNativeMode, releaseDebugger } from "./native/index.js";
 import {
   type PlannedTabMessage,
   describeBroadcastDelivery,
   isTrustedSender,
   lookupOrder,
   panelWindowFor,
-  prefixNodeId,
   parseNodeId,
   planFrameAnnouncementResponse,
   planFrameHello,
@@ -520,7 +519,7 @@ chrome.runtime.onConnect.addListener((port) => {
     sidepanelConnected = false;
     focusTrackerOffTabs.clear();
     panelTrees.clear();
-    cancelNativePicks();
+    releaseDebugger();
 
     // The panel arms the focus tracker (and observer) on any tab whose frames
     // announce while it is connected — background tabs included, and
@@ -814,47 +813,21 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       }
 
       case "FOCUS_CHANGED": {
-        // Prefix the nodeId and forward to side panel. Stamp `tabId` so
-        // the panel can drop focus events for tabs it isn't bound to. The
-        // native tree's page keys number the reporting frame's own document
+        // Forward to the side panel. Stamp `tabId` so the panel can drop
+        // focus events for tabs it isn't bound to. The native tree's page
+        // keys number the reporting frame's own document
         // (`NATIVE_PAGE_KEYS`), so they go with that frame.
-        const { nodeId, pageKeys } = message.payload;
+        const { pageKeys } = message.payload;
         chrome.runtime
           .sendMessage({
             type: "FOCUS_CHANGED",
             tabId,
-            payload: {
-              ...(nodeId !== undefined
-                ? { nodeId: prefixNodeId(frameId, nodeId) }
-                : {}),
-              ...(pageKeys !== undefined ? { pageKeys, frameId } : {}),
-            },
+            payload: { pageKeys, frameId },
           })
           .catch((err) => {
             // Panel may be closed; benign, but log so real routing bugs aren't invisible.
             console.debug(
               "[SN background] FOCUS_CHANGED forward failed:",
-              err?.message ?? err,
-            );
-          });
-        sendResponse({ received: true });
-        return false;
-      }
-
-      case "NODE_PICKED": {
-        // Same shape as FOCUS_CHANGED — the content script reports a
-        // frame-local nodeId; prefix it with the originating frameId
-        // so the panel resolves it against the merged tree.
-        const prefixedNodeId = prefixNodeId(frameId, message.payload.nodeId);
-        chrome.runtime
-          .sendMessage({
-            type: "NODE_PICKED",
-            tabId,
-            payload: { nodeId: prefixedNodeId },
-          })
-          .catch((err) => {
-            console.debug(
-              "[SN background] NODE_PICKED forward failed:",
               err?.message ?? err,
             );
           });
@@ -919,8 +892,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         if (message.payload.enabled) focusTrackerOffTabs.delete(tabId);
         else focusTrackerOffTabs.add(tabId);
       } else {
-        const { viewMode, framesOnly } = message.payload;
-        panelTrees.set(tabId, { viewMode, framesOnly: framesOnly === true });
+        panelTrees.set(tabId, {
+          framesOnly: message.payload.framesOnly === true,
+        });
       }
       // Clear old frame data on fresh request
       if (message.type === "REQUEST_TREE") {
@@ -988,10 +962,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
               {
                 type: "REQUEST_TREE",
                 payload: tree ??
-                  panelTrees.get(nowActive) ?? {
-                    viewMode: "a11y",
-                    framesOnly: true,
-                  },
+                  panelTrees.get(nowActive) ?? { framesOnly: true },
               },
               () => {
                 if (chrome.runtime.lastError) {
@@ -1022,21 +993,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           /* ignore */
         }
       });
-    }
-    sendResponse({ success: true });
-    return false;
-  }
-
-  // Picker toggle — broadcast to every frame so a click inside an iframe
-  // also picks an element. NODE_PICKED comes back through the default
-  // content→panel forwarder below (with `tabId` stamped on).
-  if (message.type === "SET_PICK_MODE") {
-    const targetTabId = resolvePanelTargetTab(
-      (message as { tabId?: number }).tabId,
-      activeTabId,
-    );
-    if (targetTabId != null) {
-      void broadcastToAllFrames(targetTabId, message);
     }
     sendResponse({ success: true });
     return false;

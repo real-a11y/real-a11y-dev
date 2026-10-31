@@ -24,12 +24,15 @@ select `packages/extension/dist`. (After any rebuild, click the refresh icon on 
 page — a stale service worker is the usual cause of "it didn't change".)
 
 1. Open the side panel on a content-rich page — does it connect and render a tree?
-   From 0.1.16 the panel opens on Chrome's own tree (native
-   mode, which **R42** covers), and this row exercises the DOM tree: open
-   **Settings ▾** and uncheck **Read pages through Chrome (recommended)**. That holds
-   for the rest of the run, R18 and R19 included. A build from 0.1.15 or earlier has
-   no native mode and no Settings.
-2. Switch views: tree / outline / tab order / findings
+   From 0.1.18 the panel shows Chrome's own tree alone, and this row exercises it
+   (**R42** covers what is particular to reading through Chrome: its bar, its note,
+   a refused attach). (Extension ≤ 0.1.17: this row exercises the in-page tree.
+   Open **Settings ▾** and uncheck **Read pages through Chrome (recommended)**, which
+   holds for the rest of the run, R18 and R19 included. A build from 0.1.15 or
+   earlier has no native mode and no Settings.)
+2. Switch views: **A11Y** and **TAB**, and the role filters (**Headings**,
+   **Links**, …). (Extension ≤ 0.1.17, in the in-page tree: tree / outline / tab
+   order / findings.)
 3. Search, and type-ahead within the tree
 4. Select a node — is the corresponding element highlighted on the page?
 5. The element picker: pick from the page, land on the right node. Pick a node on a
@@ -58,20 +61,23 @@ page — a stale service worker is the usual cause of "it didn't change".)
    usually ~30s), then navigate to an ordinary page and press **Try again** — does the
    tree arrive on the FIRST press?
 12. On a page with long names (Spanish Wikipedia's front page) with the panel at its
-   default width, in both trees: does a long name end in "…" with no sideways scroll,
-   and does hovering it show the whole name? Does every row with a state badge
-   (collapsed, disabled, …) show it whole, however long its name? Turn on **Settings ▾**
-   → **Show full names**: does the tree widen to fit the names and scroll sideways? Open
-   the panel in a second window: is it on there too? Turn it off again.
+   default width: does a long name end in "…" with no sideways scroll, and does
+   hovering it show the whole name? (Extension ≤ 0.1.17: in both trees.) Does every
+   row with a state badge (collapsed, disabled, …) show it whole, however long its
+   name? Press **TAB**: does a long stop name end in "…" too? Turn on **Settings ▾**
+   → **Show full names**: do the tree and the TAB list widen to fit the names and
+   scroll sideways? Open the panel in a second window: is it on there too? Turn it
+   off again.
 
 ## Expected
 
 - Panel connects and renders without a manual reload
 - Every view populates and stays in sync with the page
 - Selection highlights the right element; the picker resolves to the right node
-- **Picking never activates what you picked.** Before `core 0.1.0-beta.12` the picker
-  cancelled only the `click`, so on a run against an earlier release the menu opening
-  or focus moving on step 5 is the known defect, not a new one
+- **Picking never activates what you picked.** From 0.1.18 the picker is Chrome's own
+  inspect mode. Before `core 0.1.0-beta.12` the in-page picker cancelled only the
+  `click`, so on a run against an earlier release the menu opening or focus moving
+  on step 5 is the known defect, not a new one
 - **Arrowing announces the active row** to the screen reader. This is the one that
   actually matters
 - Expand/collapse state survives live tree updates — a re-render that collapses
@@ -90,10 +96,11 @@ page — a stale service worker is the usual cause of "it didn't change".)
   exists for, not a new one
 
 - **A long name doesn't scroll the panel sideways** (step 12). From extension 0.1.18
-  (unreleased) it ends in "…" with a tooltip, a row's key states end its label whole
-  (only a row too narrow for them widens the tree, and alone), and **Show full names**
-  brings back the wide tree in every window. On 0.1.17 and earlier a long name always
-  widens the tree, and Settings has no such switch
+  (unreleased) it ends in "…" with a tooltip, in the tree and the TAB list alike, a
+  row's key states end its label whole (only a row too narrow for them widens the
+  tree, and alone), and **Show full names** brings back the wide tree in every
+  window. On 0.1.17 and earlier a long name always widens the tree, and Settings has
+  no such switch
 
 ## Why this exists
 
