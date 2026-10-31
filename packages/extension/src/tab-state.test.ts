@@ -1,3 +1,4 @@
+import type { SemanticNode } from "@real-a11y-dev/core";
 import { describe, it, expect, vi } from "vitest";
 
 import type { FrameTree } from "./frame-merger.js";
@@ -9,7 +10,10 @@ import {
   createTabState,
   disposeTabState,
   forgetAskedPlaces,
+  framesToMerge,
   getOrCreateTabState,
+  holdsSkeleton,
+  publishedTree,
   recordFrameTree,
   removeFrame,
   unplaceableFrames,
@@ -295,5 +299,161 @@ describe("disposeTabState", () => {
   it("is a no-op for tab ids that aren't tracked", () => {
     const reg = new Map<number, TabState>();
     expect(() => disposeTabState(reg, 999)).not.toThrow();
+  });
+});
+
+describe("holdsSkeleton", () => {
+  /** The frames Chrome lists. */
+  const live = (...frameIds: number[]) =>
+    new Map(frameIds.map((id) => [id, { parentFrameId: 0, url: "" }]));
+  const skeletonOf = (frameId: number): FrameTree => ({
+    ...makeFrameTree(frameId),
+    framesOnly: true,
+  });
+
+  it("is false while every frame sent its tree", () => {
+    const s = createTabState();
+    s.frames.set(0, makeFrameTree(0));
+    s.frames.set(1, makeFrameTree(1));
+    expect(holdsSkeleton(s, live(0, 1))).toBe(false);
+  });
+
+  it("is true while the top frame sent its skeleton", () => {
+    const s = createTabState();
+    s.frames.set(0, skeletonOf(0));
+    s.frames.set(1, makeFrameTree(1));
+    expect(holdsSkeleton(s, live(0, 1))).toBe(true);
+    // Whatever Chrome lists: the top frame is the page.
+    expect(holdsSkeleton(s, live())).toBe(true);
+  });
+
+  it("is true while a frame Chrome lists sent its skeleton", () => {
+    const s = createTabState();
+    s.frames.set(0, makeFrameTree(0));
+    s.frames.set(3, skeletonOf(3));
+    expect(holdsSkeleton(s, live(0, 3))).toBe(true);
+  });
+
+  it("leaves out a frame Chrome no longer lists, which sends nothing again", () => {
+    const s = createTabState();
+    s.frames.set(0, makeFrameTree(0));
+    s.frames.set(3, skeletonOf(3));
+    expect(holdsSkeleton(s, live(0))).toBe(false);
+  });
+});
+
+describe("framesToMerge", () => {
+  const live = (...frameIds: number[]) =>
+    new Map(frameIds.map((id) => [id, { parentFrameId: 0, url: "" }]));
+
+  it("leaves out the skeleton of a frame Chrome no longer lists, and nothing else", () => {
+    const s = createTabState();
+    s.frames.set(0, { ...makeFrameTree(0), framesOnly: true });
+    s.frames.set(1, { ...makeFrameTree(1), framesOnly: true });
+    s.frames.set(2, { ...makeFrameTree(2), framesOnly: true });
+    // A frame's tree is merged in its turn whether Chrome lists it or not.
+    s.frames.set(3, makeFrameTree(3));
+    expect([...framesToMerge(s, live(1)).keys()]).toEqual([0, 1, 3]);
+    // The tab's own record of its frames is left alone.
+    expect(s.frames.size).toBe(4);
+  });
+});
+
+describe("publishedTree", () => {
+  function node(
+    id: string,
+    parentId: string | null,
+    isExposedToAT = true,
+  ): SemanticNode {
+    return {
+      id,
+      parentId,
+      childIds: [],
+      depth: parentId === null ? 0 : 1,
+      a11y: {
+        role: "generic",
+        name: "",
+        description: "",
+        states: {},
+        properties: {},
+        isExposedToAT,
+      },
+    };
+  }
+
+  /** The page, frame 1 under an <iframe> it shows and frame 2 under one it
+   *  hides, as merged. */
+  function page() {
+    const state = createTabState();
+    const topFrame = makeFrameTree(0);
+    state.frames.set(0, topFrame);
+    state.frames.set(1, makeFrameTree(1));
+    state.frames.set(2, makeFrameTree(2));
+    const merged = [
+      node("root-0", null),
+      node("shown", "root-0"),
+      node("hidden", "root-0", false),
+      node("f1-root-1", "shown"),
+      node("f2-root-2", "hidden"),
+    ];
+    const result = {
+      nodes: new Map(merged.map((n) => [n.id, n])),
+      nodeToFrame: new Map<string, number>(),
+      unplaced: [],
+    };
+    const live = new Map(
+      [0, 1, 2].map((id) => [id, { parentFrameId: 0, url: "" }]),
+    );
+    return { state, topFrame, result, live };
+  }
+
+  it("is the merged tree, with the top frame's title and URL, for the tab", () => {
+    const { state, topFrame, result, live } = page();
+    const message = publishedTree(state, result, {
+      tabId: 7,
+      topFrame,
+      changed: new Map(),
+      live,
+    });
+    expect(message).toEqual({
+      type: "TREE_DATA",
+      tabId: 7,
+      payload: {
+        nodes: [...result.nodes.entries()],
+        rootId: "root-0",
+        pageTitle: "Frame 0",
+        pageUrl: "https://example.test/frame-0",
+      },
+    });
+  });
+
+  it("says when the top frame and each frame the page shows changed, earliest first, and takes each off the tab's changes", () => {
+    const { state, topFrame, result, live } = page();
+    const changed = new Map([
+      [1, 3_000],
+      [2, 1_000],
+      [0, 2_000],
+    ]);
+    for (const [frameId, at] of changed) state.changedFrames.set(frameId, at);
+    const message = publishedTree(state, result, {
+      tabId: 7,
+      topFrame,
+      changed,
+      live,
+    });
+    // The hidden frame's change prompts nothing, and is answered for.
+    expect(message.payload.pageChangedAt).toEqual([2_000, 3_000]);
+    expect(state.changedFrames.size).toBe(0);
+  });
+
+  it("says the tree is a skeleton while a frame sent its skeleton", () => {
+    const { state, topFrame, result, live } = page();
+    state.frames.set(2, { ...makeFrameTree(2), framesOnly: true });
+    const at = { tabId: 7, topFrame, changed: new Map(), live };
+    expect(publishedTree(state, result, at).payload.framesOnly).toBe(true);
+    state.frames.set(2, makeFrameTree(2));
+    expect(publishedTree(state, result, at).payload).not.toHaveProperty(
+      "framesOnly",
+    );
   });
 });

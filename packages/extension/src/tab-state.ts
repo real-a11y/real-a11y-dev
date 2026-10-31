@@ -10,8 +10,15 @@
  * module just exposes the transitions.
  */
 
-import type { FrameTree } from "./frame-merger.js";
+import type { SemanticNode } from "@real-a11y-dev/core";
+
+import {
+  type FrameTree,
+  type MergeResult,
+  frameVisibility,
+} from "./frame-merger.js";
 import { MAX_MARKED_FRAMES } from "./frame-owner.js";
+import type { ContentToPanel } from "./types.js";
 
 export interface TabState {
   frames: Map<number, FrameTree>;
@@ -211,4 +218,107 @@ export function disposeTabState(
   if (state?.mergeTimer) clearTimeout(state.mergeTimer);
   if (state?.placeTimer) clearTimeout(state.placeTimer);
   registry.delete(tabId);
+}
+
+/**
+ * The changes a publish answers for (`changed`: `changedFrames` as it was
+ * before the merge), of the top frame and each frame the page shows, earliest
+ * first. Chrome's tree reads those frames, so a change in any of them is one
+ * its auto-refresh follows; a hidden frame's (an animating ad's) changes
+ * nothing there. Each one answered for is taken off `changedFrames`.
+ */
+export function takeShownChanges(
+  state: TabState,
+  changed: ReadonlyMap<number, number>,
+  nodes: ReadonlyMap<string, SemanticNode>,
+  topRootId: string,
+): number[] {
+  const shown: number[] = [];
+  for (const [frameId, at] of changed) {
+    const tree = state.frames.get(frameId);
+    const where = tree ? frameVisibility(nodes, tree, topRootId) : "hidden";
+    if (where === "shown") shown.push(at);
+    // A frame with no place yet, or inside one that has none, is answered
+    // for by the publish that places it, such as one its parent's tree,
+    // sent again on request, prompts.
+    if (where !== "unplaced" && state.changedFrames.get(frameId) === at) {
+      state.changedFrames.delete(frameId);
+    }
+  }
+  return shown.sort((x, y) => x - y);
+}
+
+/**
+ * Whether the top frame, or a frame Chrome still lists (`live`), sent its
+ * skeleton rather than its tree: the merge is then no tree to show. A frame
+ * Chrome no longer lists, one whose <iframe> the page removed, sends nothing
+ * again, and holds nothing up.
+ */
+export function holdsSkeleton(
+  state: TabState,
+  live: ReadonlyMap<number, unknown>,
+): boolean {
+  for (const [frameId, tree] of state.frames) {
+    if (tree.framesOnly && (frameId === 0 || live.has(frameId))) return true;
+  }
+  return false;
+}
+
+/**
+ * The frames' trees to merge: all but the skeleton of a frame Chrome no
+ * longer lists (`live`), one whose <iframe> the page removed. That frame
+ * sends nothing again, and {@link holdsSkeleton} passes it over, so merged
+ * into a tree published whole it would be rows with none of a tree's facets.
+ */
+export function framesToMerge(
+  state: TabState,
+  live: ReadonlyMap<number, unknown>,
+): Map<number, FrameTree> {
+  const frames = new Map(state.frames);
+  for (const [frameId, tree] of state.frames) {
+    if (tree.framesOnly && frameId !== 0 && !live.has(frameId)) {
+      frames.delete(frameId);
+    }
+  }
+  return frames;
+}
+
+/**
+ * The merged tree's publish to the panel, with page info: the top frame's
+ * title and URL, the changes the publish answers for (`changed`, see
+ * {@link takeShownChanges}), each one, since the panel follows an action
+ * while any change it hasn't read falls in the action's window, not only the
+ * latest; and whether it is only the skeleton of a tree (`live`: the frames
+ * Chrome lists, see {@link holdsSkeleton}). Building it takes the changes it
+ * answers for off `changedFrames`: build one per publish.
+ */
+export function publishedTree(
+  state: TabState,
+  result: MergeResult,
+  at: {
+    tabId: number;
+    topFrame: FrameTree;
+    changed: ReadonlyMap<number, number>;
+    live: ReadonlyMap<number, unknown>;
+  },
+): Extract<ContentToPanel, { type: "TREE_DATA" }> {
+  const { tabId, topFrame } = at;
+  const pageChangedAt = takeShownChanges(
+    state,
+    at.changed,
+    result.nodes,
+    topFrame.rootId,
+  );
+  return {
+    type: "TREE_DATA",
+    tabId,
+    payload: {
+      nodes: Array.from(result.nodes.entries()),
+      rootId: topFrame.rootId,
+      pageTitle: topFrame.pageTitle,
+      pageUrl: topFrame.frameUrl,
+      ...(pageChangedAt.length > 0 ? { pageChangedAt } : {}),
+      ...(holdsSkeleton(state, at.live) ? { framesOnly: true } : {}),
+    },
+  };
 }

@@ -48,7 +48,7 @@ async function framesLoaded(page: Page): Promise<void> {
 test("the in-page tree reads each blank frame under its own <iframe>", async ({
   nav,
 }) => {
-  const { page, tabId } = await nav.open(FIXTURE);
+  const { page, tabId } = await nav.openInPage(FIXTURE);
   await framesLoaded(page);
   // More than once: the frames answer in whatever order they please, and
   // the two `srcdoc` ones can't be told apart by anything but their marks.
@@ -75,7 +75,7 @@ test("the in-page tree reads each blank frame under its own <iframe>", async ({
 test("the in-page tree follows a frame the page writes over again", async ({
   nav,
 }) => {
-  const { page, tabId } = await nav.open(FIXTURE);
+  const { page, tabId } = await nav.openInPage(FIXTURE);
   await framesLoaded(page);
   await nav.domTree(tabId);
 
@@ -106,7 +106,7 @@ test("the in-page tree follows a page that writes its own document over again", 
 }) => {
   // Not a blank frame's matter alone: any document can be replaced under
   // the script that reads it, the top one included.
-  const { page, tabId } = await nav.open(FIXTURE);
+  const { page, tabId } = await nav.openInPage(FIXTURE);
   await framesLoaded(page);
   await nav.domTree(tabId);
 
@@ -145,7 +145,7 @@ test("the in-page tree follows a page that writes its own document over again", 
 test("blank frames a page adds while the panel is open each land under their own <iframe>", async ({
   nav,
 }) => {
-  const { page, tabId } = await nav.open(FIXTURE);
+  const { page, tabId } = await nav.openInPage(FIXTURE);
   await framesLoaded(page);
   await nav.domTree(tabId);
 
@@ -185,7 +185,7 @@ test("a frame that loads long after the page around it was read still lands unde
   // The page's tree is sent once for the new <iframe>, before the frame's
   // script has loaded and marked it, and the page doesn't change again. The
   // frame is placed all the same, once the page is asked for its tree.
-  const { page, tabId } = await nav.open(FIXTURE);
+  const { page, tabId } = await nav.openInPage(FIXTURE);
   await framesLoaded(page);
   await nav.domTree(tabId);
 

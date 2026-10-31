@@ -9,26 +9,22 @@ import {
   createPicker,
   getElementRefs,
   getExplicitRole,
+  getNodeId,
   renderingParent,
   safeGetAttribute,
   safeNodeType,
   safeParentElement,
 } from "@real-a11y-dev/core";
-import type {
-  SemanticNode,
-  TreeViewMode,
-  TreeChange,
-} from "@real-a11y-dev/core";
+import type { TreeViewMode, TreeChange } from "@real-a11y-dev/core";
 
 import { computeFieldState } from "./field-state.js";
 import {
-  FRAME_HOLDER_SELECTOR,
   frameOwnerMark,
-  isFrameHolder,
   markFrameOwner,
   newFrameMark,
   unmarkFrameOwner,
 } from "./frame-owner.js";
+import { frameSkeleton, markedFrames } from "./frame-skeleton.js";
 import {
   liveDocumentElement,
   liveDocumentURL,
@@ -44,7 +40,7 @@ import {
 import { pageText } from "./page-text.js";
 import { isTrustedSender, planHighlight } from "./routing.js";
 import { elementsFromTabSequence, sendKey } from "./send-key.js";
-import type { PanelToContent } from "./types.js";
+import type { PanelToContent, TreeRequest } from "./types.js";
 
 const isSubFrame = window !== window.top;
 
@@ -62,8 +58,20 @@ const isSubFrame = window !== window.top;
 const POINTER_ACTIONS = new Set(["click", "navigate"]);
 
 let currentViewMode: TreeViewMode = "a11y";
+// While Chrome's tree shows, a frame sends its skeleton and reads no tree,
+// until the panel asks for the whole tree (`TreeRequest`).
+let framesOnly = true;
 let focusingFromTree = false;
 let liveExtractor: LiveTreeExtractor | null = null;
+
+/** Take the tree the panel asks for. Whether it is another than before. */
+function takeTreeRequest(tree: TreeRequest): boolean {
+  const next = tree.framesOnly === true;
+  const changed = tree.viewMode !== currentViewMode || next !== framesOnly;
+  currentViewMode = tree.viewMode;
+  framesOnly = next;
+  return changed;
+}
 
 function liveMode(): "dom" | "a11y" {
   return currentViewMode === "dom" ? "dom" : "a11y";
@@ -215,27 +223,18 @@ function teardown(): void {
 function sendTree(change?: TreeChange, { reread = false } = {}) {
   // Before extracting, which can take a while on a big page.
   const readAt = Date.now();
-  const extractor = getLiveExtractor();
+  const tree = frameTree(change);
   // No root element to read: the next one to appear sends the tree.
-  if (!extractor) return;
-  const mode = liveMode();
-  if (extractor.mode !== mode) {
-    extractor.setMode(mode);
-  }
-
-  const result = change ? extractor.refresh(change) : extractor.extract();
-
-  const serialized = Array.from(result.nodes.entries());
+  if (!tree) return;
+  const { embeds, ...read } = tree;
   const owner = ownFrameMark();
-  const embeds = markedFrames(serialized);
 
   safeSendMessage({
     type: "FRAME_TREE_DATA",
     payload: {
       frameUrl: location.href,
       pageTitle: document.title,
-      nodes: serialized,
-      rootId: result.rootId,
+      ...read,
       ...(owner !== undefined ? { owner } : {}),
       ...(embeds.length > 0 ? { embeds } : {}),
       // The burst the observer saw ended its debounce ago. Anything else sent
@@ -247,41 +246,22 @@ function sendTree(change?: TreeChange, { reread = false } = {}) {
   });
 }
 
-// Through the prototype: a named <img> or <form> called `querySelectorAll`
-// shadows the document's own.
-const querySelectorAll = Document.prototype.querySelectorAll;
-
-/**
- * The tree's nodes for elements that hold a frame whose script marked them,
- * each with the mark: where the service worker puts that frame's tree (see
- * frame-owner.ts). A marked element the tree has no node for, as the a11y
- * view has none for a hidden <iframe>, goes with an empty node id: the
- * frame has no place in this tree, and the service worker needn't ask this
- * document where it is. One inside a shadow root isn't found that way, and
- * is asked after once.
- */
-function markedFrames(
-  nodes: ReadonlyArray<[string, SemanticNode]>,
-): Array<[nodeId: string, owner: string]> {
-  const out: Array<[string, string]> = [];
-  const inTree = new Set<string>();
-  for (const [nodeId, node] of nodes) {
-    const tagName = node.dom?.tagName;
-    if (!tagName || !isFrameHolder(tagName.toLowerCase())) continue;
-    const element = elementRefs.get(nodeId);
-    const mark = element ? frameOwnerMark(element) : undefined;
-    if (mark === undefined) continue;
-    out.push([nodeId, mark]);
-    inTree.add(mark);
+/** This frame's tree as the panel asks for it, `change` read into it: its
+ *  skeleton, or the whole tree. Null while the document has no root
+ *  element. */
+function frameTree(change?: TreeChange) {
+  if (framesOnly) {
+    return boundRoot
+      ? { ...frameSkeleton(boundRoot), framesOnly: true as const }
+      : null;
   }
-  for (const element of querySelectorAll.call(
-    document,
-    FRAME_HOLDER_SELECTOR,
-  )) {
-    const mark = frameOwnerMark(element);
-    if (mark !== undefined && !inTree.has(mark)) out.push(["", mark]);
-  }
-  return out;
+  const extractor = getLiveExtractor();
+  if (!extractor) return null;
+  const mode = liveMode();
+  if (extractor.mode !== mode) extractor.setMode(mode);
+  const result = change ? extractor.refresh(change) : extractor.extract();
+  const nodes = Array.from(result.nodes.entries());
+  return { nodes, rootId: result.rootId, embeds: markedFrames(nodes) };
 }
 
 /** The document's root element the script is bound to: what the tree is
@@ -333,7 +313,7 @@ chrome.runtime.onMessage.addListener(
 
     switch (message.type) {
       case "REQUEST_TREE": {
-        currentViewMode = message.payload.viewMode;
+        takeTreeRequest(message.payload);
         // Requesting a tree implies the panel is open — arm live updates so
         // the panel keeps receiving them after this one-time populate.
         startObserving();
@@ -347,8 +327,8 @@ chrome.runtime.onMessage.addListener(
         // service-worker restart empties it while this frame keeps observing
         // and stays silent until its own DOM next mutates. This is the
         // background asking us to re-announce so its merge sees us again.
-        // Unlike REQUEST_TREE it carries no viewMode and must not change
-        // ours — `currentViewMode` survived the restart and is still right.
+        // Unlike REQUEST_TREE it carries no tree to send and must not change
+        // ours — the one we have survived the restart and is still right.
         //
         // Only answer if already armed — which is the restart case, and the
         // only one the background sends this for. Arming here instead would
@@ -362,7 +342,7 @@ chrome.runtime.onMessage.addListener(
       }
 
       case "SET_VIEW_MODE": {
-        currentViewMode = message.payload.viewMode;
+        takeTreeRequest(message.payload);
         sendTree(undefined, { reread: true });
         sendResponse({ success: true });
         break;
@@ -487,8 +467,13 @@ chrome.runtime.onMessage.addListener(
       }
 
       case "SET_OBSERVING": {
-        if (message.payload.enabled) startObserving();
-        else stopObserving();
+        const { enabled, tree } = message.payload;
+        // A frame already observing sends the tree it is now asked for.
+        const changed = tree !== undefined && takeTreeRequest(tree);
+        if (!enabled) stopObserving();
+        else if (observingEnabled && changed) {
+          sendTree(undefined, { reread: true });
+        } else startObserving();
         sendResponse({ success: true });
         break;
       }
@@ -618,10 +603,10 @@ function onFocusIn(
 
   // The DOM tree follows the document's view of the event, the outermost
   // shadow host, as it always has. A move heard on a shadow root keeps that
-  // host, so it has nothing new to follow there.
-  const nodeId = atDocument
-    ? findTrackedAncestor(e.target as Element | null)
-    : null;
+  // host, so it has nothing new to follow there. The focus ring goes on it:
+  // a frame that sent its skeleton has no tree for the ring's id to name.
+  const ringId = atDocument ? overlayNodeId(e.target as Element | null) : null;
+  const nodeId = framesOnly ? null : ringId;
   // For the native tree, which may hold a row for the element itself. A
   // report that numbers nothing still says which frame focus is in, and the
   // panel takes that frame's row. In the top frame it says nothing at all.
@@ -631,8 +616,8 @@ function onFocusIn(
     (isSubFrame || Object.values(chains).some((chain) => chain.length > 0))
       ? chains
       : undefined;
+  if (ringId) focusManager.highlightElement(ringId);
   if (!nodeId && !keys) return;
-  if (nodeId) focusManager.highlightElement(nodeId);
   safeSendMessage({
     type: "FOCUS_CHANGED",
     payload: {
@@ -760,6 +745,16 @@ function findTrackedAncestor(el: Element | null): string | null {
   return null;
 }
 
+/** The node an overlay on `el` is drawn by: the tree's for it or for the
+ *  nearest element above it. A frame sending its skeleton has read no tree,
+ *  and gives the element its own. */
+function overlayNodeId(el: Element | null): string | null {
+  if (!framesOnly || !el) return findTrackedAncestor(el);
+  const id = getNodeId(el);
+  elementRefs.set(id, el);
+  return id;
+}
+
 // The native tree's selection follow asks for the same overlay the DOM tree's
 // own select draws (HIGHLIGHT_NODE → `highlightElement`, scrolled into view),
 // and its hover for the one the DOM tree's hover draws (in place: no scroll).
@@ -785,7 +780,7 @@ function highlightFromNativeEvent(e: Event, kind: "reveal" | "preview"): void {
   if (arm.nonce === null || (e as CustomEvent).detail !== arm.nonce) return;
   arm.nonce = null;
   if (curtainVisible) return;
-  const nodeId = findTrackedAncestor(composedTarget(e));
+  const nodeId = overlayNodeId(composedTarget(e));
   if (nodeId) {
     focusManager.highlightElement(nodeId, { scroll: kind === "reveal" });
   }

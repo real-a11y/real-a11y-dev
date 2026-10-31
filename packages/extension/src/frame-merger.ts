@@ -33,6 +33,8 @@ export interface FrameTree {
    * place is known, and is nowhere in this tree.
    */
   embeds?: Array<[nodeId: string, owner: string]>;
+  /** The frame sent its skeleton, not its tree (`frame-skeleton.ts`). */
+  framesOnly?: true;
 }
 
 export interface FrameInfo {

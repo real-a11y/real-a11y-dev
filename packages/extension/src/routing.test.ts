@@ -303,6 +303,22 @@ describe("planFrameAnnouncementResponse", () => {
     expect(plan.find((m) => m.body.type === "TOGGLE_CURTAIN")).toBeUndefined();
   });
 
+  it("re-asserts observing with the tree the panel last asked the tab for, which a frame that missed the request sends", () => {
+    const tree = { viewMode: "dom", framesOnly: false } as const;
+    const plan = planFrameAnnouncementResponse({
+      ...baseOpts,
+      frameId: 4,
+      sidepanelConnected: true,
+      tree,
+    });
+
+    expect(plan[0]).toEqual({
+      tabId: 42,
+      frameId: 4,
+      body: { type: "SET_OBSERVING", payload: { enabled: true, tree } },
+    });
+  });
+
   it("re-asserts the tracker as the panel last set it, so Focus OFF holds through page updates", () => {
     const plan = planFrameAnnouncementResponse({
       ...baseOpts,
@@ -376,6 +392,22 @@ describe("planFrameHello", () => {
       focusTracker: true,
     });
     for (const item of plan) expect(item).toMatchObject({ frameId: 9 });
+  });
+
+  it("arms the frame with the tree the panel last asked the tab for, so one loading after the request sends it", () => {
+    const tree = { viewMode: "tab", framesOnly: false } as const;
+    const plan = planFrameHello({
+      tabId: 42,
+      frameId: 9,
+      sidepanelConnected: true,
+      focusTracker: true,
+      tree,
+    });
+    expect(plan[0]).toEqual({
+      tabId: 42,
+      frameId: 9,
+      body: { type: "SET_OBSERVING", payload: { enabled: true, tree } },
+    });
   });
 
   it("sets the tracker as the panel last set it for the tab", () => {

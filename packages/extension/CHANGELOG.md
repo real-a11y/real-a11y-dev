@@ -100,6 +100,21 @@
   and a pick from the page goes back to Chrome's tree, with the picked row
   selected.
 
+- While Chrome's tree shows, the page no longer reads the in-page tree,
+  which isn't on screen then (PR_LINK). Each frame of the page used to walk
+  itself and send its whole tree after every burst of changes, whichever tree
+  showed: on a large page, a walk of the whole page each time, for nothing
+  the user could see. Now a frame sends only what Chrome's tree needs of it,
+  from the elements holding its frames alone: that the page is there, its
+  title, when it changed, and which of its frames the page shows. So **Follow
+  page changes** and the reads after an action still see a change in a frame
+  the page shows, and still pass over one in a hidden frame, an animating
+  ad's. A hidden frame is now also found under its own `<iframe>` when
+  another's address is like its own, so its changes no longer pass for that
+  one's. The in-page tree, and either tree's TAB view, read the page when
+  they come up, and say _Reading the page…_ until it lands; the in-page tree
+  comes back with the scope, selection and expanded rows it had.
+
 ## 0.1.17
 
 ### Patch Changes

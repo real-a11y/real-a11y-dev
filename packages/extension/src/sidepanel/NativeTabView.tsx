@@ -22,7 +22,7 @@ export type NativeView = Exclude<TreeViewMode, "dom">;
  *  and activating a stop does there. */
 export type NativeTabOrder = Pick<
   ComponentProps<typeof TabSequenceView>,
-  "nodes" | "rootId" | "onHighlight" | "onActivate"
+  "nodes" | "rootId" | "pending" | "onHighlight" | "onActivate"
 >;
 
 /** The toolbar's A11Y / TAB switch. */
