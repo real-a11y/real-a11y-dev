@@ -121,17 +121,29 @@ function placeMarkedFrames(
 
 /**
  * The frames still in the page: the top frame, each frame Chrome lists
- * (`listed`), and each one placed by its mark, whatever Chrome lists, since
- * the element bearing the mark is in a tree now. Chrome lists no
- * `javascript:` frame, though the content script runs in one. A frame whose
- * <iframe> the page removed is none of them, once the document around it has
- * sent its tree again.
+ * (`listed`), and each one its mark places in the tree of a frame still in
+ * the page, whatever Chrome lists. Chrome lists no `javascript:` frame,
+ * though the content script runs in one. A frame whose <iframe> the page
+ * removed is none of them, once the document around it has sent its tree
+ * again, and nor is a frame inside it, whose mark only that frame's last
+ * tree still bears.
  */
 export function liveFrames(
   frames: Map<number, FrameTree>,
   listed: ReadonlyMap<number, unknown>,
 ): Set<number> {
-  return new Set([0, ...listed.keys(), ...placeMarkedFrames(frames).keys()]);
+  const live = new Set([0, ...listed.keys()]);
+  const placed = placeMarkedFrames(frames);
+  for (let grew = true; grew;) {
+    grew = false;
+    for (const [frameId, place] of placed) {
+      if (!live.has(frameId) && live.has(place.frameId)) {
+        live.add(frameId);
+        grew = true;
+      }
+    }
+  }
+  return live;
 }
 
 /** The frames that marked the element holding them where no tree has a node

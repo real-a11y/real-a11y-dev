@@ -367,6 +367,26 @@ describe("framesToMerge", () => {
     expect(s.frames.size).toBe(4);
   });
 
+  it("leaves out the skeletons of a removed frame and of the frames inside it, which only its last tree places", () => {
+    // Frame 5's <iframe>, holding frame 6's, is gone from the page's tree,
+    // and Chrome lists neither: frame 5's last skeleton still bears 6's mark.
+    const s = createTabState();
+    s.frames.set(0, makeFrameTree(0));
+    s.frames.set(5, {
+      ...makeFrameTree(5),
+      owner: "mark-5",
+      embeds: [["if-6", "mark-6"]],
+      framesOnly: true,
+    });
+    s.frames.set(6, { ...makeFrameTree(6), owner: "mark-6", framesOnly: true });
+    expect([...framesToMerge(s, live()).keys()]).toEqual([0]);
+    expect(holdsSkeleton(s, live())).toBe(false);
+    // While the page's tree bears frame 5's mark, both are in the page.
+    s.frames.set(0, { ...makeFrameTree(0), embeds: [["if-5", "mark-5"]] });
+    expect([...framesToMerge(s, live()).keys()]).toEqual([0, 5, 6]);
+    expect(holdsSkeleton(s, live())).toBe(true);
+  });
+
   it("keeps the skeleton of a frame Chrome doesn't list while its mark places it", () => {
     const s = createTabState();
     s.frames.set(0, { ...makeFrameTree(0), embeds: [["if-js", "mark-js"]] });
