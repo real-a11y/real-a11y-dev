@@ -119,10 +119,13 @@ work along with yours.
 a merge commit. Regenerate a11y baselines fresh afterwards rather than carrying
 the pre-rebase ones.
 
-**Node 20.20.2 (Volta-pinned) and pnpm 9.15.0.** `engines` says `>=20`: the
-`verify` matrix runs 20 and 22, and a separate `packages-node24` job exercises
-the libraries on 24 — so a Node 24-only failure can and does come from CI. Work
-on 20 regardless, because the docs build needs it (see CONTRIBUTING for why).
+**Node 22.12.0 (Volta-pinned) and pnpm 9.15.0.** The root `engines` says
+`>=22.12`, Vitest 5's floor; the published packages still say `>=20`, which no
+CI job runs their tests on. The `verify` matrix runs 22.12 and the newest 22, and
+a separate `packages-node24` job exercises the libraries on 24 — so a Node 24-only
+failure can and does come from CI. Work on 22.12+; the docs build has worked on
+22.22, but VitePress 1.6 can hit `ERR_REQUIRE_CYCLE_MODULE` on some 22.x/24.x
+(see CONTRIBUTING), where Node 20 still builds it.
 If a package fails to build in a worktree with implicit-`any` or dts errors in
 code you never touched, its deps aren't materialized: run `pnpm install` **in the
 worktree**.
