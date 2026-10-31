@@ -351,9 +351,9 @@ export function App() {
     // attach gate refuses what this reads as on, and the carried-over value
     // reaches this panel as a change in storage.)
     const fromStorage = () => {
-      const read = chrome.storage?.local?.get(NATIVE_MODE_KEY);
-      if (!read) return setNativeSettingKnown(true);
-      void read
+      if (!chrome.storage?.local) return setNativeSettingKnown(true);
+      void chrome.storage.local
+        .get(NATIVE_MODE_KEY)
         .then((r) => apply(nativeModeOn(r[NATIVE_MODE_KEY])))
         .catch(() => setNativeSettingKnown(true));
     };
