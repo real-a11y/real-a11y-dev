@@ -16,6 +16,7 @@ import {
   type FrameTree,
   type MergeResult,
   frameVisibility,
+  liveFrames,
 } from "./frame-merger.js";
 import { MAX_MARKED_FRAMES } from "./frame-owner.js";
 import type { ContentToPanel } from "./types.js";
@@ -249,36 +250,36 @@ export function takeShownChanges(
 }
 
 /**
- * Whether the top frame, or a frame Chrome still lists (`live`), sent its
- * skeleton rather than its tree: the merge is then no tree to show. A frame
- * Chrome no longer lists, one whose <iframe> the page removed, sends nothing
- * again, and holds nothing up.
+ * Whether a frame still in the page (`liveFrames`, of those Chrome lists:
+ * `listed`) sent its skeleton rather than its tree: the merge is then no
+ * tree to show. A frame whose <iframe> the page removed sends nothing again,
+ * and holds nothing up.
  */
 export function holdsSkeleton(
   state: TabState,
-  live: ReadonlyMap<number, unknown>,
+  listed: ReadonlyMap<number, unknown>,
 ): boolean {
+  const live = liveFrames(state.frames, listed);
   for (const [frameId, tree] of state.frames) {
-    if (tree.framesOnly && (frameId === 0 || live.has(frameId))) return true;
+    if (tree.framesOnly && live.has(frameId)) return true;
   }
   return false;
 }
 
 /**
- * The frames' trees to merge: all but the skeleton of a frame Chrome no
- * longer lists (`live`), one whose <iframe> the page removed. That frame
- * sends nothing again, and {@link holdsSkeleton} passes it over, so merged
- * into a tree published whole it would be rows with none of a tree's facets.
+ * The frames' trees to merge: all but the skeleton of a frame no longer in
+ * the page (see {@link holdsSkeleton}), one whose <iframe> the page removed.
+ * That frame sends nothing again, and holds no publish up, so merged into a
+ * tree published whole it would be rows with none of a tree's facets.
  */
 export function framesToMerge(
   state: TabState,
-  live: ReadonlyMap<number, unknown>,
+  listed: ReadonlyMap<number, unknown>,
 ): Map<number, FrameTree> {
+  const live = liveFrames(state.frames, listed);
   const frames = new Map(state.frames);
   for (const [frameId, tree] of state.frames) {
-    if (tree.framesOnly && frameId !== 0 && !live.has(frameId)) {
-      frames.delete(frameId);
-    }
+    if (tree.framesOnly && !live.has(frameId)) frames.delete(frameId);
   }
   return frames;
 }
@@ -288,9 +289,9 @@ export function framesToMerge(
  * title and URL, the changes the publish answers for (`changed`, see
  * {@link takeShownChanges}), each one, since the panel follows an action
  * while any change it hasn't read falls in the action's window, not only the
- * latest; and whether it is only the skeleton of a tree (`live`: the frames
- * Chrome lists, see {@link holdsSkeleton}). Building it takes the changes it
- * answers for off `changedFrames`: build one per publish.
+ * latest; and whether it is only the skeleton of a tree (`listed`: the
+ * frames Chrome lists, see {@link holdsSkeleton}). Building it takes the
+ * changes it answers for off `changedFrames`: build one per publish.
  */
 export function publishedTree(
   state: TabState,
@@ -299,7 +300,7 @@ export function publishedTree(
     tabId: number;
     topFrame: FrameTree;
     changed: ReadonlyMap<number, number>;
-    live: ReadonlyMap<number, unknown>;
+    listed: ReadonlyMap<number, unknown>;
   },
 ): Extract<ContentToPanel, { type: "TREE_DATA" }> {
   const { tabId, topFrame } = at;
@@ -318,7 +319,7 @@ export function publishedTree(
       pageTitle: topFrame.pageTitle,
       pageUrl: topFrame.frameUrl,
       ...(pageChangedAt.length > 0 ? { pageChangedAt } : {}),
-      ...(holdsSkeleton(state, at.live) ? { framesOnly: true } : {}),
+      ...(holdsSkeleton(state, at.listed) ? { framesOnly: true } : {}),
     },
   };
 }

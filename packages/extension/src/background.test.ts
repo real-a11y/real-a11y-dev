@@ -1895,6 +1895,38 @@ describe("background: which frames' changes Chrome's tree follows", () => {
     expect(pageChanged()).toEqual([true]);
   });
 
+  it("follows a change in a frame Chrome doesn't list, which its mark places, while Chrome's tree shows", async () => {
+    // Chrome lists no `javascript:` frame, though the content script runs
+    // in one. Both frames send their skeletons.
+    const top = frameTreePayload(0);
+    deliver(0, {
+      ...top,
+      framesOnly: true,
+      nodes: [
+        ["root", makeNode("root", { childIds: ["ifA", "ifB", "ifJ"] })],
+        ...top.nodes.slice(1),
+        [
+          "ifJ",
+          makeNode("ifJ", { parentId: "root", depth: 1, tagName: "iframe" }),
+        ],
+      ],
+      embeds: [["ifJ", "mark-js"]],
+    });
+    await vi.runAllTimersAsync();
+    changedAt();
+    deliver(6, {
+      frameUrl: "about:blank",
+      pageTitle: "",
+      rootId: "root",
+      nodes: [["root", makeNode("root")]],
+      owner: "mark-js",
+      framesOnly: true,
+      changedAt: 5_000,
+    });
+    await vi.runAllTimersAsync();
+    expect(changedAt()).toEqual([[5_000]]);
+  });
+
   it("leaves out a change in a frame the tree has no place for", async () => {
     const url = "https://c.test/widget";
     h.knobs.frames.push({ frameId: 3, parentFrameId: 0, url });

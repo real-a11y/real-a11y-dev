@@ -166,7 +166,7 @@ async function mergeAndSendTree(tabId: number) {
     tabId,
     topFrame,
     changed,
-    live: frameInfoMap,
+    listed: frameInfoMap,
   });
   chrome.runtime.sendMessage(tree).catch(() => {
     // Side panel might not be open

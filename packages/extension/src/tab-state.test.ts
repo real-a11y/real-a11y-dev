@@ -334,6 +334,15 @@ describe("holdsSkeleton", () => {
     expect(holdsSkeleton(s, live(0, 3))).toBe(true);
   });
 
+  it("is true while a frame Chrome doesn't list, but its mark places, sent its skeleton", () => {
+    // Chrome lists no `javascript:` frame, though the content script runs
+    // in one: the element bearing its mark is in the page's tree.
+    const s = createTabState();
+    s.frames.set(0, { ...makeFrameTree(0), embeds: [["if-js", "mark-js"]] });
+    s.frames.set(4, { ...skeletonOf(4), owner: "mark-js" });
+    expect(holdsSkeleton(s, live(0))).toBe(true);
+  });
+
   it("leaves out a frame Chrome no longer lists, which sends nothing again", () => {
     const s = createTabState();
     s.frames.set(0, makeFrameTree(0));
@@ -356,6 +365,20 @@ describe("framesToMerge", () => {
     expect([...framesToMerge(s, live(1)).keys()]).toEqual([0, 1, 3]);
     // The tab's own record of its frames is left alone.
     expect(s.frames.size).toBe(4);
+  });
+
+  it("keeps the skeleton of a frame Chrome doesn't list while its mark places it", () => {
+    const s = createTabState();
+    s.frames.set(0, { ...makeFrameTree(0), embeds: [["if-js", "mark-js"]] });
+    s.frames.set(4, {
+      ...makeFrameTree(4),
+      owner: "mark-js",
+      framesOnly: true,
+    });
+    expect([...framesToMerge(s, live()).keys()]).toEqual([0, 4]);
+    // Once the page's tree bears the mark no more, its <iframe> is gone.
+    s.frames.set(0, makeFrameTree(0));
+    expect([...framesToMerge(s, live()).keys()]).toEqual([0]);
   });
 });
 
@@ -401,19 +424,19 @@ describe("publishedTree", () => {
       nodeToFrame: new Map<string, number>(),
       unplaced: [],
     };
-    const live = new Map(
+    const listed = new Map(
       [0, 1, 2].map((id) => [id, { parentFrameId: 0, url: "" }]),
     );
-    return { state, topFrame, result, live };
+    return { state, topFrame, result, listed };
   }
 
   it("is the merged tree, with the top frame's title and URL, for the tab", () => {
-    const { state, topFrame, result, live } = page();
+    const { state, topFrame, result, listed } = page();
     const message = publishedTree(state, result, {
       tabId: 7,
       topFrame,
       changed: new Map(),
-      live,
+      listed,
     });
     expect(message).toEqual({
       type: "TREE_DATA",
@@ -428,7 +451,7 @@ describe("publishedTree", () => {
   });
 
   it("says when the top frame and each frame the page shows changed, earliest first, and takes each off the tab's changes", () => {
-    const { state, topFrame, result, live } = page();
+    const { state, topFrame, result, listed } = page();
     const changed = new Map([
       [1, 3_000],
       [2, 1_000],
@@ -439,7 +462,7 @@ describe("publishedTree", () => {
       tabId: 7,
       topFrame,
       changed,
-      live,
+      listed,
     });
     // The hidden frame's change prompts nothing, and is answered for.
     expect(message.payload.pageChangedAt).toEqual([2_000, 3_000]);
@@ -447,9 +470,9 @@ describe("publishedTree", () => {
   });
 
   it("says the tree is a skeleton while a frame sent its skeleton", () => {
-    const { state, topFrame, result, live } = page();
+    const { state, topFrame, result, listed } = page();
     state.frames.set(2, { ...makeFrameTree(2), framesOnly: true });
-    const at = { tabId: 7, topFrame, changed: new Map(), live };
+    const at = { tabId: 7, topFrame, changed: new Map(), listed };
     expect(publishedTree(state, result, at).payload.framesOnly).toBe(true);
     state.frames.set(2, makeFrameTree(2));
     expect(publishedTree(state, result, at).payload).not.toHaveProperty(
