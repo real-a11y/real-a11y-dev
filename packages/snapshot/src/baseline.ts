@@ -216,6 +216,36 @@ export function applyBaseline(
 }
 
 /**
+ * Diff one page's findings against its old entries. Records each old entry that
+ * a finding still matches in `matchedOld`, carries its `note` over in
+ * `carriedNote`, and returns how many findings are new.
+ */
+function matchPageToOld(
+  oldEntries: readonly BaselineEntry[],
+  findings: readonly FingerprintedFinding[],
+  carriedNote: Map<FingerprintedFinding, string>,
+  matchedOld: Set<BaselineEntry>,
+): number {
+  const baseFindings = oldEntries.map(entryToFinding);
+  const entryOf = new Map<FingerprintedFinding, BaselineEntry>();
+  baseFindings.forEach((f, i) => entryOf.set(f, oldEntries[i]));
+
+  let added = 0;
+  for (const d of diffFindings(baseFindings, findings)) {
+    if (d.kind === "new") {
+      added += 1;
+    } else if ((d.kind === "unchanged" || d.kind === "changed") && d.base) {
+      const oldEntry = entryOf.get(d.base);
+      if (oldEntry) {
+        matchedOld.add(oldEntry);
+        if (oldEntry.note) carriedNote.set(d.finding, oldEntry.note);
+      }
+    }
+  }
+  return added;
+}
+
+/**
  * Regenerate a baseline from the current findings, carrying forward the `note`
  * of every still-matched entry. Deterministic order (page, rule, fingerprint,
  * occ) so a re-run is a no-op diff. Returns `added` (new findings not in the old
@@ -237,22 +267,12 @@ export function buildBaseline(
   let added = 0;
 
   for (const page of pages) {
-    const oldEntries = oldByPage.get(page.id) ?? [];
-    const baseFindings = oldEntries.map(entryToFinding);
-    const entryOf = new Map<FingerprintedFinding, BaselineEntry>();
-    baseFindings.forEach((f, i) => entryOf.set(f, oldEntries[i]));
-
-    for (const d of diffFindings(baseFindings, page.findings)) {
-      if (d.kind === "new") {
-        added += 1;
-      } else if ((d.kind === "unchanged" || d.kind === "changed") && d.base) {
-        const oldEntry = entryOf.get(d.base);
-        if (oldEntry) {
-          matchedOld.add(oldEntry);
-          if (oldEntry.note) carriedNote.set(d.finding, oldEntry.note);
-        }
-      }
-    }
+    added += matchPageToOld(
+      oldByPage.get(page.id) ?? [],
+      page.findings,
+      carriedNote,
+      matchedOld,
+    );
   }
 
   const entries = pages
