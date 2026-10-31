@@ -31,7 +31,10 @@ load it again** before step 1, step 10 and step 11, and after step 7.
    has **Chrome's tree** pressed under **Show**, and Chrome's tree has no TAB.)
    While it reads, Chrome's bar appears across every window: “Semantic
    Navigator” started debugging this browser. The bar comes and goes, because
-   the extension attaches only to read or act.
+   the extension attaches only to read or act. Switch to another tab with an
+   ordinary page that isn't changing: the panel empties, and the bar doesn't
+   come up. Press **Load tree**: Chrome's tree is read for that tab (extension
+   ≤ 0.1.17: it says _No native tree loaded yet — hit refresh_ until **↻**).
 2. A note below the toolbar explains the bar, with **Got it** alone (extension
    ≤ 0.1.17: and **Turn off**). Press **Got it**: the note goes, and focus moves
    to the tree. Close and reopen the panel, then quit Chrome and start it again:
@@ -176,7 +179,8 @@ and the tab order is only in the in-page tree)
 ## Expected
 
 - **Chrome's tree with nothing asked** (step 1), and Chrome's bar names the
-  extension
+  extension. A tab switched to waits for a press, and from 0.1.18 **Load tree**
+  is that press
 - The note explains the bar once; **Got it** is remembered across reopening the panel
   and restarting Chrome
 - Chrome's tree is Chromium's own: the media controls in step 3 are there

@@ -9,7 +9,7 @@
   "packages/extension/src/native/debugger-session.ts": 693,
   "packages/extension/src/native/index.ts": 564,
   "packages/extension/src/native/native-core.ts": 1731,
-  "packages/extension/src/sidepanel/App.tsx": 1857,
+  "packages/extension/src/sidepanel/App.tsx": 1855,
   "packages/extension/src/sidepanel/NativeTreeView.tsx": 1059,
   "packages/mcp/src/server.ts": 1083,
   "scripts/pr-risk.mjs": 1183

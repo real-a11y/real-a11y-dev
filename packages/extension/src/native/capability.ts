@@ -173,3 +173,10 @@ export function explainUnavailable(reason: NativeUnavailableReason): string {
       return "Chrome refused the debugger attach on this tab. Refresh to try again — the TAB view still lists the tab order meanwhile.";
   }
 }
+
+/** What a read that failed for no reason of the tab's own says. */
+export function readFailedText(error: string | undefined): string {
+  return error === "cancelled-by-user"
+    ? "you cancelled Chrome's debugging bar"
+    : `read failed: ${error ?? "unknown"}`;
+}

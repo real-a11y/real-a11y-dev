@@ -28,6 +28,7 @@ import {
 import {
   blockedBy,
   explainUnavailable,
+  readFailedText,
   type NativeUnavailableReason,
   type TabCapability,
 } from "../native/capability.js";
@@ -1423,9 +1424,7 @@ export function App() {
           if (auto) {
             const why = r?.reason
               ? explainUnavailable(r.reason)
-              : r?.error === "cancelled-by-user"
-                ? "you cancelled Chrome's debugging bar"
-                : `read failed: ${r?.error ?? "unknown"}`;
+              : readFailedText(r?.error);
             if (r?.reason) setNativeCapability(blockedBy(r.reason));
             setNativeStatus(`auto-refresh paused — ${why}; Refresh to resume`);
             return false;
@@ -1433,18 +1432,12 @@ export function App() {
           setNativeNodes(new Map());
           setNativeRootId("");
           nativePageKeys.current = undefined;
-          if (r?.reason) {
-            // The banner over the tree says why; the status line, which a
-            // screen reader hears for certain, says only that it can't.
-            setNativeCapability(blockedBy(r.reason));
-            setNativeStatus("native unavailable");
-          } else {
-            setNativeStatus(
-              r?.error === "cancelled-by-user"
-                ? "you cancelled Chrome's debugging bar"
-                : `read failed: ${r?.error ?? "unknown"}`,
-            );
-          }
+          // A refusal's reason goes in the banner over the tree; the status
+          // line, which a screen reader hears for certain, says only that.
+          if (r?.reason) setNativeCapability(blockedBy(r.reason));
+          setNativeStatus(
+            r?.reason ? "native unavailable" : readFailedText(r?.error),
+          );
           return false;
         }
         const read = new Map((r.nodes ?? []).map((n) => [n.id, n]));
@@ -2577,7 +2570,14 @@ export function App() {
             */}
             <button
               class="sn-input-panel-btn sn-input-panel-btn--primary"
-              onClick={() => requestTree()}
+              onClick={() => {
+                requestTree();
+                // This press is the gesture a switched-to tab waits for, so
+                // Chrome's tree is read too, unless the TAB view shows.
+                if (myTabId !== null && view !== "tab") {
+                  void loadNativeTree(myTabId);
+                }
+              }}
             >
               {pageUnreachable ? "Try again" : "Load tree"}
             </button>

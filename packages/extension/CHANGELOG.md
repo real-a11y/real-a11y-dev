@@ -37,9 +37,10 @@
   view's names no longer stop at 57 characters: a long one ends in an
   ellipsis, with its whole text as a tooltip, and **Show full names** shows
   it whole. **Copy ▾** offers the tab sequence while the TAB view shows it,
-  labelled as the extension's in-page walk's. And closing the last side
-  panel detaches the debugger from any tab it is still attached to, such as
-  one a restarted service worker left attached.
+  labelled as the extension's in-page walk's. **Load tree**, on a tab you
+  switched to, reads Chrome's tree too, rather than leaving it for ↻. And
+  closing the last side panel detaches the debugger from any tab it is still
+  attached to, such as one a restarted service worker left attached.
 
 - A long name in Chrome's tree ends in an ellipsis instead of widening the
   tree, so the panel no longer scrolls sideways on pages whose names run to a
