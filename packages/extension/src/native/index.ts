@@ -113,7 +113,7 @@ type NativeMessage =
   // Picker: arm CDP's element picker on `tabId`. Acknowledged immediately
   // (the pick itself can take as long as the user needs to click) — the
   // actual outcome arrives later as a `NATIVE_PICK_RESULT` push to the
-  // panel, mirroring how the DOM picker's own NODE_PICKED works.
+  // panel.
   // `requestId` is opaque here — the background only ever echoes it back
   // verbatim on the eventual result — but the panel needs it: a STOP
   // immediately followed by a new START on the same tab leaves every token

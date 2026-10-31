@@ -320,10 +320,9 @@ export function isTrustedSender(
  *
  * {@link isTrustedSender} accepts content scripts too, because they carry the
  * extension's id. That is right for the handlers content scripts are meant to
- * reach, and wrong for anything that drives `chrome.debugger` or flips the
- * native-mode setting: a content script runs in the page's renderer process,
- * so a compromised renderer could otherwise read and act on any tab through
- * the debugger, or turn native mode back on after the user turned it off.
+ * reach, and wrong for anything that drives `chrome.debugger`: a content
+ * script runs in the page's renderer process, so a compromised renderer could
+ * otherwise read and act on any tab through the debugger.
  * Chrome sets `sender.url` from the frame that
  * sent the message, and a content script never runs in an extension page, so
  * an extension-origin URL is what tells the two apart. `sender.tab` is not

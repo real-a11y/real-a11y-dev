@@ -1074,11 +1074,10 @@ export class NativeDebuggerSession {
        * Chromium's hit test resolves to the exact DOM element under the
        * cursor, which is often a node the accessibility tree never kept —
        * an unnamed wrapper `<span>` inside a named button, padding inside a
-       * labelled group, and so on (the DOM picker's own `resolveTracked`
-       * walks `.parentElement` for the identical reason). `Accessibility.
-       * getAXNodeAndAncestors` returns the AX node for `backendNodeId` and
-       * its ancestors up to the root in one call — cheaper than walking the
-       * DOM domain's own parent chain node by node — so the panel can try
+       * labelled group, and so on. `Accessibility.getAXNodeAndAncestors`
+       * returns the AX node for `backendNodeId` and its ancestors up to the
+       * root in one call — cheaper than walking the DOM domain's own parent
+       * chain node by node — so the panel can try
        * each ancestor in turn against whatever tree it currently has
        * loaded until one is actually present. A failure here (an older
        * Chromium without the method, a torn-down target) degrades to just

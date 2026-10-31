@@ -38,11 +38,9 @@ import type { ContentToPanel, TreeRequest } from "./types.js";
 // `chrome.debugger` native mode (RFC PR H) ships in every build now that the
 // manifest carries `debugger`/`tabs`/`storage` as required permissions (see
 // `public/manifest.json`) — the capability itself is always registered.
-// Whether it attaches is a separate, runtime, user-facing setting
-// (`native/setting.ts`): on by default, and off once the user turns it off in
-// the side panel's Settings. `registerNativeMode()` wires the message
-// handlers, and none of them attaches while it is off — see
-// `NativeDebuggerSession.attach()`'s own gate. `__DOGFOOD__` (still a
+// Chrome's tree is the side panel's only tree, so no setting gates it:
+// `registerNativeMode()` wires the message handlers, which answer the
+// extension's own pages alone (`isExtensionPageSender`). `__DOGFOOD__` (still a
 // build-time constant, see `vite.config.ts`) now only decides whether the
 // dev-only `DogfoodPanel` debug widget renders (`sidepanel/main.tsx`); it no
 // longer gates this module at all.
