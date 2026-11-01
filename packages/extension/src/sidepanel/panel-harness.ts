@@ -1,5 +1,6 @@
 import type { SemanticNode } from "@real-a11y-dev/core";
 
+import type { NativeNode } from "../native/native-actions.js";
 import type { ContentToPanel, PanelToContent } from "../types.js";
 
 /**
@@ -42,6 +43,15 @@ export interface ChromeMockOptions {
    * without extension storage, as most suites do.
    */
   storage?: Record<string, unknown>;
+  /**
+   * Answer each `NATIVE_READ` with a read of these nodes, as the service
+   * worker does once Chrome lets the debugger attach, so Chrome's tree
+   * shows. `respond` still goes first. Left out, a read gets the plain
+   * `{ success: true }` reply, which carries no tree, and the panel says the
+   * read failed: a suite about the TAB view, the page's frames or the
+   * service worker never needs one.
+   */
+  nativeTree?: NativeNode[];
 }
 
 export function installChromeMock(options: ChromeMockOptions = {}): ChromeMock {
@@ -75,19 +85,22 @@ export function installChromeMock(options: ChromeMockOptions = {}): ChromeMock {
       sent.push(message);
       // An ordinary reachable page: `isUnreachablePageResponse` reads
       // `unreachable`, and leaving it unset is what such a page replies.
-      const reply = options.respond?.(message);
+      const reply =
+        options.respond?.(message) ??
+        (options.nativeTree &&
+        (message as { type: string }).type === "NATIVE_READ"
+          ? nativeRead(options.nativeTree)
+          : undefined);
       const response = reply === undefined ? { success: true } : reply;
       if (responseCallback) {
         responseCallback(response);
         return undefined;
       }
-      // MV3's real `chrome.runtime.sendMessage` is polymorphic — callback
-      // form when one is passed, Promise form otherwise (used by, e.g.,
-      // App.tsx's own NATIVE_* calls and its NATIVE_FLAG_GET fetch-on-mount).
-      // `{ success: true }` carries no `enabled`/tree data, so every such
-      // caller sees the same "off"/"empty" default a real disconnected reply
-      // would — existing tests that never touch native state keep behaving
-      // exactly as before this mock supported the Promise form at all.
+      // MV3's real `chrome.runtime.sendMessage` is polymorphic: callback
+      // form when one is passed, Promise form otherwise, which App.tsx's
+      // NATIVE_* calls use. `{ success: true }` carries no tree, so a
+      // NATIVE_READ answered with it fails, as one the service worker
+      // couldn't serve does.
       return Promise.resolve(response);
     },
     onMessage: {
@@ -203,6 +216,49 @@ export const TREE: [string, SemanticNode][] = [
   node("n3", "n2", 2, "button", "Save"),
   node("n4", "n2", 2, "button", "Cancel"),
 ];
+
+/**
+ * Chrome's tree for {@link TREE}'s page: the same toolbar and its two
+ * buttons, with the ids a native read gives them.
+ */
+export const NATIVE_TREE: NativeNode[] = [
+  {
+    id: "ax-root",
+    role: "RootWebArea",
+    name: "Page",
+    depth: 0,
+    childIds: ["ax-2"],
+  },
+  {
+    id: "ax-2",
+    role: "group",
+    name: "Toolbar",
+    depth: 1,
+    childIds: ["ax-3", "ax-4"],
+  },
+  {
+    id: "ax-3",
+    role: "button",
+    name: "Save",
+    depth: 2,
+  },
+  {
+    id: "ax-4",
+    role: "button",
+    name: "Cancel",
+    depth: 2,
+  },
+];
+
+/** A native read's successful reply: these nodes, rooted at the first. */
+export function nativeRead(nodes: NativeNode[] = NATIVE_TREE): unknown {
+  return {
+    ok: true,
+    url: "https://example.test/",
+    rootId: nodes[0]?.id ?? "",
+    nodes: structuredClone(nodes),
+  };
+}
 
 export function treeData(): ContentToPanel {
   return {

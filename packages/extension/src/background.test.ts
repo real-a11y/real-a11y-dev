@@ -188,12 +188,10 @@ function makeHarness() {
 
   const noopEvent = () => ({ addListener: () => {} });
 
-  // Minimal in-memory StorageArea — background.ts now registers native mode
-  // unconditionally (the capability ships in every build; a separate
-  // runtime setting, not this stub, keeps it off by default), which
-  // constructs a NativeDebuggerSession needing `chrome.storage.local`/
-  // `.session` to exist even though nothing in this file's own tests
-  // exercises native mode itself.
+  // Minimal in-memory StorageArea — background.ts registers native mode
+  // unconditionally, which constructs a NativeDebuggerSession needing
+  // `chrome.storage.local`/`.session` to exist even though nothing in this
+  // file's own tests exercises native mode itself.
   function fakeStorageArea() {
     const data: Record<string, unknown> = {};
     return {
@@ -1235,7 +1233,7 @@ describe("background: a frame whose place in the tree isn't known yet", () => {
     // frame's tree is dropped and sent again, the same page as before.
     for (const fn of h.messageListeners) {
       fn(
-        { type: "REQUEST_TREE", tabId: TAB_ID, payload: { viewMode: "a11y" } },
+        { type: "REQUEST_TREE", tabId: TAB_ID, payload: { framesOnly: false } },
         { id: EXTENSION_ID },
         () => {},
       );
@@ -1267,7 +1265,7 @@ describe("background: a frame whose place in the tree isn't known yet", () => {
     h.liveFrames.delete(1); // slow to answer the request below
     for (const fn of h.messageListeners) {
       fn(
-        { type: "REQUEST_TREE", tabId: TAB_ID, payload: { viewMode: "a11y" } },
+        { type: "REQUEST_TREE", tabId: TAB_ID, payload: { framesOnly: false } },
         { id: EXTENSION_ID },
         () => {},
       );
@@ -1358,7 +1356,7 @@ describe("background: panel broadcast delivery reporting", () => {
 
     const replies = sendFromPanel({
       type: "REQUEST_TREE",
-      payload: { viewMode: "a11y" },
+      payload: { framesOnly: false },
     });
     // Nothing may be claimed before Chrome has run the send callback.
     expect(replies).toEqual([]);
@@ -1375,7 +1373,7 @@ describe("background: panel broadcast delivery reporting", () => {
 
     const replies = sendFromPanel({
       type: "REQUEST_TREE",
-      payload: { viewMode: "a11y" },
+      payload: { framesOnly: false },
     });
     await vi.runAllTimersAsync();
 
@@ -1396,7 +1394,7 @@ describe("background: panel broadcast delivery reporting", () => {
     // No connectPanel() — this is a worker woken by the request itself.
     const replies = sendFromPanel({
       type: "REQUEST_TREE",
-      payload: { viewMode: "a11y" },
+      payload: { framesOnly: false },
     });
     await vi.runAllTimersAsync();
 
@@ -1416,7 +1414,7 @@ describe("background: panel broadcast delivery reporting", () => {
   it("reports success once a reachable tab has taken REQUEST_TREE", async () => {
     const replies = sendFromPanel({
       type: "REQUEST_TREE",
-      payload: { viewMode: "a11y" },
+      payload: { framesOnly: false },
     });
     await vi.runAllTimersAsync();
 
@@ -1517,16 +1515,10 @@ describe("background: page focus forwarded to the panel", () => {
   const forwarded = () =>
     h.panelMessages.filter((m) => m.type === "FOCUS_CHANGED");
 
-  it("passes the top frame's page keys on with its node, as frame 0's", () => {
+  it("passes the top frame's page keys on, as frame 0's", () => {
     const pageKeys = { "read-1": [7, 2, 0] };
-    reportFocus(0, { nodeId: "n3", pageKeys });
     reportFocus(0, { pageKeys });
     expect(forwarded()).toEqual([
-      {
-        type: "FOCUS_CHANGED",
-        tabId: TAB_ID,
-        payload: { nodeId: "n3", pageKeys, frameId: 0 },
-      },
       {
         type: "FOCUS_CHANGED",
         tabId: TAB_ID,
@@ -1535,17 +1527,15 @@ describe("background: page focus forwarded to the panel", () => {
     ]);
   });
 
-  it("passes a subframe's page keys on with the frame they number, its node frame-prefixed", () => {
+  it("passes a subframe's page keys on with the frame they number", () => {
     const pageKeys = { "read-1": [7] };
-    reportFocus(2, { nodeId: "n3", pageKeys });
-    reportFocus(2, { nodeId: "n4" });
+    reportFocus(2, { pageKeys });
     expect(forwarded()).toEqual([
       {
         type: "FOCUS_CHANGED",
         tabId: TAB_ID,
-        payload: { nodeId: "f2-n3", pageKeys, frameId: 2 },
+        payload: { pageKeys, frameId: 2 },
       },
-      { type: "FOCUS_CHANGED", tabId: TAB_ID, payload: { nodeId: "f2-n4" } },
     ]);
   });
 
@@ -1702,10 +1692,8 @@ describe("background: the tree each tab's panel asked for", () => {
 
   it("arms a frame that loads after the panel asked with the tree it asked for", async () => {
     openPanel();
-    ask("REQUEST_TREE", { viewMode: "dom", framesOnly: false });
-    expect(await helloTree()).toEqual([
-      [5, { viewMode: "dom", framesOnly: false }],
-    ]);
+    ask("REQUEST_TREE", { framesOnly: false });
+    expect(await helloTree()).toEqual([[5, { framesOnly: false }]]);
   });
 
   it("arms one with none before the panel asked, which leaves it sending its skeleton", async () => {
@@ -1715,42 +1703,31 @@ describe("background: the tree each tab's panel asked for", () => {
 
   it("keeps the latest ask, a tree's or a view's, and reads one naming no skeleton as one for the whole tree", async () => {
     openPanel();
-    ask("REQUEST_TREE", { viewMode: "a11y", framesOnly: true });
-    ask("SET_VIEW_MODE", { viewMode: "tab", framesOnly: false });
-    expect(await helloTree()).toEqual([
-      [5, { viewMode: "tab", framesOnly: false }],
-    ]);
-    ask("SET_VIEW_MODE", { viewMode: "a11y", framesOnly: true });
-    expect(await helloTree()).toEqual([
-      [5, { viewMode: "a11y", framesOnly: true }],
-    ]);
-    ask("REQUEST_TREE", { viewMode: "a11y" });
-    expect(await helloTree()).toEqual([
-      [5, { viewMode: "a11y", framesOnly: false }],
-    ]);
+    ask("REQUEST_TREE", { framesOnly: true });
+    ask("SET_VIEW_MODE", { framesOnly: false });
+    expect(await helloTree()).toEqual([[5, { framesOnly: false }]]);
+    ask("SET_VIEW_MODE", { framesOnly: true });
+    expect(await helloTree()).toEqual([[5, { framesOnly: true }]]);
+    ask("REQUEST_TREE", {});
+    expect(await helloTree()).toEqual([[5, { framesOnly: false }]]);
   });
 
   it("gives it again to a frame that announces, so one that missed the ask sends it", async () => {
     openPanel();
-    ask("SET_VIEW_MODE", { viewMode: "dom", framesOnly: false });
+    ask("SET_VIEW_MODE", { framesOnly: false });
     await vi.runAllTimersAsync();
     const from = h.tabMessages.length;
     announce(h, 1, { framesOnly: true });
     await vi.runAllTimersAsync();
-    expect(armedWith(from)).toContainEqual([
-      1,
-      { viewMode: "dom", framesOnly: false },
-    ]);
+    expect(armedWith(from)).toContainEqual([1, { framesOnly: false }]);
   });
 
   it("forgets every tab's once the last panel closes", async () => {
     const closeFirst = openPanel();
     const closeSecond = openPanel();
-    ask("REQUEST_TREE", { viewMode: "dom", framesOnly: false });
+    ask("REQUEST_TREE", { framesOnly: false });
     closeFirst();
-    expect(await helloTree()).toEqual([
-      [5, { viewMode: "dom", framesOnly: false }],
-    ]);
+    expect(await helloTree()).toEqual([[5, { framesOnly: false }]]);
     closeSecond();
     // A panel that opens again asks for its own.
     openPanel();
@@ -1759,7 +1736,7 @@ describe("background: the tree each tab's panel asked for", () => {
 
   it("forgets a tab's once the tab closes", async () => {
     openPanel();
-    ask("REQUEST_TREE", { viewMode: "dom", framesOnly: false });
+    ask("REQUEST_TREE", { framesOnly: false });
     await vi.runAllTimersAsync();
     removeTab(h);
     expect(await helloTree()).toEqual([[5, undefined]]);
@@ -1767,7 +1744,7 @@ describe("background: the tree each tab's panel asked for", () => {
 
   it("asks the tab a closed one gives way to for the tree that tab's panel asked for", async () => {
     openPanel();
-    ask("SET_VIEW_MODE", { viewMode: "dom", framesOnly: false });
+    ask("SET_VIEW_MODE", { framesOnly: false });
     await vi.runAllTimersAsync();
     h.knobs.lastFocusedTab = { id: TAB_ID + 1, windowId: 1 };
     const from = h.tabMessages.length;
@@ -1781,7 +1758,7 @@ describe("background: the tree each tab's panel asked for", () => {
         frameId: undefined,
         body: {
           type: "REQUEST_TREE",
-          payload: { viewMode: "dom", framesOnly: false },
+          payload: { framesOnly: false },
         },
       },
     ]);
@@ -2255,7 +2232,7 @@ describe("background: which tab each window's side panel is told", () => {
     await vi.runAllTimersAsync();
     for (const fn of h.messageListeners) {
       fn(
-        { type: "REQUEST_TREE", payload: { viewMode: "a11y" } },
+        { type: "REQUEST_TREE", payload: { framesOnly: false } },
         { id: EXTENSION_ID },
         () => {},
       );

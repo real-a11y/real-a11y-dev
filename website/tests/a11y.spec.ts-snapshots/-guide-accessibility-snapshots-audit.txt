@@ -123,12 +123,14 @@ main
     emphasis "what it means"
     link "See the full comparison →"
   heading "The same tree, everywhere" (level 2)
-  paragraph "An accessibility snapshot is the serialized form of the tree you can also live across Real A11y's surfaces — the , the , and the all render the same extraction, and the serializes the same tree from your shell. What you inspect by eye in the panel is what you commit as a snapshot in tests."
+  paragraph "An accessibility snapshot is the serialized form of the tree you can also live across Real A11y's surfaces — the , the and the render the same extraction, and the and the show Chromium's own tree, which the snapshots too. What you inspect by eye in the panel is what you commit as a snapshot in tests."
     emphasis "see"
-    link "Chrome extension"
+    link "inspector"
     link "React panel"
     link "Storybook addon"
+    link "Chrome extension"
     link "CLI"
+    link "Playwright adapter"
   heading "Start snapshotting" (level 2)
   list
     listitem "→ the (, or for a whole page set)"

@@ -51,8 +51,8 @@ Two different engines can build this tree, and every tree records which one buil
 
 | Producer | What it is | Where you meet it |
 |---|---|---|
-| `dom` | This project's own in-page walk, with its own ARIA role and accessible-name rules | the inspector, `react`, the Storybook addon, `@real-a11y-dev/testing`, every surface's tab order, and the Chrome extension's whole tree with native mode off |
-| `native` | Chromium's own accessibility tree, read over the DevTools protocol | the CLI and the MCP server, and the Chrome extension's default view |
+| `dom` | This project's own in-page walk, with its own ARIA role and accessible-name rules | the inspector, `react`, the Storybook addon, `@real-a11y-dev/testing`, and every surface's tab order, the Chrome extension's TAB view included |
+| `native` | Chromium's own accessibility tree, read over the DevTools protocol | the CLI, the MCP server, and the Chrome extension's tree |
 
 They agree on most of a page, but never byte for byte, by design. Chromium names some controls differently (a file input is a `button`, `<details>` is a disclosure), places names differently, and sees content the in-page walk can't reach, such as the built-in media controls inside `<video>`. So compare a tree only with one from the same producer. Tab order is the exception that only `dom` can answer: Chromium's tree knows whether a node can take focus, but not the order Tab visits them in.
 

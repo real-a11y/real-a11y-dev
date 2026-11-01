@@ -1,15 +1,16 @@
 /**
  * A field that holds more than one line, through the side panel's edit box,
- * in both trees: the box shows the field's lines, and an edit keeps them.
+ * from Chrome's tree and from a TAB row, whose box the page's own walk
+ * fills: the box shows the field's lines, and an edit keeps them.
  *
  * The box was a one-line `<input>`, which strips line breaks from what it
  * holds. The first keystroke put a textarea's lines back as one, so Enter
  * typed them into the page that way, Shift+Enter set the value rather than
- * starting a line, and the in-page tree read an editor's paragraphs as one
+ * starting a line, and the page's walk read an editor's paragraphs as one
  * run of text, `Dear Sam,Thanks!`.
  */
 
-import { expect, test, type NativeHarness } from "./harness";
+import { expect, test } from "./harness";
 
 const LETTER = "Dear Sam,\nThanks for the books.\n\nBest,\nJo";
 
@@ -55,49 +56,36 @@ test("Chrome's tree: an edit keeps a textarea's lines, and Shift+Enter starts on
     .toBe("Bread\nButter\nJam");
 });
 
-/** Click a panel control from inside the panel, as `field-values.test.ts`'s
- *  `press` does: a Playwright click would bring the panel's own tab to the
- *  front, and the in-page tree acts on the active tab. */
-async function pressInPanel(nav: NativeHarness, label: string): Promise<void> {
-  await nav.panel.evaluate((want) => {
-    const button = [...document.querySelectorAll("button")].find(
-      (b) =>
-        b.textContent?.trim() === want || b.getAttribute("aria-label") === want,
-    );
-    if (!button) throw new Error(`no button "${want}"`);
-    button.click();
-  }, label);
-}
-
-test("In-page tree: the edit box shows a textarea's lines and an editor's, and an edit keeps them", async ({
+test("TAB view: the edit box shows a textarea's lines and an editor's, and an edit keeps them", async ({
   nav,
 }) => {
-  const { page } = await nav.open("multiline-fields.html");
-  await page.bringToFront();
-  await nav.panel.reload();
-  await nav.chooseTree("In-page tree");
-  await expect
-    .poll(() => nav.panel.locator(".sn-node").count(), { timeout: 20_000 })
-    .toBeGreaterThan(0);
-  await pressInPanel(nav, "Expand all");
+  const { page } = await nav.showTabOrder("multiline-fields.html");
   // The edit box opens on its field's state, which it asks the page for.
   await nav.routeToPage(["GET_FIELD_STATE", "DISPATCH_ACTION"]);
 
-  // Everything from inside the panel, as `pressInPanel` does.
+  // Everything from inside the panel: the page's walk acts on the bound tab.
   const box = nav.panel.locator(".sn-input-panel-field");
   const open = async (name: string) => {
     await nav.panel.evaluate((want) => {
-      // A row's text runs its role into its name, `textboxLetter`.
-      const flat = (text: string) => text.replace(/\s+/g, "");
-      const row = [...document.querySelectorAll(".sn-node")].find((r) =>
-        flat(r.textContent ?? "").includes(flat(want)),
-      );
-      const button = row?.querySelector<HTMLButtonElement>(
-        'button[title="Type (Enter)"]',
-      );
-      if (!button) throw new Error(`no Type button on ${want}`);
-      button.click();
-    }, `textbox ${name}`);
+      const stop = [
+        ...document.querySelectorAll(
+          '[aria-label="Tab sequence"] [role="option"]',
+        ),
+      ].find((o) => o.querySelector(".sn-tab-name")?.textContent === want);
+      if (!stop) throw new Error(`no tab stop ${want}`);
+      (stop as HTMLElement).click();
+    }, name);
+    // Selected once the list has rendered it so: Activate acts on that.
+    await expect(
+      nav.tabStops().getByRole("option", { selected: true }),
+    ).toContainText(name);
+    await nav.panel.evaluate(() => {
+      const activate = [
+        ...document.querySelectorAll<HTMLButtonElement>(".sn-list-action-btn"),
+      ].find((b) => b.textContent?.trim() === "Activate");
+      if (!activate || activate.disabled) throw new Error("no Activate");
+      activate.click();
+    });
     await expect(box, name).toBeVisible();
   };
   /** Type at the end of the box, as a user adding a line does. */
@@ -126,7 +114,7 @@ test("In-page tree: the edit box shows a textarea's lines and an editor's, and a
   await expect(page.locator("#letter")).toHaveValue(`${LETTER}\nPS`);
 
   // An editor's text, line by line: its paragraphs used to run together. The
-  // in-page write is text, not markup, so a plain editor like this one shows
+  // walk's write is text, not markup, so a plain editor like this one shows
   // a line break in it as a space, and one whose style keeps line breaks, as
   // the list's does, shows lines.
   await open("Card");

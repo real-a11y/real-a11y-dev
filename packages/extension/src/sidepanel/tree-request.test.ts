@@ -7,6 +7,7 @@ import type { ContentToPanel, TreeRequest } from "../types.js";
 import { App } from "./App.js";
 import type { ChromeMock } from "./panel-harness.js";
 import {
+  NATIVE_TREE,
   TAB_ID,
   installChromeMock,
   stubMatchMedia,
@@ -15,53 +16,20 @@ import {
 
 /**
  * The tree the panel asks the page for (`TreeRequest`). While Chrome's tree
- * shows, each frame sends only its skeleton: enough to say the page is
- * there, its title, when it changed and which of its frames it shows. The
- * in-page tree, and a TAB view of either tree, need the in-page walk's whole
- * tree, and the panel asks for it while one of them shows.
+ * shows its A11Y view, each frame sends only its skeleton: enough to say the
+ * page is there, its title, when it changed and which of its frames it
+ * shows. The TAB view lists the in-page walk's tab stops, so the panel asks
+ * for the whole tree while it shows.
  */
-
-const SETTING = "settings.nativeModeEnabled";
-
-/** A native read that succeeds, so Chrome's tree stays on screen. */
-const NATIVE_TREE = {
-  ok: true,
-  nodes: [
-    {
-      id: "r1",
-      role: "RootWebArea",
-      name: "Test page",
-      depth: 0,
-      childIds: [],
-      states: {},
-      properties: {},
-    },
-  ],
-  rootId: "r1",
-  url: "https://example.test/",
-  documentId: "doc-1",
-};
 
 describe("the tree the panel asks the page for", () => {
   let container: HTMLDivElement;
   let chromeMock: ChromeMock;
 
-  function mount(
-    storage: Record<string, unknown> = {},
-    /** Plays the service worker for NATIVE_FLAG_GET instead. */
-    flagGet?: () => unknown,
-  ): void {
+  function mount(storage: Record<string, unknown> = {}): void {
     chromeMock = installChromeMock({
       storage: { "settings.nativeNoticeSeen": true, ...storage },
-      respond: (message) => {
-        const type = (message as { type: string }).type;
-        if (type === "NATIVE_FLAG_GET") {
-          if (flagGet) return flagGet();
-          return { enabled: chromeMock.stored[SETTING] !== false };
-        }
-        if (type === "NATIVE_READ") return NATIVE_TREE;
-        return undefined;
-      },
+      nativeTree: NATIVE_TREE,
     });
     act(() => {
       render(h(App, {}), container);
@@ -137,96 +105,31 @@ describe("the tree the panel asks the page for", () => {
     await flush();
   }
 
-  /** Choose a tree in Settings, as the user does. */
-  async function chooseTree(name: "Chrome's tree" | "In-page tree") {
-    if (!buttonNamed(name)) await press("Settings ▾");
-    await press(name);
-  }
-
   const nativeTree = () =>
     container.querySelector(
       '[role="tree"][aria-label^="Native accessibility tree"]',
     );
-  const inPageRow = () => container.querySelector("[data-node-id='n3']");
-  const reading = () =>
-    container.querySelector<HTMLElement>('.sn-tree-pending[role="status"]');
 
-  it("asks a page for its frames' skeletons while Chrome's tree may show, and connects on them", async () => {
+  it("asks a page for its frames' skeletons while Chrome's tree shows, and connects on them", async () => {
     mount();
     await flush();
     await showTab();
-    expect(asked().at(-1)).toEqual({ viewMode: "a11y", framesOnly: true });
+    expect(asked().at(-1)).toEqual({ framesOnly: true });
 
     await pageSends("skeletons");
     // The page is there: Chrome's tree reads it.
     expect(nativeTree()).not.toBeNull();
-    expect(asked().at(-1)).toEqual({ viewMode: "a11y", framesOnly: true });
+    expect(asked().at(-1)).toEqual({ framesOnly: true });
   });
 
-  it("asks for the whole tree once the in-page tree is chosen, reading the page until it lands", async () => {
-    mount();
-    await flush();
-    await showTab();
-    await pageSends("skeletons");
-
-    await chooseTree("In-page tree");
-    expect(asked().at(-1)).toEqual({ viewMode: "a11y", framesOnly: false });
-    expect(reading()?.textContent).toBe("Reading the page…");
-    expect(inPageRow()).toBeNull();
-
-    await pageSends("trees");
-    expect(reading()).toBeNull();
-    expect(inPageRow()).not.toBeNull();
-
-    // And Chrome's tree again: the skeletons do.
-    await chooseTree("Chrome's tree");
-    expect(asked().at(-1)).toEqual({ viewMode: "a11y", framesOnly: true });
-  });
-
-  it("keeps the in-page tree's scope and selection through Chrome's tree, whose skeletons are no tree", async () => {
-    mount();
-    await flush();
-    await showTab();
-    await pageSends("skeletons");
-    await chooseTree("In-page tree");
-    await pageSends("trees");
-    act(() => {
-      chromeMock.emit({
-        type: "FOCUS_CHANGED",
-        tabId: TAB_ID,
-        payload: { nodeId: "n3" },
-      } as unknown as ContentToPanel);
-    });
-    act(() => {
-      container
-        .querySelector("[data-node-id='n2']")!
-        .dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
-    });
-    await flush();
-    const scoped = () => container.querySelector(".sn-scope-bar");
-    expect(scoped()).not.toBeNull();
-
-    await chooseTree("Chrome's tree");
-    await pageSends("skeletons");
-    await pageSends("skeletons");
-    await chooseTree("In-page tree");
-    await pageSends("trees");
-    expect(scoped()).not.toBeNull();
-    expect(
-      container
-        .querySelector("[data-node-id='n3']")
-        ?.getAttribute("aria-selected"),
-    ).toBe("true");
-  });
-
-  it("asks for the whole tree for Chrome's tree's TAB view, reading the tab order until it lands", async () => {
+  it("asks for the whole tree for the TAB view, reading the tab order until it lands", async () => {
     mount();
     await flush();
     await showTab();
     await pageSends("skeletons");
 
     await press("TAB");
-    expect(asked().at(-1)).toEqual({ viewMode: "tab", framesOnly: false });
+    expect(asked().at(-1)).toEqual({ framesOnly: false });
     expect(container.textContent).toContain("Reading the page's tab order…");
 
     await pageSends("trees");
@@ -235,39 +138,20 @@ describe("the tree the panel asks the page for", () => {
     );
 
     await press("A11Y");
-    expect(asked().at(-1)).toEqual({ viewMode: "a11y", framesOnly: true });
+    expect(asked().at(-1)).toEqual({ framesOnly: true });
   });
 
-  it("asks for the whole tree with native mode off", async () => {
-    mount({ [SETTING]: false });
+  it("shows Chrome's tree where an older version stored native mode off", async () => {
+    // Up to 0.1.17 the user could turn native mode off, and the panel then
+    // asked each page for its whole tree. The setting is gone, and what it
+    // stored no longer counts.
+    mount({ "settings.nativeModeEnabled": false });
     await flush();
     await showTab();
-    expect(asked().at(-1)).toEqual({ viewMode: "a11y", framesOnly: false });
+    expect(asked().at(-1)).toEqual({ framesOnly: true });
 
-    await pageSends("trees");
-    expect(inPageRow()).not.toBeNull();
-    expect(nativeTree()).toBeNull();
-  });
-
-  it("asks for the whole tree where the setting can't be read, as the panel stays on the in-page tree", async () => {
-    // Neither the service worker nor storage says.
-    chromeMock = installChromeMock({ respond: () => undefined });
-    act(() => {
-      render(h(App, {}), container);
-    });
-    await flush();
-    await showTab();
-    expect(asked().at(-1)).toEqual({ viewMode: "a11y", framesOnly: false });
-  });
-
-  it("asks for the whole tree once a change in storage says native mode is off, as the panel had it", async () => {
-    // The service worker never answers the panel's own read.
-    mount({ [SETTING]: false }, () => new Promise(() => {}));
-    await flush();
-    act(() => chromeMock.writeStorage({ [SETTING]: false }));
-    await flush();
-    await showTab();
-    expect(asked().at(-1)).toEqual({ viewMode: "a11y", framesOnly: false });
+    await pageSends("skeletons");
+    expect(nativeTree()).not.toBeNull();
   });
 
   it("lists none of the stops the page had in Chrome's TAB view while it reads the page again", async () => {
@@ -306,9 +190,7 @@ describe("the tree the panel asks the page for", () => {
   });
 
   it("asks no tab for a tree before one is bound, which would be another window's", async () => {
-    // The setting, read before the panel has its tab, changes the tree it
-    // wants.
-    mount({ [SETTING]: false });
+    mount();
     await flush();
     expect(asked()).toEqual([]);
 
@@ -318,7 +200,7 @@ describe("the tree the panel asks the page for", () => {
         .filter((m) => m.type === "REQUEST_TREE" || m.type === "SET_VIEW_MODE")
         .map((m) => m.tabId),
     ).toEqual(asked().map(() => TAB_ID));
-    expect(asked().at(-1)).toEqual({ viewMode: "a11y", framesOnly: false });
+    expect(asked().at(-1)).toEqual({ framesOnly: true });
   });
 
   it("asks a service worker that restarted for the tree it wants, which that one forgot", async () => {
@@ -336,6 +218,6 @@ describe("the tree the panel asks the page for", () => {
         .slice(before)
         .filter((m) => m.type === "SET_VIEW_MODE")
         .map((m) => (m as { payload: TreeRequest }).payload),
-    ).toEqual([{ viewMode: "tab", framesOnly: false }]);
+    ).toEqual([{ framesOnly: false }]);
   });
 });

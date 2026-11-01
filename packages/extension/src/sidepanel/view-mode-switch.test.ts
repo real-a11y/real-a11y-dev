@@ -7,27 +7,26 @@ import type { ContentToPanel } from "../types.js";
 import { App } from "./App.js";
 import type { ChromeMock } from "./panel-harness.js";
 import {
+  NATIVE_TREE,
   TAB_ID,
-  TREE,
   installChromeMock,
   stubMatchMedia,
   treeData,
 } from "./panel-harness.js";
 
 /**
- * Switching the DOM/A11Y/TAB view mode must not put the panel through the
- * tab-switch teardown. The two used to share one effect, so a toggle wiped the
- * tree, the selection and the scope, and dropped the panel to the "Connecting
- * to page..." screen until the re-extraction came back.
+ * Switching Chrome's tree between its A11Y and TAB views must not put the
+ * panel through the tab-switch teardown, nor read the page again: the tree,
+ * its selection and its scope are all still there when A11Y comes back.
  */
 
-describe("view-mode switching", () => {
+describe("switching Chrome's tree between A11Y and TAB", () => {
   let container: HTMLDivElement;
   let chromeMock: ChromeMock;
 
   beforeEach(() => {
     stubMatchMedia();
-    chromeMock = installChromeMock();
+    chromeMock = installChromeMock({ nativeTree: NATIVE_TREE });
     container = document.createElement("div");
     document.body.appendChild(container);
   });
@@ -37,6 +36,15 @@ describe("view-mode switching", () => {
     container.remove();
   });
 
+  /** Let the promise-form replies land and the effects they trigger run. */
+  async function flush(): Promise<void> {
+    for (let i = 0; i < 5; i++) {
+      await act(async () => {
+        await Promise.resolve();
+      });
+    }
+  }
+
   function toggleButton(label: string): HTMLButtonElement {
     const btn = [...container.querySelectorAll("button.sn-toggle-btn")].find(
       (b) => b.textContent?.trim() === label,
@@ -45,20 +53,20 @@ describe("view-mode switching", () => {
     return btn as HTMLButtonElement;
   }
 
-  function tree(): HTMLElement {
-    const el = container.querySelector('[role="tree"]');
-    if (!el) throw new Error("no tree rendered");
-    return el as HTMLElement;
-  }
-
   function row(nodeId: string): HTMLElement {
     const el = container.querySelector(`[data-node-id="${nodeId}"]`);
     if (!el) throw new Error(`no row rendered for ${nodeId}`);
     return el as HTMLElement;
   }
 
-  /** Panel with a tree loaded, a selected row and a scoped subtree. */
-  function mountLoadedPanel(): void {
+  const reads = () =>
+    chromeMock.sent.filter(
+      (m) => (m as { type: string }).type === "NATIVE_READ",
+    );
+
+  /** The panel on Chrome's tree, a row selected and the tree scoped to the
+   *  toolbar. */
+  async function mountLoadedPanel(): Promise<void> {
     act(() => {
       render(h(App, {}), container);
     });
@@ -71,89 +79,45 @@ describe("view-mode switching", () => {
     act(() => {
       chromeMock.emit(treeData());
     });
+    await flush();
     act(() => {
-      // Focus sync from the page is the cheapest way to move the selection.
-      chromeMock.emit({
-        type: "FOCUS_CHANGED",
-        tabId: TAB_ID,
-        payload: { nodeId: "n3" },
-      } as unknown as ContentToPanel);
+      row("ax-3").click();
     });
     act(() => {
-      row("n2").dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
+      row("ax-2").dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
     });
   }
 
-  it("keeps the tree, selection and scope when the view mode changes", () => {
-    mountLoadedPanel();
-
-    expect(container.textContent).not.toContain("Connecting to page...");
-    expect(row("n3").getAttribute("aria-selected")).toBe("true");
+  it("keeps Chrome's tree, its selection and its scope through the TAB view", async () => {
+    await mountLoadedPanel();
+    expect(row("ax-3").getAttribute("aria-selected")).toBe("true");
     expect(container.querySelector(".sn-scope-bar")).not.toBeNull();
+    const readsBefore = reads().length;
 
     act(() => {
-      toggleButton("DOM").click();
+      toggleButton("TAB").click();
     });
-
-    // The tab-switch teardown used to run here, so the panel dropped to the
-    // empty state and lost selection and scope until the re-extraction came
-    // back — and then came back without them.
+    await flush();
     expect(container.textContent).not.toContain("Connecting to page...");
-    expect(row("n3").getAttribute("aria-selected")).toBe("true");
-    expect(container.querySelector(".sn-scope-bar")).not.toBeNull();
-
-    // The toggle's own job still happens: the content script is told to
-    // re-extract in the new mode.
+    expect(toggleButton("TAB").getAttribute("aria-pressed")).toBe("true");
+    // The TAB view asks the page for its whole tree, once.
     expect(
       chromeMock.sent.filter((m) => m.type === "SET_VIEW_MODE"),
     ).toHaveLength(1);
-    expect(toggleButton("DOM").getAttribute("aria-pressed")).toBe("true");
+
+    act(() => {
+      toggleButton("A11Y").click();
+    });
+    await flush();
+    expect(container.textContent).not.toContain("Connecting to page...");
+    expect(row("ax-3").getAttribute("aria-selected")).toBe("true");
+    expect(container.querySelector(".sn-scope-bar")).not.toBeNull();
+    // Chrome's tree came back as it was, without another read.
+    expect(reads()).toHaveLength(readsBefore);
   });
 
-  it("drops a selection the incoming tree no longer contains", () => {
-    mountLoadedPanel();
-    expect(row("n3").getAttribute("aria-selected")).toBe("true");
-
-    act(() => {
-      toggleButton("DOM").click();
-    });
-    // The re-extraction in the other view mode comes back without the
-    // selected node — the two trees disagree about generic wrappers, which is
-    // exactly what switching between them is for. A selection pointing into
-    // nothing leaves no `aria-activedescendant` and no index for
-    // `useTreeKeyboard` to move from, so the tree stops answering keys.
-    act(() => {
-      chromeMock.emit({
-        type: "TREE_DATA",
-        tabId: TAB_ID,
-        payload: {
-          nodes: TREE.filter(([id]) => id !== "n3").map(([id, n]) => [
-            id,
-            structuredClone(n),
-          ]),
-          rootId: "n1",
-          pageTitle: "Test page",
-          pageUrl: "https://example.test/",
-        },
-      } as unknown as ContentToPanel);
-    });
-
-    expect(container.querySelector('[data-node-id="n3"]')).toBeNull();
-    expect(container.querySelector('[aria-selected="true"]')).toBeNull();
-
-    // The proof it was dropped rather than merely unrendered: a selection
-    // that resolves to no row leaves `useTreeKeyboard` no index to move from,
-    // and every key becomes a no-op. Cleared, ArrowDown picks the first row.
-    act(() => {
-      tree().dispatchEvent(
-        new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }),
-      );
-    });
-    expect(container.querySelector('[aria-selected="true"]')).not.toBeNull();
-  });
-
-  it("still tears the panel down when the bound tab changes", () => {
-    mountLoadedPanel();
+  it("still tears the panel down when the bound tab changes", async () => {
+    await mountLoadedPanel();
 
     act(() => {
       chromeMock.emit({
@@ -163,8 +127,8 @@ describe("view-mode switching", () => {
     });
 
     // A different tab's tree is not this tab's tree: the panel drops it and
-    // waits for the user to load the new one.
+    // waits for the new tab's page.
     expect(container.textContent).toContain("Connecting to page...");
-    expect(container.querySelector('[data-node-id="n3"]')).toBeNull();
+    expect(container.querySelector('[data-node-id="ax-3"]')).toBeNull();
   });
 });

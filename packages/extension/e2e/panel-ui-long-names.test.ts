@@ -1,5 +1,6 @@
 /**
- * Long names in a side panel's width, in both producers' trees.
+ * Long names in a side panel's width, in Chrome's tree and the TAB view's
+ * list.
  *
  * A name longer than the panel is wide used to size the whole tree to it, so
  * the panel scrolled sideways and every other row's end sat off screen. Now
@@ -20,8 +21,8 @@ const PANEL_WIDTH = 360;
  *  and both its key states. */
 const NARROW_WIDTH = 200;
 
-/** The fixture's heading: on screen in both trees as they open, with no
- *  row to expand first. */
+/** The fixture's heading: on screen as the tree opens, with no row to
+ *  expand first. */
 const LONG_NAME =
   "Wikipedia, la enciclopedia libre que cualquiera puede editar en español";
 
@@ -30,24 +31,13 @@ const LONG_NAME =
 const TOGGLE_NAME =
   "Mostrar los nombres completos de los artículos de la enciclopedia";
 
-/** Bring the fixture forward, reload the panel and show `producer`'s tree. */
-async function show(
-  nav: NativeHarness,
-  producer: "DOM" | "NATIVE",
-): Promise<void> {
-  const { page } = await nav.open("long-names.html");
-  await page.bringToFront();
-  await nav.panel.reload();
-  await nav.chooseTree(producer === "DOM" ? "In-page tree" : "Chrome's tree");
-  if (producer === "DOM") {
-    // The A11Y view, its default, so a row shows its name as native's does.
-    await expect(
-      nav.viewToggle().getByRole("button", { name: "A11Y", exact: true }),
-    ).toHaveAttribute("aria-pressed", "true");
-  }
-  await expect
-    .poll(() => nav.panel.locator(".sn-node").count(), { timeout: 20_000 })
-    .toBeGreaterThan(0);
+/** The fixture's long link: a tab stop, so the TAB view lists it. */
+const LINK_NAME =
+  "Página principal de la enciclopedia libre y políglota de la Fundación Wikimedia";
+
+/** Bring the fixture forward, reload the panel and show Chrome's tree. */
+async function show(nav: NativeHarness): Promise<void> {
+  await nav.showNative("long-names.html");
 }
 
 /**
@@ -144,78 +134,116 @@ async function setFullNames(nav: NativeHarness, on: boolean): Promise<void> {
   await expect(box).toHaveCount(0);
 }
 
-for (const producer of ["NATIVE", "DOM"] as const) {
-  test(`${producer}: a long name ends in an ellipsis, and Show full names widens the tree instead`, async ({
-    nav,
-  }) => {
-    const before = nav.panel.viewportSize();
-    await nav.panel.setViewportSize({ width: PANEL_WIDTH, height: 720 });
-    try {
-      await show(nav, producer);
-      await expect
-        .poll(() => layout(nav))
-        .toEqual({
-          scrollsSideways: false,
-          wideRows: [],
-          nameClipped: true,
-          tooltip: LONG_NAME,
-          // A key state never gives way to the name.
-          statesInView: ["disabled", "pressed"],
-          // Nor does a toolbar control to the panel's edge: they wrap.
-          toolbarFits: true,
-        });
-      // A screen reader hears them right after the name, though they show
-      // after the label: the badges are hidden from it.
-      await expect(
-        nav.panel.getByRole("treeitem", {
-          name: new RegExp(
-            `^button "${TOGGLE_NAME}" (disabled, pressed|pressed, disabled) `,
-          ),
-        }),
-      ).toHaveCount(1);
+test("a long name ends in an ellipsis, and Show full names widens the tree instead", async ({
+  nav,
+}) => {
+  const before = nav.panel.viewportSize();
+  await nav.panel.setViewportSize({ width: PANEL_WIDTH, height: 720 });
+  try {
+    await show(nav);
+    await expect
+      .poll(() => layout(nav))
+      .toEqual({
+        scrollsSideways: false,
+        wideRows: [],
+        nameClipped: true,
+        tooltip: LONG_NAME,
+        // A key state never gives way to the name.
+        statesInView: ["disabled", "pressed"],
+        // Nor does a toolbar control to the panel's edge: they wrap.
+        toolbarFits: true,
+      });
+    // A screen reader hears them right after the name, though they show
+    // after the label: the badges are hidden from it.
+    await expect(
+      nav.panel.getByRole("treeitem", {
+        name: new RegExp(
+          `^button "${TOGGLE_NAME}" (disabled, pressed|pressed, disabled) `,
+        ),
+      }),
+    ).toHaveCount(1);
 
-      await setFullNames(nav, true);
-      await expect
-        .poll(() => layout(nav))
-        .toMatchObject({ scrollsSideways: true, nameClipped: false });
+    await setFullNames(nav, true);
+    await expect
+      .poll(() => layout(nav))
+      .toMatchObject({ scrollsSideways: true, nameClipped: false });
 
-      // Kept in storage: a panel opened afresh starts with full names.
-      await show(nav, producer);
-      await expect
-        .poll(() => layout(nav))
-        .toMatchObject({ scrollsSideways: true, nameClipped: false });
+    // Kept in storage: a panel opened afresh starts with full names.
+    await show(nav);
+    await expect
+      .poll(() => layout(nav))
+      .toMatchObject({ scrollsSideways: true, nameClipped: false });
 
-      await setFullNames(nav, false);
-      await expect
-        .poll(() => layout(nav))
-        .toMatchObject({ scrollsSideways: false, nameClipped: true });
-    } finally {
-      // The worker's panel is shared: leave it as the next test expects.
-      await nav.panel.evaluate(() =>
-        chrome.storage.local.remove("settings.showFullNames"),
+    await setFullNames(nav, false);
+    await expect
+      .poll(() => layout(nav))
+      .toMatchObject({ scrollsSideways: false, nameClipped: true });
+  } finally {
+    // The worker's panel is shared: leave it as the next test expects.
+    await nav.panel.evaluate(() =>
+      chrome.storage.local.remove("settings.showFullNames"),
+    );
+    if (before) await nav.panel.setViewportSize(before);
+  }
+});
+
+test("a row too narrow for its key states widens, alone, rather than clip them", async ({
+  nav,
+}) => {
+  const before = nav.panel.viewportSize();
+  await nav.panel.setViewportSize({ width: NARROW_WIDTH, height: 720 });
+  try {
+    await show(nav);
+    await expect
+      .poll(() => layout(nav))
+      .toMatchObject({
+        scrollsSideways: true,
+        // The toggle's row, by just enough for its states; no other.
+        wideRows: [TOGGLE_NAME],
+        nameClipped: true,
+        statesInView: ["disabled", "pressed"],
+      });
+  } finally {
+    if (before) await nav.panel.setViewportSize(before);
+  }
+});
+
+test("the TAB view ends a long name in an ellipsis too, and Show full names widens its list", async ({
+  nav,
+}) => {
+  const before = nav.panel.viewportSize();
+  await nav.panel.setViewportSize({ width: PANEL_WIDTH, height: 720 });
+  /** How the list shows the long link's stop. */
+  const stop = () =>
+    nav.panel.evaluate((name) => {
+      const list = document.querySelector<HTMLElement>(
+        '[aria-label="Tab sequence"]',
+      )!;
+      const span = [...list.querySelectorAll<HTMLElement>(".sn-tab-name")].find(
+        (el) => el.textContent === name,
       );
-      if (before) await nav.panel.setViewportSize(before);
-    }
-  });
+      return {
+        scrollsSideways: list.scrollWidth > list.clientWidth,
+        nameClipped: span ? span.scrollWidth > span.clientWidth : null,
+        tooltip: span?.title ?? null,
+      };
+    }, LINK_NAME);
+  try {
+    await nav.showTabOrder("long-names.html");
+    await expect.poll(stop).toEqual({
+      scrollsSideways: false,
+      nameClipped: true,
+      tooltip: LINK_NAME,
+    });
 
-  test(`${producer}: a row too narrow for its key states widens, alone, rather than clip them`, async ({
-    nav,
-  }) => {
-    const before = nav.panel.viewportSize();
-    await nav.panel.setViewportSize({ width: NARROW_WIDTH, height: 720 });
-    try {
-      await show(nav, producer);
-      await expect
-        .poll(() => layout(nav))
-        .toMatchObject({
-          scrollsSideways: true,
-          // The toggle's row, by just enough for its states; no other.
-          wideRows: [TOGGLE_NAME],
-          nameClipped: true,
-          statesInView: ["disabled", "pressed"],
-        });
-    } finally {
-      if (before) await nav.panel.setViewportSize(before);
-    }
-  });
-}
+    await setFullNames(nav, true);
+    await expect
+      .poll(stop)
+      .toMatchObject({ scrollsSideways: true, nameClipped: false });
+  } finally {
+    await nav.panel.evaluate(() =>
+      chrome.storage.local.remove("settings.showFullNames"),
+    );
+    if (before) await nav.panel.setViewportSize(before);
+  }
+});

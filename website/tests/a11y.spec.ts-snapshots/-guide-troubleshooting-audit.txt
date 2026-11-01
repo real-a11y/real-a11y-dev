@@ -52,7 +52,8 @@ main
       code "display: none"
       code "visibility: hidden"
       code "aria-hidden="true""
-  paragraph "If the tree genuinely is empty but you expect content, open the Chrome extension on the same page and check the A11y view — the same extraction runs there."
+  paragraph "If the tree genuinely is empty but you expect content, mount the on the same page and check its A11y view — the same extraction runs there."
+    link "inspector"
   separator
   heading "Snapshot flaps between runs or between local and CI" (level 2)
   paragraph "is deterministic, but it surfaces text that isn't. Common culprits:"
@@ -140,11 +141,12 @@ main
     code "<label for>"
   paragraph "Two cases still come up short:"
   list
-    listitem "() can't be read from page script, so their host shows up with nothing inside it. The CLI and MCP server read Chromium's own accessibility tree, which does include them. If you own the component, an open root costs you nothing in encapsulation that matters for styling."
+    listitem "() can't be read from page script, so their host shows up with nothing inside it. The CLI, the MCP server and the Chrome extension read Chromium's own accessibility tree, which does include them. If you own the component, an open root costs you nothing in encapsulation that matters for styling."
       strong "Closed shadow roots"
       code "attachShadow({ mode: "closed" })"
-    listitem "The panel and the extension re-extract on DOM mutations, and mutations inside a component's shadow tree don't reach that observer yet. If a component updates and the panel doesn't, press refresh. One-shot extraction (the matchers and assertions, ) always reads the current state."
+    listitem "The panel re-extracts on DOM mutations, and the extension, with on, reads Chrome's tree again after them, but mutations inside a component's shadow tree don't reach that observer yet. If a component updates and the panel doesn't, press refresh. One-shot extraction (the matchers and assertions, ) always reads the current state."
       strong "Live views don't yet notice changes inside a shadow root."
+      strong "Follow page changes"
       code "testing"
       code "getTree()"
   separator
@@ -270,7 +272,9 @@ main
     listitem "Check the relevant recipe (, ) if you're on one of those stacks."
       link "Next.js"
       link "Storybook + React 19"
-    listitem "Reproduce in the Chrome extension against the same URL — if the extension also produces the unexpected output, it's a real tree extraction question (open an issue with the minimal HTML). If the extension matches your expectation but the library disagrees, it's likely a config or environment issue."
+    listitem "Reproduce in the on the same page — if it also produces the unexpected output, it's a real tree extraction question (open an issue with the minimal HTML). If the inspector matches your expectation but the library disagrees, it's likely a config or environment issue. The Chrome extension shows Chromium's own tree, which differs from the library's by design ()."
+      link "inspector"
+      link "Two producers"
 contentinfo
   link "Edit this page on GitHub"
   paragraph "Last updated:"

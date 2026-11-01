@@ -102,7 +102,7 @@ but it is redundant.
 
 ## The panel
 
-The panel embeds the full interactive **Semantic Navigator** tree — the same `TreePanel` used by the Chrome extension and inspector — rendered inside a CSS-isolated shadow root. A mode switcher in the panel header offers three views:
+The panel embeds the full interactive **Semantic Navigator** tree — the same `TreePanel` the inspector uses — rendered inside a CSS-isolated shadow root. A mode switcher in the panel header offers three views:
 
 | Mode | Shows |
 |---|---|
@@ -237,6 +237,6 @@ The addon listens to `storyRendered` and `storyChanged` events **while the panel
 
 ## Panel features
 
-Inside every story's panel is the same tree as the Chrome extension, with its search, role filters and [keyboard](/guide/chrome-extension#keyboard). Selecting or hovering a row outlines its element in the story canvas, without scrolling it, and activating a row runs its action in the story. Unlike the inspector's `highlightOnHover` and `scrollHostOnSelect`, none of this is configurable. **Show full names**, under ⚙ at the end of the toolbar, holds across stories until Storybook reloads. The addon has no Focus sync, scope breadcrumb or live region log.
+Inside every story's panel is the same tree as the inspector's, with the search, role filters and [keyboard](/guide/chrome-extension#keyboard) the Chrome extension's tree has too. Selecting or hovering a row outlines its element in the story canvas, without scrolling it, and activating a row runs its action in the story. Unlike the inspector's `highlightOnHover` and `scrollHostOnSelect`, none of this is configurable. **Show full names**, under ⚙ at the end of the toolbar, holds across stories until Storybook reloads. The addon has no Focus sync, scope breadcrumb or live region log.
 
 → [Using the panel](/guide/chrome-extension#using-the-panel)

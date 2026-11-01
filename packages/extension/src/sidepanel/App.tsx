@@ -3,31 +3,14 @@
 import type {
   ActionType,
   SemanticNode,
-  DomSemanticNode,
   ExtractionResult,
-  TreeViewMode,
-  RoleFilter,
   ActionRequest,
 } from "@real-a11y-dev/core";
+import { getPrimaryAction } from "@real-a11y-dev/core";
 import {
-  getPrimaryAction,
-  ACTION_LABELS,
-  applySearchFilter,
-  ROLE_FILTER_LABELS,
-  buildControlsIndex,
-} from "@real-a11y-dev/core";
-import {
-  JUMP_KEYS,
-  JUMP_KEYSHORTCUTS,
-  KeyStatesForReaders,
   ShowFullNamesSetting,
   useDismissible,
-  useTreeKeyboard,
-  useInputModality,
-  useVirtualTree,
-  useIndexById,
 } from "@real-a11y-dev/semantic-navigator-ui";
-import { useSearch } from "@real-a11y-dev/semantic-navigator-ui";
 import {
   serializeTree,
   serializeOutline,
@@ -40,12 +23,12 @@ import {
   useLayoutEffect,
   useCallback,
   useRef,
-  useMemo,
 } from "preact/hooks";
 
 import {
   blockedBy,
   explainUnavailable,
+  readFailedText,
   type NativeUnavailableReason,
   type TabCapability,
 } from "../native/capability.js";
@@ -63,11 +46,7 @@ import {
   nativeRowsByPageKey,
   type NativePageRows,
 } from "../native/native-tree-utils.js";
-import {
-  NATIVE_MODE_KEY,
-  NATIVE_NOTICE_SEEN_KEY,
-  nativeModeOn,
-} from "../native/setting.js";
+import { NATIVE_NOTICE_SEEN_KEY } from "../native/setting.js";
 import {
   isFieldStateSuccess,
   isPanelWindow,
@@ -79,23 +58,14 @@ import {
 import type { ContentToPanel, PanelToContent, TreeRequest } from "../types.js";
 
 import { describeAction, describeSelection } from "./action-feedback.js";
-import { ControlsChip, JUMP_FLASH_MS } from "./ControlsChip.js";
-import {
-  asDom,
-  getDisplayRole,
-  showsTextContent,
-  showsTextPreview,
-} from "./dom-rows.js";
+import { asDom } from "./dom-rows.js";
 import {
   buildExportMarkdown,
+  exportViewsFor,
   pageLabel,
-  ALL_VIEWS,
-  NATIVE_VIEWS,
   VIEW_LABELS,
 } from "./export.js";
 import type { ExportMeta, ExportView, ExportViews } from "./export.js";
-import { announcedValueLabel, rawValueLabel } from "./field-value.js";
-import { FilteredList } from "./FilteredList.js";
 import { FOCUSABLE_SELECTOR } from "./focus-hooks.js";
 import {
   followAfterRead,
@@ -122,29 +92,11 @@ import {
   findNativeModalDialog,
   nativeActionFeedback,
 } from "./native-feedback.js";
-import { extensionName, NativeModeNotice } from "./NativeModeNotice.js";
+import { NativeModeNotice } from "./NativeModeNotice.js";
 import type { NativeView } from "./NativeTabView.js";
 import { NativeTreeView, type NativeReveal } from "./NativeTreeView.js";
-import { domStateBadges, EmbeddedBadge, StateBadges } from "./row-badges.js";
-import {
-  arrowLeftStopsAtScopeRoot,
-  describeNode,
-  hasChildren,
-  isInScope,
-  matchCountLabel,
-  SCOPE_KEY_HINT,
-  scopeKeyAction,
-  scopePath,
-  subtreeNodes,
-} from "./scope.js";
-import { ScopeBar } from "./ScopeBar.js";
-import {
-  DialogIndicator,
-  KEYS,
-  SendKeyBar,
-  sendKeySpec,
-} from "./SendKeyBar.js";
-import { TabSequenceView } from "./TabSequenceView.js";
+import { describeNode } from "./scope.js";
+import { KEYS } from "./SendKeyBar.js";
 import { useStoredFlag } from "./use-stored-flag.js";
 import { useNativeOverlay } from "./useNativeOverlay.js";
 
@@ -188,35 +140,15 @@ const MAX_NAV_RECOVERY_HOPS = 5;
  *  kept has the stops the page had, not those it has. */
 const NO_NODES = new Map<string, SemanticNode>();
 
-/** What turning native mode off says, here or from another window: a panel
- *  waiting for a page has no in-page tree on screen to point at. */
-function nativeOffMessage(connected: boolean): string {
-  return connected
-    ? "Not reading pages through Chrome — showing the in-page tree."
-    : "Not reading pages through Chrome.";
-}
-
 export function App() {
-  const [viewMode, setViewMode] = useState<TreeViewMode>("a11y");
-  // Read by `sendTreeRequest` instead of closing over `viewMode`, so that
-  // callback — and `requestTree`/`reExtract`/`handleActivate` built on it —
-  // keeps a stable identity when the mode changes. It is a dependency of the
-  // tab-change effect below, whose teardown belongs to tab switches alone: a
-  // view-mode toggle that re-ran it wiped the tree, the selection and the
-  // scope and dropped the panel to "Connecting to page..." until the
-  // re-extraction landed. A ref rather than a dependency because the mode is
-  // an input to a request, never a reason to re-send one — SET_VIEW_MODE
-  // already makes the content script re-extract.
-  const viewModeRef = useRef<TreeViewMode>(viewMode);
-  useEffect(() => {
-    viewModeRef.current = viewMode;
-  }, [viewMode]);
+  // Chrome's tree, or the page's tab order in its place.
+  const [view, setView] = useState<NativeView>("a11y");
+  // The in-page walk's tree, which the TAB view lists the page's tab order
+  // from: Chrome's tree has none (`NativeTabView.tsx`).
   const [nodes, setNodes] = useState<Map<string, SemanticNode>>(new Map());
   const [rootId, setRootId] = useState<string>("");
   // The page sent its frames' skeleton, not its tree (see `framesOnly`).
   const [treePending, setTreePending] = useState(false);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [renderCount, forceRender] = useState(0);
   const [connected, setConnected] = useState(false);
   // The same, for callbacks that run after a reply. Written during render,
   // like `pickModeOnRef`.
@@ -238,7 +170,6 @@ export function App() {
   const feedbackTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
     undefined,
   );
-  const [roleFilter, setRoleFilter] = useState<RoleFilter>(null);
   const [curtainOn, setCurtainOn] = useState(false);
   const [focusTrackerOn, setFocusTrackerOn] = useState(true);
   // For the message listener and the native reads. With Focus sync off, a
@@ -264,9 +195,10 @@ export function App() {
     [],
   );
   // Picker mode (DevTools-style "select an element in the page"). Off by
-  // default; toggled by the toolbar button or Ctrl/Cmd+Shift+C. The
-  // content script owns the actual click capture — this flag is just the
-  // panel's mirror so the button shows the right pressed state.
+  // default; toggled by the toolbar button or Ctrl/Cmd+Shift+C. Chromium's
+  // inspect mode owns the actual click capture (`runPick` in
+  // debugger-session.ts) — this flag is just the panel's mirror so the button
+  // shows the right pressed state.
   const [pickModeOn, setPickModeOn] = useState(false);
   // Latest `pickModeOn`, for listeners and cleanups that must not re-subscribe
   // when it changes. Written during render, not from an effect: an effect
@@ -277,41 +209,16 @@ export function App() {
   const [inputState, setInputState] = useState<InputPanelState | null>(null);
   const [pageTitle, setPageTitle] = useState<string>("");
   const [pageUrl, setPageUrl] = useState<string>("");
-  const [scopedRootId, setScopedRootId] = useState<string | null>(null);
   const [liveAnnouncements, setLiveAnnouncements] = useState<
     Array<{ id: number; text: string; level: string; role: string }>
   >([]);
   const announcementId = useRef(0);
 
-  // ---- Native producer (RFC PR H/#229) ----
-  // The capability ships in every build (see background.ts), and is on
-  // unless the user turns this setting off — a real `chrome.storage`-backed
-  // flag now, not a build-time one. Fetched once on mount via the same
-  // NATIVE_FLAG_GET message DogfoodPanel.tsx already used for its own
-  // checkbox; NATIVE_FLAG_SET flips it (see `requestNativeMode` below).
-  // Every open panel also follows it in storage (see `followNativeSetting`),
-  // so a panel in one window agrees with a change made in another.
-  const [nativeModeEnabled, setNativeModeEnabledRaw] = useState(false);
-  // The same value for callbacks, updated with the state rather than on the
-  // next render: two storage changes can land before that render.
-  const nativeModeEnabledRef = useRef(false);
-  // Whether the panel has learned the setting, or given up learning it and
-  // stays on the DOM tree: until then, it may be on.
-  const [nativeSettingKnown, setNativeSettingKnown] = useState(false);
-  const setNativeModeEnabledState = useCallback((on: boolean) => {
-    nativeModeEnabledRef.current = on;
-    setNativeSettingKnown(true);
-    setNativeModeEnabledRaw(on);
-  }, []);
-  // The Settings menu (the "Read pages through Chrome" switch), and the turn
-  // on or off it has asked for and not had answered: the switch shows that
-  // value meanwhile, and goes back if it doesn't take.
+  // ---- Chrome's tree ----
+  // The Settings menu.
   const settingsOpen = openPopup === "settings";
   const settingsRef = useRef<HTMLDivElement>(null);
   const settingsButtonRef = useRef<HTMLButtonElement>(null);
-  const [nativeSettingPending, setNativeSettingPending] = useState<
-    boolean | null
-  >(null);
   // Whether the user has acknowledged the note about Chrome's debugging bar
   // (see `NativeModeNotice`). `null` until storage says, or where the panel
   // runs without extension storage: the note shows only on a definite "no".
@@ -321,66 +228,6 @@ export function App() {
   // Whether a native read has succeeded in this panel, which is when Chrome's
   // bar has shown: the note about it waits for that.
   const [nativeEverRead, setNativeEverRead] = useState(false);
-  // Whether the note is on screen, as of the last render. Written during
-  // render, like `pickModeOnRef`.
-  const nativeNoticeShown = useRef(false);
-  // Setting writes this panel has sent and not yet had answered. Their echo
-  // in storage can arrive before the reply, and the reply is what updates
-  // this panel, in order, so `followNativeSetting` holds back every change
-  // that lands meanwhile, and applies the last one once the writes are
-  // answered (`ownWriteDone`): it may have been another window's. Storage
-  // reports changes in the order they were written, so the last one held is
-  // the setting as it then stood.
-  const ownSettingWrites = useRef(0);
-  const heldSetting = useRef<{ value: unknown } | null>(null);
-  // Bumped each time the panel learns the setting from something newer than
-  // its mount-time read: a change in storage, or the reply to its own write.
-  // That read's reply is dropped if it lands after one.
-  const settingLearned = useRef(0);
-  useEffect(() => {
-    const learned = settingLearned.current;
-    const apply = (on: boolean) => {
-      if (settingLearned.current !== learned) return;
-      setNativeModeEnabledState(on);
-    };
-    // The service worker didn't say (not woken yet, a context torn down
-    // mid-reload, an internal failure): read the key itself, so Settings
-    // shows the setting every other window follows. Where even that fails,
-    // the panel stays on the DOM tree, which reads without either. (The old
-    // dogfood key is the service worker's to carry over; until it has, its
-    // attach gate refuses what this reads as on, and the carried-over value
-    // reaches this panel as a change in storage.)
-    const fromStorage = () => {
-      if (!chrome.storage?.local) return setNativeSettingKnown(true);
-      void chrome.storage.local
-        .get(NATIVE_MODE_KEY)
-        .then((r) => apply(nativeModeOn(r[NATIVE_MODE_KEY])))
-        .catch(() => setNativeSettingKnown(true));
-    };
-    void chrome.runtime
-      .sendMessage({ type: "NATIVE_FLAG_GET" })
-      .then((r: { enabled?: unknown } | undefined) => {
-        if (typeof r?.enabled === "boolean") apply(r.enabled);
-        else fromStorage();
-      })
-      .catch(fromStorage);
-  }, [setNativeModeEnabledState]);
-
-  // Which tree the panel is currently showing. Only ever leaves "dom" when
-  // `nativeModeEnabled` is true — the toggle that flips it is itself gated on
-  // that setting below.
-  const [producer, setProducer] = useState<"dom" | "native">("dom");
-  // Latest `producer` for use inside the long-lived onMessage listener,
-  // which closes over the value at registration time — same pattern as
-  // `myTabIdRef` below. Needed because a producer switch sends the OLD
-  // producer's picker an async disable (`switchProducer`'s own
-  // `togglePickMode()` call) whose acknowledgement can arrive after the
-  // switch — a late DOM `PICK_MODE_CHANGED` must not clear a native pick
-  // that's since been armed, and the mirror case (a late `NATIVE_PICK_
-  // RESULT`) must not clear a DOM one.
-  // Written during render, like `pickModeOnRef`, for the same reason.
-  const producerRef = useRef<"dom" | "native">(producer);
-  producerRef.current = producer;
   const [nativeNodes, setNativeNodes] = useState<Map<string, NativeNode>>(
     new Map(),
   );
@@ -417,11 +264,9 @@ export function App() {
   const [nativeReadAt, setNativeReadAt] = useState<string | undefined>(
     undefined,
   );
-  // Native picker's counterpart to `requestReveal`/DOM's `selectedId` +
-  // ancestor-expand dance above — NativeTreeView owns its own expand/select
-  // state (see that component's own top comment), so the panel can't reach
-  // in and set it directly the way it does for the DOM tree. Passed down as
-  // a `reveal` prop instead; `nonce` forces the child's effect to re-fire
+  // The picker's result — NativeTreeView owns its own expand/select state
+  // (see that component's own top comment), so the panel can't reach in and
+  // set it directly. Passed down as a `reveal` prop instead; `nonce` forces the child's effect to re-fire
   // even when the same node is picked twice in a row.
   const [nativePickReveal, setNativePickReveal] = useState<
     NativeReveal | undefined
@@ -431,16 +276,6 @@ export function App() {
   const [nativePageFocus, setNativePageFocus] = useState<
     NativeReveal | undefined
   >(undefined);
-  // A reveal is consumed when the native tree mounts with it, so it must not
-  // outlive that tree: switching to DOM and back would remount the tree and
-  // apply an old pick again, clearing its search and selecting that row. An
-  // old focus report would select its row again in the same way.
-  useEffect(() => {
-    if (producer !== "native") {
-      setNativePickReveal(undefined);
-      setNativePageFocus(undefined);
-    }
-  }, [producer]);
   // The native pick's inspect mode is on (NATIVE_PICK_ARMED arrived). Until
   // then the Pick button is pressed but busy: a page click isn't a pick yet.
   const [nativePickArmed, setNativePickArmed] = useState(false);
@@ -448,8 +283,8 @@ export function App() {
   // compared against its CURRENT value when NATIVE_PICK_RESULT arrives, same
   // pattern `dispatchNativeAction`/`loadNativeTree` already use for a
   // read/act reply. A pick can take arbitrarily long (it waits on a page
-  // click), so a tab switch, navigation, or disabling native mode can all
-  // land while one is outstanding; without this, a result that arrives after
+  // click), so a tab switch or a navigation can land while one is
+  // outstanding; without this, a result that arrives after
   // any of those applies stale `backendDOMNodeId`-derived ids to whatever
   // tree the panel has loaded by then. Chromium's backend node ids are
   // small, renderer-scoped integers that a new document can plausibly reuse
@@ -473,8 +308,7 @@ export function App() {
   // `capabilityRequest`, one counter shared across both message types since
   // both answer "does this reply still describe the tab we're looking at".
   const nativeOpToken = useRef(0);
-  // Bumped by the myTabId effect below and by `showNativeOff` (native mode
-  // turned off, here or in another window) — NEVER by PAGE_NAVIGATED. A
+  // Bumped by the myTabId effect below — NEVER by PAGE_NAVIGATED. A
   // snapshot of this taken before a native op, compared after, tells apart
   // "something that isn't this action's own navigation invalidated it" from
   // "nativeOpToken moved only because PAGE_NAVIGATED fired for the
@@ -498,16 +332,11 @@ export function App() {
   // Reads Chrome's tree again, numbered, when Focus sync wants numbers it
   // lacks: see where it is re-pointed, after `loadNativeTree`.
   const numberNativeTree = useRef(() => {});
-  // Auto-load the native tree once per transition into native mode (mirrors
-  // the DOM producer's own `hasRequestedInitial` restraint below — a later
-  // tab switch while already in native mode clears the tree and waits for an
-  // explicit refresh rather than re-attaching automatically).
-  const hasAutoLoadedNative = useRef(false);
   // Native auto-refresh: the tree reads itself again once a navigation's new
   // page has settled, and, with "Follow page changes" on, after the page
   // changes and goes quiet — see `native-auto-refresh.ts` for the policy.
-  // `armedTab` is the tab a successful read armed it on: a tab switch,
-  // leaving native mode, or a failed read clears it, so nothing but a user's
+  // `armedTab` is the tab a successful read armed it on: a tab switch or a
+  // failed read clears it, so nothing but a user's
   // Refresh attaches to a tab the user hasn't read, and a refusal or the
   // user's Cancel on Chrome's debugging bar is never answered by another
   // attach. A same-tab navigation leaves it armed.
@@ -548,7 +377,7 @@ export function App() {
     signalSince: null,
     inFlight: null,
   });
-  // The "Follow page changes" setting, kept with native mode's own.
+  // The "Follow page changes" setting.
   const [followPageChanges, setFollowPageChanges] = useStoredFlag(
     FOLLOW_PAGE_CHANGES_KEY,
   );
@@ -564,8 +393,8 @@ export function App() {
       a.timer = null;
     }
   }, []);
-  /** Stop auto-refresh until a read succeeds again: a tab switch, leaving
-   *  native mode, or a failed read. */
+  /** Stop auto-refresh until a read succeeds again: a tab switch, or a
+   *  failed read. */
   const disarmAutoRefresh = useCallback(() => {
     autoRefresh.current.armedTab = null;
     autoRefresh.current.navigationPending = false;
@@ -604,15 +433,13 @@ export function App() {
     () => setFollowPageChanges(!followPageChangesRef.current),
     [setFollowPageChanges],
   );
-  // The "Show full names" setting (in Settings), for both trees: off, a long
-  // name ends in an ellipsis and the tree fits the panel.
+  // The "Show full names" setting (in Settings): off, a long name ends in an
+  // ellipsis and the tree fits the panel.
   const [showFullNames, setShowFullNames] = useStoredFlag(SHOW_FULL_NAMES_KEY);
   // What had focus as this render began, before its commit could take it
-  // away. Turning native mode off, here or in another window, takes away the
-  // native tree and the tree choice in Settings; so does a default read that
-  // falls back to the in-page tree, and the note about Chrome's bar goes once
-  // it is answered. Whatever had focus can go with them, which would leave it
-  // on the body: a layout effect further down puts it back instead, whichever
+  // away: the note about Chrome's bar goes once it is answered, and a page
+  // that disconnects takes the tree with it. Whatever had focus can go with
+  // them, which would leave it on the body: a layout effect further down puts it back instead, whichever
   // way it went. Read during render, which runs before the commit, rather
   // than from focus events: a panel without the window's focus (the user is
   // in the page, or in another window) gets none when focus moves.
@@ -629,8 +456,8 @@ export function App() {
    *  Bumping `nativeOpToken` makes a late reply recognizably stale to every
    *  `token !== nativeOpToken.current` guard, and because those guards leave
    *  `nativeBusy` set on a stale reply, this is also what clears it. Used by a
-   *  tab switch, a navigation and turning native mode off — anything that
-   *  makes the native ids in hand meaningless. */
+   *  tab switch and a navigation — anything that makes the native ids in
+   *  hand meaningless. */
   const resetNativeState = useCallback(() => {
     nativeOpToken.current++;
     setNativeNodes(new Map());
@@ -648,32 +475,11 @@ export function App() {
     nativePageKeys.current = undefined;
   }, []);
 
-  /** Native mode is off: drop the native tree and return the view to DOM.
-   *  For this panel's own Disable, and for one in another window. */
-  const showNativeOff = useCallback(() => {
-    setNativeModeEnabledState(false);
-    // Disabling mid-recovery must also abort `recoverFromOwnNavigation`'s
-    // settle loop, the same way a real tab switch does.
-    tabChangeToken.current++;
-    resetNativeState();
-    setProducer("dom");
-    // The service worker cancels an armed native pick when native mode goes
-    // off, but its NATIVE_PICK_RESULT arrives after `producerRef` has already
-    // flipped to "dom", and the handler drops a native result then. Clear
-    // the button here instead of waiting for a message that won't land. A
-    // DOM pick is the content script's, and carries on in the DOM tree.
-    if (producerRef.current === "native") setPickModeOn(false);
-    // An edit box or option picker opened from the native tree acts through
-    // native mode, which is off now: submitting it would do nothing.
-    setInputState((open) => (open?.source === "native" ? null : open));
-  }, [resetNativeState, setNativeModeEnabledState]);
-  // Native as the default view, on unless the user turned it off: once per
-  // panel session, on the first page that connects and that native mode can
-  // read. Not on every tab or navigation after that — each of those would
-  // attach the debugger with no fresh gesture. Spent by a successful default
-  // read, and by turning native mode on from Settings with a page connected
-  // (the switch is its own gesture, and its own read). Turned on while no
-  // page is connected, the switch leaves the read to this default instead.
+  // Chrome's tree reads itself once per panel session, on the first page that
+  // connects and that it can read. Not on every tab or navigation after that
+  // — each of those would attach the debugger with no fresh gesture: a tab
+  // switched to waits for Refresh. Spent by the session's first successful
+  // read, the default's or the user's.
   const hasAppliedNativeDefault = useRef(false);
   // The tabs the default has failed on (DevTools owns it, a blocked URL, the
   // service worker didn't answer). The default waits for a tab not in here
@@ -681,44 +487,9 @@ export function App() {
   // flash Chrome's bar, for as long as the page stays unreadable. All of
   // them, not just the last: switching A → B → A would otherwise retry A.
   const nativeDefaultFailedOn = useRef(new Set<number>());
-  // Why the last native read failed, in words for the fallback announcement.
-  // A ref because the default's revert runs after the read, in a promise.
-  const lastNativeFailure = useRef("");
 
-  const treeRef = useRef<HTMLDivElement>(null);
-  // The role filter's list or the Tab view, whichever shows in the tree's
-  // place: where focus goes after leaving the scope from the breadcrumb.
-  const listViewRef = useRef<HTMLElement | null>(null);
-  const searchInputRef = useRef<HTMLInputElement>(null);
   const exportRef = useRef<HTMLDivElement>(null);
   const exportButtonRef = useRef<HTMLButtonElement>(null);
-  const { query, matchCount, updateQuery, updateMatchCount } = useSearch();
-
-  const focusSearch = useCallback(() => {
-    searchInputRef.current?.focus();
-  }, []);
-
-  // aria-controls cross-link index (trigger ↔ controlled element). Used to
-  // render clickable jump chips on disclosure pairs (button ↔ menu, tab ↔
-  // panel, etc.) so the relationship is reachable without scroll-hunting.
-  const controlsIndex = useMemo(() => buildControlsIndex(nodes), [nodes]);
-
-  // Tree-node id currently flashing after a cross-link jump. Cleared by a
-  // timeout so the flash plays once.
-  const [flashingId, setFlashingId] = useState<string | null>(null);
-
-  // Explicit "reveal this row" requests from jump / pick / focus / go-to-tree
-  // flows. These must scroll the target into view even when it is already the
-  // selection (so the selectedId-keyed effect wouldn't re-run). Bumping the
-  // nonce triggers the reveal effect below; the target is stashed in a ref and
-  // resolved against the post-expansion visible list. `requestReveal` keeps a
-  // stable identity so callbacks defined here can depend on it safely.
-  const [revealNonce, setRevealNonce] = useState(0);
-  const revealTargetRef = useRef<string | null>(null);
-  const requestReveal = useCallback((id: string) => {
-    revealTargetRef.current = id;
-    setRevealNonce((n) => n + 1);
-  }, []);
 
   // The tab this side-panel instance is bound to: the active tab of the
   // window it is in, since Chrome gives each window a side panel of its own.
@@ -736,22 +507,19 @@ export function App() {
     myTabIdRef.current = myTabId;
   }, [myTabId]);
   // Chrome's tree needs only each frame's skeleton (`TreeRequest`): the
-  // in-page walk's whole tree is wanted while its tree or a TAB view shows.
-  // So is Chrome's tree's, until the setting is read, and while the default
-  // may still show it on this tab.
-  const nativeAhead =
-    (!nativeSettingKnown || nativeModeEnabled) &&
-    !hasAppliedNativeDefault.current &&
-    !nativeDefaultFailedOn.current.has(myTabId ?? -1);
-  const framesOnly =
-    viewMode !== "tab" && (producer === "native" || nativeAhead);
+  // in-page walk's whole tree is wanted while the TAB view shows.
+  const framesOnly = view !== "tab";
+  // Read by `sendTreeRequest` instead of closing over `framesOnly`, so that
+  // callback — and `requestTree`/`reExtract`/`handleActivate` built on it —
+  // keeps a stable identity when the view changes. It is a dependency of the
+  // tab-change effect below, whose teardown belongs to tab switches alone. A
+  // ref rather than a dependency because the view is an input to a request,
+  // never a reason to re-send one: SET_VIEW_MODE already makes the content
+  // script read the page again.
   const framesOnlyRef = useRef(framesOnly);
   framesOnlyRef.current = framesOnly;
   /** The tree the panel wants of the page now. */
-  const askedTree = (): TreeRequest => ({
-    viewMode: viewModeRef.current,
-    framesOnly: framesOnlyRef.current,
-  });
+  const askedTree = (): TreeRequest => ({ framesOnly: framesOnlyRef.current });
   // The window this panel is in: an ACTIVE_TAB_CHANGED for another window is
   // that window's panel's (`isPanelWindow`). `undefined` until the look-up
   // below answers. `null` where it can't be learned (no `chrome.tabs` to ask,
@@ -869,51 +637,7 @@ export function App() {
     }, ms);
   }, []);
 
-  /** Show the setting as it stands after a change made outside this panel:
-   *  another window's panel turned native mode on or off in its Settings
-   *  (each window has its own side panel), or the dogfood build's checkbox
-   *  did. A removed key is the default again, which is on. */
-  const applyNativeSetting = useCallback(
-    (value: unknown) => {
-      const on = nativeModeOn(value);
-      settingLearned.current++;
-      setNativeSettingKnown(true);
-      if (on === nativeModeEnabledRef.current) return;
-      if (on) {
-        // Not a gesture in this window. A panel that has shown a page
-        // doesn't read the next one natively on its own, so its default read
-        // is spent: Settings offers Chrome's tree, and nothing attaches until
-        // it's chosen. One that has never connected reads the first page
-        // that does, as a panel opened with native mode on would.
-        if (everConnected.current) hasAppliedNativeDefault.current = true;
-        setNativeModeEnabledState(true);
-        announce(
-          connectedRef.current
-            ? "Reading pages through Chrome is on — choose Chrome's tree in Settings to see it."
-            : "Reading pages through Chrome is on.",
-          4000,
-        );
-        return;
-      }
-      // The service worker has already detached, and refuses reads, so show
-      // what this panel's own turn-off would.
-      showNativeOff();
-      announce(nativeOffMessage(connectedRef.current), 4000);
-    },
-    [announce, showNativeOff, setNativeModeEnabledState],
-  );
-  /** A change to the setting in storage. Held while this panel has a write
-   *  of its own on its way (see `ownSettingWrites`). */
-  const followNativeSetting = useCallback(
-    (value: unknown) => {
-      if (ownSettingWrites.current > 0) {
-        heldSetting.current = { value };
-        return;
-      }
-      applyNativeSetting(value);
-    },
-    [applyNativeSetting],
-  );
+  // The note about Chrome's bar, acknowledged in this window or another.
   useEffect(() => {
     // Absent where the panel runs without extension storage (unit tests).
     if (!chrome.storage?.onChanged) return;
@@ -922,9 +646,6 @@ export function App() {
       area: string,
     ) => {
       if (area !== "local") return;
-      if (NATIVE_MODE_KEY in changes) {
-        followNativeSetting(changes[NATIVE_MODE_KEY]!.newValue);
-      }
       if (NATIVE_NOTICE_SEEN_KEY in changes) {
         setNativeNoticeSeen(changes[NATIVE_NOTICE_SEEN_KEY]!.newValue === true);
       }
@@ -941,141 +662,13 @@ export function App() {
       .catch(() => {});
     chrome.storage.onChanged.addListener(onChanged);
     return () => chrome.storage.onChanged.removeListener(onChanged);
-  }, [followNativeSetting]);
-  /** One of this panel's own setting writes is answered, or failed, and its
-   *  answer applied. Once none is left on its way, the last change held back
-   *  meanwhile is applied after it: that write's own echo, which changes
-   *  nothing, or another window's answer. */
-  const ownWriteDone = useCallback(() => {
-    ownSettingWrites.current--;
-    if (ownSettingWrites.current > 0) return;
-    const held = heldSetting.current;
-    heldSetting.current = null;
-    if (held) applyNativeSetting(held.value);
-  }, [applyNativeSetting]);
-  /** Send one of this panel's own writes to the setting. `onReply` gets the
-   *  service worker's reply, or `undefined` if it never answered, and runs
-   *  before a change held meanwhile is applied (`ownWriteDone`), so what it
-   *  does can't undo that change. */
-  const ownWrite = useCallback(
-    (
-      message: { type: "NATIVE_FLAG_SET"; enabled: boolean },
-      onReply: (reply: { enabled?: boolean } | undefined) => void,
-    ): void => {
-      ownSettingWrites.current++;
-      let sent: Promise<unknown>;
-      try {
-        sent = chrome.runtime.sendMessage(message);
-      } catch {
-        // Thrown rather than rejected, by a torn-down context: never sent.
-        sent = Promise.resolve(undefined);
-      }
-      void sent
-        // Never reached the service worker, so nothing was persisted.
-        .catch(() => undefined)
-        .then((reply) => {
-          try {
-            onReply(reply as { enabled?: boolean } | undefined);
-          } finally {
-            ownWriteDone();
-          }
-        });
-    },
-    [ownWriteDone],
-  );
-  /** Asks the service worker to persist the setting. A request, not a state
-   *  setter: it can fail, and `answered` hears whether the setting really
-   *  changed. `NATIVE_FLAG_SET` replies `{ok: false}` from its outer catch on
-   *  an internal failure rather than rejecting, so a reply alone doesn't mean
-   *  it took. Turning native mode off also drops the native tree and returns
-   *  the view to DOM; the service worker detaches the debugger as soon as any
-   *  operation in flight finishes. */
-  const requestNativeMode = useCallback(
-    (next: boolean, answered: (took: boolean) => void): void => {
-      ownWrite({ type: "NATIVE_FLAG_SET", enabled: next }, (reply) => {
-        const took = reply?.enabled === next;
-        if (took) {
-          settingLearned.current++;
-          if (next) {
-            setNativeModeEnabledState(true);
-          } else {
-            showNativeOff();
-          }
-        }
-        answered(took);
-      });
-    },
-    [ownWrite, showNativeOff, setNativeModeEnabledState],
-  );
+  }, []);
   const acknowledgeNativeNotice = useCallback(() => {
     setNativeNoticeSeen(true);
     void chrome.storage?.local
       ?.set({ [NATIVE_NOTICE_SEEN_KEY]: true })
       .catch(() => {});
   }, []);
-  /** The Settings switch, and the note's Turn off: turn native mode on or off
-   *  in every window. Turning it on here is this panel's gesture, so it reads
-   *  the page natively at once, or, while no page is connected, the next one
-   *  that connects; turning it off detaches as soon as anything in flight
-   *  finishes. */
-  const setNativeModeFromSettings = useCallback(
-    (next: boolean) => {
-      if (
-        nativeSettingPending !== null ||
-        next === nativeModeEnabledRef.current
-      ) {
-        return;
-      }
-      setNativeSettingPending(next);
-      // Turning native mode off while the note is up answers it, however it
-      // was turned off, and so does one that lands while the note is up (a
-      // read in flight shows it while the turn-off waits for that read).
-      // Marked once the change is stored, and not before: if it doesn't take,
-      // the note stays to say what is still happening.
-      const answersNotice = !next && nativeNoticeShown.current;
-      requestNativeMode(next, (stored) => {
-        setNativeSettingPending(null);
-        if (!stored) {
-          announce("Couldn't change that setting — try again.", 3000);
-          return;
-        }
-        if (answersNotice || (!next && nativeNoticeShown.current)) {
-          acknowledgeNativeNotice();
-        }
-        if (!next) {
-          announce(nativeOffMessage(connectedRef.current), 3000);
-          return;
-        }
-        // Set here, before the render the setting's flip has scheduled: the
-        // default's effect runs in it.
-        if (!connectedRef.current) {
-          // No page to read yet, nor any proof there will be one: the
-          // default reads the first that connects, as in a panel opened with
-          // native mode on. This switch is a gesture, so a tab the default
-          // failed on before is read again.
-          hasAppliedNativeDefault.current = false;
-          nativeDefaultFailedOn.current.clear();
-          announce(
-            "Reading pages through Chrome — the next page shows its tree.",
-            3000,
-          );
-          return;
-        }
-        // This switch is the session's gesture, and the read it starts is
-        // the session's first native read, so the default has nothing left
-        // to do.
-        hasAppliedNativeDefault.current = true;
-        setProducer("native");
-        announce("Reading pages through Chrome — showing its tree.", 3000);
-      });
-    },
-    [
-      announce,
-      acknowledgeNativeNotice,
-      nativeSettingPending,
-      requestNativeMode,
-    ],
-  );
 
   // The native tree's page outline: a settled selection's reveal and a
   // hovered row's preview (see `useNativeOverlay`).
@@ -1084,7 +677,6 @@ export function App() {
     preview: previewNativeRow,
     resumePreviews,
   } = useNativeOverlay({
-    enabled: nativeModeEnabled,
     tabId: nativeTreeTabId,
     busy: nativeBusy,
     curtainOn,
@@ -1099,9 +691,9 @@ export function App() {
 
   // After every commit (`focusBeforeCommit`): if it took away the element
   // that had focus, and so left focus on the body, focus moves to the tree on
-  // screen, or the list shown in its place (the Tab view, or either tree's
-  // role filter), or what holds the place of an in-page tree still to come.
-  // While the panel waits for a page there is none of them, and focus is
+  // screen, or the list shown in its place (the TAB view, or the role
+  // filter's). While the panel waits for a page there is none of them, and
+  // focus is
   // left as a navigation leaves it. Focus anywhere else stays where
   // it is, and a panel where nothing had focus is left alone. A layout effect
   // rather than an effect, which waits for a paint: a panel in a window that
@@ -1115,9 +707,8 @@ export function App() {
     // A popup's controls (the Copy menu, Settings) are not lost when it
     // closes: Escape returns focus to its button, and a press outside puts
     // focus where the press does (`useDismissible`). One that went while its
-    // popup stayed open (the choice of tree in Settings, when native mode
-    // goes off in another window or the page disconnects) leaves focus in
-    // the popup, on its first control.
+    // popup stayed open (Copy's Tab sequence, while the page's tab order is
+    // read again) leaves focus in the popup, on its first control.
     const popup = popupBeforeCommit.current;
     if (popup) {
       if (popup.isConnected && (active === null || active === document.body)) {
@@ -1129,7 +720,6 @@ export function App() {
     [
       document.querySelector<HTMLElement>('[role="tree"]'),
       document.querySelector<HTMLElement>('.sn-filtered-list[role="listbox"]'),
-      document.querySelector<HTMLElement>(".sn-tree-pending"),
     ]
       .find((el) => el?.isConnected)
       ?.focus();
@@ -1168,28 +758,6 @@ export function App() {
     },
     [],
   );
-
-  /**
-   * Leave pick mode across the whole tab.
-   *
-   * A picker only ever disables itself in ITS OWN document — on a tracked
-   * click, on a click that hit nothing tracked, and on Escape — so the other
-   * frames stay armed and keep swallowing pointer events while the panel's
-   * per-tab ⦿ already reads off, leaving no enabled control to switch them
-   * back. Broadcasting converges them.
-   *
-   * Deliberately unconditional rather than guarded on the panel's own mirror
-   * of the mode. The frames this has to reach are exactly the ones the mirror
-   * can be wrong about, so a guard would skip the broadcast in the case it
-   * exists for. It terminates on its own instead: `setEnabled` is idempotent
-   * and only reports a real transition, so the frames disarmed by one
-   * broadcast answer with a PICK_MODE_CHANGED that provokes at most one more,
-   * and that one silences everybody.
-   */
-  const exitPickMode = useCallback(() => {
-    setPickModeOn(false);
-    sendToBoundTab({ type: "SET_PICK_MODE", payload: { enabled: false } });
-  }, [sendToBoundTab]);
 
   // Every REQUEST_TREE goes through here so its reply is always read. The
   // background can only tell whether a page is reachable from inside its
@@ -1262,14 +830,14 @@ export function App() {
   //
   // Only `myTabId` may re-run this. `requestTree` and `sendToBoundTab` are in
   // the deps as well but are identity-stable by construction (see
-  // `viewModeRef`) — the teardown below describes leaving a tab, and nothing
+  // `framesOnlyRef`) — the teardown below describes leaving a tab, and nothing
   // else is allowed to trigger it.
   const hasRequestedInitial = useRef(false);
   useEffect(() => {
     if (myTabId === null) return;
-    // A new bound tab invalidates any native tree in hand the same way it
-    // invalidates the DOM one below — native ids are scoped to the document
-    // they were read from. Bumping the token here (rather than only on an
+    // A new bound tab invalidates the native tree in hand the same way it
+    // invalidates the page's own one below — native ids are scoped to the
+    // document they were read from. Bumping the token here (rather than only on an
     // explicit native reload) is what makes a reply from the tab just left
     // recognizably stale to the guards in loadNativeTree/dispatchNativeAction
     // — and, since that guard is what leaves `nativeBusy` set on a stale
@@ -1279,15 +847,10 @@ export function App() {
     tabChangeToken.current++;
     resetNativeState();
     // Auto-refresh follows the tab a read succeeded on, never the one the
-    // panel just moved to — that one waits for Refresh, like the auto-load.
+    // panel just moved to — that one waits for Refresh, as the default read
+    // does once it is spent (`hasAppliedNativeDefault`): re-reading on a tab
+    // switch would attach chrome.debugger with no user action.
     disarmAutoRefresh();
-    // Deliberately NOT resetting hasAutoLoadedNative here — this effect fires
-    // on EVERY tab change, including a plain tab switch while already in
-    // native mode, and resetting it here would immediately re-trigger the
-    // auto-load effect below on the new tab, silently re-attaching
-    // chrome.debugger with no user action. That flag only re-arms when the
-    // user actually leaves and re-enters native mode (see the producer effect
-    // right below the auto-load effect).
 
     // The service worker keeps Focus sync's state by tab, so the tab now
     // bound gets this panel's: a tab first seen here starts out on.
@@ -1303,8 +866,6 @@ export function App() {
     }
     setNodes(new Map());
     setRootId("");
-    setSelectedId(null);
-    setScopedRootId(null);
     setConnected(false);
     // The verdict belonged to the tab we just left; the new one is unknown
     // until it is asked.
@@ -1410,8 +971,6 @@ export function App() {
       if (message.type === "PAGE_NAVIGATED") {
         setNodes(new Map());
         setRootId("");
-        setSelectedId(null);
-        setScopedRootId(null);
         setConnected(false);
         // The old page's verdict says nothing about the new one.
         setPageUnreachable(false);
@@ -1419,9 +978,8 @@ export function App() {
         setPageUrl("");
         // A navigation replaces the document, and with it every
         // backendDOMNodeId a native tree's ids are built from — see the
-        // myTabId effect's identical teardown (including why hasAutoLoadedNative
-        // is deliberately NOT reset here) for why this has to happen here too,
-        // not just on a tab switch. Same reason for clearing nativeBusy: a
+        // myTabId effect's identical teardown for why this has to happen here
+        // too, not just on a tab switch. Same reason for clearing nativeBusy: a
         // NATIVE_READ/NATIVE_ACT in flight when the page navigates has its
         // token orphaned by the bump above, so nothing else is coming to
         // clear the busy flag its own finally block intentionally left set.
@@ -1453,8 +1011,7 @@ export function App() {
       // well.
       if (
         message.type === "TREE_DATA" &&
-        Array.isArray(message.payload.pageChangedAt) &&
-        producerRef.current === "native"
+        Array.isArray(message.payload.pageChangedAt)
       ) {
         const a = autoRefresh.current;
         const now = Date.now();
@@ -1477,40 +1034,13 @@ export function App() {
 
       if (message.type === "TREE_DATA" || message.type === "TREE_UPDATED") {
         // A skeleton says the page is there, its title, and where its frames
-        // are. It is no tree, and leaves the last one as it was, with its
-        // scope and selection, for the in-page tree to show again.
+        // are. It is no tree, and leaves the last one as it was.
         const skeleton =
           message.type === "TREE_DATA" && message.payload.framesOnly === true;
         setTreePending(skeleton);
         if (!skeleton) {
-          const nodeMap = new Map<string, SemanticNode>(message.payload.nodes);
-
-          // Preserve user's expand/collapse state from previous tree
-          setNodes((prev) => {
-            for (const [id, node] of nodeMap.entries() as IterableIterator<
-              [string, DomSemanticNode]
-            >) {
-              const prevNode = asDom(prev.get(id));
-              if (prevNode) {
-                node.ui.expanded = prevNode.ui.expanded;
-                node.ui.selected = prevNode.ui.selected;
-              }
-            }
-            return nodeMap;
-          });
-
+          setNodes(new Map<string, SemanticNode>(message.payload.nodes));
           setRootId(message.payload.rootId);
-          // Reset scope if scoped node no longer exists in tree
-          setScopedRootId((prev) => (prev && !nodeMap.has(prev) ? null : prev));
-          // Same for the selection, and for the same reason. A selection that
-          // survives into a tree without it is worse than none: no row
-          // carries `aria-selected`, `aria-activedescendant` points at
-          // nothing, and `useTreeKeyboard` can't find an index to move from —
-          // so every key is dead until the user clicks a row. It goes stale
-          // exactly where the two views disagree, which is where switching
-          // them is useful: a generic wrapper picked in DOM view is pruned
-          // from the a11y tree.
-          setSelectedId((prev) => (prev && !nodeMap.has(prev) ? null : prev));
         }
         setConnected(true);
         // A tree is proof of reach, whoever asked for it — a live update from
@@ -1530,7 +1060,6 @@ export function App() {
         message.type === "PAGE_INPUT" &&
         typeof message.at === "number" &&
         Number.isFinite(message.at) &&
-        producerRef.current === "native" &&
         autoRefresh.current.armedTab !== null &&
         autoRefresh.current.armedTab === myTabIdRef.current
       ) {
@@ -1548,8 +1077,7 @@ export function App() {
       if (
         message.type === "PAGE_TYPING" &&
         typeof message.at === "number" &&
-        Number.isFinite(message.at) &&
-        producerRef.current === "native"
+        Number.isFinite(message.at)
       ) {
         const a = autoRefresh.current;
         const now = Date.now();
@@ -1574,16 +1102,7 @@ export function App() {
         }, 8000);
       }
 
-      // Each tree follows focus only while it is the one showing. Following
-      // it in the hidden DOM tree would move the hidden DOM selection, and
-      // leave a hidden DOM scope that doesn't hold the focused node: "Showing
-      // the full tree" announced over a native tree that is still scoped, and
-      // the DOM scope gone when the user switches back.
-      if (
-        message.type === "FOCUS_CHANGED" &&
-        focusTrackerOnRef.current &&
-        producerRef.current === "native"
-      ) {
+      if (message.type === "FOCUS_CHANGED" && focusTrackerOnRef.current) {
         const numbered = nativePageKeys.current;
         const nodeId = numbered
           ? nativeRowForPageFocus(
@@ -1600,88 +1119,12 @@ export function App() {
           }));
         }
       }
-      if (
-        message.type === "FOCUS_CHANGED" &&
-        focusTrackerOnRef.current &&
-        producerRef.current === "dom" &&
-        message.payload.nodeId !== undefined
-      ) {
-        const nodeId = message.payload.nodeId;
-        setSelectedId(nodeId);
-
-        // Expand ancestors so the node is visible
-        setNodes((prev) => {
-          let current = asDom(prev.get(nodeId));
-          while (current?.parentId) {
-            const parent = asDom(prev.get(current.parentId));
-            if (parent && !parent.ui.expanded) {
-              parent.ui.expanded = true;
-            }
-            current = parent;
-          }
-          return prev;
-        });
-        forceRender((n) => n + 1);
-        // Reveal even if the focused node is already the selection (re-focusing
-        // the current node after scrolling away should still bring it back).
-        requestReveal(nodeId);
-      }
-
-      if (message.type === "NODE_PICKED") {
-        // User picked an element on the page via the picker. Select the
-        // matching tree node, expand ancestors so it's visible, scroll it
-        // into view, and turn pick mode off in our local mirror (content
-        // already exited on its side after the click).
-        const nodeId = message.payload.nodeId;
-        setSelectedId(nodeId);
-        // Content already exited on its side after the click — but only in
-        // the frame that resolved it, so this takes the rest of the tab with
-        // it. The PICK_MODE_CHANGED that follows this same click is then a
-        // no-op, as are the ones the other frames send back.
-        exitPickMode();
-        setNodes((prev) => {
-          let current = asDom(prev.get(nodeId));
-          while (current?.parentId) {
-            const parent = asDom(prev.get(current.parentId));
-            if (parent && !parent.ui.expanded) {
-              parent.ui.expanded = true;
-            }
-            current = parent;
-          }
-          return prev;
-        });
-        forceRender((n) => n + 1);
-        // Reveal even if the picked node is already the selection.
-        requestReveal(nodeId);
-      }
-
-      if (message.type === "PICK_MODE_CHANGED") {
-        // Content authoritatively reports its own pick-mode state. This
-        // covers the case where the user pressed Escape on the page to
-        // exit — without it the panel button would stay stuck "on". Gated
-        // on the producer STILL being "dom": `switchProducer` sends the
-        // content script an async disable when leaving DOM with a pick
-        // armed, and that acknowledgement can arrive after the panel has
-        // already switched to native and armed a pick there — an
-        // unconditional apply would clear the (still-live) native pick's
-        // "on" indicator for an ack that belongs to a producer nobody is
-        // looking at anymore.
-        //
-        // A frame reporting itself OFF is reporting only for itself, and
-        // Escape (like a click that hit nothing tracked) sends no
-        // NODE_PICKED, so this is the only notice the panel gets that a
-        // picker somewhere has closed. Take the rest of the tab with it.
-        if (producerRef.current === "dom") {
-          if (message.payload.enabled) setPickModeOn(true);
-          else exitPickMode();
-        }
-      }
 
       if (message.type === "NATIVE_PICK_RESULT") {
         // Background's reply to NATIVE_PICK_START, for any of three
         // outcomes: a click resolved to a node, the pick was cancelled
-        // (Escape, tab switch, disabling native mode — see the cleanup
-        // effect below), or the attach/dispatch itself failed (DevTools
+        // (Escape, tab switch — see the cleanup effect below), or the
+        // attach/dispatch itself failed (DevTools
         // already attached, an unattachable navigation mid-arm, a
         // connection drop).
         //
@@ -1698,11 +1141,8 @@ export function App() {
         setNativePickArmed(false);
         // Pick mode is inherently one-shot server-side (`runPick` always
         // resolves and turns Overlay.setInspectMode back off), so the local
-        // mirror comes off here whenever the producer is still native — the
-        // mirror image of the `PICK_MODE_CHANGED` guard above: a result
-        // that outlives a switch back to DOM must not clear a pick the DOM
-        // producer has since armed.
-        if (producerRef.current === "native") setPickModeOn(false);
+        // mirror comes off here.
+        setPickModeOn(false);
         // Everything past this point describes a SPECIFIC document (a
         // picked node's backendDOMNodeId, or a capability tied to the tab
         // that was current when the pick was armed) — gate it against
@@ -1723,10 +1163,9 @@ export function App() {
           // user asked for exactly this) so a real failure doesn't read as
           // Escape having silently worked.
           if (message.payload.reason) {
+            // The banner over the tree says why (`nativeCapability`).
             setNativeCapability(blockedBy(message.payload.reason));
-            setNativeStatus(
-              `native unavailable — ${explainUnavailable(message.payload.reason)}`,
-            );
+            setNativeStatus("native unavailable");
           } else {
             setNativeStatus(`pick failed: ${message.payload.error}`);
           }
@@ -1737,7 +1176,7 @@ export function App() {
 
       if (message.type === "NATIVE_PICK_ARMED") {
         if (message.requestId !== nativePickRequestId.current) return;
-        if (producerRef.current === "native") setNativePickArmed(true);
+        setNativePickArmed(true);
       }
     };
 
@@ -1751,127 +1190,19 @@ export function App() {
     };
   }, [resetNativeState, announce, showTab, showWindowTab]);
 
-  const handleViewModeChange = useCallback((mode: TreeViewMode) => {
-    setViewMode(mode);
-  }, []);
-  // The tree the page's frames send follows the view: a new one, or Chrome's
-  // tree shown or left. Binding a tab asks for it (`sendTreeRequest`), and
-  // until then there's nowhere to ask: with no tab named, it would go to the
-  // tab last switched to, in any window.
+  // The tree the page's frames send follows the view. Binding a tab asks for
+  // it (`sendTreeRequest`), and until then there's nowhere to ask: with no
+  // tab named, it would go to the tab last switched to, in any window.
   useEffect(() => {
     if (myTabIdRef.current !== null) {
       sendToBoundTab({ type: "SET_VIEW_MODE", payload: askedTree() });
     }
-    // `askedTree` reads them through refs, current by now.
-  }, [viewMode, framesOnly, sendToBoundTab]);
+    // `askedTree` reads it through a ref, current by now.
+  }, [framesOnly, sendToBoundTab]);
 
-  // Chrome's tree's A11Y is its tree, whichever of the in-page tree's DOM and
-  // A11Y views was last on: leaving TAB goes back to that one, and pressing
-  // A11Y while the tree shows changes nothing.
-  const lastTreeView = useRef<TreeViewMode>("a11y");
-  if (viewMode !== "tab") lastTreeView.current = viewMode;
-  const handleNativeViewChange = useCallback(
-    (view: NativeView) => {
-      const mode = view === "tab" ? "tab" : lastTreeView.current;
-      if (mode !== viewModeRef.current) handleViewModeChange(mode);
-    },
-    [handleViewModeChange],
-  );
-
-  // Apply search + role filter
-  useEffect(() => {
-    if (nodes.size === 0) return;
-    let count = applySearchFilter(nodes, query, viewMode, roleFilter);
-    // Scoped, the count covers only what the scoped tree can show. The
-    // whole-tree pass above still runs first so every node's `matchesFilter`
-    // is right the moment the scope is left; the second pass over just the
-    // subtree sets the same flags for the nodes inside it (their visibility
-    // depends only on their own subtree) and returns the scoped count.
-    if (scopedRootId && nodes.has(scopedRootId)) {
-      count = applySearchFilter(
-        subtreeNodes(nodes, scopedRootId),
-        query,
-        viewMode,
-        roleFilter,
-      );
-    }
-    updateMatchCount(count);
-    forceRender((n) => n + 1);
-  }, [query, nodes, viewMode, roleFilter, scopedRootId, updateMatchCount]);
-
-  // Compute visible nodes
-  const effectiveRootId = scopedRootId || rootId;
-  const scopedRootNode = scopedRootId ? nodes.get(scopedRootId) : null;
-  const scopedDepthOffset = scopedRootNode ? scopedRootNode.depth : 0;
-  // Memoized so the flattened list keeps a stable identity across unrelated
-  // re-renders. `renderCount` bumps on every forceRender() — expand/collapse,
-  // filter application, incoming messages — which is exactly when the visible
-  // set (driven by mutated `ui.expanded`/`ui.matchesFilter`) can change.
-  // Without this, effects keyed on `visibleNodeIds` would re-run every render.
-  //
-  // INVARIANT: node visibility is mutated in place, so the memo only stays
-  // fresh if every site that touches `ui.expanded`/`ui.matchesFilter` calls
-  // `forceRender()` afterwards — a mutation without the bump silently renders
-  // a stale window.
-  //
-  // `visiblePositions` records each row's `aria-posinset`/`aria-setsize` within
-  // its visible sibling group: virtualization keeps only the windowed rows in
-  // the DOM, so screen readers need those explicit set markers to perceive the
-  // full tree size and position (WAI-ARIA TreeView).
-  const { visibleNodeIds, visiblePositions } = useMemo(() => {
-    const ids: string[] = [];
-    const positions = new Map<string, { posinset: number; setsize: number }>();
-    function walkVisible(nodeId: string, posinset: number, setsize: number) {
-      const node = asDom(nodes.get(nodeId));
-      if (!node || !node.ui.matchesFilter) return;
-      ids.push(nodeId);
-      positions.set(nodeId, { posinset, setsize });
-      if (node.ui.expanded) {
-        const visibleChildren = node.childIds.filter(
-          (childId) => asDom(nodes.get(childId))?.ui.matchesFilter,
-        );
-        visibleChildren.forEach((childId, i) => {
-          walkVisible(childId, i + 1, visibleChildren.length);
-        });
-      }
-    }
-    if (effectiveRootId) walkVisible(effectiveRootId, 1, 1);
-    return { visibleNodeIds: ids, visiblePositions: positions };
-    // renderCount changes on every forceRender() call — intentional invalidation.
-  }, [nodes, effectiveRootId, renderCount]);
-
-  // Row id → position in `visibleNodeIds`, so resolving the selection to an
-  // index (aria-activedescendant on every keypress, scroll-into-view, reveal)
-  // is a lookup rather than a scan of the whole list. Kept in a ref as well,
-  // read by the effects below so they resolve against the post-expansion list
-  // without listing `visibleNodeIds` as a dependency (which would re-fire the
-  // scroll on every expand/collapse).
-  const visibleIndexById = useIndexById(visibleNodeIds);
-  const visibleIndexByIdRef = useRef(visibleIndexById);
-  visibleIndexByIdRef.current = visibleIndexById;
-
-  const {
-    containerRef,
-    startIndex,
-    endIndex,
-    totalHeight,
-    offset,
-    onScroll,
-    scrollToIndex,
-  } = useVirtualTree(visibleNodeIds.length);
-
-  // aria-activedescendant may only point at a DOM-present row. Offscreen
-  // virtualized rows are unmounted, so require the selection to sit in the
-  // current window (keyboard selection scrolls it in via scrollToIndex).
-  const activeDescendantId = (() => {
-    if (selectedId === null) return undefined;
-    const i = visibleIndexById.get(selectedId) ?? -1;
-    return i >= startIndex && i < endIndex ? `snrow-${selectedId}` : undefined;
-  })();
-
+  /** A tab stop the TAB view selects: the page outlines its element. */
   const handleSelect = useCallback(
     (id: string) => {
-      setSelectedId(id);
       sendToBoundTab({
         type: "HIGHLIGHT_NODE",
         payload: { nodeId: id },
@@ -1880,104 +1211,19 @@ export function App() {
     [sendToBoundTab],
   );
 
-  const handleJumpToNode = useCallback(
-    (targetId: string) => {
-      // Expand every collapsed ancestor so the target is in `visibleNodeIds`
-      // before we try to scroll to it.
-      let cur: DomSemanticNode | undefined = asDom(nodes.get(targetId));
-      let mutated = false;
-      while (cur && cur.parentId) {
-        const parent = asDom(nodes.get(cur.parentId));
-        if (parent && !parent.ui.expanded) {
-          parent.ui.expanded = true;
-          mutated = true;
-        }
-        cur = parent;
-      }
-      if (mutated) forceRender((c) => c + 1);
-      // A row the search hides is not in the visible list, so the selection
-      // would point at nothing a keyboard or screen reader can reach: clear
-      // the search, as the native tree's jump does.
-      if (asDom(nodes.get(targetId))?.ui.matchesFilter === false) {
-        updateQuery("");
-      }
-      // Through the ordinary selection path, so the page highlights the
-      // target as it does for any other selection.
-      handleSelect(targetId);
-      setFlashingId(targetId);
-      setTimeout(() => setFlashingId(null), JUMP_FLASH_MS);
-      // Reveal the row even if it is already the selection (jump chips can
-      // target the current node); the reveal effect scrolls once ancestors
-      // are expanded and `visibleNodeIds` recomputed.
-      requestReveal(targetId);
-    },
-    [nodes, requestReveal, handleSelect, updateQuery],
-  );
-
-  const handleToggle = useCallback(
-    (id: string) => {
-      const node = asDom(nodes.get(id));
-      if (node) {
-        node.ui.expanded = !node.ui.expanded;
-        forceRender((n) => n + 1);
-      }
-    },
-    [nodes],
-  );
-
-  // Switch from filtered list to tree view, selecting and revealing a node
-  const handleGoToTree = useCallback(
-    (id: string) => {
-      setRoleFilter(null);
-      setSelectedId(id);
-      // Expand ancestors so the node is visible in the tree
-      setNodes((prev) => {
-        let current = asDom(prev.get(id));
-        while (current?.parentId) {
-          const parent = asDom(prev.get(current.parentId));
-          if (parent && !parent.ui.expanded) {
-            parent.ui.expanded = true;
-          }
-          current = parent;
-        }
-        return prev;
-      });
-      forceRender((n) => n + 1);
-      // Highlight on the page
-      sendToBoundTab({
-        type: "HIGHLIGHT_NODE",
-        payload: { nodeId: id },
-      });
-      // Reveal the row (even if already selected). Wait an extra frame after
-      // the filter → tree transition so focus lands on a rendered tree.
-      requestReveal(id);
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          treeRef.current?.focus();
-        });
-      });
-    },
-    [nodes, requestReveal, sendToBoundTab],
-  );
-
+  /** A tab stop the TAB view activates, through the content script: the
+   *  rows are the page's own walk's, not Chrome's tree's. */
   const handleActivate = useCallback(
     (id: string, explicitAction?: ActionType) => {
       const node = asDom(nodes.get(id));
       if (!node) return;
 
-      // The slider/spinbutton ▼/▲ pair passes its own action so each
-      // button dispatches its own step. Stepper keys (+/−/Shift+Enter)
-      // from the tree, FilteredList, and TabSequenceView do the same.
-      // All other paths (plain Enter, single-action button click,
-      // Activate) let us pick the primary so existing single-action
-      // ergonomics keep working unchanged.
+      // Stepper keys (+/−/Shift+Enter) pass their own action, so each
+      // dispatches its own step. Every other path (plain Enter, Activate)
+      // picks the primary action.
       const primaryAction =
         explicitAction ?? getPrimaryAction(node.interaction.actions);
-      if (!primaryAction) {
-        // Not interactive — toggle expand instead
-        if (node.childIds.length > 0) handleToggle(id);
-        return;
-      }
+      if (!primaryAction) return;
 
       // Text input — open inline input panel
       if (
@@ -2049,10 +1295,10 @@ export function App() {
       sendToBoundTab({ type: "DISPATCH_ACTION", payload: request }, (res) => {
         // Two ways an action fails to land, and both have to be read: the
         // message never reached a content script (lastError), or one
-        // answered and refused — which is how it reports that the page is
-        // in a state the action cannot run in, such as an armed picker
-        // holding the pointer events. Without the second, the optimistic
-        // banner set above stays on screen claiming something happened.
+        // answered and refused — which is how it reports that the action
+        // can't run, the element gone since the page was read, say. Without
+        // the second, the optimistic banner set above stays on screen
+        // claiming something happened.
         const refusal = res as
           { success?: boolean; error?: string } | undefined;
         const failure = chrome.runtime.lastError
@@ -2068,41 +1314,28 @@ export function App() {
         setTimeout(reExtract, 100);
       });
     },
-    [nodes, handleToggle, sendToBoundTab, reExtract],
+    [nodes, sendToBoundTab, reExtract, announce],
   );
 
-  // ---- Native producer actions ----
-  // Cheap pre-flight (no attach) — refreshed whenever the bound tab changes
-  // while native is the active producer, so the capability banner tracks the
-  // CURRENT tab. Mirrors DogfoodPanel's refreshCapability, driven by App's
-  // own authoritative myTabId instead of polling chrome.tabs itself.
-  //
-  // Every native-action function below opens with
-  // `if (!nativeModeEnabled) return;`. This used to be load-bearing for
-  // dead-code elimination when the whole capability was build-time gated
-  // (`dogfood` collapsed to a literal in the store build); now that
-  // `nativeModeEnabled` is a real runtime value, the check is a genuine
-  // runtime guard instead — the setting being off is what keeps
-  // `chrome.debugger` from ever being touched, same as
-  // `NativeDebuggerSession.attach()`'s own gate does one layer down.
-  const refreshNativeCapability = useCallback(
-    async (tabId: number) => {
-      if (!nativeModeEnabled) return;
-      const token = nativeOpToken.current;
-      const cap = (await chrome.runtime.sendMessage({
-        type: "NATIVE_CAPABILITY",
-        tabId,
-      })) as TabCapability;
-      if (token !== nativeOpToken.current) return; // superseded by a tab switch
-      setNativeCapability(cap);
-    },
-    [nativeModeEnabled],
-  );
+  // ---- Chrome's tree: reads and actions ----
+  // Cheap pre-flight (no attach) — refreshed whenever the bound tab changes,
+  // so the capability banner tracks the CURRENT tab. Mirrors DogfoodPanel's
+  // refreshCapability, driven by App's own authoritative myTabId instead of
+  // polling chrome.tabs itself.
+  const refreshNativeCapability = useCallback(async (tabId: number) => {
+    const token = nativeOpToken.current;
+    const cap = (await chrome.runtime.sendMessage({
+      type: "NATIVE_CAPABILITY",
+      tabId,
+    })) as TabCapability;
+    if (token !== nativeOpToken.current) return; // superseded by a tab switch
+    setNativeCapability(cap);
+  }, []);
 
   useEffect(() => {
-    if (!nativeModeEnabled || producer !== "native" || myTabId === null) return;
+    if (myTabId === null) return;
     void refreshNativeCapability(myTabId);
-  }, [nativeModeEnabled, producer, myTabId, refreshNativeCapability]);
+  }, [myTabId, refreshNativeCapability]);
 
   /**
    * Wait out an automatic read in flight, for an operation the user started
@@ -2121,7 +1354,7 @@ export function App() {
 
   /** Read the native tree into state. Mirrors DogfoodPanel's readTreeInto,
    *  minus its own flat-list bookkeeping — NativeTreeView owns expand state.
-   *  Returns whether the read succeeded — the native-default effect below is
+   *  Returns whether the read succeeded — the default read's effect below is
    *  the one caller that needs to tell a real failure apart from a read that
    *  just got superseded by something else.
    *
@@ -2146,7 +1379,6 @@ export function App() {
         followsAction = false,
       }: { auto?: boolean; followsAction?: boolean } = {},
     ): Promise<boolean> => {
-      if (!nativeModeEnabled) return false;
       const token = nativeOpToken.current;
       const a = autoRefresh.current;
       a.lastReadStartedAt = Date.now();
@@ -2159,7 +1391,7 @@ export function App() {
         // A read on a tab with a pick armed queues behind the pick, which
         // ends only with a click, Escape or its time limit. Say so.
         setNativeStatus(
-          pickModeOnRef.current && producerRef.current === "native"
+          pickModeOnRef.current
             ? "waiting for the pick to end — click an element on the page, or press Esc"
             : "reading native tree…",
         );
@@ -2192,9 +1424,7 @@ export function App() {
           if (auto) {
             const why = r?.reason
               ? explainUnavailable(r.reason)
-              : r?.error === "cancelled-by-user"
-                ? "you cancelled Chrome's debugging bar"
-                : `read failed: ${r?.error ?? "unknown"}`;
+              : readFailedText(r?.error);
             if (r?.reason) setNativeCapability(blockedBy(r.reason));
             setNativeStatus(`auto-refresh paused — ${why}; Refresh to resume`);
             return false;
@@ -2202,19 +1432,12 @@ export function App() {
           setNativeNodes(new Map());
           setNativeRootId("");
           nativePageKeys.current = undefined;
-          if (r?.reason) {
-            setNativeCapability(blockedBy(r.reason));
-            lastNativeFailure.current = explainUnavailable(r.reason);
-            setNativeStatus(
-              `native unavailable — ${lastNativeFailure.current}`,
-            );
-          } else {
-            lastNativeFailure.current =
-              r?.error === "cancelled-by-user"
-                ? "you cancelled Chrome's debugging bar"
-                : `read failed: ${r?.error ?? "unknown"}`;
-            setNativeStatus(lastNativeFailure.current);
-          }
+          // A refusal's reason goes in the banner over the tree; the status
+          // line, which a screen reader hears for certain, says only that.
+          if (r?.reason) setNativeCapability(blockedBy(r.reason));
+          setNativeStatus(
+            r?.reason ? "native unavailable" : readFailedText(r?.error),
+          );
           return false;
         }
         const read = new Map((r.nodes ?? []).map((n) => [n.id, n]));
@@ -2235,6 +1458,7 @@ export function App() {
         setNativeRootId(r.rootId ?? "");
         setNativeTreeTabId(tabId);
         setNativeEverRead(true);
+        hasAppliedNativeDefault.current = true;
         setNativeTreeUrl(r.url);
         setNativeReadAt(new Date().toISOString());
         // A successful read is proof any standing refusal no longer holds —
@@ -2263,13 +1487,13 @@ export function App() {
         if (!auto && token === nativeOpToken.current) setNativeBusy(false);
       }
     },
-    [nativeModeEnabled, disarmAutoRefresh, resumePreviews],
+    [disarmAutoRefresh, resumePreviews],
   );
 
   /** Guarded entry point for a user- or effect-triggered read (refresh
    *  button, auto-load). Excludes a second read/act while one is in flight —
    *  see `nativeInFlight`'s own declaration. Propagates `loadNativeTreeCore`'s
-   *  success/failure so the native-default effect can tell them apart. */
+   *  success/failure so the default read's effect can tell them apart. */
   const loadNativeTree = useCallback(
     async (
       tabId: number,
@@ -2279,7 +1503,7 @@ export function App() {
       // by the in-flight guard below: the user didn't start that one, so it
       // mustn't cost them a click.
       if (!opts?.auto && !(await waitForAutoRead())) return false;
-      if (!nativeModeEnabled || nativeInFlight.current) return false;
+      if (nativeInFlight.current) return false;
       nativeInFlight.current = true;
       try {
         return await loadNativeTreeCore(tabId, opts);
@@ -2287,7 +1511,7 @@ export function App() {
         nativeInFlight.current = false;
       }
     },
-    [nativeModeEnabled, loadNativeTreeCore, waitForAutoRead],
+    [loadNativeTreeCore, waitForAutoRead],
   );
 
   // Chrome's tree is numbered for Focus sync only while it is on, so a tree
@@ -2301,7 +1525,6 @@ export function App() {
     if (
       tabId === null ||
       !focusTrackerOnRef.current ||
-      producerRef.current !== "native" ||
       nativeNodesRef.current.size === 0 ||
       nativePageKeys.current !== undefined ||
       nativeInFlight.current
@@ -2312,7 +1535,7 @@ export function App() {
   };
 
   // Re-pointed every render so the timer always decides with the current
-  // `loadNativeTree` and mode; everything else it reads is a ref.
+  // `loadNativeTree`; everything else it reads is a ref.
   runNativeAutoRefresh.current = () => {
     const a = autoRefresh.current;
     const decision = decideAutoRefresh(
@@ -2320,7 +1543,6 @@ export function App() {
         mode: followPageChangesRef.current ? "changes" : "navigation",
         armedTab: a.armedTab,
         boundTab: myTabIdRef.current,
-        native: nativeModeEnabled && producerRef.current === "native",
         navigationPending: a.navigationPending,
         lastChangeAt: a.lastChangeAt,
         firstFollowedChangeAt: a.follow.firstChangeAt,
@@ -2348,31 +1570,6 @@ export function App() {
     }
   };
 
-  // Auto-load once per transition into native mode — see hasAutoLoadedNative's
-  // declaration for why this deliberately does NOT also fire on a later tab
-  // switch while already in native mode.
-  useEffect(() => {
-    if (!nativeModeEnabled || producer !== "native" || myTabId === null) return;
-    if (hasAutoLoadedNative.current) return;
-    hasAutoLoadedNative.current = true;
-    void loadNativeTree(myTabId);
-  }, [nativeModeEnabled, producer, myTabId, loadNativeTree]);
-
-  // The ONLY place hasAutoLoadedNative re-arms: leaving native mode. Neither
-  // the myTabId effect (a tab switch) nor PAGE_NAVIGATED (a same-tab
-  // navigation) reset it — both fire while producer can still be "native",
-  // and resetting it there would race straight into the effect above,
-  // silently re-attaching chrome.debugger with no fresh user gesture. Only
-  // flipping producer back to "dom" and then to "native" again — a real,
-  // deliberate re-entry — earns the tree another free auto-load.
-  // Leaving native mode also disarms auto-refresh, so re-entering starts from
-  // that one read.
-  useEffect(() => {
-    if (producer !== "dom") return;
-    hasAutoLoadedNative.current = false;
-    disarmAutoRefresh();
-  }, [producer, disarmAutoRefresh]);
-
   /** Called after a successful action finds `nativeOpToken` bumped out from
    *  under it once the settle wait (below) has passed. `tabChangeAtStart` is
    *  a snapshot of `tabChangeToken` — the counter ONLY the myTabId effect
@@ -2387,7 +1584,7 @@ export function App() {
    *  If it moved, a real tab switch (or another native op) beat us to it —
    *  leave it alone, same as every other token check in this file (re-
    *  reading here would be exactly the silent reattach-with-no-gesture
-   *  `hasAutoLoadedNative` exists to prevent elsewhere). If it did NOT move,
+   *  `hasAppliedNativeDefault` exists to prevent elsewhere). If it did NOT move,
    *  nothing but PAGE_NAVIGATED could have bumped `nativeOpToken` — firing
    *  for the navigation this action itself just caused (a link activated
    *  through the tree, a form submit, …), not an unrelated tab switch, but
@@ -2411,11 +1608,9 @@ export function App() {
    *  fallback past that. */
   const recoverFromOwnNavigation = useCallback(
     async (tabId: number, tabChangeAtStart: number) => {
-      // Left the tab or native mode: a read now would attach
-      // `chrome.debugger` for a tree nobody is looking at.
-      const abandoned = () =>
-        tabChangeToken.current !== tabChangeAtStart ||
-        producerRef.current !== "native";
+      // Left the tab: a read now would attach `chrome.debugger` for a tree
+      // nobody is looking at.
+      const abandoned = () => tabChangeToken.current !== tabChangeAtStart;
       let lastSeenToken = nativeOpToken.current;
       for (let hop = 0; hop < MAX_NAV_RECOVERY_HOPS; hop++) {
         if (abandoned()) return;
@@ -2449,7 +1644,7 @@ export function App() {
    *  before the operation, so its own navigation shows as a moved token. A
    *  navigation that starts while the re-read is under way supersedes the
    *  read, and is followed the same way. Skipped once the panel has left the
-   *  tab or native mode. The caller holds `nativeInFlight`: this reads
+   *  tab. The caller holds `nativeInFlight`: this reads
    *  through the unguarded core. A read that succeeds, of either page, has
    *  the page's next changes followed for a while (`ACTION_FOLLOW_MS`).
    *  Resolves whether it read the page the operation ran on — not when the
@@ -2460,9 +1655,7 @@ export function App() {
       token: number,
       tabChangeAtStart: number,
     ): Promise<boolean> => {
-      const abandoned = () =>
-        tabChangeToken.current !== tabChangeAtStart ||
-        producerRef.current !== "native";
+      const abandoned = () => tabChangeToken.current !== tabChangeAtStart;
       // Always settle before checking staleness or reading again — even when
       // `nativeOpToken` already moved (a same-tab link click can make
       // PAGE_NAVIGATED, fired on `onBeforeNavigate` in background.ts, win the
@@ -2488,27 +1681,16 @@ export function App() {
     [loadNativeTreeCore, recoverFromOwnNavigation, followActionAftermath],
   );
 
-  // The default itself (see `hasAppliedNativeDefault`). It waits for
-  // `connected`, as the tree choice in Settings does: the DOM producer
-  // reaching the tab first is what proves there is a page there at all.
-  //
-  // It reads through the guarded `loadNativeTree` itself rather than leaving
-  // the auto-load effect to do it, because it has to know whether the read
-  // worked: setting `hasAutoLoadedNative` up front stops a duplicate read, and
-  // a failure reverts to DOM, says why, and leaves the default for the next
-  // tab. A read some other operation superseded (the `token` check) leaves
-  // whatever that operation left alone.
+  // The default read (see `hasAppliedNativeDefault`). It waits for
+  // `connected`: the page's content script reaching the panel first is what
+  // proves there is a page there at all. A read that fails leaves its reason
+  // on screen (the tree's status line and capability banner), and the
+  // default for the next tab: Refresh reads this one again. A read some
+  // other operation superseded (the `token` check) leaves whatever that
+  // operation left alone.
   useEffect(() => {
-    if (!nativeModeEnabled || !connected || myTabId === null) return;
+    if (!connected || myTabId === null) return;
     if (hasAppliedNativeDefault.current) return;
-    // Already native by another path in the same window (Chrome's tree
-    // chosen in Settings): nothing is left to default, and a second read here
-    // could only undo the user's choice if it failed. The session's default
-    // is spent.
-    if (producerRef.current === "native") {
-      hasAppliedNativeDefault.current = true;
-      return;
-    }
     if (nativeDefaultFailedOn.current.has(myTabId)) return;
     // Another read is in flight (a refresh, an action's re-read). Reading
     // now would come back `false` because it's busy, not because the page
@@ -2518,33 +1700,24 @@ export function App() {
     hasAppliedNativeDefault.current = true;
     const tabId = myTabId;
     const token = nativeOpToken.current;
-    const revertDefault = (why: string) => {
-      if (token !== nativeOpToken.current) return;
+    const failed = () => {
+      if (token !== nativeOpToken.current) return false;
       hasAppliedNativeDefault.current = false;
-      hasAutoLoadedNative.current = false;
       nativeDefaultFailedOn.current.add(tabId);
-      setProducer("dom");
-      // NativeTreeView, where the reason would otherwise show, unmounts with
-      // the switch, so announce it.
-      announce(`Native mode: showing the in-page tree — ${why}`, 8000);
+      return true;
     };
-    setProducer("native");
-    hasAutoLoadedNative.current = true;
-    void loadNativeTree(tabId)
-      .then((ok) => {
-        if (!ok) revertDefault(lastNativeFailure.current || "read failed");
-      })
-      // sendMessage rejected outright: the service worker didn't wake, or the
-      // context was torn down.
-      .catch(() => revertDefault("the extension didn't answer"));
-  }, [
-    nativeModeEnabled,
-    connected,
-    myTabId,
-    nativeBusy,
-    loadNativeTree,
-    announce,
-  ]);
+    void loadNativeTree(tabId).then(
+      (ok) => {
+        if (!ok) failed();
+      },
+      // sendMessage rejected outright: the service worker didn't wake, or
+      // the context was torn down.
+      () => {
+        if (failed())
+          setNativeStatus("read failed: the extension didn't answer");
+      },
+    );
+  }, [connected, myTabId, nativeBusy, loadNativeTree]);
 
   /** Dispatch one native action and, on success, settle + re-read — the same
    *  two-step DogfoodPanel's runAct uses, so a click that opens a menu or
@@ -2565,7 +1738,7 @@ export function App() {
       // The click named a node of the tree as it stood (see
       // `waitForAutoRead`).
       if (!(await waitForAutoRead())) return;
-      if (!nativeModeEnabled || nativeInFlight.current) return;
+      if (nativeInFlight.current) return;
       nativeInFlight.current = true;
       try {
         const token = nativeOpToken.current;
@@ -2579,8 +1752,8 @@ export function App() {
             action,
             nativeNodesRef.current,
           );
-        // Every failure is reported where the DOM tree reports its own, in
-        // the feedback bar; the status line alone is easy to miss.
+        // Every failure is reported where a TAB row's is, in the feedback
+        // bar; the status line alone is easy to miss.
         const fail = (why: string) => {
           setNativeStatus(why);
           announce(`Failed: ${why}`, 3000);
@@ -2670,7 +1843,6 @@ export function App() {
       }
     },
     [
-      nativeModeEnabled,
       nativeTreeTabId,
       nativeTreeUrl,
       settleThenReread,
@@ -2684,8 +1856,7 @@ export function App() {
       node: NativeNode,
       explicitAction?: "increment" | "decrement" | "select",
     ) => {
-      if (!nativeModeEnabled) return;
-      // A real `<select>` opens the same option picker the DOM tree's does,
+      // A real `<select>` opens the same option picker a TAB row's does,
       // listing its own option rows from the tree already read. Checked
       // before an explicit `select`, which a role-filter list passes for any
       // row it offers selection on: dispatched on the `<select>` itself it
@@ -2725,9 +1896,9 @@ export function App() {
         void dispatchNativeAction(node.id, explicitAction);
         return;
       }
-      // Typable fields reuse the SAME InputPanel the DOM producer uses — the
-      // point of this integration over DogfoodPanel's crude `prompt()`. No
-      // GET_FIELD_STATE round trip needed: unlike the DOM path, a native
+      // Typable fields reuse the SAME InputPanel a TAB row's field opens —
+      // the point of this integration over DogfoodPanel's crude `prompt()`.
+      // No GET_FIELD_STATE round trip needed: unlike a TAB row's, a native
       // node's value/placeholder are already loaded eagerly at read time.
       //
       // NEVER prefill with the redaction sentinel itself. A sensitive
@@ -2778,7 +1949,7 @@ export function App() {
           // A textarea's or an editor's box keeps line breaks, as typed and
           // as `rawValue` holds them.
           ...(node.states?.["multiline"] === true ? { multiline: true } : {}),
-          // Mask the retyped replacement the same way the DOM tree's box is
+          // Mask the retyped replacement the same way a TAB row's box is
           // masked (inputType, set by `domTextInputState`, checked in
           // InputPanel.tsx).
           // The wire carries each field's verdict (`valueWithheld`, beside
@@ -2795,7 +1966,7 @@ export function App() {
       }
       void dispatchNativeAction(node.id, "click");
     },
-    [nativeModeEnabled, dispatchNativeAction],
+    [dispatchNativeAction],
   );
 
   const handleInputSubmit = useCallback(
@@ -2905,91 +2076,47 @@ export function App() {
     if (next) numberNativeTree.current();
   }, [focusTrackerOn, sendToBoundTab]);
 
-  // Picker mode toggle. DOM: tells the content script to install / remove
-  // its capture-phase click handler — PICK_MODE_CHANGED comes back when the
-  // content script confirms (or when the user pressed Escape on the page to
-  // exit), and we mirror state from that message handler below. Native has
-  // no content script to install a page-side handler in, so it goes through
-  // `chrome.debugger`'s own `Overlay.setInspectMode` instead (`runPick` in
-  // debugger-session.ts) — NATIVE_PICK_RESULT is that path's counterpart to
-  // PICK_MODE_CHANGED/NODE_PICKED, handled in the same message handler above.
+  // Picker mode toggle, through `chrome.debugger`'s own
+  // `Overlay.setInspectMode` (`runPick` in debugger-session.ts):
+  // NATIVE_PICK_RESULT comes back, handled in the message handler above.
   const togglePickMode = useCallback(() => {
     const next = !pickModeOn;
-    if (producer === "native") {
-      if (nativeTreeTabId === undefined) return; // load a tree first
-      // Same guard the toolbar button's own `disabled` enforces, but only
-      // for ARMING — without it, the Ctrl/Cmd+Shift+C shortcut could start a
-      // pick while a NATIVE_READ/NATIVE_ACT is still in flight, queueing it
-      // behind an operation the UI is actively showing as disabled. Stopping
-      // an already-armed pick must never be blocked by this: `nativeBusy` is
-      // unrelated state that could in principle flip true while a pick is
-      // outstanding, and the user still needs a way to cancel it.
-      if (next && nativeBusy) return;
-      // Snapshot the token this pick is armed under — compared against its
-      // current value when the result arrives (see `nativePickToken`'s own
-      // comment). Only on arming: a STOP's own result never reveals
-      // anything, so it has nothing to stamp.
-      if (next) {
-        nativePickToken.current = nativeOpToken.current;
-        nativePickRequestId.current++;
-      }
-      setPickModeOn(next);
-      setNativePickArmed(false);
-      void chrome.runtime
-        .sendMessage({
-          type: next ? "NATIVE_PICK_START" : "NATIVE_PICK_STOP",
-          tabId: nativeTreeTabId,
-          requestId: nativePickRequestId.current,
-        })
-        .catch(() => {
-          // Service worker not reachable — nothing was armed/cancelled
-          // server-side, so don't strand the button showing "on".
-          setPickModeOn(false);
-        });
-      return;
+    if (nativeTreeTabId === undefined) return; // load a tree first
+    // Same guard the toolbar button's own `disabled` enforces, but only for
+    // ARMING — without it, the Ctrl/Cmd+Shift+C shortcut could start a pick
+    // while a NATIVE_READ/NATIVE_ACT is still in flight, queueing it behind
+    // an operation the UI is actively showing as disabled. Stopping an
+    // already-armed pick must never be blocked by this: `nativeBusy` is
+    // unrelated state that could in principle flip true while a pick is
+    // outstanding, and the user still needs a way to cancel it.
+    if (next && nativeBusy) return;
+    // Snapshot the token this pick is armed under — compared against its
+    // current value when the result arrives (see `nativePickToken`'s own
+    // comment). Only on arming: a STOP's own result never reveals anything,
+    // so it has nothing to stamp.
+    if (next) {
+      nativePickToken.current = nativeOpToken.current;
+      nativePickRequestId.current++;
     }
-    if (!next) {
-      // Goes through the same path as a frame exiting on its own, so the
-      // mirror and the broadcast stay in one place.
-      exitPickMode();
-      return;
-    }
-    setPickModeOn(true);
-    sendToBoundTab({
-      type: "SET_PICK_MODE",
-      payload: { enabled: true },
-    });
-  }, [
-    pickModeOn,
-    producer,
-    nativeTreeTabId,
-    nativeBusy,
-    sendToBoundTab,
-    exitPickMode,
-  ]);
-
-  // Switching producers while a pick is armed left the OLD producer's picker
-  // running (the DOM content script's click capture, or the native Overlay
-  // inspect mode) with nothing to turn it off — the toolbar's own pick
-  // button just started reflecting the NEW producer's state (always "off",
-  // since neither ever auto-arms), so the running picker became invisible to
-  // the UI while still live. Cancelling first, on the producer the pick
-  // actually belongs to, avoids that: `togglePickMode` reads `producer` from
-  // its own closure, so calling it before `setProducer` targets the right
-  // one.
-  const switchProducer = useCallback(
-    (next: "dom" | "native") => {
-      if (pickModeOn) togglePickMode();
-      setProducer(next);
-    },
-    [pickModeOn, togglePickMode],
-  );
+    setPickModeOn(next);
+    setNativePickArmed(false);
+    void chrome.runtime
+      .sendMessage({
+        type: next ? "NATIVE_PICK_START" : "NATIVE_PICK_STOP",
+        tabId: nativeTreeTabId,
+        requestId: nativePickRequestId.current,
+      })
+      .catch(() => {
+        // Service worker not reachable — nothing was armed/cancelled
+        // server-side, so don't strand the button showing "on".
+        setPickModeOn(false);
+      });
+  }, [pickModeOn, nativeTreeTabId, nativeBusy]);
 
   // Ctrl/Cmd+Shift+C: toggle pick mode, mirroring DevTools' inspector
   // shortcut. Bound to the panel document so it fires whenever the panel
-  // has focus. Page-level shortcuts are handled by the content script's own
-  // Escape listener while pick mode is active (DOM only — see the native
-  // Escape handling below, which the panel itself owns instead).
+  // has focus. Escape on the page is Chromium's, and Escape in the panel is
+  // handled below.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const mod = e.ctrlKey || e.metaKey;
@@ -3003,25 +2130,17 @@ export function App() {
   }, [togglePickMode]);
 
   // Cancel an armed native pick when the panel leaves its tab: a tab switch,
-  // or `nativeTreeTabId` resetting to `undefined` (which covers turning
-  // native mode off), or the panel unmounting. Otherwise inspect mode stays
-  // up on the page and the button stays "on" waiting for a result the panel
-  // may never see.
+  // or `nativeTreeTabId` resetting to `undefined` (a navigation), or the
+  // panel unmounting. Otherwise inspect mode stays up on the page and the
+  // button stays "on" waiting for a result the panel may never see.
   //
   // It depends on `nativeTreeTabId` alone. `pickModeOn` flips false whenever
   // a pick finishes normally, and re-running the cleanup then would send a
-  // STOP for a pick that's already over. `producer` is left out because
-  // `switchProducer` sends its own STOP for the producer being left.
+  // STOP for a pick that's already over.
   useEffect(() => {
     const tabId = nativeTreeTabId;
     return () => {
-      if (
-        producerRef.current !== "native" ||
-        !pickModeOnRef.current ||
-        tabId === undefined
-      ) {
-        return;
-      }
+      if (!pickModeOnRef.current || tabId === undefined) return;
       // Clear the local mirror immediately rather than waiting on this
       // message's own reply — the panel is leaving this tab either way, and
       // a rejected send (service worker momentarily unreachable) would
@@ -3047,8 +2166,7 @@ export function App() {
   togglePickModeRef.current = togglePickMode;
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
-      if (producerRef.current !== "native" || !pickModeOnRef.current) return;
+      if (e.key !== "Escape" || !pickModeOnRef.current) return;
       e.preventDefault();
       togglePickModeRef.current();
     };
@@ -3056,64 +2174,8 @@ export function App() {
     return () => document.removeEventListener("keydown", onKey);
   }, []);
 
-  // Modality flag — see useInputModality for the full rationale. Hover
-  // handlers gate on isMouseModality() so keyboard-driven scroll doesn't
-  // produce spurious mouseenter events that clobber the selection.
-  const { isMouseModality, markKeyboard } = useInputModality();
-
-  const handleHover = useCallback(
-    (id: string | null) => {
-      if (!isMouseModality()) return;
-      if (id) {
-        // `hover` keeps this a preview: overlay only, no page scroll and no
-        // real focus change. Without it, sweeping the pointer down the tree
-        // scroll-jumped the page and fired a focus event on the host page for
-        // every row it passed over.
-        sendToBoundTab({
-          type: "HIGHLIGHT_NODE",
-          payload: { nodeId: id, hover: true },
-        });
-      } else {
-        sendToBoundTab({ type: "CLEAR_HIGHLIGHT" });
-      }
-    },
-    [isMouseModality, sendToBoundTab],
-  );
-
-  const handleExpandAll = useCallback(() => {
-    for (const node of nodes.values() as IterableIterator<DomSemanticNode>) {
-      if (node.childIds.length > 0) node.ui.expanded = true;
-    }
-    forceRender((n) => n + 1);
-  }, [nodes]);
-
-  const handleCollapseAll = useCallback(() => {
-    for (const node of nodes.values() as IterableIterator<DomSemanticNode>) {
-      if (node.depth > 0) node.ui.expanded = false;
-    }
-    forceRender((n) => n + 1);
-  }, [nodes]);
-
-  const handleScopeToNode = useCallback(
-    (id: string | null) => {
-      const node = id ? asDom(nodes.get(id)) : undefined;
-      if (node) node.ui.expanded = true;
-      setScopedRootId(id);
-      forceRender((n) => n + 1);
-      // Scoping swaps the whole tree out from under a screen reader, and the
-      // bar that shows it sits outside the tree — say what happened.
-      announce(
-        node
-          ? `Scoped to ${describeNode(getDisplayRole(node), node.a11y.name)}`
-          : "Showing the full tree",
-        2500,
-      );
-    },
-    [nodes, announce],
-  );
-
   // Native's scope, held here rather than in NativeTreeView so Copy can
-  // export the same subtree the tree shows, as it does for DOM.
+  // export the same subtree the tree shows.
   const [nativeScopedRootId, setNativeScopedRootId] = useState<string | null>(
     null,
   );
@@ -3130,9 +2192,8 @@ export function App() {
     },
     [nativeNodes, announce],
   );
-  // Drop a scope whose node a re-read no longer has — the same rule DOM's
-  // TREE_DATA handler applies. Every native teardown (tab switch,
-  // navigation, leaving native mode) empties `nativeNodes`, so this also
+  // Drop a scope whose node a re-read no longer has. Every native teardown
+  // (tab switch, navigation) empties `nativeNodes`, so this also
   // covers all of those without each one clearing the scope itself.
   useEffect(() => {
     setNativeScopedRootId((prev) =>
@@ -3168,19 +2229,6 @@ export function App() {
     [sendToBoundTab, announce],
   );
 
-  const handleSendKey = useCallback(
-    (
-      key: string,
-      code: string,
-      keyCode: number,
-      modifiers?: { shift?: boolean },
-    ) => {
-      sendKeyOnly(key, code, keyCode, modifiers);
-      setTimeout(reExtract, 300);
-    },
-    [sendKeyOnly, reExtract],
-  );
-
   // A navigation that a sent key may still cause, after its re-read has
   // already read the old page: the PAGE_NAVIGATED handler follows one that
   // lands inside the window, through `followKeyNavigationRef`.
@@ -3191,7 +2239,7 @@ export function App() {
   } | null>(null);
 
   // The native tree's keyboard bar and dialog indicator send through the
-  // same content-script path, and only the native tree is read again
+  // content script (`sendKeyOnly`), and the native tree is read again
   // afterwards: a key can change the page (Escape closing a dialog, Enter
   // submitting a form), and a native tree is read only on request. The
   // settle window starts once the content script has dispatched the key. An
@@ -3276,39 +2324,44 @@ export function App() {
 
   const closeCopyMenu = useCallback(() => closePopup("copy"), [closePopup]);
 
+  // The TAB view's stops, while it shows them: the page's own walk, kept
+  // after TAB is left only until the next time the page is read whole.
+  const tabOrderShown =
+    view === "tab" && !treePending && rootId !== "" && nodes.size > 0;
+
   // Export the selected view(s) as a Markdown report and copy to clipboard.
-  // Serialized entirely panel-side from the merged snapshot the panel already
-  // holds — so it's exactly what's on screen (current view, scoped) and never
-  // depends on the content script being fresh.
+  // Serialized entirely panel-side from the trees the panel already holds —
+  // so it's exactly what's on screen (Chrome's tree as read, scoped; the TAB
+  // view's stops) and never depends on the content script being fresh.
   const doExport = useCallback(
     (selection: ExportView[]) => {
       closeCopyMenu();
       // Back to the button the menu goes with, as a menu button's items do.
       exportButtonRef.current?.focus();
 
-      /** Put the report on the clipboard and say whether it worked. */
-      const copyReport = (
-        views: ExportViews,
-        meta: Omit<ExportMeta, "extensionVersion">,
-      ) => {
-        const markdown = buildExportMarkdown(
-          views,
-          { ...meta, extensionVersion: chrome.runtime.getManifest().version },
-          selection,
-        );
-        navigator.clipboard.writeText(markdown).then(
-          () => announce("Copied to clipboard", 2500),
-          () =>
-            announce("Clipboard blocked — click the panel, then retry", 2500),
-        );
-      };
+      const tabsWanted = selection.includes("tab");
+      // An empty selection asks for the tree, which isn't there either.
+      const treeWanted = !tabsWanted || selection.some((v) => v !== "tab");
+      if (
+        (treeWanted && (!nativeRootId || nativeNodes.size === 0)) ||
+        (tabsWanted && !tabOrderShown)
+      ) {
+        announce("Nothing to export yet", 2000);
+        return;
+      }
 
-      if (producer === "native") {
-        if (!nativeRootId || nativeNodes.size === 0) {
-          announce("Nothing to export yet", 2000);
-          return;
-        }
-        // Native exports the subtree its tree shows, the same as DOM below.
+      const views: ExportViews = { tree: "", outline: "" };
+      // A report of the tab sequence alone is the page's own walk's, at the
+      // click: it follows the page while the TAB view shows.
+      let meta: Omit<ExportMeta, "extensionVersion"> = {
+        producer: "dom",
+        pageTitle,
+        pageUrl,
+        capturedAt: new Date().toISOString(),
+        viewLabel: "Native accessibility tree",
+      };
+      if (treeWanted) {
+        // The subtree the tree shows.
         const nativeScope =
           nativeScopedRootId !== null
             ? nativeNodes.get(nativeScopedRootId)
@@ -3317,93 +2370,59 @@ export function App() {
           nativeNodes,
           nativeScope?.id ?? nativeRootId,
         );
-        copyReport(
-          {
-            // `normalizeNativeAX` already drops every bare generic wrapper,
-            // so every generic left in a native tree is one the panel shows:
-            // a named group, a block of text named from its own text, or a
-            // role-less editor. `serializeTree`'s default
-            // `includeGeneric: false` doesn't know that and would drop it.
-            tree: serializeTree(tree, { includeGeneric: true }),
-            outline: serializeOutline(tree),
-          },
-          {
-            producer: tree.source!.producer,
-            // The native read's own page, not the DOM producer's, which can
-            // lag a navigation or never arrive on a page only native reads.
-            // A native tree carries no document title, so the DOM
-            // producer's is used only when it describes the same URL;
-            // otherwise the header falls back to the URL.
-            pageTitle: pageUrl && pageUrl === nativeTreeUrl ? pageTitle : "",
-            pageUrl: nativeTreeUrl ?? "",
-            // When the tree on screen was read: it doesn't follow the page
-            // by itself, so the click's time could describe a stale tree.
-            capturedAt: nativeReadAt ?? new Date().toISOString(),
-            viewLabel: "Native accessibility tree",
-            scope: nativeScope
-              ? describeNode(nativeScope.role, nativeScope.name)
-              : undefined,
-          },
-        );
-        return;
-      }
-
-      const exportRootId = scopedRootId || rootId;
-      if (!exportRootId || nodes.size === 0) {
-        announce("Nothing to export yet", 2000);
-        return;
-      }
-      // The panel renders the extension's own DOM-producer tree, so stamp the
-      // export with that provenance (the panel keeps nodes in a bare Map rather
-      // than a full ExtractionResult).
-      const tree: ExtractionResult = {
-        nodes,
-        rootId: exportRootId,
-        source: { producer: "dom" },
-      };
-
-      // No de-indent: `serializeTree` counts each line's indent in PRINTED
-      // ancestors, so the scope root is already at column 0. Slicing
-      // `2 * depth` more off every line, as this once did, cut the role off
-      // the scope root and the start of every line under it.
-      //
-      // Field values stay OUT of the report (the serializers' `values`
-      // option, off by default), although the tree on screen shows them: a
-      // report gets pasted into issues and PRs, and ADR-0001 leaves values
-      // out of anything posted unless asked.
-      const scopeNode = scopedRootId ? nodes.get(scopedRootId) : null;
-      const treeStr = serializeTree(tree);
-      const scopeLabel = scopeNode
-        ? describeNode(scopeNode.a11y.role, scopeNode.a11y.name)
-        : undefined;
-
-      copyReport(
-        {
-          tree: treeStr,
-          outline: serializeOutline(tree),
-          // Number the export's tab-order section at render — it mirrors the
-          // numbered on-screen panel; the numbers are display-only, never stored.
-          tabSequence: numberTabStops(serializeTabSequence(tree)),
-        },
-        {
+        // `normalizeNativeAX` already drops every bare generic wrapper, so
+        // every generic left in a native tree is one the panel shows: a named
+        // group, a block of text named from its own text, or a role-less
+        // editor. `serializeTree`'s default `includeGeneric: false` doesn't
+        // know that and would drop it.
+        views.tree = serializeTree(tree, { includeGeneric: true });
+        views.outline = serializeOutline(tree);
+        meta = {
           producer: tree.source!.producer,
-          pageTitle,
-          pageUrl,
-          capturedAt: new Date().toISOString(),
-          viewLabel: viewMode === "dom" ? "DOM tree" : "Accessibility tree",
-          scope: scopeLabel,
-        },
+          // The native read's own page, not the content script's, which can
+          // lag a navigation or never arrive on a page only native reads. A
+          // native tree carries no document title, so the content script's
+          // is used only when it describes the same URL; otherwise the
+          // header falls back to the URL.
+          pageTitle: pageUrl && pageUrl === nativeTreeUrl ? pageTitle : "",
+          pageUrl: nativeTreeUrl ?? "",
+          // When the tree on screen was read: it doesn't follow the page by
+          // itself, so the click's time could describe a stale tree.
+          capturedAt: nativeReadAt ?? new Date().toISOString(),
+          viewLabel: "Native accessibility tree",
+          scope: nativeScope
+            ? describeNode(nativeScope.role, nativeScope.name)
+            : undefined,
+        };
+      }
+      if (tabsWanted) {
+        // Numbered at render, as the TAB view numbers its stops; the numbers
+        // are display-only, never stored.
+        const walk: ExtractionResult = {
+          nodes,
+          rootId,
+          source: { producer: "dom" },
+        };
+        views.tabSequence = numberTabStops(serializeTabSequence(walk));
+      }
+
+      const markdown = buildExportMarkdown(
+        views,
+        { ...meta, extensionVersion: chrome.runtime.getManifest().version },
+        selection,
+      );
+      navigator.clipboard.writeText(markdown).then(
+        () => announce("Copied to clipboard", 2500),
+        () => announce("Clipboard blocked — click the panel, then retry", 2500),
       );
     },
     [
-      producer,
       nativeNodes,
       nativeRootId,
       nativeScopedRootId,
       nodes,
-      scopedRootId,
       rootId,
-      viewMode,
+      tabOrderShown,
       pageTitle,
       pageUrl,
       nativeTreeUrl,
@@ -3412,8 +2431,8 @@ export function App() {
       closeCopyMenu,
     ],
   );
-  // What the Copy menu offers for the tree on screen.
-  const exportViews = producer === "native" ? NATIVE_VIEWS : ALL_VIEWS;
+  // What the Copy menu offers: the tab sequence too while TAB shows it.
+  const exportViews = exportViewsFor(nativeNodes.size > 0, tabOrderShown);
 
   // Close Settings and the Copy menu on a press outside them, or on Escape.
   const closeSettings = useCallback(() => closePopup("settings"), [closePopup]);
@@ -3425,12 +2444,7 @@ export function App() {
   // user acknowledges it, in this window or another. Said once when it
   // appears, since a note that appears is not announced by itself.
   const showNativeNotice =
-    connected &&
-    nativeModeEnabled &&
-    producer === "native" &&
-    nativeEverRead &&
-    nativeNoticeSeen === false;
-  nativeNoticeShown.current = showNativeNotice;
+    connected && nativeEverRead && nativeNoticeSeen === false;
   const announcedNativeNotice = useRef(false);
   useEffect(() => {
     if (!showNativeNotice || announcedNativeNotice.current) return;
@@ -3441,80 +2455,15 @@ export function App() {
     );
   }, [showNativeNotice, announce]);
 
-  const jumpKeys = useMemo(
-    () => ({ links: controlsIndex, onJump: handleJumpToNode }),
-    [controlsIndex, handleJumpToNode],
-  );
-  const { handleKeyDown } = useTreeKeyboard({
-    nodes,
-    visibleNodeIds,
-    selectedId,
-    onSelect: handleSelect,
-    onToggle: handleToggle,
-    onActivate: handleActivate,
-    onFocusSearch: focusSearch,
-    // A jump outside the scope leaves it, as a click on a chip does.
-    jump: jumpKeys,
-  });
-
-  // Scroll the selected tree item into view whenever the selection changes
-  // (covers keyboard navigation, focus-sync from the page, jump/pick/go-to-tree
-  // flows that call setSelectedId). Keyed on `selectedId` only — depending on
-  // `visibleNodeIds` would re-fire on every expand/collapse and yank the
-  // viewport back to an off-screen selection. The list is read from a ref so
-  // the index resolves against the post-expansion list without adding it as a
-  // dependency.
-  useEffect(() => {
-    if (!selectedId) return;
-    const index = visibleIndexByIdRef.current.get(selectedId) ?? -1;
-    if (index !== -1) scrollToIndex(index, "nearest");
-  }, [selectedId, scrollToIndex]);
-
-  // Reveal a row on explicit request (jump/pick/focus/go-to-tree), even when it
-  // is already the selection. Keyed on the reveal nonce, not visibleNodeIds, so
-  // ordinary expand/collapse never scrolls; the target is resolved against the
-  // post-expansion list via the ref.
-  //
-  // A target outside the current scope (a pick, a focus sync or a jump chip
-  // can each land anywhere on the page) leaves the scope first and
-  // re-requests the reveal, which then resolves against the full tree.
-  // `scopedRootId` and `nodes` are read through a ref for the same reason
-  // the visible list is: depending on them would re-scroll on every scope
-  // change or tree update.
-  const revealScopeRef = useRef({ scopedRootId, nodes, handleScopeToNode });
-  revealScopeRef.current = { scopedRootId, nodes, handleScopeToNode };
-  useEffect(() => {
-    if (revealNonce === 0) return;
-    const target = revealTargetRef.current;
-    if (!target) return;
-    const scope = revealScopeRef.current;
-    if (
-      scope.scopedRootId &&
-      scope.nodes.has(target) &&
-      !isInScope(
-        target,
-        scope.scopedRootId,
-        (id) => scope.nodes.get(id)?.parentId,
-      )
-    ) {
-      scope.handleScopeToNode(null);
-      requestReveal(target);
-      return;
-    }
-    const index = visibleIndexByIdRef.current.get(target) ?? -1;
-    if (index !== -1) scrollToIndex(index, "nearest");
-  }, [revealNonce, scrollToIndex, requestReveal]);
-
   const prefersDark =
     typeof window !== "undefined" &&
     window.matchMedia("(prefers-color-scheme: dark)").matches;
   const themeClass = prefersDark ? "sn-theme-dark" : "sn-theme-light";
 
   // Settings, in each header rather than the toolbar, which is drawn only
-  // once a page is connected: this is where native mode turns off and back
-  // on, so it is on screen whether or not a page is connected.
-  // A disclosure, not a menu: what it opens is a switch and a line about it,
-  // and, while native mode is on, which tree this panel shows.
+  // once a page is connected: so it is on screen whether or not a page is
+  // connected. A disclosure, not a menu: what it opens is a switch and a line
+  // about it.
   const settingsDisclosure = (
     <div class="sn-dropdown" ref={settingsRef}>
       <button
@@ -3535,76 +2484,7 @@ export function App() {
           role="group"
           aria-label="Settings"
         >
-          <label class="sn-settings-item">
-            <input
-              type="checkbox"
-              checked={nativeSettingPending ?? nativeModeEnabled}
-              aria-describedby="sn-settings-native-hint"
-              aria-disabled={nativeSettingPending !== null}
-              onChange={(e) => {
-                const input = e.target as HTMLInputElement;
-                const wanted = input.checked;
-                // Back to what it showed until the panel takes the
-                // click: none is taken while a change is on its way.
-                input.checked = nativeSettingPending ?? nativeModeEnabled;
-                setNativeModeFromSettings(wanted);
-              }}
-            />
-            <span>Read pages through Chrome (recommended)</span>
-          </label>
-          <p id="sn-settings-native-hint" class="sn-settings-hint">
-            Shows the tree Chrome itself gives assistive technology. While it
-            reads, Chrome shows a bar: “{extensionName()}” started debugging
-            this browser. Off, the panel reads the page itself.
-          </p>
-          {/* Which producer this panel shows. Here rather than in the
-              toolbar, whose DOM / A11Y / TAB views belong to the in-page
-              tree: a DOM / NATIVE toggle beside them put two different
-              "DOM" buttons side by side.
-
-              Only while native mode is on, and not while a turn-off is on its
-              way: a choice of Chrome's tree implies it is one click away,
-              which isn't true once the user has turned native mode off, and
-              the switch above already shows it off. And only once a page has
-              connected: the DOM
-              producer reaching the tab first is what proves there is a page
-              there at all. That is a scope cut, not a capability gap: every
-              page Chrome blocks the content script on (chrome://, the Web
-              Store, an extension page) blocks native's attach for the same
-              reason (capability.ts's DOM_FALLBACK table). */}
-          {connected && nativeModeEnabled && nativeSettingPending !== false && (
-            <div class="sn-settings-source">
-              <span id="sn-settings-source-label" class="sn-settings-label">
-                Show
-              </span>
-              <div
-                class="sn-toggle-group"
-                role="group"
-                aria-labelledby="sn-settings-source-label"
-                aria-describedby="sn-settings-source-hint"
-              >
-                <button
-                  class="sn-toggle-btn"
-                  aria-pressed={producer === "native"}
-                  onClick={() => switchProducer("native")}
-                >
-                  Chrome's tree
-                </button>
-                <button
-                  class="sn-toggle-btn"
-                  aria-pressed={producer === "dom"}
-                  onClick={() => switchProducer("dom")}
-                >
-                  In-page tree
-                </button>
-              </div>
-              <p id="sn-settings-source-hint" class="sn-settings-hint">
-                The in-page tree is the panel's own reading of the page, with
-                the DOM, A11Y and TAB views.
-              </p>
-            </div>
-          )}
-          {/* Either tree, as the shared panel's Settings has it. */}
+          {/* As the shared panel's Settings has it. */}
           <ShowFullNamesSetting
             checked={showFullNames}
             onChange={setShowFullNames}
@@ -3690,7 +2570,14 @@ export function App() {
             */}
             <button
               class="sn-input-panel-btn sn-input-panel-btn--primary"
-              onClick={() => requestTree()}
+              onClick={() => {
+                requestTree();
+                // This press is the gesture a switched-to tab waits for, so
+                // Chrome's tree is read too, unless the TAB view shows.
+                if (myTabId !== null && view !== "tab") {
+                  void loadNativeTree(myTabId);
+                }
+              }}
             >
               {pageUnreachable ? "Try again" : "Load tree"}
             </button>
@@ -3721,26 +2608,6 @@ export function App() {
       return "";
     }
   })();
-
-  // Detect if tree root is a dialog (modal scoping from dom-extractor)
-  const rootNode = rootId ? nodes.get(rootId) : null;
-  const isDialogScoped =
-    rootNode?.a11y.role === "dialog" || rootNode?.a11y.role === "alertdialog";
-
-  // Build scope breadcrumb path
-  const scopeBreadcrumb = scopedRootId
-    ? scopePath(
-        scopedRootId,
-        (id) => nodes.get(id)?.parentId,
-        (id) => {
-          const current = asDom(nodes.get(id));
-          if (!current) return undefined;
-          return viewMode === "a11y"
-            ? describeNode(getDisplayRole(current), current.a11y.name)
-            : `<${current.dom.tagName}>`;
-        },
-      )
-    : [];
 
   return (
     <div class={`sn-root ${themeClass}`}>
@@ -3775,17 +2642,15 @@ export function App() {
         </button>
       </div>
 
-      {/* The toolbar both trees share. Each tree's own controls are in a
-          toolbar of their own under it: NativeTreeView's for Chrome's tree,
-          the next one for the in-page tree. On one row with these, the
-          in-page tree's left the search box no room below about 530px and
-          squeezed the DOM / A11Y / TAB views to nothing, in a side panel
+      {/* The panel's toolbar. The tree's own controls are in a toolbar of
+          their own under it (NativeTreeView's): on one row with these, they
+          left the search box no room below about 530px, in a side panel
           usually 320–400px wide.
 
-          Both keyed, so that the screen shown while the panel waits for a
-          page never takes over an element of either: Preact leaves a ref on
-          an element it reuses for one with no ref, so the Copy menu's
-          container would outlive its toolbar, and the menu come back open
+          Keyed, so that the screen shown while the panel waits for a page
+          never takes over its elements: Preact leaves a ref on an element it
+          reuses for one with no ref, so the Copy menu's container would
+          outlive its toolbar, and the menu come back open
           (`useDismissible`). */}
       <div
         key="sn-toolbar"
@@ -3793,35 +2658,31 @@ export function App() {
         role="toolbar"
         aria-label="Tree controls"
       >
-        {(producer === "dom" ||
-          (producer === "native" && nativeModeEnabled)) && (
-          <button
-            class="sn-pick-btn"
-            aria-pressed={pickModeOn}
-            // A native pick is pressed as soon as it's asked for, but busy
-            // until Chromium's inspect mode is actually on: a page click
-            // before then isn't a pick.
-            aria-busy={producer === "native" && pickModeOn && !nativePickArmed}
-            onClick={togglePickMode}
-            disabled={
-              producer === "native" &&
-              (nativeTreeTabId === undefined || (!pickModeOn && nativeBusy))
-            }
-            title={
-              pickModeOn
-                ? producer === "native" && !nativePickArmed
-                  ? "Arming the picker…"
-                  : "Pick mode ON — click an element in the page to select it in the tree (Esc to cancel)"
-                : producer === "native" && nativeTreeTabId === undefined
-                  ? "Load a native tree first"
-                  : "Pick an element in the page (Ctrl/Cmd+Shift+C)"
-            }
-            aria-label="Pick element in page"
-          >
-            {/* Crosshair-on-cursor glyph mirroring DevTools' picker icon. */}
-            {"⦿"}
-          </button>
-        )}
+        <button
+          class="sn-pick-btn"
+          aria-pressed={pickModeOn}
+          // A pick is pressed as soon as it's asked for, but busy until
+          // Chromium's inspect mode is actually on: a page click before then
+          // isn't a pick.
+          aria-busy={pickModeOn && !nativePickArmed}
+          onClick={togglePickMode}
+          disabled={
+            nativeTreeTabId === undefined || (!pickModeOn && nativeBusy)
+          }
+          title={
+            pickModeOn
+              ? !nativePickArmed
+                ? "Arming the picker…"
+                : "Pick mode ON — click an element in the page to select it in the tree (Esc to cancel)"
+              : nativeTreeTabId === undefined
+                ? "Load a native tree first"
+                : "Pick an element in the page (Ctrl/Cmd+Shift+C)"
+          }
+          aria-label="Pick element in page"
+        >
+          {/* Crosshair-on-cursor glyph mirroring DevTools' picker icon. */}
+          {"⦿"}
+        </button>
 
         <button
           class="sn-curtain-btn"
@@ -3868,19 +2729,13 @@ export function App() {
               >
                 Everything
               </button>
-              {exportViews.map((view) => (
+              {exportViews.map((item) => (
                 <button
-                  key={view}
+                  key={item}
                   class="sn-export-item"
-                  onClick={() => doExport([view])}
+                  onClick={() => doExport([item])}
                 >
-                  {view === "tree"
-                    ? producer === "native"
-                      ? "Native tree"
-                      : viewMode === "dom"
-                        ? "DOM tree"
-                        : "A11y tree"
-                    : VIEW_LABELS[view]}
+                  {item === "tree" ? "Native tree" : VIEW_LABELS[item]}
                 </button>
               ))}
             </div>
@@ -3888,142 +2743,12 @@ export function App() {
         </div>
       </div>
 
-      {producer === "dom" && (
-        <div
-          key="sn-inpage-toolbar"
-          class="sn-toolbar sn-toolbar--wrap"
-          role="toolbar"
-          aria-label="In-page tree controls"
-        >
-          <input
-            ref={searchInputRef}
-            class="sn-search"
-            type="search"
-            placeholder="Search nodes..."
-            aria-label="Search tree nodes"
-            value={query}
-            onInput={(e) => updateQuery((e.target as HTMLInputElement).value)}
-          />
-
-          <div class="sn-toggle-group" role="group" aria-label="Tree view mode">
-            <button
-              class="sn-toggle-btn"
-              aria-pressed={viewMode === "dom"}
-              onClick={() => handleViewModeChange("dom")}
-            >
-              DOM
-            </button>
-            <button
-              class="sn-toggle-btn"
-              aria-pressed={viewMode === "a11y"}
-              onClick={() => handleViewModeChange("a11y")}
-            >
-              A11Y
-            </button>
-            <button
-              class="sn-toggle-btn"
-              aria-pressed={viewMode === "tab"}
-              onClick={() => handleViewModeChange("tab")}
-            >
-              TAB
-            </button>
-          </div>
-
-          <button
-            class="sn-toolbar-btn"
-            onClick={() => {
-              // requestTree stamps myTabId (via sendToBoundTab) so this doesn't
-              // race the background's activeTabId update — without that, hitting
-              // refresh right after a tab switch would route to the wrong tab.
-              requestTree();
-              announce("Tree refreshed", 1500);
-            }}
-            aria-label="Refresh tree"
-            title="Refresh tree"
-          >
-            {"\u21BB"}
-          </button>
-
-          <button
-            class="sn-toolbar-btn"
-            onClick={handleExpandAll}
-            disabled={viewMode === "tab"}
-            aria-label="Expand all"
-            title="Expand all"
-          >
-            +
-          </button>
-          <button
-            class="sn-toolbar-btn"
-            onClick={handleCollapseAll}
-            disabled={viewMode === "tab"}
-            aria-label="Collapse all"
-            title="Collapse all"
-          >
-            -
-          </button>
-
-          {/* Mounted before there is a count to report: a live region that
-              arrives already holding its text is not announced by most screen
-              reader / browser pairs. Only the text swaps. Last in the row, so
-              that in a narrow panel a count with no room drops to a line of
-              its own rather than squeezing the search box or pushing a
-              control off the row. */}
-          <span class="sn-search-count" aria-live="polite">
-            {(query || roleFilter) &&
-              matchCountLabel(matchCount, scopedRootId !== null)}
-          </span>
-        </div>
-      )}
-
       {/* Block-level, NOT a toolbar flex child: its paragraph would otherwise
           squeeze every other toolbar control (search box, curtain, refresh,
           zoom, copy) into a cramped, wrapped mess. Same placement pattern as
           NativeTreeView's own capability banner. */}
       {showNativeNotice && (
-        <NativeModeNotice
-          onAcknowledge={acknowledgeNativeNotice}
-          onTurnOff={() => setNativeModeFromSettings(false)}
-          turningOff={nativeSettingPending !== null}
-        />
-      )}
-
-      {/* Role filters — DOM producer only; disabled in tab sequence view */}
-      {producer === "dom" && (
-        <div class="sn-filters" role="toolbar" aria-label="Filter by role">
-          {(
-            Object.keys(ROLE_FILTER_LABELS) as Array<Exclude<RoleFilter, null>>
-          ).map((key) => (
-            <button
-              key={key}
-              class="sn-filter-btn"
-              aria-pressed={roleFilter === key}
-              disabled={viewMode === "tab"}
-              onClick={() => setRoleFilter(roleFilter === key ? null : key)}
-            >
-              {ROLE_FILTER_LABELS[key]}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {/* Dialog scope indicator — DOM producer only */}
-      {producer === "dom" && (
-        <DialogIndicator
-          dialog={isDialogScoped ? { name: rootNode?.a11y.name ?? "" } : null}
-          onEscape={() => sendKeySpec(handleSendKey, KEYS.Escape)}
-        />
-      )}
-
-      {/* Scope breadcrumb (when user scoped to a subtree). Native renders
-          its own, inside NativeTreeView, from the same component. */}
-      {producer === "dom" && scopedRootId && (
-        <ScopeBar
-          path={scopeBreadcrumb}
-          rootId={rootId}
-          onScope={handleScopeToNode}
-          focusAfterExit={() => treeRef.current ?? listViewRef.current}
-        />
+        <NativeModeNotice onAcknowledge={acknowledgeNativeNotice} />
       )}
 
       {feedbackRegion}
@@ -4037,451 +2762,46 @@ export function App() {
         />
       )}
 
-      {nativeModeEnabled && producer === "native" ? (
-        /* ---- Native tree view ---- */
-        <NativeTreeView
-          nodes={nativeNodes}
-          rootId={nativeRootId}
-          busy={nativeBusy}
-          capability={nativeCapability}
-          status={nativeStatus}
-          onRefresh={() => {
-            if (myTabId !== null) void loadNativeTree(myTabId);
-          }}
-          onActivate={handleNativeActivate}
-          reveal={nativePickReveal}
-          pageFocus={nativePageFocus}
-          onRevealMiss={() =>
-            announce(
-              "The picked element isn't in this tree — refresh the native tree, then pick again.",
-              5000,
-            )
-          }
-          onSelectionReveal={revealNativeRow}
-          onHoverPreview={previewNativeRow}
-          scopedRootId={nativeScopedRootId}
-          onScope={handleNativeScope}
-          pickArmed={pickModeOn}
-          onSendKey={handleNativeSendKey}
-          onDialogEscape={handleNativeDialogEscape}
-          followPageChanges={followPageChanges}
-          onToggleFollowPageChanges={toggleFollowPageChanges}
-          showFullNames={showFullNames}
-          // Its TAB view is the in-page tree's: Chrome's tree has no tab
-          // order. One view mode for both trees, so TAB stays on when the
-          // user switches tree in Settings.
-          tabOrder={{
-            nodes: treePending ? NO_NODES : nodes,
-            rootId,
-            pending: treePending,
-            onHighlight: handleSelect,
-            onActivate: handleActivate,
-          }}
-          view={viewMode === "tab" ? "tab" : "a11y"}
-          onViewChange={handleNativeViewChange}
-        />
-      ) : treePending ? (
-        // Takes the focus a tree that went away left, until its own lands.
-        <div class="sn-empty sn-tree-pending" role="status" tabIndex={-1}>
-          Reading the page…
-        </div>
-      ) : viewMode === "tab" ? (
-        /* ---- Tab sequence view ---- */
-        <TabSequenceView
-          nodes={nodes}
-          rootId={scopedRootId ?? rootId}
-          query={query}
-          onHighlight={handleSelect}
-          onActivate={handleActivate}
-          onFocusSearch={focusSearch}
-          scoped={scopedRootId !== null}
-          onExitScope={() => handleScopeToNode(null)}
-          listRef={listViewRef}
-        />
-      ) : roleFilter ? (
-        /* ---- Filtered list view ---- */
-        <FilteredList
-          nodes={nodes}
-          scopeRootId={scopedRootId}
-          roleFilter={roleFilter}
-          query={query}
-          onHighlight={handleSelect}
-          onActivate={handleActivate}
-          onGoToTree={handleGoToTree}
-          onFocusSearch={focusSearch}
-          onExitScope={() => handleScopeToNode(null)}
-          listRef={listViewRef}
-        />
-      ) : (
-        /* ---- Tree view ---- */
-        <>
-          <div
-            ref={containerRef}
-            class={`sn-tree-container${isDialogScoped ? " sn-tree-container--dialog" : ""}${scopedRootId ? " sn-tree-container--scoped" : ""}`}
-            onScroll={onScroll}
-          >
-            <div
-              ref={treeRef}
-              class={`sn-tree${showFullNames ? " sn-tree--full-names" : ""}`}
-              role="tree"
-              aria-label={`Semantic tree — press Enter to activate interactive elements; +/− or Shift+Enter to step sliders and spinbuttons; ${SCOPE_KEY_HINT}; Alt+J to follow a row's aria-controls links one by one and Alt+Shift+J to go back`}
-              aria-keyshortcuts={JUMP_KEYSHORTCUTS}
-              tabIndex={0}
-              style={{
-                minHeight: totalHeight,
-                paddingTop: offset,
-                boxSizing: "border-box",
-              }}
-              // Focus stays on this container (rows are non-focusable divs), so
-              // the active row must be announced via aria-activedescendant —
-              // otherwise arrowing through the tree just flips aria-selected on
-              // rows the screen reader isn't looking at, and the user hears
-              // nothing. Point it at the selected row only while that row is
-              // in the virtualized window (offscreen rows are not in the DOM).
-              aria-activedescendant={activeDescendantId}
-              onKeyDown={(e) => {
-                markKeyboard();
-                const scopeAction = scopeKeyAction(e, {
-                  scoped: scopedRootId !== null,
-                  // A DOM pick is cancelled by Escape on the PAGE (the
-                  // content script owns it); the panel's own Escape never
-                  // reaches it, so here Escape always leaves the scope.
-                  pickArmed: false,
-                });
-                if (scopeAction) {
-                  e.preventDefault();
-                  if (scopeAction === "exit") {
-                    handleScopeToNode(null);
-                  } else if (selectedId && hasChildren(nodes.get(selectedId))) {
-                    handleScopeToNode(selectedId);
-                  }
-                  return;
-                }
-                if (e.key === "ArrowLeft" && selectedId) {
-                  const selected = asDom(nodes.get(selectedId));
-                  const isOpen =
-                    !!selected?.ui.expanded && hasChildren(selected);
-                  if (
-                    arrowLeftStopsAtScopeRoot(selectedId, scopedRootId, isOpen)
-                  ) {
-                    e.preventDefault();
-                    return;
-                  }
-                }
-                handleKeyDown(e);
-              }}
-            >
-              {visibleNodeIds.slice(startIndex, endIndex).map((id) => {
-                const node = asDom(nodes.get(id));
-                if (!node) return null;
-
-                const isParent = hasChildren(node);
-                const actions = node.interaction.actions;
-                // Slider / spinbutton rows surface a paired ▼/▲ stepper
-                // instead of the single primary-action button — works
-                // under the Screen Curtain because the dispatcher drives
-                // the value end-to-end without the user touching the
-                // page. Suppress the primary button to avoid duplicating
-                // "Increment" alongside ▲. Mirrors TreeNode in
-                // @real-a11y-dev/semantic-navigator-ui.
-                const showStepPair =
-                  actions.includes("increment") &&
-                  actions.includes("decrement");
-                const primaryAction = showStepPair
-                  ? null
-                  : getPrimaryAction(actions);
-                const isSelected = id === selectedId;
-                const position = visiblePositions.get(id);
-                const displayDepth = scopedRootId
-                  ? node.depth - scopedDepthOffset
-                  : node.depth;
-                const badges = domStateBadges(node.a11y.states);
-                const keyBadges = badges.filter((b) => b.keyState);
-
-                return (
-                  <div
-                    key={id}
-                    // id is the aria-activedescendant target for this row. Node
-                    // ids are `sn-<n>` / `f<n>-sn-<n>` — already selector- and
-                    // id-safe — so `snrow-<id>` is a valid, unique element id.
-                    id={`snrow-${id}`}
-                    class={[
-                      "sn-node",
-                      isSelected && "sn-node--selected",
-                      node.dom.isHidden && "sn-node--hidden",
-                      node.interaction.isInteractive && "sn-node--interactive",
-                      id === flashingId && "sn-node--flash",
-                    ]
-                      .filter(Boolean)
-                      .join(" ")}
-                    role="treeitem"
-                    aria-expanded={isParent ? node.ui.expanded : undefined}
-                    aria-selected={isSelected}
-                    aria-level={displayDepth + 1}
-                    aria-posinset={position?.posinset}
-                    aria-setsize={position?.setsize}
-                    data-node-id={id}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleSelect(id);
-                    }}
-                    onDblClick={(e) => {
-                      e.stopPropagation();
-                      if (isParent && !node.interaction.isInteractive) {
-                        handleScopeToNode(id);
-                      } else if (node.interaction.isInteractive) {
-                        handleActivate(id);
-                      }
-                    }}
-                    onMouseEnter={() => handleHover(id)}
-                    onMouseLeave={() => handleHover(null)}
-                  >
-                    <span class="sn-indent">
-                      {Array.from({ length: displayDepth }, (_, i) => (
-                        <span key={i} class="sn-indent-unit" />
-                      ))}
-                    </span>
-
-                    <button
-                      class={`sn-toggle ${!isParent ? "sn-toggle--leaf" : ""}`}
-                      tabIndex={-1}
-                      aria-hidden="true"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (isParent) handleToggle(id);
-                      }}
-                    >
-                      {isParent ? (node.ui.expanded ? "\u25BE" : "\u25B8") : ""}
-                    </button>
-
-                    <span class="sn-label">
-                      {viewMode === "dom" ? (
-                        <>
-                          <span class="sn-tag">
-                            {"<"}
-                            {node.dom.tagName}
-                            {">"}
-                          </span>
-                          {/* The raw DOM value — a select's `value`, not
-                              its label. A sensitive field's is already
-                              `[redacted]`. */}
-                          {node.dom.attributes.value !== undefined && (
-                            <span
-                              class="sn-field-value"
-                              title={rawValueLabel(node.dom.attributes.value)}
-                            >
-                              {rawValueLabel(node.dom.attributes.value)}
-                            </span>
-                          )}
-                          {node.dom.textContent && showsTextContent(node) && (
-                            <span
-                              class="sn-text-content"
-                              title={node.dom.textContent}
-                            >
-                              {node.dom.textContent}
-                            </span>
-                          )}
-                        </>
-                      ) : (
-                        <>
-                          {/* The role and name stay together on a narrow
-                              row, which clips the name and drops what
-                              follows it (tree.css, "Long labels"). */}
-                          <span class="sn-head">
-                            {/* Role — semantic display name */}
-                            <span class="sn-role">{getDisplayRole(node)}</span>
-                            {/* Heading level badge */}
-                            {node.a11y.properties.level && (
-                              <span class="sn-level-badge">
-                                H{node.a11y.properties.level}
-                              </span>
-                            )}
-                            {node.dom.tagName === "iframe" && !isParent && (
-                              <EmbeddedBadge />
-                            )}
-                            {/* With its whole text as a tooltip, for when
-                                it ends in an ellipsis; so does the preview
-                                below. */}
-                            {node.a11y.name && (
-                              <span class="sn-name" title={node.a11y.name}>
-                                {node.a11y.name}
-                              </span>
-                            )}
-                            <KeyStatesForReaders
-                              labels={keyBadges.map((b) => b.label)}
-                            />
-                          </span>
-                          {/* Descendant-text preview — leaf-only to avoid
-                              duplicating what's already in child rows
-                              (table/rowgroup, paragraphs with strong/em
-                              children, etc.). Fires for `<code>` whose
-                              role=presentation spans flattened, `<svg>`
-                              with descendant `<text>`, decorative
-                              wrappers, etc. Mirrors the shared TreeNode
-                              in @real-a11y-dev/semantic-navigator-ui.
-                              Skipped for a field — see `showsTextPreview`. */}
-                          {node.childIds.length === 0 &&
-                            node.dom.descendantText !== "" &&
-                            node.dom.descendantText !== node.a11y.name &&
-                            showsTextPreview(node) && (
-                              <span
-                                class="sn-name-preview"
-                                title={node.dom.descendantText}
-                              >
-                                {node.dom.descendantText}
-                              </span>
-                            )}
-                          {/* Accessible description — from aria-describedby / aria-description */}
-                          {node.a11y.description && (
-                            <span
-                              class="sn-description"
-                              title={node.a11y.description}
-                            >
-                              {node.a11y.description.length > 80
-                                ? node.a11y.description.slice(0, 80) + "\u2026"
-                                : node.a11y.description}
-                            </span>
-                          )}
-                          {/* The value a screen reader announces
-                              (ADR-0001) \u2014 on any node that has one, not only
-                              editable fields: a select's option label, a
-                              slider's valuetext, an editor's text. A
-                              sensitive field's is already `[redacted]`. */}
-                          {node.a11y.value !== undefined && (
-                            <span
-                              class="sn-field-value"
-                              title={announcedValueLabel(node.a11y.value)}
-                            >
-                              {announcedValueLabel(node.a11y.value)}
-                            </span>
-                          )}
-                          <StateBadges
-                            badges={badges.filter((b) => !b.keyState)}
-                          />
-                          {/* Cross-links (aria-controls or heuristic): to the
-                              rows this one controls, and back to those that
-                              control it. */}
-                          {controlsIndex.forward.get(id)?.map((targetId) => {
-                            const target = asDom(nodes.get(targetId));
-                            if (!target) return null;
-                            return (
-                              <ControlsChip
-                                key={`controls-${targetId}`}
-                                role={getDisplayRole(target)}
-                                name={target.a11y.name}
-                                direction="forward"
-                                inferred={controlsIndex.inferred.has(id)}
-                                keyHint={JUMP_KEYS.forward}
-                                onJump={() => handleJumpToNode(targetId)}
-                              />
-                            );
-                          })}
-                          {controlsIndex.reverse
-                            .get(id)
-                            ?.map((triggerId, i) => {
-                              const trigger = asDom(nodes.get(triggerId));
-                              if (!trigger) return null;
-                              return (
-                                <ControlsChip
-                                  key={`controlled-by-${triggerId}`}
-                                  role={getDisplayRole(trigger)}
-                                  name={trigger.a11y.name}
-                                  direction="reverse"
-                                  inferred={controlsIndex.inferred.has(
-                                    triggerId,
-                                  )}
-                                  // Alt+Shift+J reaches the first one.
-                                  keyHint={i === 0 ? JUMP_KEYS.back : undefined}
-                                  onJump={() => handleJumpToNode(triggerId)}
-                                />
-                              );
-                            })}
-                        </>
-                      )}
-
-                      {primaryAction && (
-                        <span class="sn-action-tag">
-                          {ACTION_LABELS[primaryAction]}
-                        </span>
-                      )}
-                    </span>
-
-                    {/* Key states: after the label, which can clip them,
-                        rather than in it. A row too narrow for them widens
-                        instead (tree.css, "Long labels"). A screen reader
-                        hears them after the name (KeyStatesForReaders). */}
-                    {viewMode !== "dom" && (
-                      <StateBadges keyStates badges={keyBadges} />
-                    )}
-
-                    {primaryAction && (
-                      <button
-                        class="sn-action sn-action--visible"
-                        tabIndex={-1}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleActivate(id);
-                        }}
-                        title={`${ACTION_LABELS[primaryAction]} (Enter)`}
-                      >
-                        {"\u23CE"}
-                      </button>
-                    )}
-
-                    {/* Slider / spinbutton paired stepper. Order is
-                        decrement-then-increment so the visible glyphs
-                        read as a single range control. Each button
-                        passes its own action to handleActivate so the
-                        dispatcher knows which way to step. */}
-                    {showStepPair && (
-                      <span class="sn-action-pair">
-                        <button
-                          class="sn-action sn-action--visible sn-action--step"
-                          tabIndex={-1}
-                          aria-label={ACTION_LABELS.decrement}
-                          title={ACTION_LABELS.decrement}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleActivate(id, "decrement");
-                          }}
-                        >
-                          {"\u25BC"}
-                        </button>
-                        <button
-                          class="sn-action sn-action--visible sn-action--step"
-                          tabIndex={-1}
-                          aria-label={ACTION_LABELS.increment}
-                          title={ACTION_LABELS.increment}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleActivate(id, "increment");
-                          }}
-                        >
-                          {"\u25B2"}
-                        </button>
-                      </span>
-                    )}
-                  </div>
-                );
-              })}
-
-              {visibleNodeIds.length === 0 && (
-                <div class="sn-empty">
-                  {query ? "No matching nodes" : "Empty tree"}
-                </div>
-              )}
-            </div>
-          </div>
-
-          <SendKeyBar onSendKey={handleSendKey} />
-
-          <div class="sn-hints">
-            <kbd>Enter</kbd> activate &middot; <kbd>+/−</kbd> step &middot;{" "}
-            <kbd>Space</kbd> expand &middot; <kbd>Arrow</kbd> navigate &middot;{" "}
-            <kbd>DblClick</kbd> scope &middot; <kbd>Alt+(Shift)+J</kbd> jump
-          </div>
-        </>
-      )}
+      <NativeTreeView
+        nodes={nativeNodes}
+        rootId={nativeRootId}
+        busy={nativeBusy}
+        capability={nativeCapability}
+        status={nativeStatus}
+        onRefresh={() => {
+          if (myTabId !== null) void loadNativeTree(myTabId);
+        }}
+        onActivate={handleNativeActivate}
+        reveal={nativePickReveal}
+        pageFocus={nativePageFocus}
+        onRevealMiss={() =>
+          announce(
+            "The picked element isn't in this tree — refresh the native tree, then pick again.",
+            5000,
+          )
+        }
+        onSelectionReveal={revealNativeRow}
+        onHoverPreview={previewNativeRow}
+        scopedRootId={nativeScopedRootId}
+        onScope={handleNativeScope}
+        pickArmed={pickModeOn}
+        onSendKey={handleNativeSendKey}
+        onDialogEscape={handleNativeDialogEscape}
+        followPageChanges={followPageChanges}
+        onToggleFollowPageChanges={toggleFollowPageChanges}
+        showFullNames={showFullNames}
+        // Its TAB view is the page's own walk's: Chrome's tree has no tab
+        // order.
+        tabOrder={{
+          nodes: treePending ? NO_NODES : nodes,
+          rootId,
+          pending: treePending,
+          onHighlight: handleSelect,
+          onActivate: handleActivate,
+        }}
+        view={view}
+        onViewChange={setView}
+      />
 
       {/* Live region announcements, mounted before the first one arrives —
           see the search count above. Relaying the page's live regions through

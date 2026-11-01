@@ -1,14 +1,12 @@
 /**
  * The TAB view of Chrome's tree (`NativeTreeView.tsx`). A native node carries
- * no tab order (`tabindex` never reaches one), so the view shows the in-page
- * walk's (`TabSequenceView`), as the CLI's `tabs` does, and its selection and
- * activation go through the content script, as in the in-page tree's own TAB
- * view. The order is `getTabSequence`'s, which doesn't model shadow roots,
- * iframes or focus traps. App holds which view shows: the in-page tree's view
- * mode.
+ * no tab order (`tabindex` never reaches one), so the view shows the page's
+ * own walk's (`TabSequenceView`), as the CLI's `tabs` does, and its selection
+ * and activation go through the content script. The order is
+ * `getTabSequence`'s, which doesn't model shadow roots, iframes or focus
+ * traps. App holds which view shows.
  */
 
-import type { TreeViewMode } from "@real-a11y-dev/core";
 import type { ComponentProps } from "preact";
 import { useMemo } from "preact/hooks";
 
@@ -16,10 +14,10 @@ import { matchCountLabel } from "./scope.js";
 import { TabSequenceView, tabStops } from "./TabSequenceView.js";
 
 /** Chrome's tree, or the page's tab order in its place. */
-export type NativeView = Exclude<TreeViewMode, "dom">;
+export type NativeView = "a11y" | "tab";
 
-/** The page's tab order: the in-page tree it comes from, and what selecting
- *  and activating a stop does there. */
+/** The page's tab order: the walk it comes from, and what selecting and
+ *  activating a stop does there. */
 export type NativeTabOrder = Pick<
   ComponentProps<typeof TabSequenceView>,
   "nodes" | "rootId" | "pending" | "onHighlight" | "onActivate"
@@ -56,7 +54,7 @@ export function useTabMatchLabel(
   query: string,
 ): string | false {
   // Keyed on the tree, not on `shown`: App hands over a new object each
-  // render, and the walk is the in-page tree's whole tab sequence.
+  // render, and the walk is the page's whole tab sequence.
   const nodes = shown?.nodes;
   const rootId = shown?.rootId;
   return useMemo(

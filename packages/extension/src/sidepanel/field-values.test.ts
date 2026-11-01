@@ -7,16 +7,16 @@ import type { FieldState } from "../field-state.js";
 import type { ContentToPanel } from "../types.js";
 
 import { App } from "./App.js";
-import { announcedValueLabel, rawValueLabel } from "./field-value.js";
+import { announcedValueLabel } from "./field-value.js";
 import type { ChromeMock } from "./panel-harness.js";
 import { TAB_ID, installChromeMock, stubMatchMedia } from "./panel-harness.js";
 
 /**
- * ADR-0001 in the DOM producer's panel: the A11y view shows the value a
- * screen reader announces (`a11y.value`), the DOM view the raw DOM value
- * (`dom.attributes.value`). A `<select>` reads "Spain" in one and "es" in the
- * other; a sensitive field reads `[redacted]` in both — never its contents,
- * and never a bullet per character, which is its length.
+ * ADR-0001 on the TAB view's rows. Chrome's tree shows the value a screen
+ * reader announces (`native-edit-box.test.ts` and the NativeTreeView suites
+ * cover it). The TAB view lists the stops of the page's own walk and shows no
+ * value on them, but a stop opens the panel's edit box, and the report Copy ▾
+ * makes of the stops gets posted: neither may carry what a field holds.
  */
 
 interface FieldSpec {
@@ -30,7 +30,7 @@ interface FieldSpec {
   raw?: string;
   type?: string;
   isEditable?: boolean;
-  /** `dom.descendantText` — the leaf-text preview the A11y view prints. */
+  /** `dom.textContent` and `dom.descendantText`. */
   text?: string;
   /** `interaction.actions`: `["type"]` gives the row its edit box. */
   actions?: string[];
@@ -151,7 +151,7 @@ const FIELDS: FieldSpec[] = [
   },
 ];
 
-/** Their own tree: the panel renders a window of rows, and FIELDS fills it. */
+/** Two textareas whose markup holds a default, as core's walk reads it. */
 const TEXTAREAS: FieldSpec[] = [
   // `<textarea autocomplete="one-time-code">123456</textarea>`: core's text
   // content and preview carry the markup default — here, the secret.
@@ -220,109 +220,69 @@ function treeData(fields: FieldSpec[] = FIELDS): ContentToPanel {
   } as unknown as ContentToPanel;
 }
 
-describe("field values in the DOM producer's tree", () => {
+/** Let the promise-form replies land and the effects they trigger run. */
+async function flush(): Promise<void> {
+  for (let i = 0; i < 5; i++) {
+    await act(async () => {
+      await Promise.resolve();
+    });
+  }
+}
+
+/** The panel on the TAB view, listing `fields`. */
+async function showTabOrder(
+  container: HTMLElement,
+  chromeMock: ChromeMock,
+  fields: FieldSpec[],
+): Promise<void> {
+  act(() => {
+    render(h(App, {}), container);
+  });
+  act(() => {
+    chromeMock.emit({
+      type: "ACTIVE_TAB_CHANGED",
+      tabId: TAB_ID,
+    } as unknown as ContentToPanel);
+  });
+  act(() => {
+    chromeMock.emit(treeData(fields));
+  });
+  await flush();
+  const tab = [...container.querySelectorAll("button.sn-toggle-btn")].find(
+    (b) => b.textContent?.trim() === "TAB",
+  ) as HTMLButtonElement | undefined;
+  if (!tab) throw new Error("no TAB toggle");
+  act(() => tab.click());
+  // The page sends its whole tree for the TAB view.
+  act(() => {
+    chromeMock.emit(treeData(fields));
+  });
+  await flush();
+}
+
+const scrollIntoView = Element.prototype.scrollIntoView;
+
+describe("the tab sequence in the copied report", () => {
   let container: HTMLDivElement;
   let chromeMock: ChromeMock;
 
   beforeEach(() => {
     stubMatchMedia();
+    // jsdom has no scrollIntoView, which the TAB list calls.
+    Element.prototype.scrollIntoView = () => {};
     chromeMock = installChromeMock();
     container = document.createElement("div");
     document.body.appendChild(container);
-    act(() => {
-      render(h(App, {}), container);
-    });
-    act(() => {
-      chromeMock.emit({
-        type: "ACTIVE_TAB_CHANGED",
-        tabId: TAB_ID,
-      } as unknown as ContentToPanel);
-    });
-    act(() => {
-      chromeMock.emit(treeData());
-    });
   });
 
   afterEach(() => {
     render(null, container);
     container.remove();
+    Element.prototype.scrollIntoView = scrollIntoView;
   });
 
-  /** The value text a row shows, or null when it shows none. */
-  function shownValue(nodeId: string): string | null {
-    const row = container.querySelector(`[data-node-id="${nodeId}"]`);
-    if (!row) throw new Error(`no row rendered for ${nodeId}`);
-    return row.querySelector(".sn-field-value")?.textContent ?? null;
-  }
-
-  function showView(label: "DOM" | "A11Y"): void {
-    const btn = [...container.querySelectorAll("button.sn-toggle-btn")].find(
-      (b) => b.textContent?.trim() === label,
-    ) as HTMLButtonElement | undefined;
-    if (!btn) throw new Error(`no ${label} toggle`);
-    act(() => {
-      btn.click();
-    });
-  }
-
-  it("shows a select's announced label in the A11y view and its raw value in the DOM view", () => {
-    expect(shownValue("country")).toBe('= "Spain"');
-    showView("DOM");
-    expect(shownValue("country")).toBe('value="es"');
-  });
-
-  it("shows a password as [redacted] in both views — never its length", () => {
-    expect(shownValue("password")).toBe('= "[redacted]"');
-    showView("DOM");
-    expect(shownValue("password")).toBe('value="[redacted]"');
-    expect(container.textContent).not.toContain("•");
-  });
-
-  it("shows a value wherever the A11y view has one, not only on editable fields", () => {
-    expect(shownValue("volume")).toBe('= "Loud"');
-    expect(shownValue("email")).toBe('= "jane@example.com"');
-  });
-
-  it("shows the announced value collapsed, and the raw one as written", () => {
-    expect(shownValue("notes")).toBe('= "line one line two"');
-    showView("DOM");
-    expect(shownValue("notes")).toBe('value="line one\\nline   two"');
-  });
-
-  it("prints an editor's text once, as its value — not again as a text preview", () => {
-    const row = container.querySelector('[data-node-id="editor"]')!;
-    expect(shownValue("editor")).toBe('= "Hello world"');
-    expect(row.textContent!.split("Hello world")).toHaveLength(2);
-  });
-
-  it("prints a block-formatted editor's text once, though value and preview differ in spacing", () => {
-    const row = container.querySelector('[data-node-id="blocks"]')!;
-    expect(shownValue("blocks")).toBe('= "one two"');
-    expect(row.textContent).not.toContain("onetwo");
-  });
-
-  it("never prints a textarea's markup default — for a sensitive one it is the secret", () => {
-    act(() => {
-      chromeMock.emit(treeData(TEXTAREAS));
-    });
-    const rowText = (id: string) =>
-      container.querySelector(`[data-node-id="${id}"]`)!.textContent;
-    expect(shownValue("otp")).toBe('= "[redacted]"');
-    expect(rowText("otp")).not.toContain("123456");
-    expect(rowText("otp-cleared")).not.toContain("654321");
-    showView("DOM");
-    expect(shownValue("otp")).toBe('value="[redacted]"');
-    expect(rowText("otp")).not.toContain("123456");
-    expect(rowText("otp-cleared")).not.toContain("654321");
-  });
-
-  it("shows nothing for an empty field in either view", () => {
-    expect(shownValue("empty")).toBeNull();
-    showView("DOM");
-    expect(shownValue("empty")).toBeNull();
-  });
-
-  it("leaves values out of the copied report, which gets posted", async () => {
+  it("leaves values out, and a textarea's markup default, which for a sensitive one is the secret", async () => {
+    await showTabOrder(container, chromeMock, [...FIELDS, ...TEXTAREAS]);
     const copied: string[] = [];
     Object.defineProperty(navigator, "clipboard", {
       configurable: true,
@@ -343,23 +303,35 @@ describe("field values in the DOM producer's tree", () => {
       });
     };
     press("Copy ▾");
-    press("Everything");
+    press("Tab sequence");
 
     expect(copied).toHaveLength(1);
     expect(copied[0]).toContain('combobox "Country"');
-    for (const value of ["Spain", "es", "jane@example.com", "Loud"]) {
+    expect(copied[0]).toContain('textbox "Code"');
+    for (const value of [
+      "Spain",
+      "es",
+      "jane@example.com",
+      "Loud",
+      "80",
+      "line one line two",
+      "Hello world",
+      "one two",
+    ]) {
       expect(copied[0]).not.toContain(`"${value}"`);
     }
+    expect(copied[0]).not.toContain("123456");
+    expect(copied[0]).not.toContain("654321");
   });
 });
 
 /**
- * The edit box a DOM tree row opens, through the panel's own opener: what the
+ * The edit box a TAB row opens, through the panel's own opener: what the
  * content script's `computeFieldState` replies for the row's field decides
  * it. A withheld field's box must hide what is typed, empty or not, and an
  * untouched Enter must not type "" over the value the box couldn't show.
  */
-describe("the DOM producer's edit box", () => {
+describe("the edit box a TAB row opens", () => {
   /** What `computeFieldState` replies for each row's field. */
   const STATES: Record<string, FieldState> = {
     // Empty, as on a sign-in page's "Enter your password" step.
@@ -432,41 +404,42 @@ describe("the DOM producer's edit box", () => {
   let container: HTMLDivElement;
   let chromeMock: ChromeMock;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     stubMatchMedia();
+    Element.prototype.scrollIntoView = () => {};
     chromeMock = installChromeMock({
       respond: (m) =>
         m.type === "GET_FIELD_STATE" ? STATES[m.payload.nodeId] : undefined,
     });
     container = document.createElement("div");
     document.body.appendChild(container);
-    act(() => {
-      render(h(App, {}), container);
-    });
-    act(() => {
-      chromeMock.emit({
-        type: "ACTIVE_TAB_CHANGED",
-        tabId: TAB_ID,
-      } as unknown as ContentToPanel);
-    });
-    act(() => {
-      chromeMock.emit(treeData(ROWS));
-    });
+    await showTabOrder(container, chromeMock, ROWS);
   });
 
   afterEach(() => {
     render(null, container);
     container.remove();
+    Element.prototype.scrollIntoView = scrollIntoView;
   });
 
-  /** Open a row's edit box from its Type button. */
+  /** Open a row's edit box: select its stop, then Activate. */
   function openBox(nodeId: string): HTMLInputElement {
-    const button = container.querySelector<HTMLButtonElement>(
-      `[data-node-id="${nodeId}"] button.sn-action`,
-    );
-    if (!button) throw new Error(`no Type button on ${nodeId}`);
+    const name = ROWS.find((r) => r.id === nodeId)!.name;
+    const stop = [
+      ...container.querySelectorAll<HTMLElement>(
+        '[aria-label="Tab sequence"] [role="option"]',
+      ),
+    ].find((o) => o.querySelector(".sn-tab-name")?.textContent === name);
+    if (!stop) throw new Error(`no stop for ${nodeId}`);
+    act(() => stop.click());
+    const activate = [
+      ...container.querySelectorAll<HTMLButtonElement>(".sn-list-action-btn"),
+    ].find((b) => b.textContent?.trim() === "Activate");
+    if (!activate || activate.disabled) {
+      throw new Error(`no Activate for ${nodeId}`);
+    }
     act(() => {
-      button.click();
+      activate.click();
     });
     const box = container.querySelector<HTMLInputElement>(
       ".sn-input-panel-field",
@@ -552,11 +525,5 @@ describe("the DOM producer's edit box", () => {
 describe("value labels", () => {
   it("JSON-escapes, as the serializers print a value", () => {
     expect(announcedValueLabel('say "hi"')).toBe('= "say \\"hi\\""');
-    expect(rawValueLabel("a\nb")).toBe('value="a\\nb"');
-  });
-
-  it("cuts a long raw value at 240 characters with …", () => {
-    const label = rawValueLabel("z".repeat(1000));
-    expect(label).toBe(`value="${"z".repeat(239)}…"`);
   });
 });

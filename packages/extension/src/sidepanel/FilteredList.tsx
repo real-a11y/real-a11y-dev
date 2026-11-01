@@ -1,9 +1,4 @@
-import type {
-  ActionType,
-  SemanticNode,
-  DomSemanticNode,
-  RoleFilter,
-} from "@real-a11y-dev/core";
+import type { ActionType, RoleFilter } from "@real-a11y-dev/core";
 import { ROLE_FILTER_GROUPS, getPrimaryAction } from "@real-a11y-dev/core";
 import {
   createTypeAheadBuffer,
@@ -12,27 +7,16 @@ import {
   resolveStepperKeyAction,
 } from "@real-a11y-dev/semantic-navigator-ui";
 import type { MutableRef } from "preact/hooks";
-import {
-  useMemo,
-  useState,
-  useRef,
-  useCallback,
-  useEffect,
-} from "preact/hooks";
+import { useState, useRef, useCallback, useEffect } from "preact/hooks";
 
-import { handleListScopeKey, isInScope } from "./scope.js";
+import { handleListScopeKey } from "./scope.js";
 
 // Filters whose items have meaningful activate actions
 const INTERACTIVE_FILTERS: Set<string> = new Set(["link", "button", "form"]);
 
 /**
- * One row of the role-filtered list, in a shape either producer can fill.
- *
- * The list used to read `DomSemanticNode` facets directly, so the native
- * producer's tree view couldn't use it and kept filtering its tree in place
- * instead. The two modes then showed different UIs for the same filter.
- * Each producer now maps its own nodes onto this shape (`FilteredList` below
- * for DOM, `NativeTreeView` for native), and `FilteredListView` renders it.
+ * One row of the role-filtered list. `NativeTreeView` maps its nodes onto
+ * this shape, and `FilteredListView` renders it.
  */
 export interface FilteredListItem {
   id: string;
@@ -90,6 +74,9 @@ interface FilteredListViewProps {
   pickArmed?: boolean;
   /** Receives the listbox element, for a caller that hands it focus. */
   listRef?: MutableRef<HTMLElement | null>;
+  /** "Show full names" (Settings): a long name shows whole, and the list
+   *  scrolls sideways, as the tree does (`lists.css`). */
+  showFullNames?: boolean;
 }
 
 export function FilteredListView({
@@ -105,6 +92,7 @@ export function FilteredListView({
   onExitScope,
   pickArmed = false,
   listRef: outerListRef,
+  showFullNames = false,
 }: FilteredListViewProps) {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const listRef = useRef<HTMLDivElement | null>(null);
@@ -265,7 +253,7 @@ export function FilteredListView({
     <div class="sn-filtered-list-container">
       <div
         ref={setListRef}
-        class="sn-filtered-list"
+        class={`sn-filtered-list${showFullNames ? " sn-filtered-list--full-names" : ""}`}
         role="listbox"
         aria-label={`${ROLE_FILTER_GROUPS[roleFilter] ? roleFilter : ""} elements`}
         tabIndex={0}
@@ -314,7 +302,11 @@ export function FilteredListView({
               {isHeading && level && (
                 <span class="sn-level-badge">H{level}</span>
               )}
-              <span class="sn-filtered-name">{item.label}</span>
+              {/* With its whole text as a tooltip, for when it ends in an
+                  ellipsis. */}
+              <span class="sn-filtered-name" title={item.label}>
+                {item.label}
+              </span>
               {item.states.length > 0 && (
                 <span class="sn-filtered-states">{item.states.join(", ")}</span>
               )}
@@ -354,81 +346,5 @@ export function FilteredListView({
         )}
       </div>
     </div>
-  );
-}
-
-interface FilteredListProps {
-  nodes: Map<string, SemanticNode>;
-  /** The scoped subtree's root, if the panel is scoped: only matches inside
-   *  it are listed, the same subtree the tree shows. */
-  scopeRootId?: string | null;
-  roleFilter: Exclude<RoleFilter, null>;
-  query: string;
-  onHighlight: (nodeId: string) => void;
-  /** Optional action lets stepper keys dispatch increment/decrement. */
-  onActivate: (nodeId: string, action?: ActionType) => void;
-  onGoToTree: (nodeId: string) => void;
-  /** Focus the panel search input when `/` is pressed. */
-  onFocusSearch?: () => void;
-  onExitScope?: () => void;
-  listRef?: MutableRef<HTMLElement | null>;
-}
-
-/** The DOM producer's role-filtered list: maps `nodes` onto `FilteredListView`. */
-export function FilteredList({
-  nodes,
-  scopeRootId = null,
-  roleFilter,
-  query,
-  ...rest
-}: FilteredListProps) {
-  const scoped = scopeRootId !== null && nodes.has(scopeRootId);
-  // Get direct matches in document order
-  const items = useMemo(() => {
-    const roles = ROLE_FILTER_GROUPS[roleFilter];
-    if (!roles) return [];
-
-    // The DOM producer's tree always carries every facet.
-    const result: FilteredListItem[] = [];
-    const lowerQuery = query.toLowerCase();
-
-    for (const node of nodes.values() as IterableIterator<DomSemanticNode>) {
-      if (!roles.includes(node.a11y.role)) continue;
-      if (
-        scoped &&
-        !isInScope(node.id, scopeRootId!, (id) => nodes.get(id)?.parentId)
-      ) {
-        continue;
-      }
-      // Apply text search within results
-      if (lowerQuery) {
-        const name = (node.a11y.name || "").toLowerCase();
-        const text = (node.dom.textContent || "").toLowerCase();
-        if (!name.includes(lowerQuery) && !text.includes(lowerQuery)) continue;
-      }
-      const level = parseInt(node.a11y.properties.level ?? "", 10);
-      result.push({
-        id: node.id,
-        label:
-          node.a11y.name ||
-          node.dom.textContent?.trim() ||
-          `(${node.dom.tagName})`,
-        level: Number.isNaN(level) ? undefined : level,
-        states: describeStates(node.a11y.states),
-        actions: node.interaction.actions,
-      });
-    }
-
-    return result;
-  }, [nodes, roleFilter, query, scoped, scopeRootId]);
-
-  return (
-    <FilteredListView
-      items={items}
-      roleFilter={roleFilter}
-      query={query}
-      scopeRootId={scoped ? scopeRootId : null}
-      {...rest}
-    />
   );
 }

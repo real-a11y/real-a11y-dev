@@ -58,10 +58,6 @@ const BUILD_DIRS = {
 export type ExtensionBuild = keyof typeof BUILD_DIRS;
 const FIXTURE_DIR = resolve(HERE, "fixtures");
 
-/** The choice of tree in the panel's Settings: Chrome's own (the native
- *  tree), or the panel's in-page reading with its DOM / A11Y / TAB views. */
-export type TreeChoice = "Chrome's tree" | "In-page tree";
-
 /** Mirrors the panel's own `NativeAction` union (`native-core.ts`). Declared
  *  rather than imported: the e2e suite talks to the extension over the message
  *  channel, exactly as the panel does, and should not compile against its
@@ -70,12 +66,13 @@ export type NativeAction =
   "click" | "type" | "focus" | "increment" | "decrement" | "select";
 
 /**
- * One node of a DOM-producer tree, as `TREE_DATA` puts it on the wire.
+ * One node of the page's own walk, as `TREE_DATA` puts it on the wire: the
+ * tree the TAB view lists the tab stops of.
  *
- * Only the fields the DOM-path tests actually read. Declared rather than
- * imported from `core` for the same reason `NativeNode` is: these tests talk
- * to the extension over its message channel, and compiling against its
- * internals would hide a drift that should show up as a failing assertion.
+ * Only the fields the tests actually read. Declared rather than imported from
+ * `core` for the same reason `NativeNode` is: these tests talk to the
+ * extension over its message channel, and compiling against its internals
+ * would hide a drift that should show up as a failing assertion.
  */
 export interface DomNode {
   id: string;
@@ -261,14 +258,9 @@ async function launchDogfoodExtension(
   await panel.goto(
     `chrome-extension://${extensionId}/src/sidepanel/index.html`,
   );
-  // Native mode is on out of the box: the user-facing runtime setting
-  // (`settings.nativeModeEnabled` in `chrome.storage.local`,
-  // `packages/extension/src/native/setting.ts`) is off only once the user
-  // turns it off in the side panel's Settings, and `attach()` enforces it
-  // inside its storage transaction. Every worker starts as a user who never
-  // touched Settings; a test that needs it off writes `false` itself. The
-  // one-time note about Chrome's debugging bar is marked as acknowledged, so
-  // it shows only in the suite about it, which clears the mark.
+  // The one-time note about Chrome's debugging bar is marked as
+  // acknowledged, so it shows only in the suite about it
+  // (`store-build.test.ts`), which clears the mark.
   await panel.evaluate(() =>
     chrome.storage.local.set({ "settings.nativeNoticeSeen": true }),
   );
@@ -520,16 +512,14 @@ export class NativeHarness {
    * bare fixture name would hand back whichever tab happened to be first.
    */
   /**
-   * Open a fixture, bring it forward, reload the panel onto it and show the
-   * native tree: choose Chrome's tree in Settings (offered only once the DOM
-   * producer has connected) and wait for the auto-load's first rows. Returns
-   * the page.
+   * Open a fixture, bring it forward, reload the panel onto it and wait for
+   * Chrome's tree: the panel reads the first page that connects by itself.
+   * Returns the page.
    */
   async showNative(fixture: string): Promise<Page> {
     const { page } = await this.open(fixture);
     await page.bringToFront();
     await this.panel.reload();
-    await this.chooseTree("Chrome's tree");
     await expect
       .poll(() => this.panel.locator(".sn-node").count(), { timeout: 20_000 })
       .toBeGreaterThan(0);
@@ -538,18 +528,15 @@ export class NativeHarness {
 
   /**
    * Open a fixture, bring it forward, reload the panel onto it and show the
-   * in-page tree: choose it in Settings and wait for its first rows. Its
-   * frames then send the panel their whole trees, those that load later
-   * too, where they send only their skeletons while Chrome's tree shows.
+   * TAB view ({@link tabView}). Its frames then send the panel their whole
+   * trees, those that load later too, where they send only their skeletons
+   * while the A11Y view shows.
    */
-  async openInPage(fixture: string): Promise<FixtureTab> {
+  async showTabOrder(fixture: string): Promise<FixtureTab> {
     const tab = await this.open(fixture);
     await tab.page.bringToFront();
     await this.panel.reload();
-    await this.chooseTree("In-page tree");
-    await expect
-      .poll(() => this.panel.locator(".sn-node").count(), { timeout: 20_000 })
-      .toBeGreaterThan(0);
+    await this.tabView();
     return tab;
   }
 
@@ -560,34 +547,32 @@ export class NativeHarness {
     });
   }
 
-  /** The in-page tree's DOM / A11Y / TAB views, in the toolbar while that
-   *  tree shows. */
-  viewToggle(): Locator {
-    return this.panel.getByRole("group", { name: "Tree view mode" });
+  /** Chrome's tree's A11Y or TAB view button. */
+  viewButton(name: "A11Y" | "TAB"): Locator {
+    return this.panel
+      .getByRole("group", { name: "Native tree view" })
+      .getByRole("button", { name, exact: true });
   }
 
-  /** A button of the choice of tree in Settings, while Settings is open. */
-  treeChoice(name: TreeChoice): Locator {
-    return this.panel.getByRole("button", { name, exact: true });
+  /** The TAB view's list of the page's tab stops. */
+  tabStops(): Locator {
+    return this.panel.getByRole("listbox", { name: "Tab sequence" });
   }
 
   /**
-   * Show Chrome's tree or the in-page tree, as the user does: open
-   * Settings ▾, choose (offered once a page has connected, while native
-   * mode is on), and close Settings again with its own button, which keeps
-   * focus on that button.
+   * Switch Chrome's tree to its TAB view, which lists the page's tab stops
+   * from its own walk, and wait for its first stops.
    */
-  async chooseTree(name: TreeChoice): Promise<void> {
-    const settings = this.panel.getByRole("button", { name: "Settings ▾" });
-    const choice = this.treeChoice(name);
-    if ((await settings.getAttribute("aria-expanded")) !== "true") {
-      await settings.click();
-    }
-    await expect(choice).toBeVisible({ timeout: 20_000 });
-    await choice.click();
-    await expect(choice).toHaveAttribute("aria-pressed", "true");
-    await settings.click();
-    await expect(choice).toHaveCount(0);
+  async tabView(): Promise<void> {
+    const tab = this.viewButton("TAB");
+    await expect(tab).toBeVisible({ timeout: 20_000 });
+    await tab.click();
+    await expect(tab).toHaveAttribute("aria-pressed", "true");
+    await expect
+      .poll(() => this.tabStops().getByRole("option").count(), {
+        timeout: 20_000,
+      })
+      .toBeGreaterThan(0);
   }
 
   async open(fixture: string): Promise<FixtureTab> {
@@ -683,29 +668,28 @@ export class NativeHarness {
   /** What the panel would ask before offering controls at all. */
   async capability(
     tabId: number,
-  ): Promise<{ native: boolean; reason?: string; domFallback: boolean }> {
+  ): Promise<{ native: boolean; reason?: string }> {
     return await this.send({ type: "NATIVE_CAPABILITY", tabId });
   }
 
-  // ---- DOM producer ------------------------------------------------------
+  // ---- The page's own walk ----------------------------------------------
   //
-  // Everything above drives the dev-only NATIVE path. The methods below drive
-  // the one the STORE build actually ships: an in-page content script that
-  // walks the DOM and dispatches through it. What they buy over a jsdom suite
-  // is the part jsdom can only approximate — real capture-phase event
-  // handling, in real Chromium, across real frames.
+  // Everything above drives Chrome's tree, read over `chrome.debugger`. The
+  // methods below drive the content script's own walk of the page, which the
+  // TAB view lists the tab stops of, and which answers a TAB row's actions.
+  // What they buy over a jsdom suite is the part jsdom can only approximate:
+  // real event handling, in real Chromium, across real frames.
   //
   // They address the frames FROM THE SERVICE WORKER, which is where the
   // background addresses them from, rather than by sending panel messages.
   // That is forced, not stylistic: this harness loads the panel as an ordinary
   // tab so Playwright can drive it, and the background's router splits on
   // `sender.tab?.id` (a real side panel has no tab). A panel-as-tab's messages
-  // are therefore read as if a content script sent them, and every DOM-path
+  // are therefore read as if a content script sent them, and every such
   // command would be silently misrouted. So these mirror what the background
-  // does with each command — fan SET_PICK_MODE out to every frame, address
-  // DISPATCH_ACTION to the frame named in the node id — and leave the
-  // background's own routing to `background.test.ts` and `routing.test.ts`,
-  // which cover it directly.
+  // does with each command — address GET_FIELD_STATE to the frame named in
+  // the node id — and leave the background's own routing to
+  // `background.test.ts` and `routing.test.ts`, which cover it directly.
 
   /**
    * Ask every frame in the tab to extract, and return the merged tree the
@@ -721,7 +705,7 @@ export class NativeHarness {
     const before = await this.panelMessageCount();
     await this.toFrames(tabId, {
       type: "REQUEST_TREE",
-      payload: { viewMode: "a11y" },
+      payload: { framesOnly: false },
     });
     const deadline = Date.now() + 10_000;
     for (;;) {
@@ -745,38 +729,10 @@ export class NativeHarness {
     }
   }
 
-  /** Arm or disarm the element picker in EVERY frame, as the background's
-   *  `broadcastToAllFrames` does for SET_PICK_MODE. Fanning out is the point:
-   *  pick mode is per frame, and the panel's toggle is per tab. */
-  async setPickMode(tabId: number, enabled: boolean): Promise<void> {
-    await this.toFrames(tabId, {
-      type: "SET_PICK_MODE",
-      payload: { enabled },
-    });
-  }
-
-  /**
-   * Dispatch a DOM-producer action, as a click on a tree row's ⏎ does.
-   *
-   * `nodeId` is the merged, frame-prefixed id. Splitting it and addressing
-   * that one frame with the frame-local id is what the background does for
-   * DISPATCH_ACTION; sending the prefixed id to frame 0 would just miss.
-   */
-  async domAct(
-    tabId: number,
-    nodeId: string,
-    action: string,
-  ): Promise<{ success?: boolean; error?: string }> {
-    const { frameId, localId } = splitNodeId(nodeId);
-    return await this.toFrame(tabId, frameId, {
-      type: "DISPATCH_ACTION",
-      payload: { nodeId: localId, action },
-    });
-  }
-
   /**
    * What the inline input panel opens with for a node — `GET_FIELD_STATE`,
-   * addressed to the node's frame the way {@link domAct} addresses an action.
+   * addressed to the node's frame as the background does: `nodeId` is the
+   * merged, frame-prefixed id, and the frame knows the node by its own.
    */
   async domFieldState(
     tabId: number,
@@ -832,7 +788,7 @@ export class NativeHarness {
 
   /**
    * Record every background → panel push, so a test can assert on what did
-   * NOT arrive (a `NODE_PICKED` nobody asked for) as well as what did.
+   * NOT arrive as well as what did.
    *
    * Installed once per panel page and idempotent: the panel outlives each
    * test, and a second listener would double every message.
@@ -1013,12 +969,12 @@ export function nodes(all: NativeNode[], role: string): NativeNode[] {
   return all.filter((n) => n.role === role);
 }
 
-/** The in-page tree as the panel was sent it, by node id. */
+/** The page's own walk as the panel was sent it, by node id. */
 export type DomTree = Map<string, DomNode>;
 
-/** The title of the <iframe> the node named `name` sits under in the in-page
- *  tree, or null when it is under none: in no frame, or in a frame the tree
- *  couldn't place. Undefined when no node has that name. */
+/** The title of the <iframe> the node named `name` sits under in the page's
+ *  own walk, or null when it is under none: in no frame, or in a frame the
+ *  walk couldn't place. Undefined when no node has that name. */
 export function frameOf(
   tree: DomTree,
   name: string,

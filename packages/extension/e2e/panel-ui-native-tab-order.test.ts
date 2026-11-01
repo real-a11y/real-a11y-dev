@@ -1,9 +1,7 @@
 /**
  * The TAB view in Chrome's tree (`NativeTreeView.tsx`). Chrome's tree carries
  * no tab order — `tabindex` never reaches a native node — so the view lists
- * the in-page walk's tab stops, as the CLI's `tabs` does. Until it came,
- * seeing a page's tab order with native mode on meant switching to the
- * in-page tree in Settings.
+ * the page's own walk's tab stops, as the CLI's `tabs` does.
  *
  * `tab-order.html` puts two positive tabindexes after the elements they come
  * before, so a list in document order fails here.
@@ -17,8 +15,8 @@ type PanelPage = import("@playwright/test").Page;
  * Route the panel's `HIGHLIGHT_NODE` to the page, as the background does for
  * a real side panel: to the frame its node id names, with the frame-local
  * id. This harness loads the panel as a tab, so the background reads its
- * messages as a content script's and never forwards them (see the
- * DOM-producer note in `harness.ts`). Install it after the panel's last
+ * messages as a content script's and never forwards them (see the note on
+ * the page's own walk in `harness.ts`). Install it after the panel's last
  * reload, which drops it.
  */
 async function routeHighlightToPage(panel: PanelPage): Promise<void> {
@@ -89,7 +87,7 @@ test("TAB lists the page's tab stops in the order Tab visits them, with no nativ
   }
   expect(visited).toEqual(TAB_ORDER);
 
-  // The list is the in-page walk's: showing it read nothing natively, so
+  // The list is the page's own walk's: showing it read nothing natively, so
   // Chrome's debugging bar never came up for it.
   await nav.panel.waitForTimeout(1_500);
   expect(await nav.nativeReads()).toHaveLength(reads);
@@ -100,7 +98,7 @@ test("TAB lists the page's tab stops in the order Tab visits them, with no nativ
   await expect(list).toHaveCount(0);
 });
 
-test("a stop moves the page's focus through the content script, as in the in-page tree", async ({
+test("a stop moves the page's focus through the content script", async ({
   nav,
 }) => {
   const page = await nav.showNative("tab-order.html");
@@ -111,7 +109,7 @@ test("a stop moves the page's focus through the content script, as in the in-pag
   const list = nav.panel.getByRole("listbox", { name: "Tab sequence" });
 
   // Selecting a stop moves the page's focus to its element, and so does
-  // Move to, through the in-page walk's own element ids.
+  // Move to, through the walk's own element ids.
   await list.getByRole("option", { name: /Two/ }).click();
   await expect
     .poll(() => page.evaluate(() => document.activeElement?.textContent))

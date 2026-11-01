@@ -29,9 +29,10 @@ updated yet, this row is **Blocked**, not Pass — a local build is a different 
      ordinary page: with nothing asked first, it reads Chrome's own tree, and
      Chrome's bar appears while it reads, naming the extension the way the listing
      does (“Semantic Navigator” started debugging this browser). A note below the
-     toolbar explains the bar: press **Got it**. Steps 4–9 run on the native tree;
-     **Show** in **Settings ▾** switches to the in-page tree, and step 7 holds on
-     both. **R42** is the full version of this step
+     toolbar explains the bar: press **Got it**. Steps 4–9 run on Chrome's tree,
+     and step 7 holds on its **TAB** view too (extension ≤ 0.1.17: **Show** in
+     **Settings ▾** switches to the in-page tree, and step 7 holds on both).
+     **R42** is the full version of this step
 4. **A docs site** — long content, many headings: open the panel, browse the tree, use search
 5. **An SPA** — client-side routes: navigate, confirm the panel follows; use Back
 6. **A real form** — click, type, toggle; confirm the page's own handlers ran
@@ -47,7 +48,7 @@ updated yet, this row is **Blocked**, not Pass — a local build is a different 
 - The **store build** installs and works — minification and the store's packaging step are both
   in play here and neither is exercised locally
 - The version matches what was submitted
-- **3b** — the panel reads the native tree with nothing asked first, Chrome's bar
+- **3b** — the panel reads Chrome's tree with nothing asked first, Chrome's bar
   names the extension, and the note explains the bar
 - Panel works across all three site shapes; SPA routes and Back are followed
 - Real handlers fire on the form

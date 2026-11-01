@@ -21,10 +21,12 @@ generic
 button "Copy Code"
 generic
 link "See the full comparison →"
-link "Chrome extension"
+link "inspector"
 link "React panel"
 link "Storybook addon"
+link "Chrome extension"
 link "CLI"
+link "Playwright adapter"
 link "real-a11y CLI"
 link "Snapshots reference"
 link "boxedTreeSnapshot() matcher"

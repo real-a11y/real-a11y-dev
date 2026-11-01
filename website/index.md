@@ -22,7 +22,7 @@ features:
     details: "The full semantic tree as plain data — roles, accessible names, focus state, modal context, live regions. Every package is a different lens on the same tree."
   - icon: 🧩
     title: Chrome extension
-    details: "Open the side panel on any website and explore its DOM, A11y, and TAB views live. Highlights elements on the page as you navigate the tree. No code, no setup."
+    details: "Open the side panel on any website and explore Chrome's own accessibility tree and its tab order live. Highlights elements on the page as you navigate the tree. No code, no setup."
     link: /guide/chrome-extension
     linkText: Install the extension
   - icon: 🧪

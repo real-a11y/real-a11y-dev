@@ -38,7 +38,7 @@ export function tabStops(
   rootId: string,
   query: string,
 ): DomSemanticNode[] {
-  // The panel only renders DOM-produced trees, so every node has all facets.
+  // The page's own walk is DOM-produced, so every node has all facets.
   const seq = getTabSequence({ nodes, rootId }) as DomSemanticNode[];
   if (!query.trim()) return seq;
   const lq = query.toLowerCase();
@@ -65,13 +65,13 @@ interface TabSequenceViewProps {
   onActivate: (nodeId: string, action?: ActionType) => void;
   /** Focus the panel search input when `/` is pressed. */
   onFocusSearch?: () => void;
-  /** `rootId` is a scope root: Escape calls `onExitScope`, as in the tree. */
-  scoped?: boolean;
-  onExitScope?: () => void;
   /** Receives the listbox element, for a caller that hands it focus. */
   listRef?: MutableRef<HTMLElement | null>;
   /** `nodes` is no tree yet: the page is still to send it. */
   pending?: boolean;
+  /** "Show full names" (Settings): a long name shows whole, and the list
+   *  scrolls sideways, as the tree does (`lists.css`). */
+  showFullNames?: boolean;
 }
 
 export function TabSequenceView({
@@ -81,10 +81,9 @@ export function TabSequenceView({
   onHighlight,
   onActivate,
   onFocusSearch,
-  scoped = false,
-  onExitScope,
   listRef: outerListRef,
   pending = false,
+  showFullNames = false,
 }: TabSequenceViewProps) {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const listRef = useRef<HTMLDivElement | null>(null);
@@ -124,11 +123,10 @@ export function TabSequenceView({
         if (items[index]) onHighlight(items[index].id);
       };
 
-      // A DOM pick is cancelled on the page, never by the panel's Escape.
-      if (handleListScopeKey(e, { scoped, onExitScope })) {
-        typeAhead.current.clear();
-        return;
-      }
+      // Ctrl/Cmd+Enter scopes in the tree. The tab order covers the whole
+      // page, so here it does nothing, rather than fall through to Enter and
+      // act on the page.
+      if (handleListScopeKey(e, { scoped: false })) return;
 
       switch (e.key) {
         case "ArrowDown": {
@@ -213,8 +211,6 @@ export function TabSequenceView({
       onHighlight,
       onActivate,
       onFocusSearch,
-      scoped,
-      onExitScope,
     ],
   );
 
@@ -222,7 +218,7 @@ export function TabSequenceView({
     <div class="sn-filtered-list-container">
       <div
         ref={setListRef}
-        class="sn-filtered-list"
+        class={`sn-filtered-list${showFullNames ? " sn-filtered-list--full-names" : ""}`}
         role="listbox"
         aria-label="Tab sequence"
         tabIndex={0}
@@ -265,8 +261,10 @@ export function TabSequenceView({
             >
               <span class="sn-tab-number">{index + 1}</span>
               <span class="sn-tab-role">{node.a11y.role}</span>
-              <span class="sn-filtered-name sn-tab-name">
-                {label.length > 60 ? label.slice(0, 57) + "…" : label}
+              {/* With its whole text as a tooltip, for when it ends in an
+                  ellipsis. */}
+              <span class="sn-filtered-name sn-tab-name" title={label}>
+                {label}
               </span>
               {isPositiveTabindex && (
                 <span

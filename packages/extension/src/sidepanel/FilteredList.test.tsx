@@ -1,45 +1,28 @@
-import type { SemanticNode } from "@real-a11y-dev/core";
 import { render } from "preact";
 import { act } from "preact/test-utils";
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 
-import { FilteredList } from "./FilteredList.js";
+import { FilteredListView, type FilteredListItem } from "./FilteredList.js";
 
 /**
  * The panel's role-filtered list view — the heading outline, the link list, the
- * form-control list. Written in JSX rather than `h()` calls because the props
- * are the interesting part of each case and JSX keeps them readable.
+ * form-control list. Chrome's tree maps its matches onto `FilteredListItem`s
+ * (`NativeTreeView.tsx`) and the list renders them. Written in JSX rather than
+ * `h()` calls because the props are the interesting part of each case and JSX
+ * keeps them readable.
  */
 
-function listNode(
-  id: string,
-  role: string,
-  name: string,
-  properties: Record<string, string> = {},
-): [string, SemanticNode] {
-  return [
-    id,
-    {
-      id,
-      parentId: "root",
-      childIds: [],
-      depth: 1,
-      a11y: { role, name, description: "", states: {}, properties },
-      dom: { tagName: "div", attributes: {}, textContent: name },
-      interaction: { actions: [], isEditable: false, focusable: true },
-      ui: { expanded: true, selected: false, matchesFilter: true },
-    } as unknown as SemanticNode,
-  ];
+function item(id: string, label: string, level?: number): FilteredListItem {
+  return { id, label, level, states: [], actions: [] };
 }
 
-const HEADINGS = new Map<string, SemanticNode>([
-  listNode("h1", "heading", "Overview", { level: "1" }),
-  listNode("h2", "heading", "Install", { level: "2" }),
-  listNode("h3", "heading", "Troubleshooting", { level: "3" }),
-  listNode("p1", "paragraph", "Not a heading"),
-]);
+const HEADINGS: FilteredListItem[] = [
+  item("h1", "Overview", 1),
+  item("h2", "Install", 2),
+  item("h3", "Troubleshooting", 3),
+];
 
-describe("FilteredList", () => {
+describe("FilteredListView", () => {
   let container: HTMLDivElement;
   let originalScrollIntoView: typeof Element.prototype.scrollIntoView;
 
@@ -71,82 +54,39 @@ describe("FilteredList", () => {
 
   function noop() {}
 
-  it("keeps the Move to button for the DOM producer, which can highlight", () => {
+  function show(
+    props: Partial<Parameters<typeof FilteredListView>[0]> = {},
+  ): void {
     act(() => {
       render(
-        <FilteredList
-          nodes={HEADINGS}
+        <FilteredListView
+          items={HEADINGS}
           roleFilter="heading"
           query=""
           onHighlight={noop}
           onActivate={noop}
           onGoToTree={noop}
+          {...props}
         />,
         container,
       );
     });
-    const buttons = [...container.querySelectorAll(".sn-list-action-btn")].map(
-      (b) => b.textContent,
-    );
-    expect(buttons).toEqual(["Activate", "Move to"]);
-  });
+  }
 
-  it("lists only matches inside the scope when scoped", () => {
-    // `h3` sits under a `section` the panel is scoped to; `h1` and `h2` are
-    // outside it. The list covers the same subtree the scoped tree shows.
-    const scoped = new Map<string, SemanticNode>([
-      ...HEADINGS,
-      listNode("section", "region", "Help"),
-    ]);
-    (scoped.get("h3") as { parentId: string }).parentId = "section";
-    act(() => {
-      render(
-        <FilteredList
-          nodes={scoped}
-          scopeRootId="section"
-          roleFilter="heading"
-          query=""
-          onHighlight={noop}
-          onActivate={noop}
-          onGoToTree={noop}
-        />,
-        container,
+  it("offers Move to only where the page can be highlighted", () => {
+    const buttons = () =>
+      [...container.querySelectorAll(".sn-list-action-btn")].map(
+        (b) => b.textContent,
       );
-    });
-    expect(options().map((o) => o.textContent)).toEqual(["H3Troubleshooting"]);
+    show();
+    expect(buttons()).toEqual(["Activate", "Move to"]);
+    show({ onHighlight: undefined });
+    expect(buttons()).toEqual(["Activate"]);
   });
 
   describe("a scope change with the list showing", () => {
-    // `h2` and `h3` sit under `section`; `h1` is outside it.
-    function sectioned(): Map<string, SemanticNode> {
-      const nodes = new Map<string, SemanticNode>([
-        ...HEADINGS,
-        listNode("section", "region", "Help"),
-      ]);
-      (nodes.get("h2") as { parentId: string }).parentId = "section";
-      (nodes.get("h3") as { parentId: string }).parentId = "section";
-      return nodes;
-    }
-
-    function show(
-      nodes: Map<string, SemanticNode>,
-      scopeRootId: string | null,
-    ) {
-      act(() => {
-        render(
-          <FilteredList
-            nodes={nodes}
-            scopeRootId={scopeRootId}
-            roleFilter="heading"
-            query=""
-            onHighlight={noop}
-            onActivate={noop}
-            onGoToTree={noop}
-          />,
-          container,
-        );
-      });
-    }
+    // `h2` and `h3` sit under the scope; `h1` is outside it.
+    const inScope = HEADINGS.slice(1);
 
     function selectedLabel(): string | null | undefined {
       return container.querySelector('[role="option"][aria-selected="true"]')
@@ -157,8 +97,7 @@ describe("FilteredList", () => {
       // Regression (Devin Review): the list kept its index, so leaving the
       // scope moved the selection from Troubleshooting to Install, and
       // Enter would have acted on a row nobody picked.
-      const nodes = sectioned();
-      show(nodes, "section");
+      show({ items: inScope, scopeRootId: "section" });
       act(() => {
         listbox().dispatchEvent(
           new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }),
@@ -166,73 +105,27 @@ describe("FilteredList", () => {
       });
       expect(selectedLabel()).toBe("H3Troubleshooting");
 
-      show(nodes, null);
+      show({ items: HEADINGS, scopeRootId: null });
       expect(options()).toHaveLength(3);
       expect(selectedLabel()).toBe("H3Troubleshooting");
     });
 
     it("falls back to the first item when the selected one leaves the scope", () => {
-      const nodes = sectioned();
-      show(nodes, null); // Overview is selected
-      show(nodes, "section");
+      show({ scopeRootId: null }); // Overview is selected
+      show({ items: inScope, scopeRootId: "section" });
       expect(selectedLabel()).toBe("H2Install");
     });
   });
 
   it("says a scoped list is empty in this scope", () => {
-    act(() => {
-      render(
-        <FilteredList
-          nodes={HEADINGS}
-          scopeRootId="p1"
-          roleFilter="heading"
-          query=""
-          onHighlight={noop}
-          onActivate={noop}
-          onGoToTree={noop}
-        />,
-        container,
-      );
-    });
+    show({ items: [], scopeRootId: "p1" });
     expect(container.querySelector(".sn-empty")?.textContent).toBe(
       "No headings found in this scope",
     );
   });
 
-  it("ignores a scope id the tree doesn't have", () => {
-    act(() => {
-      render(
-        <FilteredList
-          nodes={HEADINGS}
-          scopeRootId="gone"
-          roleFilter="heading"
-          query=""
-          onHighlight={noop}
-          onActivate={noop}
-          onGoToTree={noop}
-        />,
-        container,
-      );
-    });
-    expect(options()).toHaveLength(3);
-  });
-
-  it("lists only the nodes in the filtered role group, with heading levels", () => {
-    act(() => {
-      render(
-        <FilteredList
-          nodes={HEADINGS}
-          roleFilter="heading"
-          query=""
-          onHighlight={noop}
-          onActivate={noop}
-          onGoToTree={noop}
-        />,
-        container,
-      );
-    });
-
-    // The paragraph is outside the `heading` role group and must not appear.
+  it("lists its items with heading levels", () => {
+    show();
     expect(options().map((el) => el.textContent)).toEqual([
       "H1Overview",
       "H2Install",
@@ -247,19 +140,7 @@ describe("FilteredList", () => {
 
   it("moves the selection with ArrowDown and reports each highlight", () => {
     const highlighted: string[] = [];
-    act(() => {
-      render(
-        <FilteredList
-          nodes={HEADINGS}
-          roleFilter="heading"
-          query=""
-          onHighlight={(id) => highlighted.push(id)}
-          onActivate={noop}
-          onGoToTree={noop}
-        />,
-        container,
-      );
-    });
+    show({ onHighlight: (id) => highlighted.push(id) });
 
     expect(options()[0]?.getAttribute("aria-selected")).toBe("true");
 
@@ -287,41 +168,26 @@ describe("FilteredList", () => {
     expect(highlighted).toEqual(["h2", "h3"]);
   });
 
-  it("narrows by query and shows the empty state when nothing matches", () => {
-    act(() => {
-      render(
-        <FilteredList
-          nodes={HEADINGS}
-          roleFilter="heading"
-          query="install"
-          onHighlight={noop}
-          onActivate={noop}
-          onGoToTree={noop}
-        />,
-        container,
-      );
-    });
-
-    // Case-insensitive, matched against the accessible name.
-    expect(options().map((el) => el.textContent)).toEqual(["H2Install"]);
-
-    act(() => {
-      render(
-        <FilteredList
-          nodes={HEADINGS}
-          roleFilter="heading"
-          query="nothing here"
-          onHighlight={noop}
-          onActivate={noop}
-          onGoToTree={noop}
-        />,
-        container,
-      );
-    });
-
+  it("says what the search left nothing of", () => {
+    show({ items: [], query: "nothing here" });
     expect(options()).toHaveLength(0);
     expect(container.textContent).toContain(
       'No headings found matching "nothing here"',
+    );
+  });
+
+  it("gives a name its whole text as a tooltip, and shows it whole with Show full names", () => {
+    const long = "A heading whose text runs on far past the width of a panel";
+    show({ items: [item("h1", long, 1)] });
+    expect(
+      container.querySelector(".sn-filtered-name")?.getAttribute("title"),
+    ).toBe(long);
+    expect(listbox().classList.contains("sn-filtered-list--full-names")).toBe(
+      false,
+    );
+    show({ items: [item("h1", long, 1)], showFullNames: true });
+    expect(listbox().classList.contains("sn-filtered-list--full-names")).toBe(
+      true,
     );
   });
 });

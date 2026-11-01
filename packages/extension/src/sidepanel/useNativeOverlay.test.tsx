@@ -20,7 +20,6 @@ describe("useNativeOverlay", () => {
   const inputs = (
     over: Partial<NativeOverlayInputs> = {},
   ): NativeOverlayInputs => ({
-    enabled: true,
     tabId: 7,
     busy: false,
     curtainOn: false,
@@ -78,7 +77,6 @@ describe("useNativeOverlay", () => {
   });
 
   it.each([
-    ["native mode is off", { enabled: false }],
     ["no tree has been read", { tabId: undefined }],
     ["the panel is busy", { busy: true }],
     ["Screen Curtain is on", { curtainOn: true }],

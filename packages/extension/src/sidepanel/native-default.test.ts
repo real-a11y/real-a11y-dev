@@ -8,34 +8,35 @@ import { App } from "./App.js";
 import type { ChromeMock } from "./panel-harness.js";
 import {
   installChromeMock,
+  nativeRead,
   stubMatchMedia,
   treeData,
 } from "./panel-harness.js";
 
 /**
- * Native as the default view, as native mode comes out of the box. A
- * default that can't read a tab falls back to DOM and must not try
- * that tab again: each retry attaches the debugger, and flashes Chrome's bar,
- * with no gesture behind it.
+ * The read the panel makes by itself, of the first page that connects. A
+ * read that can't happen on a tab says why, and the panel must not try that
+ * tab again by itself: each retry attaches the debugger, and flashes
+ * Chrome's bar, with no gesture behind it. Refresh still reads it.
  */
 
-describe("native default", () => {
+describe("the panel's own first read", () => {
   let container: HTMLDivElement;
   let chromeMock: ChromeMock;
+  /** Whether Chrome lets the debugger attach. */
+  let refused: boolean;
 
   beforeEach(() => {
+    // DevTools holds every tab, so every native read fails.
+    refused = true;
     stubMatchMedia();
     chromeMock = installChromeMock({
       respond: (message) => {
         const type = (message as { type: string }).type;
-        if (type === "NATIVE_FLAG_GET") return { enabled: true };
-        // DevTools holds every tab, so every native read fails.
         if (type === "NATIVE_READ") {
-          return {
-            ok: false,
-            error: "unavailable",
-            reason: "devtools-conflict",
-          };
+          return refused
+            ? { ok: false, error: "unavailable", reason: "devtools-conflict" }
+            : nativeRead();
         }
         return undefined;
       },
@@ -93,5 +94,78 @@ describe("native default", () => {
     // Back on the first tab: it failed there, so no new attach.
     await showTab(7);
     expect(nativeReadTabs()).toEqual([7, 8]);
+
+    // Refresh is a gesture: it reads the tab again.
+    act(() => refresh().click());
+    await flush();
+    expect(nativeReadTabs()).toEqual([7, 8, 7]);
   });
+
+  it("reads once by itself: once a read succeeds, another tab waits for Refresh", async () => {
+    refused = false;
+    act(() => {
+      render(h(App, {}), container);
+    });
+    await flush();
+
+    await showTab(7);
+    expect(nativeReadTabs()).toEqual([7]);
+    await showTab(8);
+    expect(nativeReadTabs()).toEqual([7]);
+
+    act(() => refresh().click());
+    await flush();
+    expect(nativeReadTabs()).toEqual([7, 8]);
+  });
+
+  /** Tab 8 comes forward, its page silent, and Load tree is pressed. */
+  async function loadSilentTab(): Promise<void> {
+    act(() => {
+      chromeMock.emit({
+        type: "ACTIVE_TAB_CHANGED",
+        tabId: 8,
+      } as unknown as ContentToPanel);
+    });
+    await flush();
+    expect(nativeReadTabs()).toEqual([7]);
+    act(() => button("Load tree").click());
+    await flush();
+  }
+
+  it("reads a tab switched to when Load tree is pressed: the press is the gesture", async () => {
+    refused = false;
+    act(() => {
+      render(h(App, {}), container);
+    });
+    await flush();
+    await showTab(7);
+
+    await loadSilentTab();
+    // Read at once, not left for a Refresh once the page answers.
+    expect(nativeReadTabs()).toEqual([7, 8]);
+  });
+
+  it("reads nothing through Chrome on Load tree while the TAB view shows", async () => {
+    refused = false;
+    act(() => {
+      render(h(App, {}), container);
+    });
+    await flush();
+    await showTab(7);
+    act(() => button("TAB").click());
+    await flush();
+
+    // The TAB view needs no debugger: Load tree asks the page alone.
+    await loadSilentTab();
+    expect(nativeReadTabs()).toEqual([7]);
+  });
+
+  const refresh = () =>
+    container.querySelector<HTMLButtonElement>(
+      'button[aria-label="Refresh native tree"]',
+    )!;
+  const button = (label: string) =>
+    [...container.querySelectorAll<HTMLButtonElement>("button")].find(
+      (b) => b.textContent?.trim() === label,
+    )!;
 });

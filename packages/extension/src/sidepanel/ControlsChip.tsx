@@ -6,7 +6,7 @@
  * Tab order like every row control; `keyHint` names the key that reaches it.
  */
 
-/** How long a row a jump lands on stays highlighted, in both trees. */
+/** How long a row a jump lands on stays highlighted. */
 export const JUMP_FLASH_MS = 700;
 
 /** A chip's label never runs past this many characters of the name. */

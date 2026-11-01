@@ -1,6 +1,6 @@
 ---
 title: Semantic Navigator — Chrome extension
-description: Inspect any website's DOM, accessibility tree, and tab order in a Chrome side panel. No setup, no code — open it on any URL, see what assistive tech sees.
+description: Inspect any website's accessibility tree, the one Chrome gives assistive technology, and its tab order in a Chrome side panel. No setup, no code — open it on any URL, see what assistive tech sees.
 ---
 
 # Semantic Navigator
@@ -36,17 +36,19 @@ Most accessibility problems don't look like problems — until you remove the vi
 
 The panel shows the tree screen readers read, not what NVDA, JAWS, VoiceOver or TalkBack say or how they move through a page. Use it to catch missing names, wrong roles and broken tab order early, and test with real screen readers before you ship.
 
-## Native mode
+## Chrome's tree
 
-By default the panel reads Chromium's own accessibility tree, the one Chrome gives assistive technology, over `chrome.debugger`. It sees what the in-page reading can't, such as a video player's built-in controls. Where it can't read a page, the panel shows the in-page tree instead and says why.
+The panel reads Chromium's own accessibility tree, the one Chrome gives assistive technology, over `chrome.debugger`. It sees what a reading of the page from inside it can't, such as a video player's built-in controls. Where Chrome won't let it read a page, with DevTools open on the tab, say, the panel says why.
 
-While it reads, Chrome shows a bar across every window: “Semantic Navigator” started debugging this browser. That's expected. Pressing **Cancel** on the bar stops the panel reading that tab until you press **↻**. To turn native mode off, switch off **Read pages through Chrome (recommended)** in **Settings ▾**, next to the page's title.
+While it reads, Chrome shows a bar across every window: “Semantic Navigator” started debugging this browser. That's expected. Pressing **Cancel** on the bar stops the panel reading that tab until you press **↻**.
 
-Chrome's tree is read when the panel opens, when the page navigates, and for a few seconds after you act. For any other change press **↻**, or turn on **Follow page changes** (**⟳**). It has no tab order of its own, because `tabindex` never reaches a native node, so its **TAB** view, next to **A11Y** in its toolbar, lists the in-page reading's tab stops in tab order, as [the in-page tree's TAB view](./reading-the-tab-view.md#how-tab-order-works) does: a positive `tabindex` first, then document order. Neither models shadow roots, iframes or focus traps. Showing it reads nothing through Chrome, so the bar doesn't come up for it. While Chrome's tree shows, the extension doesn't read the page itself, so TAB and the in-page tree take a moment to read it as they come up. **Settings ▾** → **Show** → **In-page tree** has the DOM view as well. The two trees never match exactly, by design: see [Two producers](./reading-the-a11y-view.md#two-producers).
+Chrome's tree is read when the panel opens, when the page navigates, and for a few seconds after you act. For any other change press **↻**, or turn on **Follow page changes** (**⟳**). It has no tab order of its own, because `tabindex` never reaches a native node, so its **TAB** view, next to **A11Y** in its toolbar, lists the tab stops of the extension's own reading of the page, in tab order, as [the TAB view](./reading-the-tab-view.md#how-tab-order-works) of the other panels does: a positive `tabindex` first, then document order. Neither models shadow roots, iframes or focus traps. Showing it reads nothing through Chrome, so the bar doesn't come up for it, and it works on a page Chrome's tree can't read. It takes a moment to read the page as it comes up. Chrome's tree and the other panels' trees never match exactly, by design: see [Two producers](./reading-the-a11y-view.md#two-producers).
+
+Up to version 0.1.17, **Settings ▾** could switch the panel to the extension's own in-page tree, with its DOM view. Chrome's tree is the only one now.
 
 ## Using the panel
 
-The extension's in-page tree is the same panel as [`@real-a11y-dev/inspector`](/packages/inspector), [`<SemanticNavigator />`](/packages/react) and the [Storybook addon](/packages/storybook-addon). Chrome's tree works the same way. For what each view shows, see [Reading the tree](/guide/reading-the-a11y-view).
+Chrome's tree works the same way as the panel of [`@real-a11y-dev/inspector`](/packages/inspector), [`<SemanticNavigator />`](/packages/react) and the [Storybook addon](/packages/storybook-addon). For what each view shows, see [Reading the tree](/guide/reading-the-a11y-view).
 
 - **Search and role filters.** The search box (`/`) keeps the rows whose role, name, tag, attributes or text match, with the rows above them. **Headings**, **Links**, **Buttons**, **Forms**, **Landmarks** and **Images** each list just those nodes.
 - **Selecting a row** outlines its element on the page, scrolls it into view and focuses it if it can take focus. Hovering a row outlines it. The [inspector](/packages/inspector#config) and [`<SemanticNavigator />`](/packages/react#props) do these only if you opt in, with `highlightOnHover`, `scrollHostOnSelect` and `focusHostOnActivate`.
@@ -60,7 +62,7 @@ Only the extension has these:
 - **Scoping.** Double-click a container row, or press `Ctrl`/`Cmd`+`Enter`, to show only that part of the page. Search, filters and **Copy** follow the scope. The breadcrumb above the tree, or `Esc`, takes you back. In the other panels, scope with the inspector's [`setRoot()`](/packages/inspector#setroot-root) or a different `root` for `<SemanticNavigator />`.
 - **The live log.** When a live region (`role="status"`, `"alert"` or `"log"`, or `aria-live`) changes, its text appears at the bottom of the panel, assertive in red and polite in blue. Use it to check that toasts, validation errors and loading messages are announced. It approximates a screen reader: it shows the region's whole text, and doesn't watch iframes.
 - **The key bar.** `Esc`, `Tab`, `Shift+Tab`, `Enter`, `Space`, `↓` and `↑` go to whatever has focus on the page, for example to open a combobox and pick an option.
-- **Copy ▾** puts the view on the clipboard as a Markdown report for a bug tracker, headed by the URL, which tree it came from and the scope. Field values are left out.
+- **Copy ▾** puts the tree on the clipboard as a Markdown report for a bug tracker, headed by the URL, which tree it came from and the scope, with the tab sequence too while the **TAB** view shows. Field values are left out.
 - **Frames.** Each iframe's tree sits under its `<iframe>` row, cross-origin frames included.
 
 ### Keyboard
@@ -80,13 +82,13 @@ Only the extension has these:
 
 ## Privacy
 
-Everything happens in your browser. The extension makes no network requests and has no account or tracking. It stores its settings and, while native mode is attached, which tab it's reading. Password, one-time-code and card fields show `[redacted]`, and **Copy** leaves field values out. The [privacy policy](/privacy) lists every permission it asks for and why.
+Everything happens in your browser. The extension makes no network requests and has no account or tracking. It stores its settings and, while its debugger is attached, which tab it's reading. Password, one-time-code and card fields show `[redacted]`, and **Copy** leaves field values out. The [privacy policy](/privacy) lists every permission it asks for and why.
 
 ## Troubleshooting
 
 - **"This page can't be inspected."** Chrome doesn't let extensions run on `chrome://` pages, the Chrome Web Store or the PDF viewer. On an ordinary page, reload and press **Try again**.
 - **The panel is empty after switching tabs.** That's deliberate. Press **Load tree** or **↻**.
-- **Native mode can't read the page.** Usually DevTools is open on that tab: close it, then choose **Chrome's tree** in **Settings ▾**.
+- **Chrome's tree can't read the page.** Usually DevTools is open on that tab: close it, then press **↻**. The **TAB** view still lists the tab order meanwhile.
 - **Chrome's tree stopped updating.** **Cancel** on Chrome's bar, or a failed read, pauses it. Press **↻**.
 
 ## Install

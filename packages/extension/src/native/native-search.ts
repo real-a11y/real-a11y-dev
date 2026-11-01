@@ -1,7 +1,7 @@
 /**
  * Search + role-filter for the native producer's tree view — the native-mode
  * counterpart of `core`'s `applySearchFilter` (`core/src/search/tree-search.ts`),
- * which the DOM producer's own toolbar search box and role-filter pills use.
+ * which the shared panel's search box and role-filter pills use.
  *
  * Reuses `core`'s `ROLE_FILTER_GROUPS`/`ROLE_FILTER_LABELS` rather than
  * duplicating them: a native tree's roles come from `normalizeNativeAX`

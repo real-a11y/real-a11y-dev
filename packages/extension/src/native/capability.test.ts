@@ -26,7 +26,7 @@ describe("classifyTabUrl", () => {
       "http://localhost:5173/app?x=1#y",
       "https://youtube.com/watch?v=abc",
     ]) {
-      expect(classifyTabUrl(url)).toEqual({ native: true, domFallback: true });
+      expect(classifyTabUrl(url)).toEqual({ native: true });
     }
   });
 
@@ -111,27 +111,7 @@ describe("classifyTabUrl", () => {
   });
 });
 
-describe("domFallback", () => {
-  it("is false exactly where Chrome blocks the content script too", () => {
-    // The expensive mistake is claiming a fallback that doesn't exist: it sends
-    // a dogfooder to a panel that will also never load.
-    for (const reason of [
-      "browser-ui",
-      "extension-page",
-      "web-store",
-      "view-source",
-      "file-url",
-    ] as const) {
-      expect(blockedBy(reason).domFallback).toBe(false);
-    }
-    // `no-url` means chrome.tabs.get threw — the tab is gone or privileged, so
-    // the content script is no better off there either.
-    expect(blockedBy("no-url").domFallback).toBe(false);
-    for (const reason of ["devtools-conflict", "attach-refused"] as const) {
-      expect(blockedBy(reason).domFallback).toBe(true);
-    }
-  });
-
+describe("blockedBy", () => {
   it("agrees with what classifyTabUrl returns for the same page", () => {
     // blockedBy() is what the panel uses when only a reason code crossed the
     // message boundary, so the two must not drift.
@@ -165,12 +145,21 @@ describe("explainUnavailable", () => {
     }
   });
 
-  it("never promises a DOM fallback where there isn't one", () => {
-    // "the in-page tree works meanwhile" on a chrome:// page would be a
-    // second dead end dressed up as a remedy.
+  it("never promises an in-page tree, which the panel no longer has", () => {
     for (const reason of ALL_REASONS) {
-      if (blockedBy(reason).domFallback) continue;
-      expect(explainUnavailable(reason)).not.toMatch(/in-page tree/i);
+      expect(explainUnavailable(reason)).not.toMatch(/in-page|DOM producer/i);
+    }
+  });
+
+  it("points at the TAB view only where the content script still runs", () => {
+    // A DevTools conflict or a refused attach leaves the page's own walk, and
+    // so the TAB view, working. Pointing at it on a chrome:// page, where
+    // Chrome blocks the content script too, would be a second dead end
+    // dressed up as a remedy.
+    for (const reason of ALL_REASONS) {
+      const works =
+        reason === "devtools-conflict" || reason === "attach-refused";
+      expect(explainUnavailable(reason).includes("TAB view")).toBe(works);
     }
   });
 });

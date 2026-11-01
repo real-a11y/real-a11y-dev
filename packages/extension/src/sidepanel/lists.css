@@ -1,0 +1,16 @@
+/* ---- Long names in the TAB view and the role filter's list ----
+   Unless "Show full names" is on, a long name ends in an ellipsis
+   (`.sn-filtered-name` in tree.css) and carries its whole text as a tooltip.
+   On, it shows whole, and the list scrolls sideways when a row is wider than
+   the panel, as the tree does (tree.css, "Long labels"). */
+.sn-filtered-list--full-names .sn-filtered-item {
+  box-sizing: border-box;
+  min-width: 100%;
+  width: max-content;
+  overflow: visible;
+}
+
+.sn-filtered-list--full-names .sn-filtered-name {
+  flex: none;
+  overflow: visible;
+}

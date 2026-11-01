@@ -1,8 +1,7 @@
 /**
- * The native tree's share of the DOM tree's everyday UI, through the real
- * build: the keyboard bar and the dialog indicator, type-ahead, Enter and
- * Shift+Enter on a slider, and action feedback that names the node rather
- * than its id.
+ * Chrome's tree's everyday UI, through the real build: the keyboard bar and
+ * the dialog indicator, type-ahead, Enter and Shift+Enter on a slider, and
+ * action feedback that names the node rather than its id.
  */
 
 import { expect, test } from "./harness";
@@ -13,7 +12,8 @@ type PanelPage = import("@playwright/test").Page;
  * Route the panel's `SEND_KEY` to the page's top frame, as the background
  * does for a real side panel. This harness loads the panel as a tab, so the
  * background reads its messages as a content script's and never forwards a
- * key to the page (see the DOM-producer note in `harness.ts`). Only `SEND_KEY`
+ * key to the page (see the note on the page's own walk in `harness.ts`). Only
+ * `SEND_KEY`
  * is rerouted; everything else goes through untouched. Install it after the
  * panel's last reload, which would drop it.
  */
@@ -152,7 +152,7 @@ test("Enter steps a native slider up and Shift+Enter steps it down", async ({
   ).toBeEnabled();
   await tree.press("Shift+Enter");
   await expect.poll(valueNow).toBe("68");
-  // A step shows no banner, as in the DOM tree.
+  // A step shows no banner: the value changing is the confirmation.
   await expect(nav.panel.locator(".sn-action-feedback-text")).toHaveCount(0);
 });
 
@@ -243,45 +243,6 @@ test("a sent key whose page navigates a second later is followed there", async (
   ).toBeVisible({ timeout: 10_000 });
 });
 
-test("switching to the in-page tree right after a sent key reads no native tree", async ({
-  nav,
-}) => {
-  await nav.showNative("native-panel.html");
-  await routeSendKeyToPage(nav.panel);
-
-  // Without the switch, the key is followed by a native read.
-  let reads = (await nav.nativeReads()).length;
-  await clickInPanel(nav.panel, ".sn-keyboard-bar", "Tab");
-  await expect
-    .poll(async () => (await nav.nativeReads()).length, { timeout: 10_000 })
-    .toBeGreaterThan(reads);
-  await expect(
-    nav.panel.getByRole("button", { name: "Refresh native tree" }),
-  ).toBeEnabled();
-
-  // With it, in the same task as the key, there is none. The switch is in
-  // Settings, so Settings is opened first.
-  reads = (await nav.nativeReads()).length;
-  await nav.panel.getByRole("button", { name: "Settings ▾" }).click();
-  await expect(nav.treeChoice("In-page tree")).toBeVisible();
-  await nav.panel.evaluate(() => {
-    const press = [
-      ...document.querySelectorAll<HTMLButtonElement>(
-        ".sn-keyboard-bar button",
-      ),
-    ].find((b) => b.textContent?.trim() === "Tab")!;
-    const inPage = [
-      ...document.querySelectorAll<HTMLButtonElement>(
-        "#sn-settings-menu button",
-      ),
-    ].find((b) => b.textContent?.trim() === "In-page tree")!;
-    press.click();
-    inPage.click();
-  });
-  await nav.panel.waitForTimeout(NO_READ_WINDOW_MS);
-  expect((await nav.nativeReads()).length).toBe(reads);
-});
-
 test("Press ESC whose re-read fails doesn't say the dialog is still open", async ({
   nav,
 }) => {
@@ -346,7 +307,7 @@ test("a native action the extension never answers says Failed too", async ({
   );
 });
 
-test("a checkbox and a radio word their feedback as the DOM tree does", async ({
+test("a checkbox and a radio word their feedback by what they became", async ({
   nav,
 }) => {
   await nav.showNative("native-parity.html");
