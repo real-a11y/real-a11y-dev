@@ -1,5 +1,52 @@
 # @real-a11y-dev/testing
 
+## 0.1.0-beta.21
+
+### Patch Changes
+
+- 0301ba1: Treat a mutation anywhere inside one of the panel's own overlay elements as internal, not just one on the overlay's root element.
+
+  The live observer ignores the elements it injects itself — the focus highlight and the screen curtain — so that drawing them cannot trigger the re-extract → re-render → re-redraw loop the filter exists to break. It recognised them by id, and only a text change consulted the ancestor chain. An attribute change was matched against the changed element alone, and a child being added or removed was matched against the moved nodes alone, so neither saw that the element it happened on sits _inside_ an overlay:
+
+  ```js
+  // Both of these read as a page mutation and schedule a re-extraction.
+  curtainLabel.className = "visible"; // attributes, inside #__sn-curtain
+  highlightFrame.appendChild(corner); // childList, inside #__sn-highlight
+  ```
+
+  All three mutation kinds now climb from the changed node, so an overlay's whole subtree is internal.
+
+  Nothing changes for a panel that uses the built-in overlays as they are. The curtain does have inner elements, but they are built before it is attached — so the observer never sees those records — and nothing mutates them afterwards. What this does fix is `DomObserver`'s fourth argument, the caller's own set of sentinel ids: an element registered there was only shielded at its root, and any attribute or child change below it still re-armed the observer against the overlay the caller registered to be ignored.
+
+  `cli` and `mcp` are left out: they read Chromium's own accessibility tree over CDP and never construct a `DomObserver`.
+
+- 8e6e736: Name a paragraph, list item, code block or status message with the words inside its plain inline wrappers, the way Chromium does. Chromium gives a role-less inline element — a `<span>`, a `<b>`, a custom or unknown element — no node of its own, so its text is the line's. The DOM producer read only the element's own text nodes, and since a tree prints no `generic`, the wrapped words vanished from every printed tree:
+
+  | Markup                                                                  | Before                         | Now                                   |
+  | ----------------------------------------------------------------------- | ------------------------------ | ------------------------------------- |
+  | `<p>Drop in <b>the panel</b> now.</p>`                                  | `paragraph "Drop in now."`     | `paragraph "Drop in the panel now."`  |
+  | `<p>Drop in <semanticnavigator>and it appears.</semanticnavigator></p>` | `paragraph "Drop in"`          | `paragraph "Drop in and it appears."` |
+  | `<p><span>Only text</span></p>`                                         | `paragraph`                    | `paragraph "Only text"`               |
+  | `<p>A<span>B</span>C</p>`                                               | `paragraph "AC"`               | `paragraph "ABC"`                     |
+  | `<li>Item <span>text</span></li>`                                       | `listitem "Item"`              | `listitem "Item text"`                |
+  | `<pre><code><span>import</span><span> x</span></code></pre>`            | `code`                         | `code "import x"`                     |
+  | `<p>Line one<br>Line two</p>`                                           | `paragraph "Line oneLine two"` | `paragraph "Line one Line two"`       |
+
+  The second row is what VitePress's `v-html` makes of a literal `<SemanticNavigator />` in a `details:` string.
+
+  - **What counts as a wrapper** is what Chromium leaves out of its tree: an element with no role (or `role="none"`, or an empty or unknown one), drawn inline (`inline`, `inline-block`, `inline-flex`, `display: contents`), with nothing that could name, focus or point at it. A class, a style, a `data-*` or a `dir` keeps it a wrapper, and so does an `<a>` with no `href`.
+  - **Text that stays out**, because its element has a node of its own that shows it: a link, a `<code>`, `<strong>` or `<em>`, a `<label>` or `<abbr>`, a `<canvas>` or `<object>` (whose children are fallback), and a wrapper with an `id`, a `lang`, a `title`, an `aria-` attribute, a `tabindex`, an `onclick`, an explicit `role="generic"` or a box of its own (`block`, `flex`, `inline-table`, a float). A hidden wrapper adds nothing.
+  - **A `<div>` is unchanged.** A `generic`'s name decides whether the tree keeps it, so reading through its wrappers would add a node for every `<div><span>…</span></div>`. The wrapper still keeps its own node and name, as it does under a heading.
+  - **Inside an editor** nothing changes: what a user typed never names an element.
+  - The live tree re-names the paragraph when text inside its wrapper changes, or when the wrapper gains or loses what gives it a node of its own.
+
+  What this changes for you:
+
+  - **Snapshots and diffs:** the names of paragraphs, list items, code blocks, block quotes, definitions and live regions that hold inline wrappers change, and a syntax-highlighted code block is now named with its code. Re-record those snapshots. A DOM-produced tree now agrees with a native one on all of these.
+  - **Queries:** `findByRole("paragraph", { name: "Drop in the panel now." })` now finds the first row's paragraph.
+  - **Panels:** `inspector`, `react` and `storybook-addon` show the new names.
+  - **`cli` / `mcp`:** only `real-a11y tabs` and `get_tab_order` read the in-page tree, and a tab stop changes name only if it is itself a focusable paragraph, list item or code block. Everything else they print comes from Chromium's own tree, which already read these.
+
 ## 0.1.0-beta.20
 
 ### Patch Changes

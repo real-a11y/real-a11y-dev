@@ -17,7 +17,7 @@
   also touches dogfood code.
 -->
 
-## Unreleased
+## 0.1.18
 
 ### Patch Changes
 

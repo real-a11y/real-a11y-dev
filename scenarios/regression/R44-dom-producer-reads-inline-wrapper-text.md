@@ -6,7 +6,7 @@ area: Testing
 type: Automated
 priority: P1
 status: Active
-validFrom: "testing ≥ the first release after 0.1.0-beta.20 (likewise inspector, react, storybook-addon). On 0.1.0-beta.20 or earlier every step reproduces the defect — the wrapped words are missing from the tree. That is the old behaviour, not a fail. The rule lives in `packages/core/src/extraction/dom-extractor.ts`, but `core` is PRIVATE and bundled, so assert against `@real-a11y-dev/testing` only."
+validFrom: "testing ≥ 0.1.0-beta.21 (likewise inspector, react, storybook-addon). On 0.1.0-beta.20 or earlier every step reproduces the defect — the wrapped words are missing from the tree. That is the old behaviour, not a fail. The rule lives in `packages/core/src/extraction/dom-extractor.ts`, but `core` is PRIVATE and bundled, so assert against `@real-a11y-dev/testing` only."
 validUntil: ""
 expected: "a paragraph, list item, code block or status names itself with the text of its role-less inline wrappers (span, b, a custom or unknown element, role=none) and reads a br as a space; a wrapper with an id, title, aria- attribute or tabindex keeps its text to itself; a div's name is unchanged; the DOM and native trees agree"
 covers:
