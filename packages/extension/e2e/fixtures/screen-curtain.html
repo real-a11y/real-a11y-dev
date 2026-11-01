@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <!-- A strict policy for styles, as many sites have: the curtain's own
+         stylesheet must still apply. -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="style-src 'nonce-fixture'; script-src 'nonce-fixture'"
+    />
+    <title>Curtained page</title>
+    <style nonce="fixture">
+      /* Everything of the page's that could be seen is this red, which the
+         test looks for on screen; the curtain has none of it. */
+      body {
+        margin: 0;
+        background: rgb(255, 0, 0);
+      }
+      .seen {
+        background: rgb(255, 0, 0);
+        width: 120px;
+        height: 80px;
+        margin: 0;
+        padding: 0;
+        border: 0;
+      }
+      /* As high as an element of the page's can go: above the curtain's old
+         z-index, and level with its new one, later in the document. */
+      #top {
+        position: fixed;
+        right: 8px;
+        bottom: 8px;
+        z-index: 2147483647;
+      }
+      /* What a page's design system gives its popovers, which reaches the
+         curtain too: it must not move, shrink or thin it. */
+      [popover] {
+        inset: auto 8px 8px auto !important;
+        width: 120px !important;
+        height: 80px !important;
+        opacity: 0.99 !important;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Curtained page</h1>
+    <div id="top" class="seen"></div>
+    <button id="out">Out</button>
+    <!-- Search suggestions shown as a popover, in the top layer, the way the
+         bug was met on a real site. -->
+    <label>Search <input id="search" /></label>
+    <ul id="suggestions" class="seen" popover="manual">
+      <li>Suggestion</li>
+    </ul>
+    <ul id="menu" class="seen" popover="manual">
+      <li>Menu item</li>
+    </ul>
+    <dialog id="dialog" class="seen">
+      <button id="inside">Inside</button>
+    </dialog>
+    <div id="video" class="seen"></div>
+    <!-- A component whose popover is in its shadow root, where its toggle
+         event stops short of the window. -->
+    <div id="host"></div>
+    <script nonce="fixture">
+      const root = document
+        .getElementById("host")
+        .attachShadow({ mode: "open" });
+      root.innerHTML = `
+        <style nonce="fixture">div { background: rgb(255, 0, 0); width: 120px; height: 80px; }</style>
+        <div popover="manual">In a shadow root</div>`;
+
+      /** What a press reached of the page's: `id:type`. */
+      window.reached = [];
+      for (const el of document.querySelectorAll("#out, #dialog, #inside")) {
+        for (const type of ["pointerdown", "click"]) {
+          el.addEventListener(type, (e) => {
+            if (e.currentTarget === e.target) reached.push(`${el.id}:${type}`);
+          });
+        }
+      }
+    </script>
+  </body>
+</html>

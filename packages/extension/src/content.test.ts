@@ -2100,6 +2100,20 @@ describe("content: a page that replaces its document", () => {
     expect(document.getElementById("__sn-curtain")).toBeNull();
   });
 
+  it("lifts the screen curtain at the next key or press once the extension is gone", () => {
+    const press = () =>
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "a" }));
+    h.send({ type: "TOGGLE_CURTAIN", payload: { visible: true } });
+    press();
+    expect(document.getElementById("__sn-curtain")).not.toBeNull();
+
+    // Reloaded or updated: the panel that could lift the curtain is gone, and
+    // no new script comes to this page.
+    delete (h.chromeMock as { runtime: { id?: string } }).runtime.id;
+    press();
+    expect(document.getElementById("__sn-curtain")).toBeNull();
+  });
+
   describe("live regions", () => {
     const announced = () =>
       h.sent
