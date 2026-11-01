@@ -60,9 +60,9 @@ pnpm --filter @real-a11y-dev/example-react-app dev
   the ref after every commit, and a unit test now pins 6b as well
 - **7** — live prop changes are reflected
 - **8** — no errors, and specifically no hydration warnings
-- **9** — from inspector and react 0.1.0-beta.21 a long name never scrolls the panel sideways unless **Show full
-  names** is on, and a key state such as PRESSED is never cut off: a row too narrow for
-  it scrolls the tree sideways, alone. Earlier releases widen the tree for every long
+- **9** — from inspector and react 0.1.0-beta.21, a long name never scrolls the panel
+  sideways unless **Show full names** is on, and a key state such as PRESSED is never
+  cut off: a row too narrow for it scrolls the tree sideways, alone. Earlier releases widen the tree for every long
   name and have no ⚙
 
 ## Why this exists
