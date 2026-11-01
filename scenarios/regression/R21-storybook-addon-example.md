@@ -61,8 +61,7 @@ pnpm --filter @real-a11y-dev/example-storybook storybook
 - **8** — `0` both times. The addon promises no extraction while another tab is active;
   up to 0.1.0-beta.19 it extracted regardless — with another tab selected on Storybook
   10.1 and later, and with the panel hidden on every version
-- **9** — from storybook-addon 0.1.0-beta.21 (unreleased; panel-clip-long-names is a
-  pending changeset) a long name never scrolls the panel sideways unless **Show full
+- **9** — from storybook-addon 0.1.0-beta.21 a long name never scrolls the panel sideways unless **Show full
   names** is on, and the choice holds in the panel Storybook mounts after the Docs page,
   and across stories. Earlier releases widen the tree for it and have no ⚙
 

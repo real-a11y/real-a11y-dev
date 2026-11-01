@@ -96,7 +96,7 @@ page — a stale service worker is the usual cause of "it didn't change".)
   exists for, not a new one
 
 - **A long name doesn't scroll the panel sideways** (step 12). From extension 0.1.18
-  (unreleased) it ends in "…" with a tooltip, in the tree and the TAB list alike, a
+  it ends in "…" with a tooltip, in the tree and the TAB list alike, a
   row's key states end its label whole (only a row too narrow for them widens the
   tree, and alone), and **Show full names** brings back the wide tree in every
   window. On 0.1.17 and earlier a long name always widens the tree, and Settings has

@@ -70,7 +70,7 @@ Then install the addon with the command the docs give, as written.
 
 - The addon registers per the docs, with no undocumented extra config
 - **1** — on a CSF Next preview the panel shows trees with the docs' `definePreview` line,
-  from the first release after 0.1.0-beta.20. Up to 0.1.0-beta.20 there was no such line to
+  from 0.1.0-beta.21. Up to 0.1.0-beta.20 there was no such line to
   add, and on a Vite Storybook the panel waited on every story (confirmed on
   `11.0.0-alpha.8`)
 - The panel appears and tracks stories and controls
@@ -78,7 +78,7 @@ Then install the addon with the command the docs give, as written.
   it. On storybook-addon 0.1.0-beta.19 with Storybook 10.1 or later the panel paints over the
   tab bar — the known defect the beta.19 dogfood filed, fixed in 0.1.0-beta.20
 - **4** — every tree the panel logs matches its pressed toggle: `dom` under DOM, `a11y` under
-  A11Y. From the first release after 0.1.0-beta.20 the panel is still on DOM after the tab
+  A11Y. From 0.1.0-beta.21 the panel is still on DOM after the tab
   switch, after the Docs page and after the reload — confirmed so far on Storybook 10.6.2
   only, so record the version you saw it on. **Unconfirmed on Storybook 9**: it unmounts the
   panel behind another addon tab, so it should now keep DOM after the tab switch too, where it
