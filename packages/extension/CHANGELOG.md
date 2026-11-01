@@ -21,6 +21,21 @@
 
 ### Patch Changes
 
+- The **screen curtain** hides everything the page shows. Whatever a page
+  put in the browser's top layer stayed in plain sight over it: search
+  suggestions or a menu shown as a popover, a modal dialog, a fullscreen
+  video. So did an element at the highest z-index there is. The curtain is now
+  in the top layer itself, and goes back on top of whatever the page shows
+  there after it, before the next frame paints it; for a popover inside a
+  component's shadow root, within about a tenth of a second. A page's own
+  styles for popovers no longer reach it either. No click on the curtain
+  reaches the page, not even a modal dialog open under it, which a click
+  used to land on; a screen reader's click, and Chrome's tree's actions,
+  still do. Chrome's tree no longer lists the curtain's own words, _Screen
+  Curtain_, at the end of the page's. And a curtain left up when the
+  extension is reloaded or updated comes down at the next key or click on
+  the page, where it used to stay until the page was reloaded.
+
 - The side panel shows Chrome's tree alone
   ([#572](https://github.com/real-a11y/real-a11y-dev/pull/572)). The
   extension's own in-page tree is gone, with its DOM / A11Y / TAB views,

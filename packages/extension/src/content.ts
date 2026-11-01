@@ -16,6 +16,7 @@ import {
 } from "@real-a11y-dev/core";
 import type { TreeChange } from "@real-a11y-dev/core";
 
+import { liftCurtain, showCurtain } from "./curtain.js";
 import { computeFieldState } from "./field-state.js";
 import {
   frameOwnerMark,
@@ -190,6 +191,17 @@ function teardown(): void {
   observer?.stop();
   unobserveLiveRegions();
   documentObserver.disconnect();
+  // No panel can lift the curtain any more: the extension it belonged to is
+  // gone, and no new script comes to a page already open.
+  curtainVisible = false;
+  drawCurtain();
+}
+
+/** Tear down at the user's next key or press on a curtained page whose
+ *  extension is gone, which leaves the page behind a curtain nothing can
+ *  lift, rather than at its next send, which may never come. */
+function teardownIfOrphaned(): void {
+  if (curtainVisible && !chrome.runtime?.id) teardown();
 }
 
 /**
@@ -466,28 +478,11 @@ chrome.runtime.onMessage.addListener(
 );
 
 /** Put the curtain's element in the document, or take it out, as
- *  `curtainVisible` has it. Only the top frame renders it. */
+ *  `curtainVisible` has it. Only the top frame renders it: see curtain.ts. */
 function drawCurtain(): void {
   if (isSubFrame) return;
-  let curtain = document.getElementById("__sn-curtain");
-  if (curtainVisible && !curtain && boundRoot) {
-    curtain = document.createElement("div");
-    curtain.id = "__sn-curtain";
-    curtain.style.cssText = `
-      position: fixed; inset: 0; z-index: 2147483646;
-      background: #0f172a; color: #94a3b8;
-      display: flex; align-items: center; justify-content: center;
-      flex-direction: column; gap: 8px;
-      font: 16px/1.5 system-ui, sans-serif;
-    `;
-    curtain.innerHTML = `
-      <div style="font-size:24px;font-weight:700;color:#e2e8f0">Screen Curtain</div>
-      <div>Content hidden — navigate via Semantic Navigator</div>
-    `;
-    boundRoot.appendChild(curtain);
-  } else if (!curtainVisible && curtain) {
-    curtain.remove();
-  }
+  if (!curtainVisible) liftCurtain(document);
+  else if (boundRoot) showCurtain(boundRoot);
 }
 
 // Reverse focus sync: page focus → tree selection. Added by
@@ -963,11 +958,13 @@ const onPageInput = (e: Event) => {
 
 /** The user pressed a key: when, to date the typing it makes. */
 const onKeyPressed = (e: Event) => {
+  teardownIfOrphaned();
   if (!tornDown && observingEnabled) typing.keyPressed(e);
 };
 
 /** The user pressed the pointer: what is edited next isn't a key's. */
 const onPointerPressed = (e: Event) => {
+  teardownIfOrphaned();
   if (!tornDown && observingEnabled) typing.pointerPressed(e);
 };
 
