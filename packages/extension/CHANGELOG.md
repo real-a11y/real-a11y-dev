@@ -21,7 +21,8 @@
 
 ### Patch Changes
 
-- The **screen curtain** hides everything the page shows. Whatever a page
+- The **screen curtain** hides everything the page shows
+  ([#573](https://github.com/real-a11y/real-a11y-dev/pull/573)). Whatever a page
   put in the browser's top layer stayed in plain sight over it: search
   suggestions or a menu shown as a popover, a modal dialog, a fullscreen
   video. So did an element at the highest z-index there is. The curtain is now
