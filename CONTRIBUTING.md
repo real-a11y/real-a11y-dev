@@ -6,25 +6,27 @@ Thanks for your interest in contributing to Real A11y. This guide covers how to 
 
 ### Prerequisites
 
-- Node.js 20 — a `.nvmrc` is provided (`nvm use` / `fnm use`), and the repo is
-  pinned to `20.20.2` for [Volta](https://volta.sh) users, who get it
-  automatically on `cd`. Volta reads the _nearest_ `package.json`, so every
+- Node.js 22.12 — a `.nvmrc` is provided (`nvm use` / `fnm use`), and the repo is
+  pinned to `22.12.0` for [Volta](https://volta.sh) users, who get it
+  automatically on `cd`. 22.12 is Vitest 5's floor (`^22.12 || ^24 || >=26`), so
+  it is the oldest Node the test suites run on. Volta reads the _nearest_ `package.json`, so every
   private workspace (`website/`, `examples/*`, the internal `packages/*`)
   carries `"volta": { "extends": "../…/package.json" }` back to the root pin —
   add it to any new private workspace, or pnpm runs its scripts on Volta's
   global default instead. The six published packages deliberately carry no
-  `volta` key: it would ship in their tarballs. The published packages support Node 20+ (`engines`) —
-  except `@real-a11y-dev/cli`, which needs 22.12+ for `@puppeteer/browsers` —
-  and CI exercises the libraries on 20, 22, and 24, but **the docs build needs
-  Node 20**: VitePress 1.6 (the latest stable) throws `ERR_REQUIRE_CYCLE_MODULE`
-  on Node's newer `require(esm)` cycle enforcement, which is present in current
-  Node **22.x and 24.x** — 20.x is the last line where `pnpm --filter …/website
-  build` still works. The fix only exists in the still-alpha VitePress 2.0, so
-  we stay on 20 for the docs until VitePress 2 ships stable.
+  `volta` key: it would ship in their tarballs. The published packages still
+  declare Node 20+ (`engines`) — except `@real-a11y-dev/cli`, which needs 22.12+
+  for `@puppeteer/browsers` — but no CI job runs their tests on 20 any more:
+  `verify` runs 22.12 and the newest 22, and `packages-node24` runs 24. Only
+  `examples-dev` and `website-a11y` still build on 20. VitePress 1.6 (the latest
+  stable) is documented to throw `ERR_REQUIRE_CYCLE_MODULE` on Node's newer
+  `require(esm)` cycle enforcement in some Node 22.x and 24.x releases; the
+  docs build has worked on 22.22, but if it breaks for you, that is the cause
+  and Node 20 still builds it. The fix only exists in the still-alpha VitePress 2.0.
   > **Volta gotcha:** Volta binds a global `pnpm` to whatever Node was the
-  > default when you installed it, and pnpm runs the docs build on _that_ Node
-  > regardless of this pin. If `pnpm exec node --version` isn't 20.x, rebind:
-  > `volta install node@20 && volta install pnpm@<version>`.
+  > default when you installed it, and pnpm runs scripts on _that_ Node
+  > regardless of this pin. If `pnpm exec node --version` isn't 22.x, rebind:
+  > `volta install node@22 && volta install pnpm@<version>`.
 - pnpm >= 9
 
 ### Setup

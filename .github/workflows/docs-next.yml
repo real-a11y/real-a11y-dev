@@ -101,10 +101,11 @@ jobs:
       # pnpm version is read from `packageManager` in package.json.
       - uses: pnpm/action-setup@v6
 
-      # Deliberately `node-version-file` rather than the hardcoded `20` the
-      # other workflows use. `.nvmrc` is `20`, so there is no behavioural
-      # difference today — this is the form the others should converge on, not
-      # an inconsistency to "fix" back.
+      # Deliberately `node-version-file` rather than a hardcoded version.
+      # `.nvmrc` is `22.12` (Vitest 5's floor) while `docs.yml` and
+      # `docs-preview.yml` still build on `20`, so the `next` channel is the one
+      # that exercises the docs build on the dev Node. Keep it that way: a
+      # VitePress/Node break shows up here before it can reach the stable site.
       - uses: actions/setup-node@v7
         with:
           node-version-file: .nvmrc
