@@ -65,21 +65,21 @@ test("a role-filter pill swaps the tree for a flat list of that role, narrowed b
 
   await nav.panel.getByRole("button", { name: "Buttons", exact: true }).click();
 
-  // The same flat list the DOM producer shows (`FilteredList`), not a pruned
-  // tree — and every match is listed, even ones under a collapsed section.
+  // A flat list (`FilteredListView`), not a pruned tree — and every match is
+  // listed, even ones under a collapsed section.
   await expect(nav.panel.locator("[role='tree']")).toHaveCount(0);
   const list = nav.panel.getByRole("listbox");
   await expect(list.getByRole("option", { name: /Item \d+/ })).toHaveCount(16);
   // The password field is a textbox, not a button — excluded by the pill.
   await expect(list.getByRole("option", { name: "Password" })).toHaveCount(0);
   await expect(nav.panel.locator(".sn-list-count")).toHaveText("16 items");
-  // The list follows onto the page like the DOM producer's, so it offers
-  // Move to as well (see panel-ui-native.test.ts for what it does there).
+  // The list follows onto the page, so it offers Move to as well (see
+  // panel-ui-native.test.ts for what it does there).
   await expect(
     nav.panel.getByRole("button", { name: "Move to", exact: true }),
   ).toHaveCount(1);
 
-  // AND-combines with the query, same as the DOM producer's own filters.
+  // AND-combines with the query.
   const search = nav.panel.getByLabel("Search native tree nodes");
   await search.fill("Item 12");
   await expect(list.getByRole("option")).toHaveCount(1);

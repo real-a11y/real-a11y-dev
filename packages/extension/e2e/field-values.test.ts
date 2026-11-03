@@ -1,16 +1,17 @@
 /**
  * ADR-0001's field values, through the real build in real Chromium.
  *
- * The A11y view shows the value a screen reader announces and the DOM view
- * the raw DOM value; a sensitive field reads `[redacted]` in both, never its
- * contents or its length. A `<select>` is the field that tells the two apart:
- * it announces its option LABEL ("Spain") and holds its option VALUE ("es").
- *
- * Both producers are covered, because they get there differently. The DOM
- * producer's content script computes `a11y.value` in the page. NATIVE takes
- * Chromium's own AX value, and only once `pageReadValue` has classified the
- * element in-page — Chromium masks a password with bullets but sends a
+ * Chrome's tree shows the value a screen reader announces; a sensitive field
+ * reads `[redacted]`, never its contents or its length. A `<select>` is the
+ * field that tells the announced value from the raw one: it announces its
+ * option LABEL ("Spain") and holds its option VALUE ("es"). It takes
+ * Chromium's own AX value only once `pageReadValue` has classified the
+ * element in the page — Chromium masks a password with bullets but sends a
  * `cc-number` text field in plaintext, so its payload cannot be the gate.
+ *
+ * A TAB row's edit box gets there differently: it opens on the field state
+ * the content script reads in the page (`GET_FIELD_STATE`), and the TAB
+ * view's rows show no value at all.
  */
 
 import { expect, node, nodes, test, type NativeHarness } from "./harness";
@@ -18,28 +19,6 @@ import { expect, node, nodes, test, type NativeHarness } from "./harness";
 type PanelPage = import("@playwright/test").Page;
 
 const SECRETS = ["hunter2", "4111111111111111", "2031", "November"];
-
-/** Click a panel control from inside the panel. A Playwright click would
- *  bring the panel's own tab to the front, and the panel resolves its target
- *  as the active tab — see `panel-ui.test.ts`'s header. */
-async function press(
-  panel: PanelPage,
-  label: string,
-  within = "body",
-): Promise<void> {
-  await panel.evaluate(
-    ([want, scope]) => {
-      const button = [...document.querySelectorAll(`${scope} button`)].find(
-        (b) =>
-          b.textContent?.trim() === want ||
-          b.getAttribute("aria-label") === want,
-      ) as HTMLButtonElement | undefined;
-      if (!button) throw new Error(`no button "${want}" in ${scope}`);
-      button.click();
-    },
-    [label, within] as const,
-  );
-}
 
 /** The fixture in the foreground and the panel freshly mounted on it. */
 async function showFixture(
@@ -52,44 +31,45 @@ async function showFixture(
   return page;
 }
 
-/** The fixture with the in-page tree on screen, all of it expanded. */
-async function showInPageTree(
+/** The fixture with the TAB view on screen. */
+async function showTabRows(
   nav: NativeHarness,
   fixture: string,
 ): Promise<PanelPage> {
-  const page = await showFixture(nav, fixture);
-  await nav.chooseTree("In-page tree");
-  await expect
-    .poll(() => nav.panel.locator(".sn-node").count(), { timeout: 20_000 })
-    .toBeGreaterThan(0);
-  await press(nav.panel, "Expand all");
+  const { page } = await nav.showTabOrder(fixture);
   // The edit box opens on its field's state, which it asks the page for.
   await nav.routeToPage(["GET_FIELD_STATE", "DISPATCH_ACTION"]);
   return page;
 }
 
 /**
- * The in-page tree's edit box. Everything from inside the panel, as `press`
- * does: a Playwright click or keypress would bring the panel's own tab to the
- * front first.
+ * A TAB row's edit box. Everything from inside the panel: a Playwright click
+ * or keypress would bring the panel's own tab to the front first.
  */
-function inPageEditBox(nav: NativeHarness) {
+function tabRowEditBox(nav: NativeHarness) {
   const box = nav.panel.locator(".sn-input-panel-field");
-  /** Open the edit box of the textbox named `name`. */
+  /** Open the edit box of the tab stop named `name`: select it, then
+   *  Activate, once the list shows it selected. */
   const open = async (name: string) => {
     await nav.panel.evaluate((want) => {
-      // A row's text runs its role into its name, `textboxCard number`; the
-      // quotes around the name are the stylesheet's.
-      const flat = (text: string) => text.replace(/\s+/g, "");
-      const row = [...document.querySelectorAll(".sn-node")].find((r) =>
-        flat(r.textContent ?? "").includes(flat(want)),
-      );
-      const button = row?.querySelector<HTMLButtonElement>(
-        'button[title="Type (Enter)"]',
-      );
-      if (!button) throw new Error(`no Type button on ${want}`);
-      button.click();
-    }, `textbox ${name}`);
+      const stop = [
+        ...document.querySelectorAll(
+          '[aria-label="Tab sequence"] [role="option"]',
+        ),
+      ].find((o) => o.querySelector(".sn-tab-name")?.textContent === want);
+      if (!stop) throw new Error(`no tab stop ${want}`);
+      (stop as HTMLElement).click();
+    }, name);
+    await expect(
+      nav.tabStops().getByRole("option", { selected: true }),
+    ).toContainText(name);
+    await nav.panel.evaluate(() => {
+      const activate = [
+        ...document.querySelectorAll<HTMLButtonElement>(".sn-list-action-btn"),
+      ].find((b) => b.textContent?.trim() === "Activate");
+      if (!activate || activate.disabled) throw new Error("no Activate");
+      activate.click();
+    });
     await expect(box, name).toBeVisible();
   };
   const key = (k: "Enter" | "Escape") =>
@@ -165,7 +145,6 @@ test("NATIVE panel: the tree shows the announced label, and a retype starts from
   nav,
 }) => {
   const page = await showFixture(nav);
-  await nav.chooseTree("Chrome's tree");
   await expect
     .poll(() => nav.panel.locator(".sn-node").count(), { timeout: 20_000 })
     .toBeGreaterThan(0);
@@ -208,72 +187,13 @@ test("NATIVE panel: the tree shows the announced label, and a retype starts from
   await expect(page.locator("#editor")).toHaveText("");
 });
 
-test("DOM mode: the A11y view shows the announced label, the DOM view the raw value", async ({
+test("TAB view: a withheld field's edit box masks what is typed, empty or not, and an untouched Enter types nothing", async ({
   nav,
 }) => {
-  // Native mode off for this test, so the native default never switches
-  // the panel away from the DOM tree: what this checks has nothing to do
-  // with native mode. This worker's other tests expect it on again after.
-  await nav.panel.evaluate(() =>
-    chrome.storage.local.set({ "settings.nativeModeEnabled": false }),
-  );
-  try {
-    await showFixture(nav);
-    // The DOM producer connects on its own; a row on screen is the tree landing.
-    await expect
-      .poll(() => nav.panel.locator(".sn-node").count(), { timeout: 20_000 })
-      .toBeGreaterThan(0);
-    await press(nav.panel, "Expand all");
-
-    const valueOf = (rowText: RegExp) =>
-      nav.panel
-        .locator(".sn-node", { hasText: rowText })
-        .locator(".sn-field-value");
-
-    // A11y view (the default).
-    await expect(valueOf(/combobox\s*Country/)).toHaveText('= "Spain"');
-    await expect(valueOf(/textbox\s*Password/)).toHaveText('= "[redacted]"');
-    await expect(valueOf(/textbox\s*Card number/)).toHaveText('= "[redacted]"');
-    await expect(valueOf(/slider\s*Volume/)).toHaveText('= "Loud"');
-    // An editor's text prints once, as its value — not again as a preview.
-    await expect(valueOf(/textbox\s*Message/)).toHaveText('= "Hello world"');
-    await expect(
-      nav.panel.locator(".sn-node", { hasText: /textbox\s*Message/ }),
-    ).not.toContainText(/Hello world.*Hello world/);
-
-    // DOM view — the view-mode toggle, not the dogfood build's producer one.
-    // Switching re-extracts, and the new tree lands with its own default
-    // expansion at some point after the click, so expand until the row shows.
-    await press(nav.panel, "DOM", '[aria-label="Tree view mode"]');
-    await expect(async () => {
-      await press(nav.panel, "Expand all");
-      await expect(valueOf(/<select>/)).toHaveText('value="es"', {
-        timeout: 1_000,
-      });
-    }).toPass({ timeout: 15_000 });
-    await expect(
-      nav.panel.locator(".sn-field-value", { hasText: 'value="[redacted]"' }),
-    ).toHaveCount(3);
-    await expect(
-      nav.panel.locator(".sn-field-value", { hasText: 'value="80"' }),
-    ).toHaveCount(1);
-
-    for (const secret of SECRETS) {
-      await expect(nav.panel.locator(".sn-tree")).not.toContainText(secret);
-    }
-    await expect(nav.panel.locator(".sn-tree")).not.toContainText("•");
-  } finally {
-    await nav.panel.evaluate(() =>
-      chrome.storage.local.set({ "settings.nativeModeEnabled": true }),
-    );
-  }
-});
-
-test("In-page tree: a withheld field's edit box masks what is typed, empty or not, and an untouched Enter types nothing", async ({
-  nav,
-}) => {
-  const page = await showInPageTree(nav, "retype-mask.html");
-  const { box, open: openBox, key, type: typeIntoBox } = inPageEditBox(nav);
+  const page = await showTabRows(nav, "retype-mask.html");
+  const { box, open: openBox, key, type: typeIntoBox } = tabRowEditBox(nav);
+  // The rows show no value, a password's least of all.
+  await expect(nav.tabStops()).not.toContainText("hunter2");
 
   // Each opens empty, in place of a value it can't show, and hides what is
   // typed: a password nobody has typed yet as well as a filled one, a card
@@ -321,11 +241,11 @@ test("In-page tree: a withheld field's edit box masks what is typed, empty or no
   await expect(page.locator("#old")).toHaveValue("hunter2");
 });
 
-test("In-page tree: an untouched Enter in a rich-text editor's edit box leaves the editor as it was", async ({
+test("TAB view: an untouched Enter in a rich-text editor's edit box leaves the editor as it was", async ({
   nav,
 }) => {
-  const page = await showInPageTree(nav, "editor-content.html");
-  const { box, open, key, type } = inPageEditBox(nav);
+  const page = await showTabRows(nav, "editor-content.html");
+  const { box, open, key, type } = tabRowEditBox(nav);
   const contents = () =>
     page
       .locator('[role="textbox"][contenteditable]')

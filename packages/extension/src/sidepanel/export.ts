@@ -1,20 +1,20 @@
 /**
  * Assemble a shareable Markdown report of the tree currently shown in the
  * panel. The serialized strings are produced panel-side from the panel's own
- * (merged, scoped) snapshot via `@real-a11y-dev/serialize` — so the export is
- * the tree on screen, less its field values (ADR-0001 keeps those out of
- * anything posted), and never depends on the content script. This module is
- * pure string assembly: no Chrome / DOM dependencies.
+ * (scoped) snapshot via `@real-a11y-dev/serialize` — so the export is the
+ * tree on screen, less its field values (ADR-0001 keeps those out of anything
+ * posted), and never depends on the content script. This module is pure
+ * string assembly: no Chrome / DOM dependencies.
  */
 
-/** The serialized views, computed from the panel's current tree. */
+/** The serialized views, computed from the panel's current trees. */
 export interface ExportViews {
-  /** The current view's tree (A11y or DOM, whichever is shown). */
+  /** Chrome's tree, as read. */
   tree: string;
   /** Heading outline (`h1`..`h6`). */
   outline: string;
-  /** Tab sequence (focusable nodes in order). Absent for a producer with no
-   *  tab-order data: a native tree (see `NATIVE_VIEWS`). */
+  /** Tab sequence (focusable nodes in order), from the page's own walk:
+   *  Chrome's tree has no tab order (see `exportViewsFor`). */
   tabSequence?: string;
 }
 
@@ -23,18 +23,20 @@ export type ExportView = "tree" | "outline" | "tab";
 
 /** Reproducibility context for the report header. */
 export interface ExportMeta {
-  /** Which producer built the tree: the tree's own `source.producer`. Printed
-   *  in the header so a DOM report and a native one are never compared
-   *  without anyone noticing (CLAUDE.md, "Two producers build the tree"). */
+  /** Which producer built the tree: the tree's own `source.producer`, or
+   *  `dom` for a report of the tab sequence alone. Printed in the header so
+   *  a DOM report and a native one are never compared without anyone
+   *  noticing (CLAUDE.md, "Two producers build the tree"). */
   producer: "dom" | "native";
   pageTitle: string;
   pageUrl: string;
-  /** ISO timestamp of when the tree was read: the click, for the DOM tree,
-   *  which follows the page live; the last read, for a native tree. */
+  /** ISO timestamp of when the tree was read: the last read, for a native
+   *  tree; the click, for the tab sequence alone, which follows the page live
+   *  while it shows. */
   capturedAt: string;
   /** Extension version, from the manifest. */
   extensionVersion: string;
-  /** Heading for the tree section, e.g. `Accessibility tree` / `DOM tree`. */
+  /** Heading for the tree section, e.g. `Native accessibility tree`. */
   viewLabel: string;
   /**
    * When the panel is scoped to a subtree, a label for it (e.g.
@@ -48,14 +50,24 @@ export interface ExportMeta {
 export const ALL_VIEWS: ExportView[] = ["tree", "outline", "tab"];
 
 /**
- * Every view a native tree can actually produce — `tab` (tab sequence)
- * omitted. `tabindex` never reaches a native node (see `CLAUDE.md`'s "Two
- * producers build the tree"), so there's no tab-order data to export, not
- * merely an unimplemented one. `getTabSequence` would return an empty
- * sequence for a native tree either way, but rendering that as "(nothing
- * focusable)" would misreport a missing capability as a real finding.
+ * The views the Copy menu offers: Chrome's tree and its headings once a read
+ * has put one on screen (`treeShown`), and the tab sequence while the TAB view
+ * shows it (`tabOrderShown`). A read Chrome refused leaves the tab sequence
+ * alone to copy. `tabindex` never
+ * reaches a native node (see `CLAUDE.md`'s "Two producers build the tree"), so
+ * the tab sequence is the page's own walk's, which the page sends whole only
+ * while the TAB view shows. `getTabSequence` would return an empty sequence
+ * for a native tree, and rendering that as "(nothing focusable)" would
+ * misreport a missing capability as a real finding.
  */
-export const NATIVE_VIEWS: ExportView[] = ["tree", "outline"];
+export function exportViewsFor(
+  treeShown: boolean,
+  tabOrderShown: boolean,
+): ExportView[] {
+  return ALL_VIEWS.filter((view) =>
+    view === "tab" ? tabOrderShown : treeShown,
+  );
+}
 
 const PRODUCER_LABELS: Record<ExportMeta["producer"], string> = {
   dom: "dom (the extension's own in-page walk)",
@@ -94,10 +106,22 @@ export function buildExportMarkdown(
   meta: ExportMeta,
   selection: ExportView[] = ALL_VIEWS,
 ): string {
-  const sections: Array<{ view: ExportView; heading: string; body: string }> = [
+  const sections: Array<{
+    view: ExportView;
+    heading: string;
+    body: string;
+    producer?: ExportMeta["producer"];
+  }> = [
     { view: "tree", heading: meta.viewLabel, body: views.tree },
     { view: "outline", heading: "Heading outline", body: views.outline },
-    { view: "tab", heading: "Tab sequence", body: views.tabSequence ?? "" },
+    // Always the page's own walk's: a report of Chrome's tree says so here,
+    // as its header names Chrome's.
+    {
+      view: "tab",
+      heading: "Tab sequence",
+      body: views.tabSequence ?? "",
+      producer: "dom",
+    },
   ];
   const chosen = sections.filter((s) => selection.includes(s.view));
   const title = pageLabel(meta.pageTitle, meta.pageUrl);
@@ -118,6 +142,13 @@ export function buildExportMarkdown(
     "",
     `## ${s.heading}`,
     "",
+    ...(s.producer && s.producer !== meta.producer
+      ? [`**Producer:** ${PRODUCER_LABELS[s.producer]}`, ""]
+      : []),
+    // The tab order is the whole page's, whatever the tree is scoped to.
+    ...(s.view === "tab" && meta.scope
+      ? ["**Scope:** the whole page", ""]
+      : []),
     fenced(s.body),
   ]);
 

@@ -1,6 +1,6 @@
 /**
- * The page outline the native tree draws through `chrome.debugger`, as the
- * DOM tree's select and hover do: a settled selection's `reveal` (outline,
+ * The page outline the native tree draws through `chrome.debugger`, as a TAB
+ * row's select draws its own: a settled selection's `reveal` (outline,
  * scrolled into view, real focus) and a hovered row's `preview` (outline in
  * place, nothing else). One hook, so both share the guards, the request ids
  * the service worker drops a superseded one by, and what is on the page.
@@ -17,7 +17,6 @@ import { useCallback, useRef } from "preact/hooks";
 import { backendNodeIdFrom } from "../native/native-core.js";
 
 export interface NativeOverlayInputs {
-  enabled: boolean;
   /** The tab the native tree was read from. */
   tabId: number | undefined;
   busy: boolean;
@@ -50,7 +49,7 @@ export function useNativeOverlay(inputs: NativeOverlayInputs) {
   // The tab it last told the user can't show an outline: said once per tab.
   const noOutlineAnnouncedFor = useRef<number | null>(null);
   // The tab whose previews stopped: one was refused for a reason (DevTools
-  // open, a page native mode can't attach to) or by the user's Cancel on
+  // open, a page Chrome won't let the debugger attach to) or by the user's Cancel on
   // Chrome's bar. Every later hover would be refused the same way, or put the
   // bar back after the user dismissed it, so previews wait for the next
   // successful read (`resumePreviews`).
@@ -65,12 +64,7 @@ export function useNativeOverlay(inputs: NativeOverlayInputs) {
     s: NativeOverlayInputs,
   ): s is NativeOverlayInputs & {
     tabId: number;
-  } =>
-    s.enabled &&
-    s.tabId !== undefined &&
-    !s.busy &&
-    !s.curtainOn &&
-    !s.userOpInFlight();
+  } => s.tabId !== undefined && !s.busy && !s.curtainOn && !s.userOpInFlight();
 
   const ask = (tabId: number, nodeId: string, action: "reveal" | "preview") => {
     const requestId = ++lastRequest.current;
@@ -126,8 +120,8 @@ export function useNativeOverlay(inputs: NativeOverlayInputs) {
 
   /**
    * The pointer rests on `nodeId`, or left the tree's rows (`null`). Leaving
-   * clears the outline, whichever row it came from — the selection's too, as
-   * the DOM tree's hover does. A preview that settles after the pointer has
+   * clears the outline, whichever row it came from — the selection's too. A
+   * preview that settles after the pointer has
    * left clears what it drew, unless a newer overlay was asked for since.
    */
   const preview = useCallback((nodeId: string | null) => {

@@ -14,6 +14,7 @@ link "The MCP server refuses to open a file:// URL"
 link "Still stuck?"
 button "Copy Code"
 generic
+link "inspector"
 button "Copy Code"
 generic
 button "Copy Code"
@@ -38,5 +39,7 @@ generic
 link "Peer Dependencies"
 link "Next.js"
 link "Storybook + React 19"
+link "inspector"
+link "Two producers"
 link "Edit this page on GitHub"
 link "Previous page Accessible Names"

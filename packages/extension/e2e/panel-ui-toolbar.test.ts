@@ -1,18 +1,19 @@
 /**
- * The in-page tree's toolbar at a side panel's width. A side panel is usually
- * 320–400px wide, and with the in-page tree's controls on one row with the
- * shared toolbar's, everything past the search box took about 510px: the
- * search box shrank to its padding, the DOM / A11Y / TAB views, whose
- * `overflow: hidden` leaves them no minimum width, to nothing, and Copy ▾ ran
- * off the edge, so a click on A11Y landed on the search box. Layout is what
- * jsdom doesn't do, so only a real browser can pin it.
+ * The panel's toolbars at a side panel's width. A side panel is usually
+ * 320–400px wide, and with a tree's controls on one row with the shared
+ * toolbar's, everything past the search box once took about 510px: the
+ * search box shrank to its padding, a view toggle, whose `overflow: hidden`
+ * leaves it no minimum width, to nothing, and Copy ▾ ran off the edge, so a
+ * click on A11Y landed on the search box. Chrome's tree's toolbar, which
+ * holds the A11Y / TAB views, wraps so each control keeps its room. Layout is
+ * what jsdom doesn't do, so only a real browser can pin it.
  */
 
 import { expect, test, type NativeHarness } from "./harness";
 
 /**
- * The controls of the two toolbars over the in-page tree, the one both trees
- * share and the in-page tree's own, and what keeps any of them from a click:
+ * The controls of the two toolbars over Chrome's tree, the shared one and the
+ * tree's own, and what keeps any of them from a click:
  * running past the panel's edge, or another element at its middle, where a
  * click lands. Read in one pass in the page: with the fixture page in front,
  * the panel draws about one frame a second, so each of Playwright's own
@@ -25,7 +26,7 @@ function reachability(nav: NativeHarness) {
       ...document.querySelectorAll<HTMLElement>('[role="toolbar"]'),
     ]
       .filter((bar) =>
-        /^(In-page )?tree controls$/i.test(bar.getAttribute("aria-label")!),
+        /^(Native )?tree controls$/i.test(bar.getAttribute("aria-label")!),
       )
       .flatMap((bar) => [
         ...bar.querySelectorAll<HTMLElement>("button, input"),
@@ -53,7 +54,7 @@ function reachability(nav: NativeHarness) {
       }
     }
     const search = document.querySelector(
-      'input[aria-label="Search tree nodes"]',
+      '[aria-label="Native tree controls"] input.sn-search',
     );
     return {
       count: controls.length,
@@ -65,8 +66,9 @@ function reachability(nav: NativeHarness) {
 
 async function expectAllReachable(nav: NativeHarness): Promise<void> {
   const { count, problems, searchWidth } = await reachability(nav);
-  // The shared toolbar's picker, curtain, Focus sync and Copy ▾, and the
-  // in-page tree's search box, its three views, refresh, expand and collapse.
+  // The shared toolbar's picker, curtain, Focus sync and Copy ▾, and Chrome's
+  // tree's search box, its two views, refresh, expand, collapse and Follow
+  // page changes.
   expect(count).toBe(11);
   expect(problems).toEqual([]);
   // Room to type in: the narrow panel left it its 18px of padding.
@@ -74,16 +76,10 @@ async function expectAllReachable(nav: NativeHarness): Promise<void> {
 }
 
 for (const width of [320, 360, 400]) {
-  test(`at ${width}px the in-page tree's toolbar keeps every control on screen, and DOM, A11Y and TAB take a click`, async ({
+  test(`at ${width}px Chrome's tree's toolbar keeps every control on screen, and A11Y and TAB take a click`, async ({
     nav,
   }) => {
-    const { page } = await nav.open("tabs.html");
-    await page.bringToFront();
-    await nav.panel.reload();
-    await nav.chooseTree("In-page tree");
-    await expect
-      .poll(() => nav.panel.locator(".sn-node").count(), { timeout: 20_000 })
-      .toBeGreaterThan(0);
+    await nav.showNative("tabs.html");
 
     // The panel page is shared by every test in the worker.
     const size = nav.panel.viewportSize();
@@ -92,10 +88,8 @@ for (const width of [320, 360, 400]) {
       await expectAllReachable(nav);
 
       // A11Y shows first, so each click changes the view.
-      for (const view of ["TAB", "DOM", "A11Y"]) {
-        const button = nav
-          .viewToggle()
-          .getByRole("button", { name: view, exact: true });
+      for (const view of ["TAB", "A11Y"] as const) {
+        const button = nav.viewButton(view);
         await button.click();
         await expect(button).toHaveAttribute("aria-pressed", "true");
       }
@@ -104,7 +98,7 @@ for (const width of [320, 360, 400]) {
       // there is some, and under it where there isn't, never in a control's
       // way.
       await nav.panel
-        .getByRole("searchbox", { name: "Search tree nodes" })
+        .getByRole("searchbox", { name: "Search native tree nodes" })
         .fill("Nils");
       await expect(nav.panel.locator(".sn-search-count")).toHaveText(
         /^[1-9]\d* match/,

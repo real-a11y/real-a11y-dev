@@ -4,18 +4,16 @@ import * as curtains from "./curtain-store.js";
 import {
   asFrameMarks,
   buildFrameInfoMap,
-  frameVisibility,
   mergeFrameTrees,
   unplacedFrames,
 } from "./frame-merger.js";
-import { cancelNativePicks, registerNativeMode } from "./native/index.js";
+import { registerNativeMode, releaseDebugger } from "./native/index.js";
 import {
   type PlannedTabMessage,
   describeBroadcastDelivery,
   isTrustedSender,
   lookupOrder,
   panelWindowFor,
-  prefixNodeId,
   parseNodeId,
   planFrameAnnouncementResponse,
   planFrameHello,
@@ -28,21 +26,21 @@ import {
   clearTabFrames,
   disposeTabState,
   forgetAskedPlaces,
+  framesToMerge,
   getOrCreateTabState,
+  publishedTree,
   recordFrameTree,
   removeFrame,
   unplaceableFrames,
 } from "./tab-state.js";
-import type { ContentToPanel } from "./types.js";
+import type { ContentToPanel, TreeRequest } from "./types.js";
 
 // `chrome.debugger` native mode (RFC PR H) ships in every build now that the
 // manifest carries `debugger`/`tabs`/`storage` as required permissions (see
 // `public/manifest.json`) — the capability itself is always registered.
-// Whether it attaches is a separate, runtime, user-facing setting
-// (`native/setting.ts`): on by default, and off once the user turns it off in
-// the side panel's Settings. `registerNativeMode()` wires the message
-// handlers, and none of them attaches while it is off — see
-// `NativeDebuggerSession.attach()`'s own gate. `__DOGFOOD__` (still a
+// Chrome's tree is the side panel's only tree, so no setting gates it:
+// `registerNativeMode()` wires the message handlers, which answer the
+// extension's own pages alone (`isExtensionPageSender`). `__DOGFOOD__` (still a
 // build-time constant, see `vite.config.ts`) now only decides whether the
 // dev-only `DogfoodPanel` debug widget renders (`sidepanel/main.tsx`); it no
 // longer gates this module at all.
@@ -146,7 +144,7 @@ async function mergeAndSendTree(tabId: number) {
 
   const frameInfoMap = buildFrameInfoMap(allFrames);
   const result = mergeFrameTrees({
-    frames: state.frames,
+    frames: framesToMerge(state, frameInfoMap),
     frameInfoMap,
     unplaceable: unplaceableFrames(state),
   });
@@ -155,49 +153,21 @@ async function mergeAndSendTree(tabId: number) {
   state.nodeToFrame = result.nodeToFrame;
   askForFramePlaces(tabId, state, result.unplaced, frameInfoMap);
 
-  // Send merged tree to side panel with page info. `tabId` lets the side
-  // panel filter out broadcasts for tabs it isn't bound to — without that
-  // any background tab's tree update leaks into every open panel.
-  const serialized = Array.from(result.nodes.entries());
   // The outstanding request is answered by this publish, whatever prompted the
   // merge — so the guard above goes back to being purely port-driven.
   panelTreeRequests.delete(tabId);
-  // Chrome's tree reads the top frame and every frame the page shows, so a
-  // change in any of them is one its auto-refresh follows; a hidden frame's
-  // (an animating ad's) changes nothing there.
-  const pageChangedAt: number[] = [];
-  for (const [frameId, at] of changed) {
-    const tree = state.frames.get(frameId);
-    const where = tree
-      ? frameVisibility(result.nodes, tree, topFrame.rootId)
-      : "hidden";
-    if (where === "shown") pageChangedAt.push(at);
-    // A frame with no place yet, or inside one that has none, is answered
-    // for by the publish that places it, such as one its parent's tree,
-    // sent again on request, prompts.
-    if (where !== "unplaced" && state.changedFrames.get(frameId) === at) {
-      state.changedFrames.delete(frameId);
-    }
-  }
-  chrome.runtime
-    .sendMessage({
-      type: "TREE_DATA",
-      tabId,
-      payload: {
-        nodes: serialized,
-        rootId: topFrame.rootId,
-        pageTitle: topFrame.pageTitle,
-        pageUrl: topFrame.frameUrl,
-        // Each one: the panel follows an action while any change it hasn't
-        // read falls in the action's window, not only the latest.
-        ...(pageChangedAt.length > 0
-          ? { pageChangedAt: pageChangedAt.sort((x, y) => x - y) }
-          : {}),
-      },
-    })
-    .catch(() => {
-      // Side panel might not be open
-    });
+  // Send merged tree to side panel with page info. `tabId` lets the side
+  // panel filter out broadcasts for tabs it isn't bound to — without that
+  // any background tab's tree update leaks into every open panel.
+  const tree = publishedTree(state, result, {
+    tabId,
+    topFrame,
+    changed,
+    listed: frameInfoMap,
+  });
+  chrome.runtime.sendMessage(tree).catch(() => {
+    // Side panel might not be open
+  });
 }
 
 /**
@@ -497,6 +467,9 @@ let sidepanelConnected = false;
 // panel, whose disconnect turns every tracker off; a panel that connects
 // sends its own state.
 const focusTrackerOffTabs = new Set<number>();
+// The tree each tab's panel last asked for, which a frame armed after that
+// sends. Kept, and cleared, as Focus sync's state is.
+const panelTrees = new Map<number, TreeRequest>();
 // The connected side-panel ports. Chrome renders one side panel PER WINDOW, so
 // there can be several at once — ref-counted here so the disconnect teardown
 // runs only when the LAST panel closes (the panel-driven state below is global).
@@ -543,7 +516,8 @@ chrome.runtime.onConnect.addListener((port) => {
     if (sidepanelPorts.size > 0) return;
     sidepanelConnected = false;
     focusTrackerOffTabs.clear();
-    cancelNativePicks();
+    panelTrees.clear();
+    releaseDebugger();
 
     // The panel arms the focus tracker (and observer) on any tab whose frames
     // announce while it is connected — background tabs included, and
@@ -785,6 +759,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           nodes: message.payload.nodes,
           rootId: message.payload.rootId,
           ...asFrameMarks(message.payload),
+          ...(message.payload.framesOnly === true ? { framesOnly: true } : {}),
         });
         // A frame asked where one of its frames goes has now answered.
         answeredPlacesAskedOf(state, frameId);
@@ -810,6 +785,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           sidepanelConnected,
           curtainOn: curtains.isCurtainOn(tabId),
           focusTracker: !focusTrackerOffTabs.has(tabId),
+          tree: panelTrees.get(tabId),
         });
         dispatchPlan(plan);
 
@@ -827,6 +803,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             frameId,
             sidepanelConnected,
             focusTracker: !focusTrackerOffTabs.has(tabId),
+            tree: panelTrees.get(tabId),
           }),
         );
         sendResponse({ received: true });
@@ -834,47 +811,21 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       }
 
       case "FOCUS_CHANGED": {
-        // Prefix the nodeId and forward to side panel. Stamp `tabId` so
-        // the panel can drop focus events for tabs it isn't bound to. The
-        // native tree's page keys number the reporting frame's own document
+        // Forward to the side panel. Stamp `tabId` so the panel can drop
+        // focus events for tabs it isn't bound to. The native tree's page
+        // keys number the reporting frame's own document
         // (`NATIVE_PAGE_KEYS`), so they go with that frame.
-        const { nodeId, pageKeys } = message.payload;
+        const { pageKeys } = message.payload;
         chrome.runtime
           .sendMessage({
             type: "FOCUS_CHANGED",
             tabId,
-            payload: {
-              ...(nodeId !== undefined
-                ? { nodeId: prefixNodeId(frameId, nodeId) }
-                : {}),
-              ...(pageKeys !== undefined ? { pageKeys, frameId } : {}),
-            },
+            payload: { pageKeys, frameId },
           })
           .catch((err) => {
             // Panel may be closed; benign, but log so real routing bugs aren't invisible.
             console.debug(
               "[SN background] FOCUS_CHANGED forward failed:",
-              err?.message ?? err,
-            );
-          });
-        sendResponse({ received: true });
-        return false;
-      }
-
-      case "NODE_PICKED": {
-        // Same shape as FOCUS_CHANGED — the content script reports a
-        // frame-local nodeId; prefix it with the originating frameId
-        // so the panel resolves it against the merged tree.
-        const prefixedNodeId = prefixNodeId(frameId, message.payload.nodeId);
-        chrome.runtime
-          .sendMessage({
-            type: "NODE_PICKED",
-            tabId,
-            payload: { nodeId: prefixedNodeId },
-          })
-          .catch((err) => {
-            console.debug(
-              "[SN background] NODE_PICKED forward failed:",
               err?.message ?? err,
             );
           });
@@ -938,6 +889,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       if (message.type === "SET_FOCUS_TRACKER") {
         if (message.payload.enabled) focusTrackerOffTabs.delete(tabId);
         else focusTrackerOffTabs.add(tabId);
+      } else {
+        panelTrees.set(tabId, {
+          framesOnly: message.payload.framesOnly === true,
+        });
       }
       // Clear old frame data on fresh request
       if (message.type === "REQUEST_TREE") {
@@ -976,6 +931,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       (message as { tabId?: number }).tabId,
       activeTabId,
     );
+    // The tree this panel asks for, for the tab it shows next: read before
+    // the tab's removal forgets it.
+    const tree =
+      closingTabId == null ? undefined : panelTrees.get(closingTabId);
     if (closingTabId != null) {
       chrome.tabs.remove(closingTabId, () => {
         if (chrome.runtime.lastError) {
@@ -1000,7 +959,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
               nowActive,
               {
                 type: "REQUEST_TREE",
-                payload: { viewMode: "a11y" },
+                payload: tree ??
+                  panelTrees.get(nowActive) ?? { framesOnly: true },
               },
               () => {
                 if (chrome.runtime.lastError) {
@@ -1031,21 +991,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           /* ignore */
         }
       });
-    }
-    sendResponse({ success: true });
-    return false;
-  }
-
-  // Picker toggle — broadcast to every frame so a click inside an iframe
-  // also picks an element. NODE_PICKED comes back through the default
-  // content→panel forwarder below (with `tabId` stamped on).
-  if (message.type === "SET_PICK_MODE") {
-    const targetTabId = resolvePanelTargetTab(
-      (message as { tabId?: number }).tabId,
-      activeTabId,
-    );
-    if (targetTabId != null) {
-      void broadcastToAllFrames(targetTabId, message);
     }
     sendResponse({ success: true });
     return false;
@@ -1208,6 +1153,7 @@ chrome.tabs.onRemoved.addListener((tabId) => {
   curtains.forgetTab(tabId);
   panelTreeRequests.delete(tabId);
   focusTrackerOffTabs.delete(tabId);
+  panelTrees.delete(tabId);
   // A panel showing a popup is told nothing else when the popup closes: no
   // tab is switched to in the panel's own window, so it asks for that
   // window's tab itself.

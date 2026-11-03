@@ -22,7 +22,6 @@ function state(over: Partial<AutoRefreshState> = {}): AutoRefreshState {
     mode: "changes" as const,
     armedTab: 7,
     boundTab: 7,
-    native: true,
     navigationPending: false,
     lastChangeAt: NOW - 5000,
     lastReadStartedAt: NOW - 6000,
@@ -105,12 +104,6 @@ describe("decideAutoRefresh in changes mode", () => {
         NOW,
       ),
     ).toEqual({ kind: "skip" });
-  });
-
-  it("skips when the panel isn't showing the native tree", () => {
-    expect(decideAutoRefresh(state({ native: false }), NOW)).toEqual({
-      kind: "skip",
-    });
   });
 
   it("skips when no read has armed it, or a failed read disarmed it", () => {

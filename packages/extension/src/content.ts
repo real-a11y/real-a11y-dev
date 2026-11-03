@@ -6,29 +6,25 @@ import {
   FocusManager,
   DomObserver,
   DOM_OBSERVER_DEBOUNCE_MS,
-  createPicker,
   getElementRefs,
   getExplicitRole,
+  getNodeId,
   renderingParent,
   safeGetAttribute,
   safeNodeType,
   safeParentElement,
 } from "@real-a11y-dev/core";
-import type {
-  SemanticNode,
-  TreeViewMode,
-  TreeChange,
-} from "@real-a11y-dev/core";
+import type { TreeChange } from "@real-a11y-dev/core";
 
+import { liftCurtain, showCurtain } from "./curtain.js";
 import { computeFieldState } from "./field-state.js";
 import {
-  FRAME_HOLDER_SELECTOR,
   frameOwnerMark,
-  isFrameHolder,
   markFrameOwner,
   newFrameMark,
   unmarkFrameOwner,
 } from "./frame-owner.js";
+import { frameSkeleton, markedFrames } from "./frame-skeleton.js";
 import {
   liveDocumentElement,
   liveDocumentURL,
@@ -44,29 +40,22 @@ import {
 import { pageText } from "./page-text.js";
 import { isTrustedSender, planHighlight } from "./routing.js";
 import { elementsFromTabSequence, sendKey } from "./send-key.js";
-import type { PanelToContent } from "./types.js";
+import type { PanelToContent, TreeRequest } from "./types.js";
 
 const isSubFrame = window !== window.top;
 
-/**
- * Actions whose dispatch goes through `ActionDispatcher`'s synthetic
- * pointerdown→click sequence, and which an armed element picker therefore
- * swallows.
- *
- * Not `toggle`, despite its click fallback: the extractor emits it only for
- * `<details>`/`<summary>` (`dom-extractor.ts`), and both of those flip
- * `.open` directly, so the fallback is unreachable from a tree this panel
- * built. The rest — `type`, `select`, `focus`, `submit`, `scroll` and the
- * steppers, which use Arrow keys — never touch a pointer event either.
- */
-const POINTER_ACTIONS = new Set(["click", "navigate"]);
-
-let currentViewMode: TreeViewMode = "a11y";
+// While Chrome's tree shows, a frame sends its skeleton and reads no tree,
+// until the panel asks for the whole tree (`TreeRequest`).
+let framesOnly = true;
 let focusingFromTree = false;
 let liveExtractor: LiveTreeExtractor | null = null;
 
-function liveMode(): "dom" | "a11y" {
-  return currentViewMode === "dom" ? "dom" : "a11y";
+/** Take the tree the panel asks for. Whether it is another than before. */
+function takeTreeRequest(tree: TreeRequest): boolean {
+  const next = tree.framesOnly === true;
+  const changed = next !== framesOnly;
+  framesOnly = next;
+  return changed;
 }
 
 /** The extractor over the document's root element, or null while the
@@ -74,13 +63,14 @@ function liveMode(): "dom" | "a11y" {
  *  written to yet. */
 function getLiveExtractor(): LiveTreeExtractor | null {
   if (!liveExtractor && boundRoot) {
-    liveExtractor = new LiveTreeExtractor(boundRoot, { mode: liveMode() });
+    liveExtractor = new LiveTreeExtractor(boundRoot, { mode: "a11y" });
   }
   return liveExtractor;
 }
 
 // This frame's mark on the element holding it (see frame-owner.ts), which is
-// how both trees know which <iframe> this frame's document belongs under
+// how the service worker and Chrome's tree know which <iframe> this frame's
+// document belongs under
 // when its URL can't say: an `about:blank` or `srcdoc` frame, or one a
 // script wrote into. None for the top frame.
 const frameMark = isSubFrame ? newFrameMark() : null;
@@ -201,9 +191,17 @@ function teardown(): void {
   observer?.stop();
   unobserveLiveRegions();
   documentObserver.disconnect();
-  // Drop the picker listeners and restore the cursor so the page stops
-  // showing crosshair after the extension is reloaded / orphaned.
-  picker.teardown();
+  // No panel can lift the curtain any more: the extension it belonged to is
+  // gone, and no new script comes to a page already open.
+  curtainVisible = false;
+  drawCurtain();
+}
+
+/** Tear down at the user's next key or press on a curtained page whose
+ *  extension is gone, which leaves the page behind a curtain nothing can
+ *  lift, rather than at its next send, which may never come. */
+function teardownIfOrphaned(): void {
+  if (curtainVisible && !chrome.runtime?.id) teardown();
 }
 
 /**
@@ -215,27 +213,18 @@ function teardown(): void {
 function sendTree(change?: TreeChange, { reread = false } = {}) {
   // Before extracting, which can take a while on a big page.
   const readAt = Date.now();
-  const extractor = getLiveExtractor();
+  const tree = frameTree(change);
   // No root element to read: the next one to appear sends the tree.
-  if (!extractor) return;
-  const mode = liveMode();
-  if (extractor.mode !== mode) {
-    extractor.setMode(mode);
-  }
-
-  const result = change ? extractor.refresh(change) : extractor.extract();
-
-  const serialized = Array.from(result.nodes.entries());
+  if (!tree) return;
+  const { embeds, ...read } = tree;
   const owner = ownFrameMark();
-  const embeds = markedFrames(serialized);
 
   safeSendMessage({
     type: "FRAME_TREE_DATA",
     payload: {
       frameUrl: location.href,
       pageTitle: document.title,
-      nodes: serialized,
-      rootId: result.rootId,
+      ...read,
       ...(owner !== undefined ? { owner } : {}),
       ...(embeds.length > 0 ? { embeds } : {}),
       // The burst the observer saw ended its debounce ago. Anything else sent
@@ -247,41 +236,20 @@ function sendTree(change?: TreeChange, { reread = false } = {}) {
   });
 }
 
-// Through the prototype: a named <img> or <form> called `querySelectorAll`
-// shadows the document's own.
-const querySelectorAll = Document.prototype.querySelectorAll;
-
-/**
- * The tree's nodes for elements that hold a frame whose script marked them,
- * each with the mark: where the service worker puts that frame's tree (see
- * frame-owner.ts). A marked element the tree has no node for, as the a11y
- * view has none for a hidden <iframe>, goes with an empty node id: the
- * frame has no place in this tree, and the service worker needn't ask this
- * document where it is. One inside a shadow root isn't found that way, and
- * is asked after once.
- */
-function markedFrames(
-  nodes: ReadonlyArray<[string, SemanticNode]>,
-): Array<[nodeId: string, owner: string]> {
-  const out: Array<[string, string]> = [];
-  const inTree = new Set<string>();
-  for (const [nodeId, node] of nodes) {
-    const tagName = node.dom?.tagName;
-    if (!tagName || !isFrameHolder(tagName.toLowerCase())) continue;
-    const element = elementRefs.get(nodeId);
-    const mark = element ? frameOwnerMark(element) : undefined;
-    if (mark === undefined) continue;
-    out.push([nodeId, mark]);
-    inTree.add(mark);
+/** This frame's tree as the panel asks for it, `change` read into it: its
+ *  skeleton, or the whole tree. Null while the document has no root
+ *  element. */
+function frameTree(change?: TreeChange) {
+  if (framesOnly) {
+    return boundRoot
+      ? { ...frameSkeleton(boundRoot), framesOnly: true as const }
+      : null;
   }
-  for (const element of querySelectorAll.call(
-    document,
-    FRAME_HOLDER_SELECTOR,
-  )) {
-    const mark = frameOwnerMark(element);
-    if (mark !== undefined && !inTree.has(mark)) out.push(["", mark]);
-  }
-  return out;
+  const extractor = getLiveExtractor();
+  if (!extractor) return null;
+  const result = change ? extractor.refresh(change) : extractor.extract();
+  const nodes = Array.from(result.nodes.entries());
+  return { nodes, rootId: result.rootId, embeds: markedFrames(nodes) };
 }
 
 /** The document's root element the script is bound to: what the tree is
@@ -299,26 +267,6 @@ let observer = observerOf(boundRoot);
 const documentObserver = new MutationObserver(() => rebindDocument());
 documentObserver.observe(document, { childList: true });
 
-// ─── Element picker (DevTools-style "select an element in the page") ─────────
-//
-// All behavior lives in the standalone `createPicker` factory in
-// ./picker.ts — that module is unit-tested in jsdom without chrome.runtime.
-// The wiring here just injects the runtime dependencies (FocusManager
-// highlight, the shared elementRefs, safeSendMessage for panel
-// notifications) and keeps a reference for teardown.
-const picker = createPicker({
-  doc: document,
-  isSubFrame,
-  findId: (el) => elementRefs.findId(el),
-  onHighlight: (nodeId) =>
-    focusManager.highlightElement(nodeId, { scroll: false }),
-  onClearHighlight: () => focusManager.clearHighlight(),
-  onPicked: (nodeId) =>
-    safeSendMessage({ type: "NODE_PICKED", payload: { nodeId } }),
-  onModeChange: (enabled) =>
-    safeSendMessage({ type: "PICK_MODE_CHANGED", payload: { enabled } }),
-});
-
 // Listen for messages from side panel (via background)
 chrome.runtime.onMessage.addListener(
   (message: PanelToContent, sender, sendResponse) => {
@@ -333,7 +281,7 @@ chrome.runtime.onMessage.addListener(
 
     switch (message.type) {
       case "REQUEST_TREE": {
-        currentViewMode = message.payload.viewMode;
+        takeTreeRequest(message.payload);
         // Requesting a tree implies the panel is open — arm live updates so
         // the panel keeps receiving them after this one-time populate.
         startObserving();
@@ -347,8 +295,8 @@ chrome.runtime.onMessage.addListener(
         // service-worker restart empties it while this frame keeps observing
         // and stays silent until its own DOM next mutates. This is the
         // background asking us to re-announce so its merge sees us again.
-        // Unlike REQUEST_TREE it carries no viewMode and must not change
-        // ours — `currentViewMode` survived the restart and is still right.
+        // Unlike REQUEST_TREE it carries no tree to send and must not change
+        // ours — the one we have survived the restart and is still right.
         //
         // Only answer if already armed — which is the restart case, and the
         // only one the background sends this for. Arming here instead would
@@ -362,37 +310,13 @@ chrome.runtime.onMessage.addListener(
       }
 
       case "SET_VIEW_MODE": {
-        currentViewMode = message.payload.viewMode;
+        takeTreeRequest(message.payload);
         sendTree(undefined, { reread: true });
         sendResponse({ success: true });
         break;
       }
 
       case "DISPATCH_ACTION": {
-        // An armed picker owns the page's POINTER events, so an action that
-        // reaches the dispatcher's synthetic pointerdown→click sequence
-        // cannot land: the picker's capture-phase listeners swallow the whole
-        // sequence before the page sees any of it. Worse, that click reaches
-        // the picker's own handler, which resolves the actioned element —
-        // tracked by construction, since the action arrived as a node id —
-        // reports it as a NODE_PICKED the user never pointed at, and drops
-        // out of pick mode. Refuse instead: same page outcome as before,
-        // without the phantom pick.
-        //
-        // Only the pointer actions. The picker listens for pointer events and
-        // Escape, nothing else, so `type`, `select`, `focus`, `submit`,
-        // `scroll` and the steppers (keyboard arrows) reach the page
-        // unharmed and stay available — blocking those would strand a typed
-        // value in the input panel for no reason. `toggle` is here because it
-        // falls back to a click for anything that is not a <details>.
-        if (picker.isEnabled() && POINTER_ACTIONS.has(message.payload.action)) {
-          sendResponse({
-            success: false,
-            error: "Turn off pick mode to act on the page",
-          });
-          break;
-        }
-
         const result = dispatcher.dispatch(message.payload);
         sendResponse(result);
 
@@ -487,14 +411,13 @@ chrome.runtime.onMessage.addListener(
       }
 
       case "SET_OBSERVING": {
-        if (message.payload.enabled) startObserving();
-        else stopObserving();
-        sendResponse({ success: true });
-        break;
-      }
-
-      case "SET_PICK_MODE": {
-        picker.setEnabled(message.payload.enabled);
+        const { enabled, tree } = message.payload;
+        // A frame already observing sends the tree it is now asked for.
+        const changed = tree !== undefined && takeTreeRequest(tree);
+        if (!enabled) stopObserving();
+        else if (observingEnabled && changed) {
+          sendTree(undefined, { reread: true });
+        } else startObserving();
         sendResponse({ success: true });
         break;
       }
@@ -525,20 +448,12 @@ chrome.runtime.onMessage.addListener(
       }
 
       case "SEND_KEY": {
-        // No pick-mode gate here, deliberately. The picker's keydown
-        // listener acts on exactly one key — it takes Escape as "leave pick
-        // mode" — and that is a reasonable thing for Escape to do, not the
-        // silent corruption DISPATCH_ACTION suffered. Refusing it instead
-        // would leave the key bar's Esc doing nothing at all: the page never
-        // sees it either way, and the mode it used to close stays open.
-        // Every other key passes the picker untouched.
-        //
         // Synthetic KeyboardEvents are untrusted — Chrome skips their
         // default actions (Tab does not move focus; Escape does not close
         // <dialog>). sendKey dispatches the events for page listeners and
         // applies those defaults itself unless preventDefault ran. Tab
         // order reuses core getTabSequence via the live extractor — same
-        // policy as the panel's Tab Sequence view.
+        // policy as the panel's TAB view.
         const target = document.activeElement || document.body;
         sendKey(target, message.payload, {
           resolveTabSequence: () => {
@@ -563,28 +478,11 @@ chrome.runtime.onMessage.addListener(
 );
 
 /** Put the curtain's element in the document, or take it out, as
- *  `curtainVisible` has it. Only the top frame renders it. */
+ *  `curtainVisible` has it. Only the top frame renders it: see curtain.ts. */
 function drawCurtain(): void {
   if (isSubFrame) return;
-  let curtain = document.getElementById("__sn-curtain");
-  if (curtainVisible && !curtain && boundRoot) {
-    curtain = document.createElement("div");
-    curtain.id = "__sn-curtain";
-    curtain.style.cssText = `
-      position: fixed; inset: 0; z-index: 2147483646;
-      background: #0f172a; color: #94a3b8;
-      display: flex; align-items: center; justify-content: center;
-      flex-direction: column; gap: 8px;
-      font: 16px/1.5 system-ui, sans-serif;
-    `;
-    curtain.innerHTML = `
-      <div style="font-size:24px;font-weight:700;color:#e2e8f0">Screen Curtain</div>
-      <div>Content hidden — navigate via Semantic Navigator</div>
-    `;
-    boundRoot.appendChild(curtain);
-  } else if (!curtainVisible && curtain) {
-    curtain.remove();
-  }
+  if (!curtainVisible) liftCurtain(document);
+  else if (boundRoot) showCurtain(boundRoot);
 }
 
 // Reverse focus sync: page focus → tree selection. Added by
@@ -616,12 +514,10 @@ function onFocusIn(
   watchFocusRoots(focused);
   if (curtainVisible) return;
 
-  // The DOM tree follows the document's view of the event, the outermost
-  // shadow host, as it always has. A move heard on a shadow root keeps that
-  // host, so it has nothing new to follow there.
-  const nodeId = atDocument
-    ? findTrackedAncestor(e.target as Element | null)
-    : null;
+  // The focus ring goes on the document's view of the event, the outermost
+  // shadow host. A move heard on a shadow root keeps that host, so it has
+  // nothing new to ring there.
+  const ringId = atDocument ? overlayNodeId(e.target as Element | null) : null;
   // For the native tree, which may hold a row for the element itself. A
   // report that numbers nothing still says which frame focus is in, and the
   // panel takes that frame's row. In the top frame it says nothing at all.
@@ -631,15 +527,9 @@ function onFocusIn(
     (isSubFrame || Object.values(chains).some((chain) => chain.length > 0))
       ? chains
       : undefined;
-  if (!nodeId && !keys) return;
-  if (nodeId) focusManager.highlightElement(nodeId);
-  safeSendMessage({
-    type: "FOCUS_CHANGED",
-    payload: {
-      ...(nodeId ? { nodeId } : {}),
-      ...(keys ? { pageKeys: keys } : {}),
-    },
-  });
+  if (ringId) focusManager.highlightElement(ringId);
+  if (!keys) return;
+  safeSendMessage({ type: "FOCUS_CHANGED", payload: { pageKeys: keys } });
 }
 
 /** The element an event happened on. `e.target` is retargeted to the
@@ -760,9 +650,19 @@ function findTrackedAncestor(el: Element | null): string | null {
   return null;
 }
 
-// The native tree's selection follow asks for the same overlay the DOM tree's
-// own select draws (HIGHLIGHT_NODE → `highlightElement`, scrolled into view),
-// and its hover for the one the DOM tree's hover draws (in place: no scroll).
+/** The node an overlay on `el` is drawn by: the tree's for it or for the
+ *  nearest element above it. A frame sending its skeleton has read no tree,
+ *  and gives the element its own. */
+function overlayNodeId(el: Element | null): string | null {
+  if (!framesOnly || !el) return findTrackedAncestor(el);
+  const id = getNodeId(el);
+  elementRefs.set(id, el);
+  return id;
+}
+
+// The native tree's selection follow asks for the same overlay a TAB row's
+// select draws (HIGHLIGHT_NODE → `highlightElement`, scrolled into view), and
+// its hover for an overlay drawn in place, with no scroll.
 // `pageReveal` and `pagePreview` in native/native-core.ts fire these at the
 // element from the page's main world, and DOM events reach this isolated
 // world with the same target, so the overlay lands on the element the native
@@ -785,7 +685,7 @@ function highlightFromNativeEvent(e: Event, kind: "reveal" | "preview"): void {
   if (arm.nonce === null || (e as CustomEvent).detail !== arm.nonce) return;
   arm.nonce = null;
   if (curtainVisible) return;
-  const nodeId = findTrackedAncestor(composedTarget(e));
+  const nodeId = overlayNodeId(composedTarget(e));
   if (nodeId) {
     focusManager.highlightElement(nodeId, { scroll: kind === "reveal" });
   }
@@ -1043,11 +943,10 @@ const typing = typingClock();
  * (`isPageInput`). While the panel is open, say so, and when (`actedAt`),
  * and nothing more: not what or where. Chrome's tree then reads what the
  * page does in the next few seconds, as it does after an action sent
- * through the tree. A click the picker takes is a pick, not an action on
- * the page.
+ * through the tree.
  */
 const onPageInput = (e: Event) => {
-  if (tornDown || !observingEnabled || picker.isEnabled()) return;
+  if (tornDown || !observingEnabled) return;
   // A key in a closed shadow root's field reaches the window as its host's;
   // `deepFocusTarget` finds the field.
   const target = () =>
@@ -1059,11 +958,13 @@ const onPageInput = (e: Event) => {
 
 /** The user pressed a key: when, to date the typing it makes. */
 const onKeyPressed = (e: Event) => {
+  teardownIfOrphaned();
   if (!tornDown && observingEnabled) typing.keyPressed(e);
 };
 
 /** The user pressed the pointer: what is edited next isn't a key's. */
 const onPointerPressed = (e: Event) => {
+  teardownIfOrphaned();
   if (!tornDown && observingEnabled) typing.pointerPressed(e);
 };
 
@@ -1119,12 +1020,6 @@ function rebindDocument(): void {
   observer?.stop();
   observer = observerOf(root);
   unobserveLiveRegions();
-  // An armed picker lost its listeners with the rest: arm it again, which
-  // tells the panel nothing it doesn't know.
-  if (picker.isEnabled()) {
-    picker.teardown();
-    picker.setEnabled(true);
-  }
   // The curtain was an element of the document that is gone.
   drawCurtain();
   if (!observingEnabled) return;

@@ -47,7 +47,7 @@ Real A11y takes the same idea somewhere Playwright structurally can't, and frame
 |---|---|---|
 | Runs in | A real browser (reads the browser's own accessibility tree) | **jsdom and a real browser** — no browser needed for unit tests |
 | Test runners | Playwright | Vitest, Jest (jsdom) + a Playwright adapter |
-| Engine | The browser's native AX tree | Real A11y's own extraction — the same tree the [extension](/guide/chrome-extension), [React panel](/packages/react), and [Storybook addon](/packages/storybook-addon) render |
+| Engine | The browser's native AX tree | Real A11y's own extraction — the same tree the [inspector](/packages/inspector), [React panel](/packages/react), and [Storybook addon](/packages/storybook-addon) render. The [Playwright adapter](/packages/testing/playwright#auditing-the-native-tree) also reads Chromium's own tree, as the [extension](/guide/chrome-extension) shows it |
 | Views | Role + name tree | Tree **+** [heading outline](/packages/testing/snapshots#outlinesnapshot-root-options) **+** [tab order](/packages/testing/snapshots#tabsequencesnapshot-root-options) |
 | Framing | A stable alternative to DOM / visual snapshots | An accessibility audit, paired with [assertions](/packages/testing/assertions) and [matchers](/packages/testing/matchers) |
 

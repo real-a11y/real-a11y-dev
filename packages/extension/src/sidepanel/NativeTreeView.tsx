@@ -1,33 +1,32 @@
 /**
  * The native producer's tree view (RFC PR H/#229, shipped in the store build
- * since #386). Renders Chromium's own accessibility tree,
- * read over `chrome.debugger`, as a real expand/collapse `role="tree"` —
- * `DogfoodPanel.tsx`'s flat depth-indented list never needed one, but this
- * is the production panel's tree, so it gets the same tree semantics the DOM
- * producer's view already has (see `App.tsx`'s own tree block).
+ * since #386): the side panel's tree. Renders Chromium's own accessibility
+ * tree, read over `chrome.debugger`, as a real expand/collapse `role="tree"` —
+ * `DogfoodPanel.tsx`'s flat depth-indented list never needed one.
  *
  * Deliberately its own component with its OWN inline row rendering, not a
- * `TreePanel`/`TreeNode` (`@real-a11y-dev/semantic-navigator-ui`) consumer —
- * matching `App.tsx`'s existing pattern for its DOM tree, which forks its own
- * rendering for the same reason (`TreeNode` requires a fully DOM-faceted
- * `DomSemanticNode` unconditionally; a native node has no `dom`/`interaction`
- * facets to give it). A convergence of the two tree renderers is future work,
- * out of scope here — see CLAUDE.md's "Two producers build the tree".
+ * `TreePanel`/`TreeNode` (`@real-a11y-dev/semantic-navigator-ui`) consumer:
+ * `TreeNode` requires a fully DOM-faceted `DomSemanticNode` unconditionally,
+ * and a native node has no `dom`/`interaction` facets to give it. See
+ * CLAUDE.md's "Two producers build the tree".
  *
- * Reuses the DOM tree's own CSS classes (`.sn-tree`, `.sn-node`, `.sn-label`,
- * `.sn-state-badge`, …) from `@ui-styles/tree.css` so the two producers look
- * like one tool, not two — only the row's internal JSX differs, not its
- * visual language.
+ * Reuses the shared panel's CSS classes (`.sn-tree`, `.sn-node`, `.sn-label`,
+ * `.sn-state-badge`, …) from `@ui-styles/tree.css` so it looks like the other
+ * surfaces' panels — only the row's internal JSX differs, not its visual
+ * language.
  *
  * Self-contained: owns its own expand/collapse set, selection, keyboard nav,
  * search/role-filter (`native-search.ts`) and virtualization. `App.tsx` owns
  * only the data (the last successful `NATIVE_READ`), the capability banner
  * inputs, and what an activation DISPATCHES (`onActivate`) — the same
- * division `TabSequenceView`/`FilteredList` already use for the DOM
- * producer's alternate views. Search/filter state stays local rather than
- * lifted to `App.tsx` for the same reason: it's a native-only view concern,
- * and it naturally resets when the user switches back to the DOM producer
- * and this component unmounts.
+ * division `TabSequenceView` and `FilteredListView` use. Search/filter state
+ * stays local rather than lifted to `App.tsx` for the same reason: it's a
+ * view concern.
+ *
+ * The TAB view is the one part that isn't Chrome's. A native node carries no
+ * tab order (`tabindex` never reaches one), so the view shows the page's own
+ * walk's (`tabOrder`), as the CLI's `tabs` does, and its selection and
+ * activation go through the content script. App holds which view shows.
  */
 
 import {
@@ -66,11 +65,8 @@ import {
   type TabCapability,
 } from "../native/capability.js";
 import {
-  ACTABLE,
   isSelectableRole,
-  nativeSelectOptions,
   isSteppableRole,
-  isTypableRole,
   type NativeNode,
 } from "../native/native-actions.js";
 import { searchNativeTree } from "../native/native-search.js";
@@ -78,16 +74,26 @@ import { nativeParentIndex } from "../native/native-tree-utils.js";
 
 import { ControlsChip, JUMP_FLASH_MS } from "./ControlsChip.js";
 import { announcedValueLabel } from "./field-value.js";
-import {
-  describeStates,
-  FilteredListView,
-  type FilteredListItem,
-} from "./FilteredList.js";
+import { FilteredListView, type FilteredListItem } from "./FilteredList.js";
 import { findNativeModalDialog } from "./native-feedback.js";
 import {
   NATIVE_FOLLOW_DEBOUNCE_MS,
   NATIVE_HOVER_DWELL_MS,
 } from "./native-follow.js";
+import {
+  emptyTreeText,
+  nativeActions,
+  nativeSelectIds,
+  primaryLabel,
+  toListItem,
+  typeAheadLabel,
+} from "./native-rows.js";
+import {
+  NativeViewToggle,
+  useTabMatchLabel,
+  type NativeTabOrder,
+  type NativeView,
+} from "./NativeTabView.js";
 import { EmbeddedBadge, nativeStateBadges, StateBadges } from "./row-badges.js";
 import {
   arrowLeftStopsAtScopeRoot,
@@ -101,6 +107,7 @@ import {
 } from "./scope.js";
 import { ScopeBar } from "./ScopeBar.js";
 import { DialogIndicator, SendKeyBar, type SendKey } from "./SendKeyBar.js";
+import { TabSequenceView } from "./TabSequenceView.js";
 import { useDwellTimer } from "./use-dwell-timer.js";
 
 const ROLE_FILTER_KEYS = Object.keys(ROLE_FILTER_LABELS) as Array<
@@ -142,23 +149,22 @@ export interface NativeTreeViewProps {
   onRevealMiss?: () => void;
   /**
    * Focus sync: the page's focus moved to this row's element. The row is
-   * selected and brought into view, as the DOM tree does it, and nothing is
-   * done on the page: focus is already there. `nonce` changes on every
+   * selected and brought into view, and nothing is done on the page: focus is already there. `nonce` changes on every
    * report, so focusing the same element again after scrolling away brings
    * its row back. `ancestorIds` is unused.
    */
   pageFocus?: NativeReveal;
   /**
    * The user settled on this node as the selection (a click, arrow keys, a
-   * pick, the role-filter list): App reveals it on the page, with the same
-   * outline the DOM tree's selection draws. Optional, so a host that doesn't
+   * pick, the role-filter list): App reveals it on the page, with the
+   * outline a TAB row's selection draws too. Optional, so a host that doesn't
    * care about the page can leave it out.
    */
   onSelectionReveal?: (nodeId: string) => void;
   /**
    * The pointer is resting on this row (after a short dwell), or `null` once
    * it has left one — App.tsx outlines the row's element on the page in
-   * place, the DOM tree's hover preview. Optional for the same reason as
+   * place, a hover preview. Optional for the same reason as
    * `onSelectionReveal`.
    */
   onHoverPreview?: (nodeId: string | null) => void;
@@ -189,58 +195,15 @@ export interface NativeTreeViewProps {
   /** The "Show full names" setting: a long name widens the tree, rather than
    *  ending in an ellipsis with the tree fitting the panel. */
   showFullNames?: boolean;
-}
-
-/** A node is worth a click/Enter action, a select action, or both never — the
- *  same three-way split `DogfoodPanel.tsx` renders from, reused here so a
- *  fix to one never silently diverges from the other. `selects` says the row
- *  selects: an option, or a real `<select>`, which opens the option picker
- *  as the DOM tree's does (see `nativeSelectIds`). */
-function primaryLabel(node: NativeNode, selects: boolean): string | undefined {
-  if (isTypableRole(node.role, node.states)) return "Type";
-  if (selects) return "Select";
-  if (ACTABLE.has(node.role)) return "Click";
-  return undefined;
-}
-
-/** The ids of the rows backed by a real `<select>`, with option rows to pick
- *  from. Worked out once per tree read rather than per row and key press. */
-function nativeSelectIds(nodes: Map<string, NativeNode>): Set<string> {
-  const ids = new Set<string>();
-  for (const node of nodes.values()) {
-    if (nativeSelectOptions(node, nodes).length > 0) ids.add(node.id);
-  }
-  return ids;
-}
-
-/** What a native row can do, in `interaction.actions`' vocabulary, so the
- *  shared filtered list can decide Enter/Activate and the stepper keys the
- *  same way it does for a DOM row. Mirrors `primaryLabel`'s precedence. */
-function nativeActions(node: NativeNode, selects: boolean): ActionType[] {
-  const actions: ActionType[] = [];
-  if (isTypableRole(node.role, node.states)) actions.push("type");
-  else if (selects) actions.push("select");
-  else if (ACTABLE.has(node.role)) actions.push("click");
-  if (isSteppableRole(node.role)) actions.push("increment", "decrement");
-  return actions;
-}
-
-function toListItem(node: NativeNode, selects: boolean): FilteredListItem {
-  const level = parseInt(node.properties?.["level"] ?? "", 10);
-  return {
-    id: node.id,
-    label: node.name || `(${node.role})`,
-    level: Number.isNaN(level) ? undefined : level,
-    states: describeStates(node.states),
-    actions: nativeActions(node, selects),
-  };
-}
-
-/** What type-ahead matches a row by — its name, else its role — the same
- *  fallback `useTreeKeyboard`'s `treeNodeTypeAheadLabel` uses for a DOM row
- *  (a native node has no text content of its own to fall between them). */
-function typeAheadLabel(node: NativeNode): string {
-  return node.name?.trim() || node.role;
+  /**
+   * The page's tab order, from the page's own walk. With it and
+   * `onViewChange`, the toolbar offers A11Y and TAB, and TAB shows the tab
+   * order in the tree's place.
+   */
+  tabOrder?: NativeTabOrder;
+  /** Which of the two shows. */
+  view?: NativeView;
+  onViewChange?: (view: NativeView) => void;
 }
 
 export function NativeTreeView({
@@ -264,7 +227,12 @@ export function NativeTreeView({
   followPageChanges = false,
   onToggleFollowPageChanges,
   showFullNames = false,
+  tabOrder,
+  view = "a11y",
+  onViewChange,
 }: NativeTreeViewProps) {
+  // The tab order, while it shows in the tree's place.
+  const shownTabOrder = view === "tab" ? tabOrder : undefined;
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [selectedId, setSelectedId] = useState<string | null>(null);
   // Bumped by an explicit gesture that re-selects a row — a click, or a pick
@@ -323,8 +291,7 @@ export function NativeTreeView({
   const [leftScope, setLeftScope] = useState<string | null>(null);
 
   // The scope in effect: App's id, if this tree has it. The tree walks from
-  // it and indents relative to it, the same as the DOM tree's
-  // `effectiveRootId`/`scopedDepthOffset`.
+  // it and indents relative to it.
   const scopeRoot =
     scopedRootId !== null &&
     scopedRootId !== leftScope &&
@@ -335,8 +302,9 @@ export function NativeTreeView({
   const depthOffset = scopeRoot ? (nodes.get(scopeRoot)?.depth ?? 0) : 0;
 
   // Open the scope root whenever a scope becomes active, including on mount:
-  // switching to DOM and back remounts this view with App's saved scope but
-  // a freshly seeded expansion set (the page root and its children only), so
+  // a page that disconnects and connects again, with the tree still in hand,
+  // remounts this view with App's saved scope but a freshly seeded expansion
+  // set (the page root and its children only), so
   // a deeper scope root would otherwise come back as one collapsed row.
   // Declared after the root-seeding layout effect above so its update lands
   // on top of the seeded set rather than being replaced by it. Keyed on the
@@ -348,8 +316,8 @@ export function NativeTreeView({
     );
   }, [scopeRoot]);
 
-  // Scoping into a row also opens it, as DOM's `handleScopeToNode` does, so
-  // the new root never arrives collapsed to a single line.
+  // Scoping into a row also opens it, so the new root never arrives
+  // collapsed to a single line.
   const scopeTo = useCallback(
     (id: string | null) => {
       if (!onScope) return;
@@ -394,6 +362,8 @@ export function NativeTreeView({
       }
       setQuery("");
       setRoleFilter(null);
+      // The row is in the tree, which the tab order stands in for.
+      if (view === "tab") onViewChange?.("a11y");
       expandTo(nodeId);
       setSelectedId(nodeId);
       setFollowNonce((n) => n + 1);
@@ -407,7 +377,7 @@ export function NativeTreeView({
         requestAnimationFrame(() => treeRef.current?.focus());
       });
     },
-    [scopeRoot, parentOf, scopeTo, expandTo],
+    [scopeRoot, parentOf, scopeTo, expandTo, view, onViewChange],
   );
 
   // A pick result lands here from App.tsx's own message handler.
@@ -415,8 +385,8 @@ export function NativeTreeView({
     if (!reveal) return;
     // The exact hit-tested node may not itself be one the AX tree kept — an
     // unnamed wrapper `<span>`, padding inside a labelled group. Fall back
-    // to the nearest ancestor that IS present, same as the DOM picker's own
-    // `resolveTracked` walking `.parentElement` for the identical reason.
+    // to the nearest ancestor that IS present, same as core's picker
+    // (`createPicker`) walking `.parentElement` for the identical reason.
     const nodeId = [reveal.nodeId, ...(reveal.ancestorIds ?? [])].find((id) =>
       nodes.has(id),
     );
@@ -429,7 +399,7 @@ export function NativeTreeView({
     // change a background refresh causes.
   }, [reveal?.nonce]);
 
-  // `aria-controls`, both ways, through the same index as the DOM tree's:
+  // `aria-controls`, both ways, through the same index as the shared panel's:
   // a row lists the rows it controls (Chromium's own relation,
   // `node.controls`) and the rows that control it, plus a "likely" link the
   // `aria-haspopup` heuristic infers for a trigger with none. The heuristic
@@ -455,8 +425,7 @@ export function NativeTreeView({
     return indexControlLinks(links);
   }, [nodes, rootId]);
 
-  // The row a jump chip just landed on, flashed briefly as the DOM tree's
-  // `handleJumpToNode` does.
+  // The row a jump chip just landed on, flashed briefly.
   const [flashingId, setFlashingId] = useState<string | null>(null);
   // The run of Alt+J presses in progress, if any (see `nextJump`).
   const jumpCycle = useRef<JumpCycle | null>(null);
@@ -477,8 +446,8 @@ export function NativeTreeView({
 
   const modalDialog = useMemo(() => findNativeModalDialog(nodes), [nodes]);
 
-  // Same shape as `applySearchFilter`'s result for the DOM producer, minus
-  // the mutation — see `native-search.ts` for why. Only actually walks
+  // Same shape as core's `applySearchFilter` result, which the shared panel
+  // filters by, minus the mutation — see `native-search.ts` for why. Only actually walks
   // `nodes` when a filter is active (`searchNativeTree` short-circuits to an
   // empty result otherwise), so an untouched search box costs nothing here.
   const search = useMemo(
@@ -497,8 +466,11 @@ export function NativeTreeView({
     return n;
   }, [search, scopeRoot, parentOf]);
 
-  // With a role filter on, show the same flat list the DOM producer does
-  // (`FilteredList`) instead of the tree: every direct match, in document
+  // While the tab order shows, the count is of its stops the search leaves.
+  const tabMatchLabel = useTabMatchLabel(shownTabOrder, query);
+
+  // With a role filter on, show the same flat list the shared panel does
+  // instead of the tree: every direct match, in document
   // order. A pre-order walk, not `nodes`' own iteration order, because that's
   // what "document order" means for this tree. It starts from the scope root
   // when scoped, so the list covers what the scoped tree covers and nothing
@@ -520,19 +492,19 @@ export function NativeTreeView({
   }, [nodes, walkRoot, roleFilter, search, selects]);
 
   // `visiblePositions` records each row's aria-posinset/aria-setsize within
-  // its visible sibling group — mirrors App.tsx's own identical computation
-  // for the DOM tree. Virtualization keeps only the windowed rows in the
+  // its visible sibling group, as the shared panel's tree has them.
+  // Virtualization keeps only the windowed rows in the
   // DOM, so a screen reader needs these explicit set markers to perceive the
   // tree's full size and a row's position in it (WAI-ARIA TreeView); without
   // them a virtualized native row is indistinguishable from a plain child.
   //
   // A filter restricts the walk to matches and their ancestors — same design
-  // as the DOM producer's own tree (App.tsx's `visibleNodeIds`): descending
-  // still requires `expanded`, so a match under a collapsed ancestor stays
-  // hidden until the user expands it by hand. That is a real limitation
-  // there too (both producers seed only two levels open by default — see
-  // this file's own layout-effect comment, and `dom-extractor.ts`'s
-  // `expanded: depth < 2`) rather than something native does worse.
+  // as the shared panel's tree: descending still requires `expanded`, so a
+  // match under a collapsed ancestor stays hidden until the user expands it
+  // by hand. That is a real limitation there too (both seed only two levels
+  // open by default — see this file's own layout-effect comment, and
+  // `dom-extractor.ts`'s `expanded: depth < 2`) rather than something native
+  // does worse.
   const { visibleIds, visiblePositions } = useMemo(() => {
     const ids: string[] = [];
     const positions = new Map<string, { posinset: number; setsize: number }>();
@@ -592,7 +564,7 @@ export function NativeTreeView({
   // Tab press. So the row it selects is held here, set in the same render as
   // the selection, and the follow effect below lets that selection go by;
   // it is let go once the selection moves to another row. It leaves a scope
-  // the row is outside of, as the DOM tree does, but takes no focus from the
+  // the row is outside of, but takes no focus from the
   // page and clears nothing the user filtered by: with a search that hides
   // the row, or the role filter's list, which keeps its own selection, the
   // selection stays where it was.
@@ -601,7 +573,8 @@ export function NativeTreeView({
   useEffect(() => {
     if (!pageFocus) return;
     const id = pageFocus.nodeId;
-    if (!nodes.has(id)) return;
+    // Nor while the tab order shows in the tree's place, as the list does.
+    if (!nodes.has(id) || shownTabOrder) return;
     if (roleFilter !== null || (hasFilter && !search.visibleIds.has(id))) {
       return;
     }
@@ -676,14 +649,15 @@ export function NativeTreeView({
   // so it waits for the pointer to rest on a row rather than firing for every
   // row a sweep crosses. A row that scrolls under a still pointer during
   // keyboard navigation is not a new hover (`useInputModality`), the same
-  // guard the DOM tree's rows use — but leaving a row always ends its hover,
+  // guard the shared panel's rows use — but leaving a row always ends its
+  // hover,
   // whatever the modality, or keyboard scrolling would strand an outline
   // already shown. A row that goes away under a still pointer gets no
   // `mouseleave` at all — collapsed, dropped by a re-read, out of the
-  // rendered slice, the tree swapped for a role filter's list, or this view
-  // unmounted — so those end its hover too. Only an outline actually asked
-  // for (`hoverShown`) is reported cleared; a preview still waiting is just
-  // cancelled.
+  // rendered slice, the tree swapped for a role filter's list or the TAB
+  // view's, or this view unmounted — so those end its hover too. Only an
+  // outline actually asked for (`hoverShown`) is reported cleared; a preview
+  // still waiting is just cancelled.
   const { isMouseModality, markKeyboard } = useInputModality();
   const onHoverPreviewRef = useRef(onHoverPreview);
   onHoverPreviewRef.current = onHoverPreview;
@@ -728,10 +702,11 @@ export function NativeTreeView({
     if (hoverRowId.current === id) endHover();
   };
   useEffect(() => endHover, [endHover]);
-  // The list a role filter shows replaces the tree's rows outright.
+  // The list a role filter shows replaces the tree's rows outright, and so
+  // does the TAB view's.
   useEffect(() => {
-    if (roleFilter !== null) endHover();
-  }, [roleFilter, endHover]);
+    if (roleFilter !== null || shownTabOrder !== undefined) endHover();
+  }, [roleFilter, shownTabOrder !== undefined, endHover]);
   // The hovered row left the rendered rows without a `mouseleave`.
   useEffect(() => {
     const id = hoverRowId.current;
@@ -743,8 +718,7 @@ export function NativeTreeView({
   // The role-filter list's selection lives in `FilteredListView`, not in
   // `selectedId`, so it follows onto the page through this instead: every
   // click, arrow/Home/End/type-ahead move and "Move to" in the list calls
-  // it, the same `onHighlight` hook the DOM producer's list drives its page
-  // highlight with. Absent `onSelectionReveal` it stays undefined, which is
+  // it, through the list's `onHighlight` hook. Absent `onSelectionReveal` it stays undefined, which is
   // how the list knows to hide "Move to" rather than show a dead button.
   const followFromList = onSelectionReveal ? scheduleFollow : undefined;
 
@@ -771,8 +745,7 @@ export function NativeTreeView({
 
   // The list's "go to tree" (Enter/double-click on a heading, landmark or
   // image): drop the role filter, open every ancestor so the row is actually
-  // rendered, select it and hand focus to the tree — the same steps
-  // `App.tsx`'s `handleGoToTree` takes for the DOM producer. The selection
+  // rendered, select it and hand focus to the tree. The selection
   // effect above scrolls it into view once the tree has rendered.
   const goToTree = useCallback(
     (id: string) => {
@@ -793,8 +766,8 @@ export function NativeTreeView({
    * alike: the row's own action, and for a slider, which has none but a
    * step, a step up. A spinbutton's own action is its edit box — the only
    * keyboard way to type a value from the native tree — so Enter opens it,
-   * and Shift+Enter or +/- step it. (The DOM tree's Enter steps a spinbutton
-   * up instead: its primary action comes from core's `getPrimaryAction`,
+   * and Shift+Enter or +/- step it. (The shared panel's Enter steps a
+   * spinbutton up instead: its primary action comes from core's `getPrimaryAction`,
    * shared by every surface.) Returns false when the row has nothing to do.
    */
   const activateRow = useCallback(
@@ -837,7 +810,7 @@ export function NativeTreeView({
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
-      // Mirrors the DOM producer's own `/`-focuses-search shortcut
+      // Mirrors the shared panel's `/`-focuses-search shortcut
       // (`useTreeKeyboard`'s `onFocusSearch`) — checked first and
       // unconditionally on `visibleIds`/`selectedId`, so it works even
       // against an empty or not-yet-loaded tree.
@@ -887,7 +860,7 @@ export function NativeTreeView({
 
       if (visibleIds.length === 0) return;
 
-      // Type-ahead, as the DOM tree's `useTreeKeyboard` has it: printable
+      // Type-ahead, as the shared panel's `useTreeKeyboard` has it: printable
       // keys move to the next row whose name (else role) starts with them.
       const tryTypeAhead = (from: number) => {
         if (!isTypeAheadKey(e)) return;
@@ -918,8 +891,8 @@ export function NativeTreeView({
       if (!node) return;
 
       // `+`/`-` and `Shift+Enter` step a slider or spinbutton before Enter or
-      // type-ahead see the key: the mapping the DOM tree and the role-filter
-      // lists share.
+      // type-ahead see the key: the mapping the shared panel and the
+      // role-filter lists share.
       const step = resolveStepperKeyAction(
         e,
         nativeActions(node, selects(node)),
@@ -1006,10 +979,11 @@ export function NativeTreeView({
         }
         case "*": {
           // Expand every sibling that has children (WAI-ARIA TreeView), as
-          // the DOM tree's `useTreeKeyboard` does: nothing on the tree's own
-          // root, which has no siblings. On the scope root it opens just that
-          // row, the one visible effect of DOM's `*` there — DOM also opens
-          // the scope root's siblings, which the scoped tree doesn't render.
+          // the shared panel's `useTreeKeyboard` does: nothing on the tree's
+          // own root, which has no siblings. On the scope root it opens just
+          // that row, the one visible effect of `*` there — the hook also
+          // opens the scope root's siblings, which the scoped tree doesn't
+          // render.
           e.preventDefault();
           typeAhead.current.clear();
           const parentId = parentOf.get(node.id);
@@ -1051,25 +1025,41 @@ export function NativeTreeView({
     ],
   );
 
+  const onFocusSearch = () => searchInputRef.current?.focus();
+  // What the tab order and a role filter's list, in the tree's place, share.
+  const listProps = { query, listRef, showFullNames, onFocusSearch };
+
   return (
     <>
-      <div class="sn-toolbar" role="toolbar" aria-label="Native tree controls">
+      {/* Wraps in a narrow panel (toolbar.css): it holds a view toggle
+          too. */}
+      <div
+        class="sn-toolbar sn-toolbar--wrap"
+        role="toolbar"
+        aria-label="Native tree controls"
+      >
         <input
           ref={searchInputRef}
           class="sn-search"
           type="search"
           placeholder="Search nodes..."
-          aria-label="Search native tree nodes"
+          aria-label={
+            shownTabOrder ? "Search tab stops" : "Search native tree nodes"
+          }
           value={query}
           onInput={(e) => setQuery((e.target as HTMLInputElement).value)}
         />
-        {/* Mounted before there is a count to report — see App.tsx's
-            identical DOM-producer span for why: a live region that arrives
-            already holding text is not announced by most screen
+        {/* Mounted before there is a count to report: a live region that
+            arrives already holding text is not announced by most screen
             reader/browser pairs. */}
         <span class="sn-search-count" aria-live="polite">
-          {hasFilter && matchCountLabel(matchCount, scopeRoot !== null)}
+          {shownTabOrder
+            ? tabMatchLabel
+            : hasFilter && matchCountLabel(matchCount, scopeRoot !== null)}
         </span>
+        {tabOrder && onViewChange && (
+          <NativeViewToggle view={view} onViewChange={onViewChange} />
+        )}
         <button
           class="sn-toolbar-btn"
           onClick={onRefresh}
@@ -1082,7 +1072,7 @@ export function NativeTreeView({
         <button
           class="sn-toolbar-btn"
           onClick={expandAll}
-          disabled={nodes.size === 0}
+          disabled={nodes.size === 0 || shownTabOrder !== undefined}
           aria-label="Expand all"
           title="Expand all"
         >
@@ -1091,7 +1081,7 @@ export function NativeTreeView({
         <button
           class="sn-toolbar-btn"
           onClick={collapseAll}
-          disabled={nodes.size === 0}
+          disabled={nodes.size === 0 || shownTabOrder !== undefined}
           aria-label="Collapse all"
           title="Collapse all"
         >
@@ -1119,7 +1109,7 @@ export function NativeTreeView({
             key={key}
             class="sn-filter-btn"
             aria-pressed={roleFilter === key}
-            disabled={nodes.size === 0}
+            disabled={nodes.size === 0 || shownTabOrder !== undefined}
             onClick={() => setRoleFilter(roleFilter === key ? null : key)}
           >
             {ROLE_FILTER_LABELS[key]}
@@ -1141,7 +1131,8 @@ export function NativeTreeView({
         </div>
       )}
 
-      {scopeRoot && (
+      {/* The scope is the tree's; the tab order covers the whole page. */}
+      {scopeRoot && !shownTabOrder && (
         <ScopeBar
           path={scopePath(
             scopeRoot,
@@ -1157,20 +1148,20 @@ export function NativeTreeView({
         />
       )}
 
-      {roleFilter !== null ? (
+      {shownTabOrder ? (
+        <TabSequenceView {...shownTabOrder} {...listProps} />
+      ) : roleFilter !== null ? (
         <FilteredListView
           items={listItems}
           roleFilter={roleFilter}
-          query={query}
           onHighlight={followFromList}
           onActivate={activateFromList}
           onGoToTree={goToTree}
-          onFocusSearch={() => searchInputRef.current?.focus()}
           activateDisabled={busy}
           scopeRootId={scopeRoot}
           onExitScope={() => scopeTo(null)}
           pickArmed={pickArmed}
-          listRef={listRef}
+          {...listProps}
         />
       ) : (
         <>
@@ -1212,7 +1203,7 @@ export function NativeTreeView({
                 const steppable = isSteppableRole(node.role);
                 const selectAction = selects(node) ? "select" : undefined;
                 const position = visiblePositions.get(id);
-                // A heading's level shows as the DOM tree's `H2` badge rather
+                // A heading's level shows as the shared panel's `H2` badge rather
                 // than among the generic `key=value` properties below. Only
                 // for headings: a tree item or grid row carries a level too.
                 const headingLevel =
@@ -1255,22 +1246,21 @@ export function NativeTreeView({
                       // pattern above) — so without this, `.sn-tree:focus-visible
                       // .sn-node--selected`'s outline never has a `:focus-visible`
                       // container to key off, and the selected row shows no focus
-                      // ring at all. Mirrors App.tsx's DOM-tree `handleSelect`,
-                      // which calls the identical `treeRef.current?.focus()`.
+                      // ring at all.
                       treeRef.current?.focus();
                     }}
                     onDblClick={(e) => {
                       e.stopPropagation();
-                      // Same split as the DOM tree's row: a row with an
+                      // Same split as the shared panel's row: a row with an
                       // action runs it, a container scopes the view to itself
                       // (expanding stays on the chevron and the arrow keys).
-                      // One difference: DOM counts any focusable element as
-                      // having an action (a `tabindex="0"` region focuses),
-                      // native counts only what it can click, select or type
-                      // into. A focusable container scopes here, because
-                      // selecting its row already moved page focus onto it
-                      // (`onSelectionReveal`), which is all DOM's activation
-                      // of it would do.
+                      // One difference: the shared panel counts any focusable
+                      // element as having an action (a `tabindex="0"` region
+                      // focuses), native counts only what it can click,
+                      // select or type into. A focusable container scopes
+                      // here, because selecting its row already moved page
+                      // focus onto it (`onSelectionReveal`), which is all the
+                      // shared panel's activation of it would do.
                       if (label) {
                         if (!busy) onActivate(node, selectAction);
                       } else if (isParent) {
@@ -1445,13 +1435,7 @@ export function NativeTreeView({
 
               {visibleIds.length === 0 && (
                 <div class="sn-empty">
-                  {capability && !capability.native
-                    ? "Native unavailable on this page"
-                    : nodes.size === 0
-                      ? "No native tree loaded yet — hit refresh"
-                      : hasFilter
-                        ? `No matches${query ? ` for "${query}"` : ""}`
-                        : "Empty tree"}
+                  {emptyTreeText(capability, nodes.size, hasFilter, query)}
                 </div>
               )}
             </div>

@@ -103,7 +103,6 @@ describe("Chrome's tree: the edit box a typable row opens", () => {
     chromeMock = installChromeMock({
       respond: (message) => {
         const type = (message as { type: string }).type;
-        if (type === "NATIVE_FLAG_GET") return { enabled: true };
         if (type === "NATIVE_READ") {
           return {
             ok: true,

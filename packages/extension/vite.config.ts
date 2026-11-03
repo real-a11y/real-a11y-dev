@@ -8,8 +8,8 @@ import { defineConfig } from "vite";
 
 const isContentScript = process.env.BUILD_TARGET === "content";
 
-// Native mode (`chrome.debugger`) ships in every build now — the store build
-// included — gated at runtime by a user setting, off by default. `DOGFOOD=1`
+// Native mode (`chrome.debugger`) ships in every build — the store build
+// included: Chrome's tree is the side panel's tree. `DOGFOOD=1`
 // only controls whether the separate `dist-dogfood/` output additionally
 // bundles the dogfooding exercise's extras: `DogfoodPanel`, the internal
 // diagnostics UI, and the durable event log it reads. `__DOGFOOD__` is inlined

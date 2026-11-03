@@ -217,26 +217,4 @@ describe("withRecovery as the one funnel", () => {
     expect(res.outcome.reason).toBe("devtools-conflict");
     expect(s.records.map((r) => r.kind)).toEqual(["unavailable"]);
   });
-
-  it("does not retry once native mode has been switched off", async () => {
-    // `disabled` comes from inside the attach transaction. Retrying it would be
-    // re-attaching against the answer the user just gave.
-    const s = fakeSession([{ outcome: { ok: false, error: "disabled" } }]);
-    const res = await withRecovery(s.session as any, 1, async () => "tree");
-    expect(res.outcome.error).toBe("disabled");
-    expect(s.calls()).toBe(1);
-  });
-
-  it("books an abandoned recovery rather than a silent gap", async () => {
-    // The drop was already recorded upstream as `detach-unsolicited`. If the
-    // retry is refused because native went off, neither ok nor failed is true —
-    // without its own kind the ledger shows a debit with no credit, which reads
-    // exactly like a drop that never needed recovery.
-    const s = fakeSession([
-      { outcome: { ok: false, error: "connection-lost" } },
-      { outcome: { ok: false, error: "disabled" } },
-    ]);
-    await withRecovery(s.session as any, 1, async () => "tree");
-    expect(s.records.map((r) => r.kind)).toEqual(["reattach-abandoned"]);
-  });
 });

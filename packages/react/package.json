@@ -1,6 +1,6 @@
 {
   "name": "@real-a11y-dev/react",
-  "version": "0.1.0-beta.20",
+  "version": "0.1.0-beta.21",
   "description": "React wrapper around @real-a11y-dev/inspector — component plus tree/modal hooks",
   "license": "MIT",
   "author": "Juan Crisostomo (Real A11y)",
@@ -70,6 +70,6 @@
     "react-dom": "^19.3.0",
     "tsup": "^8.3.0",
     "typescript": "^5.6.0",
-    "vitest": "^4.1.11"
+    "vitest": "^5.0.3"
   }
 }

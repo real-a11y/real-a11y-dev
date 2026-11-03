@@ -2,8 +2,8 @@
  * The keyboard path to a tree's `aria-controls` jump chips, which sit outside
  * the Tab order like every row control. One implementation for every tree:
  * {@link useTreeKeyboard} applies it for each panel that mounts the tree (the
- * inspector, the Storybook addon, the Chrome extension's DOM tree), and the
- * extension's native tree calls it directly, so no two drift apart.
+ * inspector, the React component, the Storybook addon), and the Chrome
+ * extension's tree calls it directly, so no two drift apart.
  *
  * - `Alt`+`J` follows the selected row's first `aria-controls` link. Pressed
  *   again while still on that target, it moves on to the origin's next one,

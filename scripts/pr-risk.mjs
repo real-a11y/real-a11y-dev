@@ -1784,8 +1784,8 @@ function ciNeeds(files) {
     // `verify` always runs at least once: it carries format:check and lint,
     // which any text file can break. Only its BREADTH is conditional.
     matrix: code
-      ? { node: [20, 22], os: ["ubuntu-latest", "macos-latest"] }
-      : { node: [20], os: ["ubuntu-latest"] },
+      ? { node: ["22.12", "22"], os: ["ubuntu-latest", "macos-latest"] }
+      : { node: ["22.12"], os: ["ubuntu-latest"] },
   };
 }
 

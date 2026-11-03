@@ -3,7 +3,7 @@
  *
  * Chromium gives a real `<select>` a `combobox` row with a `MenuListPopup`
  * child holding its `option` rows. Activating that row opens the panel's
- * option picker (`InputPanel`'s `SelectPicker`, the DOM tree's own), listed
+ * option picker (`InputPanel`'s `SelectPicker`, a TAB row's too), listed
  * from those rows, and choosing one dispatches the existing `select` action
  * on it. A custom `role="combobox"` has no such popup and keeps its click.
  */

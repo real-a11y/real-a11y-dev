@@ -1,5 +1,69 @@
 # @real-a11y-dev/inspector
 
+## 0.1.0-beta.21
+
+### Minor Changes
+
+- 7a0fc1e: A long name in the panel's tree now ends in an ellipsis instead of widening the tree, and a new **Show full names** setting brings the old layout back.
+
+  A row used to size itself, and so the whole tree, to its widest name: one long link or paragraph name (Spanish Wikipedia's run to a sentence) scrolled the panel sideways and put the end of every other row off screen. Now a row is as wide as the panel and a long name ends in "…", carrying its whole text as a tooltip. A row's role and name come first, and its key states, those that change what the element is or does (disabled, pressed, selected, required, …), are never cut off: they end the row's label, and the name ends in an ellipsis to make room for them. A screen reader hears them right after the name. Text after the name ends in an ellipsis the same way, and the other badges and jump chips show whole once there is room for them. The DOM view's attributes and text content shorten the same way. A row too narrow for the start of its label and its key states, such as one nested deeper than the panel is wide, still scrolls the tree sideways, by just enough, and no other row widens with it.
+
+  - The toolbar gains a Settings button (⚙) holding **Show full names**: rows widen to fit the longest name, and the tree scrolls sideways, as before. It closes on Escape, on a press outside it, or when focus moves out of it. In a panel too narrow for one row, the toolbar now wraps onto a second, rather than cutting a control off at its edge. The user's choice holds for the life of the page, in every panel on it: the inspectors open follow it at once, and it holds through the inspector's `refresh()` and `setRoot()`, in every later inspector (as React makes whenever one of its props changes, or it remounts), and across stories in Storybook.
+  - `@real-a11y-dev/inspector`: `SemanticNavigatorConfig` gains `defaultShowFullNames?: boolean` (default `false`), for a panel that starts with full names.
+  - `@real-a11y-dev/react`: `<SemanticNavigator>` gains the matching `defaultShowFullNames` prop. It only sets where the panel starts, so changing it remounts nothing.
+
+### Patch Changes
+
+- 6a0c016: A `mount()` that throws now undoes itself, so the container it failed on no longer drops out of every other tree on the page.
+
+  With the default `mount: "shadow"`, `mount()` throws on a container that can't host a shadow root, such as a `<form>`, an `<a>` or an `<img>`. It had already marked that container as the panel's own (`data-real-a11y-panel`), and extraction leaves the panel out of the trees it builds, so every other inspector or extraction on the page left the container and everything inside it out: a form's fields went missing. The instance also stayed marked as mounted, so calling `mount()` again did nothing. Now a `mount()` that throws removes the marker and leaves the instance unmounted, and the error still reaches the caller unchanged. A shadow root it attached before failing stays, because a shadow root can't be removed, and the next `mount()` reuses it.
+
+  An inspector also no longer removes a marker it didn't add. If the container was already marked, say by a `mount: "light"` panel rendering in it, neither a failed `mount()` nor `unmount()` takes the marker away, so that panel's controls stay out of the page's tree. And the marker is checked, set and removed through `Element.prototype`, the way the extractor reads it, so a `mount: "light"` panel in a `<form>` with a control named `hasAttribute`, `setAttribute` or `removeAttribute` no longer makes `mount()` or `unmount()` throw.
+
+- 0301ba1: Treat a mutation anywhere inside one of the panel's own overlay elements as internal, not just one on the overlay's root element.
+
+  The live observer ignores the elements it injects itself — the focus highlight and the screen curtain — so that drawing them cannot trigger the re-extract → re-render → re-redraw loop the filter exists to break. It recognised them by id, and only a text change consulted the ancestor chain. An attribute change was matched against the changed element alone, and a child being added or removed was matched against the moved nodes alone, so neither saw that the element it happened on sits _inside_ an overlay:
+
+  ```js
+  // Both of these read as a page mutation and schedule a re-extraction.
+  curtainLabel.className = "visible"; // attributes, inside #__sn-curtain
+  highlightFrame.appendChild(corner); // childList, inside #__sn-highlight
+  ```
+
+  All three mutation kinds now climb from the changed node, so an overlay's whole subtree is internal.
+
+  Nothing changes for a panel that uses the built-in overlays as they are. The curtain does have inner elements, but they are built before it is attached — so the observer never sees those records — and nothing mutates them afterwards. What this does fix is `DomObserver`'s fourth argument, the caller's own set of sentinel ids: an element registered there was only shielded at its root, and any attribute or child change below it still re-armed the observer against the overlay the caller registered to be ignored.
+
+  `cli` and `mcp` are left out: they read Chromium's own accessibility tree over CDP and never construct a `DomObserver`.
+
+- 041094c: Ship the tree stylesheet minified. Both packages inline the shared stylesheet (`@real-a11y-dev/semantic-navigator-ui`'s `themes.css` and `tree.css`) as a string and inject it into the panel's shadow root, and nothing minified that string, so every CSS comment and all of its indentation shipped to users. The build now strips whitespace and comments and nothing else, so every rule and value is exactly as written. Each bundle shrinks by about 3.3 kB gzipped (11.6 kB raw). The inlined copy also drops the `@import "./themes.css"` it carried, which browsers ignored because it came after other rules. No visible change.
+- 8e6e736: Name a paragraph, list item, code block or status message with the words inside its plain inline wrappers, the way Chromium does. Chromium gives a role-less inline element — a `<span>`, a `<b>`, a custom or unknown element — no node of its own, so its text is the line's. The DOM producer read only the element's own text nodes, and since a tree prints no `generic`, the wrapped words vanished from every printed tree:
+
+  | Markup                                                                  | Before                         | Now                                   |
+  | ----------------------------------------------------------------------- | ------------------------------ | ------------------------------------- |
+  | `<p>Drop in <b>the panel</b> now.</p>`                                  | `paragraph "Drop in now."`     | `paragraph "Drop in the panel now."`  |
+  | `<p>Drop in <semanticnavigator>and it appears.</semanticnavigator></p>` | `paragraph "Drop in"`          | `paragraph "Drop in and it appears."` |
+  | `<p><span>Only text</span></p>`                                         | `paragraph`                    | `paragraph "Only text"`               |
+  | `<p>A<span>B</span>C</p>`                                               | `paragraph "AC"`               | `paragraph "ABC"`                     |
+  | `<li>Item <span>text</span></li>`                                       | `listitem "Item"`              | `listitem "Item text"`                |
+  | `<pre><code><span>import</span><span> x</span></code></pre>`            | `code`                         | `code "import x"`                     |
+  | `<p>Line one<br>Line two</p>`                                           | `paragraph "Line oneLine two"` | `paragraph "Line one Line two"`       |
+
+  The second row is what VitePress's `v-html` makes of a literal `<SemanticNavigator />` in a `details:` string.
+
+  - **What counts as a wrapper** is what Chromium leaves out of its tree: an element with no role (or `role="none"`, or an empty or unknown one), drawn inline (`inline`, `inline-block`, `inline-flex`, `display: contents`), with nothing that could name, focus or point at it. A class, a style, a `data-*` or a `dir` keeps it a wrapper, and so does an `<a>` with no `href`.
+  - **Text that stays out**, because its element has a node of its own that shows it: a link, a `<code>`, `<strong>` or `<em>`, a `<label>` or `<abbr>`, a `<canvas>` or `<object>` (whose children are fallback), and a wrapper with an `id`, a `lang`, a `title`, an `aria-` attribute, a `tabindex`, an `onclick`, an explicit `role="generic"` or a box of its own (`block`, `flex`, `inline-table`, a float). A hidden wrapper adds nothing.
+  - **A `<div>` is unchanged.** A `generic`'s name decides whether the tree keeps it, so reading through its wrappers would add a node for every `<div><span>…</span></div>`. The wrapper still keeps its own node and name, as it does under a heading.
+  - **Inside an editor** nothing changes: what a user typed never names an element.
+  - The live tree re-names the paragraph when text inside its wrapper changes, or when the wrapper gains or loses what gives it a node of its own.
+
+  What this changes for you:
+
+  - **Snapshots and diffs:** the names of paragraphs, list items, code blocks, block quotes, definitions and live regions that hold inline wrappers change, and a syntax-highlighted code block is now named with its code. Re-record those snapshots. A DOM-produced tree now agrees with a native one on all of these.
+  - **Queries:** `findByRole("paragraph", { name: "Drop in the panel now." })` now finds the first row's paragraph.
+  - **Panels:** `inspector`, `react` and `storybook-addon` show the new names.
+  - **`cli` / `mcp`:** only `real-a11y tabs` and `get_tab_order` read the in-page tree, and a tab stop changes name only if it is itself a focusable paragraph, list item or code block. Everything else they print comes from Chromium's own tree, which already read these.
+
 ## 0.1.0-beta.20
 
 ### Patch Changes

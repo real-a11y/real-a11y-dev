@@ -7,6 +7,7 @@ import type { ContentToPanel } from "../types.js";
 import { App } from "./App.js";
 import type { ChromeMock } from "./panel-harness.js";
 import {
+  NATIVE_TREE,
   TAB_ID,
   installChromeMock,
   stubMatchMedia,
@@ -32,7 +33,7 @@ describe("panel live regions", () => {
 
   beforeEach(() => {
     stubMatchMedia();
-    chromeMock = installChromeMock();
+    chromeMock = installChromeMock({ nativeTree: NATIVE_TREE });
     container = document.createElement("div");
     document.body.appendChild(container);
   });
@@ -48,8 +49,8 @@ describe("panel live regions", () => {
     return el as HTMLElement;
   }
 
-  /** Panel with a tree loaded and no action taken yet. */
-  function mountIdlePanel(): void {
+  /** Panel with Chrome's tree loaded and no action taken yet. */
+  async function mountIdlePanel(): Promise<void> {
     act(() => {
       render(h(App, {}), container);
     });
@@ -62,10 +63,16 @@ describe("panel live regions", () => {
     act(() => {
       chromeMock.emit(treeData());
     });
+    // The native read's reply lands.
+    for (let i = 0; i < 5; i++) {
+      await act(async () => {
+        await Promise.resolve();
+      });
+    }
   }
 
-  it("mounts all three live regions empty, before there is anything to say", () => {
-    mountIdlePanel();
+  it("mounts all three live regions empty, before there is anything to say", async () => {
+    await mountIdlePanel();
 
     for (const selector of [
       ".sn-search-count",
@@ -78,8 +85,8 @@ describe("panel live regions", () => {
     }
   });
 
-  it("keeps the action bar assertive, so a failure is not queued behind chatter", () => {
-    mountIdlePanel();
+  it("keeps the action bar assertive, so a failure is not queued behind chatter", async () => {
+    await mountIdlePanel();
 
     const feedback = region(".sn-action-feedback");
     expect(feedback.getAttribute("role")).toBe("status");
@@ -89,8 +96,8 @@ describe("panel live regions", () => {
     expect(feedback.getAttribute("aria-live")).toBe("assertive");
   });
 
-  it("announces an action through the region that was already mounted", () => {
-    mountIdlePanel();
+  it("announces an action through the region that was already mounted", async () => {
+    await mountIdlePanel();
     const before = region(".sn-action-feedback");
 
     act(() => {
@@ -107,8 +114,8 @@ describe("panel live regions", () => {
     expect(region(".sn-action-feedback")).toBe(before);
   });
 
-  it("announces a relayed page announcement through the mounted log", () => {
-    mountIdlePanel();
+  it("announces a relayed page announcement through the mounted log", async () => {
+    await mountIdlePanel();
     const before = region(".sn-live-log");
 
     act(() => {
@@ -123,8 +130,8 @@ describe("panel live regions", () => {
     expect(region(".sn-live-log")).toBe(before);
   });
 
-  it("announces the search match count through the mounted region", () => {
-    mountIdlePanel();
+  it("announces the search match count through the mounted region", async () => {
+    await mountIdlePanel();
     const before = region(".sn-search-count");
 
     act(() => {
@@ -135,7 +142,7 @@ describe("panel live regions", () => {
       input.dispatchEvent(new Event("input", { bubbles: true }));
     });
 
-    expect(region(".sn-search-count").textContent).toContain("match");
+    expect(region(".sn-search-count").textContent).toBe("1 match");
     expect(region(".sn-search-count")).toBe(before);
   });
 });

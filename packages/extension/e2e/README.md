@@ -12,15 +12,14 @@ Needs a Chromium binary — `pnpm exec playwright install chromium` if you have
 not run Playwright in this checkout before.
 
 `pretest:e2e` runs both `build` and `build:dogfood`. Most suites load the
-dogfood build (`dist-dogfood/`) with native mode on, as it comes out of the box,
-and drive the real panel: the choice of tree in its Settings, the tree and its
-actions. A few also drive
-`DogfoodPanel`, the internal diagnostics widget, which only the dogfood build
-contains. `native-on-by-default.test.ts` loads the store build (`dist/`), to
-check what the listing ships: the manifest, the absence of the dogfood
-diagnostics, a fresh profile's first page read natively, the one-time note
-about Chrome's debugging bar, and turning native mode off and on in Settings. A
-suite picks its build with `test.use({ build })`.
+dogfood build (`dist-dogfood/`) and drive the real panel: Chrome's tree, its
+TAB view, and their actions. A few also drive `DogfoodPanel`, the internal
+diagnostics widget, which only the dogfood build contains.
+`store-build.test.ts` loads the store build (`dist/`), to check what the
+listing ships: the manifest, the absence of the dogfood diagnostics, a fresh
+profile's first page read through Chrome, the one-time note about Chrome's
+debugging bar, Settings, and a profile an older version left with native mode
+turned off. A suite picks its build with `test.use({ build })`.
 
 Useful switches:
 
@@ -102,10 +101,10 @@ sidesteps the question entirely.
   a query, and the `/`-focuses-search shortcut. `native-search.test.ts` (in
   `src/native/`) covers the matching logic itself at the unit level; this
   file is only for what a unit test can't see — the actual toolbar wiring.
-- `panel-ui-dom-toolbar.test.ts` — the in-page tree's toolbars at a side
+- `panel-ui-toolbar.test.ts` — the toolbars over Chrome's tree at a side
   panel's 320, 360 and 400px: every control whole on screen and the element a
   click at its middle reaches, with a search's match count showing too, and
-  DOM, A11Y and TAB each taking a real click. Layout, which jsdom doesn't do.
+  A11Y and TAB each taking a real click. Layout, which jsdom doesn't do.
   It reads the controls' geometry in one pass in the page: with the fixture
   page in front, the panel draws about one frame a second, so each of
   Playwright's own checks that waits on frames can take two seconds.
@@ -117,22 +116,22 @@ sidesteps the question entirely.
   frame, and a form whose controls shadow the properties the walk reads.
   Focus inside frames is `native-frames.test.ts`'s, on its same-origin and
   cross-origin frames, which show the same document.
-- `blank-frames.test.ts` — frames with no URL of their own, in both trees:
-  two `srcdoc` frames alike element for element, a frame the page writes
-  into with `document.open()`, an empty one, and a sandboxed one the content
-  script doesn't run in. The in-page tree reads each under its own
-  `<iframe>` and keeps up when one is written over again, and Chrome's tree
-  follows focus into each. It pins the three facts about Chromium the
+- `blank-frames.test.ts` — frames with no URL of their own: two `srcdoc`
+  frames alike element for element, a frame the page writes into with
+  `document.open()`, an empty one, and a sandboxed one the content script
+  doesn't run in. The page's own walk, which the TAB view lists, reads each
+  under its own `<iframe>` and keeps up when one is written over again, and
+  Chrome's tree follows focus into each. It pins the three facts about Chromium the
   feature rests on, which jsdom can't show: a frame of its parent's origin
   reads `window.frameElement`, one extension's content scripts share an
   element's object across the frames of an origin (`src/frame-owner.ts`),
   and `document.open()` removes the content script's listeners.
-- `field-values.test.ts` — ADR-0001's field values in both producers and both
-  views: a `<select>` reads its announced label (`= "Spain"`) in the A11y view
-  and its raw value (`value="es"`) in the DOM view, a password and a
-  `cc-number` field read `[redacted]` everywhere, and a native retype starts
-  from the raw value, not the capped announced one. Unlike the pattern files it
-  asserts on what the panel shows, because that is the behaviour.
+- `field-values.test.ts` — ADR-0001's field values: a `<select>` reads its
+  announced label (`= "Spain"`) in Chrome's tree, a password and a
+  `cc-number` field read `[redacted]`, a native retype starts from the raw
+  value, not the capped announced one, and a TAB row's edit box masks a
+  withheld field, empty or not. Unlike the pattern files it asserts on what
+  the panel shows, because that is the behaviour.
 
 ## Coverage
 

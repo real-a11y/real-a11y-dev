@@ -2,8 +2,8 @@
 
 /**
  * Dev-only control surface for the `chrome.debugger` native dogfood (RFC PR H).
- * Rendered only in the DOGFOOD build (see main.tsx). Lets a dogfooder toggle
- * native mode, read Chromium's native tree over CDP, act on it, and export the
+ * Rendered only in the DOGFOOD build (see main.tsx). Lets a dogfooder read
+ * Chromium's native tree over CDP, act on it, and export the
  * instrumentation report answering the banner / MV3-lifecycle / DevTools-conflict
  * questions. Deliberately self-contained — it lifts out cleanly if the verdict
  * is "no", and never touches the production side-panel App.
@@ -36,13 +36,13 @@ export {
 } from "../native/native-actions.js";
 
 /**
- * Render a node's accessible description the way the production DOM/A11Y
- * tree view shows it (`App.tsx`'s `node.a11y.description` block) — right
- * after the name, truncated to 80 characters with an ellipsis for a longer
- * one. Live dogfood finding: an invalid form field's error message (e.g. a
- * `role="combobox"` email input with `aria-describedby` pointing at an
- * "Ingresa tu e-mail." helper span) showed up in the DOM/A11Y tree right
- * next to the field but was entirely invisible on the native tree — not a
+ * Render a node's accessible description the way the side panel's tree shows
+ * it (`NativeTreeView.tsx`'s description) — right after the name, truncated
+ * to 80 characters with an ellipsis for a longer one. Live dogfood finding:
+ * an invalid form field's error message (e.g. a `role="combobox"` email input
+ * with `aria-describedby` pointing at an "Ingresa tu e-mail." helper span)
+ * showed up in the in-page tree right next to the field but was entirely
+ * invisible on the native tree — not a
  * formatting gap like `expanded`/`collapsed`, a whole facet
  * `EnrichedNativeNode` never carried at all. `browser`'s own native
  * producer (CLI/MCP) already surfaces this from the same CDP payload — a
@@ -156,9 +156,8 @@ async function tabUrl(tabId: number): Promise<string | undefined> {
 }
 
 export function DogfoodPanel() {
-  const [enabled, setEnabled] = useState(false);
   const [nodes, setNodes] = useState<NativeNode[]>([]);
-  const [status, setStatus] = useState("native mode is off");
+  const [status, setStatus] = useState("");
   // The tab the current tree was read from. Native node ids encode Chromium
   // `backendDOMNodeId`s, which are scoped to that tab's document — dispatching
   // one anywhere else would act on an unrelated element in a different page.
@@ -185,15 +184,9 @@ export function DogfoodPanel() {
     undefined,
   );
 
-  useEffect(() => {
-    void chrome.runtime
-      .sendMessage({ type: "NATIVE_FLAG_GET" })
-      .then((r: { enabled?: boolean }) => setEnabled(r?.enabled === true));
-  }, []);
-
   /**
-   * Re-ask what native can do here. Cheap (no attach), so it runs on mount, on
-   * toggle, and whenever the user switches or navigates a tab.
+   * Re-ask what native can do here. Cheap (no attach), so it runs on mount,
+   * and whenever the user switches or navigates a tab.
    *
    * Sequenced: these fire from three sources that can overlap, and the replies
    * are not ordered. A late answer for the tab you just left would otherwise
@@ -259,34 +252,6 @@ export function DogfoodPanel() {
       chrome.tabs.onUpdated.removeListener(onUpdated);
     };
   }, []);
-
-  async function toggle() {
-    const next = !enabled;
-    const r = (await chrome.runtime.sendMessage({
-      type: "NATIVE_FLAG_SET",
-      enabled: next,
-    })) as { detached?: number };
-    setEnabled(next);
-    if (next) {
-      setStatus("native mode on — Load tree to attach");
-      await refreshCapability();
-      return;
-    }
-    forgetTree();
-    // Drop the capability with the flag. Leaving it set kept an amber "native
-    // unavailable here" panel on screen for a feature the user had just turned
-    // off — and the banner is gated on `enabled` for the same reason.
-    setCapability(undefined);
-    // Report the detach count, ZERO INCLUDED: it is the only observable proof
-    // the capability is gone, and a truthiness test hid exactly the answer the
-    // normal case gives. A non-zero count is the interesting one — an MV3
-    // suspend had stranded a live attachment, and its banner with it.
-    setStatus(
-      r?.detached === undefined
-        ? "native mode off"
-        : `native mode off — detached from ${r.detached} tab(s)`,
-    );
-  }
 
   /** Read the tree into state. Returns the node count, or null on failure —
    *  including a discarded, superseded response (see below).
@@ -514,10 +479,6 @@ export function DogfoodPanel() {
         ⚠︎ chrome.debugger native mode — DEV dogfood
       </summary>
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:6px 0">
-        <label>
-          <input type="checkbox" checked={enabled} onChange={toggle} /> native
-          mode
-        </label>
         {/*
           Deliberately NOT disabled on an unattachable tab. Disabling it was the
           second door that kept five of the eight reason codes out of the
@@ -527,23 +488,16 @@ export function DogfoodPanel() {
           there is no banner flash to protect against. The amber panel above
           already says the press will be refused and why.
         */}
-        <button onClick={loadTree} disabled={!enabled || busy}>
+        <button onClick={loadTree} disabled={busy}>
           {busy ? "working…" : "Load native tree"}
         </button>
         <button onClick={copyReport}>Copy dogfood report</button>
         <button onClick={clearLog}>Clear log</button>
       </div>
-      {enabled && capability && !capability.native && (
+      {capability && !capability.native && (
         <div style="margin:6px 0;padding:4px 6px;border-left:3px solid #b45309;background:#fef3c7">
           <strong>native unavailable here</strong> —{" "}
           {explainUnavailable(capability.reason!)}
-          {capability.domFallback && (
-            <>
-              {" "}
-              The tab-order view is DOM-based and is unaffected either way — it
-              never used native.
-            </>
-          )}
         </div>
       )}
       <div style="opacity:0.8">{status}</div>
@@ -567,7 +521,7 @@ export function DogfoodPanel() {
                   <button
                     style="text-align:left;width:100%;white-space:pre"
                     onClick={() => act(n)}
-                    disabled={busy || !enabled}
+                    disabled={busy}
                   >
                     {label}
                   </button>
@@ -575,7 +529,7 @@ export function DogfoodPanel() {
                   <button
                     style="text-align:left;width:100%;white-space:pre"
                     onClick={() => act(n, "select")}
-                    disabled={busy || !enabled}
+                    disabled={busy}
                   >
                     {label}
                   </button>
@@ -589,14 +543,14 @@ export function DogfoodPanel() {
                     <button
                       title={`Decrement "${n.name || n.role}"`}
                       onClick={() => act(n, "decrement")}
-                      disabled={busy || !enabled}
+                      disabled={busy}
                     >
                       −
                     </button>
                     <button
                       title={`Increment "${n.name || n.role}"`}
                       onClick={() => act(n, "increment")}
-                      disabled={busy || !enabled}
+                      disabled={busy}
                     >
                       +
                     </button>

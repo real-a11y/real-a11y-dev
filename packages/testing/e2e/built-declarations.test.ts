@@ -98,7 +98,10 @@ test.describe("built matcher declarations", () => {
     // reports as "not identical" — and it fires wherever both augmentations are
     // loaded, including this package's own `tsc` program.
     expect(code("matchers-vitest.d.ts")).toMatch(
-      /interface Assertion<[^>]*>\s*extends\s+A11yMatchers<void>/,
+      // Vitest 5's `Assertion<R extends void | Promise<void> = void, T>` has a
+      // `>` inside its own parameter list, so the pattern spells it out: the
+      // merge only compiles while the parameters stay identical to Vitest's.
+      /interface Assertion<\s*R extends void \| Promise<void> = void,\s*T = unknown,?\s*>\s*extends\s+A11yMatchers<void>/,
     );
   });
 

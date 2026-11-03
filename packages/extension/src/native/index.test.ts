@@ -31,8 +31,8 @@ function storageArea(initial: Record<string, unknown> = {}) {
     set: async (items: Record<string, unknown>) => {
       Object.assign(data, items);
     },
-    remove: async (key: string) => {
-      delete data[key];
+    remove: async (keys: string | string[]) => {
+      for (const key of Array.isArray(keys) ? keys : [keys]) delete data[key];
     },
     setAccessLevel: vi.fn(async () => {}),
   };
@@ -41,17 +41,22 @@ function storageArea(initial: Record<string, unknown> = {}) {
 let listeners: Listener[];
 let local: ReturnType<typeof storageArea>;
 let attach: ReturnType<typeof vi.fn>;
+let detach: ReturnType<typeof vi.fn>;
 
-function install(initial: Record<string, unknown> = {}) {
+function install(
+  initial: Record<string, unknown> = {},
+  session: Record<string, unknown> = {},
+) {
   listeners = [];
   local = storageArea(initial);
   attach = vi.fn(async () => {});
+  detach = vi.fn(async () => {});
   vi.stubGlobal("chrome", {
-    storage: { local, session: storageArea() },
+    storage: { local, session: storageArea(session) },
     debugger: {
       onDetach: { addListener: () => {} },
       attach,
-      detach: async () => {},
+      detach,
       sendCommand: async () => ({}),
     },
     runtime: {
@@ -85,34 +90,35 @@ async function send(
 
 async function register() {
   vi.resetModules();
-  const { registerNativeMode } = await import("./index.js");
-  registerNativeMode();
-  // Let the fire-and-forget migration and access-level calls settle.
+  const mod = await import("./index.js");
+  mod.registerNativeMode();
+  // Let the fire-and-forget access-level call settle.
   await new Promise((r) => setTimeout(r, 0));
+  return mod;
 }
 
 beforeEach(() => install());
 afterEach(() => vi.unstubAllGlobals());
 
 describe("registerNativeMode: who may send native messages", () => {
-  it("lets the side panel turn native mode on", async () => {
+  it("answers the side panel", async () => {
     await register();
     const { response } = await send(
-      { type: "NATIVE_FLAG_SET", enabled: true },
+      { type: "NATIVE_CAPABILITY", tabId: 7 },
       PANEL,
     );
-    expect(response).toMatchObject({ enabled: true });
-    expect(local.data["settings.nativeModeEnabled"]).toBe(true);
+    expect(response).toEqual({ native: true });
   });
 
   it("ignores a content script, which carries the extension's id too", async () => {
     await register();
     const { answered } = await send(
-      { type: "NATIVE_FLAG_SET", enabled: true },
+      { type: "NATIVE_CAPABILITY", tabId: 7 },
       CONTENT_SCRIPT,
     );
     expect(answered).toBe(false);
-    expect(local.data["settings.nativeModeEnabled"]).toBeUndefined();
+    await send({ type: "NATIVE_READ", tabId: 7 }, CONTENT_SCRIPT);
+    expect(attach).not.toHaveBeenCalled();
   });
 
   it("keeps chrome.storage.local out of content scripts' reach", async () => {
@@ -123,91 +129,72 @@ describe("registerNativeMode: who may send native messages", () => {
   });
 });
 
-describe("registerNativeMode: on by default", () => {
-  // Native mode is on unless the user turned it off in the panel's
-  // Settings: a profile that never touched the setting reads natively.
-  const get = async () =>
-    (await send({ type: "NATIVE_FLAG_GET" }, PANEL)).response;
-
-  it("reads as on while the setting was never touched", async () => {
-    await register();
-    expect(await get()).toEqual({ enabled: true });
-  });
-
-  it("reads as off once turned off, and on again once turned back on", async () => {
-    await register();
-    await send({ type: "NATIVE_FLAG_SET", enabled: false }, PANEL);
-    expect(await get()).toEqual({ enabled: false });
-    await send({ type: "NATIVE_FLAG_SET", enabled: true }, PANEL);
-    expect(await get()).toEqual({ enabled: true });
-  });
-
-  it("attaches for a read while the setting was never touched", async () => {
+describe("registerNativeMode: reads", () => {
+  it("attaches for a read", async () => {
     await register();
     await send({ type: "NATIVE_READ", tabId: 7 }, PANEL);
     expect(attach).toHaveBeenCalled();
   });
 
-  it("never attaches once the user turned it off", async () => {
+  it("attaches where an older version stored native mode off, and clears what it stored", async () => {
+    // The setting is gone: a stored "off" from before counts for nothing,
+    // and is removed, with the key it was migrated from.
+    install({
+      "settings.nativeModeEnabled": false,
+      "devFlags.nativeMode": false,
+      "settings.nativeNoticeSeen": true,
+      "settings.showFullNames": true,
+    });
     await register();
-    await send({ type: "NATIVE_FLAG_SET", enabled: false }, PANEL);
     await send({ type: "NATIVE_READ", tabId: 7 }, PANEL);
-    expect(attach).not.toHaveBeenCalled();
+    expect(attach).toHaveBeenCalled();
+    expect("settings.nativeModeEnabled" in local.data).toBe(false);
+    expect("devFlags.nativeMode" in local.data).toBe(false);
+    // Chrome's bar is back for someone who had turned it off: the note that
+    // explains it shows again.
+    expect("settings.nativeNoticeSeen" in local.data).toBe(false);
+    expect(local.data["settings.showFullNames"]).toBe(true);
   });
 
-  it("reads a stored value that isn't a boolean as on", async () => {
-    install({ "settings.nativeModeEnabled": "false" });
+  it("keeps the note acknowledged where native mode was left on", async () => {
+    install({
+      "settings.nativeModeEnabled": true,
+      "settings.nativeNoticeSeen": true,
+    });
     await register();
-    expect(await get()).toEqual({ enabled: true });
+    await send({ type: "NATIVE_READ", tabId: 7 }, PANEL);
+    expect("settings.nativeModeEnabled" in local.data).toBe(false);
+    expect(local.data["settings.nativeNoticeSeen"]).toBe(true);
   });
 
-  it("refuses a change that isn't a boolean, and changes nothing", async () => {
+  it("no longer answers the setting's messages", async () => {
     await register();
-    await send({ type: "NATIVE_FLAG_SET", enabled: false }, PANEL);
-
-    const { response } = await send({ type: "NATIVE_FLAG_SET" }, PANEL);
-
-    expect(response).toEqual({ ok: false, error: "bad-request" });
-    expect(local.data["settings.nativeModeEnabled"]).toBe(false);
-    expect(await get()).toEqual({ enabled: false });
+    for (const message of [
+      { type: "NATIVE_FLAG_GET" },
+      { type: "NATIVE_FLAG_SET", enabled: false },
+    ]) {
+      const { response } = await send(message, PANEL);
+      expect(response).toEqual({ ok: false, error: "unsupported" });
+    }
+    expect(local.data["settings.nativeModeEnabled"]).toBeUndefined();
   });
 });
 
-describe("registerNativeMode: the old dogfood flag", () => {
-  it("carries devFlags.nativeMode over and removes it", async () => {
-    install({ "devFlags.nativeMode": true });
-    await register();
-    expect(local.data["settings.nativeModeEnabled"]).toBe(true);
-    expect("devFlags.nativeMode" in local.data).toBe(false);
+describe("releaseDebugger: the last side panel closes", () => {
+  it("detaches a tab an MV3 suspend left attached", async () => {
+    // Nothing reads the tab once the panel is gone, so nothing would detach
+    // it, and Chrome's bar would stay up.
+    install({}, { "dogfood.attachedTabs": { 7: Date.now() } });
+    const { releaseDebugger } = await register();
+    releaseDebugger();
+    await vi.waitFor(() => expect(detach).toHaveBeenCalledWith({ tabId: 7 }));
   });
 
-  it("carries an old 'off' over, so native mode stays off", async () => {
-    install({ "devFlags.nativeMode": false });
-    await register();
-    expect(local.data["settings.nativeModeEnabled"]).toBe(false);
-    expect("devFlags.nativeMode" in local.data).toBe(false);
-  });
-
-  it("never writes over a Disable sent while it runs", async () => {
-    // The panel's message is what wakes the worker, so a Disable can arrive
-    // while the migration is still between its read and its write.
-    install({ "devFlags.nativeMode": true });
-    vi.resetModules();
-    const { registerNativeMode } = await import("./index.js");
-    registerNativeMode();
-    await send({ type: "NATIVE_FLAG_SET", enabled: false }, PANEL);
+  it("detaches nothing while nothing is attached", async () => {
+    const { releaseDebugger } = await register();
+    releaseDebugger();
     await new Promise((r) => setTimeout(r, 0));
-    expect(local.data["settings.nativeModeEnabled"]).toBe(false);
-    expect("devFlags.nativeMode" in local.data).toBe(false);
-  });
-
-  it("never overrides a setting the user already chose", async () => {
-    install({
-      "devFlags.nativeMode": true,
-      "settings.nativeModeEnabled": false,
-    });
-    await register();
-    expect(local.data["settings.nativeModeEnabled"]).toBe(false);
+    expect(detach).not.toHaveBeenCalled();
   });
 });
 
@@ -224,7 +211,6 @@ describe("registerNativeMode: the dogfood event log in the store build", () => {
 
   it("writes nothing durable while native mode is used", async () => {
     await register();
-    await send({ type: "NATIVE_FLAG_SET", enabled: true }, PANEL);
     await send({ type: "NATIVE_READ", tabId: 7 }, PANEL);
     const keys = Object.keys(local.data).filter((k) => k.startsWith("dogfood"));
     expect(keys).toEqual([]);

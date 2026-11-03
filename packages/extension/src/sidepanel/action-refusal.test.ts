@@ -13,13 +13,14 @@ import { TAB_ID, installChromeMock, stubMatchMedia } from "./panel-harness.js";
  * The panel's action feedback must describe what the page did, not what the
  * panel asked for. Every action path used to announce success on the strength
  * of the message having been sent, so a frame that answered and REFUSED —
- * which is how it reports that the page is in a state the action cannot run
- * in, pick mode being the case that exists — still read as done.
+ * which is how it reports that the action can't run, the element gone since
+ * the page was read, say — still read as done. A TAB row's action is the one
+ * a frame answers: Chrome's tree acts through the debugger.
  */
 
-const ERROR = "Turn off pick mode to act on the page";
+const ERROR = "Element no longer in DOM";
 
-/** A one-button tree whose row actually offers a click action. */
+/** A one-button tree whose row is a tab stop and offers a click action. */
 function actionableTree(): ContentToPanel {
   const mk = (
     id: string,
@@ -38,7 +39,11 @@ function actionableTree(): ContentToPanel {
       depth,
       a11y: { role, name, description: "", states: {}, properties: {} },
       dom: { tagName: "button", attributes: {}, textContent: name },
-      interaction: { actions, isEditable: false, focusable: true },
+      interaction: {
+        actions,
+        isEditable: false,
+        isFocusable: actions.length > 0,
+      },
       ui: { expanded: true, selected: false, matchesFilter: true },
     } as unknown as SemanticNode,
   ];
@@ -62,7 +67,19 @@ describe("panel action feedback: a frame that refuses", () => {
   let container: HTMLDivElement;
   let chromeMock: ChromeMock;
 
-  function mount(respond?: (m: PanelToContent) => unknown): void {
+  /** Let the promise-form replies land and the effects they trigger run. */
+  async function flush(): Promise<void> {
+    for (let i = 0; i < 5; i++) {
+      await act(async () => {
+        await Promise.resolve();
+      });
+    }
+  }
+
+  /** The panel on the TAB view, its one stop listed. */
+  async function mount(
+    respond?: (m: PanelToContent) => unknown,
+  ): Promise<void> {
     chromeMock = installChromeMock(respond ? { respond } : {});
     act(() => {
       render(h(App, {}), container);
@@ -76,6 +93,17 @@ describe("panel action feedback: a frame that refuses", () => {
     act(() => {
       chromeMock.emit(actionableTree());
     });
+    await flush();
+    const tab = [...container.querySelectorAll("button.sn-toggle-btn")].find(
+      (b) => b.textContent?.trim() === "TAB",
+    ) as HTMLButtonElement | undefined;
+    if (!tab) throw new Error("no TAB toggle rendered");
+    act(() => tab.click());
+    // The page sends its whole tree for the TAB view.
+    act(() => {
+      chromeMock.emit(actionableTree());
+    });
+    await flush();
   }
 
   function feedback(): string {
@@ -87,18 +115,24 @@ describe("panel action feedback: a frame that refuses", () => {
   }
 
   function clickAction(): void {
-    const btn = container.querySelector(
-      '[data-node-id="n2"] button.sn-action',
-    ) as HTMLButtonElement | null;
-    if (!btn) throw new Error("no action button rendered for n2");
+    const btn = [
+      ...container.querySelectorAll("button.sn-list-action-btn"),
+    ].find((b) => b.textContent?.trim() === "Activate") as
+      HTMLButtonElement | undefined;
+    if (!btn || btn.disabled) throw new Error("no Activate button for Save");
     act(() => {
       btn.click();
     });
   }
 
+  const scrollIntoView = Element.prototype.scrollIntoView;
+
   beforeEach(() => {
     vi.useFakeTimers();
     stubMatchMedia();
+    // jsdom has no scrollIntoView, which the TAB list calls to keep its
+    // selected stop in view.
+    Element.prototype.scrollIntoView = () => {};
     container = document.createElement("div");
     document.body.appendChild(container);
   });
@@ -107,60 +141,13 @@ describe("panel action feedback: a frame that refuses", () => {
     render(null, container);
     container.remove();
     vi.useRealTimers();
+    Element.prototype.scrollIntoView = scrollIntoView;
     delete (globalThis as { chrome?: unknown }).chrome;
   });
 
-  it("disarms every frame in the tab when one of them resolves a pick", () => {
-    mount();
-    chromeMock.sent.length = 0;
-
-    act(() => {
-      chromeMock.emit({
-        type: "NODE_PICKED",
-        tabId: TAB_ID,
-        payload: { nodeId: "n2" },
-      } as unknown as ContentToPanel);
-    });
-
-    // Only the frame that resolved the click exits on its own. Without this
-    // the other frames stay armed while the ⦿ button reads off, swallowing
-    // clicks with no visible control to turn back off.
-    expect(
-      chromeMock.sent.filter(
-        (m) =>
-          m.type === "SET_PICK_MODE" &&
-          (m.payload as { enabled: boolean }).enabled === false,
-      ),
-    ).toHaveLength(1);
-  });
-
-  // Escape, and a click that lands on nothing tracked, both exit the picker
-  // WITHOUT a NODE_PICKED — PICK_MODE_CHANGED is the only notice the panel
-  // gets. Handling just the pick path leaves sibling frames armed.
-  it("disarms every frame when one reports itself out of pick mode", () => {
-    mount();
-    chromeMock.sent.length = 0;
-
-    act(() => {
-      chromeMock.emit({
-        type: "PICK_MODE_CHANGED",
-        tabId: TAB_ID,
-        payload: { enabled: false },
-      } as unknown as ContentToPanel);
-    });
-
-    expect(
-      chromeMock.sent.filter(
-        (m) =>
-          m.type === "SET_PICK_MODE" &&
-          (m.payload as { enabled: boolean }).enabled === false,
-      ),
-    ).toHaveLength(1);
-  });
-
-  it("does not let an earlier action's timer clear a later message", () => {
+  it("does not let an earlier action's timer clear a later message", async () => {
     let refuse = false;
-    mount((m) =>
+    await mount((m) =>
       m.type === "DISPATCH_ACTION" && refuse
         ? { success: false, error: ERROR }
         : undefined,
@@ -185,8 +172,8 @@ describe("panel action feedback: a frame that refuses", () => {
     expect(feedback()).toBe(`Failed: ${ERROR}`);
   });
 
-  it("reports the refusal instead of the optimistic banner", () => {
-    mount((m) =>
+  it("reports the refusal instead of the optimistic banner", async () => {
+    await mount((m) =>
       m.type === "DISPATCH_ACTION"
         ? { success: false, error: ERROR }
         : undefined,
@@ -197,8 +184,8 @@ describe("panel action feedback: a frame that refuses", () => {
     expect(feedback()).toBe(`Failed: ${ERROR}`);
   });
 
-  it("keeps the refusal on screen past the optimistic banner's own clear", () => {
-    mount((m) =>
+  it("keeps the refusal on screen past the optimistic banner's own clear", async () => {
+    await mount((m) =>
       m.type === "DISPATCH_ACTION"
         ? { success: false, error: ERROR }
         : undefined,
@@ -219,8 +206,8 @@ describe("panel action feedback: a frame that refuses", () => {
     expect(feedback()).toBe("");
   });
 
-  it("still reports success when the frame accepts the action", () => {
-    mount();
+  it("still reports success when the frame accepts the action", async () => {
+    await mount();
 
     clickAction();
 

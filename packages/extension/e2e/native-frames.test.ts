@@ -138,7 +138,6 @@ async function showNative(nav: NativeHarness): Promise<{
   const { page, same, cross } = await openFrames(nav);
   await page.bringToFront();
   await nav.panel.reload();
-  await nav.chooseTree("Chrome's tree");
   await expect
     .poll(() => nav.panel.locator(".sn-node").count(), { timeout: 20_000 })
     .toBeGreaterThan(0);
@@ -214,7 +213,6 @@ test("a pick inside either frame selects that frame's row", async ({ nav }) => {
   const { page, same, cross } = await openFrames(nav);
   await page.bringToFront();
   await nav.panel.reload();
-  await nav.chooseTree("Chrome's tree");
   await expect
     .poll(() => nav.panel.locator(".sn-node").count(), { timeout: 20_000 })
     .toBeGreaterThan(0);

@@ -9,7 +9,6 @@ import {
   matchCountLabel,
   scopeKeyAction,
   scopePath,
-  subtreeNodes,
 } from "./scope.js";
 
 const PARENT: Record<string, string | undefined> = {
@@ -47,19 +46,6 @@ describe("isInScope", () => {
   it("is false for an ancestor or an unrelated node", () => {
     expect(isInScope("main", "form", parentOf)).toBe(false);
     expect(isInScope("other", "form", parentOf)).toBe(false);
-  });
-});
-
-describe("subtreeNodes", () => {
-  it("keeps the root and everything under it, nothing else", () => {
-    const nodes = new Map([
-      ["root", { childIds: ["a", "b"] }],
-      ["a", { childIds: ["a1"] }],
-      ["a1", { childIds: [] }],
-      ["b", {}],
-    ]);
-    expect([...subtreeNodes(nodes, "a").keys()].sort()).toEqual(["a", "a1"]);
-    expect(subtreeNodes(nodes, "gone").size).toBe(0);
   });
 });
 

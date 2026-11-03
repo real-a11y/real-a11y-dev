@@ -5,6 +5,9 @@
  * pulling in the Chrome APIs that the background uses elsewhere.
  */
 
+import type { FieldState } from "./field-state.js";
+import type { TreeRequest } from "./types.js";
+
 // ---- Node ID prefixing to avoid collisions between frames ----
 
 /**
@@ -101,6 +104,22 @@ export interface PlannedTabMessage {
   body: { type: string; payload?: unknown };
 }
 
+/** Tell a frame to observe, sending `tree`, if given. */
+function observe(
+  tabId: number,
+  frameId: number,
+  tree: TreeRequest | undefined,
+): PlannedTabMessage {
+  return {
+    tabId,
+    frameId,
+    body: {
+      type: "SET_OBSERVING",
+      payload: { enabled: true, ...(tree ? { tree } : {}) },
+    },
+  };
+}
+
 /**
  * Decide what the background should send to a content script that just
  * announced itself via `FRAME_TREE_DATA`.
@@ -127,6 +146,8 @@ export function planFrameAnnouncementResponse(opts: {
   sidepanelConnected: boolean;
   curtainOn: boolean;
   focusTracker: boolean;
+  /** The tree the panel last asked the tab for, if it has. */
+  tree?: TreeRequest;
 }): PlannedTabMessage[] {
   const out: PlannedTabMessage[] = [];
 
@@ -141,11 +162,9 @@ export function planFrameAnnouncementResponse(opts: {
     // Re-assert observation (idempotent — content's startObserving() early-
     // returns if already observing) so a frame that keeps announcing after a
     // service-worker revival stays armed, and re-assert the focus tracker.
-    out.push({
-      tabId: opts.tabId,
-      frameId: opts.frameId,
-      body: { type: "SET_OBSERVING", payload: { enabled: true } },
-    });
+    // With the tree the panel asked for: a frame that sent another, having
+    // missed the request, sends this one.
+    out.push(observe(opts.tabId, opts.frameId, opts.tree));
     out.push({
       tabId: opts.tabId,
       frameId: opts.frameId,
@@ -176,14 +195,13 @@ export function planFrameHello(opts: {
   frameId: number;
   sidepanelConnected: boolean;
   focusTracker: boolean;
+  /** The tree the panel last asked the tab for, if it has: the one a frame
+   *  loading after the request sends. */
+  tree?: TreeRequest;
 }): PlannedTabMessage[] {
   if (!opts.sidepanelConnected) return [];
   return [
-    {
-      tabId: opts.tabId,
-      frameId: opts.frameId,
-      body: { type: "SET_OBSERVING", payload: { enabled: true } },
-    },
+    observe(opts.tabId, opts.frameId, opts.tree),
     {
       tabId: opts.tabId,
       frameId: opts.frameId,
@@ -302,10 +320,9 @@ export function isTrustedSender(
  *
  * {@link isTrustedSender} accepts content scripts too, because they carry the
  * extension's id. That is right for the handlers content scripts are meant to
- * reach, and wrong for anything that drives `chrome.debugger` or flips the
- * native-mode setting: a content script runs in the page's renderer process,
- * so a compromised renderer could otherwise read and act on any tab through
- * the debugger, or turn native mode back on after the user turned it off.
+ * reach, and wrong for anything that drives `chrome.debugger`: a content
+ * script runs in the page's renderer process, so a compromised renderer could
+ * otherwise read and act on any tab through the debugger.
  * Chrome sets `sender.url` from the frame that
  * sent the message, and a content script never runs in an extension page, so
  * an extension-origin URL is what tells the two apart. `sender.tab` is not
@@ -330,18 +347,17 @@ export function isExtensionPageSender(
 // ---- Side-panel inbound message filtering ----
 
 /**
- * Message types whose payload carries a **frame-local** node id, and which the
- * background therefore re-sends with the id prefixed by its frame.
+ * Message types whose payload is **frame-local**, and which the background
+ * therefore re-sends with the frame it came from: a focus report's page keys
+ * number its own frame's document.
  *
  * A content script's `chrome.runtime.sendMessage` fans out to every extension
  * context, so each of these reaches the panel twice: once directly from the
- * frame (raw `sn-<n>`) and once relayed by the background (`f<frameId>-sn-<n>`).
- * Only the relayed copy is addressable in the merged tree — see
- * {@link shouldPanelAcceptMessage}.
+ * frame, naming no frame, and once relayed by the background, naming it. Only
+ * the relayed copy finds its rows — see {@link shouldPanelAcceptMessage}.
  */
 const BACKGROUND_RELAYED_TYPES: ReadonlySet<string> = new Set([
   "FOCUS_CHANGED",
-  "NODE_PICKED",
 ]);
 
 /**
@@ -350,18 +366,15 @@ const BACKGROUND_RELAYED_TYPES: ReadonlySet<string> = new Set([
  * Two independent rules:
  *
  *   1. **Frame-scoped events must come via the background.** `FOCUS_CHANGED`
- *      and `NODE_PICKED` are sent by the content script with a frame-LOCAL
- *      node id, and the content script's `sendMessage` reaches the panel
- *      directly as well as the background. For a subframe event the direct
- *      copy's `sn-<n>` collides with a *different*, unrelated top-frame node
- *      in the merged tree: the panel selects it and force-expands its
- *      ancestors, and although the background's prefixed forward then corrects
- *      the selection, those expansions stay. Delivery order isn't guaranteed
- *      either way round, so both orders leave the stray expansions behind.
- *      Requiring the background's `tabId` stamp drops the direct copy — the
- *      same shape as the earlier `LIVE_REGION` fix, which no-opped the
- *      *forward* because there the direct copy is the correct one (its payload
- *      is text, not an id).
+ *      is sent by the content script with page keys that number its own
+ *      frame's document, and the content script's `sendMessage` reaches the
+ *      panel directly as well as the background. For a subframe's report the
+ *      direct copy names no frame, so the panel would read its numbers as the
+ *      top frame's and follow focus to an unrelated row. Requiring the
+ *      background's `tabId` stamp drops the direct copy — the same shape as
+ *      the earlier `LIVE_REGION` fix, which no-opped the *forward* because
+ *      there the direct copy is the correct one (its payload is text, not
+ *      numbers).
  *
  *   2. **Tab scoping.** Drop broadcasts belonging to another tab. Relayed
  *      messages carry an explicit `tabId`; content-direct ones (`LIVE_REGION`)
@@ -587,4 +600,28 @@ export function isUnreachablePageResponse(response: unknown): boolean {
   if (typeof response !== "object" || response === null) return false;
   const reply = response as { success?: unknown; error?: unknown };
   return reply.success === false && reply.error === RESTRICTED_PAGE_ERROR;
+}
+
+/**
+ * Narrow a chrome.runtime.sendMessage reply that reports `{ success: true }`.
+ * The callback can receive `undefined` when chrome.runtime.lastError is set
+ * (e.g. the MV3 service worker was torn down before responding) — never
+ * dereference the reply without this (or equivalent) guard.
+ */
+export function isSuccessResponse(
+  response: unknown,
+): response is { success: true } {
+  return (
+    typeof response === "object" &&
+    response !== null &&
+    "success" in response &&
+    (response as { success: unknown }).success === true
+  );
+}
+
+/** GET_FIELD_STATE success reply — same undefined-safe gate as isSuccessResponse. */
+export function isFieldStateSuccess(
+  response: unknown,
+): response is Extract<FieldState, { success: true }> {
+  return isSuccessResponse(response);
 }

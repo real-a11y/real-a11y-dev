@@ -93,10 +93,12 @@ main
       row
         cell "Engine"
         cell "The browser's native AX tree"
-        cell "Real A11y's own extraction — the same tree the extension, React panel, and Storybook addon render"
-          link "extension"
+        cell "Real A11y's own extraction — the same tree the inspector, React panel, and Storybook addon render. The Playwright adapter also reads Chromium's own tree, as the extension shows it"
+          link "inspector"
           link "React panel"
           link "Storybook addon"
+          link "Playwright adapter"
+          link "extension"
       row
         cell "Views"
         cell "Role + name tree"

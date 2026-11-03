@@ -3,10 +3,10 @@
  *
  * Like `background.ts`, `content.ts` is wiring rather than a pure module: it
  * registers the `chrome.runtime.onMessage` listener and owns the per-frame
- * state (pick mode, curtain, observation) that the handlers read. The
- * interaction between a panel-driven action and the element picker is only
- * observable at that level, so these tests stand up a fake `chrome`, import
- * the real module, and drive it through the listener it registers.
+ * state (curtain, observation, the tree asked for) that the handlers read.
+ * That state is only observable at that level, so these tests stand up a fake
+ * `chrome`, import the real module, and drive it through the listener it
+ * registers.
  */
 
 import type { SemanticNode } from "@real-a11y-dev/core";
@@ -77,7 +77,7 @@ function nodeIdByTag(h: Harness, tagName: string): string {
   return match[0];
 }
 
-describe("content: panel-driven actions vs. the element picker", () => {
+describe("content: the actions a TAB row dispatches", () => {
   let h: Harness;
 
   beforeEach(async () => {
@@ -89,20 +89,17 @@ describe("content: panel-driven actions vs. the element picker", () => {
     h = makeHarness();
     (globalThis as { chrome?: unknown }).chrome = h.chromeMock;
     await import("./content.js");
-    // Populate the element-ref map so node ids resolve, then start from a
-    // clean slate so assertions only see what the test itself provoked.
-    h.send({ type: "REQUEST_TREE", payload: { viewMode: "a11y" } });
+    // Populate the element-ref map so node ids resolve.
+    h.send({ type: "REQUEST_TREE", payload: { framesOnly: false } });
   });
 
   afterEach(() => {
     // Everything this module armed hangs off `document`, which outlives
-    // `vi.resetModules()`: the picker's capture-phase listeners and the
-    // DomObserver / live-region MutationObserver that `REQUEST_TREE` starts.
-    // A module left armed keeps intercepting clicks and pushing stray
+    // `vi.resetModules()`: the DomObserver / live-region MutationObserver
+    // that `REQUEST_TREE` starts. A module left armed keeps pushing stray
     // FRAME_TREE_DATA into the NEXT test's `h.sent` — which is what
     // `lastTree()` reads — through a `chrome` global it no longer owns.
-    // Disarm both while this test's module is still the live one.
-    h.send({ type: "SET_PICK_MODE", payload: { enabled: false } });
+    // Disarm it while this test's module is still the live one.
     h.send({ type: "SET_OBSERVING", payload: { enabled: false } });
     vi.clearAllTimers();
     vi.useRealTimers();
@@ -110,120 +107,7 @@ describe("content: panel-driven actions vs. the element picker", () => {
     document.body.innerHTML = "";
   });
 
-  it("does not report a spurious pick when an action is dispatched in pick mode", () => {
-    const nodeId = nodeIdByTag(h, "button");
-    h.send({ type: "SET_PICK_MODE", payload: { enabled: true } });
-    h.sent.length = 0;
-
-    h.send({
-      type: "DISPATCH_ACTION",
-      payload: { nodeId, action: "click" },
-    });
-
-    // The action arrived by node id from the panel — the user did not point
-    // at anything, so nothing was picked.
-    expect(h.sent.filter((m) => m.type === "NODE_PICKED")).toEqual([]);
-  });
-
-  it("stays in pick mode when an action is dispatched in pick mode", () => {
-    const nodeId = nodeIdByTag(h, "button");
-    h.send({ type: "SET_PICK_MODE", payload: { enabled: true } });
-    h.sent.length = 0;
-
-    h.send({
-      type: "DISPATCH_ACTION",
-      payload: { nodeId, action: "click" },
-    });
-
-    // Pick mode is the user's mode to leave; a panel action must not end it.
-    expect(h.sent.filter((m) => m.type === "PICK_MODE_CHANGED")).toEqual([]);
-  });
-
-  it("still reports a real user pick while pick mode is on", () => {
-    h.send({ type: "SET_PICK_MODE", payload: { enabled: true } });
-    h.sent.length = 0;
-
-    // A genuine click from the page, not one the dispatcher synthesized.
-    document
-      .getElementById("target")!
-      .dispatchEvent(new MouseEvent("click", { bubbles: true }));
-
-    expect(h.sent.filter((m) => m.type === "NODE_PICKED")).toHaveLength(1);
-    expect(
-      h.sent.filter(
-        (m) =>
-          m.type === "PICK_MODE_CHANGED" &&
-          (m.payload as { enabled: boolean }).enabled === false,
-      ),
-    ).toHaveLength(1);
-  });
-
-  // The key bar is deliberately NOT gated. Escape is the one key the picker
-  // reacts to, and leaving pick mode is a reasonable thing for Escape to do —
-  // refusing it would leave the button inert instead, since the page does not
-  // receive the key either way. Pinned so the gate is not widened to match
-  // DISPATCH_ACTION's on the assumption that it was an oversight.
-  it("lets the key bar's Escape leave pick mode, as it always has", () => {
-    h.send({ type: "SET_PICK_MODE", payload: { enabled: true } });
-    h.sent.length = 0;
-
-    const result = h.send({
-      type: "SEND_KEY",
-      payload: { key: "Escape", code: "Escape", keyCode: 27 },
-    });
-
-    expect(result).toEqual({ success: true });
-    expect(
-      h.sent.filter(
-        (m) =>
-          m.type === "PICK_MODE_CHANGED" &&
-          (m.payload as { enabled: boolean }).enabled === false,
-      ),
-    ).toHaveLength(1);
-  });
-
-  // The action gate is narrow: the picker swallows pointer events, so
-  // everything else must keep working while it is armed. Blocking `type` in
-  // particular would strand a value the user already typed into the panel's
-  // input, which closes on submit whatever the frame answers.
-  it("still types into a field while pick mode is on", () => {
-    const nodeId = nodeIdByTag(h, "input");
-    h.send({ type: "SET_PICK_MODE", payload: { enabled: true } });
-
-    const result = h.send({
-      type: "DISPATCH_ACTION",
-      payload: { nodeId, action: "type", payload: { value: "hello" } },
-    });
-
-    expect(result).toEqual({ success: true });
-    expect((document.getElementById("field") as HTMLInputElement).value).toBe(
-      "hello",
-    );
-  });
-
-  it("still toggles a <details> while pick mode is on", () => {
-    document.body.insertAdjacentHTML(
-      "beforeend",
-      `<details id="d"><summary>More</summary>body</details>`,
-    );
-    h.send({ type: "REQUEST_TREE", payload: { viewMode: "a11y" } });
-    const nodeId = nodeIdByTag(h, "details");
-    h.send({ type: "SET_PICK_MODE", payload: { enabled: true } });
-
-    const result = h.send({
-      type: "DISPATCH_ACTION",
-      payload: { nodeId, action: "toggle" },
-    });
-
-    // `toggle` flips `.open` directly — no pointer events, nothing for the
-    // picker to swallow, so it is not in POINTER_ACTIONS.
-    expect(result).toEqual({ success: true });
-    expect((document.getElementById("d") as HTMLDetailsElement).open).toBe(
-      true,
-    );
-  });
-
-  it("still dispatches the action itself when pick mode is off", () => {
+  it("clicks", () => {
     const nodeId = nodeIdByTag(h, "button");
     const clicks: Event[] = [];
     document
@@ -237,6 +121,39 @@ describe("content: panel-driven actions vs. the element picker", () => {
 
     expect(result).toEqual({ success: true });
     expect(clicks).toHaveLength(1);
+  });
+
+  it("types into a field", () => {
+    const nodeId = nodeIdByTag(h, "input");
+
+    const result = h.send({
+      type: "DISPATCH_ACTION",
+      payload: { nodeId, action: "type", payload: { value: "hello" } },
+    });
+
+    expect(result).toEqual({ success: true });
+    expect((document.getElementById("field") as HTMLInputElement).value).toBe(
+      "hello",
+    );
+  });
+
+  it("toggles a <details>", () => {
+    document.body.insertAdjacentHTML(
+      "beforeend",
+      `<details id="d"><summary>More</summary>body</details>`,
+    );
+    h.send({ type: "REQUEST_TREE", payload: { framesOnly: false } });
+    const nodeId = nodeIdByTag(h, "details");
+
+    const result = h.send({
+      type: "DISPATCH_ACTION",
+      payload: { nodeId, action: "toggle" },
+    });
+
+    expect(result).toEqual({ success: true });
+    expect((document.getElementById("d") as HTMLDetailsElement).open).toBe(
+      true,
+    );
   });
 });
 
@@ -263,14 +180,17 @@ describe("content: a native reveal's arm", () => {
     h = makeHarness();
     (globalThis as { chrome?: unknown }).chrome = h.chromeMock;
     await import("./content.js");
-    h.send({ type: "REQUEST_TREE", payload: { viewMode: "a11y" } });
+    h.send({ type: "REQUEST_TREE", payload: { framesOnly: false } });
     h.send({ type: "SET_FOCUS_TRACKER", payload: { enabled: true } });
+    // A native read numbers the page: a focus report names the focused
+    // element by its number, and the top frame sends none without one.
+    h.send({ type: "NATIVE_PAGE_KEYS", payload: { readId: "read-1" } });
   });
 
   afterEach(() => {
     // The focusin listener hangs off `document`, same as every other
-    // listener this module arms — and unlike SET_PICK_MODE/SET_OBSERVING
-    // above, no earlier test in this file ever turned SET_FOCUS_TRACKER on,
+    // listener this module arms — and unlike SET_OBSERVING above, no earlier
+    // test in this file ever turned SET_FOCUS_TRACKER on,
     // so this specific leak had nothing to expose until this describe block.
     // Left enabled, a stale listener from THIS test still fires (and still
     // reaches the CURRENT test's `chrome.runtime.sendMessage`, since it's
@@ -529,7 +449,6 @@ describe("content: a frame whose panel never connected", () => {
   });
 
   afterEach(() => {
-    h.send({ type: "SET_PICK_MODE", payload: { enabled: false } });
     h.send({ type: "SET_OBSERVING", payload: { enabled: false } });
     vi.clearAllTimers();
     vi.useRealTimers();
@@ -558,7 +477,7 @@ describe("content: a frame whose panel never connected", () => {
 });
 
 /**
- * Focus sync walks up from the focused element to the nearest node in the
+ * The focus ring walks up from the focused element to the nearest node in the
  * tree. A form rendered since the last extraction isn't in it yet — a dialog's
  * form that focuses its first field as it opens is focused before the
  * debounced refresh runs — so the walk has to get past the form.
@@ -576,7 +495,7 @@ describe("content: focus inside a form whose control shadows its properties", ()
     h = makeHarness();
     (globalThis as { chrome?: unknown }).chrome = h.chromeMock;
     await import("./content.js");
-    h.send({ type: "REQUEST_TREE", payload: { viewMode: "a11y" } });
+    h.send({ type: "REQUEST_TREE", payload: { framesOnly: false } });
     h.send({ type: "SET_FOCUS_TRACKER", payload: { enabled: true } });
   });
 
@@ -590,8 +509,25 @@ describe("content: focus inside a form whose control shadows its properties", ()
     document.body.innerHTML = "";
   });
 
+  /** `main`, where only it measures itself: a ring drawn for it, and not
+   *  for an element inside it, is where it is. */
+  function measureMain(): void {
+    document.getElementById("app")!.getBoundingClientRect = () =>
+      new DOMRect(12, 34, 56, 78);
+  }
+
+  /** Where the ring was last drawn, if it was. */
+  function ringAt() {
+    const overlay = document.getElementById("__sn-highlight");
+    if (overlay?.style.display !== "block") return undefined;
+    const { left, top, width, height } = overlay.style;
+    return { left, top, width, height };
+  }
+
+  const MAIN_AT = { left: "12px", top: "34px", width: "56px", height: "78px" };
+
   it("walks past the form to the nearest node in the tree", () => {
-    const mainId = nodeIdByTag(h, "main");
+    measureMain();
     document.getElementById("app")!.innerHTML =
       `<form><input type="hidden" name="parentElement">` +
       `<input id="inside" aria-label="Inside"></form>`;
@@ -609,15 +545,13 @@ describe("content: focus inside a form whose control shadows its properties", ()
       .getElementById("inside")!
       .dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
 
-    expect(h.sent.filter((m) => m.type === "FOCUS_CHANGED")).toEqual([
-      { type: "FOCUS_CHANGED", payload: { nodeId: mainId } },
-    ]);
+    expect(ringAt()).toEqual(MAIN_AT);
   });
 
   it("walks past a form whose control shadows nodeType", () => {
     // `form.nodeType` is then that control, not 1, so the walk took the form
-    // for no element at all and stopped below it, syncing nothing.
-    const mainId = nodeIdByTag(h, "main");
+    // for no element at all and stopped below it, ringing nothing.
+    measureMain();
     document.getElementById("app")!.innerHTML =
       `<form><input type="hidden" name="nodeType">` +
       `<input id="inside" aria-label="Inside"></form>`;
@@ -633,9 +567,7 @@ describe("content: focus inside a form whose control shadows its properties", ()
       .getElementById("inside")!
       .dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
 
-    expect(h.sent.filter((m) => m.type === "FOCUS_CHANGED")).toEqual([
-      { type: "FOCUS_CHANGED", payload: { nodeId: mainId } },
-    ]);
+    expect(ringAt()).toEqual(MAIN_AT);
   });
 
   it("moves focus to an editable form selected in the panel", () => {
@@ -663,7 +595,7 @@ describe("content: focus inside a form whose control shadows its properties", ()
       });
     }
     const focus = vi.spyOn(form, "focus");
-    h.send({ type: "REQUEST_TREE", payload: { viewMode: "a11y" } });
+    h.send({ type: "REQUEST_TREE", payload: { framesOnly: false } });
 
     h.send({
       type: "HIGHLIGHT_NODE",
@@ -697,7 +629,7 @@ describe("content: live regions", () => {
     (globalThis as { chrome?: unknown }).chrome = h.chromeMock;
     await import("./content.js");
     // Arms the observers, as a panel opening does.
-    h.send({ type: "REQUEST_TREE", payload: { viewMode: "a11y" } });
+    h.send({ type: "REQUEST_TREE", payload: { framesOnly: false } });
     h.sent.length = 0;
   });
 
@@ -1022,7 +954,7 @@ describe("content: numbering the page for the native tree", () => {
     h = makeHarness();
     (globalThis as { chrome?: unknown }).chrome = h.chromeMock;
     await import("./content.js");
-    h.send({ type: "REQUEST_TREE", payload: { viewMode: "a11y" } });
+    h.send({ type: "REQUEST_TREE", payload: { framesOnly: false } });
     h.send({ type: "SET_FOCUS_TRACKER", payload: { enabled: true } });
   });
 
@@ -1056,7 +988,7 @@ describe("content: numbering the page for the native tree", () => {
 
   const focusReports = () =>
     h.sent.filter((m) => m.type === "FOCUS_CHANGED") as Array<{
-      payload: { nodeId?: string; pageKeys?: Record<string, number[]> };
+      payload: { pageKeys?: Record<string, number[]> };
     }>;
 
   it("answers a read with the digest of its walk of the page, and the page's URL", async () => {
@@ -1070,22 +1002,23 @@ describe("content: numbering the page for the native tree", () => {
     });
   });
 
-  it("reports focus by the read's numbers, the focused element's first, alongside the DOM tree's node", async () => {
+  it("reports focus by the read's numbers, the focused element's first, and nothing else", async () => {
     h.send({ type: "NATIVE_PAGE_KEYS", payload: { readId: "read-1" } });
     const keys = await numbers();
     const target = document.getElementById("target")!;
     h.sent.length = 0;
     focusTarget();
     const [report] = focusReports();
-    expect(report?.payload.nodeId).toEqual(expect.any(String));
-    expect(report?.payload.pageKeys).toEqual({
-      "read-1": [
-        keys.get(target),
-        keys.get(target.parentElement!),
-        keys.get(document.getElementById("app")!),
-        keys.get(document.body),
-        keys.get(document.documentElement),
-      ],
+    expect(report?.payload).toEqual({
+      pageKeys: {
+        "read-1": [
+          keys.get(target),
+          keys.get(target.parentElement!),
+          keys.get(document.getElementById("app")!),
+          keys.get(document.body),
+          keys.get(document.documentElement),
+        ],
+      },
     });
   });
 
@@ -1114,22 +1047,18 @@ describe("content: numbering the page for the native tree", () => {
           relatedTarget: from,
         }),
       );
-    // Into the root from outside: the document hears it, and the DOM tree's
-    // node goes with it.
+    // Into the root from outside: the document hears it.
     h.sent.length = 0;
     focus(a, document.getElementById("target"));
     expect(focusReports()).toHaveLength(1);
-    expect(focusReports()[0]!.payload.nodeId).toEqual(expect.any(String));
     expect(focusReports()[0]!.payload.pageKeys!["read-1"]![0]).toBe(
       keys.get(a),
     );
 
-    // Within it: only the root hears it. The DOM tree's node, the host's,
-    // hasn't changed, so only the native numbers go.
+    // Within it: only the root hears it.
     h.sent.length = 0;
     focus(b, a);
     expect(focusReports()).toHaveLength(1);
-    expect(focusReports()[0]!.payload.nodeId).toBeUndefined();
     expect(focusReports()[0]!.payload.pageKeys!["read-1"]![0]).toBe(
       keys.get(b),
     );
@@ -1138,7 +1067,9 @@ describe("content: numbering the page for the native tree", () => {
     h.sent.length = 0;
     focus(document.getElementById("target")!, b);
     expect(focusReports()).toHaveLength(1);
-    expect(focusReports()[0]!.payload.nodeId).toEqual(expect.any(String));
+    expect(focusReports()[0]!.payload.pageKeys!["read-1"]![0]).toBe(
+      keys.get(document.getElementById("target")!),
+    );
   });
 
   it("hears focus moving between a shadow host and its own shadow tree, which the document never does", async () => {
@@ -1179,7 +1110,7 @@ describe("content: numbering the page for the native tree", () => {
     ).toEqual([keys.get(host)]);
   });
 
-  it("reports a move from inside a shadow root to an element slotted into its host once, as the document hears it", () => {
+  it("reports a move from inside a shadow root to an element slotted into its host once", async () => {
     const host = document.createElement("div");
     const slotted = document.createElement("button");
     host.append(slotted);
@@ -1188,6 +1119,7 @@ describe("content: numbering the page for the native tree", () => {
     root.innerHTML = `<button id="a">A</button><slot></slot>`;
     const a = root.getElementById("a")!;
     h.send({ type: "NATIVE_PAGE_KEYS", payload: { readId: "read-1" } });
+    const keys = await numbers();
     const focus = (el: Element, from: Element | null) =>
       el.dispatchEvent(
         new FocusEvent("focusin", {
@@ -1200,7 +1132,9 @@ describe("content: numbering the page for the native tree", () => {
     h.sent.length = 0;
     focus(slotted, a);
     expect(focusReports()).toHaveLength(1);
-    expect(focusReports()[0]!.payload.nodeId).toEqual(expect.any(String));
+    expect(focusReports()[0]!.payload.pageKeys!["read-1"]![0]).toBe(
+      keys.get(slotted),
+    );
   });
 
   it("reports no numbers before a read, and nothing at all with the tracker off", () => {
@@ -1338,7 +1272,7 @@ describe("content: the mark a frame leaves on its <iframe>", () => {
     const { frameOwnerMark } = await import("./frame-owner.js");
     const mark = frameOwnerMark(holder);
     expect(keysAnswer().owner).toBe(mark);
-    h.send({ type: "REQUEST_TREE", payload: { viewMode: "a11y" } });
+    h.send({ type: "REQUEST_TREE", payload: { framesOnly: false } });
     expect(lastTreePayload().owner).toBe(mark);
   });
 
@@ -1369,6 +1303,9 @@ describe("content: the mark a frame leaves on its <iframe>", () => {
 
   it("reports focus in a document written since the read as in this frame, naming no element", async () => {
     await load();
+    // The focus ring is drawn on the element, which jsdom can't scroll to.
+    const scrollIntoView = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = () => {};
     h.send({ type: "NATIVE_PAGE_KEYS", payload: { readId: "read-1" } });
     h.send({ type: "SET_FOCUS_TRACKER", payload: { enabled: true } });
     // What `document.open()` leaves: a root element no read has seen.
@@ -1389,6 +1326,8 @@ describe("content: the mark a frame leaves on its <iframe>", () => {
       ]);
     } finally {
       h.send({ type: "SET_FOCUS_TRACKER", payload: { enabled: false } });
+      Element.prototype.scrollIntoView = scrollIntoView;
+      document.getElementById("__sn-highlight")?.remove();
       html.remove();
       document.append(original);
       await vi.advanceTimersByTimeAsync(0);
@@ -1400,7 +1339,7 @@ describe("content: the mark a frame leaves on its <iframe>", () => {
     const { frameOwnerMark } = await import("./frame-owner.js");
     expect(frameOwnerMark(holder)).toBeUndefined();
     expect(keysAnswer()).not.toHaveProperty("owner");
-    h.send({ type: "REQUEST_TREE", payload: { viewMode: "a11y" } });
+    h.send({ type: "REQUEST_TREE", payload: { framesOnly: false } });
     expect(lastTreePayload()).not.toHaveProperty("owner");
   });
 });
@@ -1456,7 +1395,7 @@ describe("content: the marked frames inside a document", () => {
   });
 
   it("go with the tree, each by its <iframe>'s node", () => {
-    h.send({ type: "REQUEST_TREE", payload: { viewMode: "a11y" } });
+    h.send({ type: "REQUEST_TREE", payload: { framesOnly: false } });
     const trees = h.sent.filter((m) => m.type === "FRAME_TREE_DATA");
     const payload = trees[trees.length - 1]!.payload as {
       nodes: Array<[string, SemanticNode]>;
@@ -1483,7 +1422,7 @@ describe("content: the marked frames inside a document", () => {
       "mark-hidden",
     );
 
-    h.send({ type: "REQUEST_TREE", payload: { viewMode: "a11y" } });
+    h.send({ type: "REQUEST_TREE", payload: { framesOnly: false } });
     const trees = h.sent.filter((m) => m.type === "FRAME_TREE_DATA");
     const payload = trees[trees.length - 1]!.payload as {
       nodes: Array<[string, SemanticNode]>;
@@ -1498,9 +1437,180 @@ describe("content: the marked frames inside a document", () => {
 
   it("are left out of a tree that holds none", () => {
     document.body.innerHTML = `<main><button>Save</button></main>`;
-    h.send({ type: "REQUEST_TREE", payload: { viewMode: "a11y" } });
+    h.send({ type: "REQUEST_TREE", payload: { framesOnly: false } });
     const trees = h.sent.filter((m) => m.type === "FRAME_TREE_DATA");
     expect(trees[trees.length - 1]!.payload).not.toHaveProperty("embeds");
+  });
+});
+
+describe("content: the tree the panel asks for", () => {
+  let h: Harness;
+  let originalScrollIntoView: typeof Element.prototype.scrollIntoView;
+
+  beforeEach(async () => {
+    vi.useFakeTimers();
+    vi.resetModules();
+    // jsdom has no layout for the overlay's `scrollIntoView` to call into.
+    originalScrollIntoView = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = function () {};
+    document.title = "The page";
+    document.body.innerHTML =
+      `<main><h1>Title</h1><button id="save">Save</button>` +
+      `<iframe title="Video" src="https://video.test/embed"></iframe></main>`;
+    h = makeHarness();
+    (globalThis as { chrome?: unknown }).chrome = h.chromeMock;
+    await import("./content.js");
+  });
+
+  afterEach(() => {
+    h.send({ type: "SET_FOCUS_TRACKER", payload: { enabled: false } });
+    h.send({ type: "SET_OBSERVING", payload: { enabled: false } });
+    document.getElementById("__sn-highlight")?.remove();
+    vi.clearAllTimers();
+    vi.useRealTimers();
+    delete (globalThis as { chrome?: unknown }).chrome;
+    document.body.innerHTML = "";
+    document.title = "";
+    Element.prototype.scrollIntoView = originalScrollIntoView;
+  });
+
+  /** The payloads of the trees sent since the last call. */
+  function sentTrees(): Array<Record<string, unknown>> {
+    const trees = h.sent
+      .filter((m) => m.type === "FRAME_TREE_DATA")
+      .map((m) => m.payload as Record<string, unknown>);
+    h.sent.length = 0;
+    return trees;
+  }
+
+  /** The local names of a sent tree's elements. */
+  const tags = (tree: Record<string, unknown> | undefined) =>
+    (tree?.["nodes"] as Array<[string, SemanticNode]>).map(
+      ([, node]) => node.dom?.tagName,
+    );
+
+  const arm = (tree?: object) =>
+    h.send({
+      type: "SET_OBSERVING",
+      payload: { enabled: true, ...(tree ? { tree } : {}) },
+    });
+
+  /** The Save button, where only it measures itself: an overlay drawn for
+   *  it, and not for an element around it, is where it is. */
+  function saveButton(): HTMLElement {
+    const save = document.getElementById("save")!;
+    save.getBoundingClientRect = () => new DOMRect(45, 123, 67, 8);
+    return save;
+  }
+
+  /** Where the overlay was last drawn, if it was. */
+  function overlayAt() {
+    const overlay = document.getElementById("__sn-highlight");
+    if (overlay?.style.display !== "block") return undefined;
+    const { left, top, width, height } = overlay.style;
+    return { left, top, width, height };
+  }
+
+  /** The Save button's own place, as the overlay draws it. */
+  const SAVE_AT = { left: "45px", top: "123px", width: "67px", height: "8px" };
+
+  it("sends only its skeleton, with the page's title, until the panel asks for the tree", () => {
+    arm();
+    const [tree] = sentTrees();
+    expect(tree).toMatchObject({
+      framesOnly: true,
+      pageTitle: "The page",
+      frameUrl: location.href,
+    });
+    expect(tags(tree)).toEqual(["html", "iframe"]);
+  });
+
+  it("sends the whole tree the panel asks for, and its skeleton again once it asks for that", () => {
+    arm();
+    sentTrees();
+    h.send({
+      type: "SET_VIEW_MODE",
+      payload: { framesOnly: false },
+    });
+    let [tree] = sentTrees();
+    expect(tree).not.toHaveProperty("framesOnly");
+    expect(tags(tree)).toContain("button");
+    h.send({
+      type: "REQUEST_TREE",
+      payload: { framesOnly: true },
+    });
+    [tree] = sentTrees();
+    expect(tree).toHaveProperty("framesOnly", true);
+    expect(tags(tree)).toEqual(["html", "iframe"]);
+  });
+
+  it("sends its skeleton for each change to the page, dated as a change", async () => {
+    arm();
+    sentTrees();
+    const changedAt = Date.now();
+    document.querySelector("main")!.append(document.createElement("iframe"));
+    await vi.advanceTimersByTimeAsync(2000);
+    const trees = sentTrees();
+    expect(trees.length).toBeGreaterThan(0);
+    expect(trees[0]).toMatchObject({ framesOnly: true, changedAt });
+    expect(tags(trees.at(-1))).toEqual(["html", "iframe", "iframe"]);
+  });
+
+  it("starts observing with the tree it is armed with", () => {
+    arm({ framesOnly: false });
+    const trees = sentTrees();
+    expect(trees).toHaveLength(1);
+    expect(trees[0]).not.toHaveProperty("framesOnly");
+    // The whole tree, the button in it.
+    expect(tags(trees[0])).toContain("button");
+  });
+
+  it("sends the tree it is armed with again where it sent another, and nothing more where it is the same", () => {
+    arm();
+    sentTrees();
+    arm({ framesOnly: true });
+    expect(sentTrees()).toEqual([]);
+    arm({ framesOnly: false });
+    const trees = sentTrees();
+    expect(trees).toHaveLength(1);
+    expect(trees[0]).toHaveProperty("reread", true);
+    expect(trees[0]).not.toHaveProperty("framesOnly");
+    expect(tags(trees[0])).toContain("button");
+  });
+
+  it("rings the focused element whichever tree it sends, and reports focus no native read numbered to nobody", () => {
+    arm();
+    h.send({ type: "SET_FOCUS_TRACKER", payload: { enabled: true } });
+    h.sent.length = 0;
+    const save = saveButton();
+    save.dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
+    expect(overlayAt()).toEqual(SAVE_AT);
+    // The top frame, with no native read to number it: nothing to report.
+    expect(h.sent.filter((m) => m.type === "FOCUS_CHANGED")).toEqual([]);
+
+    // With the tree, for the TAB view, the same.
+    h.send({ type: "SET_VIEW_MODE", payload: { framesOnly: false } });
+    document.getElementById("__sn-highlight")?.remove();
+    save.dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
+    expect(overlayAt()).toEqual(SAVE_AT);
+    expect(h.sent.filter((m) => m.type === "FOCUS_CHANGED")).toEqual([]);
+  });
+
+  it("draws a native reveal's overlay on the element itself while it sends its skeleton", () => {
+    arm();
+    h.send({
+      type: "ARM_NATIVE_OVERLAY",
+      payload: { seq: 1, active: true, nonce: "n-1" },
+    });
+    saveButton().dispatchEvent(
+      new CustomEvent("real-a11y:native-reveal", {
+        bubbles: false,
+        composed: true,
+        detail: "n-1",
+      }),
+    );
+    expect(overlayAt()).toEqual(SAVE_AT);
+    h.send({ type: "ARM_NATIVE_OVERLAY", payload: { seq: 1, active: false } });
   });
 });
 
@@ -1514,7 +1624,7 @@ describe("content: what a tree says of how it was read", () => {
     h = makeHarness();
     (globalThis as { chrome?: unknown }).chrome = h.chromeMock;
     await import("./content.js");
-    h.send({ type: "REQUEST_TREE", payload: { viewMode: "a11y" } });
+    h.send({ type: "REQUEST_TREE", payload: { framesOnly: false } });
   });
 
   afterEach(() => {
@@ -1536,9 +1646,9 @@ describe("content: what a tree says of how it was read", () => {
 
   it("calls a tree sent on request, or after a key, a re-read", async () => {
     sentTrees();
-    h.send({ type: "REQUEST_TREE", payload: { viewMode: "a11y" } });
+    h.send({ type: "REQUEST_TREE", payload: { framesOnly: false } });
     h.send({ type: "RESEND_TREE" });
-    h.send({ type: "SET_VIEW_MODE", payload: { viewMode: "dom" } });
+    h.send({ type: "SET_VIEW_MODE", payload: { framesOnly: false } });
     h.send({
       type: "SEND_KEY",
       payload: { key: "Tab", code: "Tab", keyCode: 9 },
@@ -1632,12 +1742,11 @@ describe("content: the user acting on the page", () => {
       ? { ...(h.chromeMock as object), dom }
       : h.chromeMock;
     await import("./content.js");
-    h.send({ type: "REQUEST_TREE", payload: { viewMode: "a11y" } });
+    h.send({ type: "REQUEST_TREE", payload: { framesOnly: false } });
     h.sent.length = 0;
   }
 
   afterEach(() => {
-    h.send({ type: "SET_PICK_MODE", payload: { enabled: false } });
     h.send({ type: "SET_OBSERVING", payload: { enabled: false } });
     vi.doUnmock("./page-input.js");
     vi.restoreAllMocks();
@@ -1692,13 +1801,6 @@ describe("content: the user acting on the page", () => {
   it("says nothing while the panel is closed", async () => {
     await load({ trusted: true });
     h.send({ type: "SET_OBSERVING", payload: { enabled: false } });
-    document.querySelector("button")!.click();
-    expect(inputs()).toEqual([]);
-  });
-
-  it("says nothing of a click the picker takes", async () => {
-    await load({ trusted: true });
-    h.send({ type: "SET_PICK_MODE", payload: { enabled: true } });
     document.querySelector("button")!.click();
     expect(inputs()).toEqual([]);
   });
@@ -1837,7 +1939,6 @@ describe("content: a page that replaces its document", () => {
   });
 
   afterEach(async () => {
-    h.send({ type: "SET_PICK_MODE", payload: { enabled: false } });
     h.send({ type: "SET_FOCUS_TRACKER", payload: { enabled: false } });
     h.send({ type: "SET_OBSERVING", payload: { enabled: false } });
     document.addEventListener = addEventListener;
@@ -1873,7 +1974,7 @@ describe("content: a page that replaces its document", () => {
     tree.payload.nodes.map(([, n]) => n.a11y?.name).filter(Boolean);
 
   it("sends the new document's tree, read from its root", async () => {
-    h.send({ type: "REQUEST_TREE", payload: { viewMode: "a11y" } });
+    h.send({ type: "REQUEST_TREE", payload: { framesOnly: false } });
     expect(names(trees().at(-1)!)).toContain("Old");
     h.sent.length = 0;
 
@@ -1888,7 +1989,7 @@ describe("content: a page that replaces its document", () => {
   });
 
   it("keeps watching the new document for changes", async () => {
-    h.send({ type: "REQUEST_TREE", payload: { viewMode: "a11y" } });
+    h.send({ type: "REQUEST_TREE", payload: { framesOnly: false } });
     await rewrite(`<button id="new">New</button>`);
     h.sent.length = 0;
 
@@ -1905,8 +2006,12 @@ describe("content: a page that replaces its document", () => {
     h.sent.length = 0;
     await rewrite(`<button id="new">New</button>`);
     expect(h.sent).toEqual([]);
-    // Armed later, it reads the document that is there now.
-    h.send({ type: "SET_OBSERVING", payload: { enabled: true } });
+    // Armed later, it reads the document that is there now: the whole tree,
+    // as the panel last asked the tab for.
+    h.send({
+      type: "SET_OBSERVING",
+      payload: { enabled: true, tree: { framesOnly: false } },
+    });
     expect(names(trees().at(-1)!)).toContain("New");
   });
 
@@ -1932,9 +2037,11 @@ describe("content: a page that replaces its document", () => {
       ).toHaveLength(1);
     }
 
-    // Not lost here, so not doubled: one report for one focus change.
-    h.send({ type: "REQUEST_TREE", payload: { viewMode: "a11y" } });
+    // Not lost here, so not doubled: one report for one focus change. The
+    // top frame reports only what a read numbered, so number it first.
+    h.send({ type: "REQUEST_TREE", payload: { framesOnly: false } });
     h.send({ type: "SET_FOCUS_TRACKER", payload: { enabled: true } });
+    h.send({ type: "NATIVE_PAGE_KEYS", payload: { readId: "read-1" } });
     h.sent.length = 0;
     document
       .getElementById("new")!
@@ -1993,6 +2100,20 @@ describe("content: a page that replaces its document", () => {
     expect(document.getElementById("__sn-curtain")).toBeNull();
   });
 
+  it("lifts the screen curtain at the next key or press once the extension is gone", () => {
+    const press = () =>
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "a" }));
+    h.send({ type: "TOGGLE_CURTAIN", payload: { visible: true } });
+    press();
+    expect(document.getElementById("__sn-curtain")).not.toBeNull();
+
+    // Reloaded or updated: the panel that could lift the curtain is gone, and
+    // no new script comes to this page.
+    delete (h.chromeMock as { runtime: { id?: string } }).runtime.id;
+    press();
+    expect(document.getElementById("__sn-curtain")).toBeNull();
+  });
+
   describe("live regions", () => {
     const announced = () =>
       h.sent
@@ -2005,7 +2126,7 @@ describe("content: a page that replaces its document", () => {
     }
 
     it("are heard in the new document", async () => {
-      h.send({ type: "REQUEST_TREE", payload: { viewMode: "a11y" } });
+      h.send({ type: "REQUEST_TREE", payload: { framesOnly: false } });
       await rewrite(`<div role="status" id="status">Loading</div>`);
       h.sent.length = 0;
       await say("Ready");
@@ -2015,7 +2136,7 @@ describe("content: a page that replaces its document", () => {
     it("are heard in a body that arrives after the root element", async () => {
       // A document written in stages: the root and its head, and the body
       // some time later. The root is the same element both times.
-      h.send({ type: "REQUEST_TREE", payload: { viewMode: "a11y" } });
+      h.send({ type: "REQUEST_TREE", payload: { framesOnly: false } });
       const html = document.createElement("html");
       html.append(document.createElement("head"));
       document.documentElement.remove();
@@ -2032,7 +2153,7 @@ describe("content: a page that replaces its document", () => {
     });
 
     it("are heard in a body that takes another's place", async () => {
-      h.send({ type: "REQUEST_TREE", payload: { viewMode: "a11y" } });
+      h.send({ type: "REQUEST_TREE", payload: { framesOnly: false } });
       const body = document.createElement("body");
       body.innerHTML = `<div role="status" id="status">Loading</div>`;
       document.body.replaceWith(body);
@@ -2043,7 +2164,7 @@ describe("content: a page that replaces its document", () => {
     });
 
     it("are heard no more once the panel has gone", async () => {
-      h.send({ type: "REQUEST_TREE", payload: { viewMode: "a11y" } });
+      h.send({ type: "REQUEST_TREE", payload: { framesOnly: false } });
       await rewrite(`<div role="status" id="status">Loading</div>`);
       h.send({ type: "SET_OBSERVING", payload: { enabled: false } });
       // A body arriving now arms nothing.
@@ -2059,13 +2180,13 @@ describe("content: a page that replaces its document", () => {
 
   it("waits out a document left with no root element, and reads the next one", async () => {
     // `document.open()` with nothing written yet.
-    h.send({ type: "REQUEST_TREE", payload: { viewMode: "a11y" } });
+    h.send({ type: "REQUEST_TREE", payload: { framesOnly: false } });
     h.sent.length = 0;
     document.documentElement.remove();
     await vi.advanceTimersByTimeAsync(0);
 
     expect(() =>
-      h.send({ type: "REQUEST_TREE", payload: { viewMode: "a11y" } }),
+      h.send({ type: "REQUEST_TREE", payload: { framesOnly: false } }),
     ).not.toThrow();
     expect(
       h.send({ type: "NATIVE_PAGE_KEYS", payload: { readId: "read-1" } }),
@@ -2074,17 +2195,5 @@ describe("content: a page that replaces its document", () => {
 
     await rewrite(`<button id="new">New</button>`);
     expect(names(trees().at(-1)!)).toContain("New");
-  });
-
-  it("keeps an armed picker picking in the new document", async () => {
-    h.send({ type: "REQUEST_TREE", payload: { viewMode: "a11y" } });
-    h.send({ type: "SET_PICK_MODE", payload: { enabled: true } });
-    await rewrite(`<button id="new">New</button>`);
-    h.sent.length = 0;
-
-    document
-      .getElementById("new")!
-      .dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    expect(h.sent.filter((m) => m.type === "NODE_PICKED")).toHaveLength(1);
   });
 });

@@ -6,7 +6,7 @@ area: Extension
 type: Manual
 priority: P0
 status: Active
-validFrom: "extension ≥ 0.1.8. The dispatch-fidelity expectations mirror core's ActionDispatcher, which the CDP backend also mirrors — a fix in one belongs in both. Step 6a (a withheld field's edit box): in Chrome's tree, the first extension release with #510; in the in-page tree, the first with #512 — 0.1.16 as tagged fails both, which are the bugs those two fix. Step 6b (a sensitive textarea's markup text): extension ≥ 0.1.15; its input panel opening empty in the in-page tree: the first extension release with #512; and an untouched Enter in its edit box in Chrome's tree: the first with #516 — 0.1.16 as tagged fails both. Step 5a (an untouched Enter in an editor's edit box, in the in-page tree): the first extension release with #519 — 0.1.16 as tagged fails it. Step 5b (an untouched Enter in the edit box of an editor holding only an image, in Chrome's tree): the first extension release with #522 — 0.1.16 as tagged fails it. Step 6c (a custom textbox around a password in its shadow root): the first extension release with #520 — 0.1.16 as tagged fails it, and so does a release with #510 alone. Step 9 (a multi-line field's edit box): the first extension release with #523 — 0.1.16 as tagged fails it"
+validFrom: "extension ≥ 0.1.8. The dispatch-fidelity expectations mirror core's ActionDispatcher, which the CDP backend also mirrors — a fix in one belongs in both. Step 6a (a withheld field's edit box): in Chrome's tree, the first extension release with #510; in the in-page tree, the first with #512 — 0.1.16 as tagged fails both, which are the bugs those two fix. Step 6b (a sensitive textarea's markup text): extension ≥ 0.1.15; its input panel opening empty in the in-page tree: the first extension release with #512; and an untouched Enter in its edit box in Chrome's tree: the first with #516 — 0.1.16 as tagged fails both. Step 5a (an untouched Enter in an editor's edit box, in the in-page tree): the first extension release with #519 — 0.1.16 as tagged fails it. Step 5b (an untouched Enter in the edit box of an editor holding only an image, in Chrome's tree): the first extension release with #522 — 0.1.16 as tagged fails it. Step 6c (a custom textbox around a password in its shadow root): the first extension release with #520 — 0.1.16 as tagged fails it, and so does a release with #510 alone. Step 9 (a multi-line field's edit box): the first extension release with #523 — 0.1.16 as tagged fails it. From extension 0.1.18 the in-page tree is gone, and its part of a step runs from the field's stop in the TAB view, which opens the same edit box"
 validUntil: ""
 expected: "click/type/select dispatch on the real page; a sensitive field's value is NEVER shown in the panel — a password's, what is typed into a password or card field's edit box, empty or not, or into the edit box Chrome's tree opens on a custom textbox around a password in its shadow root, or a sensitive textarea's markup text in the live-announcement log or an editor's input panel; an untouched Enter in that edit box, or in a rich-text editor's in either tree, leaves the field as it was; a multi-line field's edit box keeps its line breaks; Send-Tab/Esc behave or fail visibly"
 twin: D6
@@ -27,8 +27,9 @@ point is behaviour against handlers you didn't write.
    state reflects it — not just the DOM value
 5. Type into a rich-text / contenteditable editor (ProseMirror, Lexical, Draft)
    - **5a** — in an editor whose content isn't only plain text (some bold, a
-     link or an image), open the editor's edit box from its row in the
-     **In-page tree** (**Settings ▾** → **Show**) and press `Enter` without
+     link or an image), open the editor's edit box from its stop in the
+     **TAB** view (**Activate**; extension ≤ 0.1.17: from its row in the
+     **In-page tree**, **Settings ▾** → **Show**) and press `Enter` without
      typing
 
    - **5b** — an editor holding only an image, no text: a real editor you
@@ -44,13 +45,15 @@ point is behaviour against handlers you didn't write.
      );
      ```
 
-     In **Chrome's tree** (**Settings ▾** → **Show**), open the `Signature`
-     textbox's edit box from its row and press `Enter` without typing
+     In **Chrome's tree**, open the `Signature` textbox's edit box from its row
+     and press `Enter` without typing
 6. Focus a **password** field and type into it
    - **6a** — a sign-in page's password step while the field is still
-     **empty**, as on Google's "Enter your password". In each tree
-     (**Settings ▾** → **Show**), open the field's edit box from its row
-     (**TYPE**, or `Enter`) and type a few characters. Do the same on an empty
+     **empty**, as on Google's "Enter your password". Open the field's edit box
+     from its row in **Chrome's tree** (**TYPE**, or `Enter`), and from its stop
+     in the **TAB** view (**Activate**), and type a few characters into each.
+     (Extension ≤ 0.1.17: from its row in each tree, **Settings ▾** →
+     **Show**.) Do the same on an empty
      card number field, from a checkout form or from this, run in the page's
      DevTools console before pressing **↻** to refresh the tree:
 
@@ -68,8 +71,9 @@ point is behaviour against handlers you didn't write.
 
    - **6b** — a fixture, since no real form puts a field in a live region. With
      the panel open on any page, run this in the page's DevTools console, then
-     select the `Note` textbox in the **In-page tree** (**Settings ▾** →
-     **Show**) and open its inline input panel:
+     select the `Note` textbox's stop in the **TAB** view and open its inline
+     input panel (**Activate**; extension ≤ 0.1.17: its row in the **In-page
+     tree**, **Settings ▾** → **Show**):
 
      ```js
      document.body.insertAdjacentHTML(
@@ -82,8 +86,8 @@ point is behaviour against handlers you didn't write.
        'Code sent <textarea autocomplete="one-time-code">OTP-SENTINEL</textarea>';
      ```
 
-     Then go back to **Chrome's tree** (**Settings ▾** → **Show**), open the same
-     textbox's edit box from its row, and press `Enter` without typing
+     Then go back to **Chrome's tree** (**A11Y**), open the same textbox's edit
+     box from its row, and press `Enter` without typing
    - **6c** — a custom element that is a textbox itself, around the password
      input it types into in a closed shadow root of its own. Run this in the
      page's DevTools console, press **↻** (Refresh native tree), then on
@@ -112,9 +116,11 @@ point is behaviour against handlers you didn't write.
 7. Send Tab and Escape through the panel
 8. Toggle a checkbox and change a `<select>`
 9. Edit a **multi-line** field: a `<textarea>` holding a few lines (a comment or
-   an address box), and a rich-text editor holding two paragraphs. In each tree
-   (**Settings ▾** → **Show**), open the field's edit box from its row, go to
-   the end, add a line with `Shift+Enter`, type a few words, and press `Enter`
+   an address box), and a rich-text editor holding two paragraphs. From its row
+   in **Chrome's tree**, and from its stop in the **TAB** view (extension ≤
+   0.1.17: from its row in each tree, **Settings ▾** → **Show**), open the
+   field's edit box, go to the end, add a line with `Shift+Enter`, type a few
+   words, and press `Enter`
 
 ## Expected
 
@@ -138,7 +144,8 @@ point is behaviour against handlers you didn't write.
 - **6** — the password value is **NEVER** displayed in the panel, in any view, at any
   time
 - **6a** — the edit box shows dots, not what you type, for both empty fields, as it
-  does for a password field that already holds something, in both trees, and the
+  does for a password field that already holds something, from Chrome's tree and
+  the TAB view alike (extension ≤ 0.1.17: in both trees), and the
   other field's box opens without what you typed. `Enter` without typing closes the
   filled field's box and leaves the field as it was. Before #510, Chrome's tree
   opened both empty fields' boxes in plain text, and the other field's box showed
@@ -161,8 +168,8 @@ point is behaviour against handlers you didn't write.
   failure
 - **8** — state changes and is reflected
 - **9** — the edit box has room for several lines and shows the textarea's own
-  lines. In the in-page tree it shows the editor's paragraphs as lines too;
-  Chrome's tree opens an editor's box empty. `Shift+Enter` starts a new line rather
+  lines. From a TAB stop (extension ≤ 0.1.17: in the in-page tree) it shows the
+  editor's paragraphs as lines too; Chrome's tree opens an editor's box empty. `Shift+Enter` starts a new line rather
   than setting the value, and after `Enter` the textarea holds its lines and the
   new one. An editor whose style keeps line breaks shows the new line, and one that
   doesn't shows it as a space. Before #523 the box was one line: it ran the

@@ -89,7 +89,40 @@ test("Alt+J cycles through every row a row controls, and Alt+Shift+J goes back",
   await expect(selected).toContainText("Apply");
 });
 
-test("an open menu button with no aria-controls gets a likely chip, as in DOM", async ({
+test("a jump to a row the search hides clears the search", async ({ nav }) => {
+  await nav.showNative("controls-multi.html");
+  await nav.panel.getByRole("button", { name: "Expand all" }).click();
+  const search = nav.panel.getByRole("searchbox", {
+    name: "Search native tree nodes",
+  });
+  await search.fill("Apply");
+  await nav.panel.getByRole("treeitem", { name: /^button "Apply"/ }).click();
+  await expect(
+    nav.panel.getByRole("treeitem", { name: /^region "Filters"/ }),
+  ).toHaveCount(0);
+
+  await nav.panel.getByRole("tree").press("Alt+j");
+  await expect(search).toHaveValue("");
+  await expect(
+    nav.panel.locator('[role="treeitem"][aria-selected="true"]'),
+  ).toContainText("Filters");
+});
+
+test("Alt+J does nothing on a row with no link, and keeps the selection", async ({
+  nav,
+}) => {
+  await nav.showNative("tabs.html");
+  await nav.panel.getByRole("button", { name: "Expand all" }).click();
+  await nav.panel
+    .getByRole("treeitem", { name: /^tablist "Entertainment"/ })
+    .click();
+  await nav.panel.getByRole("tree").press("Alt+j");
+  await expect(
+    nav.panel.locator('[role="treeitem"][aria-selected="true"] .sn-role'),
+  ).toHaveText("tablist");
+});
+
+test("an open menu button with no aria-controls gets a likely chip", async ({
   nav,
 }) => {
   await nav.showNative("controls-multi.html");

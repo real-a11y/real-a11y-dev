@@ -9,6 +9,8 @@ npm install -D @real-a11y-dev/testing vitest jsdom
 # Jest: npm install -D @real-a11y-dev/testing jest jest-environment-jsdom
 ```
 
+The Vitest types entry (`@real-a11y-dev/testing/matchers/vitest`) needs **Vitest 5 or newer**, which itself needs Node.js 22.12+; on Vitest 3 or 4 it reports TS2428. The runtime matchers work on any Vitest version.
+
 Jest also needs `testEnvironment: "jsdom"`, and does not parse TypeScript on its own — a `.ts` test needs `ts-jest` or `babel-jest`, so the transform-free path is a `.js` test. Full walkthrough: [real-a11y.dev/packages/testing](https://real-a11y.dev/packages/testing#your-first-passing-test).
 
 ## Quick start

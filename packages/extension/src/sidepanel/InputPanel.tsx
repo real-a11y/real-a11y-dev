@@ -14,8 +14,9 @@ export interface InputPanelState {
   placeholder?: string;
   options?: SelectOption[];
   /**
-   * Which producer's node `nodeId` resolves against — the DOM tree's own
-   * per-frame ids, or a native tree's `ax-dom-<backendNodeId>` ids. Absent
+   * Which producer's node `nodeId` resolves against — the page's own walk's
+   * per-frame ids (a TAB row's), or a native tree's `ax-dom-<backendNodeId>`
+   * ids. Absent
    * means `"dom"`, the only producer that opened this
    * panel before native mode existed — every pre-existing call site is still
    * correct with no changes. `App.tsx`'s submit handler reads this to decide
@@ -38,7 +39,7 @@ export interface InputPanelState {
    */
   blockEmptySubmit?: boolean;
   /**
-   * Set when the box holds less than its field: a DOM tree editor's box opens
+   * Set when the box holds less than its field: a TAB row editor's box opens
    * on its text alone (see {@link domTextInputState}), and a retype replaces
    * everything in the editor — its formatting, images and controls too.
    * Submitting with NO edit cancels instead of dispatching, prefilled or
@@ -66,7 +67,7 @@ export interface InputPanelState {
 }
 
 /**
- * The edit box a DOM tree row opens, from its field's `GET_FIELD_STATE` reply
+ * The edit box a TAB row opens, from its field's `GET_FIELD_STATE` reply
  * (`computeFieldState`). A field whose value is withheld (ADR-0001) arrives
  * without it, so its box opens empty in its place: it hides what is typed,
  * for every such field, empty or not (a password field's own type used to be

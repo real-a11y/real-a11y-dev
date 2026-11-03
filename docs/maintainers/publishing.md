@@ -52,7 +52,7 @@ Produces `packages/extension/semantic-navigator-v<version>.zip` (uses the pure-N
 |---|---|
 | Manifest V3 | ✅ |
 | Icons 16 / 48 / 128 | ✅ `packages/extension/public/icons/` |
-| Permissions (`activeTab`, `sidePanel`, `webNavigation`, plus `debugger`, `tabs`, `storage` for native mode) — each justified below | ✅ |
+| Permissions (`activeTab`, `sidePanel`, `webNavigation`, plus `debugger`, `tabs`, `storage` for reading Chrome's tree) — each justified below | ✅ |
 | Content Security Policy (`script-src 'self'; object-src 'self'; base-uri 'self'`) | ✅ |
 | `homepage_url` | ✅ Points to `https://real-a11y.dev` |
 | `author` | ✅ `Real A11y` |
@@ -83,15 +83,15 @@ Just point the CWS listing's "Privacy policy URL" field at `https://real-a11y.de
 
 **Short description** (132 chars max):
 
-> Navigate and interact with any web page through its semantic DOM and accessibility tree. Built for developers and a11y pros.
+> Navigate and interact with any web page through Chrome's own accessibility tree. Built for developers and a11y pros.
 
 **Detailed description** — draft to paste / edit before submitting:
 
-> Semantic Navigator replaces the visual browser rendering with an interactive DOM and accessibility tree. It's built for developers, QA engineers, and accessibility consultants who need to experience a page the way assistive technology does.
+> Semantic Navigator replaces the visual browser rendering with an interactive accessibility tree: the one Chrome itself gives assistive technology. It's built for developers, QA engineers, and accessibility consultants who need to experience a page the way assistive technology does.
 >
 > **What you can do:**
 >
-> - Explore the DOM tree or the computed accessibility tree in a side panel
+> - Explore Chrome's own accessibility tree in a side panel
 > - Click, navigate, focus, submit, and toggle through the tree — no mouse on the page required
 > - Watch the page's real focus highlighted live as you tab through it
 > - Scope down to a single dialog, form, or landmark
@@ -99,7 +99,7 @@ Just point the CWS listing's "Privacy policy URL" field at `https://real-a11y.de
 > - Inspect the tab order and catch missing or out-of-order focus targets
 > - "Curtain" the page to audit purely from the semantic tree
 >
-> Built on the open-source Real A11y engine. The same tree extraction also powers our testing library, React hooks, and Storybook addon — see https://real-a11y.dev.
+> Built with the open-source Real A11y toolchain, which also powers our testing library, React component, Storybook addon, CLI and MCP server — see https://real-a11y.dev.
 >
 > Privacy: runs entirely in your browser. No data leaves your machine.
 
@@ -139,12 +139,12 @@ Reuse the monochrome brand: black typography on a white background, echoing the 
 5. Set **Visibility**: Public
 6. **Single purpose declaration:** "Inspect and interact with the accessibility tree of web pages."
 7. **Permission justifications** (Google will ask for each):
-   - `activeTab` — read the current page's DOM to build the semantic tree
+   - `activeTab` — read the current page's DOM for its tab order and its frames
    - `sidePanel` — the extension's UI lives in the side panel
    - `webNavigation` — detect iframe lifecycle and SPA route changes to refresh the tree
-   - `debugger` — native mode, on by default and turned off in the side panel's Settings: reads and acts on Chromium's own accessibility tree over the DevTools protocol, the way DevTools does, attaching only while the side panel reads or acts on the page it shows. Required rather than optional because Chrome doesn't allow `debugger` as an optional permission
-   - `tabs` — native mode reads the URL of the tab the side panel is bound to, to tell whether the debugger can attach there and whether the page navigated since the tree was read
-   - `storage` — remembers the side panel's settings (whether native mode is on, Follow page changes, whether the note about Chrome's debugging bar was dismissed), and keeps content-free attach bookkeeping for the browser session
+   - `debugger` — reads and acts on Chromium's own accessibility tree, the tree the side panel shows, over the DevTools protocol, the way DevTools does, attaching only while the side panel reads or acts on the page it shows. Required rather than optional because Chrome doesn't allow `debugger` as an optional permission
+   - `tabs` — the side panel reads the URL of the tab it is bound to, to tell whether the debugger can attach there and whether the page navigated since the tree was read
+   - `storage` — remembers the side panel's settings (Show full names, Follow page changes, whether the note about Chrome's debugging bar was dismissed), and keeps content-free attach bookkeeping for the browser session
 8. Submit for review
 
 **Review time:** Typically 1–3 business days. Extensions using `<all_urls>` content scripts + `activeTab` may trigger manual review (up to 7 days), and `debugger` raises the bar further.

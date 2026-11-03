@@ -21,6 +21,8 @@ Registration is opt-in (the jest-axe pattern): call `registerA11yMatchers(expect
 
 ### Vitest
 
+The `@real-a11y-dev/testing/matchers/vitest` types entry needs **Vitest 5 or newer** (which itself needs Node.js 22.12+): it merges into Vitest 5's `Assertion<R, T>` interface, and an interface merge must repeat the original's type parameters. On Vitest 3 or 4 it fails with TS2428. The runtime `registerA11yMatchers` has no such requirement.
+
 ```ts
 // vitest.setup.ts
 import { expect } from "vitest";

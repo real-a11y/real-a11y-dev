@@ -74,7 +74,6 @@ describe("native focus sync", () => {
     chromeMock = installChromeMock({
       respond: (message) => {
         const type = (message as { type: string }).type;
-        if (type === "NATIVE_FLAG_GET") return { enabled: true };
         if (type === "NATIVE_READ") {
           // Numbered when the panel asks, as the service worker does.
           const numbered =

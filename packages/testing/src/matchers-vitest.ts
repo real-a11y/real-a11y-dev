@@ -14,8 +14,10 @@ import "vitest";
 import type { A11yMatchers } from "./matchers.js";
 
 declare module "vitest" {
-  // `T = any` mirrors Vitest's own `Assertion` declaration — interface merges
-  // require identical type parameters, defaults included.
+  // `R extends void | Promise<void> = void, T = unknown` mirrors Vitest 5's own
+  // `Assertion` declaration — interface merges require identical type
+  // parameters, defaults included. (Vitest 3 and 4 declared `Assertion<T = any>`,
+  // so this entry needs Vitest 5.)
   //
   // `A11yMatchers<void>`, NOT `<T>`. `T` is the SUBJECT type — the thing being
   // asserted on — while `A11yMatchers`' parameter is the matcher's RETURN type.
@@ -32,8 +34,12 @@ declare module "vitest" {
   // colliding — which is why a project that loads this entry AND the Jest one
   // (a shared setup file in a monorepo, or this package's own `tsc` program,
   // where both files are always compiled together) compiles cleanly.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-empty-object-type -- declaration-merge into Vitest's matcher types
-  interface Assertion<T = any> extends A11yMatchers<void> {}
+  /* eslint-disable @typescript-eslint/no-unused-vars, @typescript-eslint/no-empty-object-type -- declaration-merge into Vitest's matcher types */
+  interface Assertion<
+    R extends void | Promise<void> = void,
+    T = unknown,
+  > extends A11yMatchers<void> {}
+  /* eslint-enable @typescript-eslint/no-unused-vars, @typescript-eslint/no-empty-object-type */
   // eslint-disable-next-line @typescript-eslint/no-empty-object-type -- declaration-merge into Vitest's matcher types
   interface AsymmetricMatchersContaining extends A11yMatchers {}
 }

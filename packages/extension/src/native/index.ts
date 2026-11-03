@@ -4,11 +4,8 @@
  * Native-mode entry point (RFC PR H). Registered unconditionally from the
  * service worker (`background.ts`) — the capability ships in every build now
  * that `public/manifest.json` carries `debugger`/`tabs`/`storage` as required
- * permissions. Native mode is on by default: the side panel reads
- * Chromium's own tree unless the user has turned it off in the panel's
- * Settings. That setting is enforced in one place, inside
- * `NativeDebuggerSession.attach()` itself, so "off" and "attached" stay
- * mutually exclusive.
+ * permissions. The side panel shows Chromium's own tree, and nothing else:
+ * the extension's in-page walk is left to its TAB view.
  *
  * This wires the panel↔SW messages for reading Chromium's native tree over
  * `chrome.debugger`, acting through it, and exporting the dogfood report. All
@@ -44,11 +41,7 @@ import {
   type PageKeysRead,
   withoutFragment,
 } from "./page-keys.js";
-import { NATIVE_MODE_KEY as FLAG_KEY, nativeModeOn } from "./setting.js";
-
-/** The dogfood build's name for the same setting, before it became a user
- *  setting. Read once, carried over, then removed — see `migrateFlag`. */
-const LEGACY_FLAG_KEY = "devFlags.nativeMode";
+import { forgetRetiredSettings } from "./setting.js";
 
 declare const __DOGFOOD__: boolean;
 /** True only in the `DOGFOOD=1` build (`vite.config.ts`). The store build
@@ -63,38 +56,11 @@ const discardingStorage: chrome.storage.StorageArea = {
   set: async () => {},
 } as unknown as chrome.storage.StorageArea;
 
-/** Carry a dogfooder's old `devFlags.nativeMode` over to the new key, then
- *  drop the old key so it doesn't linger in their storage. Native mode is on
- *  by default now, so it is an old "off" that matters: either answer was the
- *  user's, and either is kept. */
-async function migrateFlag(): Promise<void> {
-  const got = await chrome.storage.local.get([FLAG_KEY, LEGACY_FLAG_KEY]);
-  if (!(LEGACY_FLAG_KEY in got)) return;
-  const legacy: unknown = got[LEGACY_FLAG_KEY];
-  if (typeof legacy === "boolean" && got[FLAG_KEY] === undefined) {
-    await chrome.storage.local.set({ [FLAG_KEY]: legacy });
-  }
-  await chrome.storage.local.remove(LEGACY_FLAG_KEY);
-}
-
-/** The user-facing native-mode setting, as stored: `false` once the user
- *  turns native mode off in the panel's Settings, `true` once they turn it
- *  back on, `undefined` if they never touched it. Native mode is on unless it
- *  is `false`. */
-async function nativeModeSetting(): Promise<boolean | undefined> {
-  const got = await chrome.storage.local.get(FLAG_KEY);
-  const value: unknown = got[FLAG_KEY];
-  return typeof value === "boolean" ? value : undefined;
-}
-
 /** Request/response messages the panel sends for native mode. Pushes the
  *  other way (`NATIVE_PICK_RESULT`, `NATIVE_PICK_ARMED`) are typed in
  *  `../types.ts` with the panel's other inbound messages, because the panel's
  *  one message handler routes them. */
 type NativeMessage =
-  // Replies `{ enabled }`: on unless the user turned native mode off.
-  | { type: "NATIVE_FLAG_GET" }
-  | { type: "NATIVE_FLAG_SET"; enabled: boolean }
   | { type: "NATIVE_CAPABILITY"; tabId: number }
   | {
       type: "NATIVE_READ";
@@ -147,7 +113,7 @@ type NativeMessage =
   // Picker: arm CDP's element picker on `tabId`. Acknowledged immediately
   // (the pick itself can take as long as the user needs to click) — the
   // actual outcome arrives later as a `NATIVE_PICK_RESULT` push to the
-  // panel, mirroring how the DOM picker's own NODE_PICKED works.
+  // panel.
   // `requestId` is opaque here — the background only ever echoes it back
   // verbatim on the eventual result — but the panel needs it: a STOP
   // immediately followed by a new START on the same tab leaves every token
@@ -156,7 +122,7 @@ type NativeMessage =
   // indistinguishable from the new one's.
   | { type: "NATIVE_PICK_START"; tabId: number; requestId: number }
   // Picker: cancel the pick `requestId` on `tabId` — explicit toggle-off, or
-  // the panel leaving native mode or switching tabs. Naming the request keeps
+  // the panel switching tabs. Naming the request keeps
   // a late STOP from cancelling a later pick.
   | { type: "NATIVE_PICK_STOP"; tabId: number; requestId: number };
 
@@ -371,15 +337,18 @@ function isNativeMessage(m: unknown): m is NativeMessage {
   );
 }
 
-/** The session `registerNativeMode` created, for {@link cancelNativePicks}. */
+/** The session `registerNativeMode` created, for {@link releaseDebugger}. */
 let activeSession: NativeDebuggerSession | undefined;
 
-/** End every pick in progress. The background calls this when the last side
- *  panel closes: nobody is left to receive the pick, and an armed pick would
+/** Let go of the debugger. The background calls this when the last side
+ *  panel closes: nobody is left to receive a pick, and an armed pick would
  *  otherwise keep the debugger attached, and eat the next page click, until
- *  its time limit. */
-export function cancelNativePicks(): void {
+ *  its time limit; and an attachment an MV3 suspend stranded would keep
+ *  Chrome's bar up with no panel left to read the tab (`detachAll`). The
+ *  picks end first, so the detach doesn't wait behind one. */
+export function releaseDebugger(): void {
   activeSession?.cancelAllPicks();
+  void activeSession?.detachAll().catch(() => {});
 }
 
 // Pairs each `reveal` dispatch's content-script arm with its own release —
@@ -394,18 +363,12 @@ const latestOverlay = new Map<number, number>();
 export function registerNativeMode(): void {
   // Content scripts can read and write `chrome.storage.local` by default. They
   // run in the page's renderer, and nothing they do needs storage, so keep
-  // the native-mode setting out of their reach.
+  // the panel's settings, and the dogfood build's event log, out of their
+  // reach.
   void chrome.storage.local
     .setAccessLevel?.({ accessLevel: "TRUSTED_CONTEXTS" })
     .catch(() => {});
-  // Every read and write of the setting waits for the migration: one that
-  // ran alongside a Disable could otherwise write its carried-over `true`
-  // after the user's `false`.
-  const migrated = migrateFlag().catch(() => {});
-  const flagEnabled = async () => {
-    await migrated;
-    return nativeModeOn(await nativeModeSetting());
-  };
+  void forgetRetiredSettings().catch(() => {});
 
   // The dogfood build keeps its event log in `local`, so it survives restarts
   // for the dogfooder's report; the store build keeps none (see
@@ -416,10 +379,6 @@ export function registerNativeMode(): void {
   const session = new NativeDebuggerSession(
     DOGFOOD ? chrome.storage.local : discardingStorage,
     chrome.storage.session ?? chrome.storage.local,
-    // The flag is enforced INSIDE the attach transaction, not by the callers.
-    // That is what makes it atomic against `detachAll`, and it is why no
-    // message handler re-checks it before dispatching.
-    flagEnabled,
   );
   activeSession = session;
   const log = session.dogfoodLog();
@@ -427,8 +386,8 @@ export function registerNativeMode(): void {
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (!isNativeMessage(message)) return; // not ours — let other handlers run
     // These messages route the most powerful capability the extension has —
-    // reading/dispatching over chrome.debugger and toggling the setting — so
-    // only the extension's own pages may send them. A content script carries
+    // reading/dispatching over chrome.debugger — so only the extension's own
+    // pages may send them. A content script carries
     // the extension's id too, and runs in the page's process.
     if (
       !isExtensionPageSender(
@@ -456,46 +415,11 @@ export function registerNativeMode(): void {
           return;
         }
         switch (message.type) {
-          case "NATIVE_FLAG_GET":
-            sendResponse({ enabled: await flagEnabled() });
-            return;
-          case "NATIVE_FLAG_SET": {
-            // Only `false` turns native mode off, so storing anything but a
-            // boolean would leave it reading as on while this went on to
-            // detach as if turning it off.
-            if (typeof message.enabled !== "boolean") {
-              sendResponse({ ok: false, error: "bad-request" });
-              return;
-            }
-            await migrated;
-            await chrome.storage.local.set({ [FLAG_KEY]: message.enabled });
-            // Cancel any in-flight picker session BEFORE detachAll: a pick
-            // that never got a click is still occupying that tab's slot in
-            // the per-tab operation queue detachAll waits on (see
-            // `cancelAllPicks`'s own comment) — without this, turning native
-            // mode off would hang until the user happened to click
-            // something.
-            if (!message.enabled) session.cancelAllPicks();
-            // Turning it off must drop the capability, not merely stop offering
-            // it. `debugger` cannot be optional, so there is no permission to
-            // revoke — "off" can only mean "not attached", and an attachment
-            // stranded by an MV3 suspend would otherwise keep the banner up on
-            // a tab the user just switched native off for.
-            const detached = message.enabled ? 0 : await session.detachAll();
-            sendResponse({ enabled: message.enabled, detached });
-            return;
-          }
           case "NATIVE_CAPABILITY":
             // Pre-flight only — no attach, so asking the question never costs a
-            // banner flash. The panel calls this to decide whether to offer the
-            // native controls at all.
-            //
-            // Deliberately NOT gated on `nativeModeEnabled()`, unlike the two
-            // handlers below. It exercises no `debugger` capability, and the
-            // panel needs the answer while the flag is still off — that is what
-            // lets the toggle report "native unavailable here" the moment it is
-            // ticked, instead of after a failed read. It returns only the
-            // reason enum, never the URL it classified.
+            // banner flash. The panel calls this for each tab it binds, so the
+            // capability banner says "unavailable here" before a read fails.
+            // It returns only the reason enum, never the URL it classified.
             sendResponse(await capabilityOf(message.tabId));
             return;
           case "NATIVE_READ": {
@@ -751,7 +675,7 @@ export function registerNativeMode(): void {
             // pick.
             sendResponse({ ok: true });
             const { tabId, requestId } = message;
-            // Captured now, so turning native mode off before this pick
+            // Captured now, so the last side panel closing before this pick
             // registers still cancels it (see `cancelAllPicks`).
             const generation = session.pickGeneration();
             let timedOut = false;
@@ -856,11 +780,6 @@ export function registerNativeMode(): void {
  * Recording the refusal here is also what makes the Capability metric real: the
  * panel no longer pre-empts the call, so every refusal — URL-derived or
  * attach-derived — reaches the log through one writer.
- *
- * The native-mode flag is NOT checked here. It is enforced inside
- * `NativeDebuggerSession.attach()`, on the same storage queue the revoke uses,
- * which is the only placement that makes "switched off" and "attached"
- * mutually exclusive rather than merely usually-ordered.
  */
 export async function withRecovery<T>(
   session: NativeDebuggerSession,
@@ -889,11 +808,10 @@ export async function withRecovery<T>(
 
   const first = await runGuarded(session, tabId, fn, opts);
   if (first.outcome.ok) return first;
-  // A conflict won't clear on its own, and `disabled` means the user switched
-  // native off — retrying either would be re-attaching against the answer.
+  // A conflict won't clear on its own — retrying would be re-attaching
+  // against the answer.
   if (
     first.outcome.error === "conflict" ||
-    first.outcome.error === "disabled" ||
     first.outcome.error === "superseded" ||
     first.outcome.error === "cancelled-by-user"
   ) {
@@ -933,16 +851,8 @@ export async function withRecovery<T>(
   if (first.outcome.error === "connection-lost") {
     await session.dogfoodLog().record({
       // A drop was already booked as `detach-unsolicited` upstream, so it needs
-      // a verdict or the ledger carries a debit with no matching credit. When
-      // the retry was refused because native went off, neither `ok` nor
-      // `failed` is true — nothing was attempted — so it gets its own kind
-      // rather than overstating a failure.
-      kind:
-        retry.outcome.error === "disabled"
-          ? "reattach-abandoned"
-          : retry.outcome.ok
-            ? "reattach-ok"
-            : "reattach-failed",
+      // a verdict or the ledger carries a debit with no matching credit.
+      kind: retry.outcome.ok ? "reattach-ok" : "reattach-failed",
       at: Date.now(),
     });
   }

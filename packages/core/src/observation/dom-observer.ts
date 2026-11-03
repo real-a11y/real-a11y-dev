@@ -120,6 +120,11 @@ const DEFAULT_INTERNAL_IDS: ReadonlySet<string> = new Set([
 /**
  * True if `node` is an Element with one of the sentinel ids — meaning
  * mutations involving it are our own and should be ignored.
+ *
+ * A sentinel shields its whole subtree, so an id registered through the
+ * constructor's `internalIds` must name an element that holds no page
+ * content: mutations below it are dropped, and a panel showing that content
+ * would go stale with nothing to say so.
  */
 function isInternalNode(node: Node, internalIds: ReadonlySet<string>): boolean {
   if (safeNodeType(node) !== 1 /* ELEMENT_NODE */) return false;
@@ -132,9 +137,11 @@ function isInternalNode(node: Node, internalIds: ReadonlySet<string>): boolean {
 }
 
 /**
- * Walk up from `node` looking for an internal-sentinel ancestor. Catches
- * characterData / nested mutations on text content inside the sentinel
- * (e.g. the curtain's "Screen Curtain" text).
+ * Walk up from `node` looking for an internal-sentinel ancestor — `node`
+ * itself counts. A sentinel's whole subtree is ours, so this catches nested
+ * mutations anywhere inside it: the curtain's "Screen Curtain" text
+ * (characterData), a class toggled on an inner element (attributes), and a
+ * node added or removed below the sentinel root (childList).
  */
 function hasInternalAncestor(
   node: Node,
@@ -154,9 +161,13 @@ function isInternalMutation(
   internalIds: ReadonlySet<string>,
 ): boolean {
   if (m.type === "attributes") {
-    return isInternalNode(m.target, internalIds);
+    return hasInternalAncestor(m.target, internalIds);
   }
   if (m.type === "childList") {
+    // Anything below a sentinel root is ours whatever the moved nodes are;
+    // the per-node checks below are for the sentinel's own mount/unmount,
+    // where the target is the ordinary page element it hangs off.
+    if (hasInternalAncestor(m.target, internalIds)) return true;
     const total = m.addedNodes.length + m.removedNodes.length;
     if (total === 0) return false;
     for (const n of m.addedNodes) {

@@ -1,18 +1,18 @@
-/** Where the native-mode setting lives in `chrome.storage.local`: written by
- *  the service worker (`index.ts`), which also enforces it, and followed by
- *  every open side panel, so a panel in one window agrees with a change made
- *  in another. Absent until the user changes it in the panel's Settings;
- *  native mode is on unless it is `false`. */
-export const NATIVE_MODE_KEY = "settings.nativeModeEnabled";
-
-/** Whether the setting's stored value means native mode is on: anything but
- *  `false`, so a setting never touched (unset) reads as on. The one rule the
- *  service worker's attach gate and every side panel read it by. */
-export function nativeModeOn(value: unknown): boolean {
-  return value !== false;
-}
-
 /** Set once the user has acknowledged the side panel's note about Chrome's
  *  debugging bar, so the note shows until then and never again after, in
  *  every window. */
 export const NATIVE_NOTICE_SEEN_KEY = "settings.nativeNoticeSeen";
+
+/** Remove what the native-mode switch stored up to 0.1.17, and the key it
+ *  was migrated from: nothing reads them now. Whoever had switched it off
+ *  is about to see Chrome's bar again, so the note that explains the bar
+ *  shows again too. */
+export async function forgetRetiredSettings(): Promise<void> {
+  const key = "settings.nativeModeEnabled";
+  const wasOff = (await chrome.storage.local.get(key))[key] === false;
+  await chrome.storage.local.remove([
+    key,
+    "devFlags.nativeMode",
+    ...(wasOff ? [NATIVE_NOTICE_SEEN_KEY] : []),
+  ]);
+}

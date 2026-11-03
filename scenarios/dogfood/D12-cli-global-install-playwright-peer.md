@@ -81,14 +81,14 @@ Then try the obvious unblock, still as a **global** user:
   the partial install in step 3 is the layout where those two disagree
 - `npm i -g playwright` unblocks the global binary (`audit` loads the driver).
   Chrome still needs `real-a11y install` if it is not already cached. Behind a
-  mandatory proxy, `real-a11y install` through cli 0.1.0-beta.10 also needs `proxy-agent`,
+  mandatory proxy, `real-a11y install` through cli 0.1.0-beta.11 also needs `proxy-agent`,
   which nothing installs or documents — the known defect, not a new one
 - The defect fixture reports exactly its one finding and exits `1`; the clean twin
   exits `0`; the server log shows both requests
 - **3** — `--version` prints a version exactly when `audit` loads the driver, in all
   three layouts. The partial install fails with an error that says the install is
   incomplete, not a version followed by "is the server running?" (the known defect
-  through cli 0.1.0-beta.10, found by the beta.19 dogfood)
+  through cli 0.1.0-beta.11, found by the beta.19 dogfood)
 - **4** — the proxied run reaches the fixture directly (`NO_PROXY` holds) on both
   Playwright versions. On cli 0.1.0-beta.9 with Playwright 1.58.2 (and anything from
   1.49), loopback goes to the proxy — the known defect, not a new one. cli

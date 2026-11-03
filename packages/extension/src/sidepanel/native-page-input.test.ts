@@ -45,7 +45,6 @@ describe("Chrome's tree after the user acts on the page", () => {
     chromeMock = installChromeMock({
       respond: (message) => {
         const type = (message as { type: string }).type;
-        if (type === "NATIVE_FLAG_GET") return { enabled: true };
         if (type === "NATIVE_READ") {
           if (cancelReads) return { ok: false, error: "cancelled-by-user" };
           return {

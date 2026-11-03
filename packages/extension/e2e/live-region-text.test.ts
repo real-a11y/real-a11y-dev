@@ -8,8 +8,9 @@
  * walk; this pins it against Chromium's own parser and CSS, where a stylesheet
  * rule, not an inline style, is what usually hides an element.
  *
- * Like `pick-mode-dom.test.ts`, this drives the DOM path the store build
- * ships. Run it with `pnpm test:e2e`, which rebuilds the bundle first.
+ * It drives the content script's own reads, which the store build ships
+ * with the live log and the TAB view's edit box. Run it with
+ * `pnpm test:e2e`, which rebuilds the bundle first.
  */
 
 import { expect, test } from "./harness";

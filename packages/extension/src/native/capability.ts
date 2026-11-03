@@ -38,50 +38,14 @@ export interface TabCapability {
   native: boolean;
   /** Only when `native` is false. */
   reason?: NativeUnavailableReason;
-  /**
-   * The DOM content-script producer works here, so the panel below is a real
-   * fallback rather than a second dead end.
-   *
-   * This is NOT the negation of `native`. On `chrome://`, the Web Store and
-   * extension pages Chrome blocks *all* extension access, so the content script
-   * is just as dead — and telling a dogfooder to "use the DOM tree instead"
-   * there sends them to a panel that will also never load (the failure #0.1.12
-   * was about). Only a DevTools conflict, an unreadable URL, or an unexplained
-   * refusal leave the DOM producer genuinely working.
-   */
-  domFallback: boolean;
 }
 
-const ATTACHABLE: TabCapability = { native: true, domFallback: true };
-
-/**
- * Whether the DOM content-script producer still works, per reason — the single
- * source of truth for {@link TabCapability.domFallback}.
- *
- * `false` here means Chrome blocks *every* extension surface on that page, so
- * the content script is as dead as the debugger. Getting this wrong in the
- * optimistic direction is the expensive mistake: it sends a dogfooder to a
- * panel that will sit on "Connecting to page…" forever and reads as a second
- * bug rather than the same platform rule.
- */
-const DOM_FALLBACK: Record<NativeUnavailableReason, boolean> = {
-  "browser-ui": false,
-  "extension-page": false,
-  "web-store": false,
-  "view-source": false,
-  // Both producers need "Allow access to file URLs"; neither has it by default.
-  "file-url": false,
-  // The URL was unreadable, which means `chrome.tabs.get` threw — the tab is
-  // gone or privileged, and the content script is no better off there.
-  "no-url": false,
-  "devtools-conflict": true,
-  "attach-refused": true,
-};
+const ATTACHABLE: TabCapability = { native: true };
 
 /** The capability a refusal implies, from the reason alone. Used by the panel
  *  for a reason that arrived over messaging, where the URL is not in hand. */
 export function blockedBy(reason: NativeUnavailableReason): TabCapability {
-  return { native: false, reason, domFallback: DOM_FALLBACK[reason] };
+  return { native: false, reason };
 }
 
 /**
@@ -119,8 +83,9 @@ export function classifyTabUrl(
   if (scheme === "about:") {
     // `parsed.pathname`, not a slice of the raw url — otherwise `about:blank#x`
     // and `about:blank?a=1` miss the allow-list and land on `browser-ui`, the
-    // single worst reason to land on (the only one that is both non-retryable
-    // and claims no DOM fallback) for a document that is perfectly attachable.
+    // single worst reason to land on (non-retryable, and one where Chrome
+    // blocks the content script too) for a document that is perfectly
+    // attachable.
     // Chrome itself produces `about:blank#blocked`. Lowercase moves with it,
     // since pathname preserves case.
     const rest = parsed.pathname.toLowerCase();
@@ -130,7 +95,7 @@ export function classifyTabUrl(
   }
   if (scheme === "view-source:") return blockedBy("view-source");
   // `file://` is not blocked outright — it is blocked *by default*. With "Allow
-  // access to file URLs" on, both producers work, so refusing unconditionally
+  // access to file URLs" on, the debugger attaches, so refusing unconditionally
   // would fail closed against this module's own policy and would put a bogus
   // `file-url` entry in the capability split for a dogfooder whose setup is
   // fine. The caller supplies the answer (`isAllowedFileSchemeAccess`), which
@@ -181,29 +146,37 @@ export function classifyAttachError(
 }
 
 /**
- * One sentence for a dogfooder: what happened, and what to do about it.
+ * One sentence for the user: what happened, and what to do about it.
  *
- * Where the DOM producer still works, say so — that is the "fallback" half of
- * the capability story. Where it doesn't, say *that* instead of pointing at a
- * panel which will sit on "Connecting to page…" forever.
+ * Where the content script still works (a DevTools conflict, an unexplained
+ * refusal), the TAB view, which reads the page through it, still lists the
+ * tab order: say so. Where Chrome blocks every extension surface, say that
+ * instead.
  */
 export function explainUnavailable(reason: NativeUnavailableReason): string {
   switch (reason) {
     case "browser-ui":
-      return "native can't attach to browser UI pages — and neither can the DOM producer; Chrome blocks extensions here entirely. Try a normal web page.";
+      return "native can't attach to browser UI pages — Chrome blocks extensions here entirely. Try a normal web page.";
     case "extension-page":
       return "native can't attach to extension pages — Chrome blocks extensions from each other. Try a normal web page.";
     case "web-store":
-      return "native can't attach to the Chrome Web Store — Chrome blocks all extension access there, the DOM producer included.";
+      return "native can't attach to the Chrome Web Store — Chrome blocks all extension access there.";
     case "view-source":
       return "view-source: has no attachable document. Open the page itself.";
     case "file-url":
-      return 'native can\'t attach to file:// URLs without "Allow access to file URLs" (chrome://extensions → this extension → Details). The DOM producer needs the same switch.';
+      return 'native can\'t attach to file:// URLs without "Allow access to file URLs" (chrome://extensions → this extension → Details).';
     case "no-url":
       return "couldn't read this tab's URL — it has probably gone away. Try again, or switch to a tab that is still open.";
     case "devtools-conflict":
-      return "DevTools is attached to this tab, and Chrome allows only one debugger client at a time. Close DevTools (or undock it onto another tab) and try again — the in-page tree works meanwhile.";
+      return "DevTools is attached to this tab, and Chrome allows only one debugger client at a time. Close DevTools (or undock it onto another tab) and refresh — the TAB view still lists the tab order meanwhile.";
     case "attach-refused":
-      return "Chrome refused the debugger attach on this tab. The in-page tree should still work.";
+      return "Chrome refused the debugger attach on this tab. Refresh to try again — the TAB view still lists the tab order meanwhile.";
   }
+}
+
+/** What a read that failed for no reason of the tab's own says. */
+export function readFailedText(error: string | undefined): string {
+  return error === "cancelled-by-user"
+    ? "you cancelled Chrome's debugging bar"
+    : `read failed: ${error ?? "unknown"}`;
 }

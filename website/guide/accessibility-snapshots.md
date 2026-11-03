@@ -75,7 +75,7 @@ Visual snapshots and accessibility snapshots are the two halves of regression te
 
 ## The same tree, everywhere
 
-An accessibility snapshot is the serialized form of the tree you can also *see* live across Real A11y's surfaces — the [Chrome extension](/guide/chrome-extension), the [React panel](/packages/react), and the [Storybook addon](/packages/storybook-addon) all render the same extraction, and the [CLI](/packages/cli) serializes the same tree from your shell. What you inspect by eye in the panel is what you commit as a snapshot in tests.
+An accessibility snapshot is the serialized form of the tree you can also *see* live across Real A11y's surfaces — the [inspector](/packages/inspector), the [React panel](/packages/react) and the [Storybook addon](/packages/storybook-addon) render the same extraction, and the [Chrome extension](/guide/chrome-extension) and the [CLI](/packages/cli) show Chromium's own tree, which the [Playwright adapter](/packages/testing/playwright#auditing-the-native-tree) snapshots too. What you inspect by eye in the panel is what you commit as a snapshot in tests.
 
 ## Start snapshotting
 

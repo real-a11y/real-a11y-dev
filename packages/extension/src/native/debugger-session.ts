@@ -27,9 +27,9 @@ const PROTOCOL = "1.3";
  * Bound on the liveness probe `attach()` sends before trusting a reused
  * session (see there). It runs inside the promise `detachAll` waits on, so an
  * unbounded probe against a wedged tab — blocked on a synchronous `alert()`,
- * say — would let turning native mode off hang right along with it. A timeout
- * is treated as "can't tell" (falls through to the conservative branch),
- * never as proof the connection is gone.
+ * say — would let the last side panel's close hang right along with it. A
+ * timeout is treated as "can't tell" (falls through to the conservative
+ * branch), never as proof the connection is gone.
  */
 const PROBE_TIMEOUT_MS = 2000;
 
@@ -254,8 +254,6 @@ export interface AttachOutcome {
     | "attach-failed"
     | "connection-lost"
     | "command-failed"
-    /** Native mode was switched off before this attach could happen. */
-    | "disabled"
     /** A newer request replaced this one while it waited its turn, so it
      *  never attached (see {@link OperationOptions.stillWanted}). */
     | "superseded"
@@ -333,13 +331,6 @@ export class NativeDebuggerSession {
    * that hasn't landed yet. See `attach` and `detachAll`.
    */
   private pendingAttaches = new Map<number, Promise<void>>();
-
-  /**
-   * Is native mode still on? Consulted INSIDE the attach's storage transaction,
-   * which is what makes "switch it off" and "attach" mutually exclusive rather
-   * than merely usually-ordered — see {@link attach}.
-   */
-  private isEnabled: () => Promise<boolean>;
 
   /**
    * Cancel callback for an in-flight {@link runPick}, keyed by tab id. Lets
@@ -455,8 +446,8 @@ export class NativeDebuggerSession {
 
   /**
    * Bumped by {@link cancelAllPicks}. A pick started under an older value is
-   * cancelled the moment it registers: turning native mode off has to stop a
-   * START that had passed the attach but not yet registered, or
+   * cancelled the moment it registers: the last side panel's close has to
+   * stop a START that had passed the attach but not yet registered, or
    * {@link detachAll} would wait behind it with nothing to end it.
    */
   private pickGen = 0;
@@ -467,16 +458,10 @@ export class NativeDebuggerSession {
    *                       Production passes `chrome.storage.session` — it
    *                       survives worker restarts but not a browser restart,
    *                       which is exactly the lifetime of a debugger attach.
-   * @param isEnabled      the runtime native-mode flag, re-read per attach.
    */
-  constructor(
-    storage: StorageArea,
-    attachStorage: StorageArea = storage,
-    isEnabled: () => Promise<boolean> = async () => true,
-  ) {
+  constructor(storage: StorageArea, attachStorage: StorageArea = storage) {
     this.log = new DogfoodLog(storage);
     this.attachStore = attachStorage;
-    this.isEnabled = isEnabled;
     // Chrome detaches on its own when the tab closes or navigates somewhere
     // the debugger can't stay (`target_closed`), or when the user presses
     // Cancel on its debugging bar (`canceled_by_user`). Record it as the
@@ -629,16 +614,9 @@ export class NativeDebuggerSession {
   }
 
   /**
-   * Attach, and record it, as ONE transaction on the storage queue.
-   *
-   * The enabled-check lives in here rather than in the caller because the
-   * caller cannot make it atomic. `detachAll` reads the attach map on this same
-   * queue, so an attach that is merely *checked* upstream can still be in
-   * flight when the revoke takes its snapshot: it is in neither the map nor
-   * refused, and its banner goes up after the panel has said native is off.
-   * Sharing the queue removes the window rather than narrowing it — an attach
-   * either lands in the map before the revoke reads it, or finds the flag
-   * already false.
+   * Attach, and record it on the storage queue `detachAll` reads the attach
+   * map on, tracked for the whole call so a revoke taken meanwhile waits for
+   * it: an attach still in flight is in the map once the revoke reads it.
    */
   private async attach(tabId: number): Promise<AttachOutcome> {
     const result = this.attachTracked(tabId);
@@ -666,8 +644,6 @@ export class NativeDebuggerSession {
     // pick armed on it needs to see that reason (see `lastDetachReason`).
     this.lastDetachReason.delete(tabId);
     this.droppedPick.delete(tabId);
-    // Cheap pre-check, outside the mutex — the authoritative one is below.
-    if (!(await this.isEnabled())) return { ok: false, error: "disabled" };
     // True when Chrome refused because WE already hold the tab, so the existing
     // attachment is reused rather than replaced.
     let reused = false;
@@ -701,7 +677,7 @@ export class NativeDebuggerSession {
         // Bounded: this call sits inside the promise `detachAll` waits on (see
         // `attach`'s wrapper), so an unbounded probe against a tab whose
         // renderer is wedged — blocked on a synchronous `alert()`, say — would
-        // let turning native mode off hang right along with it.
+        // let the last side panel's close hang right along with it.
         const probe = await Promise.race([
           chrome.debugger
             .sendCommand({ tabId }, "Runtime.evaluate", { expression: "1" })
@@ -752,15 +728,12 @@ export class NativeDebuggerSession {
         return { ok: false, error: "attach-failed" };
       }
     }
-    // Re-check and record as ONE transaction on the storage queue, which is the
-    // queue `detachAll` snapshots on — so an attach either lands in the map
-    // before the revoke reads it, or finds the flag already false and undoes
-    // itself. The CDP call above stays OUTSIDE: this mutex is shared with
+    // Record on the storage queue, which is the queue `detachAll` snapshots
+    // on. The CDP call above stays OUTSIDE: this mutex is shared with
     // `detach`, `detachIfLive` and the `onDetach` recorder, and holding it
     // across a round-trip let a slow attach on one tab block another tab's
     // teardown and stall the revoke that was trying to stop it.
-    const kept = await this.enqueue(async () => {
-      if (!(await this.isEnabled())) return false;
+    await this.enqueue(async () => {
       const attached = await this.readAttached();
       // On reuse keep the ORIGINAL timestamp: the banner has been up since that
       // moment, and restarting the clock would under-report the dwell total the
@@ -768,12 +741,7 @@ export class NativeDebuggerSession {
       if (!(reused && attached[tabId] !== undefined))
         attached[tabId] = Date.now();
       await this.writeAttached(attached);
-      return true;
     });
-    if (!kept) {
-      await chrome.debugger.detach({ tabId }).catch(() => {});
-      return { ok: false, error: "disabled" };
-    }
     // A reused attachment is not a new attach session — the banner never came
     // down — so recording one would inflate both the session count and, through
     // it, the average dwell.
@@ -782,15 +750,16 @@ export class NativeDebuggerSession {
   }
 
   /**
-   * Detach from every tab this session still holds — the revoke path.
+   * Detach from every tab this session still holds — the revoke path, which
+   * the last side panel's close takes.
    *
-   * Turning native mode off has to actually drop the capability, not just stop
-   * offering it: `debugger` cannot be an optional permission (spike-confirmed),
+   * Closing the panel has to actually drop the capability, not just stop
+   * using it: `debugger` cannot be an optional permission (spike-confirmed),
    * so there is no `chrome.permissions.remove` to call and "revoked" can only
    * mean "not attached". Normally nothing is attached — `withDebugger` detaches
    * in `finally` — but an MV3 suspend mid-operation can leave a live attachment
-   * whose `finally` never ran, and that keeps the banner up on a tab the user
-   * believes they just turned native off for.
+   * whose `finally` never ran, and that keeps the banner up on a tab with no
+   * panel left to read it.
    *
    * Reads the attach map from storage rather than memory for the same reason
    * the map lives there at all: the suspend that strands an attachment is
@@ -799,15 +768,11 @@ export class NativeDebuggerSession {
    * @returns how many tabs were detached.
    */
   async detachAll(): Promise<number> {
-    // Wait out anything already mid-attach before taking the snapshot below.
-    // Each attach re-checks the enabled flag before landing in the map (see
-    // `attach`), so by the time this proceeds, every attach that was in
-    // flight WHEN THE REVOKE WAS CALLED has already either landed (and will
-    // be picked up in the read below) or found the flag false and undone
-    // itself — so the count this returns, and the report the panel builds
-    // from it, are never stale by the time either goes out. Snapshotting the
-    // map BEFORE this wait would miss the point: it's exactly the entries an
-    // in-flight attach hasn't written yet that this closes the gap on.
+    // Wait out anything already mid-attach before taking the snapshot below,
+    // so every attach that was in flight WHEN THE REVOKE WAS CALLED has
+    // landed in the map the read below takes. Snapshotting the map BEFORE
+    // this wait would miss the point: it's exactly the entries an in-flight
+    // attach hasn't written yet that this closes the gap on.
     await Promise.all([...this.pendingAttaches.values()]);
     const attached = await this.enqueue(() => this.readAttached());
     let detached = 0;
@@ -816,7 +781,7 @@ export class NativeDebuggerSession {
       // Through the per-tab queue, NOT around it. Tearing down an operation
       // that is mid-flight makes its CDP call throw, which `withDebugger`
       // classifies as `connection-lost` and `withRecovery` then RETRIES — so
-      // switching native off during a read would re-attach immediately after,
+      // closing the panel during a read would re-attach immediately after,
       // put the banner back, and book a `reattach-ok` that never happened.
       // Queueing waits for the operation instead; its own `finally` detaches,
       // and this then finds nothing left to do.
@@ -839,8 +804,8 @@ export class NativeDebuggerSession {
    * reported, or an `onDetach` that lost the race with a worker teardown — and
    * such an entry is arbitrarily old. Logging it as an ordinary detach would
    * add hours to "total time attached", which is the banner-tolerance number
-   * the ship/no-ship decision reads, and would report "detached from 1 tab(s)"
-   * to a user whose banner was never up.
+   * the ship/no-ship decision read, and would book a detach for a banner that
+   * was never up.
    *
    * So the CDP call decides: it resolving is the only evidence the attachment
    * was live. If it rejects, the entry is recorded as an unsolicited detach of
@@ -1109,11 +1074,10 @@ export class NativeDebuggerSession {
        * Chromium's hit test resolves to the exact DOM element under the
        * cursor, which is often a node the accessibility tree never kept —
        * an unnamed wrapper `<span>` inside a named button, padding inside a
-       * labelled group, and so on (the DOM picker's own `resolveTracked`
-       * walks `.parentElement` for the identical reason). `Accessibility.
-       * getAXNodeAndAncestors` returns the AX node for `backendNodeId` and
-       * its ancestors up to the root in one call — cheaper than walking the
-       * DOM domain's own parent chain node by node — so the panel can try
+       * labelled group, and so on. `Accessibility.getAXNodeAndAncestors`
+       * returns the AX node for `backendNodeId` and its ancestors up to the
+       * root in one call — cheaper than walking the DOM domain's own parent
+       * chain node by node — so the panel can try
        * each ancestor in turn against whatever tree it currently has
        * loaded until one is actually present. A failure here (an older
        * Chromium without the method, a torn-down target) degrades to just
@@ -1286,9 +1250,9 @@ export class NativeDebuggerSession {
 
   /**
    * Cancel every pick, armed or still starting, across every tab. Called
-   * before {@link detachAll} (turning native mode off) and when the last side
-   * panel closes: a pick nobody can finish would otherwise hold the debugger,
-   * and the per-tab queue `detachAll` waits on, until the timeout.
+   * when the last side panel closes, before {@link detachAll}: a pick nobody
+   * can finish would otherwise hold the debugger, and the per-tab queue
+   * `detachAll` waits on, until the timeout.
    */
   cancelAllPicks(): void {
     this.pickGen++;

@@ -64,7 +64,10 @@ for (const label of ["One", "Two"]) {
 }
 ```
 
-15. Show the **In-page tree** (Settings ▾) and expand each of those frames' nodes
+15. Expand each of those frames' rows in Chrome's tree, then press **TAB**, which
+    lists the stops of the extension's own reading of the page (extension ≤
+    0.1.17: show the **In-page tree**, **Settings ▾**, and expand each of those
+    frames' nodes)
 16. Select a node inside one and act on it
 17. Change what a frame shows — type in the editor, or run the snippet's three
     `contentDocument` lines again on one frame with another label
@@ -76,8 +79,9 @@ for (const label of ["One", "Two"]) {
 19. Open a news article with an embedded video or map: most such pages also
     load hidden ad and tracking frames, which
     `[...document.querySelectorAll("iframe")].filter((f) => !f.checkVisibility())`
-    lists in the console. Show the **In-page tree** and expand the video's or
-    map's iframe node
+    lists in the console. Expand the video's or map's iframe row in Chrome's
+    tree, then press **TAB** (extension ≤ 0.1.17: show the **In-page tree** and
+    expand the video's or map's iframe node)
 
 ## Expected
 
@@ -92,16 +96,21 @@ for (const label of ["One", "Two"]) {
 - **14** — the iframe subtrees are still there after the tree redraws. They must not
   disappear and wait for you to interact inside each iframe to come back
 - **15** — each frame's content sits under **its own** iframe node: `One button`
-  under `One`, `Two button` under `Two`, never both under one or swapped. Before 0.1.16
-  these nodes are empty, which is a Blocked, not a Fail
+  under `One`, `Two button` under `Two`, never both under one or swapped. From
+  0.1.18 the TAB view lists `One button` before `Two button`, as their frames
+  come. Before 0.1.16 the in-page tree's nodes are empty, which is a Blocked, not
+  a Fail
 - **16** — the action lands in the frame the node is in
 - **17** — the tree shows the new content, under the same iframe node, without a
   reload
-- **18** — an empty iframe node. No content script runs in a sandboxed frame, so
-  nothing inside it is read; it must not show another frame's content
+- **18** — Chrome's tree shows the sandboxed frame's own content, which it reads
+  itself; no content script runs there, so the TAB view lists none of its stops
+  (extension ≤ 0.1.17: the in-page tree shows an empty iframe node). It must
+  never show another frame's content
 - **19** — the embed's own content sits under its iframe node: the player's or
   the map's controls, not an ad's or a tracker's, and not nothing. A hidden
-  frame's content hangs under no iframe node
+  frame's content hangs under no iframe node, and the TAB view lists none of
+  its stops
 
 ## Why this exists
 

@@ -1,8 +1,8 @@
 // Mark the copied manifest in `dist-dogfood/` as the dogfood build. Runs after
 // the `DOGFOOD=1` vite build, which copies `public/manifest.json` verbatim —
 // that manifest already carries `debugger`/`tabs`/`storage` (native mode ships
-// in every build now, gated by a runtime setting, not a build-time permission
-// split), so this script no longer needs to add them itself. What it still
+// in every build now, with no build-time permission split), so this script no
+// longer needs to add them itself. What it still
 // does: rename the build so it's unmistakable in chrome://extensions, and
 // additionally bundle `DogfoodPanel`, the internal telemetry/diagnostics UI
 // for the dogfooding exercise (see `__DOGFOOD__` in vite.config.ts) — that

@@ -1,6 +1,5 @@
 import type {
   SemanticNode,
-  TreeViewMode,
   ActionRequest,
   ActionResult,
 } from "@real-a11y-dev/core";
@@ -8,20 +7,16 @@ import type {
 import type { NativeUnavailableReason } from "./native/capability.js";
 
 /**
- * Where the page's focus went (Focus sync), for whichever tree the panel
- * shows. Either field may be missing, never both.
+ * Where the page's focus went (Focus sync), for the native tree.
  */
 export interface FocusChangedPayload {
-  /** The DOM tree's node for the focused element, or the nearest one above
-   *  it that the tree tracks. */
-  nodeId?: string;
   /**
-   * For the native tree: by native read, the numbers the read gave the
-   * focused element and each numbered element above it in its document,
-   * nearest first (see `native/page-keys.ts`). The panel takes the first that
-   * names a row of the tree it got from that read.
+   * By native read, the numbers the read gave the focused element and each
+   * numbered element above it in its document, nearest first (see
+   * `native/page-keys.ts`). The panel takes the first that names a row of the
+   * tree it got from that read.
    */
-  pageKeys?: Record<string, number[]>;
+  pageKeys: Record<string, number[]>;
   /** The frame whose document `pageKeys` number, as the extension knows it
    *  (0: the top frame). The service worker sets it, from the sender, on
    *  what it forwards to the panel. */
@@ -59,6 +54,8 @@ export type FrameToBackground =
          *  can have changed up to that debounce later: its next flush says
          *  so. */
         changedAt?: number;
+        /** The frame's skeleton, not its tree: see `frame-skeleton.ts`. */
+        framesOnly?: true;
       };
     }
   // Cheap "I'm here" announce sent at content-script load, carrying no tree.
@@ -114,6 +111,9 @@ export type ContentToPanel =
          *  the changes no publish has answered for yet. Absent when there is
          *  none, or only a hidden frame's — see `TabState.changedFrames`. */
         pageChangedAt?: number[];
+        /** A frame sent its skeleton (`FRAME_TREE_DATA.framesOnly`): the
+         *  nodes say where the page's frames are, and are no tree to show. */
+        framesOnly?: true;
       };
     }
   | {
@@ -157,26 +157,12 @@ export type ContentToPanel =
       type: "TAB_CLOSED";
       tabId: number;
     }
-  // Picker (DevTools-style "select an element in the page"): the user
-  // clicked an element on the page while pick mode was on. Content
-  // resolves the click target up the DOM tree to the nearest tracked
-  // node and sends its id; panel selects it, scrolls it into view, and
-  // turns pick mode back off.
-  | { type: "NODE_PICKED"; tabId?: number; payload: { nodeId: string } }
-  // Picker: content acknowledges that pick mode entered or exited (e.g.
-  // the user pressed Escape on the page). Panel mirrors its toggle so
-  // the UI doesn't drift out of sync.
-  | {
-      type: "PICK_MODE_CHANGED";
-      tabId?: number;
-      payload: { enabled: boolean };
-    }
-  // Native picker's counterpart to NODE_PICKED. Lives here (unlike the rest
-  // of the NATIVE_* messages, which stay in native/index.ts's own
-  // NativeMessage union — see that union's own comment) because it is a
-  // genuine background→panel PUSH the same shape as NODE_PICKED/
-  // PICK_MODE_CHANGED above, not a request/response call; the panel's
-  // single message handler already routes exactly this shape.
+  // The picker's result (DevTools-style "select an element in the page").
+  // Lives here (unlike the rest of the NATIVE_* messages, which stay in
+  // native/index.ts's own NativeMessage union — see that union's own
+  // comment) because it is a genuine background→panel PUSH, not a
+  // request/response call; the panel's single message handler already
+  // routes exactly this shape.
   | {
       type: "NATIVE_PICK_RESULT";
       tabId: number;
@@ -227,6 +213,16 @@ export interface SelectOption {
 type BoundTab = { tabId?: number };
 
 /**
+ * The tree the panel asks a tab's frames for. `framesOnly`: each frame's
+ * skeleton (`frame-skeleton.ts`) in place of its tree, while Chrome's tree
+ * shows. A frame starts so, and sends its whole tree once asked for one: for
+ * the TAB view, which lists the page's tab order from it.
+ */
+export interface TreeRequest {
+  framesOnly: boolean;
+}
+
+/**
  * Messages to a content script: from the side panel by way of the background,
  * plus one the service worker sends on its own (`ARM_NATIVE_OVERLAY`).
  *
@@ -237,16 +233,14 @@ type BoundTab = { tabId?: number };
  * still shows (or is clearing) the previous tab's tree.
  */
 export type PanelToContent =
-  | (BoundTab & {
-      type: "REQUEST_TREE";
-      payload: { viewMode: TreeViewMode };
-    })
+  | (BoundTab & { type: "REQUEST_TREE"; payload: TreeRequest })
   // Background→content recovery ping: re-announce your current tree.
   // Deliberately distinct from REQUEST_TREE, which carries the panel's
-  // `viewMode` and assigns it. The background does not track the view mode,
-  // so it has none to send — and it must not reset one either: the content
-  // script's `currentViewMode` outlives a service-worker restart and is the
-  // correct mode to re-announce at.
+  // `TreeRequest` and assigns it. The one the background keeps for each tab
+  // is gone after a restart, the only time it sends this, so it has none to
+  // send — and it must not reset one either: the content script's
+  // `currentViewMode` and `framesOnly` outlive a service-worker restart and
+  // are the correct ones to re-announce at.
   | (BoundTab & { type: "RESEND_TREE" })
   | (BoundTab & { type: "DISPATCH_ACTION"; payload: ActionRequest })
   | (BoundTab & {
@@ -260,7 +254,7 @@ export type PanelToContent =
       payload: { nodeId: string; hover?: boolean };
     })
   | (BoundTab & { type: "CLEAR_HIGHLIGHT" })
-  | (BoundTab & { type: "SET_VIEW_MODE"; payload: { viewMode: TreeViewMode } })
+  | (BoundTab & { type: "SET_VIEW_MODE"; payload: TreeRequest })
   | (BoundTab & { type: "TOGGLE_CURTAIN"; payload: { visible: boolean } })
   | (BoundTab & { type: "GET_FIELD_STATE"; payload: { nodeId: string } })
   | (BoundTab & {
@@ -310,12 +304,13 @@ export type PanelToContent =
   // Start/stop the (expensive) live tree observation in the content script.
   // Driven by the panel's connect/disconnect the same way SET_FOCUS_TRACKER
   // is, so a page whose panel was never opened does no observing at all.
-  | (BoundTab & { type: "SET_OBSERVING"; payload: { enabled: boolean } })
-  | (BoundTab & { type: "CLOSE_TAB" })
-  // Picker: toggle DevTools-style "select an element in the page" mode.
-  // Content swaps in the capture-phase click handler + cursor styling
-  // when enabled, removes them when disabled.
-  | (BoundTab & { type: "SET_PICK_MODE"; payload: { enabled: boolean } });
+  | (BoundTab & {
+      type: "SET_OBSERVING";
+      /** `tree`: the tree the panel last asked the tab for, which a frame
+       *  armed after it was asked sends. Absent, the frame's own stands. */
+      payload: { enabled: boolean; tree?: TreeRequest };
+    })
+  | (BoundTab & { type: "CLOSE_TAB" });
 
 export type ExtensionMessage =
   ContentToPanel | PanelToContent | FrameToBackground;

@@ -1,6 +1,6 @@
 {
   "name": "@real-a11y-dev/cli",
-  "version": "0.1.0-beta.10",
+  "version": "0.1.0-beta.11",
   "description": "Audit what a screen reader hears, from your shell — semantic-tree accessibility audits with CI-grade exit codes and formats",
   "license": "MIT",
   "author": "Juan Crisostomo (Real A11y)",
@@ -70,6 +70,6 @@
     "semver": "^7.8.5",
     "tsup": "^8.3.0",
     "typescript": "^5.6.0",
-    "vitest": "^4.1.11"
+    "vitest": "^5.0.3"
   }
 }

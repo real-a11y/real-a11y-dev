@@ -37,6 +37,3 @@ export { KeyStatesForReaders } from "./components/KeyStatesForReaders.js";
 export { useInputModality } from "./hooks/useInputModality.js";
 export type { InputModality } from "./hooks/useInputModality.js";
 export { useVirtualTree } from "./hooks/useVirtualTree.js";
-// Exported for the extension's side panel, which renders its own tree over the
-// same flattened id list and needs the same index to avoid rescanning it.
-export { useIndexById } from "./hooks/useIndexById.js";

@@ -1,16 +1,16 @@
 import { describe, it, expect } from "vitest";
 
-import { ALL_VIEWS, buildExportMarkdown, NATIVE_VIEWS } from "./export.js";
+import { ALL_VIEWS, buildExportMarkdown, exportViewsFor } from "./export.js";
 
 import type { ExportMeta } from "./export.js";
 
 const META: ExportMeta = {
-  producer: "dom",
+  producer: "native",
   pageTitle: "Sign in",
   pageUrl: "https://example.com/login",
   capturedAt: "2026-06-27T10:00:00.000Z",
   extensionVersion: "0.1.4",
-  viewLabel: "Accessibility tree",
+  viewLabel: "Native accessibility tree",
 };
 
 const VIEWS = {
@@ -29,34 +29,49 @@ describe("buildExportMarkdown", () => {
   });
 
   it("names the producer that built the tree", () => {
-    expect(buildExportMarkdown(VIEWS, META)).toContain(
-      "**Producer:** dom (the extension's own in-page walk)",
-    );
-    const native = buildExportMarkdown(
-      { tree: VIEWS.tree, outline: VIEWS.outline },
-      { ...META, producer: "native" },
-      NATIVE_VIEWS,
-    );
-    expect(native).toContain(
-      "**Producer:** native (Chromium's own accessibility tree)",
+    expect(buildExportMarkdown(VIEWS, META, ["tree", "outline"])).toContain(
+      "- **Producer:** native (Chromium's own accessibility tree)",
     );
     // Even a headings-only export says which producer it came from.
-    expect(
-      buildExportMarkdown(VIEWS, { ...META, producer: "native" }, ["outline"]),
-    ).toContain("**Producer:** native");
+    expect(buildExportMarkdown(VIEWS, META, ["outline"])).toContain(
+      "**Producer:** native",
+    );
+  });
+
+  it("says the tab sequence is the page's own walk's, in a report of Chrome's tree", () => {
+    // The header names one producer, and Chrome's tree has no tab order: the
+    // tab sequence comes from the content script's walk, and says so where
+    // it starts.
+    const md = buildExportMarkdown(VIEWS, META);
+    const tabs = md.slice(md.indexOf("## Tab sequence"));
+    expect(tabs).toMatch(
+      /^## Tab sequence\n\n\*\*Producer:\*\* dom \(the extension's own in-page walk\)\n\n```/,
+    );
+    // Once: the tree's sections are Chrome's, as the header says.
+    expect(md.match(/Producer:\*\* dom/g)).toHaveLength(1);
+  });
+
+  it("names the walk in the header of a report of the tab sequence alone", () => {
+    const md = buildExportMarkdown(VIEWS, { ...META, producer: "dom" }, [
+      "tab",
+    ]);
+    expect(md).toContain(
+      "- **Producer:** dom (the extension's own in-page walk)",
+    );
+    // The header already says it: the section doesn't again.
+    expect(md).toMatch(/## Tab sequence\n\n```/);
   });
 
   it("labels the tree section by the current view", () => {
-    expect(buildExportMarkdown(VIEWS, META)).toContain("## Accessibility tree");
-    expect(
-      buildExportMarkdown(VIEWS, { ...META, viewLabel: "DOM tree" }),
-    ).toContain("## DOM tree");
+    expect(buildExportMarkdown(VIEWS, META)).toContain(
+      "## Native accessibility tree",
+    );
   });
 
   it("emits all views by default, in canonical order", () => {
     const md = buildExportMarkdown(VIEWS, META);
     const headings = [
-      "## Accessibility tree",
+      "## Native accessibility tree",
       "## Heading outline",
       "## Tab sequence",
     ];
@@ -68,9 +83,23 @@ describe("buildExportMarkdown", () => {
   it("emits only the selected view when a subset is given", () => {
     const md = buildExportMarkdown(VIEWS, META, ["outline"]);
     expect(md).toContain("## Heading outline");
-    expect(md).not.toContain("## Accessibility tree");
+    expect(md).not.toContain("## Native accessibility tree");
     expect(md).not.toContain("## Tab sequence");
     expect(md).toContain("# Accessibility report — Sign in"); // header always present
+  });
+
+  it("says the tab sequence is the whole page's when the tree is scoped", () => {
+    const views = { ...VIEWS, tabSequence: '01. button "Go"' };
+    const scoped = buildExportMarkdown(views, {
+      ...META,
+      scope: 'banner "Top"',
+    });
+    const tab = scoped.slice(scoped.indexOf("## Tab sequence"));
+    expect(tab).toContain("**Scope:** the whole page");
+    expect(scoped.slice(0, scoped.indexOf("## Tab sequence"))).not.toContain(
+      "the whole page",
+    );
+    expect(buildExportMarkdown(views, META)).not.toContain("the whole page");
   });
 
   it("adds a Scope line only when scoped", () => {
@@ -93,17 +122,24 @@ describe("buildExportMarkdown", () => {
   });
 });
 
-describe("NATIVE_VIEWS", () => {
-  it("omits the tab-sequence view that ALL_VIEWS includes", () => {
-    expect(ALL_VIEWS).toContain("tab");
-    expect(NATIVE_VIEWS).not.toContain("tab");
-    expect(NATIVE_VIEWS).toEqual(["tree", "outline"]);
+describe("exportViewsFor", () => {
+  it("offers the tab sequence only while the TAB view shows it", () => {
+    // Chrome's tree has no tab order, and the page sends its whole walk only
+    // while TAB shows: rendering an empty sequence as "(nothing focusable)"
+    // would misreport a missing capability as a finding.
+    expect(exportViewsFor(true, true)).toEqual(ALL_VIEWS);
+    expect(exportViewsFor(true, false)).toEqual(["tree", "outline"]);
+  });
+
+  it("offers the tab sequence alone where Chrome's tree couldn't be read", () => {
+    expect(exportViewsFor(false, true)).toEqual(["tab"]);
+    expect(exportViewsFor(false, false)).toEqual([]);
   });
 
   it("never renders a Tab sequence section when used as the selection", () => {
-    const md = buildExportMarkdown(VIEWS, META, NATIVE_VIEWS);
+    const md = buildExportMarkdown(VIEWS, META, exportViewsFor(true, false));
     expect(md).not.toContain("## Tab sequence");
-    expect(md).toContain("## Accessibility tree");
+    expect(md).toContain("## Native accessibility tree");
     expect(md).toContain("## Heading outline");
   });
 });

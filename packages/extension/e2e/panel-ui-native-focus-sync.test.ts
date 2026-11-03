@@ -1,7 +1,7 @@
 /**
  * Focus sync in Chrome's tree: focus moving on the page selects the focused
- * element's row, expanded to and scrolled into view, as the in-page tree's
- * Focus sync does, and with no debugger attached. The native read numbers
+ * element's row, expanded to and scrolled into view, with no debugger
+ * attached. The native read numbers
  * the page's elements twice, over CDP and in the content script's walk of
  * the live page (`src/native/page-keys.ts`), and focus is reported by
  * number. If the two walks numbered the page differently, nothing would

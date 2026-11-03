@@ -12,8 +12,8 @@ navigation "On this page"
 main
   heading "Reading the DOM View" (level 1)
   blockquote
-    paragraph "The DOM view is the same tree across every Real A11y surface — the , the , the , and the option on . This page applies to all of them."
-      link "Chrome extension"
+    paragraph "The DOM view is the same tree across every Real A11y surface that has one — the , the , the , and the option on . This page applies to all of them."
+      link "inspector"
       code "<SemanticNavigator />"
       link "React component"
       link "Storybook addon"
