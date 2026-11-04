@@ -134,7 +134,7 @@ describe("readRun", () => {
 
   it("puts an automatic read that follows up what the user did in the follow window's run, and says what it finds", () => {
     expect(readRun(true, true, startOf(51_000, CLICKED))).toEqual({
-      follows: CLICKED.from,
+      follows: CLICKED.actedAt,
       announce: true,
     });
   });
@@ -183,23 +183,31 @@ describe("readRun", () => {
     );
   });
 
-  it("keeps a change made in the window before, and heard of after a click opened another, in that window's run", () => {
+  it("starts a run for a click on the page while a follow window is open, which only stretches it", () => {
     const first = readRun(true, true, startOf(50_400, CLICKED));
+    // A second click at 52s, inside the first click's window.
+    const second = followPageInput(CLICKED, 52_000, 51_500, 52_000);
+    expect(second.from).toBe(CLICKED.from);
+    const again = readRun(true, true, startOf(52_300, second));
+    expect(again.follows).not.toBe(first.follows);
+    // The reads that follow it up are its own run.
+    expect(readRun(true, true, startOf(53_000, second)).follows).toBe(
+      again.follows,
+    );
+  });
+
+  it("puts a change reported late from the window before with the click that opened the next", () => {
     // The first window closed at 55s; a click at 70s, after a change heard
     // of at 56s, opened another; then a busy frame reported a change it made
-    // at 54s.
-    const later = {
-      ...followPageInput(CLICKED, 70_000, 56_000, 70_000),
-      firstChangeAt: 54_000,
-    };
-    expect(readRun(true, true, startOf(70_300, later)).follows).toBe(
-      first.follows,
-    );
-    // A change made since the click is the new window's.
+    // at 54s. The read shows what changed since the read before it.
+    const later = followPageInput(CLICKED, 70_000, 56_000, 70_000);
     expect(
+      readRun(true, true, startOf(70_300, { ...later, firstChangeAt: 54_000 }))
+        .follows,
+    ).toBe(
       readRun(true, true, startOf(70_300, { ...later, firstChangeAt: 70_100 }))
         .follows,
-    ).toBe(later.from);
+    );
   });
 });
 
@@ -837,6 +845,36 @@ describe("compareRead", () => {
         );
         expect(found(saved.changes)?.changed).toEqual(["ax-dom-32"]);
         expect(saved.base.dialogs).toEqual([]);
+      });
+
+      it("keeps the outer dialog for one a follow-up of the same run opens over it, and marks nothing in it when that closes", () => {
+        // The action's re-read found the dialog; the page opened a confirm
+        // over it before the follow window ended.
+        const opened = opening();
+        const onScreen = dialog();
+        const confirm = compareRead(
+          opened.base,
+          onScreen,
+          readOf(CONFIRM, inConfirm),
+          runOf(100),
+        );
+        expect(found(confirm.changes)?.added).toEqual([
+          "ax-dom-60",
+          "ax-dom-61",
+          "ax-dom-62",
+        ]);
+        expect(confirm.base.dialogs.map((d) => d.before.nodes)).toEqual([
+          PAGE,
+          onScreen,
+        ]);
+        const back = compareRead(
+          confirm.base,
+          CONFIRM,
+          readOf(dialog(), inDialog),
+          runOf(200),
+        );
+        expect(back.changes).toBeNull();
+        expect(back.base.dialogs.map((d) => d.dialogId)).toEqual(["ax-dom-40"]);
       });
 
       it("compares with the page when both close at once", () => {

@@ -44,8 +44,9 @@ export interface ReadRun {
   /**
    * The run, named by when it began: when the read the user caused that
    * began it started, where the follow window that read opens starts too
-   * (`followAfterRead`), or when a follow window a click opened starts.
-   * Null for an automatic read, a run of its own.
+   * (`followAfterRead`), or when the user last clicked or pressed a key on
+   * the page in the follow window. Null for an automatic read, a run of its
+   * own.
    */
   follows: number | null;
   announce: boolean;
@@ -65,20 +66,17 @@ export function readRun(
 ): ReadRun {
   if (!auto) return { follows: start.lastReadStartedAt, announce: true };
   return followsAction
-    ? { follows: followedFrom(start.follow), announce: true }
+    ? { follows: followedGesture(start.follow), announce: true }
     : { follows: null, announce: false };
 }
 
-/** The follow window the change a read follows up was made in: the open
- *  one, or the one before it, for a change made there and reported after
- *  a click on the page opened another (`followPageInput`). */
-function followedFrom(w: FollowWindow): number {
-  const at = w.firstChangeAt;
-  const inPrevious =
-    !(at > w.from && at < w.until) &&
-    at > w.previousFrom &&
-    at < w.previousUntil;
-  return inPrevious ? w.previousFrom : w.from;
+/** What the user did that a follow window's reads follow up, named by when
+ *  they did it: what opened the window, or their latest click or key on the
+ *  page since. A click inside an open window only stretches it
+ *  (`followPageInput`), but it is a gesture of its own, whose reads show
+ *  what changed since the read before it, not since the first click. */
+function followedGesture(w: FollowWindow): number {
+  return Math.max(w.from, w.actedAt);
 }
 
 /** A tree and the root it is drawn from. A document's reads don't always
@@ -295,10 +293,14 @@ export function compareRead(
     return { base: next, changes: null, compared: false };
   }
   const changes = inFront ? withoutRemovals(found) : found;
+  // A dialog stands in front of the tree on screen as it came, which a
+  // follow-up of the run doesn't compare with: a second dialog the page
+  // opened over the first keeps the first, not the page behind both.
+  const before = continues ? { nodes: shown, rootId: base.rootId } : baseline;
   const open =
     !inFront || dialogs.some((d) => d.dialogId === inFront)
       ? dialogs
-      : [...dialogs, { dialogId: inFront, before: baseline }];
+      : [...dialogs, { dialogId: inFront, before }];
   return {
     base: { ...next, runBefore: baseline, dialogs: open },
     changes: isEmptyNativeChanges(changes) ? null : changes,

@@ -191,3 +191,58 @@ test("a dialog a library opens by hiding the page is marked as a modal one is, t
     await nav.panel.locator(".sn-node--change-new").count(),
   ).toBeLessThanOrEqual(1);
 });
+
+test("the panel's own accessibility tree in Chrome, what a screen reader reads, carries the marks and what the read found", async ({
+  nav,
+}) => {
+  await nav.showNative("accordion.html");
+  await row(nav.panel, "button", "Personal Information").click();
+  await nav.panel.getByRole("tree").press("Enter");
+  await expect(changesBar(nav.panel)).toBeVisible();
+
+  const cdp = await nav.panel.context().newCDPSession(nav.panel);
+  type AXNode = {
+    nodeId: string;
+    parentId?: string;
+    ignored: boolean;
+    role?: { value: string };
+    name?: { value: string };
+    properties?: { name: string; value: { value: unknown } }[];
+  };
+  const read = async () =>
+    ((await cdp.send("Accessibility.getFullAXTree")) as { nodes: AXNode[] })
+      .nodes;
+  const rows = (nodes: AXNode[]) =>
+    nodes
+      .filter((node) => !node.ignored && node.role?.value === "treeitem")
+      .map((node) => node.name?.value ?? "");
+
+  // Each marked row says what happened to it after its role and name.
+  await expect
+    .poll(async () => rows(await read()))
+    .toEqual(
+      expect.arrayContaining([
+        expect.stringMatching(/^region "Personal Information".*, new$/),
+        expect.stringMatching(
+          /^button "Personal Information".*, changed: now expanded/,
+        ),
+      ]),
+    );
+  // And a polite live region holds what the read found.
+  const nodes = await read();
+  const polite = new Set(
+    nodes
+      .filter((node) =>
+        node.properties?.some(
+          (p) => p.name === "live" && p.value.value === "polite",
+        ),
+      )
+      .map((node) => node.nodeId),
+  );
+  const said = nodes.find(
+    (node) =>
+      node.role?.value === "StaticText" &&
+      node.name?.value === "2 new, 1 changed in the tree",
+  );
+  expect(said?.parentId !== undefined && polite.has(said.parentId)).toBe(true);
+});
