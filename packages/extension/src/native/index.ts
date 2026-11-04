@@ -29,11 +29,7 @@ import {
 } from "./debugger-session.js";
 import type { DogfoodLog } from "./dogfood.js";
 
-import {
-  dispatchNative,
-  readNativeTree,
-  type NativeAction,
-} from "./native-core.js";
+import { dispatchNative, type NativeAction } from "./native-core.js";
 import {
   asFramePageKeyDigest,
   type FrameAnswers,
@@ -41,6 +37,7 @@ import {
   type PageKeysRead,
   withoutFragment,
 } from "./page-keys.js";
+import { documentFields, readNativeTreeChecked } from "./read-document.js";
 import { forgetRetiredSettings } from "./setting.js";
 
 declare const __DOGFOOD__: boolean;
@@ -447,7 +444,7 @@ export function registerNativeMode(): void {
             const { outcome, value } = await withRecovery(
               session,
               tabId,
-              (t) => readNativeTree(t, options),
+              (t) => readNativeTreeChecked(t, options),
               log,
               { retryDrop: !message.auto, respectCancel: message.auto },
             );
@@ -493,10 +490,9 @@ export function registerNativeMode(): void {
               // panel's flat depth-indented list, which never needed one.
               rootId: value.rootId,
               // The document read, so the panel can tell a read of the page a
-              // navigation is leaving from one of the page it arrives at.
-              ...(value.documentId !== undefined
-                ? { documentId: value.documentId }
-                : {}),
+              // navigation is leaving from one of the page it arrives at, and
+              // whether another document took its place as it was read.
+              ...documentFields(value),
               // Rows carry `pageKey`s from this read's numbering of the page
               // and its frames: what the content scripts' focus reports name.
               ...(value.pageKeyed ? { pageKeysReadId: readId } : {}),

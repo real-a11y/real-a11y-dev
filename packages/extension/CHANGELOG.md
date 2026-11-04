@@ -17,6 +17,33 @@
   also touches dogfood code.
 -->
 
+## Unreleased
+
+### Patch Changes
+
+- **Chrome's tree marks what changed** since the read before. When the
+  tree is read again, after you act through the tree or on the page, or
+  press **↻**, the rows it finds new flash green and keep a green edge, and
+  the rows that changed flash amber and keep an amber edge, with what
+  changed underlined or outlined: the `collapsed` badge of a button that
+  now reads `expanded`, say. The top row of something new says _new_, a
+  changed row says _changed_ (hover it to see what it was before), and a
+  collapsed row says what changed under it (_2 new inside_). What the page
+  added opens in the tree. A bar under the tree counts the new, changed and
+  removed rows, lists the removed ones, and goes to the previous or next
+  change, as `Alt`+`Shift`+`N` and `Alt`+`N` do; its ✕ clears the marks. A
+  screen reader hears what a read you caused found, then, on the top row of
+  something new, _new_, and on a changed row what changed, a state with the
+  way it went (_now collapsed_). The reads that follow up one action count
+  as one: a menu button that went `expanded`, then the items the page
+  fetched for it, stay marked together. A modal dialog is marked new
+  without the page behind it, which Chrome's tree leaves out while the
+  dialog is open, counting as removed, and closing it marks what it changed
+  on the page: a native `<dialog>` and one a library such as Radix opens by
+  hiding the page alike, and a dialog opened over another one too. Nothing
+  is marked across a navigation, and what a page changes by itself, with
+  **Follow page changes** on, is marked without being announced.
+
 ## 0.1.18
 
 ### Patch Changes

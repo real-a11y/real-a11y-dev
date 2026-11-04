@@ -31,7 +31,6 @@
 
 import {
   indexControlLinks,
-  isNativeIframeRole,
   ROLE_FILTER_LABELS,
   type ActionType,
   type ControlLinkSource,
@@ -42,9 +41,7 @@ import {
   findTypeAheadIndex,
   isJumpKey,
   isTypeAheadKey,
-  JUMP_KEYS,
   JUMP_KEYSHORTCUTS,
-  KeyStatesForReaders,
   nextJump,
   resolveStepperKeyAction,
   useInputModality,
@@ -72,8 +69,7 @@ import {
 import { searchNativeTree } from "../native/native-search.js";
 import { nativeParentIndex } from "../native/native-tree-utils.js";
 
-import { ControlsChip, JUMP_FLASH_MS } from "./ControlsChip.js";
-import { announcedValueLabel } from "./field-value.js";
+import { JUMP_FLASH_MS } from "./ControlsChip.js";
 import { FilteredListView, type FilteredListItem } from "./FilteredList.js";
 import { findNativeModalDialog } from "./native-feedback.js";
 import {
@@ -88,13 +84,13 @@ import {
   toListItem,
   typeAheadLabel,
 } from "./native-rows.js";
+import { NativeRowLabel } from "./NativeRowLabel.js";
 import {
   NativeViewToggle,
   useTabMatchLabel,
   type NativeTabOrder,
   type NativeView,
 } from "./NativeTabView.js";
-import { EmbeddedBadge, nativeStateBadges, StateBadges } from "./row-badges.js";
 import {
   arrowLeftStopsAtScopeRoot,
   describeNode,
@@ -108,7 +104,16 @@ import {
 import { ScopeBar } from "./ScopeBar.js";
 import { DialogIndicator, SendKeyBar, type SendKey } from "./SendKeyBar.js";
 import { TabSequenceView } from "./TabSequenceView.js";
+import {
+  CHANGE_KEYSHORTCUTS,
+  changeRowClass,
+  isChangeKey,
+  rowChangeMarks,
+  type NativeTreeChangesProp,
+} from "./tree-changes.js";
+import { ChangeNoticeRegion, TreeChangesBar } from "./TreeChangesBar.js";
 import { useDwellTimer } from "./use-dwell-timer.js";
+import { useTreeChanges } from "./use-tree-changes.js";
 
 const ROLE_FILTER_KEYS = Object.keys(ROLE_FILTER_LABELS) as Array<
   Exclude<RoleFilter, null>
@@ -204,6 +209,12 @@ export interface NativeTreeViewProps {
   /** Which of the two shows. */
   view?: NativeView;
   onViewChange?: (view: NativeView) => void;
+  /**
+   * What the read on screen found new, changed or removed since the read
+   * before it, marked on the rows (`tree-changes.ts`). Left out, nothing is
+   * marked.
+   */
+  changes?: NativeTreeChangesProp;
 }
 
 export function NativeTreeView({
@@ -230,6 +241,7 @@ export function NativeTreeView({
   tabOrder,
   view = "a11y",
   onViewChange,
+  changes,
 }: NativeTreeViewProps) {
   // The tab order, while it shows in the tree's place.
   const shownTabOrder = view === "tab" ? tabOrder : undefined;
@@ -524,6 +536,19 @@ export function NativeTreeView({
     if (walkRoot) walk(walkRoot, 1, 1);
     return { visibleIds: ids, visiblePositions: positions };
   }, [nodes, walkRoot, expanded, hasFilter, search]);
+
+  // What the last read found changed (`use-tree-changes.ts`).
+  const changeView = useTreeChanges({
+    changes: changes?.marks ?? null,
+    nodes,
+    rootId,
+    parentOf,
+    visibleIds,
+    selectedId,
+    setExpanded,
+    jumpTo,
+  });
+  const { goToChange } = changeView;
 
   const {
     containerRef,
@@ -858,6 +883,15 @@ export function NativeTreeView({
         return;
       }
 
+      // The next or previous change the last read found, as the changes
+      // bar's arrows go. It starts type-ahead afresh, as a jump does.
+      if (isChangeKey(e)) {
+        e.preventDefault();
+        typeAhead.current.clear();
+        goToChange(e.shiftKey);
+        return;
+      }
+
       if (visibleIds.length === 0) return;
 
       // Type-ahead, as the shared panel's `useTreeKeyboard` has it: printable
@@ -1022,6 +1056,7 @@ export function NativeTreeView({
       scopeTo,
       controlsIndex,
       jumpTo,
+      goToChange,
     ],
   );
 
@@ -1101,6 +1136,7 @@ export function NativeTreeView({
         <span class="sn-page-url" aria-live="polite">
           {status}
         </span>
+        <ChangeNoticeRegion notice={changeView.notice} />
       </div>
 
       <div class="sn-filters" role="toolbar" aria-label="Filter by role">
@@ -1174,8 +1210,8 @@ export function NativeTreeView({
               ref={treeRef}
               class={`sn-tree${showFullNames ? " sn-tree--full-names" : ""}`}
               role="tree"
-              aria-label={`Native accessibility tree — press Enter to activate (a slider steps up, a spinbutton opens its edit box), +/− or Shift+Enter to step sliders and spinbuttons, arrows to navigate, ${SCOPE_KEY_HINT}, Alt+J to follow a row's aria-controls links one by one and Alt+Shift+J to go back`}
-              aria-keyshortcuts={JUMP_KEYSHORTCUTS}
+              aria-label={`Native accessibility tree — press Enter to activate (a slider steps up, a spinbutton opens its edit box), +/− or Shift+Enter to step sliders and spinbuttons, arrows to navigate, ${SCOPE_KEY_HINT}, Alt+J to follow a row's aria-controls links one by one and Alt+Shift+J to go back, Alt+N and Alt+Shift+N to go to the next and previous change since the read before`}
+              aria-keyshortcuts={`${JUMP_KEYSHORTCUTS} ${CHANGE_KEYSHORTCUTS}`}
               tabIndex={0}
               style={{
                 minHeight: totalHeight,
@@ -1203,17 +1239,8 @@ export function NativeTreeView({
                 const steppable = isSteppableRole(node.role);
                 const selectAction = selects(node) ? "select" : undefined;
                 const position = visiblePositions.get(id);
-                // A heading's level shows as the shared panel's `H2` badge rather
-                // than among the generic `key=value` properties below. Only
-                // for headings: a tree item or grid row carries a level too.
-                const headingLevel =
-                  node.role === "heading"
-                    ? node.properties?.["level"]
-                    : undefined;
-                const badges = nativeStateBadges(node.states, node.properties, {
-                  headingLevel,
-                });
-                const keyBadges = badges.filter((b) => b.keyState);
+                const { shown, hidden, flashes } = changeView;
+                const marks = rowChangeMarks(shown, hidden, parentOf, id);
 
                 return (
                   <div
@@ -1224,6 +1251,7 @@ export function NativeTreeView({
                       isSelected && "sn-node--selected",
                       label && "sn-node--interactive",
                       id === flashingId && "sn-node--flash",
+                      changeRowClass(marks, flashes.get(id)),
                     ]
                       .filter(Boolean)
                       .join(" ")}
@@ -1295,94 +1323,14 @@ export function NativeTreeView({
                       {isParent ? (expanded.has(id) ? "▾" : "▸") : ""}
                     </button>
 
-                    <span class="sn-label">
-                      {/* The role and name stay together on a narrow row,
-                          which clips the name and drops what follows it
-                          (tree.css, "Long labels"). */}
-                      <span class="sn-head">
-                        <span class="sn-role">{node.role}</span>
-                        {headingLevel && (
-                          <span class="sn-level-badge">H{headingLevel}</span>
-                        )}
-                        {isNativeIframeRole(node.role) &&
-                          !hasChildren(node) && <EmbeddedBadge />}
-                        {node.name && (
-                          <span class="sn-name" title={node.name}>
-                            {node.name}
-                          </span>
-                        )}
-                        <KeyStatesForReaders
-                          labels={keyBadges.map((b) => b.label)}
-                        />
-                      </span>
-                      {node.description && (
-                        <span class="sn-description" title={node.description}>
-                          {node.description.length > 80
-                            ? node.description.slice(0, 80) + "…"
-                            : node.description}
-                        </span>
-                      )}
-                      {/* What a screen reader announces (ADR-0001) — a
-                          select's option label, not its raw `value`. */}
-                      {node.value !== undefined && (
-                        <span
-                          class="sn-field-value"
-                          title={announcedValueLabel(node.value)}
-                        >
-                          {announcedValueLabel(node.value)}
-                        </span>
-                      )}
-                      {node.value === undefined && node.placeholder && (
-                        <span
-                          class="sn-field-value"
-                          title={`Placeholder hint: ${JSON.stringify(node.placeholder)}`}
-                        >
-                          {"placeholder: "}
-                          {JSON.stringify(node.placeholder)}
-                        </span>
-                      )}
-                      <StateBadges badges={badges.filter((b) => !b.keyState)} />
-                      {/* Jump chips: to the rows this one controls, and back
-                          to the rows that control it. */}
-                      {controlsIndex.forward.get(id)?.map((targetId) => {
-                        const target = nodes.get(targetId);
-                        if (!target) return null;
-                        return (
-                          <ControlsChip
-                            key={`controls-${targetId}`}
-                            role={target.role}
-                            name={target.name}
-                            direction="forward"
-                            inferred={controlsIndex.inferred.has(id)}
-                            keyHint={JUMP_KEYS.forward}
-                            onJump={() => jumpTo(targetId)}
-                          />
-                        );
-                      })}
-                      {controlsIndex.reverse.get(id)?.map((triggerId, i) => {
-                        const trigger = nodes.get(triggerId);
-                        if (!trigger) return null;
-                        return (
-                          <ControlsChip
-                            key={`controlled-by-${triggerId}`}
-                            role={trigger.role}
-                            name={trigger.name}
-                            direction="reverse"
-                            inferred={controlsIndex.inferred.has(triggerId)}
-                            // Alt+Shift+J reaches the first one.
-                            keyHint={i === 0 ? JUMP_KEYS.back : undefined}
-                            onJump={() => jumpTo(triggerId)}
-                          />
-                        );
-                      })}
-                      {label && <span class="sn-action-tag">{label}</span>}
-                    </span>
-
-                    {/* Key states: after the label, which can clip them,
-                        rather than in it. A row too narrow for them widens
-                        instead (tree.css, "Long labels"). A screen reader
-                        hears them after the name (KeyStatesForReaders). */}
-                    <StateBadges keyStates badges={keyBadges} />
+                    <NativeRowLabel
+                      node={node}
+                      nodes={nodes}
+                      label={label}
+                      controlsIndex={controlsIndex}
+                      onJump={jumpTo}
+                      marks={marks}
+                    />
 
                     {label && (
                       <button
@@ -1441,12 +1389,27 @@ export function NativeTreeView({
             </div>
           </div>
 
+          {changeView.shown && (
+            <TreeChangesBar
+              changes={changeView.shown}
+              onPrevious={() => goToChange(true)}
+              onNext={() => goToChange(false)}
+              // The bar goes with the marks, and focus to the tree rather
+              // than with the bar.
+              onClear={() => {
+                changes?.clear();
+                treeRef.current?.focus();
+              }}
+            />
+          )}
+
           {onSendKey && <SendKeyBar onSendKey={onSendKey} />}
 
           <div class="sn-hints">
             <kbd>Enter</kbd> activate &middot; <kbd>+/−</kbd> step &middot;{" "}
             <kbd>Space</kbd> expand &middot; <kbd>Arrow</kbd> navigate &middot;{" "}
             <kbd>DblClick</kbd> scope &middot; <kbd>Alt+(Shift)+J</kbd> jump
+            &middot; <kbd>Alt+(Shift)+N</kbd> change
           </div>
         </>
       )}

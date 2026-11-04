@@ -1,0 +1,271 @@
+/* ---- What the last read of Chrome's tree found changed ----
+   (`tree-changes.ts`.) A new row and a changed one keep a coloured left
+   edge until the next read, and flash as the read lands. Colour is never
+   the only sign: the top row of a new subtree and a changed row also carry
+   a tag that says so, what changed is underlined or outlined on the row,
+   and a screen reader hears it all in the row's label. The colours are the
+   shared panel's diff colours (`themes.css`), light and dark.
+
+   Rows stay exactly --sn-line-height for the virtualized tree (see
+   `.sn-node` in tree.css), so the edge is an inset box-shadow, as the
+   selection's ring is, and composes with it. */
+.sn-node--change-new {
+  box-shadow: inset 3px 0 0 var(--sn-diff-added-edge);
+}
+
+.sn-node--change-changed {
+  box-shadow: inset 3px 0 0 var(--sn-diff-changed-edge);
+}
+
+.sn-node--selected.sn-node--change-new {
+  box-shadow:
+    inset 0 0 0 1px var(--sn-accent),
+    inset 3px 0 0 var(--sn-diff-added-edge);
+}
+
+.sn-node--selected.sn-node--change-changed {
+  box-shadow:
+    inset 0 0 0 1px var(--sn-accent),
+    inset 3px 0 0 var(--sn-diff-changed-edge);
+}
+
+/* The flash: the row's diff colour, held, then fading to whatever the row
+   shows underneath (hover, selection). Stronger than the diff backgrounds,
+   which are a light theme's 93% tints, too pale to catch the eye on a
+   selected row: the edge colour, a third of the way over the panel. */
+.sn-tree {
+  --sn-change-new-flash: color-mix(
+    in srgb,
+    var(--sn-diff-added-edge) 30%,
+    var(--sn-bg)
+  );
+  --sn-change-changed-flash: color-mix(
+    in srgb,
+    var(--sn-diff-changed-edge) 30%,
+    var(--sn-bg)
+  );
+}
+
+@keyframes sn-change-new-flash {
+  0%,
+  30% {
+    background-color: var(--sn-change-new-flash);
+  }
+}
+
+@keyframes sn-change-changed-flash {
+  0%,
+  30% {
+    background-color: var(--sn-change-changed-flash);
+  }
+}
+
+.sn-node--change-flash.sn-node--change-new {
+  animation: sn-change-new-flash 1.5s ease-out;
+}
+
+.sn-node--change-flash.sn-node--change-changed {
+  animation: sn-change-changed-flash 1.5s ease-out;
+}
+
+/* A row a later read finds fresh again while it flashes starts over: a
+   change of animation name restarts it, the same name again doesn't. The
+   frames are the same as the first animation's. */
+@keyframes sn-change-new-flash-alt {
+  0%,
+  30% {
+    background-color: var(--sn-change-new-flash);
+  }
+}
+
+@keyframes sn-change-changed-flash-alt {
+  0%,
+  30% {
+    background-color: var(--sn-change-changed-flash);
+  }
+}
+
+.sn-node--change-flash-alt.sn-node--change-new {
+  animation-name: sn-change-new-flash-alt;
+}
+
+.sn-node--change-flash-alt.sn-node--change-changed {
+  animation-name: sn-change-changed-flash-alt;
+}
+
+/* A jump landing on a flashing row (Alt+N) shows the landing on top of the
+   change's flash, which runs on under it: taken out of the list and put
+   back, it would start over, then be cut off where its time ends. */
+.sn-node--flash.sn-node--change-flash.sn-node--change-new {
+  animation:
+    sn-change-new-flash 1.5s ease-out,
+    sn-node-flash 700ms ease-out;
+}
+
+.sn-node--flash.sn-node--change-flash.sn-node--change-changed {
+  animation:
+    sn-change-changed-flash 1.5s ease-out,
+    sn-node-flash 700ms ease-out;
+}
+
+.sn-node--flash.sn-node--change-flash-alt.sn-node--change-new {
+  animation-name: sn-change-new-flash-alt, sn-node-flash;
+}
+
+.sn-node--flash.sn-node--change-flash-alt.sn-node--change-changed {
+  animation-name: sn-change-changed-flash-alt, sn-node-flash;
+}
+
+/* What changed on a changed row: its name, value or role underlined, its
+   badges outlined. */
+.sn-change-part:not(.sn-state-badge):not(.sn-level-badge) {
+  text-decoration: underline 2px var(--sn-diff-changed-edge);
+  text-underline-offset: 2px;
+}
+
+.sn-state-badge.sn-change-part,
+.sn-level-badge.sn-change-part {
+  outline: 1px solid var(--sn-diff-changed-edge);
+  outline-offset: 0;
+}
+
+@keyframes sn-change-part-flash {
+  0%,
+  30% {
+    background-color: var(--sn-change-changed-flash);
+  }
+}
+
+.sn-node--change-flash .sn-change-part {
+  animation: sn-change-part-flash 1.5s ease-out;
+}
+
+@keyframes sn-change-part-flash-alt {
+  0%,
+  30% {
+    background-color: var(--sn-change-changed-flash);
+  }
+}
+
+.sn-node--change-flash-alt .sn-change-part {
+  animation-name: sn-change-part-flash-alt;
+}
+
+/* The tags: "new", "changed", and what a row stands in for ("2 new
+   inside"). As the state badges are, so a row stays 24px. */
+.sn-change-tag {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  margin-left: 4px;
+  padding: 0 4px;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 14px;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.sn-change-tag--new {
+  background: var(--sn-diff-added-bg);
+  border-color: var(--sn-diff-added-edge);
+  color: var(--sn-diff-added-text);
+}
+
+.sn-change-tag--changed {
+  background: var(--sn-diff-changed-bg);
+  border-color: var(--sn-diff-changed-edge);
+  color: var(--sn-diff-changed-text);
+}
+
+.sn-change-tag--inside {
+  border-color: var(--sn-diff-changed-edge);
+  border-style: dashed;
+  color: var(--sn-diff-changed-text);
+}
+
+.sn-change-tag--flash {
+  animation: sn-change-part-flash 1.5s ease-out;
+}
+
+/* Reduced motion: no fade. The flash shows as a plain tint for as long as
+   it lasts, and the edge and tags stay. */
+@media (prefers-reduced-motion: reduce) {
+  .sn-node--change-flash.sn-node--change-new,
+  .sn-node--change-flash.sn-node--change-changed,
+  .sn-node--flash.sn-node--change-flash.sn-node--change-new,
+  .sn-node--flash.sn-node--change-flash.sn-node--change-changed,
+  .sn-node--change-flash .sn-change-part,
+  .sn-change-tag--flash {
+    animation: none;
+  }
+
+  .sn-node--change-flash.sn-node--change-new {
+    background-color: var(--sn-change-new-flash);
+  }
+
+  .sn-node--change-flash.sn-node--change-changed,
+  .sn-node--change-flash .sn-change-part,
+  .sn-change-tag--flash {
+    background-color: var(--sn-change-changed-flash);
+  }
+}
+
+/* Forced colours drop backgrounds and box-shadows: the edge becomes a
+   border, as the shared panel's diff rows do, and the tags keep theirs. */
+@media (forced-colors: active) {
+  .sn-node--change-new,
+  .sn-node--change-changed {
+    border-left: 3px solid CanvasText;
+  }
+
+  .sn-change-tag {
+    border-color: CanvasText;
+  }
+
+  .sn-state-badge.sn-change-part,
+  .sn-level-badge.sn-change-part {
+    outline-color: CanvasText;
+  }
+
+  .sn-change-part:not(.sn-state-badge):not(.sn-level-badge) {
+    text-decoration-color: CanvasText;
+  }
+}
+
+/* ---- The changes bar, under the tree ---- */
+.sn-changes-bar {
+  flex-shrink: 0;
+  padding: 2px 8px 2px 12px;
+  background: var(--sn-bg-toolbar);
+  border-top: 1px solid var(--sn-border);
+  font-size: 11px;
+}
+
+.sn-changes-line {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.sn-changes-summary {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--sn-text);
+}
+
+.sn-changes-line .sn-toolbar-btn {
+  flex: none;
+  padding: 1px 6px;
+}
+
+/* The removed rows' list sits in the bar: no second rule above it. */
+.sn-changes-bar .sn-removed {
+  border-top: none;
+  padding: 0 0 2px;
+}

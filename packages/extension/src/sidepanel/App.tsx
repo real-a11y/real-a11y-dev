@@ -49,7 +49,6 @@ import {
 import { NATIVE_NOTICE_SEEN_KEY } from "../native/setting.js";
 import {
   isFieldStateSuccess,
-  isPanelWindow,
   isSuccessResponse,
   isTrustedSender,
   isUnreachablePageResponse,
@@ -58,6 +57,7 @@ import {
 import type { ContentToPanel, PanelToContent, TreeRequest } from "../types.js";
 
 import { describeAction, describeSelection } from "./action-feedback.js";
+import { takesActiveTab, type ActiveTabTold } from "./active-tab.js";
 import { asDom } from "./dom-rows.js";
 import {
   buildExportMarkdown,
@@ -97,23 +97,9 @@ import type { NativeView } from "./NativeTabView.js";
 import { NativeTreeView, type NativeReveal } from "./NativeTreeView.js";
 import { describeNode } from "./scope.js";
 import { KEYS } from "./SendKeyBar.js";
+import { readRun, useNativeChanges } from "./use-native-changes.js";
 import { useStoredFlag } from "./use-stored-flag.js";
 import { useNativeOverlay } from "./useNativeOverlay.js";
-
-/** What the panel keeps of an ACTIVE_TAB_CHANGED. */
-type ActiveTabTold = { tabId: number; windowId: number; focus?: boolean };
-
-/**
- * Whether a panel in window `myWindowId` takes an ACTIVE_TAB_CHANGED: one for
- * its own window (`isPanelWindow`), unless the worker told it the window's
- * tab because the user moved to the window, and what they moved to is this
- * panel. Then they came for what it shows (a popup, say), not the page.
- */
-function takesActiveTab(m: ActiveTabTold, myWindowId: number | null): boolean {
-  return (
-    isPanelWindow(m.windowId, myWindowId) && !(m.focus && document.hasFocus())
-  );
-}
 
 /** How many settle windows (~5s) `whenNativeIdle` waits for a native read or
  *  action in flight: a sent key's re-read, or an option picked while one ran.
@@ -235,6 +221,8 @@ export function App() {
   // the callback doesn't change identity on every tree read.
   const nativeNodesRef = useRef(nativeNodes);
   nativeNodesRef.current = nativeNodes;
+  // What each read found new, changed or removed, which the tree marks.
+  const nativeChanges = useNativeChanges(nativeNodes);
   // Focus sync for the native tree: the read the tree on screen came from,
   // when that read numbered the page, and its rows by frame and number. The
   // content scripts' focus reports name rows by those numbers
@@ -1382,6 +1370,9 @@ export function App() {
       const token = nativeOpToken.current;
       const a = autoRefresh.current;
       a.lastReadStartedAt = Date.now();
+      // Which reads its changes are marked with (`use-native-changes.ts`),
+      // as things stand when it starts.
+      const run = readRun(auto, followsAction, a);
       // Whatever changed before now, this read sees.
       a.firstUnreadChangeAt = Infinity;
       a.follow = followReadStarted(a.follow);
@@ -1441,6 +1432,7 @@ export function App() {
           return false;
         }
         const read = new Map((r.nodes ?? []).map((n) => [n.id, n]));
+        nativeChanges.noteRead(tabId, r, read, run);
         setNativeNodes(read);
         // Ahead of the render, for a caller that looks at what it just read.
         nativeNodesRef.current = read;
@@ -2801,6 +2793,7 @@ export function App() {
         }}
         view={view}
         onViewChange={setView}
+        changes={nativeChanges}
       />
 
       {/* Live region announcements, mounted before the first one arrives —

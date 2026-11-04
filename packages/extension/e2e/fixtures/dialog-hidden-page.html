@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Dialog (page hidden) — Radix-style fixture</title>
+  </head>
+  <body>
+    <!--
+      The shape Radix UI's Dialog (and so shadcn/ui's) puts on the page,
+      reconstructed: the dialog is portalled to the end of <body> as a
+      `role="dialog"` with no `aria-modal`, and `hideOthers` sets
+      `aria-hidden="true"` on every other child of <body> but a live region,
+      which it leaves alone. Chrome's tree then holds the live region and the
+      dialog only, and the dialog carries no `modal` state: what a
+      `showModal()` dialog (dialog-modal.html) does for the page, done by
+      hand.
+    -->
+    <div id="app">
+      <h1>Profile</h1>
+      <button
+        id="open"
+        aria-haspopup="dialog"
+        aria-expanded="false"
+        aria-controls="profile-dialog"
+      >
+        Edit profile
+      </button>
+      <p id="name">Pedro Duarte</p>
+    </div>
+    <div id="announcer" aria-live="polite"></div>
+
+    <script>
+      var trigger = document.getElementById("open");
+      var app = document.getElementById("app");
+
+      function close(saved) {
+        document.querySelector("[data-radix-portal]").remove();
+        app.removeAttribute("aria-hidden");
+        trigger.setAttribute("aria-expanded", "false");
+        if (saved) document.getElementById("name").textContent = saved;
+        trigger.focus();
+      }
+
+      trigger.addEventListener("click", function () {
+        var portal = document.createElement("div");
+        portal.setAttribute("data-radix-portal", "");
+        portal.innerHTML =
+          '<div role="dialog" id="profile-dialog" aria-labelledby="dialog-title" tabindex="-1" data-state="open">' +
+          '<h2 id="dialog-title">Edit profile</h2>' +
+          '<label for="name-input">Name</label>' +
+          '<input id="name-input" type="text" value="Pedro Duarte" />' +
+          '<button id="save">Save changes</button>' +
+          "</div>";
+        document.body.append(portal);
+        app.setAttribute("aria-hidden", "true");
+        trigger.setAttribute("aria-expanded", "true");
+        document.getElementById("save").addEventListener("click", function () {
+          close(document.getElementById("name-input").value + " (saved)");
+        });
+        document.getElementById("name-input").focus();
+      });
+    </script>
+  </body>
+</html>

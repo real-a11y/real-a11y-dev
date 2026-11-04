@@ -1,0 +1,311 @@
+/**
+ * Which two trees a read of Chrome's tree compares, for the changes the
+ * tree marks (`tree-changes.ts`), kept for `App.tsx`.
+ *
+ * A read compares the tree it brings with the tree before its run of
+ * reads. A read the user causes starts a run (Refresh, or an action or a key
+ * sent through the tree), and so does an automatic one. A read that follows
+ * up what the user did (`follow-window.ts`) joins the run of the follow
+ * window it is in, so what a click's first read found stays marked when a
+ * later read finds the rest of it: a menu's button that went `expanded`, then
+ * the items the page fetched for it. Only within one document: the same id
+ * names the same element in no other.
+ *
+ * A modal dialog takes the rest of the page out of Chrome's tree while it is
+ * open, as it does for a screen reader: a native `<dialog>` opened with
+ * `showModal()`, or one whose page a library hides with `aria-hidden` or
+ * `inert` (Radix, and so shadcn/ui). That isn't the page removing anything.
+ * So a read that brings a dialog while at least half the tree it is compared
+ * with leaves marks what is new and nothing removed, and keeps that tree; the
+ * read the dialog is gone from compares with it, so what shows is what the
+ * dialog changed on the page. A dialog opened over another keeps the outer
+ * one's tree the same way, so closing it compares with the outer dialog.
+ * Whether Chrome marks a dialog `modal` doesn't decide it: a library's
+ * modal isn't marked, and an `aria-modal` dialog that leaves the page in the
+ * tree, or a modal inside a frame, is.
+ */
+
+import { useCallback, useRef, useState } from "preact/hooks";
+
+import type { NativeNode } from "../native/native-actions.js";
+import {
+  diffNativeTrees,
+  isEmptyNativeChanges,
+  type NativeTreeChanges,
+} from "../native/native-tree-diff.js";
+
+import type { FollowWindow } from "./follow-window.js";
+import type { NativeChangeMarks } from "./tree-changes.js";
+
+/** The run of reads a read is in, and whether what it finds is said. */
+export interface ReadRun {
+  /**
+   * The run, named by when it began: when the read the user caused that
+   * began it started, where the follow window that read opens starts too
+   * (`followAfterRead`), or when a follow window a click opened starts.
+   * Null for an automatic read, a run of its own.
+   */
+  follows: number | null;
+  announce: boolean;
+}
+
+/** What `readRun` needs of auto-refresh's state as a read starts. */
+export interface ReadStart {
+  lastReadStartedAt: number;
+  follow: FollowWindow;
+}
+
+/** The run of a read, from auto-refresh's state as it starts. */
+export function readRun(
+  auto: boolean,
+  followsAction: boolean,
+  start: ReadStart,
+): ReadRun {
+  if (!auto) return { follows: start.lastReadStartedAt, announce: true };
+  return followsAction
+    ? { follows: start.follow.from, announce: true }
+    : { follows: null, announce: false };
+}
+
+/** A tree and the root it is drawn from. A document's reads don't always
+ *  share a root: Chromium's own is dropped, so a page with one landmark is
+ *  rooted at it, one with more at the synthetic `ax-root`, and an open modal
+ *  dialog leaves only itself (`rootIdOf`). */
+export interface Tree {
+  nodes: Map<string, NativeNode>;
+  rootId: string;
+}
+
+/** A read: its tree, and the tab and document it is of. */
+export interface ReadTree extends Tree {
+  tabId: number;
+  documentId: string | undefined;
+  /** Another document took the one it began on's place as it was read
+   *  (`read-document.ts`): its rows are of neither. */
+  documentChanged?: boolean;
+}
+
+/** What the next read is compared with. */
+export interface ChangeBase {
+  /** The read on screen: its tab, document, root, and run. */
+  tabId: number;
+  documentId: string | undefined;
+  rootId: string;
+  follows: number | null;
+  /** The tree before the run's first read. */
+  runBefore: Tree;
+  /** The dialogs that took the rest of the tree out of Chrome's, outermost
+   *  first, each with the tree from before it came. */
+  dialogs: readonly OpenDialog[];
+}
+
+/** A dialog in front of the rest of the tree, and the tree from before it. */
+export interface OpenDialog {
+  dialogId: string;
+  before: Tree;
+}
+
+/** The dialogs a tree shows. */
+function dialogsIn(tree: Tree): string[] {
+  const ids: string[] = [];
+  for (const node of tree.nodes.values()) {
+    if (node.role === "dialog" || node.role === "alertdialog")
+      ids.push(node.id);
+  }
+  return ids;
+}
+
+/** `changes` without the rows that went: what a dialog in front of the
+ *  page took out of the tree, while the page still holds them. A stop that was
+ *  a stop for more than that (the dialog itself, new, which the rows that
+ *  went are charged to as the tree's new root) stays one. */
+function withoutRemovals(changes: NativeTreeChanges): NativeTreeChanges {
+  return {
+    ...changes,
+    removed: [],
+    removedUnder: new Map(),
+    stops: changes.stops.filter(
+      (id) =>
+        !changes.removedUnder.has(id) ||
+        changes.changed.has(id) ||
+        changes.added.has(id),
+    ),
+  };
+}
+
+/** Whether `read` is of the document the tree on screen is of, as surely
+ *  as can be told: with no tree on screen, no document id, or one that
+ *  changed as the read was taken, it can't be. */
+function sameDocument(
+  base: ChangeBase | null,
+  shown: Map<string, NativeNode>,
+  read: ReadTree,
+): base is ChangeBase {
+  return (
+    base !== null &&
+    shown.size > 0 &&
+    read.documentId !== undefined &&
+    !read.documentChanged &&
+    base.tabId === read.tabId &&
+    base.documentId === read.documentId
+  );
+}
+
+/**
+ * The tree `read` is compared with, given `against` (the tree before its run)
+ * and the dialogs open in front of the page: `against`, unless a dialog the
+ * read doesn't show any more closed, then the tree from before the first
+ * such dialog came, the dialogs still open with it. A dialog missing from a
+ * read that brings a new one went behind it rather than away: Chromium
+ * keeps only the dialog in front.
+ */
+function closingDialogs(
+  against: Tree,
+  dialogs: readonly OpenDialog[],
+  read: Tree,
+): { baseline: Tree; dialogs: readonly OpenDialog[] } {
+  let shown = dialogs.length - 1;
+  while (shown >= 0 && !read.nodes.has(dialogs[shown]!.dialogId)) shown--;
+  if (shown === dialogs.length - 1) return { baseline: against, dialogs };
+  const known = (id: string) => dialogs.some((d) => d.dialogId === id);
+  const opened = dialogsIn(read).some(
+    (id) => !against.nodes.has(id) && !known(id),
+  );
+  if (opened) return { baseline: against, dialogs };
+  return {
+    baseline: dialogs[shown + 1]!.before,
+    dialogs: dialogs.slice(0, shown + 1),
+  };
+}
+
+/** The dialog `read` brought in front of `baseline`, if it took at least
+ *  half of it out of the tree with it, as a modal's does. */
+function dialogInFront(
+  baseline: Tree,
+  read: Tree,
+  found: NativeTreeChanges,
+): string | undefined {
+  if (found.removed.length * 2 < baseline.nodes.size) return undefined;
+  return dialogsIn(read).find((id) => !baseline.nodes.has(id));
+}
+
+/** Whether `read` is the page back from behind a dialog this panel never
+ *  saw come: the dialog gone, and most of the read new. */
+function backFromUnseenDialog(
+  baseline: Tree,
+  read: Tree,
+  found: NativeTreeChanges,
+  dialogs: readonly OpenDialog[],
+): boolean {
+  if (found.added.size * 2 < read.nodes.size) return false;
+  return dialogsIn(baseline).some(
+    (id) => !read.nodes.has(id) && !dialogs.some((d) => d.dialogId === id),
+  );
+}
+
+/**
+ * What `read` found changed, in `run`, and the base the next read compares
+ * with. `shown` is the tree on screen, which `read` replaces: what a read
+ * that starts a run compares with. Nothing is found when there is no tree on
+ * screen, it is of another document, or which document the read is of is in
+ * doubt.
+ */
+export function compareRead(
+  base: ChangeBase | null,
+  shown: Map<string, NativeNode>,
+  read: ReadTree,
+  run: ReadRun,
+): { base: ChangeBase; changes: NativeTreeChanges | null } {
+  const next: ChangeBase = {
+    tabId: read.tabId,
+    documentId: read.documentId,
+    rootId: read.rootId,
+    follows: run.follows,
+    runBefore: read,
+    dialogs: [],
+  };
+  if (!sameDocument(base, shown, read)) return { base: next, changes: null };
+  const continues = run.follows !== null && run.follows === base.follows;
+  const against = continues
+    ? base.runBefore
+    : { nodes: shown, rootId: base.rootId };
+  const { baseline, dialogs } = closingDialogs(against, base.dialogs, read);
+  const found = diffNativeTrees(
+    baseline.nodes,
+    read.nodes,
+    read.rootId,
+    baseline.rootId,
+  );
+  const inFront = dialogInFront(baseline, read, found);
+  if (!inFront && backFromUnseenDialog(baseline, read, found, dialogs)) {
+    return { base: next, changes: null };
+  }
+  const changes = inFront ? withoutRemovals(found) : found;
+  const open =
+    !inFront || dialogs.some((d) => d.dialogId === inFront)
+      ? dialogs
+      : [...dialogs, { dialogId: inFront, before: baseline }];
+  return {
+    base: { ...next, runBefore: baseline, dialogs: open },
+    changes: isEmptyNativeChanges(changes) ? null : changes,
+  };
+}
+
+/** The marks for the tree on screen, `nodes`, and what changes them. */
+export function useNativeChanges(nodes: Map<string, NativeNode>) {
+  const [changes, setChanges] = useState<NativeChangeMarks | null>(null);
+  const seq = useRef(0);
+  const base = useRef<ChangeBase | null>(null);
+  // The tree on screen, as of the last render: a read replaces it after it
+  // is compared. While there is none (after a navigation, a tab switch or a
+  // failed read), nothing is marked, and the run's tree is forgotten, so no
+  // read compares with it. In the render, not an effect, which a read
+  // landing first could race.
+  const shown = useRef(nodes);
+  shown.current = nodes;
+  if (nodes.size === 0) base.current = null;
+
+  /** A read of `tabId` came back with `r`, its tree `read`, in `run`.
+   *  Called before the tree on screen is replaced. Its identity never
+   *  changes, so a callback that holds it needn't list it. */
+  const noteRead = useCallback(
+    (
+      tabId: number,
+      r: { rootId?: string; documentId?: string; documentChanged?: boolean },
+      read: Map<string, NativeNode>,
+      run: ReadRun,
+    ) => {
+      const next = compareRead(
+        base.current,
+        shown.current,
+        {
+          tabId,
+          documentId: r.documentId,
+          documentChanged: r.documentChanged,
+          rootId: r.rootId ?? "",
+          nodes: read,
+        },
+        run,
+      );
+      base.current = next.base;
+      setChanges(
+        next.changes && {
+          changes: next.changes,
+          seq: ++seq.current,
+          announce: run.announce,
+        },
+      );
+    },
+    [],
+  );
+
+  /** The changes bar's ✕: the marks go, and a read that follows up the same
+   *  run compares with the tree as it is now, so they don't come back. */
+  const clear = useCallback(() => {
+    setChanges(null);
+    const b = base.current;
+    if (b) b.runBefore = { nodes: shown.current, rootId: b.rootId };
+  }, []);
+
+  return { marks: nodes.size > 0 ? changes : null, noteRead, clear };
+}
