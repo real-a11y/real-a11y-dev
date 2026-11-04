@@ -403,12 +403,30 @@ describe("rowsToOpen", () => {
     ]);
   });
 
-  it("past the limit, leaves closed a fresh row inside a subtree an earlier read found new", () => {
+  it("past the limit, opens the subtree an earlier read found new that holds the fresh rows, and leaves them closed", () => {
     const { nodes, parentOf, changes } = addition(AUTO_EXPAND_MAX_ROWS);
     // The section came with the read before; this read filled its list.
     const fresh = new Set([...changes.added].filter((id) => id !== "section"));
     expect(fresh.size).toBeGreaterThan(AUTO_EXPAND_MAX_ROWS);
-    expect(rowsToOpen(changes, fresh, nodes, parentOf)).toEqual(["dialog"]);
+    expect(rowsToOpen(changes, fresh, nodes, parentOf).sort()).toEqual([
+      "dialog",
+      "section",
+    ]);
+  });
+
+  it("past the limit, opens a list an earlier read found new and empty once a later read fills it", () => {
+    const ids = Array.from(
+      { length: AUTO_EXPAND_MAX_ROWS + 1 },
+      (_, i) => `result${i}`,
+    );
+    const nodes = outline({ root: ["main"], main: ["results"], results: ids });
+    const changes = changesOf({ added: ["results", ...ids] });
+    // The list came empty with the action's re-read, so nothing opened it;
+    // its results all came with this one.
+    const fresh = new Set(ids);
+    expect(rowsToOpen(changes, fresh, nodes, nativeParentIndex(nodes))).toEqual(
+      ["results"],
+    );
   });
 });
 

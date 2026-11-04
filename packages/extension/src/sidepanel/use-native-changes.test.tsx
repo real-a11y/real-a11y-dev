@@ -29,11 +29,12 @@ import {
  * starts a run and compares with the tree on screen; the reads that follow
  * it up in its follow window join its run and compare with the tree from
  * before it, so what a click did stays marked while the page finishes doing
- * it; an automatic read compares with the tree on screen and says nothing.
- * Nothing is compared across tabs or documents, with a document it has no id
- * for, or while a navigation is pending; reads of one document whose roots
- * differ are. The page behind a modal dialog isn't removed, and closing the
- * dialog compares with the page from before it opened.
+ * it; an automatic read compares with the tree on screen and says nothing,
+ * and leaves the marks when it finds nothing. Nothing is compared across
+ * tabs or documents, with a document it has no id for, or in a read another
+ * document took the place of as it was taken; reads of one document whose
+ * roots differ are. The page behind a modal dialog isn't removed, and
+ * closing the dialog compares with the page from before it opened.
  */
 
 const ROOT = "ax-dom-1";
@@ -180,6 +181,25 @@ describe("readRun", () => {
     expect(readRun(true, true, startOf(70_300, later)).follows).not.toBe(
       first.follows,
     );
+  });
+
+  it("keeps a change made in the window before, and heard of after a click opened another, in that window's run", () => {
+    const first = readRun(true, true, startOf(50_400, CLICKED));
+    // The first window closed at 55s; a click at 70s, after a change heard
+    // of at 56s, opened another; then a busy frame reported a change it made
+    // at 54s.
+    const later = {
+      ...followPageInput(CLICKED, 70_000, 56_000, 70_000),
+      firstChangeAt: 54_000,
+    };
+    expect(readRun(true, true, startOf(70_300, later)).follows).toBe(
+      first.follows,
+    );
+    // A change made since the click is the new window's.
+    expect(
+      readRun(true, true, startOf(70_300, { ...later, firstChangeAt: 70_100 }))
+        .follows,
+    ).toBe(later.from);
   });
 });
 
@@ -572,6 +592,80 @@ describe("compareRead", () => {
       expect(result.base.dialogs.map((d) => d.dialogId)).toEqual(["ax-dom-40"]);
     });
 
+    it("doesn't take a dialog that comes with content the page swapped in for one in front of it", () => {
+      // A loading page, then the page it loaded, with a cookie banner that
+      // is a dialog among the rest.
+      const LOADING = tree(
+        n("ax-root", "document", "", ["ax-dom-70", "ax-dom-71"]),
+        n("ax-dom-70", "status", "Loading"),
+        n("ax-dom-71", "generic", ""),
+      );
+      const COOKIES = n("ax-dom-80", "dialog", "Cookies", ["ax-dom-81"]);
+      const ACCEPT = n("ax-dom-81", "button", "Accept");
+      const LOADED = tree(
+        n("ax-root", "document", "", ["ax-dom-30", "ax-dom-31", "ax-dom-80"]),
+        n("ax-dom-30", "button", "Add address"),
+        n("ax-dom-31", "main", "", ["ax-dom-32"]),
+        n("ax-dom-32", "status", "No address"),
+        COOKIES,
+        ACCEPT,
+      );
+      const loaded = compareRead(
+        baseOf(LOADING, null, "ax-root"),
+        LOADING,
+        readOf(LOADED, onPage),
+        runOf(100),
+      );
+      expect(found(loaded.changes)).toEqual({
+        added: [
+          "ax-dom-30",
+          "ax-dom-31",
+          "ax-dom-32",
+          "ax-dom-80",
+          "ax-dom-81",
+        ],
+        changed: [],
+        removed: ["ax-dom-70", "ax-dom-71"],
+      });
+      expect(loaded.base.dialogs).toEqual([]);
+      // Accepting the cookies takes the banner away, and nothing else.
+      const accepted = compareRead(
+        loaded.base,
+        LOADED,
+        readOf(new Map([...LOADED].slice(0, 4)), onPage),
+        runOf(200),
+      );
+      expect(found(accepted.changes)).toEqual({
+        added: [],
+        changed: [],
+        removed: ["ax-dom-80", "ax-dom-81"],
+      });
+    });
+
+    it("takes a dialog that comes, with the page back around it, as one closes for one that came as it closed", () => {
+      // Saving closed the dialog, and the page says so in an alertdialog.
+      const SAVED_WITH_UNDO = tree(
+        n("ax-root", "document", "", ["ax-dom-30", "ax-dom-31", "ax-dom-90"]),
+        n("ax-dom-30", "button", "Add address"),
+        n("ax-dom-31", "main", "", ["ax-dom-32"]),
+        n("ax-dom-32", "status", "12 Mill Lane"),
+        n("ax-dom-90", "alertdialog", "Saved", ["ax-dom-91"]),
+        n("ax-dom-91", "button", "Undo"),
+      );
+      const result = compareRead(
+        opening().base,
+        dialog(),
+        readOf(SAVED_WITH_UNDO, onPage),
+        runOf(300),
+      );
+      expect(found(result.changes)).toEqual({
+        added: ["ax-dom-90", "ax-dom-91"],
+        changed: ["ax-dom-32"],
+        removed: [],
+      });
+      expect(result.base.dialogs).toEqual([]);
+    });
+
     it("counts what went for a dialog that leaves the page in the tree, as an aria-modal one can", () => {
       // The page's Actions menu closed as the dialog opened beside it.
       const WITH_MENU = tree(
@@ -898,10 +992,33 @@ describe("useNativeChanges", () => {
     });
   });
 
-  it("drops the marks when a read finds nothing changed", () => {
+  it("drops the marks when a read the user caused finds nothing changed", () => {
     mount();
     land(OPENED, inRun(100));
+    land(new Map(OPENED), inRun(200));
+    expect(hook.marks).toBeNull();
+  });
+
+  it("keeps the marks through an automatic read that finds nothing changed, and compares the next read with that one", () => {
+    mount();
+    land(OPENED, inRun(100));
+    const marks = hook.marks;
+    expect(marks).not.toBeNull();
+    // The page changed where the tree doesn't show it.
     land(new Map(OPENED), AUTO);
+    expect(hook.marks).toBe(marks);
+    land(FILLED, AUTO);
+    expect(found(hook.marks?.changes)).toEqual({
+      added: ["ax-dom-5", "ax-dom-6"],
+      changed: [],
+      removed: [],
+    });
+  });
+
+  it("still drops the marks for an automatic read of another document", () => {
+    mount();
+    land(OPENED, inRun(100));
+    land(CHECKOUT_LOADING, AUTO, CHECKOUT);
     expect(hook.marks).toBeNull();
   });
 

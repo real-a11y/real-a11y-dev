@@ -16,7 +16,8 @@
  * `showModal()`, or one whose page a library hides with `aria-hidden` or
  * `inert` (Radix, and so shadcn/ui). That isn't the page removing anything.
  * So a read that brings a dialog while at least half the tree it is compared
- * with leaves marks what is new and nothing removed, and keeps that tree; the
+ * with leaves, the dialog all but alone in it (`standsInFront`), marks what
+ * is new and nothing removed, and keeps that tree; the
  * read the dialog is gone from compares with it, so what shows is what the
  * dialog changed on the page. A dialog opened over another keeps the outer
  * one's tree the same way, so closing it compares with the outer dialog.
@@ -31,6 +32,7 @@ import type { NativeNode } from "../native/native-actions.js";
 import {
   diffNativeTrees,
   isEmptyNativeChanges,
+  isLastingNativeId,
   type NativeTreeChanges,
 } from "../native/native-tree-diff.js";
 
@@ -63,8 +65,20 @@ export function readRun(
 ): ReadRun {
   if (!auto) return { follows: start.lastReadStartedAt, announce: true };
   return followsAction
-    ? { follows: start.follow.from, announce: true }
+    ? { follows: followedFrom(start.follow), announce: true }
     : { follows: null, announce: false };
+}
+
+/** The follow window the change a read follows up was made in: the open
+ *  one, or the one before it, for a change made there and reported after
+ *  a click on the page opened another (`followPageInput`). */
+function followedFrom(w: FollowWindow): number {
+  const at = w.firstChangeAt;
+  const inPrevious =
+    !(at > w.from && at < w.until) &&
+    at > w.previousFrom &&
+    at < w.previousUntil;
+  return inPrevious ? w.previousFrom : w.from;
 }
 
 /** A tree and the root it is drawn from. A document's reads don't always
@@ -115,6 +129,33 @@ function dialogsIn(tree: Tree): string[] {
   return ids;
 }
 
+/** How many rows `tree` shows beside dialog `dialogId`, outside its
+ *  subtree: none for a `showModal()` dialog, a live region or two for one
+ *  a library left the page's rest hidden beside. The synthetic root, and
+ *  any other row that doesn't last, is no row of the page's. */
+function rowsBeside(tree: Tree, dialogId: string): number {
+  const inside = new Set<string>();
+  const stack = [dialogId];
+  while (stack.length > 0) {
+    const id = stack.pop()!;
+    if (inside.has(id)) continue;
+    inside.add(id);
+    stack.push(...(tree.nodes.get(id)?.childIds ?? []));
+  }
+  let beside = 0;
+  for (const id of tree.nodes.keys()) {
+    if (!inside.has(id) && isLastingNativeId(id)) beside++;
+  }
+  return beside;
+}
+
+/** Whether dialog `dialogId` stands all but alone in `read`, in front of
+ *  `rows` rows of the page: what shows beside it is at most half that. A
+ *  dialog in content the page swapped in, a cookie banner, say, doesn't. */
+function standsInFront(read: Tree, dialogId: string, rows: number): boolean {
+  return rowsBeside(read, dialogId) * 2 <= rows;
+}
+
 /** `changes` without the rows that went: what a dialog in front of the
  *  page took out of the tree, while the page still holds them. A stop that was
  *  a stop for more than that (the dialog itself, new, which the rows that
@@ -156,8 +197,10 @@ function sameDocument(
  * and the dialogs open in front of the page: `against`, unless a dialog the
  * read doesn't show any more closed, then the tree from before the first
  * such dialog came, the dialogs still open with it. A dialog missing from a
- * read that brings a new one went behind it rather than away: Chromium
- * keeps only the dialog in front.
+ * read that brings a new one standing in front of the page went behind it
+ * rather than away: Chromium keeps only the dialog in front. One that comes
+ * with the page back around it, a confirmation that the dialog was saved,
+ * say, came as it closed.
  */
 function closingDialogs(
   against: Tree,
@@ -167,26 +210,31 @@ function closingDialogs(
   let shown = dialogs.length - 1;
   while (shown >= 0 && !read.nodes.has(dialogs[shown]!.dialogId)) shown--;
   if (shown === dialogs.length - 1) return { baseline: against, dialogs };
+  const behind = dialogs[shown + 1]!.before;
   const known = (id: string) => dialogs.some((d) => d.dialogId === id);
   const opened = dialogsIn(read).some(
-    (id) => !against.nodes.has(id) && !known(id),
+    (id) =>
+      !against.nodes.has(id) &&
+      !known(id) &&
+      standsInFront(read, id, behind.nodes.size),
   );
   if (opened) return { baseline: against, dialogs };
-  return {
-    baseline: dialogs[shown + 1]!.before,
-    dialogs: dialogs.slice(0, shown + 1),
-  };
+  return { baseline: behind, dialogs: dialogs.slice(0, shown + 1) };
 }
 
 /** The dialog `read` brought in front of `baseline`, if it took at least
- *  half of it out of the tree with it, as a modal's does. */
+ *  half of it out of the tree with it, as a modal's does, and stands all
+ *  but alone in front of what went. */
 function dialogInFront(
   baseline: Tree,
   read: Tree,
   found: NativeTreeChanges,
 ): string | undefined {
-  if (found.removed.length * 2 < baseline.nodes.size) return undefined;
-  return dialogsIn(read).find((id) => !baseline.nodes.has(id));
+  const went = found.removed.length;
+  if (went * 2 < baseline.nodes.size) return undefined;
+  return dialogsIn(read).find(
+    (id) => !baseline.nodes.has(id) && standsInFront(read, id, went),
+  );
 }
 
 /** Whether `read` is the page back from behind a dialog this panel never
@@ -208,14 +256,18 @@ function backFromUnseenDialog(
  * with. `shown` is the tree on screen, which `read` replaces: what a read
  * that starts a run compares with. Nothing is found when there is no tree on
  * screen, it is of another document, or which document the read is of is in
- * doubt.
+ * doubt; `compared` tells that from a read compared that found nothing.
  */
 export function compareRead(
   base: ChangeBase | null,
   shown: Map<string, NativeNode>,
   read: ReadTree,
   run: ReadRun,
-): { base: ChangeBase; changes: NativeTreeChanges | null } {
+): {
+  base: ChangeBase;
+  changes: NativeTreeChanges | null;
+  compared: boolean;
+} {
   const next: ChangeBase = {
     tabId: read.tabId,
     documentId: read.documentId,
@@ -224,7 +276,9 @@ export function compareRead(
     runBefore: read,
     dialogs: [],
   };
-  if (!sameDocument(base, shown, read)) return { base: next, changes: null };
+  if (!sameDocument(base, shown, read)) {
+    return { base: next, changes: null, compared: false };
+  }
   const continues = run.follows !== null && run.follows === base.follows;
   const against = continues
     ? base.runBefore
@@ -238,7 +292,7 @@ export function compareRead(
   );
   const inFront = dialogInFront(baseline, read, found);
   if (!inFront && backFromUnseenDialog(baseline, read, found, dialogs)) {
-    return { base: next, changes: null };
+    return { base: next, changes: null, compared: false };
   }
   const changes = inFront ? withoutRemovals(found) : found;
   const open =
@@ -248,6 +302,7 @@ export function compareRead(
   return {
     base: { ...next, runBefore: baseline, dialogs: open },
     changes: isEmptyNativeChanges(changes) ? null : changes,
+    compared: true,
   };
 }
 
@@ -288,6 +343,11 @@ export function useNativeChanges(nodes: Map<string, NativeNode>) {
         run,
       );
       base.current = next.base;
+      // An automatic read of the page's own changes that finds none in the
+      // tree leaves the marks: on a page that keeps changing where the tree
+      // doesn't show it, they would go moments after the action that made
+      // them. A read the user caused that finds none takes them away.
+      if (next.compared && !next.changes && run.follows === null) return;
       setChanges(
         next.changes && {
           changes: next.changes,

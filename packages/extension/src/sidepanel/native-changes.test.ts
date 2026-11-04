@@ -48,6 +48,9 @@ interface PageRead {
   rootId: string;
   documentId: string;
   nodes: NativeNode[];
+  /** Another document took this one's place as it was read, as the
+   *  service worker finds by asking for the document again after it. */
+  documentChanged?: true;
 }
 
 /** A row of the page, at its top level unless `extra` says otherwise. */
@@ -181,6 +184,7 @@ describe("Chrome's tree: what each read found changed", () => {
           url: PAGE_URL,
           rootId: page.rootId,
           documentId: page.documentId,
+          ...(page.documentChanged ? { documentChanged: true } : {}),
           nodes: structuredClone(page.nodes),
         };
       },
@@ -450,6 +454,20 @@ describe("Chrome's tree: what each read found changed", () => {
       await refresh();
       expect(marked()).toEqual({ new: [], changed: ["ax-dom-2"] });
       expect(summary()).toBe("1 changed");
+    });
+
+    it("marks nothing in a read another document took the place of as it was taken, and compares the read after it with that one", async () => {
+      await showNative();
+      // The rows are the old page's, read as a navigation committed.
+      page = { ...shop([MENU, SAVED_NOTE, MAIN]), documentChanged: true };
+      await refresh();
+      expect(rowOf("ax-dom-8")).not.toBeNull();
+      expect(marked()).toEqual(NOTHING_MARKED);
+      expect(bar()).toBeNull();
+
+      page = shop([MENU_OPEN, SAVED_NOTE, MAIN]);
+      await refresh();
+      expect(marked()).toEqual({ new: [], changed: ["ax-dom-2"] });
     });
 
     it("compares a read of the same document whose root moved", async () => {

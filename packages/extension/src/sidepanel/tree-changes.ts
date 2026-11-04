@@ -108,9 +108,10 @@ export function freshChanges(
  * one collapsed row: every `fresh` new row that has rows under it, and every
  * row new earlier in the run that holds one, as the menu a button opened
  * does once the items the page fetched for it come. Past
- * {@link AUTO_EXPAND_MAX_ROWS}, only the top row of each fresh new subtree.
- * A row the user collapsed after an earlier read found it stays collapsed
- * unless the page adds to it.
+ * {@link AUTO_EXPAND_MAX_ROWS}, only the top row of each new subtree that
+ * holds a fresh row, as one read that found it all would: an empty list
+ * found new, then filled, shows its items, closed. A row the user collapsed
+ * after an earlier read found it stays collapsed unless the page adds to it.
  */
 export function rowsToOpen(
   changes: NativeTreeChanges,
@@ -121,10 +122,19 @@ export function rowsToOpen(
   const opens = (id: string) => (nodes.get(id)?.childIds?.length ?? 0) > 0;
   const freshAdded = [...changes.added].filter((id) => fresh.has(id));
   if (freshAdded.length > AUTO_EXPAND_MAX_ROWS) {
-    return freshAdded.filter((id) => {
-      const parent = parentOf.get(id);
-      return (parent === undefined || !changes.added.has(parent)) && opens(id);
-    });
+    const tops = new Set<string>();
+    for (const id of freshAdded) {
+      let top = id;
+      for (
+        let p = parentOf.get(top);
+        p !== undefined && changes.added.has(p);
+        p = parentOf.get(p)
+      ) {
+        top = p;
+      }
+      if (opens(top)) tops.add(top);
+    }
+    return [...tops];
   }
   const open = new Set(freshAdded.filter(opens));
   for (const id of freshAdded) {

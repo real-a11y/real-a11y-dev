@@ -43,6 +43,9 @@ export interface ChangeNotice {
  *  the wall clock, never steps back. */
 const now = () => performance.now();
 
+/** No row placed: nothing marked to go to. */
+const NO_POSITIONS: ReadonlyMap<string, number> = new Map();
+
 /** The rows flashing, each until its own end, on one timer for the flash
  *  that ends first. `flash` starts the rows a read found fresh; `stop`
  *  ends them all. */
@@ -139,6 +142,13 @@ export function useTreeChanges({
     [shown, visibleIds, parentOf, flashes],
   );
 
+  // Each row's place in the tree, once for the marks rather than at every
+  // press of the keys below.
+  const positions = useMemo(
+    () => (shown ? documentPositions(nodes, rootId) : NO_POSITIONS),
+    [shown, nodes, rootId],
+  );
+
   // Alt+N and Alt+Shift+N, and the changes bar's arrows: the next or
   // previous change, wherever it is — opened up to, as a jump chip's
   // target is. Landing on the row already selected moves nothing a screen
@@ -147,7 +157,7 @@ export function useTreeChanges({
     (back: boolean) => {
       const target = nextChangeStop(
         shown?.stops ?? [],
-        documentPositions(nodes, rootId),
+        positions,
         selectedId,
         back,
       );
@@ -158,7 +168,7 @@ export function useTreeChanges({
       if (target === selectedId) say("This is the only change");
       jumpTo(target);
     },
-    [shown, nodes, rootId, selectedId, jumpTo, say],
+    [shown, positions, selectedId, jumpTo, say],
   );
 
   return { shown, flashes, hidden, notice, goToChange };
