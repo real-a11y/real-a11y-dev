@@ -21,7 +21,8 @@
 
 ### Patch Changes
 
-- **Chrome's tree marks what changed** since the read before. When the
+- **Chrome's tree marks what changed** since the read before
+  ([#580](https://github.com/real-a11y/real-a11y-dev/pull/580)). When the
   tree is read again, after you act through the tree or on the page, or
   press **↻**, the rows it finds new flash green and keep a green edge, and
   the rows that changed flash amber and keep an amber edge, with what
