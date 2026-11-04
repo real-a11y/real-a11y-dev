@@ -267,11 +267,14 @@ async function interactOnPage(
  */
 export async function runInteractStepsOnSession(
   session: BrowserSession,
-  command: string,
-  steps: readonly InteractStep[],
-  positionals: string[],
-  flags: FlagValues,
+  opts: {
+    command: string;
+    steps: readonly InteractStep[];
+    positionals: string[];
+    flags: FlagValues;
+  },
 ): Promise<number> {
+  const { command, steps, positionals, flags } = opts;
   const format = parseFormat(flags.format, ["pretty", "json"] as const);
   const target: Target = singleTarget(positionals, flags, command);
   const output = outputOf(flags);
@@ -342,13 +345,12 @@ export async function runInteractOnSession(
   flags: FlagValues,
 ): Promise<number> {
   const steps = stepsFromFlags(flags);
-  return runInteractStepsOnSession(
-    session,
-    "interact",
+  return runInteractStepsOnSession(session, {
+    command: "interact",
     steps,
     positionals,
     flags,
-  );
+  });
 }
 
 export const interactCommand: CommandFn = async (positionals, flags) => {
@@ -413,13 +415,12 @@ export async function runClickOnSession(
   flags: FlagValues,
 ): Promise<number> {
   const step = sugarStep("click", flags);
-  return runInteractStepsOnSession(
-    session,
-    "click",
-    [step],
+  return runInteractStepsOnSession(session, {
+    command: "click",
+    steps: [step],
     positionals,
     flags,
-  );
+  });
 }
 
 export async function runTypeOnSession(
@@ -428,7 +429,12 @@ export async function runTypeOnSession(
   flags: FlagValues,
 ): Promise<number> {
   const step = sugarStep("type", flags);
-  return runInteractStepsOnSession(session, "type", [step], positionals, flags);
+  return runInteractStepsOnSession(session, {
+    command: "type",
+    steps: [step],
+    positionals,
+    flags,
+  });
 }
 
 export async function runFocusOnSession(
@@ -437,13 +443,12 @@ export async function runFocusOnSession(
   flags: FlagValues,
 ): Promise<number> {
   const step = sugarStep("focus", flags);
-  return runInteractStepsOnSession(
-    session,
-    "focus",
-    [step],
+  return runInteractStepsOnSession(session, {
+    command: "focus",
+    steps: [step],
     positionals,
     flags,
-  );
+  });
 }
 
 function sugar(

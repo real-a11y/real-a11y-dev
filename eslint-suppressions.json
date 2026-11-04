@@ -36,9 +36,6 @@
   "packages/cli/src/commands/interact.ts": {
     "complexity": {
       "count": 1
-    },
-    "max-params": {
-      "count": 1
     }
   },
   "packages/cli/src/commands/snapshot.ts": {
