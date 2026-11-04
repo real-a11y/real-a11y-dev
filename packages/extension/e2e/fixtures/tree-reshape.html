@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Tree reshape — fixture</title>
+  </head>
+  <body>
+    <!--
+      A page whose Chrome tree changes shape without a navigation. A modal
+      dialog opened with `showModal()` takes the rest of the page out of the
+      tree, so the tree's root moves to the dialog and back again
+      (`rootIdOf`). A button that wraps itself in a new group puts its own
+      row under a new row, which starts closed. What the side panel keeps
+      through both is what `panel-ui-native-reshape.test.ts` checks.
+    -->
+    <header>
+      <h1>Shop</h1>
+      <button id="open-dialog">Add delivery address</button>
+    </header>
+    <main>
+      <section aria-label="Basket">
+        <ul aria-label="Items">
+          <li>Shoes</li>
+          <li>Hats</li>
+        </ul>
+      </section>
+      <button id="wrap">Group me</button>
+    </main>
+
+    <dialog id="address-dialog" aria-labelledby="dialog-title">
+      <h2 id="dialog-title">Add delivery address</h2>
+      <button id="dialog-close">Close</button>
+    </dialog>
+
+    <script>
+      var dialog = document.getElementById("address-dialog");
+      document
+        .getElementById("open-dialog")
+        .addEventListener("click", function () {
+          dialog.showModal();
+        });
+      document
+        .getElementById("dialog-close")
+        .addEventListener("click", function () {
+          dialog.close();
+        });
+      // The same element, moved: its row keeps its id in the next read.
+      var wrap = document.getElementById("wrap");
+      wrap.addEventListener("click", function () {
+        var group = document.createElement("div");
+        group.setAttribute("role", "group");
+        group.setAttribute("aria-label", "Grouped");
+        wrap.replaceWith(group);
+        group.append(wrap);
+      });
+    </script>
+  </body>
+</html>

@@ -308,9 +308,23 @@ export function compareRead(
   };
 }
 
-/** The marks for the tree on screen, `nodes`, and what changes them. */
+/** Which document a read is of, as one string: its tab and its document,
+ *  and whether another took that one's place as it was read, which makes
+ *  its rows of neither. Where Chromium names no document, its URL stands
+ *  in, so a navigation still leads to another. */
+export function documentKeyOf(
+  tabId: number,
+  r: { documentId?: string; documentChanged?: boolean; url?: string },
+): string {
+  const which = r.documentId ?? `url ${r.url ?? ""}`;
+  return `${tabId} ${which}${r.documentChanged ? " changed" : ""}`;
+}
+
+/** The marks for the tree on screen, `nodes`, what changes them, and which
+ *  document the tree is of. */
 export function useNativeChanges(nodes: Map<string, NativeNode>) {
   const [changes, setChanges] = useState<NativeChangeMarks | null>(null);
+  const [documentKey, setDocumentKey] = useState<string>();
   const seq = useRef(0);
   const base = useRef<ChangeBase | null>(null);
   // The tree on screen, as of the last render: a read replaces it after it
@@ -328,7 +342,12 @@ export function useNativeChanges(nodes: Map<string, NativeNode>) {
   const noteRead = useCallback(
     (
       tabId: number,
-      r: { rootId?: string; documentId?: string; documentChanged?: boolean },
+      r: {
+        rootId?: string;
+        documentId?: string;
+        documentChanged?: boolean;
+        url?: string;
+      },
       read: Map<string, NativeNode>,
       run: ReadRun,
     ) => {
@@ -345,6 +364,7 @@ export function useNativeChanges(nodes: Map<string, NativeNode>) {
         run,
       );
       base.current = next.base;
+      setDocumentKey(documentKeyOf(tabId, r));
       // An automatic read of the page's own changes that finds none in the
       // tree leaves the marks: on a page that keeps changing where the tree
       // doesn't show it, they would go moments after the action that made
@@ -369,5 +389,10 @@ export function useNativeChanges(nodes: Map<string, NativeNode>) {
     if (b) b.runBefore = { nodes: shown.current, rootId: b.rootId };
   }, []);
 
-  return { marks: nodes.size > 0 ? changes : null, noteRead, clear };
+  return {
+    marks: nodes.size > 0 ? changes : null,
+    noteRead,
+    clear,
+    documentKey,
+  };
 }

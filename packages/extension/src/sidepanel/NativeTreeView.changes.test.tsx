@@ -852,6 +852,28 @@ describe("NativeTreeView change marks", () => {
       expect(row("menu-btn")).toBeTruthy();
     });
 
+    it("keeps the selection on a row a read wraps in a new row, which it opens", () => {
+      mount(CLOSED);
+      act(() => row("cart").click());
+      expect(selected()).toBe("cart");
+      // The page wrapped the cart in a new section, which the read opens
+      // in the render that brings it: for that render's effects, which
+      // drop a selection they can't see, the cart still shows.
+      const WRAPPED = page(
+        [ROOT, "RootWebArea", "Shop", ["nav", "main"]],
+        ...NAV,
+        ["main", "main", "", ["menu-btn", "basket"]],
+        MENU_CLOSED,
+        ["basket", "region", "Basket", ["cart"]],
+        ...CART,
+      );
+      land(CLOSED, WRAPPED);
+
+      expect(expandedOf("basket")).toBe("true");
+      expect(selected()).toBe("cart");
+      expect(row("cart").getAttribute("aria-selected")).toBe("true");
+    });
+
     it("opens the selected new row when a follow-up read fills it", () => {
       mount(CLOSED);
       // The first read of the run finds the menu new, still empty.

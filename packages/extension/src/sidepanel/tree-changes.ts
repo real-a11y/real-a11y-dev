@@ -33,6 +33,12 @@ export interface NativeTreeChangesProp {
   marks: NativeChangeMarks | null;
   /** Clear the marks: the changes bar's ✕. */
   clear: () => void;
+  /**
+   * Which document the read on screen is of: its tab and its document, as
+   * the marks tell reads apart. The rows the user opened stay open until it
+   * changes (`use-tree-expansion.ts`), whatever root the tree moves to.
+   */
+  documentKey?: string;
 }
 
 /** How long a row flashes when a read finds it new or changed. */

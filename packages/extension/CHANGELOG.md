@@ -45,6 +45,18 @@
   is marked across a navigation, and what a page changes by itself, with
   **Follow page changes** on, is marked without being announced.
 
+- **Chrome's tree keeps the rows you opened** while the page's tree changes
+  shape ([#583](https://github.com/real-a11y/real-a11y-dev/pull/583)). A
+  modal dialog, a native `<dialog>` or one a library such as Radix opens by
+  hiding the page, takes the rest of the page out of Chrome's tree, and
+  opening and closing one closed every row you had opened, back to the
+  page's top rows; so did a page gaining or losing its only row at the top.
+  Now the dialog opens with its own rows, closing it brings the page back as
+  you left it, and a page left with one row at the top opens nothing you had
+  closed. Only another page, or another tab, starts again from the top. And
+  a row the page wraps in a new one, which the tree opens, stays selected,
+  where the selection used to go.
+
 ## 0.1.18
 
 ### Patch Changes

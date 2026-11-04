@@ -942,6 +942,7 @@ describe("useNativeChanges", () => {
       rootId?: string;
       documentId?: string;
       documentChanged?: boolean;
+      url?: string;
     } = SHOP,
     tabId = 1,
   ) {
@@ -1190,5 +1191,48 @@ describe("useNativeChanges", () => {
     expect(hook.marks).toBeNull();
     landKept(new Map(FILLED), inRun(200));
     expect(hook.marks).toBeNull();
+  });
+
+  describe("which document the tree is of", () => {
+    it("names none before any read", () => {
+      mount(null);
+      expect(hook.documentKey).toBeUndefined();
+    });
+
+    it("names the same one for every read of a document, whatever its root", () => {
+      mount();
+      const first = hook.documentKey;
+      land(OPENED, inRun(100), { ...SHOP, rootId: "ax-root" });
+      expect(hook.documentKey).toBe(first);
+    });
+
+    it("names another for a read of another document, or of another tab", () => {
+      mount();
+      const shop = hook.documentKey;
+      land(CHECKOUT_LOADING, AUTO, CHECKOUT);
+      expect(hook.documentKey).not.toBe(shop);
+      land(CLOSED, AUTO, SHOP, 2);
+      expect(hook.documentKey).not.toBe(shop);
+    });
+
+    it("names neither document for a read whose document changed as it was taken", () => {
+      mount();
+      const shop = hook.documentKey;
+      // It began on the shop, but its rows are of the page that took the
+      // shop's place.
+      land(OPENED, AUTO, { ...SHOP, documentChanged: true });
+      expect(hook.documentKey).not.toBe(shop);
+    });
+
+    it("tells documents Chromium names none for apart by their URLs", () => {
+      mount(null);
+      const shop = { rootId: ROOT, url: "https://shop.test/" };
+      land(CLOSED, AUTO, shop);
+      const first = hook.documentKey;
+      land(OPENED, AUTO, shop);
+      expect(hook.documentKey).toBe(first);
+      land(CLOSED, AUTO, { ...shop, url: "https://shop.test/cart" });
+      expect(hook.documentKey).not.toBe(first);
+    });
   });
 });
