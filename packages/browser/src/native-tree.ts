@@ -100,6 +100,8 @@ import {
 } from "@real-a11y-dev/core";
 import type { CDPSession, Page } from "playwright";
 
+import { readDomRoot, type DomNode } from "./dom-document.js";
+
 /**
  * How {@link nativeTree} / {@link buildNativeTree} treat what users entered.
  */
@@ -737,10 +739,7 @@ async function enrichFromDom(
   editableRoots: ReadonlySet<number> = new Set(),
 ): Promise<Map<number, NativeDomInfo>> {
   const out = new Map<number, NativeDomInfo>();
-  const { root } = (await client.send("DOM.getDocument", {
-    depth: -1,
-    pierce: true,
-  })) as { root: DomNode };
+  const root = await readDomRoot(client);
 
   // Parent links aren't in the payload — record them on the way down so the
   // locator walk can go back up.
@@ -861,19 +860,6 @@ export interface NativeDomInfo {
    * node in the tree counts as seen, and gives it no `dom` facet.
    */
   pseudo?: boolean;
-}
-
-interface DomNode {
-  backendNodeId?: number;
-  nodeName?: string;
-  nodeType?: number;
-  attributes?: string[];
-  children?: DomNode[];
-  contentDocument?: DomNode;
-  shadowRoots?: DomNode[];
-  /** On a shadow root: `open`, `closed` or `user-agent`. */
-  shadowRootType?: string;
-  pseudoElements?: DomNode[];
 }
 
 /** Both CDP reads a native tree is built from, over one session. */

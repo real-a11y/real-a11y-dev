@@ -115,6 +115,23 @@ describe("real-a11y (built bin)", () => {
     expect(stdout).toContain('button "Save"');
   });
 
+  it("reads a page nested past the CDP depth limit that DOM.getDocument cannot serialize", async () => {
+    const page = dataUrl(
+      "<!doctype html><title>Deep</title><main><h1>Deep page</h1>" +
+        '<div id="root"></div><a href="#after">After the chain</a></main>' +
+        "<script>let c=document.getElementById('root');" +
+        "for(let i=0;i<160;i++){const d=document.createElement('div');c.appendChild(d);c=d}" +
+        "const b=document.createElement('button');b.textContent='Deep button';c.appendChild(b);" +
+        "</script>",
+    );
+    const tree = await runCli(["tree", page]);
+    expect(tree.code).toBe(0);
+    expect(tree.stdout).toContain('button "Deep button"');
+    const audit = await runCli(["audit", page]);
+    expect(audit.stdout + audit.stderr).not.toContain("page failed");
+    expect(audit.stdout + audit.stderr).not.toContain("stack limit");
+  });
+
   it("tabs lists only the stops Chromium actually tabs to", async () => {
     // The expected list is Chromium's own Tab walk of this page. The in-page
     // walk used to list the two href-less anchors, the button in the disabled
