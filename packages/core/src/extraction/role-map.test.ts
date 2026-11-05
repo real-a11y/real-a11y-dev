@@ -780,6 +780,62 @@ describe("getImplicitRole", () => {
     expect(getImplicitRole(el("<aside>Sidebar</aside>"))).toBe("complementary");
   });
 
+  describe("<aside> scope (HTML-AAM 3.5.9 / 3.5.10)", () => {
+    const aside = (html: string): Element => {
+      document.body.innerHTML = html;
+      return [...document.body.querySelectorAll("aside")].at(-1)!;
+    };
+
+    it.each(["article", "section", "nav", "aside"])(
+      "is generic when unnamed inside <%s>",
+      (outer) => {
+        expect(
+          getImplicitRole(aside(`<${outer}><aside>x</aside></${outer}>`)),
+        ).toBe("generic");
+      },
+    );
+
+    it("is generic inside <main><article>", () => {
+      expect(
+        getImplicitRole(
+          aside("<main><article><aside>x</aside></article></main>"),
+        ),
+      ).toBe("generic");
+    });
+
+    it("is complementary under body and under main", () => {
+      expect(getImplicitRole(aside("<aside>x</aside>"))).toBe("complementary");
+      expect(getImplicitRole(aside("<main><aside>x</aside></main>"))).toBe(
+        "complementary",
+      );
+    });
+
+    it.each([
+      'aria-label="Related"',
+      'title="Related"',
+      'aria-labelledby="lbl"',
+    ])("stays complementary when named by %s", (attrs) => {
+      expect(
+        getImplicitRole(
+          aside(
+            `<span id="lbl">Related</span><section><aside ${attrs}>x</aside></section>`,
+          ),
+        ),
+      ).toBe("complementary");
+    });
+
+    it.each([
+      'aria-label=""',
+      'aria-label=" "',
+      'aria-labelledby="non-existing"',
+      'title=""',
+    ])("is generic when %s names nothing", (attrs) => {
+      expect(
+        getImplicitRole(aside(`<section><aside ${attrs}>x</aside></section>`)),
+      ).toBe("generic");
+    });
+  });
+
   it("returns dialog for <dialog>", () => {
     expect(getImplicitRole(el("<dialog>Modal</dialog>"))).toBe("dialog");
   });

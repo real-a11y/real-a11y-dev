@@ -15,6 +15,7 @@ import {
 import {
   flatParent,
   flatParentElement,
+  hasSectioningAncestor,
   idScope,
   isRenderedInFlatTree,
   renderingParent,
@@ -139,7 +140,8 @@ function isAreaHiddenFromAT(area: Element): boolean {
 
 /**
  * Whether a naming attribute can actually produce a name — the gate on the
- * `form` and `region` roles, which exist only when the element is named.
+ * `form` and `region` roles, which exist only when the element is named, and
+ * on an `aside` inside sectioning content.
  *
  * Presence is not enough, the same way it is not enough for `voidsPresentation`
  * below: `aria-label="  "` states nothing, and an `aria-labelledby` whose every
@@ -147,7 +149,7 @@ function isAreaHiddenFromAT(area: Element): boolean {
  * form nor a region in those cases, so neither does this.
  *
  * `title` counts, which is worth recording because axe-core's default for
- * these two roles does not count it (it opts in explicitly for `<aside>`).
+ * these roles does not count it (it opts in explicitly for `<aside>`).
  * Chromium does: `<form title="Titled">` comes back as `form "Titled"` in its
  * own tree, measured over CDP against Chromium 141, so this follows Chromium.
  *
@@ -358,7 +360,11 @@ const ROLE_MAP: Record<string, RoleResolver> = {
   address: "group",
   area: (el) => (el.hasAttribute("href") ? "link" : "generic"),
   article: "article",
-  aside: "complementary",
+  // HTML-AAM §3.5.9/§3.5.10: in sectioning content, complementary only if named.
+  aside: (el) =>
+    hasSectioningAncestor(el) && !hasAccessibleName(el)
+      ? "generic"
+      : "complementary",
   // <audio>/<video>: ARIA has no media roles and HTML-AAM says "no
   // corresponding role", but real browser accessibility trees disagree
   // with that framing — Chromium exposes internal Audio/Video roles
