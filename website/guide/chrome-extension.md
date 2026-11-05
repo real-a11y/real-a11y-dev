@@ -59,6 +59,7 @@ Chrome's tree works the same way as the panel of [`@real-a11y-dev/inspector`](/p
 Only the extension has these:
 
 - **Focus sync.** Focus moving on the page, by Tab, a click or the page's own script, selects that element's row.
+- **What changed.** Each time Chrome's tree is read again, the rows new since the read before flash green and the rows that changed flash amber, then keep a coloured edge until the next read. The top row of something new says _new_, a changed row says _changed_, with what changed underlined or outlined, and a collapsed row says what changed under it. What the page added opens. The bar under the tree counts the changes, lists the removed rows, and goes from change to change, as `Alt`+`N` does. A screen reader hears what a read you caused found.
 - **Scoping.** Double-click a container row, or press `Ctrl`/`Cmd`+`Enter`, to show only that part of the page. Search, filters and **Copy** follow the scope. The breadcrumb above the tree, or `Esc`, takes you back. In the other panels, scope with the inspector's [`setRoot()`](/packages/inspector#setroot-root) or a different `root` for `<SemanticNavigator />`.
 - **The live log.** When a live region (`role="status"`, `"alert"` or `"log"`, or `aria-live`) changes, its text appears at the bottom of the panel, assertive in red and polite in blue. Use it to check that toasts, validation errors and loading messages are announced. It approximates a screen reader: it shows the region's whole text, and doesn't watch iframes.
 - **The key bar.** `Esc`, `Tab`, `Shift+Tab`, `Enter`, `Space`, `↓` and `↑` go to whatever has focus on the page, for example to open a combobox and pick an option.
@@ -79,6 +80,7 @@ Only the extension has these:
 | Letters | Jump to the next row whose name starts with what you type |
 | `Alt`+`J` / `Alt`+`Shift`+`J` | Follow the row's jump chip / go back |
 | `Ctrl`/`Cmd`+`Enter` / `Esc` | Extension only: scope to the row / leave the scope |
+| `Alt`+`N` / `Alt`+`Shift`+`N` | Extension only: next / previous change since the read before |
 
 ## Privacy
 

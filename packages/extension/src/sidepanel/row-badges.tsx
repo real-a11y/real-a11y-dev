@@ -13,6 +13,9 @@ export interface StateBadge {
   cls: string;
   /** A key state (`isKeyState`), which a row never lets its label clip. */
   keyState: boolean;
+  /** What it shows, as a change to it is named (`native-tree-diff.ts`):
+   *  `states.<key>` or `properties.<key>`. */
+  field: string;
 }
 
 /** The class that colours the badge for state `key` at `value`. */
@@ -47,18 +50,20 @@ export function nativeStateBadges(
   for (const [key, value] of Object.entries(states ?? {})) {
     const cls = stateBadgeClass(key, value);
     const keyState = isKeyState(key);
+    const field = `states.${key}`;
     if (key === "expanded") {
       badges.push({
         label: value === true ? "expanded" : "collapsed",
         cls,
         keyState,
+        field,
       });
     } else if (key === "checked" && value === "mixed") {
-      badges.push({ label: "mixed", cls, keyState });
+      badges.push({ label: "mixed", cls, keyState, field });
     } else if (value === true) {
-      badges.push({ label: key, cls, keyState });
+      badges.push({ label: key, cls, keyState, field });
     } else if (value !== false) {
-      badges.push({ label: `${key}=${value}`, cls, keyState });
+      badges.push({ label: `${key}=${value}`, cls, keyState, field });
     }
   }
   // A property (hasPopup, value bounds, …) is never a key state.
@@ -68,6 +73,7 @@ export function nativeStateBadges(
       label: `${key}=${value}`,
       cls: "sn-state--info",
       keyState: false,
+      field: `properties.${key}`,
     });
   }
   return badges;
@@ -77,14 +83,17 @@ export function nativeStateBadges(
  * A row's state badges, or nothing when it has none. Its key states pass
  * `keyStates`: the row shows them after its label, where nothing clips them,
  * and hides them from a screen reader, which hears them after the name
- * instead, from the ui package's `KeyStatesForReaders`.
+ * instead, from the ui package's `KeyStatesForReaders`. A badge whose
+ * `field` is in `changed` is marked as what changed since the read before.
  */
 export function StateBadges({
   badges,
   keyStates = false,
+  changed,
 }: {
   badges: StateBadge[];
   keyStates?: boolean;
+  changed?: ReadonlySet<string>;
 }) {
   if (badges.length === 0) return null;
   return (
@@ -93,7 +102,10 @@ export function StateBadges({
       aria-hidden={keyStates || undefined}
     >
       {badges.map((b) => (
-        <span key={b.label} class={`sn-state-badge ${b.cls}`}>
+        <span
+          key={b.label}
+          class={`sn-state-badge ${b.cls}${changed?.has(b.field) ? " sn-change-part" : ""}`}
+        >
           {b.label}
         </span>
       ))}

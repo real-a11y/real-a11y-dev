@@ -51,13 +51,48 @@ describe("nativeStateBadges", () => {
         { hasPopup: "menu", level: "2" },
       ),
     ).toEqual([
-      { label: "disabled", cls: "sn-state--disabled", keyState: true },
-      { label: "mixed", cls: "sn-state--mixed", keyState: true },
-      { label: "collapsed", cls: "sn-state--info", keyState: true },
-      { label: "required", cls: "sn-state--required", keyState: true },
-      { label: "invalid=spelling", cls: "sn-state--info", keyState: true },
-      { label: "hasPopup=menu", cls: "sn-state--info", keyState: false },
-      { label: "level=2", cls: "sn-state--info", keyState: false },
+      {
+        label: "disabled",
+        cls: "sn-state--disabled",
+        keyState: true,
+        field: "states.disabled",
+      },
+      {
+        label: "mixed",
+        cls: "sn-state--mixed",
+        keyState: true,
+        field: "states.checked",
+      },
+      {
+        label: "collapsed",
+        cls: "sn-state--info",
+        keyState: true,
+        field: "states.expanded",
+      },
+      {
+        label: "required",
+        cls: "sn-state--required",
+        keyState: true,
+        field: "states.required",
+      },
+      {
+        label: "invalid=spelling",
+        cls: "sn-state--info",
+        keyState: true,
+        field: "states.invalid",
+      },
+      {
+        label: "hasPopup=menu",
+        cls: "sn-state--info",
+        keyState: false,
+        field: "properties.hasPopup",
+      },
+      {
+        label: "level=2",
+        cls: "sn-state--info",
+        keyState: false,
+        field: "properties.level",
+      },
     ]);
   });
 
