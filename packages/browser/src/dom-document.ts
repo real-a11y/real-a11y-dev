@@ -33,12 +33,18 @@ export async function readDomRoot(client: CDPSession): Promise<DomNode> {
       pierce: true,
     })) as { nodes: DomNode[] };
     return nestFlatDocument(nodes);
-  } catch {
-    const { root } = (await client.send("DOM.getDocument", {
-      depth: -1,
-      pierce: true,
-    })) as { root: DomNode };
-    return root;
+  } catch (flatError) {
+    try {
+      const { root } = (await client.send("DOM.getDocument", {
+        depth: -1,
+        pierce: true,
+      })) as { root: DomNode };
+      return root;
+    } catch {
+      // Both failed: report the flat read's error, the one that is not just
+      // the nested read's depth limit.
+      throw flatError;
+    }
   }
 }
 
