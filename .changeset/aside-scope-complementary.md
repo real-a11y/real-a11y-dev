@@ -18,6 +18,7 @@ Stop reporting an unnamed `<aside>` inside sectioning content as a `complementar
 
 An `<aside>` directly under `<body>` or `<main>` is unchanged, and so is an explicit `role="complementary"`. What this changes for you:
 
+- **Known difference from Chromium:** `<aside title="">` in sectioning content is `generic` here, as the spec says, but Chromium 153 still reports `complementary`. An `aria-labelledby` that points at an element with no text still counts as a name here.
 - **Queries:** `findByRole("complementary")` no longer matches an unnamed nested `<aside>`.
 - **Panels:** the Landmarks filter in `inspector`, `react` and `storybook-addon` no longer lists it.
 - **Snapshots:** an a11y snapshot or diff produced by the DOM producer drops the `complementary` line for such an `<aside>`, so a saved one needs re-recording. `cli` and `mcp` read Chromium's tree and already behaved this way.
