@@ -942,7 +942,6 @@ describe("useNativeChanges", () => {
       rootId?: string;
       documentId?: string;
       documentChanged?: boolean;
-      url?: string;
     } = SHOP,
     tabId = 1,
   ) {
@@ -1224,14 +1223,19 @@ describe("useNativeChanges", () => {
       expect(hook.documentKey).not.toBe(shop);
     });
 
-    it("tells documents Chromium names none for apart by their URLs", () => {
+    it("tells documents Chromium names none for apart by the navigation between them, a reload too", () => {
       mount(null);
-      const shop = { rootId: ROOT, url: "https://shop.test/" };
-      land(CLOSED, AUTO, shop);
+      // No document id: a page's own routing moves its URL, which this
+      // read doesn't carry, and a reload keeps it. Only the navigation
+      // between two documents empties the tree (`PAGE_NAVIGATED`).
+      const unnamed = { rootId: ROOT };
+      land(CLOSED, AUTO, unnamed);
       const first = hook.documentKey;
-      land(OPENED, AUTO, shop);
+      land(OPENED, AUTO, unnamed);
       expect(hook.documentKey).toBe(first);
-      land(CLOSED, AUTO, { ...shop, url: "https://shop.test/cart" });
+
+      act(() => show(new Map()));
+      land(CLOSED, AUTO, unnamed);
       expect(hook.documentKey).not.toBe(first);
     });
   });

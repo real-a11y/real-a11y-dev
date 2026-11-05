@@ -22,7 +22,11 @@ import { useLayoutEffect, useMemo, useRef, useState } from "preact/hooks";
 
 import type { NativeNode } from "../native/native-actions.js";
 
-/** `open` added to the rows open, the same set back when it adds nothing. */
+/**
+ * `open` added to the rows open, the same set back when it adds nothing.
+ *
+ * @internal
+ */
 export function opened(prev: Set<string>, open: Iterable<string>): Set<string> {
   let next: Set<string> | null = null;
   for (const id of open) {

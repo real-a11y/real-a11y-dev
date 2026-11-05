@@ -308,15 +308,22 @@ export function compareRead(
   };
 }
 
-/** Which document a read is of, as one string: its tab and its document,
- *  and whether another took that one's place as it was read, which makes
- *  its rows of neither. Where Chromium names no document, its URL stands
- *  in, so a navigation still leads to another. */
+/**
+ * Which document a read is of, as one string: its tab and its document, and
+ * whether another took that one's place as it was read, which makes its rows
+ * of neither. Where Chromium names no document, `emptied` stands in: how many
+ * times the tree on screen has gone, which every navigation to another
+ * document does (`PAGE_NAVIGATED`) and a change of URL within one doesn't.
+ * A URL couldn't: a reload keeps it, and a page's own routing changes it.
+ *
+ * @internal
+ */
 export function documentKeyOf(
   tabId: number,
-  r: { documentId?: string; documentChanged?: boolean; url?: string },
+  r: { documentId?: string; documentChanged?: boolean },
+  emptied: number,
 ): string {
-  const which = r.documentId ?? `url ${r.url ?? ""}`;
+  const which = r.documentId ?? `emptied ${emptied}`;
   return `${tabId} ${which}${r.documentChanged ? " changed" : ""}`;
 }
 
@@ -333,6 +340,9 @@ export function useNativeChanges(nodes: Map<string, NativeNode>) {
   // read compares with it. In the render, not an effect, which a read
   // landing first could race.
   const shown = useRef(nodes);
+  // How many times it has gone: see `documentKeyOf`.
+  const emptied = useRef(0);
+  if (nodes.size === 0 && shown.current.size > 0) emptied.current++;
   shown.current = nodes;
   if (nodes.size === 0) base.current = null;
 
@@ -342,12 +352,7 @@ export function useNativeChanges(nodes: Map<string, NativeNode>) {
   const noteRead = useCallback(
     (
       tabId: number,
-      r: {
-        rootId?: string;
-        documentId?: string;
-        documentChanged?: boolean;
-        url?: string;
-      },
+      r: { rootId?: string; documentId?: string; documentChanged?: boolean },
       read: Map<string, NativeNode>,
       run: ReadRun,
     ) => {
@@ -364,7 +369,7 @@ export function useNativeChanges(nodes: Map<string, NativeNode>) {
         run,
       );
       base.current = next.base;
-      setDocumentKey(documentKeyOf(tabId, r));
+      setDocumentKey(documentKeyOf(tabId, r, emptied.current));
       // An automatic read of the page's own changes that finds none in the
       // tree leaves the marks: on a page that keeps changing where the tree
       // doesn't show it, they would go moments after the action that made
