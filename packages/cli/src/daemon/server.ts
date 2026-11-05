@@ -13,9 +13,9 @@
 
 import { timingSafeEqual } from "node:crypto";
 import { chmodSync } from "node:fs";
-import { readFile, rm, rmdir, stat, writeFile } from "node:fs/promises";
+import { stat } from "node:fs/promises";
 import { createServer, type Server, type Socket } from "node:net";
-import { dirname, isAbsolute, join as pathJoin } from "node:path";
+import { isAbsolute } from "node:path";
 
 import type { BrowserSession } from "@real-a11y-dev/browser";
 
@@ -43,6 +43,7 @@ import {
   decodeRpc,
 } from "./protocol.js";
 import { resolveCommandTargets, runCommandOnSession } from "./runner.js";
+import { removeOwnSessionFiles as removeSessionFiles } from "./session-files.js";
 
 function constantTimeEquals(a: string, b: string): boolean {
   if (a.length !== b.length) return false;
@@ -214,117 +215,7 @@ export class DaemonServer {
 
   private async removeOwnSessionFiles(): Promise<void> {
     if (!this.pidfile) return;
-    const sessionDir = dirname(this.pidfile);
-
-    // A concurrent `ensureDaemonClient` replacement may be starting.  Take
-    // the same `.lock` used for startup; if a live process holds it, skip
-    // cleanup and let that process own the session directory.
-    const release = await this.claimCleanupLock(sessionDir);
-    if (!release) return;
-    try {
-      // Snapshot ownership once while the lock protects us from replacement
-      // daemons; re-reading after we delete the pidfile would abort cleanup.
-      const ours = await this.ownsPidfile();
-      if (!ours) return;
-
-      if (!this.isNamedPipePath(this.socketPath)) {
-        await rm(this.socketPath, { force: true }).catch(() => 0);
-      }
-      await rm(this.pidfile, { force: true }).catch(() => 0);
-
-      for (const file of ["daemon.log", "token", "pipe", "name.txt"]) {
-        await rm(pathJoin(sessionDir, file), { force: true }).catch(() => 0);
-      }
-
-      // Release the lock and remove the lock file so the directory can be
-      // removed. The release is idempotent; if a replacement has already
-      // claimed the session, `rmdir` will fail and `session list` / `session stop`
-      // will diagnose it.
-      await release();
-    } finally {
-      await release();
-    }
-
-    try {
-      await rmdir(sessionDir);
-    } catch {
-      // Not empty (e.g. a concurrent start left a .lock) — leave it for
-      // `session list` / `session stop` to diagnose.
-    }
-  }
-
-  private async ownsPidfile(): Promise<boolean> {
-    if (!this.pidfile) return false;
-    try {
-      const raw = await readFile(this.pidfile, "utf8");
-      const parsed = JSON.parse(raw) as { pid?: unknown };
-      return (
-        typeof parsed.pid === "number" &&
-        Number.isInteger(parsed.pid) &&
-        parsed.pid > 0 &&
-        parsed.pid === process.pid
-      );
-    } catch {
-      return false;
-    }
-  }
-
-  private async claimCleanupLock(
-    sessionDir: string,
-  ): Promise<(() => Promise<void>) | undefined> {
-    const lockPath = pathJoin(sessionDir, ".lock");
-    const deadline = Date.now() + 500;
-    while (Date.now() <= deadline) {
-      try {
-        await writeFile(
-          lockPath,
-          JSON.stringify({ pid: process.pid, startedAt: Date.now() }),
-          { flag: "wx", mode: 0o600 },
-        );
-        let released = false;
-        return async () => {
-          if (released) return;
-          released = true;
-          await rm(lockPath, { force: true }).catch(() => 0);
-        };
-      } catch (err) {
-        const code = (err as NodeJS.ErrnoException).code;
-        if (code === "EEXIST") {
-          if (await this.isStaleLock(lockPath)) {
-            await rm(lockPath, { force: true }).catch(() => 0);
-            continue;
-          }
-          // A live process (likely a replacement daemon start) holds the lock.
-          return undefined;
-        }
-        // Unknown filesystem error: proceed without a lock, but return a no-op.
-        return async () => {};
-      }
-    }
-    return undefined;
-  }
-
-  private async isStaleLock(lockPath: string): Promise<boolean> {
-    try {
-      const raw = await readFile(lockPath, "utf8");
-      const data = JSON.parse(raw) as { pid?: number; startedAt?: number };
-      if (typeof data.pid === "number") {
-        try {
-          process.kill(data.pid, 0);
-          return false;
-        } catch (err) {
-          if ((err as NodeJS.ErrnoException).code === "EPERM") return false;
-          return true;
-        }
-      }
-    } catch {
-      return true;
-    }
-    return true;
-  }
-
-  private isNamedPipePath(path: string): boolean {
-    return path.startsWith("\\\\.\\pipe\\");
+    await removeSessionFiles(this.pidfile, this.socketPath);
   }
 
   get sessionCount(): number {
