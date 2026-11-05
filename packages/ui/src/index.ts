@@ -28,6 +28,57 @@ export type { TypeAheadBuffer } from "./hooks/typeAhead.js";
 export { useSearch } from "./hooks/useSearch.js";
 export { buildTreeDiffView, EMPTY_DIFF_VIEW } from "./diff.js";
 export type { TreeDiffView, NodeDiffStatus } from "./diff.js";
+// @internal — the change marks (what each read of a tree found new, changed
+// or removed), shared with the extension's native tree; not a stability
+// promise.
+export {
+  diffTreeRows,
+  isEmptyTreeChanges,
+  NO_TREE_CHANGES,
+  type DiffRules,
+  type FieldChange,
+  type RemovedRow,
+  type Tree,
+  type TreeChanges,
+  type TreeRow,
+} from "./tree-changes-diff.js";
+export {
+  compareThroughDialogs,
+  type DialogComparison,
+  type DialogRules,
+  type OpenDialog,
+} from "./tree-changes-dialogs.js";
+export {
+  CHANGE_FLASH_MS,
+  CHANGE_KEYSHORTCUTS,
+  changeRowClass,
+  describeChange,
+  documentPositions,
+  freshChanges,
+  hiddenChangesByRow,
+  hiddenChangesText,
+  isChangeKey,
+  marksForReaders,
+  nextChangeStop,
+  rowChangeMarks,
+  rowsToOpen,
+  summarizeChanges,
+  withRowsOpen,
+  type ChangeMarks,
+  type HiddenChanges,
+  type RowChangeMarks,
+  type TreeChangesProp,
+} from "./tree-changes.js";
+export {
+  useHiddenChanges,
+  useTreeChanges,
+  type ChangeNotice,
+} from "./hooks/useTreeChanges.js";
+export {
+  ChangeNoticeRegion,
+  TreeChangesBar,
+} from "./components/TreeChangesBar.js";
+export { RowChangeTags } from "./components/RowChangeTags.js";
 // @internal — shared with the extension's own popups; not a stability promise.
 export { FOCUSABLE_SELECTOR, useDismissible } from "./hooks/useDismissible.js";
 export { ShowFullNamesSetting } from "./components/ShowFullNamesSetting.js";

@@ -1,13 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import type { NativeNode } from "../native/native-actions.js";
-import {
-  diffNativeTrees,
-  type NativeNodeChange,
-  type NativeTreeChanges,
-} from "../native/native-tree-diff.js";
-import { nativeParentIndex } from "../native/native-tree-utils.js";
-
+import type { FieldChange, TreeChanges, TreeRow } from "./tree-changes-diff.js";
 import {
   AUTO_EXPAND_MAX_ROWS,
   CHANGE_FLASH_MS,
@@ -38,21 +31,38 @@ import {
 } from "./tree-changes.js";
 
 /**
- * How Chrome's tree shows what a read found changed since the read before
- * it (`tree-changes.ts`): which rows flash and which open, which shown row
+ * How a tree view shows what a read found changed since the read before it
+ * (`tree-changes.ts`): which rows flash and which open, which shown row
  * stands in for the changes under it, where Alt+N goes, and the words for
- * each change. The changes are written out by hand, except in the last
- * block, which takes them from a real diff of two reads.
+ * each change. The changes are written out by hand; the extension's
+ * `native-change-marks.test.ts` takes them from a real diff of two reads of
+ * Chrome's tree.
  */
+
+/** A row as these tests write one. */
+interface Row extends TreeRow {
+  id: string;
+  role: string;
+  name: string;
+}
+
+/** Each row's parent, from every row's children. */
+function parentIndex(nodes: ReadonlyMap<string, TreeRow>): Map<string, string> {
+  const parentOf = new Map<string, string>();
+  for (const [id, node] of nodes) {
+    for (const child of node.childIds ?? []) parentOf.set(child, id);
+  }
+  return parentOf;
+}
 
 /** A tree from an outline of each row's children. Every id the outline
  *  names gets a row, and a row it gives no children is a leaf. */
-function outline(children: Record<string, string[]>): Map<string, NativeNode> {
-  const nodes = new Map<string, NativeNode>();
-  const row = (id: string): NativeNode => {
+function outline(children: Record<string, string[]>): Map<string, Row> {
+  const nodes = new Map<string, Row>();
+  const row = (id: string): Row => {
     let node = nodes.get(id);
     if (!node) {
-      node = { id, role: "generic", name: "", depth: 0 };
+      node = { id, role: "generic", name: "" };
       nodes.set(id, node);
     }
     return node;
@@ -73,10 +83,10 @@ function changesOf({
   stops = [],
 }: {
   added?: string[];
-  changed?: Record<string, readonly NativeNodeChange[]>;
+  changed?: Record<string, readonly FieldChange[]>;
   removedUnder?: Record<string, number>;
   stops?: string[];
-}): NativeTreeChanges {
+}): TreeChanges {
   return {
     added: new Set(added),
     changed: new Map(Object.entries(changed)),
@@ -101,10 +111,10 @@ const inside = (counts: Partial<HiddenChanges>): HiddenChanges => ({
   ...counts,
 });
 
-const RENAMED: readonly NativeNodeChange[] = [
+const RENAMED: readonly FieldChange[] = [
   { field: "name", before: "Add to cart", after: "Added" },
 ];
-const OPENED: readonly NativeNodeChange[] = [
+const OPENED: readonly FieldChange[] = [
   { field: "states.expanded", before: false, after: true },
 ];
 
@@ -193,7 +203,7 @@ describe("isChangeKey", () => {
 describe("freshChanges", () => {
   /** A click's first read: a menu button opened, its menu came, and two
    *  rows went from the list beside it. */
-  const firstRead = (): NativeTreeChanges =>
+  const firstRead = (): TreeChanges =>
     changesOf({
       added: ["menu", "item1"],
       changed: { button: OPENED },
@@ -254,7 +264,7 @@ describe("freshChanges", () => {
   });
 
   it("tells a change to collapsed or to an empty value from a change to none", () => {
-    const to = (change: NativeNodeChange) =>
+    const to = (change: FieldChange) =>
       changesOf({ changed: { row: [change] } });
     // An expanded state of false shows "collapsed"; none shows no badge.
     expect(
@@ -299,7 +309,7 @@ describe("rowsToOpen", () => {
     menu: ["group"],
     group: ["item1", "item2"],
   });
-  const MENU_PARENTS = nativeParentIndex(MENU);
+  const MENU_PARENTS = parentIndex(MENU);
 
   it("opens every fresh new row that has rows under it", () => {
     const changes = changesOf({
@@ -359,7 +369,7 @@ describe("rowsToOpen", () => {
     const changes = changesOf({
       added: ["note", "section", "list", ...ids, "dialog", "ok"],
     });
-    return { nodes, parentOf: nativeParentIndex(nodes), changes };
+    return { nodes, parentOf: parentIndex(nodes), changes };
   }
   /** The rows `addition` adds besides the list's items. */
   const BESIDES_ITEMS = 5;
@@ -424,27 +434,22 @@ describe("rowsToOpen", () => {
     // The list came empty with the action's re-read, so nothing opened it;
     // its results all came with this one.
     const fresh = new Set(ids);
-    expect(rowsToOpen(changes, fresh, nodes, nativeParentIndex(nodes))).toEqual(
-      ["results"],
-    );
+    expect(rowsToOpen(changes, fresh, nodes, parentIndex(nodes))).toEqual([
+      "results",
+    ]);
   });
 });
 
 describe("hiddenChangesByRow", () => {
   /** What each row in `shown` stands in for, of `changes` to `nodes`. */
   function standIns(
-    changes: NativeTreeChanges,
-    nodes: Map<string, NativeNode>,
+    changes: TreeChanges,
+    nodes: Map<string, Row>,
     shown: string[],
     fresh: ReadonlySet<string> = new Set(),
   ): Record<string, HiddenChanges> {
     return Object.fromEntries(
-      hiddenChangesByRow(
-        changes,
-        new Set(shown),
-        nativeParentIndex(nodes),
-        fresh,
-      ),
+      hiddenChangesByRow(changes, new Set(shown), parentIndex(nodes), fresh),
     );
   }
 
@@ -623,7 +628,7 @@ describe("rowChangeMarks", () => {
     main: ["list", "button"],
     list: ["item"],
   });
-  const parentOf = nativeParentIndex(nodes);
+  const parentOf = parentIndex(nodes);
   const changes = changesOf({
     added: ["list", "item"],
     changed: { button: RENAMED },
@@ -1108,144 +1113,6 @@ describe("describeChange", () => {
   });
 });
 
-describe("the marks of a real read", () => {
-  const n = (
-    id: string,
-    role: string,
-    name: string,
-    childIds: string[] = [],
-    extra: Partial<NativeNode> = {},
-  ): [string, NativeNode] => [
-    id,
-    { id, role, name, depth: 0, childIds, ...extra },
-  ];
-  const ROOT = "ax-dom-1";
-
-  // A shop's page before and after a click on its Menu button: the menu
-  // opened, the cart's second item went, and the status said so.
-  const before = new Map([
-    n(ROOT, "RootWebArea", "Shop", ["ax-dom-2", "ax-dom-4"]),
-    n("ax-dom-2", "navigation", "", ["ax-dom-3"]),
-    n("ax-dom-3", "button", "Menu", [], { states: { expanded: false } }),
-    n("ax-dom-4", "main", "", ["ax-dom-5", "ax-dom-9"]),
-    n("ax-dom-5", "list", "Cart", ["ax-dom-6", "ax-dom-7"]),
-    n("ax-dom-6", "listitem", "Apples"),
-    n("ax-dom-7", "listitem", "Pears", ["ax-dom-8"]),
-    n("ax-dom-8", "StaticText", "Pears"),
-    n("ax-dom-9", "status", ""),
-  ]);
-  const after = new Map([
-    n(ROOT, "RootWebArea", "Shop", ["ax-dom-2", "ax-dom-10", "ax-dom-4"]),
-    n("ax-dom-2", "navigation", "", ["ax-dom-3"]),
-    n("ax-dom-3", "button", "Menu", [], { states: { expanded: true } }),
-    n("ax-dom-10", "menu", "Menu", ["ax-dom-11", "ax-dom-12"]),
-    n("ax-dom-11", "menuitem", "Home"),
-    n("ax-dom-12", "menuitem", "Sale"),
-    n("ax-dom-4", "main", "", ["ax-dom-5", "ax-dom-9"]),
-    n("ax-dom-5", "list", "Cart", ["ax-dom-6"]),
-    n("ax-dom-6", "listitem", "Apples"),
-    n("ax-dom-9", "status", "Pears removed"),
-  ]);
-
-  it("counts what the click did, opens the menu, and goes from change to change", () => {
-    const changes = diffNativeTrees(before, after, ROOT);
-    expect(summarizeChanges(changes)).toBe("3 new, 2 changed, 2 removed");
-    expect(
-      rowsToOpen(
-        changes,
-        freshChanges(null, changes),
-        after,
-        nativeParentIndex(after),
-      ),
-    ).toEqual(["ax-dom-10"]);
-
-    const position = documentPositions(after, ROOT);
-    const visit = (back: boolean) => {
-      const visited: string[] = [];
-      let at: string | null = null;
-      for (let i = 0; i < 5; i++) {
-        at = nextChangeStop(changes.stops, position, at, back) ?? null;
-        visited.push(String(at));
-      }
-      return visited;
-    };
-    // The button, the menu's top row, the list two rows went from, the
-    // status; then round again.
-    expect(visit(false)).toEqual([
-      "ax-dom-3",
-      "ax-dom-10",
-      "ax-dom-5",
-      "ax-dom-9",
-      "ax-dom-3",
-    ]);
-    expect(visit(true)).toEqual([
-      "ax-dom-9",
-      "ax-dom-5",
-      "ax-dom-10",
-      "ax-dom-3",
-      "ax-dom-9",
-    ]);
-  });
-
-  it("marks the rows as the tree shows them, the menu and the cart closed", () => {
-    const changes = diffNativeTrees(before, after, ROOT);
-    const parentOf = nativeParentIndex(after);
-    const shown = new Set([
-      ROOT,
-      "ax-dom-2",
-      "ax-dom-3",
-      "ax-dom-10",
-      "ax-dom-4",
-      "ax-dom-5",
-      "ax-dom-9",
-    ]);
-    const hidden = hiddenChangesByRow(
-      changes,
-      shown,
-      parentOf,
-      freshChanges(null, changes),
-    );
-    // The menu's items are new with it, so the menu counts none of them.
-    expect(Object.fromEntries(hidden)).toEqual({
-      "ax-dom-5": inside({ removed: 2, fresh: true }),
-    });
-
-    const marks = (id: string) => rowChangeMarks(changes, hidden, parentOf, id);
-    expect(marks("ax-dom-10")).toMatchObject({ isNew: true, newTop: true });
-    expect(marks("ax-dom-11")).toMatchObject({ isNew: true, newTop: false });
-    expect(marks("ax-dom-3").changes?.map(describeChange)).toEqual([
-      "expanded: collapsed → expanded",
-    ]);
-    expect(marks("ax-dom-9").changes?.map(describeChange)).toEqual([
-      'name: none → "Pears removed"',
-    ]);
-    expect(hiddenChangesText(marks("ax-dom-5").hidden!)).toBe(
-      "2 removed inside",
-    );
-    expect(
-      changeRowClass(marks("ax-dom-4"), { until: 1_500, alt: false }),
-    ).toBeFalsy();
-  });
-
-  it("flashes only what a follow-up read of the same click found besides", () => {
-    // The page fetched a third menu item after the first read. The
-    // follow-up read compares with the tree from before the click too.
-    const later = new Map(after);
-    later.set("ax-dom-10", {
-      ...after.get("ax-dom-10")!,
-      childIds: ["ax-dom-11", "ax-dom-12", "ax-dom-13"],
-    });
-    later.set(...n("ax-dom-13", "menuitem", "Gift cards"));
-    const first = diffNativeTrees(before, after, ROOT);
-    const second = diffNativeTrees(before, later, ROOT);
-    expect([...freshChanges(first, second)]).toEqual(["ax-dom-13"]);
-    expect(summarizeChanges(second)).toBe("4 new, 2 changed, 2 removed");
-    expect(
-      freshChanges(second, diffNativeTrees(before, later, ROOT)).size,
-    ).toBe(0);
-  });
-});
-
 describe("the flashes", () => {
   const FLASHING = new Map([
     ["a", { until: 1_000, alt: false }],
@@ -1303,7 +1170,7 @@ describe("notAboveSelection", () => {
     group: ["name", "email"],
     aside: ["tips"],
   });
-  const tree = { nodes, rootId: "root", parentOf: nativeParentIndex(nodes) };
+  const tree = { nodes, rootId: "root", parentOf: parentIndex(nodes) };
 
   it("leaves out the rows above the selection, and keeps those below", () => {
     expect(notAboveSelection(["banner", "aside"], tree, "email")).toEqual([
@@ -1333,7 +1200,7 @@ describe("hiddenChangesByRow, given the flashes", () => {
     const hidden = hiddenChangesByRow(
       changes,
       new Set(["root", "list"]),
-      nativeParentIndex(nodes),
+      parentIndex(nodes),
       new Map([
         ["a", { until: 1_200, alt: false }],
         ["c", { until: 1_900, alt: true }],

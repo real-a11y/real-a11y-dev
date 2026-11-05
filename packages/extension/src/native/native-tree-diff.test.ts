@@ -1,14 +1,16 @@
+import {
+  isEmptyTreeChanges,
+  NO_TREE_CHANGES,
+  type FieldChange,
+  type TreeChanges,
+} from "@real-a11y-dev/semantic-navigator-ui";
 import { describe, expect, it } from "vitest";
 
 import type { NativeNode } from "./native-actions.js";
 import {
   compareNativeNodes,
   diffNativeTrees,
-  isEmptyNativeChanges,
   isLastingNativeId,
-  NO_NATIVE_CHANGES,
-  type NativeNodeChange,
-  type NativeTreeChanges,
 } from "./native-tree-diff.js";
 
 /** A row as a read gives it: a nameless `generic` unless `extra` says more. */
@@ -47,24 +49,23 @@ const diff = (
   before: Map<string, NativeNode>,
   after: Map<string, NativeNode>,
   rootId = "root",
-): NativeTreeChanges => diffNativeTrees(before, after, rootId);
+): TreeChanges => diffNativeTrees(before, after, rootId);
 
 /** What changed between two reads of one row. */
 const compare = (
   before: Partial<NativeNode>,
   after: Partial<NativeNode>,
-): NativeNodeChange[] =>
-  compareNativeNodes(node("x", before), node("x", after));
+): FieldChange[] => compareNativeNodes(node("x", before), node("x", after));
 
 /** A row's changes in one fixed order: the order they come in is not what
  *  these tests are about. */
-const byField = (changes: readonly NativeNodeChange[]): NativeNodeChange[] =>
+const byField = (changes: readonly FieldChange[]): FieldChange[] =>
   [...changes].sort((a, b) =>
     a.field < b.field ? -1 : a.field > b.field ? 1 : 0,
   );
 
 /** The ids of the rows a diff found removed, in its order. */
-const removedIds = (changes: NativeTreeChanges): string[] =>
+const removedIds = (changes: TreeChanges): string[] =>
   changes.removed.map((r) => r.id);
 
 /** A row showing `text` as its description or placeholder, or neither. */
@@ -101,38 +102,37 @@ describe("isLastingNativeId", () => {
   });
 });
 
-describe("NO_NATIVE_CHANGES and isEmptyNativeChanges", () => {
-  it("NO_NATIVE_CHANGES has nothing in it, and is empty", () => {
-    expect(NO_NATIVE_CHANGES.added.size).toBe(0);
-    expect(NO_NATIVE_CHANGES.changed.size).toBe(0);
-    expect(NO_NATIVE_CHANGES.removed).toEqual([]);
-    expect(NO_NATIVE_CHANGES.removedUnder.size).toBe(0);
-    expect(NO_NATIVE_CHANGES.stops).toEqual([]);
-    expect(isEmptyNativeChanges(NO_NATIVE_CHANGES)).toBe(true);
+describe("NO_TREE_CHANGES and isEmptyTreeChanges", () => {
+  it("NO_TREE_CHANGES has nothing in it, and is empty", () => {
+    expect(NO_TREE_CHANGES.added.size).toBe(0);
+    expect(NO_TREE_CHANGES.changed.size).toBe(0);
+    expect(NO_TREE_CHANGES.removed).toEqual([]);
+    expect(NO_TREE_CHANGES.removedUnder.size).toBe(0);
+    expect(NO_TREE_CHANGES.stops).toEqual([]);
+    expect(isEmptyTreeChanges(NO_TREE_CHANGES)).toBe(true);
   });
 
   it("is not empty once one row was added, changed or removed", () => {
-    const some: NativeTreeChanges[] = [
-      { ...NO_NATIVE_CHANGES, added: new Set(["a"]), stops: ["a"] },
+    const some: TreeChanges[] = [
+      { ...NO_TREE_CHANGES, added: new Set(["a"]), stops: ["a"] },
       {
-        ...NO_NATIVE_CHANGES,
+        ...NO_TREE_CHANGES,
         changed: new Map([["a", [{ field: "name", after: "A" }]]]),
         stops: ["a"],
       },
       {
-        ...NO_NATIVE_CHANGES,
+        ...NO_TREE_CHANGES,
         removed: [{ id: "a", role: "button", name: "A" }],
         removedUnder: new Map([["root", 1]]),
         stops: ["root"],
       },
       // A removed row charged to no row still counts: the root went.
       {
-        ...NO_NATIVE_CHANGES,
+        ...NO_TREE_CHANGES,
         removed: [{ id: "root", role: "RootWebArea", name: "" }],
       },
     ];
-    for (const changes of some)
-      expect(isEmptyNativeChanges(changes)).toBe(false);
+    for (const changes of some) expect(isEmptyTreeChanges(changes)).toBe(false);
   });
 });
 
@@ -387,8 +387,8 @@ describe("diffNativeTrees", () => {
 
     it("finds nothing", () => {
       const changes = diff(page(), page());
-      expect(changes).toEqual(NO_NATIVE_CHANGES);
-      expect(isEmptyNativeChanges(changes)).toBe(true);
+      expect(changes).toEqual(NO_TREE_CHANGES);
+      expect(isEmptyTreeChanges(changes)).toBe(true);
     });
 
     it("finds nothing when only focus moved", () => {
@@ -403,7 +403,7 @@ describe("diffNativeTrees", () => {
           b: { states: { focused: true } },
         },
       );
-      expect(diff(before, after)).toEqual(NO_NATIVE_CHANGES);
+      expect(diff(before, after)).toEqual(NO_TREE_CHANGES);
     });
 
     it("leaves both reads as they were", () => {
@@ -496,7 +496,7 @@ describe("diffNativeTrees", () => {
         { root: ["ax-9"] },
         { "ax-9": { role: "status", name: "Done" } },
       );
-      expect(diff(before, after)).toEqual(NO_NATIVE_CHANGES);
+      expect(diff(before, after)).toEqual(NO_TREE_CHANGES);
     });
   });
 
@@ -589,7 +589,7 @@ describe("diffNativeTrees", () => {
       expect(changes.removed).toEqual([]);
       expect(changes.removedUnder.size).toBe(0);
       expect(changes.stops).toEqual(["menu"]);
-      expect(isEmptyNativeChanges(changes)).toBe(false);
+      expect(isEmptyTreeChanges(changes)).toBe(false);
     });
 
     it("marks the root when the page's title changes", () => {
@@ -623,7 +623,7 @@ describe("diffNativeTrees", () => {
         { root: ["a", "b"], b: ["x"] },
         { x: { name: "Draft" } },
       );
-      expect(diff(before, moved)).toEqual(NO_NATIVE_CHANGES);
+      expect(diff(before, moved)).toEqual(NO_TREE_CHANGES);
 
       const renamed = read(
         { root: ["a", "b"], b: ["x"] },
@@ -774,7 +774,7 @@ describe("diffNativeTrees", () => {
         { root: ["a"] },
         { stray: { name: "Two" }, other: { role: "button" } },
       );
-      expect(diff(before, after)).toEqual(NO_NATIVE_CHANGES);
+      expect(diff(before, after)).toEqual(NO_TREE_CHANGES);
     });
 
     it("counts a row the later read still holds but no longer leads to as removed", () => {
@@ -802,7 +802,7 @@ describe("diffNativeTrees", () => {
       const before = read({ root: ["a"] });
       const after = read({ root: ["a"] });
       after.get("root")!.childIds = ["a", "ghost"];
-      expect(diff(before, after)).toEqual(NO_NATIVE_CHANGES);
+      expect(diff(before, after)).toEqual(NO_TREE_CHANGES);
     });
   });
 
@@ -875,7 +875,7 @@ describe("diffNativeTrees", () => {
       expect(removedIds(changes)).toEqual(["root", "a", "ax-5"]);
       expect(changes.removedUnder.size).toBe(0);
       expect(changes.stops).toEqual([]);
-      expect(isEmptyNativeChanges(changes)).toBe(false);
+      expect(isEmptyTreeChanges(changes)).toBe(false);
     });
   });
 
