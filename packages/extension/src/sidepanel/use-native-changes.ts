@@ -315,6 +315,11 @@ export function compareRead(
  * times the tree on screen has gone, which every navigation to another
  * document does (`PAGE_NAVIGATED`) and a change of URL within one doesn't.
  * A URL couldn't: a reload keeps it, and a page's own routing changes it.
+ * A failed read that clears the tree counts too, as it does for the marks,
+ * which forget the tree they compared with: a read fails when the page goes
+ * as it is read, and with no document to go by, taking a page for a new one
+ * only closes rows, where taking a new page for the old one would open the
+ * old one's ids on it and leave its own first rows closed.
  *
  * @internal
  */
