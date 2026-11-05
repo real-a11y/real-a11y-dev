@@ -1,4 +1,9 @@
 import { extractA11yTree } from "@real-a11y-dev/core";
+import {
+  CHANGE_FLASH_MS,
+  type ChangeMarks,
+  type TreeChanges,
+} from "@real-a11y-dev/semantic-navigator-ui";
 import { render, type ComponentProps } from "preact";
 import { useState } from "preact/hooks";
 import { act } from "preact/test-utils";
@@ -13,21 +18,17 @@ import {
 } from "vitest";
 
 import type { NativeNode } from "../native/native-actions.js";
-import {
-  diffNativeTrees,
-  type NativeTreeChanges,
-} from "../native/native-tree-diff.js";
+import { diffNativeTrees } from "../native/native-tree-diff.js";
 
 import { JUMP_FLASH_MS } from "./ControlsChip.js";
 import type { NativeTabOrder } from "./NativeTabView.js";
 import { NativeTreeView } from "./NativeTreeView.js";
-import { CHANGE_FLASH_MS, type NativeChangeMarks } from "./tree-changes.js";
 
 type TreeProps = ComponentProps<typeof NativeTreeView>;
 
 /**
  * What Chrome's tree shows of the changes a read found since the read before
- * it (`tree-changes.ts`, `use-tree-changes.ts`): the edge and the flash on a
+ * it (the ui package's `tree-changes.ts` and `useTreeChanges`): the edge and the flash on a
  * new or changed row, its tags and what a screen reader hears of them, the
  * new rows it opens, the polite word on what a read the user caused found,
  * Alt+N from change to change, and the bar under the tree. The marks are a
@@ -273,7 +274,7 @@ function spoken(el: Element): string[] {
 /** What `App.tsx` hands the tree: the read on screen, and its marks. */
 interface OnScreen {
   nodes: Map<string, NativeNode>;
-  marks: NativeChangeMarks | null;
+  marks: ChangeMarks | null;
 }
 
 describe("NativeTreeView change marks", () => {
@@ -337,7 +338,7 @@ describe("NativeTreeView change marks", () => {
   /** The panel with `nodes` on screen, and whatever marks came with them. */
   function mount(
     nodes: Map<string, NativeNode>,
-    marks: NativeChangeMarks | null = null,
+    marks: ChangeMarks | null = null,
     props: Partial<TreeProps> = {},
   ) {
     act(() => {
@@ -351,7 +352,7 @@ describe("NativeTreeView change marks", () => {
     before: Map<string, NativeNode>,
     after: Map<string, NativeNode>,
     announce = true,
-  ): NativeChangeMarks {
+  ): ChangeMarks {
     return {
       changes: diffNativeTrees(before, after, ROOT),
       seq: ++seq,
@@ -370,10 +371,7 @@ describe("NativeTreeView change marks", () => {
   }
 
   /** A read of `nodes` lands, marked with `changes`. */
-  function landChanges(
-    nodes: Map<string, NativeNode>,
-    changes: NativeTreeChanges,
-  ) {
+  function landChanges(nodes: Map<string, NativeNode>, changes: TreeChanges) {
     act(() => show({ nodes, marks: { changes, seq: ++seq, announce: true } }));
   }
 

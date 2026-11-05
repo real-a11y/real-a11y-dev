@@ -1,12 +1,12 @@
 /**
  * What changed, through the real build: each read of Chrome's tree is
  * compared with the one before it, and the tree marks what it found
- * (`tree-changes.ts`). The APG accordion is the case the feature was asked
+ * (the ui package's `tree-changes.ts`). The APG accordion is the case the feature was asked
  * for: a button that opens a panel, whose new rows should stand out, with
  * the button's own `collapsed` → `expanded`.
  */
 
-import { CHANGE_FLASH_MS } from "../src/sidepanel/tree-changes.ts";
+import { CHANGE_FLASH_MS } from "@real-a11y-dev/semantic-navigator-ui";
 
 import { expect, test, type NativeHarness } from "./harness";
 

@@ -1,23 +1,25 @@
 /**
- * How Chrome's tree shows what a read found changed since the read before
- * it (`native-tree-diff.ts`): which rows flash, which collapsed row stands in
+ * How a tree view shows what a read found changed since the read before it
+ * (`tree-changes-diff.ts`): which rows flash, which collapsed row stands in
  * for the changes under it, which new rows open, where Alt+N goes, and the
- * words for all of it. Pure: `NativeTreeView.tsx` renders from it, and
- * `TreeChangesBar.tsx` sums it up under the tree.
+ * words for all of it. Pure: a tree view renders from it (the extension's
+ * `NativeTreeView.tsx`, through `useTreeChanges`), and `TreeChangesBar.tsx`
+ * sums it up under the tree.
  */
 
-import type { NativeNode } from "../native/native-actions.js";
-import type {
-  NativeNodeChange,
-  NativeTreeChanges,
-} from "../native/native-tree-diff.js";
+import {
+  documentOrder,
+  type FieldChange,
+  type TreeChanges,
+  type TreeRow,
+} from "./tree-changes-diff.js";
 
 /**
- * The changes Chrome's tree marks, as `App.tsx` hands them down with the
- * read that found them.
+ * The changes a tree marks, as its host hands them down with the read that
+ * found them.
  */
-export interface NativeChangeMarks {
-  changes: NativeTreeChanges;
+export interface ChangeMarks {
+  changes: TreeChanges;
   /** Different for every read that sets the marks: a read that finds what
    *  the one before it found is still a read. */
   seq: number;
@@ -27,16 +29,16 @@ export interface NativeChangeMarks {
   announce: boolean;
 }
 
-/** What `App.tsx` hands Chrome's tree of the changes it marks
- *  (`use-native-changes.ts`). */
-export interface NativeTreeChangesProp {
-  marks: NativeChangeMarks | null;
+/** What a host hands its tree of the changes it marks: the extension's
+ *  `use-native-changes.ts`, say. */
+export interface TreeChangesProp {
+  marks: ChangeMarks | null;
   /** Clear the marks: the changes bar's ✕. */
   clear: () => void;
   /**
-   * Which document the read on screen is of: its tab and its document, as
-   * the marks tell reads apart. The rows the user opened stay open until it
-   * changes (`use-tree-expansion.ts`), whatever root the tree moves to.
+   * Which document the read on screen is of, as the marks tell reads apart:
+   * the rows the user opened stay open until it changes, whatever root the
+   * tree moves to (the extension's `use-tree-expansion.ts`).
    */
   documentKey?: string;
 }
@@ -58,8 +60,10 @@ export const MAX_REMOVED_LISTED = 50;
 /** The two keys, as hints and titles name them. */
 export const CHANGE_KEYS = { forward: "Alt+N", back: "Alt+Shift+N" } as const;
 
-/** Both keys, as the tree's `aria-keyshortcuts` lists them. */
-export const CHANGE_KEYSHORTCUTS = `${CHANGE_KEYS.forward} ${CHANGE_KEYS.back}`;
+/** Both keys, as the tree's `aria-keyshortcuts` lists them. Spelled out
+ *  rather than read from {@link CHANGE_KEYS}: a property read at the top of
+ *  a module keeps both in every bundle of this package, used or not. */
+export const CHANGE_KEYSHORTCUTS = "Alt+N Alt+Shift+N";
 
 /**
  * Alt+N or Alt+Shift+N, matched as the jump keys are (`isJumpKey`): on the
@@ -79,7 +83,7 @@ export function isChangeKey(
 }
 
 /** What a changed row changed to, as one comparable value. */
-function changeSignature(changes: readonly NativeNodeChange[]): string {
+function changeSignature(changes: readonly FieldChange[]): string {
   return JSON.stringify(changes.map((c) => [c.field, c.after ?? null]));
 }
 
@@ -90,8 +94,8 @@ function changeSignature(changes: readonly NativeNodeChange[]): string {
  * found flashes nothing again.
  */
 export function freshChanges(
-  prev: NativeTreeChanges | null,
-  next: NativeTreeChanges,
+  prev: TreeChanges | null,
+  next: TreeChanges,
 ): Set<string> {
   const fresh = new Set<string>();
   for (const id of next.added) {
@@ -120,9 +124,9 @@ export function freshChanges(
  * after an earlier read found it stays collapsed unless the page adds to it.
  */
 export function rowsToOpen(
-  changes: NativeTreeChanges,
+  changes: TreeChanges,
   fresh: ReadonlySet<string>,
-  nodes: ReadonlyMap<string, NativeNode>,
+  nodes: ReadonlyMap<string, TreeRow>,
   parentOf: ReadonlyMap<string, string>,
 ): string[] {
   const opens = (id: string) => (nodes.get(id)?.childIds?.length ?? 0) > 0;
@@ -155,6 +159,19 @@ export function rowsToOpen(
   return [...open];
 }
 
+/** `open` added to the rows `prev` holds open, or `prev` itself when it adds
+ *  nothing: for a view that keeps its open rows as a set. */
+export function withRowsOpen(
+  prev: Set<string>,
+  open: Iterable<string>,
+): Set<string> {
+  let next: Set<string> | null = null;
+  for (const id of open) {
+    if (!prev.has(id)) (next ??= new Set(prev)).add(id);
+  }
+  return next ?? prev;
+}
+
 /** The changes under a row that have no row of their own on screen. */
 export interface HiddenChanges {
   added: number;
@@ -175,7 +192,7 @@ export interface HiddenChanges {
  * A change outside the rows shown at all (outside the scope) goes nowhere.
  */
 export function hiddenChangesByRow(
-  changes: NativeTreeChanges,
+  changes: TreeChanges,
   shown: ReadonlySet<string>,
   parentOf: ReadonlyMap<string, string>,
   fresh: {
@@ -246,7 +263,7 @@ export interface RowChangeMarks {
   /** It is the top row of a new subtree, the one that says "new". */
   newTop: boolean;
   /** What changed on it, if it changed. */
-  changes?: readonly NativeNodeChange[];
+  changes?: readonly FieldChange[];
   /** What it stands in for, under it. */
   hidden?: HiddenChanges;
 }
@@ -257,7 +274,7 @@ const UNMARKED: RowChangeMarks = { isNew: false, newTop: false };
 /** What row `id` shows of `changes`, with `hidden` from
  *  {@link hiddenChangesByRow}. */
 export function rowChangeMarks(
-  changes: NativeTreeChanges | null,
+  changes: TreeChanges | null,
   hidden: ReadonlyMap<string, HiddenChanges> | null,
   parentOf: ReadonlyMap<string, string>,
   id: string,
@@ -279,7 +296,7 @@ export function rowChangeMarks(
  * checked" would read the same either way. Anything else is named, as the
  * row already says what it is now.
  */
-export function spokenChange(change: NativeNodeChange): string {
+export function spokenChange(change: FieldChange): string {
   const key = changedFieldLabel(change.field);
   if (!change.field.startsWith("states.")) return key;
   if (change.field === "states.expanded") {
@@ -380,7 +397,7 @@ export function firstFlashEnd(flashes: ReadonlyMap<string, Flash>): number {
 export function notAboveSelection(
   open: string[],
   tree: {
-    nodes: ReadonlyMap<string, NativeNode>;
+    nodes: ReadonlyMap<string, TreeRow>;
     rootId: string;
     parentOf: ReadonlyMap<string, string>;
   },
@@ -402,26 +419,15 @@ export function notAboveSelection(
 /** Each row's place in document order, walking from `rootId` as the tree
  *  draws it: what {@link nextChangeStop} orders by. */
 export function documentPositions(
-  nodes: ReadonlyMap<string, NativeNode>,
+  nodes: ReadonlyMap<string, TreeRow>,
   rootId: string,
 ): Map<string, number> {
-  const position = new Map<string, number>();
-  const stack = nodes.has(rootId) ? [rootId] : [];
-  while (stack.length > 0) {
-    const id = stack.pop()!;
-    if (position.has(id)) continue;
-    position.set(id, position.size);
-    const children = nodes.get(id)?.childIds ?? [];
-    for (let i = children.length - 1; i >= 0; i--) {
-      if (nodes.has(children[i]!)) stack.push(children[i]!);
-    }
-  }
-  return position;
+  return new Map(documentOrder({ nodes, rootId }).map((id, i) => [id, i]));
 }
 
 /**
  * Where Alt+N (`back` false) or Alt+Shift+N (`back` true) goes from the row
- * `from`: the next or previous stop (`NativeTreeChanges.stops`) in document
+ * `from`: the next or previous stop (`TreeChanges.stops`) in document
  * order, wrapping around, or the first or last with no row selected.
  * `position` is each row's place in that order; a stop without one is gone
  * from the tree. `undefined` when there is nowhere to go.
@@ -457,7 +463,7 @@ function countsText(added: number, changed: number, removed: number): string {
 }
 
 /** What a read found, in rows: "3 new, 1 changed, 2 removed". */
-export function summarizeChanges(changes: NativeTreeChanges): string {
+export function summarizeChanges(changes: TreeChanges): string {
   return countsText(
     changes.added.size,
     changes.changed.size,
@@ -493,7 +499,7 @@ function shownSide(field: string, value: string | boolean | undefined): string {
 }
 
 /** One change, for a row's tooltip: `expanded: collapsed → expanded`. */
-export function describeChange(change: NativeNodeChange): string {
+export function describeChange(change: FieldChange): string {
   // Ids mean nothing to a reader; the row's chips show the rows it controls.
   if (change.field === "controls") return "the rows it controls";
   return `${changedFieldLabel(change.field)}: ${shownSide(change.field, change.before)} → ${shownSide(change.field, change.after)}`;

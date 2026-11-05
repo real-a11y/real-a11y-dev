@@ -1,3 +1,4 @@
+import { CHANGE_FLASH_MS } from "@real-a11y-dev/semantic-navigator-ui";
 import { render, h } from "preact";
 import { act } from "preact/test-utils";
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
@@ -21,7 +22,6 @@ import {
   stubMatchMedia,
   treeData,
 } from "./panel-harness.js";
-import { CHANGE_FLASH_MS } from "./tree-changes.js";
 
 /**
  * What Chrome's tree marks of each read, through the whole panel. `App.tsx`

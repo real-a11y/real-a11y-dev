@@ -3,7 +3,7 @@
  * one page, through the real build: the rows the user opened, when a modal
  * dialog moves the tree's root to itself and back (`use-tree-expansion.ts`),
  * and the selection, when a read wraps the selected row in a new one, which
- * the read opens (`use-tree-changes.ts`).
+ * the read opens (the ui package's `useTreeChanges`).
  */
 
 import { expect, test } from "./harness";

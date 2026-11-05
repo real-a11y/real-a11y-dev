@@ -1,21 +1,20 @@
 /**
- * The line under Chrome's tree while it marks what the last read found
- * changed (`tree-changes.ts`): how many rows are new, changed and removed,
- * the way to the previous and next change for a pointer, a way to clear the
- * marks, and the removed rows, which have no row of their own to mark,
- * listed as the shared panel lists the rows removed since its checkpoint.
+ * The line under a tree while it marks what the last read found changed
+ * (`tree-changes.ts`): how many rows are new, changed and removed, the way
+ * to the previous and next change for a pointer, a way to clear the marks,
+ * and the removed rows, which have no row of their own to mark, listed as
+ * `TreePanel` lists the rows removed since its checkpoint.
  * The keys, Alt+Shift+N and Alt+N, are the tree's, so the arrows name them
  * in their titles only, as a jump chip names Alt+J: they do nothing here.
  */
 
-import type { NativeTreeChanges } from "../native/native-tree-diff.js";
-
+import type { ChangeNotice } from "../hooks/useTreeChanges.js";
+import type { TreeChanges } from "../tree-changes-diff.js";
 import {
   CHANGE_KEYS,
   MAX_REMOVED_LISTED,
   summarizeChanges,
-} from "./tree-changes.js";
-import type { ChangeNotice } from "./use-tree-changes.js";
+} from "../tree-changes.js";
 
 /**
  * Where a read the user caused says what it found changed, and Alt+N that
@@ -42,7 +41,7 @@ export function TreeChangesBar({
   onNext,
   onClear,
 }: {
-  changes: NativeTreeChanges;
+  changes: TreeChanges;
   onPrevious: () => void;
   onNext: () => void;
   /** Left out without it. */

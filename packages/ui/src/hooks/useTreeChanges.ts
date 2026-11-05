@@ -1,8 +1,10 @@
 /**
- * The changes Chrome's tree marks, as `NativeTreeView.tsx` shows them
- * (`tree-changes.ts`): the rows a read finds new or changed flash for a
- * moment, the new ones open, in the render that brings the read, a read the
- * user caused says what it found, and Alt+N goes from change to change.
+ * The changes a tree view marks, as it shows them (`tree-changes.ts`): the
+ * rows a read finds new or changed flash for a moment, the new ones open, in
+ * the render that brings the read, a read the user caused says what it
+ * found, and Alt+N goes from change to change. The view keeps its open rows
+ * as a set and says how to select a row (`jumpTo`); the extension's
+ * `NativeTreeView.tsx` is one.
  */
 
 import {
@@ -14,9 +16,7 @@ import {
   useState,
 } from "preact/hooks";
 
-import type { NativeNode } from "../native/native-actions.js";
-import type { NativeTreeChanges } from "../native/native-tree-diff.js";
-
+import type { TreeChanges, TreeRow } from "../tree-changes-diff.js";
 import {
   documentPositions,
   firstFlashEnd,
@@ -29,9 +29,9 @@ import {
   notAboveSelection,
   rowsToOpen,
   summarizeChanges,
-  type NativeChangeMarks,
-} from "./tree-changes.js";
-import { opened } from "./use-tree-expansion.js";
+  withRowsOpen,
+  type ChangeMarks,
+} from "../tree-changes.js";
 
 /** What the polite region under the toolbar says, keyed so the same words
  *  twice are said twice. */
@@ -80,12 +80,12 @@ const NOTHING_FRESH: FreshRead = { fresh: new Set(), open: [] };
  *  rows that opens, none above the selection. No `prev` at all is a view
  *  mounting with marks it didn't see arrive: nothing is fresh. */
 function freshRead(
-  prev: NativeTreeChanges | null | undefined,
-  changes: NativeChangeMarks | null,
+  prev: TreeChanges | null | undefined,
+  changes: ChangeMarks | null,
   tree: {
-    nodes: Map<string, NativeNode>;
+    nodes: ReadonlyMap<string, TreeRow>;
     rootId: string;
-    parentOf: Map<string, string>;
+    parentOf: ReadonlyMap<string, string>;
   },
   selectedId: string | null,
 ): FreshRead {
@@ -110,12 +110,12 @@ export function useTreeChanges({
   setExpanded,
   jumpTo,
 }: {
-  changes: NativeChangeMarks | null;
-  nodes: Map<string, NativeNode>;
+  changes: ChangeMarks | null;
+  nodes: ReadonlyMap<string, TreeRow>;
   rootId: string;
-  parentOf: Map<string, string>;
+  parentOf: ReadonlyMap<string, string>;
   selectedId: string | null;
-  /** The rows open (`use-tree-expansion.ts`). */
+  /** The rows open, as the view keeps them. */
   expanded: Set<string>;
   setExpanded: (update: (open: Set<string>) => Set<string>) => void;
   /** Select a row wherever it is, as a jump chip does. */
@@ -132,7 +132,7 @@ export function useTreeChanges({
   // The marks the layout effect below last took in. Marks the view mounts
   // with are a read it didn't see arrive: they show, but neither flash, nor
   // open anything, nor speak again.
-  const last = useRef<NativeTreeChanges | null | undefined>(undefined);
+  const last = useRef<TreeChanges | null | undefined>(undefined);
   // Worked out in the render that brings the read, so the rows it opens are
   // open in that render rather than from the next. That render's plain
   // effects run as the next one starts, among them the one that drops a
@@ -148,7 +148,10 @@ export function useTreeChanges({
   // On top of the rows open until the layout effect adds them there, where
   // the user can close them again.
   const pending = last.current === shown ? NOTHING_FRESH.open : read.open;
-  const open = useMemo(() => opened(expanded, pending), [expanded, pending]);
+  const open = useMemo(
+    () => withRowsOpen(expanded, pending),
+    [expanded, pending],
+  );
 
   // Before paint, so a marked row never shows a frame without its flash.
   // Marks that go take what was said about them along.
@@ -163,7 +166,7 @@ export function useTreeChanges({
     if (read.fresh.size === 0) return;
     flash(read.fresh);
     if (read.open.length > 0) {
-      setExpanded((prevOpen) => opened(prevOpen, read.open));
+      setExpanded((prevOpen) => withRowsOpen(prevOpen, read.open));
     }
     if (changes.announce) {
       say(`${summarizeChanges(changes.changes)} in the tree`);
@@ -209,8 +212,8 @@ export function useTreeChanges({
  */
 export function useHiddenChanges(
   { shown, flashes }: ReturnType<typeof useTreeChanges>,
-  visibleIds: string[],
-  parentOf: Map<string, string>,
+  visibleIds: readonly string[],
+  parentOf: ReadonlyMap<string, string>,
 ) {
   return useMemo(
     () =>

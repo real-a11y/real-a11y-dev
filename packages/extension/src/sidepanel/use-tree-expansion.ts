@@ -4,7 +4,7 @@
  * the page's landmarks show without an extra click and what is deeper starts
  * closed.
  *
- * A document's reads don't always share a root (`Tree` in
+ * A document's reads don't always share a root (`ReadTree` in
  * `use-native-changes.ts`): Chromium's own is dropped, so a page with one row
  * at the top is rooted at it, one with more at the synthetic `ax-root`, and
  * an open modal dialog leaves only itself, a native `showModal()` one or one
@@ -18,22 +18,10 @@
  * one.
  */
 
+import { withRowsOpen } from "@real-a11y-dev/semantic-navigator-ui";
 import { useLayoutEffect, useMemo, useRef, useState } from "preact/hooks";
 
 import type { NativeNode } from "../native/native-actions.js";
-
-/**
- * `open` added to the rows open, the same set back when it adds nothing.
- *
- * @internal
- */
-export function opened(prev: Set<string>, open: Iterable<string>): Set<string> {
-  let next: Set<string> | null = null;
-  for (const id of open) {
-    if (!prev.has(id)) (next ??= new Set(prev)).add(id);
-  }
-  return next ?? prev;
-}
 
 /** The document the tree is of, the read and root it was last drawn from,
  *  and every row the document's reads have held. */
@@ -97,7 +85,7 @@ export function useTreeExpansion(
     if (!pending) return expanded;
     return pending.fresh
       ? new Set(pending.open)
-      : opened(expanded, pending.open);
+      : withRowsOpen(expanded, pending.open);
   }, [expanded, pending]);
   // A layout effect, so `NativeTreeView`'s that opens a scope root, declared
   // after this hook's call, lands on top of a document's first rows rather
@@ -107,7 +95,7 @@ export function useTreeExpansion(
     if (seed?.fresh) {
       setExpanded(new Set(seed.open));
     } else if (seed) {
-      setExpanded((prev) => opened(prev, seed.open));
+      setExpanded((prev) => withRowsOpen(prev, seed.open));
     }
     const was = drawn.current;
     if (!was || seed?.fresh) {

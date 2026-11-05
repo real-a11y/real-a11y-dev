@@ -1,13 +1,11 @@
+import type { TreeChanges } from "@real-a11y-dev/semantic-navigator-ui";
 import { render } from "preact";
 import { useState } from "preact/hooks";
 import { act } from "preact/test-utils";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import type { NativeNode } from "../native/native-actions.js";
-import {
-  diffNativeTrees,
-  type NativeTreeChanges,
-} from "../native/native-tree-diff.js";
+import { diffNativeTrees } from "../native/native-tree-diff.js";
 
 import {
   followAfterRead,
@@ -98,7 +96,7 @@ const WENT_EXPANDED = { field: "states.expanded", before: false, after: true };
 
 /** What a comparison found, by row id: added and changed in any order,
  *  removed in the earlier read's document order. */
-function found(changes: NativeTreeChanges | null | undefined) {
+function found(changes: TreeChanges | null | undefined) {
   if (!changes) return null;
   return {
     added: [...changes.added].sort(),

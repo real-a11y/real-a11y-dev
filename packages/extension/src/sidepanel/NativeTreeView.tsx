@@ -37,16 +37,25 @@ import {
   type RoleFilter,
 } from "@real-a11y-dev/core";
 import {
+  CHANGE_KEYSHORTCUTS,
+  ChangeNoticeRegion,
+  changeRowClass,
   createTypeAheadBuffer,
   findTypeAheadIndex,
+  isChangeKey,
   isJumpKey,
   isTypeAheadKey,
   JUMP_KEYSHORTCUTS,
   nextJump,
   resolveStepperKeyAction,
+  rowChangeMarks,
+  TreeChangesBar,
+  useHiddenChanges,
   useInputModality,
+  useTreeChanges,
   useVirtualTree,
   type JumpCycle,
+  type TreeChangesProp,
 } from "@real-a11y-dev/semantic-navigator-ui";
 import {
   useCallback,
@@ -104,16 +113,7 @@ import {
 import { ScopeBar } from "./ScopeBar.js";
 import { DialogIndicator, SendKeyBar, type SendKey } from "./SendKeyBar.js";
 import { TabSequenceView } from "./TabSequenceView.js";
-import {
-  CHANGE_KEYSHORTCUTS,
-  changeRowClass,
-  isChangeKey,
-  rowChangeMarks,
-  type NativeTreeChangesProp,
-} from "./tree-changes.js";
-import { ChangeNoticeRegion, TreeChangesBar } from "./TreeChangesBar.js";
 import { useDwellTimer } from "./use-dwell-timer.js";
-import { useHiddenChanges, useTreeChanges } from "./use-tree-changes.js";
 import { useTreeExpansion } from "./use-tree-expansion.js";
 
 const ROLE_FILTER_KEYS = Object.keys(ROLE_FILTER_LABELS) as Array<
@@ -212,11 +212,11 @@ export interface NativeTreeViewProps {
   onViewChange?: (view: NativeView) => void;
   /**
    * What the read on screen found new, changed or removed since the read
-   * before it, marked on the rows (`tree-changes.ts`), and which document it
-   * is of. Left out, nothing is marked, and every read is taken to be of
-   * one document.
+   * before it, marked on the rows (the ui package's `tree-changes.ts`), and
+   * which document it is of. Left out, nothing is marked, and every read is
+   * taken to be of one document.
    */
-  changes?: NativeTreeChangesProp;
+  changes?: TreeChangesProp;
 }
 
 export function NativeTreeView({
@@ -488,9 +488,9 @@ export function NativeTreeView({
     return items;
   }, [nodes, walkRoot, roleFilter, search, selects]);
 
-  // What the last read found changed (`use-tree-changes.ts`), and the rows
-  // open with those it opens: in the render that brings it, so a row it
-  // wraps in a new one still shows there, and stays selected.
+  // What the last read found changed (the ui package's `useTreeChanges`),
+  // and the rows open with those it opens: in the render that brings it, so
+  // a row it wraps in a new one still shows there, and stays selected.
   const changeView = useTreeChanges({
     changes: changes?.marks ?? null,
     nodes,

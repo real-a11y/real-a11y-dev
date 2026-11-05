@@ -57,6 +57,11 @@
   a row the page wraps in a new one, which the tree opens, stays selected,
   where the selection used to go.
 
+- Nothing changes for users: the code behind the change marks moved into the
+  panel code the extension shares with the inspector, the React panel and the
+  Storybook addon, so they can mark what changed too
+  ([#584](https://github.com/real-a11y/real-a11y-dev/pull/584)).
+
 ## 0.1.18
 
 ### Patch Changes

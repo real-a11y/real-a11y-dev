@@ -2,13 +2,17 @@
  * What a row of Chrome's tree (`NativeTreeView.tsx`) shows after its indent
  * and toggle, up to its action buttons: its label (role, heading level,
  * name, description, value, state badges, jump chips, action tag), its key
- * states, and what the last read found changed on it (`tree-changes.ts`).
+ * states, and what the last read found changed on it (the ui package's
+ * `tree-changes.ts`).
  */
 
 import { isNativeIframeRole, type ControlsIndex } from "@real-a11y-dev/core";
 import {
   JUMP_KEYS,
   KeyStatesForReaders,
+  marksForReaders,
+  RowChangeTags,
+  type RowChangeMarks,
 } from "@real-a11y-dev/semantic-navigator-ui";
 
 import type { NativeNode } from "../native/native-actions.js";
@@ -17,14 +21,8 @@ import { ControlsChip } from "./ControlsChip.js";
 import { announcedValueLabel } from "./field-value.js";
 import { EmbeddedBadge, nativeStateBadges, StateBadges } from "./row-badges.js";
 import { hasChildren } from "./scope.js";
-import {
-  describeChange,
-  hiddenChangesText,
-  marksForReaders,
-  type RowChangeMarks,
-} from "./tree-changes.js";
 
-/** What changed on a row, by field (`NativeNodeChange.field`). */
+/** What changed on a row, by field (`FieldChange.field`). */
 type Changed = ReadonlySet<string> | undefined;
 
 /** The class that marks a part of the row as what changed: underlined or
@@ -215,51 +213,6 @@ function JumpChips({
           />
         );
       })}
-    </>
-  );
-}
-
-/**
- * What the last read found on a row, as tags after its key states, where
- * nothing clips them. A screen reader hears the same in the row's label.
- */
-function RowChangeTags({ marks }: { marks: RowChangeMarks }) {
-  const { hidden } = marks;
-  return (
-    <>
-      {marks.newTop && (
-        <span
-          class="sn-change-tag sn-change-tag--new"
-          aria-hidden="true"
-          title="New since the read before"
-        >
-          new
-        </span>
-      )}
-      {marks.changes && (
-        <span
-          class="sn-change-tag sn-change-tag--changed"
-          aria-hidden="true"
-          title={[
-            "Changed since the read before:",
-            ...marks.changes.map(describeChange),
-          ].join("\n")}
-        >
-          changed
-        </span>
-      )}
-      {/* Keyed on when its flash ends, so a later read that flashes another
-          change under the row starts the tag's flash over. */}
-      {hidden && (
-        <span
-          key={hidden.fresh ? hidden.flashUntil : "still"}
-          class={`sn-change-tag sn-change-tag--inside${hidden.fresh ? " sn-change-tag--flash" : ""}`}
-          aria-hidden="true"
-          title={`Under this row, since the read before: ${hiddenChangesText(hidden)}`}
-        >
-          {hiddenChangesText(hidden)}
-        </span>
-      )}
     </>
   );
 }
