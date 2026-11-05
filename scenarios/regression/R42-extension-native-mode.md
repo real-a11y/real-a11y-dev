@@ -8,7 +8,7 @@ priority: P0
 status: Active
 validFrom: "extension ≥ 0.1.16. On 0.1.15 or earlier there is no native mode, so this row is Blocked, not Fail. A step marked 'extension ≤ 0.1.17' runs only up to 0.1.17, which also had an in-page tree and a switch to stop reading through Chrome, and one marked 'from 0.1.18' or 'from 0.1.19' only from then. Load unpacked from packages/extension/dist"
 validUntil: ""
-expected: "a fresh profile reads Chrome's tree with nothing asked, and Chrome's bar names the extension; a note explains the bar once; from 0.1.18, where Chrome refuses the attach the panel says why and the TAB view still lists the tab order, a profile that turned reading through Chrome off reads Chrome's tree after the update, and Settings holds Show full names alone; Cancel on the bar is respected; each window's panel shows only its own window's tab, or a popup opened from it; page focus selects its row in Chrome's tree without the bar, inside frames too; what a click through the tree loads a moment later, and a change inside a shown frame with Follow page changes on, reach Chrome's tree without Refresh; its state badges take the shared panel's colours; its TAB view lists the page's tab stops in the order Tab visits them, with no bar; from 0.1.19, each read marks what it found new or changed, a dialog without the page behind it counting as removed, and a screen reader hears what a read it caused found; up to 0.1.17, Turn off and the Settings switch stop the reads, and nothing attaches while it is off"
+expected: "a fresh profile reads Chrome's tree with nothing asked, and Chrome's bar names the extension; a note explains the bar once; from 0.1.18, where Chrome refuses the attach the panel says why and the TAB view still lists the tab order, a profile that turned reading through Chrome off reads Chrome's tree after the update, and Settings holds Show full names alone; Cancel on the bar is respected; each window's panel shows only its own window's tab, or a popup opened from it; page focus selects its row in Chrome's tree without the bar, inside frames too; what a click through the tree loads a moment later, and a change inside a shown frame with Follow page changes on, reach Chrome's tree without Refresh; its state badges take the shared panel's colours; its TAB view lists the page's tab stops in the order Tab visits them, with no bar; from 0.1.19, each read marks what it found new or changed, a dialog without the page behind it counting as removed, and a screen reader hears what a read it caused found, and the rows opened and the row selected stay so when a modal dialog comes and goes or the page wraps the selected row; up to 0.1.17, Turn off and the Settings switch stop the reads, and nothing attaches while it is off"
 twin: D6
 notion: ""
 ---
@@ -215,6 +215,13 @@ and the tab order is only in the in-page tree)
     row flashes, and the edges, tags and outlined badge are there. In Windows
     contrast themes (forced colours), a marked row has a solid line down its
     left edge, and the tags and the changed badge stay outlined.
+25. Open `packages/extension/e2e/fixtures/tree-reshape.html`, served over http. On
+    **Chrome's tree**, open the **Basket** region's row, which starts closed. Open
+    the dialog through the tree (select **Add delivery address**, `Enter`): the
+    tree shows the dialog alone, open. Close it (select **Close**, `Enter`): the
+    page's rows come back, and **Basket** is still open. Select **Group me** and
+    press `Enter`: the button wraps itself in a new group, which opens, and the
+    button's row is still the one selected.
 
 ## Expected
 
@@ -265,6 +272,9 @@ and the tab order is only in the in-page tree)
   is new without the page behind it counting as removed; a screen reader hears
   what a read it caused found, and each marked row says what happened to it;
   reduced motion stills the flash, and forced colours keep every mark visible
+- **What you opened and selected stays** (step 25), from 0.1.19: a row you
+  opened is still open after a modal dialog opens and closes, and a selected row
+  a read wraps in a new row stays selected
 
 ## Why this exists
 
@@ -300,3 +310,10 @@ did to the tree, at a glance. The e2e suite
 counts and the dialog cases in Chromium, but not that a flash is noticeable in
 either theme, that a screen reader hears the summary once and at the right moment,
 or that reduced motion and forced colours leave the marks readable.
+
+Step 25 is here because a modal dialog moves the root of Chrome's tree to itself
+and back, which up to 0.1.18 closed every row the user had opened, and a row the
+page wraps lands under a new row, which up to 0.1.18 stayed closed and took the
+selection with it. The e2e suite
+(`packages/extension/e2e/panel-ui-native-reshape.test.ts`) checks the same page
+in Chromium.

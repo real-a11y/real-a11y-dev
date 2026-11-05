@@ -113,7 +113,8 @@ import {
 } from "./tree-changes.js";
 import { ChangeNoticeRegion, TreeChangesBar } from "./TreeChangesBar.js";
 import { useDwellTimer } from "./use-dwell-timer.js";
-import { useTreeChanges } from "./use-tree-changes.js";
+import { useHiddenChanges, useTreeChanges } from "./use-tree-changes.js";
+import { useTreeExpansion } from "./use-tree-expansion.js";
 
 const ROLE_FILTER_KEYS = Object.keys(ROLE_FILTER_LABELS) as Array<
   Exclude<RoleFilter, null>
@@ -211,8 +212,9 @@ export interface NativeTreeViewProps {
   onViewChange?: (view: NativeView) => void;
   /**
    * What the read on screen found new, changed or removed since the read
-   * before it, marked on the rows (`tree-changes.ts`). Left out, nothing is
-   * marked.
+   * before it, marked on the rows (`tree-changes.ts`), and which document it
+   * is of. Left out, nothing is marked, and every read is taken to be of
+   * one document.
    */
   changes?: NativeTreeChangesProp;
 }
@@ -245,7 +247,14 @@ export function NativeTreeView({
 }: NativeTreeViewProps) {
   // The tab order, while it shows in the tree's place.
   const shownTabOrder = view === "tab" ? tabOrder : undefined;
-  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  // The rows open, kept through every root a document's reads move to
+  // (`use-tree-expansion.ts`). The tree shows these and the rows the read on
+  // screen's changes are opening: `expanded`, below.
+  const [openRows, setExpanded] = useTreeExpansion(
+    nodes,
+    rootId,
+    changes?.documentKey,
+  );
   const [selectedId, setSelectedId] = useState<string | null>(null);
   // Bumped by an explicit gesture that re-selects a row — a click, or a pick
   // reveal — so the page-focus follow below re-fires even when `selectedId`
@@ -259,31 +268,6 @@ export function NativeTreeView({
   const listRef = useRef<HTMLElement | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const typeAhead = useRef(createTypeAheadBuffer());
-
-  // Seed a sensible default the first time THIS root shows up — root plus its
-  // immediate children expanded, so the page's landmark structure is visible
-  // without an extra click, deeper content collapsed. `rootId` is stable
-  // across repeated reads of the same document (native ids encode Chromium's
-  // own `backendDOMNodeId`, which only changes on navigation) and changes
-  // after a real navigation — so this fires once per document, not once per
-  // re-read, and never fights the user's own expand/collapse choices on an
-  // action-triggered refresh of the SAME page.
-  // Layout effect, not a plain effect: a plain effect runs AFTER the browser
-  // paints, so the very first render of a new root would briefly paint just
-  // that one collapsed row before this seeds its children in and repaints —
-  // a one-frame flash on every tree load. Synchronous, pre-paint seeding
-  // avoids it.
-  useLayoutEffect(() => {
-    if (!rootId) return;
-    setExpanded((prev) => {
-      if (prev.has(rootId)) return prev;
-      const root = nodes.get(rootId);
-      return new Set([rootId, ...(root?.childIds ?? [])]);
-    });
-    // Only re-seed when the root identity itself changes — reading `nodes`
-    // fresh inside the effect (rather than depending on it) is deliberate:
-    // it must NOT re-seed just because the tree refreshed with the same root.
-  }, [rootId]);
 
   const parentOf = useMemo(() => nativeParentIndex(nodes), [nodes]);
   const selectIds = useMemo(() => nativeSelectIds(nodes), [nodes]);
@@ -318,9 +302,10 @@ export function NativeTreeView({
   // remounts this view with App's saved scope but a freshly seeded expansion
   // set (the page root and its children only), so
   // a deeper scope root would otherwise come back as one collapsed row.
-  // Declared after the root-seeding layout effect above so its update lands
-  // on top of the seeded set rather than being replaced by it. Keyed on the
-  // scope alone, so a user collapsing the scope root later keeps it closed.
+  // Declared after `useTreeExpansion`, whose layout effect seeds the set, so
+  // its update lands on top of the seeded set rather than being replaced by
+  // it. Keyed on the scope alone, so a user collapsing the scope root later
+  // keeps it closed.
   useLayoutEffect(() => {
     if (!scopeRoot) return;
     setExpanded((prev) =>
@@ -503,6 +488,21 @@ export function NativeTreeView({
     return items;
   }, [nodes, walkRoot, roleFilter, search, selects]);
 
+  // What the last read found changed (`use-tree-changes.ts`), and the rows
+  // open with those it opens: in the render that brings it, so a row it
+  // wraps in a new one still shows there, and stays selected.
+  const changeView = useTreeChanges({
+    changes: changes?.marks ?? null,
+    nodes,
+    rootId,
+    parentOf,
+    selectedId,
+    expanded: openRows,
+    setExpanded,
+    jumpTo,
+  });
+  const { goToChange, expanded } = changeView;
+
   // `visiblePositions` records each row's aria-posinset/aria-setsize within
   // its visible sibling group, as the shared panel's tree has them.
   // Virtualization keeps only the windowed rows in the
@@ -514,7 +514,7 @@ export function NativeTreeView({
   // as the shared panel's tree: descending still requires `expanded`, so a
   // match under a collapsed ancestor stays hidden until the user expands it
   // by hand. That is a real limitation there too (both seed only two levels
-  // open by default — see this file's own layout-effect comment, and
+  // open by default — see `use-tree-expansion.ts`, and
   // `dom-extractor.ts`'s `expanded: depth < 2`) rather than something native
   // does worse.
   const { visibleIds, visiblePositions } = useMemo(() => {
@@ -536,19 +536,7 @@ export function NativeTreeView({
     if (walkRoot) walk(walkRoot, 1, 1);
     return { visibleIds: ids, visiblePositions: positions };
   }, [nodes, walkRoot, expanded, hasFilter, search]);
-
-  // What the last read found changed (`use-tree-changes.ts`).
-  const changeView = useTreeChanges({
-    changes: changes?.marks ?? null,
-    nodes,
-    rootId,
-    parentOf,
-    visibleIds,
-    selectedId,
-    setExpanded,
-    jumpTo,
-  });
-  const { goToChange } = changeView;
+  const hidden = useHiddenChanges(changeView, visibleIds, parentOf);
 
   const {
     containerRef,
@@ -1239,7 +1227,7 @@ export function NativeTreeView({
                 const steppable = isSteppableRole(node.role);
                 const selectAction = selects(node) ? "select" : undefined;
                 const position = visiblePositions.get(id);
-                const { shown, hidden, flashes } = changeView;
+                const { shown, flashes } = changeView;
                 const marks = rowChangeMarks(shown, hidden, parentOf, id);
 
                 return (
