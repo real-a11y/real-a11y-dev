@@ -17,6 +17,9 @@ not in GitHub Issues. Use the Notion MCP tools (`notion-*`) for all operations.
 - **Status** (status) — `Not started`, `Up next`, `In progress`, `In review`,
   `Cancelled`, `Done`.
 - **Triage** (select) — the five triage roles. See `./triage-labels.md`.
+- **Severity** (select) — how bad a bug is for the people using the tools:
+  `blocker`, `major`, `minor`, or `perf` for a performance cliff. Optional: set
+  it on bug tickets and leave it empty on other work.
 - **Project** (relation → Projects,
   `collection://3a81c354-b0b5-80ca-9fa9-000b60120b45`) — every task should name
   one. **A relation takes an array of page URLs, not a name**: sending
@@ -35,6 +38,7 @@ Current projects:
 | Dogfood follow-ups — 0.1.0-beta.1         | `https://app.notion.com/p/3a81c354b0b5816bb2bff81fd574ca0b` |
 | Phase 2: session daemon                   | `https://app.notion.com/p/3b01c354b0b581b690dbc4c790a406a6` |
 | ADR-0001: field values                    | `https://app.notion.com/p/3e81c354b0b58181aaacc03119226984` |
+| A11y spec audit (2026-11)                 | `https://app.notion.com/p/40e1c354b0b58101841af2314001f913` |
 
 Re-query them with `notion-query-data-sources` in `rows` mode against the Projects
 data source rather than trusting this table after a reorganisation. Not
