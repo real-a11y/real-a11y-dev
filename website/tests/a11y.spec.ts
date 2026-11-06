@@ -120,6 +120,43 @@ const ROUTE_DISABLED_RULES: Record<string, string[]> = {
   "/": ["landmark-one-main", "region"],
 };
 
+// `label-content-name-mismatch` (WCAG 2.5.3 Label in Name) became enforced
+// with axe-core 4.14 and flags two things on this site that are not defects:
+//
+// - The home-page feature cards (`LabeledFeature.vue`). Their name is
+//   authored as "<heading>: <call to action>" — both halves are visible text,
+//   which is what 2.5.3 asks for. The rule instead wants the *whole* card's
+//   text in the name, details paragraph included, and that component's header
+//   explains why a ~300 character name is the worse outcome.
+// - VitePress's own search button (`.DocSearch`): `aria-label="Search"` beside
+//   a visible "Search" plus a keyboard-shortcut hint. Theme markup, not ours.
+//
+// Only these nodes are let through, matched by markup. The rule stays on for
+// everything else, so a new mismatch anywhere still fails the build. Disabling
+// the rule per route would have switched it off for the whole page.
+const LABEL_IN_NAME_RULE = "label-content-name-mismatch";
+const KNOWN_LABEL_IN_NAME_NODES = [
+  /class="DocSearch DocSearch-Button"/,
+  /class="VPLink link no-icon VPFeature"/,
+];
+
+function withoutKnownLabelInNameNodes(
+  violations: AxeViolationLike[],
+): AxeViolationLike[] {
+  return violations
+    .map((v) =>
+      v.id === LABEL_IN_NAME_RULE
+        ? {
+            ...v,
+            nodes: v.nodes.filter(
+              (n) => !KNOWN_LABEL_IN_NAME_NODES.some((re) => re.test(n.html)),
+            ),
+          }
+        : v,
+    )
+    .filter((v) => v.nodes.length > 0);
+}
+
 // Axe: per (route × theme). Themes affect contrast checks, so we run
 // the suite under both `colorScheme: "light"` and `"dark"`.
 for (const theme of THEMES) {
@@ -138,10 +175,11 @@ for (const theme of THEMES) {
           .disableRules(ROUTE_DISABLED_RULES[route] ?? [])
           .analyze();
 
-        if (results.violations.length > 0) {
+        const violations = withoutKnownLabelInNameNodes(results.violations);
+        if (violations.length > 0) {
           throw new Error(
-            `axe found ${results.violations.length} violation(s):\n` +
-              formatAxeViolations(results.violations),
+            `axe found ${violations.length} violation(s):\n` +
+              formatAxeViolations(violations),
           );
         }
       });
