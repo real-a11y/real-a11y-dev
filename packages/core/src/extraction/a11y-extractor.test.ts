@@ -650,3 +650,35 @@ describe("extractA11yTree", () => {
     });
   });
 });
+
+describe("presentational tables", () => {
+  const rolesOf = (html: string) =>
+    [...extractA11yTree(createPage(html)).nodes.values()].map((n) => ({
+      role: n.a11y.role,
+      name: n.a11y.name,
+    }));
+
+  const repro =
+    "<thead><tr><th>H</th></tr></thead><tbody><tr><td>C</td></tr></tbody>";
+
+  it("exposes no table-part nodes and keeps the text", () => {
+    const nodes = rolesOf(`<table role="presentation">${repro}</table>`);
+    const roles = nodes.map((n) => n.role);
+    for (const r of ["rowgroup", "row", "columnheader", "cell"]) {
+      expect(roles).not.toContain(r);
+    }
+    const root = extractA11yTree(
+      createPage(`<table role="presentation">${repro}</table>`),
+    )
+      .nodes.values()
+      .next().value;
+    expect(root?.dom?.descendantText).toBe("HC");
+  });
+
+  it("keeps table, row and cell when the table is labelled", () => {
+    const roles = rolesOf(
+      `<table role="presentation" aria-label="L">${repro}</table>`,
+    ).map((n) => n.role);
+    expect(roles).toEqual(expect.arrayContaining(["table", "row", "cell"]));
+  });
+});

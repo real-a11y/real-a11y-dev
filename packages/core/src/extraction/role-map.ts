@@ -22,8 +22,26 @@ import {
 } from "./flat-tree.js";
 import { isFocusable, parseHtmlInteger } from "./focusability.js";
 import { imageUsingMap } from "./image-map.js";
+import { tablePartRole, thHeaderRole } from "./table-roles.js";
 
 type RoleResolver = string | ((el: Element) => string);
+
+/**
+ * A table part is presentational when its owning table resolves to
+ * presentation and conflict resolution doesn't void it for the part itself.
+ * Only a table with an authored `role` can resolve to presentation, so a plain
+ * data table skips the full resolve. ROLE_MAP wraps this in arrows because a
+ * call inside the map's initializer would stop bundlers tree-shaking it.
+ */
+const tablePart = (el: Element, implicit: RoleResolver) =>
+  tablePartRole(
+    el,
+    implicit,
+    (table, part) =>
+      safeGetAttribute(table, "role") !== null &&
+      resolveRole(table, true) === "presentation" &&
+      !voidsPresentation(part),
+  );
 
 /**
  * Per-extraction cache of `getComputedStyle` results. Created once at the
@@ -173,35 +191,6 @@ function hasAccessibleName(el: Element): boolean {
     hasMeaningfulAttribute(el, "aria-label") ||
     hasMeaningfulAttribute(el, "title")
   );
-}
-
-function thHeaderRole(el: Element): string {
-  // An explicit scope decides on its own; colgroup/rowgroup scope the same
-  // axis as col/row for role purposes.
-  const scope = el.getAttribute("scope");
-  if (scope === "col" || scope === "colgroup") return "columnheader";
-  if (scope === "row" || scope === "rowgroup") return "rowheader";
-
-  // No scope: HTML-AAM's auto algorithm looks at where the cell sits. A
-  // header row (<thead>, or the table's first row when there is no <thead>)
-  // labels columns; anything else labels its row. Ancestor walk only — no
-  // layout reads.
-  // eslint-disable-next-line no-restricted-properties -- one read, and a <th> is never a form
-  const row = el.parentElement;
-  if (!row || safeTagName(row) !== "tr") return "rowheader";
-
-  // eslint-disable-next-line no-restricted-properties -- one read, and `row` is a <tr> by the check above
-  const section = row.parentElement;
-  if (section && safeTagName(section) === "thead") return "columnheader";
-
-  // Otherwise only the table's very first row heads columns. When a <thead>
-  // exists its row wins that check, so a <th> leading a body row stays a
-  // rowheader (the "Name | Ada" leading-cell pattern). A <tr> always precedes
-  // its own descendants in document order, so a nested table can't win here.
-  const table = row.closest("table");
-  return table && row === table.querySelector("tr")
-    ? "columnheader"
-    : "rowheader";
 }
 
 function isLandmarkContext(el: Element): boolean {
@@ -468,15 +457,15 @@ const ROLE_MAP: Record<string, RoleResolver> = {
   sup: "superscript",
   svg: "img",
   table: "table",
-  tbody: "rowgroup",
-  td: "cell",
+  tbody: (el) => tablePart(el, "rowgroup"),
+  td: (el) => tablePart(el, "cell"),
   template: "generic",
   textarea: "textbox",
-  tfoot: "rowgroup",
-  th: thHeaderRole,
-  thead: "rowgroup",
+  tfoot: (el) => tablePart(el, "rowgroup"),
+  th: (el) => tablePart(el, thHeaderRole),
+  thead: (el) => tablePart(el, "rowgroup"),
   time: "time",
-  tr: "row",
+  tr: (el) => tablePart(el, "row"),
   u: "generic",
   ul: "list",
   var: "generic",
