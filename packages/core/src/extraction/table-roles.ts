@@ -38,7 +38,7 @@ export function thHeaderRole(el: Element): string {
 }
 
 /**
- * Role resolver for a table part.
+ * Role of a table part.
  *
  * WAI-ARIA 1.2 (`presentation`): the implicit native semantics of a
  * presentational table's thead/tbody/tfoot/tr/th/td are removed with the
@@ -49,15 +49,14 @@ export function thHeaderRole(el: Element): string {
  * reaches a resolver.
  */
 export function tablePartRole(
+  el: Element,
   implicit: RoleResolver,
   isPresentational: (table: Element, part: Element) => boolean,
-): (el: Element) => string {
-  return (el) => {
-    let table = flatParentElement(el);
-    while (table && safeTagName(table) !== "table") {
-      table = flatParentElement(table);
-    }
-    if (table && isPresentational(table, el)) return "presentation";
-    return typeof implicit === "string" ? implicit : implicit(el);
-  };
+): string {
+  let table = flatParentElement(el);
+  while (table && safeTagName(table) !== "table") {
+    table = flatParentElement(table);
+  }
+  if (table && isPresentational(table, el)) return "presentation";
+  return typeof implicit === "string" ? implicit : implicit(el);
 }

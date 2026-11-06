@@ -29,13 +29,15 @@ type RoleResolver = string | ((el: Element) => string);
 /**
  * A table part is presentational when its owning table resolves to
  * presentation and conflict resolution doesn't void it for the part itself.
+ * Entries in ROLE_MAP wrap this in arrows: a call at module scope would stop
+ * bundlers tree-shaking the whole map.
  */
-const tablePart = (implicit: RoleResolver) =>
-  tablePartRole(
-    implicit,
-    (table, part) =>
-      resolveRole(table, true) === "presentation" && !voidsPresentation(part),
-  );
+const tablePart = (el: Element, implicit: RoleResolver) =>
+  tablePartRole(el, implicit, (table, part) => {
+    return (
+      resolveRole(table, true) === "presentation" && !voidsPresentation(part)
+    );
+  });
 
 /**
  * Per-extraction cache of `getComputedStyle` results. Created once at the
@@ -451,15 +453,15 @@ const ROLE_MAP: Record<string, RoleResolver> = {
   sup: "superscript",
   svg: "img",
   table: "table",
-  tbody: tablePart("rowgroup"),
-  td: tablePart("cell"),
+  tbody: (el) => tablePart(el, "rowgroup"),
+  td: (el) => tablePart(el, "cell"),
   template: "generic",
   textarea: "textbox",
-  tfoot: tablePart("rowgroup"),
-  th: tablePart(thHeaderRole),
-  thead: tablePart("rowgroup"),
+  tfoot: (el) => tablePart(el, "rowgroup"),
+  th: (el) => tablePart(el, thHeaderRole),
+  thead: (el) => tablePart(el, "rowgroup"),
   time: "time",
-  tr: tablePart("row"),
+  tr: (el) => tablePart(el, "row"),
   u: "generic",
   ul: "list",
   var: "generic",
