@@ -76,8 +76,10 @@ describe("a visibility:visible child of a visibility:hidden element", () => {
       expect(nodes.find((n) => n.id === "hidden")).toBeUndefined();
     }
     // The re-shown child is there; the one that inherits the hiding is not.
-    expect(dom.find((n) => n.id === "shown")?.role).toBe("paragraph");
-    expect(dom.find((n) => n.id === "inherits")).toBeUndefined();
+    for (const nodes of [dom, native]) {
+      expect(nodes.find((n) => n.id === "shown")?.role).toBe("paragraph");
+      expect(nodes.find((n) => n.id === "inherits")).toBeUndefined();
+    }
   });
 
   it("keeps the control of an aria-describedby target in a re-shown child", async () => {

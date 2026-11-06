@@ -675,6 +675,20 @@ describe("extractA11yTree", () => {
       expect(kept).toHaveLength(0);
     });
 
+    it("leaves an extraction root hidden by visibility:hidden empty, as before", () => {
+      const root = createPage(`<p style="visibility:visible">x</p>`);
+      root.setAttribute("style", "visibility:hidden");
+      const { nodes } = extractA11yTree(root);
+      expect(nodes.size).toBe(0);
+    });
+
+    it("does not surface the unrendered fallback of a hidden <video>", () => {
+      const kept = paragraphs(
+        `<video style="visibility:hidden"><p style="visibility:visible">fallback</p></video>`,
+      );
+      expect(kept).toHaveLength(0);
+    });
+
     it("still prunes an aria-hidden subtree whole", () => {
       const kept = paragraphs(
         `<div aria-hidden="true"><p aria-hidden="false" style="visibility:visible">x</p></div>`,

@@ -22,20 +22,24 @@ export function isHiddenOnlyByVisibility(
   style?: CSSStyleDeclaration | null,
 ): boolean {
   if (isAriaHiddenValue(element.getAttribute("aria-hidden"))) return false;
+  // A media element's children are unrendered fallback, never reachable.
+  if (element.localName === "video" || element.localName === "audio") {
+    return false;
+  }
   const computed =
     style !== undefined ? style : getCachedComputedStyle(element);
-  return (
-    computed?.visibility === "hidden" && !isSubtreeHidden(element, computed)
-  );
+  // No computed style (a DOM-less runtime): the inline value, as isHiddenFromAT.
+  const visibility = computed
+    ? computed.visibility
+    : (element as HTMLElement).style?.visibility;
+  return visibility === "hidden" && !isSubtreeHidden(element, computed);
 }
 
 /**
  * The children of `element` a user could reach, looking through any child
  * hidden by its own `visibility:hidden`: that child is not reachable, but a
  * descendant that sets `visibility:visible` is. Children hidden any other way
- * (`aria-hidden`, `display:none`, `inert`) take their subtree with them. A
- * media element's children are unrendered fallback, so they are not looked
- * through either.
+ * (`aria-hidden`, `display:none`, `inert`) take their subtree with them.
  */
 export function reachableChildren(
   element: Element,
@@ -44,9 +48,8 @@ export function reachableChildren(
   return flatChildren(element).flatMap((child) => {
     const style = getCachedComputedStyle(child, styleCache);
     if (!isHiddenFromAT(child, style)) return [child];
-    const lookThrough =
-      isHiddenOnlyByVisibility(child, style) &&
-      !["video", "audio"].includes(child.localName);
-    return lookThrough ? reachableChildren(child, styleCache) : [];
+    return isHiddenOnlyByVisibility(child, style)
+      ? reachableChildren(child, styleCache)
+      : [];
   });
 }

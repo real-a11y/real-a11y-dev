@@ -129,7 +129,8 @@ function processNode(
   // sets `visibility:visible` is rendered, so walk on. Any other hiding
   // (`aria-hidden`) takes the whole subtree with it.
   if (!node.a11y.isExposedToAT) {
-    const element = getElementRefs().get(node.id);
+    // A hidden root has no parent to promote its children to.
+    const element = newParentId && getElementRefs().get(node.id);
     return element && isHiddenOnlyByVisibility(element) ? promote() : [];
   }
 
