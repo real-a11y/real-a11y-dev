@@ -21,6 +21,12 @@
 
 ### Patch Changes
 
+- **The parts of a `role="presentation"` or `role="none"` table are no longer
+  read as `row`, `cell` or header nodes**
+  ([#590](https://github.com/real-a11y/real-a11y-dev/pull/590)). The bundled
+  in-page engine now drops them, as WAI-ARIA 1.2 and Chromium do. The side
+  panel's tree is Chrome's own and already did; only the in-page walk behind
+  the TAB view changes.
 - **An unnamed `<aside>` inside `article`, `aside`, `nav` or `section` is no
   longer read as a `complementary` landmark**
   ([#587](https://github.com/real-a11y/real-a11y-dev/pull/587)). The bundled
