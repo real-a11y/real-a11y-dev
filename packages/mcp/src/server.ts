@@ -20,9 +20,8 @@ import {
   captureNativeCheckpoint,
   diffNativeCheckpoint,
   isPlaywrightMissing,
-  resolveTarget,
 } from "@real-a11y-dev/browser";
-import type { A11ySession, TargetCandidate } from "@real-a11y-dev/browser";
+import type { A11ySession } from "@real-a11y-dev/browser";
 import { numberTabStops } from "@real-a11y-dev/serialize";
 import { SessionRegistryError } from "@real-a11y-dev/session-registry";
 import {
@@ -42,6 +41,12 @@ import {
 import { z } from "zod";
 
 import {
+  actFailure,
+  describeTarget,
+  disabledRefusal,
+  resolveActTarget,
+} from "./act-target.js";
+import {
   type CheckpointStore,
   differentUrl,
   diffCheckpointPages,
@@ -56,6 +61,21 @@ import {
   type SessionManager,
   type SessionRecord,
 } from "./sessions.js";
+import {
+  actName,
+  actNth,
+  actRole,
+  MAX_OUTPUT_CHARS,
+  errText,
+  pageTitle,
+  PLAYWRIGHT_MISSING_HINT,
+  READ_ONLY,
+  rootSelector,
+  RULES_HINT,
+  SCOPE_HINT,
+  SLICE_HINT,
+  text,
+} from "./tool-output.js";
 
 export {
   McpSessionManager,
@@ -102,120 +122,6 @@ function packageVersion(): string {
   }
 }
 
-/**
- * A CSS scope for the in-page walk.
- *
- * Only `get_tab_order` still takes it: tab SEQUENCE is layout work Chromium's
- * AX tree doesn't expose, so that one view is still an in-page walk. Everything
- * else — the tree checkpoints included, as of the native migration — reads
- * Chromium's own accessibility tree, which is whole-document: there is nothing
- * for a selector to scope, and a parameter that silently did nothing would be
- * worse than none at all.
- */
-const rootSelector = z
-  .string()
-  .default("body")
-  .describe("CSS selector for the extraction root. Defaults to 'body'.");
-
-/**
- * Cap oversized tool output so a huge page can't blow the agent's context.
- *
- * The hint carries as much weight as the cap. Every truncation used to end
- * "narrow with rootSelector" — a parameter four of the five read tools no
- * longer accept, so the advice arrives attached to the one output where the
- * agent most needs a way forward and names a door that isn't there. Each caller
- * passes the lever IT actually has instead, and a tool with none passes nothing:
- * "this is the whole document" is a worse answer than a fix, and a better one
- * than a fix that doesn't exist.
- */
-const MAX_OUTPUT_CHARS = 40_000;
-function bounded(body: string, hint?: string): string {
-  if (body.length <= MAX_OUTPUT_CHARS) return body;
-  return (
-    body.slice(0, MAX_OUTPUT_CHARS) +
-    `\n\n… output truncated at ${MAX_OUTPUT_CHARS} chars.${hint ? ` ${hint}` : ""}`
-  );
-}
-
-/**
- * A page-supplied title, made safe to print. Sanitized because `document.title`
- * is page-controlled — an escape sequence or a newline in it could forge result
- * lines — and capped because it is unbounded: a multi-megabyte title would
- * flood the agent's context on every open_page.
- */
-const TITLE_CAP = 300;
-function pageTitle(raw: string): string {
-  const clean = sanitizeText(raw, { singleLine: true }).slice(0, TITLE_CAP);
-  return clean || "(untitled)";
-}
-
-function text(body: string, hint?: string) {
-  return { content: [{ type: "text" as const, text: bounded(body, hint) }] };
-}
-
-/**
- * Playwright is a peer of this package. npm installs it with the server, under
- * npx too, and so does pnpm with its default `auto-install-peers`. Yarn, pnpm
- * with that setting off, and a `--legacy-peer-deps` install leave it out. The
- * module error alone names no fix, so a tool that needs a browser answers with
- * one.
- */
-const PLAYWRIGHT_MISSING_HINT =
-  "Playwright isn't installed beside the server. Launch it as `npx -y -p @real-a11y-dev/mcp -p playwright real-a11y-mcp`, or install `playwright` next to `@real-a11y-dev/mcp` in the project the client starts it from.";
-
-// The three levers that survive the migration, named once so a tool can't
-// advertise one it doesn't take.
-/** The one tool still built on the in-page walk: `get_tab_order`. */
-const SCOPE_HINT = "Pass a narrower `rootSelector` to scope the walk.";
-/** Anything whose bulk is findings. Narrows the findings, never the tree. */
-const RULES_HINT = "Pass a `rules` subset to report fewer findings.";
-/** The whole-document reads, which have no scope parameter at all. */
-const SLICE_HINT =
-  "This read is whole-document and takes no `rootSelector` — `get_heading_outline` and `list_elements` return smaller slices of the same tree.";
-
-// ── Act-tool targeting fragments ─────────────────────────────────────────
-// Targets are described in the tree's own vocabulary — role + accessible
-// name — never a node id. Ids are internal and realm-bound; resolution runs
-// against a fresh native tree immediately before each dispatch.
-const actRole = z
-  .string()
-  .min(1)
-  .describe(
-    "ARIA role of the target, exactly as the tree prints it — e.g. 'button', " +
-      "'link', 'textbox', 'checkbox', 'menuitem'.",
-  );
-const actName = z
-  .string()
-  .optional()
-  .describe(
-    "Accessible name of the target — case-insensitive, whitespace-normalized " +
-      "EXACT match against the tree get_semantic_tree returns. Pass '' to " +
-      "target an unlabeled control. Omit to match any name; if several nodes " +
-      "match, the error lists them so you can pass nth.",
-  );
-const actNth = z
-  .number()
-  .int()
-  .min(1)
-  .optional()
-  .describe(
-    "1-based pick among the matching nodes in document order, evaluated among " +
-      "the role+name-filtered matches. Use after an ambiguity error lists the " +
-      "candidates.",
-  );
-
-/**
- * Build the MCP server and register every tool against the given session.
- * The session is injected so the server can be exercised in tests with a fake
- * (no browser); production wires in a real {@link BrowserSession}.
- */
-/** Hints for the read-only query tools (no side effects, closed world). */
-const READ_ONLY = {
-  readOnlyHint: true,
-  idempotentHint: true,
-  openWorldHint: false,
-} as const;
-
 export interface BuildServerOptions {
   /**
    * True when the server was started with a saved login session
@@ -254,6 +160,11 @@ export interface BuildServerOptions {
   redactInput?: boolean;
 }
 
+/**
+ * Build the MCP server and register every tool against the given session.
+ * The session is injected so the server can be exercised in tests with a fake
+ * (no browser); production wires in a real {@link BrowserSession}.
+ */
 export function buildServer(
   sessionOrManager: A11ySession | SessionManager,
   options: BuildServerOptions = {},
@@ -341,19 +252,6 @@ export function buildServer(
   // timeout closing the browser (the store lives outside the record, see
   // `SessionManager.checkpoints`); the one thing that discards them is
   // close_browser.
-  // Every client-visible error goes through here, so the boundary lives here
-  // rather than at each thrower: `import_checkpoint` and the session refusals
-  // build through it too, and a redaction that only guards the paths someone
-  // remembered is the shape this PR keeps finding.
-  const errText = (msg: string) => ({
-    content: [
-      {
-        type: "text" as const,
-        text: bounded(sanitizeText(redactUrlsIn(msg), { singleLine: true })),
-      },
-    ],
-    isError: true as const,
-  });
   // No zod `.regex()` here on purpose: the SDK enforces the schema BEFORE the
   // handler runs, so a schema-level regex would reject bad names as a
   // protocol-level InvalidParams (a raw zod issue array) — the manager's own
@@ -1173,112 +1071,21 @@ export function buildServer(
   // Targets resolve against a FRESH native tree per dispatch, so node ids
   // never cross the tool boundary and staleness shrinks to the instant
   // between resolution and dispatch.
-  const describeTarget = (c: TargetCandidate) => `${c.role} "${c.name}"`;
-  const MAX_CANDIDATES = 10;
-
-  async function resolveActTarget(
+  // Targets resolve against a FRESH native tree per dispatch (read here, so
+  // strict mode applies and a target is aimed at by the name the agent was
+  // shown).
+  const resolveTargetFresh = async (
     rec: SessionRecord,
     role: string,
     name: string | undefined,
     nth: number | undefined,
-  ): Promise<
-    | { ok: true; nodeId: string; candidate: TargetCandidate }
-    | { ok: false; res: ReturnType<typeof errText> }
-  > {
-    // The same tree the reads print, strict mode included — a target is aimed
-    // at by the name the agent was shown.
-    const tree = await readTree(rec);
-    const resolved = resolveTarget(tree, { role, name, nth });
-    switch (resolved.kind) {
-      case "resolved":
-        return {
-          ok: true,
-          nodeId: resolved.nodeId,
-          candidate: resolved.candidate,
-        };
-      case "not-found": {
-        const label = name !== undefined ? `${role} named "${name}"` : role;
-        if (resolved.matchesForRole > 0) {
-          return {
-            ok: false,
-            res: errText(
-              `No ${label} in the accessibility tree — but ${resolved.matchesForRole} ${role}(s) with other ` +
-                `names exist. Check the name with get_semantic_tree, or omit name to list the candidates.`,
-            ),
-          };
-        }
-        return {
-          ok: false,
-          res: errText(
-            `No ${label} in the accessibility tree. Re-read it with get_semantic_tree — ` +
-              `the page may have changed, or the element may not be exposed to assistive tech at all ` +
-              `(which is itself an accessibility finding).`,
-          ),
-        };
-      }
-      case "ambiguous": {
-        const shown = resolved.candidates.slice(0, MAX_CANDIDATES);
-        const lines = shown.map(
-          (c) =>
-            `  nth=${c.nth} · ${describeTarget(c)}${c.disabled ? " (disabled)" : ""}`,
-        );
-        const more = resolved.candidates.length - shown.length;
-        if (more > 0) lines.push(`  … +${more} more`);
-        return {
-          ok: false,
-          res: errText(
-            `${resolved.candidates.length} ${role}(s) match — pass nth (1-based, document order) to pick one:\n` +
-              lines.join("\n"),
-          ),
-        };
-      }
-      case "nth-out-of-range":
-        return {
-          ok: false,
-          res: errText(
-            `nth=${resolved.nth}, but only ${resolved.matchCount} node(s) match.`,
-          ),
-        };
-      case "no-dom-node":
-        return {
-          ok: false,
-          res: errText(
-            `Matched ${describeTarget(resolved.candidate)}, but it has no backing DOM element ` +
-              `(a synthesized node) — it can't be acted on.`,
-          ),
-        };
-    }
-  }
-
-  // A disabled control swallows the action silently — el.click() "succeeds"
-  // and fires nothing, so the agent would see success plus an empty diff and
-  // draw the wrong conclusion. Refuse with the cause instead.
-  function disabledRefusal(candidate: TargetCandidate, verb: string) {
-    return errText(
-      `${describeTarget(candidate)} is disabled — the page would ignore the ${verb}. ` +
-        `If enabling it is the point of the flow, act on whatever enables it first ` +
-        `(diff_tree after that action will show the state change).`,
-    );
-  }
+  ) => resolveActTarget(await readTree(rec), role, name, nth);
 
   // The diff loop is the payoff of acting at all — steer every success to it.
   const diffSteer = (rec: SessionRecord) =>
     rec.treeCheckpoint !== undefined
       ? " Call diff_tree to see what this changed."
       : " Tip: call checkpoint_tree before acting, then diff_tree after, to see exactly what an action changed for a screen reader.";
-
-  function actFailure(toolName: string, error: string | undefined) {
-    // The backend's "re-read the tree and retry" remedy presumes a caller
-    // holding node ids. Here the target resolved from a fresh tree
-    // microseconds ago, so a resolution miss means the page mutated mid-action
-    // — and the re-read IS a retry of this tool.
-    if (error !== undefined && /could not resolve node/.test(error)) {
-      return errText(
-        `The target changed or disappeared mid-action — the page mutated. Retry ${toolName}.`,
-      );
-    }
-    return errText(error ?? "the action failed");
-  }
 
   server.registerTool(
     "click_element",
@@ -1301,7 +1108,7 @@ export function buildServer(
     },
     async ({ role, name, nth, session }) =>
       withSession(session, async (rec) => {
-        const target = await resolveActTarget(rec, role, name, nth);
+        const target = await resolveTargetFresh(rec, role, name, nth);
         if (!target.ok) return target.res;
         if (target.candidate.disabled) {
           return disabledRefusal(target.candidate, "click");
@@ -1343,7 +1150,7 @@ export function buildServer(
     },
     async ({ role, name, nth, text: value, session }) =>
       withSession(session, async (rec) => {
-        const target = await resolveActTarget(rec, role, name, nth);
+        const target = await resolveTargetFresh(rec, role, name, nth);
         if (!target.ok) return target.res;
         if (target.candidate.disabled) {
           return disabledRefusal(target.candidate, "input");
@@ -1382,7 +1189,7 @@ export function buildServer(
     },
     async ({ role, name, nth, session }) =>
       withSession(session, async (rec) => {
-        const target = await resolveActTarget(rec, role, name, nth);
+        const target = await resolveTargetFresh(rec, role, name, nth);
         if (!target.ok) return target.res;
         if (target.candidate.disabled) {
           return disabledRefusal(target.candidate, "focus");
