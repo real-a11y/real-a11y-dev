@@ -101,15 +101,21 @@ function captionSuppliedTableName(
   return !!captionName && parent.a11y.name === captionName;
 }
 
+/** What the second pass shares across every recursive call. */
+interface FilterContext {
+  domNodes: Map<string, SemanticNode>;
+  a11yNodes: Map<string, SemanticNode>;
+  rootId: string;
+}
+
 // Second pass: build the filtered tree with correct parent/child relationships
 function processNode(
   nodeId: string,
   newParentId: string | null,
   depth: number,
-  domNodes: Map<string, SemanticNode>,
-  a11yNodes: Map<string, SemanticNode>,
-  rootId: string,
+  ctx: FilterContext,
 ): string[] {
+  const { domNodes, a11yNodes, rootId } = ctx;
   const node = domNodes.get(nodeId);
   if (!node) return [];
 
@@ -134,9 +140,7 @@ function processNode(
           childId,
           keep ? node.id : newParentId,
           keep ? depth + 1 : depth,
-          domNodes,
-          a11yNodes,
-          rootId,
+          ctx,
         ),
       );
     }
@@ -166,14 +170,7 @@ function processNode(
 
     // Process children, which may flatten through skipped nodes
     for (const childId of node.childIds) {
-      const keptChildIds = processNode(
-        childId,
-        node.id,
-        depth + 1,
-        domNodes,
-        a11yNodes,
-        rootId,
-      );
+      const keptChildIds = processNode(childId, node.id, depth + 1, ctx);
       a11yNode.childIds.push(...keptChildIds);
     }
 
@@ -183,14 +180,7 @@ function processNode(
     // This node is flattened — promote its children to the parent
     const promotedIds: string[] = [];
     for (const childId of node.childIds) {
-      const keptChildIds = processNode(
-        childId,
-        newParentId,
-        depth,
-        domNodes,
-        a11yNodes,
-        rootId,
-      );
+      const keptChildIds = processNode(childId, newParentId, depth, ctx);
       promotedIds.push(...keptChildIds);
     }
     return promotedIds;
@@ -211,7 +201,7 @@ export function buildA11yTree(
   focusedId?: string,
 ): ExtractionResult {
   const a11yNodes = new Map<string, SemanticNode>();
-  processNode(rootId, null, 0, domNodes, a11yNodes, rootId);
+  processNode(rootId, null, 0, { domNodes, a11yNodes, rootId });
 
   // Inherit focus only if the focused element survived a11y filtering — a
   // focused generic/decorative node that was flattened out isn't in this view.
