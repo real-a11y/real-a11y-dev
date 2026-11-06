@@ -6637,3 +6637,31 @@ describe("a child lends its own text alternative to a name from content", () => 
     });
   });
 });
+
+describe("<aside> scope", () => {
+  afterEach(() => {
+    document.body.innerHTML = "";
+  });
+
+  const roles = (html: string): string[] => {
+    document.body.innerHTML = html;
+    return [...extractA11yTree(document.body).nodes.values()].map(
+      (n) => n.a11y.role,
+    );
+  };
+
+  it("yields no complementary node for an unnamed aside in an article", () => {
+    expect(roles("<article><aside>x</aside></article>")).not.toContain(
+      "complementary",
+    );
+  });
+
+  it("keeps a named aside in sectioning content, and an explicit role", () => {
+    expect(
+      roles('<section><aside aria-label="Related">x</aside></section>'),
+    ).toContain("complementary");
+    expect(roles('<nav><aside role="complementary">x</aside></nav>')).toContain(
+      "complementary",
+    );
+  });
+});

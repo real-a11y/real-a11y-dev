@@ -157,6 +157,10 @@ main
 
 Give the header a name (`aria-label`, `aria-labelledby` or `title`) and it appears as `sectionheader "…"` with the heading nested inside. The DOM view always shows it.
 
+### An `<aside>` that isn't a landmark
+
+An `<aside>` directly under `<body>` or `<main>` is a `complementary` landmark. Inside `<article>`, `<aside>`, `<nav>` or `<section>` it is one only when it has a name (`aria-label`, `aria-labelledby` or `title`); unnamed, [HTML-AAM](https://w3c.github.io/html-aam/#el-aside) maps it to `generic`, and so does Chromium. So `<article><aside>x</aside></article>` shows no `complementary` node, while `<section><aside aria-label="Related">x</aside></section>` shows `complementary "Related"`. An explicit `role="complementary"` always wins. One known difference: for `<aside title="">` in sectioning content the DOM view follows the spec (`generic`) while Chromium's tree still says `complementary`.
+
 ---
 
 ## Reading a well-structured tree

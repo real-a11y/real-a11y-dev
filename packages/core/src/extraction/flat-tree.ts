@@ -32,6 +32,7 @@ import {
   safeQuerySelectorAll,
   safeRootNode,
   safeShadowRoot,
+  safeTagName,
 } from "./clobber-safe.js";
 
 const ELEMENT_NODE = 1;
@@ -313,4 +314,17 @@ export function deepQuerySelectorAll(
   if (own) visit(own);
   visit(root);
   return out;
+}
+
+/**
+ * Whether any flat-tree ancestor is sectioning content (`article`, `aside`,
+ * `nav` or `section`). Unlike the header/footer scope it excludes `main`: an
+ * `<aside>` in `main` stays a landmark. Any such ancestor decides, even past a
+ * `main`.
+ */
+export function hasSectioningAncestor(element: Element): boolean {
+  const tags = ["article", "aside", "nav", "section"];
+  let p = flatParent(element);
+  while (p && !tags.includes(safeTagName(p))) p = flatParent(p);
+  return p !== null;
 }

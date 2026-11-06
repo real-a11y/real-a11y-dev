@@ -21,6 +21,12 @@
 
 ### Patch Changes
 
+- **An unnamed `<aside>` inside `article`, `aside`, `nav` or `section` is no
+  longer read as a `complementary` landmark**
+  ([#587](https://github.com/real-a11y/real-a11y-dev/pull/587)). The bundled
+  in-page engine now maps it to `generic`, as HTML-AAM and Chromium do. The
+  side panel's tree is Chrome's own and already did; only the in-page walk
+  behind the TAB view changes.
 - **Chrome's tree marks what changed** since the read before
   ([#580](https://github.com/real-a11y/real-a11y-dev/pull/580)). When the
   tree is read again, after you act through the tree or on the page, or
