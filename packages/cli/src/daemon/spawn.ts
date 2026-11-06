@@ -37,6 +37,12 @@ import {
   DaemonTimeoutError,
   DaemonTransportError,
 } from "./client.js";
+import {
+  isProcessAlive,
+  readPidfile,
+  waitForPidfile,
+  waitForProcessExit,
+} from "./pidfile.js";
 import { processStartTimeMs } from "./process-start-time.js";
 import { DAEMON_PROTOCOL_VERSION } from "./protocol.js";
 import {
@@ -222,75 +228,6 @@ function waitForSocketRelease(
     };
     attempt();
   });
-}
-
-interface Pidfile {
-  pid: number;
-  startedAt?: number;
-  daemonVersion?: string;
-  protocolVersion?: string;
-}
-
-function isValidPid(pid: unknown): pid is number {
-  return (
-    typeof pid === "number" &&
-    Number.isInteger(pid) &&
-    pid > 0 &&
-    pid <= 2147483647
-  );
-}
-
-async function readPidfile(pidfile: string): Promise<Pidfile | undefined> {
-  try {
-    const raw = await readFile(pidfile, "utf8");
-    const data = JSON.parse(raw) as Partial<Pidfile>;
-    if (isValidPid(data.pid)) return data as Pidfile;
-  } catch {
-    // missing, unreadable, or malformed pidfile is treated as no pidfile.
-  }
-  return undefined;
-}
-
-function isProcessAlive(pid: number): boolean {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (err) {
-    // EPERM means the process exists but we cannot signal it.
-    if (
-      err instanceof Error &&
-      (err as NodeJS.ErrnoException).code === "EPERM"
-    ) {
-      return true;
-    }
-    return false;
-  }
-}
-
-async function waitForProcessExit(
-  pid: number,
-  timeoutMs: number,
-): Promise<boolean> {
-  const deadline = Date.now() + timeoutMs;
-  while (isProcessAlive(pid) && Date.now() < deadline) {
-    await sleep(100);
-  }
-  return !isProcessAlive(pid);
-}
-
-async function waitForPidfile(
-  pidfile: string,
-  timeoutMs: number,
-): Promise<Pidfile> {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    const pidInfo = await readPidfile(pidfile);
-    if (pidInfo) return pidInfo;
-    await sleep(20);
-  }
-  throw new DaemonTransportError(
-    `daemon did not write its pidfile within ${timeoutMs}ms`,
-  );
 }
 
 interface VersionInfo {
