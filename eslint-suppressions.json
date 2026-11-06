@@ -117,9 +117,6 @@
   "packages/core/src/extraction/a11y-extractor.ts": {
     "complexity": {
       "count": 1
-    },
-    "max-params": {
-      "count": 1
     }
   },
   "packages/core/src/extraction/dom-extractor.ts": {
