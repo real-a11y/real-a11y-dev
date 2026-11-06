@@ -113,6 +113,31 @@ describe("findByRole", () => {
     }
   });
 
+  it("filters by selected, pressed and disabled, and ANDs them with the name", () => {
+    const root = createPage(`
+      <div role="tab" aria-selected="true" tabindex="0">on</div>
+      <div role="tab" aria-selected="false" tabindex="0">off</div>
+      <button aria-pressed="true">p1</button>
+      <button aria-pressed="mixed">p2</button>
+      <button aria-pressed="false">p3</button>
+      <button disabled>d1</button>
+      <button>d2</button>
+    `);
+    const tree = extractDomTree(root);
+    const names = (
+      role: string,
+      options: Parameters<typeof findAllByRole>[2],
+    ) => findAllByRole(tree, role, options).map((n) => n.a11y.name);
+    expect(names("tab", { selected: true })).toEqual(["on"]);
+    expect(names("tab", { selected: false })).toEqual(["off"]);
+    expect(names("button", { pressed: true })).toEqual(["p1"]);
+    expect(names("button", { pressed: "mixed" })).toEqual(["p2"]);
+    expect(names("button", { pressed: false })).toEqual(["p3"]);
+    expect(names("button", { disabled: true })).toEqual(["d1"]);
+    expect(names("button", { disabled: true, name: "d2" })).toEqual([]);
+    expect(names("button", { disabled: true, name: /^d/ })).toEqual(["d1"]);
+  });
+
   it("returns null when nothing matches", () => {
     const root = createPage(`<p>No buttons here</p>`);
     const tree = extractDomTree(root);

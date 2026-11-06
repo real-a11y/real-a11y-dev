@@ -184,11 +184,6 @@
       "count": 1
     }
   },
-  "packages/core/src/query/find-by-role.ts": {
-    "complexity": {
-      "count": 1
-    }
-  },
   "packages/core/src/search/tree-search.ts": {
     "complexity": {
       "count": 2

@@ -7,6 +7,26 @@ import {
   type QueryInput,
 } from "./types.js";
 
+/** The state filters in `FindByRoleOptions`, each compared with `a11y.states`. */
+const STATE_FILTERS = [
+  "checked",
+  "expanded",
+  "selected",
+  "pressed",
+  "disabled",
+] as const;
+
+/** Internal: does the node's accessible name satisfy the `name` filter? */
+function nameMatches(
+  node: SemanticNode,
+  filter: NonNullable<FindByRoleOptions["name"]>,
+): boolean {
+  const actual = normalizeName(node.a11y.name);
+  return typeof filter === "string"
+    ? actual === normalizeName(filter)
+    : filter.test(actual);
+}
+
 /** Internal: does this node satisfy every filter in `options`? */
 function matches(
   node: SemanticNode,
@@ -15,14 +35,8 @@ function matches(
 ): boolean {
   if (node.a11y.role !== role) return false;
 
-  // Name filter
-  if (options.name !== undefined) {
-    const actual = normalizeName(node.a11y.name);
-    if (typeof options.name === "string") {
-      if (actual !== normalizeName(options.name)) return false;
-    } else {
-      if (!options.name.test(actual)) return false;
-    }
+  if (options.name !== undefined && !nameMatches(node, options.name)) {
+    return false;
   }
 
   // Heading level (stored as a string in a11y.properties)
@@ -31,34 +45,10 @@ function matches(
     if (level === undefined || Number(level) !== options.level) return false;
   }
 
-  const state = (key: string) => node.a11y.states?.[key];
-
-  if (options.checked !== undefined && state("checked") !== options.checked) {
-    return false;
-  }
-  if (
-    options.expanded !== undefined &&
-    state("expanded") !== options.expanded
-  ) {
-    return false;
-  }
-  if (
-    options.selected !== undefined &&
-    state("selected") !== options.selected
-  ) {
-    return false;
-  }
-  if (options.pressed !== undefined && state("pressed") !== options.pressed) {
-    return false;
-  }
-  if (
-    options.disabled !== undefined &&
-    state("disabled") !== options.disabled
-  ) {
-    return false;
-  }
-
-  return true;
+  return STATE_FILTERS.every(
+    (key) =>
+      options[key] === undefined || node.a11y.states?.[key] === options[key],
+  );
 }
 
 /**
