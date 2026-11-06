@@ -1,6 +1,7 @@
 import type { ExtractionResult, SemanticNode } from "../types.js";
 
 import { extractDomTree, getElementRefs } from "./dom-extractor.js";
+import { isHiddenOnlyByVisibility } from "./visibility-hidden.js";
 
 // See SUPPRESS_KEEP_INTERACTIVE.
 const SUPPRESS_KEEP_INTERACTIVE = new Set(["legend", "summary", "label"]);
@@ -118,8 +119,19 @@ function processNode(
   const { domNodes, a11yNodes, rootId } = ctx;
   const node = domNodes.get(nodeId);
   if (!node) return [];
+  // Drop `node` and hand its children to `newParentId`, each on its own terms.
+  const promote = () =>
+    node.childIds.flatMap((childId) =>
+      processNode(childId, newParentId, depth, ctx),
+    );
 
-  if (!node.a11y.isExposedToAT) return [];
+  // Hidden by its own `visibility:hidden` only: the node goes, but a child that
+  // sets `visibility:visible` is rendered, so walk on. Any other hiding
+  // (`aria-hidden`) takes the whole subtree with it.
+  if (!node.a11y.isExposedToAT) {
+    const element = getElementRefs().get(node.id);
+    return element && isHiddenOnlyByVisibility(element) ? promote() : [];
+  }
 
   // See SUPPRESS_KEEP_INTERACTIVE. Caption is gated separately: it is only
   // suppressed when it actually supplied the table's name.
@@ -178,12 +190,7 @@ function processNode(
     return [node.id];
   } else {
     // This node is flattened — promote its children to the parent
-    const promotedIds: string[] = [];
-    for (const childId of node.childIds) {
-      const keptChildIds = processNode(childId, newParentId, depth, ctx);
-      promotedIds.push(...keptChildIds);
-    }
-    return promotedIds;
+    return promote();
   }
 }
 
