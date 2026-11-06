@@ -27,6 +27,14 @@
   in-page engine now drops them, as WAI-ARIA 1.2 and Chromium do. The side
   panel's tree is Chrome's own and already did; only the in-page walk behind
   the TAB view changes.
+
+- **A control re-shown with `visibility:visible` inside a `visibility:hidden`
+  element now counts as a tab stop**
+  ([#592](https://github.com/real-a11y/real-a11y-dev/pull/592)). The bundled
+  in-page engine used to drop the whole subtree of a `visibility:hidden`
+  element; it now keeps a descendant that sets `visibility:visible`, as Chromium
+  does. The side panel's tree is Chrome's own and already did; only the in-page
+  walk behind the TAB view changes.
 - **An unnamed `<aside>` inside `article`, `aside`, `nav` or `section` is no
   longer read as a `complementary` landmark**
   ([#587](https://github.com/real-a11y/real-a11y-dev/pull/587)). The bundled
