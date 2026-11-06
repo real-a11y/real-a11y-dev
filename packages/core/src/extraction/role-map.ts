@@ -29,15 +29,19 @@ type RoleResolver = string | ((el: Element) => string);
 /**
  * A table part is presentational when its owning table resolves to
  * presentation and conflict resolution doesn't void it for the part itself.
- * Entries in ROLE_MAP wrap this in arrows: a call at module scope would stop
- * bundlers tree-shaking the whole map.
+ * Only a table with an authored `role` can resolve to presentation, so a plain
+ * data table skips the full resolve. ROLE_MAP wraps this in arrows because a
+ * call inside the map's initializer would stop bundlers tree-shaking it.
  */
 const tablePart = (el: Element, implicit: RoleResolver) =>
-  tablePartRole(el, implicit, (table, part) => {
-    return (
-      resolveRole(table, true) === "presentation" && !voidsPresentation(part)
-    );
-  });
+  tablePartRole(
+    el,
+    implicit,
+    (table, part) =>
+      safeGetAttribute(table, "role") !== null &&
+      resolveRole(table, true) === "presentation" &&
+      !voidsPresentation(part),
+  );
 
 /**
  * Per-extraction cache of `getComputedStyle` results. Created once at the
