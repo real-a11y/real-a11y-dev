@@ -189,16 +189,20 @@ describe("a11y.config.json defaults (built bin)", () => {
     expect(stderr).not.toMatch(/--cdp ignores/);
   });
 
-  it("doesn't warn in front of the error for --cdp plus --headful", async () => {
+  it("doesn't warn in front of the error for a flag refused beside --cdp", async () => {
     // The run is refused, so there's no run for a warning to describe.
     config({ defaults: { device: "iPhone 13" } });
-    const { code, stderr } = await runCli(
-      ["audit", CLEAN, "--cdp", "http://127.0.0.1:9", "--headful", "-q"],
-      dir,
-    );
-    expect(code).toBe(2);
-    expect(stderr).toMatch(/can't be combined with --headful/);
-    expect(stderr).not.toMatch(/--cdp ignores/);
+    for (const extra of [["--headful"], ["--chrome-path", "/usr/bin/chrome"]]) {
+      const { code, stderr } = await runCli(
+        ["audit", CLEAN, "--cdp", "http://127.0.0.1:9", ...extra, "-q"],
+        dir,
+      );
+      expect(code, extra[0]).toBe(2);
+      expect(stderr, extra[0]).toMatch(
+        new RegExp(`can't be combined with .*${extra[0]}`),
+      );
+      expect(stderr, extra[0]).not.toMatch(/--cdp ignores/);
+    }
   });
 
   it("refuses an empty --cdp instead of auditing in a fresh browser", async () => {

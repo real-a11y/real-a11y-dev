@@ -4,7 +4,8 @@ import { join, resolve } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { COMMANDS } from "./args.js";
+import { COMMANDS, parseOpenOptions, type FlagValues } from "./args.js";
+import { sessionFlags } from "./commands/common.js";
 import {
   cdpDroppedDefaultsWarning,
   clearConfigCache,
@@ -15,6 +16,7 @@ import {
   droppedByCdp,
   loadConfig,
   mergeDefaults,
+  REFUSED_BESIDE_CDP,
   resolveConfig,
   type A11yConfig,
 } from "./config.js";
@@ -342,11 +344,35 @@ describe("droppedByCdp", () => {
     expect(droppedByCdp({ cdp: "" }, cfg, ALL)).toEqual([]);
   });
 
-  it("is empty when an excluded flag is typed beside --cdp (refused later)", () => {
-    // The command's own guard hard-errors on `--cdp --headful`; a warning
-    // describing the run it would have been is noise in front of that error.
+  it("is empty when a refused flag is typed beside --cdp (refused later)", () => {
+    // The command's own guard hard-errors on `--cdp --headful` and on
+    // `--cdp --chrome-path`; a warning describing the run it would have been
+    // is noise in front of that error.
     const cfg = config({ device: "iPhone 13" });
     expect(droppedByCdp({ cdp: CDP, headful: true }, cfg, ALL)).toEqual([]);
+    expect(
+      droppedByCdp({ cdp: CDP, "chrome-path": "/usr/bin/chrome" }, cfg, ALL),
+    ).toEqual([]);
+  });
+
+  it("stays quiet for exactly the flags whose guards refuse --cdp beside them", () => {
+    // Lockstep: every flag in the list really is refused next to --cdp, by
+    // `parseOpenOptions` or (for --storage-state) `sessionFlags`.
+    const typed: Record<string, unknown> = {
+      device: "iPhone 13",
+      viewport: "1280x800",
+      headful: true,
+      "storage-state": "auth.json",
+      "chrome-path": "/usr/bin/chrome",
+    };
+    for (const flag of REFUSED_BESIDE_CDP) {
+      expect(typed, flag).toHaveProperty([flag]);
+      const flags = { cdp: CDP, [flag]: typed[flag] } as FlagValues;
+      expect(() => {
+        parseOpenOptions(flags);
+        sessionFlags(flags);
+      }, flag).toThrow(/--cdp/);
+    }
   });
 
   it("leaves out a default the command doesn't declare", () => {

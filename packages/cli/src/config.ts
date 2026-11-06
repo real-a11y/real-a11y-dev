@@ -497,6 +497,18 @@ const CDP_REUSES: Record<string, "window" | "session"> = {
   "storage-state": "session",
 };
 
+/**
+ * Every flag whose explicit presence beside `--cdp` gets the run refused: the
+ * excluded ones (`parseOpenOptions` for emulation, `sessionFlags` for
+ * `--storage-state`) and `--chrome-path` (`parseOpenOptions`). No warning is
+ * printed in front of those errors — there is no run for it to describe.
+ * Exported for the lockstep test against `parseOpenOptions`.
+ */
+export const REFUSED_BESIDE_CDP: readonly string[] = [
+  ...EXCLUDED_BY.cdp!,
+  "chrome-path",
+];
+
 /** One set config default, as the flag it seeds and the value it seeds. */
 interface DefaultEntry {
   /** As the config names it — e.g. `"storageState"`. */
@@ -587,8 +599,8 @@ export interface CdpDroppedDefault {
  * A `false` (`"headful": false`) is left off — dropping it changes nothing.
  *
  * Empty when there is no run to describe: no `--cdp`, an empty one (which
- * `parseOpenOptions` refuses), or an excluded flag typed beside it (which the
- * command's own guard refuses). Same answer before or after
+ * `parseOpenOptions` refuses), or a flag typed beside it that the command's
+ * own guards refuse ({@link REFUSED_BESIDE_CDP}). Same answer before or after
  * {@link mergeDefaults}, which never seeds these.
  */
 export function droppedByCdp(
@@ -597,7 +609,7 @@ export function droppedByCdp(
   declared: ReadonlySet<string>,
 ): CdpDroppedDefault[] {
   if (typeof values.cdp !== "string" || values.cdp === "") return [];
-  if (EXCLUDED_BY.cdp!.some((flag) => values[flag] !== undefined)) return [];
+  if (REFUSED_BESIDE_CDP.some((flag) => values[flag] !== undefined)) return [];
   const out: CdpDroppedDefault[] = [];
   for (const { key, flag, val } of defaultEntries(config)) {
     const reuses = CDP_REUSES[flag];
