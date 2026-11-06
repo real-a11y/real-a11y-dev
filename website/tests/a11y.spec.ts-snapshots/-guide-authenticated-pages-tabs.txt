@@ -18,6 +18,8 @@ generic
 link "MCP configuration"
 button "Copy Code"
 generic
+button "Copy Code"
+generic
 link "MCP configuration"
 button "Copy Code"
 generic
