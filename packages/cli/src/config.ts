@@ -486,6 +486,48 @@ const EXCLUDED_BY: Record<string, readonly string[]> = {
   md: ["format"],
 };
 
+// What `--cdp` takes from the attached browser in place of each default it
+// excludes. Not silent: `droppedByCdp` + `run.ts` name each one dropped,
+// because one of them changes what the run audits rather than how — without
+// `storageState`, a browser that isn't signed in audits the logged-out page.
+const CDP_REUSES: Record<string, "window" | "session"> = {
+  device: "window",
+  viewport: "window",
+  headful: "window",
+  "storage-state": "session",
+};
+
+/** One set config default, as the flag it seeds and the value it seeds. */
+interface DefaultEntry {
+  /** As the config names it — e.g. `"storageState"`. */
+  key: string;
+  /** The parseArgs flag it seeds — e.g. `"storage-state"`. */
+  flag: string;
+  val: unknown;
+}
+
+/**
+ * Each set default in `config` as the flag it would seed — the one mapping
+ * both {@link mergeDefaults} and {@link droppedByCdp} read, so the two can't
+ * disagree about which flag a key is.
+ */
+function defaultEntries(config: A11yConfig): DefaultEntry[] {
+  const out: DefaultEntry[] = [];
+  const d = config.defaults as Record<string, unknown>;
+  for (const key of Object.keys(d)) {
+    const val = d[key];
+    if (val === undefined) continue;
+    // `annotate` is the positive form of the negated flag `--no-annotate`:
+    // only `false` seeds anything.
+    if (key === "annotate") {
+      if (val === false) out.push({ key, flag: "no-annotate", val: true });
+      continue;
+    }
+    out.push({ key, flag: KEY_TO_FLAG[key] ?? key, val });
+  }
+  return out;
+}
+
 /**
  * Merge a config's `defaults` into the parsed flags as "virtual flags": for
  * each default whose flag is unset, inject the value in the flag's raw shape so
@@ -518,19 +560,7 @@ export function mergeDefaults(
   // flag means "the user deliberately overrode something for this run" — see
   // `audit`'s `--root` vs. a per-URL `rootSelector`.
   const seeded = new Set<string>();
-  const d = config.defaults as Record<string, unknown>;
-  for (const key of Object.keys(d)) {
-    const val = d[key];
-    if (val === undefined) continue;
-    // `annotate` is the positive form of the negated flag `--no-annotate`.
-    if (key === "annotate") {
-      if (val === false && seedable("no-annotate")) {
-        values["no-annotate"] = true;
-        seeded.add("no-annotate");
-      }
-      continue;
-    }
-    const flag = KEY_TO_FLAG[key] ?? key;
+  for (const { key, flag, val } of defaultEntries(config)) {
     if (!seedable(flag)) continue;
     if (key === "rules") values[flag] = (val as string[]).join(",");
     else if (Array.isArray(val)) values[flag] = val as string[];
@@ -541,4 +571,65 @@ export function mergeDefaults(
     seeded.add(flag);
   }
   return seeded;
+}
+
+/** A config default `--cdp` kept out of the run, and what replaced it. */
+export interface CdpDroppedDefault {
+  /** As the config names it — e.g. `"storageState"`. */
+  key: string;
+  /** What the attached browser supplies in its place. */
+  reuses: "window" | "session";
+}
+
+/**
+ * The config defaults an explicit `--cdp` keeps out of this run (see
+ * {@link EXCLUDED_BY}): each the running command declares and the config sets.
+ * A `false` (`"headful": false`) is left off — dropping it changes nothing.
+ *
+ * Empty when there is no run to describe: no `--cdp`, an empty one (which
+ * `parseOpenOptions` refuses), or an excluded flag typed beside it (which the
+ * command's own guard refuses). Same answer before or after
+ * {@link mergeDefaults}, which never seeds these.
+ */
+export function droppedByCdp(
+  values: Record<string, unknown>,
+  config: A11yConfig,
+  declared: ReadonlySet<string>,
+): CdpDroppedDefault[] {
+  if (typeof values.cdp !== "string" || values.cdp === "") return [];
+  if (EXCLUDED_BY.cdp!.some((flag) => values[flag] !== undefined)) return [];
+  const out: CdpDroppedDefault[] = [];
+  for (const { key, flag, val } of defaultEntries(config)) {
+    const reuses = CDP_REUSES[flag];
+    if (reuses && val !== false && declared.has(flag)) {
+      out.push({ key, reuses });
+    }
+  }
+  return out;
+}
+
+/**
+ * The stderr warning naming what `--cdp` dropped from `file` (the config's
+ * name). Newline-ended; empty for an empty list.
+ */
+export function cdpDroppedDefaultsWarning(
+  dropped: readonly CdpDroppedDefault[],
+  file: string,
+): string {
+  if (dropped.length === 0) return "";
+  const named = dropped.map((d) => `\`${d.key}\``);
+  const list =
+    named.length === 1
+      ? named[0]
+      : `${named.slice(0, -1).join(", ")} and ${named[named.length - 1]}`;
+  const window = dropped.some((d) => d.reuses === "window");
+  const session = dropped.some((d) => d.reuses === "session");
+  const own =
+    window && session ? "window and session" : window ? "window" : "session";
+  let text = `real-a11y: warning: --cdp ignores ${list} from ${file} — it uses the attached browser's own ${own}.\n`;
+  if (session) {
+    text +=
+      "  a browser that isn't signed in (a fresh remote one, say) audits the logged-out page.\n";
+  }
+  return text;
 }

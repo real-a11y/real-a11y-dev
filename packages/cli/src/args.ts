@@ -496,6 +496,17 @@ export function parseOpenOptions(flags: FlagValues): OpenOptions {
     };
   }
 
+  // An empty endpoint used to read as "no --cdp" when the session launched (a
+  // fresh local browser), after the flag had already kept the config's device
+  // and storageState out of the run. Refuse it instead of auditing in a browser
+  // nobody asked for.
+  if (flags.cdp === "") {
+    throw new CliError(
+      "--cdp needs an endpoint, and got an empty value.",
+      "pass one, e.g. --cdp http://localhost:9222. In CI, an empty value usually means the variable or secret holding it isn't set.",
+    );
+  }
+
   if (
     typeof flags.cdp === "string" &&
     (flags.headful || options.device || options.viewport)

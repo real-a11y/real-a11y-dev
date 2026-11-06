@@ -175,6 +175,14 @@ describe("parseOpenOptions", () => {
       parseOpenOptions({ "chrome-path": "/usr/bin/chrome" }),
     ).not.toThrow();
   });
+
+  it("rejects an empty --cdp rather than launching a fresh browser", () => {
+    // `--cdp "$UNSET"` — the session used to treat "" as no --cdp and launch
+    // locally, after the flag had already dropped the config's session.
+    expect(() => parseOpenOptions({ cdp: "" })).toThrow(
+      "--cdp needs an endpoint, and got an empty value.",
+    );
+  });
 });
 
 describe("parseListCategory", () => {

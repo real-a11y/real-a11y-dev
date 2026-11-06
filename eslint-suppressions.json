@@ -53,7 +53,7 @@
   },
   "packages/cli/src/config.ts": {
     "complexity": {
-      "count": 3
+      "count": 2
     }
   },
   "packages/cli/src/daemon/client.ts": {

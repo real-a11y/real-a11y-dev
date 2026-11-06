@@ -126,7 +126,7 @@ names the reason and points at `tabs`.
 
 **`device: string`** — flag `--device` · default: unset · applies to `audit`, `inspect`, the view commands, `snapshot`
 
-Emulate a Playwright device profile — `"iPhone 13"`, `"Pixel 7"` — to audit what a screen reader hears on the mobile layout. Suppressed when you pass `--cdp` (which reuses a running browser and can't emulate).
+Emulate a Playwright device profile — `"iPhone 13"`, `"Pixel 7"` — to audit what a screen reader hears on the mobile layout. Suppressed when you pass `--cdp` (which reuses a running browser and can't emulate), with a warning that names it.
 
 ```json
 { "defaults": { "device": "iPhone 13" } }
@@ -136,7 +136,7 @@ Emulate a Playwright device profile — `"iPhone 13"`, `"Pixel 7"` — to audit 
 
 **`viewport: string`** — flag `--viewport` · default: unset · applies to `audit`, `inspect`, the view commands, `snapshot`
 
-Explicit viewport as `WIDTHxHEIGHT`, e.g. `"1280x800"`. Suppressed when you pass `--cdp`.
+Explicit viewport as `WIDTHxHEIGHT`, e.g. `"1280x800"`. Suppressed, with a warning, when you pass `--cdp`.
 
 ### `waitUntil`
 
@@ -168,13 +168,13 @@ Navigation timeout in milliseconds.
 
 **`headful: boolean`** — flag `--headful` · default `false` · applies to `audit`, `inspect`, the view commands, `snapshot`
 
-Show the browser window instead of running headless. Suppressed when you pass `--cdp`.
+Show the browser window instead of running headless. Suppressed when you pass `--cdp`, with a warning if it's `true`.
 
 ### `storageState`
 
 **`storageState: string`** — flag `--storage-state` · default: unset · **path (resolves from the config dir)** · applies to `audit`, `inspect`, the view commands, `snapshot`
 
-Audit as a logged-in user, using a session file saved by `real-a11y login`. The path resolves relative to the config file, so a committed config stays portable. Suppressed when you pass `--cdp` (CDP reuses the running browser's own session). See [Authenticated pages](/guide/authenticated-pages).
+Audit as a logged-in user, using a session file saved by `real-a11y login`. The path resolves relative to the config file, so a committed config stays portable. Suppressed, with a warning, when you pass `--cdp`: CDP reuses the running browser's own session, so a browser that isn't signed in audits the logged-out page. See [Authenticated pages](/guide/authenticated-pages).
 
 ```json
 { "defaults": { "storageState": "./.auth/session.json" } }
@@ -295,7 +295,7 @@ Add the plain-language structural summary to a diff ("Heading level changed: h2 
 Five declared flags are deliberately **excluded** from `defaults` — no config key can populate them:
 
 - **`--output` / `--quiet` / `--verbose`** — per-run I/O and log-verbosity concerns, not project policy. Where output goes and how loud a run is belong to the invocation, not the committed file.
-- **`--allow-file` / `--cdp`** — security-sensitive. `--allow-file` unlocks the `file:` gate and `--cdp` attaches to a running Chrome; a committed config must not be able to silently widen the trust boundary of every run. They stay explicit, per invocation. (They're also the *triggers* that suppress conflicting defaults — passing `--cdp` drops the seeded [`device`](#device) / [`viewport`](#viewport) / [`headful`](#headful) / [`storageState`](#storagestate), and `--md` drops [`format`](#format) — so a config default never trips a guard against a flag you actually typed.)
+- **`--allow-file` / `--cdp`** — security-sensitive. `--allow-file` unlocks the `file:` gate and `--cdp` attaches to a running Chrome; a committed config must not be able to silently widen the trust boundary of every run. They stay explicit, per invocation. (They're also the *triggers* that suppress conflicting defaults — passing `--cdp` drops the seeded [`device`](#device) / [`viewport`](#viewport) / [`headful`](#headful) / [`storageState`](#storagestate), and `--md` drops [`format`](#format) — so a config default never trips a guard against a flag you actually typed. `--cdp` names each of those four it dropped on stderr, even under `--quiet`, so a committed `storageState` can't quietly become a logged-out run.)
 
 ## Legacy shorthands
 
