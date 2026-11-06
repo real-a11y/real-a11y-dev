@@ -1534,3 +1534,92 @@ describe("getHeadingLevel", () => {
     ).toBe(4);
   });
 });
+
+// WAI-ARIA 1.2 `presentation`: the required structural children of a
+// presentational table lose their implicit semantics with it.
+describe("table parts under a presentational table", () => {
+  const part = (table: string, inner: string, id = "t") =>
+    `<table ${table}>${inner.replace("<ID>", `id="${id}"`)}</table>`;
+
+  it.each([
+    ["role=presentation", 'role="presentation"'],
+    ["role=none", 'role="none"'],
+  ])("strips every part under %s", (_n, attrs) => {
+    const roles = (inner: string) => roleOf(part(attrs, inner));
+    expect(roles("<thead <ID>><tr><td>x</td></tr></thead>")).toBe(
+      "presentation",
+    );
+    expect(roles("<tbody <ID>><tr><td>x</td></tr></tbody>")).toBe(
+      "presentation",
+    );
+    expect(roles("<tfoot <ID>><tr><td>x</td></tr></tfoot>")).toBe(
+      "presentation",
+    );
+    expect(roles("<tr <ID>><td>x</td></tr>")).toBe("presentation");
+    expect(roles("<tr><td <ID>>x</td></tr>")).toBe("presentation");
+    expect(roles("<thead><tr><th <ID>>x</th></tr></thead>")).toBe(
+      "presentation",
+    );
+    expect(roles("<tr><th <ID> scope=row>x</th></tr>")).toBe("presentation");
+  });
+
+  it("keeps the parts when aria-label or tabindex voids the table's presentation", () => {
+    for (const extra of ['aria-label="L"', 'tabindex="0"']) {
+      const attrs = `role="none" ${extra}`;
+      expect(roleOf(part(attrs, "<tr <ID>><td>x</td></tr>"))).toBe("row");
+      expect(roleOf(part(attrs, "<tr><td <ID>>x</td></tr>"))).toBe("cell");
+    }
+  });
+
+  it("lets an authored role on a part win", () => {
+    expect(
+      roleOf(part('role="none"', '<tr><td <ID> role="cell">x</td></tr>')),
+    ).toBe("cell");
+  });
+
+  it("keeps a part's implicit role when it is focusable or has a global attribute", () => {
+    expect(
+      roleOf(
+        part(
+          'role="none"',
+          '<tr><td <ID> aria-describedby="d">x</td></tr><p id="d">desc</p>',
+        ),
+      ),
+    ).toBe("cell");
+    expect(
+      roleOf(part('role="none"', '<tr><td <ID> tabindex="0">x</td></tr>')),
+    ).toBe("cell");
+  });
+
+  it("makes the tr presentational even when its td keeps cell", () => {
+    expect(
+      roleOf(
+        part('role="none"', '<tr <ID>><td aria-describedby="d">x</td></tr>'),
+      ),
+    ).toBe("presentation");
+  });
+
+  it("leaves a nested data table inside a layout table intact", () => {
+    const html =
+      '<table role="presentation"><tr><td><table><tbody id="t"><tr><td>x</td></tr></tbody></table></td></tr></table>';
+    expect(roleOf(html)).toBe("rowgroup");
+    expect(
+      roleOf(
+        html
+          .replace('<tbody id="t">', "<tbody>")
+          .replace("<td>x", '<td id="t">x'),
+      ),
+    ).toBe("cell");
+  });
+
+  it("leaves data tables alone", () => {
+    expect(roleOf(part("", "<tbody <ID>><tr><td>x</td></tr></tbody>"))).toBe(
+      "rowgroup",
+    );
+    expect(roleOf(part("", "<tr <ID>><td>x</td></tr>"))).toBe("row");
+    expect(roleOf(part("", "<tr><td <ID>>x</td></tr>"))).toBe("cell");
+    expect(roleOf(part("", "<thead><tr><th <ID>>x</th></tr></thead>"))).toBe(
+      "columnheader",
+    );
+  });
+});

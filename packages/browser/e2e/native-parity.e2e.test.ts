@@ -387,6 +387,45 @@ describe("roles Chromium discards", () => {
   });
 });
 
+// WAI-ARIA 1.2 removes the implicit semantics of a presentational table's
+// required children (thead/tbody/tr/th/td). The DOM producer once kept
+// rowgroup, row, columnheader and cell. aria-label or tabindex on the table
+// voids its presentation, so a labelled one keeps its table semantics.
+describe("presentational table parts", () => {
+  it("are dropped by both producers, and kept when the table is labelled", async () => {
+    const body =
+      "<thead><tr><th>H</th></tr></thead><tbody><tr><td>C</td></tr></tbody>";
+    const load = async (attrs: string) => {
+      await session.open(
+        dataUrl(`<main><table ${attrs}>${body}</table></main>`),
+      );
+      const dom = await session.call<string>("treeSnapshot", "body", [
+        { markFocus: false },
+      ]);
+      const native = serializeTree(await session.nativeTree(), {
+        markFocus: false,
+      });
+      return [
+        ["dom", dom],
+        ["native", native],
+      ] as const;
+    };
+
+    for (const [producer, tree] of await load('role="presentation"')) {
+      expect(tree, producer).not.toMatch(
+        /\b(rowgroup|row|columnheader|cell)\b/,
+      );
+    }
+    for (const [producer, tree] of await load(
+      'role="presentation" aria-label="L"',
+    )) {
+      expect(tree, producer).toMatch(/\btable "L"/);
+      expect(tree, producer).toMatch(/\brow\b/);
+      expect(tree, producer).toMatch(/\bcell\b/);
+    }
+  });
+});
+
 // The DOM producer walks the flat tree through open shadow roots and slots,
 // as Chromium does. Before that, every node below came from native only.
 describe("web components reach the DOM producer", () => {
