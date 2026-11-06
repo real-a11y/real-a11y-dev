@@ -10,7 +10,7 @@
  */
 
 import { spawn } from "node:child_process";
-import { createHash, randomBytes } from "node:crypto";
+import { randomBytes } from "node:crypto";
 import {
   access,
   chmod,
@@ -24,7 +24,7 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { createConnection } from "node:net";
-import { homedir, platform, userInfo } from "node:os";
+import { homedir } from "node:os";
 import { basename, join, sep } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 
@@ -39,122 +39,22 @@ import {
 } from "./client.js";
 import { processStartTimeMs } from "./process-start-time.js";
 import { DAEMON_PROTOCOL_VERSION } from "./protocol.js";
+import {
+  defaultSessionName,
+  isNamedPipe,
+  isWindows,
+  pathsForSessionDir,
+  readPipeId,
+  readSessionName,
+  resolveWindowsSocketPath,
+  sessionPaths,
+  windowsPipePath,
+  writeSessionName,
+  type SessionPaths,
+} from "./session-paths.js";
 import { tightenWindowsTokenAcl } from "./windows-acl.js";
 
-export interface SessionPaths {
-  socketPath: string;
-  pidfile: string;
-  logFile: string;
-  tokenFile: string;
-  /** Windows only: holds the random id the named pipe's name is built from. */
-  pipeFile: string;
-  sessionDir: string;
-}
-
-function isWindows(): boolean {
-  return platform() === "win32";
-}
-
-function sanitizeSessionName(name: string): string {
-  // Replace path separators / shell metacharacters, then append a short hash of
-  // the original so distinct names such as "team/prod" and "team_prod" don't
-  // collide when sanitized.
-  const base = name.replace(/[^a-zA-Z0-9_.-]/g, "_").slice(0, 55);
-  const hash = createHash("sha256").update(name).digest("hex").slice(0, 8);
-  return `${base}_${hash}`;
-}
-
-function currentUser(): string {
-  // `userInfo()` can throw in minimal containers; fall back to env vars.
-  try {
-    return sanitizeSessionName(userInfo().username);
-  } catch {
-    return sanitizeSessionName(
-      process.env.USERNAME ?? process.env.USER ?? "user",
-    );
-  }
-}
-
-export function isNamedPipe(socketPath: string): boolean {
-  return socketPath.startsWith("\\\\.\\pipe\\");
-}
-
-function windowsPipePath(pipeId: string): string {
-  // The pipe name is discoverable by any local process that can enumerate
-  // `\\.\pipe\`, so it must be independent of the auth token — a hash of the
-  // secret in a public name would hand a local attacker an offline oracle for
-  // verifying guessed tokens. The id is random, generated at spawn time, and
-  // stored in the session directory's `pipe` file so later invocations can
-  // find the pipe; the token is still required for every RPC `auth` message.
-  return `\\\\.\\pipe\\real-a11y-${pipeId}`;
-}
-
-function resolveWindowsSocketPath(
-  basePath: string,
-  pipeId: string | undefined,
-): string {
-  return pipeId ? windowsPipePath(pipeId) : basePath;
-}
-
-async function readPipeId(paths: SessionPaths): Promise<string | undefined> {
-  try {
-    const id = (await readFile(paths.pipeFile, "utf8")).trim();
-    return id || undefined;
-  } catch {
-    return undefined;
-  }
-}
-
-export function sessionPaths(name: string): SessionPaths {
-  const safe = sanitizeSessionName(name);
-  const dir = join(homedir(), ".real-a11y", "sessions", safe);
-  const socketPath = isWindows()
-    ? `\\\\.\\pipe\\real-a11y-${currentUser()}-${safe}`
-    : join(dir, "daemon.sock");
-  return {
-    socketPath,
-    pidfile: join(dir, "daemon.pid"),
-    logFile: join(dir, "daemon.log"),
-    tokenFile: join(dir, "token"),
-    pipeFile: join(dir, "pipe"),
-    sessionDir: dir,
-  };
-}
-
-function pathsForSessionDir(dir: string): SessionPaths {
-  return {
-    socketPath: isWindows()
-      ? `\\\\.\\pipe\\real-a11y-${currentUser()}-${basename(dir)}`
-      : join(dir, "daemon.sock"),
-    pidfile: join(dir, "daemon.pid"),
-    logFile: join(dir, "daemon.log"),
-    tokenFile: join(dir, "token"),
-    pipeFile: join(dir, "pipe"),
-    sessionDir: dir,
-  };
-}
-
-export function defaultSessionName(): string {
-  return createHash("sha256").update(process.cwd()).digest("hex").slice(0, 16);
-}
-
-async function writeSessionName(
-  sessionDir: string,
-  name: string,
-): Promise<void> {
-  await mkdir(sessionDir, { recursive: true, mode: 0o700 });
-  await writeFile(join(sessionDir, "name.txt"), name, { mode: 0o600 });
-}
-
-async function readSessionName(
-  sessionDir: string,
-): Promise<string | undefined> {
-  try {
-    return (await readFile(join(sessionDir, "name.txt"), "utf8")).trim();
-  } catch {
-    return undefined;
-  }
-}
+export { defaultSessionName, isNamedPipe, sessionPaths, type SessionPaths };
 
 async function isStaleLock(
   lockPath: string,
