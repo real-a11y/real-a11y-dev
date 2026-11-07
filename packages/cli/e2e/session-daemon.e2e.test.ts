@@ -50,12 +50,12 @@ describe("session daemon", () => {
 </html>`,
     );
 
-    const { stop, tokenFile } = await spawnDaemon(
+    const { stop, tokenFile } = await spawnDaemon({
       socketPath,
       pidfile,
-      60_000,
-      DAEMON_ENTRY,
-    );
+      idleTimeoutMs: 60_000,
+      daemonPath: DAEMON_ENTRY,
+    });
     const client = new DaemonClient({ socketPath, tokenFile });
 
     try {
@@ -236,13 +236,13 @@ describe("session daemon CLI routing", () => {
 
     const name = "cli-demo";
     const paths = sessionPaths(name);
-    const { stop, tokenFile } = await spawnDaemon(
-      paths.socketPath,
-      paths.pidfile,
-      60_000,
-      DAEMON_ENTRY,
-      paths.tokenFile,
-    );
+    const { stop, tokenFile } = await spawnDaemon({
+      socketPath: paths.socketPath,
+      pidfile: paths.pidfile,
+      idleTimeoutMs: 60_000,
+      daemonPath: DAEMON_ENTRY,
+      tokenFile: paths.tokenFile,
+    });
     const client = new DaemonClient({
       socketPath: paths.socketPath,
       tokenFile,

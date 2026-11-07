@@ -64,7 +64,7 @@
       "count": 3
     },
     "max-params": {
-      "count": 2
+      "count": 1
     }
   },
   "packages/cli/src/daemon/server.ts": {
