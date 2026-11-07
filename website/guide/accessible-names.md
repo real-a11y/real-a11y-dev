@@ -22,13 +22,13 @@ For any element, the accessible name is picked from the **first non-empty source
    - `<fieldset><legend>` for grouped controls
    - `<caption>` for tables
    - `alt` for images and `<input type="image">`, the first `<title>` for an `<svg>`, `title` for iframes
-4. **Text content** — inner text, including text inside descendants. A descendant with a name of its own lends that name instead of its text: an image its `alt`, an `<svg>` its `<title>`, any element its `aria-label`. A `<select>`'s `<option>` is the exception, named by its text alone. Only for roles named from their content (buttons, links, headings, cells, options…): a dialog, image, landmark or text field is named by its author alone, never by its text
+4. **Text content** — inner text, including text inside descendants. A descendant with a name of its own lends that name instead of its text: an image its `alt`, an `<svg>` its `<title>`, any element its `aria-label`. A `<select>`'s `<option>` is the exception, named by its text alone. Only for roles named from their content (buttons, links, headings, cells, options…): a dialog, image, landmark, text field, `article`, `group`, `note`, `tabpanel`, `doc-toc` or `graphics-document` is named by its author alone, never by its text
 5. `title` attribute — last-resort fallback
 6. Empty string (element has no accessible name)
 
 If #1 resolves to a non-empty string, #2–#5 are ignored — even if #2 looks "more specific" from a CSS or developer perspective.
 
-**One thing a tree shows beyond this list.** A paragraph, a list item, a code block, or a live region (`alert`, `status`) with text directly inside it shows that text as its name: `paragraph "Read the guide"`, `status "3 results"`. That keeps its content visible in a snapshot, where the tree prints names and nothing else. A screen reader reads that text as the element's content, not as a label. It never applies to a dialog, image, landmark or text field.
+**One thing a tree shows beyond this list.** A paragraph, a list item, a code block, or a live region (`alert`, `status`) with text directly inside it shows that text as its name: `paragraph "Read the guide"`, `status "3 results"`. That keeps its content visible in a snapshot, where the tree prints names and nothing else. A screen reader reads that text as the element's content, not as a label. It never applies to a dialog, image, landmark, text field, `article`, `group`, `note` or `tabpanel`.
 
 That text includes what sits in a plain inline wrapper, which Chromium gives no node of its own: a `<span>`, a `<b>`, a custom or unknown element. `<p>Drop in <b>the panel</b> now.</p>` is `paragraph "Drop in the panel now."`, and a highlighted code block is named with its code. Text in an element that has a node of its own stays out, because that node shows it: a link, a `<code>` or `<strong>`, a `<label>`, and a wrapper with an `id`, a `title`, an `aria-` attribute or a `tabindex`. A `<br>` reads as a space.
 
