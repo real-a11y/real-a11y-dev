@@ -99,8 +99,8 @@ import {
 } from "@real-a11y-dev/core";
 import type { CDPSession, Page } from "playwright";
 
-import { readDomRoot, type DomNode } from "./dom-document.js";
-import { attributeOf, createLocatorIndex } from "./native-locator.js";
+import { attributeOf, readDomRoot, type DomNode } from "./dom-document.js";
+import { createLocatorIndex } from "./native-locator.js";
 
 /**
  * How {@link nativeTree} / {@link buildNativeTree} treat what users entered.

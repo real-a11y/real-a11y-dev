@@ -1,15 +1,6 @@
 import type { CssPathAdapter } from "@real-a11y-dev/core";
 
-import type { DomNode } from "./dom-document.js";
-
-/** Read one attribute out of CDP's flat `[name, value, name, value, …]`. */
-export function attributeOf(node: DomNode, want: string): string | null {
-  const attrs = node.attributes ?? [];
-  for (let i = 0; i + 1 < attrs.length; i += 2) {
-    if (attrs[i] === want) return attrs[i + 1];
-  }
-  return null;
-}
+import { attributeOf, type DomNode } from "./dom-document.js";
 
 const ELEMENT_NODE = 1;
 
@@ -61,6 +52,7 @@ export function createLocatorIndex(): {
     link(node, inside) {
       if (inside) insideEditable.add(node);
       const kids = elementChildren(node);
+      if (kids.length === 0) return;
       const totals = new Map<string, number>();
       for (const child of kids) {
         const tag = tagOf(child);

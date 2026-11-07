@@ -266,4 +266,24 @@ describe("buildCssPath with a precomputed nthOfType", () => {
     );
     expect(scans).toBe(0);
   });
+
+  it("falls back to the scan where the accessor knows nothing, and drops nth-of-type for an only child", () => {
+    const only: PlainNode = { tag: "span" };
+    const root: PlainNode = {
+      tag: "html",
+      children: [
+        {
+          tag: "body",
+          children: [{ tag: "p", children: [only] }, { tag: "p" }],
+        },
+      ],
+    };
+    const scanning = plainTree(root);
+    const partial: CssPathAdapter<PlainNode> = {
+      ...scanning,
+      nthOfType: (n) => (n.tag === "span" ? { index: 1, count: 1 } : undefined),
+    };
+    expect(buildCssPath(only, partial)).toBe("body > p:nth-of-type(1) > span");
+    expect(buildCssPath(only, partial)).toBe(buildCssPath(only, scanning));
+  });
 });
