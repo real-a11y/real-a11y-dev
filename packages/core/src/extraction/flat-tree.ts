@@ -25,6 +25,7 @@ import {
   safeChildNodes,
   safeChildren,
   safeHidden,
+  safeGetAttribute,
   safeNodeType,
   safeOwnerDocument,
   safeParentElement,
@@ -72,7 +73,7 @@ function slotHidesItsAssignment(slot: HTMLSlotElement): boolean {
   if (
     safeHidden(slot) ||
     slot.hasAttribute("inert") ||
-    isAriaHiddenValue(slot.getAttribute("aria-hidden"))
+    isAriaHiddenValue(safeGetAttribute(slot, "aria-hidden"))
   ) {
     return true;
   }

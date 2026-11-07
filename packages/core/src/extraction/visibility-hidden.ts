@@ -1,4 +1,5 @@
 import { isAriaHiddenValue } from "./aria-tokens.js";
+import { safeGetAttribute } from "./clobber-safe.js";
 import { flatChildren } from "./flat-tree.js";
 import {
   getCachedComputedStyle,
@@ -21,7 +22,7 @@ export function isHiddenOnlyByVisibility(
   element: Element,
   style?: CSSStyleDeclaration | null,
 ): boolean {
-  if (isAriaHiddenValue(element.getAttribute("aria-hidden"))) return false;
+  if (isAriaHiddenValue(safeGetAttribute(element, "aria-hidden"))) return false;
   // A media element's children are unrendered fallback, never reachable.
   if (element.localName === "video" || element.localName === "audio") {
     return false;

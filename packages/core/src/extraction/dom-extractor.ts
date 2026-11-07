@@ -106,7 +106,7 @@ const TRACK_KINDS = new Set([
  * the raw value), which would make tests diverge from real browsers.
  */
 function trackKindOf(track: Element): string {
-  const raw = track.getAttribute("kind");
+  const raw = safeGetAttribute(track, "kind");
   if (raw === null) return "subtitles";
   const lowered = raw.toLowerCase();
   return TRACK_KINDS.has(lowered) ? lowered : "metadata";
@@ -300,7 +300,7 @@ function getActions(
 
   if (
     !skipTabindexFallback &&
-    element.getAttribute("tabindex") !== null &&
+    safeGetAttribute(element, "tabindex") !== null &&
     actions.length === 0
   ) {
     actions.push("click");
@@ -345,13 +345,8 @@ function hasInteractiveContent(
   const tag = safeTagName(element);
   // The walk skips these outright, so nothing inside one is ever emitted.
   if (SKIP_TAGS.has(tag)) return false;
-  // Nor anything inside a form whose control shadows its `tagName`: the walk
-  // reads its own element's tag plainly, and its per-element boundary skips
-  // the form, with everything in it, when that read throws. This is the read
-  // that throws there, made to predict it.
-  if (typeof element.tagName !== "string") return false;
 
-  const tabindex = element.getAttribute("tabindex");
+  const tabindex = safeGetAttribute(element, "tabindex");
   if (getActions(element, Number(tabindex) < 0).length > 0) return true;
 
   // Media elements are leaves in the walk: their light-DOM children are
@@ -390,7 +385,7 @@ function isSrOnly(
   style?: CSSStyleDeclaration | null,
 ): boolean {
   // Custom form controls hide the native input behind a visual — not sr-only
-  const tag = element.tagName.toLowerCase();
+  const tag = safeTagName(element);
   if (INTERACTIVE_TAGS.has(tag)) return false;
   if (safeGetAttribute(element, "tabindex") !== null) return false;
 
@@ -566,7 +561,7 @@ function computeAccessibleDescription(
   styleCache?: StyleCache | null,
 ): string {
   // 1. aria-describedby — resolve referenced element text
-  const describedBy = element.getAttribute("aria-describedby");
+  const describedBy = safeGetAttribute(element, "aria-describedby");
   if (describedBy) {
     const doc = idScope(element);
     const texts = describedBy
@@ -588,7 +583,7 @@ function computeAccessibleDescription(
     if (texts.length) return texts.join(" ").replace(/\s+/g, " ").trim();
   }
   // 2. aria-description — inline string (ARIA 1.3+)
-  return element.getAttribute("aria-description") || "";
+  return safeGetAttribute(element, "aria-description") || "";
 }
 
 /**
@@ -910,7 +905,8 @@ const NAMED_WIDGET_ROLES = new Set<string>([
  */
 function isImplicitDetailsGroup(element: Element): boolean {
   return (
-    safeTagName(element) === "details" && !element.getAttribute("role")?.trim()
+    safeTagName(element) === "details" &&
+    !safeGetAttribute(element, "role")?.trim()
   );
 }
 
@@ -983,7 +979,7 @@ function textAlternative(
     const labelledBy = labelledByText(element, visited, styleCache);
     if (labelledBy) return labelledBy;
   }
-  const ariaLabel = element.getAttribute("aria-label")?.trim();
+  const ariaLabel = safeGetAttribute(element, "aria-label")?.trim();
   if (ariaLabel) return ariaLabel;
   return null;
 }
@@ -1024,7 +1020,7 @@ function labelledByText(
   visited: Set<Element>,
   styleCache?: StyleCache | null,
 ): string {
-  const labelledBy = element.getAttribute("aria-labelledby");
+  const labelledBy = safeGetAttribute(element, "aria-labelledby");
   if (!labelledBy) return "";
   const doc = idScope(element);
   return labelledBy
@@ -1132,7 +1128,7 @@ function getAccessibleTextContent(
         // whether or not it contributes any text — Chromium reads
         // `<h1>Save<div aria-hidden="true">x</div>now</h1>` as "Save now".
         const spaced = needsSpaceAround(childEl, childStyle);
-        if (isAriaHiddenValue(childEl.getAttribute("aria-hidden"))) {
+        if (isAriaHiddenValue(safeGetAttribute(childEl, "aria-hidden"))) {
           if (spaced) text += " ";
           continue;
         }
@@ -1315,7 +1311,7 @@ function computeRawAccessibleName(
   // 2. aria-label, unless it is blank: accname skips one that is only
   //    whitespace, as Chromium does. `<button aria-label=" ">Save</button>` is
   //    "Save", `<img aria-label=" " alt="Home">` "Home".
-  const ariaLabel = element.getAttribute("aria-label")?.trim();
+  const ariaLabel = safeGetAttribute(element, "aria-label")?.trim();
   if (ariaLabel) return ariaLabel;
 
   const tag = safeTagName(element);
@@ -1327,9 +1323,11 @@ function computeRawAccessibleName(
   //    Scoped to <img>, the element whose role the empty alt also changes;
   //    <area> keeps its existing behaviour.
   if (tag === "img" || tag === "area") {
-    const alt = element.getAttribute("alt");
+    const alt = safeGetAttribute(element, "alt");
     const titleNamesEmptyAlt =
-      tag === "img" && alt === "" && !!element.getAttribute("title")?.trim();
+      tag === "img" &&
+      alt === "" &&
+      !!safeGetAttribute(element, "title")?.trim();
     if (alt !== null && !titleNamesEmptyAlt) return alt;
   }
 
@@ -1345,7 +1343,7 @@ function computeRawAccessibleName(
   //    like any element under the visit-once guard: a heading that holds a
   //    checkbox and its label is "Agree" in Chromium, not "Agree Agree".
   if (tag === "input" || tag === "select" || tag === "textarea") {
-    const id = element.getAttribute("id");
+    const id = safeGetAttribute(element, "id");
     if (id) {
       const label = safeQuerySelector(idScope(element), `label[for="${id}"]`);
       if (label && !visited.has(label)) {
@@ -1373,7 +1371,7 @@ function computeRawAccessibleName(
           // (see getAccessibleTextContent).
           try {
             if (FORM_CONTROL_TAGS.has(safeTagName(childEl))) continue;
-            if (isAriaHiddenValue(childEl.getAttribute("aria-hidden")))
+            if (isAriaHiddenValue(safeGetAttribute(childEl, "aria-hidden")))
               continue;
             if (
               isSubtreeHidden(
@@ -1427,7 +1425,7 @@ function computeRawAccessibleName(
     const caption = (element as HTMLTableElement).caption;
     if (caption) {
       const hidden =
-        isAriaHiddenValue(caption.getAttribute("aria-hidden")) ||
+        isAriaHiddenValue(safeGetAttribute(caption, "aria-hidden")) ||
         isSubtreeHidden(caption, getCachedComputedStyle(caption, styleCache));
       if (!hidden) {
         const t = getAccessibleTextContent(caption, visited, styleCache).trim();
@@ -1458,13 +1456,13 @@ function computeRawAccessibleName(
     // An image button is named by its alt — after a label, which Chromium
     // prefers: `<label><input type="image" alt="Go"> now</label>` is "now".
     if (type === "image") {
-      const alt = input.getAttribute("alt");
+      const alt = safeGetAttribute(input, "alt");
       if (alt) return alt;
     }
   }
 
   // 6. title attribute (HTML-AAM orders title before placeholder)
-  const title = element.getAttribute("title");
+  const title = safeGetAttribute(element, "title");
   if (title) return title;
 
   // 7. placeholder — a text field's last-resort name, after title. A
@@ -1764,9 +1762,7 @@ function collectDescendantTextBounded(
     return appendCollapsedTextChunk(state, safeTextContent(node));
   }
   if (type !== Node.ELEMENT_NODE) return false;
-  const rawTag = (node as Element).tagName;
-  const tag = typeof rawTag === "string" ? rawTag.toLowerCase() : "";
-  if (MEDIA_TAGS.has(tag)) return false;
+  if (MEDIA_TAGS.has(safeTagName(node as Element))) return false;
 
   const children = flatChildNodes(node);
   for (let i = 0; i < children.length; i++) {
@@ -1942,8 +1938,7 @@ function getFieldText(
     }
     if (type !== Node.ELEMENT_NODE) return false;
     const el = node as Element;
-    const rawTag = el.tagName;
-    const tag = typeof rawTag === "string" ? rawTag.toLowerCase() : "";
+    const tag = safeTagName(el);
     if (ignoresChildText(tag)) return false;
     // An unreadable element costs its own text, not the field's value (see
     // getAccessibleTextContent). Nothing is appended before these reads, so
@@ -1951,7 +1946,8 @@ function getFieldText(
     let style: CSSStyleDeclaration | null;
     try {
       if (!rendered) {
-        if (isAriaHiddenValue(el.getAttribute("aria-hidden"))) return false;
+        if (isAriaHiddenValue(safeGetAttribute(el, "aria-hidden")))
+          return false;
         const role = getExplicitRole(el);
         if (role && POPUP_ROLES.has(role)) return false;
       }
@@ -2048,15 +2044,15 @@ export function isSensitiveFieldAttributes(
  * like the extension's field-state read — gate on this predicate.
  */
 export function isSensitiveField(element: Element): boolean {
-  return isSensitiveFieldAttributes(element.tagName, {
+  return isSensitiveFieldAttributes(safeTagName(element), {
     // The `type` PROPERTY, not the attribute: it is what the browser actually
     // renders, normalized (an unknown or missing type reads as "text").
     // Tag-checked rather than `instanceof`, which fails across realms.
     type:
-      element.tagName.toLowerCase() === "input"
+      safeTagName(element) === "input"
         ? (element as HTMLInputElement).type
-        : element.getAttribute("type"),
-    autocomplete: element.getAttribute("autocomplete"),
+        : safeGetAttribute(element, "type"),
+    autocomplete: safeGetAttribute(element, "autocomplete"),
   });
 }
 
@@ -2118,7 +2114,7 @@ function wrapsTextControl(element: Element): boolean {
   return Array.from(element.querySelectorAll("input, select, textarea")).some(
     (control) => {
       // Tag-checked, not `instanceof`, which fails across realms.
-      if (control.tagName.toLowerCase() !== "input") return true;
+      if (safeTagName(control) !== "input") return true;
       const type = (control as HTMLInputElement).type;
       return !VALUELESS_INPUT_TYPES.has(type) && type !== "file";
     },
@@ -2167,13 +2163,13 @@ function readFieldValue(
   role: string,
   styleCache?: StyleCache,
 ): string | undefined {
-  const tag = element.tagName.toLowerCase();
+  const tag = safeTagName(element);
   if (STATE_ONLY_ROLES.has(role)) return undefined;
 
   if (RANGE_VALUE_ROLES.has(role)) {
-    const valuetext = element.getAttribute("aria-valuetext");
+    const valuetext = safeGetAttribute(element, "aria-valuetext");
     if (valuetext?.trim()) return valuetext;
-    const valuenow = element.getAttribute("aria-valuenow");
+    const valuenow = safeGetAttribute(element, "aria-valuenow");
     if (valuenow?.trim()) return valuenow;
     if (tag === "input") return (element as HTMLInputElement).value;
     // An indeterminate <progress> (no value attribute) announces no value.
@@ -2324,7 +2320,7 @@ function getKeyAttributes(element: Element): Record<string, string> {
   const attrs: Record<string, string> = {};
 
   for (const name of KEY_ATTRIBUTES) {
-    const val = element.getAttribute(name);
+    const val = safeGetAttribute(element, name);
     if (val !== null) {
       attrs[name] = val;
     }
@@ -2332,7 +2328,7 @@ function getKeyAttributes(element: Element): Record<string, string> {
 
   // Read current value from DOM property (not HTML attribute) for form controls
   // getAttribute("value") returns the initial value; .value reflects user input
-  const tag = element.tagName.toLowerCase();
+  const tag = safeTagName(element);
   if (tag === "input" || tag === "textarea" || tag === "select") {
     // Guarded: a page can make the `.value` getter throw, and this runs inside
     // `buildNode`'s one try — an unguarded read cost the page the whole node.
@@ -2413,7 +2409,7 @@ function isDisabledOption(option: Element): boolean {
  * `undefined`, which leaves the element to inherit. See `ariaBoolean`.
  */
 function explicitAriaDisabled(element: Element): boolean | null {
-  return ariaBoolean(element.getAttribute("aria-disabled"));
+  return ariaBoolean(safeGetAttribute(element, "aria-disabled"));
 }
 
 /**
@@ -2426,7 +2422,7 @@ function ariaStateValue(
   attr: string,
   role: string,
 ): boolean | string | null {
-  const value = element.getAttribute(attr);
+  const value = safeGetAttribute(element, attr);
   switch (attr) {
     case "aria-checked":
       return ariaTristate(value, role);
@@ -2480,7 +2476,7 @@ function takesInheritedDisabled(
   if (!focusable) return false;
   return !(
     tag === "a" &&
-    parseTabindex(element.getAttribute("tabindex")) === null &&
+    parseTabindex(safeGetAttribute(element, "tabindex")) === null &&
     isEditable(element)
   );
 }
@@ -2496,7 +2492,7 @@ function takesInheritedDisabled(
  * re-reads every checkbox and radio on refresh for that reason.
  */
 function nativeChecked(element: Element): boolean | "mixed" | null {
-  if (element.tagName.toLowerCase() !== "input") return null;
+  if (safeTagName(element) !== "input") return null;
   const input = element as HTMLInputElement;
   if (input.type === "checkbox")
     return input.indeterminate ? "mixed" : input.checked;
@@ -2618,7 +2614,7 @@ function referencedElement(
 ): Element | null {
   if (property in element)
     return (element as unknown as Record<string, Element | null>)[property];
-  const id = element.getAttribute(attr);
+  const id = safeGetAttribute(element, attr);
   return id ? safeGetElementById(idScope(element), id) : null;
 }
 
@@ -2646,7 +2642,7 @@ function isSubmitButton(element: Element, tag: string, type: string): boolean {
  *   one submits the form instead.
  */
 function invokedElement(element: Element, tag: string): Element | null {
-  const type = (element.getAttribute("type") ?? "").toLowerCase();
+  const type = (safeGetAttribute(element, "type") ?? "").toLowerCase();
   if (tag === "input") {
     if (!POPOVER_INVOKER_INPUT_TYPES.has(type)) return null;
   } else if (tag !== "button") {
@@ -2656,7 +2652,7 @@ function invokedElement(element: Element, tag: string): Element | null {
   if (isSubmitButton(element, tag, type) && (element as HTMLButtonElement).form)
     return null;
   if (tag === "button") {
-    const command = (element.getAttribute("command") ?? "").toLowerCase();
+    const command = (safeGetAttribute(element, "command") ?? "").toLowerCase();
     const target = POPOVER_COMMANDS.has(command)
       ? referencedElement(element, "commandfor", "commandForElement")
       : null;
@@ -2763,7 +2759,7 @@ export function nativeStates(
   const checked = nativeChecked(element);
   if (checked !== null) {
     const ariaSet = (attr: string) =>
-      ariaTristate(element.getAttribute(attr)) !== null;
+      ariaTristate(safeGetAttribute(element, attr)) !== null;
     if (role === "button" && ariaSet("aria-pressed"))
       return { checked: undefined, pressed: checked };
     const exposed =
@@ -2814,7 +2810,7 @@ function getAriaStates(
   focusable: boolean,
 ): Record<string, string | boolean> {
   const states: Record<string, string | boolean> = {};
-  const tag = element.tagName.toLowerCase();
+  const tag = safeTagName(element);
   const native = nativeStates(element, tag, role);
 
   for (const attr of ARIA_STATE_ATTRIBUTES) {
@@ -3103,7 +3099,7 @@ function isInertOrAriaHidden(element: Element): boolean {
   for (let el: Element | null = element; el; el = safeParentElement(el)) {
     // Any ancestor can be a <form> holding `<input name="hasAttribute">`.
     if (safeGetAttribute(el, "inert") !== null) return true;
-    if (isAriaHiddenValue(el.getAttribute("aria-hidden"))) return true;
+    if (isAriaHiddenValue(safeGetAttribute(el, "aria-hidden"))) return true;
   }
   return false;
 }
@@ -3157,7 +3153,7 @@ export function countsAsOverlay(el: Element): boolean {
   if (role && OVERLAY_ROLES.has(role)) return true;
 
   // `aria-live` values ARE case-insensitive tokens, unlike `role` above.
-  const live = el.getAttribute("aria-live")?.trim().toLowerCase();
+  const live = safeGetAttribute(el, "aria-live")?.trim().toLowerCase();
   if (live === "polite" || live === "assertive") return true;
   if (live === "off") return false;
   return role ? IMPLICIT_LIVE_ROLES.has(role) : false;
@@ -3303,16 +3299,13 @@ export interface ExtractDomTreeOptions {
  * a child named `tagName` — `<input name="tagName">` — shadows
  * `element.tagName`, so `.toLowerCase()` threw, and with no per-element
  * boundary the walk unwound completely and the panel hung on "Connecting to
- * page…" forever. The targeted guards (`getAttribute("id")`, the `safe*`
- * reads) defuse the plausible cases; this boundary is the catch-all for the
- * rest — including future unknown clobbering — degrading to "skip this node"
- * instead of losing the whole tree.
+ * page…" forever. Reads of `tagName` and `getAttribute` now go through
+ * `safeTagName` / `safeGetAttribute`, so a form with either shadowed keeps its
+ * fields and buttons; this boundary is the catch-all for clobbering nobody has
+ * found yet, degrading to "skip this node" instead of losing the whole tree.
  *
- * It only ever charges the element it is building, so only that element's own
- * tag is read plainly. A read that can land on another element — an ancestor a
- * role or state climbs to, a descendant a name walk enters — goes through
- * `safeTagName`; through a plain one, such a form would cost the element whose
- * read it was.
+ * A read that lands on another element — an ancestor a role or state climbs
+ * to, a descendant a name walk enters — goes through the same safe readers.
  *
  * Nothing here mutates `nodes` / the element ref map; the caller commits the node
  * only on success, so a caught element never leaves a half-built node behind.
@@ -3325,7 +3318,7 @@ function buildNode(
   styleCache: StyleCache,
 ): { id: string; node: SemanticNode } | null {
   try {
-    const tag = element.tagName.toLowerCase();
+    const tag = safeTagName(element);
     if (SKIP_TAGS.has(tag)) return null;
 
     // Skip Semantic Navigator internal elements (highlight overlay, curtain, etc.)
@@ -3333,7 +3326,8 @@ function buildNode(
     // legacy named-property elements) a child named `id` clobbers `element.id`
     // to return that element, so `.id.startsWith(...)` would throw a TypeError
     // and crash the whole extraction. getAttribute always yields a string|null.
-    if (element.getAttribute("id")?.startsWith("__sn-")) return null;
+    const ownId = safeGetAttribute(element, "id");
+    if (ownId?.startsWith("__sn-")) return null;
     // Through the prototype: every element is asked this, and on a <form>
     // holding `<input name="hasAttribute">` the method is that input.
     if (safeGetAttribute(element, PANEL_HOST_ATTRIBUTE) !== null) return null;
@@ -3364,7 +3358,6 @@ function buildNode(
     // shadow-internal `id="hint"` must not suppress an unrelated `#hint` in
     // the page. So a target is only folded when a referrer in its OWN tree
     // points at it.
-    const ownId = element.getAttribute("id");
     if (
       ownId &&
       descriptionTargetIds.has(ownId) &&
@@ -3561,7 +3554,7 @@ export function extractDomTree(
     const referrers = deepQuerySelectorAll(effectiveRoot, "[aria-describedby]");
     const freshDescriptionTargetIds = new Set<string>();
     for (const el of referrers) {
-      for (const id of (el.getAttribute("aria-describedby") || "")
+      for (const id of (safeGetAttribute(el, "aria-describedby") || "")
         .split(/\s+/)
         .filter(Boolean)) {
         freshDescriptionTargetIds.add(id);

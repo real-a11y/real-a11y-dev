@@ -21,6 +21,15 @@
 
 ### Patch Changes
 
+- **A form with a control named `tagName` or `getAttribute` no longer drops its
+  fields and buttons from the tab sequence**
+  (PR_LINK). The bundled in-page engine read both
+  members plainly on the form, the read threw, and the form went with
+  everything in it. It now reads them through the prototype, as Chromium's tree
+  already shows them. The side panel's tree is Chrome's own and was not
+  affected; only the in-page walk behind the TAB view and the key bar's Tab
+  changes.
+
 - **The parts of a `role="presentation"` or `role="none"` table are no longer
   read as `row`, `cell` or header nodes**
   ([#590](https://github.com/real-a11y/real-a11y-dev/pull/590)). The bundled

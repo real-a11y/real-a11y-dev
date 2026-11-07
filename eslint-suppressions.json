@@ -121,7 +121,7 @@
   },
   "packages/core/src/extraction/dom-extractor.ts": {
     "complexity": {
-      "count": 9
+      "count": 8
     },
     "max-depth": {
       "count": 9

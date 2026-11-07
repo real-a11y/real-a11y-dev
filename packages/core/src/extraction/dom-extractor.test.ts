@@ -281,11 +281,12 @@ describe("DOM clobbering resilience", () => {
   });
 
   it("skips only the offending element (and its subtree) when its processing throws, keeping the rest of the tree", () => {
-    // The per-element error boundary. If ANY read on ONE element throws — here a
-    // clobbered `tagName` (`<input name="tagName">` on a [LegacyOverrideBuiltIns]
-    // <form> makes `element.tagName.toLowerCase()` throw) — that element and its
-    // subtree are dropped, but siblings and ancestors still extract. Before the
-    // boundary a single throw unwound the whole walk and the panel hung forever.
+    // The per-element error boundary. If ANY read on ONE element throws, that
+    // element and its subtree are dropped, but siblings and ancestors still
+    // extract. Before the boundary a single throw unwound the whole walk and
+    // the panel hung forever. A shadowed `tagName` or `getAttribute` no longer
+    // reaches it (those reads are clobber-safe), so this throws through
+    // `getComputedStyle`, a read the walk still makes plainly.
     const root = createPage(`
       <main>
         <h1>Before</h1>
@@ -297,11 +298,14 @@ describe("DOM clobbering resilience", () => {
     `);
 
     const doomed = root.querySelector("section")!;
-    // Clobber tagName to a non-string so `.toLowerCase()` throws on this element.
-    Object.defineProperty(doomed, "tagName", {
-      configurable: true,
-      get: () => root.querySelector("h1"), // an element, not a string
-    });
+    const realGetComputedStyle = window.getComputedStyle.bind(window);
+    vi.spyOn(window, "getComputedStyle").mockImplementation(((
+      el: Element,
+      pseudo?: string | null,
+    ) => {
+      if (el === doomed) throw new TypeError("poisoned style read");
+      return realGetComputedStyle(el, pseudo);
+    }) as typeof window.getComputedStyle);
 
     // The boundary warns (outside production) rather than staying silent.
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
@@ -330,6 +334,43 @@ describe("DOM clobbering resilience", () => {
     expect(reachable.size).toBe(result.nodes.size);
 
     expect(warnSpy).toHaveBeenCalled();
+  });
+
+  describe("a form with a control named after the tag or attribute read", () => {
+    const markup = `<form><input name="NAME"><button>Go</button></form><button>Sibling</button>`;
+    const names = (root: Element) =>
+      [...extractDomTree(root).nodes.values()].map((n) => n.a11y.name);
+
+    it.each([
+      ["tagName", (form: Element) => shadow(form, "tagName")],
+      ["getAttribute", (form: Element) => clobber(form, "getAttribute")],
+    ])("keeps the form's controls when one is named %s", (name, apply) => {
+      const root = createPage(markup.replace("NAME", name));
+      apply(root.querySelector("form")!);
+      const result = extractDomTree(root);
+      const roles = [...result.nodes.values()].map(
+        (n) => `${n.a11y.role} ${n.a11y.name}`,
+      );
+      expect(roles).toContain("textbox ");
+      expect(roles).toContain("button Go");
+      expect(roles).toContain("button Sibling");
+      expect(names(root)).toContain("Go");
+    });
+
+    it.each([
+      ["tagName", (form: Element) => shadow(form, "tagName")],
+      ["getAttribute", (form: Element) => clobber(form, "getAttribute")],
+    ])(
+      "lists its controls in the tab sequence when one is named %s",
+      (name, apply) => {
+        const root = createPage(markup.replace("NAME", name));
+        apply(root.querySelector("form")!);
+        const tree = extractA11yTree(root);
+        const seq = getTabSequence(tree).map((n) => n.a11y.name);
+        expect(seq).toContain("Go");
+        expect(seq).toContain("Sibling");
+      },
+    );
   });
 
   // The boundary above is what a shadowed `tagName` costs the form itself.
@@ -390,10 +431,9 @@ describe("DOM clobbering resilience", () => {
       expect(names).toContain("Full rules");
     });
 
-    // The walk skips the form, its field with it, so the field reaches no one.
-    // Help text holding nothing else is then text-only, and shows once, as the
-    // input's description, rather than also as a node of its own.
-    it("folds help text whose only control is in the form", () => {
+    // The form's field is reachable, so help text holding it is not text-only:
+    // it keeps its own node, like any help text with a control in it.
+    it("keeps help text whose only control is in the form", () => {
       const root = createPage(`
         <main>
           <input aria-label="Password" aria-describedby="help" />
@@ -406,9 +446,12 @@ describe("DOM clobbering resilience", () => {
 
       try {
         const nodes = [...extractDomTree(root).nodes.values()];
-        expect(nodes.some((n) => n.dom?.attributes?.id === "help")).toBe(false);
-        const password = nodes.find((n) => n.a11y.name === "Password")!;
-        expect(password.a11y.description).toBe("Must be 8+ chars.");
+        expect(nodes.some((n) => n.dom?.attributes?.id === "help")).toBe(true);
+        expect(
+          nodes.some(
+            (n) => n.a11y.role === "textbox" && n.a11y.name === "Tag name",
+          ),
+        ).toBe(true);
       } finally {
         root.remove();
       }

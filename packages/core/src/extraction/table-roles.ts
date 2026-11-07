@@ -3,7 +3,7 @@
  * `tfoot`, `tr`, `th`, `td`).
  */
 
-import { safeTagName } from "./clobber-safe.js";
+import { safeGetAttribute, safeTagName } from "./clobber-safe.js";
 import { flatParentElement } from "./flat-tree.js";
 
 type RoleResolver = string | ((el: Element) => string);
@@ -11,7 +11,7 @@ type RoleResolver = string | ((el: Element) => string);
 export function thHeaderRole(el: Element): string {
   // An explicit scope decides on its own; colgroup/rowgroup scope the same
   // axis as col/row for role purposes.
-  const scope = el.getAttribute("scope");
+  const scope = safeGetAttribute(el, "scope");
   if (scope === "col" || scope === "colgroup") return "columnheader";
   if (scope === "row" || scope === "rowgroup") return "rowheader";
 
