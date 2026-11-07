@@ -2,8 +2,11 @@
  * The checkpoint tools: findings checkpoints (axis B), their export / import,
  * and the tree checkpoint behind `diff_tree` (axis A).
  *
- * Moved out of `server.ts` unchanged; they reach the server's per-instance
- * state only through {@link CheckpointToolContext}.
+ * Moved out of `server.ts`: the schemas and handler bodies are as they were;
+ * only the wiring changed, so the per-instance state they used to close over
+ * (`redactInput`, `liveValues`, the session helpers) arrives through
+ * {@link CheckpointToolContext}. `server.test.ts` covers the tools, strict mode
+ * included.
  */
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
