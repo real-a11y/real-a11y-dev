@@ -200,8 +200,9 @@ export function safeHidden(element: Element): boolean {
  * `<input name="getAttribute">` makes `form.getAttribute(…)` throw, and
  * `<img name="getElementById">` makes `document.getElementById(…)` throw.
  *
- * Every read of `getAttribute` and `tagName` in the extraction goes through
+ * Every read of `getAttribute` and `tagName` under `extraction/` goes through
  * these, so a form whose control shadows either keeps its fields and buttons.
+ * Other members (`hasAttribute`, `localName`) are still read plainly in places.
  * A throw from some other read on one element still costs that element and
  * everything inside it — the walk's per-element boundary skips the subtree, and
  * `LiveTreeExtractor.refresh` falls back to a full extraction. These matter
