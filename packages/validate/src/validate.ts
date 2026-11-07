@@ -196,6 +196,31 @@ function childrenOf(nodes: NodeMap, id: string): ValidatedNode[] {
   return [...nodes.values()].filter((n) => n.parentId === id);
 }
 
+/** `aria-busy` on the node or any ancestor. Any value but `false` counts, as in
+ *  Chromium; `attrs` holds the string from a hand-built tree or the boolean
+ *  the testing adapter fills in. */
+function isBusy(nodes: NodeMap, node: ValidatedNode): boolean {
+  for (let cur: ValidatedNode | undefined = node, n = 0; cur && n < 1e3; n++) {
+    const v = cur.attrs["aria-busy"];
+    if (v && v !== "false") return true;
+    cur = cur.parentId ? nodes.get(cur.parentId) : undefined;
+  }
+  return false;
+}
+
+/** The roles `node` must own but doesn't, or null. WAI-ARIA 1.2 §5.2.6: a
+ *  widget still loading is marked `aria-busy="true"` on itself or a containing
+ *  element, so that is not a mistake. */
+function missingOwnedRoles(
+  nodes: NodeMap,
+  node: ValidatedNode,
+): readonly string[] | null {
+  const owned = requiredOwnedRoles(node.role);
+  if (owned.length === 0 || isBusy(nodes, node)) return null;
+  const kids = childrenOf(nodes, node.id);
+  return kids.some((k) => owned.includes(k.role)) ? null : owned;
+}
+
 function descendants(nodes: NodeMap, id: string): ValidatedNode[] {
   const out: ValidatedNode[] = [];
   const walk = (pid: string) => {
@@ -270,15 +295,12 @@ export function validateTree(nodes: NodeMap): Map<string, NodeIssue[]> {
     }
 
     // 3. A container that must own specific roles, but doesn't.
-    const owned = requiredOwnedRoles(node.role);
-    if (owned.length > 0) {
-      const kids = childrenOf(nodes, node.id);
-      if (!kids.some((k) => owned.includes(k.role))) {
-        add(node.id, {
-          severity: "warn",
-          message: `"${node.role}" should contain ${owned.join(" / ")}`,
-        });
-      }
+    const missing = missingOwnedRoles(nodes, node);
+    if (missing) {
+      add(node.id, {
+        severity: "warn",
+        message: `"${node.role}" should contain ${missing.join(" / ")}`,
+      });
     }
   }
 

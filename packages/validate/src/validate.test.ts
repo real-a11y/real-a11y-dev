@@ -122,6 +122,55 @@ describe("validateTree", () => {
     ).toBe(true);
   });
 
+  describe("aria-busy exempts required-owned warnings", () => {
+    const shouldContain = (map: ReturnType<typeof buildMap>, role: string) =>
+      validateTree(map)
+        .get(find(map, role).id)
+        ?.some((i) => /should contain/.test(i.message)) ?? false;
+
+    it.each([["true"], [true]])("no warning when aria-busy=%s", (busy) => {
+      const map = buildMap([{ role: "listbox", attrs: { "aria-busy": busy } }]);
+      expect(shouldContain(map, "listbox")).toBe(false);
+    });
+
+    it("no warning when only an ancestor is busy", () => {
+      const map = buildMap([
+        {
+          role: "generic",
+          attrs: { "aria-busy": "true" },
+          children: [{ role: "listbox", name: "x" }],
+        },
+      ]);
+      expect(shouldContain(map, "listbox")).toBe(false);
+    });
+
+    it.each([["false"], [false], [undefined]])(
+      "still warns when aria-busy=%s",
+      (busy) => {
+        const attrs: Record<string, string | boolean> =
+          busy === undefined ? {} : { "aria-busy": busy };
+        const map = buildMap([{ role: "listbox", attrs }]);
+        expect(shouldContain(map, "listbox")).toBe(true);
+      },
+    );
+
+    it("keeps the presentational-children error on a busy button", () => {
+      const map = buildMap([
+        {
+          role: "button",
+          name: "b",
+          attrs: { "aria-busy": "true" },
+          children: [{ role: "tablist", name: "t" }],
+        },
+      ]);
+      expect(
+        validateTree(map)
+          .get(find(map, "button").id)
+          ?.some((i) => /presentational/.test(i.message)),
+      ).toBe(true);
+    });
+  });
+
   it("returns nothing for a valid tree", () => {
     const map = buildMap([
       {
