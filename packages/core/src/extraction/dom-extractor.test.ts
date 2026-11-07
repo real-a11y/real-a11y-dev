@@ -6691,3 +6691,33 @@ describe("<aside> scope", () => {
     );
   });
 });
+
+describe("roles only their author can name", () => {
+  // WAI-ARIA 1.2, DPUB-ARIA 1.1 and Graphics-ARIA 1.0 give these roles a name
+  // from `author` only, so their text is content and never their name —
+  // Chromium leaves each one unnamed.
+  const nameOf = (html: string): string => {
+    const root = createPage(html);
+    const node = [...extractDomTree(root).nodes.values()].find(
+      (n) => n.dom?.attributes["id"] === "target",
+    )!;
+    return node.a11y.name;
+  };
+
+  it.each([
+    [`<nav id="target" role="doc-toc">x</nav>`],
+    [`<div id="target" role="graphics-document">x</div>`],
+    [`<div id="target" role="graphics-symbol">x</div>`],
+    [`<article id="target">a</article>`],
+    [`<address id="target">x</address>`],
+    [`<div id="target" role="group">gr</div>`],
+  ])("leaves %s unnamed", (html) => {
+    expect(nameOf(html)).toBe("");
+  });
+
+  it("keeps a name its author gave", () => {
+    expect(
+      nameOf(`<nav id="target" role="doc-toc" aria-label="Contents">x</nav>`),
+    ).toBe("Contents");
+  });
+});

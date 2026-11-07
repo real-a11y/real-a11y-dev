@@ -430,6 +430,14 @@ const AUTHOR_NAMED_LEAF_ROLES = [
   "progressbar",
   "scrollbar",
   "separator",
+  "article",
+  "feed",
+  "group",
+  "note",
+  "tabpanel",
+  "doc-toc",
+  "graphics-document",
+  "graphics-symbol",
 ];
 
 describe("author-named leaves", () => {
@@ -504,7 +512,7 @@ describe("author-named leaves", () => {
     expect(serializeNativeAX(nodes)).toBe('img "Party"');
   });
 
-  it.each(["alert", "status", "listitem", "code", "group", "article"])(
+  it.each(["alert", "status", "listitem", "code", "comment", "doc-noteref"])(
     "still names a leaf %s from its text",
     (role) => {
       const nodes = normalizeNativeAX([
@@ -1570,6 +1578,14 @@ describe("text-owning roles", () => {
     "search",
     "sectionheader",
     "sectionfooter",
+    "article",
+    "feed",
+    "group",
+    "note",
+    "tabpanel",
+    "doc-toc",
+    "graphics-document",
+    "graphics-symbol",
   ];
 
   it("are the vocabulary's two tables", () => {

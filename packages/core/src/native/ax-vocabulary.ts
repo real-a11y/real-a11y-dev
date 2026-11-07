@@ -21,7 +21,7 @@
  */
 
 /** Bump on any table/rule change that alters normalized output. */
-export const NATIVE_AX_VOCABULARY_VERSION = 9;
+export const NATIVE_AX_VOCABULARY_VERSION = 10;
 
 /**
  * Chromium AX roles that are structural noise relative to this engine's
@@ -200,9 +200,18 @@ export const NATIVE_AX_OWN_TEXT_ROLES: ReadonlySet<string> = new Set([
  * these names, so listing them moves no finding. The DOM producer lists all
  * four for the same reason.
  *
- * Also not here: author-named roles that no rule reads the name of, and whose
- * text is their content — alert, status, group, article, list, tree. They
- * keep their text as a name, which is the only place the tree keeps it.
+ * Also here: the roles WAI-ARIA, DPUB-ARIA and Graphics-ARIA give a name from
+ * author only and no audit rule reads — `article`, `group`, `feed`, `note`,
+ * `tabpanel`, `doc-toc`, `graphics-document`, `graphics-symbol`. Their text is
+ * content, not a name: Chromium leaves them unnamed, so a text-only
+ * `<article>a</article>` is a bare `article`, not `article "a"`. (They are
+ * content containers, not text-owning roles — see
+ * {@link NATIVE_AX_TEXT_OWNING_ROLES}.)
+ *
+ * Not here: the live regions (alert, status), whose text is the announcement
+ * itself, and the roles that take a name from content as well as from their
+ * author (`comment`, `doc-noteref`, `graphics-object`…). The DPUB roles not
+ * listed above have not been checked against the spec text yet.
  *
  * Checked against Chromium 151: each comes back unnamed with its text on a
  * child, except `region` and `role="form"`, which Chromium does not expose at
@@ -215,6 +224,15 @@ export const NATIVE_AX_AUTHOR_NAMED_ROLES: ReadonlySet<string> = new Set([
   "image",
   "dialog",
   "alertdialog",
+  // Sectioning and structure roles named by their author only.
+  "article",
+  "feed",
+  "group",
+  "note",
+  "tabpanel",
+  "doc-toc",
+  "graphics-document",
+  "graphics-symbol",
   // Landmarks, and HTML-AAM's scoped header/footer.
   "banner",
   "complementary",
