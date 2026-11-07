@@ -20,7 +20,6 @@ import {
   safeNodeType,
   safeOwnerDocument,
   safeParentElement,
-  safeQuerySelector,
   safeQuerySelectorAll,
   safeRootNode,
   safeTagName,
@@ -40,6 +39,7 @@ import {
   isFocusable,
   parseTabindex,
 } from "./focusability.js";
+import { scopeReferenceIndex } from "./reference-index.js";
 import {
   getCachedComputedStyle,
   getExplicitRole,
@@ -1263,7 +1263,11 @@ function computeRawAccessibleName(
   if (tag === "input" || tag === "select" || tag === "textarea") {
     const id = safeGetAttribute(element, "id");
     if (id) {
-      const label = safeQuerySelector(idScope(element), `label[for="${id}"]`);
+      // First `<label for>` in the control's tree, from the per-extraction index
+      // rather than a query that rescans from the top for every control.
+      const label =
+        scopeReferenceIndex(styleCache, idScope(element)).labelFor.get(id) ??
+        null;
       if (label && !visited.has(label)) {
         visited.add(label);
         return getAccessibleTextContent(label, visited, styleCache).trim();
@@ -3282,7 +3286,7 @@ function buildNode(
     if (
       ownId &&
       descriptionTargetIds.has(ownId) &&
-      isDescribedInOwnTree(element, ownId) &&
+      isDescribedInOwnTree(element, ownId, styleCache) &&
       !hasInteractiveContent(element, styleCache)
     ) {
       return null;
@@ -3374,24 +3378,20 @@ function buildNode(
  *   labelledby in ANOTHER tree would otherwise keep this target, printing its
  *   text both as a description and as standalone content.
  */
-function isDescribedInOwnTree(element: Element, id: string): boolean {
+function isDescribedInOwnTree(
+  element: Element,
+  id: string,
+  styleCache: StyleCache,
+): boolean {
   // Clobber-safe, as in `idScope`: a description target that is a `<form>`
   // holding `<input name="getRootNode">` would otherwise throw here.
   const scope = safeRootNode(element) as Document | ShadowRoot | Element;
-  const escaped =
-    typeof CSS !== "undefined" && typeof CSS.escape === "function"
-      ? CSS.escape(id)
-      : id.replace(/["\\]/g, "\\$&");
-  // Through the prototype: the scope is usually the document, which an
-  // `<img name="querySelectorAll">` shadows, and a guess here folds away a
-  // target that labels a control as readily as one that describes nothing.
-  const referrers = (attr: string): Element[] =>
-    Array.from(safeQuerySelectorAll(scope, `[${attr}~="${escaped}"]`)).filter(
-      isRenderedInFlatTree,
-    );
+  // Referrers come from the per-extraction index of this tree, so each target is
+  // a lookup instead of two scans of the page.
+  const index = scopeReferenceIndex(styleCache, scope);
   return (
-    referrers("aria-describedby").length > 0 &&
-    referrers("aria-labelledby").length === 0
+    !!index.describedBy.get(id)?.some(isRenderedInFlatTree) &&
+    !index.labelledBy.get(id)?.some(isRenderedInFlatTree)
   );
 }
 

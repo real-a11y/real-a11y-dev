@@ -6721,3 +6721,134 @@ describe("roles only their author can name", () => {
     ).toBe("Contents");
   });
 });
+
+describe("reference lookups come from one index per tree", () => {
+  // Folding a description target and naming a control from its <label for> both
+  // ask who in a tree points at an id. They read a per-extraction index instead
+  // of querying the tree per element, and these pin the rules that index keeps.
+  const tagsOf = (root: Element) =>
+    [...extractDomTree(root).nodes.values()].map((n) => n.dom?.tagName);
+
+  it("folds a hint for every field of a long form, and names each field from its label", () => {
+    const rows = Array.from(
+      { length: 50 },
+      (_, i) =>
+        `<label for="f${i}">Field ${i}</label><input id="f${i}" aria-describedby="h${i}"><p id="h${i}">Help ${i}</p>`,
+    ).join("");
+    // Attached, so the labels are in the document the control's id resolves in.
+    const page = createPage(`<main>${rows}</main>`);
+    document.body.append(page);
+    const { nodes } = extractDomTree(page);
+    page.remove();
+    const all = [...nodes.values()];
+    expect(all.some((n) => n.dom?.tagName === "p")).toBe(false);
+    const inputs = all.filter((n) => n.dom?.tagName === "input");
+    expect(inputs.map((n) => n.a11y.name)).toEqual(
+      Array.from({ length: 50 }, (_, i) => `Field ${i}`),
+    );
+    expect(inputs[7].a11y.description).toBe("Help 7");
+  });
+
+  it("does not let a shadow-internal id fold an unrelated id in the page", () => {
+    const host = document.createElement("div");
+    host.attachShadow({ mode: "open" }).innerHTML =
+      `<input aria-label="Inner" aria-describedby="hint"><p id="hint">Inner help</p>`;
+    const page = createPage(`<p id="hint">Page text</p>`);
+    page.append(host);
+    document.body.append(page);
+    try {
+      const texts = [...extractDomTree(page).nodes.values()]
+        .filter((n) => n.dom?.tagName === "p")
+        .map((n) => n.dom?.textContent);
+      // The page's #hint is described by nobody in its own tree; the shadow's is.
+      expect(texts).toEqual(["Page text"]);
+    } finally {
+      page.remove();
+    }
+  });
+
+  it("lets an unslotted light child of a shadow host fold nothing", () => {
+    const host = document.createElement("div");
+    host.attachShadow({ mode: "open" }).innerHTML = `<span>no slot</span>`;
+    host.innerHTML = `<input aria-label="Ghost" aria-describedby="help">`;
+    const page = createPage(`<p id="help">Help text</p>`);
+    page.append(host);
+    document.body.append(page);
+    try {
+      expect(tagsOf(page)).toContain("p");
+    } finally {
+      page.remove();
+    }
+  });
+
+  it("keeps a target that also labels something in the same tree", () => {
+    const root = createPage(
+      `<input aria-labelledby="t"><button aria-describedby="t">Go</button><p id="t">Code</p>`,
+    );
+    expect(tagsOf(root)).toContain("p");
+  });
+
+  it("keeps a target that holds a link", () => {
+    const root = createPage(
+      `<input aria-label="Pw" aria-describedby="h"><p id="h">Rules <a href="/r">here</a></p>`,
+    );
+    const tags = tagsOf(root);
+    expect(tags).toContain("p");
+    expect(tags).toContain("a");
+  });
+
+  it("counts a labelling referrer outside the extracted subtree, as a per-element query did", () => {
+    const page = createPage(
+      `<section id="part"><input aria-label="In" aria-describedby="t"><p id="t">Text</p></section>` +
+        `<span aria-labelledby="t">Outside</span>`,
+    );
+    document.body.append(page);
+    try {
+      // The only labelling referrer sits outside the subtree, in the same
+      // document. It still keeps the target, so the index covers the whole tree.
+      expect(tagsOf(page.querySelector("#part")!)).toContain("p");
+      // With no labelling referrer anywhere, the same subtree folds it.
+      page.querySelector("span")!.removeAttribute("aria-labelledby");
+      expect(tagsOf(page.querySelector("#part")!)).not.toContain("p");
+    } finally {
+      page.remove();
+    }
+  });
+
+  it("reads referrers through the prototype when a form shadows getAttribute", () => {
+    const root = createPage(
+      `<form><input name="getAttribute" aria-label="F"></form>` +
+        `<button aria-describedby="help">Go</button><p id="help">Help text</p>`,
+    );
+    expect(tagsOf(root)).not.toContain("p");
+  });
+
+  it("names a control from the first label that carries its id", () => {
+    const root = createPage(
+      `<label for="a">First</label><label for="a">Second</label><input id="a">`,
+    );
+    document.body.append(root);
+    const input = [...extractDomTree(root).nodes.values()].find(
+      (n) => n.dom?.tagName === "input",
+    );
+    root.remove();
+    expect(input?.a11y.name).toBe("First");
+  });
+
+  it("looks a label up in the control's own tree", () => {
+    const host = document.createElement("div");
+    host.attachShadow({ mode: "open" }).innerHTML =
+      `<input id="x"><label for="x">Inner</label>`;
+    const page = createPage(`<label for="x">Outer</label>`);
+    page.append(host);
+    document.body.append(page);
+    try {
+      const input = [...extractDomTree(page).nodes.values()].find(
+        (n) => n.dom?.tagName === "input",
+      );
+      expect(input?.a11y.name).toBe("Inner");
+    } finally {
+      page.remove();
+    }
+  });
+});
