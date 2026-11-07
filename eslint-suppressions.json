@@ -74,13 +74,13 @@
   },
   "packages/cli/src/daemon/spawn.ts": {
     "complexity": {
-      "count": 4
+      "count": 3
     },
     "max-depth": {
       "count": 1
     },
     "max-lines-per-function": {
-      "count": 2
+      "count": 1
     }
   },
   "packages/cli/src/interact-step.ts": {

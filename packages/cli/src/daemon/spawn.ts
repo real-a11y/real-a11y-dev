@@ -17,10 +17,7 @@ import {
   mkdir,
   readFile,
   realpath,
-  readdir,
-  rmdir,
   rm,
-  stat,
   writeFile,
 } from "node:fs/promises";
 import { createConnection } from "node:net";
@@ -44,47 +41,28 @@ import {
   waitForProcessExit,
 } from "./pidfile.js";
 import { processStartTimeMs } from "./process-start-time.js";
-import { DAEMON_PROTOCOL_VERSION } from "./protocol.js";
+import { listSessions } from "./session-list.js";
 import {
   defaultSessionName,
   isNamedPipe,
   isWindows,
   pathsForSessionDir,
   readPipeId,
-  readSessionName,
   resolveWindowsSocketPath,
   sessionPaths,
   windowsPipePath,
   writeSessionName,
   type SessionPaths,
 } from "./session-paths.js";
+import { isDirectory, isStaleLock } from "./session-probe.js";
+import {
+  isStaleConnectionError,
+  isVersionCompatible,
+} from "./version-check.js";
 import { tightenWindowsTokenAcl } from "./windows-acl.js";
 
 export { defaultSessionName, isNamedPipe, sessionPaths, type SessionPaths };
-
-async function isStaleLock(
-  lockPath: string,
-  { unreadableGraceMs = 5_000 } = {},
-): Promise<boolean> {
-  const st = await stat(lockPath).catch(() => undefined);
-  if (!st) return true;
-  const now = Date.now();
-  const freshByMtime = now - st.mtimeMs < unreadableGraceMs;
-  let data: { pid?: number; startedAt?: number };
-  try {
-    const raw = await readFile(lockPath, "utf8");
-    data = JSON.parse(raw) as { pid?: number; startedAt?: number };
-  } catch {
-    // If we cannot read or parse a recent lock, assume a writer is still active.
-    return !freshByMtime;
-  }
-  const pidAlive = typeof data.pid === "number" && isProcessAlive(data.pid);
-  if (pidAlive) return false;
-  // Give the holder a short grace period before we assume it crashed.
-  const fresh =
-    typeof data.startedAt === "number" && now - data.startedAt < 5_000;
-  return !fresh;
-}
+export { listSessions, type SessionStatus } from "./session-list.js";
 
 async function acquireSessionLock(
   name: string,
@@ -228,36 +206,6 @@ function waitForSocketRelease(
     };
     attempt();
   });
-}
-
-interface VersionInfo {
-  daemonVersion: string;
-  protocolVersion: string;
-  sessionCount: number;
-  shuttingDown?: boolean;
-}
-
-function isStaleConnectionError(err: unknown): boolean {
-  // A timeout means the daemon is alive but slow; don't treat it as a stale
-  // socket we can safely unlink.
-  if (err instanceof DaemonTimeoutError) return false;
-  if (err instanceof DaemonTransportError) return true;
-  if (!(err instanceof Error)) return false;
-  const code = (err as NodeJS.ErrnoException).code;
-  if (code === "ECONNREFUSED" || code === "ENOENT") return true;
-  return /ECONNREFUSED|ENOENT/.test(err.message);
-}
-
-function isVersionCompatible(version: VersionInfo): boolean {
-  // A daemon that is already shutting down is not a candidate for reuse; the
-  // client should wait for it to exit and then respawn.
-  if (version.shuttingDown) return false;
-  const protocolOk = version.protocolVersion === DAEMON_PROTOCOL_VERSION;
-  // A "0.0.0" version (fallback when package.json cannot be located) should not
-  // force endless respawns; treat it as a wildcard.
-  const daemonVersion =
-    version.daemonVersion === "0.0.0" ? CLI_VERSION : version.daemonVersion;
-  return protocolOk && daemonVersion === CLI_VERSION;
 }
 
 async function removeSessionFiles(paths: SessionPaths): Promise<void> {
@@ -455,10 +403,10 @@ export async function ensureDaemonClient(
 
     // Probe the socket. A compatible daemon can be reused; a stale socket or
     // incompatible/shutting-down daemon must be stopped before we respawn.
-    let version: VersionInfo | undefined;
+    let version: Awaited<ReturnType<DaemonClient["version"]>> | undefined;
     let versionErr: unknown;
     try {
-      version = (await probeClient.version()) as VersionInfo;
+      version = await probeClient.version();
     } catch (err) {
       versionErr = err;
     }
@@ -610,196 +558,6 @@ export async function ensureDaemonClient(
     unregisterCleanup();
     await release();
   }
-}
-
-export interface SessionStatus {
-  name: string;
-  pid?: number;
-  status: "running" | "starting" | "stale";
-  url?: string;
-  createdAt?: number;
-  lastUsedAt?: number;
-  busy?: boolean;
-}
-
-/**
- * List every session directory under `~/.real-a11y/sessions/` and probe the
- * daemon for live sessions. Empty directories left by a clean shutdown are
- * garbage-collected; stale pidfiles/sockets are reported as `stale`.
- */
-export async function listSessions(): Promise<SessionStatus[]> {
-  const root = join(homedir(), ".real-a11y", "sessions");
-  let entries: string[];
-  try {
-    entries = await readdir(root);
-  } catch {
-    return [];
-  }
-
-  const result: SessionStatus[] = [];
-  for (const entry of entries) {
-    const dirPath = join(root, entry);
-    const st = await stat(dirPath).catch(() => undefined);
-    if (!st?.isDirectory()) continue;
-
-    // Never inspect or delete another user's session directory.
-    if (!isDirectoryOwnedByUs(st)) continue;
-
-    const paths = pathsForSessionDir(dirPath);
-    let token: string | undefined;
-    let pipeId: string | undefined;
-    if (isWindows()) {
-      token = await readFile(paths.tokenFile, "utf8").catch(() => undefined);
-      pipeId = await readPipeId(paths);
-      paths.socketPath = resolveWindowsSocketPath(paths.socketPath, pipeId);
-    }
-    const pidInfo = await readPidfile(paths.pidfile);
-    if (!pidInfo) {
-      // A daemon may be starting up and has not written its pidfile yet. Use a
-      // generous grace for an unreadable lock so a slow start is not mistaken
-      // for a stale one in this destructive path.
-      const lockPath = join(dirPath, ".lock");
-      const locked = !(await isStaleLock(lockPath, {
-        unreadableGraceMs: 30_000,
-      }).catch(() => true));
-      if (!locked) {
-        // No pidfile and no live lock. If a socket file still exists, a daemon
-        // is probably still starting; leave it alone. Otherwise this is a
-        // clean-shutdown or crashed session. Preserve the directory (and its
-        // daemon.log) so post-mortem debugging is possible; `session stop` /
-        // `stop-all` remove the directory on request.
-        if (await isSocketPresent(paths.socketPath)) {
-          const name = (await readSessionName(dirPath)) ?? entry;
-          result.push({ name, pid: undefined, status: "starting" });
-          continue;
-        }
-        const logExists = await stat(paths.logFile)
-          .then((s) => s.isFile())
-          .catch(() => false);
-        if (logExists) {
-          const name = (await readSessionName(dirPath)) ?? entry;
-          result.push({ name, pid: undefined, status: "stale" });
-          continue;
-        }
-        // Only remove the directory if it is empty. A non-empty directory
-        // without a pidfile/socket/log is a failed start; report it as stale so
-        // `session stop` / `stop-all` can clean it up, since `rmdir` alone
-        // cannot remove it.
-        try {
-          await rmdir(dirPath);
-        } catch {
-          const name = (await readSessionName(dirPath)) ?? entry;
-          result.push({ name, pid: undefined, status: "stale" });
-        }
-        continue;
-      }
-      const name = (await readSessionName(dirPath)) ?? entry;
-      result.push({
-        name,
-        pid: undefined,
-        status: "starting",
-      });
-      continue;
-    }
-
-    if (!isProcessAlive(pidInfo.pid)) {
-      // The pidfile points at a dead process: the daemon crashed or was killed.
-      // Keep the directory (and its daemon.log) so the user can diagnose it;
-      // only an explicit `session stop` / `stop-all` removes it.
-      const name = (await readSessionName(dirPath)) ?? entry;
-      result.push({ name, pid: pidInfo.pid, status: "stale" });
-      continue;
-    }
-
-    if (isWindows() && (!token?.trim() || !pipeId)) {
-      // On Windows the pipe name lives in the session's `pipe` file and the
-      // token authenticates every RPC. Without either file we cannot reach or
-      // authenticate the daemon; treat the session as stale so it can be
-      // stopped/cleaned.
-      const name = (await readSessionName(dirPath)) ?? entry;
-      result.push({ name, pid: pidInfo.pid, status: "stale" });
-      continue;
-    }
-
-    const client = new DaemonClient({
-      socketPath: paths.socketPath,
-      tokenFile: paths.tokenFile,
-    });
-    try {
-      const sessions = await client.list();
-      if (sessions.length === 0) {
-        // Daemon is alive but has no sessions yet (or just finished stop-all).
-        const name = (await readSessionName(dirPath)) ?? entry;
-        result.push({
-          name,
-          pid: pidInfo.pid,
-          status: "running",
-          url: undefined,
-          createdAt: undefined,
-          lastUsedAt: undefined,
-          busy: false,
-        });
-      }
-      for (const info of sessions) {
-        result.push({
-          name: info.name,
-          pid: pidInfo.pid,
-          status: "running",
-          url: info.url,
-          createdAt: info.createdAt,
-          lastUsedAt: info.lastUsedAt,
-          busy: info.busy,
-        });
-      }
-    } catch {
-      const name = (await readSessionName(dirPath)) ?? entry;
-      result.push({ name, pid: pidInfo.pid, status: "starting" });
-    }
-  }
-
-  return result;
-}
-
-async function isDirectory(p: string): Promise<boolean> {
-  try {
-    return (await stat(p)).isDirectory();
-  } catch {
-    return false;
-  }
-}
-
-function isDirectoryOwnedByUs(st: { uid: number }): boolean {
-  if (typeof process.getuid !== "function") return true;
-  return st.uid === process.getuid();
-}
-
-async function isSocketPresent(socketPath: string): Promise<boolean> {
-  // A leftover socket file from a crashed daemon is not "present" in the sense
-  // we care about; only report it if a daemon is actually listening.
-  return new Promise((resolve) => {
-    const socket = createConnection(socketPath);
-    let settled = false;
-    const timer = setTimeout(() => {
-      if (settled) return;
-      settled = true;
-      socket.destroy();
-      resolve(false);
-    }, 500);
-
-    socket.on("connect", () => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      socket.end();
-      resolve(true);
-    });
-    socket.on("error", () => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      resolve(false);
-    });
-  });
 }
 
 export async function resolveSessionPaths(name: string): Promise<SessionPaths> {
