@@ -35,7 +35,7 @@
   {
     "name": "@real-a11y-dev/testing/matchers (esm)",
     "path": "packages/testing/dist/matchers.js",
-    "limit": "32.7 KB",
+    "limit": "32.8 KB",
     "gzip": true
   },
   {

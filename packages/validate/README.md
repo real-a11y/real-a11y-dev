@@ -32,7 +32,7 @@ validateTree(nodes);
 Two layers:
 
 - **`validateNode(node, nodesById)`** — per-node rules: valid role, required accessible name and attributes, direct required context.
-- **`validateTree(nodesById)`** — relationship rules that need the whole tree: interactive nesting, presentational-children misuse, and required-owned containers.
+- **`validateTree(nodesById)`** — relationship rules that need the whole tree: interactive nesting, presentational-children misuse, and required-owned containers (an empty one is fine while it, or an ancestor, is `aria-busy`).
 
 Both run over a minimal `ValidatedNode` shape (`id, parentId, role, name, attrs`), so the _same_ engine validates a tree authored ahead of code or one extracted from a live DOM.
 
