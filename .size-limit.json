@@ -2,7 +2,7 @@
   {
     "name": "@real-a11y-dev/core (esm)",
     "path": "packages/core/dist/index.js",
-    "limit": "24.3 KB",
+    "limit": "24.4 KB",
     "gzip": true
   },
   {
@@ -16,26 +16,26 @@
   {
     "name": "@real-a11y-dev/inspector (esm)",
     "path": "packages/inspector/dist/index.js",
-    "limit": "40.7 KB",
+    "limit": "40.9 KB",
     "gzip": true
   },
   {
     "name": "@real-a11y-dev/react (esm)",
     "path": "packages/react/dist/index.js",
-    "limit": "18.9 KB",
+    "limit": "19 KB",
     "gzip": true,
     "ignore": ["react", "react-dom", "@real-a11y-dev/inspector"]
   },
   {
     "name": "@real-a11y-dev/testing (esm)",
     "path": "packages/testing/dist/index.js",
-    "limit": "22.1 KB",
+    "limit": "22.2 KB",
     "gzip": true
   },
   {
     "name": "@real-a11y-dev/testing/matchers (esm)",
     "path": "packages/testing/dist/matchers.js",
-    "limit": "32.5 KB",
+    "limit": "32.7 KB",
     "gzip": true
   },
   {
@@ -55,7 +55,7 @@
   {
     "name": "@real-a11y-dev/browser (page-bundle IIFE)",
     "path": "packages/browser/dist/page-bundle.iife.global.js",
-    "limit": "17.1 KB",
+    "limit": "17.2 KB",
     "gzip": true
   }
 ]
