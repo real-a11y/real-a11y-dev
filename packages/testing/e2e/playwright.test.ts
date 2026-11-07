@@ -502,16 +502,17 @@ test.describe("a form whose control is named nodeType", () => {
     expect(await sn.treeSnapshot()).toContain('heading "Checkout now"');
   });
 
-  test("keeps the heading when such a form also shadows getAttribute", async ({
+  test("names the heading in full when such a form also shadows getAttribute", async ({
     page,
   }) => {
     // Inside the form, the name walk calls the form's `getAttribute`, which a
-    // second control shadows. That throw cost the heading, not just the form.
+    // second control shadows. The read goes through the prototype, so the form's
+    // text still counts toward the name, as it does without the second control.
     await page.setContent(
       `<main><h2>Checkout <form><input type="hidden" name="nodeType"><input type="hidden" name="getAttribute"><span>now</span></form></h2></main>`,
     );
     const sn = await attach(page);
-    expect(await sn.treeSnapshot()).toContain('heading "Checkout"');
+    expect(await sn.treeSnapshot()).toContain('heading "Checkout now"');
   });
 });
 
