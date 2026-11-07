@@ -87,7 +87,6 @@ import {
   winningNameSource,
   withholdFieldInternalText,
   withholdRegionNames,
-  type CssPathAdapter,
   type FieldHostOf,
   type FieldStandIn,
   type RawAXNameNode as RawAXNode,
@@ -101,6 +100,7 @@ import {
 import type { CDPSession, Page } from "playwright";
 
 import { readDomRoot, type DomNode } from "./dom-document.js";
+import { attributeOf, createLocatorIndex } from "./native-locator.js";
 
 /**
  * How {@link nativeTree} / {@link buildNativeTree} treat what users entered.
@@ -741,32 +741,7 @@ async function enrichFromDom(
   const out = new Map<number, NativeDomInfo>();
   const root = await readDomRoot(client);
 
-  // Parent links aren't in the payload — record them on the way down so the
-  // locator walk can go back up.
-  const parents = new Map<DomNode, DomNode>();
-  // Everything strictly below an editable root — the user's content.
-  const insideEditable = new Set<DomNode>();
-  const ELEMENT_NODE = 1;
-  const elementChildren = (node: DomNode): DomNode[] =>
-    (node.children ?? []).filter((c) => c.nodeType === ELEMENT_NODE);
-
-  const adapter: CssPathAdapter<DomNode> = {
-    tagName: (n) => (n.nodeName ?? "").toLowerCase(),
-    id: (n) => (insideEditable.has(n) ? null : attributeOf(n, "id")),
-    parent: (n) => parents.get(n) ?? null,
-    children: (n) => elementChildren(n),
-    // Two kinds of stop. `<html>` is the document element — the path stops
-    // before including it, matching the DOM producer. Anything that isn't an
-    // element (`#document`, and a `#document-fragment` shadow root) is a
-    // boundary a CSS path cannot cross: this walk pierces shadow roots and the
-    // in-page one does not, so native alone reaches nodes with no whole-document
-    // selector. Those stop too, yielding a partial path anchored inside the
-    // shadow root rather than a `#document-fragment > …` selector that would
-    // look queryable and match nothing.
-    isRoot: (n) =>
-      n.nodeType !== ELEMENT_NODE ||
-      (n.nodeName ?? "").toLowerCase() === "html",
-  };
+  const locators = createLocatorIndex();
 
   // `host`: the form control whose user-agent shadow root, where it draws its
   // value, holds this node (`NativeDomInfo.fieldHost`).
@@ -775,14 +750,13 @@ async function enrichFromDom(
     inside: boolean,
     host: number | undefined,
   ): void => {
-    if (inside) insideEditable.add(node);
-    for (const child of elementChildren(node)) parents.set(child, node);
+    locators.link(node, inside);
     if (typeof node.backendNodeId === "number" && node.nodeName) {
       const ariaValueText = attributeOf(node, "aria-valuetext");
       out.set(node.backendNodeId, {
         tagName: node.nodeName.toLowerCase(),
         attributes: allowlistAttributes(node.attributes ?? []),
-        locator: buildCssPath(node, adapter),
+        locator: buildCssPath(node, locators.adapter),
         ...(ariaValueText !== null ? { ariaValueText } : {}),
         ...(host !== undefined ? { fieldHost: host } : {}),
       });
@@ -817,15 +791,6 @@ async function enrichFromDom(
   };
   walk(root, false, undefined);
   return out;
-}
-
-/** Read one attribute out of CDP's flat `[name, value, name, value, …]`. */
-function attributeOf(node: DomNode, want: string): string | null {
-  const attrs = node.attributes ?? [];
-  for (let i = 0; i + 1 < attrs.length; i += 2) {
-    if (attrs[i] === want) return attrs[i + 1];
-  }
-  return null;
 }
 
 /**

@@ -97,6 +97,33 @@ describe("native producer — findings carry locators", () => {
     expect(locators).toContain("body > main > p > img:nth-of-type(2)");
   });
 
+  it("gives both producers the same locator on a wide list, multi-digit nth-of-type included", async () => {
+    // A few thousand same-tag siblings: enough for a multi-digit nth-of-type,
+    // which the native producer reads from a per-parent index rather than by
+    // scanning the parent's children, small enough to keep Chromium's own
+    // (superlinear) AX read fast. The `<img>` without alt near the end is the
+    // finding both producers must address identically.
+    const n = 3000;
+    let items = "";
+    for (let i = 0; i < n; i++) {
+      items +=
+        i === n - 5
+          ? `<li><img src="x.png"></li>`
+          : `<li><a href="#${i}">Item ${i}</a></li>`;
+    }
+    await session.open(
+      "data:text/html," +
+        encodeURIComponent(
+          `<!doctype html><html><head><title>Wide</title></head><body><main><h1>t</h1><ul>${items}</ul></main></body></html>`,
+        ),
+    );
+    const dom = await session.snapshot("body");
+    const native = collectFindings(await session.nativeTree());
+    const want = `image-alt @ body > main > ul > li:nth-of-type(${n - 4}) > img`;
+    expect(addressed(dom.findings)).toContain(want);
+    expect(addressed(native)).toContain(want);
+  });
+
   it("stops a path at a shadow boundary instead of faking a selector", async () => {
     await session.open("data:text/html," + encodeURIComponent(FIXTURE));
     const native = collectFindings(await session.nativeTree());
