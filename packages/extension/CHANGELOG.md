@@ -24,7 +24,7 @@
 - **The side panel no longer names an `article`, `group`, `feed`, `note`,
   `tabpanel`, `doc-toc`, `graphics-document` or `graphics-symbol` after its
   text**
-  ([#PR](https://github.com/real-a11y/real-a11y-dev/pull/PR)). Only the author
+  ([#601](https://github.com/real-a11y/real-a11y-dev/pull/601)). Only the author
   can name these roles, and Chrome leaves them unnamed, so the tree no longer
   shows a name such as `article "a"` that assistive technology never gets.
 - **The TAB view keeps the controls of a form with a control named `tagName` or
