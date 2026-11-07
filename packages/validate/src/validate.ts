@@ -202,7 +202,7 @@ function childrenOf(nodes: NodeMap, id: string): ValidatedNode[] {
 function isBusy(nodes: NodeMap, node: ValidatedNode): boolean {
   for (let cur: ValidatedNode | undefined = node, n = 0; cur && n < 1e3; n++) {
     const v = cur.attrs["aria-busy"];
-    if (v && v !== "false") return true;
+    if (v && String(v).toLowerCase() !== "false") return true;
     cur = cur.parentId ? nodes.get(cur.parentId) : undefined;
   }
   return false;
@@ -216,9 +216,10 @@ function missingOwnedRoles(
   node: ValidatedNode,
 ): readonly string[] | null {
   const owned = requiredOwnedRoles(node.role);
-  if (owned.length === 0 || isBusy(nodes, node)) return null;
+  if (owned.length === 0) return null;
   const kids = childrenOf(nodes, node.id);
-  return kids.some((k) => owned.includes(k.role)) ? null : owned;
+  if (kids.some((k) => owned.includes(k.role))) return null;
+  return isBusy(nodes, node) ? null : owned;
 }
 
 function descendants(nodes: NodeMap, id: string): ValidatedNode[] {
