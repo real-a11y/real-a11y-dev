@@ -23,7 +23,7 @@
 
 - **A form with a control named `tagName` or `getAttribute` no longer drops its
   fields and buttons from the tab sequence**
-  (PR_LINK). The bundled in-page engine read both
+  ([#596](https://github.com/real-a11y/real-a11y-dev/pull/596)). The bundled in-page engine read both
   members plainly on the form, the read threw, and the form went with
   everything in it. It now reads them through the prototype, as Chromium's tree
   already shows them. The side panel's tree is Chrome's own and was not
