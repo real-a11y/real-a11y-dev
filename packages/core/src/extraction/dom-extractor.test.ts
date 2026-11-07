@@ -6823,6 +6823,14 @@ describe("reference lookups come from one index per tree", () => {
     expect(tagsOf(root)).not.toContain("p");
   });
 
+  it("splits an IDREF list on ASCII whitespace only", () => {
+    // A no-break space is part of the id, so `other\u00a0help` names no `help`.
+    const root = createPage(
+      `<input aria-label="F" aria-describedby="other\u00a0help"><p id="help">Important</p>`,
+    );
+    expect(tagsOf(root)).toContain("p");
+  });
+
   it("names a control from the first label that carries its id", () => {
     const root = createPage(
       `<label for="a">First</label><label for="a">Second</label><input id="a">`,

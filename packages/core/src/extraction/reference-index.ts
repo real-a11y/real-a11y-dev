@@ -33,8 +33,10 @@ type ScopeNode = Document | ShadowRoot | Element;
 
 const perExtraction = new WeakMap<object, WeakMap<Node, ScopeReferenceIndex>>();
 
+// An IDREF list is split on ASCII whitespace only, as the `~=` selector the
+// per-element queries used did: a no-break space belongs to the id it sits in.
 function tokens(value: string | null): string[] {
-  return value ? value.split(/\s+/).filter(Boolean) : [];
+  return value ? value.split(/[ \t\n\f\r]+/).filter(Boolean) : [];
 }
 
 function push(map: Map<string, Element[]>, id: string, el: Element): void {
@@ -75,7 +77,11 @@ function build(scope: ScopeNode): ScopeReferenceIndex {
   return index;
 }
 
-/** The reference index of `scope`, built on first use for this extraction. */
+/**
+ * The reference index of `scope`, built on first use for this extraction.
+ *
+ * @internal
+ */
 export function scopeReferenceIndex(
   extraction: object | null | undefined,
   scope: ScopeNode,
