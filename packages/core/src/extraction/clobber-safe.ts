@@ -139,9 +139,9 @@ export function safeRootNode(node: Node): Node {
  * shadowable): it is the same value the plain reads return, so the two agree
  * on a camel-cased SVG name like `foreignObject` and on a prefixed one.
  *
- * Where the element read is the one being built, the walk's per-element
- * boundary covers a shadowed tag already, by skipping that element. This is
- * for every other read: an ancestor a climb passes, a descendant a name walk
+ * The walk reads the tag of the element it builds through this too, so a form
+ * whose control shadows `tagName` keeps its subtree. Every other read needs it
+ * as much: an ancestor a climb passes, a descendant a name walk
  * enters, a sibling a locator counts — and everything `LiveTreeExtractor
  * .refresh` reads, which has no boundary. A throw there costs an element that
  * did nothing wrong, or the whole refresh.

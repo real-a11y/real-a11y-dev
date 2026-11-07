@@ -549,7 +549,7 @@ export class LiveTreeExtractor {
     dirty.add(this.nameRelevantAncestor(target));
 
     const markReferenced = (el: Element): void => {
-      const id = el.getAttribute("id");
+      const id = safeGetAttribute(el, "id");
       if (id) {
         const referrers = this.referrersById.get(id);
         if (referrers) {
@@ -558,7 +558,7 @@ export class LiveTreeExtractor {
       }
 
       for (const attr of ["aria-labelledby", "aria-describedby", "for"]) {
-        const value = el.getAttribute(attr);
+        const value = safeGetAttribute(el, attr);
         if (!value) continue;
         for (const refId of value.split(/\s+/).filter(Boolean)) {
           const refEl = el.ownerDocument?.getElementById(refId);
@@ -621,13 +621,13 @@ export class LiveTreeExtractor {
       : Array.from(el.querySelectorAll("img[usemap]"));
     const names = new Set<string>();
     for (const img of images) {
-      const usemap = img.getAttribute("usemap") ?? "";
+      const usemap = safeGetAttribute(img, "usemap") ?? "";
       if (usemap.startsWith("#")) names.add(usemap.slice(1));
     }
     if (names.size === 0) return [];
     return deepQuerySelectorAll(this.effectiveRoot ?? this.root, "map").filter(
       (map) =>
-        [map.getAttribute("name"), map.getAttribute("id")].some(
+        [safeGetAttribute(map, "name"), safeGetAttribute(map, "id")].some(
           (name) => name !== null && names.has(name),
         ),
     );
@@ -699,7 +699,7 @@ export class LiveTreeExtractor {
         const stopAt = this.effectiveRoot ?? this.root;
         let ancestor: Element | null = el;
         while (ancestor) {
-          const id = ancestor.getAttribute("id");
+          const id = safeGetAttribute(ancestor, "id");
           if (id) {
             const referrers = this.referrersById.get(id);
             if (referrers) {
@@ -726,7 +726,7 @@ export class LiveTreeExtractor {
         }
 
         if (safeTagName(el) === "label") {
-          const forId = el.getAttribute("for");
+          const forId = safeGetAttribute(el, "for");
           if (forId) {
             const input = el.ownerDocument?.getElementById(forId);
             if (input && !dirty.has(input)) {

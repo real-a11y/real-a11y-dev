@@ -1,3 +1,4 @@
+import { safeTagName } from "../extraction/clobber-safe.js";
 import { isEditable, isEditingHost } from "../extraction/editing.js";
 import { getExplicitRole } from "../extraction/role-map.js";
 import type { ActionRequest, ActionResult } from "../types.js";
@@ -55,7 +56,7 @@ function firstClickableDescendant(root: Element): Element | null {
   const walker = root.ownerDocument.createTreeWalker(root, 1 /* ELEMENT */);
   for (let node = walker.nextNode(); node; node = walker.nextNode()) {
     const el = node as Element;
-    const tag = el.tagName.toLowerCase();
+    const tag = safeTagName(el);
     if ((tag === "a" && el.hasAttribute("href")) || tag === "button") {
       return el;
     }
@@ -89,7 +90,7 @@ const TEXT_ENTRY_INPUT_TYPES = new Set([
  * and `<input type="file">`, none of which are typeable.
  */
 function acceptsTextEntry(element: Element): boolean {
-  const tag = element.tagName.toLowerCase();
+  const tag = safeTagName(element);
   if (tag === "textarea") return true;
   if (tag === "input") {
     const type = (element as HTMLInputElement).type || "text";
@@ -280,7 +281,8 @@ export class ActionDispatcher {
 
   private handleSubmit(element: Element): ActionResult {
     const form =
-      element.closest("form") || (element.tagName === "FORM" ? element : null);
+      element.closest("form") ||
+      (safeTagName(element) === "form" ? element : null);
 
     if (!form) {
       return { success: false, error: "No form found" };
@@ -291,7 +293,7 @@ export class ActionDispatcher {
   }
 
   private handleToggle(element: Element): ActionResult {
-    const tag = element.tagName.toLowerCase();
+    const tag = safeTagName(element);
 
     if (tag === "details") {
       (element as HTMLDetailsElement).open = !(element as HTMLDetailsElement)
@@ -345,7 +347,7 @@ export class ActionDispatcher {
   // here depends on the user seeing the page — the panel drives the value
   // change end-to-end.
   private handleStep(element: Element, delta: 1 | -1): ActionResult {
-    const tag = element.tagName.toLowerCase();
+    const tag = safeTagName(element);
     if (tag === "input") {
       const input = element as HTMLInputElement;
       const type = input.type;

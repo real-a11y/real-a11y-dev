@@ -175,6 +175,14 @@ describe("buildCssPath", () => {
     },
   );
 
+  it("reads a form's id past a control named getAttribute", () => {
+    document.body.innerHTML = `<form id="pay"><input type="hidden" name="getAttribute"><button>Pay</button></form>`;
+    clobber(document.querySelector("form")!, "getAttribute");
+    expect(
+      buildCssPath(document.querySelector("button")!, DOM_ELEMENT_ADAPTER),
+    ).toBe("#pay > button");
+  });
+
   it("stops before the document element", () => {
     document.body.innerHTML = "";
     expect(buildCssPath(document.body, DOM_ELEMENT_ADAPTER)).toBe("body");
