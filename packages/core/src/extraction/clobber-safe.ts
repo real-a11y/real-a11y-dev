@@ -139,9 +139,9 @@ export function safeRootNode(node: Node): Node {
  * shadowable): it is the same value the plain reads return, so the two agree
  * on a camel-cased SVG name like `foreignObject` and on a prefixed one.
  *
- * Where the element read is the one being built, the walk's per-element
- * boundary covers a shadowed tag already, by skipping that element. This is
- * for every other read: an ancestor a climb passes, a descendant a name walk
+ * The walk reads the tag of the element it builds through this too, so a form
+ * whose control shadows `tagName` keeps its subtree. Every other read needs it
+ * as much: an ancestor a climb passes, a descendant a name walk
  * enters, a sibling a locator counts — and everything `LiveTreeExtractor
  * .refresh` reads, which has no boundary. A throw there costs an element that
  * did nothing wrong, or the whole refresh.
@@ -200,11 +200,9 @@ export function safeHidden(element: Element): boolean {
  * `<input name="getAttribute">` makes `form.getAttribute(…)` throw, and
  * `<img name="getElementById">` makes `document.getElementById(…)` throw.
  *
- * Not every call goes through these. A throw on one element costs that element
- * and everything inside it — the walk's per-element boundary skips the
- * subtree, and `LiveTreeExtractor.refresh` falls back to a full extraction —
- * which is the price of a form whose control shadows `getAttribute`, the read
- * every attribute goes through. These are for the reads that cost more: the
+ * Every attribute read on an element the walk builds goes through these, so a
+ * form whose control shadows `getAttribute` keeps its subtree. They matter most
+ * for the reads that cost more than one element: the
  * document every id lookup runs against, the extraction root, and the
  * observer's per-mutation filter, where a throw drops every labelled control
  * on the page, aborts the whole extraction, or loses a whole batch of

@@ -26,7 +26,7 @@
  * walk has no element for.
  */
 
-import { safeTagName } from "./clobber-safe.js";
+import { safeGetAttribute, safeTagName } from "./clobber-safe.js";
 import { isEditable, isEditingHost } from "./editing.js";
 import { imageUsingMap } from "./image-map.js";
 
@@ -89,7 +89,7 @@ function isFocusBarred(element: Element): boolean {
   if (!FORM_CONTROL_TAGS.has(tag)) return false;
   if (
     tag === "input" &&
-    (element.getAttribute("type") || "text").toLowerCase() === "hidden"
+    (safeGetAttribute(element, "type") || "text").toLowerCase() === "hidden"
   )
     return true;
   return isActuallyDisabled(element);
@@ -119,7 +119,7 @@ export function isFocusable(element: Element): boolean {
   if (isFocusBarred(element)) return false;
 
   const tag = safeTagName(element);
-  const tabindex = parseTabindex(element.getAttribute("tabindex"));
+  const tabindex = parseTabindex(safeGetAttribute(element, "tabindex"));
   // An area takes focus only through an image using its map, tabindex or not.
   // Chromium reads a negative tabindex on one as unfocusable, even from script,
   // and an href as a stop unless editing takes it away, as for a link below.

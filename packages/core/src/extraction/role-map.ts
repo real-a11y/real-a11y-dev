@@ -273,8 +273,8 @@ function listItemRole(el: Element): string {
 export function isDropDownSelect(select: Element): boolean {
   return (
     selectRoleFromAttributes({
-      size: select.getAttribute("size"),
-      multiple: select.getAttribute("multiple"),
+      size: safeGetAttribute(select, "size"),
+      multiple: safeGetAttribute(select, "multiple"),
     }) === "combobox"
   );
 }
@@ -416,7 +416,7 @@ const ROLE_MAP: Record<string, RoleResolver> = {
   // image. `<img alt="" title="Tap to zoom">` is a named, exposed image. See
   // emptyAltIsNamed.
   img: (el) =>
-    el.getAttribute("alt") === "" && !emptyAltIsNamed(el)
+    safeGetAttribute(el, "alt") === "" && !emptyAltIsNamed(el)
       ? "presentation"
       : "img",
   input: (el) => {
@@ -706,7 +706,7 @@ function isGenericWrapper(element: Element, roleAttr: string | null): boolean {
 
 /** The first element whose `aria-owns` names `element`, in its id scope. */
 function ariaOwner(element: Element): Element | null {
-  const id = element.getAttribute("id");
+  const id = safeGetAttribute(element, "id");
   if (!id) return null;
   for (const owner of safeQuerySelectorAll(idScope(element), "[aria-owns]")) {
     const owns = safeGetAttribute(owner, "aria-owns") ?? "";
@@ -810,7 +810,7 @@ export function isHiddenFromAT(
 
   // aria-hidden hides the element AND its entire subtree from AT, for every
   // value Chromium reads as true: "TRUE" and "yes" as well as "true".
-  if (isAriaHiddenValue(element.getAttribute("aria-hidden"))) return true;
+  if (isAriaHiddenValue(safeGetAttribute(element, "aria-hidden"))) return true;
 
   if (tag === "area") return isAreaHiddenFromAT(element);
 
@@ -840,10 +840,10 @@ export function isHiddenFromAT(
 
 /** Get the heading level for heading elements */
 export function getHeadingLevel(element: Element): number | null {
-  const match = element.tagName.match(/^H([1-6])$/i);
+  const match = safeTagName(element).match(/^H([1-6])$/i);
   if (match) return parseInt(match[1], 10);
 
-  const ariaLevel = element.getAttribute("aria-level");
+  const ariaLevel = safeGetAttribute(element, "aria-level");
   if (ariaLevel && getExplicitRole(element) === "heading") {
     return parseInt(ariaLevel, 10);
   }

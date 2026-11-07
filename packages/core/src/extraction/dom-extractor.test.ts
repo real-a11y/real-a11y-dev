@@ -281,11 +281,12 @@ describe("DOM clobbering resilience", () => {
   });
 
   it("skips only the offending element (and its subtree) when its processing throws, keeping the rest of the tree", () => {
-    // The per-element error boundary. If ANY read on ONE element throws — here a
-    // clobbered `tagName` (`<input name="tagName">` on a [LegacyOverrideBuiltIns]
-    // <form> makes `element.tagName.toLowerCase()` throw) — that element and its
-    // subtree are dropped, but siblings and ancestors still extract. Before the
-    // boundary a single throw unwound the whole walk and the panel hung forever.
+    // The per-element error boundary. If ANY read on ONE element throws, that
+    // element and its subtree are dropped, but siblings and ancestors still
+    // extract. Before the boundary a single throw unwound the whole walk and
+    // the panel hung forever. A shadowed `tagName` no longer reaches it — the
+    // tag is read through the prototype — so the throw here comes from a
+    // `parentNode` read that is still plain.
     const root = createPage(`
       <main>
         <h1>Before</h1>
@@ -297,10 +298,11 @@ describe("DOM clobbering resilience", () => {
     `);
 
     const doomed = root.querySelector("section")!;
-    // Clobber tagName to a non-string so `.toLowerCase()` throws on this element.
-    Object.defineProperty(doomed, "tagName", {
+    Object.defineProperty(doomed, "parentNode", {
       configurable: true,
-      get: () => root.querySelector("h1"), // an element, not a string
+      get: () => {
+        throw new Error("unreadable");
+      },
     });
 
     // The boundary warns (outside production) rather than staying silent.
@@ -330,6 +332,30 @@ describe("DOM clobbering resilience", () => {
     expect(reachable.size).toBe(result.nodes.size);
 
     expect(warnSpy).toHaveBeenCalled();
+  });
+
+  describe("a form with a control named after its own members", () => {
+    const REPRO = `<main><form><input name="NAME" aria-label="Field" /><button>Go</button></form><button>Sibling</button></main>`;
+
+    it.each([
+      ["tagName", shadow],
+      ["getAttribute", clobber],
+    ] as const)(
+      "keeps the form's controls when one is named %s",
+      (name, force) => {
+        const root = createPage(REPRO.replace("NAME", name));
+        force(root.querySelector("form")!, name);
+        const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+        const nodes = [...extractDomTree(root).nodes.values()];
+        const named = (role: string) =>
+          nodes.filter((n) => n.a11y.role === role).map((n) => n.a11y.name);
+        expect(named("textbox")).toEqual(["Field"]);
+        expect(named("button")).toEqual(["Go", "Sibling"]);
+        // Nothing was skipped by the per-element boundary.
+        expect(warn).not.toHaveBeenCalled();
+      },
+    );
   });
 
   // The boundary above is what a shadowed `tagName` costs the form itself.
@@ -390,10 +416,9 @@ describe("DOM clobbering resilience", () => {
       expect(names).toContain("Full rules");
     });
 
-    // The walk skips the form, its field with it, so the field reaches no one.
-    // Help text holding nothing else is then text-only, and shows once, as the
-    // input's description, rather than also as a node of its own.
-    it("folds help text whose only control is in the form", () => {
+    // The form's field is a control a user can reach, so the help text around
+    // it is not text-only and keeps its own node.
+    it("keeps help text whose only control is in the form", () => {
       const root = createPage(`
         <main>
           <input aria-label="Password" aria-describedby="help" />
@@ -406,9 +431,10 @@ describe("DOM clobbering resilience", () => {
 
       try {
         const nodes = [...extractDomTree(root).nodes.values()];
-        expect(nodes.some((n) => n.dom?.attributes?.id === "help")).toBe(false);
-        const password = nodes.find((n) => n.a11y.name === "Password")!;
-        expect(password.a11y.description).toBe("Must be 8+ chars.");
+        // The control in the form is reachable, so the help text is not
+        // text-only: it keeps its node, as help text with a link does.
+        expect(nodes.some((n) => n.dom?.attributes?.id === "help")).toBe(true);
+        expect(nodes.some((n) => n.a11y.name === "Tag name")).toBe(true);
       } finally {
         root.remove();
       }

@@ -21,6 +21,10 @@
 
 ### Patch Changes
 
+- **The TAB view keeps the controls of a form with a control named `tagName` or
+  `getAttribute`** ([#598](https://github.com/real-a11y/real-a11y-dev/pull/598)).
+  The bundled engine threw on such a form and dropped it with its fields and
+  buttons, so they were missing from the tab stops. They are listed now.
 - **The parts of a `role="presentation"` or `role="none"` table are no longer
   read as `row`, `cell` or header nodes**
   ([#590](https://github.com/real-a11y/real-a11y-dev/pull/590)). The bundled

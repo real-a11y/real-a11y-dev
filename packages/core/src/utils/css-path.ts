@@ -14,6 +14,7 @@
 
 import {
   safeChildren,
+  safeGetAttribute,
   safeParentElement,
   safeTagName,
 } from "../extraction/clobber-safe.js";
@@ -92,7 +93,7 @@ export function buildCssPath<T>(node: T, dom: CssPathAdapter<T>): string {
  */
 export const DOM_ELEMENT_ADAPTER: CssPathAdapter<Element> = {
   tagName: safeTagName,
-  id: (el) => el.getAttribute("id"),
+  id: (el) => safeGetAttribute(el, "id"),
   parent: safeParentElement,
   children: safeChildren,
   isRoot: (el) => el === el.ownerDocument?.documentElement,

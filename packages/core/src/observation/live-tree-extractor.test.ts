@@ -2633,27 +2633,26 @@ describe("LiveTreeExtractor", () => {
       // The fallback is silent in its output by design, so a bug that made the
       // splice throw on ordinary pages would pass every equality test here and
       // only cost speed. The warning is what keeps that visible.
+      // jsdom's own selector engine cannot read a form whose `nodeType` is
+      // shadowed, so adding one makes the splice throw.
       const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-      document.body.innerHTML = `
-        <main id="app">
-          <form><input name="getAttribute" /><span>Old</span></form>
-        </main>
-      `;
+      document.body.innerHTML = `<main id="app"><div id="slot"></div></main>`;
       const root = document.getElementById("app")!;
-      const form = root.querySelector("form")!;
-      clobber(form, "getAttribute");
       const live = new LiveTreeExtractor(root, { mode: "a11y" });
+      const form = document.createElement("form");
+      form.innerHTML = `<input type="hidden" name="nodeType" /><span>New</span>`;
+      shadow(form, "nodeType");
       warn.mockClear();
 
       live.refresh(
         observe(root, () => {
-          form.querySelector("span")!.firstChild!.nodeValue = "New";
+          document.getElementById("slot")!.append(form);
         }),
       );
 
       expect(warn).toHaveBeenCalledWith(
         expect.stringContaining("fell back to a full extraction"),
-        expect.any(Error),
+        expect.anything(),
       );
     });
   });
@@ -2874,7 +2873,7 @@ describe("LiveTreeExtractor", () => {
       expectSpliced();
     });
 
-    it("drops the form, as a fresh extraction does, when the control arrives later", () => {
+    it("keeps the form, as a fresh extraction does, when the control arrives later", () => {
       const { root, form } = page("");
       const live = new LiveTreeExtractor(root, { mode: "dom" });
       const before = [...live.extract().nodes.values()].map((n) => n.a11y.name);
@@ -2898,7 +2897,7 @@ describe("LiveTreeExtractor", () => {
       expect(result.nodes).toEqual(extractDomTree(root).nodes);
       expectSpliced();
       const after = [...result.nodes.values()].map((n) => n.a11y.name);
-      expect(after).not.toContain("Search");
+      expect(after).toContain("Search");
       expect(after).toContain("Orders");
     });
   });

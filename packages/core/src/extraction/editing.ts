@@ -18,7 +18,7 @@
  * no tab sequence can describe it.
  */
 
-import { safeParentElement } from "./clobber-safe.js";
+import { safeGetAttribute, safeParentElement } from "./clobber-safe.js";
 
 /** The keywords that make an element editable, lower-cased. */
 const EDITABLE_KEYWORDS = new Set(["", "true", "plaintext-only"]);
@@ -28,7 +28,7 @@ const EDITABLE_KEYWORDS = new Set(["", "true", "plaintext-only"]);
  * when it has none (or an invalid value) and inherits.
  */
 function ownEditableState(element: Element): boolean | null {
-  const value = element.getAttribute("contenteditable");
+  const value = safeGetAttribute(element, "contenteditable");
   if (value === null) return null;
   const keyword = value.toLowerCase();
   if (EDITABLE_KEYWORDS.has(keyword)) return true;
