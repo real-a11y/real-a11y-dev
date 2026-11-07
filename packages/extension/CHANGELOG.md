@@ -21,8 +21,9 @@
 
 ### Patch Changes
 
-- **The side panel no longer names an `article`, `group`, `note`, `tabpanel`,
-  `doc-toc` or `graphics-document` after its text**
+- **The side panel no longer names an `article`, `group`, `feed`, `note`,
+  `tabpanel`, `doc-toc`, `graphics-document` or `graphics-symbol` after its
+  text**
   ([#PR](https://github.com/real-a11y/real-a11y-dev/pull/PR)). Only the author
   can name these roles, and Chrome leaves them unnamed, so the tree no longer
   shows a name such as `article "a"` that assistive technology never gets.
