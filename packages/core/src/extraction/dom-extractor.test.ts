@@ -334,11 +334,6 @@ describe("DOM clobbering resilience", () => {
     expect(warnSpy).toHaveBeenCalled();
   });
 
-  // The boundary above is what a shadowed `tagName` costs the form itself.
-  // Nothing around the form should pay for it — yet these reads land on the
-  // form while ANOTHER element is being built, so a throw there was charged
-  // to that element: an ancestor whose name walk entered the form, or a
-  // descendant whose role or state climbed through it.
   describe("a form with a control named after its own members", () => {
     const REPRO = `<main><form><input name="NAME" aria-label="Field" /><button>Go</button></form><button>Sibling</button></main>`;
 
@@ -355,14 +350,6 @@ describe("DOM clobbering resilience", () => {
         const nodes = [...extractDomTree(root).nodes.values()];
         const named = (role: string) =>
           nodes.filter((n) => n.a11y.role === role).map((n) => n.a11y.name);
-        console.log(
-          warn.mock.calls.map((c) =>
-            String((c[2] as Error)?.stack)
-              .split("\n")
-              .slice(0, 4)
-              .join(" | "),
-          ),
-        );
         expect(named("textbox")).toEqual(["Field"]);
         expect(named("button")).toEqual(["Go", "Sibling"]);
         // Nothing was skipped by the per-element boundary.
@@ -371,6 +358,11 @@ describe("DOM clobbering resilience", () => {
     );
   });
 
+  // The boundary above is what a shadowed `tagName` costs the form itself.
+  // Nothing around the form should pay for it — yet these reads land on the
+  // form while ANOTHER element is being built, so a throw there was charged
+  // to that element: an ancestor whose name walk entered the form, or a
+  // descendant whose role or state climbed through it.
   describe("around a form whose control shadows `tagName`", () => {
     /** Forced: jsdom doesn't shadow a form's own members. */
     function shadowEveryForm(root: Element): void {
