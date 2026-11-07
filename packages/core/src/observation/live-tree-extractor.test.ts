@@ -2349,6 +2349,39 @@ describe("LiveTreeExtractor", () => {
       expect(after.nodes).toEqual(extractDomTree(root).nodes);
     });
 
+    it("folds a target once a reference to it is added, and keeps it once removed", () => {
+      document.body.innerHTML = `
+        <main id="app">
+          <input id="f" aria-label="Password" />
+          <div id="help"><span>Must be 8+ chars.</span></div>
+        </main>
+      `;
+      const root = document.getElementById("app")!;
+      const live = new LiveTreeExtractor(root, { mode: "dom" });
+      expect(hasHelpNode(live.extract())).toBe(true);
+
+      const input = document.getElementById("f")!;
+      const attributeOn = (name: string): TreeChange => ({
+        mutations: [
+          {
+            type: "attributes",
+            target: input,
+            attributeName: name,
+          } as unknown as MutationRecord,
+        ],
+      });
+
+      input.setAttribute("aria-describedby", "help");
+      const folded = live.refresh(attributeOn("aria-describedby"));
+      expect(hasHelpNode(folded)).toBe(false);
+      expect(folded.nodes).toEqual(extractDomTree(root).nodes);
+
+      input.removeAttribute("aria-describedby");
+      const kept = live.refresh(attributeOn("aria-describedby"));
+      expect(hasHelpNode(kept)).toBe(true);
+      expect(kept.nodes).toEqual(extractDomTree(root).nodes);
+    });
+
     it("brings the target back once a control appears inside it", () => {
       document.body.innerHTML = `
         <main id="app">
