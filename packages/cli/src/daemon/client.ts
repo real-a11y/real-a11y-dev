@@ -344,13 +344,19 @@ function isSocketListening(socketPath: string): Promise<boolean> {
   });
 }
 
-export async function spawnDaemon(
-  socketPath: string,
-  pidfile: string,
+export async function spawnDaemon({
+  socketPath,
+  pidfile,
   idleTimeoutMs = 900_000,
-  daemonPath?: string,
-  tokenFile?: string,
-): Promise<{ stop: () => Promise<void>; tokenFile: string }> {
+  daemonPath,
+  tokenFile,
+}: {
+  socketPath: string;
+  pidfile: string;
+  idleTimeoutMs?: number;
+  daemonPath?: string;
+  tokenFile?: string;
+}): Promise<{ stop: () => Promise<void>; tokenFile: string }> {
   const resolvedTokenFile = tokenFile ?? join(dirname(socketPath), "token");
   const sessionDir = dirname(resolvedTokenFile);
   await mkdir(sessionDir, { recursive: true, mode: 0o700 });
