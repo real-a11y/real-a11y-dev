@@ -6,6 +6,7 @@
  */
 
 import { createRequire } from "node:module";
+import { basename } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 
@@ -20,8 +21,10 @@ import {
   type FlagValues,
 } from "./args.js";
 import {
+  cdpDroppedDefaultsWarning,
   configSource,
   describeConfigSource,
+  droppedByCdp,
   mergeDefaults,
   resolveConfig,
 } from "./config.js";
@@ -240,6 +243,19 @@ export async function run(argv: string[]): Promise<number> {
         declared.delete(excluded);
       }
       seededFromConfig = mergeDefaults(values, resolved.config, declared);
+      // `--cdp` keeps the config's emulation and session defaults out of the
+      // run (seeding them would trip the guard against combining them). That
+      // was right for its first use — your own Chrome, already signed in, with
+      // its own window — but silent: against a browser that isn't signed in (a
+      // fresh remote one), a config that says "logged in, on a phone" audits
+      // the logged-out desktop page and exits 0. Say what was dropped — a
+      // direct write, like the warnings below, so `-q` doesn't silence it.
+      const dropped = droppedByCdp(values, resolved.config, declared);
+      if (dropped.length > 0) {
+        process.stderr.write(
+          cdpDroppedDefaultsWarning(dropped, basename(resolved.path)),
+        );
+      }
       // `defaults.root` now reaches only `tabs`. Warn rather than hard-error:
       // the config loader is strict and fail-closed, so erroring here would red
       // every CI that set this key — mid-beta, over config that was correct

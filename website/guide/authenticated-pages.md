@@ -108,6 +108,19 @@ chrome --remote-debugging-port=9222 --user-data-dir=/tmp/a11y-cdp
 real-a11y audit https://app.example.com/dashboard --cdp http://localhost:9222
 ```
 
+The session comes from that browser, not from a file: if your
+`a11y.config.json` sets `storageState` (or `device`, `viewport`, `headful`),
+`--cdp` ignores it and says so on stderr:
+
+```
+real-a11y: warning: --cdp ignores `storageState` from a11y.config.json — it uses the attached browser's own session.
+  a browser that isn't signed in (a fresh remote one, say) audits the logged-out page.
+```
+
+The warning doesn't change the exit code. An empty `--cdp ""`, which is what
+an unset CI variable gives you, is an error (exit `2`) rather than a fresh,
+signed-out browser.
+
 ::: danger Use a dedicated profile for CDP
 Attaching over CDP connects to whatever Chrome is on that port — **including
 your everyday browser and its logged-in sessions** (email, banking). Always

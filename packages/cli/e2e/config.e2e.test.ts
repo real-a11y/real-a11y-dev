@@ -134,6 +134,94 @@ describe("a11y.config.json defaults (built bin)", () => {
     );
     // The fix: the mutual-exclusivity guard no longer trips on a config default.
     expect(stderr).not.toMatch(/can't be combined with/);
+    // …and the default it dropped is named, not lost silently — even under -q.
+    const warning =
+      "real-a11y: warning: --cdp ignores `device` from a11y.config.json — it uses the attached browser's own window.";
+    expect(stderr.split(warning).length - 1).toBe(1); // exactly once
+    expect(stderr).not.toMatch(/logged-out page/); // no session was dropped
+  });
+
+  it("says when --cdp drops a config storageState", async () => {
+    // The silent version of this ran a "logged in, on a phone" config as a
+    // logged-out desktop audit and exited 0: an attached browser that isn't
+    // signed in (a fresh remote one) has no session to fall back on.
+    config({
+      defaults: { device: "iPhone 13", storageState: "./auth.json" },
+    });
+    const { stderr } = await runCli(
+      ["audit", CLEAN, "--cdp", "http://127.0.0.1:9", "-q"],
+      dir,
+    );
+    expect(stderr).toContain(
+      "real-a11y: warning: --cdp ignores `device` and `storageState` from a11y.config.json — it uses the attached browser's own window and session.\n" +
+        "  a browser that isn't signed in (a fresh remote one, say) audits the logged-out page.\n",
+    );
+  });
+
+  it("names the config file --config pointed at, and a top-level device", async () => {
+    // The legacy top-level `device` folds into defaults; the warning names the
+    // key as the user wrote it, not as `defaults.device`.
+    writeFileSync(
+      join(dir, "ci.config.json"),
+      JSON.stringify({ device: "iPhone 13" }),
+    );
+    const { stderr } = await runCli(
+      [
+        "audit",
+        CLEAN,
+        "--config",
+        "ci.config.json",
+        "--cdp",
+        "http://127.0.0.1:9",
+        "-q",
+      ],
+      dir,
+    );
+    expect(stderr).toContain("--cdp ignores `device` from ci.config.json");
+  });
+
+  it("warns about nothing when --cdp drops no config default", async () => {
+    config({ defaults: { waitUntil: "load" } });
+    const { stderr } = await runCli(
+      ["audit", CLEAN, "--cdp", "http://127.0.0.1:9", "-q"],
+      dir,
+    );
+    expect(stderr).not.toMatch(/--cdp ignores/);
+  });
+
+  it("doesn't warn in front of the error for a flag refused beside --cdp", async () => {
+    // The run is refused, so there's no run for a warning to describe.
+    config({ defaults: { device: "iPhone 13" } });
+    for (const extra of [["--headful"], ["--chrome-path", "/usr/bin/chrome"]]) {
+      const { code, stderr } = await runCli(
+        ["audit", CLEAN, "--cdp", "http://127.0.0.1:9", ...extra, "-q"],
+        dir,
+      );
+      expect(code, extra[0]).toBe(2);
+      expect(stderr, extra[0]).toMatch(
+        new RegExp(`can't be combined with .*${extra[0]}`),
+      );
+      expect(stderr, extra[0]).not.toMatch(/--cdp ignores/);
+    }
+  });
+
+  it("refuses an empty --cdp instead of auditing in a fresh browser", async () => {
+    // `--cdp "$UNSET"`: the flag used to drop the config's device and
+    // storageState, then the session read "" as no --cdp and launched a fresh
+    // local browser — a logged-out desktop audit at exit 0.
+    config({
+      defaults: { device: "iPhone 13", storageState: "./auth.json" },
+    });
+    const { code, stdout, stderr } = await runCli(
+      ["audit", CLEAN, "--cdp", "", "-q"],
+      dir,
+    );
+    expect(code).toBe(2);
+    expect(stderr).toContain(
+      "--cdp needs an endpoint, and got an empty value.",
+    );
+    expect(stderr).not.toMatch(/--cdp ignores/);
+    expect(stdout).toBe("");
   });
 
   it("audit with no URL falls back to the config `urls` list", async () => {

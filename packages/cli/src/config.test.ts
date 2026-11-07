@@ -4,15 +4,19 @@ import { join, resolve } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { COMMANDS } from "./args.js";
+import { COMMANDS, parseOpenOptions, type FlagValues } from "./args.js";
+import { sessionFlags } from "./commands/common.js";
 import {
+  cdpDroppedDefaultsWarning,
   clearConfigCache,
   CONFIG_FILENAME,
   configSource,
   DEFAULTABLE_FLAGS,
   describeConfigSource,
+  droppedByCdp,
   loadConfig,
   mergeDefaults,
+  REFUSED_BESIDE_CDP,
   resolveConfig,
   type A11yConfig,
 } from "./config.js";
@@ -305,6 +309,143 @@ describe("mergeDefaults (virtual flags)", () => {
     const md: Record<string, unknown> = { md: true };
     mergeDefaults(md, config({ format: "json" }), ALL);
     expect(md.format).toBeUndefined();
+  });
+});
+
+describe("droppedByCdp", () => {
+  const config = (defaults: A11yConfig["defaults"]): A11yConfig => ({
+    urls: PAGES,
+    defaults,
+    dir: "/repo",
+  });
+  const ALL = new Set(DEFAULTABLE_FLAGS);
+  const CDP = "http://127.0.0.1:9222";
+
+  it("names each default --cdp kept out, and what replaces it", () => {
+    const values: Record<string, unknown> = { cdp: CDP };
+    const cfg = config({
+      device: "iPhone 13",
+      storageState: "auth.json",
+      waitUntil: "networkidle",
+    });
+    mergeDefaults(values, cfg, ALL);
+    // Exactly the two `mergeDefaults` left out — not the unrelated waitUntil.
+    expect(values.device).toBeUndefined();
+    expect(values["storage-state"]).toBeUndefined();
+    expect(droppedByCdp(values, cfg, ALL)).toEqual([
+      { key: "device", reuses: "window" },
+      { key: "storageState", reuses: "session" },
+    ]);
+  });
+
+  it("is empty without --cdp, or with an empty one (refused later)", () => {
+    const cfg = config({ device: "iPhone 13", storageState: "auth.json" });
+    expect(droppedByCdp({}, cfg, ALL)).toEqual([]);
+    expect(droppedByCdp({ cdp: "" }, cfg, ALL)).toEqual([]);
+  });
+
+  it("is empty when a refused flag is typed beside --cdp (refused later)", () => {
+    // The command's own guard hard-errors on `--cdp --headful` and on
+    // `--cdp --chrome-path`; a warning describing the run it would have been
+    // is noise in front of that error.
+    const cfg = config({ device: "iPhone 13" });
+    expect(droppedByCdp({ cdp: CDP, headful: true }, cfg, ALL)).toEqual([]);
+    expect(
+      droppedByCdp({ cdp: CDP, "chrome-path": "/usr/bin/chrome" }, cfg, ALL),
+    ).toEqual([]);
+  });
+
+  it("stays quiet for exactly the flags whose guards refuse --cdp beside them", () => {
+    // Lockstep: every flag in the list really is refused next to --cdp, by
+    // `parseOpenOptions` or (for --storage-state) `sessionFlags`.
+    const typed: Record<string, unknown> = {
+      device: "iPhone 13",
+      viewport: "1280x800",
+      headful: true,
+      "storage-state": "auth.json",
+      "chrome-path": "/usr/bin/chrome",
+    };
+    for (const flag of REFUSED_BESIDE_CDP) {
+      expect(typed, flag).toHaveProperty([flag]);
+      const flags = { cdp: CDP, [flag]: typed[flag] } as FlagValues;
+      expect(() => {
+        parseOpenOptions(flags);
+        sessionFlags(flags);
+      }, flag).toThrow(/--cdp/);
+    }
+  });
+
+  it("leaves out a default the command doesn't declare", () => {
+    // Nothing was dropped: the default couldn't have reached this command.
+    const cfg = config({ device: "iPhone 13", storageState: "auth.json" });
+    const noEmulation = new Set(["cdp", "storage-state"]);
+    expect(droppedByCdp({ cdp: CDP }, cfg, noEmulation)).toEqual([
+      { key: "storageState", reuses: "session" },
+    ]);
+  });
+
+  it("leaves out a `false` boolean, which dropping changes nothing", () => {
+    const cfg = config({ headful: false, viewport: "1280x800" });
+    expect(droppedByCdp({ cdp: CDP }, cfg, ALL)).toEqual([
+      { key: "viewport", reuses: "window" },
+    ]);
+  });
+
+  it("ignores defaults --cdp doesn't exclude", () => {
+    const cfg = config({
+      format: "json",
+      annotate: false,
+      rules: ["image-alt"],
+    });
+    expect(droppedByCdp({ cdp: CDP }, cfg, ALL)).toEqual([]);
+  });
+});
+
+describe("cdpDroppedDefaultsWarning", () => {
+  it("names a dropped session and says what that audits", () => {
+    expect(
+      cdpDroppedDefaultsWarning(
+        [
+          { key: "device", reuses: "window" },
+          { key: "storageState", reuses: "session" },
+        ],
+        "a11y.config.json",
+      ),
+    ).toBe(
+      "real-a11y: warning: --cdp ignores `device` and `storageState` from a11y.config.json — it uses the attached browser's own window and session.\n" +
+        "  a browser that isn't signed in (a fresh remote one, say) audits the logged-out page.\n",
+    );
+  });
+
+  it("is one line when only window settings were dropped", () => {
+    expect(
+      cdpDroppedDefaultsWarning(
+        [
+          { key: "device", reuses: "window" },
+          { key: "viewport", reuses: "window" },
+          { key: "headful", reuses: "window" },
+        ],
+        "ci.config.json",
+      ),
+    ).toBe(
+      "real-a11y: warning: --cdp ignores `device`, `viewport` and `headful` from ci.config.json — it uses the attached browser's own window.\n",
+    );
+  });
+
+  it("speaks of the session alone when only storageState was dropped", () => {
+    expect(
+      cdpDroppedDefaultsWarning(
+        [{ key: "storageState", reuses: "session" }],
+        "a11y.config.json",
+      ),
+    ).toBe(
+      "real-a11y: warning: --cdp ignores `storageState` from a11y.config.json — it uses the attached browser's own session.\n" +
+        "  a browser that isn't signed in (a fresh remote one, say) audits the logged-out page.\n",
+    );
+  });
+
+  it("is empty for nothing dropped", () => {
+    expect(cdpDroppedDefaultsWarning([], "a11y.config.json")).toBe("");
   });
 });
 
