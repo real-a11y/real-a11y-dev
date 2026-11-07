@@ -18,7 +18,7 @@ Three usual causes:
 
 1. **Root element doesn't exist yet.** If you call the extractor from a component's body (rather than inside `useEffect` / `onMount`), the ref may not be attached to the DOM. Extract on mount, not during render.
 2. **Selector didn't match.** `document.querySelector("main")` returns `null` if there's no `<main>` landmark yet. Check the return value.
-3. **Whole subtree is hidden.** `display: none`, `visibility: hidden`, or `aria-hidden="true"` on an ancestor excludes the subtree from the a11y tree by design. That's what a screen reader sees — nothing.
+3. **Whole subtree is hidden.** `display: none` or `aria-hidden="true"` on an ancestor excludes the subtree from the a11y tree by design. That's what a screen reader sees — nothing. `visibility: hidden` hides only the element itself: a descendant that sets `visibility: visible` is rendered and stays in the tree.
 
 If the tree genuinely is empty but you expect content, mount the [inspector](/packages/inspector) on the same page and check its A11y view — the same extraction runs there.
 

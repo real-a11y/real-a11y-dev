@@ -649,6 +649,53 @@ describe("extractA11yTree", () => {
       expect(images[0].a11y.name).toBe("Company logo");
     });
   });
+
+  describe("visibility:hidden", () => {
+    function paragraphs(html: string) {
+      const { nodes } = extractA11yTree(createPage(html));
+      // The wrapper div createPage adds is the tree's root; it is not under test.
+      return Array.from(nodes.values()).filter(
+        (n) =>
+          n.parentId !== null &&
+          (n.dom?.tagName === "p" || n.dom?.tagName === "div"),
+      );
+    }
+
+    it("keeps a child that sets visibility:visible and drops the hidden parent", () => {
+      const kept = paragraphs(
+        `<div style="visibility:hidden"><p style="visibility:visible">x</p></div>`,
+      );
+      expect(kept.map((n) => n.dom?.tagName)).not.toContain("div");
+      const p = kept.find((n) => n.dom?.tagName === "p");
+      expect(p?.a11y.role).toBe("paragraph");
+    });
+
+    it("drops a child that inherits visibility:hidden", () => {
+      const kept = paragraphs(`<div style="visibility:hidden"><p>x</p></div>`);
+      expect(kept).toHaveLength(0);
+    });
+
+    it("leaves an extraction root hidden by visibility:hidden empty, as before", () => {
+      const root = createPage(`<p style="visibility:visible">x</p>`);
+      root.setAttribute("style", "visibility:hidden");
+      const { nodes } = extractA11yTree(root);
+      expect(nodes.size).toBe(0);
+    });
+
+    it("does not surface the unrendered fallback of a hidden <video>", () => {
+      const kept = paragraphs(
+        `<video style="visibility:hidden"><p style="visibility:visible">fallback</p></video>`,
+      );
+      expect(kept).toHaveLength(0);
+    });
+
+    it("still prunes an aria-hidden subtree whole", () => {
+      const kept = paragraphs(
+        `<div aria-hidden="true"><p aria-hidden="false" style="visibility:visible">x</p></div>`,
+      );
+      expect(kept).toHaveLength(0);
+    });
+  });
 });
 
 describe("presentational tables", () => {

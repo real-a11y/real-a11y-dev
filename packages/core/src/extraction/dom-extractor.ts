@@ -49,6 +49,7 @@ import {
   isSubtreeHidden,
   type StyleCache,
 } from "./role-map.js";
+import { reachableChildren } from "./visibility-hidden.js";
 
 /**
  * Marks an element that hosts one of this project's own panels (the
@@ -323,6 +324,8 @@ function getActions(
  *   covers the walk's own `isSubtreeHidden` rule plus `aria-hidden` and
  *   `visibility:hidden`: those survive in the DOM view but are pruned from the
  *   a11y view, and a control AT can't reach is not a reason to keep help text.
+ *   A `visibility:hidden` element is looked through, not counted: a child that
+ *   sets `visibility:visible` is reachable (see `reachableChildren`).
  *   Shares the walk's per-extraction `styleCache`, so no style resolves twice.
  * - **A negative `tabindex` doesn't count on its own.** `getActions` gives any
  *   `[tabindex]` element a click action as a catch-all, but `tabindex="-1"` is
@@ -357,10 +360,7 @@ function hasInteractiveContent(
   // already returned true above.)
   if (MEDIA_TAGS.has(tag)) return false;
 
-  for (const child of flatChildren(element)) {
-    if (isHiddenFromAT(child, getCachedComputedStyle(child, styleCache))) {
-      continue;
-    }
+  for (const child of reachableChildren(element, styleCache)) {
     if (hasInteractiveContent(child, styleCache)) return true;
   }
   return false;
