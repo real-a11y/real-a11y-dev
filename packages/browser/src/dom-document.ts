@@ -79,3 +79,12 @@ export function nestFlatDocument(nodes: DomNode[]): DomNode {
   if (!root) throw new Error("DOM.getFlattenedDocument returned no root");
   return root;
 }
+
+/** Read one attribute out of CDP's flat `[name, value, name, value, …]`. */
+export function attributeOf(node: DomNode, want: string): string | null {
+  const attrs = node.attributes ?? [];
+  for (let i = 0; i + 1 < attrs.length; i += 2) {
+    if (attrs[i] === want) return attrs[i + 1];
+  }
+  return null;
+}

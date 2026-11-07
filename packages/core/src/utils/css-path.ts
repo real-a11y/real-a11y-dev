@@ -41,6 +41,15 @@ export interface CssPathAdapter<T> {
    * boundary would yield a selector that matches nothing.
    */
   isRoot(node: T): boolean;
+  /**
+   * Optional: where `node` sits among its same-tag siblings — 1-based `index`,
+   * and how many same-tag siblings (itself included) its parent has. A caller
+   * that has already seen every parent's children once can answer from a
+   * precomputed record instead of {@link CssPathAdapter.children} being
+   * filtered per segment, which is quadratic under one wide parent. Must agree
+   * with what the scan would find; absent, the scan is used.
+   */
+  nthOfType?(node: T): { index: number; count: number } | undefined;
 }
 
 /** How many ancestor segments a path may carry before it stops being useful. */
@@ -64,14 +73,19 @@ export function buildCssPath<T>(node: T, dom: CssPathAdapter<T>): string {
       parts.unshift(tag);
       break;
     }
-    const sameTag = dom
-      .children(parent)
-      .filter((child) => dom.tagName(child) === tag);
-    parts.unshift(
-      sameTag.length > 1
-        ? `${tag}:nth-of-type(${sameTag.indexOf(current) + 1})`
-        : tag,
-    );
+    let index: number;
+    let count: number;
+    const known = dom.nthOfType?.(current);
+    if (known) {
+      ({ index, count } = known);
+    } else {
+      const sameTag = dom
+        .children(parent)
+        .filter((child) => dom.tagName(child) === tag);
+      index = sameTag.indexOf(current) + 1;
+      count = sameTag.length;
+    }
+    parts.unshift(count > 1 ? `${tag}:nth-of-type(${index})` : tag);
     // An ancestor id anchors the path and ends the walk early — shorter and
     // more stable than continuing to the document element.
     const parentId = dom.id(parent);

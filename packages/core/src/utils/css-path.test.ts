@@ -235,3 +235,55 @@ describe("buildCssPath", () => {
     expect(path("span")).toBe("body > main > form > span");
   });
 });
+
+describe("buildCssPath with a precomputed nthOfType", () => {
+  it("uses the accessor instead of scanning, and yields the same path", () => {
+    const items = Array.from({ length: 50 }, () => ({
+      tag: "li",
+      children: [{ tag: "a" }],
+    }));
+    const last = items[49].children[0] as PlainNode;
+    const root: PlainNode = {
+      tag: "html",
+      children: [{ tag: "body", children: [{ tag: "ul", children: items }] }],
+    };
+    const scanning = plainTree(root);
+    let scans = 0;
+    const indexed: CssPathAdapter<PlainNode> = {
+      ...scanning,
+      children: (n) => {
+        scans++;
+        return scanning.children(n);
+      },
+      nthOfType: (n) => {
+        const kin = (n.parent?.children ?? []).filter((c) => c.tag === n.tag);
+        return { index: kin.indexOf(n) + 1, count: kin.length };
+      },
+    };
+    expect(buildCssPath(last, indexed)).toBe(buildCssPath(last, scanning));
+    expect(buildCssPath(last, indexed)).toBe(
+      "body > ul > li:nth-of-type(50) > a",
+    );
+    expect(scans).toBe(0);
+  });
+
+  it("falls back to the scan where the accessor knows nothing, and drops nth-of-type for an only child", () => {
+    const only: PlainNode = { tag: "span" };
+    const root: PlainNode = {
+      tag: "html",
+      children: [
+        {
+          tag: "body",
+          children: [{ tag: "p", children: [only] }, { tag: "p" }],
+        },
+      ],
+    };
+    const scanning = plainTree(root);
+    const partial: CssPathAdapter<PlainNode> = {
+      ...scanning,
+      nthOfType: (n) => (n.tag === "span" ? { index: 1, count: 1 } : undefined),
+    };
+    expect(buildCssPath(only, partial)).toBe("body > p:nth-of-type(1) > span");
+    expect(buildCssPath(only, partial)).toBe(buildCssPath(only, scanning));
+  });
+});
