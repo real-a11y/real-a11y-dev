@@ -21,6 +21,10 @@
 
 ### Patch Changes
 
+- **The TAB view's in-page walk is linear on long forms.** It rescanned the page
+  for every hint and label, so a form with a hint under each field slowed down
+  quadratically. Nothing it shows changes.
+  ([#602](https://github.com/real-a11y/real-a11y-dev/pull/602))
 - **The side panel no longer names an `article`, `group`, `feed`, `note`,
   `tabpanel`, `doc-toc`, `graphics-document` or `graphics-symbol` after its
   text**
