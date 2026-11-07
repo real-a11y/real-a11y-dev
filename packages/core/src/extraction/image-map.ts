@@ -16,6 +16,7 @@
  */
 
 import {
+  safeGetAttribute,
   safeOwnerDocument,
   safeQuerySelectorAll,
   safeRootNode,
@@ -36,12 +37,12 @@ import {
 export function imageUsingMap(area: Element): Element | null {
   const map = area.closest("map");
   if (!map) return null;
-  const names = [map.getAttribute("name"), map.getAttribute("id")];
+  const names = [safeGetAttribute(map, "name"), safeGetAttribute(map, "id")];
   const scope: ParentNode = area.isConnected
     ? safeOwnerDocument(area)
     : (safeRootNode(area) as ParentNode);
   for (const img of safeQuerySelectorAll(scope, "img[usemap]")) {
-    const usemap = img.getAttribute("usemap") ?? "";
+    const usemap = safeGetAttribute(img, "usemap") ?? "";
     if (usemap.startsWith("#") && names.includes(usemap.slice(1))) return img;
   }
   return null;

@@ -2874,7 +2874,7 @@ describe("LiveTreeExtractor", () => {
       expectSpliced();
     });
 
-    it("drops the form, as a fresh extraction does, when the control arrives later", () => {
+    it("keeps the form, as a fresh extraction does, when the control arrives later", () => {
       const { root, form } = page("");
       const live = new LiveTreeExtractor(root, { mode: "dom" });
       const before = [...live.extract().nodes.values()].map((n) => n.a11y.name);
@@ -2898,7 +2898,7 @@ describe("LiveTreeExtractor", () => {
       expect(result.nodes).toEqual(extractDomTree(root).nodes);
       expectSpliced();
       const after = [...result.nodes.values()].map((n) => n.a11y.name);
-      expect(after).not.toContain("Search");
+      expect(after).toContain("Search");
       expect(after).toContain("Orders");
     });
   });

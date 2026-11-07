@@ -200,11 +200,9 @@ export function safeHidden(element: Element): boolean {
  * `<input name="getAttribute">` makes `form.getAttribute(…)` throw, and
  * `<img name="getElementById">` makes `document.getElementById(…)` throw.
  *
- * Not every call goes through these. A throw on one element costs that element
- * and everything inside it — the walk's per-element boundary skips the
- * subtree, and `LiveTreeExtractor.refresh` falls back to a full extraction —
- * which is the price of a form whose control shadows `getAttribute`, the read
- * every attribute goes through. These are for the reads that cost more: the
+ * Every attribute read on an element the walk builds goes through these, so a
+ * form whose control shadows `getAttribute` keeps its subtree. They matter most
+ * for the reads that cost more than one element: the
  * document every id lookup runs against, the extraction root, and the
  * observer's per-mutation filter, where a throw drops every labelled control
  * on the page, aborts the whole extraction, or loses a whole batch of
