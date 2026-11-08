@@ -106,6 +106,8 @@ function insetComponents(clipPath: string): string[] | null {
  * Only `inset()` is read. Another shape that collapses the box — `circle(0)`
  * — answers no, as does a `calc()` on an edge the answer depends on: unread
  * is safer here than guessed at, since a wrong yes hides something drawn.
+ *
+ * @internal
  */
 export function insetCollapsesBox(clipPath: string): boolean {
   const components = insetComponents(clipPath);
