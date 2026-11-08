@@ -21,6 +21,10 @@
 
 ### Patch Changes
 
+- **The TAB view names a titled link or button from its content.** A `title`
+  attribute no longer outranks the element's own text, so
+  `<a title="Tooltip">Home</a>` reads "Home", as Chrome's tree does.
+  ([#605](https://github.com/real-a11y/real-a11y-dev/pull/605))
 - **The TAB view's in-page walk is linear on long forms.** It rescanned the page
   for every hint and label, so a form with a hint under each field slowed down
   quadratically. Nothing it shows changes.

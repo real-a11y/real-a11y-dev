@@ -1383,7 +1383,25 @@ function computeRawAccessibleName(
     }
   }
 
-  // 6. title attribute (HTML-AAM orders title before placeholder)
+  // 8. Recursive text content — ONLY for elements whose ARIA role supports
+  //    "name from content" (headings, links, buttons, checkboxes, table cells,
+  //    options — see NAMES_FROM_CONTENT_ROLES). NOT for generic containers
+  //    (div, span, p) which would grab huge text blobs.
+  if (!MEDIA_TAGS.has(tag) && isNameFromContentHost(element)) {
+    const fullText = getAccessibleTextContent(element, visited, styleCache, {
+      inReference,
+      textOnly: tag === "option",
+    }).trim();
+    if (fullText) {
+      if (source) source.fromContent = true;
+      return fullText;
+    }
+  }
+
+  // 6. title attribute — the Tooltip step is last (AccName 1.2 §4.3.2 2I:
+  //    "only if nothing else, including subtree content, has provided
+  //    results"), so it sits after name-from-content. HTML-AAM orders title
+  //    before placeholder.
   const title = safeGetAttribute(element, "title");
   if (title) return title;
 
@@ -1402,21 +1420,6 @@ function computeRawAccessibleName(
   // in as the accessible name via the direct-text step below. Chromium
   // exposes an unlabeled <video> with an empty name — mirror that.
   if (MEDIA_TAGS.has(tag)) return "";
-
-  // 8. Recursive text content — ONLY for elements whose ARIA role supports
-  //    "name from content" (headings, links, buttons, checkboxes, table cells,
-  //    options — see NAMES_FROM_CONTENT_ROLES). NOT for generic containers
-  //    (div, span, p) which would grab huge text blobs.
-  if (isNameFromContentHost(element)) {
-    const fullText = getAccessibleTextContent(element, visited, styleCache, {
-      inReference,
-      textOnly: tag === "option",
-    }).trim();
-    if (fullText) {
-      if (source) source.fromContent = true;
-      return fullText;
-    }
-  }
 
   // 9. Fallback: the element's own text — for generics and prose, never for
   //    a role only an author can name (see AUTHOR_NAMED_ROLES). For a

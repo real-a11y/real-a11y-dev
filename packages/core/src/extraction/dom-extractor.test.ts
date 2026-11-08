@@ -6860,3 +6860,72 @@ describe("reference lookups come from one index per tree", () => {
     }
   });
 });
+
+// AccName 1.2 §4.3.2 step 2I: the Tooltip step is last — "used only if nothing
+// else, including subtree content, has provided results". Chromium agrees.
+describe("title is the last name source (after name from content)", () => {
+  const nameOf = (html: string): string => {
+    const root = createPage(html);
+    const target = [...extractDomTree(root).nodes.values()].find(
+      (n) => n.dom?.attributes["id"] === "t",
+    )!;
+    return target.a11y.name;
+  };
+
+  it.each([
+    ["a link", `<a id="t" href="/" title="Tooltip">Home</a>`, "Home"],
+    ["a button", `<button id="t" title="Tooltip">Save</button>`, "Save"],
+    ["a heading", `<h2 id="t" title="Tooltip">Section</h2>`, "Section"],
+    [
+      "a button role",
+      `<span id="t" role="button" title="Tooltip">Save</span>`,
+      "Save",
+    ],
+    [
+      "a checkbox role",
+      `<div id="t" role="checkbox" title="Tooltip">Accept</div>`,
+      "Accept",
+    ],
+    [
+      "an option",
+      `<select><option id="t" title="Tooltip">One</option></select>`,
+      "One",
+    ],
+    [
+      "a td",
+      `<table><tr><td id="t" title="Tooltip">Cell</td></tr></table>`,
+      "Cell",
+    ],
+    [
+      "a th",
+      `<table><tr><th id="t" title="Tooltip">Head</th></tr></table>`,
+      "Head",
+    ],
+    [
+      "a summary",
+      `<details open><summary id="t" title="Tooltip">More</summary>x</details>`,
+      "More",
+    ],
+  ])("names %s from its content, not its title", (_label, html, expected) => {
+    expect(nameOf(html)).toBe(expected);
+  });
+
+  it.each([
+    ["a link with no content", `<a id="t" href="/" title="Tooltip"></a>`],
+    ["a div with text", `<div id="t" title="Tooltip">text</div>`],
+    ["a link with only whitespace", `<a id="t" href="/" title="Tooltip"> </a>`],
+    [
+      "a link with only an empty-alt image",
+      `<a id="t" href="/" title="Tooltip"><img alt="" src="x.png"></a>`,
+    ],
+    ["a nav", `<nav id="t" title="Tooltip">Menu</nav>`],
+  ])("still names %s from its title", (_label, html) => {
+    expect(nameOf(html)).toBe("Tooltip");
+  });
+
+  it("keeps spacing around a titled link nested in a name", () => {
+    expect(
+      nameOf(`<h2 id="t">Go to <a href="/" title="T">Home</a> now</h2>`),
+    ).toBe("Go to Home now");
+  });
+});

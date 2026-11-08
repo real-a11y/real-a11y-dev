@@ -387,6 +387,50 @@ describe("roles Chromium discards", () => {
   });
 });
 
+// AccName 1.2 §4.3.2 step 2I puts the Tooltip last: a title names an element
+// only when nothing else, subtree content included, has. The DOM producer once
+// returned it before name-from-content, so a titled link read "Tooltip".
+describe("title does not outrank an element's content", () => {
+  it("names a titled link, button and heading from content in both producers", async () => {
+    const browser = await chromium.launch();
+    try {
+      const page = await browser.newPage();
+      await page.setContent(
+        `<main>` +
+          `<a href="/" title="Tooltip">Home</a>` +
+          `<button title="Tooltip">Save</button>` +
+          `<h2 title="Tooltip">Section</h2>` +
+          `<a href="/empty" title="Only title"></a>` +
+          `</main>`,
+      );
+      await page.addScriptTag({ content: pageBundleSource() });
+      const dom = await page.evaluate(() => {
+        const ra = (globalThis as Record<string, unknown>).__realA11y__ as {
+          extractA11yTree(root: Element): ExtractionResult;
+        };
+        return [...ra.extractA11yTree(document.body).nodes.values()];
+      });
+      const native = await nativeTree(page);
+      const namesByRole = (nodes: Iterable<SemanticNode>) =>
+        Object.fromEntries(
+          [...nodes]
+            .filter((n) => ["link", "button", "heading"].includes(n.a11y.role))
+            .map((n) => [n.a11y.role + ":" + n.a11y.name, true]),
+        );
+      const want = {
+        "link:Home": true,
+        "button:Save": true,
+        "heading:Section": true,
+        "link:Only title": true,
+      };
+      expect(namesByRole(native.nodes.values())).toStrictEqual(want);
+      expect(namesByRole(dom)).toStrictEqual(want);
+    } finally {
+      await browser.close();
+    }
+  });
+});
+
 // WAI-ARIA 1.2 removes the implicit semantics of a presentational table's
 // required children (thead/tbody/tr/th/td). The DOM producer once kept
 // rowgroup, row, columnheader and cell. aria-label or tabindex on the table
