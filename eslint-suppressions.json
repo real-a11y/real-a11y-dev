@@ -121,16 +121,16 @@
   },
   "packages/core/src/extraction/dom-extractor.ts": {
     "complexity": {
-      "count": 7
+      "count": 6
     },
     "max-depth": {
       "count": 9
     },
     "max-lines-per-function": {
-      "count": 3
+      "count": 2
     },
     "max-params": {
-      "count": 5
+      "count": 4
     }
   },
   "packages/core/src/interaction/picker.ts": {
@@ -167,10 +167,10 @@
   },
   "packages/core/src/observation/live-tree-extractor.ts": {
     "complexity": {
-      "count": 2
+      "count": 1
     },
     "max-depth": {
-      "count": 7
+      "count": 6
     },
     "max-lines-per-function": {
       "count": 1

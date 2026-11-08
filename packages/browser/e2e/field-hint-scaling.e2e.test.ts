@@ -2,7 +2,7 @@
  * DOM extraction time on a long form, in real Chromium.
  *
  * Every field below has a `<label for>`, an `aria-describedby` and a hint
- * `<p>`. Folding a hint and naming a field once rescanned the page per field,
+ * `<p>`. Describing a field and naming it once rescanned the page per field,
  * so the time grew with the square of the page: about 30x when the page grew
  * 5x. It is linear now. The bound is a ratio between two sizes, not a time, so
  * it holds on a slow or loaded machine too. jsdom has no layout and no real
@@ -72,9 +72,9 @@ describe("extraction of a long form with a hint under every field", () => {
     const small = await extractionMs(500);
     const large = await extractionMs(2500);
 
-    // The hints fold and the fields stay: same output at both sizes.
-    expect(small.hints).toBe(0);
-    expect(large.hints).toBe(0);
+    // Every hint is a node, as is every field: output scales with the page.
+    expect(small.hints).toBe(500);
+    expect(large.hints).toBe(2500);
     expect(large.nodes).toBeGreaterThan(small.nodes * 4);
 
     // 5x the page. Linear is about 5x; the per-field rescans were about 30x.
