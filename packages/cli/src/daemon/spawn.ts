@@ -192,6 +192,33 @@ async function removeStaleSocket(paths: SessionPaths): Promise<void> {
 }
 
 /**
+ * Stop the live process the session's pidfile names. Returns false when there
+ * is no such process, and throws when it will not exit.
+ */
+async function stopPidfileDaemon(
+  paths: SessionPaths,
+  name: string,
+  authToken: string | undefined,
+): Promise<boolean> {
+  const pidInfo = await readPidfile(paths.pidfile);
+  if (!pidInfo || !isProcessAlive(pidInfo.pid)) return false;
+  const exited = await stopDaemonProcess(
+    paths,
+    pidInfo.pid,
+    pidInfo.startedAt,
+    authToken,
+  );
+  if (!exited) {
+    throw new CliError(
+      `existing daemon process for session "${name}" could not be stopped`,
+      "run 'real-a11y session stop <name>' and retry",
+      EXIT.ERROR,
+    );
+  }
+  return true;
+}
+
+/**
  * Return a client connected to the daemon for `name`, spawning it if necessary.
  *
  * Performs a version handshake and replaces stale or mismatched daemons.
@@ -270,43 +297,13 @@ export async function ensureDaemonClient(
       // or protocol error). Don't unlink it yet — try to stop the process via
       // the pidfile. If there is no pidfile, fail safe and let the user
       // diagnose instead of stranding a live daemon.
-      const pidInfo = await readPidfile(paths.pidfile);
-      if (pidInfo && isProcessAlive(pidInfo.pid)) {
-        const exited = await stopDaemonProcess(
-          paths,
-          pidInfo.pid,
-          pidInfo.startedAt,
-          existingToken,
-        );
-        if (!exited) {
-          throw new CliError(
-            `existing daemon process for session "${name}" could not be stopped`,
-            "run 'real-a11y session stop <name>' and retry",
-            EXIT.ERROR,
-          );
-        }
-      } else {
+      if (!(await stopPidfileDaemon(paths, name, existingToken))) {
         throw versionErr;
       }
     } else {
       // Version mismatch or the daemon is already shutting down: stop the running
       // daemon and respawn below.
-      const pidInfo = await readPidfile(paths.pidfile);
-      if (pidInfo && isProcessAlive(pidInfo.pid)) {
-        const exited = await stopDaemonProcess(
-          paths,
-          pidInfo.pid,
-          pidInfo.startedAt,
-          existingToken,
-        );
-        if (!exited) {
-          throw new CliError(
-            `existing daemon process for session "${name}" could not be stopped`,
-            "run 'real-a11y session stop <name>' and retry",
-            EXIT.ERROR,
-          );
-        }
-      } else {
+      if (!(await stopPidfileDaemon(paths, name, existingToken))) {
         // Daemon is responding but has no pidfile; ask it to quit and wait for
         // the socket to release.
         try {
@@ -319,22 +316,7 @@ export async function ensureDaemonClient(
     }
 
     // If a pidfile points at a live process, stop it and clean up its files.
-    const pidInfo = await readPidfile(paths.pidfile);
-    if (pidInfo && isProcessAlive(pidInfo.pid)) {
-      const exited = await stopDaemonProcess(
-        paths,
-        pidInfo.pid,
-        pidInfo.startedAt,
-        existingToken,
-      );
-      if (!exited) {
-        throw new CliError(
-          `existing daemon process for session "${name}" could not be stopped`,
-          "run 'real-a11y session stop <name>' and retry",
-          EXIT.ERROR,
-        );
-      }
-    }
+    await stopPidfileDaemon(paths, name, existingToken);
 
     await removeSessionFiles(paths);
     await removeStaleSocket(paths);
