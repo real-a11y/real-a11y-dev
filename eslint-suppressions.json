@@ -74,7 +74,7 @@
   },
   "packages/cli/src/daemon/spawn.ts": {
     "complexity": {
-      "count": 3
+      "count": 2
     },
     "max-depth": {
       "count": 1
