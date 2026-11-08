@@ -1537,6 +1537,76 @@ describe("getHeadingLevel", () => {
 
 // WAI-ARIA 1.2 `presentation`: the required structural children of a
 // presentational table lose their implicit semantics with it.
+describe("<td> in a grid or treegrid (HTML-AAM 3.5.129 / 3.5.130)", () => {
+  const td = (table: string, inner = "<tr><td id=t>C</td></tr>") =>
+    `<table ${table}>${inner}</table>`;
+
+  it.each(["grid", "treegrid"])("is a gridcell under role=%s", (role) => {
+    expect(roleOf(td(`role="${role}"`))).toBe("gridcell");
+    expect(
+      roleOf(
+        td(
+          `role="${role}"`,
+          "<thead><tr><th>H</th></tr></thead><tbody><tr><td id=t>C</td></tr></tbody>",
+        ),
+      ),
+    ).toBe("gridcell");
+  });
+
+  it("is a cell under a plain table or any other table role", () => {
+    expect(roleOf(td(""))).toBe("cell");
+    expect(roleOf(td('role="table"'))).toBe("cell");
+    expect(roleOf(td('role="foo"'))).toBe("cell");
+  });
+
+  it("is a cell inside a div that has the role, with no table owning it", () => {
+    expect(
+      roleOf('<div role="grid"><table><tr><td id=t>C</td></tr></table></div>'),
+    ).toBe("cell");
+  });
+
+  it("follows the first recognised token of the table's role", () => {
+    expect(roleOf(td('role="foo grid"'))).toBe("gridcell");
+    expect(roleOf(td('role="grid table"'))).toBe("gridcell");
+  });
+
+  it("lets the nearest table decide", () => {
+    expect(
+      roleOf(
+        '<table role="grid"><tr><td><table><tr><td id=t>C</td></tr></table></td></tr></table>',
+      ),
+    ).toBe("cell");
+    expect(
+      roleOf(
+        '<table><tr><td><table role="grid"><tr><td id=t>C</td></tr></table></td></tr></table>',
+      ),
+    ).toBe("gridcell");
+  });
+
+  it("lets an authored role win", () => {
+    expect(
+      roleOf(td('role="grid"', '<tr><td id=t role="cell">C</td></tr>')),
+    ).toBe("cell");
+  });
+
+  it("is still stripped by a presentational table", () => {
+    expect(roleOf(td('role="none"'))).toBe("presentation");
+  });
+
+  it("leaves the other parts as row and rowgroup", () => {
+    for (const [inner, role] of [
+      ["<thead id=t><tr><td>C</td></tr></thead>", "rowgroup"],
+      ["<tbody id=t><tr><td>C</td></tr></tbody>", "rowgroup"],
+      ["<tfoot id=t><tr><td>C</td></tr></tfoot>", "rowgroup"],
+      ["<tr id=t><td>C</td></tr>", "row"],
+      ["<tr><th id=t>H</th></tr>", "columnheader"],
+      ["<tr><th id=t scope=row>H</th></tr>", "rowheader"],
+    ] as const) {
+      expect(roleOf(td('role="grid"', inner))).toBe(role);
+    }
+  });
+});
+
 describe("table parts under a presentational table", () => {
   const part = (table: string, inner: string, id = "t") =>
     `<table ${table}>${inner.replace("<ID>", `id="${id}"`)}</table>`;

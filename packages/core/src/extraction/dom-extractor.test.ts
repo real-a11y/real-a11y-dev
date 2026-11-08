@@ -1831,6 +1831,23 @@ describe("extractDomTree", () => {
     );
   });
 
+  it("offers a click action only to an authored gridcell, not to an implicit one", () => {
+    // Actions key on the authored role (getActions reads getExplicitRole), so
+    // resolving a grid's <td> to gridcell adds none. Deliberate: a plain cell
+    // has no action of its own, and nothing else here marks it clickable.
+    const root = createPage(`
+      <table role="grid"><tr><td id="implicit">a</td><td id="authored" role="gridcell">b</td></tr></table>
+      <table><tr><td id="plain">c</td></tr></table>`);
+    const { nodes } = extractDomTree(root);
+    const byId = (id: string) =>
+      [...nodes.values()].find((n) => n.dom?.attributes["id"] === id)!;
+    expect(byId("implicit").a11y.role).toBe("gridcell");
+    expect(byId("implicit").interaction?.actions ?? []).not.toContain("click");
+    expect(byId("authored").interaction?.actions).toContain("click");
+    expect(byId("plain").a11y.role).toBe("cell");
+    expect(byId("plain").interaction?.actions ?? []).not.toContain("click");
+  });
+
   it("reads aria-expanded on an element with no role by its own role", () => {
     expect(
       stateById(
@@ -1858,6 +1875,9 @@ describe("extractDomTree", () => {
         </table>
         <table role="grid" aria-label="s">
           <tr><td id="grid-td" aria-expanded="true">t</td></tr>
+          <tr><td id="grid-td-unknown" role="foo" aria-expanded="true">t</td></tr>
+          <tr><td id="grid-td-none" role="none" tabindex="0" aria-expanded="true">t</td></tr>
+          <tr><td id="grid-td-authored" role="gridcell" aria-expanded="true">t</td></tr>
         </table>
         <h2 id="h2" aria-expanded="true">u</h2>
         <nav id="nav" aria-expanded="true">v</nav>
@@ -1884,9 +1904,12 @@ describe("extractDomTree", () => {
       tr: false,
       "th-row": true,
       td: undefined,
-      // Chromium names a grid's cell a gridcell, but gives it an expanded
-      // state only when the author wrote role="gridcell".
+      // A grid's cell is a gridcell in both producers, but Chromium gives it
+      // an expanded state only when the author wrote role="gridcell".
       "grid-td": undefined,
+      "grid-td-unknown": undefined,
+      "grid-td-none": undefined,
+      "grid-td-authored": true,
       h2: undefined,
       nav: undefined,
       dialog: undefined,

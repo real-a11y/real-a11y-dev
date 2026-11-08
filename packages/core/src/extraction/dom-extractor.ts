@@ -26,6 +26,7 @@ import {
   safeTextContent,
 } from "./clobber-safe.js";
 import { isEditable, isEditingHost } from "./editing.js";
+import { canExpand } from "./expanded-roles.js";
 import {
   deepQuerySelectorAll,
   flatChildNodes,
@@ -2477,41 +2478,6 @@ const SUMMARY_EXPANDED_ROLES = new Set([
   "treeitem",
 ]);
 
-/**
- * The roles Chromium 151 gives an expanded state, measured on a `<button>`
- * across every ARIA role and in context. Chromium 153 agrees, and so does a
- * `<div>` in each role. Any other role has none in their tree, whatever sets
- * one: `aria-expanded`, a popover, or a `<details>`' `open`.
- *
- * {@link SUMMARY_EXPANDED_ROLES} also has `form`, `option` and `region`. A
- * button in one of those reports the state only out of context, where Chromium
- * makes it a plain button: an option outside a list box, a region or form with
- * no name. In context it has none.
- *
- * Keyed on the role this engine computes. Where that differs from Chromium's,
- * the state follows the role it disagrees on: a `<td>` in a grid is a `cell`
- * here and a `gridcell` there, yet Chromium gives it no expanded state either
- * — only an authored `role="gridcell"` gets one.
- */
-const EXPANDABLE_ROLES = new Set([
-  "application",
-  "button",
-  "checkbox",
-  "columnheader",
-  "combobox",
-  "gridcell",
-  "link",
-  "listitem",
-  "menuitem",
-  "menuitemcheckbox",
-  "menuitemradio",
-  "row",
-  "rowheader",
-  "switch",
-  "tab",
-  "treeitem",
-]);
-
 /** The `<input>` types that can invoke a popover through `popovertarget`. */
 const POPOVER_INVOKER_INPUT_TYPES = new Set([
   "button",
@@ -2629,7 +2595,7 @@ function popoverExpanded(
   tag: string,
   role: string,
 ): boolean | null {
-  if (!EXPANDABLE_ROLES.has(role)) return null;
+  if (!canExpand(element, role)) return null;
   const invoked = invokedElement(element, tag);
   if (!invoked || isShadowIncludingDescendant(element, invoked)) return null;
   try {
@@ -2746,7 +2712,7 @@ function getAriaStates(
     // Chromium never marks an optgroup disabled, whatever its role. Its
     // options still inherit the state from it, below.
     if (attr === "aria-disabled" && tag === "optgroup") continue;
-    if (attr === "aria-expanded" && !EXPANDABLE_ROLES.has(role)) continue;
+    if (attr === "aria-expanded" && !canExpand(element, role)) continue;
     const value = ariaStateValue(element, attr, role);
     if (value !== null) states[state] = value;
   }

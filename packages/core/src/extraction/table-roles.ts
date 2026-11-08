@@ -38,6 +38,26 @@ export function thHeaderRole(el: Element): string {
 }
 
 /**
+ * Role of a `<td>` that has no authored role. HTML-AAM 3.5.129/3.5.130: a cell
+ * of a table whose role is `grid` or `treegrid` is a `gridcell`, any other is
+ * a `cell`. Only the nearest owning table decides, so a plain table nested in
+ * a grid cell keeps `cell`. `tableRole` resolves the table's authored role the
+ * way any authored role resolves (first recognised token); it lives in
+ * role-map, so it is injected.
+ */
+export function tdRole(
+  el: Element,
+  tableRole: (table: Element) => string | undefined,
+): string {
+  let table = flatParentElement(el);
+  while (table && safeTagName(table) !== "table") {
+    table = flatParentElement(table);
+  }
+  const role = table && tableRole(table);
+  return role === "grid" || role === "treegrid" ? "gridcell" : "cell";
+}
+
+/**
  * Role of a table part.
  *
  * WAI-ARIA 1.2 (`presentation`): the implicit native semantics of a
