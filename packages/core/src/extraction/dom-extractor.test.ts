@@ -1584,6 +1584,44 @@ describe("extractDomTree", () => {
     return byId;
   }
 
+  it("reports readonly from the HTML attribute on input and textarea", () => {
+    expect(
+      stateById(
+        `
+        <input id="input" readonly aria-label="a">
+        <textarea id="textarea" readonly aria-label="a"></textarea>
+        <input id="number" type="number" readonly aria-label="n">
+        <input id="override" readonly aria-readonly="false" aria-label="o">
+        <div id="widget" role="textbox" aria-readonly="true" aria-label="w"></div>
+        <input id="editable" aria-label="e">
+        <input id="aria-false" aria-readonly="false" aria-label="f">
+        <input id="checkbox" type="checkbox" readonly aria-label="c">
+        <div id="div" readonly role="textbox" aria-label="d"></div>
+        <input id="button-role" readonly role="button" aria-label="b">
+        <input id="odd-type" type="TEXT " readonly aria-label="t">
+        <input id="bogus-type" type="bogus" readonly aria-label="g">
+        <form><input name="type" id="clobber" readonly aria-label="x"></form>
+      `,
+        "readonly",
+      ),
+    ).toEqual({
+      input: true,
+      textarea: true,
+      number: true,
+      override: true,
+      widget: true,
+      editable: undefined,
+      // An explicit aria-readonly="false" is kept, as for any state.
+      "aria-false": false,
+      checkbox: undefined,
+      div: undefined,
+      "button-role": undefined,
+      "odd-type": true,
+      "bogus-type": true,
+      clobber: true,
+    });
+  });
+
   // The expectations from here to "skips script and style elements" were
   // each checked against Chromium 151's own tree: CDP `getFullAXTree`, and
   // chrome://accessibility for `aria-current`, which CDP doesn't expose.

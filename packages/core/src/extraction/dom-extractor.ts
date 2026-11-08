@@ -27,6 +27,7 @@ import {
 } from "./clobber-safe.js";
 import { isEditable, isEditingHost } from "./editing.js";
 import { canExpand } from "./expanded-roles.js";
+import { addFieldStates } from "./field-states.js";
 import {
   deepQuerySelectorAll,
   flatChildNodes,
@@ -2719,16 +2720,7 @@ function getAriaStates(
   for (const [state, value] of Object.entries(native))
     if (value !== undefined) states[state] = value;
 
-  // Native HTML states
-  const htmlEl = element as HTMLInputElement;
-  if (
-    tag === "input" ||
-    tag === "button" ||
-    tag === "select" ||
-    tag === "textarea"
-  ) {
-    if ("required" in htmlEl && htmlEl.required) states["required"] = true;
-  }
+  addFieldStates(element, tag, role, states);
 
   // A disabled control is disabled whatever its aria-disabled says. Anything
   // else with an explicit aria-disabled keeps it. The rest inherit from an
