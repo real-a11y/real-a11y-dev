@@ -58,14 +58,6 @@ export function tdRole(
 }
 
 /**
- * True for a `<td>` that is a `gridcell` only by its table's role. Chromium
- * gives that one no expanded state; an authored `role="gridcell"` gets one.
- */
-export function isImplicitGridCell(el: Element): boolean {
-  return safeTagName(el) === "td" && safeGetAttribute(el, "role") === null;
-}
-
-/**
  * Role of a table part.
  *
  * WAI-ARIA 1.2 (`presentation`): the implicit native semantics of a

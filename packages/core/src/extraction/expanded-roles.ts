@@ -1,6 +1,7 @@
 /** Which roles carry an expanded state, and on which elements. */
 
-import { isImplicitGridCell } from "./table-roles.js";
+import { safeTagName } from "./clobber-safe.js";
+import { getExplicitRole } from "./role-map.js";
 
 /**
  * The roles Chromium 151 gives an expanded state, measured on a `<button>`
@@ -16,7 +17,7 @@ import { isImplicitGridCell } from "./table-roles.js";
  * Keyed on the role this engine computes. Where that differs from Chromium's,
  * the state follows the role it disagrees on. A `<td>` in a grid is a
  * `gridcell` in both, yet Chromium gives that implicit one no expanded state —
- * only an authored `role="gridcell"` gets one, which `isImplicitGridCell` tells apart.
+ * only an authored `role="gridcell"` gets one, which `canExpand` tells apart.
  */
 const EXPANDABLE_ROLES = new Set([
   "application",
@@ -37,7 +38,16 @@ const EXPANDABLE_ROLES = new Set([
   "treeitem",
 ]);
 
-/** Whether `element`, whose computed role is `role`, can report `expanded`. */
+/**
+ * Whether `element`, whose computed role is `role`, can report `expanded`. A
+ * `<td>` that is a `gridcell` only through its table's role can't: it has no
+ * authored role, or one that names nothing and falls back.
+ */
 export function canExpand(element: Element, role: string): boolean {
-  return EXPANDABLE_ROLES.has(role) && !isImplicitGridCell(element);
+  if (!EXPANDABLE_ROLES.has(role)) return false;
+  return !(
+    role === "gridcell" &&
+    safeTagName(element) === "td" &&
+    getExplicitRole(element) === undefined
+  );
 }

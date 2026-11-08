@@ -1875,6 +1875,8 @@ describe("extractDomTree", () => {
         </table>
         <table role="grid" aria-label="s">
           <tr><td id="grid-td" aria-expanded="true">t</td></tr>
+          <tr><td id="grid-td-unknown" role="foo" aria-expanded="true">t</td></tr>
+          <tr><td id="grid-td-authored" role="gridcell" aria-expanded="true">t</td></tr>
         </table>
         <h2 id="h2" aria-expanded="true">u</h2>
         <nav id="nav" aria-expanded="true">v</nav>
@@ -1904,6 +1906,8 @@ describe("extractDomTree", () => {
       // A grid's cell is a gridcell in both producers, but Chromium gives it
       // an expanded state only when the author wrote role="gridcell".
       "grid-td": undefined,
+      "grid-td-unknown": undefined,
+      "grid-td-authored": true,
       h2: undefined,
       nav: undefined,
       dialog: undefined,
