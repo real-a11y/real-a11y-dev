@@ -1,6 +1,6 @@
 /**
  * Reading `clip-path: inset(...)` for the visually-hidden idiom. Pure string
- * parsing, no DOM access: `isSrOnly` in dom-extractor.ts is the one caller.
+ * parsing, no DOM access.
  */
 
 /**
@@ -95,12 +95,13 @@ function insetComponents(clipPath: string): string[] | null {
  * `inset(10px)` crops a decorative edge off an element that stays fully
  * visible, and matching it marked that element `dom.isHidden`.
  *
- * The box's own size is in hand here (the `clip` branch above reads
- * `computed.width` and `computed.height`), so a length could in principle be
- * measured against it. It deliberately is not: the 1px-box idiom that would
- * need it pairs the box with `clip: rect(0, 0, 0, 0)`, which that branch
- * already catches, and a 1px box clipped only by `clip-path: inset(1px)` is
- * not an idiom anything uses. The cost is that such a box reads visible.
+ * The box's own size is not read here, so a length could not be measured
+ * against it, and the caller's `clip` branch (in `isSrOnly`) reads that size
+ * only for `clip: rect()`. A length is deliberately not measured: the
+ * 1px-box idiom that would need it pairs the box with `clip: rect(0, 0, 0,
+ * 0)`, which that branch already catches, and a 1px box clipped only by
+ * `clip-path: inset(1px)` is not an idiom anything uses. The cost is that
+ * such a box reads visible.
  *
  * Only `inset()` is read. Another shape that collapses the box — `circle(0)`
  * — answers no, as does a `calc()` on an edge the answer depends on: unread
