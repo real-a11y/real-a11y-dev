@@ -1,7 +1,7 @@
 {
   "packages/browser/src/native-tree.ts": 654,
   "packages/cli/src/daemon/spawn.ts": 547,
-  "packages/core/src/extraction/dom-extractor.ts": 1893,
+  "packages/core/src/extraction/dom-extractor.ts": 1876,
   "packages/extension/src/background.ts": 703,
   "packages/extension/src/content.ts": 639,
   "packages/extension/src/native/debugger-session.ts": 693,

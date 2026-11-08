@@ -22,7 +22,7 @@ import {
 } from "./flat-tree.js";
 import { isFocusable, parseHtmlInteger } from "./focusability.js";
 import { imageUsingMap } from "./image-map.js";
-import { tablePartRole, thHeaderRole } from "./table-roles.js";
+import { tablePartRole, tdRole, thHeaderRole } from "./table-roles.js";
 
 type RoleResolver = string | ((el: Element) => string);
 
@@ -458,7 +458,7 @@ const ROLE_MAP: Record<string, RoleResolver> = {
   svg: "img",
   table: "table",
   tbody: (el) => tablePart(el, "rowgroup"),
-  td: (el) => tablePart(el, "cell"),
+  td: (el) => tablePart(el, (c) => tdRole(c, tableRoleOf)),
   template: "generic",
   textarea: "textbox",
   tfoot: (el) => tablePart(el, "rowgroup"),
@@ -754,6 +754,8 @@ function hasRequiredContext(element: Element, role: string): boolean {
 export function getExplicitRole(element: Element): string | undefined {
   return explicitRoleOf(element, true);
 }
+
+const tableRoleOf = (table: Element) => explicitRoleOf(table, true);
 
 function explicitRoleOf(
   element: Element,
