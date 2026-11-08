@@ -40,14 +40,14 @@ const EXPANDABLE_ROLES = new Set([
 
 /**
  * Whether `element`, whose computed role is `role`, can report `expanded`. A
- * `<td>` that is a `gridcell` only through its table's role can't: it has no
- * authored role, or one that names nothing and falls back.
+ * `<td>` that is a `gridcell` only through its table's role can't: its own role
+ * isn't `gridcell`: none, one that names nothing, or a voided `none`.
  */
 export function canExpand(element: Element, role: string): boolean {
   if (!EXPANDABLE_ROLES.has(role)) return false;
   return !(
     role === "gridcell" &&
     safeTagName(element) === "td" &&
-    getExplicitRole(element) === undefined
+    getExplicitRole(element) !== "gridcell"
   );
 }

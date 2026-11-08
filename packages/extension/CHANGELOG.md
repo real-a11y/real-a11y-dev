@@ -21,6 +21,11 @@
 
 ### Patch Changes
 
+- **The TAB view reports a focusable grid cell as `gridcell`.** A `<td tabindex>` in
+  a `role="grid"` or `role="treegrid"` table is no longer a `cell`, as
+  HTML-AAM and Chrome's tree have it. The tab-sequence export carries the same
+  role.
+  ([#606](https://github.com/real-a11y/real-a11y-dev/pull/606))
 - **The TAB view names a titled link or button from its content.** A `title`
   attribute no longer outranks the element's own text, so
   `<a title="Tooltip">Home</a>` reads "Home", as Chrome's tree does.
