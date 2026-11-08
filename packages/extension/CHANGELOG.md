@@ -21,6 +21,11 @@
 
 ### Patch Changes
 
+- **The TAB view reports a read-only field as `readonly`.** An `<input>` or
+  `<textarea>` with the HTML `readonly` attribute carries the state in the
+  in-page walk, as HTML-AAM and Chrome's tree have it. The side panel's A11Y
+  view already showed it.
+  ([#607](https://github.com/real-a11y/real-a11y-dev/pull/607))
 - **The TAB view reports a focusable grid cell as `gridcell`.** A `<td tabindex>` in
   a `role="grid"` or `role="treegrid"` table is no longer a `cell`, as
   HTML-AAM and Chrome's tree have it. The tab-sequence export carries the same
