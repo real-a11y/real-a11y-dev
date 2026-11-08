@@ -1597,6 +1597,10 @@ describe("extractDomTree", () => {
         <input id="aria-false" aria-readonly="false" aria-label="f">
         <input id="checkbox" type="checkbox" readonly aria-label="c">
         <div id="div" readonly role="textbox" aria-label="d"></div>
+        <input id="button-role" readonly role="button" aria-label="b">
+        <input id="odd-type" type="TEXT " readonly aria-label="t">
+        <input id="bogus-type" type="bogus" readonly aria-label="g">
+        <form><input name="type" id="clobber" readonly aria-label="x"></form>
       `,
         "readonly",
       ),
@@ -1611,6 +1615,10 @@ describe("extractDomTree", () => {
       "aria-false": false,
       checkbox: undefined,
       div: undefined,
+      "button-role": undefined,
+      "odd-type": true,
+      "bogus-type": true,
+      clobber: true,
     });
   });
 

@@ -2720,7 +2720,7 @@ function getAriaStates(
   for (const [state, value] of Object.entries(native))
     if (value !== undefined) states[state] = value;
 
-  addFieldStates(element, tag, states);
+  addFieldStates(element, tag, role, states);
 
   // A disabled control is disabled whatever its aria-disabled says. Anything
   // else with an explicit aria-disabled keeps it. The rest inherit from an

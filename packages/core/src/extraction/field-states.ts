@@ -16,14 +16,41 @@ const READONLY_INPUT_TYPES = new Set([
   "number",
 ]);
 
+/** The roles that carry aria-readonly, which these fields can have. */
+/** Every `<input>` type the HTML spec defines; any other falls back to text. */
+const KNOWN_TYPES = new Set([
+  ...READONLY_INPUT_TYPES,
+  "hidden",
+  "checkbox",
+  "radio",
+  "range",
+  "color",
+  "file",
+  "submit",
+  "image",
+  "reset",
+  "button",
+]);
+
+const READONLY_ROLES = new Set([
+  "textbox",
+  "searchbox",
+  "combobox",
+  "spinbutton",
+]);
+
 /** Whether the element carries a `readonly` attribute that HTML honors. */
-function allowsReadonly(element: Element, tag: string): boolean {
+function allowsReadonly(element: Element, tag: string, role: string): boolean {
   if (safeGetAttribute(element, "readonly") === null) return false;
+  if (!READONLY_ROLES.has(role)) return false;
   if (tag === "textarea") return true;
   if (tag !== "input") return false;
-  // The `type` property folds an unknown or missing type to "text".
-  const type = (element as HTMLInputElement).type;
-  return typeof type === "string" && READONLY_INPUT_TYPES.has(type);
+  // Read the attribute, not `.type`, which a control named "type" can shadow.
+  // An unknown or missing type is a text field.
+  const type = (safeGetAttribute(element, "type") ?? "text")
+    .trim()
+    .toLowerCase();
+  return READONLY_INPUT_TYPES.has(type) || !KNOWN_TYPES.has(type);
 }
 
 /**
@@ -34,6 +61,7 @@ function allowsReadonly(element: Element, tag: string): boolean {
 export function addFieldStates(
   element: Element,
   tag: string,
+  role: string,
   states: Record<string, string | boolean>,
 ): void {
   const htmlEl = element as HTMLInputElement;
@@ -45,5 +73,5 @@ export function addFieldStates(
   ) {
     if ("required" in htmlEl && htmlEl.required) states["required"] = true;
   }
-  if (allowsReadonly(element, tag)) states["readonly"] = true;
+  if (allowsReadonly(element, tag, role)) states["readonly"] = true;
 }
