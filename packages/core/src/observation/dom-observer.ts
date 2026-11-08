@@ -55,6 +55,7 @@ const EXTRA_OBSERVED_ATTRIBUTES = [
   "label",
   "value",
   "disabled",
+  "readonly", // <input readonly>, <textarea readonly> map to aria-readonly
   "checked",
   "hidden",
   "inert",

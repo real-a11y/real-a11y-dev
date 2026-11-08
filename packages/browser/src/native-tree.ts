@@ -158,7 +158,7 @@ const DOM_ATTR_ALLOWLIST = new Set([
  * `disabled`, `required`, `invalid`) match what the DOM producer writes, so
  * those compare cleanly across producers. Native additionally exposes
  * Blink-computed state Chromium has but the in-page walk doesn't (`focusable`,
- * `focused`, `editable`, `settable`, `readonly`, `multiline`, `modal`, `busy`)
+ * `focused`, `editable`, `settable`, `multiline`, `modal`, `busy`)
  * — a superset, not a conflict. Cross-producer state comparison is normalized
  * by the parity harness (RFC PR E), not relied on raw.
  */
