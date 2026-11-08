@@ -25,7 +25,7 @@
   The walk no longer drops a visible, text-only description target, as
   WAI-ARIA 1.2 §7.2 and Chrome's tree have it. The tab stops it lists do not
   change, and the A11Y view already showed the target.
-  (PR_LINK_PLACEHOLDER)
+  ([#609](https://github.com/real-a11y/real-a11y-dev/pull/609))
 - **The TAB view reports a read-only field as `readonly`.** An `<input>` or
   `<textarea>` with the HTML `readonly` attribute carries the state in the
   in-page walk, as HTML-AAM and Chrome's tree have it. The side panel's A11Y
