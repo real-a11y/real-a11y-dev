@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 
+import { getOutline } from "../query/outline.js";
 import { getTabSequence } from "../query/tab-sequence.js";
 import { clobber, shadow } from "../test-support/clobber.js";
 import type { SemanticNode } from "../types.js";
@@ -567,7 +568,7 @@ describe("tree scope of a clobbered <form>", () => {
     expect(nodeNamed(page, "button", "Read the terms")).toBeTruthy();
   });
 
-  it("folds a description whose referrer sits in a form with a control named parentElement", () => {
+  it("describes and keeps the target when the referrer sits in a form with a control named parentElement", () => {
     page.innerHTML = `
       <form aria-label="Pay">
         <input type="hidden" name="parentElement">
@@ -580,9 +581,8 @@ describe("tree scope of a clobbered <form>", () => {
     expect(nodes.find((n) => n.a11y.name === "Code")?.a11y.description).toBe(
       "Six digits",
     );
-    expect(nodes.some((n) => n.a11y.role === "paragraph")).toBe(false);
-    // Folded because the referrer was found rendered, not skipped because
-    // a walk up from it threw.
+    expect(nodes.some((n) => n.a11y.role === "paragraph")).toBe(true);
+    // No walk up from the referrer threw.
     expect(warn).not.toHaveBeenCalled();
   });
 });
@@ -5685,168 +5685,132 @@ describe("computed-style cache during extraction", () => {
   });
 });
 
-describe("aria-describedby target suppression", () => {
-  it("suppresses a text-only description target", () => {
-    // The reason the suppression exists: the target's text is already shown
-    // inline on the referencing element as its description, so surfacing the
-    // <p> as its own node is pure redundancy.
-    const root = createPage(`
-      <input aria-label="Password" aria-describedby="pw-help" />
-      <p id="pw-help">Must be 8+ characters.</p>
-    `);
-
-    const { nodes } = extractDomTree(root);
-
-    expect([...nodes.values()].some((n) => n.dom?.tagName === "p")).toBe(false);
+describe("aria-describedby targets stay in the tree", () => {
+  // WAI-ARIA 1.2 §7.2: a non-hidden element whose id another element
+  // references MUST get an accessible object. A description is a property of
+  // the referrer; it does not take the target out of the page.
+  // Attached, so `aria-describedby` resolves to a description.
+  const mounted: Element[] = [];
+  const mount = (html: string) => {
+    const root = createPage(html);
+    document.body.appendChild(root);
+    mounted.push(root);
+    return root;
+  };
+  afterEach(() => {
+    for (const el of mounted.splice(0)) el.remove();
   });
+  const all = (root: Element) => [...extractDomTree(root).nodes.values()];
+  const byTag = (root: Element, tag: string) =>
+    all(root).filter((n) => n.dom?.tagName === tag);
 
-  it("keeps a description target that contains interactive content", () => {
-    // Regression: the whole target subtree was dropped, so the "Full rules"
-    // link — visible, focusable page content an AT user can tab to and
-    // activate — vanished from the tree, and with it from the panel, audits,
-    // and everything else derived from the tree.
-    const root = createPage(`
-      <input aria-label="Password" aria-describedby="pw-help" />
-      <p id="pw-help">Must be 8+ characters. <a href="/rules">Full rules</a></p>
+  it("keeps a text-only description target as a paragraph", () => {
+    const root = mount(`
+      <input aria-label="pw" aria-describedby="h" />
+      <p id="h">Must be 8 chars</p>
     `);
 
-    const { nodes } = extractDomTree(root);
-
-    const link = [...nodes.values()].find((n) => n.dom?.tagName === "a");
-    expect(link).toBeDefined();
-    expect(link!.a11y.name).toBe("Full rules");
-    // The target itself has to survive too — it is the link's parent.
-    const p = [...nodes.values()].find((n) => n.dom?.tagName === "p");
+    const nodes = all(root);
+    const p = nodes.find((n) => n.a11y.role === "paragraph");
     expect(p).toBeDefined();
-    expect(p!.childIds).toContain(link!.id);
-  });
-
-  it("keeps a description target whose interactive content is nested deeper", () => {
-    const root = createPage(`
-      <input aria-label="Card" aria-describedby="card-help" />
-      <div id="card-help">
-        <span>Where do I find this? <button type="button">Show me</button></span>
-      </div>
-    `);
-
-    const { nodes } = extractDomTree(root);
-
-    const button = [...nodes.values()].find((n) => n.dom?.tagName === "button");
-    expect(button).toBeDefined();
-    expect(button!.a11y.name).toBe("Show me");
-  });
-
-  it("still suppresses a target whose only control is hidden", () => {
-    // The walk drops a display:none control, so counting it would keep the
-    // target for a node that never gets emitted — the redundant description
-    // node this suppression exists to avoid, with none of the control the
-    // exception was added for. The two decisions have to agree.
-    const root = createPage(`
-      <input aria-label="Password" aria-describedby="pw-help" />
-      <p id="pw-help">
-        Must be 8+ characters.
-        <button type="button" style="display: none">Show rules</button>
-      </p>
-    `);
-
-    const { nodes } = extractDomTree(root);
-
-    expect([...nodes.values()].some((n) => n.dom?.tagName === "button")).toBe(
-      false,
+    expect(p!.a11y.name).toBe("Must be 8 chars");
+    // The referrer's description is unchanged: the text appears on both.
+    expect(nodes.find((n) => n.a11y.role === "textbox")?.a11y.description).toBe(
+      "Must be 8 chars",
     );
-    expect([...nodes.values()].some((n) => n.dom?.tagName === "p")).toBe(false);
   });
 
-  it("still suppresses a tabindex='-1' target holding only text", () => {
-    // `getActions` hands any [tabindex] element a click action as a catch-all,
-    // but tabindex="-1" is programmatic-focus plumbing — the standard way to
-    // move focus to an error container — not something a user can tab to.
-    // Counting it would defeat suppression for plain help/error text.
-    const root = createPage(`
-      <input aria-label="Password" aria-describedby="pw-err" />
-      <div id="pw-err" tabindex="-1" role="alert">Password is required.</div>
+  it("keeps a heading description target, at its level, in the outline", () => {
+    const root = mount(`
+      <input aria-label="pw" aria-describedby="h" />
+      <h2 id="h">Password rules</h2>
     `);
 
-    const { nodes } = extractDomTree(root);
+    const result = extractDomTree(root);
+    const heading = [...result.nodes.values()].find(
+      (n) => n.a11y.role === "heading",
+    );
+    expect(heading?.a11y.name).toBe("Password rules");
+    expect(Number(heading?.a11y.properties?.level)).toBe(2);
+    expect(getOutline(result)).toEqual([
+      { id: heading!.id, level: 2, name: "Password rules" },
+    ]);
+  });
 
+  it("keeps a list description target with its items", () => {
+    const root = mount(`
+      <button aria-describedby="l">b</button>
+      <ul id="l"><li>One</li><li>Two</li></ul>
+    `);
+
+    const nodes = all(root);
+    expect(nodes.filter((n) => n.a11y.role === "list")).toHaveLength(1);
     expect(
-      [...nodes.values()].some((n) => n.dom?.attributes?.id === "pw-err"),
-    ).toBe(false);
+      nodes.filter((n) => n.a11y.role === "listitem").map((n) => n.a11y.name),
+    ).toEqual(["One", "Two"]);
   });
 
-  it("still suppresses a target whose only control is hidden from AT", () => {
-    // aria-hidden (and visibility:hidden) survive the DOM view but are pruned
-    // from the a11y view, so counting one would bring the redundant
-    // description node back in a11y mode with no control behind it.
-    const root = createPage(`
-      <input aria-label="Password" aria-describedby="pw-help" />
-      <p id="pw-help">Must be 8+ characters. <button aria-hidden="true">i</button></p>
+  it("keeps a target shared by two referrers", () => {
+    const root = mount(`
+      <input aria-label="a" aria-describedby="h" />
+      <input aria-label="b" aria-describedby="h" />
+      <p id="h">Shared help</p>
     `);
 
-    const { nodes } = extractDomTree(root);
-
-    expect([...nodes.values()].some((n) => n.dom?.tagName === "p")).toBe(false);
+    expect(byTag(root, "p")).toHaveLength(1);
   });
 
-  it("still suppresses a target whose only control is media fallback", () => {
-    // The walk treats media as a leaf — its light-DOM children are fallback
-    // content no browser renders — so a control in there is never emitted.
-    const root = createPage(`
-      <input aria-label="Clip" aria-describedby="clip-help" />
-      <p id="clip-help">
-        See the <video src="x.mp4"><a href="/transcript">transcript</a></video>
-      </p>
+  it("keeps a target that also contains a control, and one that also labels", () => {
+    const root = mount(`
+      <input aria-label="pw" aria-describedby="h" />
+      <p id="h">Rules <a href="/r">here</a></p>
+      <input aria-labelledby="t" /><button aria-describedby="t">Go</button>
+      <p id="t">Code</p>
     `);
 
-    const { nodes } = extractDomTree(root);
-
-    expect([...nodes.values()].some((n) => n.dom?.tagName === "a")).toBe(false);
-    expect([...nodes.values()].some((n) => n.dom?.tagName === "p")).toBe(false);
+    expect(byTag(root, "a")).toHaveLength(1);
+    expect(byTag(root, "p")).toHaveLength(2);
   });
 
-  it("keeps a target holding a media element that is itself a tab stop", () => {
-    // <video controls> IS emitted and IS focusable, so it is a real reason to
-    // keep the target — unlike the fallback content above.
-    const root = createPage(`
-      <input aria-label="Clip" aria-describedby="clip-help" />
-      <p id="clip-help">Watch: <video src="x.mp4" controls></video></p>
+  it("keeps a tabindex='-1' target and one whose only control is hidden", () => {
+    const root = mount(`
+      <input aria-label="pw" aria-describedby="e" />
+      <div id="e" tabindex="-1" role="alert">Required.</div>
+      <input aria-label="pw2" aria-describedby="h" />
+      <p id="h">Rules <button type="button" style="display: none">x</button></p>
     `);
 
-    const { nodes } = extractDomTree(root);
-
-    expect([...nodes.values()].some((n) => n.dom?.tagName === "video")).toBe(
-      true,
-    );
-    expect([...nodes.values()].some((n) => n.dom?.tagName === "p")).toBe(true);
+    expect(all(root).some((n) => n.dom?.attributes?.id === "e")).toBe(true);
+    expect(byTag(root, "p")).toHaveLength(1);
+    expect(byTag(root, "button")).toHaveLength(0);
   });
 
-  it("keeps a target whose control is reachable via tabindex='0'", () => {
-    const root = createPage(`
-      <input aria-label="Password" aria-describedby="pw-help" />
-      <p id="pw-help">
-        Must be 8+ characters.
-        <span tabindex="0" role="button">Show rules</span>
-      </p>
-    `);
-
-    const { nodes } = extractDomTree(root);
-
-    const widget = [...nodes.values()].find((n) => n.a11y.role === "button");
-    expect(widget).toBeDefined();
-    expect(widget!.a11y.name).toBe("Show rules");
-  });
-
-  it("surfaces the kept interactive content in the a11y view too", () => {
-    const root = createPage(`
-      <input aria-label="Password" aria-describedby="pw-help" />
-      <p id="pw-help">Must be 8+ characters. <a href="/rules">Full rules</a></p>
+  it("keeps the a11y view's target too", () => {
+    const root = mount(`
+      <input aria-label="pw" aria-describedby="h" />
+      <p id="h">Must be 8 chars</p>
     `);
 
     const { nodes } = extractA11yTree(root);
 
-    const link = [...nodes.values()].find((n) => n.a11y.role === "link");
-    expect(link).toBeDefined();
-    expect(link!.a11y.name).toBe("Full rules");
+    expect([...nodes.values()].some((n) => n.a11y.role === "paragraph")).toBe(
+      true,
+    );
+  });
+
+  it("leaves a hidden target out of the tree but in the description", () => {
+    for (const hidden of [`hidden`, `style="display: none"`]) {
+      const root = mount(`
+        <input aria-label="pw" aria-describedby="h" />
+        <p id="h" ${hidden}>Hidden help</p>
+      `);
+
+      const nodes = all(root);
+      expect(nodes.some((n) => n.a11y.role === "paragraph")).toBe(false);
+      expect(
+        nodes.find((n) => n.a11y.role === "textbox")?.a11y.description,
+      ).toBe("Hidden help");
+    }
   });
 });
 
@@ -6784,13 +6748,13 @@ describe("roles only their author can name", () => {
 });
 
 describe("reference lookups come from one index per tree", () => {
-  // Folding a description target and naming a control from its <label for> both
+  // Describing a control from its target and naming one from its <label for> both
   // ask who in a tree points at an id. They read a per-extraction index instead
   // of querying the tree per element, and these pin the rules that index keeps.
   const tagsOf = (root: Element) =>
     [...extractDomTree(root).nodes.values()].map((n) => n.dom?.tagName);
 
-  it("folds a hint for every field of a long form, and names each field from its label", () => {
+  it("keeps a hint for every field of a long form, and names each field from its label", () => {
     const rows = Array.from(
       { length: 50 },
       (_, i) =>
@@ -6802,7 +6766,7 @@ describe("reference lookups come from one index per tree", () => {
     const { nodes } = extractDomTree(page);
     page.remove();
     const all = [...nodes.values()];
-    expect(all.some((n) => n.dom?.tagName === "p")).toBe(false);
+    expect(all.filter((n) => n.dom?.tagName === "p")).toHaveLength(50);
     const inputs = all.filter((n) => n.dom?.tagName === "input");
     expect(inputs.map((n) => n.a11y.name)).toEqual(
       Array.from({ length: 50 }, (_, i) => `Field ${i}`),
@@ -6810,7 +6774,7 @@ describe("reference lookups come from one index per tree", () => {
     expect(inputs[7].a11y.description).toBe("Help 7");
   });
 
-  it("does not let a shadow-internal id fold an unrelated id in the page", () => {
+  it("keeps both a shadow-internal target and an unrelated page element sharing its id", () => {
     const host = document.createElement("div");
     host.attachShadow({ mode: "open" }).innerHTML =
       `<input aria-label="Inner" aria-describedby="hint"><p id="hint">Inner help</p>`;
@@ -6821,14 +6785,14 @@ describe("reference lookups come from one index per tree", () => {
       const texts = [...extractDomTree(page).nodes.values()]
         .filter((n) => n.dom?.tagName === "p")
         .map((n) => n.dom?.textContent);
-      // The page's #hint is described by nobody in its own tree; the shadow's is.
-      expect(texts).toEqual(["Page text"]);
+      // Ids are scoped per tree: both are kept, and each stays a separate node.
+      expect(texts).toEqual(["Page text", "Inner help"]);
     } finally {
       page.remove();
     }
   });
 
-  it("lets an unslotted light child of a shadow host fold nothing", () => {
+  it("keeps a page element whose only referrer is an unslotted light child", () => {
     const host = document.createElement("div");
     host.attachShadow({ mode: "open" }).innerHTML = `<span>no slot</span>`;
     host.innerHTML = `<input aria-label="Ghost" aria-describedby="help">`;
@@ -6866,11 +6830,11 @@ describe("reference lookups come from one index per tree", () => {
     document.body.append(page);
     try {
       // The only labelling referrer sits outside the subtree, in the same
-      // document. It still keeps the target, so the index covers the whole tree.
+      // document: the index covers the whole tree, so the target is kept and
+      // names that span. Without it the target is kept all the same.
       expect(tagsOf(page.querySelector("#part")!)).toContain("p");
-      // With no labelling referrer anywhere, the same subtree folds it.
       page.querySelector("span")!.removeAttribute("aria-labelledby");
-      expect(tagsOf(page.querySelector("#part")!)).not.toContain("p");
+      expect(tagsOf(page.querySelector("#part")!)).toContain("p");
     } finally {
       page.remove();
     }
@@ -6881,7 +6845,7 @@ describe("reference lookups come from one index per tree", () => {
       `<form><input name="getAttribute" aria-label="F"></form>` +
         `<button aria-describedby="help">Go</button><p id="help">Help text</p>`,
     );
-    expect(tagsOf(root)).not.toContain("p");
+    expect(tagsOf(root)).toContain("p");
   });
 
   it("splits an IDREF list on ASCII whitespace only", () => {

@@ -29,12 +29,10 @@ import { isEditable, isEditingHost } from "./editing.js";
 import { canExpand } from "./expanded-roles.js";
 import { addFieldStates } from "./field-states.js";
 import {
-  deepQuerySelectorAll,
   flatChildNodes,
   flatChildren,
   flatParent,
   idScope,
-  isRenderedInFlatTree,
 } from "./flat-tree.js";
 import {
   isActuallyDisabled,
@@ -52,7 +50,6 @@ import {
   isSubtreeHidden,
   type StyleCache,
 } from "./role-map.js";
-import { reachableChildren } from "./visibility-hidden.js";
 
 /**
  * Marks an element that hosts one of this project's own panels (the
@@ -148,18 +145,8 @@ const TEXT_INPUT_TYPES = new Set([
 /** Input types that toggle on click (no text entry) */
 const TOGGLE_INPUT_TYPES = new Set(["checkbox", "radio"]);
 
-/**
- * Determine what actions an element supports.
- *
- * `skipTabindexFallback` drops the trailing `[tabindex]` catch-all, leaving
- * only actions a real tag/role branch produced. Callers judging whether an
- * element is a control a USER can reach want this for a negative tabindex —
- * see {@link hasInteractiveContent}.
- */
-function getActions(
-  element: Element,
-  skipTabindexFallback = false,
-): ActionType[] {
+/** Determine what actions an element supports. */
+function getActions(element: Element): ActionType[] {
   const tag = safeTagName(element);
   const actions: ActionType[] = [];
   // The role the tree shows, so the actions offered agree with it: a
@@ -301,67 +288,11 @@ function getActions(
     actions.push("focus", "type");
   }
 
-  if (
-    !skipTabindexFallback &&
-    safeGetAttribute(element, "tabindex") !== null &&
-    actions.length === 0
-  ) {
+  if (safeGetAttribute(element, "tabindex") !== null && actions.length === 0) {
     actions.push("click");
   }
 
   return actions;
-}
-
-/**
- * True if `element` or anything under it is a control a user can actually
- * reach — the predicate deciding whether an `aria-describedby` target may be
- * suppressed. Built on the same `getActions` that sets
- * `interaction.isInteractive`, so "interactive" means one thing across the
- * extractor, with two deliberate narrowings:
- *
- * - **Only what the walk would emit, and AT would see, counts.** A control the
- *   walk never reaches — inside a `SKIP_TAGS` element, past a media leaf, or
- *   under a hidden ancestor — would keep the target alive for a node that
- *   never appears, reinstating the redundant description node with none of the
- *   control the exception exists for. Descent stops at `isHiddenFromAT`, which
- *   covers the walk's own `isSubtreeHidden` rule plus `aria-hidden` and
- *   `visibility:hidden`: those survive in the DOM view but are pruned from the
- *   a11y view, and a control AT can't reach is not a reason to keep help text.
- *   A `visibility:hidden` element is looked through, not counted: a child that
- *   sets `visibility:visible` is reachable (see `reachableChildren`).
- *   Shares the walk's per-extraction `styleCache`, so no style resolves twice.
- * - **A negative `tabindex` doesn't count on its own.** `getActions` gives any
- *   `[tabindex]` element a click action as a catch-all, but `tabindex="-1"` is
- *   programmatic-focus plumbing — a `role="alert"` error container, a toast
- *   viewport — that nobody can tab to. Counting it would defeat suppression
- *   for exactly the text-only help text this is meant to keep suppressing.
- *   Same call the overlay-content guard makes when it omits `[tabindex]`.
- *
- * Descends the flat tree (`flatChildren`) rather than `querySelectorAll`, so
- * shadow content counts and a clobbered `<form>` in the subtree reads the way
- * it does everywhere else in the walk.
- */
-function hasInteractiveContent(
-  element: Element,
-  styleCache: StyleCache,
-): boolean {
-  const tag = safeTagName(element);
-  // The walk skips these outright, so nothing inside one is ever emitted.
-  if (SKIP_TAGS.has(tag)) return false;
-
-  const tabindex = safeGetAttribute(element, "tabindex");
-  if (getActions(element, Number(tabindex) < 0).length > 0) return true;
-
-  // Media elements are leaves in the walk: their light-DOM children are
-  // unrendered fallback content, so a control among them never appears
-  // either. (A media element with `controls` is itself actionable and has
-  // already returned true above.)
-  if (MEDIA_TAGS.has(tag)) return false;
-
-  for (const child of reachableChildren(element, styleCache)) {
-    if (hasInteractiveContent(child, styleCache)) return true;
-  }
-  return false;
 }
 
 /** Tags that are natively interactive — never treated as visually hidden */
@@ -3167,8 +3098,6 @@ export interface ExtractDomTreeOptions {
   parentId?: string | null;
   /** Depth offset for the root of this partial extraction. */
   baseDepth?: number;
-  /** Precomputed description-target id set. Required for partial extraction. */
-  descriptionTargetIds?: ReadonlySet<string>;
   /** Whether to compute the focused element id. Default true for full extractions. */
   includeFocused?: boolean;
 }
@@ -3200,7 +3129,6 @@ function buildNode(
   element: Element,
   parentId: string | null,
   depth: number,
-  descriptionTargetIds: ReadonlySet<string>,
   styleCache: StyleCache,
 ): { id: string; node: SemanticNode } | null {
   try {
@@ -3224,34 +3152,13 @@ function buildNode(
     // Skip entire subtrees of display:none / hidden elements
     if (isSubtreeHidden(element, style)) return null;
 
-    // Skip elements that serve SOLELY as aria-describedby text providers.
-    // Their content is shown inline on the referencing element as a
-    // description, so a node of their own would just be redundant.
-    //
-    // "Solely" is the operative word: description targets routinely carry
-    // interactive content, and dropping the target dropped its whole subtree
-    // with it. The everyday case is help text with a link —
-    //   <input aria-describedby="pw-help">
-    //   <p id="pw-help">Must be 8+ chars. <a href="/rules">Full rules</a></p>
-    // — where "Full rules" is visible, focusable content an AT user can reach,
-    // yet it vanished from the tree and from everything derived from it (the
-    // panel, audits, serialization). When the subtree holds a control the user
-    // can actually reach, keep it: the description text being duplicated on the
-    // referencing element is a far smaller cost than losing a control.
-    //
-    // The id set is page-wide but ids are scoped per tree: a component's
-    // shadow-internal `id="hint"` must not suppress an unrelated `#hint` in
-    // the page. So a target is only folded when a referrer in its OWN tree
-    // points at it.
-    const ownId = safeGetAttribute(element, "id");
-    if (
-      ownId &&
-      descriptionTargetIds.has(ownId) &&
-      isDescribedInOwnTree(element, ownId, styleCache) &&
-      !hasInteractiveContent(element, styleCache)
-    ) {
-      return null;
-    }
+    // An `aria-describedby` target is NOT folded into its referrer. A
+    // description is a property of the referrer; it does not take the target
+    // out of the page. WAI-ARIA 1.2 §7.2 requires an accessible object for a
+    // non-hidden element whose id another element references, and Chromium
+    // keeps the paragraph, heading or list as a node, so the description text
+    // simply appears twice. Hidden targets are skipped above and still feed
+    // the referrer's description.
 
     const id = getNodeId(element);
     const role = getImplicitRole(element);
@@ -3323,54 +3230,14 @@ function buildNode(
   }
 }
 
-/**
- * True if `element` is folded into somebody's description: a RENDERED element
- * in its own tree (its document, shadow root, or — detached — its subtree
- * root) lists `id` in `aria-describedby`, and none labels it.
- *
- * All three qualifiers earn their place, because the id sets collected up
- * front are page-wide while ids are scoped per tree:
- *
- * - **own tree** — a component's internal `id="hint"` must not fold an
- *   unrelated `#hint` in the page.
- * - **rendered** — an unslotted light child of a shadow host is not rendered,
- *   so its reference reaches nobody and must not cost the page a visible node.
- * - **none labels it** — the `labelTargetIds` exclusion is page-wide too, so a
- *   labelledby in ANOTHER tree would otherwise keep this target, printing its
- *   text both as a description and as standalone content.
- */
-function isDescribedInOwnTree(
-  element: Element,
-  id: string,
-  styleCache: StyleCache,
-): boolean {
-  // Clobber-safe, as in `idScope`: a description target that is a `<form>`
-  // holding `<input name="getRootNode">` would otherwise throw here.
-  const scope = safeRootNode(element) as Document | ShadowRoot | Element;
-  // Referrers come from the per-extraction index of this tree, so each target is
-  // a lookup instead of two scans of the page.
-  const index = scopeReferenceIndex(styleCache, scope);
-  return (
-    !!index.describedBy.get(id)?.some(isRenderedInFlatTree) &&
-    !index.labelledBy.get(id)?.some(isRenderedInFlatTree)
-  );
-}
-
 function walk(
   element: Element,
   parentId: string | null,
   depth: number,
   nodes: Map<string, SemanticNode>,
-  descriptionTargetIds: ReadonlySet<string>,
   styleCache: StyleCache,
 ): string | null {
-  const built = buildNode(
-    element,
-    parentId,
-    depth,
-    descriptionTargetIds,
-    styleCache,
-  );
+  const built = buildNode(element, parentId, depth, styleCache);
   if (!built) return null;
   const { id, node } = built;
 
@@ -3392,14 +3259,7 @@ function walk(
   // style on it says so: a light child no slot takes, a hidden slot's
   // assignment, and a closed <details>' body.
   for (const child of flatChildren(element)) {
-    const childId = walk(
-      child,
-      id,
-      depth + 1,
-      nodes,
-      descriptionTargetIds,
-      styleCache,
-    );
+    const childId = walk(child, id, depth + 1, nodes, styleCache);
     if (childId) {
       node.childIds.push(childId);
     }
@@ -3418,46 +3278,13 @@ export function extractDomTree(
   const baseDepth = options.baseDepth ?? 0;
   const isPartial = options.nodes != null;
 
-  let effectiveRoot: Element;
-  let descriptionTargetIds: ReadonlySet<string> =
-    options.descriptionTargetIds ?? new Set<string>();
-
-  if (!isPartial || !options.descriptionTargetIds) {
-    effectiveRoot = resolveEffectiveRoot(root);
-
-    // Pre-collect aria-describedby targets: their text is shown inline on the
-    // referencing element as a description, so a node of their own would be
-    // redundant. This is a CANDIDATE set — ids here are page-wide, while a
-    // reference is scoped to one tree — and `isDescribedInOwnTree` decides per
-    // element. That includes the "also a labelledby target" carve-out (such a
-    // target is visible content that labels something), which is likewise only
-    // true within one tree.
-    const referrers = deepQuerySelectorAll(effectiveRoot, "[aria-describedby]");
-    const freshDescriptionTargetIds = new Set<string>();
-    for (const el of referrers) {
-      for (const id of (safeGetAttribute(el, "aria-describedby") || "")
-        .split(/\s+/)
-        .filter(Boolean)) {
-        freshDescriptionTargetIds.add(id);
-      }
-    }
-    descriptionTargetIds = freshDescriptionTargetIds;
-  } else {
-    effectiveRoot = root;
-  }
+  const effectiveRoot = isPartial ? root : resolveEffectiveRoot(root);
 
   const startRoot = isPartial ? root : effectiveRoot;
   // Fresh cache per extraction — styles may have changed since the last
   // mutation-triggered run; never reuse across extractDomTree calls.
   const styleCache: StyleCache = new WeakMap();
-  const rootId = walk(
-    startRoot,
-    parentId,
-    baseDepth,
-    nodes,
-    descriptionTargetIds,
-    styleCache,
-  );
+  const rootId = walk(startRoot, parentId, baseDepth, nodes, styleCache);
 
   const includeFocused = options.includeFocused ?? !isPartial;
   const focusedId = includeFocused

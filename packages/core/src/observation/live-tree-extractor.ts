@@ -79,7 +79,6 @@ export class LiveTreeExtractor {
   private scopeRoot: Element;
 
   private labelTargetIds = new Set<string>();
-  private descriptionTargetIds = new Set<string>();
   /** id -> elements that reference that id via aria-labelledby/aria-describedby */
   private referrersById = new Map<string, Set<Element>>();
   /** Whether {@link refresh} has warned about falling back yet. */
@@ -347,11 +346,9 @@ export class LiveTreeExtractor {
         nodes: this.domNodes,
         parentId: p.parentId,
         baseDepth: p.depth,
-        descriptionTargetIds: this.descriptionTargetIds,
         includeFocused: false,
       });
-      // If the re-extract skipped the root (it became hidden, or is now an
-      // aria-describedby text provider), the parent still references its now
+      // If the re-extract skipped the root (it became hidden), the parent still references its now
       // deleted id. Drop that dangling child so the DOM map stays consistent
       // with a clean extraction.
       if (!this.domNodes.has(p.id)) {
@@ -450,7 +447,6 @@ export class LiveTreeExtractor {
 
   private rebuildIndexes(): void {
     this.labelTargetIds.clear();
-    this.descriptionTargetIds.clear();
     this.referrersById.clear();
 
     const effectiveRoot = this.effectiveRoot ?? this.root;
@@ -478,9 +474,6 @@ export class LiveTreeExtractor {
         .split(/\s+/)
         .filter(Boolean);
       for (const id of ids) {
-        // Candidate ids only — tree scope, and the labelledby carve-out, are
-        // applied per element in `buildNode` (see extractDomTree).
-        this.descriptionTargetIds.add(id);
         this.addReferrer(id, el);
       }
     }
@@ -706,19 +699,6 @@ export class LiveTreeExtractor {
               for (const ref of referrers) {
                 if (this.markReferrer(ref, id, dirty)) changed = true;
               }
-            }
-            // An aria-describedby target is suppressed only while it holds no
-            // reachable control, so that verdict depends on its WHOLE subtree
-            // — a change anywhere inside can flip it. Seed the target itself;
-            // nothing else would, and without it a target keeps its node after
-            // its last control goes away (or is hidden), leaving the panel and
-            // audits with a duplicate of text already shown as the field's
-            // description. The opposite direction — a control appearing inside
-            // a suppressed target — falls back to a full extraction, since the
-            // target has no node to splice.
-            if (this.descriptionTargetIds.has(id) && !dirty.has(ancestor)) {
-              dirty.add(ancestor);
-              changed = true;
             }
           }
           if (ancestor === stopAt) break;

@@ -264,7 +264,7 @@ describe("IDREFs are scoped to the shadow tree", () => {
     ).toBeTruthy();
   });
 
-  it("describes from aria-describedby inside the shadow root, and folds the target", () => {
+  it("describes from aria-describedby inside the shadow root, and keeps the target", () => {
     page.innerHTML = `<x-field></x-field>`;
     shadow(
       page.querySelector("x-field")!,
@@ -274,32 +274,33 @@ describe("IDREFs are scoped to the shadow tree", () => {
     expect(find(tree, "textbox", "Password")?.a11y.description).toBe(
       "8+ characters",
     );
-    // The pre-pass saw the reference, so the text-only target is folded.
-    expect(find(tree, "paragraph")).toBeUndefined();
+    // The target is content: it stays a node beside the description.
+    expect(find(tree, "paragraph", "8+ characters")).toBeDefined();
   });
 });
 
-describe("description-target folding respects tree scope", () => {
-  it("does not drop a page element that shares an id with a component's internal hint", () => {
+describe("description targets keep their tree scope", () => {
+  it("keeps a page element that shares an id with a component's internal hint, and the hint", () => {
     page.innerHTML = `<div id="hint"><p>Shipping is free over $50</p></div><x-input></x-input>`;
     shadow(
       page.querySelector("x-input")!,
       `<input aria-label="Coupon" aria-describedby="hint"><span id="hint">Case sensitive</span>`,
     );
     const tree = extractDomTree(page);
-    // The page's own #hint is referenced by nothing in the document: keep it.
+    // The page's own #hint is referenced by nothing in the document: keep it,
+    // as a separate node from the component's.
     expect(
       nodes(tree).some(
         (n) => n.dom?.textContent === "Shipping is free over $50",
       ),
     ).toBe(true);
-    // The component's own hint is still folded into its input's description.
+    // The input is described by its own tree's hint, which is kept too.
     expect(find(tree, "textbox", "Coupon")?.a11y.description).toBe(
       "Case sensitive",
     );
     expect(
       nodes(tree).some((n) => n.dom?.textContent === "Case sensitive"),
-    ).toBe(false);
+    ).toBe(true);
   });
 
   it("keeps a target whose only referrer is an unslotted (unrendered) child", () => {
@@ -312,28 +313,28 @@ describe("description-target folding respects tree scope", () => {
     );
   });
 
-  it("folds a target that another tree merely labels", () => {
+  it("keeps a target that another tree merely labels", () => {
     page.innerHTML = `<button aria-labelledby="hint">Go</button><x-input></x-input>`;
     shadow(
       page.querySelector("x-input")!,
       `<input aria-label="Coupon" aria-describedby="hint"><span id="hint">Case sensitive</span>`,
     );
     const tree = extractDomTree(page);
-    // The page's labelledby names a DIFFERENT tree's id; it must not keep the
-    // component's own hint as standalone content beside the description.
+    // The page's labelledby names a DIFFERENT tree's id: it neither names the
+    // button from the component's hint nor changes the hint's description.
     expect(find(tree, "textbox", "Coupon")?.a11y.description).toBe(
       "Case sensitive",
     );
     expect(
       nodes(tree).some((n) => n.dom?.textContent === "Case sensitive"),
-    ).toBe(false);
+    ).toBe(true);
   });
 
-  it("still folds a document-level target in a detached subtree", () => {
+  it("keeps a document-level target in a detached subtree", () => {
     const detached = document.createElement("div");
     detached.innerHTML = `<input aria-label="Password" aria-describedby="pw"><p id="pw">8+ characters</p>`;
     const tree = extractDomTree(detached);
-    expect(find(tree, "paragraph")).toBeUndefined();
+    expect(find(tree, "paragraph", "8+ characters")).toBeDefined();
   });
 });
 
