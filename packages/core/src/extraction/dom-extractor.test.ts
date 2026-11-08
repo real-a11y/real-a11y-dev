@@ -6913,8 +6913,19 @@ describe("title is the last name source (after name from content)", () => {
   it.each([
     ["a link with no content", `<a id="t" href="/" title="Tooltip"></a>`],
     ["a div with text", `<div id="t" title="Tooltip">text</div>`],
+    ["a link with only whitespace", `<a id="t" href="/" title="Tooltip"> </a>`],
+    [
+      "a link with only an empty-alt image",
+      `<a id="t" href="/" title="Tooltip"><img alt="" src="x.png"></a>`,
+    ],
     ["a nav", `<nav id="t" title="Tooltip">Menu</nav>`],
   ])("still names %s from its title", (_label, html) => {
     expect(nameOf(html)).toBe("Tooltip");
+  });
+
+  it("keeps spacing around a titled link nested in a name", () => {
+    expect(
+      nameOf(`<h2 id="t">Go to <a href="/" title="T">Home</a> now</h2>`),
+    ).toBe("Go to Home now");
   });
 });
