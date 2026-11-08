@@ -100,11 +100,12 @@ describe("title as the description, against Chromium", () => {
     expect(dom).toMatchObject(expected);
   });
 
-  it("pins title next to an aria-describedby whose targets are empty", async () => {
+  it("falls back to title when aria-describedby names no element", async () => {
     await page.setContent(`
       <button id="e" aria-label="E" aria-describedby="missing" title="Ti">x</button>
     `);
     const { dom, native } = await pairsById();
-    expect(dom["e"]).toEqual(native["e"]);
+    expect(native["e"]).toEqual({ name: "E", description: "Ti" });
+    expect(dom["e"]).toEqual({ name: "E", description: "Ti" });
   });
 });
