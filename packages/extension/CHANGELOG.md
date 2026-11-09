@@ -21,6 +21,11 @@
 
 ### Patch Changes
 
+- **The TAB view's in-page walk describes an element by its `title` when
+  something else names it.** The description is the `title` text, as in
+  HTML-AAM §4.2 and Chrome's tree. The tab stops it lists do not change, and
+  the A11Y view already showed it.
+  ([#612](https://github.com/real-a11y/real-a11y-dev/pull/612))
 - **The TAB view's in-page walk keeps an `aria-describedby` target in its tree.**
   The walk no longer drops a visible, text-only description target, as
   WAI-ARIA 1.2 §7.2 and Chrome's tree have it. The tab stops it lists do not

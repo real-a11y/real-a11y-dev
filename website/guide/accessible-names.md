@@ -155,7 +155,7 @@ A referenced element with an `aria-label` of its own lends that instead of its t
 ## What does *not* contribute
 
 - **`placeholder`** — by the spec, placeholders are a fallback name *only if nothing else is available*, and many screen readers ignore them entirely. Don't rely on placeholders as labels.
-- **`title`** — the last fallback. It surfaces as a tooltip in desktop browsers, but many AT users (mobile, voice control) never see it. Treat it as documentation, not a label.
+- **`title`** — the last fallback. It surfaces as a tooltip in desktop browsers, but many AT users (mobile, voice control) never see it. Treat it as documentation, not a label. When something else names the element, the `title` becomes its accessible description instead: `<button aria-label="Save" title="Saves the draft">` is `button "Save"` described by "Saves the draft". `aria-describedby` and `aria-description` win over it.
 - **Text inside `aria-hidden="true"` subtrees** — excluded from name computation. As in Chromium, any value but `false`, an empty value or `undefined` hides, in any case: `aria-hidden="TRUE"` and `aria-hidden="yes"` hide too.
 - **CSS-generated content** (`::before`, `::after` `content`) — spec says it *should* contribute, but engine support is inconsistent. Don't rely on it for critical labels.
 - **What is inside an image** — an `<img>`, an `<svg>` or a `role="img"` element lends its name, never its content. `<button><span role="img">★</span></button>` has no name, nor does a button whose only content is SVG `<text>`. Give the image an `aria-label`, or the button one.

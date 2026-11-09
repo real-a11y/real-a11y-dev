@@ -173,9 +173,14 @@ main
       strong
         code "placeholder"
       emphasis "only if nothing else is available"
-    listitem "— the last fallback. It surfaces as a tooltip in desktop browsers, but many AT users (mobile, voice control) never see it. Treat it as documentation, not a label."
+    listitem "— the last fallback. It surfaces as a tooltip in desktop browsers, but many AT users (mobile, voice control) never see it. Treat it as documentation, not a label. When something else names the element, the becomes its accessible description instead: is described by "Saves the draft". and win over it."
       strong
         code "title"
+      code "title"
+      code "<button aria-label="Save" title="Saves the draft">"
+      code "button "Save""
+      code "aria-describedby"
+      code "aria-description"
     listitem "— excluded from name computation. As in Chromium, any value but , an empty value or hides, in any case: and hide too."
       strong "Text inside subtrees"
         code "aria-hidden="true""
