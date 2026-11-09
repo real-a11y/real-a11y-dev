@@ -28,7 +28,7 @@ main
       code "aria-label"
     listitem "Native host-language label:"
       list
-        listitem "or ancestor for form controls"
+        listitem "or ancestor for form controls. A control with several labels is named from all of them, joined with spaces in document order"
           code "<label for="…">"
           code "<label>"
         listitem "for grouped controls"
