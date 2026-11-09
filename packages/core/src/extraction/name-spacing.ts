@@ -62,11 +62,13 @@ export function childTextWalk<W extends TextVisibility>(
 
 /**
  * True for a child the name walk never reads into: a named widget lends its
- * own name, and a barrier lends nothing. A hidden one stays opaque too.
+ * own name, an image lends its name and never its content, and a barrier lends
+ * nothing. A hidden one stays opaque too.
  */
 export function isOpaqueNameChild(child: Element): boolean {
   const role = getImplicitRole(child);
   return (
+    role === "img" ||
     NAMED_WIDGET_ROLES.has(role) ||
     (NAME_BARRIER_ROLES.has(role) && !isImplicitDetailsGroup(child))
   );

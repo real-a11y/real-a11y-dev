@@ -4097,6 +4097,14 @@ describe("visibility:hidden text in names and descriptions (accname 2A)", () => 
     ).toBe("Email");
   });
 
+  it("does not read an image's descendants through a hidden image", () => {
+    expect(
+      nameOf(
+        `<button id="t"><span role="img" ${H}><span style="visibility:visible">Star</span></span></button>`,
+      ),
+    ).toBe("");
+  });
+
   it("does not read into a hidden widget inside a wrapping label", () => {
     expect(
       nameOf(
