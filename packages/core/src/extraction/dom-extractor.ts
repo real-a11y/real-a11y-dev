@@ -42,6 +42,17 @@ import {
 import { insetCollapsesBox } from "./inset-clip.js";
 import { associatedLabels, wrappingLabelText } from "./label-text.js";
 import { hasCaptionsTrack } from "./media-tracks.js";
+import {
+  childTextWalk,
+  hiddenChildText,
+  isImplicitDetailsGroup,
+  isTextVisible,
+  NAME_BARRIER_ROLES,
+  NAMED_WIDGET_ROLES,
+  needsSpaceAround,
+  rootTextVisible,
+  type TextVisibility,
+} from "./name-spacing.js";
 import { scopeReferenceIndex } from "./reference-index.js";
 import {
   getCachedComputedStyle,
@@ -382,93 +393,6 @@ function computeAccessibleDescription(
   return title && !source.fromTitle ? title.replace(/\s+/g, " ").trim() : "";
 }
 
-/**
- * Roles that act as a name-from-content "barrier" — when encountered as a
- * descendant during name computation, their subtree contributes the empty
- * string instead of being concatenated into the ancestor's name.
- *
- * Why this exists: a `<li role="treeitem">Reports<ul role="group"><li
- * role="treeitem">report-1</li>...</ul></li>` has, by ARIA name-from-
- * content, a recursive text content of "Reports report-1 report-2 ...".
- * Real assistive tech reads only "Reports" for that row — each nested
- * treeitem is a sibling row with its own announceable name, not part of
- * its parent's name. Without this filter the inspector showed the
- * polluted concatenation (surfaced on PR #80's APG Tree View example).
- *
- * The set covers:
- *   - Containers / structural groups: group, list, menu, tree, listbox,
- *     tablist, toolbar, treegrid, grid, table, rowgroup, combobox.
- *   - Row / item widgets that carry their own name: treeitem, menuitem*,
- *     option, tab, listitem, row, cell, gridcell, columnheader,
- *     rowheader.
- *   - Embedded form controls: slider, spinbutton, textbox, searchbox.
- *     (accname §2C says these contribute their *value* when embedded in a
- *     label — e.g. `<label>Delete <input value="3"> files</label>` names
- *     "Delete 3 files". Not implemented yet; skipping is the safer
- *     approximation until the value rule lands.)
- *   - Display widgets / live regions: dialog, alertdialog, tabpanel,
- *     alert, status, log, tooltip, progressbar, meter. A tooltip or
- *     dialog nested inside a widget is its own surface, not part of the
- *     host's label.
- *
- * Intentionally NOT included (walked into so their text contributes):
- *   - generic, presentation, none — transparent.
- *   - Inline formatting roles: strong, emphasis, code, mark, deletion,
- *     insertion, subscript, superscript, term, definition, paragraph,
- *     blockquote, caption, figcaption, time, separator.
- *   - img — it lends its name (alt, an SVG's title) instead of its content;
- *     see textAlternative.
- *   - heading — kept walkable so a button/tab whose label is a heading
- *     still picks up the heading's text (e.g. `<button><h3>X</h3>`).
- *   - Named widgets (link, button, checkbox, radio, switch) — handled by
- *     {@link NAMED_WIDGET_ROLES} below: they contribute their *computed
- *     accessible name*, not raw text.
- */
-const NAME_BARRIER_ROLES = new Set<string>([
-  // Containers / structural groups
-  "group",
-  "list",
-  "menu",
-  "menubar",
-  "tree",
-  "listbox",
-  "tablist",
-  "toolbar",
-  "treegrid",
-  "grid",
-  "table",
-  "rowgroup",
-  "combobox",
-  // Row / item widgets with their own name
-  "treeitem",
-  "menuitem",
-  "menuitemcheckbox",
-  "menuitemradio",
-  "option",
-  "tab",
-  "listitem",
-  "row",
-  "cell",
-  "gridcell",
-  "columnheader",
-  "rowheader",
-  // Embedded form controls (see §2C note in the docstring)
-  "slider",
-  "spinbutton",
-  "textbox",
-  "searchbox",
-  // Display widgets / live regions
-  "dialog",
-  "alertdialog",
-  "tabpanel",
-  "alert",
-  "status",
-  "log",
-  "tooltip",
-  "progressbar",
-  "meter",
-]);
-
 /** Tags whose text content is used as an accessible name per accname-1.2. */
 const NAMES_FROM_CONTENT_TAGS = new Set<string>([
   "a",
@@ -586,45 +510,8 @@ export function isNameBarrierElement(element: Element): boolean {
   );
 }
 
-/**
- * Named widgets encountered as descendants during name-from-content
- * contribute their *computed accessible name* — not their raw subtree text,
- * and not the empty string.
- *
- * Per accname-1.2 §2F.iii the walk recurses with the full name algorithm,
- * so `<h3><a aria-label="API docs">config.ts</a></h3>` names the heading
- * "API docs", and `<h3><a><code>config.ts</code></a></h3>` names it
- * "config.ts" — matching what Chrome and Firefox expose. Skipping these
- * entirely (as we briefly did) left link-wrapped headings nameless.
- *
- * Deliberately narrow: item widgets like treeitem/menuitem/option stay in
- * {@link NAME_BARRIER_ROLES} — a nested tree row is a sibling with its own
- * announceable name, not part of its parent's label (PR #84).
- */
-const NAMED_WIDGET_ROLES = new Set<string>([
-  "link",
-  "button",
-  "checkbox",
-  "radio",
-  "switch",
-]);
-
-/**
- * A native `<details>` carrying only its implicit `group` role. Unlike the
- * other barrier roles, Chromium walks into it for an ancestor's name, so a
- * heading like `user commented • <details><summary>edited</summary>…` keeps its
- * "edited" part. An author's explicit `role="group"` stays a barrier: Chromium
- * treats that one like any other group.
- */
-function isImplicitDetailsGroup(element: Element): boolean {
-  return (
-    safeTagName(element) === "details" &&
-    !safeGetAttribute(element, "role")?.trim()
-  );
-}
-
 /** How a name-from-content walk was reached. */
-interface NameWalk {
+interface NameWalk extends TextVisibility {
   /**
    * Inside an aria-labelledby or aria-describedby traversal, where a
    * descendant's own aria-labelledby is ignored (accname §2B: "not already part
@@ -773,7 +660,8 @@ function svgTitle(
  *
  * Per WAI-ARIA accname-1.2 §4.3.2 step 2A, hidden subtrees contribute the
  * empty string. Skip element descendants that are aria-hidden, hidden,
- * inert, or display/visibility/content-visibility-hidden. A skipped descendant
+ * inert, or display/content-visibility-hidden. `visibility: hidden` and
+ * `collapse` drop only an element's own text (see {@link NameWalk.textVisible}). A skipped descendant
  * that still RENDERS contributes a separator even so, because its box keeps the
  * text either side of it apart — see {@link needsSpaceAround}. (A skipped child
  * is not recursed into, so a `display: contents` one whose own children render
@@ -804,11 +692,14 @@ function getAccessibleTextContent(
   styleCache?: StyleCache | null,
   walk: NameWalk = {},
 ): string {
+  const textVisible = rootTextVisible(walk, () =>
+    getCachedComputedStyle(element, styleCache),
+  );
   let text = "";
   for (const child of flatChildNodes(element)) {
     const type = safeNodeType(child);
     if (type === Node.TEXT_NODE) {
-      text += child.textContent || "";
+      if (textVisible !== false) text += child.textContent || "";
     } else if (type === Node.ELEMENT_NODE) {
       const childEl = child as Element;
       // A child that cannot be read costs its own text, not the host's name.
@@ -848,6 +739,16 @@ function getAccessibleTextContent(
           continue;
         }
         const role = getImplicitRole(childEl);
+        // `visibility: hidden` / `collapse` (accname §2A). Its box still keeps
+        // its neighbours apart, and a descendant may be visible again, but it
+        // lends no alternative of its own: no aria-label, no widget name.
+        const childWalk = childTextWalk({ ...walk, textVisible }, childStyle);
+        if (childWalk.textVisible === false) {
+          text += hiddenChildText(childEl, role, spaced, () =>
+            getAccessibleTextContent(childEl, visited, styleCache, childWalk),
+          );
+          continue;
+        }
         // Named widgets contribute their computed name (accname §2F.iii). One
         // named by its text is spaced by the same box rule as everything else:
         // Chromium reads `<h2>Signed in as <a href="/u">Ada</a>'s profile</h2>`
@@ -898,7 +799,7 @@ function getAccessibleTextContent(
           childEl,
           visited,
           styleCache,
-          walk,
+          childWalk,
         );
         // Padded per accname §2F, which appends each descendant's result "with a
         // space"; the final normalization collapses the doubles. A child that
@@ -914,56 +815,6 @@ function getAccessibleTextContent(
     }
   }
   return text;
-}
-
-/**
- * True when the child has a box of its own, so text beside it can't flow into it
- * and the two must not read as one word. Chromium's name computation separates
- * exactly these — whether or not the child lends any text — and this mirrors it
- * against Chromium 141:
- *
- * - **Spaced:** blocks, list items, table parts, and the atomic inline-level
- *   boxes — `inline-block`, `inline-flex`, `inline-table` — which Chromium
- *   separates even though they sit on the line. Flex and grid items, floats and
- *   absolutely positioned children need no special case: CSS blockifies their
- *   computed `display`, so a `<span>` flex item arrives here as `block`.
- * - **Not spaced:** the non-atomic inline boxes text really does flow into —
- *   `inline`, `inline list-item`, and the `ruby` family. `display: contents`
- *   generates no box at all, so its children decide their own spacing.
- *
- * Reading computed `display` rather than a tag list means an author's
- * `display: inline` on a `<div>` (or `display: block` on a `<span>`) is honoured
- * the way it renders. Two tags are named instead, because their spacing does not
- * follow `display`: `<br>`, an inline box that ends the line, and `<summary>`,
- * which Chromium separates as its disclosure's label however it is styled.
- *
- * With no computed style to read (no `window.getComputedStyle`), keep the
- * unspaced concatenation rather than guessing.
- */
-function needsSpaceAround(
-  element: Element,
-  style: CSSStyleDeclaration | null,
-): boolean {
-  // Clobber-safe: the name walk asks this of each child it enters, and a
-  // `<form>` among them may have a control named `tagName`.
-  const tag = safeTagName(element);
-  // `<br>` is an inline box that ends the line. A `<summary>` is its
-  // disclosure's label, which Chromium separates however it is styled — an
-  // author's `display: inline` on one still reads "Note S Body", not
-  // "Note SBody" — so neither is decided by `display`.
-  if (tag === "br" || tag === "summary") return true;
-  const display = style?.display;
-  // No computed style to read (no `window.getComputedStyle`): keep the
-  // unspaced concatenation rather than guessing.
-  if (!display) return false;
-  // Compared in full, not by prefix: `inline-block` and the other atomic
-  // inline-level boxes must NOT match the bare `inline` case.
-  return !(
-    display === "inline" ||
-    display === "inline list-item" ||
-    display === "contents" ||
-    display.startsWith("ruby")
-  );
 }
 
 /** Compute the accessible name for an element (simplified) */
@@ -1075,17 +926,22 @@ function computeRawAccessibleName(
       const text =
         label === wrappingLabel
           ? wrappingLabelText(label, element, styleCache, {
-              readChild: (child) =>
+              readChild: (child, textVisible) =>
                 // Each child's own alternative first, as in any name walk:
                 // Chromium names `<label><img alt="Email"> <input></label>`
-                // "Email".
-                textAlternative(
-                  child,
-                  getImplicitRole(child),
-                  visited,
-                  styleCache,
-                  {},
-                ) ?? getAccessibleTextContent(child, visited, styleCache),
+                // "Email". A `visibility: hidden` child lends none.
+                (textVisible === false
+                  ? null
+                  : textAlternative(
+                      child,
+                      getImplicitRole(child),
+                      visited,
+                      styleCache,
+                      {},
+                    )) ??
+                getAccessibleTextContent(child, visited, styleCache, {
+                  textVisible,
+                }),
               onUnreadable: warnSkippedElement,
             })
           : getAccessibleTextContent(label, visited, styleCache).trim();
@@ -1595,15 +1451,6 @@ const CONTROL_TEXT_TAGS: ReadonlySet<string> = new Set([
  */
 export function ignoresChildText(tag: string): boolean {
   return MEDIA_TAGS.has(tag) || CONTROL_TEXT_TAGS.has(tag);
-}
-
-/**
- * True if text directly inside an element with this computed `style` shows.
- * `visibility` is inherited and a child may set it back to `visible`, so it
- * hides an element's own text, not its subtree: a walk still descends.
- */
-export function isTextVisible(style: CSSStyleDeclaration | null): boolean {
-  return style?.visibility !== "hidden" && style?.visibility !== "collapse";
 }
 
 /**

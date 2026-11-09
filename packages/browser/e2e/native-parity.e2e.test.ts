@@ -878,3 +878,76 @@ describe("a paragraph's text through role-less inline wrappers", () => {
     );
   });
 });
+
+// accname §2A: `visibility: hidden` and `collapse` text is hidden, so it names
+// nothing and describes nothing, unless the traversal began at a hidden node.
+// The DOM producer used to read it all; Chromium and the native producer never
+// did. `visibility` is per element: a child may set itself visible again.
+describe("visibility:hidden text in names and descriptions", () => {
+  const H = `style="visibility:hidden"`;
+  const cases: [string, string, Record<string, [string, string?]>][] = [
+    [
+      "name from content, a label and a label's wrapper",
+      `<h2 id="h">visible <span ${H}>hidden</span> more</h2>` +
+        `<label for="i">Email <span ${H}>(hidden)</span></label><input id="i">` +
+        `<label>Wrapped <span ${H}>(hidden)</span><input id="w"></label>` +
+        `<button id="c">visible <span style="visibility:collapse">collapsed</span></button>`,
+      {
+        h: ["visible more"],
+        i: ["Email"],
+        w: ["Wrapped"],
+        c: ["visible"],
+      },
+    ],
+    [
+      "a reference to a visible target, and a description",
+      `<span id="l">foo <span ${H}>bar</span></span><button id="lb" aria-labelledby="l">x</button>` +
+        `<button id="d" aria-describedby="dd">b</button><p id="dd">Help <span ${H}>secret</span></p>`,
+      { lb: ["foo"], d: ["b", "Help"] },
+    ],
+    [
+      "a child that sets itself visible again, and aria-label as the fallback",
+      `<h2 id="v">visible <span ${H}>hidden <span style="visibility:visible">un-hidden</span></span></h2>` +
+        `<button id="f" aria-labelledby="s5" aria-label="foo"><span id="s5"><span ${H}>label</span></span>x</button>`,
+      { v: ["visible un-hidden"], f: ["foo"] },
+    ],
+    [
+      "a hidden target, which lends its whole subtree",
+      `<span id="t" ${H}>foo <span ${H}>bar</span></span><button id="tb" aria-labelledby="t">x</button>`,
+      { tb: ["foo bar"] },
+    ],
+  ];
+
+  it.each(cases)("%s", async (_case, html, want) => {
+    const browser = await chromium.launch();
+    try {
+      const page = await browser.newPage();
+      await page.setContent(html);
+      await page.addScriptTag({ content: pageBundleSource() });
+      const dom = await page.evaluate(() => {
+        const ra = (globalThis as Record<string, unknown>).__realA11y__ as {
+          extractA11yTree(root: Element): ExtractionResult;
+        };
+        return [...ra.extractA11yTree(document.body).nodes.values()];
+      });
+      const native = [...(await nativeTree(page)).nodes.values()];
+      const read = (nodes: SemanticNode[]) =>
+        Object.fromEntries(
+          Object.keys(want).map((id) => {
+            const node = nodes.find((n) => n.dom?.attributes["id"] === id);
+            return [id, [node?.a11y.name, node?.a11y.description || undefined]];
+          }),
+        );
+      const expected = Object.fromEntries(
+        Object.entries(want).map(([id, [name, description]]) => [
+          id,
+          [name, description],
+        ]),
+      );
+      expect(read(native), "native").toStrictEqual(expected);
+      expect(read(dom), "dom").toStrictEqual(expected);
+    } finally {
+      await browser.close();
+    }
+  });
+});

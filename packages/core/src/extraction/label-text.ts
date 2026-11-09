@@ -8,6 +8,7 @@
  */
 import { isAriaHiddenValue } from "./aria-tokens.js";
 import { safeGetAttribute, safeNodeType, safeTagName } from "./clobber-safe.js";
+import { isTextVisible } from "./name-spacing.js";
 import {
   getCachedComputedStyle,
   isSubtreeHidden,
@@ -17,7 +18,12 @@ import {
 const FORM_CONTROL_TAGS = new Set(["input", "select", "textarea"]);
 
 export interface LabelReaders {
-  readChild: (child: Element) => string;
+  /**
+   * `textVisible` is `false` for a `visibility: hidden` child, which lends no
+   * alternative of its own, and `null` under a hidden label, which is read
+   * whole as it always was.
+   */
+  readChild: (child: Element, textVisible: boolean | null) => string;
   onUnreadable: (child: Element, error: unknown) => void;
 }
 
@@ -28,6 +34,7 @@ export function wrappingLabelText(
   { readChild, onUnreadable }: LabelReaders,
 ): string {
   const parts: string[] = [];
+  const labelShows = isTextVisible(getCachedComputedStyle(label, styleCache));
   for (const child of label.childNodes) {
     const type = safeNodeType(child);
     if (type === Node.TEXT_NODE) {
@@ -46,7 +53,11 @@ export function wrappingLabelText(
         ) {
           continue;
         }
-        const text = readChild(childEl).trim();
+        const style = getCachedComputedStyle(childEl, styleCache);
+        const text = readChild(
+          childEl,
+          labelShows ? isTextVisible(style) : null,
+        ).trim();
         if (text) parts.push(text);
       } catch (error) {
         onUnreadable(childEl, error);

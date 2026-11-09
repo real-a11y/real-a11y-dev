@@ -4060,6 +4060,92 @@ describe("the own-text fallback reads through role-less inline wrappers", () => 
 // name — e.g. a GitHub comment header read "user commented •" without the
 // "edited by …" summary. Every expectation below is what Chromium's own
 // accessibility tree computes for the same markup (measured over CDP).
+describe("visibility:hidden text in names and descriptions (accname 2A)", () => {
+  const H = `style="visibility:hidden"`;
+  function read(html: string, id: string) {
+    const root = createPage(html);
+    document.body.appendChild(root);
+    try {
+      const node = [...extractDomTree(root).nodes.values()].find(
+        (n) => n.dom?.attributes["id"] === id,
+      )!;
+      return { name: node.a11y.name, description: node.a11y.description };
+    } finally {
+      root.remove();
+    }
+  }
+  const nameOf = (html: string, id = "t") => read(html, id).name;
+
+  it("drops it from a heading, but keeps the gap", () => {
+    expect(
+      nameOf(`<h2 id="t">visible <span ${H}>hidden</span> more</h2>`),
+    ).toBe("visible more");
+    expect(nameOf(`<h2 id="t">a<div ${H}>x</div>b</h2>`)).toBe("a b");
+  });
+
+  it("drops visibility:collapse text from a button", () => {
+    expect(
+      nameOf(
+        `<button id="t">visible <span style="visibility:collapse">collapsed</span></button>`,
+      ),
+    ).toBe("visible");
+  });
+
+  it("drops it from a label[for] and from a wrapping label", () => {
+    expect(
+      nameOf(
+        `<label for="t">Email <span ${H}>(hidden)</span></label><input id="t">`,
+      ),
+    ).toBe("Email");
+    expect(
+      nameOf(`<label>Email <span ${H}>(hidden)</span><input id="t"></label>`),
+    ).toBe("Email");
+  });
+
+  it("drops it from a visible aria-labelledby target and a description", () => {
+    const html = `<span id="l">foo <span ${H}>bar</span></span><button id="t" aria-labelledby="l" aria-describedby="d">x</button><p id="d">Help <span ${H}>secret</span></p>`;
+    expect(read(html, "t")).toMatchObject({
+      name: "foo",
+      description: "Help",
+    });
+  });
+
+  it("falls back to aria-label when the labelledby target has no visible text", () => {
+    expect(
+      nameOf(
+        `<button id="t" aria-labelledby="s" aria-label="foo"><span id="s"><span ${H}>label</span></span>x</button>`,
+      ),
+    ).toBe("foo");
+  });
+
+  it("reads a descendant that sets itself visible again", () => {
+    expect(
+      nameOf(
+        `<h2 id="t">visible <span ${H}>hidden <span style="visibility:visible">un-hidden</span></span></h2>`,
+      ),
+    ).toBe("visible un-hidden");
+  });
+
+  it("lends no aria-label from a hidden descendant", () => {
+    expect(
+      nameOf(`<h2 id="t">a <span ${H} aria-label="nope">b</span> c</h2>`),
+    ).toBe("a c");
+  });
+
+  it("reads a hidden aria-labelledby target whole, hidden descendants included", () => {
+    expect(
+      nameOf(
+        `<span id="l" ${H}>foo <span ${H}>bar</span></span><button id="t" aria-labelledby="l">x</button>`,
+      ),
+    ).toBe("foo bar");
+    expect(
+      nameOf(
+        `<span id="l" ${H}>foo <span style="visibility:visible">bar</span></span><button id="t" aria-labelledby="l">x</button>`,
+      ),
+    ).toBe("foo bar");
+  });
+});
+
 describe("name from content through a <details>", () => {
   function nameOf(html: string): string {
     const root = createPage(html);

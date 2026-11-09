@@ -1,6 +1,6 @@
 {
   "packages/browser/src/native-tree.ts": 526,
-  "packages/core/src/extraction/dom-extractor.ts": 1702,
+  "packages/core/src/extraction/dom-extractor.ts": 1657,
   "packages/extension/src/background.ts": 703,
   "packages/extension/src/content.ts": 639,
   "packages/extension/src/native/debugger-session.ts": 693,
