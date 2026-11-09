@@ -54,6 +54,7 @@ import {
   rootTextVisible,
   type TextVisibility,
 } from "./name-spacing.js";
+import { isOutOfReach, PANEL_HOST_ATTRIBUTE } from "./overlay-reach.js";
 import { scopeReferenceIndex } from "./reference-index.js";
 import {
   getCachedComputedStyle,
@@ -66,17 +67,7 @@ import {
   type StyleCache,
 } from "./role-map.js";
 
-/**
- * Marks an element that hosts one of this project's own panels (the
- * inspector sets it on its `container`). The walk skips it and everything
- * under it: the panel mounts in an open shadow root, which the flat-tree walk
- * would otherwise read as page content — and in `mount: "light"` the panel's
- * UI was already in the light DOM.
- *
- * @internal Shared between `core` and this project's own panels. Both are
- * internal packages; no published surface re-exports it.
- */
-export const PANEL_HOST_ATTRIBUTE = "data-real-a11y-panel";
+export { PANEL_HOST_ATTRIBUTE } from "./overlay-reach.js";
 
 /** Tags to skip entirely during extraction */
 // track/source are media/picture metadata: HTML-AAM gives them no role and
@@ -2578,29 +2569,16 @@ function findPortalOverlay(doc: Document, root: Element): Element | null {
       // An overlay AT cannot reach adds nothing to the tree, so it is no
       // reason to widen: a closed drawer left mounted as `aria-hidden` (and
       // translated off-screen, so the CSS check passes) turned every component
-      // root on the page into a whole-page snapshot.
-      if (isInertOrAriaHidden(el)) continue;
+      // root on the page into a whole-page snapshot. Nor is a panel's own
+      // live region, where it says what changed: a panel mounted in the
+      // light DOM would widen every tree once it spoke.
+      if (isOutOfReach(el)) continue;
       if (isActuallyVisible(el) && hasOverlayContent(el)) return body;
     } catch {
       // Unreadable: not an overlay this scan can pivot to.
     }
   }
   return null;
-}
-
-/**
- * True when `element` or an ancestor is `inert`, or is `aria-hidden` with a
- * value Chromium hides for. Not `closest('[aria-hidden="true"]')`, which
- * matches one spelling of it, and not `closest('[aria-hidden]')`, which stops
- * at an `aria-hidden="false"` below the ancestor that hides.
- */
-function isInertOrAriaHidden(element: Element): boolean {
-  for (let el: Element | null = element; el; el = safeParentElement(el)) {
-    // Any ancestor can be a <form> holding `<input name="hasAttribute">`.
-    if (safeGetAttribute(el, "inert") !== null) return true;
-    if (isAriaHiddenValue(safeGetAttribute(el, "aria-hidden"))) return true;
-  }
-  return false;
 }
 
 /**
@@ -2668,9 +2646,14 @@ const OVERLAY_SIGNAL_SELECTOR = `${OVERLAY_CANDIDATE_SELECTOR}, [aria-modal="tru
 /**
  * An element that is itself an overlay signal. Any mounted element is asked,
  * so `matches` goes through the prototype: `<input name="matches">` shadows it
- * on a <form>, and an observer that cannot ask has to guess "overlay".
+ * on a <form>, and an observer that cannot ask has to guess "overlay". The
+ * panel's change marks ask it too, of the rows a read widened to the whole
+ * page brings.
+ *
+ * @internal Shared by the extractor, the observers and the panel's change
+ * marks; not a stability promise.
  */
-function isOverlaySignal(el: Element): boolean {
+export function isOverlaySignal(el: Element): boolean {
   return safeMatches(el, '[aria-modal="true"], dialog') || countsAsOverlay(el);
 }
 

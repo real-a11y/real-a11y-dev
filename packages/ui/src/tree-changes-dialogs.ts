@@ -5,8 +5,10 @@
  * A modal dialog takes the rest of the page out of an accessibility tree
  * while it is open, as it does for a screen reader: a native `<dialog>`
  * opened with `showModal()`, or one whose page a library hides with
- * `aria-hidden` or `inert` (Radix, and so shadcn/ui). That isn't the page
- * removing anything. So a read that brings a dialog while at least half the
+ * `aria-hidden` or `inert` (Radix, and so shadcn/ui). Radix opens a dropdown
+ * menu and a select's listbox the same way, so a `menu` or a `listbox` can
+ * stand in front of the page too, and "dialog" below means any of them. That
+ * isn't the page removing anything. So a read that brings a dialog while at least half the
  * tree it is compared with leaves, the dialog all but alone in it
  * (`standsInFront`), marks what is new and nothing removed, and keeps that
  * tree; the read the dialog is gone from compares with it, so what shows is
@@ -28,10 +30,16 @@ import {
 
 /** What a tree's rows are, for comparing two reads around a dialog. */
 export interface DialogRules<N extends TreeRow> extends DiffRules<N> {
-  /** The node's role: a `dialog` or an `alertdialog` can stand in front of
+  /** The node's role: one of {@link IN_FRONT_ROLES} can stand in front of
    *  the page. */
   role(node: N): string;
 }
+
+/** The roles that can stand in front of the page: a dialog, and the popups
+ *  a library opens as modally as one, hiding the rest of the page. One that
+ *  opens beside the page takes nothing out of the tree, and the comparison
+ *  leaves it alone (`dialogInFront`). */
+const IN_FRONT_ROLES = new Set(["dialog", "alertdialog", "menu", "listbox"]);
 
 /** A dialog in front of the rest of the tree, and the tree from before it. */
 export interface OpenDialog<N extends TreeRow> {
@@ -59,8 +67,7 @@ function dialogsIn<N extends TreeRow>(
 ): string[] {
   const ids: string[] = [];
   for (const [id, node] of tree.nodes) {
-    const role = rules.role(node);
-    if (role === "dialog" || role === "alertdialog") ids.push(id);
+    if (IN_FRONT_ROLES.has(rules.role(node))) ids.push(id);
   }
   return ids;
 }

@@ -9,10 +9,18 @@
 import {
   describeChange,
   hiddenChangesText,
+  SINCE_READ_BEFORE,
   type RowChangeMarks,
 } from "../tree-changes.js";
 
-export function RowChangeTags({ marks }: { marks: RowChangeMarks }) {
+export function RowChangeTags({
+  marks,
+  since = SINCE_READ_BEFORE,
+}: {
+  marks: RowChangeMarks;
+  /** What the marks are compared with (`TreeChangesProp.since`). */
+  since?: string;
+}) {
   const { hidden } = marks;
   return (
     <>
@@ -20,7 +28,7 @@ export function RowChangeTags({ marks }: { marks: RowChangeMarks }) {
         <span
           class="sn-change-tag sn-change-tag--new"
           aria-hidden="true"
-          title="New since the read before"
+          title={`New since ${since}`}
         >
           new
         </span>
@@ -30,7 +38,7 @@ export function RowChangeTags({ marks }: { marks: RowChangeMarks }) {
           class="sn-change-tag sn-change-tag--changed"
           aria-hidden="true"
           title={[
-            "Changed since the read before:",
+            `Changed since ${since}:`,
             ...marks.changes.map(describeChange),
           ].join("\n")}
         >
@@ -44,7 +52,7 @@ export function RowChangeTags({ marks }: { marks: RowChangeMarks }) {
           key={hidden.fresh ? hidden.flashUntil : "still"}
           class={`sn-change-tag sn-change-tag--inside${hidden.fresh ? " sn-change-tag--flash" : ""}`}
           aria-hidden="true"
-          title={`Under this row, since the read before: ${hiddenChangesText(hidden)}`}
+          title={`Under this row, since ${since}: ${hiddenChangesText(hidden)}`}
         >
           {hiddenChangesText(hidden)}
         </span>

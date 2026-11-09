@@ -1,5 +1,6 @@
-/* ---- What the last read of Chrome's tree found changed ----
-   (`tree-changes.ts`.) A new row and a changed one keep a coloured left
+/* ---- What the last read of a tree found changed ----
+   (`tree-changes.ts`: Chrome's tree in the extension, and the shared
+   panel's.) A new row and a changed one keep a coloured left
    edge until the next read, and flash as the read lands. Colour is never
    the only sign: the top row of a new subtree and a changed row also carry
    a tag that says so, what changed is underlined or outlined on the row,
@@ -117,14 +118,16 @@
 }
 
 /* What changed on a changed row: its name, value or role underlined, its
-   badges outlined. */
-.sn-change-part:not(.sn-state-badge):not(.sn-level-badge) {
+   badges outlined: Chrome's tree's (`sn-state-badge`, `sn-level-badge`) and
+   the shared panel's (`sn-badge`). */
+.sn-change-part:not(.sn-state-badge):not(.sn-level-badge):not(.sn-badge) {
   text-decoration: underline 2px var(--sn-diff-changed-edge);
   text-underline-offset: 2px;
 }
 
 .sn-state-badge.sn-change-part,
-.sn-level-badge.sn-change-part {
+.sn-level-badge.sn-change-part,
+.sn-badge.sn-change-part {
   outline: 1px solid var(--sn-diff-changed-edge);
   outline-offset: 0;
 }
@@ -226,11 +229,12 @@
   }
 
   .sn-state-badge.sn-change-part,
-  .sn-level-badge.sn-change-part {
+  .sn-level-badge.sn-change-part,
+  .sn-badge.sn-change-part {
     outline-color: CanvasText;
   }
 
-  .sn-change-part:not(.sn-state-badge):not(.sn-level-badge) {
+  .sn-change-part:not(.sn-state-badge):not(.sn-level-badge):not(.sn-badge) {
     text-decoration-color: CanvasText;
   }
 }

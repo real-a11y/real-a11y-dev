@@ -16,7 +16,11 @@ import {
   useState,
 } from "preact/hooks";
 
-import type { TreeChanges, TreeRow } from "../tree-changes-diff.js";
+import {
+  isEmptyTreeChanges,
+  type TreeChanges,
+  type TreeRow,
+} from "../tree-changes-diff.js";
 import {
   documentPositions,
   firstFlashEnd,
@@ -28,6 +32,7 @@ import {
   NO_FLASH,
   notAboveSelection,
   rowsToOpen,
+  SINCE_READ_BEFORE,
   summarizeChanges,
   withRowsOpen,
   type ChangeMarks,
@@ -65,6 +70,17 @@ function useFlashes() {
   }, []);
   const stop = useCallback(() => setFlashes(NO_FLASH), []);
   return { flashes, flash, stop };
+}
+
+/** What the polite region says, and `say` to say something: keyed, so the
+ *  same words twice are said twice. */
+function useNotice() {
+  const [notice, setNotice] = useState<ChangeNotice | null>(null);
+  const key = useRef(0);
+  const say = useCallback((text: string) => {
+    setNotice({ text, key: ++key.current });
+  }, []);
+  return { notice, say, setNotice };
 }
 
 /** What a read finds that the read before it didn't, and the rows that
@@ -109,6 +125,9 @@ export function useTreeChanges({
   expanded,
   setExpanded,
   jumpTo,
+  since = SINCE_READ_BEFORE,
+  noticeEnd = "in the tree",
+  totals = false,
 }: {
   changes: ChangeMarks | null;
   nodes: ReadonlyMap<string, TreeRow>;
@@ -120,14 +139,18 @@ export function useTreeChanges({
   setExpanded: (update: (open: Set<string>) => Set<string>) => void;
   /** Select a row wherever it is, as a jump chip does. */
   jumpTo: (id: string) => void;
+  /** What the marks are compared with (`TreeChangesProp.since`). */
+  since?: string;
+  /** How what is said ends (`TreeChangesProp.noticeEnd`). */
+  noticeEnd?: string;
+  /** The marks are totals (`TreeChangesProp.totals`). */
+  totals?: boolean;
 }) {
   const shown = changes?.changes ?? null;
   const { flashes, flash, stop } = useFlashes();
-  const [notice, setNotice] = useState<ChangeNotice | null>(null);
-  const noticeKey = useRef(0);
-  const say = useCallback((text: string) => {
-    setNotice({ text, key: ++noticeKey.current });
-  }, []);
+  const { notice, say, setNotice } = useNotice();
+  // What the marks last said they counted, for totals that move.
+  const counted = useRef<string>();
 
   // The marks the layout effect below last took in. Marks the view mounts
   // with are a read it didn't see arrive: they show, but neither flash, nor
@@ -161,48 +184,83 @@ export function useTreeChanges({
     if (prev === undefined || !changes) {
       stop();
       if (prev !== undefined) setNotice(null);
+      counted.current = undefined;
       return;
     }
-    if (read.fresh.size === 0) return;
-    flash(read.fresh);
-    if (read.open.length > 0) {
-      setExpanded((prevOpen) => withRowsOpen(prevOpen, read.open));
+    if (read.fresh.size > 0) {
+      flash(read.fresh);
+      if (read.open.length > 0) {
+        setExpanded((prevOpen) => withRowsOpen(prevOpen, read.open));
+      }
     }
-    if (changes.announce) {
-      say(`${summarizeChanges(changes.changes)} in the tree`);
+    const count = isEmptyTreeChanges(changes.changes)
+      ? "No changes"
+      : summarizeChanges(changes.changes);
+    const moved = totals && count !== counted.current;
+    counted.current = count;
+    if (changes.announce && (read.fresh.size > 0 || moved)) {
+      say(`${count} ${noticeEnd}`);
     }
   }, [changes?.seq]);
 
+  const goToChange = useGoToChange({
+    shown,
+    nodes,
+    rootId,
+    selectedId,
+    jumpTo,
+    say,
+    since,
+  });
+
+  return { shown, flashes, notice, goToChange, expanded: open };
+}
+
+/**
+ * Alt+N and Alt+Shift+N, and the changes bar's arrows: the next or previous
+ * change, wherever it is — opened up to, as a jump chip's target is. Landing
+ * on the row already selected moves nothing a screen reader would hear, so
+ * that says so, as it says when there is no change to go to.
+ */
+function useGoToChange({
+  shown,
+  nodes,
+  rootId,
+  selectedId,
+  jumpTo,
+  say,
+  since,
+}: {
+  shown: TreeChanges | null;
+  nodes: ReadonlyMap<string, TreeRow>;
+  rootId: string;
+  selectedId: string | null;
+  jumpTo: (id: string) => void;
+  say: (text: string) => void;
+  since: string;
+}) {
   // Each row's place in the tree, once for the marks rather than at every
-  // press of the keys below.
+  // press of the keys.
   const positions = useMemo(
-    () => (shown ? documentPositions(nodes, rootId) : NO_POSITIONS),
+    () =>
+      shown && shown.stops.length > 0
+        ? documentPositions(nodes, rootId)
+        : NO_POSITIONS,
     [shown, nodes, rootId],
   );
-
-  // Alt+N and Alt+Shift+N, and the changes bar's arrows: the next or
-  // previous change, wherever it is — opened up to, as a jump chip's
-  // target is. Landing on the row already selected moves nothing a screen
-  // reader would hear, so that says so.
-  const goToChange = useCallback(
+  return useCallback(
     (back: boolean) => {
-      const target = nextChangeStop(
-        shown?.stops ?? [],
-        positions,
-        selectedId,
-        back,
-      );
+      const stops = shown?.stops ?? [];
+      const target = nextChangeStop(stops, positions, selectedId, back);
       if (target === undefined) {
-        say("No changes since the read before");
+        say(`No changes since ${since}`);
         return;
       }
       if (target === selectedId) say("This is the only change");
       jumpTo(target);
     },
-    [shown, positions, selectedId, jumpTo, say],
+    [shown, positions, selectedId, jumpTo, say, since],
   );
-
-  return { shown, flashes, notice, goToChange, expanded: open };
 }
 
 /**

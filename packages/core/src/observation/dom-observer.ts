@@ -12,6 +12,7 @@ import {
   containsOverlaySignal,
   isModal,
   KEY_ATTRIBUTES,
+  PANEL_HOST_ATTRIBUTE,
 } from "../extraction/dom-extractor.js";
 import { GLOBAL_ARIA_ATTRIBUTES } from "../extraction/role-map.js";
 import type { TreeChange } from "../types.js";
@@ -762,6 +763,9 @@ function isPortalOverlayContainer(
   if (safeNodeType(node) !== 1 /* ELEMENT_NODE */) return false;
   const el = node as Element;
   if (internalIds.has(safeGetAttribute(el, "id") ?? "")) return false;
+  // A panel mounted at the page's top level, as React's floating one is,
+  // is no overlay of the page, whatever it holds.
+  if (safeGetAttribute(el, PANEL_HOST_ATTRIBUTE) !== null) return false;
   try {
     return containsOverlaySignal(el);
   } catch {

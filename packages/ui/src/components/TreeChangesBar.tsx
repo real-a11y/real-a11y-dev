@@ -8,11 +8,14 @@
  * in their titles only, as a jump chip names Alt+J: they do nothing here.
  */
 
+import { useLayoutEffect, useRef } from "preact/hooks";
+
 import type { ChangeNotice } from "../hooks/useTreeChanges.js";
 import type { TreeChanges } from "../tree-changes-diff.js";
 import {
   CHANGE_KEYS,
   MAX_REMOVED_LISTED,
+  SINCE_READ_BEFORE,
   summarizeChanges,
 } from "../tree-changes.js";
 
@@ -40,28 +43,34 @@ export function TreeChangesBar({
   onPrevious,
   onNext,
   onClear,
+  since = SINCE_READ_BEFORE,
 }: {
   changes: TreeChanges;
-  onPrevious: () => void;
-  onNext: () => void;
+  /** The arrows, left out without them: where no row can be gone to. */
+  onPrevious?: () => void;
+  onNext?: () => void;
   /** Left out without it. */
   onClear?: () => void;
+  /** What the marks are compared with (`TreeChangesProp.since`). */
+  since?: string;
 }) {
-  const listed = changes.removed.slice(0, MAX_REMOVED_LISTED);
+  const bar = useRef<HTMLDivElement>(null);
+  useFocusTreeOnLeave(bar);
   return (
     <div
+      ref={bar}
       class="sn-changes-bar"
       role="group"
-      aria-label="Changes since the read before"
+      aria-label={`Changes since ${since}`}
     >
       <div class="sn-changes-line">
         <span
           class="sn-changes-summary"
-          title="What this read of the page found new, changed or removed since the read before it"
+          title={`Rows new, changed or removed since ${since}`}
         >
           {summarizeChanges(changes)}
         </span>
-        {changes.stops.length > 0 && (
+        {changes.stops.length > 0 && onPrevious && onNext && (
           <>
             <button
               class="sn-toolbar-btn"
@@ -92,24 +101,54 @@ export function TreeChangesBar({
           </button>
         )}
       </div>
-      {changes.removed.length > 0 && (
-        <details class="sn-removed">
-          <summary class="sn-removed-summary">Removed rows</summary>
-          <ul class="sn-removed-list">
-            {listed.map((node) => (
-              <li key={node.id} class="sn-removed-item">
-                {node.role}
-                {node.name ? ` "${node.name}"` : ""}
-              </li>
-            ))}
-            {changes.removed.length > listed.length && (
-              <li class="sn-removed-item sn-removed-item--more">
-                … and {changes.removed.length - listed.length} more
-              </li>
-            )}
-          </ul>
-        </details>
-      )}
+      {changes.removed.length > 0 && <RemovedRows rows={changes.removed} />}
     </div>
+  );
+}
+
+/**
+ * When the bar goes with focus in it, as it does when a read finds nothing
+ * changed: focus goes to the tree the bar sums up, the one beside it in its
+ * panel, or the list a view shows in its place (the TAB view's, a role
+ * filter's), rather than to the page's body. On the way out, while the bar
+ * still holds what had focus.
+ */
+function useFocusTreeOnLeave(bar: { current: HTMLElement | null }): void {
+  useLayoutEffect(() => {
+    const el = bar.current;
+    const panel = el?.parentElement;
+    return () => {
+      // The document's or the shadow root's: a panel mounted in a shadow
+      // root, as the inspector's is, holds its focus there.
+      const focused = (el?.getRootNode() as Document | ShadowRoot | undefined)
+        ?.activeElement;
+      if (!el?.contains(focused ?? null)) return;
+      panel
+        ?.querySelector<HTMLElement>('[role="tree"], [role="listbox"]')
+        ?.focus();
+    };
+  }, []);
+}
+
+/** The rows that went, which have no row of their own to mark. */
+function RemovedRows({ rows }: { rows: TreeChanges["removed"] }) {
+  const listed = rows.slice(0, MAX_REMOVED_LISTED);
+  return (
+    <details class="sn-removed">
+      <summary class="sn-removed-summary">Removed rows</summary>
+      <ul class="sn-removed-list">
+        {listed.map((node) => (
+          <li key={node.id} class="sn-removed-item">
+            {node.role}
+            {node.name ? ` "${node.name}"` : ""}
+          </li>
+        ))}
+        {rows.length > listed.length && (
+          <li class="sn-removed-item sn-removed-item--more">
+            … and {rows.length - listed.length} more
+          </li>
+        )}
+      </ul>
+    </details>
   );
 }

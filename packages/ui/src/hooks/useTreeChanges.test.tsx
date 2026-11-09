@@ -16,7 +16,11 @@ import {
   ChangeNoticeRegion,
   TreeChangesBar,
 } from "../components/TreeChangesBar.js";
-import type { TreeChanges, TreeRow } from "../tree-changes-diff.js";
+import {
+  NO_TREE_CHANGES,
+  type TreeChanges,
+  type TreeRow,
+} from "../tree-changes-diff.js";
 import type { ChangeMarks, RowChangeMarks } from "../tree-changes.js";
 
 import { useHiddenChanges, useTreeChanges } from "./useTreeChanges.js";
@@ -68,9 +72,11 @@ describe("useTreeChanges", () => {
   function Host({
     marks,
     selectedId = null,
+    totals,
   }: {
     marks: ChangeMarks | null;
     selectedId?: string | null;
+    totals?: boolean;
   }) {
     const [expanded, setExpanded] = useState(() => new Set(["root"]));
     kept = expanded;
@@ -83,6 +89,7 @@ describe("useTreeChanges", () => {
       expanded,
       setExpanded,
       jumpTo,
+      ...(totals ? { totals, noticeEnd: "since the checkpoint" } : {}),
     });
     hidden = useHiddenChanges(
       view,
@@ -92,9 +99,16 @@ describe("useTreeChanges", () => {
     return <ChangeNoticeRegion notice={view.notice} />;
   }
 
-  const show = (marks: ChangeMarks | null, selectedId?: string | null) =>
+  const show = (
+    marks: ChangeMarks | null,
+    selectedId?: string | null,
+    totals?: boolean,
+  ) =>
     act(() => {
-      render(<Host marks={marks} selectedId={selectedId} />, container);
+      render(
+        <Host marks={marks} selectedId={selectedId} totals={totals} />,
+        container,
+      );
     });
   const said = () => container.textContent;
 
@@ -137,6 +151,33 @@ describe("useTreeChanges", () => {
     expect(said()).toBe("3 new, 1 changed, 1 removed in the tree");
     show(null);
     expect(said()).toBe("");
+  });
+
+  it("says totals whenever they move, down too, and none at all", () => {
+    show(null, null, true);
+    show({ changes: OPENED, seq: 1, announce: true }, null, true);
+    expect(said()).toBe("3 new, 1 changed, 1 removed since the checkpoint");
+    const fewer: TreeChanges = {
+      ...OPENED,
+      removed: [],
+      removedUnder: new Map(),
+    };
+    show({ changes: fewer, seq: 2, announce: true }, null, true);
+    expect(said()).toBe("3 new, 1 changed since the checkpoint");
+    show({ changes: NO_TREE_CHANGES, seq: 3, announce: true }, null, true);
+    expect(said()).toBe("No changes since the checkpoint");
+  });
+
+  it("says only what is new when the marks aren't totals", () => {
+    show(null);
+    show({ changes: OPENED, seq: 1, announce: true });
+    const fewer: TreeChanges = {
+      ...OPENED,
+      removed: [],
+      removedUnder: new Map(),
+    };
+    show({ changes: fewer, seq: 2, announce: true });
+    expect(said()).toBe("3 new, 1 changed, 1 removed in the tree");
   });
 
   it("goes from change to change, and says when there is none", () => {

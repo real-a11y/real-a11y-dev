@@ -213,7 +213,8 @@ describe("createInspector", () => {
     await waitUntil(() => fullNames(container) === true);
     expect(fullNames(container)).toBe(true);
 
-    // …and `refresh()` / `setRoot()`, which re-key the panel, keep it on.
+    // …and `refresh()`, which reads the tree again, and `setRoot()`, which
+    // re-keys the panel, keep it on.
     nav.refresh();
     await waitUntil(() => tree(container) !== null);
     expect(fullNames(container)).toBe(true);

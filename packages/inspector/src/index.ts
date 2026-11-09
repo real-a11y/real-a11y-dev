@@ -90,6 +90,7 @@ export function createInspector(
     scrollHostOnSelect = false,
     focusHostOnActivate = false,
     enablePicker = false,
+    markChanges = true,
     defaultShowFullNames = false,
     styleNonce,
     onNodeSelect,
@@ -104,7 +105,11 @@ export function createInspector(
   let ownsMarker = false;
   let renderTarget: Element | ShadowRoot | null = null;
   let renderHost: HTMLElement | null = null;
-  // Monotonic counter used to force a re-extraction when `refresh()` is called.
+  // Bumped by `setRoot()`: a new root remounts the panel, which shares
+  // nothing with the old one's.
+  let rootKey = 0;
+  // Bumped by `refresh()`: the panel reads the tree again where it stands,
+  // and marks what changed.
   let refreshKey = 0;
 
   function ensureRenderTarget(): Element | ShadowRoot {
@@ -174,9 +179,10 @@ export function createInspector(
 
     render(
       h(TreeView, {
-        // Re-keying forces the inner TreeView to re-run extraction when the
-        // root changes or `refresh()` bumps the counter.
-        key: `${currentRoot.tagName}-${refreshKey}`,
+        // Re-keying remounts the inner TreeView when the root changes;
+        // `refreshKey` has it read the tree again without remounting.
+        key: `${currentRoot.tagName}-${rootKey}`,
+        refreshKey,
         root: currentRoot,
         initialViewMode: currentViewMode,
         interactive,
@@ -185,6 +191,7 @@ export function createInspector(
         scrollHostOnSelect,
         focusHostOnActivate,
         enablePicker,
+        markChanges,
         // The page's choice once the user has made one, in this panel or
         // another: every open panel shows it.
         showFullNames: fullNamesChoice().on ?? defaultShowFullNames,
@@ -259,7 +266,7 @@ export function createInspector(
 
     setRoot(root: Element) {
       currentRoot = root;
-      refreshKey++;
+      rootKey++;
       renderTree();
     },
 

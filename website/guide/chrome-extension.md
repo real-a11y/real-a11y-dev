@@ -55,11 +55,11 @@ Chrome's tree works the same way as the panel of [`@real-a11y-dev/inspector`](/p
 - **Jump chips** link a control to what it controls, such as a menu button and its menu: `→ menu "Options"` and `← button "Options"`. `Alt`+`J` follows one.
 - **Modal dialogs.** When the page opens a `<dialog>` with `showModal()`, the tree re-roots to it, as a screen reader gets it. A dialog a library such as Radix opens by hiding the rest of the page with `aria-hidden` leaves the page out of the tree the same way. Either way, when the dialog closes the page comes back with the rows you had opened still open. Any other element with `role="dialog"` stays in place among the rest of the page. The panel doesn't check that focus stays in the dialog or that Escape closes it: try both.
 - **Long names** end in an ellipsis. Hover one, or turn on **Settings ▾** → **Show full names**.
+- **What changed.** Each time Chrome's tree is read again, the rows new since the read before flash green and the rows that changed flash amber, then keep a coloured edge until the next read. The top row of something new says _new_, a changed row says _changed_, with what changed underlined or outlined, and a collapsed row says what changed under it. What the page added opens. The bar under the tree counts the changes, lists the removed rows, and goes from change to change, as `Alt`+`N` does. A screen reader hears what a read you caused found. The [inspector](/packages/inspector#what-changed) and `<SemanticNavigator />` mark each update of the page the same way, and their checkpoint (⎌) marks everything since you pressed it. The Storybook addon doesn't mark changes yet.
 
 Only the extension has these:
 
 - **Focus sync.** Focus moving on the page, by Tab, a click or the page's own script, selects that element's row.
-- **What changed.** Each time Chrome's tree is read again, the rows new since the read before flash green and the rows that changed flash amber, then keep a coloured edge until the next read. The top row of something new says _new_, a changed row says _changed_, with what changed underlined or outlined, and a collapsed row says what changed under it. What the page added opens. The bar under the tree counts the changes, lists the removed rows, and goes from change to change, as `Alt`+`N` does. A screen reader hears what a read you caused found.
 - **Scoping.** Double-click a container row, or press `Ctrl`/`Cmd`+`Enter`, to show only that part of the page. Search, filters and **Copy** follow the scope. The breadcrumb above the tree, or `Esc`, takes you back. In the other panels, scope with the inspector's [`setRoot()`](/packages/inspector#setroot-root) or a different `root` for `<SemanticNavigator />`.
 - **The live log.** When a live region (`role="status"`, `"alert"` or `"log"`, or `aria-live`) changes, its text appears at the bottom of the panel, assertive in red and polite in blue. Use it to check that toasts, validation errors and loading messages are announced. It approximates a screen reader: it shows the region's whole text, and doesn't watch iframes.
 - **The key bar.** `Esc`, `Tab`, `Shift+Tab`, `Enter`, `Space`, `↓` and `↑` go to whatever has focus on the page, for example to open a combobox and pick an option.
@@ -80,7 +80,7 @@ Only the extension has these:
 | Letters | Jump to the next row whose name starts with what you type |
 | `Alt`+`J` / `Alt`+`Shift`+`J` | Follow the row's jump chip / go back |
 | `Ctrl`/`Cmd`+`Enter` / `Esc` | Extension only: scope to the row / leave the scope |
-| `Alt`+`N` / `Alt`+`Shift`+`N` | Extension only: next / previous change since the read before |
+| `Alt`+`N` / `Alt`+`Shift`+`N` | Next / previous change (not in the Storybook addon yet) |
 
 ## Privacy
 

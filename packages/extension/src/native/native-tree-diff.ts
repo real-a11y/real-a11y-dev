@@ -17,6 +17,7 @@
 import { splitNativeNodeId } from "@real-a11y-dev/core";
 import {
   diffTreeRows,
+  noteFieldChange,
   type DialogRules,
   type FieldChange,
   type TreeChanges,
@@ -80,14 +81,7 @@ export function compareNativeNodes(
     field: string,
     from: string | boolean | undefined,
     to: string | boolean | undefined,
-  ) => {
-    if (from === to) return;
-    changes.push({
-      field,
-      ...(from === undefined ? {} : { before: from }),
-      ...(to === undefined ? {} : { after: to }),
-    });
-  };
+  ) => noteFieldChange(changes, field, from, to);
   add("role", before.role, after.role);
   add("name", shownText(before.name), shownText(after.name));
   add(

@@ -18,7 +18,7 @@ npm install -D @real-a11y-dev/react
 **Peer dependencies:** `react ^18.0.0 || ^19.0.0`, `react-dom ^18.0.0 || ^19.0.0`
 
 ::: tip Install as a dev dependency
-`@real-a11y-dev/react` bundles a tree extractor and a Preact-based renderer (~40 KB gzipped). It's a developer audit tool, not runtime infrastructure — keep it in `devDependencies` and gate `<SemanticNavigator />` on a build flag so it never ships to end users.
+`@real-a11y-dev/react` bundles a tree extractor and a Preact-based renderer (~65 KB gzipped, with the inspector it renders through). It's a developer audit tool, not runtime infrastructure — keep it in `devDependencies` and gate `<SemanticNavigator />` on a build flag so it never ships to end users.
 
 See [Keep it out of production](/guide/getting-started#keep-it-out-of-production) for the common Vite / Next.js / vanilla gating patterns.
 :::
@@ -61,6 +61,7 @@ function App() {
 | `scrollHostOnSelect` | `boolean` | `false` | Scroll host element into view on selection. |
 | `focusHostOnActivate` | `boolean` | `false` | Focus host element on action activation. |
 | `enablePicker` | `boolean` | `false` | Surface a DevTools-style element picker (⦿ button + Ctrl/Cmd+Shift+C). |
+| `markChanges` | `boolean` | `true` | Mark what each update of the tree changed, and say what a click, a key or an action of the user's changed (see [the inspector's _What changed_](/packages/inspector#what-changed)). `false` marks nothing until the toolbar's checkpoint (⎌) is pressed. |
 | `defaultShowFullNames` | `boolean` | `false` | Start the tree with names in full, widening to fit the longest and scrolling sideways, instead of ending a long name in an ellipsis. Only where the panel starts: the user switches it from the toolbar's Settings (⚙), and their choice holds for the life of the page, in every navigator on it, whatever remounts the component. |
 | `styleNonce` | `string` | — | CSP nonce for injected styles (mount-only — not updated on later prop changes). |
 | `onNodeSelect` | `(node: SemanticNode) => void` | — | Called when a tree node is selected. |
@@ -73,7 +74,7 @@ function App() {
 | `panelHeight` | `number` | `420` | Initial floating panel height in px. |
 | `panelGap` | `number` | `16` | Gap between the floating panel and the viewport edges in px. |
 
-The component creates its own internal `<div>` host and passes it to `createInspector`. Changing `root`, `mount`, `theme`, `interactive`, `highlightOnHover`, `scrollHostOnSelect`, `focusHostOnActivate`, or `enablePicker` remounts the navigator (selection, expansion, and other in-panel UI state reset); changing `mode` uses the imperative `setViewMode()` API without remounting. `defaultShowFullNames` only sets how the panel starts, so changing it remounts nothing, and the user's Show full names choice, unlike the rest of the panel's state, survives any remount, the component's own included. `styleNonce` is applied when the stylesheet is first injected and is not updated on later prop changes (shadow mount reuses the host shadow root; light mount injects `#sn-styles` into `document.head` once). `onNodeSelect` / `onAction` always invoke the latest callback the parent passed (stable wrappers over refs — recreating the prop each render does not leave a stale closure).
+The component creates its own internal `<div>` host and passes it to `createInspector`. Changing `root`, `mount`, `theme`, `interactive`, `highlightOnHover`, `scrollHostOnSelect`, `focusHostOnActivate`, `enablePicker`, or `markChanges` remounts the navigator (selection, expansion, and other in-panel UI state reset); changing `mode` uses the imperative `setViewMode()` API without remounting. `defaultShowFullNames` only sets how the panel starts, so changing it remounts nothing, and the user's Show full names choice, unlike the rest of the panel's state, survives any remount, the component's own included. `styleNonce` is applied when the stylesheet is first injected and is not updated on later prop changes (shadow mount reuses the host shadow root; light mount injects `#sn-styles` into `document.head` once). `onNodeSelect` / `onAction` always invoke the latest callback the parent passed (stable wrappers over refs — recreating the prop each render does not leave a stale closure).
 
 ::: tip Why `highlightOnHover` / `scrollHostOnSelect` / `focusHostOnActivate` default to false
 `<SemanticNavigator />` renders into the same document as your app, so activating a tree row could steal focus from the panel or scroll the page underneath you. The panel itself stays fully interactive either way — row selection, cross-link chip navigation, keyboard movement — what's gated is the side effect on the *real* DOM element. `highlightOnHover` is the safe one to turn on: it only paints an outline over the page. Turn on the other two when the panel is your own inspection tool, and leave them off where end users see it.

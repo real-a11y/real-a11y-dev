@@ -20,6 +20,7 @@ import {
   isSensitiveFieldAttributes,
   nativeStates,
   PANEL_HOST_ATTRIBUTE,
+  resolveEffectiveRoot,
   SENSITIVE_AUTOCOMPLETE_TOKENS,
 } from "./dom-extractor.js";
 import { idScope } from "./flat-tree.js";
@@ -3377,6 +3378,17 @@ describe("extractDomTree", () => {
           (n) => n.a11y.role === "menuitem" && n.a11y.name === "Edit profile",
         ),
       ).toBe(true);
+    });
+
+    it("doesn't take a panel's own live region for an overlay outside root", () => {
+      // A panel mounted in the light DOM, having said what changed.
+      const panel = appendOverlay(
+        `<div ${PANEL_HOST_ATTRIBUTE}><div aria-live="polite">3 new in the tree</div></div>`,
+      );
+      expect(resolveEffectiveRoot(appRoot)).toBe(appRoot);
+      // The same region outside a panel widens the read.
+      panel.removeAttribute(PANEL_HOST_ATTRIBUTE);
+      expect(resolveEffectiveRoot(appRoot)).toBe(document.body);
     });
 
     it("scopes to body when a [role='listbox'] popover is portal-mounted", () => {

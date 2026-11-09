@@ -45,6 +45,7 @@ export {
   STATE_ONLY_ROLES,
   PANEL_HOST_ATTRIBUTE,
   VALUELESS_INPUT_TYPES,
+  isOverlaySignal,
 } from "./extraction/dom-extractor.js";
 export { buildA11yTree, extractA11yTree } from "./extraction/a11y-extractor.js";
 // For a walk up the page's own DOM outside core, such as the extension's focus

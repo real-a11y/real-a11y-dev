@@ -43,6 +43,13 @@ pnpm --filter @real-a11y-dev/example-react-app dev
    names**: does the tree widen and scroll sideways? Change `theme`, which remounts the
    navigator: is it still on? Then pass `defaultShowFullNames` and reload: does the
    panel start that way?
+10. Open a menu or a disclosure in the app. Do the button's row and the new rows flash,
+    then keep a coloured edge, with _changed_ and _new_ tags, and does the bar under the
+    tree count them and list what went? Press `Alt`+`N` in the tree: does it go from
+    change to change? With a screen reader on, is "… in the tree" said after the click,
+    and nothing as you type in a field that filters a list? Press **⎌**, change several
+    things one after another: do they all stay marked until **⎌** is pressed again?
+    Then pass `markChanges={false}`: does nothing mark until **⎌**?
 
 ## Expected
 
@@ -64,6 +71,10 @@ pnpm --filter @real-a11y-dev/example-react-app dev
   sideways unless **Show full names** is on, and a key state such as PRESSED is never
   cut off: a row too narrow for it scrolls the tree sideways, alone. Earlier releases widen the tree for every long
   name and have no ⚙
+- **10** — from inspector and react 0.1.0-beta.23, every update marks what it changed,
+  what a click brought is said once and typing is not read out, and **⎌** keeps
+  everything since it was pressed marked. Earlier releases mark nothing until **⎌**,
+  and then with a `+`/`~` column and a list under the tree
 
 ## Why this exists
 

@@ -30,23 +30,54 @@ import {
   useMemo,
 } from "preact/hooks";
 
-import { buildTreeDiffView } from "../diff.js";
+import { usePageChanges } from "../hooks/usePageChanges.js";
 import { preserveExpandedState } from "../preserve-expanded.js";
+import { semanticTreeRules } from "../semantic-tree-diff.js";
+import type { TreeChangesProp } from "../tree-changes.js";
 
 import { TreePanel } from "./TreePanel.js";
 
 /**
  * Copy the result's node Map so a later incremental splice cannot rewrite
- * baseline *membership* (delete/re-add entries on the live Map).
- * `LiveTreeExtractor.currentResult()` returns its internal Map; without this
- * copy a DOM-mode checkpoint would share that Map and see every splice.
- * Node objects may still be shared — a11y mode rebuilds wrappers each refresh;
- * DOM-mode in-place field tweaks are out of scope for the checkpoint diff.
+ * the membership of an update the change marks still compare with, or of
+ * the checkpoint (delete/re-add entries on the live Map):
+ * `LiveTreeExtractor.currentResult()` returns its internal Map. The nodes
+ * themselves can be shared: a splice replaces a node it changes rather than
+ * writing to it.
  */
 function snapshotResult(result: ExtractionResult): ExtractionResult {
   return {
     ...result,
     nodes: new Map(result.nodes),
+  };
+}
+
+/** What the change marks are compared with, in the tree's words. */
+const SINCE_UPDATE_BEFORE = "the update before";
+const SINCE_CHECKPOINT = "the checkpoint";
+
+/** What the panel marks: what each update found while `live`, and what
+ *  changed since the checkpoint while one is pinned, `live` or not. */
+function shownChanges(
+  changes: ReturnType<typeof usePageChanges<SemanticNode>>,
+  live: boolean,
+): TreeChangesProp | undefined {
+  if (!live && !changes.pinned) return undefined;
+  if (!changes.pinned) {
+    return {
+      marks: changes.marks,
+      clear: changes.clear,
+      since: SINCE_UPDATE_BEFORE,
+    };
+  }
+  // A click after the checkpoint is said with all it counts, so it says
+  // what it counts from.
+  return {
+    marks: changes.marks,
+    clear: changes.clear,
+    since: SINCE_CHECKPOINT,
+    noticeEnd: `since ${SINCE_CHECKPOINT}`,
+    totals: true,
   };
 }
 
@@ -94,10 +125,19 @@ export interface TreeViewProps {
    */
   enablePicker?: boolean;
   /**
+   * Mark what each update of the tree changed: a new or changed row keeps a
+   * coloured edge and flashes as it comes, tags say what changed, a bar under
+   * the tree sums it up and lists the rows removed, Alt+N goes from change to
+   * change, and what a click, a key or an action of the user's changed is
+   * said. Defaults to `true`; `false` marks nothing until a checkpoint is
+   * taken.
+   */
+  markChanges?: boolean;
+  /**
    * Show the toolbar's checkpoint button: capture the tree, interact with the
-   * page, and rows that appeared or changed since are marked in place.
-   * Defaults to `true` — it is a passive, read-only capture that never touches
-   * the host page.
+   * page, and everything that changed since is marked the same way, until
+   * the button is pressed again. Defaults to `true` — it is a passive,
+   * read-only capture that never touches the host page.
    */
   enableDiff?: boolean;
   /**
@@ -113,6 +153,12 @@ export interface TreeViewProps {
   showFullNames?: boolean;
   /** Called when the user turns "Show full names" on or off in Settings. */
   onShowFullNamesChange?: (showFullNames: boolean) => void;
+  /**
+   * Bump to read the tree again now, as the inspector's `refresh()` does,
+   * rather than at the page's next change: what the read finds is marked as
+   * any update's is, and nothing else in the panel starts over.
+   */
+  refreshKey?: number;
   /** Callback when a node is selected */
   onNodeSelect?: (node: SemanticNode) => void;
   /**
@@ -133,10 +179,12 @@ export function TreeView({
   scrollHostOnSelect = false,
   focusHostOnActivate = false,
   enablePicker = false,
+  markChanges = true,
   enableDiff = true,
   defaultShowFullNames = false,
   showFullNames,
   onShowFullNamesChange,
+  refreshKey,
   onNodeSelect,
   onAction,
 }: TreeViewProps) {
@@ -154,80 +202,67 @@ export function TreeView({
   }, [initialViewMode]);
   const [treeData, setTreeData] = useState<ExtractionResult | null>(null);
 
-  // Diff baseline. Capturing keeps a reference to the extraction as it was;
-  // each flush goes through `snapshotResult` so the baseline's node Map is not
-  // the live extractor Map (incremental splices must not rewrite membership).
-  // The highlight then updates live as the user interacts with the page.
-  //
-  // What the baseline was captured FROM — the view mode and the root — is
-  // stored alongside the extraction, and the diff only runs when both still
-  // match. A baseline is comparable only against the same kind of extraction
-  // of the same subtree:
+  // What each update found changed, or all of it since the checkpoint
+  // (`usePageChanges`). The checkpoint is comparable only with the same kind
+  // of extraction of the same subtree:
   //
   //   - mode: the DOM and a11y trees are built by different extractors and
   //     share almost no node ids.
   //   - root: node ids are per-element, so a different subtree yields a
   //     disjoint id set.
   //
-  // Either mismatch makes `diffTrees` report nearly every row as added and
-  // every baseline row as removed — the "diff into noise" this feature exists
-  // to avoid. (Ids are never recycled onto a different element, so the failure
-  // is bounded to noise; it cannot mis-attribute a change to the wrong row.)
+  // Either mismatch would report nearly every row as added and every row of
+  // the checkpoint as removed: the "diff into noise" this feature exists to
+  // avoid. So both drop what was compared so far, the checkpoint with it,
+  // and the button stops reading as pressed. Both can change by more than
+  // one route: the mode moves through the toolbar OR through the
+  // `initialViewMode` prop (that is how `InspectorInstance.setViewMode()` and
+  // the React wrapper's `mode` prop arrive), and the root is swapped by
+  // whoever renders us. `packages/inspector` happens to re-key TreeView on
+  // `setRoot()`, which remounts and discards this state anyway, but TreeView
+  // is a public export, and a consumer rendering it directly with a
+  // changing `root` and no key gets no such help.
   //
-  // Carrying the provenance with the data makes comparability a property of
-  // the baseline itself, rather than something each call site has to remember
-  // to enforce. Both inputs can change by more than one route: the mode moves
-  // through the toolbar OR through the `initialViewMode` prop (that is how
-  // `InspectorInstance.setViewMode()` and the React wrapper's `mode` prop
-  // arrive), and the root is swapped by whoever renders us. A guard living in
-  // one of those paths would miss the others.
-  const [baseline, setBaseline] = useState<{
-    mode: TreeViewMode;
-    root: Element;
-    result: ExtractionResult;
-  } | null>(null);
-  const diff = useMemo(
-    () =>
-      baseline &&
-      treeData &&
-      baseline.mode === viewMode &&
-      baseline.root === root
-        ? buildTreeDiffView(baseline.result, treeData)
-        : undefined,
-    [baseline, treeData, viewMode, root],
-  );
-  const toggleDiff = useCallback(
-    () =>
-      setBaseline((current) =>
-        current || !treeData
-          ? null
-          : { mode: viewMode, root, result: treeData },
-      ),
-    [treeData, viewMode, root],
-  );
-
-  // Drop a baseline whose provenance no longer holds, so the checkpoint button
-  // stops reading as pressed once its capture has become uncomparable. The
-  // guard above already prevents a stale diff from rendering; this keeps the
-  // control honest about it.
+  // The TAB view shows the A11Y view's tree, so moving between the two
+  // keeps it all.
   //
-  // `packages/inspector` happens to re-key TreeView on `setRoot()`, which
-  // remounts and discards this state anyway — but TreeView is a public export,
-  // and a consumer rendering it directly with a changing `root` and no key
-  // gets no such help.
+  // Declared before the extraction effect below, so the first update after
+  // either changes is compared with nothing from before. A pick of the
+  // element picker is for the panel: the page never sees it.
+  const extraction = viewMode === "dom" ? "dom" : "a11y";
+  const pickerRef = useRef<Picker | null>(null);
+  const rules = useMemo(
+    () => semanticTreeRules(extraction, root),
+    [extraction, root],
+  );
+  const changes = usePageChanges({
+    rules,
+    live: markChanges,
+    doc: root.ownerDocument,
+    ignoreInput: () => pickerRef.current?.isEnabled() ?? false,
+  });
+  const { pin, reset, noteRead } = changes;
   useEffect(() => {
-    setBaseline(null);
-  }, [viewMode, root]);
+    reset();
+  }, [extraction, root, reset]);
+  const toggleDiff = useCallback(() => {
+    if (changes.pinned) pin(null);
+    else if (treeData) pin(treeData);
+  }, [changes.pinned, pin, treeData]);
   // Picker: panel-side mirror of the page-side createPicker state. The
   // picker itself owns the listeners + cursor; this state drives the
   // toolbar button's aria-pressed and the toggle.
   const [pickModeOn, setPickModeOn] = useState(false);
   const [pickedNodeId, setPickedNodeId] = useState<string | null>(null);
 
+  const lastRead = useRef<{
+    extraction: "dom" | "a11y";
+    root: Element;
+    tree: ExtractionResult;
+  } | null>(null);
   const dispatcherRef = useRef<ActionDispatcher | null>(null);
   const focusManagerRef = useRef<FocusManager | null>(null);
   const observerRef = useRef<DomObserver | null>(null);
-  const pickerRef = useRef<Picker | null>(null);
 
   // Extract on mount / root / view-mode change, then patch incrementally on
   // DomObserver flushes. Tab mode shares the a11y extraction (same as before).
@@ -238,16 +273,28 @@ export function TreeView({
     const liveMode = viewMode === "dom" ? "dom" : "a11y";
     const live = new LiveTreeExtractor(root, { mode: liveMode });
 
+    // The last update: what the next one replaces, for the change marks.
+    // Through a read again (`refreshKey`) or a picker turned on or off, the
+    // tree on screen; none for a tree of another kind or root, which can't
+    // be compared with it.
+    const last = lastRead.current;
+    let onScreen =
+      last && last.extraction === liveMode && last.root === root
+        ? last.tree
+        : null;
     const flush = (change?: TreeChange) => {
+      const next = snapshotResult(live.refresh(change));
       // a11y mode rebuilds node wrappers on every refresh with
       // `expanded: depth < 3`, so without carrying the previous
       // ui.expanded forward a user's expand/collapse snaps back on any
       // host-page mutation the DomObserver sees (audit finding #103).
       setTreeData((prev) => {
-        const next = snapshotResult(live.refresh(change));
         if (prev) preserveExpandedState(prev, next);
         return next;
       });
+      noteRead(onScreen, next);
+      onScreen = next;
+      lastRead.current = { extraction: liveMode, root, tree: next };
     };
 
     flush();
@@ -259,6 +306,9 @@ export function TreeView({
     observerRef.current = new DomObserver(root, flush);
     observerRef.current.start();
 
+    // A picker made afresh starts off, and so does its button: a read again
+    // (`refreshKey`) or a picker turned on or off makes one.
+    setPickModeOn(false);
     // Picker lifecycle is tied to the same effect so the same refs +
     // FocusManager are used for the highlight overlay. The picker
     // itself is inert until setEnabled(true) — creating it is cheap.
@@ -284,7 +334,7 @@ export function TreeView({
       pickerRef.current?.teardown();
       pickerRef.current = null;
     };
-  }, [root, viewMode, enablePicker]);
+  }, [root, viewMode, enablePicker, noteRead, refreshKey]);
 
   const togglePickMode = useCallback(() => {
     pickerRef.current?.setEnabled(!pickModeOn);
@@ -336,6 +386,8 @@ export function TreeView({
         return;
       }
       const request: ActionRequest = { nodeId, action };
+      // What the action changes on the page is the user's doing.
+      changes.noteAction();
       const result = dispatcherRef.current?.dispatch(request);
       // Report what the dispatcher actually returned. Reporting a fabricated
       // success told every consumer the action worked even when the element
@@ -343,7 +395,7 @@ export function TreeView({
       // dispatch happened, so there is nothing truthful to report.
       if (result) onAction?.(request, result);
     },
-    [interactive, focusHostOnActivate, onAction],
+    [interactive, focusHostOnActivate, onAction, changes.noteAction],
   );
 
   const handleHover = useCallback(
@@ -383,9 +435,9 @@ export function TreeView({
       viewMode={viewMode}
       onViewModeChange={setViewMode}
       theme={theme}
-      diff={diff}
+      changes={shownChanges(changes, markChanges)}
       enableDiff={enableDiff}
-      diffActive={baseline !== null}
+      diffActive={changes.pinned}
       onToggleDiff={toggleDiff}
       onSelect={handleSelect}
       onActivate={handleActivate}

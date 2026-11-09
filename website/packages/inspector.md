@@ -18,7 +18,7 @@ npm install -D @real-a11y-dev/inspector
 **Peer dependencies:** none (Preact is bundled).
 
 ::: tip Install as a dev dependency
-`@real-a11y-dev/inspector` is a developer audit panel (~40 KB gzipped, Preact + tree view). Keep it in `devDependencies` and load it via a dynamic `import()` behind a build flag so it never ships to end users.
+`@real-a11y-dev/inspector` is a developer audit panel (~46 KB gzipped, Preact + tree view). Keep it in `devDependencies` and load it via a dynamic `import()` behind a build flag so it never ships to end users.
 
 See [Keep it out of production](/guide/getting-started#keep-it-out-of-production) for the Vite / webpack / vanilla gating patterns.
 :::
@@ -60,6 +60,7 @@ Returns an `InspectorInstance`.
 | `scrollHostOnSelect` | `boolean` | `false` | Scroll the host DOM element into view when selecting a tree node. |
 | `focusHostOnActivate` | `boolean` | `false` | Move focus to the host DOM element when activating a tree node action. |
 | `enablePicker` | `boolean` | `false` | Surface a DevTools-style "select an element in the page" picker (toolbar button + Ctrl/Cmd+Shift+C); off by default because it captures document-level clicks. |
+| `markChanges` | `boolean` | `true` | Mark what each update of the tree changed: new and changed rows keep a coloured edge, flash as they come and say what changed, a bar under the tree counts it and lists the rows removed, Alt+N and Alt+Shift+N go from change to change, and what a click, a key or an action of the user's changed is said to a screen reader. `false` marks nothing until the toolbar's checkpoint (⎌) is pressed, which marks everything since. |
 | `defaultShowFullNames` | `boolean` | `false` | Start the tree with names in full, widening to fit the longest and scrolling sideways, instead of ending a long name in an ellipsis. Only where the panel starts: the user switches it from the toolbar's Settings (⚙), and their choice then holds for the life of the page, in every inspector on it: those open follow it at once, and it holds through `refresh()`, `setRoot()` and every later `createInspector()`. |
 | `styleNonce` | `string` | — | CSP nonce applied to injected `<style>` elements. |
 | `onNodeSelect` | `(node) => void` | — | Callback when a node is selected. |
@@ -68,6 +69,10 @@ Returns an `InspectorInstance`.
 ::: tip Shadow DOM is the right default
 With `mount: "shadow"`, the panel's styles live inside the ShadowRoot and cannot conflict with your app. Your app's CSS cannot accidentally override the panel's layout. Keep this default unless you have a specific reason to opt out.
 :::
+
+### What changed
+
+The panel marks what each update of the tree changed, so opening a menu shows the button that went expanded and the menu that came, without hunting for them. What a click or a key of yours on the page brought, in the few seconds after it, stays marked together and is said to a screen reader ("3 new, 1 changed in the tree"); typing in a field isn't read out at every key, and what the page changes on its own is marked without being said. A modal that hides the rest of the page from the tree, or a menu or listbox opened the same way (as Radix's are), is marked as new, not as the page removed. The checkpoint button (⎌) pins the tree instead: everything that changes from then on stays marked until you press it again. Turn the automatic marks off with `markChanges: false`; the checkpoint still works.
 
 ::: tip Why `highlightOnHover` / `scrollHostOnSelect` / `focusHostOnActivate` default to false
 The inspector renders into the same document as your app, so activating a tree row could steal focus from the panel or scroll the page underneath you. The panel itself stays fully interactive either way — selection, chip navigation, keyboard movement — what's gated is the side effect on the *real* DOM element. `highlightOnHover` is the safe one to turn on: it only paints an outline over the page. Turn on the other two when the panel is your own inspection tool, and leave them off where end users see it.
@@ -112,7 +117,7 @@ inspector.setRoot(document.querySelector("[role='dialog']")!);
 
 ### `refresh()`
 
-Forces an immediate re-extraction without waiting for the next DOM mutation. Useful in tests or after programmatic DOM changes.
+Forces an immediate re-extraction without waiting for the next DOM mutation. Useful in tests or after programmatic DOM changes. The panel keeps its selection, open rows and checkpoint, and marks what the re-extraction finds changed.
 
 ### `getTree()`
 
@@ -196,6 +201,6 @@ inspector.mount();
 
 ## Panel features
 
-The inspector renders the same tree panel as the Chrome extension, with its search, role filters and [keyboard](/guide/chrome-extension#keyboard), and scopes with [`setRoot()`](#setroot-root). Focus sync, the scope breadcrumb and the live region log are the extension's alone.
+The inspector renders the same tree panel as the Chrome extension, with its search, role filters, [keyboard](/guide/chrome-extension#keyboard) and [change marks](#what-changed), and scopes with [`setRoot()`](#setroot-root). Focus sync, the scope breadcrumb and the live region log are the extension's alone.
 
 → [Using the panel](/guide/chrome-extension#using-the-panel)

@@ -27,12 +27,14 @@ describe("buildInlineStyles", () => {
     expect(inlined).not.toContain("@import");
   });
 
-  it("is themes.css then tree.css, less only whitespace and comments", () => {
+  it("is themes.css, tree.css, then tree-changes.css, less only whitespace and comments", () => {
     const tree = read("./tree.css");
     expect(tree).toContain('@import "./themes.css";');
 
     const source =
-      read("./themes.css") + tree.replace('@import "./themes.css";', "");
+      read("./themes.css") +
+      tree.replace('@import "./themes.css";', "") +
+      read("./tree-changes.css");
     expect(rules(inlined)).toBe(rules(source));
   });
 });

@@ -239,6 +239,16 @@ export interface SemanticNavigatorConfig {
    */
   enablePicker?: boolean;
   /**
+   * Mark what each update of the tree changed. Default `true`. A new or
+   * changed row keeps a coloured edge and flashes as it comes, tags say what
+   * changed, a bar under the tree counts it and lists the rows removed,
+   * Alt+N and Alt+Shift+N go from change to change, and what a click, a key
+   * or an action of the user's changed is said to a screen reader. `false`
+   * marks nothing until the toolbar's checkpoint (⎌) is pressed, which marks
+   * everything since, either way.
+   */
+  markChanges?: boolean;
+  /**
    * Start with names in the tree shown in full, the tree widening to fit a
    * long one and scrolling sideways. Default `false`: a long name ends in an
    * ellipsis, and the tree fits the panel. Only where the panel starts: the
