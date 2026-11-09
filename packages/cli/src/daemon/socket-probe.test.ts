@@ -5,7 +5,7 @@ import { join } from "node:path";
 
 import { afterEach, describe, expect, it } from "vitest";
 
-import { isSocketPresent } from "./session-probe.js";
+import { isSocketPresent } from "./socket-probe.js";
 
 describe("isSocketPresent", () => {
   let dir: string | undefined;

@@ -30,7 +30,7 @@ import {
   encodeRpc,
   decodeRpc,
 } from "./protocol.js";
-import { isSocketPresent } from "./session-probe.js";
+import { isSocketPresent } from "./socket-probe.js";
 import { tightenWindowsTokenAcl } from "./windows-acl.js";
 
 export interface DaemonRunResult {

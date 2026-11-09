@@ -17,11 +17,8 @@ import {
   resolveWindowsSocketPath,
   type SessionPaths,
 } from "./session-paths.js";
-import {
-  isDirectoryOwnedByUs,
-  isSocketPresent,
-  isStaleLock,
-} from "./session-probe.js";
+import { isDirectoryOwnedByUs, isStaleLock } from "./session-probe.js";
+import { isSocketPresent } from "./socket-probe.js";
 
 export interface SessionStatus {
   name: string;
