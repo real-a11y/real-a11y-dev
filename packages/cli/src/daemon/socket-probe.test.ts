@@ -27,7 +27,11 @@ describe("isSocketPresent", () => {
 
   it("is true while a server listens, with the default and an explicit timeout", async () => {
     dir = await mkdtemp(join(tmpdir(), "probe-"));
-    const socketPath = join(dir, "live.sock");
+    // Windows has no unix-socket files; a named pipe is its equivalent.
+    const socketPath =
+      process.platform === "win32"
+        ? `\\\\.\\pipe\\real-a11y-probe-${process.pid}-${Date.now()}`
+        : join(dir, "live.sock");
     server = createServer((s) => s.end());
     await new Promise<void>((resolve) => server!.listen(socketPath, resolve));
     expect(await isSocketPresent(socketPath)).toBe(true);
