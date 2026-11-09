@@ -17,6 +17,16 @@
   also touches dogfood code.
 -->
 
+## Unreleased
+
+### Patch Changes
+
+- **The TAB view leaves `visibility: hidden` text out of names.** A control or
+  heading named from content that includes `visibility: hidden` or `collapse`
+  text no longer reads it, as in AccName 1.2 §2A and Chrome's tree; a descendant
+  that sets `visibility: visible` again still counts.
+  ([#616](https://github.com/real-a11y/real-a11y-dev/pull/616))
+
 ## 0.1.19
 
 ### Patch Changes
