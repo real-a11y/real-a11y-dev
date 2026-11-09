@@ -54,8 +54,7 @@ export { safeParentElement } from "./extraction/clobber-safe.js";
 // announcement, an editor's text — which walk the tree the way the DOM
 // producer does: the flat tree, what is rendered, what AT can reach, and the
 // same elements skipped, read through the same clobber-safe accessors.
-export { ignoresChildText } from "./extraction/dom-extractor.js";
-export { isTextVisible } from "./extraction/name-spacing.js";
+export { ignoresChildText, isTextVisible } from "./extraction/dom-extractor.js";
 export {
   flatChildNodes,
   isRenderedInFlatTree,

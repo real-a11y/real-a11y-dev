@@ -4055,11 +4055,6 @@ describe("the own-text fallback reads through role-less inline wrappers", () => 
   });
 });
 
-// A `<details>` inside a heading/button/link. Its implicit role is `group`,
-// a name barrier, so the whole disclosure used to vanish from the ancestor's
-// name — e.g. a GitHub comment header read "user commented •" without the
-// "edited by …" summary. Every expectation below is what Chromium's own
-// accessibility tree computes for the same markup (measured over CDP).
 describe("visibility:hidden text in names and descriptions (accname 2A)", () => {
   const H = `style="visibility:hidden"`;
   function read(html: string, id: string) {
@@ -4100,6 +4095,14 @@ describe("visibility:hidden text in names and descriptions (accname 2A)", () => 
     expect(
       nameOf(`<label>Email <span ${H}>(hidden)</span><input id="t"></label>`),
     ).toBe("Email");
+  });
+
+  it("does not read into a hidden widget inside a wrapping label", () => {
+    expect(
+      nameOf(
+        `<label>Name <button ${H}><span style="visibility:visible">Go</span></button><input id="t"></label>`,
+      ),
+    ).toBe("Name");
   });
 
   it("drops it from a visible aria-labelledby target and a description", () => {
@@ -4146,6 +4149,11 @@ describe("visibility:hidden text in names and descriptions (accname 2A)", () => 
   });
 });
 
+// A `<details>` inside a heading/button/link. Its implicit role is `group`,
+// a name barrier, so the whole disclosure used to vanish from the ancestor's
+// name — e.g. a GitHub comment header read "user commented •" without the
+// "edited by …" summary. Every expectation below is what Chromium's own
+// accessibility tree computes for the same markup (measured over CDP).
 describe("name from content through a <details>", () => {
   function nameOf(html: string): string {
     const root = createPage(html);

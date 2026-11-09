@@ -8,7 +8,7 @@
  */
 import { isAriaHiddenValue } from "./aria-tokens.js";
 import { safeGetAttribute, safeNodeType, safeTagName } from "./clobber-safe.js";
-import { isTextVisible } from "./name-spacing.js";
+import { isOpaqueNameChild, isTextVisible } from "./name-spacing.js";
 import {
   getCachedComputedStyle,
   isSubtreeHidden,
@@ -48,16 +48,12 @@ export function wrappingLabelText(
         if (FORM_CONTROL_TAGS.has(safeTagName(childEl))) continue;
         if (isAriaHiddenValue(safeGetAttribute(childEl, "aria-hidden")))
           continue;
-        if (
-          isSubtreeHidden(childEl, getCachedComputedStyle(childEl, styleCache))
-        ) {
-          continue;
-        }
         const style = getCachedComputedStyle(childEl, styleCache);
-        const text = readChild(
-          childEl,
-          labelShows ? isTextVisible(style) : null,
-        ).trim();
+        if (isSubtreeHidden(childEl, style)) continue;
+        const shows = labelShows ? isTextVisible(style) : null;
+        // A hidden widget or barrier is not read into, as in a name walk.
+        if (shows === false && isOpaqueNameChild(childEl)) continue;
+        const text = readChild(childEl, shows).trim();
         if (text) parts.push(text);
       } catch (error) {
         onUnreadable(childEl, error);

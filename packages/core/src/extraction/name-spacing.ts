@@ -3,6 +3,11 @@
  * dom-extractor.ts, which is at its length ceiling.
  */
 import { safeGetAttribute, safeTagName } from "./clobber-safe.js";
+import {
+  getCachedComputedStyle,
+  getImplicitRole,
+  type StyleCache,
+} from "./role-map.js";
 
 /** The part of a name walk that says whether the current element's text shows. */
 export interface TextVisibility {
@@ -27,17 +32,18 @@ export function isTextVisible(style: CSSStyleDeclaration | null): boolean {
 
 /**
  * Whether the walk filters at its root: as given, else only under a visible
- * root. The style is read lazily, and a root whose style cannot be read (an
+ * root. The style is read only when the walk was not told, and a root whose style cannot be read (an
  * element inside a `<form>` that a control has clobbered) filters nothing,
  * as it did before the root's style was asked for.
  */
 export function rootTextVisible(
   walk: TextVisibility,
-  readStyle: () => CSSStyleDeclaration | null,
+  root: Element,
+  styleCache?: StyleCache | null,
 ): boolean | null {
   if (walk.textVisible !== undefined) return walk.textVisible;
   try {
-    return isTextVisible(readStyle()) || null;
+    return isTextVisible(getCachedComputedStyle(root, styleCache)) || null;
   } catch {
     return null;
   }
@@ -55,21 +61,28 @@ export function childTextWalk<W extends TextVisibility>(
 }
 
 /**
- * What a `visibility: hidden` child adds: its box still spaces its neighbours,
+ * True for a child the name walk never reads into: a named widget lends its
+ * own name, and a barrier lends nothing. A hidden one stays opaque too.
+ */
+export function isOpaqueNameChild(child: Element): boolean {
+  const role = getImplicitRole(child);
+  return (
+    NAMED_WIDGET_ROLES.has(role) ||
+    (NAME_BARRIER_ROLES.has(role) && !isImplicitDetailsGroup(child))
+  );
+}
+
+/**
+ * What a `visibility: hidden` child adds: its box still spaces its neighbours
  * and a descendant may be visible again, but it lends no alternative of its
- * own. A named widget or a barrier is not read into, as
- * when it is visible.
+ * own, and an opaque child is not read into at all.
  */
 export function hiddenChildText(
   child: Element,
-  role: string,
   spaced: boolean,
   read: () => string,
 ): string {
-  const opaque =
-    NAMED_WIDGET_ROLES.has(role) ||
-    (NAME_BARRIER_ROLES.has(role) && !isImplicitDetailsGroup(child));
-  const inner = opaque ? "" : read();
+  const inner = isOpaqueNameChild(child) ? "" : read();
   return spaced ? ` ${inner} ` : inner;
 }
 

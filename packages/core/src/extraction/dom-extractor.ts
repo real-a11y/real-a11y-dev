@@ -42,6 +42,7 @@ import {
 import { insetCollapsesBox } from "./inset-clip.js";
 import { associatedLabels, wrappingLabelText } from "./label-text.js";
 import { hasCaptionsTrack } from "./media-tracks.js";
+export { isTextVisible } from "./name-spacing.js";
 import {
   childTextWalk,
   hiddenChildText,
@@ -661,7 +662,7 @@ function svgTitle(
  * Per WAI-ARIA accname-1.2 §4.3.2 step 2A, hidden subtrees contribute the
  * empty string. Skip element descendants that are aria-hidden, hidden,
  * inert, or display/content-visibility-hidden. `visibility: hidden` and
- * `collapse` drop only an element's own text (see {@link NameWalk.textVisible}). A skipped descendant
+ * `collapse` drop only an element's own text (see {@link TextVisibility}). A skipped descendant
  * that still RENDERS contributes a separator even so, because its box keeps the
  * text either side of it apart — see {@link needsSpaceAround}. (A skipped child
  * is not recursed into, so a `display: contents` one whose own children render
@@ -692,9 +693,7 @@ function getAccessibleTextContent(
   styleCache?: StyleCache | null,
   walk: NameWalk = {},
 ): string {
-  const textVisible = rootTextVisible(walk, () =>
-    getCachedComputedStyle(element, styleCache),
-  );
+  const textVisible = rootTextVisible(walk, element, styleCache);
   let text = "";
   for (const child of flatChildNodes(element)) {
     const type = safeNodeType(child);
@@ -744,7 +743,7 @@ function getAccessibleTextContent(
         // lends no alternative of its own: no aria-label, no widget name.
         const childWalk = childTextWalk({ ...walk, textVisible }, childStyle);
         if (childWalk.textVisible === false) {
-          text += hiddenChildText(childEl, role, spaced, () =>
+          text += hiddenChildText(childEl, spaced, () =>
             getAccessibleTextContent(childEl, visited, styleCache, childWalk),
           );
           continue;
