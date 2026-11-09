@@ -86,7 +86,7 @@ monorepo.
 - On the beta.19 release four of these fail as known defects the beta.19 dogfood filed, not
   new ones: `testing`'s orphan `magic-string` chunk, `storybook-addon`'s two `files`
   entries that match nothing, `./matchers/vitest` against Vitest 5 (`TS2428`), and `mcp`'s
-  `SessionRecord`
+  `SessionRecord`. The `TS2428` is fixed in testing 0.1.0-beta.22
 - `npx` works with nothing installed locally — this is how most people will first run it.
   Only the scoped names exist: `real-a11y` unscoped is not one of our packages
 - No package the release **moved** is left behind within the linked family — but a member

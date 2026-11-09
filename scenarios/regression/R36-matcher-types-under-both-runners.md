@@ -98,8 +98,8 @@ run — the whole scenario is `npx tsc --noEmit`.
   declares `Assertion<R extends void | Promise<void> = void, T = unknown>`, and
   through testing 0.1.0-beta.21 our `Assertion<T = any>` reports `TS2428` three times — the
   known defect the beta.19 dogfood filed (twin: D5 step 8), fixed in testing
-  0.1.0-beta.22. From 0.1.0-beta.22 the entry declares Vitest 5's shape, so it is
-  Vitest 3 or 4 that reports `TS2428`, the documented requirement and not a fail.
+  0.1.0-beta.22. From 0.1.0-beta.22 the entry declares Vitest 5's shape, so any
+  step run on Vitest 3 or 4 reports `TS2428`, the documented requirement and not a fail.
   Steps 1–9, on the repo's pinned Vitest, keep their own expectations through it
 
 ## Why this exists
