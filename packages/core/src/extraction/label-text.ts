@@ -55,3 +55,30 @@ export function wrappingLabelText(
   }
   return parts.join(" ");
 }
+
+/**
+ * Every label of `control` in tree order: the `<label for>` elements that name
+ * its id, plus the label that wraps it. A label with a `for` belongs to the
+ * control that id names, wrapping or not, so a wrapper pointing elsewhere is
+ * left out. `wrappingLabel` is the one that holds the control, if any.
+ */
+export function associatedLabels(
+  control: Element,
+  forLabels: readonly Element[],
+): { labels: Element[]; wrappingLabel: Element | null } {
+  const labels = [...forLabels];
+  const closest = control.closest("label");
+  const id = control.getAttribute("id");
+  const wrappingLabel =
+    closest &&
+    (!closest.hasAttribute("for") || closest.getAttribute("for") === id)
+      ? closest
+      : null;
+  if (wrappingLabel && !labels.includes(wrappingLabel)) {
+    labels.push(wrappingLabel);
+    labels.sort((a, b) =>
+      a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1,
+    );
+  }
+  return { labels, wrappingLabel };
+}

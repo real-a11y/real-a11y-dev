@@ -6882,6 +6882,18 @@ describe("reference lookups come from one index per tree", () => {
     expect(input?.a11y.name).toBe(name);
   });
 
+  it("leaves out a wrapping label that points at another control", () => {
+    const root = createPage(
+      `<label for="other">Note <input id="x"></label><label for="x">Real</label><input id="other">`,
+    );
+    document.body.append(root);
+    const input = [...extractDomTree(root).nodes.values()].find(
+      (n) => n.dom?.attributes["id"] === "x",
+    );
+    root.remove();
+    expect(input?.a11y.name).toBe("Real");
+  });
+
   it("joins every label of a select", () => {
     const root = createPage(
       `<label for="s">A</label><label for="s">B</label><select id="s"><option>o</option></select>`,

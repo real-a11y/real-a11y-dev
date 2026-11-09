@@ -40,7 +40,7 @@ import {
   parseTabindex,
 } from "./focusability.js";
 import { insetCollapsesBox } from "./inset-clip.js";
-import { wrappingLabelText } from "./label-text.js";
+import { associatedLabels, wrappingLabelText } from "./label-text.js";
 import { hasCaptionsTrack } from "./media-tracks.js";
 import { scopeReferenceIndex } from "./reference-index.js";
 import {
@@ -1062,23 +1062,12 @@ function computeRawAccessibleName(
     const id = safeGetAttribute(element, "id");
     // Every `<label for>` in the control's tree, from the per-extraction index
     // rather than a query that rescans from the top for every control.
-    const labels: Element[] = id
-      ? [
-          ...(scopeReferenceIndex(styleCache, idScope(element)).labelFor.get(
-            id,
-          ) ?? []),
-        ]
-      : [];
-    // Wrapping label pattern: <label>Full name<input /></label>
-    const wrappingLabel = element.closest("label");
-    if (wrappingLabel && !labels.includes(wrappingLabel)) {
-      labels.push(wrappingLabel);
-      labels.sort((a, b) =>
-        a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING
-          ? -1
-          : 1,
-      );
-    }
+    const { labels, wrappingLabel } = associatedLabels(
+      element,
+      (id &&
+        scopeReferenceIndex(styleCache, idScope(element)).labelFor.get(id)) ||
+        [],
+    );
     const labelParts: string[] = [];
     for (const label of labels) {
       if (visited.has(label)) continue;
