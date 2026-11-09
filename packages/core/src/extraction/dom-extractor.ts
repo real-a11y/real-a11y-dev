@@ -40,6 +40,7 @@ import {
   parseTabindex,
 } from "./focusability.js";
 import { insetCollapsesBox } from "./inset-clip.js";
+import { associatedLabels, wrappingLabelText } from "./label-text.js";
 import { hasCaptionsTrack } from "./media-tracks.js";
 import { scopeReferenceIndex } from "./reference-index.js";
 import {
@@ -1053,73 +1054,44 @@ function computeRawAccessibleName(
     if (title) return title;
   }
 
-  // 4. Label element for form controls. A label is read once per computation,
-  //    like any element under the visit-once guard: a heading that holds a
-  //    checkbox and its label is "Agree" in Chromium, not "Agree Agree".
+  // 4. Label elements for form controls. HTML-AAM joins every associated label
+  //    in DOM order with spaces. Each label is read once per computation, like
+  //    any element under the visit-once guard: a heading that holds a checkbox
+  //    and its label is "Agree" in Chromium, not "Agree Agree".
   if (tag === "input" || tag === "select" || tag === "textarea") {
     const id = safeGetAttribute(element, "id");
-    if (id) {
-      // First `<label for>` in the control's tree, from the per-extraction index
-      // rather than a query that rescans from the top for every control.
-      const label =
-        scopeReferenceIndex(styleCache, idScope(element)).labelFor.get(id) ??
-        null;
-      if (label && !visited.has(label)) {
-        visited.add(label);
-        return getAccessibleTextContent(label, visited, styleCache).trim();
-      }
+    // Every `<label for>` in the control's tree, from the per-extraction index
+    // rather than a query that rescans from the top for every control.
+    const { labels, wrappingLabel } = associatedLabels(
+      element,
+      (id &&
+        scopeReferenceIndex(styleCache, idScope(element)).labelFor.get(id)) ||
+        [],
+    );
+    const labelParts: string[] = [];
+    for (const label of labels) {
+      if (visited.has(label)) continue;
+      visited.add(label);
+      const text =
+        label === wrappingLabel
+          ? wrappingLabelText(label, element, styleCache, {
+              readChild: (child) =>
+                // Each child's own alternative first, as in any name walk:
+                // Chromium names `<label><img alt="Email"> <input></label>`
+                // "Email".
+                textAlternative(
+                  child,
+                  getImplicitRole(child),
+                  visited,
+                  styleCache,
+                  {},
+                ) ?? getAccessibleTextContent(child, visited, styleCache),
+              onUnreadable: warnSkippedElement,
+            })
+          : getAccessibleTextContent(label, visited, styleCache).trim();
+      if (text) labelParts.push(text);
     }
-    // Wrapping label pattern: <label>Full name<input /></label>
-    // Walk the label's child nodes and collect text from everything that is
-    // NOT the form control itself (skips input/textarea/select siblings too).
-    const wrappingLabel = element.closest("label");
-    if (wrappingLabel && !visited.has(wrappingLabel)) {
-      visited.add(wrappingLabel);
-      const FORM_CONTROL_TAGS = new Set(["input", "select", "textarea"]);
-      const parts: string[] = [];
-      for (const child of wrappingLabel.childNodes) {
-        const type = safeNodeType(child);
-        if (type === Node.TEXT_NODE) {
-          const text = child.textContent?.trim();
-          if (text) parts.push(text);
-        } else if (type === Node.ELEMENT_NODE) {
-          const childEl = child as Element;
-          if (childEl === element) continue;
-          // An unreadable child costs its own text, not the control's name
-          // (see getAccessibleTextContent).
-          try {
-            if (FORM_CONTROL_TAGS.has(safeTagName(childEl))) continue;
-            if (isAriaHiddenValue(safeGetAttribute(childEl, "aria-hidden")))
-              continue;
-            if (
-              isSubtreeHidden(
-                childEl,
-                getCachedComputedStyle(childEl, styleCache),
-              )
-            ) {
-              continue;
-            }
-            // Each child's own alternative first, as in any name walk:
-            // Chromium names `<label><img alt="Email"> <input></label>`
-            // "Email".
-            const text = (
-              textAlternative(
-                childEl,
-                getImplicitRole(childEl),
-                visited,
-                styleCache,
-                {},
-              ) ?? getAccessibleTextContent(childEl, visited, styleCache)
-            ).trim();
-            if (text) parts.push(text);
-          } catch (error) {
-            warnSkippedElement(childEl, error);
-          }
-        }
-      }
-      const labelText = parts.join(" ");
-      if (labelText) return labelText;
-    }
+    if (labelParts.length) return labelParts.join(" ");
   }
 
   // 4a. Fieldset — accessible name comes from its direct <legend> child

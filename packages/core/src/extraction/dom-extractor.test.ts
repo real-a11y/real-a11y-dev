@@ -6856,16 +6856,54 @@ describe("reference lookups come from one index per tree", () => {
     expect(tagsOf(root)).toContain("p");
   });
 
-  it("names a control from the first label that carries its id", () => {
-    const root = createPage(
-      `<label for="a">First</label><label for="a">Second</label><input id="a">`,
-    );
+  it.each([
+    [
+      "two label[for]",
+      `<label for="x">First</label><label for="x">Second</label><input id="x">`,
+      "First Second",
+    ],
+    [
+      "a label[for] then a wrapping label",
+      `<label for="x">Outer</label><label>Wrap <input id="x"></label>`,
+      "Outer Wrap",
+    ],
+    [
+      "a wrapping label then a label[for]",
+      `<label>Wrap <input id="x"></label><label for="x">After</label>`,
+      "Wrap After",
+    ],
+  ])("joins every associated label in DOM order: %s", (_c, html, name) => {
+    const root = createPage(html);
     document.body.append(root);
     const input = [...extractDomTree(root).nodes.values()].find(
       (n) => n.dom?.tagName === "input",
     );
     root.remove();
-    expect(input?.a11y.name).toBe("First");
+    expect(input?.a11y.name).toBe(name);
+  });
+
+  it("leaves out a wrapping label that points at another control", () => {
+    const root = createPage(
+      `<label for="other">Note <input id="x"></label><label for="x">Real</label><input id="other">`,
+    );
+    document.body.append(root);
+    const input = [...extractDomTree(root).nodes.values()].find(
+      (n) => n.dom?.attributes["id"] === "x",
+    );
+    root.remove();
+    expect(input?.a11y.name).toBe("Real");
+  });
+
+  it("joins every label of a select", () => {
+    const root = createPage(
+      `<label for="s">A</label><label for="s">B</label><select id="s"><option>o</option></select>`,
+    );
+    document.body.append(root);
+    const select = [...extractDomTree(root).nodes.values()].find(
+      (n) => n.dom?.tagName === "select",
+    );
+    root.remove();
+    expect(select?.a11y.name).toBe("A B");
   });
 
   it("looks a label up in the control's own tree", () => {

@@ -21,8 +21,8 @@ import {
 } from "./clobber-safe.js";
 
 export interface ScopeReferenceIndex {
-  /** `for` value → the first `<label for>` in this tree that carries it. */
-  labelFor: Map<string, Element>;
+  /** `for` value → every `<label for>` in this tree that carries it, in tree order. */
+  labelFor: Map<string, Element[]>;
 }
 
 type ScopeNode = Document | ShadowRoot | Element;
@@ -41,7 +41,10 @@ function build(scope: ScopeNode): ScopeReferenceIndex {
   for (const el of safeQuerySelectorAll(scope, "label[for]")) {
     if (safeTagName(el) !== "label") continue;
     const forId = safeGetAttribute(el, "for");
-    if (forId && !index.labelFor.has(forId)) index.labelFor.set(forId, el);
+    if (!forId) continue;
+    const labels = index.labelFor.get(forId);
+    if (labels) labels.push(el);
+    else index.labelFor.set(forId, [el]);
   }
   return index;
 }
