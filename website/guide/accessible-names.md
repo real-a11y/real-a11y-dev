@@ -18,7 +18,7 @@ For any element, the accessible name is picked from the **first non-empty source
 1. `aria-labelledby` — references another element's text content
 2. `aria-label` — literal string on the element itself. One that is only spaces is skipped
 3. Native host-language label:
-   - `<label for="…">` or ancestor `<label>` for form controls
+   - `<label for="…">` or ancestor `<label>` for form controls. A control with several labels is named from all of them, joined with spaces in document order
    - `<fieldset><legend>` for grouped controls
    - `<caption>` for tables
    - `alt` for images and `<input type="image">`, the first `<title>` for an `<svg>`, `title` for iframes

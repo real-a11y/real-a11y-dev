@@ -21,6 +21,10 @@
 
 ### Patch Changes
 
+- **The TAB view names a control from every label it has.** A control with
+  several associated labels (two `label[for]`, or a `label[for]` and a wrapping
+  label) was named from one of them; it now reads "First Second", the joined
+  name Chromium's tree gives. (PR_LINK)
 - **The TAB view's in-page walk describes an element by its `title` when
   something else names it.** The description is the `title` text, as in
   HTML-AAM §4.2 and Chrome's tree. The tab stops it lists do not change, and
