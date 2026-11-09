@@ -6954,3 +6954,54 @@ describe("title is the last name source (after name from content)", () => {
     ).toBe("Go to Home now");
   });
 });
+
+describe("title as the accessible description (HTML-AAM §4.2)", () => {
+  const nodeOf = (html: string, tag: string): SemanticNode => {
+    // Attached: `for` and `aria-describedby` resolve through the document.
+    document.body.innerHTML = html;
+    return [...extractDomTree(document.body).nodes.values()].find(
+      (n) => n.dom?.tagName === tag,
+    )!;
+  };
+
+  afterEach(() => {
+    document.body.innerHTML = "";
+  });
+
+  it("describes a control whose name came from another source", () => {
+    const button = nodeOf(
+      `<button aria-label="AL" title="Ti">Save</button>`,
+      "button",
+    );
+    expect([button.a11y.name, button.a11y.description]).toEqual(["AL", "Ti"]);
+    const img = nodeOf(`<img alt="Alt" title="Ti" src="data:,">`, "img");
+    expect([img.a11y.name, img.a11y.description]).toEqual(["Alt", "Ti"]);
+    const input = nodeOf(
+      `<label for="i">Lab</label><input id="i" title="Ti">`,
+      "input",
+    );
+    expect([input.a11y.name, input.a11y.description]).toEqual(["Lab", "Ti"]);
+  });
+
+  it("describes a button named from its content", () => {
+    const button = nodeOf(`<button title="Ti">Save</button>`, "button");
+    expect([button.a11y.name, button.a11y.description]).toEqual(["Save", "Ti"]);
+  });
+
+  it("leaves a title that is the name out of the description", () => {
+    const link = nodeOf(`<a href="/" title="Tooltip"></a>`, "a");
+    expect([link.a11y.name, link.a11y.description]).toEqual(["Tooltip", ""]);
+  });
+
+  it("ranks aria-describedby, then aria-description, over title", () => {
+    document.body.innerHTML =
+      `<p id="d">By ref</p>` +
+      `<button id="a" aria-label="A" aria-describedby="d" aria-description="Inline" title="Ti">x</button>` +
+      `<button id="b" aria-label="B" aria-description="Inline" title="Ti">x</button>`;
+    const nodes = [...extractDomTree(document.body).nodes.values()];
+    const desc = (name: string) =>
+      nodes.find((n) => n.a11y.name === name)?.a11y.description;
+    expect(desc("A")).toBe("By ref");
+    expect(desc("B")).toBe("Inline");
+  });
+});
