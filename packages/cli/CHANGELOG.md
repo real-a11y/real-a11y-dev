@@ -1,5 +1,95 @@
 # @real-a11y-dev/cli
 
+## 0.1.0-beta.12
+
+### Patch Changes
+
+- d01a942: Stop reporting an unnamed `<aside>` inside sectioning content as a `complementary` landmark. The DOM producer mapped every `<aside>` to `complementary`; HTML-AAM maps one inside `article`, `aside`, `nav` or `section` to `complementary` only when it has an accessible name, and to `generic` otherwise, as Chromium's own tree does:
+
+  ```html
+  <article><aside>x</aside></article>
+  <!-- generic -->
+  <section><aside aria-label="Related">x</aside></section>
+  <!-- complementary "Related" -->
+  <main><aside>x</aside></main>
+  <!-- complementary -->
+  ```
+
+  An `<aside>` directly under `<body>` or `<main>` is unchanged, and so is an explicit `role="complementary"`. What this changes for you:
+
+  - **Known difference from Chromium:** `<aside title="">` in sectioning content is `generic` here, as the spec says, but Chromium 153 still reports `complementary`. An `aria-labelledby` that points at an element with no text still counts as a name here.
+  - **Queries:** `findByRole("complementary")` no longer matches an unnamed nested `<aside>`.
+  - **Panels:** the Landmarks filter in `inspector`, `react` and `storybook-addon` no longer lists it.
+  - **Snapshots:** an a11y snapshot or diff produced by the DOM producer drops the `complementary` line for such an `<aside>`, so a saved one needs re-recording. `cli` and `mcp` ship the engine too, but they read Chromium's tree and already behaved this way: only their `tabs` output uses the DOM producer, and it does not list landmarks.
+
+- 8367543: Stop naming an `article`, `group`, `feed`, `note`, `tabpanel`, `doc-toc`, `graphics-document` or `graphics-symbol` after the text inside it. WAI-ARIA 1.2, DPUB-ARIA 1.1 and Graphics-ARIA 1.0 let only the author name these roles (`aria-label`, `aria-labelledby`), and Chromium leaves them unnamed. The native producer gave a text-only one its text as a name, and the DOM producer did the same for `doc-toc` and `graphics-document`:
+
+  ```html
+  <article>a</article>
+  <!-- was: article "a"   now: article -->
+  <nav role="doc-toc">x</nav>
+  <!-- was: doc-toc "x"   now: doc-toc -->
+  ```
+
+  What this changes for you:
+
+  - **Native producer** (`cli`, `mcp`, `testing`'s `producer: "native"`, and the extension's side panel): the text hung directly on such an element is no longer printed. `<address>` is a `group` in Chromium, so it is covered too. `NATIVE_AX_VOCABULARY_VERSION` goes to 10.
+  - **DOM producer** (`inspector`, `react`, `storybook-addon`, `testing`): `doc-toc`, `graphics-document` and `graphics-symbol` are unnamed. `article`, `group`, `note` and `tabpanel` already were.
+  - **Snapshots and queries:** a saved native snapshot that holds `article "…"` or `group "…"` needs re-recording, and a query by role and name for one no longer matches. A name given by the author is unchanged.
+  - **Unchanged:** `alert`, `status`, `listitem`, `code`, and roles named from content such as `comment` and `doc-noteref`.
+
+- e8d688e: `--cdp` now says which `a11y.config.json` defaults it ignored, instead of dropping them silently, and an empty `--cdp ""` is an error rather than a fresh local browser.
+
+  **The warning.** An explicit `--cdp` keeps the config's `device`, `viewport`, `headful` and `storageState` out of the run, because a CDP connection reuses the attached browser's own window and session. That is unchanged. It used to happen without a word. Against a browser that isn't signed in, such as a fresh remote one, a config that says "logged in, on a phone" audited the logged-out desktop page and exited 0. The run now prints one warning on stderr naming each dropped key, even under `--quiet`, plus a second line when `storageState` is among them:
+
+  ```
+  real-a11y: warning: --cdp ignores `device` and `storageState` from a11y.config.json — it uses the attached browser's own window and session.
+    a browser that isn't signed in (a fresh remote one, say) audits the logged-out page.
+  ```
+
+  The exit code and stdout are unchanged, so a CI check that relied on the dropped session stays green. The warning only puts the reason in the log. A `false` boolean (`"headful": false`) isn't reported, since dropping it changes nothing. No warning prints when the run is refused anyway, for example `--cdp` with `--headful`.
+
+  **Empty `--cdp`.** `--cdp ""`, which is what an unset CI variable such as `--cdp "$BROWSER_WS"` gives you, still dropped those defaults, but the session then read the empty value as no `--cdp` and launched a fresh local browser: a logged-out desktop audit at exit 0. It now fails with exit 2: `--cdp needs an endpoint, and got an empty value.`
+
+- 2a96d11: Fix the native tree read failing on pages nested about 150 or more levels deep. `tree`, `audit`, `list` and every MCP tree read rejected with `CBOR: stack limit exceeded` (and `audit` reported the page as failed to load), because the DOM was read as one nested `DOM.getDocument` response that Chromium cannot serialize past that depth. The DOM is now read flat, with the nested read kept as a fallback. No role, name or state changes, so saved snapshots do not churn; only pages that previously failed now succeed.
+- f5e242f: Update runtime dependencies to their latest patch releases: `@puppeteer/browsers` 3.2.6 (cli) and `@modelcontextprotocol/sdk` 1.32.2 (mcp). Playwright's dev and peer-tested version moves to 1.64.1. No change to CLI output or MCP tool schemas.
+- 6b915cc: Pick up the DOM producer's `aria-describedby` target fix. Both bundle the injected page bundle that carries the DOM extractor, which now keeps a visible description target in the tree. Their own output does not change: `tree`, `outline` and the other native-produced commands already included those nodes, and `tabs` lists tab stops, which a text-only target is not.
+- 9ab986d: The DOM producer names an `input`, `select` or `textarea` from every label associated with it, joined with spaces in document order, as HTML-AAM and Chromium do. It read one label only, so a control with two labels was `textbox "First"` where Chromium gives `textbox "First Second"`. This changes names in DOM-produced trees (`inspector`, `react`, `storybook-addon`, `testing` with its default `tree: "dom"`) and in `cli` `tabs` and `mcp` `get_tab_order`, so saved snapshots of such controls will churn. The native producer is unchanged.
+- 1056767: Extract long forms in linear time. The DOM producer rescanned the whole page for every `aria-describedby` hint it folded and again for every field's `<label for>`, so a form with a hint under each field took about 30× longer when it grew 5×. It now indexes the `aria-describedby`, `aria-labelledby` and `label[for]` references of each tree once per extraction. Names, descriptions and which hints fold are unchanged, so saved snapshots do not churn.
+- 4c89079: Keep a `<form>` and its controls when one of the controls is named `tagName` or `getAttribute`. A form lets a control shadow the form's own members, so in
+
+  ```html
+  <form><input name="tagName" aria-label="Field" /><button>Go</button></form>
+  <button>Sibling</button>
+  ```
+
+  `form.tagName` is the input, and reading it as a string threw. The DOM walk's per-element boundary then skipped the form together with the field and the button, so the page looked like it held only `Sibling`. The walk now reads the tag and the attributes of the element it builds through the prototype, which a named control cannot shadow, so the form is folded as a generic node and its textbox and `button "Go"` are kept, as they are for any other control name.
+
+  What this changes for you:
+
+  - **Snapshots and tree diffs:** a tree from such a page gains the form's controls. A committed baseline from one changes, so re-record it.
+  - **`cli` / `mcp`:** `real-a11y tabs` and `get_tab_order` walk the page themselves, so on such a page they now list the form's fields and buttons as tab stops. Native trees are unaffected.
+  - **Audits:** controls inside such a form are now audited, so an unlabeled field there is reported.
+  - **jsdom:** jsdom doesn't shadow a form's members, so a suite running on jsdom is unaffected. These pages broke in a real browser.
+
+- b346565: Read a long list through the native producer in linear time. Locators were computed for every element by rescanning its parent's children, so a container with k children cost O(k²): a 10,000-item list spent about 5.9 s on locators on top of Chromium's own read. The native read now records each element's position among its same-tag siblings once, in the walk it already makes, and builds every locator from that record.
+
+  Output is unchanged: every locator, and so every fingerprint, baseline, SARIF, JUnit and markdown report, is byte-identical.
+
+  The inspector, react and storybook-addon carry the same shared locator code and pass it no index, so their output and cost are unchanged.
+
+- 837483e: The DOM producer no longer exposes `rowgroup`, `row`, `columnheader`, `rowheader` or `cell` for the parts (`thead`, `tbody`, `tfoot`, `tr`, `th`, `td`) of a `<table role="presentation">` or `role="none"`. WAI-ARIA 1.2 removes those implicit roles with the table's; the parts are flattened and their text stays in the tree, as Chromium's tree already shows. `aria-label` or `tabindex` on the table, an authored role on a part, and focus or a global ARIA attribute on a part still keep the implicit role, and a nested data table stays intact. Saved DOM-produced snapshots of layout tables will churn: the table-part lines disappear. The CLI and MCP read Chromium's tree and their output is unchanged; they release because they bundle the same core.
+- 891816b: The DOM producer now reports `readonly` for an `<input>` or `<textarea>` that carries the HTML `readonly` attribute, as HTML-AAM maps it to `aria-readonly="true"` (and the attribute wins over an `aria-readonly` on the same element). Before, only an authored `aria-readonly` was read, so a read-only field showed as an editable textbox with no `readonly` badge. Toggling the attribute on a live tree now updates the state. Saved snapshots and baselines that contain a read-only field will churn: those nodes gain `readonly`.
+
+  `cli` and `mcp` bundle the same engine but read the native tree, which already reported `readonly`, so their output does not change.
+
+- b2c0c7c: Report a `<td>` in a `role="grid"` or `role="treegrid"` table as `gridcell`, not `cell`. HTML-AAM maps such a cell to `gridcell`, and so does Chromium; only a `<td>` of a plain table is a `cell`. The DOM producer used to say `cell` for every `<td>`, so a `gridcell` query or assertion missed these cells and saved snapshots recorded the wrong role. Saved DOM-producer snapshots of grids will churn. The cell still reports no expanded state unless the author wrote `role="gridcell"`. The native producer (CLI `tree`, `audit`, MCP) already reported `gridcell`; the CLI change is the `tabs` command's in-page walk.
+- 8ffcbec: The DOM producer now names a link, button, heading, cell, summary or option from its content, and uses `title` only when nothing else names it. AccName 1.2 §4.3.2 step 2I puts the Tooltip step last ("only if nothing else, including subtree content, has provided results"), so `<a href="/" title="Tooltip">Home</a>` is `link "Home"` — as Chromium and screen readers report it — instead of `link "Tooltip"`. A `title` on an element with no content still names it, and still wins over `placeholder`. Names of titled elements change in the DOM-based surfaces (the inspector, `react`, the storybook addon, the `testing` matchers, `cli tabs`, `mcp` `get_tab_order`), so saved a11y snapshots of such elements will churn.
+- c6355e5: The DOM-produced tree now exposes an element's `title` as its accessible description when the `title` was not its name (HTML-AAM §4.2). `<button aria-label="AL" title="Ti">` is `button "AL"` with description `"Ti"`, as in Chromium and the native producer; before, its description was empty. `aria-describedby` and `aria-description` still win over `title`, and a `title` that is the name stays out of the description. Saved DOM-produced snapshots, searches and diffs that read `a11y.description` will see the new text. `cli` and `mcp` bundle the same code but read Chromium's own tree, so their output is unchanged.
+- eb38ffa: Keep a child that sets `visibility:visible` inside a `visibility:hidden` element. The DOM-produced tree used to drop the whole subtree of a `visibility:hidden` element, so a rendered paragraph or control inside it never appeared, which Chromium and the native tree do show. The hidden element itself still leaves the tree, a child that inherits `visibility:hidden` still stays out, and `aria-hidden`, `display:none`, `hidden` and `inert` still hide their whole subtree. An `aria-describedby` target whose only control sits in such a child now keeps that control. Saved DOM-produced snapshots of pages that re-show content this way will churn.
+
+  The CLI's `tabs` command reads the in-page walk, so its tab sequence includes such a control now. `cli` and `mcp` otherwise read Chromium's own tree, whose output is unchanged.
+
 ## 0.1.0-beta.11
 
 ### Patch Changes
