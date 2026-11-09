@@ -30,6 +30,7 @@ import {
   encodeRpc,
   decodeRpc,
 } from "./protocol.js";
+import { isSocketPresent } from "./session-probe.js";
 import { tightenWindowsTokenAcl } from "./windows-acl.js";
 
 export interface DaemonRunResult {
@@ -318,32 +319,6 @@ function generateId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
-function isSocketListening(socketPath: string): Promise<boolean> {
-  return new Promise((resolve) => {
-    const socket = createConnection(socketPath);
-    let settled = false;
-    const timer = setTimeout(() => {
-      if (settled) return;
-      settled = true;
-      socket.destroy();
-      resolve(false);
-    }, 1_000);
-    socket.on("connect", () => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      socket.end();
-      resolve(true);
-    });
-    socket.on("error", () => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      resolve(false);
-    });
-  });
-}
-
 export async function spawnDaemon({
   socketPath,
   pidfile,
@@ -389,7 +364,7 @@ export async function spawnDaemon({
   const tokenExists = await stat(resolvedTokenFile)
     .then(() => true)
     .catch(() => false);
-  if (tokenExists && (await isSocketListening(socketPath))) {
+  if (tokenExists && (await isSocketPresent(socketPath, 1_000))) {
     throw new CliError(
       `a daemon is already listening on ${socketPath}; stop it before spawning`,
     );

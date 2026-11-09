@@ -44,7 +44,10 @@ export function isDirectoryOwnedByUs(st: { uid: number }): boolean {
   return st.uid === process.getuid();
 }
 
-export async function isSocketPresent(socketPath: string): Promise<boolean> {
+export async function isSocketPresent(
+  socketPath: string,
+  timeoutMs = 500,
+): Promise<boolean> {
   // A leftover socket file from a crashed daemon is not "present" in the sense
   // we care about; only report it if a daemon is actually listening.
   return new Promise((resolve) => {
@@ -55,7 +58,7 @@ export async function isSocketPresent(socketPath: string): Promise<boolean> {
       settled = true;
       socket.destroy();
       resolve(false);
-    }, 500);
+    }, timeoutMs);
 
     socket.on("connect", () => {
       if (settled) return;
