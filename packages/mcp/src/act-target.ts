@@ -94,6 +94,19 @@ export function disabledRefusal(candidate: TargetCandidate, verb: string) {
   );
 }
 
+// A resolved target that is disabled becomes the shared refusal, so every act
+// tool turns "resolved" into "resolved and enabled" the same way. `verb` names
+// what the page would have ignored ("click" | "input" | "focus").
+export function refuseIfDisabled(
+  target: ReturnType<typeof resolveActTarget>,
+  verb: string,
+): ReturnType<typeof resolveActTarget> {
+  if (target.ok && target.candidate.disabled) {
+    return { ok: false, res: disabledRefusal(target.candidate, verb) };
+  }
+  return target;
+}
+
 export function actFailure(toolName: string, error: string | undefined) {
   // The backend's "re-read the tree and retry" remedy presumes a caller
   // holding node ids. Here the target resolved from a fresh tree

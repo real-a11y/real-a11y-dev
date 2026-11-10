@@ -31,7 +31,7 @@ import { z } from "zod";
 import {
   actFailure,
   describeTarget,
-  disabledRefusal,
+  refuseIfDisabled,
   resolveActTarget,
 } from "./act-target.js";
 import { registerCheckpointTools } from "./checkpoint-tools.js";
@@ -708,11 +708,11 @@ export function buildServer(
     },
     async ({ role, name, nth, session }) =>
       withSession(session, async (rec) => {
-        const target = await resolveTargetFresh(rec, role, name, nth);
+        const target = refuseIfDisabled(
+          await resolveTargetFresh(rec, role, name, nth),
+          "click",
+        );
         if (!target.ok) return target.res;
-        if (target.candidate.disabled) {
-          return disabledRefusal(target.candidate, "click");
-        }
         const result = await rec.session.act({
           nodeId: target.nodeId,
           action: "click",
@@ -750,11 +750,11 @@ export function buildServer(
     },
     async ({ role, name, nth, text: value, session }) =>
       withSession(session, async (rec) => {
-        const target = await resolveTargetFresh(rec, role, name, nth);
+        const target = refuseIfDisabled(
+          await resolveTargetFresh(rec, role, name, nth),
+          "input",
+        );
         if (!target.ok) return target.res;
-        if (target.candidate.disabled) {
-          return disabledRefusal(target.candidate, "input");
-        }
         const result = await rec.session.act({
           nodeId: target.nodeId,
           action: "type",
@@ -789,11 +789,11 @@ export function buildServer(
     },
     async ({ role, name, nth, session }) =>
       withSession(session, async (rec) => {
-        const target = await resolveTargetFresh(rec, role, name, nth);
+        const target = refuseIfDisabled(
+          await resolveTargetFresh(rec, role, name, nth),
+          "focus",
+        );
         if (!target.ok) return target.res;
-        if (target.candidate.disabled) {
-          return disabledRefusal(target.candidate, "focus");
-        }
         const result = await rec.session.act({
           nodeId: target.nodeId,
           action: "focus",
