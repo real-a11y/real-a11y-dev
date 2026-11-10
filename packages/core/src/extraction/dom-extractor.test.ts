@@ -3200,12 +3200,37 @@ describe("extractDomTree", () => {
         ).toBe("Outer inner");
       });
 
+      it("reads a [hidden] child of a visibility:hidden target", () => {
+        expect(
+          nameOf(
+            `<span id="a" style="visibility:hidden">Outer <span hidden>inner</span></span><button aria-labelledby="a">b</button>`,
+          ),
+        ).toBe("Outer inner");
+      });
+
       it("still drops a hidden child of a visible target", () => {
         expect(
           nameOf(
             `<span id="a">Vis <span style="display:none">gone</span></span><button aria-labelledby="a">b</button>`,
           ),
         ).toBe("Vis");
+      });
+
+      it("names a control from a form at a shadow root's top level whose field shadows getRootNode", () => {
+        document.body.innerHTML = `<div id="host"></div>`;
+        const shadowRoot = document
+          .getElementById("host")!
+          .attachShadow({ mode: "open" });
+        shadowRoot.innerHTML = `<form id="f"><input name="getRootNode">Pay</form><button aria-labelledby="f">Submit</button>`;
+        shadow(shadowRoot.getElementById("f")!, "getRootNode");
+        try {
+          const btn = [...extractDomTree(document.body).nodes.values()].find(
+            (n) => n.dom?.tagName === "button",
+          );
+          expect(btn?.a11y.name).toBe("Pay");
+        } finally {
+          document.body.innerHTML = "";
+        }
       });
 
       it("reads a hidden child of a hidden target as the description", () => {

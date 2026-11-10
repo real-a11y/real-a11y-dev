@@ -6,6 +6,7 @@ import { isAriaHiddenValue } from "./aria-tokens.js";
 import {
   safeGetAttribute,
   safeParentElement,
+  safeRootNode,
   safeTagName,
 } from "./clobber-safe.js";
 import {
@@ -273,7 +274,7 @@ export function isImplicitDetailsGroup(element: Element): boolean {
 /**
  * True when an aria-labelledby or aria-describedby target is itself hidden: it
  * or an ancestor is `display: none`, `hidden`, `inert`, `content-visibility:
- * hidden` or `aria-hidden`. AccName 1.2 §2A reads the whole subtree of such a
+ * hidden` or `aria-hidden`, or it is `visibility: hidden` or `collapse`. AccName 1.2 §2A reads the whole subtree of such a
  * directly referenced node, hidden descendants included (§2B: "user agents MUST
  * include all nodes in the subtree").
  */
@@ -281,6 +282,12 @@ export function isHiddenReferenceTarget(
   target: Element,
   styleCache?: StyleCache | null,
 ): boolean {
+  try {
+    // `visibility: hidden` is inherited, so only the target's own style says.
+    if (!isTextVisible(getCachedComputedStyle(target, styleCache))) return true;
+  } catch {
+    return false;
+  }
   for (let el: Element | null = target; el; el = flatParent(el)) {
     try {
       if (
@@ -321,6 +328,6 @@ export function isAriaHiddenChild(
 function flatParent(el: Element): Element | null {
   const parent = safeParentElement(el);
   if (parent) return parent;
-  const root = el.getRootNode?.();
-  return root && "host" in root ? (root as ShadowRoot).host : null;
+  const root = safeRootNode(el);
+  return "host" in root ? (root as ShadowRoot).host : null;
 }
