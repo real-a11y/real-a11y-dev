@@ -159,7 +159,7 @@ Open any story and click the **Semantic Navigator** tab. Then:
 
 The addon runs on every story with no per-story configuration required. It reads one parameter, `realA11y`:
 
-| Key | Default | |
+| Key | Default | What it does |
 |---|---|---|
 | `markChanges` | `true` | Mark what each update of the tree changed ([What changed](#what-changed)). `false` marks nothing. |
 
