@@ -3147,6 +3147,80 @@ describe("extractDomTree", () => {
       }
     });
 
+    describe("a hidden aria-labelledby target is read whole (accname 2B)", () => {
+      const nameOf = (html: string, tag = "button"): string => {
+        document.body.innerHTML = html;
+        try {
+          const node = [...extractDomTree(document.body).nodes.values()].find(
+            (n) => n.dom?.tagName === tag,
+          )!;
+          return node.a11y.name;
+        } finally {
+          document.body.innerHTML = "";
+        }
+      };
+
+      it("reads a display:none child of a display:none target", () => {
+        expect(
+          nameOf(
+            `<span id="l" style="display:none">foo <span style="display:none">bar</span></span><button aria-labelledby="l">x</button>`,
+          ),
+        ).toBe("foo bar");
+      });
+
+      it("reads the label instead of aria-label when all target text is in hidden children", () => {
+        expect(
+          nameOf(
+            `<button aria-labelledby="s1" aria-label="foo"><span id="s1" style="display:none"><span style="display:none">label</span></span>x</button>`,
+          ),
+        ).toBe("label");
+      });
+
+      it("reads a [hidden] child of a [hidden] target", () => {
+        expect(
+          nameOf(
+            `<span id="a" hidden>Outer <span hidden>inner</span></span><button aria-labelledby="a">b</button>`,
+          ),
+        ).toBe("Outer inner");
+      });
+
+      it("reads an aria-hidden child of a hidden target", () => {
+        expect(
+          nameOf(
+            `<span id="a" hidden>Outer <span aria-hidden="true">inner</span></span><button aria-labelledby="a">b</button>`,
+          ),
+        ).toBe("Outer inner");
+      });
+
+      it("reads a hidden child of a target inside a hidden ancestor", () => {
+        expect(
+          nameOf(
+            `<div hidden><span id="a">Outer <span hidden>inner</span></span></div><button aria-labelledby="a">b</button>`,
+          ),
+        ).toBe("Outer inner");
+      });
+
+      it("still drops a hidden child of a visible target", () => {
+        expect(
+          nameOf(
+            `<span id="a">Vis <span style="display:none">gone</span></span><button aria-labelledby="a">b</button>`,
+          ),
+        ).toBe("Vis");
+      });
+
+      it("reads a hidden child of a hidden target as the description", () => {
+        document.body.innerHTML = `<span id="d" style="display:none">foo <span style="display:none">bar</span></span><button aria-describedby="d">x</button>`;
+        try {
+          const btn = [...extractDomTree(document.body).nodes.values()].find(
+            (n) => n.dom?.tagName === "button",
+          )!;
+          expect(btn.a11y.description).toBe("foo bar");
+        } finally {
+          document.body.innerHTML = "";
+        }
+      });
+    });
+
     it("skips aria-hidden text inside a wrapping label", () => {
       const root = createPage(`
         <label>

@@ -2,10 +2,16 @@
  * How the name walk spaces and hides what it reads. Kept out of
  * dom-extractor.ts, which is at its length ceiling.
  */
-import { safeGetAttribute, safeTagName } from "./clobber-safe.js";
+import { isAriaHiddenValue } from "./aria-tokens.js";
+import {
+  safeGetAttribute,
+  safeParentElement,
+  safeTagName,
+} from "./clobber-safe.js";
 import {
   getCachedComputedStyle,
   getImplicitRole,
+  isSubtreeHidden,
   type StyleCache,
 } from "./role-map.js";
 
@@ -37,11 +43,13 @@ export function isTextVisible(style: CSSStyleDeclaration | null): boolean {
  * as it did before the root's style was asked for.
  */
 export function rootTextVisible(
-  walk: TextVisibility,
+  walk: TextVisibility & { inReference?: boolean | "hidden" },
   root: Element,
   styleCache?: StyleCache | null,
 ): boolean | null {
   if (walk.textVisible !== undefined) return walk.textVisible;
+  // A hidden reference root reads its whole subtree, visibility included.
+  if (walk.inReference === "hidden") return null;
   try {
     return isTextVisible(getCachedComputedStyle(root, styleCache)) || null;
   } catch {
@@ -259,5 +267,52 @@ export function isImplicitDetailsGroup(element: Element): boolean {
   return (
     safeTagName(element) === "details" &&
     !safeGetAttribute(element, "role")?.trim()
+  );
+}
+
+/**
+ * True when an aria-labelledby or aria-describedby target is itself hidden: it
+ * or an ancestor is `display: none`, `hidden`, `inert`, `content-visibility:
+ * hidden` or `aria-hidden`. AccName 1.2 §2A reads the whole subtree of such a
+ * directly referenced node, hidden descendants included (§2B: "user agents MUST
+ * include all nodes in the subtree").
+ */
+export function isHiddenReferenceTarget(
+  target: Element,
+  styleCache?: StyleCache | null,
+): boolean {
+  for (let el: Element | null = target; el; el = safeParentElement(el)) {
+    try {
+      if (
+        isAriaHiddenValue(safeGetAttribute(el, "aria-hidden")) ||
+        isSubtreeHidden(el, getCachedComputedStyle(el, styleCache))
+      ) {
+        return true;
+      }
+    } catch {
+      return false;
+    }
+  }
+  return false;
+}
+
+/** The walk over a reference target, `"hidden"` when the target is. */
+export function referenceWalk(
+  target: Element,
+  styleCache?: StyleCache | null,
+): { inReference: true | "hidden" } {
+  return {
+    inReference: isHiddenReferenceTarget(target, styleCache) ? "hidden" : true,
+  };
+}
+
+/** An `aria-hidden` child is skipped, except under a hidden reference root. */
+export function isAriaHiddenChild(
+  child: Element,
+  walk: { inReference?: boolean | "hidden" },
+): boolean {
+  return (
+    walk.inReference !== "hidden" &&
+    isAriaHiddenValue(safeGetAttribute(child, "aria-hidden"))
   );
 }
