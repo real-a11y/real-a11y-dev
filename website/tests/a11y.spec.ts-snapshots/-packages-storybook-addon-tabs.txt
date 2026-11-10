@@ -17,6 +17,12 @@ generic
 button "Copy Code"
 generic
 table
+link "inspector"
+link "story parameter"
+button "Copy Code"
+generic
+table
+link "What changed"
 button "Copy Code"
 generic
 button "Copy Code"
