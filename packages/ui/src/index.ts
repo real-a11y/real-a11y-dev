@@ -26,8 +26,6 @@ export {
 } from "./hooks/typeAhead.js";
 export type { TypeAheadBuffer } from "./hooks/typeAhead.js";
 export { useSearch } from "./hooks/useSearch.js";
-export { buildTreeDiffView, EMPTY_DIFF_VIEW } from "./diff.js";
-export type { TreeDiffView, NodeDiffStatus } from "./diff.js";
 // @internal — the change marks (what each read of a tree found new, changed
 // or removed), shared with the extension's native tree; not a stability
 // promise.
@@ -35,6 +33,7 @@ export {
   diffTreeRows,
   isEmptyTreeChanges,
   NO_TREE_CHANGES,
+  noteFieldChange,
   type DiffRules,
   type FieldChange,
   type RemovedRow,
@@ -48,6 +47,11 @@ export {
   type DialogRules,
   type OpenDialog,
 } from "./tree-changes-dialogs.js";
+export {
+  compareInRun,
+  type ReadRun,
+  type RunBase,
+} from "./tree-change-runs.js";
 export {
   CHANGE_FLASH_MS,
   CHANGE_KEYSHORTCUTS,

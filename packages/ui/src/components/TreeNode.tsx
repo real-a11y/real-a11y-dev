@@ -5,13 +5,19 @@ import type {
 } from "@real-a11y-dev/core";
 import { getPrimaryAction, ACTION_LABELS } from "@real-a11y-dev/core";
 
-import type { NodeDiffStatus } from "../diff.js";
-
 import { JUMP_KEYS } from "../hooks/jumpKeys.js";
 import { treeRowDomId, useInstanceId } from "../hooks/useInstanceId.js";
 import { isKeyState } from "../key-states.js";
+import { shownDomAttributes } from "../semantic-tree-diff.js";
+import {
+  changeRowClass,
+  marksForReaders,
+  type Flash,
+  type RowChangeMarks,
+} from "../tree-changes.js";
 
 import { KeyStatesForReaders } from "./KeyStatesForReaders.js";
+import { RowChangeTags } from "./RowChangeTags.js";
 import type { ControlsLink } from "./TreePanel.js";
 
 interface TreeNodeProps {
@@ -25,18 +31,22 @@ interface TreeNodeProps {
    */
   isFlashing?: boolean;
   /**
-   * Diff status when a baseline is captured — `"added"` for a node that
-   * appeared since, `"changed"` for one whose fields moved. Undefined for
-   * unchanged rows and whenever no baseline is active.
+   * Whether the row shows open. A read can open rows before they are open
+   * on their nodes (`useTreeChanges`), so the panel says; `node.ui.expanded`
+   * where it doesn't.
    */
-  diffStatus?: NodeDiffStatus;
+  expanded?: boolean;
   /**
-   * Reserve the marker gutter on this row. Set for EVERY row while a diff is
-   * active — not just marked ones — so the fixed-width marker column does not
-   * push marked labels right of their unmarked neighbours. The +/~ glyph
-   * paints only when `diffStatus` is set; an unmarked row keeps an empty slot.
+   * What the panel's change marks show on this row (`tree-changes.ts`):
+   * the new or changed row's edge and tag, what changed on it underlined or
+   * outlined, and what it stands in for under it. Left out while the panel
+   * marks no changes.
    */
-  diffColumn?: boolean;
+  changeMarks?: RowChangeMarks;
+  /** The row's flash, while it has one. */
+  changeFlash?: Flash;
+  /** What the marks are compared with (`TreeChangesProp.since`). */
+  changesSince?: string;
   /**
    * 1-based position of this row within its visible sibling group, and the
    * group's total size. Rendered as `aria-posinset`/`aria-setsize` so screen
@@ -77,21 +87,18 @@ interface TreeNodeProps {
   idPrefix?: string;
 }
 
-function renderDomLabel(node: DomSemanticNode) {
-  const { tagName, attributes, textContent } = node.dom;
-  const displayAttrs: Array<{ key: string; val: string }> = [];
+/** What changed on a row, by field (`FieldChange.field`). */
+type Changed = ReadonlySet<string> | undefined;
 
-  if (attributes["id"]) displayAttrs.push({ key: "id", val: attributes["id"] });
-  if (attributes["class"]) {
-    const classes = attributes["class"].split(/\s+/).slice(0, 3).join(" ");
-    displayAttrs.push({ key: "class", val: classes });
-  }
-  if (attributes["href"])
-    displayAttrs.push({ key: "href", val: attributes["href"] });
-  if (attributes["role"])
-    displayAttrs.push({ key: "role", val: attributes["role"] });
-  if (attributes["aria-label"])
-    displayAttrs.push({ key: "aria-label", val: attributes["aria-label"] });
+/** The class that marks a part of the row as what changed: underlined, or
+ *  outlined for a badge (tree-changes.css). */
+function part(changed: Changed, field: string): string {
+  return changed?.has(field) ? " sn-change-part" : "";
+}
+
+function renderDomLabel(node: DomSemanticNode, changed: Changed) {
+  const { tagName, textContent } = node.dom;
+  const displayAttrs = shownDomAttributes(node);
 
   return (
     <>
@@ -104,7 +111,7 @@ function renderDomLabel(node: DomSemanticNode) {
       {displayAttrs.map((attr) => (
         <span
           key={attr.key}
-          class="sn-attr"
+          class={`sn-attr${part(changed, `attributes.${attr.key}`)}`}
           title={`${attr.key}="${attr.val}"`}
         >
           {" "}
@@ -115,7 +122,10 @@ function renderDomLabel(node: DomSemanticNode) {
       ))}
       <span class="sn-tag">{">"}</span>
       {textContent && (
-        <span class="sn-text-content" title={textContent}>
+        <span
+          class={`sn-text-content${part(changed, "text")}`}
+          title={textContent}
+        >
           {textContent}
         </span>
       )}
@@ -123,7 +133,11 @@ function renderDomLabel(node: DomSemanticNode) {
   );
 }
 
-function renderA11yLabel(node: DomSemanticNode, keyStates: Badge[]) {
+function renderA11yLabel(
+  node: DomSemanticNode,
+  keyStates: Badge[],
+  changed: Changed,
+) {
   const { role, name } = node.a11y;
   const level = node.a11y.properties["level"];
   // Show a muted preview of descendant text only when the element is a
@@ -148,17 +162,25 @@ function renderA11yLabel(node: DomSemanticNode, keyStates: Badge[]) {
           that can end in an ellipsis carries its whole text as a tooltip
           (see renderDomLabel). */}
       <span class="sn-head">
-        <span class="sn-role">{role}</span>
-        {level && <span class="sn-text-muted"> level {level}</span>}
+        <span class={`sn-role${part(changed, "role")}`}>{role}</span>
+        {level && (
+          <span class={`sn-text-muted${part(changed, "properties.level")}`}>
+            {" "}
+            level {level}
+          </span>
+        )}
         {name && (
-          <span class="sn-name" title={name}>
+          <span class={`sn-name${part(changed, "name")}`} title={name}>
             {name}
           </span>
         )}
         <KeyStatesForReaders labels={keyStates.map((b) => b.label)} />
       </span>
       {showPreview && (
-        <span class="sn-name-preview" title={descendantText}>
+        <span
+          class={`sn-name-preview${part(changed, "text")}`}
+          title={descendantText}
+        >
           {descendantText}
         </span>
       )}
@@ -169,16 +191,26 @@ function renderA11yLabel(node: DomSemanticNode, keyStates: Badge[]) {
 interface Badge {
   label: string;
   className: string;
+  /** The change that names it (`semantic-tree-diff.ts`). */
+  field: string;
 }
 
 /** The interaction badges: what the element takes, a click or focus. */
 function interactionBadges(node: DomSemanticNode): Badge[] {
   const badges: Badge[] = [];
   if (node.interaction.isInteractive) {
-    badges.push({ label: "interactive", className: "sn-badge--interactive" });
+    badges.push({
+      label: "interactive",
+      className: "sn-badge--interactive",
+      field: "states.interactive",
+    });
   }
   if (node.interaction.isFocusable) {
-    badges.push({ label: "focusable", className: "sn-badge--interactive" });
+    badges.push({
+      label: "focusable",
+      className: "sn-badge--interactive",
+      field: "states.focusable",
+    });
   }
   return badges;
 }
@@ -195,10 +227,15 @@ function stateBadges(
   const badges: Badge[] = [];
   for (const [key, val] of Object.entries(node.a11y.states)) {
     if (which !== "all" && isKeyState(key) !== (which === "key")) continue;
+    const field = `states.${key}`;
     if (val === true) {
-      badges.push({ label: key, className: "sn-badge--state" });
+      badges.push({ label: key, className: "sn-badge--state", field });
     } else if (val !== false && val !== "") {
-      badges.push({ label: `${key}=${val}`, className: "sn-badge--state" });
+      badges.push({
+        label: `${key}=${val}`,
+        className: "sn-badge--state",
+        field,
+      });
     }
   }
   return badges;
@@ -206,14 +243,21 @@ function stateBadges(
 
 function renderBadges(
   badges: Badge[],
-  { className = "sn-badges", hidden = false } = {},
+  {
+    className = "sn-badges",
+    hidden = false,
+    changed,
+  }: { className?: string; hidden?: boolean; changed?: Changed } = {},
 ) {
   if (badges.length === 0) return null;
 
   return (
     <span class={className} aria-hidden={hidden || undefined}>
       {badges.map((b) => (
-        <span key={b.label} class={`sn-badge ${b.className}`}>
+        <span
+          key={b.label}
+          class={`sn-badge ${b.className}${part(changed, b.field)}`}
+        >
           {b.label}
         </span>
       ))}
@@ -259,8 +303,10 @@ export function TreeNode({
   viewMode,
   isSelected,
   isFlashing,
-  diffStatus,
-  diffColumn,
+  expanded = node.ui.expanded,
+  changeMarks,
+  changeFlash,
+  changesSince,
   posinset,
   setsize,
   onSelect,
@@ -292,13 +338,17 @@ export function TreeNode({
   const primaryAction = showStepPair
     ? null
     : getPrimaryAction(node.interaction.actions);
+  // What changed on the row, and what a screen reader hears of its marks,
+  // last in its label (see `marksForReaders`).
+  const changed =
+    changeMarks?.changes && new Set(changeMarks.changes.map((c) => c.field));
+  const said = changeMarks && marksForReaders(changeMarks);
 
   const classNames = [
     "sn-node",
     isSelected && "sn-node--selected",
     isFlashing && "sn-node--flash",
-    diffStatus === "added" && "sn-node--added",
-    diffStatus === "changed" && "sn-node--changed",
+    changeMarks && changeRowClass(changeMarks, changeFlash),
     !node.ui.matchesFilter && "sn-node--filtered-out",
     node.dom.isHidden && "sn-node--hidden",
     node.interaction.isInteractive && "sn-node--interactive",
@@ -314,7 +364,7 @@ export function TreeNode({
       id={treeRowDomId(prefix, node.id)}
       class={classNames}
       role="treeitem"
-      aria-expanded={hasChildren ? node.ui.expanded : undefined}
+      aria-expanded={hasChildren ? expanded : undefined}
       aria-selected={isSelected}
       aria-level={node.depth + 1}
       aria-posinset={posinset}
@@ -348,43 +398,23 @@ export function TreeNode({
           if (hasChildren) onToggle(node.id);
         }}
       >
-        {hasChildren ? (node.ui.expanded ? "\u25BE" : "\u25B8") : ""}
+        {hasChildren ? (expanded ? "\u25BE" : "\u25B8") : ""}
       </button>
-
-      {/* Diff marker gutter. Reserved on every row while a diff is active (not
-          just marked ones) so the fixed-width column keeps all labels aligned
-          instead of nudging marked rows right. A shape carries the meaning,
-          not colour alone (WCAG 1.4.1) — and the visible glyph is hidden from
-          AT in favour of a word, so the row announces "added link Docs", not
-          "plus link Docs". An unmarked row keeps the slot but paints nothing. */}
-      {diffColumn && (
-        <span
-          class={`sn-diff-marker${diffStatus ? ` sn-diff-marker--${diffStatus}` : ""}`}
-        >
-          {diffStatus && (
-            <>
-              <span aria-hidden="true">
-                {diffStatus === "added" ? "+" : "~"}
-              </span>
-              <span class="sn-sr-only">
-                {diffStatus === "added" ? "added " : "changed "}
-              </span>
-            </>
-          )}
-        </span>
-      )}
 
       {/* Label */}
       <span class="sn-label">
         {viewMode === "dom"
-          ? renderDomLabel(node)
-          : renderA11yLabel(node, keyStates)}
+          ? renderDomLabel(node, changed)
+          : renderA11yLabel(node, keyStates, changed)}
         {/* The A11Y view shows a row's key states after the label; the DOM
             view shows them here with the rest. */}
-        {renderBadges([
-          ...interactionBadges(node),
-          ...stateBadges(node, viewMode === "dom" ? "all" : "rest"),
-        ])}
+        {renderBadges(
+          [
+            ...interactionBadges(node),
+            ...stateBadges(node, viewMode === "dom" ? "all" : "rest"),
+          ],
+          { changed },
+        )}
         {/* Cross-link chips for disclosure pairs (button ↔ menu, tab ↔ panel) */}
         {onJumpToNode &&
           controlsLinks?.map((link) =>
@@ -405,6 +435,7 @@ export function TreeNode({
               i === 0 ? JUMP_KEYS.back : undefined,
             ),
           )}
+        {said && <span class="sn-sr-only">{said}</span>}
       </span>
 
       {/* Key states: after the label, which can clip them, rather than in
@@ -414,7 +445,14 @@ export function TreeNode({
       {renderBadges(keyStates, {
         className: "sn-badges sn-key-states",
         hidden: true,
+        changed,
       })}
+
+      {/* The change marks' tags, after the key states, where nothing clips
+          them either. */}
+      {changeMarks && (
+        <RowChangeTags marks={changeMarks} since={changesSince} />
+      )}
 
       {/* Action button */}
       {primaryAction && (

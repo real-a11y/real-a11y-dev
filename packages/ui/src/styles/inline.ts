@@ -13,7 +13,9 @@ import { buildSync } from "esbuild";
  * Vite already minifies the CSS it imports.
  *
  * Bundling `tree.css` follows its `@import` of `themes.css`, as Vite does, so
- * the string holds both files in order and no `@import` of its own.
+ * the string holds both files in order and no `@import` of its own. The change
+ * marks' `tree-changes.css` comes after them, in the order the extension's
+ * side panel imports the two.
  *
  * Only whitespace and comments go (`minifyWhitespace`, not `minify`). The full
  * minifier also rewrites values, turning `hsl()` colours into rounded hex and
@@ -26,13 +28,20 @@ import { buildSync } from "esbuild";
  * each package whose config imports this declares `esbuild` itself.
  */
 export function buildInlineStyles(): string {
-  const { outputFiles } = buildSync({
-    entryPoints: [fileURLToPath(new URL("./tree.css", import.meta.url))],
-    bundle: true,
-    minifyWhitespace: true,
-    // A bundle keeps `/*! … */` comments by default; these are no exception.
-    legalComments: "none",
-    write: false,
-  });
-  return outputFiles[0]!.text;
+  // One build per file, so their order is this list's, whatever order a
+  // build of both would hand its outputs back in.
+  return ["./tree.css", "./tree-changes.css"]
+    .map(
+      (file) =>
+        buildSync({
+          entryPoints: [fileURLToPath(new URL(file, import.meta.url))],
+          bundle: true,
+          minifyWhitespace: true,
+          // A bundle keeps `/*! … */` comments by default; these are no
+          // exception.
+          legalComments: "none",
+          write: false,
+        }).outputFiles[0]!.text,
+    )
+    .join("");
 }

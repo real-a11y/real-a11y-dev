@@ -33,35 +33,33 @@ import {
   useEffect,
 } from "preact/hooks";
 
-import type { TreeDiffView } from "../diff.js";
 import { JUMP_KEYSHORTCUTS } from "../hooks/jumpKeys.js";
 import { useIndexById } from "../hooks/useIndexById.js";
 import { useInputModality } from "../hooks/useInputModality.js";
 import { treeRowDomId, useInstanceId } from "../hooks/useInstanceId.js";
+import { usePanelChanges } from "../hooks/usePanelChanges.js";
 import { useSearch } from "../hooks/useSearch.js";
+import { useHiddenChanges } from "../hooks/useTreeChanges.js";
 import { useTreeKeyboard } from "../hooks/useTreeKeyboard.js";
 import { useVirtualTree } from "../hooks/useVirtualTree.js";
+import { isEmptyTreeChanges } from "../tree-changes-diff.js";
+import {
+  CHANGE_KEYSHORTCUTS,
+  isChangeKey,
+  rowChangeMarks,
+  type TreeChangesProp,
+} from "../tree-changes.js";
+
+import { getVisibleNodeIds } from "../visible-rows.js";
 
 import { FilteredList } from "./FilteredList.js";
 import { TabSequenceView } from "./TabSequenceView.js";
+import { ChangeNoticeRegion, TreeChangesBar } from "./TreeChangesBar.js";
 import { TreeNode } from "./TreeNode.js";
 import { TreeToolbar } from "./TreeToolbar.js";
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
-/** `aria-posinset`/`aria-setsize` for a row within its visible sibling group. */
-interface VisiblePosition {
-  posinset: number;
-  setsize: number;
-}
-
-/**
- * Flatten the tree to the rows that should render, and record each row's
- * position within its visible sibling group. Because the list is virtualized
- * (offscreen rows leave the DOM), screen readers rely on `aria-posinset`/
- * `aria-setsize` to perceive the full tree size and position — the plain
- * sibling inference of a fully-rendered `role="tree"` no longer holds.
- */
 /**
  * The panel only ever renders DOM-produced trees, so every node carries all
  * facets. Narrow a looked-up node to {@link DomSemanticNode} at read sites
@@ -70,30 +68,6 @@ interface VisiblePosition {
  */
 const asDom = (n: SemanticNode | undefined): DomSemanticNode | undefined =>
   n as DomSemanticNode | undefined;
-
-function getVisibleNodeIds(
-  nodes: Map<string, SemanticNode>,
-  rootId: string,
-): { ids: string[]; positions: Map<string, VisiblePosition> } {
-  const ids: string[] = [];
-  const positions = new Map<string, VisiblePosition>();
-  function walk(id: string, posinset: number, setsize: number) {
-    const node = asDom(nodes.get(id));
-    if (!node || !node.ui.matchesFilter) return;
-    ids.push(id);
-    positions.set(id, { posinset, setsize });
-    if (node.ui.expanded) {
-      const visibleChildren = node.childIds.filter(
-        (childId) => asDom(nodes.get(childId))?.ui.matchesFilter,
-      );
-      visibleChildren.forEach((childId, i) => {
-        walk(childId, i + 1, visibleChildren.length);
-      });
-    }
-  }
-  walk(rootId, 1, 1);
-  return { ids, positions };
-}
 
 /**
  * Build the chip data TreeNode renders for cross-link jumps. Pre-resolved
@@ -127,13 +101,17 @@ export interface TreePanelProps {
   /** Theme — default "auto". */
   theme?: "light" | "dark" | "auto";
   /**
-   * Highlight what changed since a captured baseline. Rows present in
-   * `treeData` get an added/changed marker; nodes that are gone are summarized
-   * below the tree, since they have no row (and no host element) to point at.
-   * Omit — or pass an empty view — to render normally.
+   * What changed in the tree, marked on its rows (`tree-changes.ts`): a new
+   * or changed row keeps a coloured edge and flashes as it comes, tags say
+   * what changed, a bar under the tree sums it up and lists the rows
+   * removed, which have no row (and no element) left to mark, Alt+N goes
+   * from change to change, and what a change the user caused found is said.
+   * `TreeView` hands it what each update of a live tree found, or all of it
+   * since the checkpoint. Left out, nothing is marked.
    */
-  diff?: TreeDiffView;
-  /** Show the toolbar's checkpoint button, which drives `diff`. */
+  changes?: TreeChangesProp;
+  /** Show the toolbar's checkpoint button, which pins what `changes` are
+   *  compared with. */
   enableDiff?: boolean;
   /** True while a baseline is captured — drives the button's pressed state. */
   diffActive?: boolean;
@@ -207,7 +185,7 @@ export function TreePanel({
   viewMode,
   onViewModeChange,
   theme = "auto",
-  diff,
+  changes,
   enableDiff = false,
   diffActive = false,
   onToggleDiff,
@@ -330,12 +308,28 @@ export function TreePanel({
     forceRender();
   }, [query, treeData, viewMode, roleFilter, updateMatchCount, forceRender]);
 
+  // What the last update found changed, marked on the rows (`changes`). A
+  // jump to a change reaches the row as a chip's jump does, through a
+  // handler defined below: read at the time of the jump.
+  const jumpRef = useRef<(id: string) => void>(() => {});
+  const jumpToChange = useCallback((id: string) => jumpRef.current(id), []);
+  const marks = usePanelChanges({
+    treeData,
+    renderCount,
+    forceRender,
+    changes,
+    selectedId,
+    jumpTo: jumpToChange,
+  });
+  const { goToChange } = marks.view;
+
   // Recompute visible IDs after node mutations (expand/collapse) or data change
   const { ids: visibleNodeIds, positions: visiblePositions } = useMemo(
-    () => getVisibleNodeIds(treeData.nodes, treeData.rootId),
+    () => getVisibleNodeIds(treeData.nodes, treeData.rootId, marks.open),
     // renderCount changes on every forceRender() call — intentional invalidation.
-    [treeData, renderCount],
+    [treeData, renderCount, marks.open],
   );
+  const hidden = useHiddenChanges(marks.view, visibleNodeIds, marks.parentOf);
 
   // Row id → position, so resolving the selection to an index (for
   // aria-activedescendant, scroll-into-view, and every pick/jump) is a lookup
@@ -512,6 +506,7 @@ export function TreePanel({
     },
     [treeData, forceRender, scrollToIndex, handleSelect, updateQuery],
   );
+  jumpRef.current = handleJumpToNode;
   const jumpKeys = useMemo(
     () => ({ links: controlsIndex, onJump: handleJumpToNode }),
     [controlsIndex, handleJumpToNode],
@@ -599,6 +594,7 @@ export function TreePanel({
             : undefined
         }
       />
+      {changes && <ChangeNoticeRegion notice={marks.view.notice} />}
       <div
         ref={isTreeBranch ? containerRef : undefined}
         class="sn-tree-container"
@@ -629,7 +625,11 @@ export function TreePanel({
             class={`sn-tree${showFullNames ? " sn-tree--full-names" : ""}`}
             role="tree"
             aria-label="Semantic tree"
-            aria-keyshortcuts={JUMP_KEYSHORTCUTS}
+            aria-keyshortcuts={
+              changes
+                ? `${JUMP_KEYSHORTCUTS} ${CHANGE_KEYSHORTCUTS}`
+                : JUMP_KEYSHORTCUTS
+            }
             tabIndex={0}
             style={{
               minHeight: totalHeight,
@@ -644,6 +644,12 @@ export function TreePanel({
             aria-activedescendant={activeDescendantId}
             onKeyDown={(e) => {
               markKeyboard();
+              // The next or previous change, as the changes bar's arrows go.
+              if (changes && isChangeKey(e)) {
+                e.preventDefault();
+                goToChange(e.shiftKey);
+                return;
+              }
               handleKeyDown(e);
             }}
           >
@@ -659,8 +665,13 @@ export function TreePanel({
                   viewMode={viewMode}
                   isSelected={id === selectedId}
                   isFlashing={id === flashingId}
-                  diffStatus={diff?.status.get(id)}
-                  diffColumn={diff !== undefined}
+                  expanded={marks.open?.has(id)}
+                  changeMarks={
+                    changes &&
+                    rowChangeMarks(marks.view.shown, hidden, marks.parentOf, id)
+                  }
+                  changeFlash={marks.view.flashes.get(id)}
+                  changesSince={changes?.since}
                   posinset={position?.posinset}
                   setsize={position?.setsize}
                   onSelect={handleSelect}
@@ -681,44 +692,23 @@ export function TreePanel({
             )}
           </div>
         )}
-        {diff && diff.removed.length > 0 && (
-          <RemovedNodes nodes={diff.removed} />
-        )}
       </div>
+      {/* In every view, as the counts and the rows removed hold for all of
+          them; its arrows only in the tree, whose rows they go to. */}
+      {marks.view.shown && !isEmptyTreeChanges(marks.view.shown) && (
+        <TreeChangesBar
+          changes={marks.view.shown}
+          onPrevious={isTreeBranch ? () => goToChange(true) : undefined}
+          onNext={isTreeBranch ? () => goToChange(false) : undefined}
+          // The bar goes with the marks, and focus to the tree rather than
+          // with the bar.
+          onClear={() => {
+            changes?.clear();
+            treeRef.current?.focus();
+          }}
+          since={changes?.since}
+        />
+      )}
     </div>
-  );
-}
-
-/** Cap the rendered list — a large teardown shouldn't produce a wall of rows. */
-const MAX_REMOVED_SHOWN = 50;
-
-/**
- * Nodes that existed at the checkpoint and are gone now. They get no tree row:
- * their elements have left the DOM, so there is nothing to select, highlight,
- * or act on. A native `<details>` carries the disclosure semantics — no
- * `aria-expanded`/`aria-controls` bookkeeping, and no duplicate-id hazard when
- * two panels are mounted at once.
- */
-function RemovedNodes({ nodes }: { nodes: SemanticNode[] }) {
-  const shown = nodes.slice(0, MAX_REMOVED_SHOWN);
-  return (
-    <details class="sn-removed">
-      <summary class="sn-removed-summary">
-        {nodes.length} removed since checkpoint
-      </summary>
-      <ul class="sn-removed-list">
-        {shown.map((node) => (
-          <li key={node.id} class="sn-removed-item">
-            {node.a11y.role}
-            {node.a11y.name ? ` "${node.a11y.name}"` : ""}
-          </li>
-        ))}
-        {nodes.length > shown.length && (
-          <li class="sn-removed-item sn-removed-item--more">
-            … and {nodes.length - shown.length} more
-          </li>
-        )}
-      </ul>
-    </details>
   );
 }

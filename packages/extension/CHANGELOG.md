@@ -26,6 +26,22 @@
   text no longer reads it, as in AccName 1.2 §2A and Chrome's tree; a descendant
   that sets `visibility: visible` again still counts.
   ([#616](https://github.com/real-a11y/real-a11y-dev/pull/616))
+- **A menu or listbox that hides the rest of the page is marked new, not the
+  page removed.** Radix's dropdown menu and select take the rest of the page
+  out of Chrome's tree, as a modal dialog does, and the marks now treat them
+  as they treat one: the menu new and nothing removed, then, once it closes,
+  what it changed on the page. ([#617](https://github.com/real-a11y/real-a11y-dev/pull/617))
+- **A dialog that closes by itself takes its marks with it.** An automatic read
+  that finds nothing else changed left the closed dialog's rows marked; it now
+  clears them. ([#617](https://github.com/real-a11y/real-a11y-dev/pull/617))
+- **Focus stays in the panel when the changes bar goes.** A read that finds
+  nothing changed takes the bar away; with focus on one of its buttons, focus
+  now moves to the tree rather than to nowhere.
+  ([#617](https://github.com/real-a11y/real-a11y-dev/pull/617))
+- The changes bar's tooltip reads "Rows new, changed or removed since the read
+  before". The code that picks which tree a read is compared with is now the
+  same as the inspector's and the React panel's, which mark what changed too.
+  ([#617](https://github.com/real-a11y/real-a11y-dev/pull/617))
 
 ## 0.1.19
 

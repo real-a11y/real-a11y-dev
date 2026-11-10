@@ -740,8 +740,13 @@ export class LiveTreeExtractor {
     while (el) {
       const id = getNodeId(el);
       const node = this.domNodes.get(id);
-      if (node?.dom) {
-        node.dom.descendantText = getDescendantText(el);
+      const text = node?.dom && getDescendantText(el);
+      if (node?.dom && text !== node.dom.descendantText) {
+        // A new node rather than a write to this one: see `detachFromParent`.
+        this.domNodes.set(id, {
+          ...node,
+          dom: { ...node.dom, descendantText: text as string },
+        });
       }
       if (el === this.root || el === this.effectiveRoot) break;
       el = safeParentElement(el);
@@ -753,12 +758,19 @@ export class LiveTreeExtractor {
    * Keeps the map free of parents pointing at nodes that are no longer in it —
    * `buildA11yTree` tolerates a dangling id, but `dom` mode hands the map
    * straight to consumers.
+   *
+   * The parent is replaced rather than written to: a result an earlier
+   * refresh handed out holds the same node, and must keep the children it
+   * had. The panel's change marks compare the two.
    */
   private detachFromParent(parentId: string | null, childId: string): void {
     if (!parentId) return;
     const parent = this.domNodes.get(parentId);
     if (!parent) return;
-    parent.childIds = parent.childIds.filter((cid) => cid !== childId);
+    this.domNodes.set(parentId, {
+      ...parent,
+      childIds: parent.childIds.filter((cid) => cid !== childId),
+    });
   }
 
   private deleteSubtree(nodeId: string): void {

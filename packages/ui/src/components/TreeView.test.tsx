@@ -4,6 +4,9 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 
 import { TreeView } from "./TreeView.js";
 
+/** A row the change marks mark new or changed. */
+const MARKED = ".sn-node--change-new, .sn-node--change-changed";
+
 /**
  * Wait for a selector to appear inside `root`, flushing microtasks/timers
  * until either it shows up or `timeoutMs` elapses.
@@ -179,6 +182,9 @@ describe("TreeView (smoke)", () => {
       expect(document.querySelectorAll(`[id="${activeA}"]`)).toHaveLength(1);
       expect(treeB.getAttribute("aria-activedescendant")).toBeNull();
     } finally {
+      // Unmounted, not only removed: a mounted TreeView keeps observing the
+      // document, and a later test's spy on the extractor would count it.
+      render(null, containerB);
       rootA.remove();
       rootB.remove();
       containerB.remove();
@@ -212,7 +218,7 @@ describe("TreeView (smoke)", () => {
         container,
         '[aria-label="Checkpoint tree for diff"][aria-pressed="false"]',
       );
-      expect(container.querySelector(".sn-diff-marker")).toBeNull();
+      expect(container.querySelector(MARKED)).toBeNull();
     } finally {
       root.remove();
     }
@@ -273,8 +279,8 @@ describe("TreeView (smoke)", () => {
         container,
         '[aria-label="Checkpoint tree for diff"][aria-pressed="false"]',
       );
-      expect(container.querySelector(".sn-diff-marker")).toBeNull();
-      expect(container.querySelector(".sn-removed")).toBeNull();
+      expect(container.querySelector(MARKED)).toBeNull();
+      expect(container.querySelector(".sn-changes-bar")).toBeNull();
     } finally {
       root.remove();
     }
@@ -408,8 +414,8 @@ describe("TreeView (smoke)", () => {
         container,
         '[aria-label="Checkpoint tree for diff"][aria-pressed="false"]',
       );
-      expect(container.querySelector(".sn-diff-marker")).toBeNull();
-      expect(container.querySelector(".sn-removed")).toBeNull();
+      expect(container.querySelector(MARKED)).toBeNull();
+      expect(container.querySelector(".sn-changes-bar")).toBeNull();
     } finally {
       rootA.remove();
       rootB.remove();

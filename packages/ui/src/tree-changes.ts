@@ -29,12 +29,34 @@ export interface ChangeMarks {
   announce: boolean;
 }
 
+/** What the marks are compared with, unless a tree's host says otherwise:
+ *  the read before, as the extension's tree of Chrome's has them. */
+export const SINCE_READ_BEFORE = "the read before";
+
 /** What a host hands its tree of the changes it marks: the extension's
  *  `use-native-changes.ts`, say. */
 export interface TreeChangesProp {
   marks: ChangeMarks | null;
   /** Clear the marks: the changes bar's ✕. */
   clear: () => void;
+  /**
+   * What the marks are compared with, as the tree's words for them end:
+   * "Changes since the checkpoint". {@link SINCE_READ_BEFORE} unless said.
+   */
+  since?: string;
+  /**
+   * How what a read the user caused found is said to end: "3 new in the
+   * tree", or "3 new since the checkpoint" for marks that count from one,
+   * where the count is more than the read found. "in the tree" unless said.
+   */
+  noticeEnd?: string;
+  /**
+   * The marks are totals since a fixed point (the checkpoint), so a read the
+   * user caused says them whenever they move, down as well as up: "No changes
+   * since the checkpoint" for marks with nothing in them. A read only says
+   * what it found new otherwise.
+   */
+  totals?: boolean;
   /**
    * Which document the read on screen is of, as the marks tell reads apart:
    * the rows the user opened stay open until it changes, whatever root the

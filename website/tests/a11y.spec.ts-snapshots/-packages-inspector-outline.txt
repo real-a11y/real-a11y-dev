@@ -4,6 +4,7 @@ h1 @real-a11y-dev/inspector
   h2 Quick start
   h2 createInspector(config)
     h3 Config
+    h3 What changed
   h2 Instance API
     h3 mount()
     h3 unmount() / destroy()

@@ -33,7 +33,7 @@ main
   paragraph "none (Preact is bundled)."
     strong "Peer dependencies:"
   paragraph "Install as a dev dependency"
-  paragraph "is a developer audit panel (~40 KB gzipped, Preact + tree view). Keep it in and load it via a dynamic behind a build flag so it never ships to end users."
+  paragraph "is a developer audit panel (~46 KB gzipped, Preact + tree view). Keep it in and load it via a dynamic behind a build flag so it never ships to end users."
     code "@real-a11y-dev/inspector"
     code "devDependencies"
     code "import()"
@@ -144,6 +144,15 @@ main
           code "false"
         cell "Surface a DevTools-style "select an element in the page" picker (toolbar button + Ctrl/Cmd+Shift+C); off by default because it captures document-level clicks."
       row
+        cell "markChanges"
+          code "markChanges"
+        cell "boolean"
+          code "boolean"
+        cell "true"
+          code "true"
+        cell "Mark what each update of the tree changed: new and changed rows keep a coloured edge, flash as they come and say what changed, a bar under the tree counts it and lists the rows removed, Alt+N and Alt+Shift+N go from change to change, and what a click, a key or an action of the user's changed is said to a screen reader. false marks nothing until the toolbar's checkpoint (⎌) is pressed, which marks everything since."
+          code "false"
+      row
         cell "defaultShowFullNames"
           code "defaultShowFullNames"
         cell "boolean"
@@ -184,6 +193,9 @@ main
   paragraph "Shadow DOM is the right default"
   paragraph "With , the panel's styles live inside the ShadowRoot and cannot conflict with your app. Your app's CSS cannot accidentally override the panel's layout. Keep this default unless you have a specific reason to opt out."
     code "mount: "shadow""
+  heading "What changed" (level 3)
+  paragraph "The panel marks what each update of the tree changed, so opening a menu shows the button that went expanded and the menu that came, without hunting for them. What a click or a key of yours on the page brought, in the few seconds after it, stays marked together and is said to a screen reader ("3 new, 1 changed in the tree"); typing in a field isn't read out at every key, and what the page changes on its own is marked without being said. A modal that hides the rest of the page from the tree, or a menu or listbox opened the same way (as Radix's are), is marked as new, not as the page removed. The checkpoint button (⎌) pins the tree instead: everything that changes from then on stays marked until you press it again. Turn the automatic marks off with ; the checkpoint still works."
+    code "markChanges: false"
   paragraph "Why / / default to false"
     code "highlightOnHover"
     code "scrollHostOnSelect"
@@ -218,7 +230,7 @@ main
   code "// Narrow the panel to just the open modal inspector.setRoot(document.querySelector("[role='dialog']")!);"
   heading "refresh()" (level 3)
     code "refresh()"
-  paragraph "Forces an immediate re-extraction without waiting for the next DOM mutation. Useful in tests or after programmatic DOM changes."
+  paragraph "Forces an immediate re-extraction without waiting for the next DOM mutation. Useful in tests or after programmatic DOM changes. The panel keeps its selection, open rows and checkpoint, and marks what the re-extraction finds changed."
   heading "getTree()" (level 3)
     code "getTree()"
   paragraph "Returns the most recently extracted tree as an ."
@@ -266,8 +278,9 @@ main
       code "refresh()"
   separator
   heading "Panel features" (level 2)
-  paragraph "The inspector renders the same tree panel as the Chrome extension, with its search, role filters and , and scopes with . Focus sync, the scope breadcrumb and the live region log are the extension's alone."
+  paragraph "The inspector renders the same tree panel as the Chrome extension, with its search, role filters, and , and scopes with . Focus sync, the scope breadcrumb and the live region log are the extension's alone."
     link "keyboard"
+    link "change marks"
     link "setRoot()"
       code "setRoot()"
   paragraph "→"

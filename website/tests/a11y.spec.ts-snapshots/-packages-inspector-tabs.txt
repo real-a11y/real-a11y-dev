@@ -27,6 +27,7 @@ button "Copy Code"
 generic
 link "examples/vanilla/"
 link "keyboard"
+link "change marks"
 link "setRoot()"
 link "Using the panel"
 link "Edit this page on GitHub"

@@ -92,8 +92,9 @@ export function TreeToolbar({
           </button>
         )}
 
-        {/* Checkpoint the tree, then interact: rows that appeared or changed
-            since are marked in place. Toggling off clears the baseline.
+        {/* Checkpoint the tree, then interact: everything that changed since
+            is marked, as the change marks mark it (`TreePanel`'s `changes`).
+            Toggling off clears the checkpoint.
             Its own class, not .sn-pick-btn — that selector is how the
             extension and tests reach the *picker* specifically; the two
             only share a look, which tree.css grants by grouping them. */}
@@ -104,7 +105,7 @@ export function TreeToolbar({
             onClick={() => onToggleDiff?.()}
             title={
               diffActive
-                ? "Checkpoint active — added and changed nodes are marked. Click to clear."
+                ? "Checkpoint active — everything that changed since is marked. Click to clear."
                 : "Checkpoint the tree, then interact to see what changed"
             }
             aria-label="Checkpoint tree for diff"

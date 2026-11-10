@@ -9,7 +9,9 @@
  * window it is in, so what a click's first read found stays marked when a
  * later read finds the rest of it: a menu's button that went `expanded`, then
  * the items the page fetched for it. Only within one document: the same id
- * names the same element in no other.
+ * names the same element in no other. Within one, a read is compared as the
+ * shared panel compares the updates of a live tree (the ui package's
+ * `tree-change-runs.ts`).
  *
  * A modal dialog takes the rest of the page out of Chrome's tree while it is
  * open, which isn't the page removing anything: the ui package's
@@ -17,9 +19,10 @@
  */
 
 import {
-  compareThroughDialogs,
+  compareInRun,
   type ChangeMarks,
-  type OpenDialog,
+  type ReadRun,
+  type RunBase,
   type Tree,
   type TreeChanges,
 } from "@real-a11y-dev/semantic-navigator-ui";
@@ -30,18 +33,15 @@ import { NATIVE_TREE_RULES } from "../native/native-tree-diff.js";
 
 import type { FollowWindow } from "./follow-window.js";
 
-/** The run of reads a read is in, and whether what it finds is said. */
-export interface ReadRun {
-  /**
-   * The run, named by when it began: when the read the user caused that
-   * began it started, where the follow window that read opens starts too
-   * (`followAfterRead`), or when the user last clicked or pressed a key on
-   * the page in the follow window. Null for an automatic read, a run of its
-   * own.
-   */
-  follows: number | null;
-  announce: boolean;
-}
+/**
+ * The run of reads a read is in (the ui package's `ReadRun`), and whether
+ * what it finds is said. A run is named by when it began: when the read the
+ * user caused that began it started, where the follow window that read opens
+ * starts too (`followAfterRead`), or when the user last clicked or pressed a
+ * key on the page in the follow window. An automatic read is a run of its
+ * own.
+ */
+export type { ReadRun };
 
 /** What `readRun` needs of auto-refresh's state as a read starts. */
 export interface ReadStart {
@@ -82,18 +82,12 @@ export interface ReadTree extends Tree<NativeNode> {
   documentChanged?: boolean;
 }
 
-/** What the next read is compared with. */
-export interface ChangeBase {
-  /** The read on screen: its tab, document, root, and run. */
+/** What the next read is compared with: the run's (the ui package's
+ *  `RunBase`), and the tab, document and root of the read on screen. */
+export interface ChangeBase extends RunBase<NativeNode> {
   tabId: number;
   documentId: string | undefined;
   rootId: string;
-  follows: number | null;
-  /** The tree before the run's first read. */
-  runBefore: Tree<NativeNode>;
-  /** The dialogs that took the rest of the tree out of Chrome's, outermost
-   *  first, each with the tree from before it came. */
-  dialogs: readonly OpenDialog<NativeNode>[];
 }
 
 /** Whether `read` is of the document the tree on screen is of, as surely
@@ -130,6 +124,7 @@ export function compareRead(
   base: ChangeBase;
   changes: TreeChanges | null;
   compared: boolean;
+  closedDialog: boolean;
 } {
   const next: ChangeBase = {
     tabId: read.tabId,
@@ -140,28 +135,14 @@ export function compareRead(
     dialogs: [],
   };
   if (!sameDocument(base, shown, read)) {
-    return { base: next, changes: null, compared: false };
+    return { base: next, changes: null, compared: false, closedDialog: false };
   }
-  const continues = run.follows !== null && run.follows === base.follows;
-  const onScreen = { nodes: shown, rootId: base.rootId };
-  const found = compareThroughDialogs(
+  const found = compareInRun(
     read,
-    {
-      against: continues ? base.runBefore : onScreen,
-      dialogs: base.dialogs,
-      // A dialog stands in front of the tree on screen as it came, which a
-      // follow-up of the run doesn't compare with: a second dialog the page
-      // opened over the first keeps the first, not the page behind both.
-      ...(continues ? { onScreen } : {}),
-    },
+    { base, onScreen: { nodes: shown, rootId: base.rootId }, run },
     NATIVE_TREE_RULES,
   );
-  if (!found) return { base: next, changes: null, compared: false };
-  return {
-    base: { ...next, runBefore: found.baseline, dialogs: found.dialogs },
-    changes: found.changes,
-    compared: true,
-  };
+  return { ...found, base: { ...next, ...found.base } };
 }
 
 /**
@@ -234,8 +215,16 @@ export function useNativeChanges(nodes: Map<string, NativeNode>) {
       // An automatic read of the page's own changes that finds none in the
       // tree leaves the marks: on a page that keeps changing where the tree
       // doesn't show it, they would go moments after the action that made
-      // them. A read the user caused that finds none takes them away.
-      if (next.compared && !next.changes && run.follows === null) return;
+      // them. A read the user caused that finds none takes them away, and
+      // so does one a dialog closed in: the marks were the dialog's.
+      if (
+        next.compared &&
+        !next.changes &&
+        run.follows === null &&
+        !next.closedDialog
+      ) {
+        return;
+      }
       setChanges(
         next.changes && {
           changes: next.changes,

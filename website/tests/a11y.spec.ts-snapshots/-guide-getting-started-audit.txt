@@ -207,7 +207,7 @@ main
           code "playwright"
   separator
   heading "Keep it out of production" (level 2)
-  paragraph "and render a full tree view (~23 KB gzipped for , plus Preact; see for the gated budgets). If you drop or into a component that ships to production, bundlers can't tree-shake the renderer away — . You want it dev-only."
+  paragraph "and render a full tree view (~46 KB gzipped for , Preact included; see for the gated budgets). If you drop or into a component that ships to production, bundlers can't tree-shake the renderer away — . You want it dev-only."
     code "@real-a11y-dev/inspector"
     code "@real-a11y-dev/react"
     code "inspector"
@@ -245,7 +245,7 @@ main
         cell "@real-a11y-dev/inspector"
           code "@real-a11y-dev/inspector"
         cell "⚠ gate it"
-        cell "Ships Preact + tree view. ~40 KB gzipped total."
+        cell "Ships Preact + tree view. ~46 KB gzipped total."
       row
         cell "@real-a11y-dev/react"
           code "@real-a11y-dev/react"

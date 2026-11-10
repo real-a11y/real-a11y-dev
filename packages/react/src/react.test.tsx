@@ -151,6 +151,30 @@ describe("<SemanticNavigator />", () => {
     expect(onTree.classList.contains("sn-tree--full-names")).toBe(true);
   });
 
+  it("marks changes unless markChanges is false", async () => {
+    function App({ markChanges }: { markChanges?: boolean }) {
+      const rootRef = useRef<HTMLDivElement>(null);
+      return (
+        <>
+          <div ref={rootRef}>
+            <button>Go</button>
+          </div>
+          <SemanticNavigator root={rootRef} markChanges={markChanges} />
+        </>
+      );
+    }
+
+    // The tree offers the change keys only while it marks changes.
+    const on = render(<App />);
+    const onTree = await findInPanel(divAt(on.container, 1), '[role="tree"]');
+    expect(onTree.getAttribute("aria-keyshortcuts")).toContain("Alt+N");
+    on.unmount();
+
+    const off = render(<App markChanges={false} />);
+    const offTree = await findInPanel(divAt(off.container, 1), '[role="tree"]');
+    expect(offTree.getAttribute("aria-keyshortcuts")).not.toContain("Alt+N");
+  });
+
   it("keeps the user's Show full names through a remount, its own included", async () => {
     function App({
       theme,

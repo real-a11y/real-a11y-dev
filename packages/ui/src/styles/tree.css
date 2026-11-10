@@ -404,54 +404,6 @@
   cursor: pointer;
 }
 
-/* ── Diff highlighting ─────────────────────────────────────────────────────
-   Colour is deliberately not load-bearing: every marked row also renders a
-   +/~ glyph and a screen-reader word, and carries a solid left edge that
-   survives forced-colours mode. */
-.sn-node--added {
-  background: var(--sn-diff-added-bg);
-  box-shadow: inset 3px 0 0 var(--sn-diff-added-edge);
-}
-
-.sn-node--changed {
-  background: var(--sn-diff-changed-bg);
-  box-shadow: inset 3px 0 0 var(--sn-diff-changed-edge);
-}
-
-/* A row can be selected AND diff-marked. Both indicators paint via inset
-   box-shadow (a real border would break the exact-24px row height), so the
-   later diff rule would clobber the selection ring — compose the two shadows
-   instead. The diff background still wins, as it did when selection used a
-   border. */
-.sn-node--selected.sn-node--added {
-  box-shadow:
-    inset 0 0 0 1px var(--sn-accent),
-    inset 3px 0 0 var(--sn-diff-added-edge);
-}
-
-.sn-node--selected.sn-node--changed {
-  box-shadow:
-    inset 0 0 0 1px var(--sn-accent),
-    inset 3px 0 0 var(--sn-diff-changed-edge);
-}
-
-.sn-diff-marker {
-  flex: none;
-  width: 1ch;
-  margin-right: 4px;
-  font-family: var(--sn-font-mono);
-  font-weight: 700;
-  text-align: center;
-}
-
-.sn-diff-marker--added {
-  color: var(--sn-diff-added-text);
-}
-
-.sn-diff-marker--changed {
-  color: var(--sn-diff-changed-text);
-}
-
 /* Forced colours strips background/box-shadow; keep the rows distinguishable.
    Selection used to rely on border-color (which survives forced-colours); the
    exact-24px virtualization constraint moved it to an inset box-shadow, so
@@ -462,14 +414,10 @@
     outline: 2px solid Highlight;
     outline-offset: -2px;
   }
-
-  .sn-node--added,
-  .sn-node--changed {
-    border-left: 3px solid CanvasText;
-  }
 }
 
-/* Removed nodes — no row exists for them, so they are summarized below. */
+/* Removed rows: no row exists for them, so the changes bar under the tree
+   lists them (tree-changes.css). */
 .sn-removed {
   border-top: 1px solid var(--sn-border);
   padding: 4px 8px;

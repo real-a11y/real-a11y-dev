@@ -1051,6 +1051,25 @@ describe("useNativeChanges", () => {
     });
   });
 
+  it("takes away the marks of a dialog that closed by itself", () => {
+    // A modal leaves only itself in the tree, rooted at it.
+    const SAVED_DIALOG = tree(
+      n("ax-dom-40", "dialog", "Saved", ["ax-dom-41"]),
+      n("ax-dom-41", "button", "OK"),
+    );
+    mount();
+    land(SAVED_DIALOG, AUTO, { ...SHOP, rootId: "ax-dom-40" });
+    expect(found(hook.marks?.changes)).toEqual({
+      added: ["ax-dom-40", "ax-dom-41"],
+      changed: [],
+      removed: [],
+    });
+    // It closes on its own, and the page behind it is as it was: the marks
+    // were the dialog's, and go with it.
+    land(CLOSED, AUTO);
+    expect(hook.marks).toBeNull();
+  });
+
   it("still drops the marks for an automatic read of another document", () => {
     mount();
     land(OPENED, inRun(100));

@@ -37,6 +37,25 @@ export interface FieldChange {
   after?: string | boolean;
 }
 
+/** What one side of a {@link FieldChange} holds. */
+type FieldValue = string | boolean | undefined;
+
+/** `field`'s change from `before` to `after` added to `changes`, if it
+ *  changed at all: how `DiffRules.compare` builds its list. */
+export function noteFieldChange(
+  changes: FieldChange[],
+  field: string,
+  before: FieldValue,
+  after: FieldValue,
+): void {
+  if (before === after) return;
+  changes.push({
+    field,
+    ...(before === undefined ? {} : { before }),
+    ...(after === undefined ? {} : { after }),
+  });
+}
+
 /** A row the earlier read had and the later one doesn't. */
 export interface RemovedRow {
   id: string;
@@ -94,6 +113,12 @@ export interface DiffRules<N extends TreeRow> {
    * compared, and is new or gone only as part of a subtree that is.
    */
   lasting(id: string): boolean;
+  /**
+   * Whether a row both reads show is compared: {@link lasting} unless said.
+   * The shared panel's own root is compared but never new or gone, as a
+   * read widened to the whole page flattens it away.
+   */
+  compared?(id: string): boolean;
   /** The row's role and name, for the rows that went. */
   label(node: N): { role: string; name: string };
 }
@@ -157,10 +182,11 @@ function addedAndChanged<N extends TreeRow>(
 ): Pick<TreeChanges, "added" | "changed"> {
   const added = new Set<string>();
   const changed = new Map<string, FieldChange[]>();
+  const compared = rules.compared ?? rules.lasting;
   for (const id of now.order) {
     if (!was.shown.has(id)) {
       if (counts(id, now, added, rules)) added.add(id);
-    } else if (rules.lasting(id)) {
+    } else if (compared(id)) {
       const changes = rules.compare(was.nodes.get(id)!, now.nodes.get(id)!);
       if (changes.length > 0) changed.set(id, changes);
     }

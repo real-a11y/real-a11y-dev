@@ -45,31 +45,23 @@ Controlled counterpart to `TreeView`. Renders a pre-extracted `ExtractionResult`
 
 ### TreeToolbar
 
-Search bar, DOM/A11Y view toggle, expand/collapse controls, and the diff checkpoint button.
+Search bar, DOM/A11Y view toggle, expand/collapse controls, and the checkpoint button.
 
 ### TreeNode
 
 Single tree node with expand/collapse toggle, label rendering (DOM or A11Y mode), state badges, and action button.
 
-## Diff mode
+## Change marks
 
-The toolbar's checkpoint button (`⎌`) captures the tree as it is right now. Interact with the page, and rows that appeared or changed since are marked in place — useful for answering "what did opening this menu actually do to the accessibility tree?". Click it again to clear.
+`TreeView` marks what each update of the tree changed, as the extension marks what each read of Chrome's tree changed, with the same code (`tree-changes*.ts`, `hooks/useTreeChanges.ts`). A new or changed row keeps a coloured edge and flashes as it comes, a tag says _new_ or _changed_ (with what changed in its title) and what changed on the row is underlined or outlined, a collapsed row says what changed under it (_2 new inside_), a bar under the tree counts it all and lists the rows removed, which have no row (and no element) left to mark, and Alt+N and Alt+Shift+N go from change to change. None of it is colour alone: a screen reader hears each mark at the end of the row's label.
 
-The marking is not color-only: added rows carry a `+` and changed rows a `~`, each paired with visually-hidden text so the status is announced, and a forced-colors fallback swaps the tint for a border. While a checkpoint is active the marker column is reserved on every row, so a marked label lines up with its unmarked neighbours instead of being nudged right; the column disappears entirely when no checkpoint is active. Nodes that were **removed** are listed in a `<details>` below the tree rather than as rows — their elements are gone from the DOM, so there is nothing to highlight, focus, or act on.
+What the user does starts a run: a click or a key on the page (a screen reader's activation arrives as a click alone), or an action sent through the tree, but not a pick of the element picker. The updates in the five seconds after it compare with the tree from before it, so the items a menu fetches stay marked with the button that opened it, and what they find is said in a polite live region. Typing in a field ends that, so a list that filters as the user types is marked without being read out at every key. Any other update is marked and not said, and one that changes nothing the tree shows leaves the marks as they are (`hooks/usePageChanges.ts`). A modal that hides the rest of the page from the tree marks the dialog new and nothing removed, and so does a menu or listbox opened the same way, as Radix's dropdown menu and select are (`tree-changes-dialogs.ts`).
 
-A baseline is only comparable against the same kind of extraction of the same subtree, so it is dropped when either the view mode or the `root` changes — a checkpoint taken in the A11Y view, or against a different root, would diff into noise.
+Only the page `TreeView` was given counts: a toast or a menu mounted outside its `root` makes the extractor read the whole page, and only the overlay is marked, not the page around the root it brings. What counts as a change is what the row shows, in its view (`semantic-tree-diff.ts`): the A11Y view's role, name, level, badges, controlled rows and a leaf's text, or the DOM view's attributes, text and badges, and whether the element is hidden. A class toggling on hover marks a DOM row, and nothing in the A11Y view.
 
-**Only `TreeView` ships this ready to use**, where it defaults to on (`enableDiff={false}` hides the button). `TreePanel` is the controlled component: it renders whatever `diff` you hand it and defaults `enableDiff` to off, because the host owns the baseline. Wiring diff mode into a `TreePanel` host means holding a baseline `ExtractionResult`, deriving the view, and resetting it yourself:
+`markChanges={false}` turns it off. The toolbar's checkpoint button (`⎌`) still works then: it pins the tree as it is, and everything that changes since is marked the same way until the button is pressed again (`enableDiff={false}` hides it). Marks and checkpoint are both dropped when the view mode or the `root` changes, since a tree of another kind or another subtree shares no rows with them.
 
-```ts
-import { buildTreeDiffView } from "@real-a11y-dev/semantic-navigator-ui";
-
-const view = buildTreeDiffView(baseline, current);
-view.status.get(nodeId); // "added" | "changed" | undefined
-view.removed; // SemanticNode[] — gone from the current tree
-```
-
-Pass the result as `TreePanel`'s `diff` prop, along with `enableDiff`, `diffActive`, and `onToggleDiff` to drive the button.
+`TreePanel` is the controlled component: it marks whatever its `changes` prop holds (a `TreeChangesProp`: the marks, how to clear them, and what they are compared with) and nothing without it, and leaves `enableDiff` off by default, because the host owns what is compared.
 
 > This is the in-page, interaction-scoped diff. It is keyed on live node identity, so it dies on navigation. For a diff that survives navigation and gates CI, use the snapshot fingerprint diff — the `real-a11y snapshot` / `real-a11y diff` CLI commands, or the MCP checkpoint tools, each carrying the internal [`@real-a11y-dev/snapshot`](../snapshot) engine.
 

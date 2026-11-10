@@ -504,6 +504,47 @@ describe("LiveTreeExtractor", () => {
     observer.stop();
   });
 
+  it("leaves the nodes of a result it handed out before as they were (dom mode)", async () => {
+    // The panel's change marks compare a refresh with the one before it, so a
+    // splice replaces a node it changes rather than writing to it.
+    document.body.innerHTML = `<main><button>Btn</button><div id="panel"><p><span>Old</span></p></div></main>`;
+
+    const live = new LiveTreeExtractor(document.body, { mode: "dom" });
+    const before = live.extract();
+    const main = [...before.nodes.values()].find(
+      (n) => n.dom?.tagName === "main",
+    )!;
+    const children = [...main.childIds];
+    const text = main.dom!.descendantText;
+    let lastChange: TreeChange | undefined;
+    const observer = new DomObserver(
+      document.body,
+      (change) => {
+        lastChange = change;
+      },
+      50,
+    );
+    observer.start();
+
+    document.querySelector("span")!.textContent = "New";
+    await vi.advanceTimersByTimeAsync(100);
+    live.refresh(lastChange);
+    document.getElementById("panel")!.style.display = "none";
+    await vi.advanceTimersByTimeAsync(100);
+    const after = live.refresh(lastChange);
+
+    // The new result has both changes; the old one has neither.
+    expect(after.nodes.get(main.id)!.childIds).toHaveLength(
+      children.length - 1,
+    );
+    expect(after.nodes.get(main.id)!.dom!.descendantText).toBe("BtnNew");
+    expect(main.childIds).toEqual(children);
+    expect(main.dom!.descendantText).toBe(text);
+    expect(text).toBe("BtnOld");
+
+    observer.stop();
+  });
+
   it("updates a name-host's name when nested text changes via childList", async () => {
     document.body.innerHTML = `<main><button><span class="label"><em>Old</em></span></button></main>`;
 

@@ -154,6 +154,52 @@ describe("compareThroughDialogs", () => {
     ]);
   });
 
+  it("stands a menu a library opens modally in front of the page, as a dialog", () => {
+    // Radix's dropdown hides the rest of the page, which leaves the menu
+    // alone in the tree under the document's root.
+    const MENU = tree(
+      ["body", "generic", "", ["menu"]],
+      ["menu", "menu", "Account", ["edit", "out"]],
+      ["edit", "menuitem", "Edit profile"],
+      ["out", "menuitem", "Sign out"],
+    );
+    const opened = compareThroughDialogs(
+      MENU,
+      { against: PAGE, dialogs: [] },
+      RULES,
+    )!;
+    expect(opened.changes!.removed).toEqual([]);
+    expect([...opened.changes!.added]).toEqual(["body", "menu", "edit", "out"]);
+    const closed = compareThroughDialogs(
+      PAGE,
+      { against: MENU, dialogs: opened.dialogs },
+      RULES,
+    )!;
+    expect(closed.baseline).toBe(PAGE);
+    expect(closed.changes).toBeNull();
+  });
+
+  it("marks a menu that opens beside the page as new, and nothing more", () => {
+    const withMenu = tree(
+      ["root", "main", "", ["save", "list", "status", "menu"]],
+      ["save", "button", "Save"],
+      ["list", "list", "Cart", ["apples", "pears"]],
+      ["apples", "listitem", "Apples"],
+      ["pears", "listitem", "Pears", ["tmp-1"]],
+      ["tmp-1", "StaticText", "Pears"],
+      ["status", "status", ""],
+      ["menu", "menu", "Account", ["edit"]],
+      ["edit", "menuitem", "Edit profile"],
+    );
+    const opened = compareThroughDialogs(
+      withMenu,
+      { against: PAGE, dialogs: [] },
+      RULES,
+    )!;
+    expect([...opened.changes!.added]).toEqual(["menu", "edit"]);
+    expect(opened.dialogs).toEqual([]);
+  });
+
   it("can't tell the page back from behind a dialog it never saw come", () => {
     expect(
       compareThroughDialogs(EMPTIED, { against: DIALOG, dialogs: [] }, RULES),

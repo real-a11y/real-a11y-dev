@@ -13,6 +13,7 @@ link "Keep it out of production"
 button "Copy Code"
 generic
 table
+link "the inspector's What changed"
 button "Copy Code"
 generic
 table
