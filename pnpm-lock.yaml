@@ -616,6 +616,9 @@ importers:
       '@real-a11y-dev/semantic-navigator-ui':
         specifier: workspace:*
         version: link:../ui
+      '@types/node':
+        specifier: ^26.6.3
+        version: 26.6.6
       '@types/react':
         specifier: ^19.3.0
         version: 19.3.0

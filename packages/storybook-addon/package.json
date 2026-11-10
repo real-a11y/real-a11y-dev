@@ -106,6 +106,7 @@
   "devDependencies": {
     "@real-a11y-dev/core": "workspace:*",
     "@real-a11y-dev/semantic-navigator-ui": "workspace:*",
+    "@types/node": "^26.6.3",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "esbuild": "^0.28.2",
