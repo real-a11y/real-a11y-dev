@@ -1,5 +1,7 @@
 ---
 "@real-a11y-dev/storybook-addon": minor
+"@real-a11y-dev/inspector": patch
+"@real-a11y-dev/react": patch
 ---
 
 The Storybook panel marks what changed in the story's tree, as the inspector's and `<SemanticNavigator />`'s do, so opening a menu in a story shows the button that went expanded and the menu that came.
@@ -10,3 +12,5 @@ The Storybook panel marks what changed in the story's tree, as the inspector's a
 - A new story, the other mode, a reloaded canvas, and the panel shown again after another addon tab start over, and a story's first render is never marked as a change.
 - `parameters: { realA11y: { markChanges: false } }` turns the marks off, for every story in `.storybook/preview.ts` or for one.
 - The channel carries what the marks need: `EVENTS.USER_INPUT` (what the user did on the story, while the panel is open), and `storyRows` and `storyRendered` on the `TREE_UPDATED` payload.
+
+`inspector` and `react` re-release the shared panel code this moves (what counts as the user acting on the page, and which rows are the page's), which their marks run; their output is unchanged by this release.
