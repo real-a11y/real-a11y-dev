@@ -281,7 +281,7 @@ export function isHiddenReferenceTarget(
   target: Element,
   styleCache?: StyleCache | null,
 ): boolean {
-  for (let el: Element | null = target; el; el = safeParentElement(el)) {
+  for (let el: Element | null = target; el; el = flatParent(el)) {
     try {
       if (
         isAriaHiddenValue(safeGetAttribute(el, "aria-hidden")) ||
@@ -315,4 +315,12 @@ export function isAriaHiddenChild(
     walk.inReference !== "hidden" &&
     isAriaHiddenValue(safeGetAttribute(child, "aria-hidden"))
   );
+}
+
+/** The parent element, stepping from a shadow root to its host. */
+function flatParent(el: Element): Element | null {
+  const parent = safeParentElement(el);
+  if (parent) return parent;
+  const root = el.getRootNode?.();
+  return root && "host" in root ? (root as ShadowRoot).host : null;
 }

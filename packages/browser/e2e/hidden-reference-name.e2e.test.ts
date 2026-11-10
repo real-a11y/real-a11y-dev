@@ -94,6 +94,24 @@ const CASES: Array<{ title: string; html: string; id: string; name: string }> =
       name: "Go to the docs",
     },
     {
+      title: "a hidden child of a target inside a hidden ancestor",
+      html: `<div hidden><span id="a">Outer <span hidden>inner</span></span></div><button id="b" aria-labelledby="a">b</button>`,
+      id: "b",
+      name: "Outer inner",
+    },
+    {
+      title: "an aria-hidden child of a hidden target",
+      html: `<span id="a" hidden>Outer <span aria-hidden="true">inner</span></span><button id="b" aria-labelledby="a">b</button>`,
+      id: "b",
+      name: "Outer inner",
+    },
+    {
+      title: "a visibility:hidden child of a hidden target",
+      html: `<span id="a" hidden>Outer <span style="visibility:hidden">inner</span></span><button id="b" aria-labelledby="a">b</button>`,
+      id: "b",
+      name: "Outer inner",
+    },
+    {
       title: "a hidden child with no space before it",
       html: `<span id="a" hidden>foo<span hidden>bar</span>baz</span><button id="b" aria-labelledby="a">b</button>`,
       id: "b",
