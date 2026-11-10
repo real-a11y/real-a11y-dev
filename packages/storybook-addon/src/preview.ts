@@ -155,9 +155,10 @@ function buildSerializableTree(change?: TreeChange): SerializableTree {
 }
 
 /**
- * Which rows of `tree` are the story's (`TreeUpdatePayload.storyRows`). Every
- * row is asked, while it is on the page: the panel compares with updates from
- * well before this one, and a row that has gone since can no longer tell.
+ * Which rows of `tree` are the story's (`TreeUpdatePayload.storyRows`): all
+ * of a tree read from the story root. Of one widened past it, every row is
+ * asked while it is on the page: the panel compares with updates from well
+ * before this one, and a row that has gone since can no longer tell.
  */
 function storyRowsOf(
   tree: SerializableTree,
@@ -165,6 +166,7 @@ function storyRowsOf(
   const { root, rows } = story!;
   const rootId = getNodeId(root);
   const outside: string[] = [];
+  if (tree.rootId === rootId) return { rootId, outside };
   for (const [id] of tree.nodes) {
     if (id !== rootId && !rows.has(id)) outside.push(id);
   }
@@ -187,8 +189,9 @@ function publish(change?: TreeChange) {
   // modes can extract to the same nodes, and a listener reading `payload.mode`
   // (documented on the website, and the bundled manager's change marks, which
   // compare an update only with one of its mode) would never see the switch.
-  // So are `storyRows` and `storyRendered`, for the same reason. `extractedAt` is excluded — it is
-  // `Date.now()`, so including it would defeat the comparison entirely.
+  // So are `storyRows` and `storyRendered`, for the same reason. `extractedAt`
+  // is excluded — it is `Date.now()`, so including it would defeat the
+  // comparison entirely.
   //
   // This costs one JSON.stringify on a publish that does go out (the channel
   // serializes independently). It buys skipping the channel's own serialize +

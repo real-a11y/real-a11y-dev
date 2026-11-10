@@ -57,16 +57,21 @@ describe("StoryTree change marks", () => {
     Element.prototype.scrollIntoView = originalScrollIntoView;
   });
 
+  /** The run of updates `read` makes them part of; `fresh` starts one. */
+  let generation = 0;
+
   /** An update of the story as the channel brings it: a copy, in JSON. */
   function read(
     mode: "a11y" | "dom" = "a11y",
     {
       fresh = false,
       storyRows,
-    }: Partial<Pick<StoryRead, "fresh">> & {
+    }: {
+      fresh?: boolean;
       storyRows?: (tree: ExtractionResult) => TreeUpdatePayload["storyRows"];
     } = {},
   ): StoryRead {
+    if (fresh) generation += 1;
     const extracted = (mode === "dom" ? extractDomTree : extractA11yTree)(
       story,
     );
@@ -86,10 +91,12 @@ describe("StoryTree change marks", () => {
       rootId: payload.tree.rootId,
       source: { producer: "dom" as const },
     };
-    return { payload, tree, fresh };
+    return { payload, tree, generation };
   }
 
   const onActivate = vi.fn();
+  beforeEach(() => onActivate.mockClear());
+
   function show(next: StoryRead, props: Partial<StoryTreeProps> = {}) {
     act(() => {
       render(
@@ -164,7 +171,7 @@ describe("StoryTree change marks", () => {
     expect(said()).toBe("");
   });
 
-  it("starts over at an update that is fresh", () => {
+  it("starts over at an update of another run", () => {
     show(read("a11y", { fresh: true }));
     addButton("Delete");
     show(read());
@@ -203,6 +210,17 @@ describe("StoryTree change marks", () => {
 
     addButton("Undo");
     show(read("dom"));
+    expect(bar()).toBeNull();
+  });
+
+  it("clears the marks as the other mode is picked, before its tree comes", () => {
+    show(read("a11y", { fresh: true }));
+    addButton("Delete");
+    const marked = read();
+    show(marked);
+    expect(bar()).not.toBeNull();
+
+    show(marked, { viewMode: "dom" });
     expect(bar()).toBeNull();
   });
 

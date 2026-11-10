@@ -60,10 +60,11 @@ function Panel() {
   const [isReady, setIsReady] = useState(false);
   const [isVisible, setIsVisible] = useState(false);
   const [read, setRead] = useState<StoryRead | null>(null);
-  // Whether the next update starts the change marks over (`StoryRead.fresh`):
-  // the first since the panel was shown, since the story changed, or since the
-  // preview reloaded. A hidden panel hears none of what changes in between.
-  const freshRef = useRef(true);
+  // The run of updates the change marks compare within
+  // (`StoryRead.generation`): a new one when the panel is shown, when the
+  // story changes and when the preview reloads. A hidden panel hears none of
+  // what changes in between.
+  const generationRef = useRef(0);
   const { markChanges = true } =
     useParameter<{ markChanges?: boolean }>(PARAM_KEY, {}) ?? {};
   // Both modes live in the manager's store, not in this component: Storybook
@@ -229,21 +230,20 @@ function Panel() {
     if (!isVisible) return;
     const channel = addons.getChannel();
     // Shown, or shown again: nothing the story did while the panel was hidden
-    // was heard, so the first update starts over.
-    freshRef.current = true;
+    // was heard, so its updates are a run of their own.
+    generationRef.current += 1;
 
     const handler = (next: TreeUpdatePayload) => {
       const tree = deserializeTree(next.tree);
       if (liveTreeRef.current) preserveExpandedState(liveTreeRef.current, tree);
       liveTreeRef.current = tree;
-      setRead({ payload: next, tree, fresh: freshRef.current });
-      freshRef.current = false;
+      setRead({ payload: next, tree, generation: generationRef.current });
     };
     channel.on(EVENTS.TREE_UPDATED, handler);
     // The preview sends this itself, so it comes between the last update of
     // the story it leaves and the first of the next.
     const storyChanged = () => {
-      freshRef.current = true;
+      generationRef.current += 1;
     };
     channel.on("storyChanged", storyChanged);
 
@@ -255,9 +255,11 @@ function Panel() {
     const requestTree = () =>
       channel.emit(EVENTS.REQUEST_TREE, extractionModeRef.current);
     requestTree();
-    // A reloaded preview names its elements afresh.
+    // A reloaded preview names its elements afresh, from the same ids: the
+    // rows opened in the tree before would open others.
     const previewReady = () => {
-      freshRef.current = true;
+      generationRef.current += 1;
+      liveTreeRef.current = null;
       requestTree();
     };
 

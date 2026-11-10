@@ -2,7 +2,14 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { PANEL_HOST_ATTRIBUTE } from "../extraction/overlay-reach.js";
 
-import { watchUserInput, type UserInput } from "./user-input.js";
+import { isUserInput, watchUserInput, type UserInput } from "./user-input.js";
+
+it("tells a user input from anything else", () => {
+  expect(["act", "click", "type"].every(isUserInput)).toBe(true);
+  expect([undefined, "scroll", 1, { input: "act" }].some(isUserInput)).toBe(
+    false,
+  );
+});
 
 describe("watchUserInput", () => {
   let heard: UserInput[];

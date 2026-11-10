@@ -63,6 +63,8 @@ const { channel, observerState, extractorState } = vi.hoisted(() => {
       rows: [] as string[],
       /** Which of them are of the page around the story (`rootRowScope`). */
       outside: [] as string[],
+      /** The story root's id: "root", unless a test widens the read past it. */
+      storyRootId: "root",
       reset() {
         this.constructed = 0;
         this.refreshCalls = 0;
@@ -70,6 +72,7 @@ const { channel, observerState, extractorState } = vi.hoisted(() => {
         this.mode = "";
         this.rows = [];
         this.outside = [];
+        this.storyRootId = "root";
       },
     },
   };
@@ -164,7 +167,7 @@ vi.mock("@real-a11y-dev/core", async (importOriginal) => {
     FocusManager,
     ActionDispatcher,
     getElementRefs: () => new WeakMap(),
-    getNodeId: () => "root",
+    getNodeId: () => extractorState.storyRootId,
     rootRowScope: () => ({
       has: (id: string) => !extractorState.outside.includes(id),
       isRoot: (id: string) => id === "root",
@@ -497,16 +500,17 @@ describe("preview: the beforeAll annotation", () => {
 describe("preview: what the panel's change marks need", () => {
   it("says which rows are the story's", () => {
     // A read widened to the page for a toast brings the page's header.
-    extractorState.rows = ["header", "toast"];
-    extractorState.outside = ["header"];
+    extractorState.rows = ["story", "header", "toast"];
+    extractorState.storyRootId = "story";
+    extractorState.outside = ["header", "root"];
     const updates: TreeUpdatePayload[] = [];
     channel.on(EVENTS.TREE_UPDATED, (payload) =>
       updates.push(payload as TreeUpdatePayload),
     );
     channel.emit(EVENTS.REQUEST_TREE);
     expect(updates[0]!.storyRows).toEqual({
-      rootId: "root",
-      outside: ["header"],
+      rootId: "story",
+      outside: ["header", "root"],
     });
   });
 

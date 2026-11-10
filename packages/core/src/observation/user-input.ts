@@ -13,6 +13,14 @@ import { PANEL_HOST_ATTRIBUTE } from "../extraction/overlay-reach.js";
  */
 export type UserInput = "act" | "click" | "type";
 
+const USER_INPUTS = new Set<unknown>(["act", "click", "type"]);
+
+/** Whether `value` is a {@link UserInput}, as one heard from another frame
+ *  has to be checked to be. */
+export function isUserInput(value: unknown): value is UserInput {
+  return USER_INPUTS.has(value);
+}
+
 /** Keys that do nothing on their own. */
 const MODIFIER_KEYS = new Set([
   "Alt",

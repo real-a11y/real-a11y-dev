@@ -6,16 +6,16 @@
  * The updates come over the channel, and so does what the user does on the
  * story (`EVENTS.USER_INPUT`): a click on the story starts a run of updates
  * that is said, as a click on the page is in the inspector. Each update is
- * compared with the one before, unless it starts over (`StoryRead.fresh`).
- * An update of the other extraction always does, as their node ids name
- * other elements, and so does the first after a tree read before the story
- * rendered (`TreeUpdatePayload.storyRendered`).
+ * compared with the one before it, if that one is of its generation
+ * (`StoryRead.generation`) and its extraction, whose node ids name the same
+ * elements, and wasn't read before the story rendered
+ * (`TreeUpdatePayload.storyRendered`).
  */
-import type {
-  ActionType,
-  ExtractionResult,
-  RowScope,
-  UserInput,
+import {
+  isUserInput,
+  type ActionType,
+  type ExtractionResult,
+  type RowScope,
 } from "@real-a11y-dev/core";
 import {
   semanticTreeRules,
@@ -41,11 +41,12 @@ export interface StoryRead {
   /** The payload's tree, with the expansion of the tree before it. */
   tree: ExtractionResult;
   /**
-   * Compared with nothing: the first update since the panel was shown, since
-   * the story changed, or since the preview reloaded, whose ids name other
-   * elements.
+   * Which run of updates this is one of: a new one starts when the panel is
+   * shown, when the story changes and when the preview reloads, and nothing
+   * is compared across two. A number rather than a flag on a run's first
+   * update, which is lost when React renders two updates as one.
    */
-  fresh: boolean;
+  generation: number;
 }
 
 /** The part of Storybook's channel the tree listens on. */
@@ -63,8 +64,6 @@ export interface StoryTreeProps extends Omit<
   markChanges: boolean;
   channel: InputChannel;
 }
-
-const USER_INPUTS = new Set<unknown>(["act", "click", "type"]);
 
 /**
  * The rows that are the story's, as each update said (`storyRows`), kept for
@@ -112,16 +111,19 @@ export function StoryTree({
   // The tree on screen, which the next update replaces.
   const onScreen = useRef<{
     tree: ExtractionResult;
+    generation: number;
     extraction: string;
     rendered: boolean;
   }>();
   // Before the tree is painted, so a mark comes with the row it marks.
   useLayoutEffect(() => {
     const last = onScreen.current;
-    // Nor with a tree read before the story rendered: what its first render
+    // Not with a tree read before the story rendered: what its first render
     // brings is the story, not a change to it.
     const compared =
-      !read.fresh && last?.extraction === extraction && last.rendered;
+      last?.generation === read.generation &&
+      last.extraction === extraction &&
+      last.rendered;
     if (!compared) {
       reset();
       rows.clear();
@@ -130,14 +132,22 @@ export function StoryTree({
     noteRead(compared ? last.tree : null, read.tree);
     onScreen.current = {
       tree: read.tree,
+      generation: read.generation,
       extraction,
       rendered: read.payload.storyRendered !== false,
     };
   }, [read, extraction, rows, reset, noteRead]);
 
+  // The other mode picked: its tree is on its way, and what was marked on
+  // this one goes now rather than when it comes.
+  const picked = panel.viewMode === "dom" ? "dom" : "a11y";
+  useLayoutEffect(() => {
+    if (onScreen.current && picked !== onScreen.current.extraction) reset();
+  }, [picked, reset]);
+
   useEffect(() => {
     const hear = (input: unknown) => {
-      if (USER_INPUTS.has(input)) noteInput(input as UserInput);
+      if (isUserInput(input)) noteInput(input);
     };
     channel.on(EVENTS.USER_INPUT, hear);
     return () => channel.off(EVENTS.USER_INPUT, hear);

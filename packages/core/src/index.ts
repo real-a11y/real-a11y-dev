@@ -95,7 +95,11 @@ export {
 } from "./observation/live-tree-extractor.js";
 // @internal — what the user does on a page, for the change marks; not a
 // stability promise.
-export { watchUserInput, type UserInput } from "./observation/user-input.js";
+export {
+  isUserInput,
+  watchUserInput,
+  type UserInput,
+} from "./observation/user-input.js";
 
 // Search
 export {

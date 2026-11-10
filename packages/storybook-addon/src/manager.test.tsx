@@ -88,7 +88,7 @@ vi.mock("storybook/manager-api", () => ({
 // updates it hands the tree to compare, so it only records its props.
 const ui = vi.hoisted(() => ({
   props: null as null | {
-    read: { payload: unknown; tree: unknown; fresh: boolean };
+    read: { payload: unknown; tree: unknown; generation: number };
     markChanges: boolean;
     viewMode: string;
     onViewModeChange: (mode: string) => void;
@@ -313,15 +313,18 @@ describe("Show full names", () => {
 });
 
 describe("change marks", () => {
-  /** Whether each update handed to the tree starts over, in order. */
-  const freshness: boolean[] = [];
+  /** The generation of each update handed to the tree, in order. */
+  const generations: number[] = [];
   async function update(mode = "a11y") {
     await fromPreview(EVENTS.TREE_UPDATED, treeUpdate(mode));
-    freshness.push(ui.props!.read.fresh);
+    generations.push(ui.props!.read.generation);
   }
+  /** Whether each update starts a run of its own: the first always does. */
+  const freshness = () =>
+    generations.map((g, i) => i === 0 || g !== generations[i - 1]);
 
   beforeEach(() => {
-    freshness.length = 0;
+    generations.length = 0;
   });
 
   it("compares each update with the one before it", async () => {
@@ -330,7 +333,7 @@ describe("change marks", () => {
     await update();
     await update();
     await update();
-    expect(freshness).toEqual([true, false, false]);
+    expect(freshness()).toEqual([true, false, false]);
   });
 
   // Nothing the story did while the panel was hidden was heard.
@@ -341,7 +344,7 @@ describe("change marks", () => {
     await resize(0, 0);
     await resize(600, 300);
     await update();
-    expect(freshness).toEqual([true, true]);
+    expect(freshness()).toEqual([true, true]);
   });
 
   // Another story's elements share no ids with this one's.
@@ -352,7 +355,7 @@ describe("change marks", () => {
     await fromPreview("storyChanged", "button--secondary");
     await update();
     await update();
-    expect(freshness).toEqual([true, true, false]);
+    expect(freshness()).toEqual([true, true, false]);
   });
 
   // A reloaded preview names its elements afresh, from the same ids.
@@ -362,7 +365,24 @@ describe("change marks", () => {
     await update();
     await fromPreview(EVENTS.PREVIEW_READY);
     await update();
-    expect(freshness).toEqual([true, true]);
+    expect(freshness()).toEqual([true, true]);
+    // Nor are the rows opened in the old tree carried by id to the new one.
+    expect(ui.preserveExpandedState).toHaveBeenCalledTimes(0);
+  });
+
+  // React renders updates that come at once as one, which only the last
+  // reaches the tree of.
+  it("keeps a new run when React renders two of its updates as one", async () => {
+    await renderPanel(true);
+    await resize(600, 300);
+    await update();
+    await act(async () => {
+      sb.channel.emit("storyChanged", "button--secondary");
+      sb.channel.emit(EVENTS.TREE_UPDATED, treeUpdate());
+      sb.channel.emit(EVENTS.TREE_UPDATED, treeUpdate());
+    });
+    generations.push(ui.props!.read.generation);
+    expect(freshness()).toEqual([true, true]);
   });
 
   it("marks changes unless the story's parameters turn them off", async () => {
