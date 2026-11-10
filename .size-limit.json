@@ -2,7 +2,7 @@
   {
     "name": "@real-a11y-dev/core (esm)",
     "path": "packages/core/dist/index.js",
-    "limit": "24.9 KB",
+    "limit": "25.2 KB",
     "gzip": true
   },
   {
@@ -41,7 +41,7 @@
   {
     "name": "@real-a11y-dev/storybook-addon (manager)",
     "path": "packages/storybook-addon/dist/manager.js",
-    "limit": "28.1 KB",
+    "limit": "30.7 KB",
     "gzip": true,
     "ignore": [
       "react",

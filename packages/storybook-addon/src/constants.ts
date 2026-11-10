@@ -3,6 +3,11 @@ import type { SemanticNode, TreeViewMode } from "@real-a11y-dev/core";
 /** Unique addon id — used for the panel and the channel events. */
 export const ADDON_ID = "real-a11y/semantic-navigator";
 export const PANEL_ID = `${ADDON_ID}/panel`;
+/**
+ * The story parameter the panel reads: `markChanges: false` turns its change
+ * marks off.
+ */
+export const PARAM_KEY = "realA11y";
 
 /** Channel events exchanged between the preview iframe and the manager UI. */
 export const EVENTS = {
@@ -10,6 +15,8 @@ export const EVENTS = {
   TREE_UPDATED: `${ADDON_ID}/tree-updated`,
   /** Preview → manager: preview iframe (re)booted — re-send REQUEST_TREE if the panel is still open. */
   PREVIEW_READY: `${ADDON_ID}/preview-ready`,
+  /** Preview → manager: what the user did on the story (`"act"` for a press or a key, `"click"`, or `"type"` for typing in a field), while the panel is open — so the panel can tell the updates they caused. */
+  USER_INPUT: `${ADDON_ID}/user-input`,
   /** Manager → preview: start observing, in the mode it carries, and send the current tree (panel shown). A no-op while already observing in that mode. */
   REQUEST_TREE: `${ADDON_ID}/request-tree`,
   /** Manager → preview: tear down the observer — panel unmounted / hidden. */
@@ -49,6 +56,21 @@ export interface TreeUpdatePayload {
   mode: TreeViewMode;
   /** Timestamp (ms since epoch) of the extraction. */
   extractedAt: number;
+  /**
+   * Which rows are the story's, for the panel's change marks. `rootId` is the
+   * story root's own row. `outside` lists the rows of the preview page around
+   * the story, which an extraction widened to the whole page brings — for an
+   * overlay the story mounts outside its root, such as a menu portaled to
+   * `<body>` — and empty unless one did. Neither is ever marked new or gone.
+   */
+  storyRows?: { rootId: string; outside: string[] };
+  /**
+   * Whether the story had rendered when the tree was read: false for a tree
+   * read on its way in, after the story changed and before it first rendered.
+   * The panel's change marks compare nothing with such a tree, so the story's
+   * first render isn't marked as a change.
+   */
+  storyRendered?: boolean;
 }
 
 /** The view mode the manager sends to the preview to request re-extraction. */

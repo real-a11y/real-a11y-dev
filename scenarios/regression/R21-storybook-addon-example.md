@@ -41,6 +41,9 @@ pnpm --filter @real-a11y-dev/example-storybook storybook
    it end in "…" with no sideways scroll? Open the panel's **⚙**, turn on **Show full
    names**, then open a component's **Docs** page and one of its stories (Storybook
    mounts a new panel there, as D9 step 4 notes): is it still on?
+10. On **Components / Disclosure → Button With Menu**, click **Open settings** in the
+    canvas, then press `Alt`+`→` to go straight to the next story, and back with `Alt`+`←`.
+    Then pick **Controls** and the panel again
 
 ## Expected
 
@@ -64,6 +67,10 @@ pnpm --filter @real-a11y-dev/example-storybook storybook
 - **9** — from storybook-addon 0.1.0-beta.21, a long name never scrolls the panel
   sideways unless **Show full names** is on, and the choice holds in the panel Storybook mounts after the Docs page,
   and across stories. Earlier releases widen the tree for it and have no ⚙
+- **10** — from storybook-addon 0.1.0-beta.23, the click marks the button _changed_ and
+  the menu with its items _new_, the bar under the tree reads "4 new, 1 changed", and a
+  screen reader hears "4 new, 1 changed in the tree". Each story switch and the return
+  from **Controls** start with nothing marked: a story's first render isn't a change
 
 ## Why this exists
 

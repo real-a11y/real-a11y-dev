@@ -1,6 +1,7 @@
 import {
   extractA11yTree,
   extractDomTree,
+  rootRowScope,
   type ExtractionResult,
 } from "@real-a11y-dev/core";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -127,7 +128,7 @@ describe("semanticTreeRules", () => {
       <main><button>Save</button></main>
     `;
     const main = host.querySelector("main")!;
-    const rules = semanticTreeRules("a11y", main);
+    const rules = semanticTreeRules("a11y", rootRowScope(main));
     const before = extractA11yTree(main);
     const toast = Object.assign(document.createElement("div"), {
       role: "status",
@@ -165,7 +166,7 @@ describe("semanticTreeRules", () => {
     shadowButton("#card", "Outside");
     shadowButton("#widget", "Inside");
     const main = host.querySelector("main")!;
-    const rules = semanticTreeRules("a11y", main);
+    const rules = semanticTreeRules("a11y", rootRowScope(main));
     const before = extractA11yTree(main);
     const toast = document.createElement("div");
     toast.setAttribute("role", "status");
@@ -188,7 +189,7 @@ describe("semanticTreeRules", () => {
   it("compares the root's own row, and doesn't take it for gone when a widened read flattens it", () => {
     host.innerHTML = `<main aria-label="Inbox"><button>Open</button></main>`;
     const main = host.querySelector("main")!;
-    const rules = semanticTreeRules("a11y", main);
+    const rules = semanticTreeRules("a11y", rootRowScope(main));
     const before = extractA11yTree(main);
     main.setAttribute("aria-label", "Archive");
     const renamed = extractA11yTree(main);
@@ -201,7 +202,7 @@ describe("semanticTreeRules", () => {
     // A root with no row of its own outside its own read: a plain <div>.
     host.innerHTML = `<div id="app"><button>Open</button></div>`;
     const app = host.querySelector("#app")!;
-    const appRules = semanticTreeRules("a11y", app);
+    const appRules = semanticTreeRules("a11y", rootRowScope(app));
     const narrow = extractA11yTree(app);
     const toast = document.createElement("div");
     toast.setAttribute("role", "status");
@@ -226,7 +227,7 @@ describe("semanticTreeRules", () => {
       <main><button>Save</button></main>
     `;
     const main = host.querySelector("main")!;
-    const rules = semanticTreeRules("a11y", main);
+    const rules = semanticTreeRules("a11y", rootRowScope(main));
     const toast = document.createElement("div");
     toast.setAttribute("role", "status");
     toast.textContent = "Saved";

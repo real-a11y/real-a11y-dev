@@ -11,9 +11,10 @@
  * While active, re-extracts on debounced DOM mutations and broadcasts the
  * result as structured JSON over the Storybook channel — but only when that
  * result differs from the last one published, so a mutation that extracts to
- * the same tree costs no postMessage and no panel re-render. Also listens for
- * highlight / activate requests and applies them via FocusManager /
- * ActionDispatcher.
+ * the same tree costs no postMessage and no panel re-render. It also tells the
+ * panel what the user does on the story, which the panel's change marks tell
+ * the updates they caused by. Also listens for highlight / activate requests
+ * and applies them via FocusManager / ActionDispatcher.
  */
 import {
   LiveTreeExtractor,
@@ -21,8 +22,15 @@ import {
   FocusManager,
   ActionDispatcher,
   getElementRefs,
+  getNodeId,
+  rootRowScope,
+  watchUserInput,
 } from "@real-a11y-dev/core";
-import type { TreeChange, DomSemanticNode } from "@real-a11y-dev/core";
+import type {
+  TreeChange,
+  DomSemanticNode,
+  RowScope,
+} from "@real-a11y-dev/core";
 import { addons } from "storybook/preview-api";
 
 import {
@@ -83,9 +91,18 @@ let observer: DomObserver | null = null;
 let focusManager: FocusManager | null = null;
 let dispatcher: ActionDispatcher | null = null;
 let liveExtractor: LiveTreeExtractor | null = null;
+/** The story root the extractor reads, and the rows of the page it holds. */
+let story: { root: Element; rows: RowScope } | null = null;
+/** Stops telling the panel what the user does on the story. */
+let unwatchInput: (() => void) | null = null;
 let currentMode: TreeMode = "a11y";
 /** True while the manager panel wants a live tree (REQUEST_TREE … STOP_TREE). */
 let panelWantsTree = false;
+/**
+ * True once the story has rendered: false from a story change, or from this
+ * module's start, until it first does (`TreeUpdatePayload.storyRendered`).
+ */
+let storyRendered = false;
 /**
  * JSON of the last payload actually put on the channel, with `extractedAt`
  * left out and `mode` kept in. `null` means "nothing published since the
@@ -137,6 +154,23 @@ function buildSerializableTree(change?: TreeChange): SerializableTree {
   };
 }
 
+/**
+ * Which rows of `tree` are the story's (`TreeUpdatePayload.storyRows`). Every
+ * row is asked, while it is on the page: the panel compares with updates from
+ * well before this one, and a row that has gone since can no longer tell.
+ */
+function storyRowsOf(
+  tree: SerializableTree,
+): NonNullable<TreeUpdatePayload["storyRows"]> {
+  const { root, rows } = story!;
+  const rootId = getNodeId(root);
+  const outside: string[] = [];
+  for (const [id] of tree.nodes) {
+    if (id !== rootId && !rows.has(id)) outside.push(id);
+  }
+  return { rootId, outside };
+}
+
 function publish(change?: TreeChange) {
   // The extractor only exists while the panel is open (start()). Channel
   // events such as SET_MODE can arrive before that, so publishing must be a
@@ -147,26 +181,34 @@ function publish(change?: TreeChange) {
   // Always re-extract, even when nothing ends up being sent: refresh()
   // rebuilds the element WeakMap, which is what keeps highlight refs fresh.
   const tree = buildSerializableTree(change);
+  const storyRows = storyRowsOf(tree);
 
   // `mode` is part of the signature because it is part of the payload: two
   // modes can extract to the same nodes, and a listener reading `payload.mode`
-  // (documented on the website) would never see the switch. The bundled
-  // manager happens to track its own view mode, so this is for everyone else.
-  // `extractedAt` is excluded — it is `Date.now()`, so including it would
-  // defeat the comparison entirely.
+  // (documented on the website, and the bundled manager's change marks, which
+  // compare an update only with one of its mode) would never see the switch.
+  // So are `storyRows` and `storyRendered`, for the same reason. `extractedAt` is excluded — it is
+  // `Date.now()`, so including it would defeat the comparison entirely.
   //
   // This costs one JSON.stringify on a publish that does go out (the channel
   // serializes independently). It buys skipping the channel's own serialize +
   // structured clone and the manager's full re-render on the fires that carry
   // nothing new, which on an animating or Controls-driven story is most of
   // them.
-  const signature = JSON.stringify({ mode: currentMode, tree });
+  const signature = JSON.stringify({
+    mode: currentMode,
+    tree,
+    storyRows,
+    storyRendered,
+  });
   if (signature === lastPublished) return;
 
   const payload: TreeUpdatePayload = {
     tree,
     mode: currentMode,
     extractedAt: Date.now(),
+    storyRows,
+    storyRendered,
   };
   channel.emit(EVENTS.TREE_UPDATED, payload);
   // Only after it is actually on the channel: a throwing emit must not leave
@@ -193,6 +235,10 @@ function start() {
   liveExtractor = new LiveTreeExtractor(root, {
     mode: liveExtractorMode(currentMode),
   });
+  story = { root, rows: rootRowScope(root) };
+  unwatchInput = watchUserInput(document, (input) =>
+    addons.getChannel().emit(EVENTS.USER_INPUT, input),
+  );
 
   // Re-extract (and refresh the element WeakMap) on every DOM mutation.
   observer = new DomObserver(
@@ -214,6 +260,9 @@ function stop() {
   focusManager = null;
   dispatcher = null;
   liveExtractor = null;
+  story = null;
+  unwatchInput?.();
+  unwatchInput = null;
   // A story render (or a panel reopen) tears this down and stands a new one
   // up, and the manager may have remounted with no tree at all — so the first
   // publish after a restart must never be withheld as a duplicate of the tree
@@ -305,6 +354,7 @@ export function beforeAll(): (() => void) | undefined {
     [
       "storyRendered",
       () => {
+        storyRendered = true;
         stop();
         if (panelWantsTree) start();
       },
@@ -312,6 +362,7 @@ export function beforeAll(): (() => void) | undefined {
     [
       "storyChanged",
       () => {
+        storyRendered = false;
         stop();
         if (panelWantsTree) {
           setTimeout(() => {

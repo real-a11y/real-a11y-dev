@@ -10,13 +10,15 @@
  * they find is said. Typing in a field ends that, as it does in the
  * extension: a list that filters as the user types is marked, not said at
  * every key. Any other update is a run of its own, marked and not said, and
- * one that changes nothing the tree shows leaves the marks as they are.
+ * one that changes nothing the tree shows leaves the marks as they are. A
+ * host that hears the page some other way, as the Storybook addon's panel
+ * hears the story's frame, passes no document and tells `noteInput` instead.
  *
  * A checkpoint pins the tree it was taken of instead: every update compares
  * with it, and the marks show everything since.
  */
 
-import { PANEL_HOST_ATTRIBUTE } from "@real-a11y-dev/core";
+import { watchUserInput, type UserInput } from "@real-a11y-dev/core";
 import { useCallback, useEffect, useRef, useState } from "preact/hooks";
 
 import {
@@ -33,7 +35,7 @@ import {
   type TreeChanges,
   type TreeRow,
 } from "../tree-changes-diff.js";
-import type { ChangeMarks } from "../tree-changes.js";
+import type { ChangeMarks, TreeChangesProp } from "../tree-changes.js";
 
 /** How long after the user acts the page's updates are what they did. */
 export const FOLLOW_MS = 5000;
@@ -44,29 +46,6 @@ const SAME_ACT_MS = 1000;
 
 /** The clock the follow window runs on, which never steps back. */
 const now = () => performance.now();
-
-/** Keys that do nothing on their own. */
-const MODIFIER_KEYS = new Set([
-  "Alt",
-  "AltGraph",
-  "CapsLock",
-  "Control",
-  "Meta",
-  "Shift",
-]);
-
-/** Whether `e` happened in a panel rather than on the page: the inspector
- *  marks the container of every panel it mounts. Through the prototype: a
- *  page's `<form>` can shadow `hasAttribute` with a control of that name. */
-function inPanel(e: Event): boolean {
-  return e
-    .composedPath()
-    .some(
-      (n) =>
-        n instanceof Element &&
-        Element.prototype.hasAttribute.call(n, PANEL_HOST_ATTRIBUTE),
-    );
-}
 
 /** What the user does on the page, as `useUserOnPage` hears it. */
 interface UserOnPage {
@@ -82,11 +61,7 @@ interface UserOnPage {
   ignore: (type: string) => boolean;
 }
 
-/**
- * Tells `on` when the user presses, clicks or presses a key on the page, and
- * when they type in a field: an `input` event of text entry, which a
- * checkbox's or a `<select>`'s isn't.
- */
+/** Tells `on` what the user does on the page (`watchUserInput`). */
 function useUserOnPage(
   doc: Document | null,
   listening: boolean,
@@ -94,30 +69,9 @@ function useUserOnPage(
 ): void {
   useEffect(() => {
     if (!doc || !listening) return;
-    const theirs = (e: Event) => !inPanel(e) && !on.ignore(e.type);
-    const act = (e: Event) => {
-      if (!MODIFIER_KEYS.has((e as KeyboardEvent).key) && theirs(e)) on.act();
-    };
-    const click = (e: Event) => {
-      if (theirs(e)) on.click();
-    };
-    const type = (e: Event) => {
-      if (typeof (e as InputEvent).inputType === "string" && theirs(e)) {
-        on.type();
-      }
-    };
-    const listeners: [string, (e: Event) => void][] = [
-      ["pointerdown", act],
-      ["keydown", act],
-      ["click", click],
-      ["input", type],
-    ];
-    for (const [name, f] of listeners) doc.addEventListener(name, f, true);
-    return () => {
-      for (const [name, f] of listeners) {
-        doc.removeEventListener(name, f, true);
-      }
-    };
+    return watchUserInput(doc, (input, e) => {
+      if (!on.ignore(e.type)) on[input]();
+    });
   }, [doc, listening, on]);
 }
 
@@ -222,7 +176,8 @@ function takeUpdate<N extends TreeRow>(
  * The marks for the page `doc` shows, compared by `rules`: what the last
  * update found while `live`, or everything since the checkpoint while one is
  * pinned (`pin`). The tree's host calls `noteRead` with each update, and
- * `noteAction` as it sends an action through the tree.
+ * `noteAction` as it sends an action through the tree; with no `doc`, it
+ * calls `noteInput` with what the user does on the page.
  */
 export function usePageChanges<N extends TreeRow>({
   rules,
@@ -232,6 +187,8 @@ export function usePageChanges<N extends TreeRow>({
 }: {
   rules: DialogRules<N>;
   live: boolean;
+  /** The page's document, which what the user does is heard on: null for a
+   *  page the host hears another way. */
   doc: Document | null;
   /** True while what the user does on the page is for the panel, as a pick
    *  of the element picker is. */
@@ -278,6 +235,9 @@ export function usePageChanges<N extends TreeRow>({
     setMarks(found && { changes: found, seq: ++r.seq, announce: run.announce });
   }, []);
 
+  /** What the user did on the page, for a host that passes no `doc`. */
+  const noteInput = useCallback((input: UserInput) => on[input](), [on]);
+
   /** Pin `tree` as the checkpoint, or none. Either way the marks go:
    *  nothing has changed since a checkpoint just taken. */
   const pin = useCallback((tree: Tree<N> | null) => {
@@ -313,8 +273,39 @@ export function usePageChanges<N extends TreeRow>({
     pinned,
     noteRead,
     noteAction: on.act,
+    noteInput,
     pin,
     clear,
     reset,
+  };
+}
+
+/** What the change marks are compared with, in the tree's words. */
+const SINCE_UPDATE_BEFORE = "the update before";
+const SINCE_CHECKPOINT = "the checkpoint";
+
+/** What a panel marks of `changes` (`usePageChanges`): what each update
+ *  found while `live`, and what changed since the checkpoint while one is
+ *  pinned, `live` or not. */
+export function shownChanges(
+  changes: { marks: ChangeMarks | null; pinned: boolean; clear: () => void },
+  live: boolean,
+): TreeChangesProp | undefined {
+  if (!live && !changes.pinned) return undefined;
+  if (!changes.pinned) {
+    return {
+      marks: changes.marks,
+      clear: changes.clear,
+      since: SINCE_UPDATE_BEFORE,
+    };
+  }
+  // A click after the checkpoint is said with all it counts, so it says
+  // what it counts from.
+  return {
+    marks: changes.marks,
+    clear: changes.clear,
+    since: SINCE_CHECKPOINT,
+    noticeEnd: `since ${SINCE_CHECKPOINT}`,
+    totals: true,
   };
 }

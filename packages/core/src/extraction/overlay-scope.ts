@@ -260,11 +260,11 @@ const OVERLAY_SIGNAL_SELECTOR = `${OVERLAY_CANDIDATE_SELECTOR}, [aria-modal="tru
  * An element that is itself an overlay signal. Any mounted element is asked,
  * so `matches` goes through the prototype: `<input name="matches">` shadows it
  * on a <form>, and an observer that cannot ask has to guess "overlay". The
- * panel's change marks ask it too, of the rows a read widened to the whole
- * page brings.
+ * change marks ask it too, of the rows a read widened to the whole page
+ * brings (`row-scope.ts`).
  *
- * @internal Shared by the extractor, the observers and the panel's change
- * marks; not a stability promise.
+ * @internal Shared by the extractor, the observers and `row-scope.ts`; not a
+ * stability promise.
  */
 export function isOverlaySignal(el: Element): boolean {
   return safeMatches(el, '[aria-modal="true"], dialog') || countsAsOverlay(el);

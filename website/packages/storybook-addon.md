@@ -112,6 +112,10 @@ The panel embeds the full interactive **Semantic Navigator** tree — the same `
 
 Switching between **A11y** and **DOM** re-extracts the story via the channel; **Tab** is a client-side transform of the current tree, so it switches instantly.
 
+### What changed
+
+The panel marks what each update of the story's tree changed, as the [inspector](/packages/inspector#what-changed) does: open a menu in the story and the button that went expanded and the menu that came are marked, without hunting for them. A click or a key of yours on the story, or an action you run from the tree, is said to a screen reader with what it brought in the few seconds after it ("4 new, 1 changed in the tree"); typing in a field isn't read out at every key, and what the story changes on its own is marked without being said. A menu or toast the story mounts outside its root, at the end of `<body>`, is marked new on its own: the rest of the preview page the panel then reads isn't. A new story, the other mode (**A11y** or **DOM**), a reloaded canvas, and the panel shown again after another addon tab all start over, since nothing in between was compared. There is no checkpoint button in the addon. Turn the marks off with the `realA11y` [story parameter](#story-parameters).
+
 ---
 
 ## How it works
@@ -153,10 +157,23 @@ Open any story and click the **Semantic Navigator** tab. Then:
 
 ## Story parameters
 
-The addon reads no story parameters today — it runs on every story with no per-story configuration required.
+The addon runs on every story with no per-story configuration required. It reads one parameter, `realA11y`:
+
+| Key | Default | |
+|---|---|---|
+| `markChanges` | `true` | Mark what each update of the tree changed ([What changed](#what-changed)). `false` marks nothing. |
+
+Set it for every story in `.storybook/preview.ts`, or for one story or component:
+
+```ts
+// .storybook/preview.ts
+export default {
+  parameters: { realA11y: { markChanges: false } },
+};
+```
 
 ::: tip
-Per-story controls (disabling the panel for a specific story, expected-outline / expected-tab-sequence assertions) are planned for v0.2. The channel architecture is already in place to support them.
+More per-story controls (disabling the panel for a specific story, expected-outline / expected-tab-sequence assertions) are planned for v0.2. The channel architecture is already in place to support them.
 :::
 
 ---
@@ -175,6 +192,8 @@ import { addons } from "storybook/manager-api";
 //   EVENTS.TREE_UPDATED    — a fresh extraction (on every debounced DOM change that
 //                            altered the tree, while the panel is open)
 //   EVENTS.PREVIEW_READY   — preview iframe (re)booted; manager re-sends REQUEST_TREE if still open
+//   EVENTS.USER_INPUT      — what the user did on the story, while the panel is open:
+//                            "act" (a press or a key), "click", or "type" (typing in a field)
 // Manager → preview:
 //   EVENTS.REQUEST_TREE    — start observing, in the mode it carries, and send the current tree
 //                            (panel shown); a no-op while already observing in that mode
@@ -191,11 +210,16 @@ channel.on(EVENTS.TREE_UPDATED, (payload: TreeUpdatePayload) => {
   console.log(rootId, `${nodes.length} nodes`);
   console.log(payload.mode);         // "a11y" | "dom" | "tab"
   console.log(payload.extractedAt);  // Date.now() timestamp
+  // For the panel's change marks: the story root's own row, and the rows of the
+  // preview page around the story an extraction widened for an overlay brings…
+  console.log(payload.storyRows);    // { rootId, outside: [id, …] }
+  // …and false for a tree read after a story change, before the story rendered.
+  console.log(payload.storyRendered);
 });
 ```
 
 `TREE_UPDATED` is de-duplicated: the preview compares each extraction against the
-last one it published (`mode` included, `extractedAt` excluded) and stays quiet
+last one it published (`mode`, `storyRows` and `storyRendered` included, `extractedAt` excluded) and stays quiet
 when they are byte-identical. So it fires on **changes to the extracted tree**,
 not on every mutation — do not use it as a DOM-mutation heartbeat, and do not
 expect a fresh `extractedAt` while a story is animating without semantic effect.

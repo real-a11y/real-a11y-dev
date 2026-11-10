@@ -3,7 +3,8 @@
  *
  * Registers a Storybook panel that:
  * - receives structured ExtractionResult data from the preview via channel
- * - mounts the Preact TreePanel inside a shadow root (CSS-isolated)
+ * - mounts the Preact TreePanel inside a shadow root (CSS-isolated), marked
+ *   with what each update changed (`story-tree.ts`)
  * - proxies hover / activate events back to the preview so the real story DOM
  *   responds (highlight overlay, interactions)
  */
@@ -13,22 +14,26 @@ import type {
   TreeViewMode,
   ActionType,
 } from "@real-a11y-dev/core";
-import {
-  TreePanel,
-  preserveExpandedState,
-} from "@real-a11y-dev/semantic-navigator-ui";
+import { preserveExpandedState } from "@real-a11y-dev/semantic-navigator-ui";
 import { render, h } from "preact";
 import * as React from "react";
 import { useEffect, useRef, useState, useCallback } from "react";
-import { addons, types, useAddonState } from "storybook/manager-api";
+import {
+  addons,
+  types,
+  useAddonState,
+  useParameter,
+} from "storybook/manager-api";
 
 import {
   ADDON_ID,
   PANEL_ID,
+  PARAM_KEY,
   EVENTS,
   type TreeUpdatePayload,
   type SerializableTree,
 } from "./constants.js";
+import { StoryTree, type StoryRead } from "./story-tree.js";
 
 declare const __SN_STYLES__: string;
 
@@ -54,7 +59,13 @@ function Panel() {
   const liveTreeRef = useRef<ExtractionResult | null>(null);
   const [isReady, setIsReady] = useState(false);
   const [isVisible, setIsVisible] = useState(false);
-  const [payload, setPayload] = useState<TreeUpdatePayload | null>(null);
+  const [read, setRead] = useState<StoryRead | null>(null);
+  // Whether the next update starts the change marks over (`StoryRead.fresh`):
+  // the first since the panel was shown, since the story changed, or since the
+  // preview reloaded. A hidden panel hears none of what changes in between.
+  const freshRef = useRef(true);
+  const { markChanges = true } =
+    useParameter<{ markChanges?: boolean }>(PARAM_KEY, {}) ?? {};
   // Both modes live in the manager's store, not in this component: Storybook
   // unmounts the panel on a docs page (Storybook 9 behind another addon tab as
   // well), and the panel it mounts on the way back has to come back in the
@@ -164,7 +175,7 @@ function Panel() {
 
     const channel = addons.getChannel();
 
-    if (!payload) {
+    if (!read) {
       render(
         h(
           "div",
@@ -180,15 +191,11 @@ function Panel() {
       return;
     }
 
-    const treeData = deserializeTree(payload.tree);
-    if (liveTreeRef.current) {
-      preserveExpandedState(liveTreeRef.current, treeData);
-    }
-    liveTreeRef.current = treeData;
-
     render(
-      h(TreePanel, {
-        treeData,
+      h(StoryTree, {
+        read,
+        markChanges,
+        channel,
         viewMode,
         onViewModeChange: handleViewModeChange,
         theme: "auto",
@@ -207,16 +214,38 @@ function Panel() {
       }),
       host,
     );
-  }, [isReady, payload, viewMode, handleViewModeChange, setShowFullNames]);
+  }, [
+    isReady,
+    read,
+    markChanges,
+    viewMode,
+    handleViewModeChange,
+    setShowFullNames,
+  ]);
 
   // ── Channel subscription — while the panel can be seen ─────────────────────
 
   useEffect(() => {
     if (!isVisible) return;
     const channel = addons.getChannel();
+    // Shown, or shown again: nothing the story did while the panel was hidden
+    // was heard, so the first update starts over.
+    freshRef.current = true;
 
-    const handler = (next: TreeUpdatePayload) => setPayload(next);
+    const handler = (next: TreeUpdatePayload) => {
+      const tree = deserializeTree(next.tree);
+      if (liveTreeRef.current) preserveExpandedState(liveTreeRef.current, tree);
+      liveTreeRef.current = tree;
+      setRead({ payload: next, tree, fresh: freshRef.current });
+      freshRef.current = false;
+    };
     channel.on(EVENTS.TREE_UPDATED, handler);
+    // The preview sends this itself, so it comes between the last update of
+    // the story it leaves and the first of the next.
+    const storyChanged = () => {
+      freshRef.current = true;
+    };
+    channel.on("storyChanged", storyChanged);
 
     // Ask the preview for the current tree immediately — otherwise the panel
     // shows "Waiting…" until the next DOM mutation in the story. Also starts
@@ -226,6 +255,11 @@ function Panel() {
     const requestTree = () =>
       channel.emit(EVENTS.REQUEST_TREE, extractionModeRef.current);
     requestTree();
+    // A reloaded preview names its elements afresh.
+    const previewReady = () => {
+      freshRef.current = true;
+      requestTree();
+    };
 
     // The preview module holds `panelWantsTree` in iframe memory. A canvas
     // reload re-executes that module (flag resets to false) but this Panel
@@ -233,11 +267,12 @@ function Panel() {
     // ready. Do NOT re-REQUEST on every storyRendered: the preview already
     // restarts the observer for open panels, and a second REQUEST would
     // double-extract + double-postMessage on every story render.
-    channel.on(EVENTS.PREVIEW_READY, requestTree);
+    channel.on(EVENTS.PREVIEW_READY, previewReady);
 
     return () => {
       channel.off(EVENTS.TREE_UPDATED, handler);
-      channel.off(EVENTS.PREVIEW_READY, requestTree);
+      channel.off("storyChanged", storyChanged);
+      channel.off(EVENTS.PREVIEW_READY, previewReady);
       // Tear down the preview observer so hidden-panel stories don't keep
       // extracting and postMessage-ing full trees across the iframe boundary.
       channel.emit(EVENTS.STOP_TREE);

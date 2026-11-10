@@ -21,6 +21,7 @@ import {
   LiveTreeExtractor,
   createPicker,
   getElementRefs,
+  rootRowScope,
 } from "@real-a11y-dev/core";
 import {
   useState,
@@ -30,10 +31,9 @@ import {
   useMemo,
 } from "preact/hooks";
 
-import { usePageChanges } from "../hooks/usePageChanges.js";
+import { shownChanges, usePageChanges } from "../hooks/usePageChanges.js";
 import { preserveExpandedState } from "../preserve-expanded.js";
 import { semanticTreeRules } from "../semantic-tree-diff.js";
-import type { TreeChangesProp } from "../tree-changes.js";
 
 import { TreePanel } from "./TreePanel.js";
 
@@ -49,35 +49,6 @@ function snapshotResult(result: ExtractionResult): ExtractionResult {
   return {
     ...result,
     nodes: new Map(result.nodes),
-  };
-}
-
-/** What the change marks are compared with, in the tree's words. */
-const SINCE_UPDATE_BEFORE = "the update before";
-const SINCE_CHECKPOINT = "the checkpoint";
-
-/** What the panel marks: what each update found while `live`, and what
- *  changed since the checkpoint while one is pinned, `live` or not. */
-function shownChanges(
-  changes: ReturnType<typeof usePageChanges<SemanticNode>>,
-  live: boolean,
-): TreeChangesProp | undefined {
-  if (!live && !changes.pinned) return undefined;
-  if (!changes.pinned) {
-    return {
-      marks: changes.marks,
-      clear: changes.clear,
-      since: SINCE_UPDATE_BEFORE,
-    };
-  }
-  // A click after the checkpoint is said with all it counts, so it says
-  // what it counts from.
-  return {
-    marks: changes.marks,
-    clear: changes.clear,
-    since: SINCE_CHECKPOINT,
-    noticeEnd: `since ${SINCE_CHECKPOINT}`,
-    totals: true,
   };
 }
 
@@ -232,7 +203,7 @@ export function TreeView({
   const extraction = viewMode === "dom" ? "dom" : "a11y";
   const pickerRef = useRef<Picker | null>(null);
   const rules = useMemo(
-    () => semanticTreeRules(extraction, root),
+    () => semanticTreeRules(extraction, rootRowScope(root)),
     [extraction, root],
   );
   const changes = usePageChanges({
