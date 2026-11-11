@@ -7,6 +7,7 @@ import {
   fieldStandIns,
   ignoreFieldInternalImages,
   indexNativeAX,
+  withholdFieldInternals,
   withholdFieldInternalText,
   withholdSensitiveFieldNames,
   type FieldHostOf,
@@ -609,5 +610,19 @@ describe("ignoreFieldInternalImages", () => {
     const out = ignoreFieldInternalImages(nodes, hostOf);
     expect(out[2].ignored).toBe(true);
     expect(nodes[2].ignored).toBeUndefined();
+  });
+
+  it("is what a transport calls: text withheld and the image ignored together", () => {
+    const nodes = [
+      ...page(),
+      raw("7", "generic", { parentId: "1", childIds: ["70"] }),
+      raw("70", "StaticText", { parentId: "7", name: { value: "4111" } }),
+    ];
+    const both: FieldHostOf = (id) =>
+      id === 30 || id === 7 || id === 70 ? 3 : null;
+    const out = withholdFieldInternals(nodes, both);
+    expect(out.find((n) => n.nodeId === "30")?.ignored).toBe(true);
+    expect(out.find((n) => n.nodeId === "70")?.name?.value).toBe("");
+    expect(out.find((n) => n.nodeId === "50")?.ignored).toBeUndefined();
   });
 });
