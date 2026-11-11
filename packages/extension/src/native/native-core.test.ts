@@ -4528,6 +4528,103 @@ describe("dispatchNative in a frame", () => {
   });
 });
 
+// Chromium for `<main><input type="image" alt="Go" src="data:,"><button><img
+// src="data:,"></button></main>`: the input is a `button` holding a user-agent
+// `image` (DOM 30, in its user-agent shadow root) and its name's text. The
+// control's own image is not the page's; an authored one in a button is.
+describe("an image input's own image", () => {
+  const ax = (): RawNativeAXNode[] => [
+    {
+      nodeId: "1",
+      backendDOMNodeId: 1,
+      role: { value: "RootWebArea" },
+      childIds: ["2"],
+    },
+    {
+      nodeId: "2",
+      parentId: "1",
+      backendDOMNodeId: 6,
+      role: { value: "main" },
+      childIds: ["3", "5"],
+    },
+    {
+      nodeId: "3",
+      parentId: "2",
+      backendDOMNodeId: 2,
+      role: { value: "button" },
+      name: { value: "Go" },
+      childIds: ["30", "31"],
+    },
+    {
+      nodeId: "30",
+      parentId: "3",
+      backendDOMNodeId: 30,
+      role: { value: "image" },
+    },
+    {
+      nodeId: "31",
+      parentId: "3",
+      backendDOMNodeId: 31,
+      role: { value: "StaticText" },
+      name: { value: "Go" },
+    },
+    {
+      nodeId: "5",
+      parentId: "2",
+      backendDOMNodeId: 9,
+      role: { value: "button" },
+      name: { value: "Logo" },
+      childIds: ["50"],
+    },
+    {
+      nodeId: "50",
+      parentId: "5",
+      backendDOMNodeId: 50,
+      role: { value: "image" },
+    },
+  ];
+  const node = (
+    localName: string,
+    backendNodeId: number,
+    extra: Partial<CdpDomNode> = {},
+  ): CdpDomNode => ({ nodeType: 1, backendNodeId, localName, ...extra });
+  const main = node("main", 6, {
+    children: [
+      node("input", 2, {
+        shadowRoots: [
+          {
+            nodeType: 11,
+            backendNodeId: 3,
+            shadowRootType: "user-agent",
+            children: [node("img", 30)],
+          },
+        ],
+      }),
+      node("button", 9, { children: [node("img", 50)] }),
+    ],
+  });
+  const dom: CdpDomNode = {
+    nodeType: 9,
+    backendNodeId: 1,
+    children: [
+      node("html", 4, { children: [node("body", 5, { children: [main] })] }),
+    ],
+  };
+
+  it("is left out of the tree, and the authored image stays", async () => {
+    const t = new FakeTransport((method) =>
+      method === "Accessibility.getFullAXTree"
+        ? { nodes: ax() }
+        : method === "DOM.getDocument"
+          ? { root: dom }
+          : {},
+    );
+    const res = await readNativeTree(t);
+    expect(res.serialized).toContain('button "Go"');
+    expect(res.serialized.match(/\bimg\b/g)).toHaveLength(1);
+  });
+});
+
 // Chromium 141 for `<main><input disabled role="none" autocomplete="cc-number"
 // value="4111…"><div>Loose block</div><button>Pay</button></main>`: the role
 // applies to a disabled field, its node is gone, and its inner text box (DOM

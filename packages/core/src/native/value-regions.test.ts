@@ -5,7 +5,9 @@ import { REDACTED_VALUE } from "../extraction/dom-extractor.js";
 import { normalizeNativeAX, serializeNativeAX } from "./ax-normalize.js";
 import {
   fieldStandIns,
+  ignoreFieldInternalImages,
   indexNativeAX,
+  withholdFieldInternals,
   withholdFieldInternalText,
   withholdSensitiveFieldNames,
   type FieldHostOf,
@@ -556,5 +558,71 @@ describe("fieldStandIns", () => {
     expect(standIns(nodes, undefined)).toEqual([
       { host: undefined, nodeIds: ["7"], masked: false },
     ]);
+  });
+});
+
+describe("ignoreFieldInternalImages", () => {
+  // Chromium for `<main><input type="image" alt="Go" src="data:,">
+  // <button><img src="a.png"></button></main>`: the input (DOM 3) is a
+  // `button` holding its UA image (DOM 30) and the text of its name; the
+  // authored `<img>` (DOM 50) sits in a button of the page's.
+  const page = () => [
+    raw("1", "main", { childIds: ["3", "5"] }),
+    raw("3", "button", {
+      parentId: "1",
+      childIds: ["30", "31"],
+      name: { value: "Go" },
+    }),
+    raw("30", "image", { parentId: "3" }),
+    raw("31", "StaticText", { parentId: "3", name: { value: "Go" } }),
+    raw("5", "button", {
+      parentId: "1",
+      childIds: ["50"],
+      name: { value: "Logo" },
+    }),
+    raw("50", "image", { parentId: "5" }),
+  ];
+  const hostOf: FieldHostOf = (id) => (id === 30 ? 3 : null);
+
+  it("keeps the image an input draws inside itself out of the tree", () => {
+    const tree = serializeNativeAX(
+      normalizeNativeAX(ignoreFieldInternalImages(page(), hostOf)),
+    );
+    // The page's own image stays, even inside a button.
+    expect(tree).toBe(
+      ["main", '  button "Go"', '  button "Logo"', "    img"].join("\n"),
+    );
+  });
+
+  it("is the walk, not the tree, that decides: no walk ignores nothing", () => {
+    const nodes = page();
+    expect(ignoreFieldInternalImages(nodes, undefined)).toBe(nodes);
+  });
+
+  it("leaves a node the walk never saw, and returns the input when nothing changed", () => {
+    const nodes = page();
+    expect(ignoreFieldInternalImages(nodes, () => undefined)).toBe(nodes);
+    expect(ignoreFieldInternalImages(nodes, () => null)).toBe(nodes);
+  });
+
+  it("copies rather than mutates", () => {
+    const nodes = page();
+    const out = ignoreFieldInternalImages(nodes, hostOf);
+    expect(out[2].ignored).toBe(true);
+    expect(nodes[2].ignored).toBeUndefined();
+  });
+
+  it("is what a transport calls: text withheld and the image ignored together", () => {
+    const nodes = [
+      ...page(),
+      raw("7", "generic", { parentId: "1", childIds: ["70"] }),
+      raw("70", "StaticText", { parentId: "7", name: { value: "4111" } }),
+    ];
+    const both: FieldHostOf = (id) =>
+      id === 30 || id === 7 || id === 70 ? 3 : null;
+    const out = withholdFieldInternals(nodes, both);
+    expect(out.find((n) => n.nodeId === "30")?.ignored).toBe(true);
+    expect(out.find((n) => n.nodeId === "70")?.name?.value).toBe("");
+    expect(out.find((n) => n.nodeId === "50")?.ignored).toBeUndefined();
   });
 });

@@ -27,6 +27,12 @@
   reported it
   ([#631](https://github.com/real-a11y/real-a11y-dev/pull/631)).
 
+- **The side panel's tree no longer lists the image Chrome draws inside an image
+  input.** `<input type="image" alt="Go">` showed `button "Go"` holding an
+  unnamed `img` from the control's own internals; it now shows the button alone,
+  as WAI-ARIA 1.2 says a button's descendants are presentational. An `<img>` the
+  page puts in a button is still listed.
+  ([#632](https://github.com/real-a11y/real-a11y-dev/pull/632))
 - **The TAB view no longer treats an unnamed `role="region"` or `role="form"` as
   a landmark.** The extension re-bundles the updated role resolution: such an
   element takes its next role token or its own role, as Chrome's tree does.

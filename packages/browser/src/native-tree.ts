@@ -80,7 +80,7 @@ import {
   nativeAXProperty,
   opensFieldInternals,
   valueRegions,
-  withholdFieldInternalText,
+  withholdFieldInternals,
   withholdRegionNames,
   type FieldHostOf,
   type FieldStandIn,
@@ -361,7 +361,7 @@ const EDITABLE_CONTENT_ATTRIBUTES = new Set(["href", "src", "poster", "id"]);
  * content too ({@link withholdRegionNames} over {@link strictValueRoots}, then
  * {@link redactEditableContent}). And always, the text a form control draws
  * inside itself, which the DOM walk marks (`fieldHost`; core's
- * `withholdFieldInternalText`).
+ * `withholdFieldInternals`).
  */
 function prepareRawNodes(
   rawNodes: RawAXNode[],
@@ -385,7 +385,7 @@ function prepareRawNodes(
   // Last: it blanks text runs only, which no step above keeps by identity.
   if (options.redactInput !== true) {
     return {
-      nodes: withholdFieldInternalText(named, hostOf),
+      nodes: withholdFieldInternals(named, hostOf),
       sensitivity,
       insideEditor: new Set(),
     };
@@ -404,7 +404,7 @@ function prepareRawNodes(
   );
   const { nodes, inside } = redactEditableContent(strict);
   return {
-    nodes: withholdFieldInternalText(nodes, hostOf),
+    nodes: withholdFieldInternals(nodes, hostOf),
     sensitivity,
     insideEditor: inside,
   };
