@@ -153,6 +153,42 @@ describe("the img synonym role=image", () => {
   });
 });
 
+// Core-AAM: a region or form with no accessible name is not exposed as a
+// landmark, and the next token of the role value is used. The DOM producer once
+// kept `region ""` / `form ""` and never reached the fallback token.
+describe("an unnamed role=region or role=form", () => {
+  it("falls back, and a named one keeps its landmark, in both producers", async () => {
+    await session.open(
+      dataUrl(
+        `<main>
+          <div role="region">r1</div>
+          <div role="region group">r2</div>
+          <div role="form navigation">r3</div>
+          <div role="form">r4</div>
+          <div role="region" aria-label="Results">r5</div>
+          <div role="form" aria-label="Search">r6</div>
+        </main>`,
+      ),
+    );
+    const domTree = await session.call<string>("treeSnapshot", "body", [
+      { markFocus: false },
+    ]);
+    const nativeTree = serializeTree(await session.nativeTree(), {
+      markFocus: false,
+    });
+
+    for (const tree of [domTree, nativeTree]) {
+      const roles = tree.split("\n").map((l) => l.trim().split(/\s/)[0]);
+      expect(roles.filter((r) => r === "group")).toHaveLength(1);
+      expect(roles.filter((r) => r === "navigation")).toHaveLength(1);
+      expect(roles.filter((r) => r === "region")).toHaveLength(1);
+      expect(roles.filter((r) => r === "form")).toHaveLength(1);
+      expect(tree).toContain('region "Results"');
+      expect(tree).toContain('form "Search"');
+    }
+  });
+});
+
 // HTML-AAM gives a submit, reset or image input a default name when nothing
 // else names it. The DOM producer once left all three as `button ""`, where
 // Chromium says "Submit", "Reset" and "Submit" — and the unlabeled-interactive
