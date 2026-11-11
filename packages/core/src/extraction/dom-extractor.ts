@@ -37,7 +37,6 @@ import {
   isFocusable,
   parseTabindex,
 } from "./focusability.js";
-import { insetCollapsesBox } from "./inset-clip.js";
 import { associatedLabels, wrappingLabelText } from "./label-text.js";
 import { hasCaptionsTrack } from "./media-tracks.js";
 export { isTextVisible } from "./name-spacing.js";
@@ -50,6 +49,8 @@ import {
   NAMED_WIDGET_ROLES,
   needsSpaceAround,
   rootTextVisible,
+  isAriaHiddenChild,
+  referenceWalk,
   type TextVisibility,
 } from "./name-spacing.js";
 import { PANEL_HOST_ATTRIBUTE } from "./overlay-reach.js";
@@ -65,6 +66,7 @@ import {
   isSubtreeHidden,
   type StyleCache,
 } from "./role-map.js";
+import { isSrOnly } from "./sr-only.js";
 
 export {
   OVERLAY_CANDIDATE_SELECTOR,
@@ -271,56 +273,6 @@ function getActions(element: Element): ActionType[] {
   return actions;
 }
 
-/** Tags that are natively interactive — never treated as visually hidden */
-const INTERACTIVE_TAGS = new Set([
-  "input",
-  "button",
-  "select",
-  "textarea",
-  "a",
-  "details",
-  "summary",
-]);
-
-/**
- * Detect the sr-only / visually-hidden CSS pattern:
- * position:absolute + tiny dimensions + clip or clip-path.
- * These elements ARE intentionally accessible to AT, but not visible.
- *
- * Interactive elements (inputs, buttons, links) are EXCLUDED — they commonly use
- * opacity:0 / position:absolute behind custom-styled visuals and remain fully usable.
- */
-function isSrOnly(
-  element: Element,
-  style?: CSSStyleDeclaration | null,
-): boolean {
-  // Custom form controls hide the native input behind a visual — not sr-only
-  const tag = safeTagName(element);
-  if (INTERACTIVE_TAGS.has(tag)) return false;
-  if (safeGetAttribute(element, "tabindex") !== null) return false;
-
-  const computed =
-    style !== undefined ? style : getCachedComputedStyle(element);
-  if (!computed) return false;
-  if (computed.position !== "absolute" && computed.position !== "fixed")
-    return false;
-
-  // Classic clip: rect(0,0,0,0) or rect(1px,1px,1px,1px)
-  const clip = computed.clip;
-  if (clip && clip !== "auto") {
-    const w = parseFloat(computed.width);
-    const h = parseFloat(computed.height);
-    if ((w <= 1 || isNaN(w)) && (h <= 1 || isNaN(h))) return true;
-  }
-
-  // Modern: a clip-path: inset(...) whose insets meet or cross (see
-  // insetCollapsesBox) — inset(50%) and inset(100%), but inset(0 100%) too.
-  const clipPath = computed.clipPath;
-  if (clipPath && insetCollapsesBox(clipPath)) return true;
-
-  return false;
-}
-
 /** Check if an element is visually hidden (computed styles) */
 function isVisuallyHidden(
   element: Element,
@@ -517,9 +469,10 @@ interface NameWalk extends TextVisibility {
    * descendant's own aria-labelledby is ignored (accname §2B: "not already part
    * of an aria-labelledby traversal"). Chromium reads `<span id="a">A <span
    * aria-labelledby="b">x</span></span>`, referenced as a label or a
-   * description, as "A x".
+   * description, as "A x". `"hidden"` when the target itself is hidden: its
+   * whole subtree is read, hidden descendants included (accname §2B).
    */
-  readonly inReference?: boolean;
+  readonly inReference?: boolean | "hidden";
   /**
    * Text only: no descendant lends an alternative of its own. A `<select>`'s
    * option is named by its text alone in Chromium — `<option><img alt="Flag">
@@ -592,7 +545,9 @@ function textAlternative(
  * Chromium reads `<button aria-labelledby="i">` over `<img id="i" alt="Direct">`
  * as "Direct", and over `<span id="s" aria-label="Lab">content</span>` as "Lab".
  * The target itself is read even when hidden — accname's "directly referenced"
- * carve-out — while hidden content inside it still contributes nothing.
+ * carve-out — and then so is everything inside it, hidden or not: Chromium
+ * reads `<span id="l" hidden>foo <span hidden>bar</span></span>` as "foo bar".
+ * Inside a visible target, hidden content still contributes nothing.
  *
  * Unlike a descendant, a target with no name lends its content even when it
  * is an image, since accname §2F reads the content of any element a reference
@@ -604,7 +559,7 @@ function referenceText(
   visited: Set<Element>,
   styleCache?: StyleCache | null,
 ): string {
-  const walk: NameWalk = { inReference: true };
+  const walk: NameWalk = referenceWalk(target, styleCache);
   return (
     textAlternative(
       target,
@@ -725,14 +680,16 @@ function getAccessibleTextContent(
         // `isSubtreeHidden`, which for an `<area>` goes looking for the image
         // using its map; the answer cannot change the outcome here.
         if (childEl.localName === "area") continue;
-        if (isSubtreeHidden(childEl, childStyle)) {
+        if (
+          walk.inReference !== "hidden" &&
+          isSubtreeHidden(childEl, childStyle)
+        )
           continue;
-        }
         // A child that has a box of its own separates the text either side of it
         // whether or not it contributes any text — Chromium reads
         // `<h1>Save<div aria-hidden="true">x</div>now</h1>` as "Save now".
         const spaced = needsSpaceAround(childEl, childStyle);
-        if (isAriaHiddenValue(safeGetAttribute(childEl, "aria-hidden"))) {
+        if (isAriaHiddenChild(childEl, walk)) {
           if (spaced) text += " ";
           continue;
         }
@@ -827,7 +784,7 @@ function computeAccessibleName(
   element: Element,
   visited: Set<Element> = new Set(),
   styleCache?: StyleCache | null,
-  inReference = false,
+  inReference: boolean | "hidden" = false,
   source?: NameSource,
 ): string {
   return computeRawAccessibleName(
@@ -845,7 +802,7 @@ function computeRawAccessibleName(
   element: Element,
   visited: Set<Element>,
   styleCache: StyleCache | null | undefined,
-  inReference: boolean,
+  inReference: boolean | "hidden",
   source: NameSource | undefined,
 ): string {
   // accname visit-once guard (§4.3.2): an element the current name computation

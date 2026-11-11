@@ -42,6 +42,11 @@
   before". The code that picks which tree a read is compared with is now the
   same as the inspector's and the React panel's, which mark what changed too.
   ([#617](https://github.com/real-a11y/real-a11y-dev/pull/617))
+- **The TAB view reads the whole subtree of a hidden `aria-labelledby` target.**
+  A control labelled by a hidden element was named from its visible-looking text
+  only (`"foo"` for `foo <span hidden>bar</span>`); it now reads "foo bar", as
+  AccName 1.2 §2B and Chrome's tree do.
+  ([#622](https://github.com/real-a11y/real-a11y-dev/pull/622))
 
 ## 0.1.19
 
