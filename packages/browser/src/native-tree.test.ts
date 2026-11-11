@@ -10,6 +10,7 @@
 //     editors, for the strict `redactInput` mode.
 // No browser needed at test time; the recording IS the browser's output.
 
+import { collectFindings } from "@real-a11y-dev/audit";
 import { normalizeNativeAX } from "@real-a11y-dev/core";
 import { serializeTree } from "@real-a11y-dev/serialize";
 import { describe, expect, it } from "vitest";
@@ -553,6 +554,93 @@ describe("buildNativeTree — R1: a field's inner text box, with the field gone"
     });
     expect(printed).not.toContain(CARD);
     expect(printed).toContain('generic "Loose block"');
+  });
+});
+
+describe("buildNativeTree — an image input's own image is not the page's", () => {
+  // Chromium for `<main><h1>t</h1><input type="image" alt="Go" src="data:,">
+  // <button><img src="data:,"></button></main>`: the input is a `button`
+  // holding a UA image (DOM 30, `#alttext-image`) and its name's text.
+  const raw = [
+    { nodeId: "1", childIds: ["2"], role: { value: "RootWebArea" } },
+    {
+      nodeId: "2",
+      parentId: "1",
+      childIds: ["3", "5"],
+      role: { value: "main" },
+      backendDOMNodeId: 2,
+    },
+    {
+      nodeId: "3",
+      parentId: "2",
+      childIds: ["30", "31"],
+      role: { value: "button" },
+      name: { value: "Go" },
+      backendDOMNodeId: 3,
+    },
+    {
+      nodeId: "30",
+      parentId: "3",
+      role: { value: "image" },
+      backendDOMNodeId: 30,
+    },
+    {
+      nodeId: "31",
+      parentId: "3",
+      role: { value: "StaticText" },
+      name: { value: "Go" },
+      backendDOMNodeId: 31,
+    },
+    {
+      nodeId: "5",
+      parentId: "2",
+      childIds: ["50"],
+      role: { value: "button" },
+      name: { value: "Logo" },
+      backendDOMNodeId: 5,
+    },
+    {
+      nodeId: "50",
+      parentId: "5",
+      role: { value: "image" },
+      backendDOMNodeId: 50,
+    },
+  ] as Parameters<typeof buildNativeTree>[0];
+  const dom = new Map<number, NativeDomInfo>([
+    [2, domOf("main")],
+    [3, domOf("input", { type: "image", alt: "Go" })],
+    [30, { ...domOf("img", { id: "alttext-image" }), fieldHost: 3 }],
+    [31, domOf("#text")],
+    [5, domOf("button")],
+    [50, domOf("img")],
+  ]);
+
+  it.each([false, true])(
+    "keeps the UA image out, the button named, and an authored image in (strict: %s)",
+    (redactInput) => {
+      const tree = buildNativeTree(raw, dom, undefined, { redactInput });
+      const nodes = nodesOf(tree);
+      expect(tree.source.producer).toBe("native");
+      expect(nodes.filter((n) => n.a11y.role === "button")).toHaveLength(2);
+      expect(
+        nodes.find((n) => n.a11y.role === "button" && n.a11y.name === "Go"),
+      ).toBeDefined();
+      // Only the authored image is left, under the page's own button.
+      const images = nodes.filter((n) => n.a11y.role === "img");
+      expect(images).toHaveLength(1);
+      expect(images[0].dom?.locator).not.toBe("#alttext-image");
+      expect(
+        collectFindings(tree, ["image-alt"]).map((f) => f.locator),
+      ).not.toContain("#alttext-image");
+    },
+  );
+
+  it("raises no image-alt for the image input", () => {
+    const authored = new Map(dom);
+    authored.set(50, { ...domOf("img"), fieldHost: undefined });
+    const noOwn = raw.filter((n) => n.nodeId !== "5" && n.nodeId !== "50");
+    const tree = buildNativeTree(noOwn, authored);
+    expect(collectFindings(tree, ["image-alt"])).toEqual([]);
   });
 });
 

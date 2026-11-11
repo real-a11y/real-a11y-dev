@@ -545,6 +545,59 @@ export function withholdFieldInternalText<T extends RawAXNameNode>(
 }
 
 /**
+ * Copies of `rawNodes` in which the image a form control draws inside itself
+ * is ignored. Chromium puts a user-agent `image` (`#alttext-image`) inside the
+ * shadow root of an `<input type="image">`, next to the text of its name. The
+ * control is a `button`, whose descendants are presentational (WAI-ARIA 1.2
+ * §5.2.9), and the page never wrote that image, so it stays out of the tree
+ * instead of showing as an unnamed `img` the page cannot fix.
+ *
+ * Keyed on {@link FieldHostOf}, never on an image's place in the tree: only a
+ * node the walk found in a control's own internals goes, so an authored
+ * `<img>` or `role="img"` (even one inside a `<button>`) and the media controls
+ * of an `<audio>` or `<video>` stay. With no walk (`hostOf` `undefined`) there
+ * is nothing to key on, and nothing is ignored.
+ *
+ * Returns copies; never mutates.
+ */
+export function ignoreFieldInternalImages<T extends RawAXNameNode>(
+  rawNodes: T[],
+  hostOf: FieldHostOf | undefined,
+): T[] {
+  if (hostOf === undefined) return rawNodes;
+  let changed = false;
+  const out = rawNodes.map((raw) => {
+    if (
+      raw.ignored ||
+      raw.role?.value !== "image" ||
+      typeof raw.backendDOMNodeId !== "number" ||
+      typeof hostOf(raw.backendDOMNodeId) !== "number"
+    ) {
+      return raw;
+    }
+    changed = true;
+    return { ...raw, ignored: true };
+  });
+  return changed ? out : rawNodes;
+}
+
+/**
+ * What a form control draws inside itself, kept out of the tree: its text
+ * ({@link withholdFieldInternalText}) and its image
+ * ({@link ignoreFieldInternalImages}). Every native transport calls this one
+ * step, so they agree on both.
+ */
+export function withholdFieldInternals<T extends RawAXNameNode>(
+  rawNodes: T[],
+  hostOf: FieldHostOf | undefined,
+): T[] {
+  return ignoreFieldInternalImages(
+    withholdFieldInternalText(rawNodes, hostOf),
+    hostOf,
+  );
+}
+
+/**
  * A form control the tree has no node of its own for, and the nodes standing
  * in for it there ({@link fieldStandIns}). `host` is the control's backend id,
  * `undefined` when the walk can't say whether any control is behind them.

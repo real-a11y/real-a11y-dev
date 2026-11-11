@@ -64,7 +64,7 @@ import {
   REDACTED_VALUE,
   serializeNativeAX,
   valueRegions,
-  withholdFieldInternalText,
+  withholdFieldInternals,
   withholdSensitiveFieldNames,
   type A11yInfo,
   type FieldHostOf,
@@ -1570,7 +1570,7 @@ async function readDocument(
   // before its text is blanked: it counts by what it holds.
   const rawIndex = indexNativeAX(rawDocument);
   const standIns = fieldStandIns(rawIndex, hostOf);
-  const full = { nodes: withholdFieldInternalText(rawDocument, hostOf) };
+  const full = { nodes: withholdFieldInternals(rawDocument, hostOf) };
   // Which fields are sensitive is known only after reading them in the page,
   // and the reads are chosen from the normalized tree. So: normalize once to
   // pick and classify the fields, keep their values out of every OTHER

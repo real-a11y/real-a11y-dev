@@ -177,6 +177,7 @@ export {
   holdsContent,
   holdsUnclassifiedValue,
   indexNativeAX,
+  ignoreFieldInternalImages,
   isNativePasswordMask,
   nativeAncestry,
   nativeAXProperty,
@@ -185,6 +186,7 @@ export {
   valueRegions,
   winningNameSource,
   withholdFieldInternalText,
+  withholdFieldInternals,
   withholdRegionNames,
   withholdSensitiveFieldNames,
 } from "./native/value-regions.js";
