@@ -195,7 +195,7 @@ main
       row
         cell "findByRole(tree, role, options?)"
           code "findByRole(tree, role, options?)"
-        cell "The first node with that role, in document order, or null. options narrows by name (a string must match the whole name, ignoring case and extra whitespace; a RegExp is tested against it), a heading's level, and the checked, expanded, selected, pressed and disabled states. Nodes hidden from assistive technology are skipped unless includeHidden: true."
+        cell "The first node with that role, in document order, or null. options narrows by name (a string must match the whole name, ignoring case and extra whitespace; a RegExp is tested against it), a heading's level, and the checked, expanded, selected, pressed and disabled states (selected also matches the chosen option of a native <select>). Nodes hidden from assistive technology are skipped unless includeHidden: true."
           code "null"
           code "options"
           code "name"
@@ -205,6 +205,8 @@ main
           code "selected"
           code "pressed"
           code "disabled"
+          code "selected"
+          code "<select>"
           code "includeHidden: true"
       row
         cell "findAllByRole(tree, role, options?)"
