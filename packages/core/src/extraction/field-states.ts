@@ -1,4 +1,10 @@
-import { safeGetAttribute } from "./clobber-safe.js";
+import { ariaBoolean } from "./aria-tokens.js";
+import {
+  safeGetAttribute,
+  safeParentElement,
+  safeTagName,
+} from "./clobber-safe.js";
+import { isSensitiveField } from "./dom-extractor.js";
 
 /** `<input>` types the `readonly` attribute applies to (HTML, 4.10.5.3). */
 const READONLY_INPUT_TYPES = new Set([
@@ -74,4 +80,36 @@ export function addFieldStates(
     if ("required" in htmlEl && htmlEl.required) states["required"] = true;
   }
   if (allowsReadonly(element, tag, role)) states["readonly"] = true;
+}
+
+/**
+ * The `selected` state of a native `<option>`, from its selectedness. Read
+ * from the `selected` property, not the attribute: a user's pick or a script
+ * setting `option.selected` moves the first and not the second.
+ *
+ * An authored aria-selected keeps winning, as in Chromium. A select that
+ * `isSensitiveField` classifies gets no `selected` at all: which option is chosen
+ * is the value its own `[redacted]` withholds.
+ */
+export function optionStates(
+  element: Element,
+  tag: string,
+  role: string,
+): Record<string, boolean | undefined> {
+  if (tag !== "option" || role !== "option") return {};
+  if (ariaBoolean(safeGetAttribute(element, "aria-selected")) !== null)
+    return {};
+  const select = owningSelect(element);
+  if (!select) return {};
+  return isSensitiveField(select)
+    ? { selected: undefined }
+    : { selected: (element as HTMLOptionElement).selected };
+}
+
+/** The `<select>` an `<option>` belongs to, through at most one `<optgroup>`. */
+function owningSelect(option: Element): Element | null {
+  let parent = safeParentElement(option);
+  if (parent && safeTagName(parent) === "optgroup")
+    parent = safeParentElement(parent);
+  return parent && safeTagName(parent) === "select" ? parent : null;
 }

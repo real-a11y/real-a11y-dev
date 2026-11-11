@@ -7399,3 +7399,83 @@ describe("host-language name sources: label attribute, labelled output/meter/pro
     ).toBe("Ph");
   });
 });
+
+describe("the selected state of a native <option>", () => {
+  const optionStates = (html: string): Array<[string, unknown]> => {
+    document.body.innerHTML = html;
+    try {
+      return [...extractDomTree(document.body).nodes.values()]
+        .filter((n) => n.a11y.role === "option")
+        .map((n) => [n.a11y.name, n.a11y.states["selected"]]);
+    } finally {
+      document.body.innerHTML = "";
+    }
+  };
+
+  it("marks the chosen option of a drop-down true and the rest false", () => {
+    expect(
+      optionStates(
+        "<select><option>a</option><option selected>b</option></select>",
+      ),
+    ).toEqual([
+      ["a", false],
+      ["b", true],
+    ]);
+  });
+
+  it("marks every chosen option of a multiple select", () => {
+    expect(
+      optionStates(
+        "<select multiple><option selected>a</option><option selected>b</option><option>c</option></select>",
+      ),
+    ).toEqual([
+      ["a", true],
+      ["b", true],
+      ["c", false],
+    ]);
+  });
+
+  it("reads selectedness, not the attribute, and reaches options inside an optgroup", () => {
+    document.body.innerHTML =
+      "<select><optgroup label='G'><option>a</option><option>b</option></optgroup></select>";
+    (document.querySelectorAll("option")[1] as HTMLOptionElement).selected =
+      true;
+    const states = [...extractDomTree(document.body).nodes.values()]
+      .filter((n) => n.a11y.role === "option")
+      .map((n) => n.a11y.states["selected"]);
+    document.body.innerHTML = "";
+    expect(states).toEqual([false, true]);
+  });
+
+  it("lets an authored aria-selected win, as Chromium does", () => {
+    expect(
+      optionStates(
+        '<select><option aria-selected="true">a</option><option selected aria-selected="false">b</option></select>',
+      ),
+    ).toEqual([
+      ["a", true],
+      ["b", false],
+    ]);
+  });
+
+  it("withholds the choice from a select whose value is withheld", () => {
+    const states = optionStates(
+      '<select autocomplete="cc-exp-month" aria-label="Month"><option>11</option><option selected>12</option></select>',
+    );
+    expect(states).toEqual([
+      ["11", undefined],
+      ["12", undefined],
+    ]);
+  });
+
+  it("leaves ARIA options to aria-selected", () => {
+    expect(
+      optionStates(
+        '<div role="listbox"><div role="option" aria-selected="true">a</div><div role="option">b</div></div>',
+      ),
+    ).toEqual([
+      ["a", true],
+      ["b", undefined],
+    ]);
+  });
+});

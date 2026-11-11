@@ -371,10 +371,10 @@ export class LiveTreeExtractor {
   }
 
   /**
-   * Add every recorded checkbox, radio and `<select>` whose native state no
+   * Add every recorded checkbox, radio, `<select>` and `<option>` whose native state no
    * longer matches its node. Those states move without an attribute, and
    * often without an event, of their own: a click on one radio unchecks its
-   * sibling, a handler can make a "select all" box indeterminate, and opening
+   * sibling, a script's `option.selected = true` fires nothing, a handler can make a "select all" box indeterminate, and opening
    * a picker fires nothing at all, so it shows once anything else refreshes.
    * It reads a property or two per control, far cheaper than re-extracting
    * them all.
@@ -383,7 +383,7 @@ export class LiveTreeExtractor {
     const refs = getElementRefs();
     for (const [id, node] of this.domNodes) {
       const tag = node.dom?.tagName;
-      if (tag !== "input" && tag !== "select") continue;
+      if (tag !== "input" && tag !== "select" && tag !== "option") continue;
       const el = refs.get(id);
       if (!el) continue;
       const native = nativeStates(el, tag, node.a11y.role);

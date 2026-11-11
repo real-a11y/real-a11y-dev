@@ -212,7 +212,7 @@ Each one takes an `ExtractionResult` or its `nodes` Map.
 
 | Function | Returns |
 |---|---|
-| `findByRole(tree, role, options?)` | The first node with that role, in document order, or `null`. `options` narrows by `name` (a string must match the whole name, ignoring case and extra whitespace; a RegExp is tested against it), a heading's `level`, and the `checked`, `expanded`, `selected`, `pressed` and `disabled` states. Nodes hidden from assistive technology are skipped unless `includeHidden: true`. |
+| `findByRole(tree, role, options?)` | The first node with that role, in document order, or `null`. `options` narrows by `name` (a string must match the whole name, ignoring case and extra whitespace; a RegExp is tested against it), a heading's `level`, and the `checked`, `expanded`, `selected`, `pressed` and `disabled` states (`selected` also matches the chosen option of a native `<select>`). Nodes hidden from assistive technology are skipped unless `includeHidden: true`. |
 | `findAllByRole(tree, role, options?)` | Every such node, in document order. |
 | `getOutline(tree)` | `{ id, level, name }` for each heading assistive technology can reach, in document order — what `outlineSnapshot()` and `assertHeadingOrder()` read. |
 | `getTabSequence(tree)` | Focusable nodes in Tab order: positive `tabindex` ascending, then the rest in document order, leaving out `tabindex="-1"`. It doesn't model shadow roots, iframes or focus traps. |
