@@ -265,8 +265,8 @@ function parseUrlEntry(raw: unknown, where: string): ConfigPage {
   return page;
 }
 
-export function loadConfig(path: string): A11yConfig {
-  const abs = resolve(path);
+/** Read `abs` and parse it as a JSON object, enforcing the size cap first. */
+function readConfigObject(abs: string): Record<string, unknown> {
   let raw: string;
   try {
     if (statSync(abs).size > MAX_BYTES) {
@@ -287,7 +287,12 @@ export function loadConfig(path: string): A11yConfig {
   if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
     throw new CliError(`config must be a JSON object: ${abs}`);
   }
-  const c = parsed as Record<string, unknown>;
+  return parsed as Record<string, unknown>;
+}
+
+export function loadConfig(path: string): A11yConfig {
+  const abs = resolve(path);
+  const c = readConfigObject(abs);
   rejectUnknown(c, TOP_KEYS, "a11y.config.json");
 
   // `urls` is optional: a config can set only `defaults` (for `audit` etc.).
