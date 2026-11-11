@@ -87,6 +87,8 @@ export function addFieldStates(
  * from the `selected` property, not the attribute: a user's pick or a script
  * setting `option.selected` moves the first and not the second.
  *
+ * @internal Called by `nativeStates`; not a supported entry point.
+ *
  * An authored aria-selected keeps winning, as in Chromium. A select that
  * `isSensitiveField` classifies gets no `selected` at all: which option is chosen
  * is the value its own `[redacted]` withholds.

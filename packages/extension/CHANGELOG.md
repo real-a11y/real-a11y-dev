@@ -21,6 +21,12 @@
 
 ### Patch Changes
 
+- **The TAB view's engine now reads a native `<select>` option's `selected`
+  state.** The extension re-bundles the updated extractor. Nothing the side
+  panel renders changes: its A11Y view shows Chromium's own tree, which already
+  reported it
+  ([#631](https://github.com/real-a11y/real-a11y-dev/pull/631)).
+
 - **The TAB view no longer treats an unnamed `role="region"` or `role="form"` as
   a landmark.** The extension re-bundles the updated role resolution: such an
   element takes its next role token or its own role, as Chrome's tree does.
