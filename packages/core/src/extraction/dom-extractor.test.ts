@@ -5248,6 +5248,16 @@ describe("input accessible name (HTML-AAM)", () => {
     );
   });
 
+  it("describes a default-named submit input by its title", () => {
+    // HTML-AAM §4.2: title is the description when it did not name the control.
+    const root = createPage('<input type="submit" title="Go">');
+    const input = [...extractDomTree(root).nodes.values()].find(
+      (n) => n.dom?.tagName === "input",
+    )!;
+    expect(input.a11y.name).toBe("Submit");
+    expect(input.a11y.description).toBe("Go");
+  });
+
   it("gives no default name to an explicit empty value or a plain button input", () => {
     expect(nameOf('<input id="target" type="submit" value="">')).toBe("");
     expect(nameOf('<input id="target" type="reset" value="">')).toBe("");
