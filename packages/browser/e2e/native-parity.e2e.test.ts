@@ -153,6 +153,40 @@ describe("the img synonym role=image", () => {
   });
 });
 
+// HTML-AAM gives a submit, reset or image input a default name when nothing
+// else names it. The DOM producer once left all three as `button ""`, where
+// Chromium says "Submit", "Reset" and "Submit" — and the unlabeled-interactive
+// audit flagged forms that assistive technology announces correctly.
+describe("the default name of submit, reset and image inputs", () => {
+  it("is the same in both producers", async () => {
+    await session.open(
+      dataUrl(
+        `<main><input type="submit"><input type="reset"><input type="image" src="data:,"><input type="submit" title="Go"><input type="image" src="data:," title="Search"></main>`,
+      ),
+    );
+    const domTree = await session.call<string>("treeSnapshot", "body", [
+      { markFocus: false },
+    ]);
+    const nativeTree = serializeTree(await session.nativeTree(), {
+      markFocus: false,
+    });
+
+    for (const tree of [domTree, nativeTree]) {
+      const buttons = tree
+        .split("\n")
+        .map((l) => l.trim())
+        .filter((l) => l.startsWith("button"));
+      expect(buttons).toEqual([
+        'button "Submit"',
+        'button "Reset"',
+        'button "Submit"',
+        'button "Submit"',
+        'button "Search"',
+      ]);
+    }
+  });
+});
+
 // An input whose `list` names a <datalist> is a combobox in Chromium's tree
 // for the text, number, date and time types. The DOM producer once ignored
 // `list`, so every one of them read as a textbox (or a searchbox, or a
