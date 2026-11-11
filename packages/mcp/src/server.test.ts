@@ -1715,6 +1715,27 @@ describe("act tools (click_element / type_text / focus_element)", () => {
     expect(session.calls.some((c) => c.fn === "act")).toBe(false);
   });
 
+  it.each([
+    [
+      "type_text",
+      { text: "x" },
+      /is disabled — the page would ignore the input/,
+    ],
+    ["focus_element", {}, /is disabled — the page would ignore the focus/],
+  ])(
+    "%s refuses a disabled target without acting",
+    async (name, extra, msg) => {
+      const client = await connect(session);
+      const res = await client.callTool({
+        name,
+        arguments: { role: "button", name: "Delete", ...extra },
+      });
+      expect(res.isError).toBe(true);
+      expect(textOf(res)).toMatch(msg);
+      expect(session.calls.some((c) => c.fn === "act")).toBe(false);
+    },
+  );
+
   it("rewrites the backend's stale-node remedy to 'retry the tool'", async () => {
     // "re-read the tree and retry" presumes a caller holding node ids; the
     // agent never had one, so the retry IS the re-read.
