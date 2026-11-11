@@ -6,9 +6,9 @@ area: Extension
 type: Manual
 priority: P0
 status: Active
-validFrom: "extension ≥ 0.1.16. On 0.1.15 or earlier there is no native mode, so this row is Blocked, not Fail. A step marked 'extension ≤ 0.1.17' runs only up to 0.1.17, which also had an in-page tree and a switch to stop reading through Chrome, and one marked 'from 0.1.18' or 'from 0.1.19' only from then. Load unpacked from packages/extension/dist"
+validFrom: "extension ≥ 0.1.16. On 0.1.15 or earlier there is no native mode, so this row is Blocked, not Fail. A step marked 'extension ≤ 0.1.17' runs only up to 0.1.17, which also had an in-page tree and a switch to stop reading through Chrome, and one marked 'from 0.1.18', 'from 0.1.19' or 'from 0.1.20' only from then. Load unpacked from packages/extension/dist"
 validUntil: ""
-expected: "a fresh profile reads Chrome's tree with nothing asked, and Chrome's bar names the extension; a note explains the bar once; from 0.1.18, where Chrome refuses the attach the panel says why and the TAB view still lists the tab order, a profile that turned reading through Chrome off reads Chrome's tree after the update, and Settings holds Show full names alone; Cancel on the bar is respected; each window's panel shows only its own window's tab, or a popup opened from it; page focus selects its row in Chrome's tree without the bar, inside frames too; what a click through the tree loads a moment later, and a change inside a shown frame with Follow page changes on, reach Chrome's tree without Refresh; its state badges take the shared panel's colours; its TAB view lists the page's tab stops in the order Tab visits them, with no bar; from 0.1.19, each read marks what it found new or changed, a dialog without the page behind it counting as removed, and a screen reader hears what a read it caused found, and the rows opened and the row selected stay so when a modal dialog comes and goes or the page wraps the selected row; up to 0.1.17, Turn off and the Settings switch stop the reads, and nothing attaches while it is off"
+expected: "a fresh profile reads Chrome's tree with nothing asked, and Chrome's bar names the extension; a note explains the bar once; from 0.1.18, where Chrome refuses the attach the panel says why and the TAB view still lists the tab order, a profile that turned reading through Chrome off reads Chrome's tree after the update, and Settings holds Show full names alone; Cancel on the bar is respected; each window's panel shows only its own window's tab, or a popup opened from it; page focus selects its row in Chrome's tree without the bar, inside frames too; what a click through the tree loads a moment later, and a change inside a shown frame with Follow page changes on, reach Chrome's tree without Refresh; its state badges take the shared panel's colours; its TAB view lists the page's tab stops in the order Tab visits them, with no bar; from 0.1.19, each read marks what it found new or changed, a dialog without the page behind it counting as removed, and a screen reader hears what a read it caused found, and the rows opened and the row selected stay so when a modal dialog comes and goes or the page wraps the selected row; from 0.1.20, a selected or hovered row's outline shows over an open menu or modal dialog, which stays open; up to 0.1.17, Turn off and the Settings switch stop the reads, and nothing attaches while it is off"
 twin: D6
 notion: ""
 ---
@@ -222,6 +222,15 @@ and the tab order is only in the in-page tree)
     page's rows come back, and **Basket** is still open. Select **Group me** and
     press `Enter`: the button wraps itself in a new group, which opens, and the
     button's row is still the one selected.
+26. Open `packages/extension/e2e/fixtures/native-top-layer.html`, served over
+    http (from 0.1.20). Press **For Business** on the page: its menu opens over
+    the page. Press **↻** and select **My apps** in Chrome's tree: the page
+    outlines the heading over the menu, and the menu stays open. Hover the
+    **Sell** row: the outline moves to the link, still over the menu. Press **Settings** on the page,
+    then **↻**, and select **Save**: the outline shows over the dialog. Then try a
+    real site's menu, such as LinkedIn's **For Business**, where this was first
+    met. (0.1.19 or earlier: the outline is drawn under the menu and the dialog,
+    and nothing of it shows.)
 
 ## Expected
 
@@ -275,6 +284,9 @@ and the tab order is only in the in-page tree)
 - **What you opened and selected stays** (step 25), from 0.1.19: a row you
   opened is still open after a modal dialog opens and closes, and a selected row
   a read wraps in a new row stays selected
+- **The outline shows over a menu or dialog** (step 26), from 0.1.20: a selected
+  or hovered row inside a menu shown as a popover, or a modal dialog, is outlined
+  over it, and the menu stays open
 
 ## Why this exists
 
@@ -317,3 +329,11 @@ page wraps lands under a new row, which up to 0.1.18 stayed closed and took the
 selection with it. The e2e suite
 (`packages/extension/e2e/panel-ui-native-reshape.test.ts`) checks the same page
 in Chromium.
+
+Step 26 is here because a menu shown as a popover, or a modal dialog, is in the
+browser's top layer, which paints over any z-index. Up to 0.1.19 the outline
+was drawn in the right place but under it, so selecting a heading in LinkedIn's
+**For Business** menu showed nothing on the page. The e2e suite
+(`packages/extension/e2e/panel-ui-native-top-layer.test.ts`) counts the
+outline's pixels on screen in Chromium; a real site's menu, with its own styles
+and scripts, is what it can't stand in for.

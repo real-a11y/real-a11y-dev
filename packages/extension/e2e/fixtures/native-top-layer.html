@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Native top layer — outline fixture</title>
+    <style>
+      /* Nothing of the page's is the outline's blue, which the test looks for
+         on screen. */
+      body {
+        margin: 0;
+        font:
+          16px/1.5 system-ui,
+          sans-serif;
+        color: #000;
+        background: #fff;
+      }
+      a {
+        color: #000;
+      }
+      /* Room between the targets' edges, where the outline is drawn, and
+         their text, whose subpixel edges can be bluish. */
+      #feed,
+      #apps-heading,
+      #save {
+        margin: 0;
+        padding: 8px 12px;
+      }
+      #sell {
+        display: inline-block;
+        padding: 8px 12px;
+      }
+      /* A menu shown as a popover, as a site's "For Business" menu is: opaque,
+         and over the page, in the top layer. */
+      #apps-menu {
+        position: fixed;
+        top: 48px;
+        left: 8px;
+        width: 360px;
+        padding: 16px;
+        background: #fff;
+        border: 1px solid #000;
+      }
+      #settings {
+        padding: 16px;
+        background: #fff;
+        border: 1px solid #000;
+      }
+      /* What a page's design system gives its popovers, which reaches the
+         outline once it is one: it must not move, pad or repaint it. */
+      [popover] {
+        margin: 24px !important;
+        padding: 16px !important;
+        background: #fff !important;
+        border-color: #000 !important;
+      }
+      /* A backdrop for every element in the top layer, meant for the page's
+         own: the outline must not bring one over the menu. */
+      ::backdrop {
+        background: rgb(255 0 0 / 0.5);
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <button id="for-business" popovertarget="apps-menu">For Business</button>
+      <button id="open-settings">Settings</button>
+    </header>
+    <main>
+      <h1 id="feed">Feed</h1>
+      <p>The page under the menu, which the menu covers.</p>
+      <p>More of the page under the menu.</p>
+    </main>
+    <div id="apps-menu" popover tabindex="-1">
+      <h2 id="apps-heading">My apps</h2>
+      <p><a id="sell" href="#sell">Sell</a></p>
+      <p><a id="groups" href="#groups">Groups</a></p>
+    </div>
+    <dialog id="settings" aria-labelledby="settings-heading">
+      <h2 id="settings-heading">Settings</h2>
+      <button id="save">Save</button>
+    </dialog>
+    <script>
+      document.getElementById("open-settings").addEventListener("click", () => {
+        document.getElementById("settings").showModal();
+      });
+    </script>
+  </body>
+</html>

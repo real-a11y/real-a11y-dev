@@ -908,8 +908,8 @@ export async function overlayRect(page: Page) {
 /**
  * Whether the overlay sits over `selector`'s element, and, with `inView`,
  * whether that element was scrolled into view as a select's outline is. The
- * overlay is `content-box` with a 2px border, so it measures up to 4px wider
- * and taller than what it frames; it also animates between targets
+ * overlay is `border-box`, its 2px border inside the rect it frames, so it
+ * measures what it frames; it also animates between targets
  * (`transition: all 0.15s`), so callers poll this rather than read it once.
  */
 export async function overlayCovers(
@@ -936,10 +936,8 @@ export async function overlayCovers(
   return (
     Math.abs(overlay.top - target.top) <= slack &&
     Math.abs(overlay.left - target.left) <= slack &&
-    overlay.width >= target.width - slack &&
-    overlay.width <= target.width + 4 + slack &&
-    overlay.height >= target.height - slack &&
-    overlay.height <= target.height + 4 + slack
+    Math.abs(overlay.width - target.width) <= slack &&
+    Math.abs(overlay.height - target.height) <= slack
   );
 }
 

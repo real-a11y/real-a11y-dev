@@ -343,11 +343,13 @@ export class DomObserver {
     // not heard: its next refresh comes from whatever else changes. A
     // `<details>` or `<dialog>` fires one too, but changes its `open`
     // attribute as well, which the primary observer reports inside `root` and
-    // `dialogObserver` below reports for a `<dialog>` outside it.
+    // `dialogObserver` below reports for a `<dialog>` outside it. The focus
+    // highlight is a popover too, shown on every draw: its toggles are ours.
     this.toggleListener = (e: Event) => {
       if (
         e.target instanceof Element &&
-        safeGetAttribute(e.target, "popover") !== null
+        safeGetAttribute(e.target, "popover") !== null &&
+        !hasInternalAncestor(e.target, this.internalIds)
       ) {
         this.pendingDirtyRoots.push(e.target);
         this.scheduleChange();
@@ -365,7 +367,13 @@ export class DomObserver {
     // watching the whole document's tree: its invoker catches up on the next
     // refresh anything else causes.
     this.popoverObserver = new MutationObserver((mutations) => {
-      if (mutations.some((m) => !safeContains(this.root, m.target))) {
+      if (
+        mutations.some(
+          (m) =>
+            !safeContains(this.root, m.target) &&
+            !isInternalMutation(m, this.internalIds),
+        )
+      ) {
         this.scheduleFull();
       }
     });

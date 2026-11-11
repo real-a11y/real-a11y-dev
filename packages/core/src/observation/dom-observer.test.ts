@@ -1306,6 +1306,28 @@ describe("DomObserver", () => {
       expect(onTreeChange).not.toHaveBeenCalled();
     });
 
+    // The focus highlight is a popover, shown again on every draw so it stays
+    // over the page's own. Hearing that would re-extract on every draw, and a
+    // panel that draws after it re-renders would never stop.
+    it("ignores the focus highlight's own toggles and popover attribute", async () => {
+      document.body.innerHTML = `<main></main>`;
+      observer = new DomObserver(
+        document.querySelector("main")!,
+        onTreeChange,
+        100,
+      );
+      observer.start();
+
+      const highlight = document.createElement("div");
+      highlight.id = "__sn-highlight";
+      document.documentElement.append(highlight);
+      highlight.setAttribute("popover", "manual");
+      toggle(highlight);
+      await settleObserver(100);
+
+      expect(onTreeChange).not.toHaveBeenCalled();
+    });
+
     it("asks for a full extraction when a popover outside the root stops being one", async () => {
       document.body.innerHTML = `<main><button popovertarget="menu">Menu</button></main><div id="menu" popover>x</div>`;
       observer = new DomObserver(
