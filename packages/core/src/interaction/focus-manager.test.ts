@@ -135,6 +135,169 @@ describe("FocusManager", () => {
       // Still only one in the document
       expect(document.querySelectorAll("#__sn-highlight").length).toBe(1);
     });
+
+    it("sets every property it needs over the page's own rules", () => {
+      const btn = mkFocusable();
+      refs.set("sn-1", btn);
+
+      fm.highlightElement("sn-1");
+
+      const { style } = document.getElementById("__sn-highlight")!;
+      for (const property of ["position", "top", "left", "width", "height"]) {
+        expect(style.getPropertyPriority(property)).toBe("important");
+      }
+    });
+
+    it("where the browser has no popovers, draws with the highest z-index alone", () => {
+      const btn = mkFocusable();
+      refs.set("sn-1", btn);
+
+      fm.highlightElement("sn-1");
+
+      const overlay = document.getElementById("__sn-highlight")!;
+      expect(overlay.hasAttribute("popover")).toBe(false);
+      expect(overlay.style.zIndex).toBe("2147483647");
+    });
+  });
+
+  describe("highlightElement in the top layer", () => {
+    /** The top layer jsdom lacks: the popovers shown, in the order they
+     *  entered it, the last on top. */
+    let layer: Element[];
+    const overlay = () => document.getElementById("__sn-highlight");
+
+    /** A popover of the page's, in the body. */
+    function pagePopover(): HTMLElement {
+      const el = document.createElement("div");
+      el.setAttribute("popover", "");
+      document.body.append(el);
+      return el;
+    }
+
+    beforeEach(() => {
+      layer = [];
+      Object.defineProperties(HTMLElement.prototype, {
+        showPopover: {
+          configurable: true,
+          value(this: HTMLElement) {
+            if (!this.hasAttribute("popover")) {
+              throw new DOMException("Not a popover", "NotSupportedError");
+            }
+            if (!layer.includes(this)) layer.push(this);
+          },
+        },
+        hidePopover: {
+          configurable: true,
+          value(this: HTMLElement) {
+            if (layer.includes(this)) layer.splice(layer.indexOf(this), 1);
+          },
+        },
+      });
+      const matches = Element.prototype.matches;
+      vi.spyOn(Element.prototype, "matches").mockImplementation(function (
+        this: Element,
+        selector: string,
+      ) {
+        return selector === ":popover-open"
+          ? layer.includes(this)
+          : matches.call(this, selector);
+      });
+    });
+
+    afterEach(() => {
+      vi.restoreAllMocks();
+      const proto = HTMLElement.prototype as Partial<HTMLElement>;
+      delete proto.showPopover;
+      delete proto.hidePopover;
+    });
+
+    it("enters it as a manual popover, above every z-index of the page's", () => {
+      const btn = mkFocusable();
+      refs.set("sn-1", btn);
+
+      fm.highlightElement("sn-1");
+
+      // Manual: it closes none of the page's popovers, and no light dismiss
+      // or Escape closes it.
+      expect(overlay()!.getAttribute("popover")).toBe("manual");
+      expect(layer).toEqual([overlay()]);
+    });
+
+    it("goes over a menu the page shows as a popover, and leaves it open", () => {
+      // The reported case: a heading inside a site's open menu was outlined
+      // under the menu, out of sight.
+      const menu = pagePopover();
+      const heading = document.createElement("h2");
+      menu.append(heading);
+      refs.set("sn-1", heading);
+      menu.showPopover();
+
+      fm.highlightElement("sn-1");
+
+      expect(layer).toEqual([menu, overlay()]);
+    });
+
+    it("goes back on top, on its next draw, of a popover the page showed after it", () => {
+      const btn = mkFocusable();
+      refs.set("sn-1", btn);
+      fm.highlightElement("sn-1");
+      const menu = pagePopover();
+      menu.showPopover();
+      expect(layer).toEqual([overlay(), menu]);
+
+      fm.highlightElement("sn-1");
+
+      expect(layer).toEqual([menu, overlay()]);
+    });
+
+    it("stays out of the accessibility tree, where a popover shown is a group", () => {
+      const btn = mkFocusable();
+      refs.set("sn-1", btn);
+
+      fm.highlightElement("sn-1");
+
+      expect(overlay()!.getAttribute("aria-hidden")).toBe("true");
+    });
+
+    it("hides its own backdrop from a page's `::backdrop` rule", () => {
+      const btn = mkFocusable();
+      refs.set("sn-1", btn);
+
+      fm.highlightElement("sn-1");
+
+      expect(overlay()!.querySelector("style")!.textContent).toContain(
+        "#__sn-highlight::backdrop { display: none !important; }",
+      );
+    });
+
+    it("takes over an overlay an older copy of this code made, with no popover", () => {
+      const old = document.createElement("div");
+      old.id = "__sn-highlight";
+      old.style.cssText = "position: fixed; z-index: 2147483647;";
+      document.documentElement.append(old);
+      const btn = mkFocusable();
+      refs.set("sn-1", btn);
+
+      fm.highlightElement("sn-1");
+
+      expect(overlay()).toBe(old);
+      expect(old.getAttribute("popover")).toBe("manual");
+      expect(layer).toEqual([old]);
+      // Upgraded once: a second draw adds no second backdrop rule.
+      fm.highlightElement("sn-1");
+      expect(old.querySelectorAll("style")).toHaveLength(1);
+    });
+
+    it("draws with the z-index alone when the top layer refuses it", () => {
+      const btn = mkFocusable();
+      refs.set("sn-1", btn);
+      vi.spyOn(HTMLElement.prototype, "showPopover").mockImplementation(() => {
+        throw new DOMException("Not fully active", "InvalidStateError");
+      });
+
+      expect(() => fm.highlightElement("sn-1")).not.toThrow();
+      expect(overlay()!.style.top).toBe("10px");
+    });
   });
 
   describe("clearHighlight", () => {
