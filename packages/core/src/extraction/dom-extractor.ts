@@ -37,6 +37,7 @@ import {
   isFocusable,
   parseTabindex,
 } from "./focusability.js";
+import * as host from "./host-names.js";
 import { buttonInputName } from "./input-names.js";
 import { associatedLabels, wrappingLabelText } from "./label-text.js";
 import { hasCaptionsTrack } from "./media-tracks.js";
@@ -865,7 +866,7 @@ function computeRawAccessibleName(
   //    in DOM order with spaces. Each label is read once per computation, like
   //    any element under the visit-once guard: a heading that holds a checkbox
   //    and its label is "Agree" in Chromium, not "Agree Agree".
-  if (tag === "input" || tag === "select" || tag === "textarea") {
+  if (host.LABELED_TAGS.has(tag)) {
     const id = safeGetAttribute(element, "id");
     // Every `<label for>` in the control's tree, from the per-extraction index
     // rather than a query that rescans from the top for every control.
@@ -906,19 +907,17 @@ function computeRawAccessibleName(
     if (labelParts.length) return labelParts.join(" ");
   }
 
-  // 4a. Fieldset — accessible name comes from its direct <legend> child
-  if (tag === "fieldset") {
-    const legend = element.querySelector(":scope > legend");
-    if (legend)
-      return getAccessibleTextContent(legend, visited, styleCache).trim();
-  }
+  // 4a. Fieldset and details — accessible name comes from the direct <legend>
+  //     or <summary> child.
+  const nameChild =
+    tag === "fieldset" ? "legend" : tag === "details" ? "summary" : null;
+  const nameEl = nameChild && element.querySelector(`:scope > ${nameChild}`);
+  if (nameEl)
+    return getAccessibleTextContent(nameEl, visited, styleCache).trim();
 
-  // 4b. Details — accessible name comes from its direct <summary> child
-  if (tag === "details") {
-    const summary = element.querySelector(":scope > summary");
-    if (summary)
-      return getAccessibleTextContent(summary, visited, styleCache).trim();
-  }
+  // 4b. The `label` attribute names an <option> or <optgroup> (HTML-AAM).
+  const attrName = host.labelAttributeName(element, tag);
+  if (attrName) return attrName;
 
   // 4c. Table — HTML-AAM names it from `HTMLTableElement.caption`. Hidden
   // captions must not name it (accname §4.3.2 step 2A); an empty caption
@@ -991,8 +990,7 @@ function computeRawAccessibleName(
   //    <textarea>'s too: Chromium names `<textarea placeholder="Your reply">`
   //    "Your reply".
   if (tag === "input" || tag === "textarea") {
-    const placeholder = (element as HTMLInputElement | HTMLTextAreaElement)
-      .placeholder;
+    const placeholder = host.placeholderName(element);
     if (placeholder) return placeholder;
   }
 

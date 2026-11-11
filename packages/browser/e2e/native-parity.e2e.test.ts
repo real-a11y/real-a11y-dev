@@ -985,3 +985,47 @@ describe("visibility:hidden text in names and descriptions", () => {
     }
   });
 });
+
+// HTML-AAM names an option and optgroup from their `label` attribute, an
+// output, meter and progress from an associated label, and a text input from
+// aria-placeholder after placeholder. The DOM producer read none of them.
+describe("host-language name sources", () => {
+  it("name option, optgroup, output, meter, progress and aria-placeholder alike in both producers", async () => {
+    const browser = await chromium.launch();
+    try {
+      const page = await browser.newPage();
+      await page.setContent(
+        `<select><option label="Lab">Text</option></select>` +
+          `<select><optgroup label="EU"><option>France</option></optgroup></select>` +
+          `<label for="o">Result</label><output id="o">42</output>` +
+          `<label for="m">Disk</label><meter id="m" value="0.5">half</meter>` +
+          `<label for="p">Upload</label><progress id="p" value="0.3">30%</progress>` +
+          `<input aria-placeholder="Ph">`,
+      );
+      await page.addScriptTag({ content: pageBundleSource() });
+      const dom = await page.evaluate(() => {
+        const ra = (globalThis as Record<string, unknown>).__realA11y__ as {
+          extractA11yTree(root: Element): ExtractionResult;
+        };
+        return [...ra.extractA11yTree(document.body).nodes.values()];
+      });
+      const native = [...(await nativeTree(page)).nodes.values()];
+      const targets = [
+        "option:Lab",
+        "group:EU",
+        "status:Result",
+        "meter:Disk",
+        "progressbar:Upload",
+        "textbox:Ph",
+      ];
+      const read = (nodes: SemanticNode[]) =>
+        targets.filter((t) =>
+          nodes.some((n) => `${n.a11y.role}:${n.a11y.name}` === t),
+        );
+      expect(read(dom), "dom").toStrictEqual(targets);
+      expect(read(native), "native").toStrictEqual(targets);
+    } finally {
+      await browser.close();
+    }
+  });
+});

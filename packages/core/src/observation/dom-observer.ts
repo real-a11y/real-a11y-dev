@@ -43,6 +43,7 @@ const EXTRA_OBSERVED_ATTRIBUTES = [
   "aria-labelledby",
   "aria-describedby",
   "aria-description", // inline description, ARIA 1.3+ (getDescription)
+  "aria-placeholder", // a text field's last-resort name, after placeholder
   "aria-level", // explicit heading / treeitem level (role-map)
   "aria-live",
   "aria-modal",

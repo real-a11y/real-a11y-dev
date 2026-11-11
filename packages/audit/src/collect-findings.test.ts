@@ -191,6 +191,28 @@ describe("collectFindings — label-title-only", () => {
     ).toEqual([]);
   });
 
+  it("does not flag an aria-placeholder input, which the DOM producer now names", () => {
+    expect(
+      collectFindings(mount(`<input aria-placeholder="Ph">`), [
+        "no-unlabeled-interactive",
+      ]),
+    ).toEqual([]);
+  });
+
+  it("counts a name from aria-placeholder as a real label, as a native tree does", () => {
+    // A native tree carries no aria-placeholder attribute, so its name from
+    // there is "named beyond title"; the DOM producer matches, so the rule
+    // gives the same answer on both.
+    expect(
+      collectFindings(
+        mount(
+          `<input aria-placeholder="Ph" aria-describedby="d"><span id="d">Hint</span>`,
+        ),
+        ["label-title-only"],
+      ),
+    ).toEqual([]);
+  });
+
   it("skips input types that do not take a visible label", () => {
     for (const type of ["hidden", "image", "button", "submit", "reset"]) {
       expect(
