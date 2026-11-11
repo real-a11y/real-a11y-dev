@@ -371,11 +371,12 @@ export class LiveTreeExtractor {
   }
 
   /**
-   * Add every recorded checkbox, radio, `<select>` and `<option>` whose native state no
-   * longer matches its node. Those states move without an attribute, and
-   * often without an event, of their own: a click on one radio unchecks its
-   * sibling, a script's `option.selected = true` fires nothing, a handler can make a "select all" box indeterminate, and opening
-   * a picker fires nothing at all, so it shows once anything else refreshes.
+   * Add every recorded checkbox, radio, `<select>` and `<option>` whose
+   * native state no longer matches its node. Those states move without an
+   * attribute, and often without an event, of their own: a click on one radio
+   * unchecks its sibling, a script's `option.selected = true` fires nothing, a
+   * handler can make a "select all" box indeterminate, and opening a picker
+   * fires nothing at all, so it shows once anything else refreshes.
    * It reads a property or two per control, far cheaper than re-extracting
    * them all.
    */
