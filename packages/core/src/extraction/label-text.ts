@@ -76,9 +76,14 @@ export function associatedLabels(
   const labels = [...forLabels];
   const closest = control.closest("label");
   const id = control.getAttribute("id");
+  // A label with no `for` labels its first labelable descendant only. Held for
+  // output, meter and progress, so `<label>Volume <input> <output>` leaves the
+  // output unnamed as Chromium does; two inputs under one label are unchanged.
   const wrappingLabel =
     closest &&
-    (!closest.hasAttribute("for") || closest.getAttribute("for") === id)
+    (!closest.hasAttribute("for") || closest.getAttribute("for") === id) &&
+    (!/^(output|meter|progress)$/.test(control.localName) ||
+      (closest as HTMLLabelElement).control === control)
       ? closest
       : null;
   if (wrappingLabel && !labels.includes(wrappingLabel)) {

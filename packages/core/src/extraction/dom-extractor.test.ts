@@ -7322,3 +7322,81 @@ describe("title as the accessible description (HTML-AAM §4.2)", () => {
     expect(desc("B")).toBe("Inline");
   });
 });
+
+describe("host-language name sources: label attribute, labelled output/meter/progress, aria-placeholder", () => {
+  const nameOfTag = (html: string, tag: string): string => {
+    // Mounted on the document: a `label[for]` resolves within its tree scope.
+    document.body.innerHTML = html;
+    try {
+      const node = [...extractDomTree(document.body).nodes.values()].find(
+        (n) => n.dom?.tagName === tag,
+      )!;
+      return node.a11y.name;
+    } finally {
+      document.body.innerHTML = "";
+    }
+  };
+
+  it("names an <option> from its label attribute, ahead of its text", () => {
+    expect(
+      nameOfTag('<select><option label="Lab">Text</option></select>', "option"),
+    ).toBe("Lab");
+  });
+
+  it("keeps an <option>'s text when its label attribute is empty or absent", () => {
+    expect(
+      nameOfTag('<select><option label="">Text</option></select>', "option"),
+    ).toBe("Text");
+    expect(nameOfTag("<select><option>Text</option></select>", "option")).toBe(
+      "Text",
+    );
+  });
+
+  it("names an <optgroup> from its label attribute", () => {
+    expect(
+      nameOfTag(
+        '<select><optgroup label="EU"><option>France</option></optgroup></select>',
+        "optgroup",
+      ),
+    ).toBe("EU");
+  });
+
+  it.each([
+    ["output", "<output id=x>42</output>", "42"],
+    ["meter", '<meter id=x value="0.5">half</meter>', ""],
+    ["progress", '<progress id=x value="0.3">30%</progress>', ""],
+  ])("names <%s> from a label[for]", (tag, control, unlabelled) => {
+    expect(nameOfTag(`<label for="x">Lbl</label>${control}`, tag)).toBe("Lbl");
+    expect(nameOfTag(control, tag)).toBe(unlabelled);
+  });
+
+  it.each([
+    ["output", "<output>42</output>"],
+    ["meter", '<meter value="0.5">half</meter>'],
+    ["progress", '<progress value="0.3">30%</progress>'],
+  ])("names <%s> from a wrapping label", (tag, control) => {
+    expect(nameOfTag(`<label>Lbl ${control}</label>`, tag)).toBe("Lbl");
+  });
+
+  it("does not let a wrapping label name an <output> beside its control", () => {
+    expect(
+      nameOfTag(
+        '<label>Volume <input type="range"> <output>50</output></label>',
+        "output",
+      ),
+    ).toBe("50");
+  });
+
+  it("names a text input from aria-placeholder, last", () => {
+    expect(nameOfTag('<input aria-placeholder="Ph">', "input")).toBe("Ph");
+    expect(
+      nameOfTag('<input placeholder="P" aria-placeholder="Ph">', "input"),
+    ).toBe("P");
+    expect(nameOfTag('<input title="T" aria-placeholder="Ph">', "input")).toBe(
+      "T",
+    );
+    expect(
+      nameOfTag('<textarea aria-placeholder="Ph"></textarea>', "textarea"),
+    ).toBe("Ph");
+  });
+});

@@ -77,6 +77,24 @@ describe("DomObserver", () => {
     ).toBe(true);
   });
 
+  it("observes aria-placeholder, a text field's last-resort name", async () => {
+    document.body.innerHTML = `<input id="i">`;
+    observer = new DomObserver(document.body, onTreeChange, 100);
+    observer.start();
+
+    document.getElementById("i")!.setAttribute("aria-placeholder", "Ph");
+
+    await settleObserver(100);
+
+    expect(onTreeChange).toHaveBeenCalledTimes(1);
+    const change = onTreeChange.mock.calls[0]![0]!;
+    expect(
+      change.mutations?.some(
+        (m: MutationRecord) => m.attributeName === "aria-placeholder",
+      ),
+    ).toBe(true);
+  });
+
   it.each(["size", "multiple"])(
     "observes a select's %s, which decides its shape",
     async (attr) => {
