@@ -34,7 +34,7 @@
   under it, so nothing showed. The outline is in the top layer now, over
   whatever the page shows there; it closes none of the page's menus, and
   Chrome's tree doesn't list it. Its border sits inside the element's edges
-  on every page.
+  on every page. ([#628](https://github.com/real-a11y/real-a11y-dev/pull/628))
 - **The TAB view leaves `visibility: hidden` text out of names.** A control or
   heading named from content that includes `visibility: hidden` or `collapse`
   text no longer reads it, as in AccName 1.2 §2A and Chrome's tree; a descendant
