@@ -161,7 +161,7 @@ describe("the default name of submit, reset and image inputs", () => {
   it("is the same in both producers", async () => {
     await session.open(
       dataUrl(
-        `<main><input type="submit"><input type="reset"><input type="image" src="data:,"></main>`,
+        `<main><input type="submit"><input type="reset"><input type="image" src="data:,"><input type="submit" title="Go"><input type="image" src="data:," title="Search"></main>`,
       ),
     );
     const domTree = await session.call<string>("treeSnapshot", "body", [
@@ -180,6 +180,8 @@ describe("the default name of submit, reset and image inputs", () => {
         'button "Submit"',
         'button "Reset"',
         'button "Submit"',
+        'button "Submit"',
+        'button "Search"',
       ]);
     }
   });
