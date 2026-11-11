@@ -21,6 +21,12 @@
 
 ### Patch Changes
 
+- **The TAB view names a submit, reset or image input.** A `<input type="submit">`
+  or `type="reset"` with no `value` was listed as `button` with no name, and an
+  image input with no `alt` or `title` the same; they now read "Submit",
+  "Reset" and "Submit", the names HTML-AAM gives and Chrome's tree shows. A
+  submit input's `title` no longer names it.
+  ([#PR](https://github.com/real-a11y/real-a11y-dev/pull/PR))
 - **The TAB view leaves `visibility: hidden` text out of names.** A control or
   heading named from content that includes `visibility: hidden` or `collapse`
   text no longer reads it, as in AccName 1.2 §2A and Chrome's tree; a descendant

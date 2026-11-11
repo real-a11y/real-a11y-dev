@@ -37,6 +37,7 @@ import {
   isFocusable,
   parseTabindex,
 } from "./focusability.js";
+import { buttonInputName } from "./input-names.js";
 import { associatedLabels, wrappingLabelText } from "./label-text.js";
 import { hasCaptionsTrack } from "./media-tracks.js";
 export { isTextVisible } from "./name-spacing.js";
@@ -951,15 +952,10 @@ function computeRawAccessibleName(
       (type === "submit" || type === "reset" || type === "button") &&
       input.value &&
       !isSensitiveField(input)
-    ) {
+    )
       return input.value;
-    }
-    // An image button is named by its alt — after a label, which Chromium
-    // prefers: `<label><input type="image" alt="Go"> now</label>` is "now".
-    if (type === "image") {
-      const alt = safeGetAttribute(input, "alt");
-      if (alt) return alt;
-    }
+    const named = buttonInputName(input, "beforeTitle");
+    if (named) return named;
   }
 
   // 8. Recursive text content — ONLY for elements whose ARIA role supports
@@ -986,6 +982,10 @@ function computeRawAccessibleName(
     if (source) source.fromTitle = true;
     return title;
   }
+
+  // 6a. The image input's default name sits after `title` (HTML-AAM §4.1.3).
+  const fallback = buttonInputName(element, "afterTitle");
+  if (fallback) return fallback;
 
   // 7. placeholder — a text field's last-resort name, after title. A
   //    <textarea>'s too: Chromium names `<textarea placeholder="Your reply">`

@@ -48,6 +48,21 @@ describe("collectFindings — no-unlabeled-interactive", () => {
     }
   });
 
+  it("passes a submit, reset or image input, which the user agent names by default", () => {
+    const root = mount(
+      `<input type="submit"><input type="reset"><input type="image" src="data:,"><input type="submit" title="Go">`,
+    );
+    expect(collectFindings(root, ["no-unlabeled-interactive"])).toEqual([]);
+  });
+
+  it("still flags a submit input whose value is explicitly empty", () => {
+    const findings = collectFindings(mount(`<input type="submit" value="">`), [
+      "no-unlabeled-interactive",
+    ]);
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.role).toBe("button");
+  });
+
   // A text field's contents are the user's data, and a combobox's text is its
   // value — neither is a label, and Chromium names none of these.
   it.each([

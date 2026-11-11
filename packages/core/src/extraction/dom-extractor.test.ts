@@ -5240,6 +5240,54 @@ describe("input accessible name (HTML-AAM)", () => {
     expect(nameOf('<input type="button" value="Go">')).toBe("Go");
   });
 
+  it("gives a submit or reset input with no value its default name, ahead of title", () => {
+    expect(nameOf('<input id="target" type="submit">')).toBe("Submit");
+    expect(nameOf('<input id="target" type="reset">')).toBe("Reset");
+    expect(nameOf('<input id="target" type="submit" title="Go">')).toBe(
+      "Submit",
+    );
+  });
+
+  it("gives no default name to an explicit empty value or a plain button input", () => {
+    expect(nameOf('<input id="target" type="submit" value="">')).toBe("");
+    expect(nameOf('<input id="target" type="reset" value="">')).toBe("");
+    expect(nameOf('<input id="target" type="button">')).toBe("");
+  });
+
+  it("lets a label, aria-label and aria-labelledby win over the default name", () => {
+    const attachedName = (html: string) => {
+      // label[for] and aria-labelledby resolve through the document.
+      document.body.innerHTML = html;
+      try {
+        return [...extractDomTree(document.body).nodes.values()].find(
+          (n) => n.dom?.tagName === "input",
+        )!.a11y.name;
+      } finally {
+        document.body.innerHTML = "";
+      }
+    };
+    expect(attachedName('<input type="submit" aria-label="Pay">')).toBe("Pay");
+    expect(
+      attachedName('<label for="s">Pay</label><input id="s" type="reset">'),
+    ).toBe("Pay");
+    expect(
+      attachedName(
+        '<span id="l">Pay now</span><input type="submit" aria-labelledby="l">',
+      ),
+    ).toBe("Pay now");
+  });
+
+  it("keeps a wrapping label's text free of the default name", () => {
+    expect(
+      nameOf('<label>Send <input id="target" type="submit"></label>'),
+    ).toBe("Send");
+    expect(
+      nameOf(
+        '<label>Send <span><input id="target" type="submit"></span></label>',
+      ),
+    ).toBe("Send");
+  });
+
   it("orders title before placeholder", () => {
     expect(
       nameOf('<input type="text" title="Your email" placeholder="you@x.com">'),
@@ -6750,6 +6798,14 @@ describe("a child lends its own text alternative to a name from content", () => 
     expect(
       nameOf(`<label><input id="target" type="image" alt="Go"> now</label>`),
     ).toBe("now");
+    // With no alt and no title it is a submit button, called one; a title
+    // comes before that default.
+    expect(nameOf(`<input id="target" type="image" src="data:,">`)).toBe(
+      "Submit",
+    );
+    expect(
+      nameOf(`<input id="target" type="image" src="data:," title="Search">`),
+    ).toBe("Search");
     // A blank alt still stops there: Chromium leaves this one unnamed rather
     // than fall back to its title.
     expect(
