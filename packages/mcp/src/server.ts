@@ -14,22 +14,16 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { ALL_RULES, listByRole } from "@real-a11y-dev/audit";
-import type { A11yRule, RoleFilter } from "@real-a11y-dev/audit";
+import { ALL_RULES } from "@real-a11y-dev/audit";
+import type { A11yRule } from "@real-a11y-dev/audit";
 import type { A11ySession } from "@real-a11y-dev/browser";
-import { numberTabStops } from "@real-a11y-dev/serialize";
-import { projectNativeTree, redactUrl } from "@real-a11y-dev/snapshot";
+import { redactUrl } from "@real-a11y-dev/snapshot";
 import { z } from "zod";
 
-import {
-  actFailure,
-  describeTarget,
-  refuseIfDisabled,
-  resolveActTarget,
-} from "./act-target.js";
+import { registerActTools } from "./act-tools.js";
 import { registerCheckpointTools } from "./checkpoint-tools.js";
 import type { CheckpointStore } from "./checkpoints.js";
-import { renderAudit, renderSnapshot } from "./render.js";
+import { registerInspectTools } from "./inspect-tools.js";
 import {
   serverInstructions,
   serverNotes,
@@ -41,19 +35,7 @@ import {
   type SessionManager,
   type SessionRecord,
 } from "./sessions.js";
-import {
-  actName,
-  actNth,
-  actRole,
-  errText,
-  pageTitle,
-  READ_ONLY,
-  rootSelector,
-  RULES_HINT,
-  SCOPE_HINT,
-  SLICE_HINT,
-  text,
-} from "./tool-output.js";
+import { errText, pageTitle, READ_ONLY, text } from "./tool-output.js";
 
 export {
   McpSessionManager,
@@ -440,170 +422,17 @@ export function buildServer(
     },
   );
 
-  // ── Audit (the differentiator) ───────────────────────────────────────────
-  server.registerTool(
-    "audit_page",
-    {
-      title: "Audit accessibility",
-      annotations: READ_ONLY,
-      description:
-        "Run accessibility audits against the current page and return every violation — unlabeled interactive controls, form controls labeled only by title or aria-describedby, skipped heading levels or missing/duplicate h1, unlabeled dialogs, and broken landmark structure. Empty-name findings are what assistive tech would announce as unnamed; label-title-only is the axe-core best-practice extra (title still is a name). This is the primary tool. Audits Chromium's own accessibility tree, so it reaches structure no in-page walk can (a `<video controls>`'s user-agent-shadow media controls); findings carry CSS locators. Whole-document. Chromium only.",
-      inputSchema: {
-        rules: z
-          .array(z.enum(RULES))
-          .optional()
-          .describe("Subset of rules to run. Omit to run all rules."),
-        session: sessionParam,
-      },
-    },
-    async ({ rules, session }) =>
-      withSession(session, async (rec) => {
-        // Findings are computed in Node over Chromium's own tree.
-        const snap = projectNativeTree(await readTree(rec), {
-          rules,
-        });
-        return text(renderAudit(snap.findings), RULES_HINT);
-      }),
-  );
-
-  server.registerTool(
-    "inspect_page",
-    {
-      title: "Inspect page (single snapshot)",
-      annotations: READ_ONLY,
-      description:
-        "Return the audit findings AND the semantic tree and heading outline — all derived from ONE read of Chromium's accessibility tree, so they are guaranteed internally consistent. The element focused at capture time is marked `[focused]`." +
-        valuesNote +
-        " Prefer this over separate audit_page + get_* calls on dynamic pages (SPAs, pages with consent dialogs) where separate calls could catch different states. That tree carries no tab order, so there is no tab-order section here — call get_tab_order for the keyboard sequence. Whole-document. Chromium only.",
-      inputSchema: {
-        rules: z
-          .array(z.enum(RULES))
-          .optional()
-          .describe("Subset of rules for the findings. Omit to run all."),
-        includeGeneric: z
-          .boolean()
-          .default(false)
-          .describe(
-            "Include generic container nodes in the tree, among them a block of text, named from its own text.",
-          ),
-        session: sessionParam,
-      },
-    },
-    async ({ rules, includeGeneric, session }) =>
-      withSession(session, async (rec) => {
-        const snap = projectNativeTree(await readTree(rec), {
-          rules,
-          includeGeneric,
-          values: liveValues,
-        });
-        return text(renderSnapshot(snap), `${RULES_HINT} ${SLICE_HINT}`);
-      }),
-  );
-
-  // ── Inspect (perception primitives) ───────────────────────────────────────
-  server.registerTool(
-    "get_semantic_tree",
-    {
-      title: "Get semantic tree",
-      annotations: READ_ONLY,
-      description:
-        "Return the page's accessibility tree as a deterministic, indented role + accessible-name outline (what a screen reader would traverse) — read from Chromium's own accessibility tree over CDP, so it reaches user-agent-shadow media controls an in-page walk never sees. The element focused at capture time is marked `[focused]`." +
-        valuesNote +
-        " Token-efficient and stable across runs. This is the vocabulary the act tools target in. Whole-document. Chromium only.",
-      inputSchema: {
-        includeGeneric: z
-          .boolean()
-          .default(false)
-          .describe(
-            "Include generic container nodes (role=generic), among them a block of text, named from its own text.",
-          ),
-        session: sessionParam,
-      },
-    },
-    async ({ includeGeneric, session }) =>
-      withSession(session, async (rec) => {
-        const snap = projectNativeTree(await readTree(rec), {
-          includeGeneric,
-          values: liveValues,
-        });
-        return text(snap.tree || "(empty tree)", SLICE_HINT);
-      }),
-  );
-
-  server.registerTool(
-    "get_heading_outline",
-    {
-      title: "Get heading outline",
-      annotations: READ_ONLY,
-      description:
-        "Return the page's heading outline (h1..h6 in document order) as an indented list, derived from Chromium's own accessibility tree. Whole-document. Chromium only.",
-      inputSchema: { session: sessionParam },
-    },
-    async ({ session }) =>
-      withSession(session, async (rec) => {
-        const snap = projectNativeTree(await readTree(rec));
-        return text(snap.outline);
-      }),
-  );
-
-  server.registerTool(
-    "get_tab_order",
-    {
-      title: "Get tab order",
-      annotations: READ_ONLY,
-      description:
-        "Return the focusable elements in the order a keyboard user encounters them when pressing Tab, numbered, with role + accessible name. The stop focused at capture time is marked `[focused]`." +
-        (redactInput
-          ? " In this server's strict mode no stop shows a field value."
-          : ' A field shows what it holds (`textbox "Email" = "jane@x.com"`; a sensitive field "[redacted]").') +
-        " Built from the in-page DOM walk — Chromium's accessibility tree knows whether a node is focusable but not the SEQUENCE (tabindex never reaches it), so this is the only source for tab order, and the one tool `rootSelector` still scopes.",
-      inputSchema: { rootSelector, session: sessionParam },
-    },
-    async ({ rootSelector, session }) =>
-      withSession(session, async (rec) => {
-        const seq = await rec.session.call<string>(
-          "tabSequenceSnapshot",
-          rootSelector,
-          [{ values: liveValues }],
-        );
-        // Number at render — the page bundle produces the canonical unnumbered
-        // form; the ordinals help an agent reference "stop 7" and are never stored.
-        return text(numberTabStops(seq), SCOPE_HINT);
-      }),
-  );
-
-  server.registerTool(
-    "list_elements",
-    {
-      title: "List elements by category",
-      annotations: READ_ONLY,
-      description:
-        "List every element of one category — links, buttons, form controls, landmarks, images, or headings — as role + accessible name + a CSS locator" +
-        (redactInput
-          ? ""
-          : ', and for a form field what it holds (a sensitive one "[redacted]")') +
-        ". A token-efficient way to review one kind of element (e.g. 'images' pairs with the image-alt rule, 'form' with labeling). Listed from Chromium's own accessibility tree, so it agrees node for node with get_semantic_tree and audit_page. Whole-document. Chromium only.",
-      inputSchema: {
-        filter: z
-          .enum(["heading", "link", "button", "form", "landmark", "image"])
-          .describe("Which category of element to list."),
-        session: sessionParam,
-      },
-    },
-    async ({ filter, session }) =>
-      withSession(session, async (rec) => {
-        // Node-side listing over the native tree — the same category engine the
-        // page bundle runs.
-        // `listByRole` never returns "" — an empty category comes back as a line
-        // saying why (0 of N nodes matched, and which roles it looked for), so
-        // there is no sentinel for this caller to supply.
-        return text(
-          listByRole(await readTree(rec), filter as RoleFilter, {
-            values: liveValues,
-          }),
-        );
-      }),
-  );
+  // ── Audit and inspect (the differentiator and the perception primitives) ─
+  registerInspectTools({
+    server,
+    rules: RULES,
+    redactInput,
+    liveValues,
+    valuesNote,
+    sessionParam,
+    withSession,
+    readTree,
+  });
 
   // ── Checkpoints (findings diff, export / import, interaction diff) ───────
   registerCheckpointTools({
@@ -620,147 +449,7 @@ export function buildServer(
   });
 
   // ── Act (the write side of the native producer) ──────────────────────────
-  // Targets resolve against a FRESH native tree per dispatch, so node ids
-  // never cross the tool boundary and staleness shrinks to the instant
-  // between resolution and dispatch.
-  // Targets resolve against a FRESH native tree per dispatch (read here, so
-  // strict mode applies and a target is aimed at by the name the agent was
-  // shown).
-  const resolveTargetFresh = async (
-    rec: SessionRecord,
-    role: string,
-    name: string | undefined,
-    nth: number | undefined,
-  ) => resolveActTarget(await readTree(rec), role, name, nth);
-
-  // The diff loop is the payoff of acting at all — steer every success to it.
-  const diffSteer = (rec: SessionRecord) =>
-    rec.treeCheckpoint !== undefined
-      ? " Call diff_tree to see what this changed."
-      : " Tip: call checkpoint_tree before acting, then diff_tree after, to see exactly what an action changed for a screen reader.";
-
-  server.registerTool(
-    "click_element",
-    {
-      title: "Click an element (by role + name)",
-      description:
-        "Dispatch a REAL click against the element matched by role + accessible name in Chromium's accessibility tree — the same view get_semantic_tree prints. Targeting is deliberately role+name only: if a control can't be reached that way, assistive technology can't reach it either, and that is itself an accessibility finding. For the full story call checkpoint_tree FIRST, then this, then diff_tree — the diff answers 'what did that click change for a screen reader?'. THE CLICK IS REAL: it can submit forms, toggle state, and NAVIGATE — if it navigates, diff_tree reports the document was replaced rather than a diff, and you re-checkpoint. If several nodes match, the error lists them; pass nth to pick one. Chromium only. See also type_text and focus_element.",
-      inputSchema: {
-        role: actRole,
-        name: actName,
-        nth: actNth,
-        session: sessionParam,
-      },
-      annotations: {
-        readOnlyHint: false,
-        destructiveHint: false,
-        idempotentHint: false,
-        openWorldHint: true,
-      },
-    },
-    async ({ role, name, nth, session }) =>
-      withSession(session, async (rec) => {
-        const target = refuseIfDisabled(
-          await resolveTargetFresh(rec, role, name, nth),
-          "click",
-        );
-        if (!target.ok) return target.res;
-        const result = await rec.session.act({
-          nodeId: target.nodeId,
-          action: "click",
-        });
-        if (!result.success) return actFailure("click_element", result.error);
-        return text(
-          `Clicked ${describeTarget(target.candidate)}.` + diffSteer(rec),
-        );
-      }),
-  );
-
-  server.registerTool(
-    "type_text",
-    {
-      title: "Type into a text field (by role + name)",
-      description:
-        "Set the value of the text field matched by role + accessible name in the native accessibility tree (role is usually 'textbox', 'searchbox', or 'combobox'). REPLACES the field's current value — via the prototype value setter plus input/change events, so framework-controlled inputs (React et al.) register it. The result NEVER echoes the typed text or any field content; diff_tree afterwards shows what the field holds the way a screen reader announces it (a sensitive field as \"[redacted]\"; nothing at all when the server runs with REAL_A11Y_REDACT_INPUT=1). There is deliberately NO credential parameter and this tool must NOT be used to log in — a password or token typed here would enter the agent's context; for pages behind auth the user starts the server with REAL_A11Y_MCP_STORAGE_STATE or REAL_A11Y_MCP_CDP instead. Pair with checkpoint_tree / diff_tree to see what the input changed (a combobox popping options, an inline error appearing). Chromium only.",
-      inputSchema: {
-        role: actRole,
-        name: actName,
-        nth: actNth,
-        text: z
-          .string()
-          .describe(
-            "The text to enter. Replaces the field's current value. Never echoed back in the result.",
-          ),
-        session: sessionParam,
-      },
-      annotations: {
-        readOnlyHint: false,
-        destructiveHint: false,
-        idempotentHint: true,
-        openWorldHint: false,
-      },
-    },
-    async ({ role, name, nth, text: value, session }) =>
-      withSession(session, async (rec) => {
-        const target = refuseIfDisabled(
-          await resolveTargetFresh(rec, role, name, nth),
-          "input",
-        );
-        if (!target.ok) return target.res;
-        const result = await rec.session.act({
-          nodeId: target.nodeId,
-          action: "type",
-          payload: { value },
-        });
-        if (!result.success) return actFailure("type_text", result.error);
-        return text(
-          `Typed into ${describeTarget(target.candidate)} — the field's previous value was replaced.` +
-            diffSteer(rec),
-        );
-      }),
-  );
-
-  server.registerTool(
-    "focus_element",
-    {
-      title: "Focus an element (by role + name)",
-      description:
-        "Move REAL keyboard focus to the element matched by role + accessible name in the native accessibility tree. The result says whether the target is a text field, so a type_text can follow. Useful alongside get_tab_order for focus-order work, and for checking what a keyboard user would land on. Chromium only. See also click_element and type_text.",
-      inputSchema: {
-        role: actRole,
-        name: actName,
-        nth: actNth,
-        session: sessionParam,
-      },
-      annotations: {
-        readOnlyHint: false,
-        destructiveHint: false,
-        idempotentHint: true,
-        openWorldHint: false,
-      },
-    },
-    async ({ role, name, nth, session }) =>
-      withSession(session, async (rec) => {
-        const target = refuseIfDisabled(
-          await resolveTargetFresh(rec, role, name, nth),
-          "focus",
-        );
-        if (!target.ok) return target.res;
-        const result = await rec.session.act({
-          nodeId: target.nodeId,
-          action: "focus",
-        });
-        if (!result.success) return actFailure("focus_element", result.error);
-        const inputNote = result.requiresInput
-          ? ` It is a text field (${result.inputType ?? "text"}) — follow with type_text to enter a value.`
-          : "";
-        return text(
-          `Focused ${describeTarget(target.candidate)}.` +
-            inputNote +
-            diffSteer(rec),
-        );
-      }),
-  );
+  registerActTools({ server, sessionParam, withSession, readTree });
 
   // ── Sessions (lifecycle view) ────────────────────────────────────────────
   server.registerTool(
