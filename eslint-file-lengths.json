@@ -8,6 +8,5 @@
   "packages/extension/src/native/native-core.ts": 1731,
   "packages/extension/src/sidepanel/App.tsx": 1854,
   "packages/extension/src/sidepanel/NativeTreeView.tsx": 1015,
-  "packages/mcp/src/server.ts": 615,
   "scripts/pr-risk.mjs": 1183
 }
