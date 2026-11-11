@@ -78,6 +78,10 @@ export {
   useTreeChanges,
   type ChangeNotice,
 } from "./hooks/useTreeChanges.js";
+// The marks for a tree of the DOM producer: TreeView's, and the Storybook
+// addon's panel's.
+export { shownChanges, usePageChanges } from "./hooks/usePageChanges.js";
+export { semanticTreeRules } from "./semantic-tree-diff.js";
 export {
   ChangeNoticeRegion,
   TreeChangesBar,

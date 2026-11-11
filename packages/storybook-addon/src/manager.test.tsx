@@ -33,6 +33,8 @@ const sb = vi.hoisted(() => {
      * every panel, so a panel mounted afresh reads back what the last one set.
      */
     addonState: new Map<string, unknown>(),
+    /** The current story's parameters, by key (`useParameter`). */
+    parameters: new Map<string, unknown>(),
     channel: {
       on(event: string, cb: Listener) {
         const set = listeners.get(event) ?? new Set();
@@ -76,13 +78,18 @@ vi.mock("storybook/manager-api", () => ({
     );
     return [state, set] as const;
   },
+  useParameter<S>(key: string, initial: S) {
+    return sb.parameters.has(key) ? (sb.parameters.get(key) as S) : initial;
+  },
 }));
 
-// The real TreePanel is a Preact app; what these tests are about is when the
-// panel asks for a tree and in which mode, so it only records its props.
+// The real tree is a Preact app (`story-tree.test.ts` renders it); what these
+// tests are about is when the panel asks for a tree, in which mode, and which
+// updates it hands the tree to compare, so it only records its props.
 const ui = vi.hoisted(() => ({
   props: null as null | {
-    treeData: unknown;
+    read: { payload: unknown; tree: unknown; generation: number };
+    markChanges: boolean;
     viewMode: string;
     onViewModeChange: (mode: string) => void;
     defaultShowFullNames?: boolean;
@@ -91,11 +98,14 @@ const ui = vi.hoisted(() => ({
   preserveExpandedState: vi.fn(),
 }));
 
-vi.mock("@real-a11y-dev/semantic-navigator-ui", () => ({
-  TreePanel: (props: NonNullable<typeof ui.props>) => {
+vi.mock("./story-tree.js", () => ({
+  StoryTree: (props: NonNullable<typeof ui.props>) => {
     ui.props = props;
     return null;
   },
+}));
+
+vi.mock("@real-a11y-dev/semantic-navigator-ui", () => ({
   preserveExpandedState: ui.preserveExpandedState,
 }));
 
@@ -187,6 +197,7 @@ beforeEach(() => {
   // A fresh manager per test: the store would otherwise carry one test's mode
   // into the next.
   sb.addonState.clear();
+  sb.parameters.clear();
   observers.clear();
   ui.props = null;
   ui.preserveExpandedState.mockClear();
@@ -234,18 +245,18 @@ describe("panel visibility", () => {
     await renderPanel(true);
     await resize(600, 300);
     await fromPreview(EVENTS.TREE_UPDATED, treeUpdate());
-    const first = ui.props!.treeData;
+    const first = ui.props!.read.tree;
 
     await resize(0, 0);
     await resize(600, 300);
     // Still mounted, so still showing the last tree until the fresh one lands…
-    expect(ui.props!.treeData).toBe(first);
+    expect(ui.props!.read.tree).toBe(first);
 
     await fromPreview(EVENTS.TREE_UPDATED, treeUpdate());
     // …which inherits the rows collapsed in it.
     expect(ui.preserveExpandedState).toHaveBeenLastCalledWith(
       first,
-      ui.props!.treeData,
+      ui.props!.read.tree,
     );
   });
 
@@ -298,6 +309,91 @@ describe("Show full names", () => {
     await resize(600, 300);
     await fromPreview(EVENTS.TREE_UPDATED, treeUpdate());
     expect(ui.props!.defaultShowFullNames).toBe(true);
+  });
+});
+
+describe("change marks", () => {
+  /** The generation of each update handed to the tree, in order. */
+  const generations: number[] = [];
+  async function update(mode = "a11y") {
+    await fromPreview(EVENTS.TREE_UPDATED, treeUpdate(mode));
+    generations.push(ui.props!.read.generation);
+  }
+  /** Whether each update starts a run of its own: the first always does. */
+  const freshness = () =>
+    generations.map((g, i) => i === 0 || g !== generations[i - 1]);
+
+  beforeEach(() => {
+    generations.length = 0;
+  });
+
+  it("compares each update with the one before it", async () => {
+    await renderPanel(true);
+    await resize(600, 300);
+    await update();
+    await update();
+    await update();
+    expect(freshness()).toEqual([true, false, false]);
+  });
+
+  // Nothing the story did while the panel was hidden was heard.
+  it("starts over when the panel is shown again", async () => {
+    await renderPanel(true);
+    await resize(600, 300);
+    await update();
+    await resize(0, 0);
+    await resize(600, 300);
+    await update();
+    expect(freshness()).toEqual([true, true]);
+  });
+
+  // Another story's elements share no ids with this one's.
+  it("starts over at another story", async () => {
+    await renderPanel(true);
+    await resize(600, 300);
+    await update();
+    await fromPreview("storyChanged", "button--secondary");
+    await update();
+    await update();
+    expect(freshness()).toEqual([true, true, false]);
+  });
+
+  // A reloaded preview names its elements afresh, from the same ids.
+  it("starts over when the preview reloads", async () => {
+    await renderPanel(true);
+    await resize(600, 300);
+    await update();
+    await fromPreview(EVENTS.PREVIEW_READY);
+    await update();
+    expect(freshness()).toEqual([true, true]);
+    // Nor are the rows opened in the old tree carried by id to the new one.
+    expect(ui.preserveExpandedState).toHaveBeenCalledTimes(0);
+  });
+
+  // React renders updates that come at once as one, which only the last
+  // reaches the tree of.
+  it("keeps a new run when React renders two of its updates as one", async () => {
+    await renderPanel(true);
+    await resize(600, 300);
+    await update();
+    await act(async () => {
+      sb.channel.emit("storyChanged", "button--secondary");
+      sb.channel.emit(EVENTS.TREE_UPDATED, treeUpdate());
+      sb.channel.emit(EVENTS.TREE_UPDATED, treeUpdate());
+    });
+    generations.push(ui.props!.read.generation);
+    expect(freshness()).toEqual([true, true]);
+  });
+
+  it("marks changes unless the story's parameters turn them off", async () => {
+    await renderPanel(true);
+    await resize(600, 300);
+    await update();
+    expect(ui.props!.markChanges).toBe(true);
+
+    sb.parameters.set("realA11y", { markChanges: false });
+    await renderPanel(true);
+    expect(ui.props!.markChanges).toBe(false);
   });
 });
 

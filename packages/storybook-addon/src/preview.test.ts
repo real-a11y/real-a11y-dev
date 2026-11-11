@@ -59,11 +59,20 @@ const { channel, observerState, extractorState } = vi.hoisted(() => {
       rootName: "",
       /** The mode the extractor was constructed with or last switched to. */
       mode: "",
+      /** Rows the mock extractor reports under the root, by id. */
+      rows: [] as string[],
+      /** Which of them are of the page around the story (`rootRowScope`). */
+      outside: [] as string[],
+      /** The story root's id: "root", unless a test widens the read past it. */
+      storyRootId: "root",
       reset() {
         this.constructed = 0;
         this.refreshCalls = 0;
         this.rootName = "";
         this.mode = "";
+        this.rows = [];
+        this.outside = [];
+        this.storyRootId = "root";
       },
     },
   };
@@ -73,7 +82,10 @@ vi.mock("storybook/preview-api", () => ({
   addons: { getChannel: () => channel },
 }));
 
-vi.mock("@real-a11y-dev/core", () => {
+vi.mock("@real-a11y-dev/core", async (importOriginal) => {
+  // The real one: what it hears is what these tests dispatch.
+  const { watchUserInput } =
+    await importOriginal<typeof import("@real-a11y-dev/core")>();
   class DomObserver {
     constructor(
       _root: Element,
@@ -100,8 +112,17 @@ vi.mock("@real-a11y-dev/core", () => {
       extractorState.refreshCalls += 1;
       // A fresh object graph every call, exactly like the real extractor: the
       // payloads are only ever equal by VALUE, never by identity.
+      const row = (id: string): [string, unknown] => [
+        id,
+        {
+          id,
+          a11y: { role: "button", name: id, states: {}, properties: {} },
+          ui: {},
+        },
+      ];
       return {
-        nodes: new Map([
+        nodes: new Map<string, unknown>([
+          ...extractorState.rows.map(row),
           [
             "root",
             {
@@ -146,6 +167,12 @@ vi.mock("@real-a11y-dev/core", () => {
     FocusManager,
     ActionDispatcher,
     getElementRefs: () => new WeakMap(),
+    getNodeId: () => extractorState.storyRootId,
+    rootRowScope: () => ({
+      has: (id: string) => !extractorState.outside.includes(id),
+      isRoot: (id: string) => id === "root",
+    }),
+    watchUserInput,
   };
 });
 
@@ -467,5 +494,70 @@ describe("preview: the beforeAll annotation", () => {
 
     channel.emit("storyRendered");
     expect(observerState.constructed).toBe(0);
+  });
+});
+
+describe("preview: what the panel's change marks need", () => {
+  it("says which rows are the story's", () => {
+    // A read widened to the page for a toast brings the page's header.
+    extractorState.rows = ["story", "header", "toast"];
+    extractorState.storyRootId = "story";
+    extractorState.outside = ["header", "root"];
+    const updates: TreeUpdatePayload[] = [];
+    channel.on(EVENTS.TREE_UPDATED, (payload) =>
+      updates.push(payload as TreeUpdatePayload),
+    );
+    channel.emit(EVENTS.REQUEST_TREE);
+    expect(updates[0]!.storyRows).toEqual({
+      rootId: "story",
+      outside: ["header", "root"],
+    });
+  });
+
+  it("says whether the story had rendered when the tree was read", () => {
+    const rendered: unknown[] = [];
+    channel.on(EVENTS.TREE_UPDATED, (payload) =>
+      rendered.push((payload as TreeUpdatePayload).storyRendered),
+    );
+    vi.useFakeTimers();
+    try {
+      channel.emit(EVENTS.REQUEST_TREE);
+      channel.emit("storyChanged");
+      // The story on its way in, read before it first renders…
+      vi.advanceTimersByTime(50);
+      // …and once it has.
+      channel.emit("storyRendered");
+      expect(rendered.slice(-2)).toEqual([false, true]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("tells the panel what the user does on the story, while it is open", () => {
+    const inputs: unknown[] = [];
+    channel.on(EVENTS.USER_INPUT, (input) => inputs.push(input));
+    const button = document.body.appendChild(document.createElement("button"));
+    const user = () => {
+      button.dispatchEvent(new Event("pointerdown", { bubbles: true }));
+      button.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Shift", bubbles: true }),
+      );
+      button.click();
+    };
+    try {
+      user();
+      expect(inputs).toEqual([]);
+
+      channel.emit(EVENTS.REQUEST_TREE);
+      user();
+      // A modifier key on its own does nothing.
+      expect(inputs).toEqual(["act", "click"]);
+
+      channel.emit(EVENTS.STOP_TREE);
+      user();
+      expect(inputs).toEqual(["act", "click"]);
+    } finally {
+      button.remove();
+    }
   });
 });

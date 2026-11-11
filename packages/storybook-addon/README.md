@@ -1,6 +1,6 @@
 # @real-a11y-dev/storybook-addon
 
-A Storybook panel that shows the semantic tree, heading outline, and tab sequence for every story — updated live while the panel is open (extraction stays idle when another addon tab is active).
+A Storybook panel that shows the semantic tree, heading outline, and tab sequence for every story — updated live while the panel is open (extraction stays idle when another addon tab is active), with what each update changed marked on the tree.
 
 Requires **Storybook 9, 10 or 11**. Storybook 9 folded `@storybook/manager-api`
 and `@storybook/preview-api` into the `storybook` package, so 8.x is not
@@ -40,6 +40,16 @@ export default definePreview({
 ```
 
 Without it the panel stays on "Waiting for story to render…".
+
+## Change marks
+
+The panel marks what each update of the story's tree changed: new and changed rows flash and keep a coloured edge, a bar under the tree counts the changes, and what a click or a key of yours on the story brought is said to a screen reader. Turn it off with a parameter, for every story in `.storybook/preview.ts` or for one:
+
+```ts
+export default {
+  parameters: { realA11y: { markChanges: false } },
+};
+```
 
 ## Docs
 

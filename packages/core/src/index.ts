@@ -45,8 +45,10 @@ export {
   STATE_ONLY_ROLES,
   PANEL_HOST_ATTRIBUTE,
   VALUELESS_INPUT_TYPES,
-  isOverlaySignal,
 } from "./extraction/dom-extractor.js";
+// @internal — which rows of a read are of the page a panel was given, for the
+// change marks; not a stability promise.
+export { rootRowScope, type RowScope } from "./extraction/row-scope.js";
 export { buildA11yTree, extractA11yTree } from "./extraction/a11y-extractor.js";
 // For a walk up the page's own DOM outside core, such as the extension's focus
 // sync: a `<form>` control named `parentElement` makes the plain read cycle.
@@ -91,6 +93,13 @@ export {
   LiveTreeExtractor,
   type LiveTreeExtractorOptions,
 } from "./observation/live-tree-extractor.js";
+// @internal — what the user does on a page, for the change marks; not a
+// stability promise.
+export {
+  isUserInput,
+  watchUserInput,
+  type UserInput,
+} from "./observation/user-input.js";
 
 // Search
 export {

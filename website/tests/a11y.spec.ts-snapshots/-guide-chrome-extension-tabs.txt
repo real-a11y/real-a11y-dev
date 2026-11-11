@@ -16,6 +16,7 @@ link "Reading the tree"
 link "inspector"
 link "<SemanticNavigator />"
 link "inspector"
+link "Storybook addon"
 link "setRoot()"
 table
 link "privacy policy"
