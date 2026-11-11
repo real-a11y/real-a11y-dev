@@ -3829,7 +3829,6 @@ describe("the direct-text fallback skips author-named roles", () => {
     ["img", `<div id="t" role="img">text img</div>`],
     // ARIA 1.3's `image` is a synonym of `img`: same role, same unnamed text.
     ["img", `<span id="t" role="image">🎉</span>`],
-    ["form", `<div id="t" role="form">Search: <input></div>`],
     ["navigation", `<nav id="t">Menu: <a href="#">Home</a></nav>`],
     ["main", `<main id="t">Welcome <a href="#">x</a></main>`],
     ["banner", `<header id="t">Site <a href="#">x</a></header>`],

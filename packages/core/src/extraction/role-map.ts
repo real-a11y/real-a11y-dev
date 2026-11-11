@@ -633,6 +633,13 @@ export function resolveRoleToken(token: string): string | undefined {
     : undefined;
 }
 
+/**
+ * `region` and `form` are not exposed as landmarks without a name (Core-AAM): an
+ * unnamed authored token is skipped, so `role="region group"` is a `group`.
+ */
+const satisfiesNameRequirement = (el: Element, role: string): boolean =>
+  (role !== "region" && role !== "form") || hasAccessibleName(el);
+
 /** The first token of a `role` value that resolves and that `accepts`. */
 function roleFromAttribute(
   value: string,
@@ -732,7 +739,10 @@ function hasRequiredContext(element: Element, role: string): boolean {
   for (let p = flatParentElement(element); p; p = flatParentElement(p)) {
     if (context.tags.has(safeTagName(p))) return true;
     const roleAttr = safeGetAttribute(p, "role");
-    const parentRole = roleAttr ? roleFromAttribute(roleAttr) : undefined;
+    // Gated like the parent's own role.
+    const parentRole = roleAttr
+      ? roleFromAttribute(roleAttr, (r) => satisfiesNameRequirement(p, r))
+      : undefined;
     if (parentRole && context.roles.has(parentRole)) return true;
     if (parentRole && context.through.has(parentRole)) continue;
     if (isGenericWrapper(p, roleAttr)) continue;
@@ -766,7 +776,9 @@ function explicitRoleOf(
   if (!value) return undefined;
   return roleFromAttribute(
     value,
-    checkContext ? (role) => hasRequiredContext(element, role) : undefined,
+    (role) =>
+      satisfiesNameRequirement(element, role) &&
+      (!checkContext || hasRequiredContext(element, role)),
   );
 }
 

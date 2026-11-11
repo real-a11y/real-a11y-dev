@@ -712,6 +712,70 @@ describe("getImplicitRole", () => {
     expect(getImplicitRole(el("<form></form>"))).toBe("generic");
   });
 
+  // Core-AAM: a region or form without an accessible name is not exposed as a
+  // landmark, and the next token of the role value is tried.
+  describe("an authored region or form role without an accessible name", () => {
+    it.each([
+      ['<div role="region">x</div>', "generic"],
+      ['<div role="form">x</div>', "generic"],
+      ['<div role="region group">x</div>', "group"],
+      ['<div role="form navigation">x</div>', "navigation"],
+      ['<div role="ReGiOn foo">x</div>', "generic"],
+      ['<nav role="region">x</nav>', "navigation"],
+      ['<nav role="form">x</nav>', "navigation"],
+      ['<section role="region">x</section>', "generic"],
+      ['<div role="region" aria-label="  ">x</div>', "generic"],
+      ['<div role="form" aria-labelledby="missing">x</div>', "generic"],
+    ])("resolves %s to %s", (html, role) => {
+      expect(getImplicitRole(el(html))).toBe(role);
+    });
+
+    it("reports no explicit role when the only token is skipped", () => {
+      expect(getExplicitRole(el('<div role="region">x</div>'))).toBeUndefined();
+      expect(getExplicitRole(el('<div role="form">x</div>'))).toBeUndefined();
+      expect(getExplicitRole(el('<div role="region group">x</div>'))).toBe(
+        "group",
+      );
+    });
+
+    it.each([
+      ['<div role="region" aria-label="Results">x</div>', "region"],
+      ['<div role="form" aria-label="Search">x</div>', "form"],
+      ['<div role="region" title="Results">x</div>', "region"],
+      ['<div role="form" title="Search">x</div>', "form"],
+      ['<div role="region group" aria-label="Results">x</div>', "region"],
+      ['<nav role="form" aria-label="Search">x</nav>', "form"],
+    ])("keeps the landmark of the named %s", (html, role) => {
+      expect(getImplicitRole(el(html))).toBe(role);
+      expect(getExplicitRole(el(html))).toBe(role);
+    });
+
+    it("keeps the landmark when aria-labelledby resolves", () => {
+      const host = document.createElement("div");
+      host.innerHTML =
+        '<span id="lbl">Payment</span><div id="t" role="form">x</div>';
+      document.body.appendChild(host);
+      try {
+        const t = host.querySelector("#t")!;
+        expect(getImplicitRole(t)).toBe("generic");
+        t.setAttribute("aria-labelledby", "lbl");
+        expect(getImplicitRole(t)).toBe("form");
+      } finally {
+        host.remove();
+      }
+    });
+
+    it("reads an unnamed region-group parent as the group it is for required context", () => {
+      // `group` is a context for listitem; an unnamed `region` is not a role.
+      // Gated, the parent is the `group` it resolves to on its own.
+      const parent = el(
+        '<div role="region group"><div role="listitem">x</div></div>',
+      );
+      expect(getImplicitRole(parent)).toBe("group");
+      expect(getImplicitRole(parent.firstElementChild!)).toBe("listitem");
+    });
+  });
+
   // A naming attribute only counts when it can produce a name. Chromium
   // exposes neither a form nor a region for any of these.
   describe("a naming attribute that names nothing", () => {
