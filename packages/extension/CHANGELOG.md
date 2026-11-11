@@ -21,6 +21,10 @@
 
 ### Patch Changes
 
+- **The TAB view names an `aria-placeholder` input.** An `<input aria-placeholder="Email">`
+  with no label, `title` or `placeholder` was listed as a `textbox` with no name;
+  it now reads "Email", the name HTML-AAM gives and Chrome's tree shows.
+  ([#629](https://github.com/real-a11y/real-a11y-dev/pull/629))
 - **The TAB view names a submit, reset or image input.** A `<input type="submit">`
   or `type="reset"` with no `value` was listed as `button` with no name, and an
   image input with no `alt` or `title` the same; they now read "Submit",
