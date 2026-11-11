@@ -1512,6 +1512,25 @@ describe("LiveTreeExtractor", () => {
       expect(gained.nodes).toEqual(extractDomTree(document.body).nodes);
     });
 
+    // An unnamed `region group` owner is a `group`, a context for list items;
+    // naming it makes it a `region`, which is not.
+    it("follows an aria-owns owner that is named or unnamed", async () => {
+      const named = await refreshAfter(
+        `<div id="owner" role="region group" aria-owns="t"></div><div id="t" role="listitem">x</div>`,
+        () =>
+          document.getElementById("owner")!.setAttribute("aria-label", "Rs"),
+      );
+      expect(roleOf(named, "t")).toBe("generic");
+      expect(named.nodes).toEqual(extractDomTree(document.body).nodes);
+
+      const unnamed = await refreshAfter(
+        `<div id="owner" role="region group" aria-label="Rs" aria-owns="t"></div><div id="t" role="listitem">x</div>`,
+        () => document.getElementById("owner")!.removeAttribute("aria-label"),
+      );
+      expect(roleOf(unnamed, "t")).toBe("listitem");
+      expect(unnamed.nodes).toEqual(extractDomTree(document.body).nodes);
+    });
+
     it("follows an ancestor that stops being a list", async () => {
       const result = await refreshAfter(
         `<div id="list" role="list"><div><div id="t" role="listitem">x</div></div></div>`,

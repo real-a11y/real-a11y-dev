@@ -21,6 +21,10 @@
 
 ### Patch Changes
 
+- **The TAB view no longer treats an unnamed `role="region"` or `role="form"` as
+  a landmark.** The extension re-bundles the updated role resolution: such an
+  element takes its next role token or its own role, as Chrome's tree does.
+  ([#630](https://github.com/real-a11y/real-a11y-dev/pull/630))
 - **The TAB view names an `aria-placeholder` input.** An `<input aria-placeholder="Email">`
   with no label, `title` or `placeholder` was listed as a `textbox` with no name;
   it now reads "Email", the name HTML-AAM gives and Chrome's tree shows.

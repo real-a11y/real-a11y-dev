@@ -198,10 +198,12 @@ export class LiveTreeExtractor {
             break;
           }
           // An owner's role can be the context that keeps an owned item its
-          // role, and the item is outside the owner's subtree. Through the
-          // prototype: the target can be a <form> that shadows `hasAttribute`.
+          // role, and the item is outside the owner's subtree. An unnamed
+          // `region` or `form` token resolves past itself, so a name attribute
+          // moves the role too. Through the prototype: the target can be a
+          // <form> that shadows `hasAttribute`.
           if (
-            attr === "role" &&
+            (attr === "role" || attr === "aria-label" || attr === "title") &&
             safeGetAttribute(target, "aria-owns") !== null
           ) {
             needsFull = true;
