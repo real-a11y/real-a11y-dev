@@ -25,7 +25,7 @@ import {
 } from "./clobber-safe.js";
 import { isEditable, isEditingHost } from "./editing.js";
 import { canExpand } from "./expanded-roles.js";
-import { addFieldStates } from "./field-states.js";
+import { addFieldStates, optionStates } from "./field-states.js";
 import {
   flatChildNodes,
   flatChildren,
@@ -2212,6 +2212,13 @@ export function expandedState(
  *   `button` role makes it a toggle button, with a `pressed`.
  * - A `<button>` or `<input>` that invokes a popover: `expanded` is whether
  *   the popover is showing, from {@link popoverExpanded}.
+ * - An `<option>` of a `<select>`, in the `option` role: `selected` is its
+ *   selectedness, HTML-AAM's mapping, and `false` when it isn't selected. An
+ *   authored `aria-selected` still wins when it is a valid boolean: Chromium
+ *   151 reports `aria-selected="true"` on an unselected option as selected,
+ *   and `"false"` on the selected one as not. A select the field-value rules
+ *   withhold ({@link isSensitiveField}) gets no `selected` at all, since
+ *   which option is chosen is the value they withhold.
  */
 export function nativeStates(
   element: Element,
@@ -2245,7 +2252,7 @@ export function nativeStates(
     const expanded = popoverExpanded(element, tag, role);
     return expanded === null ? {} : { expanded };
   }
-  if (tag !== "summary") return {};
+  if (tag !== "summary") return optionStates(element, tag, role);
   // Read only for a summary: on a <form>, a field named `parentElement`
   // shadows the property.
   const details = safeParentElement(element);

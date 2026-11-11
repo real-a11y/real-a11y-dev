@@ -1182,6 +1182,22 @@ describe("LiveTreeExtractor", () => {
       expect(result.nodes).toEqual(extractA11yTree(document.body).nodes);
     });
 
+    it("moves selected between the options a scripted selection touched", async () => {
+      const result = await refreshAfter(
+        `<main><select aria-label="Size"><option>Small</option><option id="large">Large</option></select></main>`,
+        () => {
+          (document.getElementById("large") as HTMLOptionElement).selected =
+            true;
+        },
+      );
+      const selectedOf = (name: string) =>
+        [...result.nodes.values()].find((n) => n.a11y.name === name)!.a11y
+          .states["selected"];
+      expect(selectedOf("Small")).toBe(false);
+      expect(selectedOf("Large")).toBe(true);
+      expect(result.nodes).toEqual(extractA11yTree(document.body).nodes);
+    });
+
     it("marks mixed the box a handler made indeterminate", async () => {
       const result = await refreshAfter(
         `<main><input id="all" type="checkbox" aria-label="All"><ul><li><input id="one" type="checkbox" aria-label="One"></li><li><input type="checkbox" aria-label="Two"></li></ul></main>`,
