@@ -171,6 +171,13 @@ describe("loadConfig", () => {
       /not found or unreadable/,
     );
   });
+
+  it("rejects a config file over the 1 MB cap before parsing it", () => {
+    // Not valid JSON either: the size check has to win.
+    expect(() => loadConfig(writeConfig("x".repeat(1_000_001)))).toThrow(
+      /config is larger than 1 MB/,
+    );
+  });
 });
 
 const PAGES = [{ name: "H", url: "http://x" }];
