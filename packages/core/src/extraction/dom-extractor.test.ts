@@ -7378,6 +7378,15 @@ describe("host-language name sources: label attribute, labelled output/meter/pro
     expect(nameOfTag(`<label>Lbl ${control}</label>`, tag)).toBe("Lbl");
   });
 
+  it("does not let a wrapping label name an <output> beside its control", () => {
+    expect(
+      nameOfTag(
+        '<label>Volume <input type="range"> <output>50</output></label>',
+        "output",
+      ),
+    ).toBe("50");
+  });
+
   it("names a text input from aria-placeholder, last", () => {
     expect(nameOfTag('<input aria-placeholder="Ph">', "input")).toBe("Ph");
     expect(
