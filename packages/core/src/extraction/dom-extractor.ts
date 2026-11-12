@@ -2,8 +2,8 @@ import type { SemanticNode, ExtractionResult, ActionType } from "../types.js";
 import { ElementRefMap, ELEMENT_REF_MAP_SHAPE } from "../utils/element-ref.js";
 import { getNodeId } from "../utils/id-generator.js";
 import { realmSingleton } from "../utils/realm-singleton.js";
-import { warnOutsideProduction } from "../utils/warn.js";
 
+import { withAriaOwnerIndex } from "./aria-owner.js";
 import {
   ariaBoolean,
   ariaCurrent,
@@ -68,6 +68,7 @@ import {
   isSubtreeHidden,
   type StyleCache,
 } from "./role-map.js";
+import { warnSkippedElement } from "./skipped-element.js";
 import { isSrOnly } from "./sr-only.js";
 
 export {
@@ -2373,23 +2374,6 @@ function focusedNodeId(
 }
 
 /**
- * Report — outside production — that an element was skipped mid-extraction.
- *
- * The walk wraps each element so a single pathological node (usually DOM
- * clobbering that slipped past the targeted guards) degrades to "skip this
- * node" instead of aborting the whole tree. That silent recovery is the right
- * runtime behavior, but the gap should stay debuggable, so we surface the
- * element and the error for inspection.
- */
-function warnSkippedElement(element: Element, error: unknown): void {
-  warnOutsideProduction(
-    "[real-a11y] Skipped an element during extraction to keep the rest of the tree intact:",
-    element,
-    error,
-  );
-}
-
-/**
  * Options for {@link extractDomTree}. Primarily for internal incremental
  * extraction; the public single-argument form is unchanged.
  */
@@ -2586,7 +2570,10 @@ export function extractDomTree(
   // Fresh cache per extraction — styles may have changed since the last
   // mutation-triggered run; never reuse across extractDomTree calls.
   const styleCache: StyleCache = new WeakMap();
-  const rootId = walk(startRoot, parentId, baseDepth, nodes, styleCache);
+  // One `aria-owns` index for the whole walk (see aria-owner.ts).
+  const rootId = withAriaOwnerIndex(() =>
+    walk(startRoot, parentId, baseDepth, nodes, styleCache),
+  );
 
   const includeFocused = options.includeFocused ?? !isPartial;
   const focusedId = includeFocused

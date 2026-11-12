@@ -21,6 +21,13 @@
 
 ### Patch Changes
 
+- **The TAB view's engine no longer slows down on pages that use `aria-owns`
+  at scale.** The extension re-bundles the updated extractor, which now looks
+  up an `aria-owns` owner in one index per extraction instead of rescanning the
+  page for every orphaned list item, option or tree item. Nothing the side
+  panel renders changes
+  ([#637](https://github.com/real-a11y/real-a11y-dev/pull/637)).
+
 - **The TAB view's engine now reads a native `<select>` option's `selected`
   state.** The extension re-bundles the updated extractor. Nothing the side
   panel renders changes: its A11Y view shows Chromium's own tree, which already
