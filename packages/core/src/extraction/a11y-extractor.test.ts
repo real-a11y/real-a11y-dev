@@ -441,6 +441,17 @@ describe("extractA11yTree", () => {
     expect(all.some((n) => n.a11y.role === "heading")).toBe(true);
   });
 
+  it("promotes an interactive child of a presentational table's caption", () => {
+    const { nodes } = extractA11yTree(
+      createPage(
+        `<table role="presentation"><caption>Cap <a href="#x">more</a></caption><tbody><tr><td>x</td></tr></tbody></table>`,
+      ),
+    );
+    const all = Array.from(nodes.values());
+    expect(all.some((n) => n.a11y.role === "caption")).toBe(false);
+    expect(all.some((n) => n.a11y.role === "link")).toBe(true);
+  });
+
   it("does not expose a caption under a presentational table", () => {
     for (const role of ["none", "presentation"]) {
       const { nodes } = extractA11yTree(
@@ -527,6 +538,7 @@ describe("extractA11yTree", () => {
       expect(allNodes.some((n) => n.a11y.name === "Open support tickets")).toBe(
         true,
       );
+      expect(allNodes.some((n) => n.a11y.role === "caption")).toBe(true);
     }
   });
 
