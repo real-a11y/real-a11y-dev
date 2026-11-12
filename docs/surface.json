@@ -2674,7 +2674,7 @@
     },
     {
       "bin": [],
-      "description": "ARIA semantics validation for the Semantic Navigator accessibility tree — per-node rules plus tree-level relationship checks (interactive nesting, required context / owned). aria-query-backed, so it never drifts from the spec.",
+      "description": "ARIA semantics validation for the Semantic Navigator accessibility tree — per-node rules plus tree-level relationship checks (interactive nesting, required context / owned). aria-query-backed, with a small correction layer where aria-query differs from WAI-ARIA 1.2.",
       "dir": "validate",
       "exports": [
         "."
