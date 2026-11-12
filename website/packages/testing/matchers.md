@@ -100,7 +100,7 @@ Found 1 accessibility issue:
 
 ## `toBeValidA11yTree()`
 
-Asserts the extracted accessibility tree has no ARIA **errors** — invalid roles, roles the browser discards, missing required accessible names, and relationship violations (interactive nesting, presentational-children misuse). Backed by `@real-a11y-dev/validate`. Advisory **warnings** don't fail it — only errors do.
+Asserts the extracted accessibility tree has no ARIA **errors** — invalid roles (DPUB-ARIA `doc-*` and Graphics-ARIA `graphics-*` roles count as valid), roles the browser discards, missing required accessible names, and relationship violations (interactive nesting, presentational-children misuse). Backed by `@real-a11y-dev/validate`. Advisory **warnings** don't fail it — only errors do.
 
 ```ts
 expect(container).toBeValidA11yTree();

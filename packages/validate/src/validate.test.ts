@@ -1,3 +1,4 @@
+import { roles as ariaRoles } from "aria-query";
 import { describe, it, expect } from "vitest";
 
 import {
@@ -190,6 +191,32 @@ describe("aria-schema", () => {
   it("recognizes concrete roles and rejects unknown ones", () => {
     expect(isValidRole("button")).toBe(true);
     expect(isValidRole("definitely-not-a-role")).toBe(false);
+  });
+
+  it("accepts every DPUB-ARIA and Graphics-ARIA module role", () => {
+    const module = [...ariaRoles.keys()].filter((r) =>
+      /^(doc|graphics)-/.test(r),
+    );
+    expect(module.length).toBeGreaterThan(40);
+    for (const r of module) expect(isValidRole(r)).toBe(true);
+    // deprecated DPUB roles are valid roles
+    expect(isValidRole("doc-biblioentry")).toBe(true);
+    expect(isValidRole("doc-endnote")).toBe(true);
+  });
+
+  it("still rejects abstract roles and engine/author-invented tokens", () => {
+    for (const r of ["widget", "roletype", "video", "Iframe", "doc-nope"])
+      expect(isValidRole(r)).toBe(false);
+  });
+
+  it("does not report module roles as invalid", () => {
+    for (const role of ["doc-toc", "graphics-document", "doc-pagebreak"]) {
+      const map = buildMap([{ role, name: "x" }]);
+      const issues = validateNode(find(map, role), map);
+      expect(issues.some((i) => /not a valid ARIA role/.test(i.message))).toBe(
+        false,
+      );
+    }
   });
 
   it("knows which roles have presentational children", () => {

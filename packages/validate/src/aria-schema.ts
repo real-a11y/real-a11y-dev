@@ -66,16 +66,13 @@ export interface RoleMeta {
  * Concrete, author-usable roles only. Abstract roles (`widget`, `roletype`,
  * `input`, …) are structural in the ARIA taxonomy and must never be set on a
  * real node, so we filter them out — this is the "official roles only" rule.
+ * The DPUB-ARIA (`doc-*`) and Graphics-ARIA (`graphics-*`) module roles are W3C
+ * Recommendations aria-query carries, so they are valid here too.
  */
 export const CONCRETE_ROLES: string[] = [...ariaRoles.keys()]
   .filter((r) => {
     const def = ariaRoles.get(r);
-    return (
-      def &&
-      !def.abstract &&
-      !r.startsWith("doc-") &&
-      !r.startsWith("graphics-")
-    );
+    return def && !def.abstract;
   })
   .sort();
 
