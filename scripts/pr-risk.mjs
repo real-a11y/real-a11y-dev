@@ -1282,7 +1282,7 @@ const FIELD_VALUE_GATES = [
   // per group: the list is joined with `|`.
   "redactInput|REAL_A11Y_REDACT_INPUT",
   "strictValueRoots|nodesInsideEditable|redactEditableContent|withoutEditableContent",
-  "holdsTypedText|nameText|insideEditor|inChoiceField|holdsEnteredValue",
+  "holdsTypedText|nameText|insideEditor|inChoiceField|holdsEnteredValue|hasAXText",
   "withholdsState|withholdStates|withheldAttributes|textPreviews|forcesFullExtraction|STRICT_DOM_ADAPTER",
   // The extension's native path, which reads a live value and redacts it in
   // the page (`extension/src/native/native-core.ts`) for the roles in its
