@@ -186,11 +186,6 @@
       "count": 2
     }
   },
-  "packages/core/src/utils/controls-index.ts": {
-    "complexity": {
-      "count": 1
-    }
-  },
   "packages/example-patterns/src/chart/ChartCorrect.tsx": {
     "max-lines-per-function": {
       "count": 1
