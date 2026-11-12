@@ -106,6 +106,8 @@ export function holdsEnteredValue(
 ): boolean {
   return (
     tagName.toLowerCase() !== "input" ||
-    !VALUELESS_INPUT_TYPES.has((type ?? "text").trim().toLowerCase())
+    // Lower-cased, never trimmed: a browser matches the keyword ignoring case
+    // only, so `type=" submit "` is a text field, and must count as entered.
+    !VALUELESS_INPUT_TYPES.has((type ?? "text").toLowerCase())
   );
 }

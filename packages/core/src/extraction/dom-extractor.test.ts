@@ -22,6 +22,7 @@ import {
 } from "./dom-extractor.js";
 import { idScope } from "./flat-tree.js";
 import {
+  holdsEnteredValue,
   isSensitiveField,
   isSensitiveFieldAttributes,
   SENSITIVE_AUTOCOMPLETE_TOKENS,
@@ -5337,6 +5338,14 @@ describe("strict mode (redactInput, ADR-0001)", () => {
     expect(tip.a11y.value).toBeUndefined();
     expect(named(true, "Volume").dom?.attributes.value).toBeUndefined();
     expect(named(true, "Country").dom?.attributes.value).toBeUndefined();
+    // A type the browser doesn't know, padding included, is a text field.
+    const padded = page(
+      `<input type=" submit " aria-label="Code" value="typed">`,
+    );
+    const code = [
+      ...extractDomTree(padded, { redactInput: true }).nodes.values(),
+    ].find((n) => n.a11y.name === "Code")!;
+    expect(code.dom?.attributes.value).toBeUndefined();
   });
 
   it("keeps a name the page's markup gave, inside an editor or around one", () => {
@@ -5404,6 +5413,18 @@ describe("strict mode (redactInput, ADR-0001)", () => {
     const city = [...loose.nodes.values()].find((n) => n.a11y.name === "City")!;
     expect(city.a11y.value).toBe("Lima");
     expect(city.dom?.attributes.value).toBe("Lima");
+  });
+
+  it("knows a field's value was entered from its tag and type, failing closed", () => {
+    // Both producers ask this; the native one has only CDP's attributes.
+    expect(holdsEnteredValue("INPUT", undefined)).toBe(true);
+    expect(holdsEnteredValue("input", "Email")).toBe(true);
+    expect(holdsEnteredValue("textarea", null)).toBe(true);
+    expect(holdsEnteredValue("select", "submit")).toBe(true);
+    for (const type of ["submit", "RESET", "button", "checkbox", "radio"])
+      expect(holdsEnteredValue("input", type), type).toBe(false);
+    // Browsers ignore the keyword's case, not padding around it.
+    expect(holdsEnteredValue("input", " submit ")).toBe(true);
   });
 
   it("stamps a strict tree, from either extractor, and only a strict one", () => {

@@ -11,7 +11,6 @@
 import type { SemanticNode } from "../types.js";
 
 import {
-  safeGetAttribute,
   safeOwnerDocument,
   safeParentElement,
   safeTagName,
@@ -162,8 +161,10 @@ export function withholdEntered(
   delete node.a11y.value;
   const attributes = node.dom?.attributes ?? {};
   const tag = safeTagName(element);
-  if (holdsEnteredValue(tag, safeGetAttribute(element, "type")))
-    delete attributes["value"];
+  // An input's `type` property, the keyword the browser resolved: any value it
+  // doesn't know, padded or not, is a text field.
+  const type = tag === "input" ? (element as HTMLInputElement).type : null;
+  if (holdsEnteredValue(tag, type)) delete attributes["value"];
   delete attributes["aria-valuenow"];
   if (role === "option" && inChoiceField(element))
     delete node.a11y.states["selected"];
