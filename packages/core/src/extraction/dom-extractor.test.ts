@@ -5290,8 +5290,53 @@ describe("strict mode (redactInput, ADR-0001)", () => {
       `<div contenteditable><h2>Typed title</h2><p>Typed body</p></div>`,
       "p",
     );
+    // Named by its own text alone, as the native producer's text runs are:
+    // that one blanks them, so the paragraph reads unnamed in both trees.
     expect(para.loose.a11y.name).toBe("Typed body");
-    expect(para.strict.a11y.name).toBe("[redacted]");
+    expect(para.strict.a11y.name).toBe("");
+  });
+
+  it("treats a designMode document as one editor", () => {
+    // jsdom has no designMode; Chromium's own is pinned in the testing e2e.
+    Object.defineProperty(document, "designMode", {
+      value: "on",
+      configurable: true,
+    });
+    try {
+      const { loose, strict } = both(
+        `<h2>Draft: <span>typed</span></h2><button>typed label</button>`,
+        "button",
+      );
+      expect(loose.a11y.name).toBe("typed label");
+      expect(strict.a11y.name).toBe("[redacted]");
+    } finally {
+      delete (document as { designMode?: string }).designMode;
+    }
+  });
+
+  it("says no option of a choice field is selected, and drops a range's position", () => {
+    const root = page(
+      `<select aria-label="Country"><option>Peru</option><option selected>Spain</option></select>` +
+        `<div role="listbox" aria-label="Size"><div role="option" aria-selected="true">L</div></div>` +
+        `<div role="slider" aria-label="Tip" aria-valuenow="18" aria-valuemin="0" aria-valuemax="30" tabindex="0"></div>` +
+        `<input type="range" aria-label="Volume" value="7">`,
+    );
+    const nodes = (strict: boolean) => [
+      ...extractDomTree(root, { redactInput: strict }).nodes.values(),
+    ];
+    const named = (strict: boolean, name: string) =>
+      nodes(strict).find((n) => n.a11y.name === name)!;
+    for (const option of ["Spain", "L"]) {
+      expect(named(false, option).a11y.states.selected, option).toBe(true);
+      expect(named(true, option).a11y.states.selected, option).toBeUndefined();
+    }
+    expect(named(false, "Tip").dom?.attributes["aria-valuenow"]).toBe("18");
+    const tip = named(true, "Tip");
+    expect(tip.dom?.attributes["aria-valuenow"]).toBeUndefined();
+    expect(tip.dom?.attributes["aria-valuemax"]).toBe("30"); // the page's range
+    expect(tip.a11y.value).toBeUndefined();
+    expect(named(true, "Volume").dom?.attributes.value).toBeUndefined();
+    expect(named(true, "Country").dom?.attributes.value).toBeUndefined();
   });
 
   it("keeps a name the page's markup gave, inside an editor or around one", () => {

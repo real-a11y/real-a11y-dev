@@ -397,6 +397,24 @@ test.describe("contenteditable rich-text widgets", () => {
     expect(failure).not.toContain("EDITOR-SECRET");
   });
 
+  test("strict mode on the DOM tree treats a designMode document as one editor", async ({
+    page,
+  }) => {
+    await page.setContent(`<main><button id="b"></button></main>`);
+    await page.evaluate(() => {
+      document.getElementById("b")!.textContent = "DESIGN-" + "SECRET";
+      document.designMode = "on";
+    });
+    expect(await (await attach(page)).treeSnapshot()).toContain(
+      'button "DESIGN-SECRET"',
+    );
+    const strict = await (
+      await attach(page, { redactInput: true })
+    ).treeSnapshot();
+    expect(strict).toContain('button "[redacted]"');
+    expect(strict).not.toContain("DESIGN-SECRET");
+  });
+
   test("a native <input role=combobox> serializes as a combobox (W3C APG example shape)", async ({
     page,
   }) => {

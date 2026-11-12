@@ -82,7 +82,7 @@ Everything else — `treeSnapshot()`, `outlineSnapshot()`, and every `assert*` m
 
 ### Strict mode (`redactInput`)
 
-`attach(page, { redactInput: true })` withholds every field value — sensitive or not — and all rich-text editor content (`contenteditable`, `designMode`): the editor's nodes keep their roles but read `[redacted]` (or unnamed, for a paragraph in the native tree) where they were named from the typed text, and a name outside the editor that would carry it — a heading or button around it, a control labelled by it — reads `[redacted]` whole. A name from the page's own markup (an `aria-label`, an image's `alt`) is kept. It is the same strict mode as the CLI's `--redact-input` and the MCP server's `REAL_A11Y_REDACT_INPUT=1`.
+`attach(page, { redactInput: true })` withholds every field value — sensitive or not — and all rich-text editor content (`contenteditable`, `designMode`): the editor's nodes keep their roles but read `[redacted]` (or unnamed, for a paragraph) where they were named from the typed text, and a name outside the editor that would carry it — a heading or button around it, a control labelled by it — reads `[redacted]` whole. A name from the page's own markup (an `aria-label`, an image's `alt`) is kept. It is the same strict mode as the CLI's `--redact-input` and the MCP server's `REAL_A11Y_REDACT_INPUT=1`.
 
 ```ts
 const sn = await attach(page, { redactInput: true });

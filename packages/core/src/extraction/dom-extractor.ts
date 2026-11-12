@@ -43,13 +43,6 @@ import * as host from "./host-names.js";
 import { buttonInputName } from "./input-names.js";
 import { associatedLabels, wrappingLabelText } from "./label-text.js";
 import { hasCaptionsTrack } from "./media-tracks.js";
-import {
-  nameText,
-  newNameRun,
-  withhold,
-  type NameRun,
-  type RedactInputOption,
-} from "./name-run.js";
 export { isTextVisible } from "./name-spacing.js";
 import {
   childTextWalk,
@@ -77,9 +70,21 @@ import {
   isSubtreeHidden,
   type StyleCache,
 } from "./role-map.js";
-import { isSensitiveField, REDACTED_VALUE } from "./sensitivity.js";
+import {
+  isSensitiveField,
+  REDACTED_VALUE,
+  VALUELESS_INPUT_TYPES,
+} from "./sensitivity.js";
 import { warnSkippedElement } from "./skipped-element.js";
 import { isSrOnly } from "./sr-only.js";
+import {
+  holdsTypedText,
+  nameText,
+  newNameRun,
+  withholdEntered,
+  type NameRun,
+  type RedactInputOption,
+} from "./strict-mode.js";
 
 export {
   OVERLAY_CANDIDATE_SELECTOR,
@@ -91,7 +96,7 @@ export {
 } from "./overlay-scope.js";
 
 export { PANEL_HOST_ATTRIBUTE } from "./overlay-reach.js";
-export type { RedactInputOption } from "./name-run.js";
+export type { RedactInputOption } from "./strict-mode.js";
 
 /** Tags to skip entirely during extraction */
 // track/source are media/picture metadata: HTML-AAM gives them no role and
@@ -1043,10 +1048,11 @@ function computeRawAccessibleName(
     ? trimAscii(getOwnText(element, styleCache))
     : getDirectTextContent(element);
   if (ownText) {
-    // In strict mode, an element inside an editor holds what a user typed, as
-    // `nameText` reads it. Its runs are inside too: an editable span is never
-    // a run (`isTextRun`), so this one check covers every text it gave.
-    if (run.redactInput && isEditable(element)) return withhold(run);
+    // In strict mode, an element inside an editor holds what a user typed, and
+    // this is its own text alone: the native producer blanks such text runs, so
+    // a typed paragraph reads unnamed there, and here. Its runs are inside too:
+    // an editable span is never a run (`isTextRun`).
+    if (run.redactInput && holdsTypedText(element)) return "";
     if (source) source.fromContent = true;
     return ownText;
   }
@@ -1537,17 +1543,6 @@ const TEXT_VALUE_ROLES: ReadonlySet<string> = new Set([
   "combobox",
 ]);
 
-/** `<input>` types with no announced value: a state, a name, or nothing. */
-export const VALUELESS_INPUT_TYPES: ReadonlySet<string> = new Set([
-  "checkbox",
-  "radio",
-  "button",
-  "submit",
-  "reset",
-  "image",
-  "hidden",
-]);
-
 /** The cap an announced value is cut to, with `…` — the same as text previews. */
 const VALUE_MAX = DESCENDANT_TEXT_MAX;
 
@@ -1766,22 +1761,8 @@ export const KEY_ATTRIBUTES = [
   "poster",
 ];
 
-/** True when what a field's `.value` holds is what a user entered. */
-function entersValue(element: Element, tag: string): boolean {
-  return (
-    tag !== "input" ||
-    !VALUELESS_INPUT_TYPES.has((element as HTMLInputElement).type)
-  );
-}
-
-/**
- * Get key attributes for display. In strict mode a field's live value is left
- * out, but not a button input's: its `value` is the page's label for it.
- */
-function getKeyAttributes(
-  element: Element,
-  redactInput: boolean,
-): Record<string, string> {
+/** Get key attributes for display */
+function getKeyAttributes(element: Element): Record<string, string> {
   const attrs: Record<string, string> = {};
 
   for (const name of KEY_ATTRIBUTES) {
@@ -1794,10 +1775,7 @@ function getKeyAttributes(
   // Read current value from DOM property (not HTML attribute) for form controls
   // getAttribute("value") returns the initial value; .value reflects user input
   const tag = safeTagName(element);
-  if (
-    (tag === "input" || tag === "textarea" || tag === "select") &&
-    !(redactInput && entersValue(element, tag))
-  ) {
+  if (tag === "input" || tag === "textarea" || tag === "select") {
     // Guarded: a page can make the `.value` getter throw, and this runs inside
     // `buildNode`'s one try — an unguarded read cost the page the whole node.
     let currentValue = "";
@@ -2425,9 +2403,7 @@ function buildNode(
 
     const id = getNodeId(element);
     const role = getImplicitRole(element);
-    const value = redactInput
-      ? undefined
-      : getAnnouncedValue(element, role, styleCache);
+    const value = getAnnouncedValue(element, role, styleCache);
     const actions = getActions(element);
     const focusable = isFocusable(element);
     const headingLevel = getHeadingLevel(element);
@@ -2440,7 +2416,7 @@ function buildNode(
       depth,
       dom: {
         tagName: tag,
-        attributes: getKeyAttributes(element, redactInput),
+        attributes: getKeyAttributes(element),
         // Media children are unrendered fallback + <track>/<source>
         // metadata — surfacing "Sorry, your browser doesn't support…"
         // as the node's text preview misrepresents what AT renders.
@@ -2490,6 +2466,7 @@ function buildNode(
       },
     };
 
+    if (redactInput) withholdEntered(element, role, node);
     return { id, node };
   } catch (error) {
     // One bad element must not take down the walk. Skip it and its subtree;

@@ -82,3 +82,30 @@ export function isSensitiveField(element: Element): boolean {
     autocomplete: safeGetAttribute(element, "autocomplete"),
   });
 }
+
+/** `<input>` types with no announced value: a state, a name, or nothing. */
+export const VALUELESS_INPUT_TYPES: ReadonlySet<string> = new Set([
+  "checkbox",
+  "radio",
+  "button",
+  "submit",
+  "reset",
+  "image",
+  "hidden",
+]);
+
+/**
+ * True when what a field's `value` holds is what a user entered: any form
+ * field but an `<input>` whose type has no announced value (a button's
+ * `value` is the page's label for it, a checkbox's its form value). Read from
+ * the tag name and `type` attribute alone, so both producers ask it alike.
+ */
+export function holdsEnteredValue(
+  tagName: string,
+  type: string | null | undefined,
+): boolean {
+  return (
+    tagName.toLowerCase() !== "input" ||
+    !VALUELESS_INPUT_TYPES.has((type ?? "text").trim().toLowerCase())
+  );
+}

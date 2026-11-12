@@ -40,16 +40,17 @@ export {
   RANGE_VALUE_ROLES,
   STATE_ONLY_ROLES,
   PANEL_HOST_ATTRIBUTE,
-  VALUELESS_INPUT_TYPES,
   type ExtractDomTreeOptions,
   type RedactInputOption,
 } from "./extraction/dom-extractor.js";
 // The field-value sensitivity policy (ADR-0001), one for every producer.
 export {
+  holdsEnteredValue,
   isSensitiveField,
   isSensitiveFieldAttributes,
   REDACTED_VALUE,
   SENSITIVE_AUTOCOMPLETE_TOKENS,
+  VALUELESS_INPUT_TYPES,
 } from "./extraction/sensitivity.js";
 // @internal — which rows of a read are of the page a panel was given, for the
 // change marks; not a stability promise.
