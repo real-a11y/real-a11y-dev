@@ -69,7 +69,6 @@ import {
   isSubtreeHidden,
   type StyleCache,
 } from "./role-map.js";
-
 import { warnSkippedElement } from "./skipped-element.js";
 import { isSrOnly } from "./sr-only.js";
 

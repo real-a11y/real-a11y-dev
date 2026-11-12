@@ -22,7 +22,7 @@
 ### Patch Changes
 
 - **Names keep a non-breaking space.** The extension re-bundles the updated
-  extractor and native normalizer, so a name or description that carries a
+  extractor and native normalizer, so a name that carries a
   U+00A0 now shows it as Chromium reports it, instead of an ASCII space (and
   no longer drops one at either end). Tabs, line breaks and runs of ASCII
   spaces still fold to one space. (PR_LINK_TODO)

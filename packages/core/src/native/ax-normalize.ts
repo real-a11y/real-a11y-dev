@@ -119,13 +119,13 @@ function isKept(
   // never names it — see {@link carriesValue}.
   if (NATIVE_AX_DROP_UNLESS_NAMED.has(role)) {
     return (
-      (node.name?.value ?? "").trim() !== "" ||
+      collapseWhitespace(node.name?.value ?? "") !== "" ||
       isEditingRoot(node, byId) ||
       carriesValue(node)
     );
   }
   if (NATIVE_AX_DROP_WHEN_BARE.has(role)) {
-    if ((node.name?.value ?? "").trim() !== "") return true;
+    if (collapseWhitespace(node.name?.value ?? "") !== "") return true;
     return (node.properties ?? []).some(
       (p) =>
         (p.name === "focusable" && p.value?.value === true) ||
