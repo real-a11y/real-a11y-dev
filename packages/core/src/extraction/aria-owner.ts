@@ -62,8 +62,8 @@ function ownersByScope(scope: Document | ShadowRoot): Map<string, Element> {
   return owners;
 }
 
-export /** The first element whose `aria-owns` names `element`, in its id scope. */
-function ariaOwner(element: Element): Element | null {
+/** The first element whose `aria-owns` names `element`, in its id scope. */
+export function ariaOwner(element: Element): Element | null {
   const id = safeGetAttribute(element, "id");
   if (!id) return null;
   const scope = idScope(element);

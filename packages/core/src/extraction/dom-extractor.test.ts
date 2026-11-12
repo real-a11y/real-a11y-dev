@@ -7522,6 +7522,7 @@ describe("aria-owns owner index", () => {
     });
     extractDomTree(document.body);
     // 10 owners, 101 orphans: a scan per orphan would read 1000+.
+    expect(ownsReads).toBeGreaterThan(0);
     expect(ownsReads).toBeLessThanOrEqual(2 * 10);
   });
 
