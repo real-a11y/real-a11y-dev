@@ -7479,3 +7479,70 @@ describe("the selected state of a native <option>", () => {
     ]);
   });
 });
+
+describe("aria-owns owner index", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    document.body.innerHTML = "";
+  });
+
+  function ownsPage(lists: number, perList: number): string {
+    let html = "<main><h1>t</h1>";
+    for (let i = 0; i < lists; i++) {
+      const ids = Array.from({ length: perList }, (_, j) => `o${i}_${j}`);
+      html += `<div role="list" aria-owns="${ids.join(" ")}"></div>`;
+      for (const id of ids) html += `<div role="listitem" id="${id}">x</div>`;
+    }
+    return `${html}<div role="listitem" id="stray">x</div></main>`;
+  }
+
+  function roleCounts(): Map<string, number> {
+    const counts = new Map<string, number>();
+    for (const n of extractDomTree(document.body).nodes.values()) {
+      const role = n.a11y?.role ?? "";
+      counts.set(role, (counts.get(role) ?? 0) + 1);
+    }
+    return counts;
+  }
+
+  it("keeps owned items as listitems and an unowned orphan as generic", () => {
+    document.body.innerHTML = ownsPage(3, 4);
+    const counts = roleCounts();
+    expect(counts.get("listitem")).toBe(12);
+    expect(counts.get("generic") ?? 0).toBeGreaterThanOrEqual(1);
+  });
+
+  it("reads each owner's aria-owns once per extraction, not once per orphan", () => {
+    document.body.innerHTML = ownsPage(10, 10);
+    const orig = clobberSafe.safeGetAttribute;
+    let ownsReads = 0;
+    vi.spyOn(clobberSafe, "safeGetAttribute").mockImplementation((el, name) => {
+      if (name === "aria-owns") ownsReads++;
+      return orig(el, name);
+    });
+    extractDomTree(document.body);
+    // 10 owners, 101 orphans: a scan per orphan would read 1000+.
+    expect(ownsReads).toBeLessThanOrEqual(2 * 10);
+  });
+
+  it("lets the first owner in document order decide", () => {
+    document.body.innerHTML =
+      '<div role="menu" aria-owns="t"></div><div role="list" aria-owns="t"></div><div id="t" role="listitem">x</div>';
+    // The menu comes first and gives no list context, so it wins.
+    const roles = [...extractDomTree(document.body).nodes.values()].map(
+      (n) => n.a11y?.role,
+    );
+    expect(roles).not.toContain("listitem");
+  });
+
+  it("does not let an owner in a shadow root give context to the document", () => {
+    document.body.innerHTML =
+      '<div id="host"></div><main><div id="t" role="listitem">x</div></main>';
+    document.getElementById("host")!.attachShadow({ mode: "open" }).innerHTML =
+      '<div role="list" aria-owns="t"></div>';
+    const roles = [...extractDomTree(document.body).nodes.values()].map(
+      (n) => n.a11y?.role,
+    );
+    expect(roles).not.toContain("listitem");
+  });
+});

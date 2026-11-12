@@ -4,12 +4,12 @@
  * and HTML Accessibility API Mappings (https://w3c.github.io/html-aam/).
  */
 
+import { ariaOwner } from "./aria-owner.js";
 import { isAriaHiddenValue } from "./aria-tokens.js";
 import {
   safeGetAttribute,
   safeGetElementById,
   safeHidden,
-  safeQuerySelectorAll,
   safeTagName,
 } from "./clobber-safe.js";
 import {
@@ -709,19 +709,6 @@ function isGenericWrapper(element: Element, roleAttr: string | null): boolean {
   if (roleAttr) return false;
   const tag = safeTagName(element);
   return tag === "div" || tag === "span" || tag === "slot" || tag.includes("-");
-}
-
-/** The first element whose `aria-owns` names `element`, in its id scope. */
-function ariaOwner(element: Element): Element | null {
-  const id = safeGetAttribute(element, "id");
-  if (!id) return null;
-  for (const owner of safeQuerySelectorAll(idScope(element), "[aria-owns]")) {
-    const owns = safeGetAttribute(owner, "aria-owns") ?? "";
-    if (owns.trim().split(/\s+/).includes(id)) {
-      return owner;
-    }
-  }
-  return null;
 }
 
 /**
