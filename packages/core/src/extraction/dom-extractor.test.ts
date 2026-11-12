@@ -5489,7 +5489,10 @@ describe("strict mode (redactInput, ADR-0001)", () => {
         `<x-list role="listbox" aria-label="Veg"></x-list>` +
         // Owned by a listbox elsewhere in the page.
         `<div role="listbox" aria-label="Nut" aria-owns="o1"></div>` +
-        `<div id="o1" role="option" aria-selected="true">Almond</div>`,
+        `<div id="o1" role="option" aria-selected="true">Almond</div>` +
+        // In a listbox, and owned by a group elsewhere: the parent decides.
+        `<div role="listbox" aria-label="Tree"><div id="o2" role="option" aria-selected="true">Oak</div></div>` +
+        `<div role="group" aria-owns="o2"></div>`,
     );
     root.querySelector("x-select")!.attachShadow({ mode: "open" }).innerHTML =
       `<div role="listbox" aria-label="Fruit"><slot></slot></div>`;
@@ -5499,7 +5502,7 @@ describe("strict mode (redactInput, ADR-0001)", () => {
       [...extractDomTree(root, { redactInput: strict }).nodes.values()].find(
         (n) => n.a11y.name === name,
       )!;
-    for (const name of ["Apple", "Carrot", "Almond"]) {
+    for (const name of ["Apple", "Carrot", "Almond", "Oak"]) {
       expect(option(false, name).a11y.role, name).toBe("option");
       expect(option(false, name).a11y.states.selected, name).toBe(true);
       expect(option(true, name).a11y.states.selected, name).toBeUndefined();

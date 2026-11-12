@@ -552,6 +552,10 @@ describe("collectFindings — locators, context & severity", () => {
     // The editing host's id is the page's, and so is a link outside it.
     expect(strict[0]).toMatch(/^#ed > /);
     expect(strict[1]).toMatch(/href="\/help"/);
+    // listByRole locates its rows the same way.
+    expect(
+      listByRole(extractA11yTree(root, { redactInput: true }), "heading"),
+    ).not.toMatch(/secret/);
   });
 
   it("grades severity: interactive is error, heading order is warning", () => {

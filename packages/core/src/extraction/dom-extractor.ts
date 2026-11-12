@@ -945,7 +945,8 @@ function computeRawAccessibleName(
   const nameChild =
     tag === "fieldset" ? "legend" : tag === "details" ? "summary" : null;
   const nameEl = nameChild && element.querySelector(`:scope > ${nameChild}`);
-  if (nameEl) return trimAscii(getAccessibleTextContent(nameEl, run, styleCache));
+  if (nameEl)
+    return trimAscii(getAccessibleTextContent(nameEl, run, styleCache));
 
   // 4b. The `label` attribute names an <option> or <optgroup> (HTML-AAM).
   const attrName = host.labelAttributeName(element, tag);
@@ -1056,8 +1057,7 @@ function computeRawAccessibleName(
   // isn't `[redacted]`: each text node is asked, which also catches editor
   // text slotted into a shadow tree, where the element itself isn't editable.
   const own = run.redactInput ? newNameRun(true) : null;
-  const read = (node: Node) =>
-    own ? nameText(node, own) : node.textContent || "";
+  const read = own ? (node: Node) => nameText(node, own) : textOf;
   const ownText = readsTextRuns(role)
     ? trimAscii(getOwnText(element, styleCache, read))
     : getDirectTextContent(element, read);
@@ -1248,10 +1248,13 @@ export function textRunHost(element: Element): Element | null {
     : null;
 }
 
+/** A text node's text, as the default mode reads it into a name. */
+const textOf = (node: Node): string => node.textContent || "";
+
 /** Get direct text content of an element, excluding child element text */
 function getDirectTextContent(
   element: Element,
-  readText: (node: Node) => string = (node) => node.textContent || "",
+  readText: (node: Node) => string = textOf,
 ): string {
   let text = "";
   for (const child of flatChildNodes(element)) {

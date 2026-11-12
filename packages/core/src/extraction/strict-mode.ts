@@ -154,20 +154,26 @@ export function insideEditor(element: Element): boolean {
 
 /**
  * True for an option that a `<select>`, a combobox or a listbox holds. The
- * climb follows the tree the option's role was computed in: an `aria-owns`
- * owner before the parent, and flat-tree parents, so an option slotted into a
- * web component's listbox, or one inside a listbox host's shadow root, counts.
+ * climb reads the tree the option's role was computed in: flat-tree parents,
+ * so an option slotted into a web component's listbox, or one inside a
+ * listbox host's shadow root, counts; then the `aria-owns` owners met on the
+ * way. Either path reaching a choice field is enough, so a withheld selection
+ * never depends on which of the two the role rules preferred.
  */
 function inChoiceField(option: Element): boolean {
-  const seen = new Set<Element>();
-  let el: Element | null = option;
-  while (el !== null && !seen.has(el)) {
-    seen.add(el);
-    if (el !== option) {
+  const seen = new Set<Element>([option]);
+  const pending: Element[] = [option];
+  for (let start = pending.pop(); start; start = pending.pop()) {
+    for (let el: Element | null = start; el; el = flatParentElement(el)) {
+      const owner = ariaOwner(el);
+      if (owner && !seen.has(owner)) {
+        seen.add(owner);
+        pending.push(owner);
+      }
+      if (el === option) continue;
       const role = getImplicitRole(el);
       if (role === "combobox" || role === "listbox") return true;
     }
-    el = ariaOwner(el) ?? flatParentElement(el);
   }
   return false;
 }
