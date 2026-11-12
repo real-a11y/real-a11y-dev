@@ -34,7 +34,7 @@
 - **The TAB view re-bundles the updated extractor**, which gained a strict mode
   for the CLI, the MCP server and `@real-a11y-dev/testing`. The extension never
   turns it on, so nothing the side panel shows changes
-  ([#PR_NUMBER](https://github.com/real-a11y/real-a11y-dev/pull/PR_NUMBER)).
+  ([#638](https://github.com/real-a11y/real-a11y-dev/pull/638)).
 - **The TAB view's engine no longer slows down on pages that use `aria-owns`
   at scale.** The extension re-bundles the updated extractor, which now looks
   up an `aria-owns` owner in one index per extraction instead of rescanning the
