@@ -25,7 +25,7 @@
   re-bundles the updated extractor, which no longer drops a `caption` whose
   text is also the table's name. The side panel's tree is Chrome's own and
   already showed it, and the TAB view lists tab stops only, so nothing on
-  screen changes.
+  screen changes. ([#640](https://github.com/real-a11y/real-a11y-dev/pull/640))
 - **Names keep a non-breaking space.** The extension re-bundles the updated
   extractor and native normalizer, so a name that carries a
   U+00A0 now shows it as Chromium reports it, instead of an ASCII space (and
