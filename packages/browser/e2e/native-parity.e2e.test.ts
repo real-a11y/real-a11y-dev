@@ -540,6 +540,49 @@ describe("presentational table parts", () => {
   });
 });
 
+// HTML-AAM maps <caption> to a node of its own, even when its text is also the
+// table's name. The DOM producer once dropped it, so the two disagreed on every
+// captioned table. A presentational table loses its caption with the rest.
+describe("table caption", () => {
+  it("is kept by both producers when it names the table", async () => {
+    await session.open(
+      dataUrl(
+        `<main><table><caption>Sales</caption><thead><tr><th scope="col">Region</th></tr></thead>` +
+          `<tbody><tr><td>North</td></tr></tbody></table></main>`,
+      ),
+    );
+    const dom = await session.call<string>("treeSnapshot", "body", [
+      { markFocus: false },
+    ]);
+    const native = serializeTree(await session.nativeTree(), {
+      markFocus: false,
+    });
+    const lineAfterTable = (tree: string) => {
+      const lines = tree.split("\n");
+      const i = lines.findIndex((l) => /\btable "Sales"/.test(l));
+      return { found: i >= 0, next: lines[i + 1]?.trim() };
+    };
+    const d = lineAfterTable(dom);
+    const n = lineAfterTable(native);
+    expect(d.found, dom).toBe(true);
+    expect(n.found, native).toBe(true);
+    expect(d.next).toMatch(/^caption "Sales"/);
+    expect(d.next).toBe(n.next);
+  });
+
+  it("is not exposed by the DOM producer under a presentational table", async () => {
+    await session.open(
+      dataUrl(
+        `<main><table role="none"><caption>Cap</caption><tbody><tr><td>x</td></tr></tbody></table></main>`,
+      ),
+    );
+    const dom = await session.call<string>("treeSnapshot", "body", [
+      { markFocus: false },
+    ]);
+    expect(dom).not.toMatch(/\bcaption\b/);
+  });
+});
+
 // The DOM producer walks the flat tree through open shadow roots and slots,
 // as Chromium does. Before that, every node below came from native only.
 describe("web components reach the DOM producer", () => {

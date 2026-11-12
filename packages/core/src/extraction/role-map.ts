@@ -375,7 +375,9 @@ const ROLE_MAP: Record<string, RoleResolver> = {
   body: "generic",
   br: "generic",
   button: "button",
-  caption: "caption",
+  // WAI-ARIA 1.2 (presentation): a presentational table's caption is merely
+  // its label, so it loses its semantics with the table.
+  caption: (el) => tablePart(el, "caption"),
   code: "code",
   col: "generic",
   colgroup: "generic",

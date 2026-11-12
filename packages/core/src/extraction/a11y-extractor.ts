@@ -1,5 +1,4 @@
 import type { ExtractionResult, SemanticNode } from "../types.js";
-import { trimAscii } from "../utils/ascii-whitespace.js";
 
 import { extractDomTree, getElementRefs } from "./dom-extractor.js";
 import { isHiddenOnlyByVisibility } from "./visibility-hidden.js";
@@ -77,32 +76,6 @@ function hasInteractiveDescendant(
   return false;
 }
 
-/**
- * A caption is suppressed only when it actually supplied the table's name.
- * Keying on the tag alone deletes "Open support tickets" from
- * `<table aria-label="Escalations"><caption>Open support tickets</caption>`
- * — the words are on screen, Chrome keeps a caption node, and a heading or
- * `img alt` inside would vanish from heading-order / missing-alt audits.
- */
-function captionSuppliedTableName(
-  node: SemanticNode,
-  domNodes: Map<string, SemanticNode>,
-): boolean {
-  if (node.dom?.tagName !== "caption" || !node.parentId) return false;
-  const parent = domNodes.get(node.parentId);
-  if (parent?.dom?.tagName !== "table") return false;
-  // `aria-labelledby` is not in KEY_ATTRIBUTES, so it never appears on
-  // `dom.attributes`. `aria-label` does. Read labelledby from the live
-  // element or a matching-name labelledby table would look identical to
-  // "caption supplied the name" and the caption (and any heading / img
-  // inside it) would be deleted.
-  if (parent.dom.attributes["aria-label"]) return false;
-  const tableEl = getElementRefs().get(parent.id);
-  if (tableEl?.hasAttribute("aria-labelledby")) return false;
-  const captionName = trimAscii(node.a11y.name ?? "");
-  return !!captionName && parent.a11y.name === captionName;
-}
-
 /** What the second pass shares across every recursive call. */
 interface FilterContext {
   domNodes: Map<string, SemanticNode>;
@@ -135,12 +108,8 @@ function processNode(
     return element && isHiddenOnlyByVisibility(element) ? promote() : [];
   }
 
-  // See SUPPRESS_KEEP_INTERACTIVE. Caption is gated separately: it is only
-  // suppressed when it actually supplied the table's name.
-  if (
-    SUPPRESS_KEEP_INTERACTIVE.has(node.dom!.tagName) ||
-    captionSuppliedTableName(node, domNodes)
-  ) {
+  // See SUPPRESS_KEEP_INTERACTIVE.
+  if (SUPPRESS_KEEP_INTERACTIVE.has(node.dom!.tagName)) {
     // A name source Chromium can focus is more than a name: the <summary>
     // that toggles its <details> is a tab stop. It stays as a node of its
     // own, or the tab sequence and a [focused] marker have nothing to point
