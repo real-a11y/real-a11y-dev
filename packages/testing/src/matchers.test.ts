@@ -83,6 +83,17 @@ describe("toBeValidA11yTree", () => {
     expect(mount(`<button></button>`)).not.toBeValidA11yTree();
   });
 
+  it("accepts DPUB-ARIA and Graphics-ARIA roles", () => {
+    expect(
+      mount(
+        `<nav role="doc-toc" aria-label="Contents"><a href="#c1">One</a></nav>` +
+          `<hr role="doc-pagebreak" aria-label="12">` +
+          `<div role="graphics-document" aria-label="Chart">x</div>`,
+      ),
+    ).toBeValidA11yTree();
+    expect(mount(`<div role="video">x</div>`)).not.toBeValidA11yTree();
+  });
+
   it("passes realistic valid markup (landmarks, nav, list, links)", () => {
     expect(
       mount(`

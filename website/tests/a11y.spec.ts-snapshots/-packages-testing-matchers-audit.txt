@@ -108,8 +108,10 @@ main
   code "expect(element).toHaveNoUnlabeledInteractive() Found 1 accessibility issue: - Unlabeled interactive element: button <button>"
   heading "toBeValidA11yTree()" (level 2)
     code "toBeValidA11yTree()"
-  paragraph "Asserts the extracted accessibility tree has no ARIA — invalid roles, roles the browser discards, missing required accessible names, and relationship violations (interactive nesting, presentational-children misuse). Backed by . Advisory don't fail it — only errors do."
+  paragraph "Asserts the extracted accessibility tree has no ARIA — invalid roles (DPUB-ARIA and Graphics-ARIA roles count as valid), roles the browser discards, missing required accessible names, and relationship violations (interactive nesting, presentational-children misuse). Backed by . Advisory don't fail it — only errors do."
     strong "errors"
+    code "doc-*"
+    code "graphics-*"
     code "@real-a11y-dev/validate"
     strong "warnings"
   button "Copy Code"
