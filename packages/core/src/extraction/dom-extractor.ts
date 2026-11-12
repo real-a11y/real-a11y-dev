@@ -1,4 +1,5 @@
 import type { SemanticNode, ExtractionResult, ActionType } from "../types.js";
+import { collapseAscii, trimAscii } from "../utils/ascii-whitespace.js";
 import { ElementRefMap, ELEMENT_REF_MAP_SHAPE } from "../utils/element-ref.js";
 import { getNodeId } from "../utils/id-generator.js";
 import { realmSingleton } from "../utils/realm-singleton.js";
@@ -68,6 +69,7 @@ import {
   isSubtreeHidden,
   type StyleCache,
 } from "./role-map.js";
+
 import { warnSkippedElement } from "./skipped-element.js";
 import { isSrOnly } from "./sr-only.js";
 
@@ -330,10 +332,11 @@ function computeAccessibleDescription(
           : undefined;
       })
       .filter((t): t is string => !!t);
-    // Whitespace-normalized like a name (accname §4.3.2 step 4). The walk pads
+    // Whitespace-normalized like a name: ASCII whitespace only, so a U+00A0
+    // survives as Chromium and the WPT text-node cases keep it. The walk pads
     // any child with a box of its own so its text never glues to a neighbour;
     // without this a description read "X  S" where Chromium reads "X S".
-    if (texts.length) return texts.join(" ").replace(/\s+/g, " ").trim();
+    if (texts.length) return collapseAscii(texts.join(" "));
   }
   // 2. aria-description — inline string (ARIA 1.3+)
   const inline = safeGetAttribute(element, "aria-description");
@@ -345,7 +348,7 @@ function computeAccessibleDescription(
   const source: NameSource = {};
   if (title)
     computeAccessibleName(element, new Set(), styleCache, false, source);
-  return title && !source.fromTitle ? title.replace(/\s+/g, " ").trim() : "";
+  return title && !source.fromTitle ? collapseAscii(title) : "";
 }
 
 /** Tags whose text content is used as an accessible name per accname-1.2. */
@@ -537,9 +540,7 @@ function textAlternative(
     const labelledBy = labelledByText(element, visited, styleCache);
     if (labelledBy) return labelledBy;
   }
-  const ariaLabel = safeGetAttribute(element, "aria-label")?.trim();
-  if (ariaLabel) return ariaLabel;
-  return null;
+  return trimAscii(safeGetAttribute(element, "aria-label") ?? "") || null;
 }
 
 /**
@@ -563,15 +564,15 @@ function referenceText(
   styleCache?: StyleCache | null,
 ): string {
   const walk: NameWalk = referenceWalk(target, styleCache);
-  return (
+  return trimAscii(
     textAlternative(
       target,
       getImplicitRole(target),
       visited,
       styleCache,
       walk,
-    ) || getAccessibleTextContent(target, visited, styleCache, walk)
-  ).trim();
+    ) || getAccessibleTextContent(target, visited, styleCache, walk),
+  );
 }
 
 /** The names of every element `element`'s aria-labelledby resolves to. */
@@ -607,7 +608,9 @@ function svgTitle(
 ): string {
   for (const child of element.children) {
     if (safeTagName(child) === "title") {
-      return getAccessibleTextContent(child, visited, styleCache, walk).trim();
+      return trimAscii(
+        getAccessibleTextContent(child, visited, styleCache, walk),
+      );
     }
   }
   return "";
@@ -777,9 +780,10 @@ function getAccessibleTextContent(
 
 /** Compute the accessible name for an element (simplified) */
 /**
- * Accessible name, whitespace-normalized per accname-1.2 §4.3.2 step 4:
- * collapse runs of whitespace — including the stray newlines/indentation some
- * pages leave inside their markup — to a single space, and trim. Normalizing
+ * Accessible name, whitespace-normalized as Chromium and the AccName WPT
+ * text-node cases do: collapse runs of ASCII whitespace — including the stray
+ * newlines/indentation some pages leave inside their markup — to a single
+ * space, and trim ASCII whitespace only, so a U+00A0 is kept. Normalizing
  * at this single source means every surface (panel, search, serializer,
  * snapshots) sees the same clean name.
  */
@@ -790,15 +794,9 @@ function computeAccessibleName(
   inReference: boolean | "hidden" = false,
   source?: NameSource,
 ): string {
-  return computeRawAccessibleName(
-    element,
-    visited,
-    styleCache,
-    inReference,
-    source,
-  )
-    .replace(/\s+/g, " ")
-    .trim();
+  return collapseAscii(
+    computeRawAccessibleName(element, visited, styleCache, inReference, source),
+  );
 }
 
 function computeRawAccessibleName(
@@ -835,7 +833,7 @@ function computeRawAccessibleName(
   // 2. aria-label, unless it is blank: accname skips one that is only
   //    whitespace, as Chromium does. `<button aria-label=" ">Save</button>` is
   //    "Save", `<img aria-label=" " alt="Home">` "Home".
-  const ariaLabel = safeGetAttribute(element, "aria-label")?.trim();
+  const ariaLabel = trimAscii(safeGetAttribute(element, "aria-label") ?? "");
   if (ariaLabel) return ariaLabel;
 
   const tag = safeTagName(element);
@@ -902,7 +900,7 @@ function computeRawAccessibleName(
                 }),
               onUnreadable: warnSkippedElement,
             })
-          : getAccessibleTextContent(label, visited, styleCache).trim();
+          : trimAscii(getAccessibleTextContent(label, visited, styleCache));
       if (text) labelParts.push(text);
     }
     if (labelParts.length) return labelParts.join(" ");
@@ -914,7 +912,7 @@ function computeRawAccessibleName(
     tag === "fieldset" ? "legend" : tag === "details" ? "summary" : null;
   const nameEl = nameChild && element.querySelector(`:scope > ${nameChild}`);
   if (nameEl)
-    return getAccessibleTextContent(nameEl, visited, styleCache).trim();
+    return trimAscii(getAccessibleTextContent(nameEl, visited, styleCache));
 
   // 4b. The `label` attribute names an <option> or <optgroup> (HTML-AAM).
   const attrName = host.labelAttributeName(element, tag);
@@ -930,7 +928,9 @@ function computeRawAccessibleName(
         isAriaHiddenValue(safeGetAttribute(caption, "aria-hidden")) ||
         isSubtreeHidden(caption, getCachedComputedStyle(caption, styleCache));
       if (!hidden) {
-        const t = getAccessibleTextContent(caption, visited, styleCache).trim();
+        const t = trimAscii(
+          getAccessibleTextContent(caption, visited, styleCache),
+        );
         if (t) return t;
       }
     }
@@ -963,10 +963,12 @@ function computeRawAccessibleName(
   //    options — see NAMES_FROM_CONTENT_ROLES). NOT for generic containers
   //    (div, span, p) which would grab huge text blobs.
   if (!MEDIA_TAGS.has(tag) && isNameFromContentHost(element)) {
-    const fullText = getAccessibleTextContent(element, visited, styleCache, {
-      inReference,
-      textOnly: tag === "option",
-    }).trim();
+    const fullText = trimAscii(
+      getAccessibleTextContent(element, visited, styleCache, {
+        inReference,
+        textOnly: tag === "option",
+      }),
+    );
     if (fullText) {
       if (source) source.fromContent = true;
       return fullText;
@@ -1013,7 +1015,7 @@ function computeRawAccessibleName(
   const role = getImplicitRole(element);
   if (AUTHOR_NAMED_ROLES.has(role) || isEditingHost(element)) return "";
   const ownText = readsTextRuns(role)
-    ? getOwnText(element, styleCache).trim()
+    ? trimAscii(getOwnText(element, styleCache))
     : getDirectTextContent(element);
   if (ownText) {
     if (source) source.fromContent = true;
@@ -1208,7 +1210,7 @@ function getDirectTextContent(element: Element): string {
       text += child.textContent || "";
     }
   }
-  return text.trim();
+  return trimAscii(text);
 }
 
 /** Hard cap so we don't store huge text blobs on every node. */

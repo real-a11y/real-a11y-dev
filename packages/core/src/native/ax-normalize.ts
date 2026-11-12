@@ -18,6 +18,8 @@
  * sibling order is Chromium's own.
  */
 
+import { collapseAscii } from "../utils/ascii-whitespace.js";
+
 import {
   mapNativeAXRole,
   NATIVE_AX_AUTHOR_NAMED_ROLES,
@@ -71,7 +73,8 @@ export interface NativeAXNode {
 }
 
 function collapseWhitespace(text: string): string {
-  return text.replace(/\s+/g, " ").trim();
+  // ASCII whitespace only: Chromium and the AccName WPT cases keep U+00A0.
+  return collapseAscii(text);
 }
 
 function isEditable(node: RawNativeAXNode | undefined): boolean {
