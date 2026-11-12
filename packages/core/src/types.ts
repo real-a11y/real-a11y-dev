@@ -95,6 +95,13 @@ export interface TreeSource {
   producer: TreeProducerKind;
   /** Chromium milestone the tree was read from, when `producer === "native"`. */
   chrome?: string;
+  /**
+   * Built in strict mode (`redactInput`): no field value and no editor text
+   * anywhere in it, names included. Set by both producers. A serializer asked
+   * for strict mode refuses a tree without it, since names can't be redacted
+   * after the fact.
+   */
+  redactInput?: true;
 }
 
 /**

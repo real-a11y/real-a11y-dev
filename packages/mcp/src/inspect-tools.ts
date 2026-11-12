@@ -189,7 +189,7 @@ function registerTabOrder(ctx: InspectToolContext): void {
       description:
         "Return the focusable elements in the order a keyboard user encounters them when pressing Tab, numbered, with role + accessible name. The stop focused at capture time is marked `[focused]`." +
         (redactInput
-          ? " In this server's strict mode no stop shows a field value."
+          ? " In this server's strict mode no stop shows a field value, and a name that would carry one, or a rich-text editor's text, reads \"[redacted]\"."
           : ' A field shows what it holds (`textbox "Email" = "jane@x.com"`; a sensitive field "[redacted]").') +
         " Built from the in-page DOM walk — Chromium's accessibility tree knows whether a node is focusable but not the SEQUENCE (tabindex never reaches it), so this is the only source for tab order, and the one tool `rootSelector` still scopes.",
       inputSchema: { rootSelector, session: sessionParam },
@@ -199,7 +199,7 @@ function registerTabOrder(ctx: InspectToolContext): void {
         const seq = await rec.session.call<string>(
           "tabSequenceSnapshot",
           rootSelector,
-          [{ values: liveValues }],
+          [{ values: liveValues, redactInput }],
         );
         // Number at render — the page bundle produces the canonical unnumbered
         // form; the ordinals help an agent reference "stop 7" and are never stored.

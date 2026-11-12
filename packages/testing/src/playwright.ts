@@ -77,16 +77,14 @@ export interface AttachOptions {
    */
   tree?: "dom" | "native";
   /**
-   * Strict mode for the native tree (ADR-0001's `redactInput`): no node
-   * carries a field value, and inside a rich-text editor a name computed from
-   * the typed text reads `"[redacted]"`. Default false — a native tree holds
-   * each field's announced value, with sensitive fields (`type="password"`, a
-   * credential or payment `autocomplete`) as `"[redacted]"`; snapshots print
-   * values only with `treeSnapshot({ values: true })`.
-   *
-   * Native only: the DOM tree is you inspecting your own page and has no
-   * strict mode, so `{ redactInput: true }` without `tree: "native"` throws
-   * rather than be silently ignored.
+   * Strict mode (ADR-0001's `redactInput`), for either tree: no node carries a
+   * field value, and a name that would carry one, or a rich-text editor's
+   * typed text, reads `"[redacted]"` whole. It holds for every method of the
+   * handle: snapshots, the tab sequence and assertion messages. Default
+   * false: each field's announced value is held, with sensitive fields
+   * (`type="password"`, a credential or payment `autocomplete`) as
+   * `"[redacted]"`, and snapshots print values only with
+   * `treeSnapshot({ values: true })`.
    */
   redactInput?: boolean;
 }
@@ -186,17 +184,9 @@ export async function attach(
 
   // Native producer: no page-bundle injection — read Chromium's own tree over
   // CDP and run the same serialize/audit helpers in Node. Same handle shape.
+  const redactInput = options.redactInput === true;
   if (options.tree === "native") {
-    return attachNative(page, rootSelector, {
-      redactInput: options.redactInput === true,
-    });
-  }
-  // A privacy option that silently did nothing would be worse than none.
-  if (options.redactInput === true) {
-    throw new Error(
-      '@real-a11y-dev/testing/playwright: { redactInput: true } applies to { tree: "native" } only — ' +
-        'the DOM tree has no strict mode. Pass tree: "native", or leave values out of snapshots (they\'re off unless treeSnapshot({ values: true })).',
-    );
+    return attachNative(page, rootSelector, { redactInput });
   }
 
   // Inject the bundle by EVALUATING its source rather than appending a
@@ -244,15 +234,23 @@ export async function attach(
 
   // ── Core helper: call a named export from the page bundle ───────────────
 
+  // In strict mode every helper gets a tree extracted in it rather than the
+  // root, which each of them takes as well: a name is built at extraction, so
+  // that is the one place a value can be kept out of it.
   function evalFn<T>(fnName: string, extraArgs: unknown[] = []): Promise<T> {
-    type EvalArg = { selector: string; fn: string; args: unknown[] };
+    type EvalArg = {
+      selector: string;
+      fn: string;
+      args: unknown[];
+      strict: boolean;
+    };
     return page.evaluate(
       (arg) => {
-        const { selector, fn, args } = arg as EvalArg;
+        const { selector, fn, args, strict } = arg as EvalArg;
         const ra = (globalThis as Record<string, unknown>)
           .__realA11y__ as Record<
           string,
-          (root: Element, ...a: unknown[]) => unknown
+          (root: unknown, ...a: unknown[]) => unknown
         >;
         // The global is gone when the document changed under us. Say so —
         // dereferencing it gave "Cannot read properties of undefined", which
@@ -282,9 +280,17 @@ export async function attach(
             `@real-a11y-dev/testing/playwright: rootSelector "${selector}" matched no element.`,
           );
         }
-        return ra[fn](root, ...args) as T;
+        const input = strict
+          ? ra.extractA11yTree(root, { redactInput: true })
+          : root;
+        return ra[fn](input, ...args) as T;
       },
-      { selector: rootSelector, fn: fnName, args: extraArgs } satisfies EvalArg,
+      {
+        selector: rootSelector,
+        fn: fnName,
+        args: extraArgs,
+        strict: redactInput,
+      } satisfies EvalArg,
     );
   }
 
@@ -305,6 +311,7 @@ export async function attach(
         redact?: { source: string; flags: string }[];
         includeGeneric?: boolean;
         values?: boolean;
+        redactInput: boolean;
       };
 
       return page.evaluate(
@@ -340,6 +347,7 @@ export async function attach(
           if (a.includeGeneric !== undefined)
             options.includeGeneric = a.includeGeneric;
           if (a.values !== undefined) options.values = a.values;
+          if (a.redactInput) options.redactInput = true;
           if (a.redact)
             options.redact = a.redact.map((r) => new RegExp(r.source, r.flags));
           return ra.treeSnapshot(root, options) as string;
@@ -350,6 +358,7 @@ export async function attach(
           redact: redactParts,
           includeGeneric,
           values,
+          redactInput,
         } satisfies TreeArg,
       );
     },

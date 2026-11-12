@@ -16,7 +16,7 @@
  * @internal
  */
 
-import { REDACTED_VALUE } from "../extraction/dom-extractor.js";
+import { REDACTED_VALUE } from "../extraction/sensitivity.js";
 
 import type { RawNativeAXNode } from "./ax-normalize.js";
 import { NATIVE_AX_NAME_SOURCE_ROLES } from "./ax-vocabulary.js";

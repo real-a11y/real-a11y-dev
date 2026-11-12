@@ -104,7 +104,8 @@ all rich-text editor content out of every read built on this tree — inside a
 `contenteditable` composer the structure is kept, but a name computed from the
 typed text reads `[redacted]`, as does a name taken from a field or an editor
 by `aria-labelledby` or a `<label>`. (`get_tab_order`, the in-page walk below,
-prints no values then, but still names a control inside an editor by its text.)
+withholds the same way: no values, and a name that would carry typed editor
+text reads `[redacted]`.)
 
 That tree is **whole-document**, which is why no tool takes a `rootSelector`
 except the one exception below. There is no `producer` parameter: each surface

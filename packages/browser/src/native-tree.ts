@@ -82,6 +82,7 @@ import {
   valueRegions,
   withholdFieldInternals,
   withholdRegionNames,
+  treeSource,
   type FieldHostOf,
   type FieldStandIn,
   type RawAXNameNode as RawAXNode,
@@ -699,9 +700,8 @@ export function buildNativeTree(
   const inChoiceField = (raw: RawAXNode): boolean => {
     for (const cur of nativeAncestry(raw, rawByNodeId)) {
       const role = cur.role?.value;
-      if (cur !== raw && (role === "combobox" || role === "listbox")) {
+      if (cur !== raw && (role === "combobox" || role === "listbox"))
         return true;
-      }
     }
     return false;
   };
@@ -850,6 +850,6 @@ export function buildNativeTree(
     nodes,
     rootId,
     ...(focused ? { focusedId: focused.id } : {}),
-    source: { producer: "native", ...(chrome ? { chrome } : {}) },
+    source: treeSource("native", { chrome, redactInput }),
   };
 }

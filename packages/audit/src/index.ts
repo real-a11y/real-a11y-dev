@@ -629,7 +629,9 @@ function assertRulesAs(
  * Every interactive node must have a non-empty accessible name.
  * Throws an {@link A11yAssertionError} listing the offenders.
  */
-export function assertNoUnlabeledInteractive(root: Element): void {
+export function assertNoUnlabeledInteractive(
+  root: Element | ExtractionResult,
+): void {
   assertRulesAs(
     root,
     ["no-unlabeled-interactive"],
@@ -640,7 +642,7 @@ export function assertNoUnlabeledInteractive(root: Element): void {
 /**
  * Heading structure sanity check: exactly one `h1` and no skipped levels.
  */
-export function assertHeadingOrder(root: Element): void {
+export function assertHeadingOrder(root: Element | ExtractionResult): void {
   assertRulesAs(root, ["heading-order"], "assertHeadingOrder");
 }
 
@@ -648,7 +650,7 @@ export function assertHeadingOrder(root: Element): void {
  * Every dialog must have an accessible name (via `aria-label`, labelledby, or
  * a visible title child).
  */
-export function assertDialogsLabeled(root: Element): void {
+export function assertDialogsLabeled(root: Element | ExtractionResult): void {
   assertRulesAs(root, ["dialog-labeled"], "assertDialogsLabeled");
 }
 
@@ -656,7 +658,9 @@ export function assertDialogsLabeled(root: Element): void {
  * Landmarks sanity: exactly one `main`, and `banner`/`contentinfo` appear at
  * most once at the top level.
  */
-export function assertLandmarkStructure(root: Element): void {
+export function assertLandmarkStructure(
+  root: Element | ExtractionResult,
+): void {
   assertRulesAs(root, ["landmark-structure"], "assertLandmarkStructure");
 }
 

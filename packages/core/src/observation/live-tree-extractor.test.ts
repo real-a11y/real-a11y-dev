@@ -703,6 +703,57 @@ describe("LiveTreeExtractor", () => {
     observer.stop();
   });
 
+  // Strict mode holds for the partial re-extractions a refresh splices in, not
+  // only for the first full one: a refresh must equal a clean strict read.
+  it("keeps strict mode across a refresh, typing included", async () => {
+    document.body.innerHTML = `<main><h2>Draft: <span contenteditable>hi</span></h2><input aria-label="City"></main>`;
+    const live = new LiveTreeExtractor(document.body, {
+      mode: "a11y",
+      redactInput: true,
+    });
+    let lastChange: TreeChange | undefined;
+    const observer = new DomObserver(
+      document.body,
+      (change) => {
+        lastChange = change;
+      },
+      50,
+    );
+    observer.start();
+
+    document.querySelector("span")!.firstChild!.nodeValue = "secret plan";
+    const input = document.querySelector("input") as HTMLInputElement;
+    input.value = "Quito";
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    await vi.advanceTimersByTimeAsync(100);
+
+    const result = live.refresh(lastChange);
+    expect(result.nodes).toEqual(
+      extractA11yTree(document.body, { redactInput: true }).nodes,
+    );
+    expect(result.source).toEqual({ producer: "dom", redactInput: true });
+    const nodes = [...result.nodes.values()];
+    expect(nodes.find((n) => n.a11y.role === "heading")?.a11y.name).toBe(
+      "[redacted]",
+    );
+    const city = nodes.find((n) => n.a11y.name === "City");
+    expect(city?.a11y.value).toBeUndefined();
+    expect(city?.dom?.attributes.value).toBeUndefined();
+    // No accessibility fact carries either. (The `dom` text previews are not
+    // strict mode's: no serializer prints them.)
+    expect(JSON.stringify(nodes.map((n) => n.a11y))).not.toMatch(
+      /secret plan|Quito/,
+    );
+
+    // The DOM view is strict too.
+    expect(live.setMode("dom").source).toEqual({
+      producer: "dom",
+      redactInput: true,
+    });
+
+    observer.stop();
+  });
+
   // A role-less inline wrapper's text is the paragraph's own (see `isTextRun`
   // in extraction/dom-extractor), so a change inside it, or one that gives it a
   // node of its own, renames the paragraph — which no other climb reaches.

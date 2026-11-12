@@ -43,6 +43,17 @@ export interface SerializeOptions {
    * apply to values as they do to names.
    */
   values?: boolean;
+  /**
+   * Strict mode (ADR-0001), the same option as the native producer's
+   * `nativeTree({ redactInput })`: no field value and no rich-text editor
+   * content anywhere in the output, names included. A name that would carry
+   * one reads `"[redacted]"` whole, and no value prints even with `values`.
+   *
+   * Given a DOM root, it extracts in strict mode. Given a tree, the tree must
+   * already be a strict one (`source.redactInput`), or this throws: a name is
+   * built at extraction, and nothing here could take a value back out of it.
+   */
+  redactInput?: boolean;
 }
 
 /**
@@ -124,12 +135,20 @@ function isDomRoot(input: SerializeInput): input is Element {
  */
 function toTree(
   input: SerializeInput,
-  mode: "a11y" | "dom" = "a11y",
-  fn = "serialize",
+  mode: "a11y" | "dom",
+  fn: string,
+  redactInput = false,
 ): ExtractionResult {
-  if (isDomRoot(input)) return extract(input, mode);
-  if (isExtractionResult(input)) return input;
-  throw treeInputError(fn, input);
+  if (isDomRoot(input)) return extract(input, mode, { redactInput });
+  if (!isExtractionResult(input)) throw treeInputError(fn, input);
+  // A privacy option that silently did nothing would be worse than none.
+  if (redactInput && input.source?.redactInput !== true) {
+    throw new TypeError(
+      `${fn}: { redactInput: true } needs a tree extracted in strict mode. ` +
+        "Pass the DOM root instead, or extract with { redactInput: true }.",
+    );
+  }
+  return input;
 }
 
 /**
@@ -188,7 +207,7 @@ export function serializeTree(
     values = false,
   } = options;
   const redact = ensureGlobalFlags(options.redact);
-  const tree = toTree(input, mode, "serializeTree");
+  const tree = toTree(input, mode, "serializeTree", options.redactInput);
   const focusedId = markFocus ? tree.focusedId : undefined;
 
   const printed = linearize(tree).filter(
@@ -220,7 +239,7 @@ export function serializeOutline(
 ): string {
   const { markFocus = true } = options;
   const redact = ensureGlobalFlags(options.redact);
-  const tree = toTree(input, "a11y", "serializeOutline");
+  const tree = toTree(input, "a11y", "serializeOutline", options.redactInput);
   const focusedId = markFocus ? tree.focusedId : undefined;
   const entries = getOutline(tree);
   if (entries.length === 0) return "(no headings)";
@@ -255,7 +274,12 @@ export function serializeTabSequence(
 ): string {
   const { markFocus = true, values = false } = options;
   const redact = ensureGlobalFlags(options.redact);
-  const tree = toTree(input, "a11y", "serializeTabSequence");
+  const tree = toTree(
+    input,
+    "a11y",
+    "serializeTabSequence",
+    options.redactInput,
+  );
   const focusedId = markFocus ? tree.focusedId : undefined;
   const seq = getTabSequence(tree);
   if (seq.length === 0) return "(nothing focusable)";

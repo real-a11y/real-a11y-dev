@@ -16,14 +16,16 @@ import {
   htmlAamNameOwner,
   isNameBarrierElement,
   isNameFromContentHost,
-  isSensitiveField,
-  isSensitiveFieldAttributes,
   nativeStates,
   PANEL_HOST_ATTRIBUTE,
   resolveEffectiveRoot,
-  SENSITIVE_AUTOCOMPLETE_TOKENS,
 } from "./dom-extractor.js";
 import { idScope } from "./flat-tree.js";
+import {
+  isSensitiveField,
+  isSensitiveFieldAttributes,
+  SENSITIVE_AUTOCOMPLETE_TOKENS,
+} from "./sensitivity.js";
 
 beforeEach(() => {
   resetIdCounter();
@@ -5208,6 +5210,181 @@ describe("a11y.value — what a screen reader announces (ADR-0001)", () => {
     const node = nodeFor(root, "input");
     expect(node.a11y.name).toBe("Trap");
     expect(node.a11y.value).toBeUndefined();
+  });
+});
+
+describe("strict mode (redactInput, ADR-0001)", () => {
+  // Attached, so IDREFs resolve; cleared after each case.
+  afterEach(() => {
+    document.body.innerHTML = "";
+  });
+  const page = (html: string): Element => {
+    document.body.innerHTML = html;
+    return document.body;
+  };
+  /** The node for `selector`, extracted with and without strict mode. */
+  function both(html: string, selector: string) {
+    const root = page(html);
+    const target = root.querySelector(selector)!;
+    const nodeIn = (strict: boolean) => {
+      const tree = extractDomTree(root, { redactInput: strict });
+      const node = [...tree.nodes.values()].find(
+        (n) => getElementRefs().get(n.id) === target,
+      );
+      if (!node) throw new Error(`no node for ${selector}`);
+      return node;
+    };
+    return { loose: nodeIn(false), strict: nodeIn(true) };
+  }
+
+  it("withholds a whole name that read a widget's editor text, as native does", () => {
+    // Chromium reads an editing host's text into an ancestor's name; in strict
+    // mode that is typed text, so the whole name goes, not just the word.
+    const { loose, strict } = both(
+      `<h2>Before <button contenteditable>Save</button></h2>`,
+      "h2",
+    );
+    expect(loose.a11y.name).toBe("Before Save");
+    expect(strict.a11y.name).toBe("[redacted]");
+  });
+
+  it("withholds a name that read a role-less editor's text", () => {
+    const { loose, strict } = both(
+      `<h2>Draft: <span contenteditable>hello there</span></h2>`,
+      "h2",
+    );
+    expect(loose.a11y.name).toBe("Draft: hello there");
+    expect(strict.a11y.name).toBe("[redacted]");
+  });
+
+  it("withholds a name borrowed by aria-labelledby from an editor", () => {
+    const { loose, strict } = both(
+      `<div id="e" contenteditable>secret plan</div><button aria-labelledby="e">Go</button>`,
+      "button",
+    );
+    expect(loose.a11y.name).toBe("secret plan");
+    expect(strict.a11y.name).toBe("[redacted]");
+  });
+
+  it("drops a description that read an editor, other text included", () => {
+    // Native drops the whole description: nothing says which part came from
+    // where. The hint goes with it, and no aria-description stands in.
+    const { loose, strict } = both(
+      `<p id="hint">Your draft:</p><div id="e" contenteditable>secret plan</div>` +
+        `<button aria-describedby="hint e" aria-description="Fallback">Go</button>`,
+      "button",
+    );
+    expect(loose.a11y.description).toBe("Your draft: secret plan");
+    expect(strict.a11y.description).toBe("");
+    expect(strict.a11y.name).toBe("Go");
+  });
+
+  it("withholds a name inside an editor that came from its typed content", () => {
+    const { loose, strict } = both(
+      `<div contenteditable><h2>Typed title</h2><p>Typed body</p></div>`,
+      "h2",
+    );
+    expect(loose.a11y.name).toBe("Typed title");
+    expect(strict.a11y.name).toBe("[redacted]");
+    const para = both(
+      `<div contenteditable><h2>Typed title</h2><p>Typed body</p></div>`,
+      "p",
+    );
+    expect(para.loose.a11y.name).toBe("Typed body");
+    expect(para.strict.a11y.name).toBe("[redacted]");
+  });
+
+  it("keeps a name the page's markup gave, inside an editor or around one", () => {
+    expect(
+      both(
+        `<div contenteditable><h2 aria-label="Section">Typed</h2></div>`,
+        "h2",
+      ).strict.a11y.name,
+    ).toBe("Section");
+    expect(
+      both(`<div contenteditable><a href="/"><img alt="Logo"></a></div>`, "a")
+        .strict.a11y.name,
+    ).toBe("Logo");
+    // But aria-labelledby outranks aria-label, so a name it borrows from an
+    // editor is the editor's, and still withheld.
+    expect(
+      both(
+        `<div id="e" contenteditable>secret</div><button aria-labelledby="e" aria-label="Send">Go</button>`,
+        "button",
+      ).strict.a11y.name,
+    ).toBe("[redacted]");
+  });
+
+  it("keeps a contenteditable=false island, which is the page's", () => {
+    expect(
+      both(
+        `<div contenteditable><h2 contenteditable="false">Fixed</h2></div>`,
+        "h2",
+      ).strict.a11y.name,
+    ).toBe("Fixed");
+  });
+
+  it("withholds nothing for an empty editor, which holds nothing typed", () => {
+    expect(
+      both(`<h2>Notes <span contenteditable> </span></h2>`, "h2").strict.a11y
+        .name,
+    ).toBe("Notes");
+  });
+
+  it("withholds a control's name read from a label inside an editor", () => {
+    const { loose, strict } = both(
+      `<div contenteditable><label><input type="checkbox"> Typed label</label></div>`,
+      "input",
+    );
+    expect(loose.a11y.name).toBe("Typed label");
+    expect(strict.a11y.name).toBe("[redacted]");
+  });
+
+  it("drops every value, and a field's entered dom value, but keeps a button input's label", () => {
+    const root = page(
+      `<input aria-label="City" value="Lima"><input type="submit" value="Send">` +
+        `<select aria-label="Country"><option value="es" selected>Spain</option></select>` +
+        `<div contenteditable aria-label="Notes">typed</div>`,
+    );
+    const tree = extractDomTree(root, { redactInput: true });
+    const byName = (name: string) =>
+      [...tree.nodes.values()].find((n) => n.a11y.name === name)!;
+    for (const name of ["City", "Country", "Notes"]) {
+      expect(byName(name).a11y.value, name).toBeUndefined();
+      expect(byName(name).dom?.attributes.value, name).toBeUndefined();
+    }
+    expect(byName("Send").dom?.attributes.value).toBe("Send");
+    // The default keeps them all (ADR-0001).
+    const loose = extractDomTree(root);
+    const city = [...loose.nodes.values()].find((n) => n.a11y.name === "City")!;
+    expect(city.a11y.value).toBe("Lima");
+    expect(city.dom?.attributes.value).toBe("Lima");
+  });
+
+  it("stamps a strict tree, from either extractor, and only a strict one", () => {
+    const root = page(`<button>Go</button>`);
+    expect(extractDomTree(root, { redactInput: true }).source).toEqual({
+      producer: "dom",
+      redactInput: true,
+    });
+    expect(extractA11yTree(root, { redactInput: true }).source).toEqual({
+      producer: "dom",
+      redactInput: true,
+    });
+    expect(extractDomTree(root).source).toEqual({ producer: "dom" });
+    expect(extractA11yTree(root).source).toEqual({ producer: "dom" });
+  });
+
+  it("changes nothing on a page with no editor and no value in a name", () => {
+    const html =
+      `<main><h1>Title</h1><label>Email <input value="a@b.c"></label>` +
+      `<a href="/" aria-describedby="d">Home</a><p id="d">Back to start</p></main>`;
+    const root = page(html);
+    const names = (strict: boolean) =>
+      [...extractDomTree(root, { redactInput: strict }).nodes.values()].map(
+        (n) => [n.a11y.role, n.a11y.name, n.a11y.description],
+      );
+    expect(names(true)).toEqual(names(false));
   });
 });
 

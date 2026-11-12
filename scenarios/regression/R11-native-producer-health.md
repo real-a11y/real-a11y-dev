@@ -6,12 +6,13 @@ area: MCP
 type: Automated
 priority: P1
 status: Active
-validFrom: "browser ≥ 0.1.0-beta.12 · cli ≥ 0.1.0-beta.2 (locators + focusedId). The native producer itself: browser ≥ 0.1.0-beta.11. Steps 6 / 6b as written (field values shown, sensitive ones redacted, --redact-input): cli ≥ 0.1.0-beta.7. Step 6c (a field with no node of its own): cli ≥ 0.1.0-beta.9"
+validFrom: "browser ≥ 0.1.0-beta.12 · cli ≥ 0.1.0-beta.2 (locators + focusedId). The native producer itself: browser ≥ 0.1.0-beta.11. Steps 6 / 6b as written (field values shown, sensitive ones redacted, --redact-input): cli ≥ 0.1.0-beta.7. Step 6c (a field with no node of its own): cli ≥ 0.1.0-beta.9. Step 6b's `tabs` check: cli ≥ 0.1.0-beta.13"
 validUntil: ""
 expected: "native tree returns a document tree reaching UA-shadow media controls the in-page walk misses; every native FINDING carries a CSS locator identical to the DOM producer's for the same element (a shadow-root element stops its path at the boundary rather than faking a selector); the tree sets focusedId so [focused] renders; a field shows what it holds the way a screen reader announces it, while a sensitive field (password, one-time code, payment) only ever reads [redacted]; --redact-input withholds every value and all rich-text editor content."
 covers:
   - packages.@real-a11y-dev/browser
   - cli.commands.tree.flags.--redact-input
+  - cli.commands.tabs.flags.--redact-input
 notion: "https://app.notion.com/p/3aa1c354b0b581379ac1caea2338fb81"
 ---
 
@@ -22,7 +23,8 @@ Use a page with a `<video controls>` (UA-shadow media controls), an image with n
 `<section id="panel">`, a pair of sibling images, an element inside an open shadow
 root, a text field, and a rich-text editor — `<div id="composer" contenteditable
 role="textbox" aria-label="Message">` holding a `<p>` with a link in it, an `<h3>`,
-and a `contenteditable="false"` mention chip `<a aria-label="Mention Alice">` — and a
+and a `contenteditable="false"` mention chip `<a aria-label="Mention Alice">` — a
+`<button aria-labelledby="composer">Send</button>`, and a
 `<input type="password" aria-label="Password">`.
 
 **There is no `--producer` flag.** #258 removed the axis — every browser-driving read
@@ -39,8 +41,9 @@ is native now — so these are plain invocations. An earlier version of this row
    then `real-a11y tree <url>` and `real-a11y tree <url> --redact-input`
    - **6b** — write a third sentinel into the editor's paragraph, link text and
      heading (and one into the link's `href`), then `real-a11y tree <url>`; then
-     `real-a11y tree <url> --redact-input`, the same with `-f json`, and
-     `real-a11y audit <url> -f json --redact-input`
+     `real-a11y tree <url> --redact-input`, the same with `-f json`,
+     `real-a11y audit <url> -f json --redact-input`, and
+     `real-a11y tabs <url> --redact-input`
    - **6c** — add `<table><tr><td><input disabled role="none"
      autocomplete="cc-number" value="<card sentinel>"></td></tr></table>`,
      `<p><input id="exp" type="month" disabled role="none"
@@ -80,7 +83,11 @@ is native now — so these are plain invocations. An earlier version of this row
   `link "Mention Alice"` (a markup name, kept). `audit` does **not** report the
   withheld link as `no-unlabeled-interactive` — it is named, just not shown. cli
   0.1.0-beta.6 printed the editor text as those nodes' names and had no strict
-  mode
+  mode. The `Send` button, named by the composer, prints `button "[redacted]"`
+  in `tree` and in `tabs` alike — `tabs` is the in-page walk, so this is where a
+  strict mode that reached only Chromium's tree would show. cli 0.1.0-beta.12
+  printed it in `tabs` as `button "<sentinel>"`, which is the old behaviour,
+  not a fail
 - **6c** — a disabled field with `role="none"` has no node of its own in
   Chromium's tree, and still nothing around it is named after what it holds: the
   cell prints `LayoutTableCell "[redacted]"` and the card sentinel appears

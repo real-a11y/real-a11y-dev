@@ -1,6 +1,11 @@
 import type { ExtractionResult, SemanticNode } from "../types.js";
+import { treeSource } from "../utils/tree-source.js";
 
-import { extractDomTree, getElementRefs } from "./dom-extractor.js";
+import {
+  extractDomTree,
+  getElementRefs,
+  type RedactInputOption,
+} from "./dom-extractor.js";
 import { isHiddenOnlyByVisibility } from "./visibility-hidden.js";
 
 // See SUPPRESS_KEEP_INTERACTIVE.
@@ -177,6 +182,7 @@ export function buildA11yTree(
   domNodes: Map<string, SemanticNode>,
   rootId: string,
   focusedId?: string,
+  options: RedactInputOption = {},
 ): ExtractionResult {
   const a11yNodes = new Map<string, SemanticNode>();
   processNode(rootId, null, 0, { domNodes, a11yNodes, rootId });
@@ -190,7 +196,7 @@ export function buildA11yTree(
     nodes: a11yNodes,
     rootId,
     ...(a11yFocusedId ? { focusedId: a11yFocusedId } : {}),
-    source: { producer: "dom" },
+    source: treeSource("dom", options),
   };
 }
 
@@ -201,12 +207,17 @@ export function buildA11yTree(
  * In the a11y view, nodes with role="generic" that have no accessible name
  * are "flattened" — their children are promoted to the parent level.
  * This produces a tree that more closely matches what a screen reader sees.
+ *
+ * `redactInput` is strict mode: see {@link RedactInputOption}.
  */
-export function extractA11yTree(root: Element): ExtractionResult {
+export function extractA11yTree(
+  root: Element,
+  options: RedactInputOption = {},
+): ExtractionResult {
   const {
     nodes: domNodes,
     rootId,
     focusedId: domFocusedId,
-  } = extractDomTree(root);
-  return buildA11yTree(domNodes, rootId, domFocusedId);
+  } = extractDomTree(root, options);
+  return buildA11yTree(domNodes, rootId, domFocusedId, options);
 }

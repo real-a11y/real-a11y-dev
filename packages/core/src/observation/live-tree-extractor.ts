@@ -21,6 +21,7 @@ import {
   resolveEffectiveRoot,
   resolveFocusedElement,
   textRunHost,
+  type RedactInputOption,
 } from "../extraction/dom-extractor.js";
 import {
   deepQuerySelectorAll,
@@ -29,6 +30,7 @@ import {
 } from "../extraction/flat-tree.js";
 import type { ExtractionResult, SemanticNode, TreeChange } from "../types.js";
 import { getNodeId } from "../utils/id-generator.js";
+import { treeSource } from "../utils/tree-source.js";
 import { warnOutsideProduction } from "../utils/warn.js";
 
 import {
@@ -37,7 +39,7 @@ import {
   SCOPE_ATTRS,
 } from "./live-tree-attrs.js";
 
-export interface LiveTreeExtractorOptions {
+export interface LiveTreeExtractorOptions extends RedactInputOption {
   /** "a11y" (default) or "dom". */
   mode?: "dom" | "a11y";
 }
@@ -59,6 +61,8 @@ export interface LiveTreeExtractorOptions {
 export class LiveTreeExtractor {
   private root: Element;
   public mode: "dom" | "a11y";
+  /** Strict mode, for every extraction, full or partial: see {@link RedactInputOption}. */
+  private readonly redactInput: boolean;
   private domNodes = new Map<string, SemanticNode>();
   private a11yNodes = new Map<string, SemanticNode>();
   private rootId = "";
@@ -89,6 +93,7 @@ export class LiveTreeExtractor {
     // Definite assignment: extract() sets this, but TS can't see through it.
     this.scopeRoot = root;
     this.mode = options.mode ?? "a11y";
+    this.redactInput = options.redactInput === true;
     this.extract();
   }
 
@@ -99,7 +104,9 @@ export class LiveTreeExtractor {
     // this same scope — which is what makes the later `scopeMoved()` comparison
     // meaningful. The duplicated resolution is a tiny fraction of a full walk.
     this.scopeRoot = resolveEffectiveRoot(this.root);
-    const result = extractDomTree(this.root);
+    const result = extractDomTree(this.root, {
+      redactInput: this.redactInput,
+    });
     this.adoptResult(result);
     return this.currentResult();
   }
@@ -349,6 +356,7 @@ export class LiveTreeExtractor {
         parentId: p.parentId,
         baseDepth: p.depth,
         includeFocused: false,
+        redactInput: this.redactInput,
       });
       // If the re-extract skipped the root (it became hidden), the parent still references its now
       // deleted id. Drop that dangling child so the DOM map stays consistent
@@ -362,7 +370,9 @@ export class LiveTreeExtractor {
     this.focusedId = this.resolveFocused();
 
     if (this.mode === "a11y") {
-      const a11y = buildA11yTree(this.domNodes, this.rootId, this.focusedId);
+      const a11y = buildA11yTree(this.domNodes, this.rootId, this.focusedId, {
+        redactInput: this.redactInput,
+      });
       this.a11yNodes = a11y.nodes;
       this.focusedId = a11y.focusedId;
     }
@@ -430,7 +440,9 @@ export class LiveTreeExtractor {
     this.rebuildIndexes();
 
     if (this.mode === "a11y") {
-      const a11y = buildA11yTree(this.domNodes, this.rootId, this.focusedId);
+      const a11y = buildA11yTree(this.domNodes, this.rootId, this.focusedId, {
+        redactInput: this.redactInput,
+      });
       this.a11yNodes = a11y.nodes;
       this.focusedId = a11y.focusedId;
     } else {
@@ -444,7 +456,7 @@ export class LiveTreeExtractor {
       nodes,
       rootId: this.rootId,
       ...(this.focusedId ? { focusedId: this.focusedId } : {}),
-      source: { producer: "dom" },
+      source: treeSource("dom", { redactInput: this.redactInput }),
     };
   }
 

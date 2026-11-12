@@ -278,6 +278,16 @@ test.describe("bad fixture — assertions should throw", () => {
     const sn = await attach(page);
     await expect(sn.assertDialogsLabeled()).rejects.toThrow();
   });
+
+  test("the assertions still run in strict mode, over the strict tree", async ({
+    page,
+  }) => {
+    const sn = await attach(page, { redactInput: true });
+    await expect(sn.assertHeadingOrder()).rejects.toThrow(/h1/i);
+    await expect(sn.assertNoUnlabeledInteractive()).rejects.toThrow();
+    await expect(sn.assertLandmarkStructure()).rejects.toThrow();
+    await expect(sn.assertDialogsLabeled()).rejects.toThrow();
+  });
 });
 
 // ─── Contenteditable rich-text widgets (Slack-shaped) ────────────────────────
@@ -333,13 +343,58 @@ test.describe("contenteditable rich-text widgets", () => {
     expect(strict).toContain('textbox "Message to general"');
     expect(strict).not.toContain("EDITOR-SECRET");
 
-    // The DOM tree is the developer inspecting their own page: no strict mode.
+    // The DOM tree shows it too, by default, and withholds it in strict mode:
+    // in every view the handle has, not only the tree.
     expect(await (await attach(page)).treeSnapshot()).toContain(
       "EDITOR-SECRET",
     );
-    await expect(attach(page, { redactInput: true })).rejects.toThrow(
-      /tree: "native"/,
+    const domStrict = await attach(page, { redactInput: true });
+    const views = [
+      await domStrict.treeSnapshot({ values: true }),
+      await domStrict.treeSnapshot({ mode: "dom", values: true }),
+      await domStrict.tabSequenceSnapshot(),
+      await domStrict.outlineSnapshot(),
+    ];
+    for (const view of views) expect(view).not.toContain("EDITOR-SECRET");
+    expect(views[0]).toContain('textbox "Message to general"');
+  });
+
+  test("strict mode on the DOM tree withholds a whole name built from typed text", async ({
+    page,
+  }) => {
+    await page.setContent(`<main>
+      <h2>Draft: <span id="ed" contenteditable="true"></span></h2>
+      <button aria-labelledby="ed">Send</button>
+    </main>`);
+    // Written at runtime, so the markup above holds no sentinel.
+    await page.evaluate(() => {
+      document.getElementById("ed")!.textContent = "EDITOR-" + "SECRET";
+    });
+
+    const loose = await attach(page);
+    expect(await loose.treeSnapshot()).toContain(
+      'heading "Draft: EDITOR-SECRET" (level 2)',
     );
+    expect(await loose.tabSequenceSnapshot()).toContain(
+      'button "EDITOR-SECRET"',
+    );
+
+    const strict = await attach(page, { redactInput: true });
+    const tree = await strict.treeSnapshot({ values: true });
+    const tabs = await strict.tabSequenceSnapshot();
+    expect(tree).toContain('heading "[redacted]" (level 2)');
+    expect(tree).toContain('button "[redacted]"');
+    expect(tabs).toContain('button "[redacted]"');
+    for (const view of [tree, tabs, await strict.outlineSnapshot()]) {
+      expect(view).not.toContain("EDITOR-SECRET");
+    }
+    // A failing assertion names what it found, so its message is strict too.
+    const failure = await strict.assertHeadingOrder().then(
+      () => "passed",
+      (error: Error) => error.message,
+    );
+    expect(failure).toMatch(/h1/i);
+    expect(failure).not.toContain("EDITOR-SECRET");
   });
 
   test("a native <input role=combobox> serializes as a combobox (W3C APG example shape)", async ({

@@ -61,12 +61,14 @@ pre-extracted tree it also runs in **plain Node** — no DOM globals needed — 
 trees produced outside a DOM runtime (a deserialized snapshot, a browser tree
 read over CDP) serialize the same way.
 
-`serializeTree` takes `{ mode, redact, includeGeneric, markFocus, values }`
-options — see the [testing docs](https://real-a11y.dev/packages/testing/snapshots)
+`serializeTree` takes `{ mode, redact, includeGeneric, markFocus, values,
+redactInput }` options — see the [testing docs](https://real-a11y.dev/packages/testing/snapshots)
 for the `redact` pattern reference, the `[focused]` marker, and `values`, which
 prints each field's announced value (`textbox "Email" = "jane@x.com"`, a
 sensitive field as `"[redacted]"`). `values` is off by default, so output is
-unchanged unless asked. The output is stable
+unchanged unless asked. `redactInput` is the strict mode: given a DOM root it
+extracts with no field value and no editor text in any name, and given a tree
+it throws unless the tree was extracted that way. The output is stable
 across runs (roles + names only, no ids or timestamps), which is what makes it
 safe to commit and diff.
 

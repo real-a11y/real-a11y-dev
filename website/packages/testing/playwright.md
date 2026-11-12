@@ -46,7 +46,7 @@ test("page heading structure", async ({ page }) => {
 |---|---|---|---|
 | `rootSelector` | `string` | `"body"` | CSS selector for the audit root element. |
 | `tree` | `"dom" \| "native"` | `"dom"` | Which producer builds the tree. See [Auditing the native tree](#auditing-the-native-tree). |
-| `redactInput` | `boolean` | `false` | Native tree only: withhold every field value and all rich-text editor content. See [Strict mode](#strict-mode-redactinput). Throws with `tree: "dom"`. |
+| `redactInput` | `boolean` | `false` | Withhold every field value and all rich-text editor content, with either tree. See [Strict mode](#strict-mode-redactinput). |
 
 ## Narrowing the root
 
@@ -82,14 +82,15 @@ Everything else — `treeSnapshot()`, `outlineSnapshot()`, and every `assert*` m
 
 ### Strict mode (`redactInput`)
 
-`attach(page, { tree: "native", redactInput: true })` withholds every field value — sensitive or not — and all rich-text editor content (`contenteditable`, `designMode`): the editor's nodes keep their roles but read `[redacted]` (or unnamed, for a paragraph) where Chromium named them from the typed text. It is the same strict mode as the CLI's `--redact-input` and the MCP server's `REAL_A11Y_REDACT_INPUT=1`.
+`attach(page, { redactInput: true })` withholds every field value — sensitive or not — and all rich-text editor content (`contenteditable`, `designMode`): the editor's nodes keep their roles but read `[redacted]` (or unnamed, for a paragraph in the native tree) where they were named from the typed text, and a name outside the editor that would carry it — a heading or button around it, a control labelled by it — reads `[redacted]` whole. A name from the page's own markup (an `aria-label`, an image's `alt`) is kept. It is the same strict mode as the CLI's `--redact-input` and the MCP server's `REAL_A11Y_REDACT_INPUT=1`.
 
 ```ts
-const sn = await attach(page, { tree: "native", redactInput: true });
+const sn = await attach(page, { redactInput: true });
 expect(await sn.treeSnapshot({ values: true })).not.toContain("draft text");
+expect(await sn.tabSequenceSnapshot()).not.toContain("draft text");
 ```
 
-It applies to the native tree only. The DOM tree is you inspecting your own page and has no strict mode, so `{ redactInput: true }` without `tree: "native"` throws rather than be silently ignored.
+It works with either tree, and for every method of the handle: the tree, outline and tab sequence snapshots, and the messages the `assert*` methods throw.
 
 ## Testing that assertions fail on broken pages
 

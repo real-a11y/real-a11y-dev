@@ -37,19 +37,26 @@ export {
   finishAnnouncedValue,
   getAnnouncedValue,
   getElementRefs,
-  isSensitiveField,
-  isSensitiveFieldAttributes,
   RANGE_VALUE_ROLES,
-  REDACTED_VALUE,
-  SENSITIVE_AUTOCOMPLETE_TOKENS,
   STATE_ONLY_ROLES,
   PANEL_HOST_ATTRIBUTE,
   VALUELESS_INPUT_TYPES,
+  type ExtractDomTreeOptions,
+  type RedactInputOption,
 } from "./extraction/dom-extractor.js";
+// The field-value sensitivity policy (ADR-0001), one for every producer.
+export {
+  isSensitiveField,
+  isSensitiveFieldAttributes,
+  REDACTED_VALUE,
+  SENSITIVE_AUTOCOMPLETE_TOKENS,
+} from "./extraction/sensitivity.js";
 // @internal — which rows of a read are of the page a panel was given, for the
 // change marks; not a stability promise.
 export { rootRowScope, type RowScope } from "./extraction/row-scope.js";
 export { buildA11yTree, extractA11yTree } from "./extraction/a11y-extractor.js";
+// For a producer outside core (the native one) to stamp a tree as core does.
+export { treeSource } from "./utils/tree-source.js";
 // For a walk up the page's own DOM outside core, such as the extension's focus
 // sync: a `<form>` control named `parentElement` makes the plain read cycle.
 export { safeParentElement } from "./extraction/clobber-safe.js";
