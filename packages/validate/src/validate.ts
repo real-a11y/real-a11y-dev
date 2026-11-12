@@ -58,6 +58,14 @@ export interface ValidatedNode {
    * producer that keeps every authored token.
    */
   discardedRole?: string;
+  /**
+   * The element can take focus. Only `separator` reads it: WAI-ARIA 1.2 makes
+   * `aria-valuenow` required of a focusable one.
+   *
+   * Absent fails OPEN — a hand-built node says nothing about focus, and
+   * demanding a value from every one would flag every plain divider.
+   */
+  focusable?: boolean;
 }
 
 export interface NodeIssue {
@@ -166,7 +174,9 @@ export function validateNode(
   // whether or not anyone wrote `aria-controls`, so demanding them reported
   // correct HTML as broken. See `uaSuppliedAttrs`, which is per-attribute
   // precisely because an element can supply one state and still owe another.
-  const required = attributesForRole(n.role).filter((a) => a.required);
+  const required = attributesForRole(n.role).filter(
+    (a) => a.required || (a.requiredWhenFocusable && n.focusable === true),
+  );
   for (const a of required) {
     if (n.uaSuppliedAttrs?.includes(a.name)) continue;
     const v = n.attrs[a.name];
@@ -181,7 +191,14 @@ export function validateNode(
 
   if (meta.requiredContextRole.length > 0) {
     const parent = n.parentId ? nodesById.get(n.parentId) : null;
-    const ok = parent && meta.requiredContextRole.includes(parent.role);
+    // An element's own semantics fulfil the context (WAI-ARIA 1.2 §5.2.7): a
+    // `<select>`'s options sit directly in its combobox.
+    const ok =
+      parent &&
+      (meta.requiredContextRole.includes(parent.role) ||
+        (n.implicitRole === true &&
+          parent.implicitRole === true &&
+          NATIVE_STRUCTURAL_NESTING.has(`${parent.role}>${n.role}`)));
     if (!ok) {
       issues.push({
         severity: "warn",

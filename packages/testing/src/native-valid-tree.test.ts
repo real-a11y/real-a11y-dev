@@ -242,8 +242,25 @@ describe("authored ARIA still owes the contract", () => {
       `<div role="combobox" aria-label="S" aria-expanded="false" aria-controls="x"><div role="option">A</div></div>`,
     );
     expect(violations(root)).toEqual([
-      'generic "A" — role "option" is discarded outside its required context',
+      'generic "A" — role "option" is discarded outside its required context (group / listbox)',
     ]);
+  });
+
+  it("a focusable separator with no aria-valuenow is an error", () => {
+    const root = mount(
+      `<div role="separator" tabindex="0" aria-label="Resize"></div>`,
+    );
+    expect(violations(root)).toEqual([
+      'separator "Resize" — missing required aria-valuenow',
+    ]);
+  });
+
+  it("a focusable separator with aria-valuenow, <hr> and a plain separator pass", () => {
+    expect(
+      mount(
+        `<div role="separator" tabindex="0" aria-label="Resize" aria-valuenow="50"></div><hr><div role="separator"></div>`,
+      ),
+    ).toBeValidA11yTree();
   });
 });
 
@@ -366,7 +383,7 @@ describe("a role the browser discards is still reported", () => {
         ),
       ),
     ).toEqual([
-      'generic "Apple" — role "option" is discarded outside its required context',
+      'generic "Apple" — role "option" is discarded outside its required context (group / listbox)',
     ]);
   });
 
