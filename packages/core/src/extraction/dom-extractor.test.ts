@@ -7615,6 +7615,31 @@ describe("U+00A0 in names and descriptions", () => {
     ).toBe("Save");
   });
 
+  it("keeps a table named from a caption with edge non-breaking spaces", () => {
+    page.innerHTML = `<table><caption>&nbsp;Sales&nbsp;</caption><tbody><tr><td>a</td></tr></tbody></table>`;
+    const nodes = [...extractDomTree(page).nodes.values()];
+    expect(nodes.find((n) => n.a11y.role === "table")?.a11y.name).toBe(
+      `${NBSP}Sales${NBSP}`,
+    );
+  });
+
+  it("keeps the role of an element named only by a non-breaking space", () => {
+    // Chromium keeps form, scoped aside and an empty-alt image's role here.
+    expect(
+      only(`<form aria-label="&nbsp;"><input aria-label="x"></form>`, "form")
+        .a11y.name,
+    ).toBe(NBSP);
+    expect(
+      only(
+        `<section aria-label="s"><aside aria-label="&nbsp;">x</aside></section>`,
+        "complementary",
+      ).a11y.name,
+    ).toBe(NBSP);
+    expect(only(`<img alt="" aria-label="&nbsp;">`, "img").a11y.name).toBe(
+      NBSP,
+    );
+  });
+
   it("keeps a non-breaking space in an aria-describedby description", () => {
     const button = only(
       `<button aria-describedby="d">Go</button><p id="d">a&nbsp;b</p>`,

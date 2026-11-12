@@ -1,4 +1,5 @@
 import type { ExtractionResult, SemanticNode } from "../types.js";
+import { trimAscii } from "../utils/ascii-whitespace.js";
 
 import { extractDomTree, getElementRefs } from "./dom-extractor.js";
 import { isHiddenOnlyByVisibility } from "./visibility-hidden.js";
@@ -98,7 +99,7 @@ function captionSuppliedTableName(
   if (parent.dom.attributes["aria-label"]) return false;
   const tableEl = getElementRefs().get(parent.id);
   if (tableEl?.hasAttribute("aria-labelledby")) return false;
-  const captionName = node.a11y.name?.trim();
+  const captionName = trimAscii(node.a11y.name ?? "");
   return !!captionName && parent.a11y.name === captionName;
 }
 
