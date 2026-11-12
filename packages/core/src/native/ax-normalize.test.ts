@@ -1682,3 +1682,25 @@ describe("sectionheader / sectionfooter (drop when bare)", () => {
     ).toBe(["main", "  sectionheader", '    heading "Title"'].join("\n"));
   });
 });
+
+describe("U+00A0 in names", () => {
+  // Chromium keeps U+00A0 in a name and AccName trims ASCII whitespace only.
+  it("keeps a non-breaking space inside and at the ends of a name", () => {
+    const nodes = normalizeNativeAX([
+      raw("1", "button", { name: "button\u00a0label" }),
+    ]);
+    expect(nodes[0]!.name).toBe("button\u00a0label");
+    const edges = normalizeNativeAX([
+      raw("1", "button", { name: "\u00a0label\u00a0" }),
+    ]);
+    expect(edges[0]!.name).toBe("\u00a0label\u00a0");
+  });
+
+  it("still trims and collapses ASCII whitespace", () => {
+    const nodes = normalizeNativeAX([
+      raw("1", "button", { name: " label" }),
+      raw("2", "button", { name: "a \t\n b " }),
+    ]);
+    expect(nodes.map((n) => n.name)).toEqual(["label", "a b"]);
+  });
+});

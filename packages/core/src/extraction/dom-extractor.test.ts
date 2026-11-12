@@ -7547,3 +7547,104 @@ describe("aria-owns owner index", () => {
     expect(roles).not.toContain("listitem");
   });
 });
+
+describe("U+00A0 in names and descriptions", () => {
+  // AccName defines no collapse for text and trims only ASCII whitespace
+  // (WPT accname/name/comp_text_node, comp_label). U+00A0 is none of those.
+  const NBSP = " ";
+  let page: HTMLElement;
+
+  beforeEach(() => {
+    page = document.createElement("div");
+    document.body.appendChild(page);
+  });
+
+  afterEach(() => {
+    page.remove();
+  });
+
+  const only = (html: string, role: string): SemanticNode => {
+    page.innerHTML = html;
+    const found = [...extractDomTree(page).nodes.values()].filter(
+      (n) => n.a11y.role === role,
+    );
+    expect(found).toHaveLength(1);
+    return found[0]!;
+  };
+
+  it("keeps one, three and mixed non-breaking spaces inside a name", () => {
+    expect(only(`<button>button&nbsp;label</button>`, "button").a11y.name).toBe(
+      `button${NBSP}label`,
+    );
+    expect(
+      only(`<button>button&nbsp;&nbsp;&nbsp;label</button>`, "button").a11y
+        .name,
+    ).toBe(`button${NBSP.repeat(3)}label`);
+    expect(
+      only(`<button>button   &nbsp;   label</button>`, "button").a11y.name,
+    ).toBe(`button ${NBSP} label`);
+  });
+
+  it("keeps a leading and a trailing non-breaking space", () => {
+    expect(only(`<button>&nbsp;label&nbsp;</button>`, "button").a11y.name).toBe(
+      `${NBSP}label${NBSP}`,
+    );
+    expect(
+      only(`<h2>\n  &nbsp;heading&nbsp;\n</h2>`, "heading").a11y.name,
+    ).toBe(`${NBSP}heading${NBSP}`);
+  });
+
+  it("still folds and trims ASCII whitespace", () => {
+    expect(
+      only(`<button>\n\t one \r\n two\f</button>`, "button").a11y.name,
+    ).toBe("one two");
+  });
+
+  it("keeps an edge non-breaking space of an aria-label", () => {
+    expect(
+      only(`<button aria-label="&nbsp;label">x</button>`, "button").a11y.name,
+    ).toBe(`${NBSP}label`);
+    expect(
+      only(`<nav aria-label="label&nbsp;">x</nav>`, "navigation").a11y.name,
+    ).toBe(`label${NBSP}`);
+  });
+
+  it("still skips a blank (ASCII whitespace) aria-label", () => {
+    expect(
+      only(`<button aria-label=" ">Save</button>`, "button").a11y.name,
+    ).toBe("Save");
+  });
+
+  it("keeps a table named from a caption with edge non-breaking spaces", () => {
+    page.innerHTML = `<table><caption>&nbsp;Sales&nbsp;</caption><tbody><tr><td>a</td></tr></tbody></table>`;
+    const nodes = [...extractDomTree(page).nodes.values()];
+    expect(nodes.find((n) => n.a11y.role === "table")?.a11y.name).toBe(
+      `${NBSP}Sales${NBSP}`,
+    );
+  });
+
+  it("keeps the role of an element named only by a non-breaking space", () => {
+    // Chromium keeps form, scoped aside and an empty-alt image's role here.
+    expect(
+      only(`<form aria-label="&nbsp;"><input aria-label="x"></form>`, "form")
+        .a11y.name,
+    ).toBe(NBSP);
+    expect(
+      only(
+        `<section aria-label="s"><aside aria-label="&nbsp;">x</aside></section>`,
+        "complementary",
+      ).a11y.name,
+    ).toBe(NBSP);
+    expect(only(`<img alt="" aria-label="&nbsp;">`, "img").a11y.name).toBe(
+      NBSP,
+    );
+  });
+
+  it("keeps a non-breaking space in an aria-describedby description", () => {
+    const button = only(
+      `<button aria-describedby="d">Go</button><p id="d">a&nbsp;b</p>`,
+      "button",
+    );
+    expect(button.a11y.description).toBe(`a${NBSP}b`);
+  });
+});

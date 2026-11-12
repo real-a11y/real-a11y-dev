@@ -4,6 +4,8 @@
  * and HTML Accessibility API Mappings (https://w3c.github.io/html-aam/).
  */
 
+import { trimAscii } from "../utils/ascii-whitespace.js";
+
 import { ariaOwner } from "./aria-owner.js";
 import { isAriaHiddenValue } from "./aria-tokens.js";
 import {
@@ -516,7 +518,7 @@ export const GLOBAL_ARIA_ATTRIBUTES = [
  * shadow the attribute reader itself.
  */
 function hasMeaningfulAttribute(element: Element, attr: string): boolean {
-  return !!safeGetAttribute(element, attr)?.trim();
+  return !!trimAscii(safeGetAttribute(element, attr) ?? "");
 }
 
 /**
