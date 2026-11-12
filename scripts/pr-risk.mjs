@@ -1274,14 +1274,15 @@ const FIELD_VALUE_GATES = [
   "holdsContent",
   // The strict mode (`redactInput`): every value and all rich-text editor
   // content withheld. The switch itself — its option, the CLI flag and config
-  // key, the MCP server's env var — and the gates it turns on in the native
-  // producer.
-  "redactInput",
-  "REAL_A11Y_REDACT_INPUT",
-  "strictValueRoots",
-  "nodesInsideEditable",
-  "redactEditableContent",
-  "withoutEditableContent",
+  // key, the MCP server's env var — then the gates it turns on in the native
+  // producer, and in the DOM producer (`core/src/extraction/strict-mode.ts`):
+  // which text a name withholds as typed, which attributes and states a strict
+  // node never records, and where a strict tree's findings say they are
+  // (`audit`). One alternation per group: the list is joined with `|`.
+  "redactInput|REAL_A11Y_REDACT_INPUT",
+  "strictValueRoots|nodesInsideEditable|redactEditableContent|withoutEditableContent",
+  "holdsTypedText|nameText|insideEditor|inChoiceField|holdsEnteredValue",
+  "withholdsState|withholdStates|withheldAttributes|STRICT_DOM_ADAPTER",
   // The extension's native path, which reads a live value and redacts it in
   // the page (`extension/src/native/native-core.ts`) for the roles in its
   // `VALUE_BEARING_ROLES`.

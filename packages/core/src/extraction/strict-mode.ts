@@ -10,12 +10,14 @@
  */
 import type { SemanticNode } from "../types.js";
 
+import { ariaOwner } from "./aria-owner.js";
 import {
   safeOwnerDocument,
   safeParentElement,
   safeTagName,
 } from "./clobber-safe.js";
 import { isEditable } from "./editing.js";
+import { flatParentElement } from "./flat-tree.js";
 import { getImplicitRole } from "./role-map.js";
 import { holdsEnteredValue } from "./sensitivity.js";
 
@@ -37,15 +39,21 @@ export interface RedactInputOption {
    *   heading, a button, a label or a reference — reads `[redacted]` whole. A
    *   node inside an editor named by its own content does too, and one named
    *   by its own text alone, such as a paragraph, reads unnamed. A name the
-   *   page's markup gave (`aria-label`, `alt`) is kept.
+   *   page's markup gave (`aria-label`, `alt`, `title`) is kept.
    * - A description that would carry it is dropped.
+   * - A node inside an editor keeps no `href`, `src`, `poster` or `id` in its
+   *   `dom.attributes`: a pasted link's URL, and an id some editors derive
+   *   from a heading's text.
+   * - No node carries the `dom` text previews (`textContent`,
+   *   `descendantText`), which the native producer never fills either.
    *
-   * An editor is a `contenteditable` region or a `designMode` document. The
-   * `dom` text previews (`textContent`, `descendantText`) are not covered: no
-   * serializer prints them.
+   * An editor is a `contenteditable` region or a `designMode` document. Any
+   * truthy value turns it on, so a privacy switch never fails open.
    *
-   * The result is stamped `source.redactInput: true`. Default false: values
-   * are announced as a screen reader announces them, a sensitive field's as
+   * The result of a whole extraction is stamped `source.redactInput: true`. A
+   * partial one (`nodes`) is not: it adds to a map it did not build, so the
+   * caller that built the map vouches for it. Default false: values are
+   * announced as a screen reader announces them, a sensitive field's as
    * `[redacted]`.
    */
   redactInput?: boolean;
@@ -134,24 +142,64 @@ export function nameText(node: Node, run: NameRun): string {
   return run.typedHere ? withhold(run) : text;
 }
 
-/** True for an option that a `<select>`, a combobox or a listbox holds. */
+/**
+ * True for an element strictly inside an editor: its parent holds typed text
+ * ({@link holdsTypedText}). The editing host itself is the page's, as the
+ * native producer counts it (`nodesInsideEditable` in the browser package).
+ */
+export function insideEditor(element: Element): boolean {
+  const parent = safeParentElement(element);
+  return parent !== null && holdsTypedText(parent);
+}
+
+/**
+ * True for an option that a `<select>`, a combobox or a listbox holds. The
+ * climb follows the tree the option's role was computed in: an `aria-owns`
+ * owner before the parent, and flat-tree parents, so an option slotted into a
+ * web component's listbox, or one inside a listbox host's shadow root, counts.
+ */
 function inChoiceField(option: Element): boolean {
-  for (
-    let el = safeParentElement(option);
-    el !== null;
-    el = safeParentElement(el)
-  ) {
-    const role = getImplicitRole(el);
-    if (role === "combobox" || role === "listbox") return true;
+  const seen = new Set<Element>();
+  let el: Element | null = option;
+  while (el !== null && !seen.has(el)) {
+    seen.add(el);
+    if (el !== option) {
+      const role = getImplicitRole(el);
+      if (role === "combobox" || role === "listbox") return true;
+    }
+    el = ariaOwner(el) ?? flatParentElement(el);
   }
   return false;
 }
 
 /**
+ * The attributes strict mode keeps out of `element`'s `dom.attributes`: what
+ * was entered into a field (`value`, which `getKeyAttributes` reads from the
+ * live `.value`; a range's `aria-valuenow`), and inside an editor what a user
+ * supplied ({@link insideEditor}): the native producer's
+ * `EDITABLE_CONTENT_ATTRIBUTES`. Asked before the attributes are read, so a
+ * withheld value is never read at all.
+ */
+export function withheldAttributes(element: Element): ReadonlySet<string> {
+  const withheld = new Set(["aria-valuenow"]);
+  const tag = safeTagName(element);
+  // An input's `type` property, the keyword the browser resolved: any value it
+  // doesn't know, padded or not, is a text field.
+  const type = tag === "input" ? (element as HTMLInputElement).type : null;
+  if (holdsEnteredValue(tag, type)) withheld.add("value");
+  if (insideEditor(element)) {
+    for (const name of EDITOR_CONTENT_ATTRIBUTES) withheld.add(name);
+  }
+  return withheld;
+}
+
+const EDITOR_CONTENT_ATTRIBUTES = ["href", "src", "poster", "id"];
+
+/**
  * True when strict mode keeps `state` off the node of `element`: an option's
  * `selected`, inside a choice field, since it says what the field's withheld
  * value is. The native producer drops the same option states. One rule for
- * {@link withholdEntered} and the live extractor's check for states that
+ * {@link withholdStates} and the live extractor's check for states that
  * moved, which would otherwise see the missing state as a change.
  */
 export function withholdsState(
@@ -162,25 +210,15 @@ export function withholdsState(
   return state === "selected" && role === "option" && inChoiceField(element);
 }
 
-/**
- * Strict mode for what a node records beyond its name: no announced value,
- * no entered value in its attributes (a range's position included), and no
- * option in a choice field marked selected, since that says what the field's
- * withheld value is. The native producer drops the same option states.
- */
-export function withholdEntered(
+/** `states` without what {@link withholdsState} keeps off `element`'s node. */
+export function withholdStates(
   element: Element,
   role: string,
-  node: SemanticNode,
-): void {
-  delete node.a11y.value;
-  const attributes = node.dom?.attributes ?? {};
-  const tag = safeTagName(element);
-  // An input's `type` property, the keyword the browser resolved: any value it
-  // doesn't know, padded or not, is a text field.
-  const type = tag === "input" ? (element as HTMLInputElement).type : null;
-  if (holdsEnteredValue(tag, type)) delete attributes["value"];
-  delete attributes["aria-valuenow"];
-  if (withholdsState(element, role, "selected"))
-    delete node.a11y.states["selected"];
+  states: SemanticNode["a11y"]["states"],
+): SemanticNode["a11y"]["states"] {
+  if ("selected" in states && withholdsState(element, role, "selected")) {
+    const { selected: _withheld, ...rest } = states;
+    return rest;
+  }
+  return states;
 }

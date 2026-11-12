@@ -41,6 +41,7 @@ import {
 } from "./focusability.js";
 import * as host from "./host-names.js";
 import { buttonInputName } from "./input-names.js";
+import { getKeyAttributes } from "./key-attributes.js";
 import { associatedLabels, wrappingLabelText } from "./label-text.js";
 import { hasCaptionsTrack } from "./media-tracks.js";
 export { isTextVisible } from "./name-spacing.js";
@@ -78,14 +79,14 @@ import {
 import { warnSkippedElement } from "./skipped-element.js";
 import { isSrOnly } from "./sr-only.js";
 import {
-  holdsTypedText,
   nameText,
   newNameRun,
-  withholdEntered,
+  withholdStates,
   type NameRun,
   type RedactInputOption,
 } from "./strict-mode.js";
 
+export { KEY_ATTRIBUTES } from "./key-attributes.js";
 export {
   OVERLAY_CANDIDATE_SELECTOR,
   containsOverlaySignal,
@@ -1005,6 +1006,11 @@ function computeRawAccessibleName(
     }
   }
 
+  // Strict mode withheld what a step above read: the name reads `[redacted]`
+  // whole, so `title` is no fallback. Left unread, it stays the description it
+  // would be beside that name.
+  if (run.withheld) return "";
+
   // 6. title attribute — the Tooltip step is last (AccName 1.2 §4.3.2 2I:
   //    "only if nothing else, including subtree content, has provided
   //    results"), so it sits after name-from-content. HTML-AAM orders title
@@ -1044,15 +1050,19 @@ function computeRawAccessibleName(
   //    isNameFromContentHost, which gates step 8 the same way).
   const role = getImplicitRole(element);
   if (AUTHOR_NAMED_ROLES.has(role) || isEditingHost(element)) return "";
+  // In strict mode, text a user typed is this element's own text alone: the
+  // native producer blanks such text runs, so a typed paragraph reads unnamed
+  // there, and here. Read through a run of its own, so the element's name
+  // isn't `[redacted]`: each text node is asked, which also catches editor
+  // text slotted into a shadow tree, where the element itself isn't editable.
+  const own = run.redactInput ? newNameRun(true) : null;
+  const read = (node: Node) =>
+    own ? nameText(node, own) : node.textContent || "";
   const ownText = readsTextRuns(role)
-    ? trimAscii(getOwnText(element, styleCache))
-    : getDirectTextContent(element);
+    ? trimAscii(getOwnText(element, styleCache, read))
+    : getDirectTextContent(element, read);
+  if (own?.withheld) return "";
   if (ownText) {
-    // In strict mode, an element inside an editor holds what a user typed, and
-    // this is its own text alone: the native producer blanks such text runs, so
-    // a typed paragraph reads unnamed there, and here. Its runs are inside too:
-    // an editable span is never a run (`isTextRun`).
-    if (run.redactInput && holdsTypedText(element)) return "";
     if (source) source.fromContent = true;
     return ownText;
   }
@@ -1084,12 +1094,13 @@ function readsTextRuns(role: string): boolean {
 function getOwnText(
   element: Element,
   styleCache: StyleCache | null | undefined,
+  readText: (node: Node) => string,
 ): string {
   let text = "";
   for (const child of flatChildNodes(element)) {
     const type = safeNodeType(child);
     if (type === Node.TEXT_NODE) {
-      text += child.textContent || "";
+      text += readText(child);
     } else if (type === Node.ELEMENT_NODE) {
       const childEl = child as Element;
       // A child that cannot be read costs its own text, not the host's name —
@@ -1102,7 +1113,7 @@ function getOwnText(
         if (safeTagName(childEl) === "br") {
           text += " ";
         } else if (isTextRun(childEl, style)) {
-          text += getOwnText(childEl, styleCache);
+          text += getOwnText(childEl, styleCache, readText);
         }
       } catch (error) {
         warnSkippedElement(childEl, error);
@@ -1238,11 +1249,14 @@ export function textRunHost(element: Element): Element | null {
 }
 
 /** Get direct text content of an element, excluding child element text */
-function getDirectTextContent(element: Element): string {
+function getDirectTextContent(
+  element: Element,
+  readText: (node: Node) => string = (node) => node.textContent || "",
+): string {
   let text = "";
   for (const child of flatChildNodes(element)) {
     if (safeNodeType(child) === Node.TEXT_NODE) {
-      text += child.textContent || "";
+      text += readText(child);
     }
   }
   return trimAscii(text);
@@ -1707,91 +1721,6 @@ export function finishAnnouncedValue(
   return collapsed.length > VALUE_MAX
     ? collapsed.slice(0, VALUE_MAX - 1) + "…"
     : collapsed;
-}
-
-/**
- * Attributes recorded verbatim on every node's `dom.attributes`.
- *
- * Exported because `DomObserver` builds its `attributeFilter` from this list:
- * an attribute the extractor reads but the observer doesn't watch produces a
- * node that silently goes stale, since an in-place flip yields no other
- * mutation to fall back on.
- */
-export const KEY_ATTRIBUTES = [
-  "id",
-  "class",
-  "href",
-  "src",
-  "type",
-  "name",
-  "role",
-  "aria-label",
-  "aria-expanded",
-  "aria-hidden",
-  "aria-checked",
-  "aria-disabled",
-  "aria-required",
-  "aria-controls",
-  "aria-haspopup",
-  // Range values. Required props on slider/scrollbar/meter/progressbar, and
-  // carried by nothing else: `A11yInfo.properties` is `{level, captions}`, so
-  // without these an authored slider could not be reported as satisfied no
-  // matter what the author wrote.
-  "aria-valuenow",
-  "aria-valuemin",
-  "aria-valuemax",
-  "alt",
-  "title",
-  "for",
-  "action",
-  "method",
-  "placeholder",
-  "tabindex",
-  // A <select>'s display size: more than one row makes it a listbox, with no
-  // expanded state. The testing matcher reads them back to tell a redundant
-  // authored role, and the observer must see them flip, or a live tree keeps
-  // the old role and state.
-  "size",
-  "multiple",
-  // Media a11y signals (boolean attributes render as "")
-  "controls",
-  "autoplay",
-  "muted",
-  "loop",
-  "poster",
-];
-
-/** Get key attributes for display */
-function getKeyAttributes(element: Element): Record<string, string> {
-  const attrs: Record<string, string> = {};
-
-  for (const name of KEY_ATTRIBUTES) {
-    const val = safeGetAttribute(element, name);
-    if (val !== null) {
-      attrs[name] = val;
-    }
-  }
-
-  // Read current value from DOM property (not HTML attribute) for form controls
-  // getAttribute("value") returns the initial value; .value reflects user input
-  const tag = safeTagName(element);
-  if (tag === "input" || tag === "textarea" || tag === "select") {
-    // Guarded: a page can make the `.value` getter throw, and this runs inside
-    // `buildNode`'s one try — an unguarded read cost the page the whole node.
-    let currentValue = "";
-    try {
-      currentValue = (element as HTMLInputElement).value;
-    } catch {
-      // No readable value: record none.
-    }
-    if (currentValue) {
-      attrs["value"] = isSensitiveField(element)
-        ? REDACTED_VALUE
-        : currentValue;
-    }
-  }
-
-  return attrs;
 }
 
 /**
@@ -2403,11 +2332,15 @@ function buildNode(
 
     const id = getNodeId(element);
     const role = getImplicitRole(element);
-    const value = getAnnouncedValue(element, role, styleCache);
+    // Strict mode decides at the read: what it withholds is never computed.
+    const value = redactInput
+      ? undefined
+      : getAnnouncedValue(element, role, styleCache);
     const actions = getActions(element);
     const focusable = isFocusable(element);
     const headingLevel = getHeadingLevel(element);
     const isMedia = MEDIA_TAGS.has(tag);
+    const states = getAriaStates(element, role, focusable);
 
     const node: SemanticNode = {
       id,
@@ -2416,12 +2349,8 @@ function buildNode(
       depth,
       dom: {
         tagName: tag,
-        attributes: getKeyAttributes(element),
-        // Media children are unrendered fallback + <track>/<source>
-        // metadata — surfacing "Sorry, your browser doesn't support…"
-        // as the node's text preview misrepresents what AT renders.
-        textContent: isMedia ? "" : getDirectTextContent(element),
-        descendantText: isMedia ? "" : getDescendantText(element),
+        attributes: getKeyAttributes(element, redactInput),
+        ...textPreviews(element, isMedia || redactInput),
         isHidden: isVisuallyHidden(element, style),
       },
       a11y: {
@@ -2433,7 +2362,7 @@ function buildNode(
           redactInput,
         ),
         ...(value !== undefined ? { value } : {}),
-        states: getAriaStates(element, role, focusable),
+        states: redactInput ? withholdStates(element, role, states) : states,
         properties: {
           ...(headingLevel !== null ? { level: String(headingLevel) } : {}),
           // The walk doesn't descend into media children, so the one
@@ -2466,7 +2395,6 @@ function buildNode(
       },
     };
 
-    if (redactInput) withholdEntered(element, role, node);
     return { id, node };
   } catch (error) {
     // One bad element must not take down the walk. Skip it and its subtree;
@@ -2474,6 +2402,25 @@ function buildNode(
     warnSkippedElement(element, error);
     return null;
   }
+}
+
+/**
+ * A node's `dom` text previews. None for media, whose children are unrendered
+ * fallback and <track>/<source> metadata: "Sorry, your browser doesn't
+ * support…" as a preview would misrepresent what AT renders. None in strict
+ * mode either, which keeps what a user typed off every node, as the native
+ * producer keeps no previews at all.
+ */
+function textPreviews(
+  element: Element,
+  none: boolean,
+): Pick<NonNullable<SemanticNode["dom"]>, "textContent" | "descendantText"> {
+  return none
+    ? { textContent: "", descendantText: "" }
+    : {
+        textContent: getDirectTextContent(element),
+        descendantText: getDescendantText(element),
+      };
 }
 
 function walk(
@@ -2529,7 +2476,8 @@ export function extractDomTree(
   const startRoot = isPartial ? root : effectiveRoot;
   // Fresh cache per extraction — styles may have changed since the last
   // mutation-triggered run; never reuse across extractDomTree calls.
-  const redactInput = options.redactInput === true;
+  // Any truthy value: a privacy switch that a `"1"` left off would fail open.
+  const redactInput = Boolean(options.redactInput);
   // One `aria-owns` index for the whole walk (see aria-owner.ts).
   const rootId = withAriaOwnerIndex(() =>
     walk(startRoot, parentId, baseDepth, nodes, {
@@ -2546,6 +2494,8 @@ export function extractDomTree(
     nodes,
     rootId: rootId || "",
     ...(focusedId ? { focusedId } : {}),
-    source: treeSource("dom", { redactInput }),
+    // Only a whole extraction vouches for its map: a partial one adds to nodes
+    // someone else extracted, in whatever mode they used.
+    source: treeSource("dom", { redactInput: redactInput && !isPartial }),
   };
 }

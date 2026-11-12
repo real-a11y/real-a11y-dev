@@ -739,19 +739,66 @@ describe("LiveTreeExtractor", () => {
     const city = nodes.find((n) => n.a11y.name === "City");
     expect(city?.a11y.value).toBeUndefined();
     expect(city?.dom?.attributes.value).toBeUndefined();
-    // No accessibility fact carries either. (The `dom` text previews are not
-    // strict mode's: no serializer prints them.)
-    expect(JSON.stringify(nodes.map((n) => n.a11y))).not.toMatch(
+    // No node carries either, the `dom` text previews included.
+    expect(JSON.stringify(nodes)).not.toMatch(/secret plan|Quito/);
+
+    // The DOM view is strict too, its ancestors' previews after the splice
+    // included.
+    const dom = live.setMode("dom");
+    expect(dom.source).toEqual({ producer: "dom", redactInput: true });
+    expect(JSON.stringify([...dom.nodes.values()])).not.toMatch(
       /secret plan|Quito/,
     );
 
-    // The DOM view is strict too.
-    expect(live.setMode("dom").source).toEqual({
-      producer: "dom",
+    observer.stop();
+  });
+
+  // A region that becomes an editor withholds its text from every name that
+  // reads it, a referrer to an id inside it included, which no splice of the
+  // region reaches. A refresh must still equal a clean strict read.
+  it("refreshes a referrer's name when a region becomes an editor in strict mode", async () => {
+    document.body.innerHTML = `<main><div id="box"><h2 id="t">Quarterly plan</h2></div><button aria-labelledby="t">Open</button></main>`;
+    const live = new LiveTreeExtractor(document.body, {
+      mode: "a11y",
       redactInput: true,
     });
+    let lastChange: TreeChange | undefined;
+    const observer = new DomObserver(
+      document.body,
+      (change) => {
+        lastChange = change;
+      },
+      50,
+    );
+    observer.start();
+
+    document.getElementById("box")!.setAttribute("contenteditable", "true");
+    await vi.advanceTimersByTimeAsync(100);
+
+    const result = live.refresh(lastChange);
+    expect(result.nodes).toEqual(
+      extractA11yTree(document.body, { redactInput: true }).nodes,
+    );
+    const button = [...result.nodes.values()].find(
+      (n) => n.a11y.role === "button",
+    );
+    expect(button?.a11y.name).toBe("[redacted]");
 
     observer.stop();
+  });
+
+  it("reads any truthy redactInput as strict mode", () => {
+    document.body.innerHTML = `<main><h2>Draft: <span contenteditable>secret plan</span></h2></main>`;
+    const live = new LiveTreeExtractor(document.body, {
+      mode: "a11y",
+      // A plain-JS caller passing an environment variable through.
+      redactInput: "1" as unknown as boolean,
+    });
+    const result = live.refresh();
+    expect(result.source).toEqual({ producer: "dom", redactInput: true });
+    expect(JSON.stringify([...result.nodes.values()])).not.toMatch(
+      /secret plan/,
+    );
   });
 
   // Strict mode keeps a chosen option's `selected` off its node, so the check

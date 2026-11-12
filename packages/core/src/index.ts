@@ -52,6 +52,9 @@ export {
   SENSITIVE_AUTOCOMPLETE_TOKENS,
   VALUELESS_INPUT_TYPES,
 } from "./extraction/sensitivity.js";
+// @internal — strict mode's test for what a user typed in, for a reader of
+// the live page outside core: audit's finding locators.
+export { insideEditor } from "./extraction/strict-mode.js";
 // @internal — which rows of a read are of the page a panel was given, for the
 // change marks; not a stability promise.
 export { rootRowScope, type RowScope } from "./extraction/row-scope.js";

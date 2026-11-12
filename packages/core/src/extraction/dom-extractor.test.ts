@@ -5448,6 +5448,138 @@ describe("strict mode (redactInput, ADR-0001)", () => {
     expect(buildA11yTree(loose.nodes, loose.rootId).source).toEqual({
       producer: "dom",
     });
+    // A partial extraction adds to a map it did not build, so it vouches for
+    // nothing: the map here is a loose one.
+    const button = [...loose.nodes.values()].find(
+      (n) => n.a11y.role === "button",
+    )!;
+    const partial = extractDomTree(root.querySelector("button")!, {
+      nodes: loose.nodes,
+      parentId: button.parentId,
+      baseDepth: button.depth,
+      redactInput: true,
+    });
+    expect(partial.source).toEqual({ producer: "dom" });
+  });
+
+  it("leaves a paragraph unnamed whose text an editor slots into a shadow tree", () => {
+    // The shadow paragraph isn't editable, its text is: each text node is
+    // asked, so the editor's text never names it. Chromium blanks the runs.
+    for (const html of [
+      `<div contenteditable><x-block>typed secret</x-block></div>`,
+      `<x-block contenteditable>typed secret</x-block>`,
+    ]) {
+      const root = page(html);
+      root.querySelector("x-block")!.attachShadow({ mode: "open" }).innerHTML =
+        `<p><slot></slot></p>`;
+      const paragraph = (strict: boolean) =>
+        [...extractDomTree(root, { redactInput: strict }).nodes.values()].find(
+          (n) => n.a11y.role === "paragraph",
+        )!;
+      expect(paragraph(false).a11y.name, html).toBe("typed secret");
+      expect(paragraph(true).a11y.name, html).toBe("");
+    }
+  });
+
+  it("says no option is selected that a listbox holds through a shadow tree or aria-owns", () => {
+    const root = page(
+      // Slotted into a web component's listbox.
+      `<x-select><div role="option" aria-selected="true">Apple</div></x-select>` +
+        // Inside the shadow root of a listbox host.
+        `<x-list role="listbox" aria-label="Veg"></x-list>` +
+        // Owned by a listbox elsewhere in the page.
+        `<div role="listbox" aria-label="Nut" aria-owns="o1"></div>` +
+        `<div id="o1" role="option" aria-selected="true">Almond</div>`,
+    );
+    root.querySelector("x-select")!.attachShadow({ mode: "open" }).innerHTML =
+      `<div role="listbox" aria-label="Fruit"><slot></slot></div>`;
+    root.querySelector("x-list")!.attachShadow({ mode: "open" }).innerHTML =
+      `<div role="option" aria-selected="true">Carrot</div>`;
+    const option = (strict: boolean, name: string) =>
+      [...extractDomTree(root, { redactInput: strict }).nodes.values()].find(
+        (n) => n.a11y.name === name,
+      )!;
+    for (const name of ["Apple", "Carrot", "Almond"]) {
+      expect(option(false, name).a11y.role, name).toBe("option");
+      expect(option(false, name).a11y.states.selected, name).toBe(true);
+      expect(option(true, name).a11y.states.selected, name).toBeUndefined();
+    }
+  });
+
+  it("keeps a title as the description when the name it would back is withheld", () => {
+    // The title steps in for no withheld name, so it is still unused there.
+    const { loose, strict } = both(
+      `<div contenteditable><a href="/x" title="Open link">typed</a></div>`,
+      "a",
+    );
+    expect(loose.a11y).toMatchObject({
+      name: "typed",
+      description: "Open link",
+    });
+    expect(strict.a11y).toMatchObject({
+      name: "[redacted]",
+      description: "Open link",
+    });
+  });
+
+  it("keeps no text previews, and no URL or id a user put inside an editor", () => {
+    const root = page(
+      `<main id="m"><div id="ed" contenteditable><h2 id="plan-secret">plan secret</h2>` +
+        `<p><a href="https://x.test/?token=secret"><img src="https://x.test/secret.png" alt="pic"></a></p></div>` +
+        `<a href="/home">Home</a></main>`,
+    );
+    const nodes = (strict: boolean) => [
+      ...extractDomTree(root, { redactInput: strict }).nodes.values(),
+    ];
+    expect(JSON.stringify(nodes(false))).toMatch(/token=secret/);
+    const strict = nodes(true);
+    expect(JSON.stringify(strict)).not.toMatch(/secret/i);
+    for (const node of strict) {
+      expect(node.dom?.textContent, node.a11y.role).toBe("");
+      expect(node.dom?.descendantText, node.a11y.role).toBe("");
+    }
+    const attributes = (id: string) =>
+      strict.find((n) => getElementRefs().get(n.id) === root.querySelector(id))!
+        .dom?.attributes;
+    // The editing host, and anything outside the editor, is the page's.
+    expect(attributes("#ed")?.id).toBe("ed");
+    expect(attributes("main")?.id).toBe("m");
+    expect(attributes('a[href="/home"]')?.href).toBe("/home");
+  });
+
+  it("never reads a value strict mode withholds", () => {
+    const root = page(`<input aria-label="City" value="Lima">`);
+    const input = root.querySelector("input")!;
+    const native = Object.getOwnPropertyDescriptor(
+      HTMLInputElement.prototype,
+      "value",
+    )!;
+    let reads = 0;
+    Object.defineProperty(input, "value", {
+      configurable: true,
+      get() {
+        reads++;
+        return native.get!.call(this);
+      },
+    });
+    extractDomTree(root, { redactInput: true });
+    expect(reads).toBe(0);
+    extractDomTree(root);
+    expect(reads).toBeGreaterThan(0);
+  });
+
+  it("reads any truthy redactInput as strict mode", () => {
+    // A plain-JS caller passing an environment variable through: a privacy
+    // switch must not fail open on a "1".
+    const root = page(`<h2>Draft: <span contenteditable>typed</span></h2>`);
+    const tree = extractDomTree(root, {
+      redactInput: "1" as unknown as boolean,
+    });
+    expect(tree.source).toEqual({ producer: "dom", redactInput: true });
+    expect(
+      [...tree.nodes.values()].find((n) => n.a11y.role === "heading")?.a11y
+        .name,
+    ).toBe("[redacted]");
   });
 
   it("changes nothing on a page with no editor and no value in a name", () => {

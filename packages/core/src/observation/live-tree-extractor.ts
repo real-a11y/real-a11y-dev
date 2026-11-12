@@ -34,8 +34,8 @@ import { getNodeId } from "../utils/id-generator.js";
 import { warnOutsideProduction } from "../utils/warn.js";
 
 import {
+  forcesFullExtraction,
   IMAGE_RENDERING_ATTRS,
-  REFERENCE_ATTRS,
   SCOPE_ATTRS,
 } from "./live-tree-attrs.js";
 
@@ -95,7 +95,7 @@ export class LiveTreeExtractor {
     // Definite assignment: extract() sets this, but TS can't see through it.
     this.scopeRoot = root;
     this.mode = options.mode ?? "a11y";
-    this.redactInput = options.redactInput === true;
+    this.redactInput = Boolean(options.redactInput);
     this.extract();
   }
 
@@ -202,7 +202,7 @@ export class LiveTreeExtractor {
         } else if (m.type === "attributes") {
           const target = m.target as Element;
           const attr = m.attributeName ?? "";
-          if (REFERENCE_ATTRS.has(attr)) {
+          if (forcesFullExtraction(attr, this.redactInput)) {
             needsFull = true;
             break;
           }
@@ -366,7 +366,8 @@ export class LiveTreeExtractor {
       if (!this.domNodes.has(p.id)) {
         this.detachFromParent(p.parentId, p.id);
       }
-      this.updateAncestorDescendantText(p.root);
+      // Strict mode keeps no text previews (see RedactInputOption).
+      if (!this.redactInput) this.updateAncestorDescendantText(p.root);
     }
 
     this.focusedId = this.resolveFocused();

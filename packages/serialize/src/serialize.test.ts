@@ -408,6 +408,19 @@ describe("strict mode (redactInput, ADR-0001)", () => {
     }
   });
 
+  it("reads any truthy redactInput as strict mode, for a root and a tree alike", () => {
+    // A plain-JS caller passing an environment variable through: the root
+    // extracts strictly, as the tree branch already asked for a strict tree.
+    page();
+    const opts = { redactInput: "1" as unknown as boolean, values: true };
+    const out = serializeTree(document.body, opts);
+    expect(out).toContain('heading "[redacted]" (level 2)');
+    expect(out).not.toMatch(/secret plan|jane@x\.com/);
+    expect(() => serializeTree(extractA11yTree(document.body), opts)).toThrow(
+      /needs a tree extracted in strict mode/,
+    );
+  });
+
   it("leaves the default unchanged", () => {
     page();
     expect(serializeTree(document.body)).toContain(

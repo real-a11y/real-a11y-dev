@@ -139,10 +139,13 @@ function toTree(
   fn: string,
   redactInput = false,
 ): ExtractionResult {
-  if (isDomRoot(input)) return extract(input, mode, { redactInput });
+  // Any truthy value, as the extractor reads it: one answer to "was strict
+  // mode asked for", whichever branch runs.
+  const strict = Boolean(redactInput);
+  if (isDomRoot(input)) return extract(input, mode, { redactInput: strict });
   if (!isExtractionResult(input)) throw treeInputError(fn, input);
   // A privacy option that silently did nothing would be worse than none.
-  if (redactInput && input.source?.redactInput !== true) {
+  if (strict && input.source?.redactInput !== true) {
     throw new TypeError(
       `${fn}: { redactInput: true } needs a tree extracted in strict mode. ` +
         "Pass the DOM root instead, or extract with { redactInput: true }.",

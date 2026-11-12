@@ -22,9 +22,9 @@ Use a page with a `<video controls>` (UA-shadow media controls), an image with n
 `alt`, an unlabeled `<button id="go">`, an image nested under
 `<section id="panel">`, a pair of sibling images, an element inside an open shadow
 root, a text field, and a rich-text editor — `<div id="composer" contenteditable
-role="textbox" aria-label="Message">` holding a `<p>` with a link in it, an `<h3>`,
-and a `contenteditable="false"` mention chip `<a aria-label="Mention Alice">` — a
-`<button aria-labelledby="composer">Send</button>`, and a
+role="textbox" aria-label="Message">` holding a `<p id="draft">` with a link in it,
+an `<h3>`, and a `contenteditable="false"` mention chip `<a aria-label="Mention
+Alice">` — a `<button aria-labelledby="draft">Send</button>`, and a
 `<input type="password" aria-label="Password">`.
 
 **There is no `--producer` flag.** #258 removed the axis — every browser-driving read
@@ -83,11 +83,14 @@ is native now — so these are plain invocations. An earlier version of this row
   `link "Mention Alice"` (a markup name, kept). `audit` does **not** report the
   withheld link as `no-unlabeled-interactive` — it is named, just not shown. cli
   0.1.0-beta.6 printed the editor text as those nodes' names and had no strict
-  mode. The `Send` button, named by the composer, prints `button "[redacted]"`
-  in `tree` and in `tabs` alike — `tabs` is the in-page walk, so this is where a
-  strict mode that reached only Chromium's tree would show. cli 0.1.0-beta.12
-  printed it in `tabs` as `button "<sentinel>"`, which is the old behaviour,
-  not a fail
+  mode. The `Send` button, named by the editor's paragraph, prints
+  `button "[redacted]"` in `tree` and in `tabs` alike — `tabs` is the in-page
+  walk, so this is where a strict mode that reached only Chromium's tree would
+  show. Without `--redact-input`, `tabs` prints it with the paragraph's sentinel
+  text. cli 0.1.0-beta.12 printed that in `tabs --redact-input` too, which is the
+  old behaviour, not a fail. (Labelled by the composer itself, the button would
+  read `Message`, its markup name, in `tabs`: the in-page walk takes a referenced
+  element's `aria-label`.)
 - **6c** — a disabled field with `role="none"` has no node of its own in
   Chromium's tree, and still nothing around it is named after what it holds: the
   cell prints `LayoutTableCell "[redacted]"` and the card sentinel appears

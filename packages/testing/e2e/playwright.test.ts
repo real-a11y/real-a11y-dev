@@ -388,13 +388,54 @@ test.describe("contenteditable rich-text widgets", () => {
     for (const view of [tree, tabs, await strict.outlineSnapshot()]) {
       expect(view).not.toContain("EDITOR-SECRET");
     }
-    // A failing assertion names what it found, so its message is strict too.
-    const failure = await strict.assertHeadingOrder().then(
-      () => "passed",
-      (error: Error) => error.message,
+  });
+
+  test("strict mode on the DOM tree holds for assertion messages, locators included", async ({
+    page,
+  }) => {
+    // A skipped level quotes the heading's name, and an unlabeled link is
+    // located by the nearest id and its href: inside an editor, an id some
+    // editors derive from a heading's text and a URL the user pasted.
+    await page.setContent(`<main><h1>Inbox</h1>
+      <div id="ed" contenteditable="true" aria-label="Message">
+        <h3></h3><p><a></a></p>
+      </div>
+    </main>`);
+    // Written at runtime, so the markup above holds no sentinel.
+    await page.evaluate(() => {
+      const secret = "EDITOR-" + "SECRET";
+      const h3 = document.querySelector("h3")!;
+      h3.textContent = `${secret} plan`;
+      h3.id = `${secret}-plan`;
+      document.querySelector("p")!.id = `${secret}-para`;
+      document.querySelector("a")!.href = `https://intranet.test/${secret}`;
+    });
+    const messages = async (handle: Awaited<ReturnType<typeof attach>>) =>
+      Promise.all(
+        [
+          () => handle.assertHeadingOrder(),
+          () => handle.assertNoUnlabeledInteractive(),
+        ].map((assert) =>
+          assert().then(
+            () => "passed",
+            (error: Error) => error.message,
+          ),
+        ),
+      );
+
+    const [looseOrder, looseLink] = await messages(await attach(page));
+    // The checks bite: by default both messages carry the sentinel.
+    expect(looseOrder).toContain('"EDITOR-SECRET plan" is h3');
+    expect(looseLink).toContain("EDITOR-SECRET");
+
+    const [order, link] = await messages(
+      await attach(page, { redactInput: true }),
     );
-    expect(failure).toMatch(/h1/i);
-    expect(failure).not.toContain("EDITOR-SECRET");
+    expect(order).toContain('"[redacted]" is h3');
+    expect(link).toMatch(/Unlabeled interactive element: link <a>/);
+    expect(link).toContain("#ed > ");
+    for (const message of [order, link])
+      expect(message).not.toContain("EDITOR-SECRET");
   });
 
   test("strict mode on the DOM tree treats a designMode document as one editor", async ({

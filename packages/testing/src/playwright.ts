@@ -184,7 +184,8 @@ export async function attach(
 
   // Native producer: no page-bundle injection — read Chromium's own tree over
   // CDP and run the same serialize/audit helpers in Node. Same handle shape.
-  const redactInput = options.redactInput === true;
+  // Any truthy value: a plain-JS `redactInput: 1` must not fail open.
+  const redactInput = Boolean(options.redactInput);
   if (options.tree === "native") {
     return attachNative(page, rootSelector, { redactInput });
   }
