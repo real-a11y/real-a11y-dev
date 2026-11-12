@@ -427,6 +427,22 @@ describe("extractA11yTree", () => {
     expect(allNodes.find((n) => n.dom?.tagName === "caption")).toBeUndefined();
   });
 
+  it("suppresses a caption whose name keeps edge non-breaking spaces", () => {
+    // The table's name keeps U+00A0 (AccName trims ASCII whitespace only), so
+    // the comparison that decides "the caption supplied the name" must too.
+    for (const caption of ["&nbsp;Sales", "Sales&nbsp;", "&nbsp;Sales&nbsp;"]) {
+      const root = createPage(
+        `<table><caption>${caption}</caption><tbody><tr><td>NW-1</td></tr></tbody></table>`,
+      );
+      const allNodes = Array.from(extractA11yTree(root).nodes.values());
+      const table = allNodes.find((n) => n.a11y.role === "table");
+      expect(table?.a11y.name).toBe(caption.replaceAll("&nbsp;", "\u00a0"));
+      expect(
+        allNodes.find((n) => n.dom?.tagName === "caption"),
+      ).toBeUndefined();
+    }
+  });
+
   it("does not name a table from a hidden caption", () => {
     for (const caption of [
       `<caption hidden>Ghost</caption>`,
