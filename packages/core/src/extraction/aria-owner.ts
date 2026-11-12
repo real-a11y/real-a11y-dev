@@ -62,13 +62,24 @@ function ownersByScope(scope: Document | ShadowRoot): Map<string, Element> {
   return owners;
 }
 
-/** The first element whose `aria-owns` names `element`, in its id scope. */
+/**
+ * The first element whose `aria-owns` names `element`, in its id scope.
+ *
+ * @internal
+ */
 export function ariaOwner(element: Element): Element | null {
   const id = safeGetAttribute(element, "id");
   if (!id) return null;
   const scope = idScope(element);
   const index = activeOwnerIndex().current;
-  if (!index) return ownersByScope(scope).get(id) ?? null;
+  if (!index) {
+    // No extraction in progress: one lookup, so keep the early exit.
+    for (const owner of safeQuerySelectorAll(scope, "[aria-owns]")) {
+      const owns = safeGetAttribute(owner, "aria-owns") ?? "";
+      if (owns.trim().split(/\s+/).includes(id)) return owner;
+    }
+    return null;
+  }
   let owners = index.get(scope);
   if (!owners) {
     owners = ownersByScope(scope);
