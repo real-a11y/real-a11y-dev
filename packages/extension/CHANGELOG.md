@@ -25,7 +25,7 @@
   extractor and native normalizer, so a name that carries a
   U+00A0 now shows it as Chromium reports it, instead of an ASCII space (and
   no longer drops one at either end). Tabs, line breaks and runs of ASCII
-  spaces still fold to one space. (PR_LINK_TODO)
+  spaces still fold to one space. ([#639](https://github.com/real-a11y/real-a11y-dev/pull/639))
 - **The TAB view's engine no longer slows down on pages that use `aria-owns`
   at scale.** The extension re-bundles the updated extractor, which now looks
   up an `aria-owns` owner in one index per extraction instead of rescanning the
