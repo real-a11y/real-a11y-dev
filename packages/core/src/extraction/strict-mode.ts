@@ -9,6 +9,7 @@
  * package), so the two strict trees print a node alike.
  */
 import type { SemanticNode } from "../types.js";
+import { trimAscii } from "../utils/ascii-whitespace.js";
 
 import { ariaOwner } from "./aria-owner.js";
 import {
@@ -125,12 +126,14 @@ export function holdsTypedText(element: Element): boolean {
 /**
  * What a text node lends a name. In strict mode, text a user typed is withheld
  * (see {@link holdsTypedText}), as the native producer withholds an editor's
- * content (`redactEditableContent`). Whitespace alone is nothing typed: an
- * empty editor, like an empty field, has nothing to give.
+ * content (`redactEditableContent`). ASCII whitespace alone is nothing typed:
+ * an empty editor, like an empty field, has nothing to give. A U+00A0 is
+ * typed, though (editors write a typed space as one), and a name keeps it,
+ * so text of nothing but U+00A0 is withheld like any other.
  */
 export function nameText(node: Node, run: NameRun): string {
   const text = node.textContent || "";
-  if (!run.redactInput || !text.trim()) return text;
+  if (!run.redactInput || !trimAscii(text)) return text;
   // Editing stops at a shadow root, as `isEditable` does: a text node with no
   // parent element sits straight in one.
   const parent = safeParentElement(node);

@@ -5378,6 +5378,19 @@ describe("strict mode (redactInput, ADR-0001)", () => {
     ).toBe("Fixed");
   });
 
+  it("withholds text of nothing but non-breaking spaces, which a name would keep", () => {
+    // Editors write a typed space as U+00A0, and names keep U+00A0 (#639):
+    // whitespace by JS's trim, but typed, and it would print.
+    const nbsp = "\u00a0\u00a0\u00a0";
+    const para = both(`<div contenteditable><p>${nbsp}</p></div>`, "p");
+    expect(para.loose.a11y.name).toBe(nbsp);
+    expect(para.strict.a11y.name).toBe("");
+    expect(
+      both(`<h2>Notes <span contenteditable>${nbsp}</span></h2>`, "h2").strict
+        .a11y.name,
+    ).toBe("[redacted]");
+  });
+
   it("withholds nothing for an empty editor, which holds nothing typed", () => {
     expect(
       both(`<h2>Notes <span contenteditable> </span></h2>`, "h2").strict.a11y
