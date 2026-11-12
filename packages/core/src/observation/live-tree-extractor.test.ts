@@ -754,6 +754,40 @@ describe("LiveTreeExtractor", () => {
     observer.stop();
   });
 
+  // Strict mode keeps a chosen option's `selected` off its node, so the check
+  // for native states that moved must not read that gap as a change.
+  it("leaves a selected option alone in strict mode when something else changes", async () => {
+    document.body.innerHTML = `<main><select aria-label="Size"><option>S</option><option selected>L</option></select><p id="p">Before</p></main>`;
+    const live = new LiveTreeExtractor(document.body, {
+      mode: "dom",
+      redactInput: true,
+    });
+    const optionL = () =>
+      [...live.extract().nodes.values()].find((n) => n.a11y.name === "L")!;
+    const before = optionL();
+    let lastChange: TreeChange | undefined;
+    const observer = new DomObserver(
+      document.body,
+      (change) => {
+        lastChange = change;
+      },
+      50,
+    );
+    observer.start();
+    document.getElementById("p")!.textContent = "After";
+    await vi.advanceTimersByTimeAsync(100);
+    observer.stop();
+
+    const result = live.refresh(lastChange);
+    const after = [...result.nodes.values()].find((n) => n.a11y.name === "L");
+    // Not re-extracted: the very node the full extraction built.
+    expect(after).toBe(before);
+    expect(after?.a11y.states.selected).toBeUndefined();
+    expect(result.nodes).toEqual(
+      extractDomTree(document.body, { redactInput: true }).nodes,
+    );
+  });
+
   // A role-less inline wrapper's text is the paragraph's own (see `isTextRun`
   // in extraction/dom-extractor), so a change inside it, or one that gives it a
   // node of its own, renames the paragraph — which no other climb reaches.

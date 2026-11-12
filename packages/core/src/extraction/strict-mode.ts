@@ -148,6 +148,21 @@ function inChoiceField(option: Element): boolean {
 }
 
 /**
+ * True when strict mode keeps `state` off the node of `element`: an option's
+ * `selected`, inside a choice field, since it says what the field's withheld
+ * value is. The native producer drops the same option states. One rule for
+ * {@link withholdEntered} and the live extractor's check for states that
+ * moved, which would otherwise see the missing state as a change.
+ */
+export function withholdsState(
+  element: Element,
+  role: string,
+  state: string,
+): boolean {
+  return state === "selected" && role === "option" && inChoiceField(element);
+}
+
+/**
  * Strict mode for what a node records beyond its name: no announced value,
  * no entered value in its attributes (a range's position included), and no
  * option in a choice field marked selected, since that says what the field's
@@ -166,6 +181,6 @@ export function withholdEntered(
   const type = tag === "input" ? (element as HTMLInputElement).type : null;
   if (holdsEnteredValue(tag, type)) delete attributes["value"];
   delete attributes["aria-valuenow"];
-  if (role === "option" && inChoiceField(element))
+  if (withholdsState(element, role, "selected"))
     delete node.a11y.states["selected"];
 }

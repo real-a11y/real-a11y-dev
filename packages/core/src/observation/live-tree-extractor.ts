@@ -28,9 +28,9 @@ import {
   flatParent,
   isRenderedInFlatTree,
 } from "../extraction/flat-tree.js";
+import { withholdsState } from "../extraction/strict-mode.js";
 import type { ExtractionResult, SemanticNode, TreeChange } from "../types.js";
 import { getNodeId } from "../utils/id-generator.js";
-import { treeSource } from "../utils/tree-source.js";
 import { warnOutsideProduction } from "../utils/warn.js";
 
 import {
@@ -67,6 +67,8 @@ export class LiveTreeExtractor {
   private a11yNodes = new Map<string, SemanticNode>();
   private rootId = "";
   private focusedId: string | undefined;
+  /** The stamp of the last full extraction; every partial one runs alike. */
+  private source: ExtractionResult["source"] = { producer: "dom" };
   private effectiveRoot: Element | null = null;
   /**
    * The scope `resolveEffectiveRoot()` reported at the last full extraction.
@@ -370,9 +372,8 @@ export class LiveTreeExtractor {
     this.focusedId = this.resolveFocused();
 
     if (this.mode === "a11y") {
-      const a11y = buildA11yTree(this.domNodes, this.rootId, this.focusedId, {
-        redactInput: this.redactInput,
-      });
+      const { domNodes, rootId, focusedId, source } = this;
+      const a11y = buildA11yTree(domNodes, rootId, focusedId, source);
       this.a11yNodes = a11y.nodes;
       this.focusedId = a11y.focusedId;
     }
@@ -399,6 +400,10 @@ export class LiveTreeExtractor {
       if (!el) continue;
       const native = nativeStates(el, tag, node.a11y.role);
       for (const [state, value] of Object.entries(native)) {
+        // A state strict mode withholds is never on the node, so it can't
+        // have moved: comparing would dirty every selected option each time.
+        if (this.redactInput && withholdsState(el, node.a11y.role, state))
+          continue;
         if (value !== node.a11y.states[state]) {
           dirty.add(el);
           break;
@@ -436,13 +441,13 @@ export class LiveTreeExtractor {
     this.domNodes = result.nodes;
     this.rootId = result.rootId;
     this.focusedId = result.focusedId;
+    this.source = result.source;
     this.effectiveRoot = getElementRefs().get(this.rootId) ?? this.root;
     this.rebuildIndexes();
 
     if (this.mode === "a11y") {
-      const a11y = buildA11yTree(this.domNodes, this.rootId, this.focusedId, {
-        redactInput: this.redactInput,
-      });
+      const { domNodes, rootId, focusedId, source } = this;
+      const a11y = buildA11yTree(domNodes, rootId, focusedId, source);
       this.a11yNodes = a11y.nodes;
       this.focusedId = a11y.focusedId;
     } else {
@@ -456,7 +461,7 @@ export class LiveTreeExtractor {
       nodes,
       rootId: this.rootId,
       ...(this.focusedId ? { focusedId: this.focusedId } : {}),
-      source: treeSource("dom", { redactInput: this.redactInput }),
+      source: this.source,
     };
   }
 

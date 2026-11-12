@@ -6,7 +6,7 @@ import { clobber, shadow } from "../test-support/clobber.js";
 import type { SemanticNode } from "../types.js";
 import { resetIdCounter } from "../utils/id-generator.js";
 
-import { extractA11yTree } from "./a11y-extractor.js";
+import { buildA11yTree, extractA11yTree } from "./a11y-extractor.js";
 import * as clobberSafe from "./clobber-safe.js";
 import {
   extractDomTree,
@@ -5439,6 +5439,15 @@ describe("strict mode (redactInput, ADR-0001)", () => {
     });
     expect(extractDomTree(root).source).toEqual({ producer: "dom" });
     expect(extractA11yTree(root).source).toEqual({ producer: "dom" });
+    // Projecting a DOM map carries its extraction's stamp; it never claims one.
+    const loose = extractDomTree(root);
+    expect(
+      buildA11yTree(loose.nodes, loose.rootId, loose.focusedId, loose.source)
+        .source,
+    ).toEqual({ producer: "dom" });
+    expect(buildA11yTree(loose.nodes, loose.rootId).source).toEqual({
+      producer: "dom",
+    });
   });
 
   it("changes nothing on a page with no editor and no value in a name", () => {
