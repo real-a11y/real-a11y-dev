@@ -152,7 +152,13 @@ The same rule is why `<video controls>` no longer fails: its extracted role is e
 
 // Fails — the <section> ends the search for a listbox, so this is no option.
 <div role="listbox" aria-label="Fruit"><section><div role="option" aria-selected="false">Apple</div></section></div>
+// ...and an orphaned option's error ends in (group / listbox), the containers WAI-ARIA 1.2 allows.
+
+// Fails — separator "Resize" — missing required aria-valuenow
+<div role="separator" tabindex="0" aria-label="Resize"></div>
 ```
+
+A **focusable** `separator` must carry `aria-valuenow` (WAI-ARIA 1.2); a plain `<hr>` or non-focusable separator needs none.
 
 A discarded role is an error, not an advisory warning: assistive tech gets a different role from the one you wrote. See [How roles are resolved](/guide/reading-the-a11y-view#how-roles-are-resolved) for which containers count.
 

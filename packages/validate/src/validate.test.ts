@@ -5,6 +5,8 @@ import {
   isValidRole,
   isPresentationalChildren,
   requiredOwnedRoles,
+  roleMeta,
+  attributesForRole,
   suggestedChildRoles,
 } from "./aria-schema.js";
 import { validateNode, validateTree, type ValidatedNode } from "./validate.js";
@@ -603,5 +605,118 @@ describe("structural gaps are flagged as warnings", () => {
       (i) => i.severity === "warn",
     );
     expect(warns.some((w) => pattern.test(w.message))).toBe(true);
+  });
+});
+
+describe("WAI-ARIA 1.2 corrections to aria-query", () => {
+  const issuesFor = (specs: NodeSpec[], role: string) => {
+    const map = buildMap(specs);
+    return validateNode(find(map, role), map).map(
+      (i) => `${i.severity}: ${i.message}`,
+    );
+  };
+
+  it("roleMeta carries the 1.2 required context", () => {
+    expect(roleMeta("option").requiredContextRole).toEqual([
+      "group",
+      "listbox",
+    ]);
+    expect(roleMeta("rowheader").requiredContextRole).toEqual(["row"]);
+    expect(roleMeta("caption").requiredContextRole).toEqual([
+      "figure",
+      "grid",
+      "table",
+      "treegrid",
+    ]);
+  });
+
+  it("a parentless option warns it belongs in a group / listbox", () => {
+    expect(
+      issuesFor(
+        [{ role: "option", name: "A", attrs: { "aria-selected": false } }],
+        "option",
+      ),
+    ).toEqual(["warn: should be inside group / listbox"]);
+  });
+
+  it("an option in a listbox, or a group, is clean", () => {
+    const ok = { role: "option", name: "A", attrs: { "aria-selected": false } };
+    expect(issuesFor([{ role: "listbox", children: [ok] }], "option")).toEqual(
+      [],
+    );
+    expect(
+      issuesFor(
+        [{ role: "listbox", children: [{ role: "group", children: [ok] }] }],
+        "option",
+      ),
+    ).toEqual([]);
+  });
+
+  it("a rowheader in a rowgroup warns it belongs in a row", () => {
+    expect(
+      issuesFor(
+        [{ role: "rowgroup", children: [{ role: "rowheader", name: "Ada" }] }],
+        "rowheader",
+      ),
+    ).toEqual(["warn: should be inside row"]);
+    expect(
+      issuesFor(
+        [{ role: "row", children: [{ role: "rowheader", name: "Ada" }] }],
+        "rowheader",
+      ),
+    ).toEqual([]);
+  });
+
+  it("a caption in a treegrid is clean", () => {
+    expect(
+      issuesFor(
+        [{ role: "treegrid", children: [{ role: "caption", name: "Files" }] }],
+        "caption",
+      ),
+    ).toEqual([]);
+  });
+
+  it("a focusable separator needs aria-valuenow; others do not", () => {
+    const sep = (focusable: boolean | undefined, attrs = {}) => {
+      const n: ValidatedNode = {
+        id: "s",
+        parentId: null,
+        role: "separator",
+        name: "Resize",
+        attrs,
+        ...(focusable === undefined ? {} : { focusable }),
+      };
+      return validateNode(n, new Map([["s", n]])).map((i) => i.message);
+    };
+    expect(sep(true)).toEqual(["missing required aria-valuenow"]);
+    expect(sep(true, { "aria-valuenow": "50" })).toEqual([]);
+    expect(sep(false)).toEqual([]);
+    expect(sep(undefined)).toEqual([]);
+  });
+
+  it("a treeitem without aria-selected still errors (1.2 inherits it from option)", () => {
+    const map = buildMap([
+      { role: "tree", children: [{ role: "treeitem", name: "A" }] },
+    ]);
+    expect(
+      validateNode(find(map, "treeitem"), map).map((i) => i.message),
+    ).toContain("missing required aria-selected");
+  });
+
+  // Drift guard: an aria-query upgrade must not silently change a verdict on
+  // these roles. Update the expectation only against the 1.2 role tables.
+  it("pins the effective schema for the corrected roles", () => {
+    const required = (r: string) =>
+      attributesForRole(r)
+        .filter((a) => a.required || a.requiredWhenFocusable)
+        .map((a) => `${a.name}${a.requiredWhenFocusable ? "?focusable" : ""}`);
+    expect(required("separator")).toEqual(["aria-valuenow?focusable"]);
+    expect(required("option")).toEqual(["aria-selected"]);
+    expect(required("treeitem")).toEqual(["aria-selected"]);
+    expect(required("rowheader")).toEqual([]);
+    expect(required("caption")).toEqual([]);
+    expect(suggestedChildRoles("treegrid")).toContain("caption");
+    expect(suggestedChildRoles("rowgroup")).not.toContain("rowheader");
+    expect(suggestedChildRoles("listbox")).toContain("option");
   });
 });

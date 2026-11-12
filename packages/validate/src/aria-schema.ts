@@ -1,7 +1,8 @@
 /**
  * ARIA schema — a thin wrapper over `aria-query`, the canonical WAI-ARIA data
  * package (the same source eslint-jsx-a11y and Testing Library trust). We do NOT
- * hand-maintain a role list — it would drift from the spec.
+ * hand-maintain a role list. Where aria-query disagrees with the WAI-ARIA 1.2
+ * role tables, a small correction layer below follows the spec.
  *
  * This is the reason the validation layer is its own package rather than part of
  * `@real-a11y-dev/core`: core stays dependency-free, and the `aria-query`
@@ -52,6 +53,12 @@ export type AttrType =
 export interface AttrSpec {
   name: string; // e.g. "aria-checked"
   required: boolean;
+  /**
+   * Required only while the element is focusable (`separator`'s
+   * `aria-valuenow`). `required` stays false for these, so a caller that has
+   * no focusability to offer never demands the attribute.
+   */
+  requiredWhenFocusable?: boolean;
   type: AttrType;
   values?: string[]; // for token / tristate
 }
@@ -75,6 +82,39 @@ export const CONCRETE_ROLES: string[] = [...ariaRoles.keys()]
     return def && !def.abstract;
   })
   .sort();
+
+/**
+ * WAI-ARIA 1.2 corrections to aria-query 5.3.2, which disagrees with the
+ * role tables on the rows below. Each entry cites the 1.2 table it follows, so
+ * the effective schema is pinned to the spec rather than to whatever
+ * aria-query ships next. `schema-drift.test.ts` pins the result.
+ */
+const ARIA_12_REQUIRED_CONTEXT: Record<string, string[]> = {
+  // https://www.w3.org/TR/wai-aria-1.2/#option — contained in, or owned by,
+  // a listbox or a group within a listbox. aria-query lists no context.
+  option: ["group", "listbox"],
+  // https://www.w3.org/TR/wai-aria-1.2/#rowheader — row only. aria-query adds
+  // rowgroup.
+  rowheader: ["row"],
+  // https://www.w3.org/TR/wai-aria-1.2/#caption — figure, grid, table and
+  // treegrid. aria-query omits treegrid.
+  caption: ["figure", "grid", "table", "treegrid"],
+};
+
+/** https://www.w3.org/TR/wai-aria-1.2/#separator — `aria-valuenow` is
+ *  required of a focusable separator. aria-query lists no required props. */
+const ARIA_12_REQUIRED_WHEN_FOCUSABLE: Record<string, string[]> = {
+  separator: ["aria-valuenow"],
+};
+
+function requiredContextOf(role: string, def: RoleDef | undefined): string[] {
+  return (
+    ARIA_12_REQUIRED_CONTEXT[role] ??
+    def?.requiredContextRole ??
+    def?.requireContextRole ??
+    []
+  );
+}
 
 /** ARIA attributes that represent dynamic *state* (mapped to `a11y.states`); the
  *  rest are treated as *properties* (`a11y.properties`) — mirroring core's split. */
@@ -103,12 +143,21 @@ export function attributesForRole(role: string): AttrSpec[] {
   const def = ariaRoles.get(role);
   if (!def) return [];
   const required = new Set(Object.keys(def.requiredProps ?? {}));
+  const whenFocusable = new Set(ARIA_12_REQUIRED_WHEN_FOCUSABLE[role] ?? []);
   const all = new Set<string>([
     ...Object.keys(def.requiredProps ?? {}),
     ...Object.keys(def.props ?? {}),
+    ...whenFocusable,
   ]);
   return [...all]
-    .map((name) => ({ name, required: required.has(name), ...attrType(name) }))
+    .map((name) => ({
+      name,
+      required: required.has(name),
+      ...(whenFocusable.has(name) && !required.has(name)
+        ? { requiredWhenFocusable: true }
+        : {}),
+      ...attrType(name),
+    }))
     .sort(
       (a, b) =>
         Number(b.required) - Number(a.required) || a.name.localeCompare(b.name),
@@ -119,8 +168,7 @@ export function roleMeta(role: string): RoleMeta {
   const def = ariaRoles.get(role);
   return {
     accessibleNameRequired: Boolean(def?.accessibleNameRequired),
-    requiredContextRole:
-      def?.requiredContextRole ?? def?.requireContextRole ?? [],
+    requiredContextRole: requiredContextOf(role, def),
     superClass: def?.superClass?.flat() ?? [],
   };
 }
@@ -143,8 +191,7 @@ export function suggestedChildRoles(parentRole: string | null): string[] {
   // Children that require this parent as their context.
   for (const r of CONCRETE_ROLES) {
     const def = ariaRoles.get(r);
-    const ctx = def?.requiredContextRole ?? def?.requireContextRole;
-    if (ctx && ctx.includes(parentRole)) out.add(r);
+    if (requiredContextOf(r, def).includes(parentRole)) out.add(r);
   }
   // Elements this parent is expected to own (last role of each ownership chain).
   const owned = ariaRoles.get(parentRole)?.requiredOwnedElements;

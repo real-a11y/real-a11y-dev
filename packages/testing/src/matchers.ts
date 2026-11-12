@@ -260,6 +260,12 @@ function discardedRoleOf(n: SemanticNode): string | undefined {
   return resolved ?? authored;
 }
 
+/** `focusable` for the validator, omitted when the producer recorded no
+ *  interaction facet so its fail-open default applies. */
+function focusableOf(n: SemanticNode): { focusable?: boolean } {
+  return n.interaction ? { focusable: n.interaction.isFocusable } : {};
+}
+
 function toValidatedNode(
   n: SemanticNode,
   parentId: string | null,
@@ -300,6 +306,9 @@ function toValidatedNode(
       (resolveRoleToken(authored) ?? authored) ===
         implicitRoleFor(tag, type, domAttrs),
     uaSuppliedAttrs: uaSuppliedAttrs(tag, type, getElementRefs().get(n.id)),
+    // Left out when the producer recorded no interaction facet, so the
+    // validator's fail-open default applies.
+    ...focusableOf(n),
     ...(discardedRole !== undefined ? { discardedRole } : {}),
   };
 }

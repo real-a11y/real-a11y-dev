@@ -305,20 +305,19 @@ describe("a role the user agent discarded", () => {
     ]);
   });
 
-  // aria-query lists no required context for option, so the rule can't
-  // either — but the browser still threw the role away, and an unnamed
-  // orphan option was an error before the role fell back.
-  it("reports one whose context the schema doesn't list", () => {
+  // aria-query lists no required context for option; WAI-ARIA 1.2 names a
+  // listbox, or a group within one, and the correction layer supplies it.
+  it("names the container of an orphaned option", () => {
     const n = node({ id: "n", role: "generic", discardedRole: "option" });
     expect(errorsFor(n)).toEqual([
-      'role "option" is discarded outside its required context',
+      'role "option" is discarded outside its required context (group / listbox)',
     ]);
   });
 
   it("goes on to judge the role the browser applies", () => {
     const n = node({ id: "n", role: "button", discardedRole: "option" });
     expect(errorsFor(n)).toEqual([
-      'role "option" is discarded outside its required context',
+      'role "option" is discarded outside its required context (group / listbox)',
       'role "button" requires an accessible name',
     ]);
   });
@@ -336,7 +335,36 @@ describe("a role the user agent discarded", () => {
       }),
     );
     expect(errorsFor(nodes.get("n")!, nodes)).toEqual([
-      'role "option" is discarded outside its required context',
+      'role "option" is discarded outside its required context (group / listbox)',
     ]);
+  });
+});
+
+describe("an implicit option directly in an implicit combobox", () => {
+  it("is in context: a native <select>'s own semantics fulfil it", () => {
+    const select = node({ id: "s", role: "combobox", implicitRole: true });
+    const option = node({
+      id: "o",
+      parentId: "s",
+      role: "option",
+      name: "A",
+      implicitRole: true,
+      uaSuppliedAttrs: ["aria-selected"],
+    });
+    expect(validateNode(option, mapOf(select, option))).toEqual([]);
+  });
+
+  it("an authored option in an authored combobox still warns", () => {
+    const combo = node({ id: "s", role: "combobox" });
+    const option = node({
+      id: "o",
+      parentId: "s",
+      role: "option",
+      name: "A",
+      attrs: { "aria-selected": false },
+    });
+    expect(
+      validateNode(option, mapOf(combo, option)).map((i) => i.message),
+    ).toEqual(["should be inside group / listbox"]);
   });
 });
