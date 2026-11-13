@@ -37,6 +37,7 @@ export {
   finishAnnouncedValue,
   getAnnouncedValue,
   getElementRefs,
+  PAGE_STATE_VALUE_ROLES,
   RANGE_VALUE_ROLES,
   STATE_ONLY_ROLES,
   PANEL_HOST_ATTRIBUTE,

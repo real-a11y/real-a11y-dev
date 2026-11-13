@@ -32,7 +32,9 @@ import {
   getAnnouncedValue,
   getDescendantText,
   MEDIA_TAGS,
+  PAGE_STATE_VALUE_ROLES,
   readFieldValue,
+  selectedLabels,
 } from "./field-text.js";
 import {
   flatChildNodes,
@@ -110,6 +112,7 @@ export {
   getAnnouncedValue,
   getDescendantText,
   ignoresChildText,
+  PAGE_STATE_VALUE_ROLES,
   RANGE_VALUE_ROLES,
   STATE_ONLY_ROLES,
 } from "./field-text.js";
@@ -597,16 +600,23 @@ function embeddedControlText(
   styleCache: StyleCache | null | undefined,
 ): string | null {
   if (!EMBEDDED_VALUE_ROLES.has(role)) return null;
+  const tag = safeTagName(element);
+  // Several chosen options join with spaces, as Chromium joins them in a name.
   const value =
-    role === "listbox" && safeTagName(element) !== "select"
-      ? Array.from(
-          element.querySelectorAll('[role="option"][aria-selected="true"]'),
-          (option) => computeAccessibleName(option, run, styleCache),
-        ).join(" ")
-      : readFieldValue(element, role, styleCache ?? undefined);
+    tag === "select"
+      ? selectedLabels(element as HTMLSelectElement).join(" ")
+      : role === "listbox"
+        ? Array.from(
+            element.querySelectorAll('[role="option"][aria-selected="true"]'),
+            (option) => computeAccessibleName(option, run, styleCache),
+          ).join(" ")
+        : readFieldValue(element, role, styleCache ?? undefined);
   const text = collapseAscii(value ?? "");
   if (!text) return "";
-  return run.redactInput || isSensitiveField(element) ? withhold(run) : text;
+  const entered = !PAGE_STATE_VALUE_ROLES.has(role);
+  return (run.redactInput && entered) || isSensitiveField(element)
+    ? withhold(run)
+    : text;
 }
 
 /**
@@ -654,10 +664,14 @@ function referenceText(
 ): string {
   const walk: NameWalk = referenceWalk(target, styleCache);
   const role = getImplicitRole(target);
+  // A control's value comes before its aria-label (AccName 2C precedes 2D):
+  // Chromium names `<button aria-labelledby="i">` over `<input id="i"
+  // aria-label="Field" value="typed">` "typed". An empty one gives way to it.
+  const embedded = embeddedControlText(target, role, run, styleCache);
   return trimAscii(
-    textAlternative(target, role, run, styleCache, walk) ||
-      (embeddedControlText(target, role, run, styleCache) ??
-        getAccessibleTextContent(target, run, styleCache, walk)),
+    embedded ||
+      textAlternative(target, role, run, styleCache, walk) ||
+      (embedded ?? getAccessibleTextContent(target, run, styleCache, walk)),
   );
 }
 

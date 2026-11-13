@@ -7,6 +7,7 @@
 
 import {
   NATIVE_AX_NAME_SOURCE_ROLES,
+  PAGE_STATE_VALUE_ROLES,
   REDACTED_VALUE,
   carriesAXValue,
   cleanAXText,
@@ -41,13 +42,6 @@ const REDACTED_NAME = REDACTED_VALUE;
 function isEditable(raw: RawAXNode): boolean {
   return (raw.properties ?? []).some((p) => p.name === "editable");
 }
-
-/** Roles whose value is the page's own state, never something a user entered. */
-const PAGE_STATE_VALUE_ROLES: ReadonlySet<string> = new Set([
-  "progressbar",
-  "meter",
-  "scrollbar",
-]);
 
 /**
  * Strict mode's value roots: every field whose value it withholds. That is

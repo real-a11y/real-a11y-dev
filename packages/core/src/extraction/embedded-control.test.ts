@@ -130,6 +130,55 @@ describe("an embedded control lends its value (AccName 2C)", () => {
     ).toBe("Count 2");
   });
 
+  it("reads a range the page sets too, as Chromium does", () => {
+    // AccName 2C names only a control the user adjusts; Chromium reads every
+    // range, so the DOM producer does.
+    expect(
+      nameOf(
+        `<h2 id="t">Upload <progress value="40" max="100"></progress></h2>`,
+      ),
+    ).toBe("Upload 40");
+    expect(nameOf(`<h2 id="t">Disk <meter value="0.6"></meter></h2>`)).toBe(
+      "Disk 0.6",
+    );
+    expect(
+      nameOf(
+        `<h2 id="t">Disk <div role="meter" aria-valuenow="60" aria-valuetext="60 percent"></div></h2>`,
+      ),
+    ).toBe("Disk 60 percent");
+    // An indeterminate progress bar holds no value.
+    expect(nameOf(`<h2 id="t">Loading <progress></progress></h2>`)).toBe(
+      "Loading",
+    );
+  });
+
+  it("joins several chosen options with spaces", () => {
+    expect(
+      nameOf(
+        `<h2 id="t">Pick <select multiple size="3"><option selected>A</option><option>B</option><option selected>C</option></select></h2>`,
+      ),
+    ).toBe("Pick A C");
+  });
+
+  it("puts a referenced control's value before its aria-label (2C precedes 2D)", () => {
+    expect(
+      nameOf(
+        `<input id="i" aria-label="Field" value="typed"><button id="t" aria-labelledby="i">b</button>`,
+      ),
+    ).toBe("typed");
+    expect(
+      nameOf(
+        `<div role="slider" id="i" tabindex="0" aria-valuenow="5" aria-label="Vol"></div><button id="t" aria-labelledby="i">b</button>`,
+      ),
+    ).toBe("5");
+    // An empty one gives way to its aria-label.
+    expect(
+      nameOf(
+        `<input id="i" aria-label="Field"><button id="t" aria-labelledby="i">b</button>`,
+      ),
+    ).toBe("Field");
+  });
+
   it("lends a description its value too", () => {
     expect(
       read(
@@ -170,17 +219,6 @@ describe("what an embedded control never lends", () => {
         `<h2 id="t">Pick <ul role="listbox"><li role="option">Apple</li><li role="option">Pear</li></ul></h2>`,
       ),
     ).toBe("Pick");
-  });
-
-  it("is a value the page sets: a progressbar, a meter", () => {
-    expect(
-      nameOf(
-        `<h2 id="t">Upload <progress value="40" max="100"></progress></h2>`,
-      ),
-    ).toBe("Upload");
-    expect(nameOf(`<h2 id="t">Disk <meter value="0.6"></meter></h2>`)).toBe(
-      "Disk",
-    );
   });
 
   it("is anything, for an empty control", () => {
@@ -243,6 +281,17 @@ describe("an embedded control's value under ADR-0001", () => {
     const html = `<label id="l">Age</label><div role="combobox" id="t" tabindex="0" aria-labelledby="l t">Ten</div>`;
     expect(nameOf(html)).toBe("Age Ten");
     expect(nameOf(html, "#t", true)).toBe(REDACTED_VALUE);
+  });
+
+  it("keeps a value the page sets in strict mode, as native does", () => {
+    // A progress bar's value is the page's state, never something entered.
+    expect(
+      nameOf(
+        `<h2 id="t">Upload <progress value="40" max="100"></progress></h2>`,
+        "#t",
+        true,
+      ),
+    ).toBe("Upload 40");
   });
 
   it("keeps a name with no value in it, in strict mode", () => {

@@ -320,11 +320,23 @@ export const STATE_ONLY_ROLES: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * Roles of a control whose value the user adjusts, which lends that value to
- * a name it is embedded in (AccName 1.2 step 2C, "Embedded Control"): a text
- * field's value, a combobox's or listbox's chosen option, a range's
- * `aria-valuetext`, else `aria-valuenow`, else its host value. Not a
- * progressbar, meter or scrollbar, whose value the page sets.
+ * Roles whose value is the page's own state, never something a user entered:
+ * strict mode (ADR-0001) leaves it in names. One set for both producers.
+ */
+export const PAGE_STATE_VALUE_ROLES: ReadonlySet<string> = new Set([
+  "progressbar",
+  "meter",
+  "scrollbar",
+]);
+
+/**
+ * Roles of a control that lends its value to a name it is embedded in
+ * (AccName 1.2 step 2C, "Embedded Control"): a text field's value, a
+ * combobox's or listbox's chosen option, a range's `aria-valuetext`, else
+ * `aria-valuenow`, else its host value. AccName names only a control the user
+ * adjusts, but Chromium reads every range this way, a progressbar, meter or
+ * scrollbar too (`<h2>Disk <meter value="0.6"></h2>` is "Disk 0.6"), and the
+ * DOM producer reads what Chromium reads.
  */
 export const EMBEDDED_VALUE_ROLES: ReadonlySet<string> = new Set([
   "textbox",
@@ -333,6 +345,7 @@ export const EMBEDDED_VALUE_ROLES: ReadonlySet<string> = new Set([
   "listbox",
   "slider",
   "spinbutton",
+  ...PAGE_STATE_VALUE_ROLES,
 ]);
 
 /** Non-native roles whose value is the text they hold. */
@@ -346,11 +359,10 @@ const TEXT_VALUE_ROLES: ReadonlySet<string> = new Set([
 const VALUE_MAX = DESCENDANT_TEXT_MAX;
 
 /** A `<select>`'s selected options by label — what a screen reader says. */
-function selectedLabels(select: HTMLSelectElement): string {
+export function selectedLabels(select: HTMLSelectElement): string[] {
   return Array.from(select.options)
     .filter((option) => option.selected)
-    .map((option) => option.label || option.text)
-    .join(", ");
+    .map((option) => option.label || option.text);
 }
 
 /** True when `element` wraps a text-entry control that holds the value
@@ -438,7 +450,9 @@ export function readFieldValue(
     return input.value;
   }
   if (tag === "textarea") return (element as HTMLTextAreaElement).value;
-  if (tag === "select") return selectedLabels(element as HTMLSelectElement);
+  if (tag === "select") {
+    return selectedLabels(element as HTMLSelectElement).join(", ");
+  }
 
   // A non-native field: an editor, or an ARIA textbox/combobox built on a div.
   // A textbox nested INSIDE an editor is part of that editor's content, which
