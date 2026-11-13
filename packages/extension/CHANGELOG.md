@@ -21,6 +21,12 @@
 
 ### Patch Changes
 
+- **The TAB view's engine treats `visibility: collapse` as hidden.** The
+  extension re-bundles the updated extractor, so an element styled
+  `visibility: collapse` no longer counts as exposed when the content script
+  walks tab stops and frame skeletons, as `visibility: hidden` already did
+  ([#644](https://github.com/real-a11y/real-a11y-dev/pull/644)). The A11Y tree
+  is Chromium's own and is unchanged.
 - **The TAB view's engine reads a heading's `aria-level` correctly.** The
   extension re-bundles the updated extractor: `aria-level` on `h1`-`h6` now
   wins over the tag number, and `0`, negative or non-numeric values no longer

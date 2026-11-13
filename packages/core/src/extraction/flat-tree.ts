@@ -57,7 +57,7 @@ function isSlot(node: Node): node is HTMLSlotElement {
  * The conditions mirror `isSubtreeHidden` (plus `aria-hidden`, which the walk
  * applies separately) and they matter in both directions:
  *
- * - **`visibility:hidden` is NOT here**, for the same reason `isSubtreeHidden`
+ * - **`visibility:hidden` and `collapse` are NOT here**, for the same reason `isSubtreeHidden`
  *   omits it: visibility is inherited but not subtree-hiding, so an assigned
  *   child may set `visibility:visible` and render after all. Real browsers
  *   inherit through the flat tree, so a child that doesn't override it is

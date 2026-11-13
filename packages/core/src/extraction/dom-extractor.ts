@@ -85,6 +85,7 @@ import {
   type NameRun,
   type RedactInputOption,
 } from "./strict-mode.js";
+import { isOwnVisibilityHidden } from "./visibility.js";
 
 export { KEY_ATTRIBUTES } from "./key-attributes.js";
 export {
@@ -305,16 +306,10 @@ function isVisuallyHidden(
   // An area is drawn by its image, whose visibility isSubtreeHidden read.
   if (element.localName === "area") return false;
 
-  if (computed) {
-    if (computed.visibility === "hidden") return true;
-    // NOTE: opacity:0 is intentionally NOT checked here.
-    // Custom form controls (radio, checkbox, file inputs) routinely use
-    // opacity:0 to hide the native widget behind a custom visual while
-    // keeping it interactive. opacity:0 is also not a WAI-ARIA hiding
-    // mechanism — AT still reads opacity-0 elements.
-  } else if ((element as HTMLElement).style?.visibility === "hidden") {
-    return true;
-  }
+  // NOTE: opacity:0 is intentionally NOT checked here. Custom form controls
+  // routinely use it to hide the native widget behind a custom visual while
+  // keeping it interactive, and AT still reads opacity-0 elements.
+  if (isOwnVisibilityHidden(element, computed)) return true;
 
   // sr-only pattern: visually hidden but intentionally accessible to AT
   if (isSrOnly(element, computed)) return true;
