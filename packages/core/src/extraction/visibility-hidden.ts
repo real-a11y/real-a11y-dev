@@ -7,9 +7,10 @@ import {
   isSubtreeHidden,
   type StyleCache,
 } from "./role-map.js";
+import { isOwnVisibilityHidden } from "./visibility.js";
 
 /**
- * Whether an element is hidden from AT by its own `visibility:hidden` and for
+ * Whether an element is hidden from AT by its own `visibility:hidden` or `collapse` and for
  * no other reason. Unlike `aria-hidden`, `display:none` or `inert`, that hides
  * the element alone: a descendant can set `visibility:visible` and be
  * rendered, so the a11y projection drops the node but keeps walking its
@@ -29,16 +30,15 @@ export function isHiddenOnlyByVisibility(
   }
   const computed =
     style !== undefined ? style : getCachedComputedStyle(element);
-  // No computed style (a DOM-less runtime): the inline value, as isHiddenFromAT.
-  const visibility = computed
-    ? computed.visibility
-    : (element as HTMLElement).style?.visibility;
-  return visibility === "hidden" && !isSubtreeHidden(element, computed);
+  return (
+    isOwnVisibilityHidden(element, computed) &&
+    !isSubtreeHidden(element, computed)
+  );
 }
 
 /**
  * The children of `element` a user could reach, looking through any child
- * hidden by its own `visibility:hidden`: that child is not reachable, but a
+ * hidden by its own `visibility:hidden` or `collapse`: that child is not reachable, but a
  * descendant that sets `visibility:visible` is. Children hidden any other way
  * (`aria-hidden`, `display:none`, `inert`) take their subtree with them.
  */

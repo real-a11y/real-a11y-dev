@@ -64,6 +64,17 @@ describe("visibility:collapse", () => {
     }
   });
 
+  it("keeps a visibility:visible child of a collapsed element, in both producers", async () => {
+    await page.setContent(
+      `<div style="visibility:collapse"><p style="visibility:visible">shown</p><p>inherits</p></div>`,
+    );
+    const { dom, native } = await trees();
+    for (const seen of [dom, native]) {
+      expect(has(seen, "paragraph", "shown")).toBe(true);
+      expect(has(seen, "paragraph", "inherits")).toBe(false);
+    }
+  });
+
   it("keeps opacity:0, clipped and off-screen content exposed", async () => {
     await page.setContent(
       `<p style="opacity:0">a</p>

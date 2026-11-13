@@ -4180,6 +4180,19 @@ describe("the own-text fallback reads through role-less inline wrappers", () => 
 });
 
 describe("an element styled visibility:collapse", () => {
+  it("keeps a visibility:visible child in the a11y tree", () => {
+    const root = createPage(
+      `<div style="visibility:collapse"><p id="v" style="visibility:visible">x</p></div>`,
+    );
+    document.body.appendChild(root);
+    try {
+      const nodes = [...extractA11yTree(root).nodes.values()];
+      expect(nodes.find((n) => n.dom?.attributes["id"] === "v")).toBeDefined();
+    } finally {
+      root.remove();
+    }
+  });
+
   it("reads as hidden, and is not exposed to AT", () => {
     const root = createPage(`<p id="c" style="visibility:collapse">x</p>`);
     document.body.appendChild(root);
