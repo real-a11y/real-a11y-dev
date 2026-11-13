@@ -25,6 +25,7 @@ import {
 import { isFocusable, parseHtmlInteger } from "./focusability.js";
 import { imageUsingMap } from "./image-map.js";
 import { tablePartRole, tdRole, thHeaderRole } from "./table-roles.js";
+import { isHiddenByVisibility, isOwnVisibilityHidden } from "./visibility.js";
 
 type RoleResolver = string | ((el: Element) => string);
 
@@ -136,7 +137,7 @@ function isImageRendered(image: Element | null): boolean {
     if (el.localName === "area" || isSubtreeHidden(el)) return false;
   }
   const visibility = getCachedComputedStyle(image)?.visibility;
-  return visibility !== "hidden" && visibility !== "collapse";
+  return !isHiddenByVisibility(visibility);
 }
 
 /**
@@ -831,16 +832,10 @@ export function isHiddenFromAT(
 
   if (isSubtreeHidden(element, computed)) return true;
 
-  if (computed) {
-    if (computed.visibility === "hidden") return true;
-  } else if ((element as HTMLElement).style?.visibility === "hidden") {
-    // No computed style (a DOM-less runtime): read the inline value, the same
-    // fallback `isVisuallyHidden` uses. Without it the two disagree, and a
-    // "not visible but exposed" node reads as sr-only content AT would see.
-    return true;
-  }
-
-  return false;
+  // No computed style (a DOM-less runtime): read the inline value, the same
+  // fallback `isVisuallyHidden` uses, or a "not visible but exposed" node
+  // reads as sr-only content AT would see.
+  return isOwnVisibilityHidden(element, computed);
 }
 
 /**

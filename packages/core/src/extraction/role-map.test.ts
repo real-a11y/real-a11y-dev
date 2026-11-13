@@ -9,6 +9,7 @@ import {
   isSubtreeHidden,
   getHeadingLevel,
 } from "./role-map.js";
+import { isHiddenByVisibility } from "./visibility.js";
 
 function el(html: string): Element {
   const div = document.createElement("div");
@@ -1564,6 +1565,32 @@ describe("isHiddenFromAT", () => {
   it("falls back to inline visibility:hidden when there is no computed style", () => {
     const node = el('<div style="visibility:hidden">Ghost</div>');
     expect(isHiddenFromAT(node, null)).toBe(true);
+  });
+});
+
+describe("visibility:collapse", () => {
+  it("is AT-hidden like visibility:hidden, but not subtree-hidden", () => {
+    const node = el('<div style="visibility:collapse">Ghost</div>');
+    document.body.appendChild(node);
+    try {
+      expect(isSubtreeHidden(node)).toBe(false);
+      expect(isHiddenFromAT(node)).toBe(true);
+    } finally {
+      node.remove();
+    }
+  });
+
+  it("falls back to inline visibility:collapse when there is no computed style", () => {
+    const node = el('<div style="visibility:collapse">Ghost</div>');
+    expect(isHiddenFromAT(node, null)).toBe(true);
+  });
+
+  it("names exactly hidden and collapse as hiding values", () => {
+    expect(isHiddenByVisibility("hidden")).toBe(true);
+    expect(isHiddenByVisibility("collapse")).toBe(true);
+    expect(isHiddenByVisibility("visible")).toBe(false);
+    expect(isHiddenByVisibility("")).toBe(false);
+    expect(isHiddenByVisibility(undefined)).toBe(false);
   });
 });
 
