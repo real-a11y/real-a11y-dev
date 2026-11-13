@@ -4723,7 +4723,9 @@ describe("a <textarea>'s markup text is its default value, never text (ADR-0001)
     );
     document.body.appendChild(root);
     try {
-      expect(nodeFor(root, "input").a11y.name).toBe("");
+      // The reference reads the field's value (AccName 2C), and a sensitive
+      // one withholds the whole name built from it.
+      expect(nodeFor(root, "input").a11y.name).toBe("[redacted]");
       expect(nodeFor(root, "button").a11y.description).toBe("");
       expect(extracted(root)).not.toContain(SECRET);
     } finally {
@@ -4740,8 +4742,10 @@ describe("a <textarea>'s markup text is its default value, never text (ADR-0001)
     );
     document.body.appendChild(root);
     try {
-      expect(nodeFor(root, "#pay").a11y.name).toBe("Pay Code");
-      expect(nodeFor(root, "#ref").a11y.name).toBe("Card");
+      // The title reads the field's value (AccName 2C), and a sensitive one
+      // withholds the whole name built from it.
+      expect(nodeFor(root, "#pay").a11y.name).toBe("[redacted]");
+      expect(nodeFor(root, "#ref").a11y.name).toBe("[redacted]");
       expect(extracted(root)).not.toContain(SECRET);
     } finally {
       root.remove();

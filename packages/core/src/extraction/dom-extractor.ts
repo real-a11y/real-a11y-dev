@@ -28,9 +28,11 @@ import { isEditable, isEditingHost } from "./editing.js";
 import { canExpand } from "./expanded-roles.js";
 import { addFieldStates, optionStates } from "./field-states.js";
 import {
+  EMBEDDED_VALUE_ROLES,
   getAnnouncedValue,
   getDescendantText,
   MEDIA_TAGS,
+  readFieldValue,
 } from "./field-text.js";
 import {
   flatChildNodes,
@@ -80,6 +82,7 @@ import { isSrOnly } from "./sr-only.js";
 import {
   nameText,
   newNameRun,
+  withhold,
   withholdStates,
   type NameRun,
   type RedactInputOption,
@@ -574,6 +577,62 @@ function textAlternative(
 }
 
 /**
+ * What a control the user adjusts lends a name or description it sits in
+ * (AccName 1.2 step 2C), or `null` when `element` isn't one
+ * ({@link EMBEDDED_VALUE_ROLES}): its value as {@link readFieldValue} reads it,
+ * or an ARIA listbox's chosen options. Only that: never its `aria-label`
+ * (step 2D), nor a combobox's or listbox's other options. Chromium names
+ * `<label><input type="checkbox"> Flash the screen <input value="3"> times
+ * </label>` "Flash the screen 3 times".
+ *
+ * A sensitive field's value, and in strict mode any value, is withheld: the
+ * whole name reads `[redacted]` (see {@link NameRun.withheld}), as the native
+ * producer reads a name built around such a field. An empty control lends
+ * nothing and withholds nothing.
+ */
+function embeddedControlText(
+  element: Element,
+  role: string,
+  run: NameRun,
+  styleCache: StyleCache | null | undefined,
+): string | null {
+  if (!EMBEDDED_VALUE_ROLES.has(role)) return null;
+  const value =
+    role === "listbox" && safeTagName(element) !== "select"
+      ? Array.from(
+          element.querySelectorAll('[role="option"][aria-selected="true"]'),
+          (option) => computeAccessibleName(option, run, styleCache),
+        ).join(" ")
+      : readFieldValue(element, role, styleCache ?? undefined);
+  const text = collapseAscii(value ?? "");
+  if (!text) return "";
+  return run.redactInput || isSensitiveField(element) ? withhold(run) : text;
+}
+
+/**
+ * What a name-from-content barrier lends the walk it sits in
+ * ({@link isNameBarrierElement}, with the role in hand): a control the user
+ * adjusts its value ({@link embeddedControlText}), unless it is the control
+ * being named (see `NameRun.named`), and any other barrier nothing. `null`
+ * when `element` is no barrier.
+ */
+function barrierText(
+  element: Element,
+  role: string,
+  run: NameRun,
+  styleCache: StyleCache | null | undefined,
+): string | null {
+  const embedded =
+    element === run.named
+      ? null
+      : embeddedControlText(element, role, run, styleCache);
+  if (embedded !== null) return embedded;
+  return NAME_BARRIER_ROLES.has(role) && !isImplicitDetailsGroup(element)
+    ? ""
+    : null;
+}
+
+/**
  * The text an aria-labelledby (or aria-describedby) reference borrows from its
  * target: the target's own alternative where it has one, else its content.
  * Chromium reads `<button aria-labelledby="i">` over `<img id="i" alt="Direct">`
@@ -594,9 +653,11 @@ function referenceText(
   styleCache?: StyleCache | null,
 ): string {
   const walk: NameWalk = referenceWalk(target, styleCache);
+  const role = getImplicitRole(target);
   return trimAscii(
-    textAlternative(target, getImplicitRole(target), run, styleCache, walk) ||
-      getAccessibleTextContent(target, run, styleCache, walk),
+    textAlternative(target, role, run, styleCache, walk) ||
+      (embeddedControlText(target, role, run, styleCache) ??
+        getAccessibleTextContent(target, run, styleCache, walk)),
   );
 }
 
@@ -762,11 +823,11 @@ function getAccessibleTextContent(
           text += spaced || (named && !source.fromContent) ? ` ${name} ` : name;
           continue;
         }
-        if (NAME_BARRIER_ROLES.has(role) && !isImplicitDetailsGroup(childEl)) {
-          // isNameBarrierElement, with the role already in hand. It lends no
-          // text, but its box still keeps the neighbours apart: Chromium reads
-          // `<h1>Save<input>now</h1>` as "Save now".
-          if (spaced) text += " ";
+        // A barrier's box keeps its neighbours apart even when it lends no
+        // text: Chromium reads `<h1>Save<input>now</h1>` as "Save now".
+        const barrier = barrierText(childEl, role, run, styleCache);
+        if (barrier !== null) {
+          text += spaced ? ` ${barrier} ` : barrier;
           continue;
         }
         const alternative = walk.textOnly
@@ -832,7 +893,12 @@ function accessibleName(
   styleCache: StyleCache,
   redactInput: boolean,
 ): string {
-  const run = newNameRun(redactInput);
+  // A label's own name leaves its control's value out, as the control's does.
+  const control =
+    safeTagName(element) === "label"
+      ? (element as HTMLLabelElement).control
+      : null;
+  const run = newNameRun(redactInput, control ?? element);
   const name = computeAccessibleName(element, run, styleCache);
   return run.withheld ? REDACTED_VALUE : name;
 }
@@ -921,6 +987,13 @@ function computeRawAccessibleName(
         label === wrappingLabel
           ? wrappingLabelText(label, element, styleCache, {
               readText: (node) => nameText(node, run),
+              readEmbedded: (child) =>
+                embeddedControlText(
+                  child,
+                  getImplicitRole(child),
+                  run,
+                  styleCache,
+                ),
               readChild: (child, textVisible) =>
                 // Each child's own alternative first, as in any name walk:
                 // Chromium names `<label><img alt="Email"> <input></label>`

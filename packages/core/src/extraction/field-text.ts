@@ -319,6 +319,22 @@ export const STATE_ONLY_ROLES: ReadonlySet<string> = new Set([
   "menuitemradio",
 ]);
 
+/**
+ * Roles of a control whose value the user adjusts, which lends that value to
+ * a name it is embedded in (AccName 1.2 step 2C, "Embedded Control"): a text
+ * field's value, a combobox's or listbox's chosen option, a range's
+ * `aria-valuetext`, else `aria-valuenow`, else its host value. Not a
+ * progressbar, meter or scrollbar, whose value the page sets.
+ */
+export const EMBEDDED_VALUE_ROLES: ReadonlySet<string> = new Set([
+  "textbox",
+  "searchbox",
+  "combobox",
+  "listbox",
+  "slider",
+  "spinbutton",
+]);
+
 /** Non-native roles whose value is the text they hold. */
 const TEXT_VALUE_ROLES: ReadonlySet<string> = new Set([
   "textbox",
@@ -387,7 +403,7 @@ export function fieldValueOwner(el: Element): Element | null {
 }
 
 /** The raw text a field holds, before sensitivity, collapse and cap. */
-function readFieldValue(
+export function readFieldValue(
   element: Element,
   role: string,
   styleCache?: StyleCache,
