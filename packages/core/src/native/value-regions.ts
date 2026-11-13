@@ -202,7 +202,7 @@ function holdsNameText(raw: RawAXNameNode): boolean {
 /** `raw` is part of what a user types into: a text field's own text, an
  *  editor's content. */
 function typedIn(raw: RawAXNameNode): boolean {
-  return Boolean(nativeAXProperty(raw, "editable")?.value);
+  return nativeAXProperty(raw, "editable") !== undefined;
 }
 
 /** `id` is `ancestor` or sits beneath it. */
@@ -740,10 +740,7 @@ export function fieldStandIns<T extends RawAXNameNode>(
         break;
       }
       chain.push(cur.nodeId);
-      if (
-        carriesAXValue(cur) ||
-        nativeAXProperty(cur, "editable") !== undefined
-      ) {
+      if (carriesAXValue(cur) || typedIn(cur)) {
         result = true;
         break;
       }
