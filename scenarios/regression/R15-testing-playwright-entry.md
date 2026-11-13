@@ -6,7 +6,7 @@ area: Testing
 type: Automated
 priority: P0
 status: Active
-validFrom: "testing ≥ 0.1.0-beta.11 (the ./playwright subpath export). nativeTree() through the handle: any release with the `tree: "native"` option. Step 10 is from the release that dropped `listByRole` from the bundle — on earlier releases `__realA11y__.listByRole` is still present, which is the old surface rather than a failure. `browser` is PRIVATE from this release on, so there is no browser version to pin or install — assert against `@real-a11y-dev/testing` only. Its page-bundle is now INLINED into this package as source text rather than read from disk, so step 10's direct `__realA11y__` reach is unchanged but there is no bundle file beside testing's dist to look for."
+validFrom: "testing ≥ 0.1.0-beta.11 (the ./playwright subpath export). nativeTree() through the handle: any release with the `tree: "native"` option. Step 10 is from the release that dropped `listByRole` from the bundle — on earlier releases `__realA11y__.listByRole` is still present, which is the old surface rather than a failure. `browser` is PRIVATE from this release on, so there is no browser version to pin or install — assert against `@real-a11y-dev/testing` only. Its page-bundle is now INLINED into this package as source text rather than read from disk, so step 10's direct `__realA11y__` reach is unchanged but there is no bundle file beside testing's dist to look for. Step 11 (strict mode on the DOM tree): testing ≥ 0.1.0-beta.23; before it, `attach(page, { redactInput: true })` throws, which is the old surface rather than a failure."
 validUntil: ""
 expected: "attach works on a CSP-strict page; handle survives goto(); Frame attach audits iframe content; bad rootSelector throws; the bundle is also callable directly as __realA11y__ (the Trusted-Types path), and listByRole is no longer among its exports"
 twin: D5
@@ -37,6 +37,11 @@ pnpm --filter @real-a11y-dev/testing test:e2e
     IIFE, then call `globalThis.__realA11y__.treeSnapshot(document.body)` and one
     `assert*` helper without going through `attach()`. Also confirm
     `__realA11y__.listByRole` is **absent**
+11. On a page with a `contenteditable` composer whose text names a heading around
+    it (`<h2>Draft: <span contenteditable>…</span></h2>`) and a button
+    (`aria-labelledby` pointing at it), write a sentinel into the composer, then
+    `attach(page, { redactInput: true })` — the DOM tree, no `tree` option — and
+    take every snapshot the handle offers, plus one failing `assert*`
 
 ## Expected
 
@@ -49,6 +54,10 @@ pnpm --filter @real-a11y-dev/testing test:e2e
   reads as "clean page"
 - **8** — returns Chromium's own tree, reaching UA-shadow media controls
 - **9** — the sentinel appears in no snapshot
+- **11** — the sentinel appears in no snapshot and no assertion message; the
+  heading and the button print `"[redacted]"` in the tree snapshot and the tab
+  sequence alike, while `attach(page)` without the option prints the sentinel in
+  both names. Strict mode used to be native-only and threw here
 - **10** — the direct calls work: `__realA11y__` is a published surface, not an
   internal of `attach()`, and evaluating the IIFE is the documented escape hatch
   where `addScriptTag` is blocked. `listByRole` is gone from it as of

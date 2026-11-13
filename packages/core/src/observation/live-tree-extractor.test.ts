@@ -703,6 +703,138 @@ describe("LiveTreeExtractor", () => {
     observer.stop();
   });
 
+  // Strict mode holds for the partial re-extractions a refresh splices in, not
+  // only for the first full one: a refresh must equal a clean strict read.
+  it("keeps strict mode across a refresh, typing included", async () => {
+    document.body.innerHTML = `<main><h2>Draft: <span contenteditable>hi</span></h2><input aria-label="City"></main>`;
+    const live = new LiveTreeExtractor(document.body, {
+      mode: "a11y",
+      redactInput: true,
+    });
+    let lastChange: TreeChange | undefined;
+    const observer = new DomObserver(
+      document.body,
+      (change) => {
+        lastChange = change;
+      },
+      50,
+    );
+    observer.start();
+
+    document.querySelector("span")!.firstChild!.nodeValue = "secret plan";
+    const input = document.querySelector("input") as HTMLInputElement;
+    input.value = "Quito";
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    await vi.advanceTimersByTimeAsync(100);
+
+    const result = live.refresh(lastChange);
+    expect(result.nodes).toEqual(
+      extractA11yTree(document.body, { redactInput: true }).nodes,
+    );
+    expect(result.source).toEqual({ producer: "dom", redactInput: true });
+    const nodes = [...result.nodes.values()];
+    expect(nodes.find((n) => n.a11y.role === "heading")?.a11y.name).toBe(
+      "[redacted]",
+    );
+    const city = nodes.find((n) => n.a11y.name === "City");
+    expect(city?.a11y.value).toBeUndefined();
+    expect(city?.dom?.attributes.value).toBeUndefined();
+    // No node carries either, the `dom` text previews included.
+    expect(JSON.stringify(nodes)).not.toMatch(/secret plan|Quito/);
+
+    // The DOM view is strict too, its ancestors' previews after the splice
+    // included.
+    const dom = live.setMode("dom");
+    expect(dom.source).toEqual({ producer: "dom", redactInput: true });
+    expect(JSON.stringify([...dom.nodes.values()])).not.toMatch(
+      /secret plan|Quito/,
+    );
+
+    observer.stop();
+  });
+
+  // A region that becomes an editor withholds its text from every name that
+  // reads it, a referrer to an id inside it included, which no splice of the
+  // region reaches. A refresh must still equal a clean strict read.
+  it("refreshes a referrer's name when a region becomes an editor in strict mode", async () => {
+    document.body.innerHTML = `<main><div id="box"><h2 id="t">Quarterly plan</h2></div><button aria-labelledby="t">Open</button></main>`;
+    const live = new LiveTreeExtractor(document.body, {
+      mode: "a11y",
+      redactInput: true,
+    });
+    let lastChange: TreeChange | undefined;
+    const observer = new DomObserver(
+      document.body,
+      (change) => {
+        lastChange = change;
+      },
+      50,
+    );
+    observer.start();
+
+    document.getElementById("box")!.setAttribute("contenteditable", "true");
+    await vi.advanceTimersByTimeAsync(100);
+
+    const result = live.refresh(lastChange);
+    expect(result.nodes).toEqual(
+      extractA11yTree(document.body, { redactInput: true }).nodes,
+    );
+    const button = [...result.nodes.values()].find(
+      (n) => n.a11y.role === "button",
+    );
+    expect(button?.a11y.name).toBe("[redacted]");
+
+    observer.stop();
+  });
+
+  it("reads any truthy redactInput as strict mode", () => {
+    document.body.innerHTML = `<main><h2>Draft: <span contenteditable>secret plan</span></h2></main>`;
+    const live = new LiveTreeExtractor(document.body, {
+      mode: "a11y",
+      // A plain-JS caller passing an environment variable through.
+      redactInput: "1" as unknown as boolean,
+    });
+    const result = live.refresh();
+    expect(result.source).toEqual({ producer: "dom", redactInput: true });
+    expect(JSON.stringify([...result.nodes.values()])).not.toMatch(
+      /secret plan/,
+    );
+  });
+
+  // Strict mode keeps a chosen option's `selected` off its node, so the check
+  // for native states that moved must not read that gap as a change.
+  it("leaves a selected option alone in strict mode when something else changes", async () => {
+    document.body.innerHTML = `<main><select aria-label="Size"><option>S</option><option selected>L</option></select><p id="p">Before</p></main>`;
+    const live = new LiveTreeExtractor(document.body, {
+      mode: "dom",
+      redactInput: true,
+    });
+    const optionL = () =>
+      [...live.extract().nodes.values()].find((n) => n.a11y.name === "L")!;
+    const before = optionL();
+    let lastChange: TreeChange | undefined;
+    const observer = new DomObserver(
+      document.body,
+      (change) => {
+        lastChange = change;
+      },
+      50,
+    );
+    observer.start();
+    document.getElementById("p")!.textContent = "After";
+    await vi.advanceTimersByTimeAsync(100);
+    observer.stop();
+
+    const result = live.refresh(lastChange);
+    const after = [...result.nodes.values()].find((n) => n.a11y.name === "L");
+    // Not re-extracted: the very node the full extraction built.
+    expect(after).toBe(before);
+    expect(after?.a11y.states.selected).toBeUndefined();
+    expect(result.nodes).toEqual(
+      extractDomTree(document.body, { redactInput: true }).nodes,
+    );
+  });
+
   // A role-less inline wrapper's text is the paragraph's own (see `isTextRun`
   // in extraction/dom-extractor), so a change inside it, or one that gives it a
   // node of its own, renames the paragraph — which no other climb reaches.

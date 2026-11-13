@@ -16,7 +16,8 @@
  * @internal
  */
 
-import { REDACTED_VALUE } from "../extraction/dom-extractor.js";
+import { REDACTED_VALUE } from "../extraction/sensitivity.js";
+import { trimAscii } from "../utils/ascii-whitespace.js";
 
 import type { RawNativeAXNode } from "./ax-normalize.js";
 import { NATIVE_AX_NAME_SOURCE_ROLES } from "./ax-vocabulary.js";
@@ -45,6 +46,17 @@ export interface RawAXNameNode extends RawNativeAXNode {
   name?: { value?: string; sources?: AXNameSource[] };
   description?: { value?: string };
   properties?: Array<{ name: string; value?: AXPropertyValue }>;
+}
+
+/**
+ * True when `text` holds more than ASCII whitespace. A U+00A0 is text, as a
+ * name keeps it (#639), and an editor writes a typed space as one: an editor
+ * holding nothing else has something typed, and a name of nothing else
+ * still shows it. What the redaction rules ask, where {@link cleanAXText}
+ * would call such text empty.
+ */
+export function hasAXText(text: string): boolean {
+  return trimAscii(text) !== "";
 }
 
 /** Collapse internal whitespace and trim: how every native transport
@@ -138,7 +150,7 @@ export function nativeAXProperty(
 /** A value with text that isn't only whitespace, as text; else `undefined`. */
 export function nonEmptyAXText(value: unknown): string | undefined {
   const text = axValueText(value);
-  return text !== undefined && text.trim() !== "" ? text : undefined;
+  return text !== undefined && hasAXText(text) ? text : undefined;
 }
 
 /** `raw` has an AX value with text in it. */
@@ -170,7 +182,7 @@ export function holdsContent<T extends RawAXNameNode>(
     if (
       text &&
       NATIVE_AX_NAME_SOURCE_ROLES.has(cur.role?.value ?? "") &&
-      cleanAXText(String(cur.name?.value ?? "")) !== ""
+      hasAXText(String(cur.name?.value ?? ""))
     ) {
       return true;
     }
@@ -325,8 +337,7 @@ export function winningNameSource(
   raw: RawAXNameNode,
 ): AXNameSource | undefined {
   return raw.name?.sources?.find(
-    (s) =>
-      s.superseded !== true && cleanAXText(String(s.value?.value ?? "")) !== "",
+    (s) => s.superseded !== true && hasAXText(String(s.value?.value ?? "")),
   );
 }
 
@@ -362,7 +373,7 @@ export function withholdRegionNames<T extends RawAXNameNode>(
   if (regions.roots.size === 0) return rawNodes;
   return rawNodes.map((raw) => {
     let out = raw;
-    if (cleanAXText(String(raw.name?.value ?? "")) !== "") {
+    if (hasAXText(String(raw.name?.value ?? ""))) {
       const winner = winningNameSource(raw);
       const redact =
         (regions.containing.has(raw.nodeId) &&
@@ -468,7 +479,7 @@ function isBareGeneric(raw: RawAXNameNode | undefined): boolean {
 function isTextRun(raw: RawAXNameNode | undefined): boolean {
   return (
     raw?.role?.value === "StaticText" &&
-    cleanAXText(String(raw.name?.value ?? "")) !== ""
+    hasAXText(String(raw.name?.value ?? ""))
   );
 }
 

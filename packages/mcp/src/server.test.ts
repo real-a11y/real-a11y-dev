@@ -2378,7 +2378,7 @@ describe("field values (ADR-0001)", () => {
     const client = await connect(session);
     await client.callTool({ name: "get_tab_order", arguments: {} });
     const call = session.calls.find((c) => c.fn === "tabSequenceSnapshot");
-    expect(call?.args).toEqual([{ values: true }]);
+    expect(call?.args).toEqual([{ values: true, redactInput: false }]);
   });
 
   it("diff_tree reports a typed value as (unset) → the value", async () => {
@@ -2421,10 +2421,12 @@ describe("field values (ADR-0001)", () => {
       expect(nativeTreeOptions().every((o) => o?.redactInput === true)).toBe(
         true,
       );
+      // The tab order is the in-page walk's: it extracts in strict mode too,
+      // so no name it prints carries a value or editor text.
       await client.callTool({ name: "get_tab_order", arguments: {} });
       expect(
         session.calls.find((c) => c.fn === "tabSequenceSnapshot")?.args,
-      ).toEqual([{ values: false }]);
+      ).toEqual([{ values: false, redactInput: true }]);
     });
 
     it("says so in the tool descriptions", async () => {

@@ -6,6 +6,7 @@ import {
   findAllByRole,
   getElementRefs,
   getOutline,
+  insideEditor,
   isExtractionResult,
   linearize,
   ROLE_FILTER_GROUPS,
@@ -241,10 +242,23 @@ function requireRules(rules: readonly A11yRule[], fn: string): void {
  */
 const cssPath = (el: Element): string => buildCssPath(el, DOM_ELEMENT_ADAPTER);
 
-/** `href` + nearest landmark, to tell otherwise-identical findings apart. */
-function elementContext(el: Element): string | undefined {
+/**
+ * {@link cssPath} for a tree read in strict mode: an element inside an editor
+ * lends the path no `id`, which some editors derive from a heading's text. The
+ * native producer's locators skip the same ids (`createLocatorIndex`).
+ */
+const STRICT_DOM_ADAPTER: typeof DOM_ELEMENT_ADAPTER = {
+  ...DOM_ELEMENT_ADAPTER,
+  id: (el) => (insideEditor(el) ? null : DOM_ELEMENT_ADAPTER.id(el)),
+};
+
+/**
+ * `href` + nearest landmark, to tell otherwise-identical findings apart. In
+ * strict mode no `href` from inside an editor, where a user typed or pasted it.
+ */
+function elementContext(el: Element, strict: boolean): string | undefined {
   const bits: string[] = [];
-  const href = el.getAttribute("href");
+  const href = strict && insideEditor(el) ? null : el.getAttribute("href");
   if (href) {
     bits.push(`href="${href.length > 48 ? href.slice(0, 48) + "…" : href}"`);
   }
@@ -263,7 +277,10 @@ function elementContext(el: Element): string | undefined {
  * computed here; without one, the locator the producer precomputed is used and
  * there is no context to derive. `{}` only when neither is available.
  */
-function locate(node: SemanticNode): Pick<Finding, "locator" | "context"> {
+function locate(
+  node: SemanticNode,
+  tree: ExtractionResult,
+): Pick<Finding, "locator" | "context"> {
   const el = getElementRefs().get(node.id);
   if (!el) {
     // No live element: this tree came from the native producer, which ran in
@@ -272,8 +289,12 @@ function locate(node: SemanticNode): Pick<Finding, "locator" | "context"> {
     const precomputed = node.dom?.locator;
     return precomputed ? { locator: precomputed } : {};
   }
-  const context = elementContext(el);
-  return context ? { locator: cssPath(el), context } : { locator: cssPath(el) };
+  // A strict tree's findings are strict too: the live element would otherwise
+  // say what the tree was read without.
+  const strict = tree.source?.redactInput === true;
+  const locator = strict ? buildCssPath(el, STRICT_DOM_ADAPTER) : cssPath(el);
+  const context = elementContext(el, strict);
+  return context ? { locator, context } : { locator };
 }
 
 /** `heading-order`: exactly one `<h1>`, and no skipped heading levels. Appends to `findings`. */
@@ -372,7 +393,7 @@ function unlabeledInteractiveFindings(
       message: tag
         ? `Unlabeled interactive element: ${node.a11y.role} <${tag}>`
         : `Unlabeled interactive element: ${node.a11y.role}`,
-      ...locate(node),
+      ...locate(node, tree),
     });
   }
 }
@@ -394,7 +415,7 @@ function labelTitleOnlyFindings(
       message: tag
         ? `Form element <${tag}> is labeled only by title or aria-describedby — add a visible <label>, aria-label, or aria-labelledby.`
         : `Form element is labeled only by title or aria-describedby — add a visible <label>, aria-label, or aria-labelledby.`,
-      ...locate(node),
+      ...locate(node, tree),
     });
   }
 }
@@ -419,7 +440,7 @@ function imageAltFindings(tree: ExtractionResult, findings: Finding[]): void {
       message: tag
         ? `Image has no accessible name: <${tag}> — add alt text, or mark it decorative with alt="".`
         : `Image has no accessible name — add alt text, or mark it decorative with alt="".`,
-      ...locate(node),
+      ...locate(node, tree),
     });
   }
 }
@@ -441,7 +462,7 @@ function dialogLabeledFindings(
       role: d.a11y.role,
       ...(d.dom?.tagName ? { tagName: d.dom.tagName } : {}),
       message: `Dialog (role ${d.a11y.role}) has no accessible name.`,
-      ...locate(d),
+      ...locate(d, tree),
     });
   }
 }
@@ -560,7 +581,7 @@ export function listByRole(
       value !== undefined ? ` = ${JSON.stringify(value)}` : "";
     const level = node.a11y.properties?.level;
     const levelSuffix = level ? ` (level ${level})` : "";
-    const { locator, context } = locate(node);
+    const { locator, context } = locate(node, tree);
     const where = locator
       ? `  [${locator}${context ? ` · ${context}` : ""}]`
       : "";
@@ -629,7 +650,9 @@ function assertRulesAs(
  * Every interactive node must have a non-empty accessible name.
  * Throws an {@link A11yAssertionError} listing the offenders.
  */
-export function assertNoUnlabeledInteractive(root: Element): void {
+export function assertNoUnlabeledInteractive(
+  root: Element | ExtractionResult,
+): void {
   assertRulesAs(
     root,
     ["no-unlabeled-interactive"],
@@ -640,7 +663,7 @@ export function assertNoUnlabeledInteractive(root: Element): void {
 /**
  * Heading structure sanity check: exactly one `h1` and no skipped levels.
  */
-export function assertHeadingOrder(root: Element): void {
+export function assertHeadingOrder(root: Element | ExtractionResult): void {
   assertRulesAs(root, ["heading-order"], "assertHeadingOrder");
 }
 
@@ -648,7 +671,7 @@ export function assertHeadingOrder(root: Element): void {
  * Every dialog must have an accessible name (via `aria-label`, labelledby, or
  * a visible title child).
  */
-export function assertDialogsLabeled(root: Element): void {
+export function assertDialogsLabeled(root: Element | ExtractionResult): void {
   assertRulesAs(root, ["dialog-labeled"], "assertDialogsLabeled");
 }
 
@@ -656,7 +679,9 @@ export function assertDialogsLabeled(root: Element): void {
  * Landmarks sanity: exactly one `main`, and `banner`/`contentinfo` appear at
  * most once at the top level.
  */
-export function assertLandmarkStructure(root: Element): void {
+export function assertLandmarkStructure(
+  root: Element | ExtractionResult,
+): void {
   assertRulesAs(root, ["landmark-structure"], "assertLandmarkStructure");
 }
 

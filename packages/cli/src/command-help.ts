@@ -118,8 +118,10 @@ but not the SEQUENCE — tabindex never reaches it — so tab order is DOM work 
 nature, not a fallback.
 
 Each stop shows its field value; a password, one-time code or payment field
-reads "[redacted]". --redact-input drops the values. A link typed into a
-rich-text editor is not a Tab stop, so it never appears here; a
+reads "[redacted]". --redact-input drops the values, and a stop whose name
+would carry text typed into a rich-text editor reads "[redacted]", as in
+tree. A link typed into a rich-text editor is not a Tab stop, so it never
+appears here; a
 contenteditable="false" island such as a mention chip is one, and keeps its
 name.
 

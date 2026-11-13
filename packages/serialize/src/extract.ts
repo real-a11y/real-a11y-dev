@@ -2,6 +2,7 @@ import {
   extractA11yTree,
   extractDomTree,
   type ExtractionResult,
+  type RedactInputOption,
   type TreeViewMode,
 } from "@real-a11y-dev/core";
 
@@ -12,6 +13,9 @@ import {
 export function extract(
   root: Element,
   mode: TreeViewMode = "a11y",
+  options: RedactInputOption = {},
 ): ExtractionResult {
-  return mode === "dom" ? extractDomTree(root) : extractA11yTree(root);
+  return mode === "dom"
+    ? extractDomTree(root, options)
+    : extractA11yTree(root, options);
 }

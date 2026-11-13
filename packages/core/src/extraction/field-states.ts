@@ -4,7 +4,7 @@ import {
   safeParentElement,
   safeTagName,
 } from "./clobber-safe.js";
-import { isSensitiveField } from "./dom-extractor.js";
+import { isSensitiveField } from "./sensitivity.js";
 
 /** `<input>` types the `readonly` attribute applies to (HTML, 4.10.5.3). */
 const READONLY_INPUT_TYPES = new Set([

@@ -21,23 +21,25 @@ import {
   resolveEffectiveRoot,
   resolveFocusedElement,
   textRunHost,
+  type RedactInputOption,
 } from "../extraction/dom-extractor.js";
 import {
   deepQuerySelectorAll,
   flatParent,
   isRenderedInFlatTree,
 } from "../extraction/flat-tree.js";
+import { withholdsState } from "../extraction/strict-mode.js";
 import type { ExtractionResult, SemanticNode, TreeChange } from "../types.js";
 import { getNodeId } from "../utils/id-generator.js";
 import { warnOutsideProduction } from "../utils/warn.js";
 
 import {
+  forcesFullExtraction,
   IMAGE_RENDERING_ATTRS,
-  REFERENCE_ATTRS,
   SCOPE_ATTRS,
 } from "./live-tree-attrs.js";
 
-export interface LiveTreeExtractorOptions {
+export interface LiveTreeExtractorOptions extends RedactInputOption {
   /** "a11y" (default) or "dom". */
   mode?: "dom" | "a11y";
 }
@@ -59,10 +61,14 @@ export interface LiveTreeExtractorOptions {
 export class LiveTreeExtractor {
   private root: Element;
   public mode: "dom" | "a11y";
+  /** Strict mode, for every extraction, full or partial: see {@link RedactInputOption}. */
+  private readonly redactInput: boolean;
   private domNodes = new Map<string, SemanticNode>();
   private a11yNodes = new Map<string, SemanticNode>();
   private rootId = "";
   private focusedId: string | undefined;
+  /** The stamp of the last full extraction; every partial one runs alike. */
+  private source: ExtractionResult["source"] = { producer: "dom" };
   private effectiveRoot: Element | null = null;
   /**
    * The scope `resolveEffectiveRoot()` reported at the last full extraction.
@@ -89,6 +95,7 @@ export class LiveTreeExtractor {
     // Definite assignment: extract() sets this, but TS can't see through it.
     this.scopeRoot = root;
     this.mode = options.mode ?? "a11y";
+    this.redactInput = Boolean(options.redactInput);
     this.extract();
   }
 
@@ -99,7 +106,9 @@ export class LiveTreeExtractor {
     // this same scope — which is what makes the later `scopeMoved()` comparison
     // meaningful. The duplicated resolution is a tiny fraction of a full walk.
     this.scopeRoot = resolveEffectiveRoot(this.root);
-    const result = extractDomTree(this.root);
+    const result = extractDomTree(this.root, {
+      redactInput: this.redactInput,
+    });
     this.adoptResult(result);
     return this.currentResult();
   }
@@ -193,7 +202,7 @@ export class LiveTreeExtractor {
         } else if (m.type === "attributes") {
           const target = m.target as Element;
           const attr = m.attributeName ?? "";
-          if (REFERENCE_ATTRS.has(attr)) {
+          if (forcesFullExtraction(attr, this.redactInput)) {
             needsFull = true;
             break;
           }
@@ -349,6 +358,7 @@ export class LiveTreeExtractor {
         parentId: p.parentId,
         baseDepth: p.depth,
         includeFocused: false,
+        redactInput: this.redactInput,
       });
       // If the re-extract skipped the root (it became hidden), the parent still references its now
       // deleted id. Drop that dangling child so the DOM map stays consistent
@@ -356,13 +366,15 @@ export class LiveTreeExtractor {
       if (!this.domNodes.has(p.id)) {
         this.detachFromParent(p.parentId, p.id);
       }
-      this.updateAncestorDescendantText(p.root);
+      // Strict mode keeps no text previews (see RedactInputOption).
+      if (!this.redactInput) this.updateAncestorDescendantText(p.root);
     }
 
     this.focusedId = this.resolveFocused();
 
     if (this.mode === "a11y") {
-      const a11y = buildA11yTree(this.domNodes, this.rootId, this.focusedId);
+      const { domNodes, rootId, focusedId, source } = this;
+      const a11y = buildA11yTree(domNodes, rootId, focusedId, source);
       this.a11yNodes = a11y.nodes;
       this.focusedId = a11y.focusedId;
     }
@@ -389,6 +401,10 @@ export class LiveTreeExtractor {
       if (!el) continue;
       const native = nativeStates(el, tag, node.a11y.role);
       for (const [state, value] of Object.entries(native)) {
+        // A state strict mode withholds is never on the node, so it can't
+        // have moved: comparing would dirty every selected option each time.
+        if (this.redactInput && withholdsState(el, node.a11y.role, state))
+          continue;
         if (value !== node.a11y.states[state]) {
           dirty.add(el);
           break;
@@ -426,11 +442,13 @@ export class LiveTreeExtractor {
     this.domNodes = result.nodes;
     this.rootId = result.rootId;
     this.focusedId = result.focusedId;
+    this.source = result.source;
     this.effectiveRoot = getElementRefs().get(this.rootId) ?? this.root;
     this.rebuildIndexes();
 
     if (this.mode === "a11y") {
-      const a11y = buildA11yTree(this.domNodes, this.rootId, this.focusedId);
+      const { domNodes, rootId, focusedId, source } = this;
+      const a11y = buildA11yTree(domNodes, rootId, focusedId, source);
       this.a11yNodes = a11y.nodes;
       this.focusedId = a11y.focusedId;
     } else {
@@ -444,7 +462,7 @@ export class LiveTreeExtractor {
       nodes,
       rootId: this.rootId,
       ...(this.focusedId ? { focusedId: this.focusedId } : {}),
-      source: { producer: "dom" },
+      source: this.source,
     };
   }
 

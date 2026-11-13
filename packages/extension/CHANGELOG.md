@@ -37,6 +37,10 @@
   U+00A0 now shows it as Chromium reports it, instead of an ASCII space (and
   no longer drops one at either end). Tabs, line breaks and runs of ASCII
   spaces still fold to one space. ([#639](https://github.com/real-a11y/real-a11y-dev/pull/639))
+- **The TAB view re-bundles the updated extractor**, which gained a strict mode
+  for the CLI, the MCP server and `@real-a11y-dev/testing`. The extension never
+  turns it on, so nothing the side panel shows changes
+  ([#638](https://github.com/real-a11y/real-a11y-dev/pull/638)).
 - **The TAB view's engine no longer slows down on pages that use `aria-owns`
   at scale.** The extension re-bundles the updated extractor, which now looks
   up an `aria-owns` owner in one index per extraction instead of rescanning the

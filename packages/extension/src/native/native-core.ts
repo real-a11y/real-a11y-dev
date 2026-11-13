@@ -2468,7 +2468,7 @@ export function pageType(this: Element, text: string): Marker {
  * mode for the one workflow native mode exists to dogfood.
  *
  * This adds it back with the SAME redaction the DOM producer already applies
- * (`isSensitiveField` in `core/src/extraction/dom-extractor.ts`), inlined
+ * (`isSensitiveField` in `core/src/extraction/sensitivity.ts`), inlined
  * rather than imported for the reason every other in-page function in this
  * file gives: serialized as source text for `Runtime.callFunctionOn`, so no
  * imports or module-scope references survive the trip. The RFC's own R1 text

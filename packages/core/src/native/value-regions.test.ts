@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { REDACTED_VALUE } from "../extraction/dom-extractor.js";
+import { REDACTED_VALUE } from "../extraction/sensitivity.js";
 
 import { normalizeNativeAX, serializeNativeAX } from "./ax-normalize.js";
 import {

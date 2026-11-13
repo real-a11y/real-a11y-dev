@@ -234,7 +234,7 @@ its text, never its length. A `snapshot` artifact is committed and posted, so
 it leaves values out unless you pass `--values`. `--redact-input` (config
 `defaults.redactInput`) is the strict mode: no field value and no rich-text
 editor content in any output — inside an editor, a name computed from the typed
-text reads `[redacted]`.
+text reads `[redacted]`, in `tabs` as in `tree`.
 
 ## Configure once
 

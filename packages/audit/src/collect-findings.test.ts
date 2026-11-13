@@ -1,4 +1,8 @@
-import type { ExtractionResult, SemanticNode } from "@real-a11y-dev/core";
+import {
+  extractA11yTree,
+  type ExtractionResult,
+  type SemanticNode,
+} from "@real-a11y-dev/core";
 import { describe, it, expect } from "vitest";
 
 import { collectFindings, listByRole, ALL_RULES } from "./index.js";
@@ -525,6 +529,33 @@ describe("collectFindings — locators, context & severity", () => {
     const root = mount(`<a href="/help/faq"></a>`);
     const [f] = collectFindings(root, ["no-unlabeled-interactive"]);
     expect(f?.context).toMatch(/href="\/help\/faq"/);
+  });
+
+  it("locates a strict tree's findings with no id or href from inside an editor", () => {
+    // Some editors derive a heading's id from its text, and a link's URL in a
+    // message box is what was typed or pasted. The native producer's locators
+    // skip both; so does a strict DOM tree's, read from the live element.
+    const root = mount(
+      `<main><div id="ed" contenteditable><h2 id="plan-secret">plan</h2>` +
+        `<p><a href="https://x.test/?token=secret"></a></p></div>` +
+        `<a href="/help"></a></main>`,
+    );
+    const located = (tree: Element | ExtractionResult) =>
+      collectFindings(tree, ["no-unlabeled-interactive"]).map((f) =>
+        [f.locator, f.context].join(" "),
+      );
+    const loose = located(root);
+    expect(loose[0]).toMatch(/token=secret/);
+    const strict = located(extractA11yTree(root, { redactInput: true }));
+    expect(strict).toHaveLength(2);
+    expect(strict.join(" ")).not.toMatch(/secret/);
+    // The editing host's id is the page's, and so is a link outside it.
+    expect(strict[0]).toMatch(/^#ed > /);
+    expect(strict[1]).toMatch(/href="\/help"/);
+    // listByRole locates its rows the same way.
+    expect(
+      listByRole(extractA11yTree(root, { redactInput: true }), "heading"),
+    ).not.toMatch(/secret/);
   });
 
   it("grades severity: interactive is error, heading order is warning", () => {

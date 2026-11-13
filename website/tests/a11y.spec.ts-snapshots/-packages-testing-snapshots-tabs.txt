@@ -13,8 +13,12 @@ generic
 table
 link "Focus marker"
 link "Field values"
+link "Strict mode"
 button "Copy Code"
 generic
+button "Copy Code"
+generic
+link "Playwright adapter's"
 button "Copy Code"
 generic
 button "Copy Code"

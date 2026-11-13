@@ -18,6 +18,8 @@ import {
 const FORM_CONTROL_TAGS = new Set(["input", "select", "textarea"]);
 
 export interface LabelReaders {
+  /** A text node of the label's own — the name walk's, so strict mode holds. */
+  readText: (node: Node) => string;
   /**
    * `textVisible` is `false` for a `visibility: hidden` child, which lends no
    * alternative of its own, and `null` under a hidden label, which is read
@@ -31,14 +33,14 @@ export function wrappingLabelText(
   label: Element,
   control: Element,
   styleCache: StyleCache | null | undefined,
-  { readChild, onUnreadable }: LabelReaders,
+  { readText, readChild, onUnreadable }: LabelReaders,
 ): string {
   const parts: string[] = [];
   const labelShows = isTextVisible(getCachedComputedStyle(label, styleCache));
   for (const child of label.childNodes) {
     const type = safeNodeType(child);
     if (type === Node.TEXT_NODE) {
-      const text = child.textContent?.trim();
+      const text = readText(child).trim();
       if (text) parts.push(text);
     } else if (type === Node.ELEMENT_NODE) {
       const childEl = child as Element;
