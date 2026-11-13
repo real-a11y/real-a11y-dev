@@ -4,20 +4,22 @@
  * (ADR-0001), sensitivity included. Kept apart from the name walk in
  * dom-extractor.ts, which asks it for a field's value.
  */
-import { isAriaHiddenValue } from "./aria-tokens.js";
+import { ariaBoolean, isAriaHiddenValue } from "./aria-tokens.js";
 import {
   safeGetAttribute,
+  safeGetElementById,
   safeNodeType,
   safeParentElement,
   safeTagName,
   safeTextContent,
 } from "./clobber-safe.js";
 import { isEditable, isEditingHost } from "./editing.js";
-import { flatChildNodes } from "./flat-tree.js";
+import { flatChildNodes, idScope } from "./flat-tree.js";
 import { isTextVisible } from "./name-spacing.js";
 import {
   getCachedComputedStyle,
   getExplicitRole,
+  isHiddenFromAT,
   isSubtreeHidden,
   type StyleCache,
 } from "./role-map.js";
@@ -347,6 +349,74 @@ export const EMBEDDED_VALUE_ROLES: ReadonlySet<string> = new Set([
   "spinbutton",
   ...PAGE_STATE_VALUE_ROLES,
 ]);
+
+/**
+ * `<input>` types whose value Chromium never reads into a name around them,
+ * though the DOM producer gives them the textbox role: a colour well, and the
+ * date and time inputs, which Chromium exposes as their parts. `<h2>Due <input
+ * type="date" value="2030-04-01"></h2>` is "Due" in Chromium.
+ */
+export const NAMELESS_VALUE_INPUT_TYPES: ReadonlySet<string> = new Set([
+  "color",
+  "date",
+  "datetime-local",
+  "month",
+  "time",
+  "week",
+]);
+
+/**
+ * The raw value an embedded control lends a name around it (AccName 2C, see
+ * {@link EMBEDDED_VALUE_ROLES}), as Chromium reads it: a `<select>`'s or ARIA
+ * listbox's chosen options joined with spaces (each option named by
+ * `nameOption`), nothing for a {@link NAMELESS_VALUE_INPUT_TYPES} input, and
+ * otherwise the value {@link readFieldValue} reads. Sensitivity is the
+ * caller's.
+ */
+export function embeddedValue(
+  element: Element,
+  role: string,
+  nameOption: (option: Element) => string,
+  styleCache?: StyleCache,
+): string {
+  const tag = safeTagName(element);
+  if (tag === "select") {
+    return selectedLabels(element as HTMLSelectElement).join(" ");
+  }
+  if (role === "listbox") {
+    return chosenAriaOptions(element, styleCache).map(nameOption).join(" ");
+  }
+  const type = tag === "input" ? (element as HTMLInputElement).type : "";
+  if (NAMELESS_VALUE_INPUT_TYPES.has(type)) return "";
+  return readFieldValue(element, role, styleCache) ?? "";
+}
+
+/**
+ * An ARIA listbox's chosen options, as Chromium reads them into a name: each
+ * `aria-selected` one inside it or in what it `aria-owns`, unless it is hidden.
+ */
+function chosenAriaOptions(
+  listbox: Element,
+  styleCache?: StyleCache,
+): Element[] {
+  const scope = idScope(listbox);
+  const owned = (safeGetAttribute(listbox, "aria-owns") ?? "")
+    .split(/\s+/)
+    .flatMap((id) => {
+      const el = id ? safeGetElementById(scope, id) : null;
+      return el ? [el] : [];
+    });
+  return [listbox, ...owned]
+    .flatMap((root) => [
+      ...(root !== listbox && root.matches('[role="option"]') ? [root] : []),
+      ...root.querySelectorAll('[role="option"]'),
+    ])
+    .filter(
+      (option) =>
+        ariaBoolean(safeGetAttribute(option, "aria-selected")) === true &&
+        !isHiddenFromAT(option, getCachedComputedStyle(option, styleCache)),
+    );
+}
 
 /** Non-native roles whose value is the text they hold. */
 const TEXT_VALUE_ROLES: ReadonlySet<string> = new Set([

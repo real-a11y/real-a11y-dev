@@ -8,7 +8,7 @@
  * around it. Neither name's own element changes, so the refresh adds the
  * hosts these values reach.
  */
-import { safeParentElement } from "../extraction/clobber-safe.js";
+import { safeParentElement, safeTagName } from "../extraction/clobber-safe.js";
 import { isNameBarrierElement } from "../extraction/dom-extractor.js";
 import {
   EMBEDDED_VALUE_ROLES,
@@ -48,7 +48,7 @@ export function addValueReaders(
     if (!lendsValue(field)) continue;
     dirty.add(hostOf(field));
     for (let up = safeParentElement(field); up; up = safeParentElement(up)) {
-      if (up.localName === "label") {
+      if (safeTagName(up) === "label") {
         dirty.add(up);
         break;
       }

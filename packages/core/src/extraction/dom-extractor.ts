@@ -29,12 +29,11 @@ import { canExpand } from "./expanded-roles.js";
 import { addFieldStates, optionStates } from "./field-states.js";
 import {
   EMBEDDED_VALUE_ROLES,
+  embeddedValue,
   getAnnouncedValue,
   getDescendantText,
   MEDIA_TAGS,
   PAGE_STATE_VALUE_ROLES,
-  readFieldValue,
-  selectedLabels,
 } from "./field-text.js";
 import {
   flatChildNodes,
@@ -600,18 +599,14 @@ function embeddedControlText(
   styleCache: StyleCache | null | undefined,
 ): string | null {
   if (!EMBEDDED_VALUE_ROLES.has(role)) return null;
-  const tag = safeTagName(element);
-  // Several chosen options join with spaces, as Chromium joins them in a name.
-  const value =
-    tag === "select"
-      ? selectedLabels(element as HTMLSelectElement).join(" ")
-      : role === "listbox"
-        ? Array.from(
-            element.querySelectorAll('[role="option"][aria-selected="true"]'),
-            (option) => computeAccessibleName(option, run, styleCache),
-          ).join(" ")
-        : readFieldValue(element, role, styleCache ?? undefined);
-  const text = collapseAscii(value ?? "");
+  const text = collapseAscii(
+    embeddedValue(
+      element,
+      role,
+      (option) => computeAccessibleName(option, run, styleCache),
+      styleCache ?? undefined,
+    ),
+  );
   if (!text) return "";
   const entered = !PAGE_STATE_VALUE_ROLES.has(role);
   return (run.redactInput && entered) || isSensitiveField(element)

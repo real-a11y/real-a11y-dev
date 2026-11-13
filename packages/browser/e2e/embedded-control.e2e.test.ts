@@ -173,6 +173,10 @@ const REFERENCES = `
 
 const UNLENT = `
   <label><input id="own" value="x"> Name</label>
+  <h2 id="color">Head <input type="color" value="#ff0000"></h2>
+  <h2 id="date">Head <input type="date" value="1991-09-10"></h2>
+  <h2 id="time">Head <input type="time" value="13:45"></h2>
+  <h2 id="hidden-opt">Pick <ul role="listbox"><li role="option">A</li><li role="option" aria-selected="true" style="display:none">B</li></ul></h2>
   <h2 id="opts">Pick <select><option>Apple</option><option selected>Pear</option><option>Plum</option></select></h2>
   <h2 id="lb-none">Pick <ul role="listbox"><li role="option">A</li><li role="option">B</li></ul></h2>
   <h2 id="indeterminate">Loading <progress></progress></h2>
@@ -209,10 +213,14 @@ describe("an embedded control's value, against Chromium", () => {
       VARIANTS.map(
         ([id, control]) =>
           `<label><input id="${id}" type="checkbox"> Flash the screen ${control} times</label>`,
-      ).join(""),
+      ).join("") +
+        // A listbox whose options it owns from elsewhere.
+        `<h2 id="owned">Pick <div role="listbox" tabindex="0" aria-owns="owned-a owned-b"></div></h2>` +
+        `<span role="option" id="owned-a">One</span><span role="option" id="owned-b" aria-selected="true">Two</span>`,
     );
     const [dom, raw] = [await domById(false), await rawById()];
-    for (const [id] of VARIANTS) {
+    expect(raw["owned"]?.name).toBe("Pick Two");
+    for (const id of [...VARIANTS.map(([id]) => id), "owned"]) {
       expect(dom[id]?.name, id).toBe(raw[id]?.name);
     }
   });
@@ -230,7 +238,17 @@ describe("an embedded control's value, against Chromium", () => {
   it("lends nothing where Chromium lends nothing", async () => {
     await page.setContent(UNLENT);
     const [dom, raw] = [await domById(false), await rawById()];
-    for (const id of ["own", "opts", "lb-none", "indeterminate", "empty"]) {
+    for (const id of [
+      "own",
+      "opts",
+      "lb-none",
+      "indeterminate",
+      "empty",
+      "color",
+      "date",
+      "time",
+      "hidden-opt",
+    ]) {
       expect(dom[id]?.name, id).toBe(raw[id]?.name);
     }
   });

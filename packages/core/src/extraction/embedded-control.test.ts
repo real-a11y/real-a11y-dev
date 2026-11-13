@@ -221,6 +221,35 @@ describe("what an embedded control never lends", () => {
     ).toBe("Pick");
   });
 
+  it("is a date, time or colour input's value, which Chromium reads as parts", () => {
+    for (const [type, value] of [
+      ["color", "#ff0000"],
+      ["date", "2030-04-01"],
+      ["datetime-local", "2030-01-02T03:04"],
+      ["month", "2030-04"],
+      ["time", "13:45"],
+      ["week", "2030-W05"],
+    ]) {
+      expect(
+        nameOf(`<h2 id="t">Due <input type="${type}" value="${value}"></h2>`),
+        type,
+      ).toBe("Due");
+    }
+  });
+
+  it("is a hidden chosen option, and finds one the listbox aria-owns", () => {
+    expect(
+      nameOf(
+        `<h2 id="t">Pick <ul role="listbox"><li role="option">A</li><li role="option" aria-selected="true" style="display:none">B</li></ul></h2>`,
+      ),
+    ).toBe("Pick");
+    expect(
+      nameOf(
+        `<h2 id="t">Pick <div role="listbox" tabindex="0" aria-owns="o1 o2"></div></h2><div role="option" id="o1">One</div><div role="option" id="o2" aria-selected="true">Two</div>`,
+      ),
+    ).toBe("Pick Two");
+  });
+
   it("is anything, for an empty control", () => {
     expect(nameOf(`<h2 id="t">Save<input>now</h2>`)).toBe("Save now");
   });
