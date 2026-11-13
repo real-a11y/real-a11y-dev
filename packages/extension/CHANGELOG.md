@@ -21,6 +21,12 @@
 
 ### Patch Changes
 
+- **The TAB view's engine reads a heading's `aria-level` correctly.** The
+  extension re-bundles the updated extractor: `aria-level` on `h1`-`h6` now
+  wins over the tag number, and `0`, negative or non-numeric values no longer
+  produce a level of `0`, `-1` or `NaN`
+  ([#642](https://github.com/real-a11y/real-a11y-dev/pull/642)). The A11Y tree
+  is Chromium's own and is unchanged.
 - **The TAB view's engine keeps a table's `caption` node.** The extension
   re-bundles the updated extractor, which no longer drops a `caption` whose
   text is also the table's name. The side panel's tree is Chrome's own and
