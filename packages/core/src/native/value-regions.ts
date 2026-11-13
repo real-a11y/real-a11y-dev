@@ -27,9 +27,6 @@ import { NATIVE_AX_NAME_SOURCE_ROLES } from "./ax-vocabulary.js";
 export interface AXNameSource {
   type?: string;
   attribute?: string;
-  /** The host-language source, such as `labelwrapped` for a `<label>` around
-   *  the node or `labelfor` for one pointing at it. */
-  nativeSource?: string;
   value?: { value?: unknown };
   superseded?: boolean;
 }
@@ -202,10 +199,6 @@ function holdsNameText(raw: RawAXNameNode): boolean {
   );
 }
 
-/** Name sources for a host-language label: one around the node, or one
- *  pointing at it. */
-const HOST_LABEL_SOURCES = new Set(["label", "labelfor", "labelwrapped"]);
-
 /** `raw` is part of what a user types into: a text field's own text, an
  *  editor's content. */
 function typedIn(raw: RawAXNameNode): boolean {
@@ -228,8 +221,10 @@ function isWithin<T extends RawAXNameNode>(
  * Chromium leaves the root `root` out of the name it builds for the field
  * `raw` (itself a root) from `target` (see {@link ValueRegions.references}):
  * `target` is a label around the field, and `root` is the field or what is
- * typed in it, with nothing else beneath the field, or, from a host-language
- * `<label>`, anything inside the field (a date input's own spinbuttons).
+ * typed in it, with nothing else beneath the field. A name that didn't come
+ * from `aria-labelledby` (a `<label>`, which skips the whole control, or an
+ * `aria-label`) leaves out anything inside the field. A name with no trace
+ * gets the narrower pass, since nothing says where it came from.
  */
 function leavesOut<T extends RawAXNameNode>(
   byId: ReadonlyMap<string, T>,
@@ -240,9 +235,8 @@ function leavesOut<T extends RawAXNameNode>(
   const around =
     target.nodeId !== raw.nodeId && isWithin(byId, raw.nodeId, target.nodeId);
   if (!around || !isWithin(byId, root, raw.nodeId)) return false;
-  if (HOST_LABEL_SOURCES.has(winningNameSource(raw)?.nativeSource ?? "")) {
-    return true;
-  }
+  const winner = winningNameSource(raw);
+  if (winner && winner.attribute !== "aria-labelledby") return true;
   const node = byId.get(root);
   if (root !== raw.nodeId && !(node && typedIn(node))) return false;
   return !(raw.childIds ?? []).some((id) => {
@@ -298,7 +292,9 @@ export interface ValueRegions {
    * typed (a `div` combobox's text). Every other path reads the value: the
    * field in its own `aria-labelledby` (`aria-labelledby="label card"` is
    * `textbox "Card 4111…"`), a reference into it, and an `aria-describedby`,
-   * around the field or not.
+   * around the field or not. One field is withheld though Chromium skips it:
+   * a `<select>` in its own `aria-labelledby`, which the tree can't tell from
+   * a `div` combobox that is read.
    */
   references(
     raw: RawAXNameNode,
@@ -361,30 +357,33 @@ export function valueRegions<T extends RawAXNameNode>(
     roots,
     containing,
     inside: (raw) => rootOf(raw) !== null,
-    references: (raw, property) =>
-      (nativeAXProperty(raw, property)?.relatedNodes ?? []).some((related) => {
-        const id = related.backendDOMNodeId;
-        if (typeof id !== "number") return false;
-        const own = byBackendId.get(id);
-        const targets = [
-          ...(own !== undefined ? [own] : []),
-          ...(standInsOf.get(id) ?? []),
-        ];
-        return targets.some((target) => {
-          const around = rootOf(target);
-          const reached = [
-            ...(around !== null ? [around] : []),
-            ...(rootsUnder.get(target.nodeId) ?? []),
+    references: (raw, property) => {
+      // Only a field's own label leaves anything out. A node that is NOT a
+      // field — a region labelled by the editable heading inside it — gets
+      // no such pass: its name IS the text.
+      const ownLabel = property === "labelledby" && roots.has(raw.nodeId);
+      return (nativeAXProperty(raw, property)?.relatedNodes ?? []).some(
+        (related) => {
+          const id = related.backendDOMNodeId;
+          if (typeof id !== "number") return false;
+          const own = byBackendId.get(id);
+          const targets = [
+            ...(own !== undefined ? [own] : []),
+            ...(standInsOf.get(id) ?? []),
           ];
-          // Only a field's own label leaves anything out. A node that is NOT
-          // a field — a region labelled by the editable heading inside it —
-          // gets no such pass: its name IS the text.
-          const ownLabel = property === "labelledby" && roots.has(raw.nodeId);
-          return reached.some(
-            (root) => !(ownLabel && leavesOut(byId, raw, target, root)),
-          );
-        });
-      }),
+          return targets.some((target) => {
+            const around = rootOf(target);
+            const reached = [
+              ...(around !== null ? [around] : []),
+              ...(rootsUnder.get(target.nodeId) ?? []),
+            ];
+            return reached.some(
+              (root) => !(ownLabel && leavesOut(byId, raw, target, root)),
+            );
+          });
+        },
+      );
+    },
   };
 }
 

@@ -7,8 +7,10 @@ import {
   fieldStandIns,
   ignoreFieldInternalImages,
   indexNativeAX,
+  valueRegions,
   withholdFieldInternals,
   withholdFieldInternalText,
+  withholdRegionNames,
   withholdSensitiveFieldNames,
   type FieldHostOf,
   type RawAXNameNode,
@@ -387,6 +389,55 @@ describe("withholdSensitiveFieldNames", () => {
       ["2"],
     );
     expect(wrapped[1].name?.value).toBe("Expiry");
+    // An aria-label wins over the label, so nothing of the field is read.
+    const authored = withholdSensitiveFieldNames(
+      month(
+        traced("Card expiry", { type: "attribute", attribute: "aria-label" }),
+      ),
+      ["2"],
+    );
+    expect(authored[1].name?.value).toBe("Card expiry");
+    // With no trace, nothing says the parts were skipped.
+    const untraced = withholdSensitiveFieldNames(month({ value: "Expiry" }), [
+      "2",
+    ]);
+    expect(untraced[1].name?.value).toBe(REDACTED_VALUE);
+  });
+
+  it("leaves out what is typed in a field, inside the field, for a label around it", () => {
+    // <label id="w">Count <input type="number" aria-labelledby="w"
+    // value="7"></label> in strict mode: the field and the editable box
+    // inside it are both roots, and Chromium reads neither into the name.
+    // A part that isn't typed in (a date input's spinbutton) is read.
+    const editable = { name: "editable", value: { value: "plaintext" } };
+    const field = (inner: RawAXNameNode) => [
+      raw("1", "LabelText", { childIds: ["2"] }),
+      raw("2", "spinbutton", {
+        parentId: "1",
+        name: traced("Count", byLabelledBy),
+        value: { value: 7 },
+        properties: [pointsAt("labelledby", 1)],
+        childIds: ["3"],
+      }),
+      raw("3", "none", { parentId: "2", ignored: true, childIds: ["4"] }),
+      inner,
+    ];
+    const typed = field(
+      raw("4", "generic", { parentId: "3", properties: [editable] }),
+    );
+    const typedOut = withholdRegionNames(
+      typed,
+      valueRegions(indexNativeAX(typed), new Set(["2", "4"])),
+    );
+    expect(typedOut[1].name?.value).toBe("Count");
+    const part = field(
+      raw("4", "spinbutton", { parentId: "3", value: { value: 7 } }),
+    );
+    const partOut = withholdRegionNames(
+      part,
+      valueRegions(indexNativeAX(part), new Set(["2", "4"])),
+    );
+    expect(partOut[1].name?.value).toBe(REDACTED_VALUE);
   });
 });
 

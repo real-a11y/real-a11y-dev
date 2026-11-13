@@ -98,6 +98,7 @@ describe("a field's own value in its own name, against Chromium", () => {
       <label id="desc-w-l">Card <input id="desc-w" aria-label="Card" aria-describedby="desc-w-l" autocomplete="cc-number" value="4333333333333333"></label>
       <label id="wrap-l">Card <input id="wrap" aria-labelledby="wrap-l" autocomplete="cc-number" value="4444444444444444"></label>
       <label>Expiry <input id="exp-host" type="month" autocomplete="cc-exp" value="2031-05"></label>
+      <label>Expiry <input id="exp-aria" type="month" aria-label="Card expiry" autocomplete="cc-exp" value="2032-07"></label>
     `);
     const raw = await rawById();
     // Chromium itself puts the value there.
@@ -109,6 +110,7 @@ describe("a field's own value in its own name, against Chromium", () => {
     // ...and skips it through a label around a text field, or a <label>.
     expect(raw.get("wrap")?.name.trim()).toBe("Card");
     expect(raw.get("exp-host")?.name).toBe("Expiry");
+    expect(raw.get("exp-aria")?.name).toBe("Card expiry");
 
     for (const redactInput of [false, true]) {
       const native = await nativeById(redactInput);
@@ -122,6 +124,7 @@ describe("a field's own value in its own name, against Chromium", () => {
       }
       expect(native.get("wrap")?.name, at).toBe("Card");
       expect(native.get("exp-host")?.name, at).toBe("Expiry");
+      expect(native.get("exp-aria")?.name, at).toBe("Card expiry");
     }
   });
 
