@@ -3,6 +3,10 @@ link "Concrete examples"
 link "What does not contribute"
 link "Debugging an unexpected name"
 link "Why this matters"
+link "A control inside a label or heading"
+link "A control inside a label or heading"
+button "Copy Code"
+generic
 button "Copy Code"
 generic
 button "Copy Code"

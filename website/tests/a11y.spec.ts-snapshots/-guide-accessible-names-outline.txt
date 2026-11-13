@@ -8,6 +8,7 @@ h1 Accessible Names
     h3 Link with only an image
     h3 Dialog with text but no label
     h3 Form control with a wrapping label
+    h3 A control inside a label or heading
     h3 Form control with for / id
     h3 aria-label beats text content
     h3 aria-labelledby beats everything
