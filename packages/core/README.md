@@ -55,7 +55,7 @@ import { getImplicitRole, isHiddenFromAT, getHeadingLevel } from "@real-a11y-dev
 
 getImplicitRole(element);    // "button", "link", "navigation", etc.
 isHiddenFromAT(element);     // true if aria-hidden, role=presentation, etc.
-getHeadingLevel(element);    // 1-6 for headings, null otherwise
+getHeadingLevel(element);    // level (1-6 from the tag, or aria-level) for headings, null otherwise
 ```
 
 Media elements follow the browser's native tree rather than the (silent)

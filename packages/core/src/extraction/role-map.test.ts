@@ -1597,6 +1597,84 @@ describe("getHeadingLevel", () => {
       getHeadingLevel(el('<div role="HEADING" aria-level="4">N</div>')),
     ).toBe(4);
   });
+
+  // WAI-ARIA 1.2 §8.4 (aria-level on an implicit heading), Core-AAM §3.6.3
+  // (0 and negatives read as 1). Chromium 153 agrees on every case here.
+  it("lets a valid aria-level win over the hN tag number", () => {
+    expect(getHeadingLevel(el('<h2 aria-level="3">x</h2>'))).toBe(3);
+  });
+
+  it("maps 0 and negative aria-level to 1", () => {
+    expect(
+      getHeadingLevel(el('<div role="heading" aria-level="0">x</div>')),
+    ).toBe(1);
+    expect(
+      getHeadingLevel(el('<div role="heading" aria-level="-1">x</div>')),
+    ).toBe(1);
+    expect(getHeadingLevel(el('<h3 aria-level="0">x</h3>'))).toBe(1);
+  });
+
+  it("reads an unparseable, blank or overflowing aria-level as 1", () => {
+    // Chromium 153: 1 on role=heading and on an hN alike, never NaN.
+    expect(
+      getHeadingLevel(el('<div role="heading" aria-level="abc">x</div>')),
+    ).toBe(1);
+    expect(getHeadingLevel(el('<h4 aria-level="abc">x</h4>'))).toBe(1);
+    expect(getHeadingLevel(el('<h2 aria-level=" ">x</h2>'))).toBe(1);
+    expect(
+      getHeadingLevel(el('<div role="heading" aria-level=" ">x</div>')),
+    ).toBe(1);
+    expect(getHeadingLevel(el('<h4 aria-level="2147483648">x</h4>'))).toBe(1);
+    expect(
+      getHeadingLevel(
+        el('<div role="heading" aria-level="99999999999999999999">x</div>'),
+      ),
+    ).toBe(1);
+  });
+
+  it("ignores a level of 10 or more", () => {
+    expect(getHeadingLevel(el('<h4 aria-level="10">x</h4>'))).toBe(4);
+    expect(getHeadingLevel(el('<h4 aria-level="100000">x</h4>'))).toBe(4);
+    expect(
+      getHeadingLevel(el('<div role="heading" aria-level="10">x</div>')),
+    ).toBe(null);
+    expect(
+      getHeadingLevel(el('<div role="heading" aria-level="9">x</div>')),
+    ).toBe(9);
+  });
+
+  it("cuts trailing garbage, fractions and exponents like parseInt", () => {
+    expect(getHeadingLevel(el('<h2 aria-level="3abc">x</h2>'))).toBe(3);
+    expect(getHeadingLevel(el('<h2 aria-level="+3">x</h2>'))).toBe(3);
+    expect(getHeadingLevel(el('<h2 aria-level="1e2">x</h2>'))).toBe(1);
+  });
+
+  it("keeps large, fractional and padded aria-level values", () => {
+    expect(
+      getHeadingLevel(el('<div role="heading" aria-level="7">x</div>')),
+    ).toBe(7);
+    expect(
+      getHeadingLevel(el('<div role="heading" aria-level="2.5">x</div>')),
+    ).toBe(2);
+    expect(
+      getHeadingLevel(el('<div role="heading" aria-level=" 3 ">x</div>')),
+    ).toBe(3);
+  });
+
+  it("ignores aria-level on an hN that has another role", () => {
+    expect(getHeadingLevel(el('<h2 role="tab" aria-level="3">x</h2>'))).toBe(2);
+  });
+
+  it("treats an empty aria-level as not set", () => {
+    expect(getHeadingLevel(el('<h2 aria-level="">x</h2>'))).toBe(2);
+    expect(
+      getHeadingLevel(el('<div role="heading" aria-level="">x</div>')),
+    ).toBe(null);
+  });
+
+  it("gives a role=heading with no aria-level no level", () => {
+    expect(getHeadingLevel(el('<div role="heading">x</div>'))).toBe(null);
+  });
 });
 
 // WAI-ARIA 1.2 `presentation`: the required structural children of a
