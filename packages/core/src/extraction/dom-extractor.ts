@@ -6,6 +6,7 @@ import { realmSingleton } from "../utils/realm-singleton.js";
 import { treeSource } from "../utils/tree-source.js";
 
 import { withAriaOwnerIndex } from "./aria-owner.js";
+import { canExpand, roleTakesState } from "./aria-state-roles.js";
 import {
   ariaBoolean,
   ariaCurrent,
@@ -25,7 +26,6 @@ import {
   safeTagName,
 } from "./clobber-safe.js";
 import { isEditable, isEditingHost } from "./editing.js";
-import { canExpand } from "./expanded-roles.js";
 import { addFieldStates, optionStates } from "./field-states.js";
 import {
   EMBEDDED_VALUE_ROLES,
@@ -1796,7 +1796,7 @@ function getAriaStates(
     // Chromium never marks an optgroup disabled, whatever its role. Its
     // options still inherit the state from it, below.
     if (attr === "aria-disabled" && tag === "optgroup") continue;
-    if (attr === "aria-expanded" && !canExpand(element, role)) continue;
+    if (!roleTakesState(element, attr, role)) continue;
     const value = ariaStateValue(element, attr, role);
     if (value !== null) states[state] = value;
   }
