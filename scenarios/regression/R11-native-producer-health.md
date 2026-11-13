@@ -155,7 +155,10 @@ host. Step 6c is the policy for a field Chromium keeps no node for: the policy
 keyed on the field's node, so a cell named from the card field inside it went
 unredacted until what stands in for the field was classified as the field.
 Step 6d is the field's own name: the rule assumed a field is never named after
-its own value, which holds for a `<label>` around it and for nothing else.
+its own value. Chromium does name it so when the field is in its own
+`aria-labelledby`, and reads a date input's parts through an `aria-labelledby`
+around it; a `<label>`, an `aria-label`, or an `aria-labelledby` around a text
+field leaves the value out.
 
 Parity itself is now a standing automated gate, so this row checks the things that
 gate can't see.
