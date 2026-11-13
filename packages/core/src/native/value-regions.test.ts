@@ -259,6 +259,135 @@ describe("withholdSensitiveFieldNames", () => {
     );
     expect(unnamed[3].name?.value).toBe("4111111111111111");
   });
+
+  /** A `labelledby` or `describedby` property pointing at DOM ids. */
+  const pointsAt = (name: string, ...ids: number[]) => ({
+    name,
+    value: {
+      relatedNodes: ids.map((backendDOMNodeId) => ({ backendDOMNodeId })),
+    },
+  });
+  /** A name as Chromium's trace reports it, from `aria-labelledby` or from
+   *  a host-language source such as a `<label>` around the node. */
+  const traced = (value: string, source: Record<string, string>) => ({
+    value,
+    sources: [{ type: "relatedElement", value: { value }, ...source }],
+  });
+  const byLabelledBy = { attribute: "aria-labelledby" };
+  const typedText = { name: "editable", value: { value: "plaintext" } };
+
+  it("withholds the name of a field in its own aria-labelledby", () => {
+    // <span id="l">Card</span><input aria-labelledby="l c"
+    // autocomplete="cc-number" value="4111…">: Chromium reads the field's
+    // value into its own name, "Card 4111…".
+    const nodes = [
+      raw("1", "StaticText", { name: { value: "Card" } }),
+      raw("2", "textbox", {
+        name: traced("Card 4111111111111111", byLabelledBy),
+        value: { value: "4111111111111111" },
+        properties: [pointsAt("labelledby", 1, 2)],
+      }),
+    ];
+    const out = withholdSensitiveFieldNames(nodes, ["2"]);
+    expect(out[1].name?.value).toBe(REDACTED_VALUE);
+  });
+
+  it("withholds a name that points into the field", () => {
+    // <div contenteditable role="textbox" aria-labelledby="s"><span
+    // id="s">typed</span></div> in strict mode: the name IS what was typed.
+    const nodes = [
+      raw("1", "textbox", {
+        name: traced("typed", byLabelledBy),
+        value: { value: "typed" },
+        properties: [pointsAt("labelledby", 2)],
+        childIds: ["2"],
+      }),
+      raw("2", "StaticText", { parentId: "1", name: { value: "typed" } }),
+    ];
+    const out = withholdSensitiveFieldNames(nodes, ["1"]);
+    expect(out[0].name?.value).toBe(REDACTED_VALUE);
+  });
+
+  it("drops a description that reaches the field's own value", () => {
+    // <label id="w">Card <input aria-label="Card" aria-describedby="w"
+    // autocomplete="cc-number" value="4111…"></label>, and the field in its
+    // own aria-describedby: unlike a name, a description built around the
+    // field reads its value.
+    for (const ids of [[1], [2]]) {
+      const nodes = [
+        raw("1", "LabelText", { childIds: ["2"] }),
+        raw("2", "textbox", {
+          parentId: "1",
+          name: { value: "Card" },
+          named: "attribute",
+          description: { value: "Card 4111111111111111" },
+          value: { value: "4111111111111111" },
+          properties: [pointsAt("describedby", ...ids)],
+        }),
+      ];
+      const out = withholdSensitiveFieldNames(nodes, ["2"]);
+      expect(out[1].description, `describedby ${ids[0]}`).toBeUndefined();
+      expect(out[1].name?.value).toBe("Card");
+    }
+  });
+
+  it("keeps a name from an aria-labelledby around a text field", () => {
+    // <label id="w">Card <input aria-labelledby="w" autocomplete="cc-number"
+    // value="4111…"></label>: Chromium skips the field's value, and the text
+    // typed in it, when it meets the field inside its label.
+    const nodes = [
+      raw("1", "LabelText", { childIds: ["2"] }),
+      raw("2", "textbox", {
+        parentId: "1",
+        name: traced("Card", byLabelledBy),
+        value: { value: "4111111111111111" },
+        properties: [typedText, pointsAt("labelledby", 1)],
+        childIds: ["3"],
+      }),
+      raw("3", "generic", {
+        parentId: "2",
+        properties: [typedText],
+        childIds: ["4"],
+      }),
+      raw("4", "StaticText", {
+        parentId: "3",
+        name: { value: "4111111111111111" },
+        properties: [typedText],
+      }),
+    ];
+    const out = withholdSensitiveFieldNames(nodes, ["2"]);
+    expect(out[1].name?.value).toBe("Card");
+  });
+
+  it("withholds a name from an aria-labelledby around a date input, not from its <label>", () => {
+    // <label id="w">Expiry <input type="month" aria-labelledby="w"
+    // autocomplete="cc-exp" value="2030-04"></label>: through
+    // aria-labelledby Chromium reads the input's parts, "Expiry April 2030";
+    // through the <label> alone it skips the whole input.
+    const month = (name: RawAXNameNode["name"]) => [
+      raw("1", "LabelText", { childIds: ["2"] }),
+      raw("2", "DateTime", {
+        parentId: "1",
+        name,
+        value: { value: "2030-04" },
+        properties: [pointsAt("labelledby", 1)],
+        childIds: ["3"],
+      }),
+      raw("3", "none", { parentId: "2", ignored: true, childIds: ["4", "5"] }),
+      raw("4", "spinbutton", { parentId: "3", value: { value: 4 } }),
+      raw("5", "spinbutton", { parentId: "3", value: { value: 2030 } }),
+    ];
+    const explicit = withholdSensitiveFieldNames(
+      month(traced("Expiry April 2030", byLabelledBy)),
+      ["2"],
+    );
+    expect(explicit[1].name?.value).toBe(REDACTED_VALUE);
+    const wrapped = withholdSensitiveFieldNames(
+      month(traced("Expiry", { nativeSource: "labelwrapped" })),
+      ["2"],
+    );
+    expect(wrapped[1].name?.value).toBe("Expiry");
+  });
 });
 
 describe("withholdFieldInternalText", () => {

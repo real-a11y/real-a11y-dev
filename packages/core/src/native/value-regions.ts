@@ -27,6 +27,9 @@ import { NATIVE_AX_NAME_SOURCE_ROLES } from "./ax-vocabulary.js";
 export interface AXNameSource {
   type?: string;
   attribute?: string;
+  /** The host-language source, such as `labelwrapped` for a `<label>` around
+   *  the node or `labelfor` for one pointing at it. */
+  nativeSource?: string;
   value?: { value?: unknown };
   superseded?: boolean;
 }
@@ -165,12 +168,14 @@ export function carriesAXValue(raw: RawAXNameNode): boolean {
  * placeholder isn't content — a native field's is never counted, since only
  * values are for one. An EMPTY field or editor contributes nothing to a name
  * built around it, so it must not withhold one (a cell labelled "Card number"
- * around an empty card field keeps its name).
+ * around an empty card field keeps its name). A node `skip` accepts is passed
+ * over with everything beneath it.
  */
 export function holdsContent<T extends RawAXNameNode>(
   raw: T,
   byId: ReadonlyMap<string, T>,
   text: boolean,
+  skip?: (raw: T) => boolean,
 ): boolean {
   const stack = [raw];
   const seen = new Set<string>();
@@ -178,20 +183,72 @@ export function holdsContent<T extends RawAXNameNode>(
     const cur = stack.pop()!;
     if (seen.has(cur.nodeId)) continue;
     seen.add(cur.nodeId);
-    if (carriesAXValue(cur)) return true;
-    if (
-      text &&
-      NATIVE_AX_NAME_SOURCE_ROLES.has(cur.role?.value ?? "") &&
-      hasAXText(String(cur.name?.value ?? ""))
-    ) {
-      return true;
-    }
+    if (skip?.(cur)) continue;
+    if (carriesAXValue(cur) || (text && holdsNameText(cur))) return true;
     for (const id of cur.childIds ?? []) {
       const child = byId.get(id);
       if (child) stack.push(child);
     }
   }
   return false;
+}
+
+/** `raw` is text a name is read from (a text run, a label's text), and has
+ *  some. */
+function holdsNameText(raw: RawAXNameNode): boolean {
+  return (
+    NATIVE_AX_NAME_SOURCE_ROLES.has(raw.role?.value ?? "") &&
+    hasAXText(String(raw.name?.value ?? ""))
+  );
+}
+
+/** Name sources for a host-language label: one around the node, or one
+ *  pointing at it. */
+const HOST_LABEL_SOURCES = new Set(["label", "labelfor", "labelwrapped"]);
+
+/** `raw` is part of what a user types into: a text field's own text, an
+ *  editor's content. */
+function typedIn(raw: RawAXNameNode): boolean {
+  return Boolean(nativeAXProperty(raw, "editable")?.value);
+}
+
+/** `id` is `ancestor` or sits beneath it. */
+function isWithin<T extends RawAXNameNode>(
+  byId: ReadonlyMap<string, T>,
+  id: string,
+  ancestor: string,
+): boolean {
+  for (const cur of nativeAncestry(byId.get(id), byId)) {
+    if (cur.nodeId === ancestor) return true;
+  }
+  return false;
+}
+
+/**
+ * Chromium leaves the root `root` out of the name it builds for the field
+ * `raw` (itself a root) from `target` (see {@link ValueRegions.references}):
+ * `target` is a label around the field, and `root` is the field or what is
+ * typed in it, with nothing else beneath the field, or, from a host-language
+ * `<label>`, anything inside the field (a date input's own spinbuttons).
+ */
+function leavesOut<T extends RawAXNameNode>(
+  byId: ReadonlyMap<string, T>,
+  raw: RawAXNameNode,
+  target: T,
+  root: string,
+): boolean {
+  const around =
+    target.nodeId !== raw.nodeId && isWithin(byId, raw.nodeId, target.nodeId);
+  if (!around || !isWithin(byId, root, raw.nodeId)) return false;
+  if (HOST_LABEL_SOURCES.has(winningNameSource(raw)?.nativeSource ?? "")) {
+    return true;
+  }
+  const node = byId.get(root);
+  if (root !== raw.nodeId && !(node && typedIn(node))) return false;
+  return !(raw.childIds ?? []).some((id) => {
+    const child = byId.get(id);
+    return child !== undefined && holdsContent(child, byId, true, typedIn);
+  });
 }
 
 /** The raw nodes, indexed the two ways the classifiers look them up. */
@@ -227,12 +284,21 @@ export interface ValueRegions {
   /**
    * `raw` takes its label or description by reference — `aria-labelledby` /
    * `aria-describedby`, and the `labelledby` Chromium reports for a `<label>` —
-   * from a root other than its own: the referenced node is, is inside, or
-   * contains one. A referenced form control the tree has no node of its own
-   * for is reached through what stands in for it ({@link fieldStandIns}). A
-   * field wrapped in its own `<label>` references that label, but the label's
-   * only root is the field itself, whose value never names it; that is no
-   * reference to a value.
+   * from a root's value: the referenced node is, is inside, or contains a root.
+   * A referenced form control the tree has no node of its own for is reached
+   * through what stands in for it ({@link fieldStandIns}).
+   *
+   * A field's own value reaches its own name or description too, in every way
+   * but one: a LABEL AROUND the field. Chromium skips the value of the field
+   * being named, and what is typed in it, when it meets the field inside its
+   * label, so `<label>Card <input autocomplete="cc-number"></label>` is
+   * `textbox "Card"`. A host-language `<label>` skips the whole control, a date
+   * input's parts included; an `aria-labelledby` naming an element around the
+   * field reads the parts, and any other content beneath the field that isn't
+   * typed (a `div` combobox's text). Every other path reads the value: the
+   * field in its own `aria-labelledby` (`aria-labelledby="label card"` is
+   * `textbox "Card 4111…"`), a reference into it, and an `aria-describedby`,
+   * around the field or not.
    */
   references(
     raw: RawAXNameNode,
@@ -291,21 +357,6 @@ export function valueRegions<T extends RawAXNameNode>(
     return result;
   };
 
-  /**
-   * `root` is part of `raw` itself: `raw` is a field (a root) and `root` is
-   * it or sits inside it — a date input's own spinbuttons. A field's name
-   * never includes its own value, so its own label pointing back around it
-   * carries nothing. A node that is NOT a field — a region labelled by the
-   * editable heading inside it — gets no such pass: its name IS the text.
-   */
-  const ownRoot = (root: string, raw: RawAXNameNode): boolean => {
-    if (!roots.has(raw.nodeId)) return false;
-    for (const cur of nativeAncestry(byId.get(root), byId)) {
-      if (cur.nodeId === raw.nodeId) return true;
-    }
-    return false;
-  };
-
   return {
     roots,
     containing,
@@ -325,7 +376,13 @@ export function valueRegions<T extends RawAXNameNode>(
             ...(around !== null ? [around] : []),
             ...(rootsUnder.get(target.nodeId) ?? []),
           ];
-          return reached.some((root) => !ownRoot(root, raw));
+          // Only a field's own label leaves anything out. A node that is NOT
+          // a field — a region labelled by the editable heading inside it —
+          // gets no such pass: its name IS the text.
+          const ownLabel = property === "labelledby" && roots.has(raw.nodeId);
+          return reached.some(
+            (root) => !(ownLabel && leavesOut(byId, raw, target, root)),
+          );
         });
       }),
   };
