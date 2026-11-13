@@ -1,4 +1,6 @@
 ---
+"@real-a11y-dev/cli": patch
+"@real-a11y-dev/mcp": patch
 "@real-a11y-dev/inspector": patch
 "@real-a11y-dev/react": patch
 "@real-a11y-dev/storybook-addon": patch

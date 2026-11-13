@@ -1634,6 +1634,18 @@ describe("getHeadingLevel", () => {
     ).toBe(3);
   });
 
+  it("ignores aria-level on an hN that has another role", () => {
+    expect(getHeadingLevel(el('<h2 role="tab" aria-level="3">x</h2>'))).toBe(2);
+  });
+
+  it("treats an empty or blank aria-level as not set", () => {
+    expect(getHeadingLevel(el('<h2 aria-level="">x</h2>'))).toBe(2);
+    expect(getHeadingLevel(el('<h2 aria-level=" ">x</h2>'))).toBe(2);
+    expect(
+      getHeadingLevel(el('<div role="heading" aria-level="">x</div>')),
+    ).toBe(null);
+  });
+
   it("gives a role=heading with no aria-level no level", () => {
     expect(getHeadingLevel(el('<div role="heading">x</div>'))).toBe(null);
   });

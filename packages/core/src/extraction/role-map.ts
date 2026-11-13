@@ -858,7 +858,13 @@ export function getHeadingLevel(element: Element): number | null {
   const tagLevel = match ? parseInt(match[1], 10) : null;
   if (tagLevel === null && getExplicitRole(element) !== "heading") return null;
 
-  const ariaLevel = safeGetAttribute(element, "aria-level");
+  // An hN given another role (`<h2 role="tab">`) is not a heading any more:
+  // its aria-level is not a heading level, so the tag number stays as before.
+  const role = getExplicitRole(element);
+  if (tagLevel !== null && role !== undefined && role !== "heading")
+    return tagLevel;
+
+  const ariaLevel = safeGetAttribute(element, "aria-level")?.trim();
   if (ariaLevel) {
     const parsed = parseInt(ariaLevel, 10);
     if (Number.isFinite(parsed)) return Math.max(parsed, 1);
