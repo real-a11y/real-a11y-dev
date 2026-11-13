@@ -271,6 +271,15 @@ describe("what an embedded control never lends", () => {
     }
   });
 
+  it("keeps a chosen option visible again inside a visibility:hidden wrapper", () => {
+    // visibility is no subtree rule: an option that sets it back is shown.
+    expect(
+      nameOf(
+        `<h2 id="t">Pick <ul role="listbox"><li role="option">A</li><div style="visibility:hidden"><span role="option" aria-selected="true" style="visibility:visible">B</span></div></ul></h2>`,
+      ),
+    ).toBe("Pick B");
+  });
+
   it("is anything, for an empty control", () => {
     expect(nameOf(`<h2 id="t">Save<input>now</h2>`)).toBe("Save now");
   });

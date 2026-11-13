@@ -420,10 +420,12 @@ function chosenAriaOptions(
 }
 
 /**
- * `option` is hidden from AT, or an element between it and `root` is (`root`
- * included unless it is the listbox itself): `aria-hidden` and `display:none`
- * hide a whole subtree without the option's own attributes or style saying
- * so.
+ * `option` is hidden from AT, or an element between it and `root` hides its
+ * whole subtree (`root` included unless it is the listbox itself):
+ * `aria-hidden`, `display:none`, `hidden` or `inert` hide the option without
+ * its own attributes or style saying so. Not `visibility: hidden`, which an
+ * option can override with `visibility: visible`, and which the option's own
+ * check reads, inherited or not.
  */
 function hiddenUpTo(
   option: Element,
@@ -431,10 +433,18 @@ function hiddenUpTo(
   listbox: Element,
   styleCache?: StyleCache,
 ): boolean {
-  for (let el: Element | null = option; el && el !== listbox;) {
-    if (isHiddenFromAT(el, getCachedComputedStyle(el, styleCache))) return true;
-    if (el === root) break;
+  if (isHiddenFromAT(option, getCachedComputedStyle(option, styleCache))) {
+    return true;
+  }
+  for (let el: Element | null = option; el && el !== root;) {
     el = safeParentElement(el);
+    if (!el || el === listbox) break;
+    if (
+      isAriaHiddenValue(safeGetAttribute(el, "aria-hidden")) ||
+      isSubtreeHidden(el, getCachedComputedStyle(el, styleCache))
+    ) {
+      return true;
+    }
   }
   return false;
 }

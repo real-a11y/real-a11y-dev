@@ -177,6 +177,9 @@ const UNLENT = `
   <h2 id="date">Head <input type="date" value="1991-09-10"></h2>
   <h2 id="time">Head <input type="time" value="13:45"></h2>
   <h2 id="hidden-opt">Pick <ul role="listbox"><li role="option">A</li><li role="option" aria-selected="true" style="display:none">B</li></ul></h2>
+  <h2 id="hidden-wrap">Pick <ul role="listbox"><li role="option">A</li><div aria-hidden="true"><span role="option" aria-selected="true">B</span></div></ul></h2>
+  <h2 id="vis-inherit">Pick <ul role="listbox"><li role="option">A</li><div style="visibility:hidden"><span role="option" aria-selected="true">B</span></div></ul></h2>
+  <h2 id="vis-override">Pick <ul role="listbox"><li role="option">A</li><div style="visibility:hidden"><span role="option" aria-selected="true" style="visibility:visible">B</span></div></ul></h2>
   <h2 id="opts">Pick <select><option>Apple</option><option selected>Pear</option><option>Plum</option></select></h2>
   <h2 id="lb-none">Pick <ul role="listbox"><li role="option">A</li><li role="option">B</li></ul></h2>
   <h2 id="indeterminate">Loading <progress></progress></h2>
@@ -248,6 +251,9 @@ describe("an embedded control's value, against Chromium", () => {
       "date",
       "time",
       "hidden-opt",
+      "hidden-wrap",
+      "vis-inherit",
+      "vis-override",
     ]) {
       expect(dom[id]?.name, id).toBe(raw[id]?.name);
     }
