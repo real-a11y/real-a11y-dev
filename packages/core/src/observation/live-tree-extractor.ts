@@ -12,10 +12,8 @@ import {
   expandedState,
   extractDomTree,
   getDescendantText,
-  fieldValueOwner,
   getElementRefs,
   htmlAamNameOwner,
-  isNameBarrierElement,
   isNameFromContentHost,
   nativeStates,
   resolveEffectiveRoot,
@@ -38,6 +36,7 @@ import {
   IMAGE_RENDERING_ATTRS,
   SCOPE_ATTRS,
 } from "./live-tree-attrs.js";
+import { addValueReaders, closesName } from "./value-readers.js";
 
 export interface LiveTreeExtractorOptions extends RedactInputOption {
   /** "a11y" (default) or "dom". */
@@ -263,15 +262,12 @@ export class LiveTreeExtractor {
     // A field's value can be computed from content beneath it — an editor's
     // text, a <select>'s option labels — so a change deep inside (a remote
     // collaborator's edit, a script relabelling an option) changes a node
-    // that no mutation names. Re-extract the field too (ADR-0001). Typing
-    // already dirties the host through its `input` event; this covers the
-    // edits that fire none.
+    // that no mutation names. Re-extract the field too (ADR-0001), and the
+    // names its value reaches (AccName 2C). Typing already dirties the field
+    // through its `input` event; this covers the edits that fire none.
     if (!needsFull) {
-      for (const el of Array.from(dirty)) {
-        const owner = fieldValueOwner(el);
-        if (owner && owner !== el) dirty.add(owner);
-      }
       this.addMovedNativeStates(dirty);
+      addValueReaders(dirty, (el) => this.nameRelevantAncestor(el));
       this.addMovedInvokers(dirty);
     }
 
@@ -688,7 +684,7 @@ export class LiveTreeExtractor {
       // "Savenow". Climbing past the starting element is what lets that host be
       // re-extracted; when no host encloses it, the fall back to `el` keeps the
       // dirty region exactly as narrow as before.
-      if (!owner && node !== el && isNameBarrierElement(node)) break;
+      if (!owner && node !== el && closesName(node)) break;
       node = safeParentElement(node);
     }
     return outermostHost ?? el;
