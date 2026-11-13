@@ -2720,6 +2720,17 @@ describe("extractDomTree", () => {
     expect(h2.a11y.properties["level"]).toBe("2");
   });
 
+  it("records aria-level on an hN and never a NaN level", () => {
+    const root = createPage(
+      '<h2 aria-level="3">a</h2><div role="heading" aria-level="abc">b</div>',
+    );
+    const { nodes, rootId } = extractDomTree(root);
+    const [a, b] = nodes.get(rootId)!.childIds.map((id) => nodes.get(id)!);
+    expect(a.a11y.properties["level"]).toBe("3");
+    expect(b.a11y.properties["level"]).not.toBe("NaN");
+    expect(b.a11y.properties["level"]).toBe("1");
+  });
+
   it("stores key attributes", () => {
     const root = createPage(
       '<a id="home-link" class="nav-link active" href="/home">Home</a>',

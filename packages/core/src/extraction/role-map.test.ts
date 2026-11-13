@@ -1597,6 +1597,46 @@ describe("getHeadingLevel", () => {
       getHeadingLevel(el('<div role="HEADING" aria-level="4">N</div>')),
     ).toBe(4);
   });
+
+  // WAI-ARIA 1.2 §8.4 (aria-level on an implicit heading), Core-AAM §3.6.3
+  // (0 and negatives read as 1). Chromium 153 agrees on every case here.
+  it("lets a valid aria-level win over the hN tag number", () => {
+    expect(getHeadingLevel(el('<h2 aria-level="3">x</h2>'))).toBe(3);
+  });
+
+  it("maps 0 and negative aria-level to 1", () => {
+    expect(
+      getHeadingLevel(el('<div role="heading" aria-level="0">x</div>')),
+    ).toBe(1);
+    expect(
+      getHeadingLevel(el('<div role="heading" aria-level="-1">x</div>')),
+    ).toBe(1);
+    expect(getHeadingLevel(el('<h3 aria-level="0">x</h3>'))).toBe(1);
+  });
+
+  it("never returns NaN for an unparseable aria-level", () => {
+    // role=heading reads as 1, like Chromium; an hN keeps its tag number.
+    expect(
+      getHeadingLevel(el('<div role="heading" aria-level="abc">x</div>')),
+    ).toBe(1);
+    expect(getHeadingLevel(el('<h4 aria-level="abc">x</h4>'))).toBe(4);
+  });
+
+  it("keeps large, fractional and padded aria-level values", () => {
+    expect(
+      getHeadingLevel(el('<div role="heading" aria-level="7">x</div>')),
+    ).toBe(7);
+    expect(
+      getHeadingLevel(el('<div role="heading" aria-level="2.5">x</div>')),
+    ).toBe(2);
+    expect(
+      getHeadingLevel(el('<div role="heading" aria-level=" 3 ">x</div>')),
+    ).toBe(3);
+  });
+
+  it("gives a role=heading with no aria-level no level", () => {
+    expect(getHeadingLevel(el('<div role="heading">x</div>'))).toBe(null);
+  });
 });
 
 // WAI-ARIA 1.2 `presentation`: the required structural children of a

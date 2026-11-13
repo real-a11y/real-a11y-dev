@@ -843,15 +843,27 @@ export function isHiddenFromAT(
   return false;
 }
 
-/** Get the heading level for heading elements */
+/**
+ * Get the heading level for heading elements.
+ *
+ * A valid `aria-level` wins over an `h1`-`h6` tag number (ARIA 1.2 §8.4 lets
+ * authors set it on an implicit heading). Core-AAM §3.6.3 maps `0` and
+ * negatives to 1. A value that does not parse is treated as follows, matching
+ * Chromium: on `role="heading"` it reads as 1; on an `hN` it is ignored and
+ * the tag number stays. The result is `null` or an integer of 1 or more,
+ * never `NaN`.
+ */
 export function getHeadingLevel(element: Element): number | null {
   const match = safeTagName(element).match(/^H([1-6])$/i);
-  if (match) return parseInt(match[1], 10);
+  const tagLevel = match ? parseInt(match[1], 10) : null;
+  if (tagLevel === null && getExplicitRole(element) !== "heading") return null;
 
   const ariaLevel = safeGetAttribute(element, "aria-level");
-  if (ariaLevel && getExplicitRole(element) === "heading") {
-    return parseInt(ariaLevel, 10);
+  if (ariaLevel) {
+    const parsed = parseInt(ariaLevel, 10);
+    if (Number.isFinite(parsed)) return Math.max(parsed, 1);
+    if (tagLevel === null) return 1;
   }
 
-  return null;
+  return tagLevel;
 }

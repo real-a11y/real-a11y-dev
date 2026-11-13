@@ -189,6 +189,39 @@ describe("an unnamed role=region or role=form", () => {
   });
 });
 
+// WAI-ARIA 1.2 §8.4 lets aria-level set an implicit heading's level, and
+// Core-AAM §3.6.3 reads 0 and negatives as 1. The DOM producer once ignored
+// aria-level on h1-h6 and printed `(level 0)`, `(level -1)` and `(level NaN)`.
+// The corpus parity metric cannot see this: `normalizePair` drops the level.
+describe("heading levels from aria-level", () => {
+  it("are the same in both producers", async () => {
+    await session.open(
+      dataUrl(
+        `<main><h2 aria-level="3">a</h2><div role="heading" aria-level="0">b</div><div role="heading" aria-level="-1">c</div><div role="heading" aria-level="abc">d</div><div role="heading" aria-level="7">e</div></main>`,
+      ),
+    );
+    const domTree = await session.call<string>("treeSnapshot", "body", [
+      { markFocus: false },
+    ]);
+    const nativeTree = serializeTree(await session.nativeTree(), {
+      markFocus: false,
+    });
+    const levels = (tree: string) =>
+      Object.fromEntries(
+        tree
+          .split("\n")
+          .map((l) => l.trim().match(/^heading "(\w)".*\(level (\S+)\)/))
+          .filter((m): m is RegExpMatchArray => m !== null)
+          .map((m) => [m[1], m[2]]),
+      );
+
+    const expected = { a: "3", b: "1", c: "1", d: "1", e: "7" };
+    expect(levels(domTree)).toEqual(expected);
+    expect(levels(nativeTree)).toEqual(expected);
+    expect(domTree).not.toContain("NaN");
+  });
+});
+
 // HTML-AAM gives a submit, reset or image input a default name when nothing
 // else names it. The DOM producer once left all three as `button ""`, where
 // Chromium says "Submit", "Reset" and "Submit" — and the unlabeled-interactive
