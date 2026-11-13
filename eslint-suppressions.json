@@ -121,7 +121,7 @@
   },
   "packages/core/src/extraction/dom-extractor.ts": {
     "complexity": {
-      "count": 6
+      "count": 5
     },
     "max-depth": {
       "count": 2
@@ -131,6 +131,11 @@
     },
     "max-params": {
       "count": 4
+    }
+  },
+  "packages/core/src/extraction/field-text.ts": {
+    "complexity": {
+      "count": 1
     }
   },
   "packages/core/src/interaction/picker.ts": {
