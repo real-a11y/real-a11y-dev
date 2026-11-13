@@ -413,7 +413,7 @@ describe("extractA11yTree", () => {
     expect(pw).toBeDefined();
   });
 
-  it("names a table from its caption and suppresses the caption node", () => {
+  it("names a table from its caption and keeps the caption node", () => {
     const root = createPage(`
       <table>
         <caption>Q3 results</caption>
@@ -424,10 +424,47 @@ describe("extractA11yTree", () => {
     const allNodes = Array.from(nodes.values());
     const table = allNodes.find((n) => n.a11y.role === "table");
     expect(table?.a11y.name).toBe("Q3 results");
-    expect(allNodes.find((n) => n.dom?.tagName === "caption")).toBeUndefined();
+    const caption = allNodes.find((n) => n.dom?.tagName === "caption");
+    expect(caption?.a11y.role).toBe("caption");
+    expect(caption?.parentId).toBe(table?.id);
   });
 
-  it("suppresses a caption whose name keeps edge non-breaking spaces", () => {
+  it("keeps a non-interactive child of a naming caption", () => {
+    const { nodes } = extractA11yTree(
+      createPage(
+        `<table><caption><h2>Sales</h2></caption><tbody><tr><td>x</td></tr></tbody></table>`,
+      ),
+    );
+    const all = Array.from(nodes.values());
+    expect(all.find((n) => n.a11y.role === "table")?.a11y.name).toBe("Sales");
+    expect(all.some((n) => n.a11y.role === "caption")).toBe(true);
+    expect(all.some((n) => n.a11y.role === "heading")).toBe(true);
+  });
+
+  it("promotes an interactive child of a presentational table's caption", () => {
+    const { nodes } = extractA11yTree(
+      createPage(
+        `<table role="presentation"><caption>Cap <a href="#x">more</a></caption><tbody><tr><td>x</td></tr></tbody></table>`,
+      ),
+    );
+    const all = Array.from(nodes.values());
+    expect(all.some((n) => n.a11y.role === "caption")).toBe(false);
+    expect(all.some((n) => n.a11y.role === "link")).toBe(true);
+  });
+
+  it("does not expose a caption under a presentational table", () => {
+    for (const role of ["none", "presentation"]) {
+      const { nodes } = extractA11yTree(
+        createPage(
+          `<table role="${role}"><caption>Cap</caption><tbody><tr><td>x</td></tr></tbody></table>`,
+        ),
+      );
+      const roles = Array.from(nodes.values()).map((n) => n.a11y.role);
+      expect(roles).not.toContain("caption");
+    }
+  });
+
+  it("keeps the table name's edge non-breaking spaces from its caption", () => {
     // The table's name keeps U+00A0 (AccName trims ASCII whitespace only), so
     // the comparison that decides "the caption supplied the name" must too.
     for (const caption of ["&nbsp;Sales", "Sales&nbsp;", "&nbsp;Sales&nbsp;"]) {
@@ -437,9 +474,7 @@ describe("extractA11yTree", () => {
       const allNodes = Array.from(extractA11yTree(root).nodes.values());
       const table = allNodes.find((n) => n.a11y.role === "table");
       expect(table?.a11y.name).toBe(caption.replaceAll("&nbsp;", "\u00a0"));
-      expect(
-        allNodes.find((n) => n.dom?.tagName === "caption"),
-      ).toBeUndefined();
+      expect(allNodes.some((n) => n.a11y.role === "caption")).toBe(true);
     }
   });
 
@@ -503,6 +538,7 @@ describe("extractA11yTree", () => {
       expect(allNodes.some((n) => n.a11y.name === "Open support tickets")).toBe(
         true,
       );
+      expect(allNodes.some((n) => n.a11y.role === "caption")).toBe(true);
     }
   });
 
