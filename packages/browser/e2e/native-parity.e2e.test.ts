@@ -197,7 +197,7 @@ describe("heading levels from aria-level", () => {
   it("are the same in both producers", async () => {
     await session.open(
       dataUrl(
-        `<main><h2 aria-level="3">a</h2><div role="heading" aria-level="0">b</div><div role="heading" aria-level="-1">c</div><div role="heading" aria-level="abc">d</div><div role="heading" aria-level="7">e</div></main>`,
+        `<main><h2 aria-level="3">a</h2><div role="heading" aria-level="0">b</div><div role="heading" aria-level="-1">c</div><div role="heading" aria-level="abc">d</div><div role="heading" aria-level="7">e</div><h4 aria-level="abc">f</h4><h4 aria-level="10">g</h4><h2 aria-level=" ">h</h2><h2 aria-level="3abc">i</h2><h4 aria-level="2147483648">j</h4></main>`,
       ),
     );
     const domTree = await session.call<string>("treeSnapshot", "body", [
@@ -215,7 +215,18 @@ describe("heading levels from aria-level", () => {
           .map((m) => [m[1], m[2]]),
       );
 
-    const expected = { a: "3", b: "1", c: "1", d: "1", e: "7" };
+    const expected = {
+      a: "3",
+      b: "1",
+      c: "1",
+      d: "1",
+      e: "7",
+      f: "1",
+      g: "4",
+      h: "1",
+      i: "3",
+      j: "1",
+    };
     expect(levels(domTree)).toEqual(expected);
     expect(levels(nativeTree)).toEqual(expected);
     expect(domTree).not.toContain("NaN");

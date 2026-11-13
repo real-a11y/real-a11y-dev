@@ -1614,12 +1614,39 @@ describe("getHeadingLevel", () => {
     expect(getHeadingLevel(el('<h3 aria-level="0">x</h3>'))).toBe(1);
   });
 
-  it("never returns NaN for an unparseable aria-level", () => {
-    // role=heading reads as 1, like Chromium; an hN keeps its tag number.
+  it("reads an unparseable, blank or overflowing aria-level as 1", () => {
+    // Chromium 153: 1 on role=heading and on an hN alike, never NaN.
     expect(
       getHeadingLevel(el('<div role="heading" aria-level="abc">x</div>')),
     ).toBe(1);
-    expect(getHeadingLevel(el('<h4 aria-level="abc">x</h4>'))).toBe(4);
+    expect(getHeadingLevel(el('<h4 aria-level="abc">x</h4>'))).toBe(1);
+    expect(getHeadingLevel(el('<h2 aria-level=" ">x</h2>'))).toBe(1);
+    expect(
+      getHeadingLevel(el('<div role="heading" aria-level=" ">x</div>')),
+    ).toBe(1);
+    expect(getHeadingLevel(el('<h4 aria-level="2147483648">x</h4>'))).toBe(1);
+    expect(
+      getHeadingLevel(
+        el('<div role="heading" aria-level="99999999999999999999">x</div>'),
+      ),
+    ).toBe(1);
+  });
+
+  it("ignores a level of 10 or more", () => {
+    expect(getHeadingLevel(el('<h4 aria-level="10">x</h4>'))).toBe(4);
+    expect(getHeadingLevel(el('<h4 aria-level="100000">x</h4>'))).toBe(4);
+    expect(
+      getHeadingLevel(el('<div role="heading" aria-level="10">x</div>')),
+    ).toBe(null);
+    expect(
+      getHeadingLevel(el('<div role="heading" aria-level="9">x</div>')),
+    ).toBe(9);
+  });
+
+  it("cuts trailing garbage, fractions and exponents like parseInt", () => {
+    expect(getHeadingLevel(el('<h2 aria-level="3abc">x</h2>'))).toBe(3);
+    expect(getHeadingLevel(el('<h2 aria-level="+3">x</h2>'))).toBe(3);
+    expect(getHeadingLevel(el('<h2 aria-level="1e2">x</h2>'))).toBe(1);
   });
 
   it("keeps large, fractional and padded aria-level values", () => {
@@ -1638,9 +1665,8 @@ describe("getHeadingLevel", () => {
     expect(getHeadingLevel(el('<h2 role="tab" aria-level="3">x</h2>'))).toBe(2);
   });
 
-  it("treats an empty or blank aria-level as not set", () => {
+  it("treats an empty aria-level as not set", () => {
     expect(getHeadingLevel(el('<h2 aria-level="">x</h2>'))).toBe(2);
-    expect(getHeadingLevel(el('<h2 aria-level=" ">x</h2>'))).toBe(2);
     expect(
       getHeadingLevel(el('<div role="heading" aria-level="">x</div>')),
     ).toBe(null);

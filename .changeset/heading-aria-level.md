@@ -7,4 +7,4 @@
 "@real-a11y-dev/testing": patch
 ---
 
-Fix the DOM producer's heading level. `aria-level` on `h1`–`h6` now wins over the tag number (`<h2 aria-level="3">` is level 3, as WAI-ARIA 1.2 §8.4 allows), and `0` or a negative `aria-level` reads as level 1 (Core-AAM §3.6.3). An unparseable `aria-level` no longer produces `(level NaN)`: `role="heading"` reads as level 1, like Chromium, and an `hN` keeps its tag number. Saved snapshots of pages that set `aria-level` on a heading may churn.
+Fix the DOM producer's heading level. `aria-level` on `h1`–`h6` now wins over the tag number (`<h2 aria-level="3">` is level 3, as WAI-ARIA 1.2 §8.4 allows), and `0` or a negative `aria-level` reads as level 1 (Core-AAM §3.6.3). A value that does not parse (`abc`, a blank string) or overflows 32 bits reads as level 1, and a level of 10 or more is ignored, all as in Chromium, so `(level NaN)` can no longer appear. Saved snapshots of pages that set `aria-level` on a heading may churn.
