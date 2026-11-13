@@ -393,7 +393,8 @@ export function embeddedValue(
 
 /**
  * An ARIA listbox's chosen options, as Chromium reads them into a name: each
- * `aria-selected` one inside it or in what it `aria-owns`, unless it is hidden.
+ * `aria-selected` one inside it or in what it `aria-owns`, unless it is hidden
+ * or sits in something hidden (see {@link hiddenUpTo}).
  */
 function chosenAriaOptions(
   listbox: Element,
@@ -406,16 +407,36 @@ function chosenAriaOptions(
       const el = id ? safeGetElementById(scope, id) : null;
       return el ? [el] : [];
     });
-  return [listbox, ...owned]
-    .flatMap((root) => [
+  return [listbox, ...owned].flatMap((root) =>
+    [
       ...(root !== listbox && root.matches('[role="option"]') ? [root] : []),
       ...root.querySelectorAll('[role="option"]'),
-    ])
-    .filter(
+    ].filter(
       (option) =>
         ariaBoolean(safeGetAttribute(option, "aria-selected")) === true &&
-        !isHiddenFromAT(option, getCachedComputedStyle(option, styleCache)),
-    );
+        !hiddenUpTo(option, root, listbox, styleCache),
+    ),
+  );
+}
+
+/**
+ * `option` is hidden from AT, or an element between it and `root` is (`root`
+ * included unless it is the listbox itself): `aria-hidden` and `display:none`
+ * hide a whole subtree without the option's own attributes or style saying
+ * so.
+ */
+function hiddenUpTo(
+  option: Element,
+  root: Element,
+  listbox: Element,
+  styleCache?: StyleCache,
+): boolean {
+  for (let el: Element | null = option; el && el !== listbox;) {
+    if (isHiddenFromAT(el, getCachedComputedStyle(el, styleCache))) return true;
+    if (el === root) break;
+    el = safeParentElement(el);
+  }
+  return false;
 }
 
 /** Non-native roles whose value is the text they hold. */

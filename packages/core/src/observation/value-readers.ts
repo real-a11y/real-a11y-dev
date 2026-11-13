@@ -8,6 +8,7 @@
  * around it. Neither name's own element changes, so the refresh adds the
  * hosts these values reach.
  */
+import { ariaOwner, withAriaOwnerIndex } from "../extraction/aria-owner.js";
 import { safeParentElement, safeTagName } from "../extraction/clobber-safe.js";
 import { isNameBarrierElement } from "../extraction/dom-extractor.js";
 import {
@@ -31,27 +32,51 @@ export function closesName(el: Element): boolean {
   return isNameBarrierElement(el) && !lendsValue(el);
 }
 
+/** The `aria-owns` owner of `el` or of an element around it, if any. */
+function ownedBy(el: Element): Element | null {
+  for (let up: Element | null = el; up; up = safeParentElement(up)) {
+    const owner = ariaOwner(up);
+    if (owner) return owner;
+  }
+  return null;
+}
+
 /**
  * Add, for each element in `dirty`, the field whose value a change there
  * moves (`fieldValueOwner`: a change deep in an editor or a `<select>`
  * changes that field's value without touching it), and for a field that
  * lends its value, the name host around it (`hostOf`) and the `<label>`
- * around it, whose control is named from it.
+ * around it, whose control is named from it. A change in an option a listbox
+ * owns from elsewhere (`aria-owns`) reaches that listbox, which no DOM
+ * ancestor of the option is.
  */
 export function addValueReaders(
   dirty: Set<Element>,
   hostOf: (el: Element) => Element,
 ): void {
-  for (const el of Array.from(dirty)) {
-    const field = fieldValueOwner(el) ?? el;
-    dirty.add(field);
-    if (!lendsValue(field)) continue;
-    dirty.add(hostOf(field));
-    for (let up = safeParentElement(field); up; up = safeParentElement(up)) {
-      if (safeTagName(up) === "label") {
-        dirty.add(up);
-        break;
+  withAriaOwnerIndex(() => {
+    for (const el of Array.from(dirty)) {
+      const owner = ownedBy(el);
+      for (const start of owner ? [el, owner] : [el]) {
+        const field = fieldValueOwner(start) ?? start;
+        dirty.add(field);
+        if (lendsValue(field)) addReaders(field, dirty, hostOf);
       }
+    }
+  });
+}
+
+/** The name host and the `<label>` a lending `field`'s value reaches. */
+function addReaders(
+  field: Element,
+  dirty: Set<Element>,
+  hostOf: (el: Element) => Element,
+): void {
+  dirty.add(hostOf(field));
+  for (let up = safeParentElement(field); up; up = safeParentElement(up)) {
+    if (safeTagName(up) === "label") {
+      dirty.add(up);
+      return;
     }
   }
 }

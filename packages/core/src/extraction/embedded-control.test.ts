@@ -250,6 +250,27 @@ describe("what an embedded control never lends", () => {
     ).toBe("Pick Two");
   });
 
+  it("is a chosen option inside something hidden", () => {
+    for (const wrapper of [
+      `<div aria-hidden="true">`,
+      `<div style="display:none">`,
+    ]) {
+      expect(
+        nameOf(
+          `<h2 id="t">Pick <ul role="listbox"><li role="option">A</li>${wrapper}<span role="option" aria-selected="true">B</span></div></ul></h2>`,
+        ),
+        wrapper,
+      ).toBe("Pick");
+      // An owned wrapper hides what it holds too.
+      expect(
+        nameOf(
+          `<h2 id="t">Pick <div role="listbox" tabindex="0" aria-owns="w"></div></h2>${wrapper.replace("<div", '<div id="w"')}<span role="option" aria-selected="true">B</span></div>`,
+        ),
+        wrapper,
+      ).toBe("Pick");
+    }
+  });
+
   it("is anything, for an empty control", () => {
     expect(nameOf(`<h2 id="t">Save<input>now</h2>`)).toBe("Save now");
   });

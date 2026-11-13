@@ -3269,6 +3269,18 @@ describe("LiveTreeExtractor: a value read into another name", () => {
     expect(nameOf("heading")).toBe("Pick Two");
   });
 
+  it("renames a heading when a choice moves among options its listbox owns", async () => {
+    // The options sit outside the heading: only `aria-owns` ties them to it.
+    const nameOf = await refreshAfter(
+      `<main><h2>Pick <div role="listbox" tabindex="0" aria-owns="a b"></div></h2><div role="option" id="a" aria-selected="true">One</div><div role="option" id="b">Two</div></main>`,
+      () => {
+        document.getElementById("a")!.setAttribute("aria-selected", "false");
+        document.getElementById("b")!.setAttribute("aria-selected", "true");
+      },
+    );
+    expect(nameOf("heading")).toBe("Pick Two");
+  });
+
   it("withholds the renamed control's name in strict mode", async () => {
     const nameOf = await refreshAfter(
       `<main><label><input type="checkbox"> Flash the screen <input id="n" aria-label="times"> times</label></main>`,
