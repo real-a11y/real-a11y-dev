@@ -69,9 +69,9 @@
     "@real-a11y-dev/session-registry": "workspace:*",
     "@real-a11y-dev/snapshot": "workspace:*",
     "@types/node": "^26.6.3",
-    "playwright": "^1.64.1",
+    "playwright": "^1.65.0",
     "tsup": "^8.3.0",
     "typescript": "^5.6.0",
-    "vitest": "^5.0.3"
+    "vitest": "^5.1.0"
   }
 }

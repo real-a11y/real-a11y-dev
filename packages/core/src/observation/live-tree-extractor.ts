@@ -12,12 +12,9 @@ import {
   expandedState,
   extractDomTree,
   getDescendantText,
-  fieldValueOwner,
   getElementRefs,
   htmlAamNameOwner,
-  isNameBarrierElement,
   isNameFromContentHost,
-  nativeStates,
   resolveEffectiveRoot,
   resolveFocusedElement,
   textRunHost,
@@ -28,7 +25,6 @@ import {
   flatParent,
   isRenderedInFlatTree,
 } from "../extraction/flat-tree.js";
-import { withholdsState } from "../extraction/strict-mode.js";
 import type { ExtractionResult, SemanticNode, TreeChange } from "../types.js";
 import { getNodeId } from "../utils/id-generator.js";
 import { warnOutsideProduction } from "../utils/warn.js";
@@ -38,6 +34,11 @@ import {
   IMAGE_RENDERING_ATTRS,
   SCOPE_ATTRS,
 } from "./live-tree-attrs.js";
+import {
+  addMovedNativeStates,
+  addValueReaders,
+  closesName,
+} from "./value-readers.js";
 
 export interface LiveTreeExtractorOptions extends RedactInputOption {
   /** "a11y" (default) or "dom". */
@@ -63,6 +64,8 @@ export class LiveTreeExtractor {
   public mode: "dom" | "a11y";
   /** Strict mode, for every extraction, full or partial: see {@link RedactInputOption}. */
   private readonly redactInput: boolean;
+  /** Withheld native states, by control (see `addMovedNativeStates`). */
+  private readonly choices = new WeakMap<Element, unknown>();
   private domNodes = new Map<string, SemanticNode>();
   private a11yNodes = new Map<string, SemanticNode>();
   private rootId = "";
@@ -110,6 +113,10 @@ export class LiveTreeExtractor {
       redactInput: this.redactInput,
     });
     this.adoptResult(result);
+    // Strict mode's withheld choices, as this extraction read them.
+    if (this.redactInput) {
+      addMovedNativeStates(this.domNodes, true, this.choices, new Set());
+    }
     return this.currentResult();
   }
 
@@ -263,15 +270,17 @@ export class LiveTreeExtractor {
     // A field's value can be computed from content beneath it — an editor's
     // text, a <select>'s option labels — so a change deep inside (a remote
     // collaborator's edit, a script relabelling an option) changes a node
-    // that no mutation names. Re-extract the field too (ADR-0001). Typing
-    // already dirties the host through its `input` event; this covers the
-    // edits that fire none.
+    // that no mutation names. Re-extract the field too (ADR-0001), and the
+    // names its value reaches (AccName 2C). Typing already dirties the field
+    // through its `input` event; this covers the edits that fire none.
     if (!needsFull) {
-      for (const el of Array.from(dirty)) {
-        const owner = fieldValueOwner(el);
-        if (owner && owner !== el) dirty.add(owner);
-      }
-      this.addMovedNativeStates(dirty);
+      addMovedNativeStates(
+        this.domNodes,
+        this.redactInput,
+        this.choices,
+        dirty,
+      );
+      addValueReaders(dirty, (el) => this.nameRelevantAncestor(el));
       this.addMovedInvokers(dirty);
     }
 
@@ -380,37 +389,6 @@ export class LiveTreeExtractor {
     }
 
     return this.currentResult();
-  }
-
-  /**
-   * Add every recorded checkbox, radio, `<select>` and `<option>` whose
-   * native state no longer matches its node. Those states move without an
-   * attribute, and often without an event, of their own: a click on one radio
-   * unchecks its sibling, a script's `option.selected = true` fires nothing, a
-   * handler can make a "select all" box indeterminate, and opening a picker
-   * fires nothing at all, so it shows once anything else refreshes.
-   * It reads a property or two per control, far cheaper than re-extracting
-   * them all.
-   */
-  private addMovedNativeStates(dirty: Set<Element>): void {
-    const refs = getElementRefs();
-    for (const [id, node] of this.domNodes) {
-      const tag = node.dom?.tagName;
-      if (tag !== "input" && tag !== "select" && tag !== "option") continue;
-      const el = refs.get(id);
-      if (!el) continue;
-      const native = nativeStates(el, tag, node.a11y.role);
-      for (const [state, value] of Object.entries(native)) {
-        // A state strict mode withholds is never on the node, so it can't
-        // have moved: comparing would dirty every selected option each time.
-        if (this.redactInput && withholdsState(el, node.a11y.role, state))
-          continue;
-        if (value !== node.a11y.states[state]) {
-          dirty.add(el);
-          break;
-        }
-      }
-    }
   }
 
   /**
@@ -688,7 +666,7 @@ export class LiveTreeExtractor {
       // "Savenow". Climbing past the starting element is what lets that host be
       // re-extracted; when no host encloses it, the fall back to `el` keeps the
       // dirty region exactly as narrow as before.
-      if (!owner && node !== el && isNameBarrierElement(node)) break;
+      if (!owner && node !== el && closesName(node)) break;
       node = safeParentElement(node);
     }
     return outermostHost ?? el;
