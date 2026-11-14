@@ -62,7 +62,7 @@ The rules, in run order (`ALL_RULES`):
 | `image-alt` | An image with no text alternative. |
 | `heading-order` | More than one `h1`, or a skipped heading level. |
 | `dialog-labeled` | A `dialog`/`alertdialog` with no accessible name. |
-| `landmark-structure` | Missing/duplicate `main`, or more than one `banner`/`contentinfo`. |
+| `landmark-structure` | Missing/duplicate `main`, or more than one `banner`/`contentinfo`. Always a warning; `assertLandmarkStructure` still throws on any of them. |
 
 ## Assert (throwing)
 

@@ -5,7 +5,12 @@ import {
 } from "@real-a11y-dev/core";
 import { describe, it, expect } from "vitest";
 
-import { collectFindings, listByRole, ALL_RULES } from "./index.js";
+import {
+  assertLandmarkStructure,
+  collectFindings,
+  listByRole,
+  ALL_RULES,
+} from "./index.js";
 
 function mount(html: string): HTMLElement {
   document.body.innerHTML = "";
@@ -302,6 +307,38 @@ describe("collectFindings — landmark-structure", () => {
     const root = mount(`<div>no landmarks</div>`);
     const findings = collectFindings(root, ["landmark-structure"]);
     expect(findings.some((f) => /Missing <main>/.test(f.message))).toBe(true);
+  });
+
+  // No spec requires a main landmark (WAI-ARIA 1.2 only caps it at one), so a
+  // page without one is a best-practice warning, not a blocking error.
+  it("reports a missing main as a warning, not an error", () => {
+    const root = mount(`<div><h1>t</h1><p>x</p></div>`);
+    const findings = collectFindings(root, ["landmark-structure"]);
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.severity).toBe("warning");
+    expect(findings[0]?.message).toMatch(/^Missing <main>/);
+  });
+
+  it("still throws from assertLandmarkStructure on a missing main", () => {
+    const root = mount(`<div><h1>t</h1><p>x</p></div>`);
+    expect(() => assertLandmarkStructure(root)).toThrow(/Missing <main>/);
+  });
+
+  it("keeps a banner inside main counted as a second banner", () => {
+    const root = mount(
+      `<header>top</header><main><h1>t</h1><div role="banner">in main</div></main>`,
+    );
+    const findings = collectFindings(root, ["landmark-structure"]);
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.severity).toBe("warning");
+    expect(findings[0]?.message).toMatch(/found 2\.$/);
+  });
+
+  it("does not count a header inside main as a banner", () => {
+    const root = mount(
+      `<header>top</header><main><h1>t</h1><header>in main</header></main><footer>f</footer>`,
+    );
+    expect(collectFindings(root, ["landmark-structure"])).toEqual([]);
   });
 
   it("flags two mains", () => {
