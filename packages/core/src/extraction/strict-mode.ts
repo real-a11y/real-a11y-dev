@@ -75,6 +75,14 @@ export interface NameRun {
    */
   readonly redactInput: boolean;
   /**
+   * The control whose value this run's name leaves out, if it is a name: the
+   * element being named, or the control a `<label>` being named labels. Met
+   * inside its own label or content it lends nothing (HTML-AAM excludes the
+   * labelled control's value), as Chromium skips it; listed in its own
+   * `aria-labelledby` it is read, as Chromium reads it.
+   */
+  readonly named?: Element;
+  /**
    * Set when the computation met text it may not show. The read adds nothing,
    * and the whole name then reads `[redacted]` (`REDACTED_VALUE`) while a
    * description is dropped. That is what the native producer does
@@ -92,8 +100,8 @@ export interface NameRun {
   typedHere?: boolean;
 }
 
-export function newNameRun(redactInput: boolean): NameRun {
-  return { visited: new Set(), redactInput, withheld: false };
+export function newNameRun(redactInput: boolean, named?: Element): NameRun {
+  return { visited: new Set(), redactInput, withheld: false, named };
 }
 
 /**

@@ -21,6 +21,14 @@
 
 ### Patch Changes
 
+- **The TAB view names a stop the way Chrome does when a form control sits
+  in its label.** The extension re-bundles the updated extractor, which reads
+  a control's value into the name around it: a checkbox labelled
+  `Flash the screen [3] times` is "Flash the screen 3 times", not "Flash the
+  screen times", and a button labelled by a text field reads what it holds.
+  A password, one-time code or payment field's value never does: such a name
+  reads `[redacted]`. The side panel's tree is Chrome's own and already showed
+  these names ([#645](https://github.com/real-a11y/real-a11y-dev/pull/645)).
 - **The side panel no longer shows a sensitive field's value in that field's
   own name.** Chrome reads a field listed in its own `aria-labelledby` by
   value, so a self-labelled card field showed as `textbox "Card 4111…"` and a

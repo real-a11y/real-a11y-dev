@@ -2,7 +2,8 @@
  * The name a label that contains its control gives it.
  *
  * HTML-AAM excludes the control's own value, so the label's child nodes are
- * read minus the control itself and any other form control. aria-hidden and
+ * read minus the control itself. Another control the user adjusts lends its
+ * value (AccName 2C) and any other form control nothing. aria-hidden and
  * hidden children are skipped. How a child is read is the caller's, so this
  * stays free of the name walk it sits inside.
  */
@@ -21,6 +22,11 @@ export interface LabelReaders {
   /** A text node of the label's own — the name walk's, so strict mode holds. */
   readText: (node: Node) => string;
   /**
+   * What a control embedded in the label lends it (AccName 2C), read ahead of
+   * its own alternative, which step 2D ignores; `null` when it isn't one.
+   */
+  readEmbedded: (child: Element) => string | null;
+  /**
    * `textVisible` is `false` for a `visibility: hidden` child, which lends no
    * alternative of its own, and `null` under a hidden label, which is read
    * whole as it always was.
@@ -29,11 +35,24 @@ export interface LabelReaders {
   onUnreadable: (child: Element, error: unknown) => void;
 }
 
+/**
+ * What a control in the label lends it: one the user adjusts its value, any
+ * other form control nothing. `null` when `child` is no control.
+ */
+function controlText(
+  child: Element,
+  readEmbedded: LabelReaders["readEmbedded"],
+): string | null {
+  const embedded = readEmbedded(child);
+  if (embedded !== null) return embedded;
+  return FORM_CONTROL_TAGS.has(safeTagName(child)) ? "" : null;
+}
+
 export function wrappingLabelText(
   label: Element,
   control: Element,
   styleCache: StyleCache | null | undefined,
-  { readText, readChild, onUnreadable }: LabelReaders,
+  { readText, readEmbedded, readChild, onUnreadable }: LabelReaders,
 ): string {
   const parts: string[] = [];
   const labelShows = isTextVisible(getCachedComputedStyle(label, styleCache));
@@ -47,7 +66,6 @@ export function wrappingLabelText(
       if (childEl === control) continue;
       // An unreadable child costs its own text, not the control's name.
       try {
-        if (FORM_CONTROL_TAGS.has(safeTagName(childEl))) continue;
         if (isAriaHiddenValue(safeGetAttribute(childEl, "aria-hidden")))
           continue;
         const style = getCachedComputedStyle(childEl, styleCache);
@@ -55,7 +73,9 @@ export function wrappingLabelText(
         const shows = labelShows ? isTextVisible(style) : null;
         // A hidden widget or barrier is not read into, as in a name walk.
         if (shows === false && isOpaqueNameChild(childEl)) continue;
-        const text = readChild(childEl, shows).trim();
+        const text = (
+          controlText(childEl, readEmbedded) ?? readChild(childEl, shows)
+        ).trim();
         if (text) parts.push(text);
       } catch (error) {
         onUnreadable(childEl, error);

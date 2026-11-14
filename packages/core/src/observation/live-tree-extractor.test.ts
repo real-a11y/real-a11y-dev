@@ -3156,3 +3156,172 @@ describe("LiveTreeExtractor", () => {
     });
   });
 });
+
+// A control the user adjusts lends its value to the name around it (AccName
+// 2C), so a change to that value renames an element the change never
+// touched: the checkbox its label labels, the heading it sits in, a button
+// labelled by it. A refresh must equal a clean read.
+describe("LiveTreeExtractor: a value read into another name", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    document.body.innerHTML = "";
+    resetIdCounter();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  /** Refresh after `act`, checking the result against a clean read. */
+  async function refreshAfter(
+    html: string,
+    act: () => void,
+    redactInput = false,
+  ): Promise<(role: string) => string | undefined> {
+    document.body.innerHTML = html;
+    const live = new LiveTreeExtractor(document.body, {
+      mode: "a11y",
+      redactInput,
+    });
+    let lastChange: TreeChange | undefined;
+    const observer = new DomObserver(
+      document.body,
+      (change) => {
+        lastChange = change;
+      },
+      50,
+    );
+    observer.start();
+    act();
+    await vi.advanceTimersByTimeAsync(100);
+    const result = live.refresh(lastChange);
+    observer.stop();
+    expect(lastChange).toBeDefined();
+    expect(result.nodes).toEqual(
+      extractA11yTree(document.body, { redactInput }).nodes,
+    );
+    return (role) =>
+      [...result.nodes.values()].find((n) => n.a11y.role === role)?.a11y.name;
+  }
+
+  const type = (selector: string, value: string) => () => {
+    const field = document.querySelector(selector) as HTMLInputElement;
+    field.value = value;
+    field.dispatchEvent(new Event("input", { bubbles: true }));
+  };
+
+  it("renames the control a label labels when a field in it is typed into", async () => {
+    const nameOf = await refreshAfter(
+      `<main><label><input type="checkbox"> Flash the screen <input id="n" value="3" aria-label="times"> times</label></main>`,
+      type("#n", "7"),
+    );
+    expect(nameOf("checkbox")).toBe("Flash the screen 7 times");
+  });
+
+  it("renames the heading a typed field sits in", async () => {
+    const nameOf = await refreshAfter(
+      `<main><h2>Items: <input id="n" value="12"></h2></main>`,
+      type("#n", "13"),
+    );
+    expect(nameOf("heading")).toBe("Items: 13");
+  });
+
+  it("renames a button labelled by a typed field", async () => {
+    const nameOf = await refreshAfter(
+      `<main><input id="i" value="hi"><button aria-labelledby="i">b</button></main>`,
+      type("#i", "hello"),
+    );
+    expect(nameOf("button")).toBe("hello");
+  });
+
+  it("renames a heading when script chooses another option, no event fired", async () => {
+    // Nothing reports the choice: it shows once anything else refreshes.
+    const nameOf = await refreshAfter(
+      `<main><h2>Sort by <select><option value="n">Name</option><option value="d">Date</option></select></h2><p>x</p></main>`,
+      () => {
+        (document.querySelector("select") as HTMLSelectElement).value = "d";
+        document.querySelector("p")!.textContent = "y";
+      },
+    );
+    expect(nameOf("heading")).toBe("Sort by Date");
+  });
+
+  it("renames a heading when its chosen option is relabelled", async () => {
+    const nameOf = await refreshAfter(
+      `<main><h2>Sort by <select><option>Name</option><option selected>Date</option></select></h2></main>`,
+      () => {
+        document.querySelectorAll("option")[1]!.firstChild!.nodeValue =
+          "Newest";
+      },
+    );
+    expect(nameOf("heading")).toBe("Sort by Newest");
+  });
+
+  it("renames a heading when an ARIA listbox's choice moves", async () => {
+    const nameOf = await refreshAfter(
+      `<main><h2>Pick <ul role="listbox"><li role="option" aria-selected="true">One</li><li role="option">Two</li></ul></h2></main>`,
+      () => {
+        const [one, two] = document.querySelectorAll("li");
+        one!.setAttribute("aria-selected", "false");
+        two!.setAttribute("aria-selected", "true");
+      },
+    );
+    expect(nameOf("heading")).toBe("Pick Two");
+  });
+
+  it("renames a heading when a choice moves among options its listbox owns", async () => {
+    // The options sit outside the heading: only `aria-owns` ties them to it.
+    const nameOf = await refreshAfter(
+      `<main><h2>Pick <div role="listbox" tabindex="0" aria-owns="a b"></div></h2><div role="option" id="a" aria-selected="true">One</div><div role="option" id="b">Two</div></main>`,
+      () => {
+        document.getElementById("a")!.setAttribute("aria-selected", "false");
+        document.getElementById("b")!.setAttribute("aria-selected", "true");
+      },
+    );
+    expect(nameOf("heading")).toBe("Pick Two");
+  });
+
+  it("withholds a name in strict mode once script gives its select a choice, no event fired", async () => {
+    // Strict mode never records a chosen option's `selected`, so the refresh
+    // has to remember it: the heading reads `[redacted]` only once the select
+    // holds a choice.
+    document.body.innerHTML = `<main><h2>Sort by <select><option>Name</option><option>Date</option></select></h2><p>x</p></main>`;
+    const select = document.querySelector("select") as HTMLSelectElement;
+    select.selectedIndex = -1;
+    const live = new LiveTreeExtractor(document.body, {
+      mode: "a11y",
+      redactInput: true,
+    });
+    const heading = (result: ExtractionResult) =>
+      [...result.nodes.values()].find((n) => n.a11y.role === "heading")?.a11y
+        .name;
+    expect(heading(live.refresh())).toBe("Sort by");
+    let lastChange: TreeChange | undefined;
+    const observer = new DomObserver(
+      document.body,
+      (change) => {
+        lastChange = change;
+      },
+      50,
+    );
+    observer.start();
+    select.selectedIndex = 1;
+    document.querySelector("p")!.textContent = "y";
+    await vi.advanceTimersByTimeAsync(100);
+    const result = live.refresh(lastChange);
+    observer.stop();
+    expect(result.nodes).toEqual(
+      extractA11yTree(document.body, { redactInput: true }).nodes,
+    );
+    expect(heading(result)).toBe("[redacted]");
+  });
+
+  it("withholds the renamed control's name in strict mode", async () => {
+    const nameOf = await refreshAfter(
+      `<main><label><input type="checkbox"> Flash the screen <input id="n" aria-label="times"> times</label></main>`,
+      type("#n", "7"),
+      true,
+    );
+    expect(nameOf("checkbox")).toBe("[redacted]");
+  });
+});
