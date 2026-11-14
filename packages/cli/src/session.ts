@@ -100,6 +100,37 @@ export interface SessionFlags {
   cwd?: string;
 }
 
+type ResolveChromeExecutable =
+  typeof import("@real-a11y-dev/browser").resolveChromeExecutable;
+
+/**
+ * The Chrome binary a launched session uses, if we get to choose one:
+ * --chrome-path (hard error if missing) > REAL_A11Y_CHROME_PATH (hard error if
+ * missing) > the `real-a11y install` manifest (soft, if any) > `undefined`,
+ * which leaves Playwright its own bundled Chromium.
+ */
+function chooseChrome(
+  flags: SessionFlags,
+  resolveChromeExecutable: ResolveChromeExecutable,
+): ReturnType<ResolveChromeExecutable> {
+  let chrome: ReturnType<ResolveChromeExecutable>;
+  try {
+    chrome = resolveChromeExecutable({ explicitPath: flags.chromePath });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    throw new CliError(
+      message,
+      `re-run: ${installCommand(flags.cwd ?? process.cwd())} — or fix/unset --chrome-path / REAL_A11Y_CHROME_PATH.`,
+    );
+  }
+  if (chrome && flags.verbose) {
+    process.stderr.write(
+      `using Chrome for Testing at ${chrome.executablePath} (source: ${chrome.source})\n`,
+    );
+  }
+  return chrome;
+}
+
 export async function createSession(
   flags: SessionFlags,
 ): Promise<BrowserSession> {
@@ -115,26 +146,9 @@ export async function createSession(
     await import("@real-a11y-dev/browser");
   const proxy = flags.proxy ?? proxyFromEnv();
   // CDP mode reuses a running browser — there's no binary for us to choose.
-  // Otherwise: --chrome-path (hard error if missing) > REAL_A11Y_CHROME_PATH
-  // (hard error if missing) > the `real-a11y install` manifest (soft, if any)
-  // > Playwright's own bundled Chromium.
-  let chrome: ReturnType<typeof resolveChromeExecutable>;
-  if (!flags.cdp) {
-    try {
-      chrome = resolveChromeExecutable({ explicitPath: flags.chromePath });
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      throw new CliError(
-        message,
-        `re-run: ${installCommand(flags.cwd ?? process.cwd())} — or fix/unset --chrome-path / REAL_A11Y_CHROME_PATH.`,
-      );
-    }
-    if (chrome && flags.verbose) {
-      process.stderr.write(
-        `using Chrome for Testing at ${chrome.executablePath} (source: ${chrome.source})\n`,
-      );
-    }
-  }
+  const chrome = flags.cdp
+    ? undefined
+    : chooseChrome(flags, resolveChromeExecutable);
   const session = new BrowserSession({
     headless: !flags.headful,
     ...(flags.cdp ? { cdpEndpoint: flags.cdp } : {}),
