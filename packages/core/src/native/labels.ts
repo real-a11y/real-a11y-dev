@@ -224,8 +224,8 @@ export interface LabelLending {
    *  around a hidden control leaves it out. */
   lending: ReadonlySet<string>;
   /** A reference to the element `backendDOMNodeId` reads a withheld value
-   *  through a control's labels: it is such a control or holds one, or
-   *  nothing says what labels it. */
+   *  through a control's labels: it is such a control or holds one, hidden
+   *  or not, or nothing says what labels it. */
   lends(backendDOMNodeId: number): boolean;
 }
 
@@ -292,14 +292,26 @@ export function labelLending<T extends RawAXNameNode>(
 ): LabelLending {
   const { byId, byBackendId } = index;
   const lenders = new Set<string>();
+  // Around every lender, which a reference reads: Chromium reads a hidden
+  // target whole, a hidden control in it by its labels. Around a lender
+  // Chromium doesn't ignore, which content named around it reads too.
+  const holding = new Set<string>();
   const lending = new Set<string>();
   const unknown = new Set<string>();
+  const markAbove = (raw: T, set: Set<string>): void => {
+    for (const cur of nativeAncestry(raw, byId)) {
+      // Every node above one already counted was counted with it.
+      if (cur === raw) continue;
+      if (set.has(cur.nodeId)) break;
+      set.add(cur.nodeId);
+    }
+  };
   const carries = (id: number | undefined): boolean => {
     const label = typeof id === "number" ? byBackendId.get(id) : undefined;
     return (
       label !== undefined &&
       (regions.inside(label) ||
-        [regions.containing, lenders, lending].some((set) =>
+        [regions.containing, lenders, holding].some((set) =>
           set.has(label.nodeId),
         ))
     );
@@ -318,14 +330,9 @@ export function labelLending<T extends RawAXNameNode>(
     grew = lent.length > 0;
     for (const [raw] of lent) {
       lenders.add(raw.nodeId);
-      // Content named around a control skips a hidden one, as its labels.
-      if (raw.ignored === true) continue;
-      for (const cur of nativeAncestry(raw, byId)) {
-        // Every node above one already counted was counted with it.
-        if (cur === raw) continue;
-        if (lending.has(cur.nodeId)) break;
-        lending.add(cur.nodeId);
-      }
+      markAbove(raw, holding);
+      // Content named around a control skips a hidden one, labels and all.
+      if (raw.ignored !== true) markAbove(raw, lending);
     }
   }
   return {
@@ -333,7 +340,7 @@ export function labelLending<T extends RawAXNameNode>(
     lends: (id) => {
       const own = byBackendId.get(id);
       if (own !== undefined) {
-        return [lenders, lending, unknown].some((set) => set.has(own.nodeId));
+        return [lenders, holding, unknown].some((set) => set.has(own.nodeId));
       }
       const walked = labelsOf?.(id);
       return walked === undefined ? !standInsOf.has(id) : walked.some(carries);
