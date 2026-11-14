@@ -191,8 +191,6 @@ export {
   indexNativeAX,
   ignoreFieldInternalImages,
   isNativePasswordMask,
-  nativeAncestry,
-  nativeAXProperty,
   nonEmptyAXText,
   opensFieldInternals,
   valueRegions,
@@ -209,6 +207,9 @@ export type {
   RawAXNameNode,
   ValueRegions,
 } from "./native/value-regions.js";
+export { nativeAncestry, nativeAXProperty } from "./native/ax-node.js";
+export { domLabels } from "./native/labels.js";
+export type { LabelDomNode, LabelsOf } from "./native/labels.js";
 
 // Query helpers (for testing / audits / Storybook)
 export {

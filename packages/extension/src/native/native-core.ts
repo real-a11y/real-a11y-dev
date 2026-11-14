@@ -54,9 +54,9 @@ import {
   withNativeIdSuffix,
   type NativeFrameRef,
   holdsUnclassifiedValue,
+  domLabels,
   indexNativeAX,
   isNativePasswordMask,
-  isSensitiveFieldAttributes,
   NATIVE_AX_CHOICE_STATES,
   nativeAXStateValue,
   normalizeNativeAX,
@@ -69,12 +69,14 @@ import {
   type A11yInfo,
   type FieldHostOf,
   type FieldStandIn,
+  type LabelsOf,
   type NativeAXNode,
   type RawAXNameNode,
   type NativeAXIndex,
 } from "@real-a11y-dev/core";
 
 import { isConnectionLost } from "./connection-lost.js";
+import { fieldsWithin, isSensitiveMarkup } from "./dom-fields.js";
 import {
   cdpFrameDocuments,
   cdpPageKeys,
@@ -955,74 +957,10 @@ function hidesUnreadNode(
   return false;
 }
 
-/** CDP's `DOM.Node`, as far as {@link fieldsWithin} reads it. */
-interface DescribedNode {
-  backendNodeId: number;
-  localName?: string;
-  shadowRootType?: string;
-  children?: DescribedNode[];
-  shadowRoots?: DescribedNode[];
-}
-
-const FIELD_TAGS = new Set(["input", "textarea", "select"]);
-
-/**
- * The backend ids of the `<input>`, `<textarea>` and `<select>` elements at or
- * inside element `backendNodeId`, from CDP's DOM agent — through author shadow
- * roots, whose content names things too, but not into a field's own
- * user-agent internals or a frame's document. `undefined` when the agent
- * can't describe it.
- */
-async function fieldsWithin(
-  transport: CdpTransport,
-  backendNodeId: number,
-): Promise<number[] | undefined> {
-  try {
-    const { node } = await transport.send<{ node: DescribedNode }>(
-      "DOM.describeNode",
-      { backendNodeId, depth: -1, pierce: true },
-    );
-    const fields: number[] = [];
-    const stack = [node];
-    while (stack.length > 0) {
-      const cur = stack.pop()!;
-      if (FIELD_TAGS.has(cur.localName ?? "")) fields.push(cur.backendNodeId);
-      stack.push(...(cur.children ?? []));
-      for (const root of cur.shadowRoots ?? []) {
-        if (root.shadowRootType !== "user-agent") stack.push(root);
-      }
-    }
-    return fields;
-  } catch {
-    return undefined;
-  }
-}
-
-/** A field whose markup says it is sensitive (core's
- *  `isSensitiveFieldAttributes`), as `DOM.getDocument` describes it. Any
- *  `type` or `autocomplete` attribute counts: a namespaced one reads the same
- *  name, and the first need not be the one the field goes by. */
-function isSensitiveMarkup(node: CdpDomNode): boolean {
-  const tag = node.localName ?? "";
-  if (!FIELD_TAGS.has(tag)) return false;
-  const attributes = node.attributes ?? [];
-  for (let i = 0; i + 1 < attributes.length; i += 2) {
-    const name = attributes[i];
-    const value = attributes[i + 1];
-    if (
-      (name === "type" && isSensitiveFieldAttributes(tag, { type: value })) ||
-      (name === "autocomplete" &&
-        isSensitiveFieldAttributes(tag, { autocomplete: value }))
-    ) {
-      return true;
-    }
-  }
-  return false;
-}
-
 /** What a walk of a session's documents found, by backend id: every DOM node
  *  it saw, for each in a form control's own internals that control, every
- *  field whose markup says it is sensitive, and every node one sits in. */
+ *  field whose markup says it is sensitive, every node one sits in, and each
+ *  form control's labels. */
 interface FieldInternals {
   seen: ReadonlySet<number>;
   hosts: ReadonlyMap<number, number>;
@@ -1034,6 +972,13 @@ interface FieldInternals {
    * node in Chromium's tree at all, so only the document places it.
    */
   holdsSensitive: ReadonlySet<number>;
+  /**
+   * Each form control's `<label>`s (core's `domLabels`). Chromium's tree has
+   * no trace of them for a hidden control, yet an `aria-labelledby` pointing
+   * at one still reads them, and a sensitive field's value in one with them
+   * (core's `valueRegions`).
+   */
+  labels: LabelsOf;
 }
 
 /**
@@ -1124,7 +1069,7 @@ async function fieldInternals(
     holdsSensitive.add(id);
     climb(id);
   }
-  return { seen, hosts, sensitive, holdsSensitive };
+  return { seen, hosts, sensitive, holdsSensitive, labels: domLabels(root) };
 }
 
 /** {@link fieldInternals}, walked once per session for the whole of a read. */
@@ -1747,6 +1692,7 @@ async function readDocument(
       read,
     ),
     withheldStandIns,
+    internals?.labels,
   );
   const nodes =
     rawNodes === full.nodes ? firstPass : normalizeNativeAX(rawNodes);
