@@ -215,6 +215,14 @@ describe("a value in the label of a control another name reads, against Chromium
       <input type="checkbox" id="hidp-c" hidden>${readers("hidp")}
       <table><tr><td id="cell">Row <input type="checkbox" aria-label="Sel"></td></tr></table>
       <label>Name <input id="self" value="typed"></label>
+      <span id="vh-c">Pick <input type="checkbox" id="vh-e" hidden></span>
+      <label for="vh-e">Code <input ${OTP}></label>${readers("vh")}
+      <span id="va-c">Pick <input type="checkbox" id="va-e" aria-hidden="true"></span>
+      <label for="va-e">Code <input ${OTP}></label>${readers("va")}
+      <span id="vv-c">Pick <input type="checkbox" id="vv-e" style="visibility:hidden"></span>
+      <label for="vv-e">Code <input ${OTP}></label>${readers("vv")}
+      <label id="cyc-l">Code <input type="checkbox" id="cyc-c"> <input id="cyc" aria-labelledby="cyc-l" ${OTP}></label>
+      <label id="cyt-l">Name <input type="checkbox" id="cyt-c"> <input id="cyt" aria-labelledby="cyt-l" value="typed"></label>
     `);
     const raw = await rawById();
     // A reference skips the checkbox's own aria-labelledby and reads the
@@ -223,21 +231,45 @@ describe("a value in the label of a control another name reads, against Chromium
     expect(raw.get("al-b")?.name).toBe("Agree");
     expect(raw.get("empty-b")?.name).toBe("Code");
     expect(raw.get("hidp-b")?.name).toBe("Plain");
+    // A visible target's content skips a hidden checkbox in it, labels and
+    // all; a field named by a label around it skips its own value, even read
+    // back through the checkbox that label labels.
+    for (const key of ["vh", "va", "vv"]) {
+      expect(raw.get(`${key}-b`)?.name.trim(), key).toBe("Pick");
+    }
+    expect(raw.get("cyc-c")?.name).toBe("Code 482913");
+    expect(raw.get("cyc")?.name.trim()).toBe("Code");
+    expect(raw.get("cyt")?.name.trim()).toBe("Name");
 
     for (const redactInput of [false, true]) {
       const native = await nativeById(redactInput);
       const at = `strict: ${redactInput}`;
-      for (const key of ["plain", "empty", "al", "own", "hidp"]) {
+      for (const key of [
+        "plain",
+        "empty",
+        "al",
+        "own",
+        "hidp",
+        "vh",
+        "va",
+        "vv",
+      ]) {
         expect(native.get(`${key}-b`)?.name, `${key} (${at})`).toBe(
-          raw.get(`${key}-b`)?.name,
+          raw.get(`${key}-b`)?.name.trim(),
         );
         expect(native.get(`${key}-d`)?.description, `${key} (${at})`).toBe(
-          raw.get(`${key}-d`)?.description,
+          raw.get(`${key}-d`)?.description.trim(),
         );
       }
       expect(native.get("cell")?.name, at).toBe("Row Sel");
       // A field's own label around it skips its own value, strict or not.
       expect(native.get("self")?.name, at).toBe("Name");
+      expect(native.get("cyc")?.name, at).toBe("Code");
+      expect(native.get("cyc-c")?.name, at).toBe(REDACTED_VALUE);
+      expect(native.get("cyt")?.name, at).toBe("Name");
+      expect(native.get("cyt-c")?.name, at).toBe(
+        redactInput ? REDACTED_VALUE : "Name typed",
+      );
     }
   });
 });
