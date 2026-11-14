@@ -69,6 +69,14 @@ export default [
       parserOptions: {
         projectService: true,
         tsconfigRootDir: import.meta.dirname,
+        // typescript-eslint 8.72.1 builds one Program per tsconfig beside the
+        // project service when it infers a single run (a CLI `eslint` call),
+        // and the two don't share source files. Here that takes this run's
+        // heap from about 1.5 GB past the 2 GB a macOS CI runner gives Node,
+        // and it aborts. Without the inference the project service serves
+        // every file, as it did through 8.72.0, with the same findings.
+        // Remove once typescript-eslint/typescript-eslint#13109 is fixed.
+        disallowAutomaticSingleRunInference: true,
       },
     },
     linterOptions: { reportUnusedDisableDirectives: "off" },

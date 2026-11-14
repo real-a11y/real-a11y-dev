@@ -112,7 +112,7 @@
   },
   "devDependencies": {
     "@jest/expect": "^29.7.0",
-    "@playwright/test": "^1.64.1",
+    "@playwright/test": "^1.65.0",
     "@real-a11y-dev/audit": "workspace:*",
     "@real-a11y-dev/browser": "workspace:*",
     "@real-a11y-dev/core": "workspace:*",
@@ -121,6 +121,6 @@
     "@types/node": "^26.6.3",
     "tsup": "^8.3.0",
     "typescript": "^5.6.0",
-    "vitest": "^5.0.3"
+    "vitest": "^5.1.0"
   }
 }
