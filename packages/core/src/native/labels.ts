@@ -154,12 +154,10 @@ function readTree(tree: LabelDomNode, trees: LabelDomNode[], walk: Walk): void {
       continue;
     }
     // A form control's own internals hold no `<label>` of the page's.
-    trees.push(
-      ...(step.shadowRoots ?? []).filter(
-        (sub) => sub.shadowRootType !== "user-agent",
-      ),
-      ...(step.contentDocument ? [step.contentDocument] : []),
-    );
+    for (const sub of step.shadowRoots ?? []) {
+      if (sub.shadowRootType !== "user-agent") trees.push(sub);
+    }
+    if (step.contentDocument) trees.push(step.contentDocument);
     const element = step.backendNodeId;
     const wrapping =
       step.nodeType === 1 && typeof element === "number"
@@ -169,7 +167,10 @@ function readTree(tree: LabelDomNode, trees: LabelDomNode[], walk: Walk): void {
       read.open.push(wrapping);
       stack.push(wrapping);
     }
-    stack.push(...[...(step.children ?? [])].reverse());
+    // One push per child: a spread of a node with ~100k children would
+    // overflow the call stack.
+    const children = step.children ?? [];
+    for (let i = children.length - 1; i >= 0; i--) stack.push(children[i]!);
   }
   for (const [label, id] of read.forLabels) {
     const control = read.byId.get(id);
@@ -219,7 +220,8 @@ interface LabelSource {
 /** What {@link labelLending} found. */
 export interface LabelLending {
   /** Raw ids of the strict AX ancestors of a control that lends a withheld
-   *  value through its labels. */
+   *  value through its labels: one Chromium doesn't ignore, as content named
+   *  around a hidden control leaves it out. */
   lending: ReadonlySet<string>;
   /** A reference to the element `backendDOMNodeId` reads a withheld value
    *  through a control's labels: it is such a control or holds one, or
@@ -316,6 +318,8 @@ export function labelLending<T extends RawAXNameNode>(
     grew = lent.length > 0;
     for (const [raw] of lent) {
       lenders.add(raw.nodeId);
+      // Content named around a control skips a hidden one, as its labels.
+      if (raw.ignored === true) continue;
       for (const cur of nativeAncestry(raw, byId)) {
         // Every node above one already counted was counted with it.
         if (cur === raw) continue;

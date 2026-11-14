@@ -655,11 +655,37 @@ describe("a control that lends a value through its labels", () => {
     // The walk found no label for it: nothing to lend.
     const unlabelled = withholdSensitiveFieldNames(nodes, ["3"], [], () => []);
     expect(unlabelled[4].name?.value).toBe("Code 482913");
-    // Nothing says: a reference to it fails closed.
-    for (const labelsOf of [undefined, () => undefined]) {
+    // Nothing says: a reference to it fails closed, a walk that saw every
+    // other element (the page added the checkbox since) included.
+    for (const labelsOf of [
+      undefined,
+      () => undefined,
+      (id: number) => (id === 4 ? undefined : []),
+    ]) {
       const out = withholdSensitiveFieldNames(nodes, ["3"], [], labelsOf);
       expect(out[4].name?.value).toBe(REDACTED_VALUE);
+      expect(out[5].description).toBeUndefined();
     }
+  });
+
+  it("keeps a name from contents around a hidden control: Chromium skips it", () => {
+    // <td>Row <input type="checkbox" id="c" hidden></td>: the cell is "Row".
+    const nodes = [
+      ...page({ role: { value: "none" }, ignored: true, parentId: "9" }),
+      raw("9", "cell", {
+        name: { value: "Row" },
+        named: "contents",
+        childIds: ["4"],
+      }),
+    ];
+    delete nodes[3]!.name;
+    delete nodes[3]!.properties;
+    const out = withholdSensitiveFieldNames(nodes, ["3"], [], (id) =>
+      id === 4 ? [1] : [],
+    );
+    expect(out[6].name?.value).toBe("Row");
+    // A reference to it still reads its label.
+    expect(out[4].name?.value).toBe(REDACTED_VALUE);
   });
 
   it("never lends a field's own value through its own label", () => {
