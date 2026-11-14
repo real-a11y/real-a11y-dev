@@ -21,6 +21,17 @@
 
 ### Patch Changes
 
+- **The side panel no longer shows a sensitive field's value that Chrome
+  reads into a name through another control's `<label>`.** A checkbox, a
+  button or a date input with no value to lend gives its labels instead, so
+  `<button aria-labelledby="c">` over a checkbox labelled
+  `Code [482913]` (a one-time code field inside the label) showed as
+  `button "Code 482913"`, and an `aria-describedby` pointing at the checkbox
+  carried the code into a description. Such a name now reads `[redacted]` and
+  such a description is dropped, for a hidden checkbox too, and for a cell or
+  link around the checkbox. A label that holds no value, and an `aria-label`
+  on the control, still name it
+  ([#PR](https://github.com/real-a11y/real-a11y-dev/pull/PR)).
 - **The TAB view no longer lists a stop Chrome never focuses.** The extension
   re-bundles the updated extractor: an element whose `tabindex` is outside the
   signed 32-bit range (`tabindex="2147483648"`) is ignored as if it had none,
