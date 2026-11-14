@@ -17,10 +17,11 @@
  */
 
 import { REDACTED_VALUE } from "../extraction/sensitivity.js";
-import { trimAscii } from "../utils/ascii-whitespace.js";
 
+import { hasAXText, nativeAncestry, nativeAXProperty } from "./ax-node.js";
 import type { RawNativeAXNode } from "./ax-normalize.js";
 import { NATIVE_AX_NAME_SOURCE_ROLES } from "./ax-vocabulary.js";
+import { labelLending, type LabelsOf } from "./labels.js";
 
 /** One step of Chromium's accessible-name computation, as `getFullAXTree`
  *  reports it on `name.sources`, in accname order. */
@@ -29,6 +30,10 @@ export interface AXNameSource {
   attribute?: string;
   value?: { value?: unknown };
   superseded?: boolean;
+  /** A host-language source: `labelfor`, `labelwrapped`, `legend`, … */
+  nativeSource?: string;
+  /** The elements a host-language source read: a control's `<label>`s. */
+  nativeSourceValue?: AXPropertyValue;
 }
 
 /** A CDP `AXValue` on a property; `relatedNodes` for idref ones
@@ -46,17 +51,6 @@ export interface RawAXNameNode extends RawNativeAXNode {
   name?: { value?: string; sources?: AXNameSource[] };
   description?: { value?: string };
   properties?: Array<{ name: string; value?: AXPropertyValue }>;
-}
-
-/**
- * True when `text` holds more than ASCII whitespace. A U+00A0 is text, as a
- * name keeps it (#639), and an editor writes a typed space as one: an editor
- * holding nothing else has something typed, and a name of nothing else
- * still shows it. What the redaction rules ask, where {@link cleanAXText}
- * would call such text empty.
- */
-export function hasAXText(text: string): boolean {
-  return trimAscii(text) !== "";
 }
 
 /** Collapse internal whitespace and trim: how every native transport
@@ -107,22 +101,6 @@ export function holdsUnclassifiedValue(
   );
 }
 
-/** Walk `raw` and its ancestors by `parentId`, stopping on a cycle. */
-export function* nativeAncestry<T extends RawAXNameNode>(
-  raw: T | undefined,
-  byId: ReadonlyMap<string, T>,
-): Generator<T> {
-  const seen = new Set<string>();
-  for (
-    let cur = raw;
-    cur && !seen.has(cur.nodeId);
-    cur = cur.parentId ? byId.get(cur.parentId) : undefined
-  ) {
-    seen.add(cur.nodeId);
-    yield cur;
-  }
-}
-
 /**
  * A CDP value, as text. Chromium keeps range values as 32-bit floats, so a
  * `<meter value="0.6">` arrives as `0.6000000238418579`; print the shortest
@@ -138,13 +116,6 @@ function axValueText(value: unknown): string | undefined {
     }
   }
   return String(value);
-}
-
-export function nativeAXProperty(
-  raw: RawAXNameNode,
-  name: string,
-): AXPropertyValue | undefined {
-  return raw.properties?.find((p) => p.name === name)?.value;
 }
 
 /** A value with text that isn't only whitespace, as text; else `undefined`. */
@@ -273,13 +244,22 @@ export interface ValueRegions {
   roots: ReadonlySet<string>;
   /** Raw ids of the strict AX ancestors of a root. */
   containing: ReadonlySet<string>;
+  /**
+   * By raw id, the strict AX ancestors of a control that lends a root's value
+   * through its labels ({@link labelLending}), and those roots: a cell, a
+   * link or a heading named from its contents takes in a checkbox there by
+   * its label, and a field's value in that label with it. For names only: no
+   * node holds such a value as its own.
+   */
+  lending: ReadonlyMap<string, ReadonlySet<string>>;
   /** `raw` is a root or sits inside one. */
   inside(raw: RawAXNameNode): boolean;
   /**
    * `raw` takes its label or description by reference — `aria-labelledby` /
    * `aria-describedby`, and the `labelledby` Chromium reports for a `<label>` —
-   * from a root's value: the referenced node is, is inside, or contains a root.
-   * A referenced form control the tree has no node of its own for is reached
+   * from a root's value: the referenced node is, is inside, or contains a root,
+   * or lends one through its labels, or contains a node that does. A
+   * referenced form control the tree has no node of its own for is reached
    * through what stands in for it ({@link fieldStandIns}).
    *
    * A field's own value reaches its own name or description too, in every way
@@ -302,14 +282,12 @@ export interface ValueRegions {
   ): boolean;
 }
 
-export function valueRegions<T extends RawAXNameNode>(
-  index: NativeAXIndex<T>,
-  roots: ReadonlySet<string>,
-  standIns: readonly FieldStandIn[] = [],
-): ValueRegions {
-  const { byId, byBackendId } = index;
-  // A control's backend id → what stands in for it. Chromium still names a
-  // region `aria-labelledby` points at such a control after its value.
+/** A control's backend id → what stands in for it. Chromium still names a
+ *  region `aria-labelledby` points at such a control after its value. */
+function standInsByHost<T extends RawAXNameNode>(
+  byId: ReadonlyMap<string, T>,
+  standIns: readonly FieldStandIn[],
+): Map<number, T[]> {
   const standInsOf = new Map<number, T[]>();
   for (const { host, nodeIds } of standIns) {
     if (host === undefined) continue;
@@ -319,6 +297,23 @@ export function valueRegions<T extends RawAXNameNode>(
     });
     standInsOf.set(host, [...(standInsOf.get(host) ?? []), ...nodes]);
   }
+  return standInsOf;
+}
+
+/**
+ * The {@link ValueRegions} of `roots`. `standIns` stand in for fields with no
+ * node of their own ({@link fieldStandIns}); `labelsOf` is the transport's
+ * walk of the document's labels, for the controls that lend a root's value
+ * through theirs ({@link labelLending}).
+ */
+export function valueRegions<T extends RawAXNameNode>(
+  index: NativeAXIndex<T>,
+  roots: ReadonlySet<string>,
+  standIns: readonly FieldStandIn[] = [],
+  labelsOf?: LabelsOf,
+): ValueRegions {
+  const { byId, byBackendId } = index;
+  const standInsOf = standInsByHost(byId, standIns);
   const containing = new Set<string>();
   const rootsUnder = new Map<string, string[]>();
   for (const id of roots) {
@@ -353,10 +348,14 @@ export function valueRegions<T extends RawAXNameNode>(
     return result;
   };
 
+  const inside = (raw: RawAXNameNode): boolean => rootOf(raw) !== null;
+  const regions = { roots, containing, inside };
+  const places = { roots, rootOf, rootsUnder };
+  const lent = labelLending(index, places, standInsOf, labelsOf);
+
   return {
-    roots,
-    containing,
-    inside: (raw) => rootOf(raw) !== null,
+    ...regions,
+    lending: lent.lending,
     references: (raw, property) => {
       // Only a field's own label leaves anything out. A node that is NOT a
       // field — a region labelled by the editable heading inside it — gets
@@ -366,7 +365,12 @@ export function valueRegions<T extends RawAXNameNode>(
         (related) => {
           const id = related.backendDOMNodeId;
           if (typeof id !== "number") return false;
+          // What a control's labels lend counts as the target's own, so a
+          // field's own value read back through them is left out as well.
+          const read = lent.reads(id);
+          if (read === undefined) return true;
           const own = byBackendId.get(id);
+          if (own === undefined && read.size > 0) return true;
           const targets = [
             ...(own !== undefined ? [own] : []),
             ...(standInsOf.get(id) ?? []),
@@ -376,6 +380,7 @@ export function valueRegions<T extends RawAXNameNode>(
             const reached = [
               ...(around !== null ? [around] : []),
               ...(rootsUnder.get(target.nodeId) ?? []),
+              ...(target === own ? read : []),
             ];
             return reached.some(
               (root) => !(ownLabel && leavesOut(byId, raw, target, root)),
@@ -412,10 +417,13 @@ export function winningNameSource(
  *   name from anywhere else — `aria-label`, a `<legend>`, a `<label for>` — is
  *   the page's and is kept, and so is a root's own name with no trace (how a
  *   field's label arrives in an older recording; a field is never named after
- *   its own value).
- * - **Named or described by reference** to a root that isn't the node's own
- *   ({@link ValueRegions.references}). Such a name reads `[redacted]`; such a
- *   description is dropped whole. That costs any other text it held
+ *   its own value). The same holds for a node around a control that lends a
+ *   root's value through its labels ({@link ValueRegions.lending}): a cell
+ *   around a checkbox reads the checkbox's label into its name.
+ * - **Named or described by reference** to a root that isn't the node's own,
+ *   or to a control that lends one ({@link ValueRegions.references}). Such a
+ *   name reads `[redacted]`; such a description is dropped whole. That costs
+ *   any other text it held
  *   (`aria-describedby="hint card"` loses the hint too) and leaves no marker
  *   that anything was removed: Chromium sends no trace of which part of a
  *   description came from which node, so there is nothing to cut it at.
@@ -432,7 +440,8 @@ export function withholdRegionNames<T extends RawAXNameNode>(
     if (hasAXText(String(raw.name?.value ?? ""))) {
       const winner = winningNameSource(raw);
       const redact =
-        (regions.containing.has(raw.nodeId) &&
+        ((regions.containing.has(raw.nodeId) ||
+          regions.lending.has(raw.nodeId)) &&
           (winner === undefined || winner.type === "contents")) ||
         (regions.roots.has(raw.nodeId) && winner?.type === "contents") ||
         regions.references(raw, "labelledby");
@@ -469,12 +478,14 @@ export function givesValueAway<T extends RawAXNameNode>(
  * the raw ids of the fields it classified as sensitive (or could not
  * classify). Only a field that {@link givesValueAway} withholds names.
  * `standIns` stand in for such fields that have no node of their own in the
- * tree ({@link fieldStandIns}), and already give their value away.
+ * tree ({@link fieldStandIns}), and already give their value away. `labelsOf`
+ * is the transport's walk of the document's labels ({@link valueRegions}).
  */
 export function withholdSensitiveFieldNames<T extends RawAXNameNode>(
   rawNodes: T[],
   fieldIds: Iterable<string>,
   standIns: readonly FieldStandIn[] = [],
+  labelsOf?: LabelsOf,
 ): T[] {
   const index = indexNativeAX(rawNodes);
   const roots = new Set<string>();
@@ -485,7 +496,10 @@ export function withholdSensitiveFieldNames<T extends RawAXNameNode>(
   for (const { nodeIds } of standIns) {
     for (const id of nodeIds) if (index.byId.has(id)) roots.add(id);
   }
-  return withholdRegionNames(rawNodes, valueRegions(index, roots, standIns));
+  return withholdRegionNames(
+    rawNodes,
+    valueRegions(index, roots, standIns, labelsOf),
+  );
 }
 
 /** The elements that draw what they hold in their own user-agent shadow root. */
