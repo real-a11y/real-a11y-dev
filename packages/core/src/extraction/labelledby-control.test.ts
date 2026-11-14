@@ -254,8 +254,14 @@ describe("a reference reads a form control's own name (AccName 2B)", () => {
       [`<span id="c" title="T"></span>`, "T"],
       [`<span id="c" title="T">content</span>`, "content"],
       [`<div role="checkbox" id="c" tabindex="0" title="T"></div>`, "T"],
+      // Whitespace, or only an empty box's spacing, is no content: the title
+      // still names it, in a name and a description alike.
+      [`<span id="c" title="T"> </span>`, "T"],
+      [`<span id="c" title="T"><div></div></span>`, "T"],
+      [`<div id="c" title="T"><div></div> <div></div></div>`, "T"],
     ]) {
       expect(borrowed(target!).name, target).toBe(name);
+      expect(borrowed(target!).description, target).toBe(name);
     }
   });
 
