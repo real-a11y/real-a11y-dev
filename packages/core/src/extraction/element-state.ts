@@ -1,4 +1,4 @@
-import { ariaBoolean } from "./aria-tokens.js";
+import { ariaBoolean, ariaCurrent, ariaTristate } from "./aria-tokens.js";
 import { safeGetAttribute, safeTagName } from "./clobber-safe.js";
 import { isEditable, isEditingHost } from "./editing.js";
 import { flatParent } from "./flat-tree.js";
@@ -93,4 +93,58 @@ export function takesInheritedDisabled(
     parseTabindex(safeGetAttribute(element, "tabindex")) === null &&
     isEditable(element)
   );
+}
+
+/**
+ * One ARIA state attribute's value as Chromium reads it, or `null` when that
+ * leaves the state unset. `role` is the element's computed role, which
+ * decides whether `aria-checked` can be mixed.
+ */
+export function ariaStateValue(
+  element: Element,
+  attr: string,
+  role: string,
+): boolean | string | null {
+  const value = safeGetAttribute(element, attr);
+  switch (attr) {
+    case "aria-checked":
+      return ariaTristate(value, role);
+    case "aria-pressed":
+      return ariaTristate(value);
+    case "aria-current":
+      return ariaCurrent(value);
+    default:
+      return ariaBoolean(value);
+  }
+}
+
+/**
+ * A native checkbox's or radio's checkedness, and `"mixed"` for an
+ * indeterminate checkbox, which Chromium reads in place of `aria-checked` and
+ * `aria-pressed`. `null` for any other element, including any other `<input>`
+ * type, which reads `aria-checked` as usual.
+ *
+ * `indeterminate` is a property with no attribute, and script is the only
+ * thing that sets it, so no mutation reports the change. `LiveTreeExtractor`
+ * re-reads every checkbox and radio on refresh for that reason.
+ */
+export function nativeChecked(element: Element): boolean | "mixed" | null {
+  if (safeTagName(element) !== "input") return null;
+  const input = element as HTMLInputElement;
+  if (input.type === "checkbox")
+    return input.indeterminate ? "mixed" : input.checked;
+  return input.type === "radio" ? input.checked : null;
+}
+
+/**
+ * Whether a drop-down `<select>`'s picker is open, which is its expanded
+ * state in Chromium's tree. An engine without the `:open` pseudo-class throws
+ * on it, and has no other way to tell.
+ */
+export function isPickerOpen(select: Element): boolean {
+  try {
+    return select.matches(":open");
+  } catch {
+    return false;
+  }
 }
