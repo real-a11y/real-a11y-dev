@@ -26,7 +26,6 @@ import type {
   AXPropertyValue,
   NativeAXIndex,
   RawAXNameNode,
-  ValueRegions,
 } from "./value-regions.js";
 
 // ── The document's labels ───────────────────────────────────────────────────
@@ -217,16 +216,26 @@ interface LabelSource {
   nativeSourceValue?: AXPropertyValue;
 }
 
+/** Where the withheld values' roots are, as {@link valueRegions} finds them. */
+export interface RootPlaces {
+  roots: ReadonlySet<string>;
+  /** The root at or around `raw`, or `null`. */
+  rootOf(raw: RawAXNameNode): string | null;
+  /** By raw id, the roots strictly beneath a node. */
+  rootsUnder: ReadonlyMap<string, readonly string[]>;
+}
+
 /** What {@link labelLending} found. */
 export interface LabelLending {
-  /** Raw ids of the strict AX ancestors of a control that lends a withheld
-   *  value through its labels: one Chromium doesn't ignore, as content named
-   *  around a hidden control leaves it out. */
-  lending: ReadonlySet<string>;
-  /** A reference to the element `backendDOMNodeId` reads a withheld value
-   *  through a control's labels: it is such a control or holds one, hidden
-   *  or not, or nothing says what labels it. */
-  lends(backendDOMNodeId: number): boolean;
+  /** By raw id, a node around a control Chromium doesn't ignore that lends
+   *  withheld values through its labels, and those values' roots: what
+   *  content named from the node takes in. A hidden control is skipped
+   *  there, labels and all. */
+  lending: ReadonlyMap<string, ReadonlySet<string>>;
+  /** The roots whose values a reference to element `backendDOMNodeId` reads
+   *  through a control's labels, or `undefined` when nothing says what
+   *  labels it. A hidden target is read whole, a hidden control in it too. */
+  reads(backendDOMNodeId: number): ReadonlySet<string> | undefined;
 }
 
 /**
@@ -264,20 +273,45 @@ function labelsRead(
   );
 }
 
+/** Add `roots` to the set of each node above `raw` in `around`. */
+function addAbove<T extends RawAXNameNode>(
+  raw: T,
+  byId: ReadonlyMap<string, T>,
+  roots: readonly string[],
+  around: Map<string, Set<string>>,
+): void {
+  for (const cur of nativeAncestry(raw, byId)) {
+    if (cur === raw) continue;
+    const known = around.get(cur.nodeId) ?? new Set<string>();
+    around.set(cur.nodeId, known);
+    const before = known.size;
+    for (const root of roots) known.add(root);
+    // A node that had them all had them added above it with them.
+    if (known.size === before) break;
+  }
+}
+
 /**
- * Which controls lend a withheld value through their labels, given the
- * `regions` of the withheld values' roots. A label lends what it holds:
- * a root, or a node inside or around one, or a control that lends one
- * through its own labels, or a node around such a control, since Chromium
- * reads a labelled control inside a label by that control's labels. So this
- * is grown to a fixed point. A control inside a root lends nothing more: the
- * root's own value already withholds whatever reads it, and a field is never
- * named after its own value through its own label.
+ * Which controls lend withheld values through their labels, and whose, given
+ * where the values' `places` are. A label lends what it holds: a root, or a
+ * node inside or around one, or a control that lends one through its own
+ * labels, or a node around such a control, since Chromium reads a labelled
+ * control inside a label by that control's labels. So this is grown to a
+ * fixed point. A control inside a root lends nothing more: the root's own
+ * value already withholds whatever reads it. Each lender keeps which roots it
+ * lends, so a field named by its own label still leaves its own value out
+ * when a control in that label lends it back (see `leavesOut`).
  *
  * Chromium reads a control with a value to lend (a `<select>`, a meter) by
  * that value, not its labels, but nothing in the tree tells it from a date
  * input, whose labels Chromium does read, so such a control lends all the
  * same: failing closed.
+ *
+ * Chromium reads a hidden node whole when a reference names it, a hidden
+ * control in it by that control's labels, and skips a hidden node in a
+ * visible one. A hidden node is an ignored one, so an ignored node reads
+ * every lender beneath it, and any other node only those Chromium doesn't
+ * ignore. That fails closed for an ignored node that isn't hidden.
  *
  * `standInsOf` holds the elements with no node of their own that something
  * stands in for (see `fieldStandIns`); a reference to any other such
@@ -286,64 +320,67 @@ function labelsRead(
  */
 export function labelLending<T extends RawAXNameNode>(
   index: NativeAXIndex<T>,
-  regions: Pick<ValueRegions, "roots" | "containing" | "inside">,
+  places: RootPlaces,
   standInsOf: ReadonlyMap<number, unknown>,
   labelsOf: LabelsOf | undefined,
 ): LabelLending {
   const { byId, byBackendId } = index;
-  const lenders = new Set<string>();
-  // Around every lender, which a reference reads: Chromium reads a hidden
-  // target whole, a hidden control in it by its labels. Around a lender
-  // Chromium doesn't ignore, which content named around it reads too.
-  const holding = new Set<string>();
-  const lending = new Set<string>();
+  const lenders = new Map<string, Set<string>>();
+  // Around every lender, and around one Chromium doesn't ignore.
+  const holding = new Map<string, Set<string>>();
+  const lending = new Map<string, Set<string>>();
   const unknown = new Set<string>();
-  const markAbove = (raw: T, set: Set<string>): void => {
-    for (const cur of nativeAncestry(raw, byId)) {
-      // Every node above one already counted was counted with it.
-      if (cur === raw) continue;
-      if (set.has(cur.nodeId)) break;
-      set.add(cur.nodeId);
+  // What reading `node` reads of the roots' values through a control's
+  // labels: as a lender itself, or around one.
+  const lent = (node: T): string[] => [
+    ...(lenders.get(node.nodeId) ?? []),
+    ...((node.ignored === true ? holding : lending).get(node.nodeId) ?? []),
+  ];
+  // What reading the elements `ids` reads of the roots' values, every way.
+  const carried = (ids: ReadonlyArray<number | undefined>): Set<string> => {
+    const out = new Set<string>();
+    for (const node of ids.map((id) => byBackendId.get(id ?? NaN))) {
+      if (node === undefined) continue;
+      const around = places.rootOf(node);
+      if (around !== null) out.add(around);
+      for (const root of places.rootsUnder.get(node.nodeId) ?? []) {
+        out.add(root);
+      }
+      for (const root of lent(node)) out.add(root);
     }
-  };
-  const carries = (id: number | undefined): boolean => {
-    const label = typeof id === "number" ? byBackendId.get(id) : undefined;
-    return (
-      label !== undefined &&
-      (regions.inside(label) ||
-        [regions.containing, lenders, holding].some((set) =>
-          set.has(label.nodeId),
-        ))
-    );
+    return out;
   };
   const candidates: Array<[T, ReadonlyArray<number | undefined>]> = [];
-  for (const raw of regions.roots.size > 0 ? byId.values() : []) {
-    if (regions.inside(raw)) continue;
+  for (const raw of places.roots.size > 0 ? byId.values() : []) {
+    if (places.rootOf(raw) !== null) continue;
     const labels = labelsRead(raw, labelsOf);
     if (labels === undefined) unknown.add(raw.nodeId);
     else if (labels.length > 0) candidates.push([raw, labels]);
   }
   for (let grew = true; grew;) {
-    const lent = candidates.filter(
-      ([raw, labels]) => !lenders.has(raw.nodeId) && labels.some(carries),
-    );
-    grew = lent.length > 0;
-    for (const [raw] of lent) {
-      lenders.add(raw.nodeId);
-      markAbove(raw, holding);
-      // Content named around a control skips a hidden one, labels and all.
-      if (raw.ignored !== true) markAbove(raw, lending);
+    grew = false;
+    for (const [raw, labels] of candidates) {
+      const known = lenders.get(raw.nodeId) ?? new Set<string>();
+      const fresh = [...carried(labels)].filter((root) => !known.has(root));
+      if (fresh.length === 0) continue;
+      grew = true;
+      for (const root of fresh) known.add(root);
+      lenders.set(raw.nodeId, known);
+      addAbove(raw, byId, fresh, holding);
+      if (raw.ignored !== true) addAbove(raw, byId, fresh, lending);
     }
   }
   return {
     lending,
-    lends: (id) => {
+    reads: (id) => {
       const own = byBackendId.get(id);
       if (own !== undefined) {
-        return [lenders, holding, unknown].some((set) => set.has(own.nodeId));
+        return unknown.has(own.nodeId) ? undefined : new Set(lent(own));
       }
       const walked = labelsOf?.(id);
-      return walked === undefined ? !standInsOf.has(id) : walked.some(carries);
+      if (walked === undefined)
+        return standInsOf.has(id) ? new Set() : undefined;
+      return carried(walked);
     },
   };
 }

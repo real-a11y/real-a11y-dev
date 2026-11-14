@@ -245,13 +245,13 @@ export interface ValueRegions {
   /** Raw ids of the strict AX ancestors of a root. */
   containing: ReadonlySet<string>;
   /**
-   * Raw ids of the strict AX ancestors of a node that lends a root's value
-   * through its labels (see {@link valueRegions}): a cell, a link or a heading
-   * named from its contents takes in a checkbox there by its label, and a
-   * field's value in that label with it. For names only: no node holds such
-   * a value as its own.
+   * By raw id, the strict AX ancestors of a control that lends a root's value
+   * through its labels ({@link labelLending}), and those roots: a cell, a
+   * link or a heading named from its contents takes in a checkbox there by
+   * its label, and a field's value in that label with it. For names only: no
+   * node holds such a value as its own.
    */
-  lending: ReadonlySet<string>;
+  lending: ReadonlyMap<string, ReadonlySet<string>>;
   /** `raw` is a root or sits inside one. */
   inside(raw: RawAXNameNode): boolean;
   /**
@@ -282,6 +282,24 @@ export interface ValueRegions {
   ): boolean;
 }
 
+/** A control's backend id → what stands in for it. Chromium still names a
+ *  region `aria-labelledby` points at such a control after its value. */
+function standInsByHost<T extends RawAXNameNode>(
+  byId: ReadonlyMap<string, T>,
+  standIns: readonly FieldStandIn[],
+): Map<number, T[]> {
+  const standInsOf = new Map<number, T[]>();
+  for (const { host, nodeIds } of standIns) {
+    if (host === undefined) continue;
+    const nodes = nodeIds.flatMap((id) => {
+      const raw = byId.get(id);
+      return raw ? [raw] : [];
+    });
+    standInsOf.set(host, [...(standInsOf.get(host) ?? []), ...nodes]);
+  }
+  return standInsOf;
+}
+
 /**
  * The {@link ValueRegions} of `roots`. `standIns` stand in for fields with no
  * node of their own ({@link fieldStandIns}); `labelsOf` is the transport's
@@ -295,17 +313,7 @@ export function valueRegions<T extends RawAXNameNode>(
   labelsOf?: LabelsOf,
 ): ValueRegions {
   const { byId, byBackendId } = index;
-  // A control's backend id → what stands in for it. Chromium still names a
-  // region `aria-labelledby` points at such a control after its value.
-  const standInsOf = new Map<number, T[]>();
-  for (const { host, nodeIds } of standIns) {
-    if (host === undefined) continue;
-    const nodes = nodeIds.flatMap((id) => {
-      const raw = byId.get(id);
-      return raw ? [raw] : [];
-    });
-    standInsOf.set(host, [...(standInsOf.get(host) ?? []), ...nodes]);
-  }
+  const standInsOf = standInsByHost(byId, standIns);
   const containing = new Set<string>();
   const rootsUnder = new Map<string, string[]>();
   for (const id of roots) {
@@ -342,7 +350,8 @@ export function valueRegions<T extends RawAXNameNode>(
 
   const inside = (raw: RawAXNameNode): boolean => rootOf(raw) !== null;
   const regions = { roots, containing, inside };
-  const lent = labelLending(index, regions, standInsOf, labelsOf);
+  const places = { roots, rootOf, rootsUnder };
+  const lent = labelLending(index, places, standInsOf, labelsOf);
 
   return {
     ...regions,
@@ -356,10 +365,12 @@ export function valueRegions<T extends RawAXNameNode>(
         (related) => {
           const id = related.backendDOMNodeId;
           if (typeof id !== "number") return false;
-          // Never left out, as a field's own value inside its own label is:
-          // that pass is for the field being named, not a control it reads.
-          if (lent.lends(id)) return true;
+          // What a control's labels lend counts as the target's own, so a
+          // field's own value read back through them is left out as well.
+          const read = lent.reads(id);
+          if (read === undefined) return true;
           const own = byBackendId.get(id);
+          if (own === undefined && read.size > 0) return true;
           const targets = [
             ...(own !== undefined ? [own] : []),
             ...(standInsOf.get(id) ?? []),
@@ -369,6 +380,7 @@ export function valueRegions<T extends RawAXNameNode>(
             const reached = [
               ...(around !== null ? [around] : []),
               ...(rootsUnder.get(target.nodeId) ?? []),
+              ...(target === own ? read : []),
             ];
             return reached.some(
               (root) => !(ownLabel && leavesOut(byId, raw, target, root)),

@@ -688,6 +688,37 @@ describe("a control that lends a value through its labels", () => {
     expect(out[4].name?.value).toBe(REDACTED_VALUE);
   });
 
+  it("keeps a reference to a visible element around a hidden control", () => {
+    // <span id="x">Pick <input type="checkbox" id="c" hidden></span> and
+    // aria-labelledby="x": Chromium reads the visible span's content and
+    // skips the hidden checkbox, "Pick".
+    const nodes = [
+      ...page({ role: { value: "none" }, ignored: true, parentId: "9" }),
+      raw("9", "generic", { childIds: ["4"] }),
+      raw("10", "button", {
+        name: {
+          value: "Pick",
+          sources: [
+            {
+              type: "relatedElement",
+              attribute: "aria-labelledby",
+              value: { value: "Pick" },
+            },
+          ],
+        },
+        description: { value: "Pick" },
+        properties: [pointsAt("labelledby", 9), pointsAt("describedby", 9)],
+      }),
+    ];
+    delete nodes[3]!.name;
+    delete nodes[3]!.properties;
+    const out = withholdSensitiveFieldNames(nodes, ["3"], [], (id) =>
+      id === 4 ? [1] : [],
+    );
+    expect(out[7].name?.value).toBe("Pick");
+    expect(out[7].description?.value).toBe("Pick");
+  });
+
   it("withholds a reference to a hidden element around a hidden control", () => {
     // <span id="x" hidden>Pick <input type="checkbox" id="c"></span> and
     // aria-labelledby="x": Chromium reads the hidden span whole, the
@@ -715,6 +746,45 @@ describe("a control that lends a value through its labels", () => {
       id === 4 ? [1] : [],
     );
     expect(out[7].name?.value).toBe(REDACTED_VALUE);
+  });
+
+  it("leaves a field's own value out of its own label, read back through a control in it", () => {
+    // <label id="l">Code <input type="checkbox"> <input aria-labelledby="l"
+    // autocomplete="one-time-code" value="482913"></label>: the label labels
+    // the checkbox, "Code 482913"; the field named by the label is "Code".
+    const typed = { name: "editable", value: { value: "plaintext" } };
+    const nodes = [
+      raw("1", "LabelText", { childIds: ["2", "4", "3"] }),
+      raw("2", "StaticText", { parentId: "1", name: { value: "Code" } }),
+      raw("4", "checkbox", {
+        parentId: "1",
+        name: {
+          value: "Code 482913",
+          sources: [byLabel("Code 482913", 1)],
+        },
+        properties: [pointsAt("labelledby", 1)],
+      }),
+      raw("3", "textbox", {
+        parentId: "1",
+        name: byReference("Code"),
+        value: { value: "482913" },
+        properties: [typed, pointsAt("labelledby", 1)],
+      }),
+    ];
+    const out = withholdSensitiveFieldNames(nodes, ["3"]);
+    expect(out[2].name?.value).toBe(REDACTED_VALUE);
+    expect(out[3].name?.value).toBe("Code");
+    // Another field's value in the label still withholds the field's name.
+    const other = [
+      ...nodes,
+      raw("5", "textbox", { parentId: "1", value: { value: "9" } }),
+    ];
+    other[0] = raw("1", "LabelText", { childIds: ["2", "4", "3", "5"] });
+    const both = withholdRegionNames(
+      other,
+      valueRegions(indexNativeAX(other), new Set(["3", "5"])),
+    );
+    expect(both[3].name?.value).toBe(REDACTED_VALUE);
   });
 
   it("never lends a field's own value through its own label", () => {
