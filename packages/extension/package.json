@@ -20,7 +20,7 @@
     "@real-a11y-dev/core": "workspace:*",
     "@real-a11y-dev/semantic-navigator-ui": "workspace:*",
     "@real-a11y-dev/serialize": "workspace:*",
-    "preact": "^10.29.8"
+    "preact": "^11.2.0"
   },
   "devDependencies": {
     "@playwright/test": "^1.65.0",
