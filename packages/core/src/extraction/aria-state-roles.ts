@@ -10,13 +10,10 @@ export { canExpand };
  * roles WAI-ARIA 1.2 §6.2.2 lists as using `aria-selected`, plus the ones it
  * inherits into. Any other role has none in their tree, whatever sets one.
  *
- * `cell` is allowed on purpose. A `<td>` in a grid is a `cell` here and a
- * `gridcell` in Chromium, which does give it the state, and the two cannot be
- * told apart until that role is fixed. A `<td>` in a plain table keeps a state
- * Chromium drops until then.
+ * A `<td>` in a grid or treegrid table is a `gridcell` here too, so it keeps the
+ * state, and a `<td>` in a plain table, a `cell`, has none, as in Chromium.
  */
 const SELECTABLE_ROLES = new Set([
-  "cell",
   "columnheader",
   "gridcell",
   "option",

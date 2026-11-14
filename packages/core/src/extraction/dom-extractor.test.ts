@@ -1792,6 +1792,8 @@ describe("extractDomTree", () => {
       <div id="checkbox" role="checkbox" tabindex="0" aria-checked="true">c</div>
       <div id="radio" role="radio" tabindex="0" aria-checked="true">r</div>
       <div id="switch" role="switch" tabindex="0" aria-checked="true">s</div>
+      <table><tr><td id="td-plain" aria-selected="true">p</td></tr></table>
+      <table role="grid"><tr><td id="td-grid" aria-selected="true">g</td></tr></table>
     `;
     expect(stateById(page, "selected")).toStrictEqual({
       "button-selected": undefined,
@@ -1802,6 +1804,8 @@ describe("extractDomTree", () => {
       checkbox: undefined,
       radio: undefined,
       switch: undefined,
+      "td-plain": undefined,
+      "td-grid": true,
     });
     expect(stateById(page, "checked")).toStrictEqual({
       "button-selected": undefined,
@@ -1812,6 +1816,8 @@ describe("extractDomTree", () => {
       checkbox: true,
       radio: true,
       switch: true,
+      "td-plain": undefined,
+      "td-grid": undefined,
     });
   });
 
