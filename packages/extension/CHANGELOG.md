@@ -31,7 +31,7 @@
   such a description is dropped, for a hidden checkbox too, and for a cell or
   link around the checkbox. A label that holds no value, and an `aria-label`
   on the control, still name it
-  ([#PR](https://github.com/real-a11y/real-a11y-dev/pull/PR)).
+  ([#653](https://github.com/real-a11y/real-a11y-dev/pull/653)).
 - **The TAB view names a stop the way Chrome does when a form control sits
   in its label.** The extension re-bundles the updated extractor, which reads
   a control's value into the name around it: a checkbox labelled
