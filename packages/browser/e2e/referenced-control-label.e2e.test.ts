@@ -116,6 +116,16 @@ describe("a value in the label of a control another name reads, against Chromium
       <span id="span">Pick <input type="checkbox" id="span-e"></span>
       <label for="span-e">Code <input ${OTP}></label>
       <button id="span-b" aria-labelledby="span">Toggle</button>
+      <span id="hspan" hidden>Pick <input type="checkbox" id="hspan-e"></span>
+      <label for="hspan-e">Code <input ${OTP}></label>
+      <button id="hspan-b" aria-labelledby="hspan">Toggle</button>
+      <button id="hspan-d" aria-describedby="hspan">Go</button>
+      <span id="aspan" aria-hidden="true">Pick <input type="checkbox" id="aspan-e"></span>
+      <label for="aspan-e">Code <input ${OTP}></label>
+      <button id="aspan-b" aria-labelledby="aspan">Toggle</button>
+      <div style="display:none"><label id="nlabel">Opt <input type="checkbox" id="nlabel-e"></label></div>
+      <label for="nlabel-e">Code <input ${OTP}></label>
+      <button id="nlabel-b" aria-labelledby="nlabel">Toggle</button>
     `);
     const raw = await rawById();
     // Chromium itself puts the code there, a hidden checkbox's label too.
@@ -128,6 +138,11 @@ describe("a value in the label of a control another name reads, against Chromium
     expect(raw.get("in-b")?.name).toBe("Opt in Code 482913");
     expect(raw.get("cell")?.name).toBe("Row Code 482913");
     expect(raw.get("span-b")?.name).toBe("Pick Code 482913");
+    // A hidden target is read whole: a hidden checkbox in it by its label.
+    expect(raw.get("hspan-b")?.name).toBe("Pick Code 482913");
+    expect(raw.get("hspan-d")?.description).toBe("Pick Code 482913");
+    expect(raw.get("aspan-b")?.name).toBe("Pick Code 482913");
+    expect(raw.get("nlabel-b")?.name).toBe("Opt Code 482913");
 
     for (const redactInput of [false, true]) {
       const native = await nativeById(redactInput);
@@ -140,7 +155,10 @@ describe("a value in the label of a control another name reads, against Chromium
         expect(native.get(`${key}-d`)?.description, `${key} (${at})`).toBe("");
       }
       expect(native.get("cell")?.name, at).toBe(REDACTED_VALUE);
-      expect(native.get("span-b")?.name, at).toBe(REDACTED_VALUE);
+      for (const id of ["span-b", "hspan-b", "aspan-b", "nlabel-b"]) {
+        expect(native.get(id)?.name, `${id} (${at})`).toBe(REDACTED_VALUE);
+      }
+      expect(native.get("hspan-d")?.description, at).toBe("");
       for (const read of native.values()) {
         expect(`${read.name} ${read.description}`, at).not.toMatch(
           /482913|•|●/,
@@ -159,6 +177,8 @@ describe("a value in the label of a control another name reads, against Chromium
       <input type="checkbox" id="pick-c">${readers("pick")}
       <label for="ed-c">Ed <span contenteditable>typed text</span></label>
       <input type="checkbox" id="ed-c">${readers("ed")}
+      <span id="hid-c" hidden>Pick <input type="checkbox" id="hid-e"></span>
+      <label for="hid-e">Name <input value="typed"></label>${readers("hid")}
     `);
     const raw = await rawById();
     expect(raw.get("text-b")?.name).toBe("Name typed");
@@ -168,7 +188,8 @@ describe("a value in the label of a control another name reads, against Chromium
 
     const shown = await nativeById(false);
     const strict = await nativeById(true);
-    for (const key of ["text", "area", "pick", "ed"]) {
+    expect(raw.get("hid-b")?.name).toBe("Pick Name typed");
+    for (const key of ["text", "area", "pick", "ed", "hid"]) {
       expect(shown.get(`${key}-b`)?.name, key).toBe(raw.get(`${key}-b`)?.name);
       expect(shown.get(`${key}-d`)?.description, key).toBe(
         raw.get(`${key}-d`)?.description,

@@ -688,6 +688,35 @@ describe("a control that lends a value through its labels", () => {
     expect(out[4].name?.value).toBe(REDACTED_VALUE);
   });
 
+  it("withholds a reference to a hidden element around a hidden control", () => {
+    // <span id="x" hidden>Pick <input type="checkbox" id="c"></span> and
+    // aria-labelledby="x": Chromium reads the hidden span whole, the
+    // checkbox in it by its label, "Pick Code 482913".
+    const nodes = [
+      ...page({ role: { value: "none" }, ignored: true, parentId: "9" }),
+      raw("9", "none", { ignored: true, childIds: ["4"] }),
+      raw("10", "button", {
+        name: {
+          value: "Pick Code 482913",
+          sources: [
+            {
+              type: "relatedElement",
+              attribute: "aria-labelledby",
+              value: { value: "Pick Code 482913" },
+            },
+          ],
+        },
+        properties: [pointsAt("labelledby", 9)],
+      }),
+    ];
+    delete nodes[3]!.name;
+    delete nodes[3]!.properties;
+    const out = withholdSensitiveFieldNames(nodes, ["3"], [], (id) =>
+      id === 4 ? [1] : [],
+    );
+    expect(out[7].name?.value).toBe(REDACTED_VALUE);
+  });
+
   it("never lends a field's own value through its own label", () => {
     // <label>Name <input value="typed"></label> in strict mode: the field's
     // own name leaves its value out, and a node around the label is no
