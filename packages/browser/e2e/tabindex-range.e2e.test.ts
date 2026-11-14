@@ -76,10 +76,10 @@ describe("tab stops", () => {
     await page.setContent(
       `<div tabindex="1abc" data-t="a">a</div><div tabindex=" 2" data-t="b">b</div><div tabindex="+3" data-t="c">c</div><div tabindex="-0" data-t="d">d</div><div tabindex="0.5" data-t="e">e</div><div tabindex="" data-t="f">f</div><div tabindex="abc" data-t="g">g</div><div tabindex="2147483648" data-t="h">h</div><div tabindex="2147483647" data-t="i">i</div><div tabindex="0" data-t="z">z</div>`,
     );
-    const chromium = await chromiumSequence();
-    expect(chromium).not.toContain("h");
+    const real = await chromiumSequence();
+    expect(real).not.toContain("h");
     // 2147483647 is the largest positive value, so it sorts after a, b, c.
-    expect(chromium).toEqual(["a", "b", "c", "i", "d", "e", "z"]);
+    expect(real).toEqual(["a", "b", "c", "i", "d", "e", "z"]);
     expect(await domSequence()).toEqual(["a", "b", "c", "i", "d", "e", "z"]);
   });
 
