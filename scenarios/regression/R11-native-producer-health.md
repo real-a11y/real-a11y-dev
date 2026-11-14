@@ -6,7 +6,7 @@ area: MCP
 type: Automated
 priority: P1
 status: Active
-validFrom: "browser ≥ 0.1.0-beta.12 · cli ≥ 0.1.0-beta.2 (locators + focusedId). The native producer itself: browser ≥ 0.1.0-beta.11. Steps 6 / 6b as written (field values shown, sensitive ones redacted, --redact-input): cli ≥ 0.1.0-beta.7. Step 6c (a field with no node of its own): cli ≥ 0.1.0-beta.9. Step 6b's `tabs` check: cli ≥ 0.1.0-beta.13"
+validFrom: "browser ≥ 0.1.0-beta.12 · cli ≥ 0.1.0-beta.2 (locators + focusedId). The native producer itself: browser ≥ 0.1.0-beta.11. Steps 6 / 6b as written (field values shown, sensitive ones redacted, --redact-input): cli ≥ 0.1.0-beta.7. Step 6c (a field with no node of its own): cli ≥ 0.1.0-beta.9. Step 6b's `tabs` check: cli ≥ 0.1.0-beta.13. Step 6d (a field in its own aria-labelledby): cli ≥ 0.1.0-beta.13"
 validUntil: ""
 expected: "native tree returns a document tree reaching UA-shadow media controls the in-page walk misses; every native FINDING carries a CSS locator identical to the DOM producer's for the same element (a shadow-root element stops its path at the boundary rather than faking a selector); the tree sets focusedId so [focused] renders; a field shows what it holds the way a screen reader announces it, while a sensitive field (password, one-time code, payment) only ever reads [redacted]; --redact-input withholds every value and all rich-text editor content."
 covers:
@@ -50,6 +50,12 @@ is native now — so these are plain invocations. An earlier version of this row
      autocomplete="cc-exp" value="2030-04"></p>` and
      `<div role="region" aria-labelledby="exp">Expiry</div>`, then
      `real-a11y tree <url>` and `real-a11y tree <url> --redact-input`
+   - **6d** — add `<span id="card-l">Card</span><input id="card"
+     aria-labelledby="card-l card" autocomplete="cc-number"
+     value="<card sentinel>">` and `<label id="exp-l">Expiry <input
+     type="month" aria-labelledby="exp-l" autocomplete="cc-exp"
+     value="2030-04"></label>`, then `real-a11y tree <url>` and
+     `real-a11y tree <url> --redact-input`
 7. `real-a11y audit <url> --root main`
 8. `pnpm --filter @real-a11y-dev/browser test:e2e`
 
@@ -100,6 +106,13 @@ is native now — so these are plain invocations. An earlier version of this row
   printed the cell as `LayoutTableCell "<card sentinel>"`, the parts as
   `= "April"` and `= "2030"`, and the region as `region "April 2030"`, which is
   the old behaviour, not a fail
+- **6d** — a field in its own `aria-labelledby` is named after its own value by
+  Chromium (`"Card <card sentinel>"`), and so is a month input named through an
+  `aria-labelledby` around it (`"Expiry April 2030 …"`). Both print
+  `"[redacted]"` as their name, in both modes, and the card sentinel, the
+  month's name and `2030` appear **nowhere**. cli 0.1.0-beta.12 printed
+  `textbox "Card <card sentinel>"` and the month's parts in its name, which is
+  the old behaviour, not a fail
 - **4** — locators on every entry. Native `list_elements` used to carry none, and
   three docs stated that as intended; both were fixed together
 - **7** — refused: the read is whole-document, so it cannot be combined with a root
@@ -141,6 +154,11 @@ can never see the second path: it needs content-named nodes under an editable
 host. Step 6c is the policy for a field Chromium keeps no node for: the policy
 keyed on the field's node, so a cell named from the card field inside it went
 unredacted until what stands in for the field was classified as the field.
+Step 6d is the field's own name: the rule assumed a field is never named after
+its own value. Chromium does name it so when the field is in its own
+`aria-labelledby`, and reads a date input's parts through an `aria-labelledby`
+around it; a `<label>`, an `aria-label`, or an `aria-labelledby` around a text
+field leaves the value out.
 
 Parity itself is now a standing automated gate, so this row checks the things that
 gate can't see.
