@@ -21,6 +21,15 @@
 
 ### Patch Changes
 
+- **The TAB view names a stop labelled by a form control the way Chrome
+  does.** The extension re-bundles the updated extractor, which reads a
+  control that `aria-labelledby` points at by its own name: a button labelled
+  by a checkbox whose `<label>` says "Agree" is "Agree", not the button's own
+  text, and an empty field lends its label, `title` or placeholder. An empty
+  field inside a heading or label lends its name the same way. A sensitive
+  field's value still never does: such a name reads `[redacted]`. The side
+  panel's tree is Chrome's own and already showed these names
+  ([#651](https://github.com/real-a11y/real-a11y-dev/pull/651)).
 - **The TAB view names a stop the way Chrome does when a form control sits
   in its label.** The extension re-bundles the updated extractor, which reads
   a control's value into the name around it: a checkbox labelled

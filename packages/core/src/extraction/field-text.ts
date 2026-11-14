@@ -332,8 +332,9 @@ export const PAGE_STATE_VALUE_ROLES: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * Roles of a control that lends its value to a name it is embedded in
- * (AccName 1.2 step 2C, "Embedded Control"): a text field's value, a
+ * Roles of a control that lends its value to a name it is embedded in, or
+ * its own name when it holds none (AccName 1.2 step 2C, "Embedded Control",
+ * see `embeddedControlText` in dom-extractor.ts): a text field's value, a
  * combobox's or listbox's chosen option, a range's `aria-valuetext`, else
  * `aria-valuenow`, else its host value. AccName names only a control the user
  * adjusts, but Chromium reads every range this way, a progressbar, meter or
@@ -354,7 +355,8 @@ export const EMBEDDED_VALUE_ROLES: ReadonlySet<string> = new Set([
  * `<input>` types whose value Chromium never reads into a name around them,
  * though the DOM producer gives them the textbox role: a colour well, and the
  * date and time inputs, which Chromium exposes as their parts. `<h2>Due <input
- * type="date" value="2030-04-01"></h2>` is "Due" in Chromium.
+ * type="date" value="2030-04-01"></h2>` is "Due" in Chromium, and with
+ * `aria-label="Start"` on the input "Due Start": such an input lends its name.
  */
 export const NAMELESS_VALUE_INPUT_TYPES: ReadonlySet<string> = new Set([
   "color",
@@ -365,13 +367,34 @@ export const NAMELESS_VALUE_INPUT_TYPES: ReadonlySet<string> = new Set([
   "week",
 ]);
 
+const VALUE_ONLY_ROLES: ReadonlySet<string> = new Set([
+  "combobox",
+  "searchbox",
+  "textbox",
+]);
+
+/**
+ * True when `element`, holding no value, lends a name around it nothing at
+ * all. Any other embedded control lends its own name instead (see
+ * `embeddedControlText` in dom-extractor.ts), but Chromium reads an empty
+ * single `<select>`, and a textbox, searchbox or combobox that isn't an
+ * `<input>` or `<textarea>`, as nothing: `<h2>Pick <select
+ * aria-label="Fruit"></select></h2>` is "Pick", as it is around `<div
+ * role="combobox" aria-label="Fruit">`, while `<h2>Pick <input
+ * aria-label="Fruit"></h2>` is "Pick Fruit".
+ */
+export function lendsValueOnly(element: Element, role: string): boolean {
+  const tag = safeTagName(element);
+  return VALUE_ONLY_ROLES.has(role) && tag !== "input" && tag !== "textarea";
+}
+
 /**
  * The raw value an embedded control lends a name around it (AccName 2C, see
  * {@link EMBEDDED_VALUE_ROLES}), as Chromium reads it: a `<select>`'s or ARIA
  * listbox's chosen options joined with spaces (each option named by
- * `nameOption`), nothing for a {@link NAMELESS_VALUE_INPUT_TYPES} input, and
- * otherwise the value {@link readFieldValue} reads. Sensitivity is the
- * caller's.
+ * `nameOption`), "" for a {@link NAMELESS_VALUE_INPUT_TYPES} input, which
+ * lends its name instead, and otherwise the value {@link readFieldValue}
+ * reads. Sensitivity is the caller's.
  */
 export function embeddedValue(
   element: Element,
