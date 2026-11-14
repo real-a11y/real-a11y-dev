@@ -417,11 +417,6 @@
       "count": 1
     }
   },
-  "packages/snapshot/src/baseline.ts": {
-    "complexity": {
-      "count": 1
-    }
-  },
   "packages/snapshot/src/diff/views-summary.ts": {
     "complexity": {
       "count": 1
