@@ -10,12 +10,18 @@
  */
 import { ariaOwner, withAriaOwnerIndex } from "../extraction/aria-owner.js";
 import { safeParentElement, safeTagName } from "../extraction/clobber-safe.js";
-import { isNameBarrierElement } from "../extraction/dom-extractor.js";
+import {
+  getElementRefs,
+  isNameBarrierElement,
+  nativeStates,
+} from "../extraction/dom-extractor.js";
 import {
   EMBEDDED_VALUE_ROLES,
   fieldValueOwner,
 } from "../extraction/field-text.js";
 import { getImplicitRole } from "../extraction/role-map.js";
+import { withholdsState } from "../extraction/strict-mode.js";
+import type { SemanticNode } from "../types.js";
 
 /** `el` lends its value to a name it sits in (AccName 2C). */
 function lendsValue(el: Element): boolean {
@@ -79,4 +85,58 @@ function addReaders(
       return;
     }
   }
+}
+
+/**
+ * Add every recorded checkbox, radio, `<select>` and `<option>` whose native
+ * state no longer matches its node. Those states move without an attribute,
+ * and often without an event, of their own: a click on one radio unchecks its
+ * sibling, a script's `option.selected = true` fires nothing, a handler can
+ * make a "select all" box indeterminate, and opening a picker fires nothing at
+ * all, so it shows once anything else refreshes. It reads a property or two
+ * per control, far cheaper than re-extracting them all.
+ *
+ * A state strict mode withholds (a chosen option's `selected`) is never on the
+ * node, so `seen` remembers it instead: comparing with the node would dirty
+ * every chosen option on each refresh, and never comparing would miss a choice
+ * made by script, which renames the name around its `<select>` (`[redacted]`
+ * once it holds a choice). Call it after a full extraction too, with a set to
+ * discard, so `seen` starts from what that extraction read.
+ */
+export function addMovedNativeStates(
+  domNodes: ReadonlyMap<string, SemanticNode>,
+  redactInput: boolean,
+  seen: WeakMap<Element, unknown>,
+  dirty: Set<Element>,
+): void {
+  const refs = getElementRefs();
+  for (const [id, node] of domNodes) {
+    const tag = node.dom?.tagName;
+    if (tag !== "input" && tag !== "select" && tag !== "option") continue;
+    const el = refs.get(id);
+    if (!el) continue;
+    const native = nativeStates(el, tag, node.a11y.role);
+    for (const [state, value] of Object.entries(native)) {
+      const moved =
+        redactInput && withholdsState(el, node.a11y.role, state)
+          ? movedSince(el, value, seen)
+          : value !== node.a11y.states[state];
+      if (moved) {
+        dirty.add(el);
+        break;
+      }
+    }
+  }
+}
+
+/** Record `value` for `el`, and say whether it differs from the last one. */
+function movedSince(
+  el: Element,
+  value: unknown,
+  seen: WeakMap<Element, unknown>,
+): boolean {
+  const known = seen.has(el);
+  const before = seen.get(el);
+  seen.set(el, value);
+  return known && before !== value;
 }

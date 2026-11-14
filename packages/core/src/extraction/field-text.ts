@@ -409,14 +409,20 @@ function chosenAriaOptions(
     });
   return [listbox, ...owned].flatMap((root) =>
     [
-      ...(root !== listbox && root.matches('[role="option"]') ? [root] : []),
-      ...root.querySelectorAll('[role="option"]'),
+      ...(root !== listbox && isAriaOption(root) ? [root] : []),
+      ...Array.from(root.querySelectorAll("[role]")).filter(isAriaOption),
     ].filter(
       (option) =>
         ariaBoolean(safeGetAttribute(option, "aria-selected")) === true &&
         !hiddenUpTo(option, root, listbox, styleCache),
     ),
   );
+}
+
+/** `el`'s role is `option` as the role resolver reads it: any case, the first
+ *  token it recognises (`role="OPTION"`, `role="option fallback"`). */
+function isAriaOption(el: Element): boolean {
+  return getExplicitRole(el) === "option";
 }
 
 /**

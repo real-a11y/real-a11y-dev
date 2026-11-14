@@ -179,6 +179,17 @@ describe("an embedded control lends its value (AccName 2C)", () => {
     ).toBe("Field");
   });
 
+  it("reads a chosen option by its resolved role, however it is spelled", () => {
+    for (const role of ["OPTION", "option fallback"]) {
+      expect(
+        nameOf(
+          `<h2 id="t">Pick <ul role="listbox"><li role="${role}">A</li><li role="${role}" aria-selected="true">B</li></ul></h2>`,
+        ),
+        role,
+      ).toBe("Pick B");
+    }
+  });
+
   it("lends a description its value too", () => {
     expect(
       read(

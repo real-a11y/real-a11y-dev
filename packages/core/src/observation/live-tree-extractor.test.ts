@@ -3281,6 +3281,41 @@ describe("LiveTreeExtractor: a value read into another name", () => {
     expect(nameOf("heading")).toBe("Pick Two");
   });
 
+  it("withholds a name in strict mode once script gives its select a choice, no event fired", async () => {
+    // Strict mode never records a chosen option's `selected`, so the refresh
+    // has to remember it: the heading reads `[redacted]` only once the select
+    // holds a choice.
+    document.body.innerHTML = `<main><h2>Sort by <select><option>Name</option><option>Date</option></select></h2><p>x</p></main>`;
+    const select = document.querySelector("select") as HTMLSelectElement;
+    select.selectedIndex = -1;
+    const live = new LiveTreeExtractor(document.body, {
+      mode: "a11y",
+      redactInput: true,
+    });
+    const heading = (result: ExtractionResult) =>
+      [...result.nodes.values()].find((n) => n.a11y.role === "heading")?.a11y
+        .name;
+    expect(heading(live.refresh())).toBe("Sort by");
+    let lastChange: TreeChange | undefined;
+    const observer = new DomObserver(
+      document.body,
+      (change) => {
+        lastChange = change;
+      },
+      50,
+    );
+    observer.start();
+    select.selectedIndex = 1;
+    document.querySelector("p")!.textContent = "y";
+    await vi.advanceTimersByTimeAsync(100);
+    const result = live.refresh(lastChange);
+    observer.stop();
+    expect(result.nodes).toEqual(
+      extractA11yTree(document.body, { redactInput: true }).nodes,
+    );
+    expect(heading(result)).toBe("[redacted]");
+  });
+
   it("withholds the renamed control's name in strict mode", async () => {
     const nameOf = await refreshAfter(
       `<main><label><input type="checkbox"> Flash the screen <input id="n" aria-label="times"> times</label></main>`,
