@@ -170,9 +170,10 @@ export function needsSpaceAround(
  *   - Embedded form controls: slider, spinbutton, textbox, searchbox.
  *     Their text never reaches a name, but their *value* does (accname
  *     §2C): `<label>Delete <input value="3"> files</label>` names "Delete 3
- *     files". The name walk reads that value before skipping the barrier
- *     (`barrierText` in dom-extractor.ts), for these, a combobox, a listbox
- *     and the display ranges below too, as Chromium does.
+ *     files", and an empty one its own name. The name walk reads that before
+ *     skipping the barrier (`barrierText` in dom-extractor.ts), for these, a
+ *     combobox, a listbox and the display ranges below too, as Chromium
+ *     does.
  *   - Display widgets / live regions: dialog, alertdialog, tabpanel,
  *     alert, status, log, tooltip, progressbar, meter. A tooltip or
  *     dialog nested inside a widget is its own surface, not part of the

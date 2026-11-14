@@ -3324,4 +3324,79 @@ describe("LiveTreeExtractor: a value read into another name", () => {
     );
     expect(nameOf("checkbox")).toBe("[redacted]");
   });
+
+  // A reference reads its control target's label, title and placeholder, and
+  // an empty field lends its name to the name it sits in: each is markup
+  // outside the element whose name it reaches.
+  const relabel = (selector: string) => () => {
+    const text = document.querySelector(selector)!.firstChild!;
+    text.nodeValue = "New";
+  };
+  const reattribute = (selector: string, attr: string) => () => {
+    document.querySelector(selector)!.setAttribute(attr, "New");
+  };
+
+  it("renames a button labelled by a control whose <label for> changes", async () => {
+    const nameOf = await refreshAfter(
+      `<main><label for="c" id="l">Old</label><input type="checkbox" id="c"><button aria-labelledby="c">x</button></main>`,
+      relabel("#l"),
+    );
+    expect(nameOf("button")).toBe("New");
+  });
+
+  it("renames it when the change is inside the <label for>", async () => {
+    const nameOf = await refreshAfter(
+      `<main><label for="c"><span id="s">Old</span></label><input type="checkbox" id="c"><button aria-labelledby="c">x</button></main>`,
+      relabel("#s"),
+    );
+    expect(nameOf("button")).toBe("New");
+  });
+
+  it("renames it when the label wraps the control", async () => {
+    const nameOf = await refreshAfter(
+      `<main><label id="l">Old <input type="checkbox" id="c"></label><button aria-labelledby="c">x</button></main>`,
+      relabel("#l"),
+    );
+    expect(nameOf("button")).toBe("New");
+  });
+
+  it("renames a button labelled by a field whose placeholder changes", async () => {
+    const nameOf = await refreshAfter(
+      `<main><input id="c" placeholder="Old"><button aria-labelledby="c">x</button></main>`,
+      reattribute("#c", "placeholder"),
+    );
+    expect(nameOf("button")).toBe("New");
+  });
+
+  it("renames a button labelled by an element whose title changes", async () => {
+    const nameOf = await refreshAfter(
+      `<main><span id="c" title="Old"></span><button aria-labelledby="c">x</button></main>`,
+      reattribute("#c", "title"),
+    );
+    expect(nameOf("button")).toBe("New");
+  });
+
+  it("renames the heading an empty field sits in when its placeholder changes", async () => {
+    const nameOf = await refreshAfter(
+      `<main><h2>Save <input id="c" placeholder="Old"> now</h2></main>`,
+      reattribute("#c", "placeholder"),
+    );
+    expect(nameOf("heading")).toBe("Save New now");
+  });
+
+  it("renames the heading an empty field sits in when the field's label changes", async () => {
+    const nameOf = await refreshAfter(
+      `<main><label for="c"><span id="s">Old</span></label><h2>Save <textarea id="c"></textarea> now</h2></main>`,
+      relabel("#s"),
+    );
+    expect(nameOf("heading")).toBe("Save New now");
+  });
+
+  it("renames the heading when an empty field is typed into", async () => {
+    const nameOf = await refreshAfter(
+      `<main><h2>Save <input id="c" placeholder="Draft"> now</h2></main>`,
+      type("#c", "typed"),
+    );
+    expect(nameOf("heading")).toBe("Save typed now");
+  });
 });
