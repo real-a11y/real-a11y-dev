@@ -1966,7 +1966,7 @@ function buildNode(
       ? undefined
       : getAnnouncedValue(element, role, styleCache);
     const actions = getActions(element);
-    const focusable = isFocusable(element);
+    const focusable = isFocusable(element, style);
     const headingLevel = getHeadingLevel(element);
     const isMedia = MEDIA_TAGS.has(tag);
     const states = getAriaStates(element, role, focusable);

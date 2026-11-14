@@ -21,6 +21,12 @@
 
 ### Patch Changes
 
+- **The TAB view no longer lists a stop Chrome never focuses.** The extension
+  re-bundles the updated extractor: an element whose `tabindex` is outside the
+  signed 32-bit range (`tabindex="2147483648"`) is ignored as if it had none,
+  and an element with `display: contents` is not a stop, though its focusable
+  children still are
+  ([#652](https://github.com/real-a11y/real-a11y-dev/pull/652)).
 - **The TAB view names a stop the way Chrome does when a form control sits
   in its label.** The extension re-bundles the updated extractor, which reads
   a control's value into the name around it: a checkbox labelled
