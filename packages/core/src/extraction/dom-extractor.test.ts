@@ -1778,6 +1778,49 @@ describe("extractDomTree", () => {
     });
   });
 
+  // Chromium 153: aria-selected and aria-checked are exposed only on the roles
+  // WAI-ARIA 1.2 lists for them.
+  it("reads aria-selected and aria-checked only on a role that supports them", () => {
+    const page = `
+      <button id="button-selected" aria-selected="true">x</button>
+      <button id="button-checked" aria-checked="true">x</button>
+      <a id="link-checked" href="/" aria-checked="true">y</a>
+      <div role="tablist"><div id="tab" role="tab" aria-selected="true">t</div></div>
+      <div role="listbox" aria-label="l">
+        <div id="option" role="option" aria-selected="true" aria-checked="true">o</div>
+      </div>
+      <div id="checkbox" role="checkbox" tabindex="0" aria-checked="true">c</div>
+      <div id="radio" role="radio" tabindex="0" aria-checked="true">r</div>
+      <div id="switch" role="switch" tabindex="0" aria-checked="true">s</div>
+      <table><tr><td id="td-plain" aria-selected="true">p</td></tr></table>
+      <table role="grid"><tr><td id="td-grid" aria-selected="true">g</td></tr></table>
+    `;
+    expect(stateById(page, "selected")).toStrictEqual({
+      "button-selected": undefined,
+      "button-checked": undefined,
+      "link-checked": undefined,
+      tab: true,
+      option: true,
+      checkbox: undefined,
+      radio: undefined,
+      switch: undefined,
+      "td-plain": undefined,
+      "td-grid": true,
+    });
+    expect(stateById(page, "checked")).toStrictEqual({
+      "button-selected": undefined,
+      "button-checked": undefined,
+      "link-checked": undefined,
+      tab: undefined,
+      option: true,
+      checkbox: true,
+      radio: true,
+      switch: true,
+      "td-plain": undefined,
+      "td-grid": undefined,
+    });
+  });
+
   it("ignores aria-expanded on every other role", () => {
     const roles = [
       "alert",

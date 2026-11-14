@@ -344,8 +344,8 @@ function landmarkStructureFindings(
   if (mains.length === 0) {
     findings.push({
       rule: "landmark-structure",
-      severity: "error",
-      message: "Missing <main>: every page needs a main landmark.",
+      severity: "warning",
+      message: "Missing <main>: a page should have one main landmark.",
     });
   } else if (mains.length > 1) {
     findings.push({

@@ -71,6 +71,15 @@ describe("real-a11y (built bin)", () => {
     expect(stdout).not.toContain("\u001B[");
   });
 
+  it("audit reports a page without main as a warning: exit 0, exit 1 under --fail-on warning", async () => {
+    const page = dataUrl("<div><h1>t</h1><p>x</p></div>");
+    const byDefault = await runCli(["audit", page]);
+    expect(byDefault.code).toBe(0);
+    expect(byDefault.stdout).toContain("[warning] landmark-structure");
+    const strict = await runCli(["audit", page, "--fail-on", "warning"]);
+    expect(strict.code).toBe(1);
+  });
+
   it("audit exits 0 on a clean page", async () => {
     const { code, stdout } = await runCli(["audit", CLEAN_PAGE]);
     expect(code).toBe(0);

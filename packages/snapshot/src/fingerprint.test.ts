@@ -90,7 +90,11 @@ describe("fingerprintFindings — doc findings", () => {
       "multiple-h1",
     ],
     ["heading-order", 'Heading level skipped: "X" is h4…', "skipped-level"],
-    ["landmark-structure", "Missing <main>: every page…", "missing-main"],
+    [
+      "landmark-structure",
+      "Missing <main>: a page should have one main landmark.",
+      "missing-main",
+    ],
     [
       "landmark-structure",
       "Expected exactly one <main> landmark, found 2.",

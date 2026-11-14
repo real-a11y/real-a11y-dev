@@ -60,7 +60,7 @@ main
       row
         cell "severity"
           code "severity"
-        cell ""error" blocks use (unlabeled controls, unlabeled dialogs); "warning" is triage-later (heading order, duplicate landmarks, images missing alt, form controls labeled only by title)."
+        cell ""error" blocks use (unlabeled controls, unlabeled dialogs); "warning" is triage-later (heading order, a missing main landmark, duplicate landmarks, images missing alt, form controls labeled only by title)."
           code ""error""
           code ""warning""
           code "title"

@@ -27,7 +27,7 @@ Each `Finding` carries:
 | Field | Meaning |
 | --- | --- |
 | `rule` | Which rule fired — one of `ALL_RULES` (below). |
-| `severity` | `"error"` blocks use (unlabeled controls, unlabeled dialogs); `"warning"` is triage-later (heading order, duplicate landmarks, images missing alt, form controls labeled only by `title`). |
+| `severity` | `"error"` blocks use (unlabeled controls, unlabeled dialogs); `"warning"` is triage-later (heading order, a missing main landmark, duplicate landmarks, images missing alt, form controls labeled only by `title`). |
 | `message` | Self-contained description of the problem. |
 | `role` / `name` / `tagName` | The offending node, when the finding is node-scoped. |
 | `locator` | Best-effort CSS selector path, so the element is findable. |

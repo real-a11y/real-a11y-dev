@@ -33,7 +33,7 @@ const RULE_LEVEL: Record<string, "error" | "warning"> = {
   "image-alt": "warning",
   "heading-order": "warning",
   "dialog-labeled": "error",
-  "landmark-structure": "error",
+  "landmark-structure": "warning",
 };
 
 const RULE_DESCRIPTION: Record<string, string> = {
@@ -46,7 +46,7 @@ const RULE_DESCRIPTION: Record<string, string> = {
     "Headings must start at h1 and not skip levels; exactly one h1.",
   "dialog-labeled": "Dialogs must have an accessible name.",
   "landmark-structure":
-    "Pages need a main landmark and at most one banner/contentinfo.",
+    "Pages should have one main landmark and at most one banner/contentinfo.",
 };
 
 const MESSAGE_CAP = 1_000; // GitHub truncates message fields at 1 000 chars.

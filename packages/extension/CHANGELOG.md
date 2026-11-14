@@ -36,6 +36,12 @@
   and a description that reaches the field's own value is dropped, as for any
   other name built from a sensitive field. A `<label>` around the field still
   names it ([#643](https://github.com/real-a11y/real-a11y-dev/pull/643)).
+- **The TAB view's engine drops `aria-selected` and `aria-checked` on roles
+  that do not support them.** The extension re-bundles the updated extractor:
+  an authored `aria-selected` on a `button`, or `aria-checked` on a `link`, no
+  longer reads as a state in the content script's DOM walk, as Chromium does
+  not expose one ([#646](https://github.com/real-a11y/real-a11y-dev/pull/646)).
+  The A11Y tree is Chromium's own and is unchanged.
 - **The TAB view's engine treats `visibility: collapse` as hidden.** The
   extension re-bundles the updated extractor, so an element styled
   `visibility: collapse` no longer counts as exposed when the content script
