@@ -124,7 +124,7 @@ describe("an embedded control lends its value (AccName 2C)", () => {
     expect(nameOf(html)).toBe(`Flash the screen ${value} times`);
   });
 
-  it("is the value alone: never the control's aria-label (step 2D)", () => {
+  it("is the value, ahead of the control's aria-label (step 2D)", () => {
     expect(
       nameOf(`<h2 id="t">Count <input value="2" aria-label="how many"></h2>`),
     ).toBe("Count 2");
@@ -171,7 +171,7 @@ describe("an embedded control lends its value (AccName 2C)", () => {
         `<div role="slider" id="i" tabindex="0" aria-valuenow="5" aria-label="Vol"></div><button id="t" aria-labelledby="i">b</button>`,
       ),
     ).toBe("5");
-    // An empty one gives way to its aria-label.
+    // An empty one gives way to its aria-label (see labelledby-control.test.ts).
     expect(
       nameOf(
         `<input id="i" aria-label="Field"><button id="t" aria-labelledby="i">b</button>`,
@@ -301,7 +301,7 @@ describe("what an embedded control never lends", () => {
     ).toBe("Pick B");
   });
 
-  it("is anything, for an empty control", () => {
+  it("is anything, for an empty control with no name", () => {
     expect(nameOf(`<h2 id="t">Save<input>now</h2>`)).toBe("Save now");
   });
 

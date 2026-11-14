@@ -35,6 +35,7 @@ import {
   SCOPE_ATTRS,
 } from "./live-tree-attrs.js";
 import {
+  addLabelledControls,
   addMovedNativeStates,
   addValueReaders,
   closesName,
@@ -673,6 +674,8 @@ export class LiveTreeExtractor {
   }
 
   private expandDependencies(dirty: Set<Element>): void {
+    // Each label's controls are added once: a later pass adds none.
+    const labels = new Set<Element>();
     let changed = true;
     while (changed) {
       changed = false;
@@ -700,19 +703,19 @@ export class LiveTreeExtractor {
               }
             }
           }
+          // A change inside a label renames what it labels, and what reads
+          // that control's name.
+          if (
+            safeTagName(ancestor) === "label" &&
+            !labels.has(ancestor) &&
+            labels.add(ancestor) &&
+            addLabelledControls(ancestor, dirty, (control) =>
+              this.nameRelevantAncestor(control),
+            )
+          )
+            changed = true;
           if (ancestor === stopAt) break;
           ancestor = safeParentElement(ancestor);
-        }
-
-        if (safeTagName(el) === "label") {
-          const forId = safeGetAttribute(el, "for");
-          if (forId) {
-            const input = el.ownerDocument?.getElementById(forId);
-            if (input && !dirty.has(input)) {
-              dirty.add(input);
-              changed = true;
-            }
-          }
         }
       }
     }

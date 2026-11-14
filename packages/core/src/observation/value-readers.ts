@@ -1,15 +1,23 @@
 /**
- * Where a live refresh must re-read a name because a field's value moved.
+ * Where a live refresh must re-read a name because a field's value, or a
+ * label, moved.
  *
- * A control the user adjusts lends its value to a name it sits in (AccName 1.2
- * step 2C, `embeddedControlText` in extraction/dom-extractor.ts): typing into
- * `<label><input type="checkbox"> Flash the screen <input> times</label>`
- * renames the checkbox, and choosing in a `<select>` renames the heading
- * around it. Neither name's own element changes, so the refresh adds the
- * hosts these values reach.
+ * A control the user adjusts lends its value to a name it sits in, and its own
+ * name when it holds none (AccName 1.2 step 2C, `embeddedControlText` in
+ * extraction/dom-extractor.ts): typing into `<label><input type="checkbox">
+ * Flash the screen <input> times</label>` renames the checkbox, and choosing
+ * in a `<select>` renames the heading around it. Neither name's own element
+ * changes, so the refresh adds the hosts these values reach. A reference to a
+ * control reads its `<label>` too, so a label's change adds what it labels.
  */
 import { ariaOwner, withAriaOwnerIndex } from "../extraction/aria-owner.js";
-import { safeParentElement, safeTagName } from "../extraction/clobber-safe.js";
+import {
+  safeGetAttribute,
+  safeGetElementById,
+  safeParentElement,
+  safeQuerySelectorAll,
+  safeTagName,
+} from "../extraction/clobber-safe.js";
 import {
   getElementRefs,
   isNameBarrierElement,
@@ -19,11 +27,13 @@ import {
   EMBEDDED_VALUE_ROLES,
   fieldValueOwner,
 } from "../extraction/field-text.js";
+import { idScope } from "../extraction/flat-tree.js";
+import { LABELED_TAGS } from "../extraction/host-names.js";
 import { getImplicitRole } from "../extraction/role-map.js";
 import { withholdsState } from "../extraction/strict-mode.js";
 import type { SemanticNode } from "../types.js";
 
-/** `el` lends its value to a name it sits in (AccName 2C). */
+/** `el` lends its value, or its name, to a name it sits in (AccName 2C). */
 function lendsValue(el: Element): boolean {
   return EMBEDDED_VALUE_ROLES.has(getImplicitRole(el));
 }
@@ -70,6 +80,37 @@ export function addValueReaders(
       }
     }
   });
+}
+
+/**
+ * Add, when `label` changed, the controls it names: the one its `for` names,
+ * else each it wraps (see `associatedLabels`, which reads it the same way).
+ * A reference to such a control reads the label, and so does a name the
+ * control lends itself to: an empty field lends its name (see
+ * `embeddedControlText`), so that name host is added too. Returns whether
+ * anything was added.
+ */
+export function addLabelledControls(
+  label: Element,
+  dirty: Set<Element>,
+  hostOf: (el: Element) => Element,
+): boolean {
+  const before = dirty.size;
+  const forId = safeGetAttribute(label, "for");
+  // Built here, not at module scope: a call there survives tree-shaking in
+  // every bundle that imports core, used or not.
+  const labelable = [...LABELED_TAGS].join(",");
+  const controls = forId
+    ? [safeGetElementById(idScope(label), forId)]
+    : [...safeQuerySelectorAll(label, labelable)].filter(
+        (control) => control.closest("label") === label,
+      );
+  for (const control of controls) {
+    if (!control) continue;
+    dirty.add(control);
+    if (lendsValue(control)) addReaders(control, dirty, hostOf);
+  }
+  return dirty.size !== before;
 }
 
 /** The name host and the `<label>` a lending `field`'s value reaches. */

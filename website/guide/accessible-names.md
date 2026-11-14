@@ -15,7 +15,7 @@ Every `SemanticNode.a11y.name` in a Real A11y tree comes from this algorithm.
 
 For any element, the accessible name is picked from the **first non-empty source** in this list:
 
-1. `aria-labelledby` — the text of each element it references. A referenced control with a value gives that value instead, ahead of its own `aria-label` (see [A control inside a label or heading](#a-control-inside-a-label-or-heading))
+1. `aria-labelledby` — the name of each element it references, computed as for that element alone except that its own `aria-labelledby` is ignored. Its content is read whatever its role, and its `title` comes last. A referenced form control gives its value, else its own name: `<button aria-labelledby="c">` over `<label for="c">Agree</label><input type="checkbox" id="c">` is `"Agree"` (see [A control inside a label or heading](#a-control-inside-a-label-or-heading))
 2. `aria-label` — literal string on the element itself. One that is only spaces is skipped
 3. Native host-language label:
    - `<label for="…">` or ancestor `<label>` for form controls. A control with several labels is named from all of them, joined with spaces in document order
@@ -23,7 +23,7 @@ For any element, the accessible name is picked from the **first non-empty source
    - `<caption>` for tables
    - `alt` for images and `<input type="image">`, the first `<title>` for an `<svg>`, `title` for iframes
    - `value` for `<input type="submit">`, `"reset"` and `"button"`. A submit or reset input with no `value` attribute gets the default name `Submit` or `Reset`, ahead of `title`; `value=""` is a stated empty name and gets none, and `type="button"` has no default
-4. **Text content** — inner text, including text inside descendants. A descendant with a name of its own lends that name instead of its text: an image its `alt`, an `<svg>` its `<title>`, any element its `aria-label`. A `<select>`'s `<option>` is the exception, named by its text alone. A form control inside gives its value, not its text or its `aria-label` (see [A control inside a label or heading](#a-control-inside-a-label-or-heading)). Only for roles named from their content (buttons, links, headings, cells, options…): a dialog, image, landmark, text field, `article`, `group`, `note`, `tabpanel`, `doc-toc` or `graphics-document` is named by its author alone, never by its text
+4. **Text content** — inner text, including text inside descendants. A descendant with a name of its own lends that name instead of its text: an image its `alt`, an `<svg>` its `<title>`, any element its `aria-label`. A `<select>`'s `<option>` is the exception, named by its text alone. A form control inside gives its value, not its text, or its own name when it holds no value (see [A control inside a label or heading](#a-control-inside-a-label-or-heading)). Only for roles named from their content (buttons, links, headings, cells, options…): a dialog, image, landmark, text field, `article`, `group`, `note`, `tabpanel`, `doc-toc` or `graphics-document` is named by its author alone, never by its text
 5. `title` attribute — last-resort fallback
 6. An `<input type="image">` that nothing else has named is called `Submit`, as it is a submit button. This default comes after `title`, unlike the submit and reset defaults
 7. Empty string (element has no accessible name)
@@ -124,9 +124,11 @@ That text includes what sits in a plain inline wrapper, which Chromium gives no 
 <h2>Sort by <select><option>Name</option><option selected>Date</option></select></h2>
 ```
 
-→ the checkbox is `"Flash the screen 3 times"` and the heading `"Sort by Date"`. A control inside a label or a name built from content lends its value, as Chromium does (AccName step 2C): a text field what it holds, a `<select>` or listbox its chosen options, a slider, spinbutton, progress bar or meter its `aria-valuetext`, else its value. Never its own `aria-label`, and never an option nobody chose. The text field keeps its own name, `"number of times"`, and a control is never named after its own value: `<label>Email <input value="a@b.c"></label>` names the field `"Email"`.
+→ the checkbox is `"Flash the screen 3 times"` and the heading `"Sort by Date"`. A control inside a label or a name built from content lends its value, as Chromium does (AccName step 2C): a text field what it holds, a `<select>` or listbox its chosen options, a slider, spinbutton, progress bar or meter its `aria-valuetext`, else its value. A value wins over the control's own `aria-label`, and an option nobody chose is never read. The text field keeps its own name, `"number of times"`, and a control is never named after its own value: `<label>Email <input value="a@b.c"></label>` names the field `"Email"`.
 
-The same holds for `aria-labelledby` and `aria-describedby` pointing at a control: `<button aria-labelledby="q">` over `<input id="q" value="cats">` is `"cats"`.
+A control that holds no value lends its own name instead: its `aria-label`, its `<label>`, its `title`, then its placeholder. `<h2>Save <input placeholder="Draft"> now</h2>` is `"Save Draft now"`. So does a date, time or colour input, whose value Chromium never reads into a name. An empty single `<select>`, and an empty `textbox`, `searchbox` or `combobox` that isn't an `<input>` or `<textarea>`, lend nothing at all, as in Chromium.
+
+The same holds for `aria-labelledby` and `aria-describedby` pointing at a control: `<button aria-labelledby="q">` over `<input id="q" value="cats">` is `"cats"`, and over the same field empty, with `<label for="q">Search</label>`, `"Search"`. A checkbox, radio, button input, `<output>` or `<progress>` gives its own name the same way, from its labels.
 
 A value that is a secret never reaches a name. If a password, one-time code or payment card field holds anything, the whole name built from it reads `"[redacted]"`, and a description built from it is dropped, in both trees. The strict mode (`redactInput`) does the same for any value a user entered. A progress bar's or meter's value is the page's own state, so it stays.
 

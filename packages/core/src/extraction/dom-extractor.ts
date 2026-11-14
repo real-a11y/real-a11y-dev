@@ -32,6 +32,7 @@ import {
   embeddedValue,
   getAnnouncedValue,
   getDescendantText,
+  lendsValueOnly,
   MEDIA_TAGS,
   PAGE_STATE_VALUE_ROLES,
 } from "./field-text.js";
@@ -47,7 +48,6 @@ import {
   parseTabindex,
 } from "./focusability.js";
 import * as host from "./host-names.js";
-import { buttonInputName } from "./input-names.js";
 import { getKeyAttributes } from "./key-attributes.js";
 import { associatedLabels, wrappingLabelText } from "./label-text.js";
 import { hasCaptionsTrack } from "./media-tracks.js";
@@ -579,35 +579,52 @@ function textAlternative(
 }
 
 /**
+ * Where a name walk reads a control, for {@link embeddedControlText}: inside a
+ * reference, its own aria-labelledby is ignored.
+ */
+interface ControlRead extends NameWalk {
+  readonly styleCache: StyleCache | null | undefined;
+}
+
+/**
  * What a control the user adjusts lends a name or description it sits in
  * (AccName 1.2 step 2C), or `null` when `element` isn't one
  * ({@link EMBEDDED_VALUE_ROLES}): its value as {@link readFieldValue} reads it,
- * or an ARIA listbox's chosen options. Only that: never its `aria-label`
- * (step 2D), nor a combobox's or listbox's other options. Chromium names
- * `<label><input type="checkbox"> Flash the screen <input value="3"> times
+ * or an ARIA listbox's chosen options, ahead of its `aria-label` and never a
+ * combobox's or listbox's other options. Chromium names `<label><input
+ * type="checkbox"> Flash the screen <input value="3" aria-label="n"> times
  * </label>` "Flash the screen 3 times".
+ *
+ * A control holding no value lends its own name instead, as Chromium does:
+ * `<h2>Save <input placeholder="Draft"> now</h2>` is "Save Draft now", and a
+ * `<button aria-labelledby>` over `<label for="e">Email</label><input id="e">`
+ * is "Email". Not one that lends only its value ({@link lendsValueOnly}).
  *
  * A sensitive field's value, and in strict mode any value, is withheld: the
  * whole name reads `[redacted]` (see {@link NameRun.withheld}), as the native
- * producer reads a name built around such a field. An empty control lends
- * nothing and withholds nothing.
+ * producer reads a name built around such a field. A name is markup, which
+ * neither withholds.
  */
 function embeddedControlText(
   element: Element,
   role: string,
   run: NameRun,
-  styleCache: StyleCache | null | undefined,
+  at: ControlRead,
 ): string | null {
   if (!EMBEDDED_VALUE_ROLES.has(role)) return null;
   const text = collapseAscii(
     embeddedValue(
       element,
       role,
-      (option) => computeAccessibleName(option, run, styleCache),
-      styleCache ?? undefined,
+      (option) => computeAccessibleName(option, run, at.styleCache),
+      at.styleCache ?? undefined,
     ),
   );
-  if (!text) return "";
+  if (!text) {
+    return lendsValueOnly(element, role)
+      ? ""
+      : computeAccessibleName(element, run, at.styleCache, at.inReference);
+  }
   const entered = !PAGE_STATE_VALUE_ROLES.has(role);
   return (run.redactInput && entered) || isSensitiveField(element)
     ? withhold(run)
@@ -617,20 +634,18 @@ function embeddedControlText(
 /**
  * What a name-from-content barrier lends the walk it sits in
  * ({@link isNameBarrierElement}, with the role in hand): a control the user
- * adjusts its value ({@link embeddedControlText}), unless it is the control
- * being named (see `NameRun.named`), and any other barrier nothing. `null`
- * when `element` is no barrier.
+ * adjusts its value or name ({@link embeddedControlText}), unless it is the
+ * control being named (see `NameRun.named`), and any other barrier nothing.
+ * `null` when `element` is no barrier.
  */
 function barrierText(
   element: Element,
   role: string,
   run: NameRun,
-  styleCache: StyleCache | null | undefined,
+  at: ControlRead,
 ): string | null {
   const embedded =
-    element === run.named
-      ? null
-      : embeddedControlText(element, role, run, styleCache);
+    element === run.named ? null : embeddedControlText(element, role, run, at);
   if (embedded !== null) return embedded;
   return NAME_BARRIER_ROLES.has(role) && !isImplicitDetailsGroup(element)
     ? ""
@@ -651,6 +666,13 @@ function barrierText(
  * is an image, since accname §2F reads the content of any element a reference
  * names: Chromium reads `<span id="t" role="img">Revenue up</span>` as
  * "Revenue up", as a label or a description.
+ *
+ * The rest of the target's own name comes with it, as Chromium computes it:
+ * a control the user adjusts lends its value, else its name
+ * ({@link embeddedControlText}), and anything else its `<label>`s, a button
+ * input's value, its content and last its `title` (AccName 2I), so a button
+ * over `<label for="c">Agree</label><input type="checkbox" id="c">` is
+ * "Agree", and over `<span id="t" title="Help"></span>` "Help".
  */
 function referenceText(
   target: Element,
@@ -659,14 +681,21 @@ function referenceText(
 ): string {
   const walk: NameWalk = referenceWalk(target, styleCache);
   const role = getImplicitRole(target);
-  // A control's value comes before its aria-label (AccName 2C precedes 2D):
-  // Chromium names `<button aria-labelledby="i">` over `<input id="i"
-  // aria-label="Field" value="typed">` "typed". An empty one gives way to it.
-  const embedded = embeddedControlText(target, role, run, styleCache);
+  const control = embeddedControlText(target, role, run, {
+    ...walk,
+    styleCache,
+  });
+  if (control !== null) return trimAscii(control);
+  const tag = safeTagName(target);
+  // Trimmed before the title is weighed: content that is only whitespace, or
+  // an empty box's spacing, names nothing, so `<span title="Help"> </span>`
+  // still lends "Help".
   return trimAscii(
-    embedded ||
-      textAlternative(target, role, run, styleCache, walk) ||
-      (embedded ?? getAccessibleTextContent(target, run, styleCache, walk)),
+    textAlternative(target, role, run, styleCache, walk) ||
+      labelsText(target, tag, run, styleCache) ||
+      host.inputValueName(target, tag) ||
+      trimAscii(getAccessibleTextContent(target, run, styleCache, walk)) ||
+      host.tooltipText(target, tag),
   );
 }
 
@@ -747,6 +776,7 @@ function getAccessibleTextContent(
   walk: NameWalk = {},
 ): string {
   const textVisible = rootTextVisible(walk, element, styleCache);
+  const read: ControlRead = { ...walk, styleCache };
   let text = "";
   for (const child of flatChildNodes(element)) {
     const type = safeNodeType(child);
@@ -834,7 +864,7 @@ function getAccessibleTextContent(
         }
         // A barrier's box keeps its neighbours apart even when it lends no
         // text: Chromium reads `<h1>Save<input>now</h1>` as "Save now".
-        const barrier = barrierText(childEl, role, run, styleCache);
+        const barrier = barrierText(childEl, role, run, read);
         if (barrier !== null) {
           text += spaced ? ` ${barrier} ` : barrier;
           continue;
@@ -912,6 +942,65 @@ function accessibleName(
   return run.withheld ? REDACTED_VALUE : name;
 }
 
+/**
+ * The text a form control's `<label>`s give it (step 4 of a name): HTML-AAM
+ * joins every associated label in DOM order with spaces. Each label is read
+ * once per computation, like any element under the visit-once guard: a
+ * heading that holds a checkbox and its label is "Agree" in Chromium, not
+ * "Agree Agree". "" for an element no label can name.
+ */
+function labelsText(
+  element: Element,
+  tag: string,
+  run: NameRun,
+  styleCache: StyleCache | null | undefined,
+): string {
+  if (!host.LABELED_TAGS.has(tag)) return "";
+  const id = safeGetAttribute(element, "id");
+  // Every `<label for>` in the control's tree, from the per-extraction index
+  // rather than a query that rescans from the top for every control.
+  const { labels, wrappingLabel } = associatedLabels(
+    element,
+    (id &&
+      scopeReferenceIndex(styleCache, idScope(element)).labelFor.get(id)) ||
+      [],
+  );
+  const labelParts: string[] = [];
+  for (const label of labels) {
+    if (run.visited.has(label)) continue;
+    run.visited.add(label);
+    const text =
+      label === wrappingLabel
+        ? wrappingLabelText(label, element, styleCache, {
+            readText: (node) => nameText(node, run),
+            readEmbedded: (child) =>
+              embeddedControlText(child, getImplicitRole(child), run, {
+                styleCache,
+              }),
+            readChild: (child, textVisible) =>
+              // Each child's own alternative first, as in any name walk:
+              // Chromium names `<label><img alt="Email"> <input></label>`
+              // "Email". A `visibility: hidden` child lends none.
+              (textVisible === false
+                ? null
+                : textAlternative(
+                    child,
+                    getImplicitRole(child),
+                    run,
+                    styleCache,
+                    {},
+                  )) ??
+              getAccessibleTextContent(child, run, styleCache, {
+                textVisible,
+              }),
+            onUnreadable: warnSkippedElement,
+          })
+        : trimAscii(getAccessibleTextContent(label, run, styleCache));
+    if (text) labelParts.push(text);
+  }
+  return labelParts.join(" ");
+}
+
 function computeRawAccessibleName(
   element: Element,
   run: NameRun,
@@ -974,58 +1063,13 @@ function computeRawAccessibleName(
     if (title) return title;
   }
 
-  // 4. Label elements for form controls. HTML-AAM joins every associated label
-  //    in DOM order with spaces. Each label is read once per computation, like
-  //    any element under the visit-once guard: a heading that holds a checkbox
-  //    and its label is "Agree" in Chromium, not "Agree Agree".
-  if (host.LABELED_TAGS.has(tag)) {
-    const id = safeGetAttribute(element, "id");
-    // Every `<label for>` in the control's tree, from the per-extraction index
-    // rather than a query that rescans from the top for every control.
-    const { labels, wrappingLabel } = associatedLabels(
-      element,
-      (id &&
-        scopeReferenceIndex(styleCache, idScope(element)).labelFor.get(id)) ||
-        [],
-    );
-    const labelParts: string[] = [];
-    for (const label of labels) {
-      if (run.visited.has(label)) continue;
-      run.visited.add(label);
-      const text =
-        label === wrappingLabel
-          ? wrappingLabelText(label, element, styleCache, {
-              readText: (node) => nameText(node, run),
-              readEmbedded: (child) =>
-                embeddedControlText(
-                  child,
-                  getImplicitRole(child),
-                  run,
-                  styleCache,
-                ),
-              readChild: (child, textVisible) =>
-                // Each child's own alternative first, as in any name walk:
-                // Chromium names `<label><img alt="Email"> <input></label>`
-                // "Email". A `visibility: hidden` child lends none.
-                (textVisible === false
-                  ? null
-                  : textAlternative(
-                      child,
-                      getImplicitRole(child),
-                      run,
-                      styleCache,
-                      {},
-                    )) ??
-                getAccessibleTextContent(child, run, styleCache, {
-                  textVisible,
-                }),
-              onUnreadable: warnSkippedElement,
-            })
-          : trimAscii(getAccessibleTextContent(label, run, styleCache));
-      if (text) labelParts.push(text);
-    }
-    if (labelParts.length) return labelParts.join(" ");
-  }
+  // 4. Label elements for form controls (see labelsText), then 5. a button
+  //    input's value or alt (see inputValueName). Steps 4a–4c name other
+  //    elements than these, so this order is theirs too.
+  const hostName =
+    labelsText(element, tag, run, styleCache) ||
+    host.inputValueName(element, tag);
+  if (hostName) return hostName;
 
   // 4a. Fieldset and details — accessible name comes from the direct <legend>
   //     or <summary> child.
@@ -1055,28 +1099,6 @@ function computeRawAccessibleName(
     }
   }
 
-  // 5. Button-like inputs (submit/reset/button) take their name from the
-  //    `value` attribute (HTML-AAM). For any other input the value is the
-  //    user's DATA, not a name — an unlabeled text field must read as unnamed
-  //    rather than echo what was typed, and an unlabeled checkbox must not
-  //    inherit its default value "on". That matches what assistive tech
-  //    announces and stops @real-a11y-dev/testing from passing genuinely
-  //    unlabeled controls. (The sensitive-value guard is kept for defense in
-  //    depth; a password field is never button-like, so it no longer reaches
-  //    this branch at all.)
-  if (tag === "input") {
-    const input = element as HTMLInputElement;
-    const type = input.type;
-    if (
-      (type === "submit" || type === "reset" || type === "button") &&
-      input.value &&
-      !isSensitiveField(input)
-    )
-      return input.value;
-    const named = buttonInputName(input, "beforeTitle");
-    if (named) return named;
-  }
-
   // 8. Recursive text content — ONLY for elements whose ARIA role supports
   //    "name from content" (headings, links, buttons, checkboxes, table cells,
   //    options — see NAMES_FROM_CONTENT_ROLES). NOT for generic containers
@@ -1099,27 +1121,9 @@ function computeRawAccessibleName(
   // would be beside that name.
   if (run.withheld) return "";
 
-  // 6. title attribute — the Tooltip step is last (AccName 1.2 §4.3.2 2I:
-  //    "only if nothing else, including subtree content, has provided
-  //    results"), so it sits after name-from-content. HTML-AAM orders title
-  //    before placeholder.
-  const title = safeGetAttribute(element, "title");
-  if (title) {
-    if (source) source.fromTitle = true;
-    return title;
-  }
-
-  // 6a. The image input's default name sits after `title` (HTML-AAM §4.1.3).
-  const fallback = buttonInputName(element, "afterTitle");
-  if (fallback) return fallback;
-
-  // 7. placeholder — a text field's last-resort name, after title. A
-  //    <textarea>'s too: Chromium names `<textarea placeholder="Your reply">`
-  //    "Your reply".
-  if (tag === "input" || tag === "textarea") {
-    const placeholder = host.placeholderName(element);
-    if (placeholder) return placeholder;
-  }
+  // 6, 6a, 7. title, an image input's default, placeholder (see tooltipText).
+  const tooltip = host.tooltipText(element, tag, source);
+  if (tooltip) return tooltip;
 
   // Media elements never name from content: their light-DOM children are
   // unrendered fallback ("Sorry, your browser doesn't support…") plus

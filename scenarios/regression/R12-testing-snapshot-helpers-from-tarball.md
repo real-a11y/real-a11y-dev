@@ -6,7 +6,7 @@ area: Testing
 type: Automated
 priority: P0
 status: Active
-validFrom: "testing ≥ 0.1.0-beta.11 (installed from the packed tarball, not a workspace link). Step 10 (values): testing ≥ 0.1.0-beta.17. Step 10b (a sensitive textarea's text): testing ≥ 0.1.0-beta.18"
+validFrom: "testing ≥ 0.1.0-beta.11 (installed from the packed tarball, not a workspace link). Step 10 (values): testing ≥ 0.1.0-beta.17. Step 10b (a sensitive textarea's text): testing ≥ 0.1.0-beta.18. Step 10b's `[redacted]` input name: testing ≥ 0.1.0-beta.23"
 validUntil: ""
 expected: "all three produce stable deterministic strings; redact masks EVERY occurrence; [focused] appears only when something is focused; values are absent unless asked, and a sensitive field's value never prints — a password's, or a sensitive textarea's markup text"
 twin: D5
@@ -59,9 +59,13 @@ Packaging faults only show from the tarball.
   and the password prints `= "[redacted]"`, with its real value nowhere in the
   string
 - **10b** — `OTP-SENTINEL` appears in none of the three strings. The input it
-  labels prints as a bare `textbox`, and with `values: true` the textarea prints
-  `= "[redacted]"`. testing 0.1.0-beta.17 and earlier printed
-  `textbox "OTP-SENTINEL"` in the default snapshot and the tab sequence alike
+  labels prints as `textbox "[redacted]"`: Chromium names it after the
+  textarea's text, and a name a sensitive value reaches is withheld whole, as
+  in the native tree. With `values: true` the textarea prints
+  `= "[redacted]"`. testing 0.1.0-beta.18 to 0.1.0-beta.22 printed the input as
+  a bare `textbox`, which is the old behaviour, not a fail. testing
+  0.1.0-beta.17 and earlier printed `textbox "OTP-SENTINEL"` in the default
+  snapshot and the tab sequence alike
 
 ## Why this exists
 
