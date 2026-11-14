@@ -3,6 +3,7 @@ import { collapseAscii, trimAscii } from "../utils/ascii-whitespace.js";
 import { ElementRefMap, ELEMENT_REF_MAP_SHAPE } from "../utils/element-ref.js";
 import { getNodeId } from "../utils/id-generator.js";
 import { realmSingleton } from "../utils/realm-singleton.js";
+import { treeSource } from "../utils/tree-source.js";
 
 import { withAriaOwnerIndex } from "./aria-owner.js";
 import {
@@ -42,6 +43,7 @@ import {
 import { isActuallyDisabled, isFocusable } from "./focusability.js";
 import * as host from "./host-names.js";
 import { buttonInputName } from "./input-names.js";
+import { getKeyAttributes } from "./key-attributes.js";
 import { associatedLabels, wrappingLabelText } from "./label-text.js";
 import { hasCaptionsTrack } from "./media-tracks.js";
 export { isTextVisible } from "./name-spacing.js";
@@ -71,9 +73,23 @@ import {
   isSubtreeHidden,
   type StyleCache,
 } from "./role-map.js";
+import {
+  isSensitiveField,
+  REDACTED_VALUE,
+  VALUELESS_INPUT_TYPES,
+} from "./sensitivity.js";
 import { warnSkippedElement } from "./skipped-element.js";
 import { isSrOnly } from "./sr-only.js";
+import {
+  nameText,
+  newNameRun,
+  withholdStates,
+  type NameRun,
+  type RedactInputOption,
+} from "./strict-mode.js";
+import { isOwnVisibilityHidden } from "./visibility.js";
 
+export { KEY_ATTRIBUTES } from "./key-attributes.js";
 export {
   OVERLAY_CANDIDATE_SELECTOR,
   containsOverlaySignal,
@@ -84,6 +100,7 @@ export {
 } from "./overlay-scope.js";
 
 export { PANEL_HOST_ATTRIBUTE } from "./overlay-reach.js";
+export type { RedactInputOption } from "./strict-mode.js";
 
 /** Tags to skip entirely during extraction */
 // track/source are media/picture metadata: HTML-AAM gives them no role and
@@ -291,16 +308,10 @@ function isVisuallyHidden(
   // An area is drawn by its image, whose visibility isSubtreeHidden read.
   if (element.localName === "area") return false;
 
-  if (computed) {
-    if (computed.visibility === "hidden") return true;
-    // NOTE: opacity:0 is intentionally NOT checked here.
-    // Custom form controls (radio, checkbox, file inputs) routinely use
-    // opacity:0 to hide the native widget behind a custom visual while
-    // keeping it interactive. opacity:0 is also not a WAI-ARIA hiding
-    // mechanism — AT still reads opacity-0 elements.
-  } else if ((element as HTMLElement).style?.visibility === "hidden") {
-    return true;
-  }
+  // NOTE: opacity:0 is intentionally NOT checked here. Custom form controls
+  // routinely use it to hide the native widget behind a custom visual while
+  // keeping it interactive, and AT still reads opacity-0 elements.
+  if (isOwnVisibilityHidden(element, computed)) return true;
 
   // sr-only pattern: visually hidden but intentionally accessible to AT
   if (isSrOnly(element, computed)) return true;
@@ -311,28 +322,37 @@ function isVisuallyHidden(
 /**
  * Compute the accessible description for an element.
  * Resolves aria-describedby IDs to text and falls back to aria-description.
+ *
+ * A description that read anything it may not show is dropped whole, with
+ * no fallback to `aria-description` or `title`, as the native producer drops
+ * one: see {@link NameRun.withheld}.
  */
 function computeAccessibleDescription(
   element: Element,
-  styleCache?: StyleCache | null,
+  styleCache: StyleCache,
+  redactInput: boolean,
 ): string {
   // 1. aria-describedby — resolve referenced element text
   const describedBy = safeGetAttribute(element, "aria-describedby");
   if (describedBy) {
     const doc = idScope(element);
+    let withheld = false;
     const texts = describedBy
       .split(/\s+/)
       .filter(Boolean)
       .map((id) => {
         const target = safeGetElementById(doc, id);
+        if (!target) return undefined;
         // The same borrowing as aria-labelledby: Chromium describes
         // `<button aria-describedby="d">` over `<span id="d"><img alt="Warning">
         // irreversible</span>` as "Warning irreversible".
-        return target
-          ? referenceText(target, new Set(), styleCache)
-          : undefined;
+        const run = newNameRun(redactInput);
+        const text = referenceText(target, run, styleCache);
+        if (run.withheld) withheld = true;
+        return text;
       })
       .filter((t): t is string => !!t);
+    if (withheld) return "";
     // Whitespace-normalized like a name: ASCII whitespace only, so a U+00A0
     // survives as Chromium and the WPT text-node cases keep it. The walk pads
     // any child with a box of its own so its text never glues to a neighbour;
@@ -348,7 +368,13 @@ function computeAccessibleDescription(
   const title = safeGetAttribute(element, "title");
   const source: NameSource = {};
   if (title)
-    computeAccessibleName(element, new Set(), styleCache, false, source);
+    computeAccessibleName(
+      element,
+      newNameRun(redactInput),
+      styleCache,
+      false,
+      source,
+    );
   return title && !source.fromTitle ? collapseAscii(title) : "";
 }
 
@@ -523,22 +549,17 @@ interface NameSource {
 function textAlternative(
   element: Element,
   role: string,
-  visited: Set<Element>,
+  run: NameRun,
   styleCache: StyleCache | null | undefined,
   walk: NameWalk,
 ): string | null {
   if (role === "img") {
-    return computeAccessibleName(
-      element,
-      visited,
-      styleCache,
-      walk.inReference,
-    );
+    return computeAccessibleName(element, run, styleCache, walk.inReference);
   }
-  if (visited.has(element) && !walk.inReference) return "";
-  visited.add(element);
+  if (run.visited.has(element) && !walk.inReference) return "";
+  run.visited.add(element);
   if (!walk.inReference) {
-    const labelledBy = labelledByText(element, visited, styleCache);
+    const labelledBy = labelledByText(element, run, styleCache);
     if (labelledBy) return labelledBy;
   }
   return trimAscii(safeGetAttribute(element, "aria-label") ?? "") || null;
@@ -561,25 +582,20 @@ function textAlternative(
  */
 function referenceText(
   target: Element,
-  visited: Set<Element>,
+  run: NameRun,
   styleCache?: StyleCache | null,
 ): string {
   const walk: NameWalk = referenceWalk(target, styleCache);
   return trimAscii(
-    textAlternative(
-      target,
-      getImplicitRole(target),
-      visited,
-      styleCache,
-      walk,
-    ) || getAccessibleTextContent(target, visited, styleCache, walk),
+    textAlternative(target, getImplicitRole(target), run, styleCache, walk) ||
+      getAccessibleTextContent(target, run, styleCache, walk),
   );
 }
 
 /** The names of every element `element`'s aria-labelledby resolves to. */
 function labelledByText(
   element: Element,
-  visited: Set<Element>,
+  run: NameRun,
   styleCache?: StyleCache | null,
 ): string {
   const labelledBy = safeGetAttribute(element, "aria-labelledby");
@@ -589,7 +605,7 @@ function labelledByText(
     .split(/\s+/)
     .map((id) => {
       const target = safeGetElementById(doc, id);
-      return target ? referenceText(target, visited, styleCache) : "";
+      return target ? referenceText(target, run, styleCache) : "";
     })
     .filter(Boolean)
     .join(" ");
@@ -603,15 +619,13 @@ function labelledByText(
  */
 function svgTitle(
   element: Element,
-  visited: Set<Element>,
+  run: NameRun,
   styleCache: StyleCache | null | undefined,
   walk: NameWalk,
 ): string {
   for (const child of element.children) {
     if (safeTagName(child) === "title") {
-      return trimAscii(
-        getAccessibleTextContent(child, visited, styleCache, walk),
-      );
+      return trimAscii(getAccessibleTextContent(child, run, styleCache, walk));
     }
   }
   return "";
@@ -650,7 +664,7 @@ function svgTitle(
  */
 function getAccessibleTextContent(
   element: Element,
-  visited: Set<Element>,
+  run: NameRun,
   styleCache?: StyleCache | null,
   walk: NameWalk = {},
 ): string {
@@ -659,7 +673,7 @@ function getAccessibleTextContent(
   for (const child of flatChildNodes(element)) {
     const type = safeNodeType(child);
     if (type === Node.TEXT_NODE) {
-      if (textVisible !== false) text += child.textContent || "";
+      if (textVisible !== false) text += nameText(child, run);
     } else if (type === Node.ELEMENT_NODE) {
       const childEl = child as Element;
       // A child that cannot be read costs its own text, not the host's name.
@@ -707,7 +721,7 @@ function getAccessibleTextContent(
         const childWalk = childTextWalk({ ...walk, textVisible }, childStyle);
         if (childWalk.textVisible === false) {
           text += hiddenChildText(childEl, spaced, () =>
-            getAccessibleTextContent(childEl, visited, styleCache, childWalk),
+            getAccessibleTextContent(childEl, run, styleCache, childWalk),
           );
           continue;
         }
@@ -723,7 +737,7 @@ function getAccessibleTextContent(
           const source: NameSource = {};
           const named = computeAccessibleName(
             childEl,
-            visited,
+            run,
             styleCache,
             walk.inReference,
             source,
@@ -735,7 +749,7 @@ function getAccessibleTextContent(
           const name =
             named ||
             (isEditingHost(childEl)
-              ? getAccessibleTextContent(childEl, visited, styleCache, walk)
+              ? getAccessibleTextContent(childEl, run, styleCache, walk)
               : "");
           text += spaced || (named && !source.fromContent) ? ` ${name} ` : name;
           continue;
@@ -749,7 +763,7 @@ function getAccessibleTextContent(
         }
         const alternative = walk.textOnly
           ? null
-          : textAlternative(childEl, role, visited, styleCache, walk);
+          : textAlternative(childEl, role, run, styleCache, walk);
         if (alternative !== null) {
           // Spaced whatever the box: Chromium reads `<a><img alt="Help">center</a>`
           // as "Help center" and `<a><span aria-label="Docs">D</span>site</a>`
@@ -759,7 +773,7 @@ function getAccessibleTextContent(
         }
         const inner = getAccessibleTextContent(
           childEl,
-          visited,
+          run,
           styleCache,
           childWalk,
         );
@@ -790,19 +804,34 @@ function getAccessibleTextContent(
  */
 function computeAccessibleName(
   element: Element,
-  visited: Set<Element> = new Set(),
+  run: NameRun,
   styleCache?: StyleCache | null,
   inReference: boolean | "hidden" = false,
   source?: NameSource,
 ): string {
   return collapseAscii(
-    computeRawAccessibleName(element, visited, styleCache, inReference, source),
+    computeRawAccessibleName(element, run, styleCache, inReference, source),
   );
+}
+
+/**
+ * The name a node records: a run of its own, read as
+ * {@link REDACTED_VALUE} whole when anything in it was withheld (see
+ * {@link NameRun.withheld}).
+ */
+function accessibleName(
+  element: Element,
+  styleCache: StyleCache,
+  redactInput: boolean,
+): string {
+  const run = newNameRun(redactInput);
+  const name = computeAccessibleName(element, run, styleCache);
+  return run.withheld ? REDACTED_VALUE : name;
 }
 
 function computeRawAccessibleName(
   element: Element,
-  visited: Set<Element>,
+  run: NameRun,
   styleCache: StyleCache | null | undefined,
   inReference: boolean | "hidden",
   source: NameSource | undefined,
@@ -819,15 +848,15 @@ function computeRawAccessibleName(
   // That cannot cycle. A traversal follows no aria-labelledby (step 1), and
   // the only way out of the subtree it walks is a control's <label> (step 4),
   // whose content is read with this guard on.
-  if (visited.has(element) && !inReference) return "";
-  visited.add(element);
+  if (run.visited.has(element) && !inReference) return "";
+  run.visited.add(element);
 
   // 1. aria-labelledby is resolved before aria-label (accname-1.2 §2B
   //    precedes §2D): concatenate the accessible names of every referenced
   //    IDREF, in order. The visit-once guard above breaks reference cycles.
   //    Not inside another reference traversal, where it is ignored (§2B).
   if (!inReference) {
-    const labelledBy = labelledByText(element, visited, styleCache);
+    const labelledBy = labelledByText(element, run, styleCache);
     if (labelledBy) return labelledBy;
   }
 
@@ -858,7 +887,7 @@ function computeRawAccessibleName(
   //     aria-label: Chromium names `<svg><title>Close</title></svg>` "Close",
   //     and `<svg aria-label="Shut"><title>Close</title></svg>` "Shut".
   if (tag === "svg") {
-    const title = svgTitle(element, visited, styleCache, { inReference });
+    const title = svgTitle(element, run, styleCache, { inReference });
     if (title) return title;
   }
 
@@ -878,11 +907,12 @@ function computeRawAccessibleName(
     );
     const labelParts: string[] = [];
     for (const label of labels) {
-      if (visited.has(label)) continue;
-      visited.add(label);
+      if (run.visited.has(label)) continue;
+      run.visited.add(label);
       const text =
         label === wrappingLabel
           ? wrappingLabelText(label, element, styleCache, {
+              readText: (node) => nameText(node, run),
               readChild: (child, textVisible) =>
                 // Each child's own alternative first, as in any name walk:
                 // Chromium names `<label><img alt="Email"> <input></label>`
@@ -892,16 +922,16 @@ function computeRawAccessibleName(
                   : textAlternative(
                       child,
                       getImplicitRole(child),
-                      visited,
+                      run,
                       styleCache,
                       {},
                     )) ??
-                getAccessibleTextContent(child, visited, styleCache, {
+                getAccessibleTextContent(child, run, styleCache, {
                   textVisible,
                 }),
               onUnreadable: warnSkippedElement,
             })
-          : trimAscii(getAccessibleTextContent(label, visited, styleCache));
+          : trimAscii(getAccessibleTextContent(label, run, styleCache));
       if (text) labelParts.push(text);
     }
     if (labelParts.length) return labelParts.join(" ");
@@ -913,7 +943,7 @@ function computeRawAccessibleName(
     tag === "fieldset" ? "legend" : tag === "details" ? "summary" : null;
   const nameEl = nameChild && element.querySelector(`:scope > ${nameChild}`);
   if (nameEl)
-    return trimAscii(getAccessibleTextContent(nameEl, visited, styleCache));
+    return trimAscii(getAccessibleTextContent(nameEl, run, styleCache));
 
   // 4b. The `label` attribute names an <option> or <optgroup> (HTML-AAM).
   const attrName = host.labelAttributeName(element, tag);
@@ -929,9 +959,7 @@ function computeRawAccessibleName(
         isAriaHiddenValue(safeGetAttribute(caption, "aria-hidden")) ||
         isSubtreeHidden(caption, getCachedComputedStyle(caption, styleCache));
       if (!hidden) {
-        const t = trimAscii(
-          getAccessibleTextContent(caption, visited, styleCache),
-        );
+        const t = trimAscii(getAccessibleTextContent(caption, run, styleCache));
         if (t) return t;
       }
     }
@@ -965,7 +993,7 @@ function computeRawAccessibleName(
   //    (div, span, p) which would grab huge text blobs.
   if (!MEDIA_TAGS.has(tag) && isNameFromContentHost(element)) {
     const fullText = trimAscii(
-      getAccessibleTextContent(element, visited, styleCache, {
+      getAccessibleTextContent(element, run, styleCache, {
         inReference,
         textOnly: tag === "option",
       }),
@@ -975,6 +1003,11 @@ function computeRawAccessibleName(
       return fullText;
     }
   }
+
+  // Strict mode withheld what a step above read: the name reads `[redacted]`
+  // whole, so `title` is no fallback. Left unread, it stays the description it
+  // would be beside that name.
+  if (run.withheld) return "";
 
   // 6. title attribute — the Tooltip step is last (AccName 1.2 §4.3.2 2I:
   //    "only if nothing else, including subtree content, has provided
@@ -1015,9 +1048,17 @@ function computeRawAccessibleName(
   //    isNameFromContentHost, which gates step 8 the same way).
   const role = getImplicitRole(element);
   if (AUTHOR_NAMED_ROLES.has(role) || isEditingHost(element)) return "";
+  // In strict mode, text a user typed is this element's own text alone: the
+  // native producer blanks such text runs, so a typed paragraph reads unnamed
+  // there, and here. Read through a run of its own, so the element's name
+  // isn't `[redacted]`: each text node is asked, which also catches editor
+  // text slotted into a shadow tree, where the element itself isn't editable.
+  const own = run.redactInput ? newNameRun(true) : null;
+  const read = own ? (node: Node) => nameText(node, own) : textOf;
   const ownText = readsTextRuns(role)
-    ? trimAscii(getOwnText(element, styleCache))
-    : getDirectTextContent(element);
+    ? trimAscii(getOwnText(element, styleCache, read))
+    : getDirectTextContent(element, read);
+  if (own?.withheld) return "";
   if (ownText) {
     if (source) source.fromContent = true;
     return ownText;
@@ -1050,12 +1091,13 @@ function readsTextRuns(role: string): boolean {
 function getOwnText(
   element: Element,
   styleCache: StyleCache | null | undefined,
+  readText: (node: Node) => string,
 ): string {
   let text = "";
   for (const child of flatChildNodes(element)) {
     const type = safeNodeType(child);
     if (type === Node.TEXT_NODE) {
-      text += child.textContent || "";
+      text += readText(child);
     } else if (type === Node.ELEMENT_NODE) {
       const childEl = child as Element;
       // A child that cannot be read costs its own text, not the host's name —
@@ -1068,7 +1110,7 @@ function getOwnText(
         if (safeTagName(childEl) === "br") {
           text += " ";
         } else if (isTextRun(childEl, style)) {
-          text += getOwnText(childEl, styleCache);
+          text += getOwnText(childEl, styleCache, readText);
         }
       } catch (error) {
         warnSkippedElement(childEl, error);
@@ -1203,12 +1245,18 @@ export function textRunHost(element: Element): Element | null {
     : null;
 }
 
+/** A text node's text, as the default mode reads it into a name. */
+const textOf = (node: Node): string => node.textContent || "";
+
 /** Get direct text content of an element, excluding child element text */
-function getDirectTextContent(element: Element): string {
+function getDirectTextContent(
+  element: Element,
+  readText: (node: Node) => string = textOf,
+): string {
   let text = "";
   for (const child of flatChildNodes(element)) {
     if (safeNodeType(child) === Node.TEXT_NODE) {
-      text += child.textContent || "";
+      text += readText(child);
     }
   }
   return trimAscii(text);
@@ -1480,84 +1528,6 @@ function getFieldText(
 }
 
 /**
- * Autocomplete field names (WHATWG autofill tokens) that identify a control
- * holding a secret. Matched against each space-separated token of an
- * element's `autocomplete` value.
- *
- * This list IS the sensitivity policy (ADR-0001): together with
- * `type="password"` it is the whole of what every producer withholds. It grows
- * only by a later decision. Exported so a copy that cannot import it — the
- * extension's in-page `pageReadValue`, which runs as source text over CDP —
- * can be pinned to it by a parity test.
- */
-export const SENSITIVE_AUTOCOMPLETE_TOKENS: ReadonlySet<string> = new Set([
-  "current-password",
-  "new-password",
-  "one-time-code",
-  "cc-number",
-  "cc-csc",
-  "cc-exp",
-  "cc-exp-month",
-  "cc-exp-year",
-]);
-
-/** Substituted for a sensitive field's value, wherever a value is shown. */
-export const REDACTED_VALUE = "[redacted]";
-
-/**
- * The sensitivity policy over a field's markup alone — its tag name plus its
- * `type` and `autocomplete` attributes — for callers with no live `Element`.
- * The native producer holds exactly this: CDP's `DOM.getDocument` attributes,
- * never a field's value. {@link isSensitiveField} is this, read off an element.
- */
-export function isSensitiveFieldAttributes(
-  tagName: string,
-  attributes: { type?: string | null; autocomplete?: string | null },
-): boolean {
-  const tag = tagName.toLowerCase();
-  if (tag !== "input" && tag !== "textarea" && tag !== "select") {
-    return false;
-  }
-  if (
-    tag === "input" &&
-    (attributes.type ?? "").trim().toLowerCase() === "password"
-  ) {
-    return true;
-  }
-  for (const token of (attributes.autocomplete ?? "")
-    .toLowerCase()
-    .split(/\s+/)) {
-    if (SENSITIVE_AUTOCOMPLETE_TOKENS.has(token)) return true;
-  }
-  return false;
-}
-
-/**
- * True if `element` is a form field whose live value must never be captured
- * into the semantic tree — a password `<input>`, or any input/textarea/select
- * whose `autocomplete` names a credential or payment field.
- *
- * The extracted tree flows into serializer snapshots (committed to git and
- * CI), the testing package's assertions, and the Chrome extension's message
- * channel. A secret typed into such a field must not ride along, so callers
- * that read `.value` — {@link extractDomTree} via `getKeyAttributes` and
- * `getAnnouncedValue`, the accessible-name fallback, and downstream consumers
- * like the extension's field-state read — gate on this predicate.
- */
-export function isSensitiveField(element: Element): boolean {
-  return isSensitiveFieldAttributes(safeTagName(element), {
-    // The `type` PROPERTY, not the attribute: it is what the browser actually
-    // renders, normalized (an unknown or missing type reads as "text").
-    // Tag-checked rather than `instanceof`, which fails across realms.
-    type:
-      safeTagName(element) === "input"
-        ? (element as HTMLInputElement).type
-        : safeGetAttribute(element, "type"),
-    autocomplete: safeGetAttribute(element, "autocomplete"),
-  });
-}
-
-/**
  * Roles announced by position in a range: `aria-valuetext`, else `valuenow`.
  * Exported with {@link STATE_ONLY_ROLES} and {@link finishAnnouncedValue} so
  * the native producer applies the same rules to Chromium's value — one table,
@@ -1585,17 +1555,6 @@ const TEXT_VALUE_ROLES: ReadonlySet<string> = new Set([
   "textbox",
   "searchbox",
   "combobox",
-]);
-
-/** `<input>` types with no announced value: a state, a name, or nothing. */
-export const VALUELESS_INPUT_TYPES: ReadonlySet<string> = new Set([
-  "checkbox",
-  "radio",
-  "button",
-  "submit",
-  "reset",
-  "image",
-  "hidden",
 ]);
 
 /** The cap an announced value is cut to, with `…` — the same as text previews. */
@@ -1762,91 +1721,6 @@ export function finishAnnouncedValue(
   return collapsed.length > VALUE_MAX
     ? collapsed.slice(0, VALUE_MAX - 1) + "…"
     : collapsed;
-}
-
-/**
- * Attributes recorded verbatim on every node's `dom.attributes`.
- *
- * Exported because `DomObserver` builds its `attributeFilter` from this list:
- * an attribute the extractor reads but the observer doesn't watch produces a
- * node that silently goes stale, since an in-place flip yields no other
- * mutation to fall back on.
- */
-export const KEY_ATTRIBUTES = [
-  "id",
-  "class",
-  "href",
-  "src",
-  "type",
-  "name",
-  "role",
-  "aria-label",
-  "aria-expanded",
-  "aria-hidden",
-  "aria-checked",
-  "aria-disabled",
-  "aria-required",
-  "aria-controls",
-  "aria-haspopup",
-  // Range values. Required props on slider/scrollbar/meter/progressbar, and
-  // carried by nothing else: `A11yInfo.properties` is `{level, captions}`, so
-  // without these an authored slider could not be reported as satisfied no
-  // matter what the author wrote.
-  "aria-valuenow",
-  "aria-valuemin",
-  "aria-valuemax",
-  "alt",
-  "title",
-  "for",
-  "action",
-  "method",
-  "placeholder",
-  "tabindex",
-  // A <select>'s display size: more than one row makes it a listbox, with no
-  // expanded state. The testing matcher reads them back to tell a redundant
-  // authored role, and the observer must see them flip, or a live tree keeps
-  // the old role and state.
-  "size",
-  "multiple",
-  // Media a11y signals (boolean attributes render as "")
-  "controls",
-  "autoplay",
-  "muted",
-  "loop",
-  "poster",
-];
-
-/** Get key attributes for display */
-function getKeyAttributes(element: Element): Record<string, string> {
-  const attrs: Record<string, string> = {};
-
-  for (const name of KEY_ATTRIBUTES) {
-    const val = safeGetAttribute(element, name);
-    if (val !== null) {
-      attrs[name] = val;
-    }
-  }
-
-  // Read current value from DOM property (not HTML attribute) for form controls
-  // getAttribute("value") returns the initial value; .value reflects user input
-  const tag = safeTagName(element);
-  if (tag === "input" || tag === "textarea" || tag === "select") {
-    // Guarded: a page can make the `.value` getter throw, and this runs inside
-    // `buildNode`'s one try — an unguarded read cost the page the whole node.
-    let currentValue = "";
-    try {
-      currentValue = (element as HTMLInputElement).value;
-    } catch {
-      // No readable value: record none.
-    }
-    if (currentValue) {
-      attrs["value"] = isSensitiveField(element)
-        ? REDACTED_VALUE
-        : currentValue;
-    }
-  }
-
-  return attrs;
 }
 
 /**
@@ -2289,7 +2163,7 @@ function focusedNodeId(
  * Options for {@link extractDomTree}. Primarily for internal incremental
  * extraction; the public single-argument form is unchanged.
  */
-export interface ExtractDomTreeOptions {
+export interface ExtractDomTreeOptions extends RedactInputOption {
   /** Existing nodes map to update in-place. When provided, extraction is partial. */
   nodes?: Map<string, SemanticNode>;
   /** Parent id for the root of this partial extraction. */
@@ -2298,6 +2172,13 @@ export interface ExtractDomTreeOptions {
   baseDepth?: number;
   /** Whether to compute the focused element id. Default true for full extractions. */
   includeFocused?: boolean;
+}
+
+/** What one extraction carries to every node it builds. */
+interface Extraction {
+  /** Fresh per extraction: styles may change between two of them. */
+  readonly styleCache: StyleCache;
+  readonly redactInput: boolean;
 }
 
 /**
@@ -2327,7 +2208,7 @@ function buildNode(
   element: Element,
   parentId: string | null,
   depth: number,
-  styleCache: StyleCache,
+  { styleCache, redactInput }: Extraction,
 ): { id: string; node: SemanticNode } | null {
   try {
     const tag = safeTagName(element);
@@ -2360,11 +2241,15 @@ function buildNode(
 
     const id = getNodeId(element);
     const role = getImplicitRole(element);
-    const value = getAnnouncedValue(element, role, styleCache);
+    // Strict mode decides at the read: what it withholds is never computed.
+    const value = redactInput
+      ? undefined
+      : getAnnouncedValue(element, role, styleCache);
     const actions = getActions(element);
     const focusable = isFocusable(element);
     const headingLevel = getHeadingLevel(element);
     const isMedia = MEDIA_TAGS.has(tag);
+    const states = getAriaStates(element, role, focusable);
 
     const node: SemanticNode = {
       id,
@@ -2373,20 +2258,20 @@ function buildNode(
       depth,
       dom: {
         tagName: tag,
-        attributes: getKeyAttributes(element),
-        // Media children are unrendered fallback + <track>/<source>
-        // metadata — surfacing "Sorry, your browser doesn't support…"
-        // as the node's text preview misrepresents what AT renders.
-        textContent: isMedia ? "" : getDirectTextContent(element),
-        descendantText: isMedia ? "" : getDescendantText(element),
+        attributes: getKeyAttributes(element, redactInput),
+        ...textPreviews(element, isMedia || redactInput),
         isHidden: isVisuallyHidden(element, style),
       },
       a11y: {
         role,
-        name: computeAccessibleName(element, new Set(), styleCache),
-        description: computeAccessibleDescription(element, styleCache),
+        name: accessibleName(element, styleCache, redactInput),
+        description: computeAccessibleDescription(
+          element,
+          styleCache,
+          redactInput,
+        ),
         ...(value !== undefined ? { value } : {}),
-        states: getAriaStates(element, role, focusable),
+        states: redactInput ? withholdStates(element, role, states) : states,
         properties: {
           ...(headingLevel !== null ? { level: String(headingLevel) } : {}),
           // The walk doesn't descend into media children, so the one
@@ -2428,14 +2313,33 @@ function buildNode(
   }
 }
 
+/**
+ * A node's `dom` text previews. None for media, whose children are unrendered
+ * fallback and <track>/<source> metadata: "Sorry, your browser doesn't
+ * support…" as a preview would misrepresent what AT renders. None in strict
+ * mode either, which keeps what a user typed off every node, as the native
+ * producer keeps no previews at all.
+ */
+function textPreviews(
+  element: Element,
+  none: boolean,
+): Pick<NonNullable<SemanticNode["dom"]>, "textContent" | "descendantText"> {
+  return none
+    ? { textContent: "", descendantText: "" }
+    : {
+        textContent: getDirectTextContent(element),
+        descendantText: getDescendantText(element),
+      };
+}
+
 function walk(
   element: Element,
   parentId: string | null,
   depth: number,
   nodes: Map<string, SemanticNode>,
-  styleCache: StyleCache,
+  extraction: Extraction,
 ): string | null {
-  const built = buildNode(element, parentId, depth, styleCache);
+  const built = buildNode(element, parentId, depth, extraction);
   if (!built) return null;
   const { id, node } = built;
 
@@ -2457,7 +2361,7 @@ function walk(
   // style on it says so: a light child no slot takes, a hidden slot's
   // assignment, and a closed <details>' body.
   for (const child of flatChildren(element)) {
-    const childId = walk(child, id, depth + 1, nodes, styleCache);
+    const childId = walk(child, id, depth + 1, nodes, extraction);
     if (childId) {
       node.childIds.push(childId);
     }
@@ -2481,10 +2385,14 @@ export function extractDomTree(
   const startRoot = isPartial ? root : effectiveRoot;
   // Fresh cache per extraction — styles may have changed since the last
   // mutation-triggered run; never reuse across extractDomTree calls.
-  const styleCache: StyleCache = new WeakMap();
+  // Any truthy value: a privacy switch that a `"1"` left off would fail open.
+  const redactInput = Boolean(options.redactInput);
   // One `aria-owns` index for the whole walk (see aria-owner.ts).
   const rootId = withAriaOwnerIndex(() =>
-    walk(startRoot, parentId, baseDepth, nodes, styleCache),
+    walk(startRoot, parentId, baseDepth, nodes, {
+      styleCache: new WeakMap(),
+      redactInput,
+    }),
   );
 
   const includeFocused = options.includeFocused ?? !isPartial;
@@ -2495,6 +2403,8 @@ export function extractDomTree(
     nodes,
     rootId: rootId || "",
     ...(focusedId ? { focusedId } : {}),
-    source: { producer: "dom" },
+    // Only a whole extraction vouches for its map: a partial one adds to nodes
+    // someone else extracted, in whatever mode they used.
+    source: treeSource("dom", { redactInput: redactInput && !isPartial }),
   };
 }

@@ -2183,6 +2183,8 @@ describe("buildNativeTree — strict mode around native text fields", () => {
       ).nodes.get("ax-dom-70")?.a11y.name;
     expect(cell("")).toBe("Notes");
     expect(cell("my draft")).toBe("[redacted]");
+    // A typed space is a U+00A0, which a name keeps: something was typed.
+    expect(cell("\u00a0\u00a0")).toBe("[redacted]");
   });
 
   it("fails closed on an ancestor whose name has no trace, but keeps the field's own label", () => {

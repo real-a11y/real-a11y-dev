@@ -139,6 +139,40 @@ describe("loadBaseline", () => {
       /not found/,
     );
   });
+
+  const loadText = (text: string) => {
+    const dir = mkdtempSync(join(tmpdir(), "a11y-baseline-"));
+    const file = join(dir, "bad.json");
+    writeFileSync(file, text);
+    return loadBaseline(file);
+  };
+  const withEntries = (entries: unknown) =>
+    JSON.stringify({ schemaVersion: BASELINE_SCHEMA_VERSION, entries });
+  const entry = { pageId: "/", page: "Home", fingerprint: "f", id: ["a"] };
+  const { page: _page, ...noPage } = entry;
+
+  it.each([
+    ["text that is not JSON", "{", /not valid JSON/],
+    ["a JSON array", "[]", /must be a JSON object/],
+    ["JSON null", "null", /must be a JSON object/],
+    ["entries that are not an array", withEntries({}), /no "entries" array/],
+  ])("fails closed on %s", (_what, text, message) => {
+    expect(() => loadText(text)).toThrow(message);
+  });
+
+  it.each([
+    ["a null entry", null],
+    ["an entry that is not an object", "f"],
+    ["a non-string fingerprint", { ...entry, fingerprint: 1 }],
+    ["a missing page", noPage],
+    ["a non-string pageId", { ...entry, pageId: 7 }],
+    ["an id that is not an array", { ...entry, id: "a" }],
+  ])("fails closed on %s", (_what, bad) => {
+    // After a well-formed one, so every entry is checked, not just the first.
+    expect(() => loadText(withEntries([entry, bad]))).toThrow(
+      /malformed entry/,
+    );
+  });
 });
 
 describe("identity is the page id, not its label", () => {

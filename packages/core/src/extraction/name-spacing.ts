@@ -15,6 +15,7 @@ import {
   isSubtreeHidden,
   type StyleCache,
 } from "./role-map.js";
+import { isHiddenByVisibility } from "./visibility.js";
 
 /** The part of a name walk that says whether the current element's text shows. */
 export interface TextVisibility {
@@ -34,7 +35,7 @@ export interface TextVisibility {
  * hides an element's own text, not its subtree: a walk still descends.
  */
 export function isTextVisible(style: CSSStyleDeclaration | null): boolean {
-  return style?.visibility !== "hidden" && style?.visibility !== "collapse";
+  return !isHiddenByVisibility(style?.visibility);
 }
 
 /**

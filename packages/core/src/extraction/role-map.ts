@@ -25,6 +25,7 @@ import {
 import { isFocusable, parseHtmlInteger } from "./focusability.js";
 import { imageUsingMap } from "./image-map.js";
 import { tablePartRole, tdRole, thHeaderRole } from "./table-roles.js";
+import { isHiddenByVisibility, isOwnVisibilityHidden } from "./visibility.js";
 
 type RoleResolver = string | ((el: Element) => string);
 
@@ -136,7 +137,7 @@ function isImageRendered(image: Element | null): boolean {
     if (el.localName === "area" || isSubtreeHidden(el)) return false;
   }
   const visibility = getCachedComputedStyle(image)?.visibility;
-  return visibility !== "hidden" && visibility !== "collapse";
+  return !isHiddenByVisibility(visibility);
 }
 
 /**
@@ -831,27 +832,48 @@ export function isHiddenFromAT(
 
   if (isSubtreeHidden(element, computed)) return true;
 
-  if (computed) {
-    if (computed.visibility === "hidden") return true;
-  } else if ((element as HTMLElement).style?.visibility === "hidden") {
-    // No computed style (a DOM-less runtime): read the inline value, the same
-    // fallback `isVisuallyHidden` uses. Without it the two disagree, and a
-    // "not visible but exposed" node reads as sr-only content AT would see.
-    return true;
-  }
-
-  return false;
+  // No computed style (a DOM-less runtime): read the inline value, the same
+  // fallback `isVisuallyHidden` uses, or a "not visible but exposed" node
+  // reads as sr-only content AT would see.
+  return isOwnVisibilityHidden(element, computed);
 }
 
-/** Get the heading level for heading elements */
+/**
+ * Get the heading level for heading elements.
+ *
+ * A valid `aria-level` wins over an `h1`-`h6` tag number (ARIA 1.2 §8.4 lets
+ * authors set it on an implicit heading). Core-AAM §3.6.3 maps `0` and
+ * negatives to 1. The rest follows Chromium 153, probed over CDP:
+ *
+ * - an empty attribute is unset;
+ * - a value that does not parse (`abc`, a blank string) or overflows 32 bits
+ *   reads as 1, on `role="heading"` and on an `hN` alike;
+ * - a level of 10 or more is ignored, as if unset: an `hN` keeps its tag
+ *   number, and a `role="heading"` gets no level (Chromium says 2 there, the
+ *   default this producer does not model);
+ * - trailing garbage and fractions are cut off, as `parseInt` does (`3abc` is
+ *   3, `2.5` is 2, `1e2` is 1).
+ *
+ * The result is `null` or an integer of 1 or more, never `NaN`.
+ */
 export function getHeadingLevel(element: Element): number | null {
   const match = safeTagName(element).match(/^H([1-6])$/i);
-  if (match) return parseInt(match[1], 10);
+  const tagLevel = match ? parseInt(match[1], 10) : null;
+  if (tagLevel === null && getExplicitRole(element) !== "heading") return null;
 
-  const ariaLevel = safeGetAttribute(element, "aria-level");
-  if (ariaLevel && getExplicitRole(element) === "heading") {
-    return parseInt(ariaLevel, 10);
+  // An hN given another role (`<h2 role="tab">`) is not a heading any more:
+  // its aria-level is not a heading level, so the tag number stays as before.
+  const role = getExplicitRole(element);
+  if (tagLevel !== null && role !== undefined && role !== "heading") {
+    return tagLevel;
   }
 
-  return null;
+  const ariaLevel = safeGetAttribute(element, "aria-level");
+  if (ariaLevel) {
+    const parsed = parseInt(ariaLevel, 10);
+    if (!Number.isFinite(parsed) || parsed > 2147483647) return 1;
+    if (parsed < 10) return Math.max(parsed, 1);
+  }
+
+  return tagLevel;
 }

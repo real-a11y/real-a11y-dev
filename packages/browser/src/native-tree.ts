@@ -68,7 +68,7 @@ import {
   NATIVE_AX_CHOICE_STATES,
   RANGE_VALUE_ROLES,
   STATE_ONLY_ROLES,
-  VALUELESS_INPUT_TYPES,
+  holdsEnteredValue,
   nativeAncestry,
   cleanAXText,
   fieldStandIns,
@@ -82,6 +82,7 @@ import {
   valueRegions,
   withholdFieldInternals,
   withholdRegionNames,
+  treeSource,
   type FieldHostOf,
   type FieldStandIn,
   type RawAXNameNode as RawAXNode,
@@ -393,10 +394,7 @@ function prepareRawNodes(
   // A button's internals hold its label, the page's, not what a user entered.
   const entered = standIns.filter(({ host }) => {
     const info = host === undefined ? undefined : enrichment.get(host);
-    return !(
-      info?.tagName === "input" &&
-      VALUELESS_INPUT_TYPES.has((info.attributes.type ?? "text").toLowerCase())
-    );
+    return !info || holdsEnteredValue(info.tagName, info.attributes.type);
   });
   const strict = withholdRegionNames(
     named,
@@ -699,9 +697,8 @@ export function buildNativeTree(
   const inChoiceField = (raw: RawAXNode): boolean => {
     for (const cur of nativeAncestry(raw, rawByNodeId)) {
       const role = cur.role?.value;
-      if (cur !== raw && (role === "combobox" || role === "listbox")) {
+      if (cur !== raw && (role === "combobox" || role === "listbox"))
         return true;
-      }
     }
     return false;
   };
@@ -850,6 +847,6 @@ export function buildNativeTree(
     nodes,
     rootId,
     ...(focused ? { focusedId: focused.id } : {}),
-    source: { producer: "native", ...(chrome ? { chrome } : {}) },
+    source: treeSource("native", { chrome, redactInput }),
   };
 }

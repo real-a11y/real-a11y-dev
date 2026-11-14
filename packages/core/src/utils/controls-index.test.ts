@@ -175,6 +175,24 @@ describe("buildControlsIndex", () => {
       expect(inferred.size).toBe(0);
     });
 
+    it("does not link when the haspopup token names no popup role", () => {
+      const { forward, inferred } = buildControlsIndex(
+        tree(
+          [
+            "trigger",
+            makeNode(
+              "trigger",
+              { "aria-haspopup": "false", "aria-expanded": "true" },
+              { role: "button" },
+            ),
+          ],
+          ["menu", makeNode("menu", {}, { role: "menu" })],
+        ),
+      );
+      expect(forward.size).toBe(0);
+      expect(inferred.size).toBe(0);
+    });
+
     it("does not link when the candidate menu is hidden", () => {
       const { forward } = buildControlsIndex(
         tree(

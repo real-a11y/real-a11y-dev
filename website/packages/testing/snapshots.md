@@ -33,6 +33,7 @@ test("login form structure", () => {
 | `includeGeneric` | `boolean` | `false` | Include generic container nodes (`role="generic"`). |
 | `markFocus` | `boolean` | `true` | Mark the element focused at extraction time with a trailing `[focused]`. See [Focus marker](#focus-marker). |
 | `values` | `boolean` | `false` | Print each field's announced value: `textbox "Email" = "jane@x.com"`. See [Field values](#field-values). |
+| `redactInput` | `boolean` | `false` | Strict mode: no field value and no rich-text editor content, names included. See [Strict mode](#strict-mode). |
 
 ### Field values
 
@@ -64,6 +65,16 @@ main
     button "Sign in"
     link "Forgot password?"
 ```
+
+### Strict mode
+
+`redactInput: true` keeps every field value and all rich-text editor content out of the output, the same strict mode as the CLI's `--redact-input` and the [Playwright adapter's](/packages/testing/playwright#strict-mode-redactinput). No value prints even with `values: true`, and a name that would carry typed text — a heading around an editor, a button labelled by one, a heading inside one — reads `"[redacted]"` whole, as the native tree reads it. A name from the page's own markup (an `aria-label`, an image's `alt`) is kept.
+
+```ts
+treeSnapshot(container, { redactInput: true });
+```
+
+It works on a DOM root, which it extracts in strict mode. A name is built at extraction, so an already-extracted tree must have been read in strict mode too (its `source.redactInput` is set); any other tree makes it throw rather than print names it can't take a value back out of. `outlineSnapshot` and `tabSequenceSnapshot` take the option the same way.
 
 ### Using `redact`
 

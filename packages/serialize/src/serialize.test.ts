@@ -1,3 +1,4 @@
+import { extractA11yTree } from "@real-a11y-dev/core";
 import { describe, it, expect, afterEach } from "vitest";
 
 import {
@@ -353,6 +354,80 @@ describe("values (ADR-0001)", () => {
     expect(serializeTabSequence(document.body)).not.toContain(" = ");
     expect(serializeTabSequence(document.body, { values: true })).toContain(
       'textbox "Email" = "jane@x.com"',
+    );
+  });
+});
+
+describe("strict mode (redactInput, ADR-0001)", () => {
+  const page = () => {
+    document.body.innerHTML = `
+      <main>
+        <h2>Draft: <span contenteditable>secret plan</span></h2>
+        <input aria-label="Email" value="jane@x.com">
+        <button contenteditable>typed label</button>
+      </main>`;
+  };
+
+  it("extracts a DOM root in strict mode, for the tree, the outline and the tab sequence alike", () => {
+    page();
+    const opts = { redactInput: true, values: true };
+    for (const out of [
+      serializeTree(document.body, opts),
+      serializeOutline(document.body, opts),
+      serializeTabSequence(document.body, opts),
+    ]) {
+      expect(out).not.toMatch(/secret plan|jane@x\.com|typed label/);
+    }
+    expect(serializeTree(document.body, opts)).toContain(
+      'heading "[redacted]" (level 2)',
+    );
+    expect(serializeTabSequence(document.body, opts)).toContain(
+      'textbox "Email"\n',
+    );
+  });
+
+  it("prints a strict tree it was given", () => {
+    page();
+    const tree = extractA11yTree(document.body, { redactInput: true });
+    expect(serializeTree(tree, { redactInput: true })).toContain(
+      'heading "[redacted]"',
+    );
+  });
+
+  it("refuses a tree that wasn't extracted in strict mode, rather than leak its names", () => {
+    page();
+    const tree = extractA11yTree(document.body);
+    for (const serialize of [
+      serializeTree,
+      serializeOutline,
+      serializeTabSequence,
+    ]) {
+      expect(() => serialize(tree, { redactInput: true })).toThrow(
+        /needs a tree extracted in strict mode/,
+      );
+    }
+  });
+
+  it("reads any truthy redactInput as strict mode, for a root and a tree alike", () => {
+    // A plain-JS caller passing an environment variable through: the root
+    // extracts strictly, as the tree branch already asked for a strict tree.
+    page();
+    const opts = { redactInput: "1" as unknown as boolean, values: true };
+    const out = serializeTree(document.body, opts);
+    expect(out).toContain('heading "[redacted]" (level 2)');
+    expect(out).not.toMatch(/secret plan|jane@x\.com/);
+    expect(() => serializeTree(extractA11yTree(document.body), opts)).toThrow(
+      /needs a tree extracted in strict mode/,
+    );
+  });
+
+  it("leaves the default unchanged", () => {
+    page();
+    expect(serializeTree(document.body)).toContain(
+      'heading "Draft: secret plan" (level 2)',
+    );
+    expect(serializeTree(document.body, { redactInput: false })).toBe(
+      serializeTree(document.body),
     );
   });
 });

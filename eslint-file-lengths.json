@@ -1,6 +1,6 @@
 {
-  "packages/browser/src/native-tree.ts": 526,
-  "packages/core/src/extraction/dom-extractor.ts": 1494,
+  "packages/browser/src/native-tree.ts": 523,
+  "packages/core/src/extraction/dom-extractor.ts": 1440,
   "packages/extension/src/background.ts": 703,
   "packages/extension/src/content.ts": 639,
   "packages/extension/src/native/debugger-session.ts": 693,
@@ -8,5 +8,5 @@
   "packages/extension/src/native/native-core.ts": 1731,
   "packages/extension/src/sidepanel/App.tsx": 1854,
   "packages/extension/src/sidepanel/NativeTreeView.tsx": 1015,
-  "scripts/pr-risk.mjs": 1183
+  "scripts/pr-risk.mjs": 1181
 }

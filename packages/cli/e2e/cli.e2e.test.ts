@@ -443,6 +443,36 @@ describe("the native producer is the only producer (built bin)", () => {
     expect(audit.stdout).not.toContain("no-unlabeled-interactive");
   });
 
+  it("--redact-input keeps editor text out of a tab stop's name, as tree does", async () => {
+    // `tabs` is the in-page walk, so strict mode has to reach the DOM
+    // producer's names, not only its values: a button named by an editor's
+    // text, and a link around one, must read as `tree` reads them. The text
+    // is written at runtime, so the data: URL that stderr echoes holds none.
+    const PAGE = dataUrl(`<main>
+      <div id="ed" contenteditable="true"></div>
+      <button aria-labelledby="ed">Send</button>
+      <a href="/next"><span class="s" contenteditable="true"></span></a>
+      <script>
+        const S = "EDITOR-" + "SECRET";
+        document.getElementById("ed").textContent = S;
+        document.querySelector(".s").textContent = S + " link";
+      </script>
+    </main>`);
+    const shown = await runCli(["tabs", PAGE]);
+    expect(shown.code).toBe(0);
+    expect(shown.stdout).toContain('button "EDITOR-SECRET"');
+
+    const strict = await runCli(["tabs", PAGE, "--redact-input"]);
+    expect(strict.code).toBe(0);
+    expect(strict.stdout).toContain('button "[redacted]"');
+    expect(strict.stdout).toContain('link "[redacted]"');
+    expect(strict.stdout).not.toContain("EDITOR-SECRET");
+    expect(strict.stderr).not.toContain("EDITOR-SECRET");
+    const tree = await runCli(["tree", PAGE, "--redact-input"]);
+    expect(tree.stdout).toContain('button "[redacted]"');
+    expect(tree.stdout).toContain('link "[redacted]"');
+  });
+
   it("tabs still reports the keyboard sequence, from the in-page walk", async () => {
     const { code, stdout } = await runCli(["tabs", ICON_BTN_PAGE]);
     expect(code).toBe(0);

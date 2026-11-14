@@ -127,6 +127,46 @@ export function indexControlLinks(
 }
 
 /**
+ * The heuristic's triggers, in tree-traversal order: expanded, carrying an
+ * `aria-haspopup` token that names a popup role, and not already linked by
+ * `aria-controls`.
+ */
+function haspopupTriggers(
+  links: ControlLinkSource[],
+  forward: Map<string, string[]>,
+): Array<{ treeId: string; targetRole: string }> {
+  const triggers: Array<{ treeId: string; targetRole: string }> = [];
+  for (const link of links) {
+    if (forward.has(link.id)) continue; // aria-controls already linked it
+    if (!link.expanded || !link.haspopup) continue;
+    const targetRole = HASPOPUP_TO_ROLE[link.haspopup];
+    if (!targetRole) continue;
+    triggers.push({ treeId: link.id, targetRole });
+  }
+  return triggers;
+}
+
+/**
+ * Candidates per role, in tree-traversal order, excluding hidden nodes and
+ * nodes already claimed as a controlled element by some explicit
+ * aria-controls link.
+ */
+function unclaimedCandidatesByRole(
+  links: ControlLinkSource[],
+  reverse: Map<string, string[]>,
+): Map<string, string[]> {
+  const candidatesByRole = new Map<string, string[]>();
+  for (const link of links) {
+    if (reverse.has(link.id)) continue;
+    if (link.hidden) continue;
+    const arr = candidatesByRole.get(link.role) ?? [];
+    arr.push(link.id);
+    candidatesByRole.set(link.role, arr);
+  }
+  return candidatesByRole;
+}
+
+/**
  * Pair triggers that have `aria-haspopup` + `aria-expanded="true"` (but no
  * `aria-controls`) with a currently-visible element of the matching role.
  *
@@ -154,26 +194,10 @@ function applyHaspopupHeuristic(
   const positionOf = new Map<string, number>();
   links.forEach((link, i) => positionOf.set(link.id, i));
 
-  const triggers: Array<{ treeId: string; targetRole: string }> = [];
-  for (const link of links) {
-    if (forward.has(link.id)) continue; // aria-controls already linked it
-    if (!link.expanded || !link.haspopup) continue;
-    const targetRole = HASPOPUP_TO_ROLE[link.haspopup];
-    if (!targetRole) continue;
-    triggers.push({ treeId: link.id, targetRole });
-  }
+  const triggers = haspopupTriggers(links, forward);
   if (triggers.length === 0) return inferred;
 
-  // Candidates per role, in tree-traversal order, excluding nodes already
-  // claimed as a controlled element by some explicit aria-controls link.
-  const candidatesByRole = new Map<string, string[]>();
-  for (const link of links) {
-    if (reverse.has(link.id)) continue;
-    if (link.hidden) continue;
-    const arr = candidatesByRole.get(link.role) ?? [];
-    arr.push(link.id);
-    candidatesByRole.set(link.role, arr);
-  }
+  const candidatesByRole = unclaimedCandidatesByRole(links, reverse);
 
   for (const { treeId: triggerId, targetRole } of triggers) {
     const candidates = candidatesByRole.get(targetRole);

@@ -17,6 +17,22 @@ export const REFERENCE_ATTRS = new Set([
 ]);
 
 /**
+ * True when a change to `attr` costs a full re-extraction: a reference
+ * attribute ({@link REFERENCE_ATTRS}), and in strict mode `contenteditable`.
+ * A region that becomes an editor (or stops being one) withholds its text
+ * from every name that reads it, a referrer to an id anywhere inside it
+ * included, which no splice of the region reaches.
+ */
+export function forcesFullExtraction(
+  attr: string,
+  redactInput: boolean,
+): boolean {
+  return (
+    REFERENCE_ATTRS.has(attr) || (redactInput && attr === "contenteditable")
+  );
+}
+
+/**
  * Attributes whose change can move the extraction *scope* — either by creating
  * or destroying a modal/overlay candidate (`aria-modal`, `role`, `open`) or by
  * flipping one's visibility, its own or an ancestor's (`class`, `style`,

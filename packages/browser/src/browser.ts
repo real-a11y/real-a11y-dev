@@ -240,6 +240,13 @@ export interface SnapshotOptions {
    * field prints `"[redacted]"`.
    */
   values?: boolean;
+  /**
+   * Strict mode (ADR-0001), as `nativeTree({ redactInput })`: the one
+   * extraction carries no field value and no rich-text editor content, so no
+   * view does — a name that would carry one reads `"[redacted]"` whole.
+   * Default false.
+   */
+  redactInput?: boolean;
 }
 
 /**
@@ -459,7 +466,7 @@ export class BrowserSession implements A11ySession {
       const page = this.requirePage();
       await this.ensureInjected(page);
       return page.evaluate(
-        ({ selector, rules, includeGeneric, values }) => {
+        ({ selector, rules, includeGeneric, values, redactInput }) => {
           const ra = (globalThis as Record<string, unknown>).__realA11y__ as
             Record<string, (...a: unknown[]) => unknown> | undefined;
           if (!ra || typeof ra.extractA11yTree !== "function") {
@@ -487,7 +494,7 @@ export class BrowserSession implements A11ySession {
               );
             }
           }
-          const tree = ra.extractA11yTree(el); // ← the single extraction
+          const tree = ra.extractA11yTree(el, { redactInput }); // ← the single extraction
           return {
             findings: ra.collectFindings(
               tree,
@@ -503,6 +510,7 @@ export class BrowserSession implements A11ySession {
           rules: options.rules ?? null,
           includeGeneric: options.includeGeneric ?? false,
           values: options.values ?? false,
+          redactInput: options.redactInput ?? false,
         },
       ) as Promise<PageSnapshot>;
     });

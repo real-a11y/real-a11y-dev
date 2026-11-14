@@ -1,6 +1,10 @@
-import type { ExtractionResult, SemanticNode } from "../types.js";
+import type { ExtractionResult, SemanticNode, TreeSource } from "../types.js";
 
-import { extractDomTree, getElementRefs } from "./dom-extractor.js";
+import {
+  extractDomTree,
+  getElementRefs,
+  type RedactInputOption,
+} from "./dom-extractor.js";
 import { isHiddenOnlyByVisibility } from "./visibility-hidden.js";
 
 // See SUPPRESS_KEEP_INTERACTIVE.
@@ -172,11 +176,17 @@ function processNode(
  * `SemanticNode` map and filters/flattens it into the view a screen reader
  * would expose. It is exposed separately so {@link LiveTreeExtractor} can
  * reuse it after incrementally patching the DOM map.
+ *
+ * `source` is the stamp of the extraction that built `domNodes`, carried over
+ * as it is. This function never decides it: a strict stamp says the names were
+ * built in strict mode, which only that extraction can know, and a serializer
+ * trusts it (see `redactInput` in the serializers).
  */
 export function buildA11yTree(
   domNodes: Map<string, SemanticNode>,
   rootId: string,
   focusedId?: string,
+  source: TreeSource = { producer: "dom" },
 ): ExtractionResult {
   const a11yNodes = new Map<string, SemanticNode>();
   processNode(rootId, null, 0, { domNodes, a11yNodes, rootId });
@@ -190,7 +200,7 @@ export function buildA11yTree(
     nodes: a11yNodes,
     rootId,
     ...(a11yFocusedId ? { focusedId: a11yFocusedId } : {}),
-    source: { producer: "dom" },
+    source,
   };
 }
 
@@ -201,12 +211,18 @@ export function buildA11yTree(
  * In the a11y view, nodes with role="generic" that have no accessible name
  * are "flattened" — their children are promoted to the parent level.
  * This produces a tree that more closely matches what a screen reader sees.
+ *
+ * `redactInput` is strict mode: see {@link RedactInputOption}.
  */
-export function extractA11yTree(root: Element): ExtractionResult {
+export function extractA11yTree(
+  root: Element,
+  options: RedactInputOption = {},
+): ExtractionResult {
   const {
     nodes: domNodes,
     rootId,
     focusedId: domFocusedId,
-  } = extractDomTree(root);
-  return buildA11yTree(domNodes, rootId, domFocusedId);
+    source,
+  } = extractDomTree(root, options);
+  return buildA11yTree(domNodes, rootId, domFocusedId, source);
 }

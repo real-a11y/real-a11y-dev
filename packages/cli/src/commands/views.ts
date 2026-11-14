@@ -121,10 +121,13 @@ export async function runTabsOnSession(
   const target = singleTarget(positionals, flags, "tabs");
   progress(`opening ${target.name} …`, { quiet: flags.quiet === true });
   const { url: finalUrl } = await ensurePageOpen(session, target, flags);
-  // The in-page walk has no strict mode of its own (ADR-0001: DOM surfaces
-  // get no switch); under --redact-input it just prints no values.
+  // The tab order is the in-page walk's, so --redact-input reaches it there:
+  // a name that would carry a value or editor text reads "[redacted]", as it
+  // does in `tree`.
+  const { redactInput, liveValues } = inputPolicy(flags);
   const text = await snapshotPage(session, rootOf(flags), {
-    values: inputPolicy(flags).liveValues,
+    values: liveValues,
+    redactInput,
   }).then((s) => s.tabOrder);
   return writeView("tabs", target, flags, redactUrl(finalUrl), text);
 }

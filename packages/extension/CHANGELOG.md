@@ -21,6 +21,25 @@
 
 ### Patch Changes
 
+- **The side panel no longer shows a sensitive field's value in that field's
+  own name.** Chrome reads a field listed in its own `aria-labelledby` by
+  value, so a self-labelled card field showed as `textbox "Card 4111…"` and a
+  password field as `textbox "PIN ••••"`. Such a name now reads `[redacted]`,
+  and a description that reaches the field's own value is dropped, as for any
+  other name built from a sensitive field. A `<label>` around the field still
+  names it ([#643](https://github.com/real-a11y/real-a11y-dev/pull/643)).
+- **The TAB view's engine treats `visibility: collapse` as hidden.** The
+  extension re-bundles the updated extractor, so an element styled
+  `visibility: collapse` no longer counts as exposed when the content script
+  walks tab stops and frame skeletons, as `visibility: hidden` already did
+  ([#644](https://github.com/real-a11y/real-a11y-dev/pull/644)). The A11Y tree
+  is Chromium's own and is unchanged.
+- **The TAB view's engine reads a heading's `aria-level` correctly.** The
+  extension re-bundles the updated extractor: `aria-level` on `h1`-`h6` now
+  wins over the tag number, and `0`, negative or non-numeric values no longer
+  produce a level of `0`, `-1` or `NaN`
+  ([#642](https://github.com/real-a11y/real-a11y-dev/pull/642)). The A11Y tree
+  is Chromium's own and is unchanged.
 - **The TAB view's engine keeps a table's `caption` node.** The extension
   re-bundles the updated extractor, which no longer drops a `caption` whose
   text is also the table's name. The side panel's tree is Chrome's own and
@@ -31,6 +50,10 @@
   U+00A0 now shows it as Chromium reports it, instead of an ASCII space (and
   no longer drops one at either end). Tabs, line breaks and runs of ASCII
   spaces still fold to one space. ([#639](https://github.com/real-a11y/real-a11y-dev/pull/639))
+- **The TAB view re-bundles the updated extractor**, which gained a strict mode
+  for the CLI, the MCP server and `@real-a11y-dev/testing`. The extension never
+  turns it on, so nothing the side panel shows changes
+  ([#638](https://github.com/real-a11y/real-a11y-dev/pull/638)).
 - **The TAB view's engine no longer slows down on pages that use `aria-owns`
   at scale.** The extension re-bundles the updated extractor, which now looks
   up an `aria-owns` owner in one index per extraction instead of rescanning the

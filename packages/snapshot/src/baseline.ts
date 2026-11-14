@@ -154,19 +154,24 @@ export function loadBaseline(path: string): Baseline {
   if (!Array.isArray(b.entries)) {
     throw new SnapshotFormatError(`baseline has no "entries" array: ${abs}`);
   }
-  for (const e of b.entries) {
-    if (
-      typeof e !== "object" ||
-      e === null ||
-      typeof (e as BaselineEntry).fingerprint !== "string" ||
-      typeof (e as BaselineEntry).page !== "string" ||
-      typeof (e as BaselineEntry).pageId !== "string" ||
-      !Array.isArray((e as BaselineEntry).id)
-    ) {
+  for (const e of b.entries as unknown[]) {
+    if (!isWellFormedEntry(e)) {
       throw new SnapshotFormatError(`baseline has a malformed entry: ${abs}`);
     }
   }
   return b as Baseline;
+}
+
+/** Whether a parsed entry carries the fields {@link loadBaseline} insists on. */
+function isWellFormedEntry(e: unknown): boolean {
+  return (
+    typeof e === "object" &&
+    e !== null &&
+    typeof (e as BaselineEntry).fingerprint === "string" &&
+    typeof (e as BaselineEntry).page === "string" &&
+    typeof (e as BaselineEntry).pageId === "string" &&
+    Array.isArray((e as BaselineEntry).id)
+  );
 }
 
 /**
