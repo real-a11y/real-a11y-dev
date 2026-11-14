@@ -219,11 +219,16 @@ describe("an embedded control's value, against Chromium", () => {
       ).join("") +
         // A listbox whose options it owns from elsewhere.
         `<h2 id="owned">Pick <div role="listbox" tabindex="0" aria-owns="owned-a owned-b"></div></h2>` +
-        `<span role="option" id="owned-a">One</span><span role="option" id="owned-b" aria-selected="true">Two</span>`,
+        `<span role="option" id="owned-a">One</span><span role="option" id="owned-b" aria-selected="true">Two</span>` +
+        // ...and one whose options sit in a wrapper it owns, which Chromium
+        // doesn't read as its choice.
+        `<h2 id="owned-wrap">Pick <div role="listbox" tabindex="0" aria-owns="owned-w"></div></h2>` +
+        `<div id="owned-w"><span role="option">Three</span><span role="option" aria-selected="true">Four</span></div>`,
     );
     const [dom, raw] = [await domById(false), await rawById()];
     expect(raw["owned"]?.name).toBe("Pick Two");
-    for (const id of [...VARIANTS.map(([id]) => id), "owned"]) {
+    expect(raw["owned-wrap"]?.name).toBe("Pick");
+    for (const id of [...VARIANTS.map(([id]) => id), "owned", "owned-wrap"]) {
       expect(dom[id]?.name, id).toBe(raw[id]?.name);
     }
   });

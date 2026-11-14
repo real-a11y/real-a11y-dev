@@ -190,6 +190,16 @@ describe("an embedded control lends its value (AccName 2C)", () => {
     }
   });
 
+  it("is a chosen option in a wrapper the listbox owns, as in Chromium", () => {
+    // Chromium reads only options it owns directly or holds as their context:
+    // its tree names this heading "Pick" (browser e2e embedded-control).
+    expect(
+      nameOf(
+        `<h2 id="t">Pick <div role="listbox" tabindex="0" aria-owns="w"></div></h2><div id="w"><span role="option">One</span><span role="option" aria-selected="true">Two</span></div>`,
+      ),
+    ).toBe("Pick");
+  });
+
   it("lends a description its value too", () => {
     expect(
       read(
