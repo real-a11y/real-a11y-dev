@@ -31,7 +31,7 @@
   such a description is dropped, for a hidden checkbox too, and for a cell or
   link around the checkbox. A label that holds no value, and an `aria-label`
   on the control, still name it
-  ([#PR](https://github.com/real-a11y/real-a11y-dev/pull/PR)).
+  ([#653](https://github.com/real-a11y/real-a11y-dev/pull/653)).
 - **The TAB view no longer lists a stop Chrome never focuses.** The extension
   re-bundles the updated extractor: an element whose `tabindex` is outside the
   signed 32-bit range (`tabindex="2147483648"`) is ignored as if it had none,
