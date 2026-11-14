@@ -687,11 +687,14 @@ function referenceText(
   });
   if (control !== null) return trimAscii(control);
   const tag = safeTagName(target);
+  // Trimmed before the title is weighed: content that is only whitespace, or
+  // an empty box's spacing, names nothing, so `<span title="Help"> </span>`
+  // still lends "Help".
   return trimAscii(
     textAlternative(target, role, run, styleCache, walk) ||
       labelsText(target, tag, run, styleCache) ||
       host.inputValueName(target, tag) ||
-      getAccessibleTextContent(target, run, styleCache, walk) ||
+      trimAscii(getAccessibleTextContent(target, run, styleCache, walk)) ||
       host.tooltipText(target, tag),
   );
 }

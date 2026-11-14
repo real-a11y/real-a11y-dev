@@ -180,6 +180,14 @@ const ORDER: Case[] = [
   ],
   ["span-title", (c) => `<span id="${c}" title="T"></span>`],
   ["span-title-content", (c) => `<span id="${c}" title="T">content</span>`],
+  // Content that is only whitespace, or only an empty box's spacing, names
+  // nothing, so the title still does.
+  ["span-title-space", (c) => `<span id="${c}" title="T"> </span>`],
+  ["span-title-block", (c) => `<span id="${c}" title="T"><div></div></span>`],
+  [
+    "div-title-blocks",
+    (c) => `<div id="${c}" title="T"><div></div> <div></div></div>`,
+  ],
   [
     "aria-checkbox-title",
     (c) => `<div role="checkbox" id="${c}" tabindex="0" title="T"></div>`,
