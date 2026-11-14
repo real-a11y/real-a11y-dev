@@ -156,3 +156,13 @@ describe("parseTabindex", () => {
     expect(isFocusable(div)).toBe(true);
   });
 });
+
+describe("isFocusable with a computed style", () => {
+  it("is false under display:contents, except for an image-map area", () => {
+    const div = document.createElement("div");
+    div.setAttribute("tabindex", "0");
+    expect(isFocusable(div, { display: "contents" })).toBe(false);
+    expect(isFocusable(div, { display: "block" })).toBe(true);
+    expect(isFocusable(div, null)).toBe(true);
+  });
+});

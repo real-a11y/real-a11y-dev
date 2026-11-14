@@ -92,4 +92,16 @@ describe("tab stops", () => {
     // The dialog has no name, so it reads by role.
     expect(await domSequence()).toEqual(["kid", "dialog", "end"]);
   });
+
+  it("keeps an image-map area with display:contents, which focuses through its image", async () => {
+    const px =
+      "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
+    await page.setContent(
+      `<img usemap="#nav" src="${px}" width="50" height="50"><map name="nav"><area href="/home" alt="Home" shape="rect" coords="0,0,50,50" style="display:contents" data-t="area"></map><button data-t="end">end</button>`,
+    );
+    await page.waitForTimeout(200);
+    const real = await chromiumSequence();
+    expect(real).toEqual(["area", "end"]);
+    expect(await domSequence()).toEqual(["Home", "end"]);
+  });
 });

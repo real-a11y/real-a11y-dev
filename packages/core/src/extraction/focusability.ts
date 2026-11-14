@@ -121,8 +121,23 @@ function isDetailsSummary(summary: Element): boolean {
   return false;
 }
 
-/** True when `element` can take focus, from Tab or from script. */
-export function isFocusable(element: Element): boolean {
+/**
+ * True when `element` can take focus, from Tab or from script. Pass its
+ * computed `style` to apply `display: contents`, which leaves an element with
+ * no box to focus (its children stay focusable). An image-map `<area>` is the
+ * exception: it takes focus through its image.
+ */
+export function isFocusable(
+  element: Element,
+  style?: Pick<CSSStyleDeclaration, "display"> | null,
+): boolean {
+  if (style?.display === "contents" && safeTagName(element) !== "area") {
+    return false;
+  }
+  return focusableByMarkup(element);
+}
+
+function focusableByMarkup(element: Element): boolean {
   if (isFocusBarred(element)) return false;
 
   const tag = safeTagName(element);
