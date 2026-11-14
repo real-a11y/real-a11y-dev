@@ -53,8 +53,15 @@ export function parseHtmlInteger(
   return match ? Number(match[1]) : null;
 }
 
-/** A `tabindex` value, parsed by {@link parseHtmlInteger}. */
-export const parseTabindex = parseHtmlInteger;
+/**
+ * A `tabindex` value, parsed by {@link parseHtmlInteger}. A value outside the
+ * signed 32-bit range is ignored as if absent: Chromium rejects it, so
+ * `tabindex="2147483648"` is not focusable and never joins the tab sequence.
+ */
+export function parseTabindex(value: string | null | undefined): number | null {
+  const n = parseHtmlInteger(value);
+  return n !== null && n >= -(2 ** 31) && n < 2 ** 31 ? n : null;
+}
 
 /**
  * True when HTML calls `element` actually disabled: by its own `disabled`

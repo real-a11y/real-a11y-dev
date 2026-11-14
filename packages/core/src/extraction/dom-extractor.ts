@@ -1966,7 +1966,9 @@ function buildNode(
       ? undefined
       : getAnnouncedValue(element, role, styleCache);
     const actions = getActions(element);
-    const focusable = isFocusable(element);
+    // `display: contents` has no box, so Chromium never focuses the element
+    // itself, whatever its tabindex. Its children are still walked and focusable.
+    const focusable = style?.display !== "contents" && isFocusable(element);
     const headingLevel = getHeadingLevel(element);
     const isMedia = MEDIA_TAGS.has(tag);
     const states = getAriaStates(element, role, focusable);
