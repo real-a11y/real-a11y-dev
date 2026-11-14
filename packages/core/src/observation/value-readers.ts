@@ -82,8 +82,6 @@ export function addValueReaders(
   });
 }
 
-const LABELABLE = [...LABELED_TAGS].join(",");
-
 /**
  * Add, when `label` changed, the controls it names: the one its `for` names,
  * else each it wraps (see `associatedLabels`, which reads it the same way).
@@ -99,9 +97,12 @@ export function addLabelledControls(
 ): boolean {
   const before = dirty.size;
   const forId = safeGetAttribute(label, "for");
+  // Built here, not at module scope: a call there survives tree-shaking in
+  // every bundle that imports core, used or not.
+  const labelable = [...LABELED_TAGS].join(",");
   const controls = forId
     ? [safeGetElementById(idScope(label), forId)]
-    : [...safeQuerySelectorAll(label, LABELABLE)].filter(
+    : [...safeQuerySelectorAll(label, labelable)].filter(
         (control) => control.closest("label") === label,
       );
   for (const control of controls) {
