@@ -715,4 +715,81 @@ describe("diffTrees", () => {
     expect(diff.changed[0].before.a11y.value).toBeUndefined();
     expect(diff.changed[0].after.a11y.value).toBe("hello");
   });
+
+  // Pins the whole report for one node: every observable field, in the order
+  // `changes` lists them. A consumer may print the list as it comes.
+  it("lists every observable field that differs, in a fixed order", () => {
+    const root = createPage(`<button aria-expanded="false">Menu</button>`);
+    const before = extractDomTree(root);
+    const button = [...before.nodes.values()].find(
+      (n) => n.a11y.role === "button",
+    )!;
+    const after = new Map(before.nodes);
+    after.set(button.id, {
+      ...button,
+      childIds: [...button.childIds, "extra"],
+      a11y: {
+        ...button.a11y,
+        role: "link",
+        name: "Other",
+        description: "described",
+        value: "held",
+        isExposedToAT: !button.a11y.isExposedToAT,
+        // `busy` is listed first here and reported last: the keys of
+        // `before` come first, then the ones only `after` has.
+        states: { busy: true, ...button.a11y.states, expanded: true },
+        properties: { ...button.a11y.properties, level: "2" },
+      },
+      dom: {
+        ...button.dom!,
+        textContent: "Other",
+        isHidden: !button.dom!.isHidden,
+      },
+      interaction: {
+        ...button.interaction!,
+        isFocusable: !button.interaction!.isFocusable,
+      },
+    });
+
+    const diff = diffTrees(before, after);
+    expect(diff.added).toEqual([]);
+    expect(diff.removed).toEqual([]);
+    expect(diff.changed).toHaveLength(1);
+    expect(diff.changed[0].changes).toEqual([
+      "a11y.role",
+      "a11y.name",
+      "a11y.description",
+      "a11y.value",
+      "dom.textContent",
+      "dom.isHidden",
+      "a11y.isExposedToAT",
+      "interaction.isFocusable",
+      "a11y.states.expanded",
+      "a11y.states.busy",
+      "a11y.properties.level",
+      "childIds",
+    ]);
+  });
+
+  // Two native nodes both lack `dom` and `interaction`: nothing to report.
+  // A facet on one side only reads as a change.
+  it("compares the optional facets by presence as well as by value", () => {
+    const root = createPage(`<button>Menu</button>`);
+    const tree = extractDomTree(root);
+    const button = [...tree.nodes.values()].find(
+      (n) => n.a11y.role === "button",
+    )!;
+    const { dom: _dom, interaction: _interaction, ...bare } = button;
+    const facetless = new Map([[button.id, bare]]);
+    const full = new Map([[button.id, button]]);
+
+    expect(diffTrees(facetless, new Map(facetless)).changed).toEqual([]);
+    const facetPaths = [
+      "dom.textContent",
+      "dom.isHidden",
+      "interaction.isFocusable",
+    ];
+    expect(diffTrees(facetless, full).changed[0].changes).toEqual(facetPaths);
+    expect(diffTrees(full, facetless).changed[0].changes).toEqual(facetPaths);
+  });
 });
