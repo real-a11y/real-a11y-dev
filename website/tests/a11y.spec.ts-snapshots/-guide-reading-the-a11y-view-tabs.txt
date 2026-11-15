@@ -15,6 +15,7 @@ button "Enlarge image: Visual view"
 button "Enlarge image: A11y tree view"
 link "How roles are resolved"
 table
+link "Content inside a web component is missing or stale"
 table
 link "presentational roles conflict resolution"
 link "Accessible Names"
