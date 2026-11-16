@@ -2,7 +2,7 @@
  * Listbox / native `<select>` — the `select` action (round 15).
  *
  * A native `<select>` arrives on the native tree as `combobox` →
- * `MenuListPopup` → `option`, and each `option` had no action at all: `option`
+ * `option` (Chromium's `MenuListPopup` between them is flattened), and each `option` had no action at all: `option`
  * is excluded from `ACTABLE` because a role-only tree cannot tell a real
  * `<option>` from a custom `role="option"` widget, and a generic click would
  * have been wrong regardless — an open native `<select>` is OS chrome, not DOM
@@ -15,9 +15,7 @@
 
 import { expect, node, nodes, test } from "./harness";
 
-test("a native select normalizes to combobox → MenuListPopup → option", async ({
-  nav,
-}) => {
+test("a native select normalizes to combobox → option", async ({ nav }) => {
   const { tabId } = await nav.open("listbox-select.html");
   const tree = await nav.readNodes(tabId);
 

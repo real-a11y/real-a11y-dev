@@ -217,7 +217,7 @@ describe("isSteppableRole", () => {
 /**
  * Live dogfood finding: "combobox options are not interactive" — Amazon's
  * department dropdown is a real `<select>`; Chromium normalizes it to
- * `combobox` → `menuListPopup` → `option`, and each `option` row had no
+ * `combobox` → `option`, and each `option` row had no
  * action at all. `option` stays out of `ACTABLE` on purpose (see its own
  * docstring — a role-only tree can't tell a real `<option>` apart from a
  * custom `role="option"` widget), but a generic click was never going to

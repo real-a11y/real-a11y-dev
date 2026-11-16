@@ -79,6 +79,7 @@ describe("native AX vocabulary", () => {
       "StaticText",
       "InlineTextBox",
       "ListMarker",
+      "MenuListPopup",
       "RootWebArea",
     ]) {
       expect(NATIVE_AX_DROP_ROLES.has(role)).toBe(true);
@@ -1680,6 +1681,49 @@ describe("sectionheader / sectionfooter (drop when bare)", () => {
         properties: [{ name: "describedby", value: { value: [] } }],
       }),
     ).toBe(["main", "  sectionheader", '    heading "Title"'].join("\n"));
+  });
+});
+
+describe("a drop-down <select>'s popup (MenuListPopup)", () => {
+  const opt = (id: string, parentId: string, name: string) =>
+    raw(id, "option", { parentId, name });
+
+  it("flattens the popup, so the options sit under the combobox in order", () => {
+    const nodes = normalizeNativeAX([
+      raw("1", "main", { childIds: ["2"] }),
+      raw("2", "combobox", { parentId: "1", childIds: ["3"], name: "Sel" }),
+      raw("3", "MenuListPopup", { parentId: "2", childIds: ["4", "5"] }),
+      opt("4", "3", "A"),
+      opt("5", "3", "B"),
+    ]);
+    expect(nodes.map((n) => n.role)).not.toContain("MenuListPopup");
+    expect(serializeNativeAX(nodes)).toBe(
+      ["main", '  combobox "Sel"', '    option "A"', '    option "B"'].join(
+        "\n",
+      ),
+    );
+    const combobox = nodes.find((n) => n.role === "combobox")!;
+    expect(
+      combobox.childIds.map((id) => nodes.find((n) => n.id === id)!.name),
+    ).toEqual(["A", "B"]);
+  });
+
+  it("keeps an optgroup as a group between the combobox and its options", () => {
+    const nodes = normalizeNativeAX([
+      raw("1", "combobox", { childIds: ["2"], name: "Pet" }),
+      raw("2", "MenuListPopup", { parentId: "1", childIds: ["3", "4"] }),
+      opt("3", "2", "None"),
+      raw("4", "group", { parentId: "2", childIds: ["5"], name: "Mammals" }),
+      opt("5", "4", "Cat"),
+    ]);
+    expect(serializeNativeAX(nodes)).toBe(
+      [
+        'combobox "Pet"',
+        '  option "None"',
+        '  group "Mammals"',
+        '    option "Cat"',
+      ].join("\n"),
+    );
   });
 });
 

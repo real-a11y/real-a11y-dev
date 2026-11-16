@@ -21,6 +21,13 @@
 
 ### Patch Changes
 
+- **The side panel tree no longer shows an extra `MenuListPopup` row under a
+  drop-down `<select>`.** Chrome's internal popup node, which is not an ARIA
+  role, sat between the combobox and its options; the options now sit directly
+  under the combobox, as the DOM producer prints them. The option picker still opens for
+  a real `<select>` and for no custom `role="combobox"`.
+  ([#662](https://github.com/real-a11y/real-a11y-dev/pull/662))
+
 - **The side panel no longer shows a `level` badge on every list item.**
   Chrome computes a list item's nesting depth as a `level`, which the panel
   listed (and copied out as `listitem "Item" (level 1)`) as if the page had set

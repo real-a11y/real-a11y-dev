@@ -120,21 +120,17 @@ describe("findNativeModalDialog", () => {
 });
 
 describe("selecting an option row", () => {
-  /** A drop-down `<select>` as the native tree reads it: the combobox, its
-   *  popup, and two options, "11" chosen. */
+  /** A drop-down `<select>` as the native tree reads it: the combobox
+   *  and two options, "11" chosen. */
   function select(valueWithheld: boolean | undefined) {
     const nodes = new Map<string, NativeNode>([
       [
         "sel",
         {
           ...node("combobox", "Expiry month", {}, "sel"),
-          childIds: ["popup"],
+          childIds: ["o1", "o2"],
           ...(valueWithheld === undefined ? {} : { valueWithheld }),
         },
-      ],
-      [
-        "popup",
-        { ...node("MenuListPopup", "", {}, "popup"), childIds: ["o1", "o2"] },
       ],
       ["o1", node("option", "01", {}, "o1")],
       ["o2", node("option", "11", {}, "o2")],
