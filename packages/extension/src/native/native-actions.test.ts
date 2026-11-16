@@ -64,6 +64,18 @@ describe("nativeSelectOptions", () => {
     expect(nativeSelectOptions(bare.get("cb")!, bare)).toEqual([]);
   });
 
+  it("skips a separator, and still lists the options around it", () => {
+    const nodes = tree(
+      n("sel", "combobox", "Pet", ["a", "hr", "b"]),
+      n("a", "option", "Cat"),
+      n("hr", "separator", ""),
+      n("b", "option", "Dog"),
+    );
+    expect(
+      nativeSelectOptions(nodes.get("sel")!, nodes).map((o) => o.name),
+    ).toEqual(["Cat", "Dog"]);
+  });
+
   it("is empty for an editable combobox and for any other role", () => {
     const nodes = tree(
       n("cb", "combobox", "Search", ["o"], {

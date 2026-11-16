@@ -120,7 +120,7 @@ describe("findNativeModalDialog", () => {
 });
 
 describe("selecting an option row", () => {
-  /** A drop-down `<select>` as the native tree reads it: the combobox, its
+  /** A drop-down `<select>` as the native tree reads it: the combobox
    *  and two options, "11" chosen. */
   function select(valueWithheld: boolean | undefined) {
     const nodes = new Map<string, NativeNode>([

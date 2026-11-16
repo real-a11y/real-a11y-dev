@@ -221,6 +221,14 @@ export function isSelectableRole(role: string): boolean {
   return role === "option";
 }
 
+/** Popup roles a custom `role="combobox"` owns; a real `<select>` has none. */
+const POPUP_ROLES: ReadonlySet<string> = new Set([
+  "listbox",
+  "tree",
+  "grid",
+  "dialog",
+]);
+
 /**
  * The option rows of a native `<select>`, in document order — what the
  * panel's option picker (`InputPanel`'s `SelectPicker`) lists for it, as a
@@ -230,12 +238,13 @@ export function isSelectableRole(role: string): boolean {
  * Chromium puts a `MenuListPopup` between a real `<select>` and its options,
  * but the normalizer flattens it (`NATIVE_AX_DROP_ROLES`), so the signal is
  * the shape left behind: a `combobox` whose children ARE the options, or
- * `group`s of them for an `<optgroup>`. A custom `role="combobox"` keeps its
- * click, because what it owns is a `listbox` (or a popup of another kind),
- * never bare options. The options come from the tree already read, with no
- * round trip. Choosing one dispatches the existing `select` action on it,
- * whose in-page `instanceof HTMLOptionElement` check stays the final word, so
- * a custom widget that did look like this would refuse cleanly.
+ * `group`s of them for an `<optgroup>`. Other children a real select can
+ * hold (an `<hr>` separator) are skipped. A custom `role="combobox"` keeps its
+ * click, because what it owns is a popup (`listbox`, `tree`, `grid` or
+ * `dialog`), never bare options. The options come from the tree already read,
+ * with no round trip. Choosing one dispatches the existing `select` action on
+ * it, whose in-page `instanceof HTMLOptionElement` check stays the final
+ * word, so a custom widget that did look like this would refuse cleanly.
  */
 export function nativeSelectOptions(
   node: NativeNode,
@@ -243,18 +252,18 @@ export function nativeSelectOptions(
 ): NativeNode[] {
   if (node.role !== "combobox" || node.states?.["editable"]) return [];
   const options: NativeNode[] = [];
-  const collect = (ids: string[] | undefined, inGroup: boolean): boolean => {
-    for (const id of ids ?? []) {
-      const child = nodes.get(id);
-      if (!child) continue;
-      if (child.role === "option") options.push(child);
-      else if (child.role === "group" && !inGroup) {
-        if (!collect(child.childIds, true)) return false;
-      } else return false;
-    }
-    return true;
-  };
-  return collect(node.childIds, false) ? options : [];
+  for (const id of node.childIds ?? []) {
+    const child = nodes.get(id);
+    if (!child) continue;
+    if (child.role === "option") options.push(child);
+    else if (child.role === "group") {
+      for (const inner of child.childIds ?? []) {
+        const grandchild = nodes.get(inner);
+        if (grandchild?.role === "option") options.push(grandchild);
+      }
+    } else if (POPUP_ROLES.has(child.role)) return [];
+  }
+  return options;
 }
 
 /**

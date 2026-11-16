@@ -48,6 +48,7 @@ export const NATIVE_AX_DROP_ROLES: ReadonlySet<string> = new Set([
   // flattening it parents the options straight to the combobox, the shape
   // both producers now share.
   "MenuListPopup",
+  "menulistpopup",
   "RootWebArea",
   "Ignored",
 ]);
