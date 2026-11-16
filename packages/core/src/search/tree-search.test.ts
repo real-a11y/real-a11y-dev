@@ -127,6 +127,71 @@ describe("applySearchFilter", () => {
   });
 });
 
+/** One node with every searchable field set to a distinct marker word. */
+function probeNode(withDom = true): Map<string, SemanticNode> {
+  const node: SemanticNode = {
+    id: "probe",
+    parentId: null,
+    childIds: [],
+    depth: 0,
+    a11y: {
+      role: "button",
+      name: "Menu",
+      description: "Opens the numbat panel",
+      states: { expanded: false, pressed: "mixed" },
+      properties: {},
+      isExposedToAT: true,
+    },
+  };
+  if (withDom) {
+    node.dom = {
+      tagName: "KOALA-BUTTON",
+      attributes: { "data-quokka": "Wallaby" },
+      textContent: "Wombat",
+      descendantText: "",
+      isHidden: false,
+    };
+  }
+  return new Map([[node.id, node]]);
+}
+
+describe("what each view mode searches", () => {
+  it.each([
+    ["the name", "menu"],
+    ["the role", "BUTTON"],
+  ])("searches %s in both modes", (_, query) => {
+    expect(searchTree(probeNode(), query, "dom").size).toBe(1);
+    expect(searchTree(probeNode(), query, "a11y").size).toBe(1);
+    expect(searchTree(probeNode(false), query, "dom").size).toBe(1);
+  });
+
+  it.each([
+    ["the tag name", "koala"],
+    ["an attribute name", "QUOKKA"],
+    ["an attribute value", "wallaby"],
+    ["the text content", "wombat"],
+  ])("searches %s in DOM mode only", (_, query) => {
+    expect(searchTree(probeNode(), query, "dom").size).toBe(1);
+    expect(searchTree(probeNode(), query, "a11y").size).toBe(0);
+    expect(searchTree(probeNode(false), query, "dom").size).toBe(0);
+  });
+
+  it.each([
+    ["the description", "numbat"],
+    ["a state name", "expanded"],
+    ["a boolean state value", "false"],
+    ["a string state value", "MIXED"],
+  ])("searches %s in A11Y mode only", (_, query) => {
+    expect(searchTree(probeNode(), query, "a11y").size).toBe(1);
+    expect(searchTree(probeNode(), query, "dom").size).toBe(0);
+  });
+
+  it("matches nothing a node does not carry", () => {
+    expect(searchTree(probeNode(), "dingo", "dom").size).toBe(0);
+    expect(searchTree(probeNode(), "dingo", "a11y").size).toBe(0);
+  });
+});
+
 /**
  * A node map that counts its own lookups. The ancestor-marking walk is the only
  * thing that calls `get`, so one lookup is one step of a climb toward the root.
