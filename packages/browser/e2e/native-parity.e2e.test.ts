@@ -1152,3 +1152,55 @@ describe("host-language name sources", () => {
     }
   });
 });
+
+// AccName 1.2 step 2F makes a shadow root's children the host's rendered
+// children, whatever the root's mode. Page script cannot reach a closed root,
+// and the DOM producer runs as page script, so its tree has an empty host
+// where Chromium's own tree has the content. This is a documented limitation
+// of the in-page walk (see the troubleshooting guide), pinned here because the
+// parity overlap percentage (`shared / domCount`) never drops for a node only
+// native has; only the `onlyNative` list names it.
+describe("a closed shadow root", () => {
+  it("is empty to the DOM producer and read by the native producer", async () => {
+    const browser = await chromium.launch();
+    try {
+      const page = await browser.newPage();
+      await page.setContent(
+        `<x-closed></x-closed>` +
+          `<script>customElements.define("x-closed", class extends HTMLElement {` +
+          `connectedCallback() { this.attachShadow({ mode: "closed" }).innerHTML = "<button>Closed button</button>"; }` +
+          `});</script>`,
+      );
+      // The host must be upgraded, so an empty DOM tree means "closed root
+      // unreadable" and not "component never rendered".
+      await page.waitForFunction(() => customElements.get("x-closed"));
+      await page.addScriptTag({ content: pageBundleSource() });
+      const dom = await page.evaluate(() => {
+        const ra = (globalThis as Record<string, unknown>).__realA11y__ as {
+          extractA11yTree(root: Element): ExtractionResult;
+        };
+        const result = ra.extractA11yTree(document.body);
+        return {
+          producer: result.source.producer,
+          lines: [...result.nodes.values()].map(
+            (n) => `${n.a11y.role} "${n.a11y.name}"`,
+          ),
+        };
+      });
+      const native = await nativeTree(page);
+      const nativeLines = [...native.nodes.values()].map(
+        (n) => `${n.a11y.role} "${n.a11y.name}"`,
+      );
+
+      expect(dom.producer).toBe("dom");
+      expect(native.source.producer).toBe("native");
+      expect(dom.lines).not.toContain('button "Closed button"');
+      expect(nativeLines).toContain('button "Closed button"');
+      expect(
+        computeParity(dom.lines.join("\n"), nativeLines.join("\n")).onlyNative,
+      ).toContain('button "Closed button"');
+    } finally {
+      await browser.close();
+    }
+  });
+});
