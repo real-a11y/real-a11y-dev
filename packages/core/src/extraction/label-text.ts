@@ -3,7 +3,8 @@
  *
  * HTML-AAM excludes the control's own value, so the label's child nodes are
  * read minus the control itself. Another control the user adjusts lends its
- * value (AccName 2C) and any other form control nothing. aria-hidden and
+ * value, or its name when it holds none (AccName 2C), and any other form
+ * control nothing. aria-hidden and
  * hidden children are skipped. How a child is read is the caller's, so this
  * stays free of the name walk it sits inside.
  */

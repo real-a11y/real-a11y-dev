@@ -21,12 +21,32 @@
 
 ### Patch Changes
 
+- **The side panel no longer shows a sensitive field's value that Chrome
+  reads into a name through another control's `<label>`.** A checkbox, a
+  button or a date input with no value to lend gives its labels instead, so
+  `<button aria-labelledby="c">` over a checkbox labelled
+  `Code [482913]` (a one-time code field inside the label) showed as
+  `button "Code 482913"`, and an `aria-describedby` pointing at the checkbox
+  carried the code into a description. Such a name now reads `[redacted]` and
+  such a description is dropped, for a hidden checkbox too, and for a cell or
+  link around the checkbox. A label that holds no value, and an `aria-label`
+  on the control, still name it
+  ([#653](https://github.com/real-a11y/real-a11y-dev/pull/653)).
 - **The TAB view no longer lists a stop Chrome never focuses.** The extension
   re-bundles the updated extractor: an element whose `tabindex` is outside the
   signed 32-bit range (`tabindex="2147483648"`) is ignored as if it had none,
   and an element with `display: contents` is not a stop, though its focusable
   children still are
   ([#652](https://github.com/real-a11y/real-a11y-dev/pull/652)).
+- **The TAB view names a stop labelled by a form control the way Chrome
+  does.** The extension re-bundles the updated extractor, which reads a
+  control that `aria-labelledby` points at by its own name: a button labelled
+  by a checkbox whose `<label>` says "Agree" is "Agree", not the button's own
+  text, and an empty field lends its label, `title` or placeholder. An empty
+  field inside a heading or label lends its name the same way. A sensitive
+  field's value still never does: such a name reads `[redacted]`. The side
+  panel's tree is Chrome's own and already showed these names
+  ([#651](https://github.com/real-a11y/real-a11y-dev/pull/651)).
 - **The TAB view names a stop the way Chrome does when a form control sits
   in its label.** The extension re-bundles the updated extractor, which reads
   a control's value into the name around it: a checkbox labelled

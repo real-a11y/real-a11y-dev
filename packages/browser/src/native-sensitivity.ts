@@ -6,23 +6,19 @@
  */
 
 import {
-  finishAnnouncedValue,
   isSensitiveFieldAttributes,
-  RANGE_VALUE_ROLES,
-  STATE_ONLY_ROLES,
   holdsEnteredValue,
   fieldStandIns,
   givesValueAway,
   holdsUnclassifiedValue,
   indexNativeAX,
   isNativePasswordMask,
-  nonEmptyAXText,
-  nativeAXProperty,
   valueRegions,
   withholdFieldInternals,
   withholdRegionNames,
   type FieldHostOf,
   type FieldStandIn,
+  type LabelsOf,
   type RawAXNameNode as RawAXNode,
   type NativeAXIndex,
   type ValueRegions,
@@ -72,6 +68,14 @@ export interface NativeDomInfo {
    */
   fieldHost?: number;
   /**
+   * The backend ids of the `<label>`s Chromium reads for this form control
+   * when another name takes it in (core's `domLabels`). Chromium's tree has
+   * no trace of them for a hidden control, yet an `aria-labelledby` pointing
+   * at one still reads them, and a field's value in one with them (core's
+   * `valueRegions`). Absent for an element with none.
+   */
+  labels?: readonly number[];
+  /**
    * A pseudo-element (`::before`, `::after`, `::marker`): content the page's
    * CSS generates, with no element of its own. The walk records it so its
    * node in the tree counts as seen, and gives it no `dom` facet.
@@ -82,49 +86,15 @@ export interface NativeDomInfo {
 // ── Field values (ADR-0001) ─────────────────────────────────────────────────
 
 /**
- * The value a screen reader announces for `raw`, before sensitivity. Chromium's
- * AX `value` is the source: a text field's text, a `<select>`'s (and an ARIA
- * combobox's) selected text, a file input's names, a date input's value, an
- * editor's text. A range widget reads its `aria-valuetext` first (Chromium 151
- * does not report it over CDP, so it comes from the DOM walk), then Chromium's
- * `valuetext`, then its number. A checkbox or radio has none: its state says
- * it. The roles are core's, so both producers read the same kinds of field.
+ * The labels the DOM walk found for each element (`NativeDomInfo.labels`), as
+ * core's `valueRegions` asks for them: an element it never saw is
+ * `undefined`, as for `FieldHostOf`.
  */
-export function rawAnnouncedValue(
-  raw: RawAXNode,
-  role: string,
-  enriched: NativeDomInfo | undefined,
-): string | undefined {
-  if (STATE_ONLY_ROLES.has(role)) return undefined;
-  if (RANGE_VALUE_ROLES.has(role)) {
-    return (
-      nonEmptyAXText(enriched?.ariaValueText) ??
-      nonEmptyAXText(nativeAXProperty(raw, "valuetext")?.value) ??
-      nonEmptyAXText(raw.value?.value) ??
-      nonEmptyAXText(nativeAXProperty(raw, "valuenow")?.value)
-    );
-  }
-  return nonEmptyAXText(raw.value?.value);
-}
-
-/**
- * {@link rawAnnouncedValue}, finished by core's {@link finishAnnouncedValue} —
- * whitespace collapsed, capped at 240 characters with `…`, and
- * {@link REDACTED_VALUE} for a sensitive field that holds anything (or a value
- * that is Chromium's password mask). Empty reads as no value, so an agent can
- * tell "password entered" from "empty" but never the length.
- */
-export function announcedValue(
-  raw: RawAXNode,
-  role: string,
-  enriched: NativeDomInfo | undefined,
-  sensitive: boolean,
-): string | undefined {
-  const text = rawAnnouncedValue(raw, role, enriched);
-  return finishAnnouncedValue(
-    text,
-    () => sensitive || isNativePasswordMask(text),
-  );
+function labelsIn(enrichment: ReadonlyMap<number, NativeDomInfo>): LabelsOf {
+  return (id) => {
+    const info = enrichment.get(id);
+    return info && (info.labels ?? []);
+  };
 }
 
 /** Where the sensitive fields are, and what their values reach. */
@@ -212,7 +182,7 @@ function fieldSensitivity(
       for (const id of nodeIds) fields.add(id);
     }
   }
-  const regions = valueRegions(index, fields, standIns);
+  const regions = valueRegions(index, fields, standIns, labelsIn(enrichment));
   return {
     regions,
     withholdsValue: (raw) =>
@@ -267,9 +237,10 @@ export function prepareRawNodes(
     const info = host === undefined ? undefined : enrichment.get(host);
     return !info || holdsEnteredValue(info.tagName, info.attributes.type);
   });
+  const roots = strictValueRoots(rawNodes, index, entered);
   const strict = withholdRegionNames(
     named,
-    valueRegions(index, strictValueRoots(rawNodes, index, entered), entered),
+    valueRegions(index, roots, entered, labelsIn(enrichment)),
   );
   const { nodes, inside } = redactEditableContent(strict);
   return {

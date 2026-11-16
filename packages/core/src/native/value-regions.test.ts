@@ -258,8 +258,17 @@ describe("withholdSensitiveFieldNames", () => {
       nodes,
       [],
       [{ ...standIn, host: undefined }],
+      () => [],
     );
     expect(unnamed[3].name?.value).toBe("4111111111111111");
+    // With no walk to say what labels the input, a reference to it fails
+    // closed: it may lend a value through one.
+    const unwalked = withholdSensitiveFieldNames(
+      nodes,
+      [],
+      [{ ...standIn, host: undefined }],
+    );
+    expect(unwalked[3].name?.value).toBe(REDACTED_VALUE);
   });
 
   /** A `labelledby` or `describedby` property pointing at DOM ids. */
@@ -438,6 +447,365 @@ describe("withholdSensitiveFieldNames", () => {
       valueRegions(indexNativeAX(part), new Set(["2", "4"])),
     );
     expect(partOut[1].name?.value).toBe(REDACTED_VALUE);
+  });
+});
+
+describe("a control that lends a value through its labels", () => {
+  /** A name trace step for a `<label>`, read or superseded. */
+  const byLabel = (value: string, ...labels: number[]) => ({
+    type: "relatedElement",
+    nativeSource: "labelfor",
+    value: { value },
+    nativeSourceValue: {
+      relatedNodes: labels.map((backendDOMNodeId) => ({ backendDOMNodeId })),
+    },
+  });
+  const pointsAt = (name: string, ...ids: number[]) => ({
+    name,
+    value: {
+      relatedNodes: ids.map((backendDOMNodeId) => ({ backendDOMNodeId })),
+    },
+  });
+  const byReference = (value: string) => ({
+    value,
+    sources: [
+      {
+        type: "relatedElement",
+        attribute: "aria-labelledby",
+        value: { value },
+      },
+    ],
+  });
+  /**
+   * Chromium 151 for `<label for="c">Code <input
+   * autocomplete="one-time-code" value="482913"></label><input
+   * type="checkbox" id="c"><button aria-labelledby="c">Toggle</button><button
+   * aria-describedby="c">Go</button>`: both buttons read the checkbox's
+   * label, and the code in it.
+   */
+  const page = (
+    checkbox: Partial<RawAXNameNode> = {},
+    field = "482913",
+  ): RawAXNameNode[] => {
+    const name = `Code ${field}`.trim();
+    return [
+      raw("1", "LabelText", { childIds: ["2", "3"] }),
+      raw("2", "StaticText", { parentId: "1", name: { value: "Code" } }),
+      raw("3", "textbox", {
+        parentId: "1",
+        ...(field ? { value: { value: field } } : {}),
+      }),
+      raw("4", "checkbox", {
+        name: { value: name, sources: [byLabel(name, 1)] },
+        properties: [pointsAt("labelledby", 1)],
+        ...checkbox,
+      }),
+      raw("5", "button", {
+        name: byReference(name),
+        properties: [pointsAt("labelledby", 4)],
+      }),
+      raw("6", "button", {
+        name: { value: "Go" },
+        named: "contents",
+        description: { value: name },
+        properties: [pointsAt("describedby", 4)],
+      }),
+    ];
+  };
+
+  it("withholds a name and a description that read a control's label holding a field's value", () => {
+    const out = withholdSensitiveFieldNames(page(), ["3"]);
+    expect(out[3].name?.value).toBe(REDACTED_VALUE);
+    expect(out[4].name?.value).toBe(REDACTED_VALUE);
+    expect(out[5].description).toBeUndefined();
+    expect(out[5].name?.value).toBe("Go");
+  });
+
+  it("keeps a name read from a label that holds no value", () => {
+    // The field is empty, or not in the label: nothing reaches the label.
+    const nodes = page({}, "");
+    expect(withholdSensitiveFieldNames(nodes, ["3"])).toBe(nodes);
+    const outside = page();
+    outside[0] = raw("1", "LabelText", { childIds: ["2"] });
+    outside[2] = raw("3", "textbox", { value: { value: "482913" } });
+    for (const raw of outside.slice(3)) {
+      if (raw.name?.value === "Code 482913") raw.name.value = "Code";
+    }
+    outside[3]!.name = { value: "Code", sources: [byLabel("Code", 1)] };
+    outside[5]!.description = { value: "Code" };
+    const out = withholdSensitiveFieldNames(outside, ["3"]);
+    expect(out[3].name?.value).toBe("Code");
+    expect(out[4].name?.value).toBe("Code");
+    expect(out[5].description?.value).toBe("Code");
+  });
+
+  it("keeps the aria-label a control has, which Chromium reads before its label", () => {
+    // <input type="checkbox" id="c" aria-label="Agree">: "Agree" for both.
+    const nodes = page({
+      name: {
+        value: "Agree",
+        sources: [
+          {
+            type: "attribute",
+            attribute: "aria-label",
+            value: { value: "Agree" },
+          },
+          { ...byLabel("Code 482913", 1), superseded: true },
+        ],
+      },
+      properties: [],
+    });
+    nodes[4]!.name = byReference("Agree");
+    const out = withholdSensitiveFieldNames(nodes, ["3"]);
+    expect(out[3].name?.value).toBe("Agree");
+    expect(out[4].name?.value).toBe("Agree");
+  });
+
+  it("follows the label a control's own aria-labelledby supersedes", () => {
+    // <span id="o">Other</span> and aria-labelledby="o" on the checkbox:
+    // its own name is "Other", but a reference to it skips its own
+    // aria-labelledby and reads the label, "Code 482913".
+    const nodes = [
+      ...page({
+        name: {
+          value: "Other",
+          sources: [
+            {
+              type: "relatedElement",
+              attribute: "aria-labelledby",
+              value: { value: "Other" },
+            },
+            { ...byLabel("Code 482913", 1), superseded: true },
+          ],
+        },
+        properties: [pointsAt("labelledby", 7)],
+      }),
+      raw("7", "StaticText", { name: { value: "Other" } }),
+    ];
+    const out = withholdSensitiveFieldNames(nodes, ["3"]);
+    expect(out[3].name?.value).toBe("Other");
+    expect(out[4].name?.value).toBe(REDACTED_VALUE);
+  });
+
+  it("withholds a name from contents around a control that lends a value", () => {
+    // <td>Row <input type="checkbox" id="c"></td> with the label elsewhere:
+    // Chromium names the cell "Row Code 482913". One named by aria-label
+    // keeps its name.
+    for (const [named, kept] of [
+      ["contents", false],
+      ["attribute", true],
+    ] as const) {
+      const nodes = [
+        ...page({ parentId: "9" }),
+        raw("9", "cell", {
+          name: { value: kept ? "Row" : "Row Code 482913" },
+          named,
+          childIds: ["4"],
+        }),
+      ];
+      const out = withholdSensitiveFieldNames(nodes, ["3"]);
+      expect(out[6].name?.value, named).toBe(kept ? "Row" : REDACTED_VALUE);
+    }
+  });
+
+  it("follows a label through the labelled controls inside it", () => {
+    // <label for="c">Opt in <input type="checkbox" id="e"></label> and the
+    // code in e's own label: "Opt in Code 482913" for c, and so for b.
+    const nodes = [
+      ...page(),
+      raw("10", "LabelText", { childIds: ["11", "12"] }),
+      raw("11", "StaticText", { parentId: "10", name: { value: "Opt in" } }),
+      raw("12", "checkbox", {
+        parentId: "10",
+        name: {
+          value: "Code 482913",
+          sources: [byLabel("Code 482913", 1)],
+        },
+        properties: [pointsAt("labelledby", 1)],
+      }),
+      raw("13", "checkbox", {
+        name: {
+          value: "Opt in Code 482913",
+          sources: [byLabel("Opt in Code 482913", 10)],
+        },
+        properties: [pointsAt("labelledby", 10)],
+      }),
+      raw("14", "button", {
+        name: byReference("Opt in Code 482913"),
+        properties: [pointsAt("labelledby", 13)],
+      }),
+    ];
+    const out = withholdSensitiveFieldNames(nodes, ["3"]);
+    expect(out[8].name?.value).toBe(REDACTED_VALUE);
+    expect(out[9].name?.value).toBe(REDACTED_VALUE);
+    expect(out[10].name?.value).toBe(REDACTED_VALUE);
+  });
+
+  it("asks the walk for the labels of a control Chromium ignores", () => {
+    // <input type="checkbox" id="c" hidden>: an ignored node with no trace,
+    // yet both buttons still read its label.
+    const nodes = page({ role: { value: "none" }, ignored: true });
+    delete nodes[3]!.name;
+    delete nodes[3]!.properties;
+    const labelled = withholdSensitiveFieldNames(nodes, ["3"], [], (id) =>
+      id === 4 ? [1] : [],
+    );
+    expect(labelled[4].name?.value).toBe(REDACTED_VALUE);
+    expect(labelled[5].description).toBeUndefined();
+    // The walk found no label for it: nothing to lend.
+    const unlabelled = withholdSensitiveFieldNames(nodes, ["3"], [], () => []);
+    expect(unlabelled[4].name?.value).toBe("Code 482913");
+    // Nothing says: a reference to it fails closed, a walk that saw every
+    // other element (the page added the checkbox since) included.
+    for (const labelsOf of [
+      undefined,
+      () => undefined,
+      (id: number) => (id === 4 ? undefined : []),
+    ]) {
+      const out = withholdSensitiveFieldNames(nodes, ["3"], [], labelsOf);
+      expect(out[4].name?.value).toBe(REDACTED_VALUE);
+      expect(out[5].description).toBeUndefined();
+    }
+  });
+
+  it("keeps a name from contents around a hidden control: Chromium skips it", () => {
+    // <td>Row <input type="checkbox" id="c" hidden></td>: the cell is "Row".
+    const nodes = [
+      ...page({ role: { value: "none" }, ignored: true, parentId: "9" }),
+      raw("9", "cell", {
+        name: { value: "Row" },
+        named: "contents",
+        childIds: ["4"],
+      }),
+    ];
+    delete nodes[3]!.name;
+    delete nodes[3]!.properties;
+    const out = withholdSensitiveFieldNames(nodes, ["3"], [], (id) =>
+      id === 4 ? [1] : [],
+    );
+    expect(out[6].name?.value).toBe("Row");
+    // A reference to it still reads its label.
+    expect(out[4].name?.value).toBe(REDACTED_VALUE);
+  });
+
+  it("keeps a reference to a visible element around a hidden control", () => {
+    // <span id="x">Pick <input type="checkbox" id="c" hidden></span> and
+    // aria-labelledby="x": Chromium reads the visible span's content and
+    // skips the hidden checkbox, "Pick".
+    const nodes = [
+      ...page({ role: { value: "none" }, ignored: true, parentId: "9" }),
+      raw("9", "generic", { childIds: ["4"] }),
+      raw("10", "button", {
+        name: {
+          value: "Pick",
+          sources: [
+            {
+              type: "relatedElement",
+              attribute: "aria-labelledby",
+              value: { value: "Pick" },
+            },
+          ],
+        },
+        description: { value: "Pick" },
+        properties: [pointsAt("labelledby", 9), pointsAt("describedby", 9)],
+      }),
+    ];
+    delete nodes[3]!.name;
+    delete nodes[3]!.properties;
+    const out = withholdSensitiveFieldNames(nodes, ["3"], [], (id) =>
+      id === 4 ? [1] : [],
+    );
+    expect(out[7].name?.value).toBe("Pick");
+    expect(out[7].description?.value).toBe("Pick");
+  });
+
+  it("withholds a reference to a hidden element around a hidden control", () => {
+    // <span id="x" hidden>Pick <input type="checkbox" id="c"></span> and
+    // aria-labelledby="x": Chromium reads the hidden span whole, the
+    // checkbox in it by its label, "Pick Code 482913".
+    const nodes = [
+      ...page({ role: { value: "none" }, ignored: true, parentId: "9" }),
+      raw("9", "none", { ignored: true, childIds: ["4"] }),
+      raw("10", "button", {
+        name: {
+          value: "Pick Code 482913",
+          sources: [
+            {
+              type: "relatedElement",
+              attribute: "aria-labelledby",
+              value: { value: "Pick Code 482913" },
+            },
+          ],
+        },
+        properties: [pointsAt("labelledby", 9)],
+      }),
+    ];
+    delete nodes[3]!.name;
+    delete nodes[3]!.properties;
+    const out = withholdSensitiveFieldNames(nodes, ["3"], [], (id) =>
+      id === 4 ? [1] : [],
+    );
+    expect(out[7].name?.value).toBe(REDACTED_VALUE);
+  });
+
+  it("leaves a field's own value out of its own label, read back through a control in it", () => {
+    // <label id="l">Code <input type="checkbox"> <input aria-labelledby="l"
+    // autocomplete="one-time-code" value="482913"></label>: the label labels
+    // the checkbox, "Code 482913"; the field named by the label is "Code".
+    const typed = { name: "editable", value: { value: "plaintext" } };
+    const nodes = [
+      raw("1", "LabelText", { childIds: ["2", "4", "3"] }),
+      raw("2", "StaticText", { parentId: "1", name: { value: "Code" } }),
+      raw("4", "checkbox", {
+        parentId: "1",
+        name: {
+          value: "Code 482913",
+          sources: [byLabel("Code 482913", 1)],
+        },
+        properties: [pointsAt("labelledby", 1)],
+      }),
+      raw("3", "textbox", {
+        parentId: "1",
+        name: byReference("Code"),
+        value: { value: "482913" },
+        properties: [typed, pointsAt("labelledby", 1)],
+      }),
+    ];
+    const out = withholdSensitiveFieldNames(nodes, ["3"]);
+    expect(out[2].name?.value).toBe(REDACTED_VALUE);
+    expect(out[3].name?.value).toBe("Code");
+    // Another field's value in the label still withholds the field's name.
+    const other = [
+      ...nodes,
+      raw("5", "textbox", { parentId: "1", value: { value: "9" } }),
+    ];
+    other[0] = raw("1", "LabelText", { childIds: ["2", "4", "3", "5"] });
+    const both = withholdRegionNames(
+      other,
+      valueRegions(indexNativeAX(other), new Set(["3", "5"])),
+    );
+    expect(both[3].name?.value).toBe(REDACTED_VALUE);
+  });
+
+  it("never lends a field's own value through its own label", () => {
+    // <label>Name <input value="typed"></label> in strict mode: the field's
+    // own name leaves its value out, and a node around the label is no
+    // lender's container.
+    const nodes = [
+      raw("1", "LabelText", { childIds: ["2", "3"], parentId: "9" }),
+      raw("2", "StaticText", { parentId: "1", name: { value: "Name" } }),
+      raw("3", "textbox", {
+        parentId: "1",
+        name: { value: "Name", sources: [byLabel("Name", 1)] },
+        value: { value: "typed" },
+        properties: [pointsAt("labelledby", 1)],
+      }),
+      raw("9", "generic", { childIds: ["1"] }),
+    ];
+    const regions = valueRegions(indexNativeAX(nodes), new Set(["3"]));
+    expect(regions.lending.size).toBe(0);
+    const out = withholdRegionNames(nodes, regions);
+    expect(out[2].name?.value).toBe("Name");
   });
 });
 

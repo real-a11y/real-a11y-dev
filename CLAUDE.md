@@ -55,7 +55,8 @@ Four consequences that are easy to get wrong:
   reaches for `node.dom` without a guard works until it meets a native tree.
 - **The two will never agree byte for byte, by design.** Chromium's vocabulary
   differs (file input as `button`, `<details>` as a disclosure), name placement
-  differs, and UA-shadow media controls are visible only to native. The parity
+  differs, and UA-shadow media controls and the content of closed author
+  shadow roots (page script can't reach them) are visible only to native. The parity
   harness in `packages/browser/e2e/` therefore measures _overlap_
   (`shared / domCount`, ~89%), not equality, and a divergence is a two-way
   signal — it can be a DOM-producer gap **or** a native-normalizer bug.

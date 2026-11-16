@@ -104,10 +104,12 @@ main
           code "native"
         cell "Chromium's own accessibility tree, read over the DevTools protocol"
         cell "the CLI, the MCP server, and the Chrome extension's tree"
-  paragraph "They agree on most of a page, but never byte for byte, by design. Chromium names some controls differently (a file input is a , is a disclosure), places names differently, and sees content the in-page walk can't reach, such as the built-in media controls inside . So compare a tree only with one from the same producer. Tab order is the exception that only can answer: Chromium's tree knows whether a node can take focus, but not the order Tab visits them in."
+  paragraph "They agree on most of a page, but never byte for byte, by design. Chromium names some controls differently (a file input is a , is a disclosure), places names differently, and sees content the in-page walk can't reach: the built-in media controls inside , and anything inside a closed shadow root (), which page script can't read, so the DOM tree shows its host empty (see ). So compare a tree only with one from the same producer. Tab order is the exception that only can answer: Chromium's tree knows whether a node can take focus, but not the order Tab visits them in."
     code "button"
     code "<details>"
     code "<video>"
+    code "attachShadow({ mode: "closed" })"
+    link "Content inside a web component is missing or stale"
     code "dom"
   separator
   heading "How roles are resolved" (level 2)

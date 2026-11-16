@@ -66,6 +66,7 @@ import {
   NATIVE_AX_CHOICE_STATES,
   nativeAncestry,
   cleanAXText,
+  domLabels,
   opensFieldInternals,
   treeSource,
   type RawAXNameNode as RawAXNode,
@@ -80,11 +81,11 @@ import { attributeOf, readDomRoot, type DomNode } from "./dom-document.js";
 import { editableRootBackendIds } from "./native-editable.js";
 import { createLocatorIndex } from "./native-locator.js";
 import {
-  announcedValue,
   prepareRawNodes,
   type NativeDomInfo,
   type NativeTreeOptions,
 } from "./native-sensitivity.js";
+import { announcedValue } from "./native-value.js";
 
 export type { NativeDomInfo, NativeTreeOptions };
 
@@ -299,6 +300,7 @@ async function enrichFromDom(
 ): Promise<Map<number, NativeDomInfo>> {
   const out = new Map<number, NativeDomInfo>();
   const root = await readDomRoot(client);
+  const labelsOf = domLabels(root);
 
   const locators = createLocatorIndex();
 
@@ -312,12 +314,14 @@ async function enrichFromDom(
     locators.link(node, inside);
     if (typeof node.backendNodeId === "number" && node.nodeName) {
       const ariaValueText = attributeOf(node, "aria-valuetext");
+      const labels = labelsOf(node.backendNodeId) ?? [];
       out.set(node.backendNodeId, {
         tagName: node.nodeName.toLowerCase(),
         attributes: allowlistAttributes(node.attributes ?? []),
         locator: buildCssPath(node, locators.adapter),
         ...(ariaValueText !== null ? { ariaValueText } : {}),
         ...(host !== undefined ? { fieldHost: host } : {}),
+        ...(labels.length > 0 ? { labels } : {}),
       });
     }
     const below =

@@ -13,10 +13,11 @@
  * Run: `pnpm --filter @real-a11y-dev/browser test:e2e embedded-control`
  */
 
-import { nativeTree, pageBundleSource } from "@real-a11y-dev/browser";
 import { REDACTED_VALUE } from "@real-a11y-dev/core";
 import { chromium, type Browser, type Page } from "playwright";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+
+import { domById, nativeById, rawById } from "./names-by-id.js";
 
 let browser: Browser;
 let page: Page;
@@ -29,100 +30,6 @@ beforeAll(async () => {
 afterAll(async () => {
   await browser.close();
 });
-
-interface Read {
-  name: string;
-  description: string;
-}
-
-type ById = Record<string, Read>;
-
-/** Every `id`-ed element's name and description from the DOM producer. */
-async function domById(redactInput: boolean): Promise<ById> {
-  await page.addScriptTag({ content: pageBundleSource() });
-  return page.evaluate((redactInput) => {
-    const ra = (globalThis as Record<string, unknown>).__realA11y__ as {
-      extractA11yTree(
-        root: Element,
-        options: { redactInput: boolean },
-      ): {
-        nodes: Map<
-          string,
-          {
-            dom?: { attributes: Record<string, string> };
-            a11y: { name: string; description?: string };
-          }
-        >;
-      };
-    };
-    const out: Record<string, { name: string; description: string }> = {};
-    const tree = ra.extractA11yTree(document.body, { redactInput });
-    for (const node of tree.nodes.values()) {
-      const id = node.dom?.attributes["id"];
-      if (id) {
-        out[id] = {
-          name: node.a11y.name,
-          description: node.a11y.description ?? "",
-        };
-      }
-    }
-    return out;
-  }, redactInput);
-}
-
-/** The same from the native producer. */
-async function nativeById(redactInput: boolean): Promise<ById> {
-  const out: ById = {};
-  for (const node of (await nativeTree(page, { redactInput })).nodes.values()) {
-    const id = node.dom?.attributes["id"];
-    if (id) {
-      out[id] = {
-        name: node.a11y.name,
-        description: node.a11y.description ?? "",
-      };
-    }
-  }
-  return out;
-}
-
-/** The same straight from Chromium's raw CDP tree, ASCII-trimmed as both
- *  producers trim a name. */
-async function rawById(): Promise<ById> {
-  const out: ById = {};
-  const cdp = await page.context().newCDPSession(page);
-  try {
-    await cdp.send("DOM.enable");
-    await cdp.send("Accessibility.enable");
-    const { nodes } = (await cdp.send("Accessibility.getFullAXTree")) as {
-      nodes: {
-        backendDOMNodeId?: number;
-        ignored?: boolean;
-        name?: { value?: string };
-        description?: { value?: string };
-      }[];
-    };
-    for (const n of nodes) {
-      if (n.ignored || n.backendDOMNodeId === undefined) continue;
-      const { node } = (await cdp.send("DOM.describeNode", {
-        backendNodeId: n.backendDOMNodeId,
-      })) as { node: { attributes?: string[] } };
-      const attrs = node.attributes ?? [];
-      const at = attrs.indexOf("id");
-      if (at >= 0) {
-        out[attrs[at + 1]!] = {
-          name: (n.name?.value ?? "").replace(
-            /^[ \t\n\f\r]+|[ \t\n\f\r]+$/g,
-            "",
-          ),
-          description: n.description?.value ?? "",
-        };
-      }
-    }
-  } finally {
-    await cdp.detach();
-  }
-  return out;
-}
 
 const REPRO = `
   <label><input id="r1" type="checkbox"> Flash the screen <input value="3" aria-label="number of times"> times</label>
@@ -200,9 +107,9 @@ describe("an embedded control's value, against Chromium", () => {
   it("names the finding's six repro cases as Chromium does", async () => {
     await page.setContent(REPRO);
     const [dom, native, raw] = [
-      await domById(false),
-      await nativeById(false),
-      await rawById(),
+      await domById(page, false),
+      await nativeById(page, false),
+      await rawById(page),
     ];
     expect(raw["r1"]?.name).toBe("Flash the screen 3 times");
     for (const id of ["r1", "r2", "r3", "r4", "r5", "r6"]) {
@@ -225,7 +132,7 @@ describe("an embedded control's value, against Chromium", () => {
         `<h2 id="owned-wrap">Pick <div role="listbox" tabindex="0" aria-owns="owned-w"></div></h2>` +
         `<div id="owned-w"><span role="option">Three</span><span role="option" aria-selected="true">Four</span></div>`,
     );
-    const [dom, raw] = [await domById(false), await rawById()];
+    const [dom, raw] = [await domById(page, false), await rawById(page)];
     expect(raw["owned"]?.name).toBe("Pick Two");
     expect(raw["owned-wrap"]?.name).toBe("Pick");
     for (const id of [...VARIANTS.map(([id]) => id), "owned", "owned-wrap"]) {
@@ -235,7 +142,7 @@ describe("an embedded control's value, against Chromium", () => {
 
   it("reads a referenced control as Chromium does", async () => {
     await page.setContent(REFERENCES);
-    const [dom, raw] = [await domById(false), await rawById()];
+    const [dom, raw] = [await domById(page, false), await rawById(page)];
     expect(raw["lv"]?.name).toBe("typed");
     for (const id of ["lv", "le", "sl", "ls"]) {
       expect(dom[id]?.name, id).toBe(raw[id]?.name);
@@ -245,7 +152,7 @@ describe("an embedded control's value, against Chromium", () => {
 
   it("lends nothing where Chromium lends nothing", async () => {
     await page.setContent(UNLENT);
-    const [dom, raw] = [await domById(false), await rawById()];
+    const [dom, raw] = [await domById(page, false), await rawById(page)];
     for (const id of [
       "own",
       "opts",
@@ -266,14 +173,14 @@ describe("an embedded control's value, against Chromium", () => {
 
   it("reads a range the page sets, and keeps it in strict mode, as native does", async () => {
     await page.setContent(PAGE_STATE);
-    const [dom, raw] = [await domById(false), await rawById()];
+    const [dom, raw] = [await domById(page, false), await rawById(page)];
     expect(raw["meter"]?.name).toBe("Disk 0.6");
     for (const id of ["meter", "progress", "pbar", "ameter", "multi"]) {
       expect(dom[id]?.name, id).toBe(raw[id]?.name);
     }
     const [strictDom, strictNative] = [
-      await domById(true),
-      await nativeById(true),
+      await domById(page, true),
+      await nativeById(page, true),
     ];
     for (const id of ["meter", "progress", "pbar", "ameter"]) {
       expect(strictDom[id]?.name, id).toBe(strictNative[id]?.name);
@@ -291,8 +198,8 @@ describe("an embedded control's value, against Chromium", () => {
     `);
     for (const redactInput of [false, true]) {
       const [dom, native] = [
-        await domById(redactInput),
-        await nativeById(redactInput),
+        await domById(page, redactInput),
+        await nativeById(page, redactInput),
       ];
       const at = `strict: ${redactInput}`;
       for (const id of ["otp", "pin", "cc"]) {
