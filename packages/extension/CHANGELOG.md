@@ -26,7 +26,7 @@
   role, sat between the combobox and its options; the options now sit directly
   under the combobox, as the DOM producer prints them. The option picker still opens for
   a real `<select>` and for no custom `role="combobox"`.
-  (PR_LINK_PLACEHOLDER)
+  ([#662](https://github.com/real-a11y/real-a11y-dev/pull/662))
 
 - **The side panel no longer shows a `level` badge on every list item.**
   Chrome computes a list item's nesting depth as a `level`, which the panel
