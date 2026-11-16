@@ -32,7 +32,7 @@
  * it holds anything — never Chromium's masking bullets, which give away the
  * length. So does anything inside such a field (a month input's UA-shadow
  * spinbuttons) or around it, and a container Chromium named from contents that
- * include one: see {@link fieldSensitivity}. That holds for a field the tree
+ * include one: see `fieldSensitivity` (in `native-sensitivity.ts`). That holds for a field the tree
  * has no node of its own for, too: what stands in for it there is classified
  * by the field's own markup (core's `fieldStandIns`).
  *
@@ -49,7 +49,7 @@
  * editor is its value — but Chromium also names the nodes inside the editor
  * from it (a paragraph's text, a link's, a heading's), so the same text reaches
  * the tree a second way. The strict mode closes that path at the source,
- * before normalization can promote anything: see {@link redactEditableContent}.
+ * before normalization can promote anything: see `redactEditableContent`.
  *
  * (Caveat, documented not hand-waved: `getFullAXTree` / `getDocument`
  * responses themselves carry field values in their CDP payload — Chromium masks
