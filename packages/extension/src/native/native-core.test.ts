@@ -388,6 +388,53 @@ describe("readNativeTree", () => {
     expect(heading?.properties).toEqual({ level: "2" });
   });
 
+  it("drops Chromium's computed level on a listitem, keeping heading and treeitem levels", async () => {
+    const lvl = (n: number) => [{ name: "level", value: { value: n } }];
+    const raw = [
+      {
+        nodeId: "1",
+        childIds: ["2", "3", "4"],
+        role: { value: "RootWebArea" },
+      },
+      {
+        nodeId: "2",
+        parentId: "1",
+        backendDOMNodeId: 20,
+        role: { value: "listitem" },
+        name: { value: "Inner" },
+        properties: lvl(2),
+      },
+      {
+        nodeId: "3",
+        parentId: "1",
+        backendDOMNodeId: 30,
+        role: { value: "heading" },
+        name: { value: "Title" },
+        properties: lvl(2),
+      },
+      {
+        nodeId: "4",
+        parentId: "1",
+        backendDOMNodeId: 40,
+        role: { value: "treeitem" },
+        name: { value: "Node" },
+        properties: lvl(3),
+      },
+    ];
+    const t = new FakeTransport((method) =>
+      method === "Accessibility.getFullAXTree" ? { nodes: raw } : {},
+    );
+    const res = await readNativeTree(t);
+
+    expect(findNative(res.nodes, "listitem", "Inner")?.properties).toEqual({});
+    expect(findNative(res.nodes, "heading", "Title")?.properties).toEqual({
+      level: "2",
+    });
+    expect(findNative(res.nodes, "treeitem", "Node")?.properties).toEqual({
+      level: "3",
+    });
+  });
+
   it("reads busy as true — Chromium sends it as the number 1", async () => {
     // Verbatim from Chromium 151's getFullAXTree on
     // `<div role="group" aria-label="g" aria-busy="true">`. Read raw, it was

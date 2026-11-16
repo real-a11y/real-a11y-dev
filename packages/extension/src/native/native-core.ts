@@ -213,6 +213,9 @@ function axFacets(
   for (const p of raw.properties ?? []) {
     const v = p.value?.value;
     if (v === undefined || v === null || typeof v === "object") continue;
+    // Chromium's computed nesting depth on a list item is no authored level,
+    // and the DOM producer reports none. Lockstep with `browser`'s axFacets.
+    if (p.name === "level" && raw.role?.value === "listitem") continue;
     if (STATE_PROPS.has(p.name)) {
       states[p.name] = nativeAXStateValue(p.value!);
     } else if (DETAIL_PROPS.has(p.name)) {

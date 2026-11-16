@@ -21,6 +21,12 @@
 
 ### Patch Changes
 
+- **The side panel no longer shows a `level` badge on every list item.**
+  Chrome computes a list item's nesting depth as a `level`, which the panel
+  listed (and copied out as `listitem "Item" (level 1)`) as if the page had set
+  `aria-level`. Headings, tree items and tree-grid rows keep their level.
+  ([#PR](https://github.com/real-a11y/real-a11y-dev/pull/PR))
+
 - **The side panel no longer shows a sensitive field's value that Chrome
   reads into a name through another control's `<label>`.** A checkbox, a
   button or a date input with no value to lend gives its labels instead, so

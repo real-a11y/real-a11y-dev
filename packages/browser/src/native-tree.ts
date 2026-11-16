@@ -267,6 +267,11 @@ function axFacets(raw: RawAXNode): Pick<A11yInfo, "states" | "properties"> {
   for (const p of raw.properties ?? []) {
     const v = p.value?.value;
     if (v === undefined || v === null || typeof v === "object") continue;
+    // Chromium computes a list item's `level` from its nesting depth; no
+    // author set it, and the DOM producer never reports one (only headings,
+    // and the roles whose level Core-AAM requires computed, carry a level).
+    // Kept in lockstep with the other native transport.
+    if (p.name === "level" && raw.role?.value === "listitem") continue;
     if (STATE_PROPS.has(p.name)) {
       states[p.name] = nativeAXStateValue(p.value!);
     } else if (DETAIL_PROPS.has(p.name)) {

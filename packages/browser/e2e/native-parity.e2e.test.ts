@@ -1027,12 +1027,8 @@ describe("a paragraph's text through role-less inline wrappers", () => {
       '  code "import { a } from "b";"',
     ];
     expect(domTree.split("\n")).toEqual(expected);
-    // Native adds a list item's level, which the DOM producer never prints.
-    expect(nativeTree.split("\n")).toEqual(
-      expected.map((line) =>
-        line.includes("listitem") ? `${line} (level 1)` : line,
-      ),
-    );
+    // A list item carries no level in either producer.
+    expect(nativeTree.split("\n")).toEqual(expected);
   });
 });
 
