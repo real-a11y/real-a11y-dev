@@ -16,10 +16,11 @@
  * Run: `pnpm --filter @real-a11y-dev/browser test:e2e referenced-control-label`
  */
 
-import { nativeTree } from "@real-a11y-dev/browser";
 import { REDACTED_VALUE } from "@real-a11y-dev/core";
 import { chromium, type Browser, type Page } from "playwright";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+
+import { nativeById, rawById } from "./names-by-id.js";
 
 let browser: Browser;
 let page: Page;
@@ -32,61 +33,6 @@ beforeAll(async () => {
 afterAll(async () => {
   await browser.close();
 });
-
-interface Read {
-  name: string;
-  description: string;
-}
-
-/** Every `id`-ed node's name and description from the native tree. */
-async function nativeById(redactInput: boolean): Promise<Map<string, Read>> {
-  const out = new Map<string, Read>();
-  for (const node of (await nativeTree(page, { redactInput })).nodes.values()) {
-    const id = node.dom?.attributes["id"];
-    if (id) {
-      out.set(id, {
-        name: node.a11y.name,
-        description: node.a11y.description ?? "",
-      });
-    }
-  }
-  return out;
-}
-
-/** The same, straight from Chromium's raw CDP tree. */
-async function rawById(): Promise<Map<string, Read>> {
-  const out = new Map<string, Read>();
-  const cdp = await page.context().newCDPSession(page);
-  try {
-    await cdp.send("DOM.enable");
-    await cdp.send("Accessibility.enable");
-    const { nodes } = (await cdp.send("Accessibility.getFullAXTree")) as {
-      nodes: {
-        backendDOMNodeId?: number;
-        ignored?: boolean;
-        name?: { value?: string };
-        description?: { value?: string };
-      }[];
-    };
-    for (const n of nodes) {
-      if (n.ignored || n.backendDOMNodeId === undefined) continue;
-      const { node } = (await cdp.send("DOM.describeNode", {
-        backendNodeId: n.backendDOMNodeId,
-      })) as { node: { attributes?: string[] } };
-      const attrs = node.attributes ?? [];
-      const at = attrs.indexOf("id");
-      if (at >= 0) {
-        out.set(attrs[at + 1]!, {
-          name: n.name?.value ?? "",
-          description: n.description?.value ?? "",
-        });
-      }
-    }
-  } finally {
-    await cdp.detach();
-  }
-  return out;
-}
 
 const OTP = `autocomplete="one-time-code" value="482913"`;
 
@@ -127,39 +73,37 @@ describe("a value in the label of a control another name reads, against Chromium
       <label for="nlabel-e">Code <input ${OTP}></label>
       <button id="nlabel-b" aria-labelledby="nlabel">Toggle</button>
     `);
-    const raw = await rawById();
+    const raw = await rawById(page);
     // Chromium itself puts the code there, a hidden checkbox's label too.
     for (const key of ["for", "wrap", "date", "hid"]) {
-      expect(raw.get(`${key}-b`)?.name, key).toBe("Code 482913");
-      expect(raw.get(`${key}-d`)?.description, key).toBe("Code 482913");
+      expect(raw[`${key}-b`]?.name, key).toBe("Code 482913");
+      expect(raw[`${key}-d`]?.description, key).toBe("Code 482913");
     }
-    expect(raw.get("pw-b")?.name).toMatch(/^Pass [•●]{7}$/);
+    expect(raw["pw-b"]?.name).toMatch(/^Pass [•●]{7}$/);
     // ...and through a labelled control inside the label, or inside content.
-    expect(raw.get("in-b")?.name).toBe("Opt in Code 482913");
-    expect(raw.get("cell")?.name).toBe("Row Code 482913");
-    expect(raw.get("span-b")?.name).toBe("Pick Code 482913");
+    expect(raw["in-b"]?.name).toBe("Opt in Code 482913");
+    expect(raw["cell"]?.name).toBe("Row Code 482913");
+    expect(raw["span-b"]?.name).toBe("Pick Code 482913");
     // A hidden target is read whole: a hidden checkbox in it by its label.
-    expect(raw.get("hspan-b")?.name).toBe("Pick Code 482913");
-    expect(raw.get("hspan-d")?.description).toBe("Pick Code 482913");
-    expect(raw.get("aspan-b")?.name).toBe("Pick Code 482913");
-    expect(raw.get("nlabel-b")?.name).toBe("Opt Code 482913");
+    expect(raw["hspan-b"]?.name).toBe("Pick Code 482913");
+    expect(raw["hspan-d"]?.description).toBe("Pick Code 482913");
+    expect(raw["aspan-b"]?.name).toBe("Pick Code 482913");
+    expect(raw["nlabel-b"]?.name).toBe("Opt Code 482913");
 
     for (const redactInput of [false, true]) {
-      const native = await nativeById(redactInput);
+      const native = await nativeById(page, redactInput);
       const at = `strict: ${redactInput}`;
       for (const key of ["for", "wrap", "date", "hid", "pw", "in"]) {
-        expect(native.get(`${key}-b`)?.name, `${key} (${at})`).toBe(
-          REDACTED_VALUE,
-        );
-        expect(native.get(`${key}-d`)?.name, `${key} (${at})`).toBe("Go");
-        expect(native.get(`${key}-d`)?.description, `${key} (${at})`).toBe("");
+        expect(native[`${key}-b`]?.name, `${key} (${at})`).toBe(REDACTED_VALUE);
+        expect(native[`${key}-d`]?.name, `${key} (${at})`).toBe("Go");
+        expect(native[`${key}-d`]?.description, `${key} (${at})`).toBe("");
       }
-      expect(native.get("cell")?.name, at).toBe(REDACTED_VALUE);
+      expect(native["cell"]?.name, at).toBe(REDACTED_VALUE);
       for (const id of ["span-b", "hspan-b", "aspan-b", "nlabel-b"]) {
-        expect(native.get(id)?.name, `${id} (${at})`).toBe(REDACTED_VALUE);
+        expect(native[id]?.name, `${id} (${at})`).toBe(REDACTED_VALUE);
       }
-      expect(native.get("hspan-d")?.description, at).toBe("");
-      for (const read of native.values()) {
+      expect(native["hspan-d"]?.description, at).toBe("");
+      for (const read of Object.values(native)) {
         expect(`${read.name} ${read.description}`, at).not.toMatch(
           /482913|•|●/,
         );
@@ -180,23 +124,23 @@ describe("a value in the label of a control another name reads, against Chromium
       <span id="hid-c" hidden>Pick <input type="checkbox" id="hid-e"></span>
       <label for="hid-e">Name <input value="typed"></label>${readers("hid")}
     `);
-    const raw = await rawById();
-    expect(raw.get("text-b")?.name).toBe("Name typed");
-    expect(raw.get("area-d")?.description).toBe("Note typed note");
-    expect(raw.get("pick-b")?.name).toBe("Pick Bee");
-    expect(raw.get("ed-b")?.name).toBe("Ed typed text");
+    const raw = await rawById(page);
+    expect(raw["text-b"]?.name).toBe("Name typed");
+    expect(raw["area-d"]?.description).toBe("Note typed note");
+    expect(raw["pick-b"]?.name).toBe("Pick Bee");
+    expect(raw["ed-b"]?.name).toBe("Ed typed text");
 
-    const shown = await nativeById(false);
-    const strict = await nativeById(true);
-    expect(raw.get("hid-b")?.name).toBe("Pick Name typed");
+    const shown = await nativeById(page, false);
+    const strict = await nativeById(page, true);
+    expect(raw["hid-b"]?.name).toBe("Pick Name typed");
     for (const key of ["text", "area", "pick", "ed", "hid"]) {
-      expect(shown.get(`${key}-b`)?.name, key).toBe(raw.get(`${key}-b`)?.name);
-      expect(shown.get(`${key}-d`)?.description, key).toBe(
-        raw.get(`${key}-d`)?.description,
+      expect(shown[`${key}-b`]?.name, key).toBe(raw[`${key}-b`]?.name);
+      expect(shown[`${key}-d`]?.description, key).toBe(
+        raw[`${key}-d`]?.description,
       );
-      expect(strict.get(`${key}-b`)?.name, key).toBe(REDACTED_VALUE);
-      expect(strict.get(`${key}-d`)?.name, key).toBe("Go");
-      expect(strict.get(`${key}-d`)?.description, key).toBe("");
+      expect(strict[`${key}-b`]?.name, key).toBe(REDACTED_VALUE);
+      expect(strict[`${key}-d`]?.name, key).toBe("Go");
+      expect(strict[`${key}-d`]?.description, key).toBe("");
     }
   });
 
@@ -224,25 +168,25 @@ describe("a value in the label of a control another name reads, against Chromium
       <label id="cyc-l">Code <input type="checkbox" id="cyc-c"> <input id="cyc" aria-labelledby="cyc-l" ${OTP}></label>
       <label id="cyt-l">Name <input type="checkbox" id="cyt-c"> <input id="cyt" aria-labelledby="cyt-l" value="typed"></label>
     `);
-    const raw = await rawById();
+    const raw = await rawById(page);
     // A reference skips the checkbox's own aria-labelledby and reads the
     // label, which holds no value; an aria-label is read before any label.
-    expect(raw.get("own-b")?.name).toBe("Lab");
-    expect(raw.get("al-b")?.name).toBe("Agree");
-    expect(raw.get("empty-b")?.name).toBe("Code");
-    expect(raw.get("hidp-b")?.name).toBe("Plain");
+    expect(raw["own-b"]?.name).toBe("Lab");
+    expect(raw["al-b"]?.name).toBe("Agree");
+    expect(raw["empty-b"]?.name).toBe("Code");
+    expect(raw["hidp-b"]?.name).toBe("Plain");
     // A visible target's content skips a hidden checkbox in it, labels and
     // all; a field named by a label around it skips its own value, even read
     // back through the checkbox that label labels.
     for (const key of ["vh", "va", "vv"]) {
-      expect(raw.get(`${key}-b`)?.name.trim(), key).toBe("Pick");
+      expect(raw[`${key}-b`]?.name, key).toBe("Pick");
     }
-    expect(raw.get("cyc-c")?.name).toBe("Code 482913");
-    expect(raw.get("cyc")?.name.trim()).toBe("Code");
-    expect(raw.get("cyt")?.name.trim()).toBe("Name");
+    expect(raw["cyc-c"]?.name).toBe("Code 482913");
+    expect(raw["cyc"]?.name).toBe("Code");
+    expect(raw["cyt"]?.name).toBe("Name");
 
     for (const redactInput of [false, true]) {
-      const native = await nativeById(redactInput);
+      const native = await nativeById(page, redactInput);
       const at = `strict: ${redactInput}`;
       for (const key of [
         "plain",
@@ -254,20 +198,20 @@ describe("a value in the label of a control another name reads, against Chromium
         "va",
         "vv",
       ]) {
-        expect(native.get(`${key}-b`)?.name, `${key} (${at})`).toBe(
-          raw.get(`${key}-b`)?.name.trim(),
+        expect(native[`${key}-b`]?.name, `${key} (${at})`).toBe(
+          raw[`${key}-b`]?.name,
         );
-        expect(native.get(`${key}-d`)?.description, `${key} (${at})`).toBe(
-          raw.get(`${key}-d`)?.description.trim(),
+        expect(native[`${key}-d`]?.description, `${key} (${at})`).toBe(
+          raw[`${key}-d`]?.description.trim(),
         );
       }
-      expect(native.get("cell")?.name, at).toBe("Row Sel");
+      expect(native["cell"]?.name, at).toBe("Row Sel");
       // A field's own label around it skips its own value, strict or not.
-      expect(native.get("self")?.name, at).toBe("Name");
-      expect(native.get("cyc")?.name, at).toBe("Code");
-      expect(native.get("cyc-c")?.name, at).toBe(REDACTED_VALUE);
-      expect(native.get("cyt")?.name, at).toBe("Name");
-      expect(native.get("cyt-c")?.name, at).toBe(
+      expect(native["self"]?.name, at).toBe("Name");
+      expect(native["cyc"]?.name, at).toBe("Code");
+      expect(native["cyc-c"]?.name, at).toBe(REDACTED_VALUE);
+      expect(native["cyt"]?.name, at).toBe("Name");
+      expect(native["cyt-c"]?.name, at).toBe(
         redactInput ? REDACTED_VALUE : "Name typed",
       );
     }
