@@ -6041,6 +6041,27 @@ describe("interaction.isFocusable follows Chromium", () => {
     });
   });
 
+  it("gives an SVG link the link role with href or xlink:href", () => {
+    const roles: Record<string, string> = {};
+    for (const node of extractDomTree(
+      createPage(`
+        <svg>
+          <a id="svg-href" href="/a"><text>A</text></a>
+          <a id="svg-xlink" xlink:href="/b"><text>B</text></a>
+          <a id="svg-bare"><text>C</text></a>
+        </svg>
+      `),
+    ).nodes.values()) {
+      const id = node.dom?.attributes["id"];
+      if (id) roles[id] = node.a11y.role;
+    }
+    expect(roles).toEqual({
+      "svg-href": "link",
+      "svg-xlink": "link",
+      "svg-bare": "generic",
+    });
+  });
+
   it("does not count a disabled control, however it came to be disabled", () => {
     expect(
       focusableById(`

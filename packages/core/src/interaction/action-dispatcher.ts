@@ -1,5 +1,6 @@
 import { safeTagName } from "../extraction/clobber-safe.js";
 import { isEditable, isEditingHost } from "../extraction/editing.js";
+import { hasLinkHref } from "../extraction/link-href.js";
 import { getExplicitRole } from "../extraction/role-map.js";
 import type { ActionRequest, ActionResult } from "../types.js";
 import { ElementRefMap } from "../utils/element-ref.js";
@@ -57,7 +58,7 @@ function firstClickableDescendant(root: Element): Element | null {
   for (let node = walker.nextNode(); node; node = walker.nextNode()) {
     const el = node as Element;
     const tag = safeTagName(el);
-    if ((tag === "a" && el.hasAttribute("href")) || tag === "button") {
+    if ((tag === "a" && hasLinkHref(el)) || tag === "button") {
       return el;
     }
     const descendantRole = getExplicitRole(el);

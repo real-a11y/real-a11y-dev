@@ -35,6 +35,14 @@ function roleInDocument(html: string): string {
 }
 
 describe("getImplicitRole", () => {
+  it("returns link for an SVG <a> with href or xlink:href, generic with neither", () => {
+    const svg = (a: string) =>
+      el(`<svg><a id="t" ${a}><text>x</text></a></svg>`).querySelector("a")!;
+    expect(getImplicitRole(svg('href="/"'))).toBe("link");
+    expect(getImplicitRole(svg('xlink:href="/"'))).toBe("link");
+    expect(getImplicitRole(svg(""))).toBe("generic");
+  });
+
   it("returns link for <a> with href", () => {
     expect(getImplicitRole(el('<a href="/about">About</a>'))).toBe("link");
   });

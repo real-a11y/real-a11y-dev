@@ -24,6 +24,7 @@ import {
 } from "./flat-tree.js";
 import { isFocusable, parseHtmlInteger } from "./focusability.js";
 import { imageUsingMap } from "./image-map.js";
+import { hasLinkHref } from "./link-href.js";
 import { tablePartRole, tdRole, thHeaderRole } from "./table-roles.js";
 import { isHiddenByVisibility, isOwnVisibilityHidden } from "./visibility.js";
 
@@ -347,7 +348,7 @@ export function isDatalistCombobox(element: Element): boolean {
 }
 
 const ROLE_MAP: Record<string, RoleResolver> = {
-  a: (el) => (el.hasAttribute("href") ? "link" : "generic"),
+  a: (el) => (hasLinkHref(el) ? "link" : "generic"),
   abbr: "generic",
   address: "group",
   area: (el) => (el.hasAttribute("href") ? "link" : "generic"),

@@ -32,6 +32,10 @@
   link around the checkbox. A label that holds no value, and an `aria-label`
   on the control, still name it
   ([#653](https://github.com/real-a11y/real-a11y-dev/pull/653)).
+- **The TAB view lists an SVG link that uses `xlink:href` as a link.** The
+  extension re-bundles the updated extractor: an SVG `<a xlink:href="/">` is
+  `link "y"` in the tab sequence, as in Chrome's tree, not `generic "y"`
+  ([#657](https://github.com/real-a11y/real-a11y-dev/pull/657)).
 - **The TAB view no longer lists a stop Chrome never focuses.** The extension
   re-bundles the updated extractor: an element whose `tabindex` is outside the
   signed 32-bit range (`tabindex="2147483648"`) is ignored as if it had none,
