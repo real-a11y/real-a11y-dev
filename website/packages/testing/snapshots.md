@@ -35,6 +35,17 @@ test("login form structure", () => {
 | `values` | `boolean` | `false` | Print each field's announced value: `textbox "Email" = "jane@x.com"`. See [Field values](#field-values). |
 | `redactInput` | `boolean` | `false` | Strict mode: no field value and no rich-text editor content, names included. See [Strict mode](#strict-mode). |
 
+### What a line carries
+
+A tree line is `role "name"`, plus `= "value"` with `values: true`, `(level N)` where the node has a level, and `[focused]` with `markFocus`. A tab-order line carries the same except the level. **No line prints states, the description, or other ARIA properties**, so a checked and an unchecked checkbox with the same name serialize identically:
+
+```
+checkbox "Subscribe"
+checkbox "Subscribe"
+```
+
+A tree snapshot therefore will not fail when a checkbox is unchecked, an `aria-expanded` is dropped, or a description changes. Assert on `node.a11y.states` and `node.a11y.description` for those, or snapshot a change with [`serializeTreeDiff`](/packages/testing/flow), which prints each changed state, description and property as a `~` line.
+
 ### Field values
 
 Pass `values: true` to print what each field holds, the way a screen reader announces it:
@@ -47,7 +58,7 @@ form "Checkout"
   slider "Tip" = "15%"
 ```
 
-- **What the value is.** A text field's or editor's text, a `<select>`'s selected option **label** (`"Spain"`, not its `value="es"`), and a range widget's `aria-valuetext` (else `aria-valuenow`). Checkboxes and radios carry none; their state says it. Whitespace collapses, and a value is capped at 240 characters.
+- **What the value is.** A text field's or editor's text, a `<select>`'s selected option **label** (`"Spain"`, not its `value="es"`), and a range widget's `aria-valuetext` (else `aria-valuenow`). Checkboxes and radios carry none; their `checked` state is on the node (`node.a11y.states`), but the tree text does not print it (see [What a line carries](#what-a-line-carries)). Whitespace collapses, and a value is capped at 240 characters.
 - **Sensitive fields never print.** A `type="password"` field, or one whose `autocomplete` names a credential or payment field (`current-password`, `new-password`, `one-time-code`, `cc-number`, `cc-csc`, `cc-exp*`), prints `"[redacted]"` when it holds anything.
 - **Off by default.** A committed snapshot only changes when you ask for values. `redact` patterns apply to values as they do to names.
 

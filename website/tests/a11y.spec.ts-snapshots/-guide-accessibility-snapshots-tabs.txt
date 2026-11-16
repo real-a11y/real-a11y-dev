@@ -15,6 +15,7 @@ table
 link "treeSnapshot"
 link "outlineSnapshot"
 link "tabSequenceSnapshot"
+link "serializeTreeDiff"
 link "redact"
 button "Copy Code"
 generic

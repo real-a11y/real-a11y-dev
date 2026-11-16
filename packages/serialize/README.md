@@ -1,6 +1,6 @@
 # @real-a11y-dev/serialize
 
-Deterministic text serialization of the [Semantic Navigator](https://real-a11y.dev) accessibility tree. The same string format the Real A11y panel, the testing snapshots, the `real-a11y` CLI (`tree`/`outline`/`tabs`), the MCP server, and the Chrome extension all share.
+Deterministic text serialization of the [Semantic Navigator](https://real-a11y.dev) accessibility tree. The same string format the testing snapshots, the `real-a11y` CLI (`tree`/`outline`/`tabs`), the MCP server, the injected page bundle, and the Chrome extension's Copy/export all share. (The `inspector`, `react` and `storybook-addon` panels do not use it.)
 
 > **Internal package — not published to npm.** It is bundled into
 > [`@real-a11y-dev/testing`](../testing), the `real-a11y` CLI, the MCP server,
@@ -69,8 +69,30 @@ sensitive field as `"[redacted]"`). `values` is off by default, so output is
 unchanged unless asked. `redactInput` is the strict mode: given a DOM root it
 extracts with no field value and no editor text in any name, and given a tree
 it throws unless the tree was extracted that way. The output is stable
-across runs (roles + names only, no ids or timestamps), which is what makes it
-safe to commit and diff.
+across runs (no ids or timestamps), which is what makes it safe to commit and
+diff.
+
+### What the text carries — and what it leaves out
+
+A `serializeTree` line is `role "name"`, then `= "value"` when `values` is on,
+`(level N)` when the node has a level, and `[focused]` when `markFocus` is on.
+`serializeTabSequence` prints role, name, the opt-in value and `[focused]` — no
+level. **Neither prints states, the description, or any other ARIA property**
+(`roledescription`, `haspopup`, `sort`, …). Two checkboxes that differ only in
+`checked` serialize to identical lines:
+
+```
+checkbox "Subscribe"
+checkbox "Subscribe"
+```
+
+So a committed tree snapshot does not change when a checkbox stops being
+checked, a disclosure loses `aria-expanded`, or a description disappears. To
+assert on those, read the node (`node.a11y.states`, `node.a11y.description`,
+`node.a11y.properties`), or use `serializeTreeDiff`, which prints every
+changed state, description and property as a `~` line. Where the `level` of a
+list item shows depends on the producer, so don't read the text as everything
+assistive technology announces.
 
 ## `serializeTreeDiff(diff, options?)`
 
