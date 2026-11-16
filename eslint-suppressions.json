@@ -11,7 +11,7 @@
   },
   "packages/browser/src/native-tree.ts": {
     "complexity": {
-      "count": 3
+      "count": 2
     },
     "max-lines-per-function": {
       "count": 1

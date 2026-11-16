@@ -1,5 +1,4 @@
 {
-  "packages/browser/src/native-tree.ts": 504,
   "packages/core/src/extraction/dom-extractor.ts": 1170,
   "packages/extension/src/background.ts": 703,
   "packages/extension/src/content.ts": 639,
