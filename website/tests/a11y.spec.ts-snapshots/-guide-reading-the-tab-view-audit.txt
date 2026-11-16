@@ -66,6 +66,11 @@ main
   paragraph "Elements with are completely excluded. They're reachable programmatically (via JavaScript's ), but invisible to the Tab key."
     code "tabindex="-1""
     code ".focus()"
+  paragraph "A outside the signed 32-bit range (such as ) is ignored as if it were absent, and an element with has no box, so neither is listed as a stop. Focusable children of a element stay in the sequence. Chrome decides both; the HTML Standard leaves rendering to the browser."
+    code "tabindex"
+    code "tabindex="2147483648""
+    code "display: contents"
+    code "display: contents"
   paragraph "The TAB view reflects this computed order exactly."
   separator
   heading "What to check" (level 2)

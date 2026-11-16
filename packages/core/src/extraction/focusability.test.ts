@@ -139,4 +139,30 @@ describe("parseTabindex", () => {
     expect(parseTabindex("1abc")).toBe(1);
     expect(parseTabindex("2.5")).toBe(2);
   });
+
+  // Chromium reads a tabindex outside the signed 32-bit range as absent.
+  it("ignores a value outside the signed 32-bit range", () => {
+    expect(parseTabindex("2147483647")).toBe(2147483647);
+    expect(parseTabindex("2147483648")).toBeNull();
+    expect(parseTabindex("-2147483648")).toBe(-2147483648);
+    expect(parseTabindex("-2147483649")).toBeNull();
+  });
+
+  it("does not make a div with an out-of-range tabindex focusable", () => {
+    const div = document.createElement("div");
+    div.setAttribute("tabindex", "2147483648");
+    expect(isFocusable(div)).toBe(false);
+    div.setAttribute("tabindex", "2147483647");
+    expect(isFocusable(div)).toBe(true);
+  });
+});
+
+describe("isFocusable with a computed style", () => {
+  it("is false under display:contents, except for an image-map area", () => {
+    const div = document.createElement("div");
+    div.setAttribute("tabindex", "0");
+    expect(isFocusable(div, { display: "contents" })).toBe(false);
+    expect(isFocusable(div, { display: "block" })).toBe(true);
+    expect(isFocusable(div, null)).toBe(true);
+  });
 });

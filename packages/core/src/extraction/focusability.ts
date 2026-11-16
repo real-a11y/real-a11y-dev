@@ -53,8 +53,15 @@ export function parseHtmlInteger(
   return match ? Number(match[1]) : null;
 }
 
-/** A `tabindex` value, parsed by {@link parseHtmlInteger}. */
-export const parseTabindex = parseHtmlInteger;
+/**
+ * A `tabindex` value, parsed by {@link parseHtmlInteger}. A value outside the
+ * signed 32-bit range is ignored as if absent: Chromium rejects it, so
+ * `tabindex="2147483648"` is not focusable and never joins the tab sequence.
+ */
+export function parseTabindex(value: string | null | undefined): number | null {
+  const n = parseHtmlInteger(value);
+  return n !== null && n >= -(2 ** 31) && n < 2 ** 31 ? n : null;
+}
 
 /**
  * True when HTML calls `element` actually disabled: by its own `disabled`
@@ -114,8 +121,23 @@ function isDetailsSummary(summary: Element): boolean {
   return false;
 }
 
-/** True when `element` can take focus, from Tab or from script. */
-export function isFocusable(element: Element): boolean {
+/**
+ * True when `element` can take focus, from Tab or from script. Pass its
+ * computed `style` to apply `display: contents`, which leaves an element with
+ * no box to focus (its children stay focusable). An image-map `<area>` is the
+ * exception: it takes focus through its image.
+ */
+export function isFocusable(
+  element: Element,
+  style?: Pick<CSSStyleDeclaration, "display"> | null,
+): boolean {
+  if (style?.display === "contents" && safeTagName(element) !== "area") {
+    return false;
+  }
+  return focusableByMarkup(element);
+}
+
+function focusableByMarkup(element: Element): boolean {
   if (isFocusBarred(element)) return false;
 
   const tag = safeTagName(element);

@@ -40,6 +40,8 @@ Browsers determine tab order using two rules, applied in this sequence:
 
 Elements with `tabindex="-1"` are completely excluded. They're reachable programmatically (via JavaScript's `.focus()`), but invisible to the Tab key.
 
+A `tabindex` outside the signed 32-bit range (such as `tabindex="2147483648"`) is ignored as if it were absent, and an element with `display: contents` has no box, so neither is listed as a stop. Focusable children of a `display: contents` element stay in the sequence. Chrome decides both; the HTML Standard leaves rendering to the browser.
+
 The TAB view reflects this computed order exactly.
 
 ---
