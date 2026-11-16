@@ -6,14 +6,15 @@ import {
   safeParentNode,
   safeQuerySelectorAll,
   safeRootNode,
+  safeTagName,
 } from "../extraction/clobber-safe.js";
 import {
-  ARIA_STATE_ATTRIBUTES,
   containsOverlaySignal,
   isModal,
   KEY_ATTRIBUTES,
   PANEL_HOST_ATTRIBUTE,
 } from "../extraction/dom-extractor.js";
+import { ARIA_STATE_ATTRIBUTES } from "../extraction/element-state.js";
 import { GLOBAL_ARIA_ATTRIBUTES } from "../extraction/role-map.js";
 import type { TreeChange } from "../types.js";
 
@@ -59,6 +60,16 @@ const EXTRA_OBSERVED_ATTRIBUTES = [
   "disabled",
   "type", // decides whether `readonly` applies to an <input>
   "readonly", // <input readonly>, <textarea readonly> map to aria-readonly
+  // The constraints a field's value is validated against, which decide its
+  // `required` and `invalid` states. `multiple`, which decides whether an
+  // email field takes a list, is a key attribute.
+  "required",
+  "pattern",
+  "min",
+  "max",
+  "minlength",
+  "maxlength",
+  "step",
   "checked",
   "hidden",
   "inert",
@@ -105,6 +116,28 @@ const OBSERVED_ATTRIBUTES = [
     ...EXTRA_OBSERVED_ATTRIBUTES,
   ]),
 ];
+
+/**
+ * Events that change a form control without a mutation, each re-extracting
+ * its target. Typing fires `input`, and a committed change fires `change`.
+ * The rest move a field's validity (see `failsValidation`): `:user-invalid`
+ * starts to match an empty required field when the user leaves it after
+ * typing, which fires `focusout` and no `change` if the value ends where it
+ * began, or when a submission is attempted, which fires `invalid` at each
+ * failing control. A form's `reset` puts its values back and stops it
+ * matching. None of these is seen by a MutationObserver, and `invalid`
+ * doesn't bubble, hence the capture phase.
+ */
+const FIELD_EVENTS = [
+  "input",
+  "change",
+  "focusout",
+  "invalid",
+  "reset",
+] as const;
+
+/** Form fields, the only targets whose `focusout` moves anything. */
+const FOCUSOUT_FIELD_TAGS = new Set(["input", "select", "textarea"]);
 
 /**
  * Element ids whose mutations we cause ourselves and must NOT trigger a tree
@@ -325,15 +358,24 @@ export class DomObserver {
     // or child nodes, so MutationObserver cannot see typing. Listen for
     // input/change events (capture phase, in case a handler stops propagation)
     // so the tree stays in sync with what users type into <input>, <textarea>,
-    // <select>, and contenteditable nodes.
+    // <select>, and contenteditable nodes. See FIELD_EVENTS for `invalid`.
     this.inputListener = (e: Event) => {
+      // Focus leaves something on every Tab press: only a field's matters.
+      if (
+        e.type === "focusout" &&
+        !(
+          e.target instanceof Element &&
+          FOCUSOUT_FIELD_TAGS.has(safeTagName(e.target))
+        )
+      )
+        return;
       if (e.target instanceof Element) {
         this.pendingDirtyRoots.push(e.target);
       }
       this.scheduleChange();
     };
-    this.root.addEventListener("input", this.inputListener, true);
-    this.root.addEventListener("change", this.inputListener, true);
+    for (const type of FIELD_EVENTS)
+      this.root.addEventListener(type, this.inputListener, true);
 
     // A popover shows and hides without an attribute changing, on it or on the
     // controls that invoke it, so no MutationRecord ever reports either. Its
@@ -514,10 +556,9 @@ export class DomObserver {
     // `inputListener` is nulled below, since removeEventListener needs it.
     for (const [portal, observer] of this.portalContentObservers) {
       observer.disconnect();
-      if (this.inputListener) {
-        portal.removeEventListener("input", this.inputListener, true);
-        portal.removeEventListener("change", this.inputListener, true);
-      }
+      if (this.inputListener)
+        for (const type of FIELD_EVENTS)
+          portal.removeEventListener(type, this.inputListener, true);
     }
     this.portalContentObservers.clear();
     for (const observer of this.dialogParentObservers.values()) {
@@ -525,8 +566,8 @@ export class DomObserver {
     }
     this.dialogParentObservers.clear();
     if (this.inputListener) {
-      this.root.removeEventListener("input", this.inputListener, true);
-      this.root.removeEventListener("change", this.inputListener, true);
+      for (const type of FIELD_EVENTS)
+        this.root.removeEventListener(type, this.inputListener, true);
       this.inputListener = null;
     }
     if (this.popoverObserver) {
@@ -590,10 +631,9 @@ export class DomObserver {
 
     // Typing inside the portal — like the primary root, `input`/`change`
     // events aren't visible to a MutationObserver.
-    if (this.inputListener) {
-      portal.addEventListener("input", this.inputListener, true);
-      portal.addEventListener("change", this.inputListener, true);
-    }
+    if (this.inputListener)
+      for (const type of FIELD_EVENTS)
+        portal.addEventListener(type, this.inputListener, true);
   }
 
   /** Tear down the observer + input listeners for a portal that unmounted. */
@@ -602,10 +642,9 @@ export class DomObserver {
     if (!observer) return;
     observer.disconnect();
     this.portalContentObservers.delete(portal);
-    if (this.inputListener) {
-      portal.removeEventListener("input", this.inputListener, true);
-      portal.removeEventListener("change", this.inputListener, true);
-    }
+    if (this.inputListener)
+      for (const type of FIELD_EVENTS)
+        portal.removeEventListener(type, this.inputListener, true);
   }
 
   /** Tear down every watched overlay that is `node` or inside it, and return them. */

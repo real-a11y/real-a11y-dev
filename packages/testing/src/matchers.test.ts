@@ -83,6 +83,23 @@ describe("toBeValidA11yTree", () => {
     expect(mount(`<button></button>`)).not.toBeValidA11yTree();
   });
 
+  it("raises nothing for an invalid field", () => {
+    const root = mount(
+      `<main>
+        <input aria-invalid="true" aria-label="a">
+        <div role="textbox" aria-invalid="grammar" aria-label="b"></div>
+        <input pattern="[0-9]+" value="abc" aria-label="c">
+        <input type="email" value="nope" aria-label="d">
+        <input id="custom" aria-label="e">
+        <input required aria-label="f">
+      </main>`,
+    );
+    root
+      .querySelector<HTMLInputElement>("#custom")!
+      .setCustomValidity("Not like that");
+    expect(root).toBeValidA11yTree();
+  });
+
   it("accepts DPUB-ARIA and Graphics-ARIA roles", () => {
     expect(
       mount(

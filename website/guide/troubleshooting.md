@@ -168,6 +168,7 @@ jsdom implements most of the accessibility tree, but a few areas diverge from re
 - **`inert` attribute** — support landed in jsdom later than in browsers. Upgrade to `jsdom ≥ 23`.
 - **`element.focus()` inside `requestAnimationFrame`** — jsdom's rAF queue differs from browsers; focus traps can look flaky.
 - **Shadow DOM event retargeting** — jsdom is mostly correct but has been known to drop `composed: true` listeners in edge cases.
+- **Form validity** — `a11y.states.invalid` follows WAI-ARIA and HTML-AAM in the DOM producer, which jsdom and the Playwright helpers' default tree use, and Chromium's own reading in `tree: "native"`. They differ on an empty required field: the DOM producer marks it invalid only once the user has interacted with it or tried to submit its form, which jsdom never sees, while Chromium never marks an empty text field invalid and marks an empty required `<select>`, checkbox or radio invalid from the start. `aria-invalid="spelling"` or `"grammar"` stays that token in a DOM tree, where Chromium reads `true` on a textbox and nothing on other roles. And Chromium gives every valid form control `invalid: false`, which a DOM tree leaves unset.
 
 The rule: jsdom covers ~95% of cases at jsdom speed. When it diverges, the truth is in Playwright. Use `@real-a11y-dev/testing/playwright` for the remaining 5%.
 

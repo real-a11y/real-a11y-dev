@@ -1,6 +1,7 @@
-import { ariaBoolean } from "./aria-tokens.js";
+import { ariaBoolean, ariaInvalid } from "./aria-tokens.js";
 import {
   safeGetAttribute,
+  safeMatches,
   safeParentElement,
   safeTagName,
 } from "./clobber-safe.js";
@@ -59,10 +60,70 @@ function allowsReadonly(element: Element, tag: string, role: string): boolean {
   return READONLY_INPUT_TYPES.has(type) || !KNOWN_TYPES.has(type);
 }
 
+/** The form controls that can be candidates for constraint validation. */
+const VALIDATED_TAGS = new Set(["input", "button", "select", "textarea"]);
+
 /**
- * The states HTML gives a form field of its own: `required`, and `readonly`.
- * HTML-AAM maps the `readonly` attribute to aria-readonly="true", and it wins
- * over an aria-readonly on the same element. Only true is recorded.
+ * True when a form control fails HTML constraint validation in a way HTML-AAM
+ * exposes as invalid: a `pattern` mismatch, a bad email or URL, a number out
+ * of range, an error set with `setCustomValidity()`, and so on.
+ *
+ * Only a candidate for constraint validation can fail it. A control HTML bars
+ * from it never does, whatever custom error it holds: a disabled or readonly
+ * one, a plain or reset button, or one inside a `<datalist>`. Chromium 153
+ * reports a barred control with a custom error invalid all the same; this
+ * follows HTML instead.
+ *
+ * A required control that is only empty fails once `:user-invalid` matches
+ * it, which is after the user has interacted with it or tried to submit its
+ * form. HTML-AAM says user agents "MUST NOT expose the element with an
+ * initial invalid state" and "SHOULD expose the invalid state only after"
+ * one of those. Chromium 153 never reports an empty text field invalid, and
+ * reports an empty required `<select>`, checkbox or radio invalid from the
+ * start. An engine without `:user-invalid`, such as an older browser, never
+ * reports an empty one invalid. jsdom has the selector but never matches it.
+ */
+export function failsValidation(element: Element, tag: string): boolean {
+  if (!VALIDATED_TAGS.has(tag)) return false;
+  // None of these four is a <form>, so no field can shadow these properties.
+  const control = element as HTMLInputElement;
+  if (!control.willValidate) return false;
+  const { validity } = control;
+  if (!validity || validity.valid) return false;
+  // Any failure but an empty required value counts at once. No other flag
+  // applies to an empty value, a custom error or unparsable input aside.
+  if (!validity.valueMissing || validity.customError || validity.badInput)
+    return true;
+  try {
+    return safeMatches(element, ":user-invalid");
+  } catch {
+    // Chromium before 119, Firefox before 88 and Safari before 16.5 throw on
+    // the selector.
+    return false;
+  }
+}
+
+/**
+ * What an element's own validity says about its `invalid` state: whether it
+ * fails validation, or `null` when validity has no say, because the element
+ * is no form control that validates or an authored `aria-invalid` decides.
+ * The one place that precedence is written, for the extractor and for a live
+ * refresh checking whether validity moved.
+ */
+export function validityInvalid(element: Element, tag: string): boolean | null {
+  if (!VALIDATED_TAGS.has(tag)) return null;
+  if (ariaInvalid(safeGetAttribute(element, "aria-invalid")) !== null)
+    return null;
+  return failsValidation(element, tag);
+}
+
+/**
+ * The states HTML gives a form field of its own: `required`, `readonly`, and
+ * `invalid` when it fails constraint validation. HTML-AAM maps the `readonly`
+ * attribute to aria-readonly="true", and it wins over an aria-readonly on the
+ * same element. An authored aria-invalid, read before this, wins over the
+ * field's validity instead, as in Chromium: `aria-invalid="false"` keeps a
+ * field that fails its `pattern` valid. Only true is recorded.
  */
 export function addFieldStates(
   element: Element,
@@ -80,6 +141,7 @@ export function addFieldStates(
     if ("required" in htmlEl && htmlEl.required) states["required"] = true;
   }
   if (allowsReadonly(element, tag, role)) states["readonly"] = true;
+  if (validityInvalid(element, tag)) states["invalid"] = true;
 }
 
 /**

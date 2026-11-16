@@ -1,4 +1,9 @@
-import { ariaBoolean, ariaCurrent, ariaTristate } from "./aria-tokens.js";
+import {
+  ariaBoolean,
+  ariaCurrent,
+  ariaInvalid,
+  ariaTristate,
+} from "./aria-tokens.js";
 import { safeGetAttribute, safeTagName } from "./clobber-safe.js";
 import { isEditable, isEditingHost } from "./editing.js";
 import { flatParent } from "./flat-tree.js";
@@ -96,9 +101,31 @@ export function takesInheritedDisabled(
 }
 
 /**
+ * ARIA state attributes hoisted onto every node's `state`, each read by
+ * {@link ariaStateValue}. Exported for the DOM observer: these are exactly the
+ * attributes an app flips in place (`aria-current` on an SPA route change,
+ * `aria-busy` around a fetch, `aria-invalid` as a form validates), so it has
+ * to watch them or the state never refreshes.
+ */
+export const ARIA_STATE_ATTRIBUTES = [
+  "aria-expanded",
+  "aria-checked",
+  "aria-disabled",
+  "aria-hidden",
+  "aria-pressed",
+  "aria-selected",
+  "aria-required",
+  "aria-readonly",
+  "aria-busy",
+  "aria-current",
+  "aria-invalid",
+];
+
+/**
  * One ARIA state attribute's value as Chromium reads it, or `null` when that
  * leaves the state unset. `role` is the element's computed role, which
- * decides whether `aria-checked` can be mixed.
+ * decides whether `aria-checked` can be mixed. `aria-invalid`'s `grammar` and
+ * `spelling` are the exception to Chromium (see `ariaInvalid`).
  */
 export function ariaStateValue(
   element: Element,
@@ -113,6 +140,8 @@ export function ariaStateValue(
       return ariaTristate(value);
     case "aria-current":
       return ariaCurrent(value);
+    case "aria-invalid":
+      return ariaInvalid(value);
     default:
       return ariaBoolean(value);
   }

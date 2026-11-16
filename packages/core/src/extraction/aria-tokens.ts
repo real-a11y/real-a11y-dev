@@ -3,10 +3,15 @@
  *
  * Every rule here was measured against Chromium 151's own tree, value by
  * value: CDP `Accessibility.getFullAXTree`, and chrome://accessibility for
- * `aria-current`, which CDP doesn't expose. None of them trims, so `" true"`
- * is not `"true"`, and none of them is the literal comparison it replaces:
- * `aria-disabled="TRUE"` disables, `aria-hidden="yes"` hides, and
- * `aria-pressed="UNDEFINED"` presses.
+ * `aria-current`, which CDP doesn't expose. `aria-invalid`'s was measured
+ * against Chromium 153 with CDP `Accessibility.getPartialAXTree`. None of
+ * them trims, so `" true"` is not `"true"`, and none of them is the literal
+ * comparison it replaces: `aria-disabled="TRUE"` disables,
+ * `aria-hidden="yes"` hides, and `aria-pressed="UNDEFINED"` presses.
+ *
+ * One rule departs from Chromium on purpose: `aria-invalid`'s `grammar` and
+ * `spelling` keep the meaning WAI-ARIA 1.2 gives them. See
+ * {@link ariaInvalid}.
  *
  * Kept free of imports so that every module reading one of these attributes
  * can share it, `role-map` and `flat-tree` included.
@@ -80,4 +85,25 @@ export function ariaCurrent(
   const token = ariaToken(value);
   if (token === null || token === false) return token;
   return CURRENT_TOKENS.has(token) ? token : true;
+}
+
+/**
+ * `aria-invalid`: as {@link ariaToken} for absent, empty, `undefined` and
+ * `false`; `"grammar"` or `"spelling"` for that token in any case; and `true`
+ * for any other value, `" false"` included.
+ *
+ * The two tokens follow WAI-ARIA 1.2, not Chromium. The spec makes
+ * `aria-invalid` a token on every role, and `grammar` and `spelling` say what
+ * kind of error the value has. Chromium 153 reads both as `true` on a
+ * `textbox` and drops them on every other role, `searchbox` and `combobox`
+ * included, where it marks the misspelled text instead. So for those two
+ * values a DOM tree says more than a native one: `"spelling"` where native
+ * says `true`, or nothing.
+ */
+export function ariaInvalid(
+  value: string | null | undefined,
+): boolean | "grammar" | "spelling" | null {
+  const token = ariaToken(value);
+  if (token === null || token === false) return token;
+  return token === "grammar" || token === "spelling" ? token : true;
 }

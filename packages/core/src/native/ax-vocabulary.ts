@@ -375,10 +375,12 @@ export const NATIVE_AX_TEXT_OWNING_ROLES: ReadonlySet<string> = new Set([
  * booleans, but `busy` arrives as a NUMBER under a boolean type —
  * `{"type":"boolean","value":1}` in Chromium 151 and 153, the only property
  * that does across every ARIA state and property. The tristates (`checked`,
- * `pressed`) arrive as the strings `"true"` / `"false"` / `"mixed"`. So a
- * boolean-typed value is a boolean whatever its JSON type, `"true"` and
- * `"false"` are booleans, and everything else — `"mixed"`, a token such as
- * `invalid`'s `"grammar"` — stays a string.
+ * `pressed`) arrive as the strings `"true"` / `"false"` / `"mixed"`, and
+ * `invalid` as the token `"true"` or `"false"`: Chromium 153 reads
+ * `aria-invalid`'s `grammar` and `spelling` as `"true"` on a textbox and
+ * sends nothing elsewhere. So a boolean-typed value is a boolean whatever its
+ * JSON type, `"true"` and `"false"` are booleans, and everything else —
+ * `"mixed"`, any other token — stays a string.
  *
  * Every native transport decodes states through this, so none can drift from
  * the others. It never touches `normalizeNativeAX`'s output (states aren't

@@ -1200,6 +1200,96 @@ describe("LiveTreeExtractor", () => {
     expect(result.nodes).toEqual(extractA11yTree(document.body).nodes);
   });
 
+  it("follows aria-invalid on a field across a refresh", async () => {
+    document.body.innerHTML = `<main><input id="f" aria-label="Postal code"></main>`;
+    const live = new LiveTreeExtractor(document.body, { mode: "a11y" });
+    let lastChange: TreeChange | undefined;
+    const observer = new DomObserver(
+      document.body,
+      (change) => {
+        lastChange = change;
+      },
+      50,
+    );
+    observer.start();
+    document.getElementById("f")!.setAttribute("aria-invalid", "true");
+    await vi.advanceTimersByTimeAsync(100);
+    const result = live.refresh(lastChange);
+    observer.stop();
+    const field = [...result.nodes.values()].find(
+      (n) => n.a11y.name === "Postal code",
+    );
+    expect(field?.a11y.states["invalid"]).toBe(true);
+    expect(result.nodes).toEqual(extractA11yTree(document.body).nodes);
+  });
+
+  // A field's validity moves with attributes the observer watches, and with
+  // script that no mutation reports.
+  describe("a field's validity across a refresh", () => {
+    async function refreshAfter(html: string, mutate: () => void) {
+      document.body.innerHTML = html;
+      const live = new LiveTreeExtractor(document.body, { mode: "a11y" });
+      let lastChange: TreeChange | undefined;
+      const observer = new DomObserver(
+        document.body,
+        (change) => {
+          lastChange = change;
+        },
+        50,
+      );
+      observer.start();
+      mutate();
+      await vi.advanceTimersByTimeAsync(100);
+      const result = live.refresh(lastChange);
+      observer.stop();
+      const field = [...result.nodes.values()].find(
+        (n) => n.a11y.name === "Postal code",
+      );
+      expect(result.nodes).toEqual(extractA11yTree(document.body).nodes);
+      return field?.a11y.states["invalid"];
+    }
+
+    it("follows a pattern the value stops matching", async () => {
+      expect(
+        await refreshAfter(
+          `<main><input id="f" value="abc" aria-label="Postal code"></main>`,
+          () => document.getElementById("f")!.setAttribute("pattern", "[0-9]+"),
+        ),
+      ).toBe(true);
+    });
+
+    it("follows a custom error set by script, on the next refresh", async () => {
+      expect(
+        await refreshAfter(
+          `<main><input id="f" aria-label="Postal code"><p id="p">a</p></main>`,
+          () => {
+            // Fires nothing. An unrelated change elsewhere is what refreshes.
+            (
+              document.getElementById("f") as HTMLInputElement
+            ).setCustomValidity("Not a postal code");
+            document.getElementById("p")!.textContent = "b";
+          },
+        ),
+      ).toBe(true);
+    });
+
+    it("follows a value script fixes, on the next refresh", async () => {
+      expect(
+        await refreshAfter(
+          `<main>
+            <input id="f" pattern="[0-9]+" value="abc" aria-label="Postal code">
+            <p id="p">a</p>
+          </main>`,
+          () => {
+            // The property, which fires nothing, unlike the user typing.
+            (document.getElementById("f") as HTMLInputElement).value = "123";
+            document.getElementById("p")!.textContent = "b";
+          },
+        ),
+      ).toBeUndefined();
+    });
+  });
+
   // A node can inherit `disabled` from an ancestor. The refresh re-extracts
   // only the mutated subtree, which holds every node whose state moved.
   describe("an inherited disabled state across a refresh", () => {

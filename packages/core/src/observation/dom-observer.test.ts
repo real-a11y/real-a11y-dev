@@ -1134,6 +1134,67 @@ describe("DomObserver", () => {
       expect(onTreeChange).toHaveBeenCalledTimes(1);
     });
 
+    it("fires when a field's constraints change", async () => {
+      document.body.innerHTML = '<input id="zip" value="abc" />';
+      observer = new DomObserver(document.body, onTreeChange, 100);
+      observer.start();
+
+      document.getElementById("zip")!.setAttribute("pattern", "[0-9]+");
+
+      await settleObserver(100);
+
+      expect(onTreeChange).toHaveBeenCalledTimes(1);
+    });
+
+    it("re-extracts a control a submission attempt finds invalid", async () => {
+      document.body.innerHTML = '<form><input id="zip" required /></form>';
+      observer = new DomObserver(document.body, onTreeChange, 100);
+      observer.start();
+
+      // What a form fires at each failing control, the moment `:user-invalid`
+      // starts to match. It doesn't bubble.
+      const zip = document.getElementById("zip")!;
+      zip.dispatchEvent(new Event("invalid", { cancelable: true }));
+
+      await settleObserver(100);
+
+      expect(onTreeChange).toHaveBeenCalledTimes(1);
+      expect(onTreeChange.mock.calls[0][0]!.dirtyRoots).toEqual([zip]);
+    });
+
+    it("re-extracts a field focus leaves, and nothing else focus leaves", async () => {
+      document.body.innerHTML =
+        '<input id="zip" required /><button id="go">Go</button>';
+      observer = new DomObserver(document.body, onTreeChange, 100);
+      observer.start();
+
+      // Leaving a field after typing is when `:user-invalid` starts to match.
+      const zip = document.getElementById("zip")!;
+      zip.dispatchEvent(new FocusEvent("focusout", { bubbles: true }));
+      await settleObserver(100);
+      expect(onTreeChange).toHaveBeenCalledTimes(1);
+      expect(onTreeChange.mock.calls[0][0]!.dirtyRoots).toEqual([zip]);
+
+      document
+        .getElementById("go")!
+        .dispatchEvent(new FocusEvent("focusout", { bubbles: true }));
+      await settleObserver(100);
+      expect(onTreeChange).toHaveBeenCalledTimes(1);
+    });
+
+    it("re-extracts a form that resets", async () => {
+      document.body.innerHTML = '<form id="f"><input required /></form>';
+      observer = new DomObserver(document.body, onTreeChange, 100);
+      observer.start();
+
+      const form = document.getElementById("f") as HTMLFormElement;
+      form.reset();
+      await settleObserver(100);
+
+      expect(onTreeChange).toHaveBeenCalledTimes(1);
+      expect(onTreeChange.mock.calls[0][0]!.dirtyRoots).toEqual([form]);
+    });
+
     it("fires when a control's placeholder changes", async () => {
       document.body.innerHTML = '<input id="q" />';
       observer = new DomObserver(document.body, onTreeChange, 100);
