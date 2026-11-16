@@ -19,6 +19,7 @@
  */
 
 import { safeGetAttribute, safeParentElement } from "./clobber-safe.js";
+import { hasLinkHref } from "./link-href.js";
 
 /** The keywords that make an element editable, lower-cased. */
 const EDITABLE_KEYWORDS = new Set(["", "true", "plaintext-only"]);
@@ -33,6 +34,15 @@ function ownEditableState(element: Element): boolean | null {
   const keyword = value.toLowerCase();
   if (EDITABLE_KEYWORDS.has(keyword)) return true;
   return keyword === "false" ? false : null;
+}
+
+/**
+ * True for an `<a>` that is a live link: it has a target, and editing has not
+ * taken that away. Chromium won't follow or focus a link inside editable
+ * content, not even from script.
+ */
+export function isLiveLink(element: Element): boolean {
+  return hasLinkHref(element) && !isEditable(element);
 }
 
 /** True when `element` is editable content, itself included. */

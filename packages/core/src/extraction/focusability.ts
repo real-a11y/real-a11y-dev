@@ -29,12 +29,10 @@
 import { safeGetAttribute, safeTagName } from "./clobber-safe.js";
 import { isEditable, isEditingHost } from "./editing.js";
 import { imageUsingMap } from "./image-map.js";
+import { hasLinkHref } from "./link-href.js";
 
 /** Form controls that `disabled` removes from the focus order entirely. */
 const FORM_CONTROL_TAGS = new Set(["button", "input", "select", "textarea"]);
-
-/** The namespace of SVG 1.1's `xlink:href`, which SVG 2 replaced with `href`. */
-const XLINK_NS = "http://www.w3.org/1999/xlink";
 
 /** HTML's rules for parsing integers: ASCII whitespace, a sign, digits. */
 const HTML_INTEGER = /^[\t\n\f\r ]*([+-]?\d+)/;
@@ -165,12 +163,7 @@ function focusableByMarkup(element: Element): boolean {
   // editable content, not even from script, unless it carries its own
   // tabindex (above) or sits in a `contenteditable="false"` island. Nothing
   // else loses it: a button or an input inside an editor is still a stop.
-  if (tag === "a")
-    return (
-      (element.hasAttribute("href") ||
-        element.hasAttributeNS(XLINK_NS, "href")) &&
-      !isEditable(element)
-    );
+  if (tag === "a") return hasLinkHref(element) && !isEditable(element);
   if (FORM_CONTROL_TAGS.has(tag)) return true;
   if (tag === "summary") return isDetailsSummary(element);
   // <video controls> / <audio controls> are tab stops — Chromium exposes them
