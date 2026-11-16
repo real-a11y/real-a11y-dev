@@ -47,7 +47,7 @@
     "test:e2e": "vitest run --config vitest.e2e.config.ts"
   },
   "dependencies": {
-    "@puppeteer/browsers": "^3.2.6"
+    "@puppeteer/browsers": "^3.2.7"
   },
   "peerDependencies": {
     "playwright": ">=1.49.0 <2"
