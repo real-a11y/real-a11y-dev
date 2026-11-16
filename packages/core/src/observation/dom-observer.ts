@@ -8,12 +8,12 @@ import {
   safeRootNode,
 } from "../extraction/clobber-safe.js";
 import {
-  ARIA_STATE_ATTRIBUTES,
   containsOverlaySignal,
   isModal,
   KEY_ATTRIBUTES,
   PANEL_HOST_ATTRIBUTE,
 } from "../extraction/dom-extractor.js";
+import { ARIA_STATE_ATTRIBUTES } from "../extraction/element-state.js";
 import { GLOBAL_ARIA_ATTRIBUTES } from "../extraction/role-map.js";
 import type { TreeChange } from "../types.js";
 

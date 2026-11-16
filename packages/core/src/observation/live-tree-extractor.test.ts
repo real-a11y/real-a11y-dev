@@ -1200,6 +1200,29 @@ describe("LiveTreeExtractor", () => {
     expect(result.nodes).toEqual(extractA11yTree(document.body).nodes);
   });
 
+  it("follows aria-invalid on a field across a refresh", async () => {
+    document.body.innerHTML = `<main><input id="f" aria-label="Postal code"></main>`;
+    const live = new LiveTreeExtractor(document.body, { mode: "a11y" });
+    let lastChange: TreeChange | undefined;
+    const observer = new DomObserver(
+      document.body,
+      (change) => {
+        lastChange = change;
+      },
+      50,
+    );
+    observer.start();
+    document.getElementById("f")!.setAttribute("aria-invalid", "true");
+    await vi.advanceTimersByTimeAsync(100);
+    const result = live.refresh(lastChange);
+    observer.stop();
+    const field = [...result.nodes.values()].find(
+      (n) => n.a11y.name === "Postal code",
+    );
+    expect(field?.a11y.states["invalid"]).toBe(true);
+    expect(result.nodes).toEqual(extractA11yTree(document.body).nodes);
+  });
+
   // A node can inherit `disabled` from an ancestor. The refresh re-extracts
   // only the mutated subtree, which holds every node whose state moved.
   describe("an inherited disabled state across a refresh", () => {

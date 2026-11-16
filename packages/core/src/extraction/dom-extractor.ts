@@ -20,6 +20,7 @@ import {
 } from "./clobber-safe.js";
 import { isEditable, isEditingHost, isLiveLink } from "./editing.js";
 import {
+  ARIA_STATE_ATTRIBUTES,
   ariaStateValue,
   explicitAriaDisabled,
   inheritsDisabled,
@@ -1354,25 +1355,6 @@ function getDirectTextContent(
   }
   return trimAscii(text);
 }
-
-/**
- * ARIA state attributes hoisted onto every node's `state`. Exported for the
- * same reason as `KEY_ATTRIBUTES` — these are exactly the attributes an app
- * flips in place (`aria-current` on an SPA route change, `aria-busy` around a
- * fetch), so the observer has to watch them or the state never refreshes.
- */
-export const ARIA_STATE_ATTRIBUTES = [
-  "aria-expanded",
-  "aria-checked",
-  "aria-disabled",
-  "aria-hidden",
-  "aria-pressed",
-  "aria-selected",
-  "aria-required",
-  "aria-readonly",
-  "aria-busy",
-  "aria-current",
-];
 
 /**
  * Roles on which Chromium exposes a native checkbox's or radio's checkedness

@@ -276,7 +276,7 @@ function toValidatedNode(
     attrs[`aria-${k}`] = v;
 
   const domAttrs = n.dom?.attributes ?? {};
-  // `states` is a fixed 10-entry set and `properties` is `{level, captions}`,
+  // `states` is a small fixed set and `properties` is `{level, captions}`,
   // so required props like `aria-controls` and `aria-valuenow` could NEVER
   // appear — an authored combobox or slider was unsatisfiable no matter what
   // the author wrote. Fill from the recorded attributes, without letting them

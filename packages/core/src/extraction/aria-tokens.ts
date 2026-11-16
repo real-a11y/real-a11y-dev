@@ -3,7 +3,8 @@
  *
  * Every rule here was measured against Chromium 151's own tree, value by
  * value: CDP `Accessibility.getFullAXTree`, and chrome://accessibility for
- * `aria-current`, which CDP doesn't expose. None of them trims, so `" true"`
+ * `aria-current`, which CDP doesn't expose. `aria-invalid`'s was measured
+ * against Chromium 153, with CDP `Accessibility.getPartialAXTree`. None of them trims, so `" true"`
  * is not `"true"`, and none of them is the literal comparison it replaces:
  * `aria-disabled="TRUE"` disables, `aria-hidden="yes"` hides, and
  * `aria-pressed="UNDEFINED"` presses.
@@ -80,4 +81,24 @@ export function ariaCurrent(
   const token = ariaToken(value);
   if (token === null || token === false) return token;
   return CURRENT_TOKENS.has(token) ? token : true;
+}
+
+/**
+ * `aria-invalid`: as {@link ariaToken} for absent, empty, `undefined` and
+ * `false`, and `true` for any other value, `" false"` included.
+ *
+ * `grammar` and `spelling`, in any case, are the exception: Chromium 153
+ * reports them as `true` on a `textbox` and sets nothing on any other role,
+ * `searchbox` and `combobox` included, where it marks the text itself
+ * instead. Pass the element's computed `role` for that.
+ */
+export function ariaInvalid(
+  value: string | null | undefined,
+  role: string,
+): boolean | null {
+  const token = ariaToken(value);
+  if (token === null || token === false) return token;
+  if (token === "grammar" || token === "spelling")
+    return role === "textbox" ? true : null;
+  return true;
 }

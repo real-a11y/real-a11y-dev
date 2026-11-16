@@ -2115,6 +2115,96 @@ describe("extractDomTree", () => {
     });
   });
 
+  // Checked against Chromium 153's own tree, CDP `getPartialAXTree`.
+  it("reads aria-invalid the way Chromium does", () => {
+    expect(
+      stateById(
+        `
+        <input id="true" aria-invalid="true" aria-label="a">
+        <input id="upper" aria-invalid="TRUE" aria-label="b">
+        <input id="yes" aria-invalid="yes" aria-label="c">
+        <input id="mixed" aria-invalid="mixed" aria-label="d">
+        <input id="zero" aria-invalid="0" aria-label="e">
+        <input id="padded-false" aria-invalid=" false" aria-label="f">
+        <input id="upper-undefined" aria-invalid="UNDEFINED" aria-label="g">
+        <input id="false" aria-invalid="False" aria-label="h">
+        <input id="empty" aria-invalid="" aria-label="i">
+        <input id="undefined" aria-invalid="undefined" aria-label="j">
+        <input id="absent" aria-label="k">
+        <div id="group" role="group" aria-invalid="true" aria-label="l">x</div>
+        <a id="link" href="#m" aria-invalid="true">m</a>
+        <button id="button" aria-invalid="false">n</button>
+        <select id="select" aria-invalid="true" aria-label="o"><option>p</option></select>
+        <input id="checkbox" type="checkbox" aria-invalid="true" aria-label="q">
+      `,
+        "invalid",
+      ),
+      // Strict: an unset state is a key holding undefined, so an element that
+      // dropped out of the tree can't pass for one.
+    ).toStrictEqual({
+      // Anything but `false`, empty or a lowercase `undefined` is invalid,
+      // untrimmed.
+      true: true,
+      upper: true,
+      yes: true,
+      mixed: true,
+      zero: true,
+      "padded-false": true,
+      "upper-undefined": true,
+      false: false,
+      empty: undefined,
+      undefined: undefined,
+      absent: undefined,
+      // A global state: every role takes it.
+      group: true,
+      link: true,
+      button: false,
+      select: true,
+      checkbox: true,
+    });
+  });
+
+  it("reads aria-invalid's grammar and spelling as invalid on a textbox only", () => {
+    const root = createPage(`
+      <input id="input" aria-invalid="grammar" aria-label="a">
+      <input id="email" type="email" aria-invalid="SPELLING" aria-label="b">
+      <textarea id="textarea" aria-invalid="spelling" aria-label="c"></textarea>
+      <div id="div-textbox" role="textbox" aria-invalid="Grammar" aria-label="d"></div>
+      <input id="search" type="search" aria-invalid="spelling" aria-label="e">
+      <input id="combobox" role="combobox" aria-invalid="grammar" aria-label="f">
+      <input id="list" list="choices" aria-invalid="spelling" aria-label="g">
+      <datalist id="choices"><option value="h"></option></datalist>
+      <div id="searchbox" role="searchbox" aria-invalid="spelling" aria-label="i"></div>
+      <input id="checkbox" type="checkbox" aria-invalid="grammar" aria-label="j">
+      <div id="group" role="group" aria-invalid="spelling" aria-label="k">x</div>
+      <input id="padded" aria-invalid=" grammar" aria-label="l">
+      <div id="padded-group" role="group" aria-invalid="grammar " aria-label="m">x</div>
+    `);
+    // In a document: jsdom finds an input's datalist only there.
+    document.body.appendChild(root);
+    try {
+      expect(stateById(root, "invalid")).toStrictEqual({
+        input: true,
+        email: true,
+        textarea: true,
+        "div-textbox": true,
+        // Any other role, a searchbox or a datalist's combobox included,
+        // marks the text itself instead.
+        search: undefined,
+        combobox: undefined,
+        list: undefined,
+        searchbox: undefined,
+        checkbox: undefined,
+        group: undefined,
+        // Untrimmed: a padded token is an unknown value, so invalid anywhere.
+        padded: true,
+        "padded-group": true,
+      });
+    } finally {
+      root.remove();
+    }
+  });
+
   it("reads a native checkbox's and radio's checkedness, never aria-checked", () => {
     const root = createPage(`
       <input id="unchecked" type="checkbox" aria-label="a">

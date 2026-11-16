@@ -21,6 +21,12 @@
 
 ### Patch Changes
 
+- **The TAB view's engine reads `aria-invalid`.** The extension re-bundles the
+  updated extractor, which now records the state the way Chrome does. The TAB
+  view lists tab stops without their states, and the A11Y tree is Chrome's
+  own, which already showed it, so nothing on screen changes
+  ([#667](https://github.com/real-a11y/real-a11y-dev/pull/667)).
+
 - **The side panel tree no longer shows an extra `MenuListPopup` row under a
   drop-down `<select>`.** Chrome's internal popup node, which is not an ARIA
   role, sat between the combobox and its options; the options now sit directly

@@ -50,6 +50,28 @@ describe("a11yDiff", () => {
     expect(a11yDiff(before, root).text).toBe("(no changes)");
   });
 
+  it("shows a field becoming invalid, and valid again", () => {
+    const root = mount(`
+      <main>
+        <label for="zip">Postal code</label>
+        <input id="zip">
+      </main>`);
+    const main = root.querySelector("main")!;
+    const zip = root.querySelector("#zip")!;
+    const before = capture(main);
+
+    zip.setAttribute("aria-invalid", "true");
+    const invalid = capture(main);
+    expect(a11yDiff(before, invalid).text).toBe(
+      '~ textbox "Postal code": a11y.states.invalid (unset) → true',
+    );
+
+    zip.setAttribute("aria-invalid", "false");
+    expect(a11yDiff(invalid, main).text).toBe(
+      '~ textbox "Postal code": a11y.states.invalid true → false',
+    );
+  });
+
   it("renders a focus transition when BOTH sides are captures", () => {
     const root = mount(
       `<main><button id="a">A</button><button id="b">B</button></main>`,
