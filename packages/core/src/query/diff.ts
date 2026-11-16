@@ -21,8 +21,19 @@ export interface TreeDiff {
   changed: NodeChange[];
 }
 
-/** Fields we consider observable for a change diff. */
-function collectChanges(before: SemanticNode, after: SemanticNode): string[] {
+/** The keys whose values differ between two shallow records, `a`'s keys first. */
+function differingKeys(
+  a: Record<string, unknown>,
+  b: Record<string, unknown>,
+): string[] {
+  const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
+  const diffs: string[] = [];
+  for (const k of keys) if (a[k] !== b[k]) diffs.push(k);
+  return diffs;
+}
+
+/** The single-valued fields that differ, as dot-paths in report order. */
+function scalarChanges(before: SemanticNode, after: SemanticNode): string[] {
   const changes: string[] = [];
 
   if (before.a11y.role !== after.a11y.role) changes.push("a11y.role");
@@ -48,21 +59,21 @@ function collectChanges(before: SemanticNode, after: SemanticNode): string[] {
   if (before.interaction?.isFocusable !== after.interaction?.isFocusable) {
     changes.push("interaction.isFocusable");
   }
+  return changes;
+}
+
+/** Fields we consider observable for a change diff. */
+function collectChanges(before: SemanticNode, after: SemanticNode): string[] {
+  const changes = scalarChanges(before, after);
 
   // Shallow record diffs
-  const recordKeys = (
-    a: Record<string, unknown>,
-    b: Record<string, unknown>,
-  ) => {
-    const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
-    const diffs: string[] = [];
-    for (const k of keys) if (a[k] !== b[k]) diffs.push(k);
-    return diffs;
-  };
-  for (const k of recordKeys(before.a11y.states, after.a11y.states)) {
+  for (const k of differingKeys(before.a11y.states, after.a11y.states)) {
     changes.push(`a11y.states.${k}`);
   }
-  for (const k of recordKeys(before.a11y.properties, after.a11y.properties)) {
+  for (const k of differingKeys(
+    before.a11y.properties,
+    after.a11y.properties,
+  )) {
     changes.push(`a11y.properties.${k}`);
   }
 

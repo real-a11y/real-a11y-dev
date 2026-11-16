@@ -181,11 +181,6 @@
       "count": 1
     }
   },
-  "packages/core/src/query/diff.ts": {
-    "complexity": {
-      "count": 1
-    }
-  },
   "packages/core/src/search/tree-search.ts": {
     "complexity": {
       "count": 2
