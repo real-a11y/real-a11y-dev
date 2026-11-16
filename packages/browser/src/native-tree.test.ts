@@ -1500,6 +1500,68 @@ describe("buildNativeTree — states read like the DOM producer's, whatever Chro
   });
 });
 
+describe("buildNativeTree — a list item's nesting depth is not an authored level", () => {
+  // Chromium computes `level` for every `<li>` from its nesting depth. No
+  // author set it and the DOM producer prints none, so the native tree drops
+  // it on a listitem. A heading, a treeitem and a treegrid row keep theirs.
+  const level = (n: number) => [{ name: "level", value: { value: n } }];
+  const raw = [
+    {
+      nodeId: "1",
+      childIds: ["2", "3", "4", "5"],
+      role: { value: "RootWebArea" },
+    },
+    {
+      nodeId: "2",
+      parentId: "1",
+      backendDOMNodeId: 20,
+      role: { value: "listitem" },
+      name: { value: "Inner" },
+      properties: level(2),
+    },
+    {
+      nodeId: "3",
+      parentId: "1",
+      backendDOMNodeId: 30,
+      role: { value: "heading" },
+      name: { value: "Title" },
+      properties: level(3),
+    },
+    {
+      nodeId: "4",
+      parentId: "1",
+      backendDOMNodeId: 40,
+      role: { value: "treeitem" },
+      name: { value: "Node" },
+      properties: level(2),
+    },
+    {
+      nodeId: "5",
+      parentId: "1",
+      backendDOMNodeId: 50,
+      role: { value: "row" },
+      name: { value: "Row" },
+      properties: level(1),
+    },
+  ] as Parameters<typeof buildNativeTree>[0];
+
+  it("carries no level on a listitem, and keeps it on heading, treeitem and row", () => {
+    const tree = buildNativeTree(raw);
+    expect(tree.nodes.get("ax-dom-20")?.a11y.properties.level).toBeUndefined();
+    expect(tree.nodes.get("ax-dom-30")?.a11y.properties.level).toBe("3");
+    expect(tree.nodes.get("ax-dom-40")?.a11y.properties.level).toBe("2");
+    expect(tree.nodes.get("ax-dom-50")?.a11y.properties.level).toBe("1");
+    expect(tree.source.producer).toBe("native");
+  });
+
+  it("prints a listitem with no (level N)", () => {
+    const printed = serializeTree(buildNativeTree(raw), { markFocus: false });
+    expect(printed).toContain('listitem "Inner"');
+    expect(printed).not.toContain('listitem "Inner" (level');
+    expect(printed).toContain('heading "Title" (level 3)');
+  });
+});
+
 describe("buildNativeTree — focusedId", () => {
   // Chromium reports focus as a per-node `focused` AX property. Every
   // focus-aware consumer instead reads the tree-level `focusedId`:
