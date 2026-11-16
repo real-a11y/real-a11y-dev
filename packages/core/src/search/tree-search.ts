@@ -1,4 +1,10 @@
-import type { SemanticNode, TreeViewMode, RoleFilter } from "../types.js";
+import type {
+  A11yInfo,
+  DomInfo,
+  RoleFilter,
+  SemanticNode,
+  TreeViewMode,
+} from "../types.js";
 
 /** Role groups for quick filtering */
 export const ROLE_FILTER_GROUPS: Record<string, string[]> = {
@@ -121,29 +127,32 @@ function matchesNode(
   // Always search role
   if (node.a11y.role.toLowerCase().includes(query)) return true;
 
-  if (viewMode === "dom" && node.dom) {
-    // Search tag name
-    if (node.dom.tagName.toLowerCase().includes(query)) return true;
+  if (viewMode === "dom" && node.dom) return matchesDomInfo(node.dom, query);
 
-    // Search key attributes
-    for (const [key, val] of Object.entries(node.dom.attributes)) {
-      if (key.toLowerCase().includes(query)) return true;
-      if (val.toLowerCase().includes(query)) return true;
-    }
+  if (viewMode === "a11y") return matchesA11yDetails(node.a11y, query);
 
-    // Search text content
-    if (node.dom.textContent?.toLowerCase().includes(query)) return true;
+  return false;
+}
+
+/** DOM mode: the tag name, each attribute's name and value, and the text. */
+function matchesDomInfo(dom: DomInfo, query: string): boolean {
+  if (dom.tagName.toLowerCase().includes(query)) return true;
+
+  for (const [key, val] of Object.entries(dom.attributes)) {
+    if (key.toLowerCase().includes(query)) return true;
+    if (val.toLowerCase().includes(query)) return true;
   }
 
-  if (viewMode === "a11y") {
-    // Search description
-    if (node.a11y.description.toLowerCase().includes(query)) return true;
+  return dom.textContent?.toLowerCase().includes(query) ?? false;
+}
 
-    // Search state values
-    for (const [key, val] of Object.entries(node.a11y.states)) {
-      if (key.toLowerCase().includes(query)) return true;
-      if (String(val).toLowerCase().includes(query)) return true;
-    }
+/** A11Y mode: the description, and each state's name and value. */
+function matchesA11yDetails(a11y: A11yInfo, query: string): boolean {
+  if (a11y.description.toLowerCase().includes(query)) return true;
+
+  for (const [key, val] of Object.entries(a11y.states)) {
+    if (key.toLowerCase().includes(query)) return true;
+    if (String(val).toLowerCase().includes(query)) return true;
   }
 
   return false;

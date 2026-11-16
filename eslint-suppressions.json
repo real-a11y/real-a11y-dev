@@ -180,7 +180,7 @@
   },
   "packages/core/src/search/tree-search.ts": {
     "complexity": {
-      "count": 2
+      "count": 1
     }
   },
   "packages/example-patterns/src/chart/ChartCorrect.tsx": {
