@@ -1,6 +1,7 @@
   h2 On this page
 h1 Snapshots
   h2 treeSnapshot(root, options?)
+    h3 What a line carries
     h3 Field values
     h3 Strict mode
     h3 Using redact

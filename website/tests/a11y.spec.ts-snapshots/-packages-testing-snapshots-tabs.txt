@@ -16,6 +16,10 @@ link "Field values"
 link "Strict mode"
 button "Copy Code"
 generic
+link "serializeTreeDiff"
+button "Copy Code"
+generic
+link "What a line carries"
 button "Copy Code"
 generic
 link "Playwright adapter's"
