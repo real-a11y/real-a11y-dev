@@ -299,9 +299,8 @@ describe("a referenced form control's own name, against Chromium", () => {
       ],
       ["for-value", ORDER[0]![1]],
     ];
-    // A value in the label of the control a reference names. The native
-    // producer prints Chromium's name for that reference whole, value and
-    // all, a gap of its own; the DOM producer withholds it.
+    // A value in the label of the control a reference names, which Chromium
+    // reads into the reference's name and description.
     const reached: Case[] = [
       ["label-embeds", ORDER[10]![1]],
       [
@@ -320,8 +319,16 @@ describe("a referenced form control's own name, against Chromium", () => {
         await nativeById(page, redactInput),
       ];
       const at = `strict: ${redactInput}`;
-      for (const id of [...keys(strict).map((key) => `b-${key}`), "h-ph"]) {
+      for (const id of [
+        ...keys([...strict, ...reached]).map((key) => `b-${key}`),
+        "h-ph",
+      ]) {
         expect(dom[id]?.name, `${id} (${at})`).toBe(native[id]?.name);
+      }
+      for (const key of keys(reached)) {
+        expect(dom[`d-${key}`]?.description, `d-${key} (${at})`).toBe(
+          native[`d-${key}`]?.description,
+        );
       }
       expect(dom["b-pw-value"]?.name, at).toBe(REDACTED_VALUE);
       expect(dom["b-cb-for"]?.name, at).toBe("Checkbox Label Text");
