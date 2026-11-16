@@ -143,7 +143,7 @@ function matchesDomInfo(dom: DomInfo, query: string): boolean {
     if (val.toLowerCase().includes(query)) return true;
   }
 
-  return dom.textContent?.toLowerCase().includes(query) === true;
+  return dom.textContent?.toLowerCase().includes(query) ?? false;
 }
 
 /** A11Y mode: the description, and each state's name and value. */

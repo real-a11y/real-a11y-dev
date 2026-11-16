@@ -183,7 +183,19 @@ describe("what each view mode searches", () => {
     ["a string state value", "MIXED"],
   ])("searches %s in A11Y mode only", (_, query) => {
     expect(searchTree(probeNode(), query, "a11y").size).toBe(1);
+    expect(searchTree(probeNode(false), query, "a11y").size).toBe(1);
     expect(searchTree(probeNode(), query, "dom").size).toBe(0);
+  });
+
+  it.each([
+    ["the name", "menu", 1],
+    ["the role", "button", 1],
+    ["the tag name", "koala", 0],
+    ["an attribute value", "wallaby", 0],
+    ["the description", "numbat", 0],
+    ["a state name", "expanded", 0],
+  ])("in tab mode searches %s: %i match(es)", (_, query, expected) => {
+    expect(searchTree(probeNode(), query, "tab").size).toBe(expected);
   });
 
   it("matches nothing a node does not carry", () => {
