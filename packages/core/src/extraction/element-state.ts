@@ -124,8 +124,8 @@ export const ARIA_STATE_ATTRIBUTES = [
 /**
  * One ARIA state attribute's value as Chromium reads it, or `null` when that
  * leaves the state unset. `role` is the element's computed role, which
- * decides whether `aria-checked` can be mixed, and what `aria-invalid`'s
- * `grammar` and `spelling` mean.
+ * decides whether `aria-checked` can be mixed. `aria-invalid`'s `grammar` and
+ * `spelling` are the exception to Chromium (see `ariaInvalid`).
  */
 export function ariaStateValue(
   element: Element,
@@ -141,7 +141,7 @@ export function ariaStateValue(
     case "aria-current":
       return ariaCurrent(value);
     case "aria-invalid":
-      return ariaInvalid(value, role);
+      return ariaInvalid(value);
     default:
       return ariaBoolean(value);
   }

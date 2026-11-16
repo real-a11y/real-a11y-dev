@@ -72,6 +72,21 @@ describe("a11yDiff", () => {
     );
   });
 
+  it("shows a field failing its own validation", () => {
+    const root = mount(`
+      <main>
+        <label for="zip">Postal code</label>
+        <input id="zip" pattern="[0-9]+">
+      </main>`);
+    const main = root.querySelector("main")!;
+    const before = capture(main);
+
+    root.querySelector<HTMLInputElement>("#zip")!.value = "abc";
+    expect(a11yDiff(before, main).text).toContain(
+      '~ textbox "Postal code": a11y.states.invalid (unset) → true',
+    );
+  });
+
   it("renders a focus transition when BOTH sides are captures", () => {
     const root = mount(
       `<main><button id="a">A</button><button id="b">B</button></main>`,

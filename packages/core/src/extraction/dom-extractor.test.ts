@@ -2164,45 +2164,156 @@ describe("extractDomTree", () => {
     });
   });
 
-  it("reads aria-invalid's grammar and spelling as invalid on a textbox only", () => {
+  // WAI-ARIA 1.2, not Chromium, which reads both as true on a textbox and
+  // drops them on any other role.
+  it("keeps aria-invalid's grammar and spelling tokens on every role", () => {
+    expect(
+      stateById(
+        `
+        <input id="input" aria-invalid="grammar" aria-label="a">
+        <input id="email" type="email" aria-invalid="SPELLING" aria-label="b">
+        <textarea id="textarea" aria-invalid="spelling" aria-label="c"></textarea>
+        <div id="div-textbox" role="textbox" aria-invalid="Grammar" aria-label="d"></div>
+        <input id="search" type="search" aria-invalid="spelling" aria-label="e">
+        <div id="searchbox" role="searchbox" aria-invalid="spelling" aria-label="f"></div>
+        <input id="checkbox" type="checkbox" aria-invalid="grammar" aria-label="g">
+        <div id="group" role="group" aria-invalid="spelling" aria-label="h">x</div>
+        <input id="padded" aria-invalid=" grammar" aria-label="i">
+        <div id="padded-group" role="group" aria-invalid="grammar " aria-label="j">x</div>
+      `,
+        "invalid",
+      ),
+    ).toStrictEqual({
+      // Lowercased, as the other ARIA tokens are.
+      input: "grammar",
+      email: "spelling",
+      textarea: "spelling",
+      "div-textbox": "grammar",
+      search: "spelling",
+      searchbox: "spelling",
+      checkbox: "grammar",
+      group: "spelling",
+      // Untrimmed: a padded token is an unknown value, so invalid.
+      padded: true,
+      "padded-group": true,
+    });
+  });
+
+  // Chromium 153 agrees with each expectation here, except where a comment
+  // says otherwise.
+  it("reports a form control that fails constraint validation as invalid", () => {
     const root = createPage(`
-      <input id="input" aria-invalid="grammar" aria-label="a">
-      <input id="email" type="email" aria-invalid="SPELLING" aria-label="b">
-      <textarea id="textarea" aria-invalid="spelling" aria-label="c"></textarea>
-      <div id="div-textbox" role="textbox" aria-invalid="Grammar" aria-label="d"></div>
-      <input id="search" type="search" aria-invalid="spelling" aria-label="e">
-      <input id="combobox" role="combobox" aria-invalid="grammar" aria-label="f">
-      <input id="list" list="choices" aria-invalid="spelling" aria-label="g">
-      <datalist id="choices"><option value="h"></option></datalist>
-      <div id="searchbox" role="searchbox" aria-invalid="spelling" aria-label="i"></div>
-      <input id="checkbox" type="checkbox" aria-invalid="grammar" aria-label="j">
-      <div id="group" role="group" aria-invalid="spelling" aria-label="k">x</div>
-      <input id="padded" aria-invalid=" grammar" aria-label="l">
-      <div id="padded-group" role="group" aria-invalid="grammar " aria-label="m">x</div>
+      <input id="pattern" pattern="[0-9]+" value="abc" aria-label="a">
+      <input id="pattern-ok" pattern="[0-9]+" value="123" aria-label="b">
+      <input id="email" type="email" value="nope" aria-label="c">
+      <input id="url" type="url" value="nope" aria-label="d">
+      <input id="under" type="number" min="5" value="1" aria-label="e">
+      <input id="over" type="number" max="5" value="9" aria-label="f">
+      <input id="custom" aria-label="g">
+      <textarea id="textarea-custom" aria-label="h"></textarea>
+      <select id="select-custom" aria-label="i"><option>j</option></select>
+      <input id="checkbox-custom" type="checkbox" aria-label="k">
+      <button id="submit-custom">l</button>
     `);
-    // In a document: jsdom finds an input's datalist only there.
-    document.body.appendChild(root);
-    try {
-      expect(stateById(root, "invalid")).toStrictEqual({
-        input: true,
-        email: true,
-        textarea: true,
-        "div-textbox": true,
-        // Any other role, a searchbox or a datalist's combobox included,
-        // marks the text itself instead.
-        search: undefined,
-        combobox: undefined,
-        list: undefined,
-        searchbox: undefined,
-        checkbox: undefined,
-        group: undefined,
-        // Untrimmed: a padded token is an unknown value, so invalid anywhere.
-        padded: true,
-        "padded-group": true,
-      });
-    } finally {
-      root.remove();
-    }
+    for (const id of [
+      "custom",
+      "textarea-custom",
+      "select-custom",
+      "checkbox-custom",
+      "submit-custom",
+    ])
+      (root.querySelector(`#${id}`) as HTMLInputElement).setCustomValidity(
+        "Not like that",
+      );
+    expect(stateById(root, "invalid")).toStrictEqual({
+      pattern: true,
+      // A valid field gets no state: Chromium reports `false` on it.
+      "pattern-ok": undefined,
+      email: true,
+      url: true,
+      under: true,
+      over: true,
+      custom: true,
+      "textarea-custom": true,
+      "select-custom": true,
+      "checkbox-custom": true,
+      "submit-custom": true,
+    });
+  });
+
+  it("never reports a control barred from constraint validation as invalid", () => {
+    const root = createPage(`
+      <input id="disabled" disabled pattern="[0-9]+" value="abc" aria-label="a">
+      <input id="readonly" readonly pattern="[0-9]+" value="abc" aria-label="b">
+      <fieldset id="fieldset" disabled aria-label="c">
+        <input id="in-fieldset" pattern="[0-9]+" value="abc" aria-label="d">
+      </fieldset>
+      <input id="readonly-custom" readonly aria-label="e">
+      <button id="button-custom" type="button">f</button>
+      <output id="output-custom" aria-label="g">h</output>
+    `);
+    for (const id of ["readonly-custom", "button-custom", "output-custom"])
+      (root.querySelector(`#${id}`) as HTMLInputElement).setCustomValidity(
+        "Not like that",
+      );
+    expect(stateById(root, "invalid")).toStrictEqual({
+      disabled: undefined,
+      readonly: undefined,
+      fieldset: undefined,
+      "in-fieldset": undefined,
+      // HTML bars these three from validation, so their custom error fails
+      // nothing. Chromium reports all three invalid all the same.
+      "readonly-custom": undefined,
+      "button-custom": undefined,
+      "output-custom": undefined,
+    });
+  });
+
+  it("does not report a required control invalid just for being empty", () => {
+    expect(
+      stateById(
+        `
+        <input id="input" required aria-label="a">
+        <textarea id="textarea" required aria-label="b"></textarea>
+        <select id="select" required aria-label="c"><option value="">-</option></select>
+        <input id="checkbox" type="checkbox" required aria-label="d">
+        <input id="radio" type="radio" name="r" required aria-label="e">
+      `,
+        "invalid",
+      ),
+    ).toStrictEqual({
+      // HTML-AAM: not until the user has interacted with it or tried to
+      // submit its form, which `:user-invalid` tells and jsdom never does.
+      // Chromium agrees for the first two, and reports the last three invalid
+      // from the start.
+      input: undefined,
+      textarea: undefined,
+      select: undefined,
+      checkbox: undefined,
+      radio: undefined,
+    });
+  });
+
+  it("lets an authored aria-invalid win over a control's validity", () => {
+    expect(
+      stateById(
+        `
+        <input id="false" aria-invalid="false" pattern="[0-9]+" value="abc" aria-label="a">
+        <input id="grammar" aria-invalid="grammar" pattern="[0-9]+" value="abc" aria-label="b">
+        <input id="true" aria-invalid="true" value="fine" aria-label="c">
+        <input id="empty" aria-invalid="" pattern="[0-9]+" value="abc" aria-label="d">
+        <input id="undefined" aria-invalid="undefined" pattern="[0-9]+" value="abc" aria-label="e">
+      `,
+        "invalid",
+      ),
+    ).toStrictEqual({
+      false: false,
+      grammar: "grammar",
+      true: true,
+      // An empty value and `undefined` set nothing, so validity decides.
+      empty: true,
+      undefined: true,
+    });
   });
 
   it("reads a native checkbox's and radio's checkedness, never aria-checked", () => {

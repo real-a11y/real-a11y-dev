@@ -23,6 +23,7 @@ import {
   isNameBarrierElement,
   nativeStates,
 } from "../extraction/dom-extractor.js";
+import { validityInvalid } from "../extraction/field-states.js";
 import {
   EMBEDDED_VALUE_ROLES,
   fieldValueOwner,
@@ -137,6 +138,11 @@ function addReaders(
  * all, so it shows once anything else refreshes. It reads a property or two
  * per control, far cheaper than re-extracting them all.
  *
+ * A field's validity, which `invalid` records, moves the same way: with a
+ * script's `setCustomValidity()` or `.value`, and when a submission attempt
+ * makes `:user-invalid` match. So every `<input>`, `<select>`, `<textarea>`
+ * and `<button>` is checked for that too.
+ *
  * A state strict mode withholds (a chosen option's `selected`) is never on the
  * node, so `seen` remembers it instead: comparing with the node would dirty
  * every chosen option on each refresh, and never comparing would miss a choice
@@ -153,9 +159,14 @@ export function addMovedNativeStates(
   const refs = getElementRefs();
   for (const [id, node] of domNodes) {
     const tag = node.dom?.tagName;
-    if (tag !== "input" && tag !== "select" && tag !== "option") continue;
+    if (!tag || !STATE_READ_TAGS.has(tag)) continue;
     const el = refs.get(id);
     if (!el) continue;
+    if (validityMoved(el, tag, node)) {
+      dirty.add(el);
+      continue;
+    }
+    if (tag === "textarea" || tag === "button") continue;
     const native = nativeStates(el, tag, node.a11y.role);
     for (const [state, value] of Object.entries(native)) {
       const moved =
@@ -168,6 +179,25 @@ export function addMovedNativeStates(
       }
     }
   }
+}
+
+/** The controls whose native state or validity can move unobserved. */
+const STATE_READ_TAGS = new Set([
+  "input",
+  "select",
+  "option",
+  "textarea",
+  "button",
+]);
+
+/**
+ * True when `el` fails or passes constraint validation where its node says
+ * otherwise. A field whose authored aria-invalid decides is skipped: a change
+ * to that is a mutation the observer already reports.
+ */
+function validityMoved(el: Element, tag: string, node: SemanticNode): boolean {
+  const fails = validityInvalid(el, tag);
+  return fails !== null && (fails || undefined) !== node.a11y.states["invalid"];
 }
 
 /** Record `value` for `el`, and say whether it differs from the last one. */
