@@ -15,26 +15,26 @@ main
     button "Sign in"
 ```
 
-It's the structural counterpart to rule-based audits. Where a tool like [axe](https://github.com/dequelabs/axe-core) answers *"does this violate a WCAG rule right now?"*, an accessibility snapshot answers *"what is the semantic structure — and did it change?"* For how it stacks up against axe, visual regression testing, and Playwright's ARIA snapshots, see [How Accessibility Snapshots Compare](/guide/accessibility-snapshots-comparisons).
+It's the structural counterpart to rule-based audits. Where a tool like [axe](https://github.com/dequelabs/axe-core) answers _"does this violate a WCAG rule right now?"_, an accessibility snapshot answers _"what is the semantic structure — and did it change?"_ For how it stacks up against axe, visual regression testing, and Playwright's ARIA snapshots, see [How Accessibility Snapshots Compare](/guide/accessibility-snapshots-comparisons).
 
 ## Why this exists
 
-Accessibility is hard to get right. Building — and *testing* — an accessible web app demands fluency in WCAG, ARIA, and the accessible-name algorithm, plus the quirks of real screen readers, which behave differently across NVDA on Windows, VoiceOver on macOS and iOS, and TalkBack on Android. That's a steep wall, and it's a big reason teams ship accessibility bugs they never notice.
+Accessibility is hard to get right. Building — and _testing_ — an accessible web app demands fluency in WCAG, ARIA, and the accessible-name algorithm, plus the quirks of real screen readers, which behave differently across NVDA on Windows, VoiceOver on macOS and iOS, and TalkBack on Android. That's a steep wall, and it's a big reason teams ship accessibility bugs they never notice.
 
-An accessibility snapshot lowers the bar. Because it shows your page exactly as assistive technology structures it — roles, names, headings, focus order — you can read it and answer the questions that matter *without* being a screen-reader expert:
+An accessibility snapshot lowers the bar. Because it shows your page exactly as assistive technology structures it — roles, names, headings, focus order — you can read it and answer the questions that matter _without_ being a screen-reader expert:
 
-- *Does this snapshot match what I think my page contains?*
-- *Would this structure make sense to someone who can't see it?*
-- *Is anything unlabeled, mis-roled, or out of order?*
+- _Does this snapshot match what I think my page contains?_
+- _Would this structure make sense to someone who can't see it?_
+- _Is anything unlabeled, mis-roled, or out of order?_
 
-You don't need NVDA, VoiceOver, and TalkBack open across three machines to catch a missing label or a heading that jumps from `<h1>` to `<h3>`. You read the snapshot in your editor, or in a pull-request diff. It doesn't *replace* real screen-reader testing — [more on that](/guide/accessibility-snapshots-comparisons#alongside-real-screen-reader-testing) — it moves the largest, most mechanical class of problems to where every developer already works.
+You don't need NVDA, VoiceOver, and TalkBack open across three machines to catch a missing label or a heading that jumps from `<h1>` to `<h3>`. You read the snapshot in your editor, or in a pull-request diff. It doesn't _replace_ real screen-reader testing — [more on that](/guide/accessibility-snapshots-comparisons#alongside-real-screen-reader-testing) — it moves the largest, most mechanical class of problems to where every developer already works.
 
 ## The problem with DOM snapshots
 
 A normal `toMatchSnapshot()` on rendered HTML captures the **DOM**: every wrapper `<div>`, class name, and inline style. Two problems follow:
 
 1. **Noise.** A purely visual refactor — renaming a class, nesting another `<div>` — churns the snapshot even though nothing a screen-reader user perceives has changed.
-2. **Blind spots.** The DOM snapshot says nothing about the *accessible name* computed from `aria-labelledby`, whether headings skip a level, or what order elements receive focus.
+2. **Blind spots.** The DOM snapshot says nothing about the _accessible name_ computed from `aria-labelledby`, whether headings skip a level, or what order elements receive focus.
 
 An accessibility snapshot inverts both. It captures **only** what reaches the accessibility tree — the tree at the top of this page — so it's stable against cosmetic change and surfaces exactly the semantics that matter. Rename every wrapper class and the snapshot is byte-identical. Drop the form's `aria-label`, skip from `<h1>` to `<h3>`, or leave a button unlabeled — and it changes immediately.
 
@@ -42,15 +42,13 @@ An accessibility snapshot inverts both. It captures **only** what reaches the ac
 
 Real A11y snapshots the same tree three ways, so you pick the grain that fits the test:
 
-| Snapshot | Captures | Catches |
-|---|---|---|
-| **Tree** ([`treeSnapshot`](/packages/testing/snapshots#treesnapshot-root-options)) | Full role + name structure (no states or description) | Missing labels, wrong roles, structural drift |
-| **Outline** ([`outlineSnapshot`](/packages/testing/snapshots#outlinesnapshot-root-options)) | Heading hierarchy only | Missing `<h1>`, skipped levels |
-| **Tab order** ([`tabSequenceSnapshot`](/packages/testing/snapshots#tabsequencesnapshot-root-options)) | Focus sequence | Focus traps, illogical tab order, positive-`tabindex` surprises |
+| Snapshot                                                                                              | Captures                                              | Catches                                                         |
+| ----------------------------------------------------------------------------------------------------- | ----------------------------------------------------- | --------------------------------------------------------------- |
+| **Tree** ([`treeSnapshot`](/packages/testing/snapshots#treesnapshot-root-options))                    | Full role + name structure (no states or description) | Missing labels, wrong roles, structural drift                   |
+| **Outline** ([`outlineSnapshot`](/packages/testing/snapshots#outlinesnapshot-root-options))           | Heading hierarchy only                                | Missing `<h1>`, skipped levels                                  |
+| **Tab order** ([`tabSequenceSnapshot`](/packages/testing/snapshots#tabsequencesnapshot-root-options)) | Focus sequence                                        | Focus traps, illogical tab order, positive-`tabindex` surprises |
 
-::: warning Role and name, not every state
-The tree text prints each node's role, name, opt-in field value, `(level N)` where the node has one and `[focused]` marker; the tab text prints the same minus the level. They do not print states such as `checked` or `expanded`, the description, or properties such as `aria-roledescription`: a checked and an unchecked checkbox with the same name look identical. Use [`serializeTreeDiff`](/packages/testing/flow) or assert on `node.a11y.states` to catch a state change.
-:::
+**Role and name, not every state.** The tree text prints each node's role, name, opt-in field value, `(level N)` where the node has one and `[focused]` marker; the tab text prints the same minus the level. They do not print states such as `checked` or `expanded`, the description, or properties such as `aria-roledescription`: a checked and an unchecked checkbox with the same name look identical. Use [`serializeTreeDiff`](/packages/testing/flow) or assert on `node.a11y.states` to catch a state change.
 
 ## Deterministic by construction
 
@@ -64,7 +62,7 @@ expect(
 
 ## It models real AT behavior
 
-Because the snapshot reflects the *extracted* accessibility tree — not raw markup — it captures semantics a DOM dump can't. The clearest example is **modal scoping**: when a dialog is genuinely modal, content behind it is inert to assistive tech, so it drops out of the tree. Open a modal and the snapshot (and tab order) collapse to just the dialog — a precise artifact for that state. "Genuinely modal" follows Chromium's own accessibility tree: a `<dialog>` opened with `showModal()`, or a page that makes the background `inert` or `aria-hidden` the way modal libraries do. `aria-modal="true"` on its own is only a hint, and the page behind it stays in the tree:
+Because the snapshot reflects the _extracted_ accessibility tree — not raw markup — it captures semantics a DOM dump can't. The clearest example is **modal scoping**: when a dialog is genuinely modal, content behind it is inert to assistive tech, so it drops out of the tree. Open a modal and the snapshot (and tab order) collapse to just the dialog — a precise artifact for that state. "Genuinely modal" follows Chromium's own accessibility tree: a `<dialog>` opened with `showModal()`, or a page that makes the background `inert` or `aria-hidden` the way modal libraries do. `aria-modal="true"` on its own is only a hint, and the page behind it stays in the tree:
 
 ```ts
 await flow(container).findByRole("button", { name: "Delete account" }).click();
@@ -75,11 +73,11 @@ expect(container).toHaveTabSequence(['button "Cancel"', 'button "Delete"']);
 
 A screenshot can be pixel-perfect while the page is broken for assistive technology. Swap a real `<button>` for a `<div onclick>` styled to match: identical screenshot, gone from the accessibility tree. That regression moves **zero pixels**, so a visual snapshot sails right past it — an accessibility snapshot catches it immediately.
 
-Visual snapshots and accessibility snapshots are the two halves of regression testing — *how it looks* and *what it means* — and neither covers the other's blind spot. [See the full comparison →](/guide/accessibility-snapshots-comparisons#versus-visual-regression-testing)
+Visual snapshots and accessibility snapshots are the two halves of regression testing — _how it looks_ and _what it means_ — and neither covers the other's blind spot. [See the full comparison →](/guide/accessibility-snapshots-comparisons#versus-visual-regression-testing)
 
 ## The same tree, everywhere
 
-An accessibility snapshot is the serialized form of the tree you can also *see* live across Real A11y's surfaces — the [inspector](/packages/inspector), the [React panel](/packages/react) and the [Storybook addon](/packages/storybook-addon) render the same extraction, and the [Chrome extension](/guide/chrome-extension) and the [CLI](/packages/cli) show Chromium's own tree, which the [Playwright adapter](/packages/testing/playwright#auditing-the-native-tree) snapshots too. What you inspect by eye in the panel is what you commit as a snapshot in tests.
+An accessibility snapshot is the serialized form of the tree you can also _see_ live across Real A11y's surfaces — the [inspector](/packages/inspector), the [React panel](/packages/react) and the [Storybook addon](/packages/storybook-addon) render the same extraction, and the [Chrome extension](/guide/chrome-extension) and the [CLI](/packages/cli) show Chromium's own tree, which the [Playwright adapter](/packages/testing/playwright#auditing-the-native-tree) snapshots too. What you inspect by eye in the panel is what you commit as a snapshot in tests.
 
 ## Start snapshotting
 
