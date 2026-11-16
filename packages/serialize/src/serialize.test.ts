@@ -431,3 +431,33 @@ describe("strict mode (redactInput, ADR-0001)", () => {
     );
   });
 });
+
+describe("what a line carries (documented contract)", () => {
+  const html = `
+    <input type="checkbox" checked aria-label="Subscribe">
+    <input type="checkbox" aria-label="Subscribe">
+    <button aria-roledescription="slide" aria-describedby="d">x</button>
+    <p id="d" hidden>Hint</p>`;
+
+  it("prints a checked and an unchecked checkbox identically", () => {
+    document.body.innerHTML = html;
+    const lines = serializeTree(document.body).split("\n");
+    const boxes = lines.filter((l) => l.includes("checkbox"));
+    expect(boxes).toEqual(['checkbox "Subscribe"', 'checkbox "Subscribe"']);
+    // The states are on the nodes, just not in the text.
+    const states = [...extractA11yTree(document.body).nodes.values()]
+      .filter((n) => n.a11y.role === "checkbox")
+      .map((n) => n.a11y.states?.checked);
+    expect(states).toEqual([true, false]);
+  });
+
+  it("prints no state, description or role description in tree or tab lines", () => {
+    document.body.innerHTML = html;
+    const tree = serializeTree(document.body);
+    const tabs = serializeTabSequence(document.body);
+    for (const out of [tree, tabs]) {
+      expect(out).toContain('button "x"');
+      expect(out).not.toMatch(/Hint|slide|checked/);
+    }
+  });
+});

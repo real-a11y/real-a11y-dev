@@ -44,9 +44,13 @@ Real A11y snapshots the same tree three ways, so you pick the grain that fits th
 
 | Snapshot | Captures | Catches |
 |---|---|---|
-| **Tree** ([`treeSnapshot`](/packages/testing/snapshots#treesnapshot-root-options)) | Full role + name structure | Missing labels, wrong roles, structural drift |
+| **Tree** ([`treeSnapshot`](/packages/testing/snapshots#treesnapshot-root-options)) | Full role + name structure (no states or description) | Missing labels, wrong roles, structural drift |
 | **Outline** ([`outlineSnapshot`](/packages/testing/snapshots#outlinesnapshot-root-options)) | Heading hierarchy only | Missing `<h1>`, skipped levels |
 | **Tab order** ([`tabSequenceSnapshot`](/packages/testing/snapshots#tabsequencesnapshot-root-options)) | Focus sequence | Focus traps, illogical tab order, positive-`tabindex` surprises |
+
+::: warning Role and name, not every state
+The tree and tab text print each node's role, name, opt-in field value, heading or list `(level N)` and `[focused]` marker. They do not print states such as `checked` or `expanded`, the description, or properties such as `aria-roledescription`: a checked and an unchecked checkbox with the same name look identical. Use [`serializeTreeDiff`](/packages/testing/flow) or assert on `node.a11y.states` to catch a state change.
+:::
 
 ## Deterministic by construction
 
