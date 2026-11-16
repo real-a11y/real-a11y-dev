@@ -100,6 +100,47 @@ describe("openPage — error catalog", () => {
     );
   });
 
+  it("leaves the binary alone in CDP mode: a missing one is not read", async () => {
+    vi.stubEnv("REAL_A11Y_CHROME_PATH", "/definitely/not/a/chrome/either");
+    try {
+      const session = await createSession({
+        cdp: "http://127.0.0.1:9",
+        chromePath: "/definitely/not/a/chrome",
+      });
+      await expect(session.close()).resolves.toBeUndefined();
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it("names the chosen binary and its source on stderr only under --verbose", async () => {
+    const write = vi
+      .spyOn(process.stderr, "write")
+      .mockImplementation(() => true);
+    // Only this line: a runtime warning on stderr is not what is being pinned.
+    const chromeLines = (): unknown[] =>
+      write.mock.calls
+        .map(([chunk]) => chunk)
+        .filter((chunk) => String(chunk).startsWith("using Chrome"));
+    try {
+      // Any file that exists: nothing launches until a page is opened.
+      const quiet = await createSession({ chromePath: process.execPath });
+      await quiet.close();
+      expect(chromeLines()).toEqual([]);
+
+      const verbose = await createSession({
+        chromePath: process.execPath,
+        verbose: true,
+      });
+      await verbose.close();
+      expect(chromeLines()).toEqual([
+        `using Chrome for Testing at ${process.execPath} (source: flag)\n`,
+      ]);
+    } finally {
+      write.mockRestore();
+    }
+  });
+
   it("reads that layout from the session's cwd, not the process's", async () => {
     // A project whose node_modules links to the running CLI, as an install
     // there would, so `npx real-a11y` reaches it from the project.

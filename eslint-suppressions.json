@@ -107,9 +107,6 @@
     }
   },
   "packages/cli/src/session.ts": {
-    "complexity": {
-      "count": 1
-    },
     "max-params": {
       "count": 1
     }
