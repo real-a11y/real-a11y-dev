@@ -5207,7 +5207,8 @@ describe("readNativeTree: a field in a host's shadow root", () => {
    * `pierce: true` does — with the closed roots, the `<slot>` that shows each
    * of a host's elements (its root's unnamed one, here), a user-agent root
    * holding `userAgent`'s part for a field, and a frame's document, but not
-   * `unwalked`, as if the page added it since; `DOM.resolveNode` to the node
+   * `unwalked`, as if the page added it since; `DOM.describeNode` describing
+   * one node the same way; `DOM.resolveNode` to the node
    * itself, but for `unresolvable`; `Runtime.callFunctionOn` running the
    * source it is handed on that node, as the page would; and each frame of
    * `frames`, read in this same session, by its owner and its own AX tree.
@@ -5298,6 +5299,11 @@ describe("readNativeTree: a field in a host's shadow root", () => {
       if (method === "DOM.getDocument") {
         if (options.listable === false) throw new Error("No node found");
         return { root: toCdp(document) };
+      }
+      if (method === "DOM.describeNode") {
+        const node = byId.get(p["backendNodeId"] as number);
+        if (!node || options.listable === false) throw new Error("No node");
+        return { node: toCdp(node) };
       }
       if (method === "DOM.resolveNode") {
         const node = byId.get(p["backendNodeId"] as number);
@@ -5945,6 +5951,135 @@ describe("readNativeTree: a field in a host's shadow root", () => {
     const due = findNative(nodes, "Date", "Due")!;
     expect(due.valueWithheld).toBe(false);
     expect(due.value).toBe("2026-10-18");
+  });
+
+  describe("a control that lends a field's value through its label", () => {
+    const CODE = "482913";
+    /**
+     * `<label for="c">Code <input autocomplete="one-time-code"
+     * value="482913"></label><input type="checkbox" id="c"><button
+     * aria-labelledby="c">Toggle</button><button
+     * aria-describedby="c">Go</button>`, as Chromium 151 sends it: each
+     * button reads the checkbox's label, and the code in it. `hidden` hides
+     * the checkbox, which leaves it an ignored node with no trace; `inLabel`
+     * false moves the field out of the label.
+     */
+    function labelPage({ hidden = false, inLabel = true } = {}): AX {
+      const label = document.createElement("label");
+      label.htmlFor = "c";
+      label.append("Code ");
+      const field = input({ autocomplete: "one-time-code" }, CODE);
+      if (inLabel) label.appendChild(field);
+      else document.body.appendChild(field);
+      const checkbox = input({ type: "checkbox", id: "c" });
+      if (hidden) checkbox.hidden = true;
+      const toggle = document.createElement("button");
+      toggle.setAttribute("aria-labelledby", "c");
+      const go = document.createElement("button");
+      go.setAttribute("aria-describedby", "c");
+      document.body.prepend(label);
+      document.body.append(checkbox, toggle, go);
+      const read = inLabel ? `Code ${CODE}` : "Code";
+      const related = (
+        name: string,
+        target: Node,
+        idOf: (n: Node) => number,
+      ) => ({
+        name,
+        value: { relatedNodes: [{ backendDOMNodeId: idOf(target) }] },
+      });
+      return (idOf) => [
+        axNode(
+          idOf,
+          document,
+          "1",
+          "RootWebArea",
+          kids("2", "4", "5", "6", "7"),
+        ),
+        axNode(idOf, label, "2", "LabelText", {
+          ...under("1"),
+          ...kids("3", ...(inLabel ? ["4"] : [])),
+        }),
+        axNode(idOf, label.firstChild!, "3", "StaticText", {
+          ...under("2"),
+          name: { value: "Code" },
+        }),
+        axNode(idOf, field, "4", "textbox", {
+          ...under(inLabel ? "2" : "1"),
+          value: { value: CODE },
+        }),
+        hidden
+          ? axNode(idOf, checkbox, "5", "none", {
+              ...under("1"),
+              ignored: true,
+            })
+          : axNode(idOf, checkbox, "5", "checkbox", {
+              ...under("1"),
+              name: {
+                value: read,
+                sources: [
+                  {
+                    type: "relatedElement",
+                    nativeSource: "labelfor",
+                    value: { value: read },
+                    nativeSourceValue: {
+                      relatedNodes: [{ backendDOMNodeId: idOf(label) }],
+                    },
+                  },
+                ],
+              },
+              properties: [related("labelledby", label, idOf)],
+            }),
+        axNode(idOf, toggle, "6", "button", {
+          ...under("1"),
+          ...labelledBy(read, idOf(checkbox)),
+        }),
+        axNode(idOf, go, "7", "button", {
+          ...under("1"),
+          name: {
+            value: "Go",
+            sources: [{ type: "contents", value: { value: "Go" } }],
+          },
+          description: { value: read },
+          properties: [related("describedby", checkbox, idOf)],
+        }),
+      ];
+    }
+    const buttons = (nodes: EnrichedNativeNode[]) =>
+      nodes.filter((n) => n.role === "button");
+
+    it("withholds what reads the checkbox: the code is in its label", async () => {
+      for (const hidden of [false, true]) {
+        document.body.innerHTML = "";
+        const { nodes } = await readNativeTree(
+          overJsdom(labelPage({ hidden })).t,
+        );
+        const [toggle, go] = buttons(nodes);
+        expect(toggle?.name, `hidden: ${hidden}`).toBe("[redacted]");
+        expect(go?.name).toBe("Go");
+        expect(go?.description).toBe("");
+        expect(JSON.stringify(nodes)).not.toContain(CODE);
+      }
+    });
+
+    it("keeps what reads a hidden checkbox whose label holds no value, by the walk's word", async () => {
+      const { nodes } = await readNativeTree(
+        overJsdom(labelPage({ hidden: true, inLabel: false })).t,
+      );
+      const [toggle, go] = buttons(nodes);
+      expect(toggle?.name).toBe("Code");
+      expect(go?.description).toBe("Code");
+    });
+
+    it("withholds what reads a hidden checkbox when the document can't be walked", async () => {
+      // Nothing then says what labels it, so a reference to it fails closed.
+      const { nodes } = await readNativeTree(
+        overJsdom(labelPage({ hidden: true, inLabel: false }), {
+          listable: false,
+        }).t,
+      );
+      expect(buttons(nodes)[0]?.name).toBe("[redacted]");
+    });
   });
 });
 

@@ -1268,12 +1268,14 @@ const FIELD_VALUE_GATES = [
   // which names built from them go with it. `holdsContent` decides that an
   // empty field withholds nothing, and `leavesOut` which labels around a field
   // skip its own value (`typedIn`, what is typed in it), so loosening either
-  // withholds less.
+  // withholds less. `labelLending` decides which controls lend a value
+  // through their `<label>`s (`labelsRead`, and `domLabels` for a hidden
+  // one), so loosening it withholds less too.
   "fieldSensitivity",
   "valueRegions",
   "withholdRegionNames",
   "withoutSelection",
-  "holdsContent|leavesOut|typedIn",
+  "holdsContent|leavesOut|typedIn|labelLending|labelsRead|domLabels",
   // The strict mode (`redactInput`): every value and all rich-text editor
   // content withheld. The switch itself — its option, the CLI flag and config
   // key, the MCP server's env var — then the gates it turns on in the native
