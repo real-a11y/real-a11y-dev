@@ -398,9 +398,13 @@ describe("DOM clobbering resilience", () => {
       const nodes = [...extractDomTree(root).nodes.values()];
       const named = (role: string) =>
         nodes.filter((n) => n.a11y.role === role).map((n) => n.a11y.name);
-      expect(named("heading")).toEqual(["Orders", "Labels Edit"]);
-      expect(named("cell")).toEqual(["#1001", "Ready"]);
-      expect(named("textbox")).toContain("Owner");
+      // The empty field lends its aria-label, as in Chromium (AccName 2C).
+      expect(named("heading")).toEqual([
+        "Orders Tag name",
+        "Labels Tag name Edit",
+      ]);
+      expect(named("cell")).toEqual(["#1001", "Ready Tag name"]);
+      expect(named("textbox")).toContain("Owner Tag name");
     });
 
     it("keeps the help text the form sits in, and the link beside it", () => {

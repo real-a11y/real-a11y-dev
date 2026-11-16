@@ -95,8 +95,10 @@ is native now — so these are plain invocations. An earlier version of this row
   show. Without `--redact-input`, `tabs` prints it with the paragraph's sentinel
   text. cli 0.1.0-beta.12 printed that in `tabs --redact-input` too, which is the
   old behaviour, not a fail. (Labelled by the composer itself, the button would
-  read `Message`, its markup name, in `tabs`: the in-page walk takes a referenced
-  element's `aria-label`.)
+  read the composer's text in `tabs`, as Chromium does: a referenced text field
+  lends its value before its `aria-label`. That name is `"[redacted]"` with
+  `--redact-input` too. cli 0.1.0-beta.12 read `Message`, the composer's
+  `aria-label`, which is the old behaviour.)
 - **6c** — a disabled field with `role="none"` has no node of its own in
   Chromium's tree, and still nothing around it is named after what it holds: the
   cell prints `LayoutTableCell "[redacted]"` and the card sentinel appears
