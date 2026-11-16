@@ -21,7 +21,7 @@
  */
 
 /** Bump on any table/rule change that alters normalized output. */
-export const NATIVE_AX_VOCABULARY_VERSION = 11;
+export const NATIVE_AX_VOCABULARY_VERSION = 12;
 
 /**
  * Chromium AX roles that are structural noise relative to this engine's
@@ -43,6 +43,11 @@ export const NATIVE_AX_DROP_ROLES: ReadonlySet<string> = new Set([
   "listmarker",
   "none",
   "presentation",
+  // The UA-shadow popup between a drop-down `<select>`'s combobox and its
+  // options. Not an ARIA role, and the DOM producer prints no such node:
+  // flattening it parents the options straight to the combobox, the shape
+  // both producers now share.
+  "MenuListPopup",
   "RootWebArea",
   "Ignored",
 ]);

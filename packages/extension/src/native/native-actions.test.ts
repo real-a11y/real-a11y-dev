@@ -28,10 +28,9 @@ function n(
 }
 
 describe("nativeSelectOptions", () => {
-  it("lists a real select's options, through its MenuListPopup", () => {
+  it("lists a real select's options, straight under the combobox", () => {
     const nodes = tree(
-      n("sel", "combobox", "Department", ["pop"]),
-      n("pop", "MenuListPopup", "", ["a", "b"]),
+      n("sel", "combobox", "Department", ["a", "b"]),
       n("a", "option", "All Departments"),
       n("b", "option", "Books"),
     );
@@ -42,8 +41,7 @@ describe("nativeSelectOptions", () => {
 
   it("includes the options inside an optgroup, in document order", () => {
     const nodes = tree(
-      n("sel", "combobox", "Pet", ["pop"]),
-      n("pop", "MenuListPopup", "", ["none", "grp"]),
+      n("sel", "combobox", "Pet", ["none", "grp"]),
       n("none", "option", "None"),
       n("grp", "group", "Mammals", ["cat", "dog"]),
       n("cat", "option", "Cat"),
@@ -54,23 +52,23 @@ describe("nativeSelectOptions", () => {
     ).toEqual(["None", "Cat", "Dog"]);
   });
 
-  it("is empty for a custom combobox with no MenuListPopup", () => {
-    // A select-only ARIA combobox: its listbox is a sibling, not a popup
-    // Chromium built for a real <select>.
+  it("is empty for a custom combobox that owns a listbox", () => {
+    // A select-only ARIA combobox: what it owns is a listbox, not bare options.
     const nodes = tree(
-      n("cb", "combobox", "Fruit", []),
+      n("cb", "combobox", "Fruit", ["lb"]),
       n("lb", "listbox", "Fruit", ["o1"]),
       n("o1", "option", "Apple"),
     );
     expect(nativeSelectOptions(nodes.get("cb")!, nodes)).toEqual([]);
+    const bare = tree(n("cb", "combobox", "Fruit", []));
+    expect(nativeSelectOptions(bare.get("cb")!, bare)).toEqual([]);
   });
 
   it("is empty for an editable combobox and for any other role", () => {
     const nodes = tree(
-      n("cb", "combobox", "Search", ["pop"], {
+      n("cb", "combobox", "Search", ["o"], {
         states: { editable: "plaintext" },
       }),
-      n("pop", "MenuListPopup", "", ["o"]),
       n("o", "option", "One"),
       n("lb", "listbox", "List", ["o"]),
     );
@@ -85,7 +83,7 @@ describe("pickerCurrentOption", () => {
     n("02", "option", "02", [], { states: { selected: true } }),
   ];
   const select = (extra: Partial<NativeNode>) =>
-    n("sel", "combobox", "Expiry month", ["pop"], extra);
+    n("sel", "combobox", "Expiry month", ["02"], extra);
 
   it("marks the selected option of a select classified as not sensitive", () => {
     expect(

@@ -207,7 +207,7 @@ export function isSteppableRole(role: string): boolean {
 /**
  * Live dogfood finding: "combobox options are not interactive" — Amazon's
  * department dropdown is a real `<select>`; Chromium normalizes it to
- * `combobox` → `menuListPopup` → `option` on the native tree, and each
+ * `combobox` → `option` on the native tree, and each
  * `option` row had no action at all, next to the in-page tree's own picker
  * UI (`InputPanel.tsx`'s `SelectPicker`) for the identical element.
  * `option` is deliberately absent from `ACTABLE` (see its own docstring) —
@@ -227,31 +227,34 @@ export function isSelectableRole(role: string): boolean {
  * TAB row's `GET_FIELD_STATE` does for the same element. Empty for every
  * other node.
  *
- * A real `<select>` is the one `combobox` Chromium gives a `MenuListPopup`
- * child; a custom `role="combobox"` never has one, so it keeps its click.
- * The options come from the tree already read, with no round trip, and
- * include those inside an `<optgroup>`. Choosing one dispatches the existing
- * `select` action on it, whose in-page `instanceof HTMLOptionElement` check
- * stays the final word.
+ * Chromium puts a `MenuListPopup` between a real `<select>` and its options,
+ * but the normalizer flattens it (`NATIVE_AX_DROP_ROLES`), so the signal is
+ * the shape left behind: a `combobox` whose children ARE the options, or
+ * `group`s of them for an `<optgroup>`. A custom `role="combobox"` keeps its
+ * click, because what it owns is a `listbox` (or a popup of another kind),
+ * never bare options. The options come from the tree already read, with no
+ * round trip. Choosing one dispatches the existing `select` action on it,
+ * whose in-page `instanceof HTMLOptionElement` check stays the final word, so
+ * a custom widget that did look like this would refuse cleanly.
  */
 export function nativeSelectOptions(
   node: NativeNode,
   nodes: Map<string, NativeNode>,
 ): NativeNode[] {
   if (node.role !== "combobox" || node.states?.["editable"]) return [];
-  const popup = (node.childIds ?? [])
-    .map((id) => nodes.get(id))
-    .find((child) => child?.role.toLowerCase() === "menulistpopup");
-  if (!popup) return [];
   const options: NativeNode[] = [];
-  const walk = (id: string) => {
-    const child = nodes.get(id);
-    if (!child) return;
-    if (child.role === "option") options.push(child);
-    else for (const grandchild of child.childIds ?? []) walk(grandchild);
+  const collect = (ids: string[] | undefined, inGroup: boolean): boolean => {
+    for (const id of ids ?? []) {
+      const child = nodes.get(id);
+      if (!child) continue;
+      if (child.role === "option") options.push(child);
+      else if (child.role === "group" && !inGroup) {
+        if (!collect(child.childIds, true)) return false;
+      } else return false;
+    }
+    return true;
   };
-  for (const id of popup.childIds ?? []) walk(id);
-  return options;
+  return collect(node.childIds, false) ? options : [];
 }
 
 /**

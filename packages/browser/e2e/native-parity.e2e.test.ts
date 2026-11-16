@@ -449,6 +449,40 @@ describe("a <select>'s role follows the rows it shows", () => {
       expect(roleOf("One row of many")).toBe("combobox");
     }
   });
+
+  // Chromium puts a `MenuListPopup` between a drop-down select and its options.
+  // It is not an ARIA role and the DOM producer prints no such node, so the
+  // native normalizer flattens it: the options sit directly under the combobox.
+  it("prints no MenuListPopup, and the options sit under the combobox", async () => {
+    await session.open(
+      dataUrl(
+        `<main>
+          <select aria-label="Sel"><option>A</option><option selected>B</option></select>
+          <select aria-label="Pet"><option>None</option><optgroup label="Mammals"><option>Cat</option></optgroup></select>
+        </main>`,
+      ),
+    );
+    const native = serializeTree(await session.nativeTree(), {
+      markFocus: false,
+    });
+    expect(native).not.toMatch(/MenuListPopup/i);
+    const lines = native.split("\n");
+    const at = (needle: string) => lines.findIndex((l) => l.includes(needle));
+    const indent = (i: number) => lines[i]!.match(/^ */)![0].length;
+
+    const sel = at('"Sel"');
+    expect(lines[sel]).toContain("combobox");
+    expect(lines[sel + 1]).toContain('option "A"');
+    expect(lines[sel + 2]).toContain('option "B"');
+    expect(indent(sel + 1)).toBe(indent(sel) + 2);
+
+    const pet = at('"Pet"');
+    expect(lines[pet + 1]).toContain('option "None"');
+    expect(lines[pet + 2]).toContain('group "Mammals"');
+    expect(lines[pet + 3]).toContain('option "Cat"');
+    expect(indent(pet + 2)).toBe(indent(pet) + 2);
+    expect(indent(pet + 3)).toBe(indent(pet) + 4);
+  });
 });
 
 // Chromium resolves `role` to the first token it recognises — skipping unknown

@@ -1,11 +1,12 @@
 /**
  * The option picker for a native `<select>`, through the real build.
  *
- * Chromium gives a real `<select>` a `combobox` row with a `MenuListPopup`
- * child holding its `option` rows. Activating that row opens the panel's
- * option picker (`InputPanel`'s `SelectPicker`, a TAB row's too), listed
- * from those rows, and choosing one dispatches the existing `select` action
- * on it. A custom `role="combobox"` has no such popup and keeps its click.
+ * A real `<select>` is a `combobox` row whose children are its `option` rows
+ * (the normalizer flattens Chromium's `MenuListPopup`). Activating that row
+ * opens the panel's option picker (`InputPanel`'s `SelectPicker`, a TAB row's
+ * too), listed from those rows, and choosing one dispatches the existing
+ * `select` action on it. A custom `role="combobox"` has no bare options and
+ * keeps its click.
  */
 
 import { expect, test } from "./harness";

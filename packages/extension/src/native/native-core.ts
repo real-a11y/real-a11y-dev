@@ -2694,7 +2694,7 @@ export function pageStep(this: Element, delta: number): Marker {
  * does for the `<select>` it belongs to — set the select's value and fire
  * `change` — rather than clicking it. Live dogfood finding: a native
  * `<select>`'s options (Chromium normalizes it to `combobox` →
- * `menuListPopup` → `option` on the native tree, e.g. Amazon's department
+ * `option` on the native tree, e.g. Amazon's department
  * dropdown) showed up on the tree but had no way to act on them, matching
  * `ACTABLE`'s own long-standing exclusion of `option` — a synthetic click on
  * a real `<option>` is a no-op, since the browser renders the open list as
@@ -2706,8 +2706,8 @@ export function pageStep(this: Element, delta: number): Marker {
  * alone, the reason `ACTABLE` stayed silent on it). A custom widget refuses
  * cleanly (`not-an-option`) rather than misfiring a wrong action.
  *
- * The panel's option picker only opens for a real `<select>` (one Chromium
- * gives a `MenuListPopup`, see `nativeSelectOptions`), so a `not-an-option`
+ * The panel's option picker only opens for a real `<select>` (a combobox whose
+ * children are options, see `nativeSelectOptions`), so a `not-an-option`
  * refusal there means the page changed under the tree since it was read.
  * It reports "Failed:" rather than falling back to a click: a click on what
  * is now some other element would act blind. Refresh is the way back.

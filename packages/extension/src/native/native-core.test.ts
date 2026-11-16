@@ -3019,7 +3019,7 @@ describe("in-page actions — step", () => {
 /**
  * Live dogfood finding: "combobox options are not interactive" — Amazon's
  * department dropdown is a real `<select>`; Chromium normalizes it to
- * `combobox` → `menuListPopup` → `option`, and each `option` row had no
+ * `combobox` → `option`, and each `option` row had no
  * native-tree action at all. A generic `click` was never the fix — a
  * synthetic pointer sequence on a real `<option>` is a no-op, since the open
  * list is OS chrome — so this is a dedicated action that sets the owning
