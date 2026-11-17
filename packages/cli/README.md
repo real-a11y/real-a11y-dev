@@ -150,11 +150,11 @@ controls inside it. A finding there is located from the frame's own `<iframe>`,
 then ` >>> `, then its path inside the frame (`#checkout >>> body > form >
 button`). `heading-order` and `landmark-structure` judge the page's own
 document, so an embedded widget's `<h1>` or `<main>` is not a second one of the
-page's. Not read yet: a frame Chromium runs in a process of its own — under
-site isolation, a cross-site or `sandbox`ed `<iframe>`. Its row stays empty.
-The Chrome for Testing `real-a11y install` fetches, and a Chrome reached with
-`--cdp`, are both site-isolated; Playwright's bundled headless Chromium runs
-every frame in the page's process.
+page's. That holds wherever Chromium runs the frame: under site isolation (the
+Chrome for Testing `real-a11y install` fetches, or a Chrome reached with
+`--cdp`) a cross-site or `sandbox`ed `<iframe>` runs in a process of its own
+and is read over a session of its own. `interact` and the action commands
+can't act inside such a frame yet.
 
 There is **no `--producer` flag**: each command has exactly one correct producer,
 so there is nothing to choose. That tree is whole-document, so those commands

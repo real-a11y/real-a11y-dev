@@ -115,8 +115,9 @@ It includes the page's `<iframe>`s: each frame's document sits under its
 `Iframe` row, the audit checks the controls inside it, and a finding there is
 located from the frame's own `<iframe>`, then ` >>> `, then its path inside the
 frame. `heading-order` and `landmark-structure` judge the page's own document
-only. A frame Chromium runs in a process of its own (under site isolation, a
-cross-site or `sandbox`ed `<iframe>`) is not read yet; its row stays empty.
+only. That holds for a frame Chromium runs in a process of its own (under site
+isolation, a cross-site or `sandbox`ed `<iframe>`) too, though the action tools
+can't act inside one yet.
 
 **`get_tab_order` is the exception, and not a fallback.** Chromium's tree knows
 whether a node is *focusable*, but not the *sequence*: `tabindex` never reaches a

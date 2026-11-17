@@ -6,7 +6,7 @@ area: MCP
 type: Automated
 priority: P1
 status: Active
-validFrom: "browser ≥ 0.1.0-beta.12 · cli ≥ 0.1.0-beta.2 (locators + focusedId). The native producer itself: browser ≥ 0.1.0-beta.11. Steps 6 / 6b as written (field values shown, sensitive ones redacted, --redact-input): cli ≥ 0.1.0-beta.7. Step 6c (a field with no node of its own): cli ≥ 0.1.0-beta.9. Step 6b's `tabs` check: cli ≥ 0.1.0-beta.13. Step 6d (a field in its own aria-labelledby): cli ≥ 0.1.0-beta.13. Step 9 (iframe content): cli ≥ 0.1.0-beta.14"
+validFrom: "browser ≥ 0.1.0-beta.12 · cli ≥ 0.1.0-beta.2 (locators + focusedId). The native producer itself: browser ≥ 0.1.0-beta.11. Steps 6 / 6b as written (field values shown, sensitive ones redacted, --redact-input): cli ≥ 0.1.0-beta.7. Step 6c (a field with no node of its own): cli ≥ 0.1.0-beta.9. Step 6b's `tabs` check: cli ≥ 0.1.0-beta.13. Step 6d (a field in its own aria-labelledby): cli ≥ 0.1.0-beta.13. Step 9 (iframe content): cli ≥ 0.1.0-beta.14. Step 9b (a frame in another process): cli ≥ 0.1.0-beta.15"
 validUntil: ""
 expected: "native tree returns a document tree reaching UA-shadow media controls the in-page walk misses; every native FINDING carries a CSS locator identical to the DOM producer's for the same element (a shadow-root element stops its path at the boundary rather than faking a selector); the tree sets focusedId so [focused] renders; a field shows what it holds the way a screen reader announces it, while a sensitive field (password, one-time code, payment) only ever reads [redacted]; --redact-input withholds every value and all rich-text editor content."
 covers:
@@ -62,6 +62,10 @@ is native now — so these are plain invocations. An earlier version of this row
    autocomplete='cc-number' value='<card sentinel>'></label><button></button></main>">`
    inside the page's `<main>`, then `real-a11y tree <url>`,
    `real-a11y audit <url> -f json` and `real-a11y tree <url> --redact-input`
+   - **9b** — serve the payment frame from a second site instead (the page on
+     `127.0.0.1`, the frame from `localhost`) and give its button the text
+     `Pay now`, then, with `real-a11y install`'s Chrome, `real-a11y tree <url>`
+     and `real-a11y click <url> --role button --name "Pay now"`
 
 ## Expected
 
@@ -135,9 +139,13 @@ is native now — so these are plain invocations. An earlier version of this row
   second `<main>`: a frame is a document of its own. cli 0.1.0-beta.13 printed
   `Iframe "Payment"` with nothing under it and found nothing inside, which is the
   old behaviour, not a fail. (A `srcdoc` frame runs in the page's process in every
-  Chrome. A cross-site or `sandbox`ed one runs in a process of its own under site
-  isolation — the Chrome `real-a11y install` fetches — and its row stays empty:
-  expected for now.)
+  Chrome.)
+- **9b** — under site isolation the cross-site frame runs in a process of its
+  own, and reads the same: its card field `[redacted]`, and `button "Pay now"`
+  under its row. `click` names the frame's button and refuses: it is
+  inside a frame Chromium runs in another process, which can't be acted on yet.
+  cli 0.1.0-beta.14 printed that frame's row with nothing under it, which is the
+  old behaviour, not a fail.
 
 ## Why this exists
 

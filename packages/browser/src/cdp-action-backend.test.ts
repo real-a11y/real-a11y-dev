@@ -66,6 +66,19 @@ describe("CdpActionBackend.dispatch", () => {
     expect(cdp.calls).toHaveLength(0);
   });
 
+  it("refuses a node of an out-of-process frame, saying so", async () => {
+    const { backend, cdp } = makeBackend(() => ({}));
+    const res = await backend.dispatch({
+      nodeId: "ax-dom-12@F00D.BEEF",
+      action: "click",
+    });
+    expect(res.success).toBe(false);
+    expect(res.error).toMatch(
+      /inside a frame Chromium runs in another process/,
+    );
+    expect(cdp.calls).toHaveLength(0);
+  });
+
   it("clicks by resolving the backendDOMNodeId to an object handle", async () => {
     const { backend, cdp } = makeBackend(resolving("obj-1", { ok: true }));
     const res = await backend.dispatch({

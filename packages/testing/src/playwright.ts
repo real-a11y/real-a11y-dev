@@ -160,10 +160,8 @@ export interface SemanticNavigatorPageHandle {
  * frame is a single `group` node and its contents are absent from every
  * snapshot and assertion. So a page embedding a checkout or payment iframe
  * audits **clean while that content is never checked**. The native producer
- * (`{ tree: "native" }`) does read a frame Chromium runs in the page's own
- * process, under its `Iframe` row; one in a process of its own (under site
- * isolation, a cross-site or `sandbox`ed `<iframe>`) it does not yet. Audit a
- * frame either producer misses by attaching to it directly:
+ * (`{ tree: "native" }`) reads every frame, under its `Iframe` row. With the
+ * DOM producer, audit a frame by attaching to it directly:
  *
  * ```ts
  * const outer = await attach(page);                  // host document only

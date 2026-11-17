@@ -2550,6 +2550,55 @@ describe("buildNativeTree — same-process frames under their Iframe rows", () =
     ).not.toContain("Inner help");
   });
 
+  // The same recording, replayed as if the payment frame ran in another
+  // renderer process: its nodes' ids carry the frame, and it brings its own
+  // DOM walk. Backend ids restart in every process, so the page's walk is
+  // seeded with a decoy at every id the frame uses: a frame node classified
+  // or described from the page's walk would show it.
+  it("reads an out-of-process frame by its own DOM walk, its ids suffixed", () => {
+    const suffix = "@F00D.BEEF";
+    const frameIds = new Set(
+      frames.flatMap((f) =>
+        f.rawNodes.map((n) => n.backendDOMNodeId).filter((id) => id != null),
+      ),
+    );
+    const pageDom = new Map([...dom].filter(([id]) => !frameIds.has(id)));
+    for (const id of frameIds) {
+      pageDom.set(id!, domOf("decoy", { autocomplete: "off" }));
+    }
+    const remote: NativeFramePayload[] = [
+      { ...payment, enrichment: dom, suffix },
+      { ...help, ownerId: `${help.ownerId}${suffix}`, enrichment: dom, suffix },
+    ];
+    const build = (redactInput: boolean) =>
+      buildNativeTree(top, pageDom, framesPayload.chrome, {
+        redactInput,
+        frames: remote,
+      });
+
+    const tree = build(false);
+    expect(serializeTree(tree, { values: true })).toBe(
+      serializeTree(framed(), { values: true }),
+    );
+    const row = tree.nodes.get(payment.ownerId)!;
+    for (const id of row.childIds) expect(id.endsWith(suffix)).toBe(true);
+    const inFrame = nodesOf(tree).filter((n) => n.id.endsWith(suffix));
+    expect(inFrame.length).toBeGreaterThan(5);
+    expect(JSON.stringify(nodesOf(tree))).not.toContain("decoy");
+    const card = inFrame.find((n) => n.a11y.name === "Card number")!;
+    expect(card.dom?.attributes.autocomplete).toBe("cc-number");
+    expect(card.a11y.value).toBe("[redacted]");
+    expect(JSON.stringify(nodesOf(tree))).not.toContain("4111");
+
+    const strict = build(true);
+    expect(nodesOf(strict).filter((n) => n.a11y.value !== undefined)).toEqual(
+      [],
+    );
+    expect(nativeAXView(top, pageDom, { frames: remote }).pairs).toEqual(
+      nativeAXView(top, dom, { frames }).pairs,
+    );
+  });
+
   it("audits a frame's controls, but not its document as a second page", () => {
     const findings = collectFindings(framed());
     expect(findings.map((f) => f.rule)).toEqual(["no-unlabeled-interactive"]);
@@ -2715,7 +2764,9 @@ describe("readFrames — which frames a read follows", () => {
       { id: "js", owner: 4, url: "javascript:void(0)", rows: [] },
     ]);
     const top = payloadOf([1, 2, 3, 4].map((backend) => ({ backend })));
-    const frames = await readFrames(client, top, ["https://app.example"]);
+    const frames = await readFrames(client, top, {
+      frameOrigins: ["https://app.example"],
+    });
     expect(frames.map((f) => f.ownerId)).toEqual(["ax-dom-1", "ax-dom-3"]);
     expect(reads).toEqual(["same", "srcdoc"]);
 

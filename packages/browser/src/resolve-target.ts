@@ -15,7 +15,7 @@
  * the MCP server and the CLI word the same refusal differently.
  */
 
-import { findAllByRole } from "@real-a11y-dev/core";
+import { findAllByRole, splitNativeNodeId } from "@real-a11y-dev/core";
 import type { ExtractionResult, SemanticNode } from "@real-a11y-dev/core";
 
 import { backendNodeIdFrom } from "./cdp-action-backend.js";
@@ -53,7 +53,11 @@ export type ResolveTargetResult =
   /** More than one match and no `nth`. Candidates are complete — callers cap rendering. */
   | { kind: "ambiguous"; candidates: TargetCandidate[] }
   /** Matched a node with no backing DOM element (`ax-<n>`, e.g. a synthesized root). */
-  | { kind: "no-dom-node"; candidate: TargetCandidate };
+  | { kind: "no-dom-node"; candidate: TargetCandidate }
+  /** Matched a node inside a frame Chromium runs in another process (its id
+   *  carries the frame: `ax-dom-<n>@<frameId>.<documentId>`). Acting there
+   *  isn't supported yet. */
+  | { kind: "in-remote-frame"; candidate: TargetCandidate };
 
 /**
  * Resolve a role + name (+ nth) query against a native tree to an actionable
@@ -99,6 +103,9 @@ export function resolveTarget(
   const node = matches[index];
   const candidate = candidateOf(node, index + 1);
 
+  if (splitNativeNodeId(node.id).frame) {
+    return { kind: "in-remote-frame", candidate };
+  }
   if (!candidate.actionable) {
     return { kind: "no-dom-node", candidate };
   }

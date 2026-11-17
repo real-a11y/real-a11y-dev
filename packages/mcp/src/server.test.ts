@@ -1702,6 +1702,26 @@ describe("act tools (click_element / type_text / focus_element)", () => {
     expect(session.calls.some((c) => c.fn === "act")).toBe(false);
   });
 
+  it("a node inside an out-of-process frame is refused, saying so", async () => {
+    const tree = actableTree();
+    const id = "ax-dom-15@F00D.BEEF";
+    const pay = { ...tree.nodes.get("ax-dom-12")!, id };
+    pay.a11y = { ...pay.a11y, name: "Pay now" };
+    tree.nodes.set(id, pay);
+    tree.nodes.get("ax-1")!.childIds.push(id);
+    session.nativeTreeResponse = tree;
+    const client = await connect(session);
+    const res = await client.callTool({
+      name: "click_element",
+      arguments: { role: "button", name: "Pay now" },
+    });
+    expect(res.isError).toBe(true);
+    expect(textOf(res)).toMatch(
+      /inside a frame Chromium runs in another process/,
+    );
+    expect(session.calls.some((c) => c.fn === "act")).toBe(false);
+  });
+
   it("a disabled target is refused with the cause, not clicked into a void", async () => {
     const client = await connect(session);
     const res = await client.callTool({

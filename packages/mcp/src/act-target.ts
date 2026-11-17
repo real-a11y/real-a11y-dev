@@ -80,6 +80,13 @@ export function resolveActTarget(
             `(a synthesized node) — it can't be acted on.`,
         ),
       };
+    case "in-remote-frame":
+      return {
+        ok: false,
+        res: errText(
+          `Matched ${describeTarget(resolved.candidate)}, but it is inside a frame Chromium runs in another process (a cross-site or sandboxed <iframe>), which can't be acted on yet.`,
+        ),
+      };
   }
 }
 

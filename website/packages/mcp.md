@@ -251,11 +251,10 @@ different jobs.
   cases.
 - **Requires a real browser.** The assistant's environment must be able to launch
   Chromium or connect to one over CDP.
-- **Frames in another process.** An `<iframe>`'s content is read under its
-  `Iframe` row, except a frame Chromium runs in a process of its own: under
-  site isolation, a cross-site or `sandbox`ed `<iframe>`. Its row stays empty
-  for now. Playwright's bundled headless Chromium runs every frame in the
-  page's process; a Chrome reached over CDP is site-isolated.
+- **Acting inside a frame in another process.** Every `<iframe>`'s content is
+  read under its `Iframe` row, but the action tools can't act inside a frame
+  Chromium runs in a process of its own (under site isolation, a cross-site or
+  `sandbox`ed `<iframe>`) yet: they name the node and say so.
 
 ## See also
 
