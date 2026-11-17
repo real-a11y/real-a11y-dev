@@ -64,27 +64,58 @@ export function iframeRowIds(nodes: readonly RawAXNode[]): number[] {
   return out;
 }
 
+/** A frame as `Page.getFrameTree` reports it. */
+export interface CdpFrame {
+  id: string;
+  url?: string;
+  /** The origin its document runs as: `https://…`, or opaque. */
+  securityOrigin?: string;
+}
+
 interface FrameTreeNode {
-  frame: { id: string; url?: string };
+  frame: CdpFrame;
   childFrames?: FrameTreeNode[];
 }
 
+/** `value` as a URL, or `null` when it doesn't parse. */
+function parseUrl(value: string | undefined): URL | null {
+  try {
+    return new URL(value ?? "");
+  } catch {
+    return null;
+  }
+}
+
 /**
- * Whether a frame showing `url` may be read on a session pinned to
- * `pinned` (see `NativeTreeOptions.frameOrigins`): its document came from
- * one of those origins, or it has no origin of its own and holds its
- * parent's markup (`about:srcdoc`, `about:blank`, `data:`), the parent
- * having been read under the same pin. Anything else, an unparseable URL
- * included, is not read.
+ * Whether a frame may be read on a session pinned to `pinned` (see
+ * `NativeTreeOptions.frameOrigins`): its document came from one of those
+ * origins, or it has no origin of its own and holds its parent's markup
+ * (`about:srcdoc`, `about:blank`, `data:`), the parent having been read
+ * under the same pin. Anything else, an unparseable URL included, is not
+ * read.
+ *
+ * Where Chromium reports the origin the document runs as (`securityOrigin`,
+ * from `Page.getFrameTree`), a non-opaque one must be pinned too: a frame
+ * from another origin that navigates itself to `about:blank` keeps that
+ * origin, and what it shows there is its own, not its parent's markup. An
+ * opaque one (a sandboxed frame's) adds nothing to its URL.
  */
 export function frameFromPinnedOrigin(
-  url: string | undefined,
+  frame: string | Pick<CdpFrame, "url" | "securityOrigin"> | undefined,
   pinned: ReadonlySet<string>,
 ): boolean {
-  let parsed: URL;
-  try {
-    parsed = new URL(url ?? "");
-  } catch {
+  const { url, securityOrigin } =
+    typeof frame === "object"
+      ? frame
+      : { url: frame, securityOrigin: undefined };
+  const parsed = parseUrl(url);
+  if (!parsed) return false;
+  const runsAs = parseUrl(securityOrigin);
+  if (
+    runsAs &&
+    (runsAs.protocol === "http:" || runsAs.protocol === "https:") &&
+    !pinned.has(runsAs.origin)
+  ) {
     return false;
   }
   if (parsed.origin !== "null") return pinned.has(parsed.origin);
@@ -130,7 +161,7 @@ export async function readFrames(
   const walk = async (node: FrameTreeNode, depth: number): Promise<void> => {
     if (depth >= NATIVE_MAX_FRAME_DEPTH) return;
     const children = (node.childFrames ?? []).filter(
-      (child) => !pinned || frameFromPinnedOrigin(child.frame.url, pinned),
+      (child) => !pinned || frameFromPinnedOrigin(child.frame, pinned),
     );
     // One round trip for every sibling's owner; the reads stay in order.
     const owners = await Promise.all(

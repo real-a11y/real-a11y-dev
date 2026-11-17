@@ -2794,6 +2794,33 @@ describe("readFrames — which frames a read follows", () => {
     expect(frameFromPinnedOrigin("file:///etc/hosts", pinned)).toBe(false);
     expect(frameFromPinnedOrigin("not a url", pinned)).toBe(false);
     expect(frameFromPinnedOrigin(undefined, pinned)).toBe(false);
+
+    // The origin the document runs as, where Chromium reports it: a frame
+    // from another origin that navigated itself to about:blank keeps it.
+    expect(
+      frameFromPinnedOrigin(
+        { url: "about:blank", securityOrigin: "https://accounts.example" },
+        pinned,
+      ),
+    ).toBe(false);
+    expect(
+      frameFromPinnedOrigin(
+        { url: "about:blank", securityOrigin: "https://app.example" },
+        pinned,
+      ),
+    ).toBe(true);
+    // A sandboxed srcdoc frame runs as an opaque origin: its URL decides.
+    for (const securityOrigin of ["null", "://", ""]) {
+      expect(
+        frameFromPinnedOrigin({ url: "about:srcdoc", securityOrigin }, pinned),
+      ).toBe(true);
+    }
+    expect(
+      frameFromPinnedOrigin(
+        { url: "https://app.example/x", securityOrigin: "null" },
+        pinned,
+      ),
+    ).toBe(true);
   });
 
   it("reads no frame when the frame tree can't be had", async () => {

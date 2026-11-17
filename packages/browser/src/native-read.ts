@@ -28,6 +28,7 @@ import {
   iframeRowIds,
   MAX_FRAMES_PER_READ,
   readFrames,
+  type CdpFrame,
   type FrameBudget,
   type NativeFramePayload,
 } from "./native-frames.js";
@@ -207,9 +208,13 @@ async function readRemoteFrame(
   depth: number,
 ): Promise<{ process: ProcessRead; payloads: NativeFramePayload[] } | null> {
   const { frameTree } = (await session.send("Page.getFrameTree")) as {
-    frameTree: { frame: { id: string; loaderId?: string } };
+    frameTree: { frame: CdpFrame & { loaderId?: string } };
   };
   const { id: frameId, loaderId } = frameTree.frame;
+  // Pinned: checked again on what Chromium reports for the frame now, its URL
+  // and the origin its document runs as, not only on Playwright's view of it.
+  const pinned = options.frameOrigins ? new Set(options.frameOrigins) : null;
+  if (pinned && !frameFromPinnedOrigin(frameTree.frame, pinned)) return null;
   const owner = (await parent.client.send("DOM.getFrameOwner", {
     frameId,
   })) as { backendNodeId?: number };
