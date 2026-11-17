@@ -313,6 +313,46 @@ describe("nativeAX() ↔ nativeTree() on a page of frames", () => {
   });
 });
 
+// `allowedOrigins` pins an authenticated session to the origins the operator
+// named, and checks the page's own URL. A frame from another origin would
+// otherwise put that origin's content, with the session's cookies, in the tree.
+describe("native tree — a session pinned to the page's origin", () => {
+  const session = new BrowserSession({ headless: true });
+
+  afterAll(async () => {
+    await session.close();
+  });
+
+  it("reads frames from the pinned origin and its own markup, and no other", async () => {
+    await session.open(url, { allowedOrigins: [new URL(url).origin] });
+    const tree = await session.nativeTree();
+    for (const title of ["same-origin", "sandboxed"]) {
+      expect(inside(tree, rowOf(tree, title)), title).toEqual(CHILD_CONTENT);
+    }
+    expect(inside(tree, rowOf(tree, "srcdoc"))).toHaveLength(2);
+    for (const title of ["cross-origin", "cross-site", "pay", "nested"]) {
+      expect(rowOf(tree, title).childIds, title).toEqual([]);
+    }
+    const printed = JSON.stringify(nodesOf(tree));
+    expect(printed).not.toContain("Name on card");
+
+    const { pairs } = await session.nativeAX();
+    expect(pairs).not.toContain('textbox "Name on card"');
+    expect(pairs).toContain('button "Srcdoc button"');
+  });
+
+  it("reads every frame once the page is opened with no pin", async () => {
+    const unpinned = new BrowserSession({ headless: true });
+    try {
+      await unpinned.open(url);
+      const tree = await unpinned.nativeTree();
+      expect(inside(tree, rowOf(tree, "pay"))).toHaveLength(3);
+    } finally {
+      await unpinned.close();
+    }
+  });
+});
+
 describe("native tree — a site-isolated Chrome (--site-per-process)", () => {
   let browser: Browser;
   let tree: ExtractionResult;

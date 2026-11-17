@@ -35,8 +35,30 @@ export interface NativeFramePayload {
 const MAX_FRAMES_PER_READ = 20;
 
 interface FrameTreeNode {
-  frame: { id: string };
+  frame: { id: string; url?: string };
   childFrames?: FrameTreeNode[];
+}
+
+/**
+ * Whether a frame showing `url` may be read on a session pinned to
+ * `pinned` (see `NativeTreeOptions.frameOrigins`): its document came from
+ * one of those origins, or it has no origin of its own and holds its
+ * parent's markup (`about:srcdoc`, `about:blank`, `data:`), the parent
+ * having been read under the same pin. Anything else, an unparseable URL
+ * included, is not read.
+ */
+export function frameFromPinnedOrigin(
+  url: string | undefined,
+  pinned: ReadonlySet<string>,
+): boolean {
+  let parsed: URL;
+  try {
+    parsed = new URL(url ?? "");
+  } catch {
+    return false;
+  }
+  if (parsed.origin !== "null") return pinned.has(parsed.origin);
+  return parsed.protocol === "about:" || parsed.protocol === "data:";
 }
 
 /**
@@ -47,14 +69,18 @@ interface FrameTreeNode {
  * be read in full only to be thrown away. Bounded by
  * {@link NATIVE_MAX_FRAME_DEPTH} and {@link MAX_FRAMES_PER_READ}. A frame
  * that fails to read (removed or navigated mid-read) is left out; its row
- * stays empty and the rest of the tree still reads.
+ * stays empty and the rest of the tree still reads. With `frameOrigins` (a
+ * pinned session), a frame from any other origin is left out too, with the
+ * frames inside it ({@link frameFromPinnedOrigin}).
  *
  * @internal Exported for its unit tests.
  */
 export async function readFrames(
   client: CDPSession,
   topNodes: readonly RawAXNode[],
+  frameOrigins?: readonly string[],
 ): Promise<NativeFramePayload[]> {
+  const pinned = frameOrigins ? new Set(frameOrigins) : null;
   const tree = (await client
     .send("Page.getFrameTree")
     .catch(() => undefined)) as { frameTree?: FrameTreeNode } | undefined;
@@ -78,7 +104,9 @@ export async function readFrames(
   let left = MAX_FRAMES_PER_READ;
   const walk = async (node: FrameTreeNode, depth: number): Promise<void> => {
     if (depth >= NATIVE_MAX_FRAME_DEPTH) return;
-    const children = node.childFrames ?? [];
+    const children = (node.childFrames ?? []).filter(
+      (child) => !pinned || frameFromPinnedOrigin(child.frame.url, pinned),
+    );
     // One round trip for every sibling's owner; the reads stay in order.
     const owners = await Promise.all(
       children.map(

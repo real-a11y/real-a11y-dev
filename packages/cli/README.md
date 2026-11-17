@@ -476,7 +476,8 @@ warns if you don't) and prefer a dedicated test account. Under a loaded
 session, auditing is **pinned to the target's origin**: if a page redirects
 off it, extraction is refused (a safeguard against a stray or hostile redirect
 pulling an unintended authenticated page into your report) — pass
-`--audit-origin <origin>` to allow a known SSO bounce. Session storage isn't
+`--audit-origin <origin>` to allow a known SSO bounce. The pin covers the
+page's iframes too: a frame from an origin you didn't allow isn't read. Session storage isn't
 captured; for apps that keep auth there, attach to your signed-in Chrome with
 `--cdp http://localhost:9222` instead (the interactive escape hatch).
 

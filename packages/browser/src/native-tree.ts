@@ -489,7 +489,7 @@ async function readNative(
   const { nodes: rawNodes } = (await client.send(
     "Accessibility.getFullAXTree",
   )) as { nodes: RawAXNode[] };
-  const frames = await readFrames(client, rawNodes);
+  const frames = await readFrames(client, rawNodes, options.frameOrigins);
   const editableRoots = new Set<number>();
   if (options.redactInput === true) {
     for (const nodes of [rawNodes, ...frames.map((f) => f.rawNodes)]) {

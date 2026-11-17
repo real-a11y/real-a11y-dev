@@ -327,6 +327,14 @@ export class BrowserSession implements A11ySession {
   private ownsPage = false;
   /** Serializes every operation so concurrent tool calls can't race the page. */
   private queue: Promise<unknown> = Promise.resolve();
+  /**
+   * The origins the open page was last pinned to by
+   * {@link assertAllowedOrigin}, or `null` when nothing pins it. A native
+   * read passes them on, so a frame from any other origin isn't read either
+   * (`NativeTreeOptions.frameOrigins`): the pin checks only the page's own
+   * URL.
+   */
+  private pinnedOrigins: readonly string[] | null = null;
 
   constructor(private readonly opts: BrowserSessionOptions = {}) {
     if (opts.storageState && opts.cdpEndpoint) {
@@ -524,7 +532,9 @@ export class BrowserSession implements A11ySession {
   async nativeAX(
     options: NativeTreeOptions = {},
   ): Promise<{ tree: string; pairs: string[] }> {
-    return this.run(() => nativeAXViewOf(this.requirePage(), options));
+    return this.run(() =>
+      nativeAXViewOf(this.requirePage(), this.withPin(options)),
+    );
   }
 
   /**
@@ -535,7 +545,9 @@ export class BrowserSession implements A11ySession {
    * value and all rich-text editor content.
    */
   async nativeTree(options: NativeTreeOptions = {}): Promise<ExtractionResult> {
-    return this.run(() => computeNativeTree(this.requirePage(), options));
+    return this.run(() =>
+      computeNativeTree(this.requirePage(), this.withPin(options)),
+    );
   }
 
   /**
@@ -643,6 +655,8 @@ export class BrowserSession implements A11ySession {
     }
     const allowed =
       hadPerCall || (source && source.length) ? new Set(source ?? []) : null;
+    // Recorded before the check, so a refused page's frames stay pinned too.
+    this.pinnedOrigins = allowed ? [...allowed] : null;
     if (!allowed) return;
     let origin: string;
     try {
@@ -655,6 +669,14 @@ export class BrowserSession implements A11ySession {
         `Refusing to audit ${origin}: not an allowed audit origin under an authenticated session (a redirect may have left the intended site).`,
       );
     }
+  }
+
+  /** `options` for a native read, with the open page's pin
+   *  ({@link pinnedOrigins}) taking the place of any `frameOrigins`. */
+  private withPin(options: NativeTreeOptions): NativeTreeOptions {
+    return this.pinnedOrigins
+      ? { ...options, frameOrigins: this.pinnedOrigins }
+      : options;
   }
 
   private async ensurePage(

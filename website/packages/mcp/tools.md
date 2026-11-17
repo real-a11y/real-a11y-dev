@@ -531,7 +531,7 @@ Path to a saved login session — a Playwright storage-state JSON (cookies + ori
 
 *comma-separated origins · optional.*
 
-Origins that auditing is pinned to — enforced on the **final** URL after redirects, so a redirect can't route to an unintended site. The pin applies **whenever this variable is set**, with or without a loaded session. It's strongly recommended alongside [`REAL_A11Y_MCP_STORAGE_STATE`](#real-a11y-mcp-storage-state) — and the server prints a startup warning if a session is loaded _without_ it — but the pin itself doesn't depend on a session. Each entry is normalized to its origin at startup, and an invalid value refuses to start.
+Origins that auditing is pinned to — enforced on the **final** URL after redirects, so a redirect can't route to an unintended site. The pin covers the page's `<iframe>`s too: a frame whose document comes from another origin isn't read, and its row stays empty (a `srcdoc`, `about:blank` or `data:` frame holds the page's own markup and is read). The pin applies **whenever this variable is set**, with or without a loaded session. It's strongly recommended alongside [`REAL_A11Y_MCP_STORAGE_STATE`](#real-a11y-mcp-storage-state) — and the server prints a startup warning if a session is loaded _without_ it — but the pin itself doesn't depend on a session. Each entry is normalized to its origin at startup, and an invalid value refuses to start.
 
 ```json
 {

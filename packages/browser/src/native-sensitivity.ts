@@ -39,6 +39,17 @@ export interface NativeTreeOptions {
    * sensitive fields are withheld.
    */
   redactInput?: boolean;
+  /**
+   * On a session pinned to origins (`BrowserSessionOptions.allowedOrigins`,
+   * the CLI's `--audit-origin`), the origins a frame's document may come
+   * from. A frame loaded from any other origin is not read, nor the frames
+   * inside it, and its row stays empty: the pin checks only the page's own
+   * URL, and a frame would otherwise put another origin's authenticated
+   * content in the tree. A `srcdoc`, `about:blank` or `data:` frame holds
+   * its parent's markup and is read. Absent: every frame is read.
+   * `BrowserSession` fills it from the pin of the page it opened.
+   */
+  frameOrigins?: readonly string[];
 }
 
 /**

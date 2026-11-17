@@ -24,7 +24,7 @@ import editorPayload from "./__fixtures__/native-ax-editor.json";
 import framesPayload from "./__fixtures__/native-ax-frames.json";
 import payload from "./__fixtures__/native-ax-payload.json";
 import valuesPayload from "./__fixtures__/native-ax-values.json";
-import { readFrames } from "./native-frames.js";
+import { frameFromPinnedOrigin, readFrames } from "./native-frames.js";
 import {
   allowlistAttributes,
   buildNativeTree,
@@ -2565,6 +2565,7 @@ describe("readFrames — which frames a read follows", () => {
     /** Absent: the read rejects, as for a frame removed mid-read. */
     rows?: Array<{ backend: number; ignored?: boolean }>;
     children?: FakeFrame[];
+    url?: string;
   }
 
   /** A raw payload: a root, and one `Iframe` row per entry of `rows`. */
@@ -2597,7 +2598,7 @@ describe("readFrames — which frames a read follows", () => {
     };
     index(children);
     const toTree = (f: FakeFrame): object => ({
-      frame: { id: f.id },
+      frame: { id: f.id, ...(f.url ? { url: f.url } : {}) },
       childFrames: (f.children ?? []).map(toTree),
     });
     const reads: string[] = [];
@@ -2695,6 +2696,53 @@ describe("readFrames — which frames a read follows", () => {
       payloadOf(many.map((f) => ({ backend: f.owner }))),
     );
     expect(reads).toHaveLength(20);
+  });
+
+  it("on a pinned session, reads only frames from a pinned origin, and their parents' markup", async () => {
+    const { client, reads } = fakeClient([
+      { id: "same", owner: 1, url: "https://app.example/a", rows: [] },
+      {
+        id: "other",
+        owner: 2,
+        url: "https://accounts.example/b",
+        rows: [{ backend: 20 }],
+        children: [
+          // From a pinned origin, but inside a frame that is not read.
+          { id: "inner", owner: 20, url: "https://app.example/c", rows: [] },
+        ],
+      },
+      { id: "srcdoc", owner: 3, url: "about:srcdoc", rows: [] },
+      { id: "js", owner: 4, url: "javascript:void(0)", rows: [] },
+    ]);
+    const top = payloadOf([1, 2, 3, 4].map((backend) => ({ backend })));
+    const frames = await readFrames(client, top, ["https://app.example"]);
+    expect(frames.map((f) => f.ownerId)).toEqual(["ax-dom-1", "ax-dom-3"]);
+    expect(reads).toEqual(["same", "srcdoc"]);
+
+    // Unpinned, every frame whose row the tree keeps is read.
+    const open = fakeClient([
+      { id: "other", owner: 2, url: "https://accounts.example/b", rows: [] },
+    ]);
+    await readFrames(open.client, top);
+    expect(open.reads).toEqual(["other"]);
+  });
+
+  it("decides a frame's origin from the URL its document came from", () => {
+    const pinned = new Set(["https://app.example"]);
+    expect(frameFromPinnedOrigin("https://app.example/x?y", pinned)).toBe(true);
+    expect(frameFromPinnedOrigin("https://app.example:8443/", pinned)).toBe(
+      false,
+    );
+    expect(frameFromPinnedOrigin("http://app.example/", pinned)).toBe(false);
+    expect(frameFromPinnedOrigin("blob:https://app.example/1-2", pinned)).toBe(
+      true,
+    );
+    expect(frameFromPinnedOrigin("about:srcdoc", pinned)).toBe(true);
+    expect(frameFromPinnedOrigin("about:blank", pinned)).toBe(true);
+    expect(frameFromPinnedOrigin("data:text/html,<p>x", pinned)).toBe(true);
+    expect(frameFromPinnedOrigin("file:///etc/hosts", pinned)).toBe(false);
+    expect(frameFromPinnedOrigin("not a url", pinned)).toBe(false);
+    expect(frameFromPinnedOrigin(undefined, pinned)).toBe(false);
   });
 
   it("reads no frame when the frame tree can't be had", async () => {
