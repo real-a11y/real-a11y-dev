@@ -111,6 +111,13 @@ That tree is **whole-document**, which is why no tool takes a `rootSelector`
 except the one exception below. There is no `producer` parameter: each surface
 has exactly one correct producer, so there was nothing left to choose.
 
+It includes the page's `<iframe>`s: each frame's document sits under its
+`Iframe` row, the audit checks the controls inside it, and a finding there is
+located from the frame's own `<iframe>`, then ` >>> `, then its path inside the
+frame. `heading-order` and `landmark-structure` judge the page's own document
+only. A frame Chromium runs in a process of its own (under site isolation, a
+cross-site or `sandbox`ed `<iframe>`) is not read yet; its row stays empty.
+
 **`get_tab_order` is the exception, and not a fallback.** Chromium's tree knows
 whether a node is *focusable*, but not the *sequence*: `tabindex` never reaches a
 native node, and ordering by it is DOM/layout work the AX tree doesn't expose.

@@ -6,7 +6,7 @@ area: MCP
 type: Automated
 priority: P1
 status: Active
-validFrom: "browser ≥ 0.1.0-beta.12 · cli ≥ 0.1.0-beta.2 (locators + focusedId). The native producer itself: browser ≥ 0.1.0-beta.11. Steps 6 / 6b as written (field values shown, sensitive ones redacted, --redact-input): cli ≥ 0.1.0-beta.7. Step 6c (a field with no node of its own): cli ≥ 0.1.0-beta.9. Step 6b's `tabs` check: cli ≥ 0.1.0-beta.13. Step 6d (a field in its own aria-labelledby): cli ≥ 0.1.0-beta.13"
+validFrom: "browser ≥ 0.1.0-beta.12 · cli ≥ 0.1.0-beta.2 (locators + focusedId). The native producer itself: browser ≥ 0.1.0-beta.11. Steps 6 / 6b as written (field values shown, sensitive ones redacted, --redact-input): cli ≥ 0.1.0-beta.7. Step 6c (a field with no node of its own): cli ≥ 0.1.0-beta.9. Step 6b's `tabs` check: cli ≥ 0.1.0-beta.13. Step 6d (a field in its own aria-labelledby): cli ≥ 0.1.0-beta.13. Step 9 (iframe content): cli ≥ 0.1.0-beta.14"
 validUntil: ""
 expected: "native tree returns a document tree reaching UA-shadow media controls the in-page walk misses; every native FINDING carries a CSS locator identical to the DOM producer's for the same element (a shadow-root element stops its path at the boundary rather than faking a selector); the tree sets focusedId so [focused] renders; a field shows what it holds the way a screen reader announces it, while a sensitive field (password, one-time code, payment) only ever reads [redacted]; --redact-input withholds every value and all rich-text editor content."
 covers:
@@ -58,6 +58,10 @@ is native now — so these are plain invocations. An earlier version of this row
      `real-a11y tree <url> --redact-input`
 7. `real-a11y audit <url> --root main`
 8. `pnpm --filter @real-a11y-dev/browser test:e2e`
+9. Add `<iframe title="Payment" srcdoc="<main><h1>Pay</h1><label>Card <input
+   autocomplete='cc-number' value='<card sentinel>'></label><button></button></main>">`
+   inside the page's `<main>`, then `real-a11y tree <url>`,
+   `real-a11y audit <url> -f json` and `real-a11y tree <url> --redact-input`
 
 ## Expected
 
@@ -122,6 +126,18 @@ is native now — so these are plain invocations. An earlier version of this row
 - **8** — the parity harness passes its overlap **floor** (0.80) and logs the
   watermark — 88.7% at time of writing. It is a floor, not equality: the two
   producers are never byte-identical
+- **9** — the frame's document sits under its row, one level deeper:
+  `Iframe "Payment"` > `main` > `heading "Pay" (level 1)`,
+  `textbox "Card" = "[redacted]"` and a bare `button`. The card sentinel appears
+  **nowhere**, and with `--redact-input` the textbox prints no value. `audit`
+  reports `no-unlabeled-interactive` for the frame's button, located as
+  `<the iframe's locator> >>> body > main > button`, and **no** second `<h1>` or
+  second `<main>`: a frame is a document of its own. cli 0.1.0-beta.13 printed
+  `Iframe "Payment"` with nothing under it and found nothing inside, which is the
+  old behaviour, not a fail. (A `srcdoc` frame runs in the page's process in every
+  Chrome. A cross-site or `sandbox`ed one runs in a process of its own under site
+  isolation — the Chrome `real-a11y install` fetches — and its row stays empty:
+  expected for now.)
 
 ## Why this exists
 
@@ -161,6 +177,13 @@ its own value. Chromium does name it so when the field is in its own
 `aria-labelledby`, and reads a date input's parts through an `aria-labelledby`
 around it; a `<label>`, an `aria-label`, or an `aria-labelledby` around a text
 field leaves the value out.
+
+Step 9 guards frames. The native read once asked Chromium for the top frame's
+document only, so every `Iframe` row came back empty: an embedded payment form
+was never printed or audited, and nothing said it had been skipped, while a
+screen reader reads it inside the frame. A frame's fields need the same value
+policy as the page's, and its own `<h1>` / `<main>` must not count against the
+page's.
 
 Parity itself is now a standing automated gate, so this row checks the things that
 gate can't see.

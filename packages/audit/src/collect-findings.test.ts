@@ -766,3 +766,65 @@ describe("collectFindings — locators on a pre-extracted tree", () => {
     ).toEqual([]);
   });
 });
+
+describe("collectFindings — a native tree's frames", () => {
+  // A native tree grafts each frame's document under its `Iframe` row. The
+  // frame is a document of its own: an embedded widget's `<h1>` or `<main>`
+  // is not a second one of the page's.
+  function framedTree(frameRole: string): ExtractionResult {
+    const nodes = new Map<string, SemanticNode>();
+    const add = (
+      id: string,
+      parentId: string | null,
+      depth: number,
+      role: string,
+      name = "",
+      properties: Record<string, string> = {},
+    ): void => {
+      nodes.set(id, {
+        id,
+        parentId,
+        childIds: [],
+        depth,
+        a11y: {
+          role,
+          name,
+          description: "",
+          states: {},
+          properties,
+          isExposedToAT: true,
+        },
+      });
+      if (parentId) nodes.get(parentId)!.childIds.push(id);
+    };
+    add("root", null, 0, "document");
+    add("h1", "root", 1, "heading", "Checkout", { level: "1" });
+    add("main", "root", 1, "main");
+    add("frame", "main", 2, frameRole, "Payment");
+    add("f-banner", "frame", 3, "banner");
+    add("f-banner-2", "frame", 3, "banner");
+    add("f-h1", "frame", 3, "heading", "Pay", { level: "1" });
+    add("f-h4", "frame", 3, "heading", "Card", { level: "4" });
+    add("f-main", "frame", 3, "main");
+    add("f-button", "f-main", 4, "button");
+    return { nodes, rootId: "root", source: { producer: "native" } };
+  }
+
+  it("keeps a frame's headings and landmarks out of the page's", () => {
+    const findings = collectFindings(framedTree("Iframe"));
+    expect(findings.map((f) => f.rule)).toEqual(["no-unlabeled-interactive"]);
+  });
+
+  it("still checks every control inside a frame", () => {
+    const [finding] = collectFindings(framedTree("Iframe"), [
+      "no-unlabeled-interactive",
+    ]);
+    expect(finding).toMatchObject({ role: "button" });
+  });
+
+  it("counts the same nodes as the page's when no frame holds them", () => {
+    const rules = collectFindings(framedTree("group")).map((f) => f.rule);
+    expect(rules.filter((r) => r === "heading-order")).toHaveLength(2);
+    expect(rules.filter((r) => r === "landmark-structure")).toHaveLength(2);
+  });
+});

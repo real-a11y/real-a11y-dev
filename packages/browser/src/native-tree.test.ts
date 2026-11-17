@@ -7,23 +7,30 @@
 //     field ADR-0001 announces a value for, plus sensitive ones placed where
 //     Chromium names a container from them (a table cell);
 //   - __fixtures__/native-ax-editor{,-hosts}.json (Chromium 151) — rich-text
-//     editors, for the strict `redactInput` mode.
+//     editors, for the strict `redactInput` mode;
+//   - __fixtures__/native-ax-frames.json (Chromium 158) — a payment `<iframe>`
+//     holding real card and password values and a nested frame, each frame's
+//     `getFullAXTree({ frameId })` payload with the row it belongs under.
 // No browser needed at test time; the recording IS the browser's output.
 
 import { collectFindings } from "@real-a11y-dev/audit";
 import { normalizeNativeAX } from "@real-a11y-dev/core";
 import { serializeTree } from "@real-a11y-dev/serialize";
+import type { CDPSession } from "playwright";
 import { describe, expect, it } from "vitest";
 
 import hostsPayload from "./__fixtures__/native-ax-editor-hosts.json";
 import editorPayload from "./__fixtures__/native-ax-editor.json";
+import framesPayload from "./__fixtures__/native-ax-frames.json";
 import payload from "./__fixtures__/native-ax-payload.json";
 import valuesPayload from "./__fixtures__/native-ax-values.json";
 import {
   allowlistAttributes,
   buildNativeTree,
   nativeAXView,
+  readFrames,
   type NativeDomInfo,
+  type NativeFramePayload,
 } from "./native-tree.js";
 
 const EMAIL_SECRET = "secret-user@example.com";
@@ -2392,5 +2399,275 @@ describe("buildNativeTree — names taken by reference (<label>, aria-labelledby
     // The field that holds the value keeps its own label.
     expect(tree.nodes.get("ax-dom-72")?.a11y.name).toBe("Minutes");
     expect(JSON.stringify(nodesOf(tree))).not.toMatch(/47|Q3 plan/);
+  });
+});
+
+describe("buildNativeTree — same-process frames under their Iframe rows", () => {
+  const CARD = "4111 1111 1111 1111";
+  const FRAME_PASSWORD = "hunter2-FRAME-SECRET";
+  const top = framesPayload.nodes as RawNodes;
+  const frames: NativeFramePayload[] = framesPayload.frames.map((f) => ({
+    ownerId: f.ownerId,
+    rawNodes: f.nodes as RawNodes,
+  }));
+  // One DOM walk reaches every same-process frame's elements, so one map.
+  const dom = enrichmentOf(framesPayload.enrich);
+  const framed = (options: { redactInput?: boolean } = {}) =>
+    buildNativeTree(top, dom, framesPayload.chrome, { ...options, frames });
+  const [payment, help] = frames;
+
+  it("the recording carries the frame's plaintext card number and password (guards the tests)", () => {
+    const raw = JSON.stringify(payment.rawNodes);
+    expect(raw).toContain(CARD);
+    expect(raw).toContain(FRAME_PASSWORD.replace(/./g, "•"));
+    expect(JSON.stringify(framesPayload.enrich)).toContain(FRAME_PASSWORD);
+  });
+
+  it("puts each frame's document under its Iframe row, and a nested frame under its own", () => {
+    expect(serializeTree(framed(), { values: true })).toBe(
+      [
+        "document",
+        "  banner",
+        '    heading "Checkout" (level 1)',
+        "  main",
+        '    Iframe "Payment"',
+        "      main",
+        '        heading "Pay" (level 1)',
+        '        textbox "Card number" = "[redacted]"',
+        '        textbox "Password" = "[redacted]"',
+        '        textbox "Name on card" = "Ada Lovelace"',
+        "        button",
+        '        Iframe "Help"',
+        '          button "Inner help"',
+        '    paragraph "After the frame"',
+      ].join("\n"),
+    );
+  });
+
+  it("keeps one root, parent links and depths: a frame's nodes sit one level below its row", () => {
+    const tree = framed();
+    const roots = nodesOf(tree).filter((n) => n.parentId === null);
+    expect(roots.map((n) => n.id)).toEqual([tree.rootId]);
+    expect(tree.source.producer).toBe("native");
+
+    const row = tree.nodes.get(payment.ownerId)!;
+    expect(row.a11y.role).toBe("Iframe");
+    const [frameMain] = row.childIds.map((id) => tree.nodes.get(id)!);
+    expect(frameMain.a11y.role).toBe("main");
+    expect(frameMain.parentId).toBe(row.id);
+    expect(frameMain.depth).toBe(row.depth + 1);
+
+    const inner = tree.nodes.get(help.ownerId)!;
+    const [innerButton] = inner.childIds.map((id) => tree.nodes.get(id)!);
+    expect(innerButton.a11y.name).toBe("Inner help");
+    expect(innerButton.depth).toBe(inner.depth + 1);
+    for (const node of nodesOf(tree)) {
+      if (node.parentId === null) continue;
+      expect(node.depth).toBe(tree.nodes.get(node.parentId)!.depth + 1);
+    }
+  });
+
+  it("without the frames' payloads, the rows stay empty (what a top-frame-only read gave)", () => {
+    const tree = buildNativeTree(top, dom, framesPayload.chrome);
+    expect(tree.nodes.get(payment.ownerId)!.childIds).toEqual([]);
+    expect(serializeTree(tree)).not.toContain("Card number");
+  });
+
+  it("classifies a frame's fields like the page's: no card number or password reaches any facet", () => {
+    for (const options of [{}, { redactInput: true }]) {
+      const printed = JSON.stringify(nodesOf(framed(options)));
+      expect(printed).not.toContain(CARD);
+      expect(printed).not.toContain("4111");
+      expect(printed).not.toContain(FRAME_PASSWORD);
+      expect(printed).not.toContain("•");
+    }
+  });
+
+  it("strict mode (redactInput) withholds every value inside a frame", () => {
+    const tree = framed({ redactInput: true });
+    expect(nodesOf(tree).filter((n) => n.a11y.value !== undefined)).toEqual([]);
+    expect(JSON.stringify(nodesOf(tree))).not.toContain("Ada Lovelace");
+  });
+
+  it("nativeAXView grafts the same frames, so the two views agree", () => {
+    const view = nativeAXView(top, dom, { frames });
+    const tree = framed();
+    expect(view.pairs).toEqual(
+      [...tree.nodes.values()]
+        .filter((n) => n.id !== tree.rootId)
+        .map((n) =>
+          n.a11y.name ? `${n.a11y.role} "${n.a11y.name}"` : n.a11y.role,
+        ),
+    );
+    expect(view.tree).toContain(
+      '      Iframe "Help"\n        button "Inner help"',
+    );
+    expect(view.tree).not.toContain(CARD);
+  });
+
+  it("drops a frame whose row the tree does not keep, with the frames inside it", () => {
+    const orphaned = [{ ...payment, ownerId: "ax-dom-999999" }, help];
+    const tree = buildNativeTree(top, dom, framesPayload.chrome, {
+      frames: orphaned,
+    });
+    expect(serializeTree(tree)).toBe(
+      serializeTree(buildNativeTree(top, dom, framesPayload.chrome)),
+    );
+  });
+
+  it("audits a frame's controls, but not its document as a second page", () => {
+    const findings = collectFindings(framed());
+    expect(findings.map((f) => f.rule)).toEqual(["no-unlabeled-interactive"]);
+    expect(findings[0]).toMatchObject({ role: "button", tagName: "button" });
+  });
+});
+
+describe("readFrames — which frames a read follows", () => {
+  interface FakeFrame {
+    id: string;
+    /** The backend id of its `<iframe>`; the parent's payload has the row. */
+    owner: number;
+    /** Absent: the read rejects, as for a frame removed mid-read. */
+    rows?: Array<{ backend: number; ignored?: boolean }>;
+    children?: FakeFrame[];
+  }
+
+  /** A raw payload: a root, and one `Iframe` row per entry of `rows`. */
+  const payloadOf = (
+    rows: Array<{ backend: number; ignored?: boolean }>,
+  ): RawNodes =>
+    [
+      {
+        nodeId: "r",
+        role: { value: "RootWebArea" },
+        childIds: rows.map((r) => `n${r.backend}`),
+      },
+      ...rows.map((r) => ({
+        nodeId: `n${r.backend}`,
+        parentId: "r",
+        backendDOMNodeId: r.backend,
+        ignored: r.ignored ?? false,
+        role: { value: "Iframe" },
+      })),
+    ] as RawNodes;
+
+  /** A CDP session over a frame tree: what `readFrames` asks, answered. */
+  function fakeClient(children: FakeFrame[]) {
+    const all = new Map<string, FakeFrame>();
+    const index = (frames: FakeFrame[]) => {
+      for (const f of frames) {
+        all.set(f.id, f);
+        index(f.children ?? []);
+      }
+    };
+    index(children);
+    const toTree = (f: FakeFrame): object => ({
+      frame: { id: f.id },
+      childFrames: (f.children ?? []).map(toTree),
+    });
+    const reads: string[] = [];
+    const client = {
+      async send(method: string, params?: { frameId?: string }) {
+        if (method === "Page.getFrameTree") {
+          return {
+            frameTree: {
+              frame: { id: "top" },
+              childFrames: children.map(toTree),
+            },
+          };
+        }
+        const frame = all.get(params?.frameId ?? "");
+        if (!frame) throw new Error("No frame for given id found");
+        if (method === "DOM.getFrameOwner") {
+          return { backendNodeId: frame.owner };
+        }
+        if (method === "Accessibility.getFullAXTree") {
+          reads.push(frame.id);
+          if (!frame.rows)
+            throw new Error("Frame with the given id was not found");
+          return { nodes: payloadOf(frame.rows) };
+        }
+        throw new Error(`unexpected ${method}`);
+      },
+    };
+    return { client: client as unknown as CDPSession, reads };
+  }
+
+  it("reads each frame whose row the tree keeps, an owner before the frames inside it", async () => {
+    const { client, reads } = fakeClient([
+      {
+        id: "a",
+        owner: 1,
+        rows: [{ backend: 10 }],
+        children: [{ id: "a1", owner: 10, rows: [] }],
+      },
+      { id: "hidden", owner: 2, rows: [] },
+      { id: "aria-hidden", owner: 3, rows: [] },
+      { id: "b", owner: 4, rows: [] },
+    ]);
+    const top = payloadOf([
+      { backend: 1 },
+      { backend: 3, ignored: true },
+      { backend: 4 },
+    ]);
+    const frames = await readFrames(client, top);
+    expect(frames.map((f) => f.ownerId)).toEqual([
+      "ax-dom-1",
+      "ax-dom-10",
+      "ax-dom-4",
+    ]);
+    // No row (display:none) or an ignored one (aria-hidden): never read.
+    expect(reads).toEqual(["a", "a1", "b"]);
+  });
+
+  it("leaves out a frame that fails to read, and reads the rest", async () => {
+    const { client } = fakeClient([
+      {
+        id: "gone",
+        owner: 1,
+        children: [{ id: "inner", owner: 10, rows: [] }],
+      },
+      { id: "ok", owner: 2, rows: [] },
+    ]);
+    const frames = await readFrames(
+      client,
+      payloadOf([{ backend: 1 }, { backend: 2 }]),
+    );
+    expect(frames.map((f) => f.ownerId)).toEqual(["ax-dom-2"]);
+  });
+
+  it("follows nested frames five deep, and no deeper", async () => {
+    const chain = (level: number): FakeFrame => ({
+      id: `f${level}`,
+      owner: level,
+      rows: [{ backend: level + 1 }],
+      ...(level < 7 ? { children: [chain(level + 1)] } : {}),
+    });
+    const { client, reads } = fakeClient([chain(1)]);
+    await readFrames(client, payloadOf([{ backend: 1 }]));
+    expect(reads).toEqual(["f1", "f2", "f3", "f4", "f5"]);
+  });
+
+  it("reads at most twenty frames", async () => {
+    const many = Array.from({ length: 25 }, (_, i) => ({
+      id: `f${i}`,
+      owner: i + 1,
+      rows: [],
+    }));
+    const { client, reads } = fakeClient(many);
+    await readFrames(
+      client,
+      payloadOf(many.map((f) => ({ backend: f.owner }))),
+    );
+    expect(reads).toHaveLength(20);
+  });
+
+  it("reads no frame when the frame tree can't be had", async () => {
+    const client = {
+      send: async () => {
+        throw new Error("Page domain not available");
+      },
+    } as unknown as CDPSession;
+    expect(await readFrames(client, payloadOf([{ backend: 1 }]))).toEqual([]);
   });
 });

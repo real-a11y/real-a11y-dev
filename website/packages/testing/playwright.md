@@ -78,6 +78,7 @@ Native mode is **read-only and whole-document** for now:
 
 - `tabSequenceSnapshot()` **throws** — a native tree carries no focus/interaction data, so tab order can't be computed. Use `{ tree: "dom" }` for tab-sequence snapshots.
 - `rootSelector` scoping is **not supported** — omit it (the default `"body"` audits the whole document); passing any other selector throws up front rather than silently ignoring it.
+- **iframes are read.** Unlike the DOM producer, which stops at an `<iframe>`, a native tree puts each frame's document under its `Iframe` row, so snapshots and the `assert*` methods cover an embedded form or payment frame. `assertHeadingOrder()` and `assertLandmarkStructure()` judge the page's own document, not a frame's. Not read yet: a frame Chromium runs in a process of its own (under site isolation, a cross-site or `sandbox`ed `<iframe>`); attach to that frame directly, as with the DOM producer.
 Everything else — `treeSnapshot()`, `outlineSnapshot()`, and every `assert*` method — works identically. Both producers normalize to the *same* tree model, so a snapshot's `role "name"` grammar is the same and the two trees are directly comparable. That includes [field values](#field-values): a native tree holds what each field announces (Chromium's own value for it), sensitive fields as `"[redacted]"`, and prints them only with `treeSnapshot({ values: true })`.
 
 ### Strict mode (`redactInput`)

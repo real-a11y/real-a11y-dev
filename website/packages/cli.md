@@ -98,6 +98,20 @@ of Chromium's own accessibility tree, plus `tabs`, which runs the in-page walk
 because tab *order* is the one thing that tree can't produce. See the
 [command reference](/packages/cli/commands) for the full set.
 
+An `<iframe>`'s content is part of that tree, the way a screen reader reads it:
+each frame's document sits under its `Iframe` row, and `audit` checks the
+controls inside it. A finding there is located from the frame's own
+`<iframe>`, then ` >>> `, then its path inside the frame
+(`#checkout >>> body > form > button`) — no single selector crosses a frame.
+`heading-order` and `landmark-structure` judge the page's own document, so an
+embedded widget's `<h1>` or `<main>` is not counted as a second one of the
+page's. Not read yet: a frame Chromium runs in a process of its own — under
+site isolation, a cross-site or `sandbox`ed `<iframe>` — whose row stays
+empty. The [Chrome for Testing](/packages/cli/commands#install) that
+`real-a11y install` fetches and a Chrome you reach with `--cdp` are both
+site-isolated; Playwright's bundled headless Chromium runs every frame in the
+page's process.
+
 ## Audit what's behind a click
 
 A page audited as it loads never shows the dialog, the expanded menu, or the

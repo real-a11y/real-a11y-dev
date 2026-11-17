@@ -68,6 +68,36 @@ describe("fingerprintFindings — node findings", () => {
     const [f] = fingerprintFindings("Home", [button({ locator: undefined })]);
     expect(f.id[5]).toBe("");
   });
+
+  // The native producer prefixes a node inside an `<iframe>` with the
+  // frame's own locator and ` >>> `. A frame's content first appeared in
+  // native trees after the page's findings had baselines, so an in-frame
+  // finding must not take over the identity of one of the page's.
+  it("keeps the page's findings when a finding inside a frame comes before them", () => {
+    const page = button({
+      locator: "body > button:nth-of-type(2)",
+      context: undefined,
+    });
+    const inFrame = (locator: string) =>
+      button({ locator, context: undefined });
+    const [before] = fingerprintFindings("Home", [page]);
+
+    const framed = fingerprintFindings("Home", [
+      inFrame("body > iframe:nth-of-type(1) >>> body > button:nth-of-type(1)"),
+      page,
+    ]);
+    expect(framed[0].id[5]).toBe("body > iframe >>> body > button");
+    expect(framed[1].fingerprint).toBe(before.fingerprint);
+
+    // Without the prefix the two would share a tuple, and the frame's
+    // finding, first in document order, would take the page's identity.
+    const unprefixed = fingerprintFindings("Home", [
+      inFrame("body > button:nth-of-type(1)"),
+      page,
+    ]);
+    expect(unprefixed[0].fingerprint).toBe(before.fingerprint);
+    expect(unprefixed[1].fingerprint).not.toBe(before.fingerprint);
+  });
 });
 
 describe("fingerprintFindings — doc findings", () => {
