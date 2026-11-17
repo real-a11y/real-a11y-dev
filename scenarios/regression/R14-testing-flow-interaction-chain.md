@@ -43,8 +43,8 @@ notion: "https://app.notion.com/p/3aa1c354b0b58162a033c8231ca8d360"
 - **7b** — both pass. Diffs see field values since ADR-0001, but a change made
   only of `a11y.value` is never an unexpected extra under `exact`. Otherwise every
   existing exact spec around a `type` would have started failing. The second form
-  proves the value change is still there to assert. From the first release after
-  testing 0.1.0-beta.22, text that makes the field fail its own validation (a
+  proves the value change is still there to assert. From
+  testing 0.1.0-beta.23, text that makes the field fail its own validation (a
   `pattern`, `type="email"`) also changes `a11y.states.invalid`, which `exact`
   reports like any other state: type into a field with no constraints, or valid
   text, to keep this step about the value alone
