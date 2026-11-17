@@ -82,10 +82,11 @@ main
   separator
   heading "Heading outline has no h1" (level 2)
     code "h1"
-  paragraph "throws if there is not exactly one . That's correct for top-level pages. For — a portaled dialog, a docs widget, an email preview iframe — scope the assertion to the subtree that should have its own hierarchy, or skip it."
+  paragraph "throws if there is not exactly one . That's correct for top-level pages. For — a portaled dialog, a docs widget, an email preview iframe — scope the assertion to the subtree that should have its own hierarchy, or skip it. (A native tree, , already leaves an iframe's headings out: the frame is a document of its own.)"
     code "assertHeadingOrder()"
     code "h1"
     strong "embedded content"
+    code "attach(page, { tree: "native" })"
   button "Copy Code"
   code "// Scope to main content const main = document.querySelector("main")!; assertHeadingOrder(main);"
   paragraph "If your page legitimately has multiple h1s (rare — usually an anti-pattern), the rule doesn't fit your design and isn't the right check."

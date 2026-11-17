@@ -144,6 +144,18 @@ document walk the read already makes — with one honest exception: an element
 inside a shadow root has no whole-document selector, so its path stops at the
 boundary.
 
+That tree includes the page's `<iframe>`s, the way a screen reader reads them:
+each frame's document sits under its `Iframe` row, and `audit` checks the
+controls inside it. A finding there is located from the frame's own `<iframe>`,
+then ` >>> `, then its path inside the frame (`#checkout >>> body > form >
+button`). `heading-order` and `landmark-structure` judge the page's own
+document, so an embedded widget's `<h1>` or `<main>` is not a second one of the
+page's. Not read yet: a frame Chromium runs in a process of its own — under
+site isolation, a cross-site or `sandbox`ed `<iframe>`. Its row stays empty.
+The Chrome for Testing `real-a11y install` fetches, and a Chrome reached with
+`--cdp`, are both site-isolated; Playwright's bundled headless Chromium runs
+every frame in the page's process.
+
 There is **no `--producer` flag**: each command has exactly one correct producer,
 so there is nothing to choose. That tree is whole-document, so those commands
 take **no `--root`** either.
@@ -464,7 +476,8 @@ warns if you don't) and prefer a dedicated test account. Under a loaded
 session, auditing is **pinned to the target's origin**: if a page redirects
 off it, extraction is refused (a safeguard against a stray or hostile redirect
 pulling an unintended authenticated page into your report) — pass
-`--audit-origin <origin>` to allow a known SSO bounce. Session storage isn't
+`--audit-origin <origin>` to allow a known SSO bounce. The pin covers the
+page's iframes too: a frame from an origin you didn't allow isn't read. Session storage isn't
 captured; for apps that keep auth there, attach to your signed-in Chrome with
 `--cdp http://localhost:9222` instead (the interactive escape hatch).
 

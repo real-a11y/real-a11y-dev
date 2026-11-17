@@ -8,6 +8,7 @@ import {
   getOutline,
   insideEditor,
   isExtractionResult,
+  isNativeIframeRole,
   linearize,
   ROLE_FILTER_GROUPS,
   treeInputError,
@@ -297,12 +298,37 @@ function locate(
   return context ? { locator, context } : { locator };
 }
 
-/** `heading-order`: exactly one `<h1>`, and no skipped heading levels. Appends to `findings`. */
+/**
+ * The nodes of a frame's document: everything under a native tree's `Iframe`
+ * row. A frame is a document of its own — an embedded widget's `<h1>` or
+ * `<main>` is not a second one of the page's — so the rules that describe
+ * the page's document (`heading-order`, `landmark-structure`) leave these
+ * out. The rules about one node apply inside a frame as anywhere. A DOM tree
+ * never enters a frame, so it has none.
+ */
+function frameContent(tree: ExtractionResult): Set<string> {
+  const out = new Set<string>();
+  const stack: string[] = [];
+  for (const node of tree.nodes.values()) {
+    if (isNativeIframeRole(node.a11y.role)) stack.push(...node.childIds);
+  }
+  while (stack.length > 0) {
+    const id = stack.pop()!;
+    if (out.has(id)) continue;
+    out.add(id);
+    stack.push(...(tree.nodes.get(id)?.childIds ?? []));
+  }
+  return out;
+}
+
+/** `heading-order`: exactly one `<h1>`, and no skipped heading levels, in the
+ *  page's own document. Appends to `findings`. */
 function headingOrderFindings(
   tree: ExtractionResult,
   findings: Finding[],
+  inFrame: ReadonlySet<string>,
 ): void {
-  const outline = getOutline(tree);
+  const outline = getOutline(tree).filter((e) => !inFrame.has(e.id));
   const h1s = outline.filter((e) => e.level === 1);
   if (h1s.length === 0) {
     findings.push({
@@ -335,12 +361,16 @@ function headingOrderFindings(
   }
 }
 
-/** `landmark-structure`: one `main`, and at most one top-level banner / contentinfo. Appends to `findings`. */
+/** `landmark-structure`: one `main`, and at most one top-level banner /
+ *  contentinfo, in the page's own document. Appends to `findings`. */
 function landmarkStructureFindings(
   tree: ExtractionResult,
   findings: Finding[],
+  inFrame: ReadonlySet<string>,
 ): void {
-  const mains = findAllByRole(tree, "main");
+  const landmarks = (role: string): SemanticNode[] =>
+    findAllByRole(tree, role).filter((n) => !inFrame.has(n.id));
+  const mains = landmarks("main");
   if (mains.length === 0) {
     findings.push({
       rule: "landmark-structure",
@@ -355,7 +385,7 @@ function landmarkStructureFindings(
     });
   }
 
-  const banners = findAllByRole(tree, "banner");
+  const banners = landmarks("banner");
   if (banners.length > 1) {
     findings.push({
       rule: "landmark-structure",
@@ -364,7 +394,7 @@ function landmarkStructureFindings(
     });
   }
 
-  const footers = findAllByRole(tree, "contentinfo");
+  const footers = landmarks("contentinfo");
   if (footers.length > 1) {
     findings.push({
       rule: "landmark-structure",
@@ -498,11 +528,18 @@ export function collectFindings(
 
   if (want.has("image-alt")) imageAltFindings(tree, findings);
 
-  if (want.has("heading-order")) headingOrderFindings(tree, findings);
+  // The page's own document, for the rules that describe it.
+  const inFrame =
+    want.has("heading-order") || want.has("landmark-structure")
+      ? frameContent(tree)
+      : new Set<string>();
+
+  if (want.has("heading-order")) headingOrderFindings(tree, findings, inFrame);
 
   if (want.has("dialog-labeled")) dialogLabeledFindings(tree, findings);
 
-  if (want.has("landmark-structure")) landmarkStructureFindings(tree, findings);
+  if (want.has("landmark-structure"))
+    landmarkStructureFindings(tree, findings, inFrame);
 
   return findings;
 }

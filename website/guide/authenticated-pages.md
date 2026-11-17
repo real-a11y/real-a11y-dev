@@ -88,6 +88,12 @@ real-a11y audit https://app.example.com/dashboard \
 Refusal is also a useful signal: it usually means the **session expired** and
 the site bounced you to a login page. Re-run `login` to refresh `auth.json`.
 
+The pin covers the page's `<iframe>`s as well. A frame whose document comes
+from an origin you didn't allow is not read — its `Iframe` row stays empty —
+since it would carry the same cookies into your report. A `srcdoc`,
+`about:blank` or `data:` frame holds the page's own markup and is read. Add the
+frame's origin with `--audit-origin` to include it.
+
 ### In the MCP server
 
 The same `auth.json` drives the MCP server: point it at the file with

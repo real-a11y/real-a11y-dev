@@ -56,7 +56,7 @@ The same option is on the Playwright adapter: `sn.treeSnapshot({ redact: [...] }
 
 ## Heading outline has no `h1`
 
-`assertHeadingOrder()` throws if there is not exactly one `h1`. That's correct for top-level pages. For **embedded content** — a portaled dialog, a docs widget, an email preview iframe — scope the assertion to the subtree that should have its own hierarchy, or skip it.
+`assertHeadingOrder()` throws if there is not exactly one `h1`. That's correct for top-level pages. For **embedded content** — a portaled dialog, a docs widget, an email preview iframe — scope the assertion to the subtree that should have its own hierarchy, or skip it. (A native tree, `attach(page, { tree: "native" })`, already leaves an iframe's headings out: the frame is a document of its own.)
 
 ```ts
 // Scope to main content

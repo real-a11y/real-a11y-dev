@@ -63,12 +63,14 @@ import {
   nativeAXStateValue,
   serializeNativeAX,
   buildCssPath,
+  graftNativeFrame,
   NATIVE_AX_CHOICE_STATES,
   nativeAncestry,
   cleanAXText,
   domLabels,
   opensFieldInternals,
   treeSource,
+  type NativeAXNode,
   type RawAXNameNode as RawAXNode,
   type SemanticNode,
   type ExtractionResult,
@@ -79,6 +81,7 @@ import type { CDPSession, Page } from "playwright";
 
 import { attributeOf, readDomRoot, type DomNode } from "./dom-document.js";
 import { editableRootBackendIds } from "./native-editable.js";
+import { readFrames, type NativeFramePayload } from "./native-frames.js";
 import { createLocatorIndex } from "./native-locator.js";
 import {
   prepareRawNodes,
@@ -87,7 +90,7 @@ import {
 } from "./native-sensitivity.js";
 import { announcedValue } from "./native-value.js";
 
-export type { NativeDomInfo, NativeTreeOptions };
+export type { NativeDomInfo, NativeFramePayload, NativeTreeOptions };
 
 /** Structural / accessibility attributes we surface on the `dom` facet.
  *  Deliberately an ALLOWLIST — `value` and any other content-bearing or
@@ -181,6 +184,95 @@ function nativeIdOf(raw: RawAXNode): string {
     : `ax-${raw.nodeId}`;
 }
 
+// ── Frames ──────────────────────────────────────────────────────────────────
+
+/**
+ * What joins a frame's locator to the locator of the `<iframe>` that shows
+ * it: `body > iframe:nth-of-type(2) >>> form > input`. No single
+ * `querySelector` can cross a frame, so a node inside one has no selector of
+ * its own; the prefix keeps it from reading as a top-document path (and, in
+ * a finding's fingerprint, from sharing an identity with one).
+ */
+const FRAME_LOCATOR_SEPARATOR = " >>> ";
+
+/** One document of the tree — the page's, or a frame's — as the name-level
+ *  redactions left it, and as core normalized it. */
+interface NativeDocument {
+  prepared: ReturnType<typeof prepareRawNodes>;
+  normalized: NativeAXNode[];
+}
+
+/**
+ * How {@link buildNativeTree} and {@link nativeAXView} assemble a recorded
+ * read: {@link NativeTreeOptions}, plus the payloads of the page's
+ * same-process frames, each to go under its `Iframe` row. Each frame is
+ * classified as a document of its own, by the same `enrichment`: the one DOM
+ * walk reaches their elements too.
+ */
+export interface NativeBuildOptions extends NativeTreeOptions {
+  frames?: readonly NativeFramePayload[];
+}
+
+/**
+ * Normalize the page's document and each frame's on its own, then graft each
+ * frame under its `Iframe` row. Separately, because core treats every raw
+ * node without a parent as a top-level root: concatenated, a frame's content
+ * would land after the page instead of under its row. A frame whose row the
+ * tree does not keep is dropped, along with the frames inside it.
+ *
+ * In strict mode, a frame whose row sits inside an editor (a `srcdoc` the
+ * user wrote into a `contenteditable`) is that editor's content as a whole,
+ * as {@link enrichFromDom} already treats it for locators. Chromium marks
+ * nothing in the frame's own document `editable`, so its root is marked
+ * here, and the editor rules (`redactEditableContent`) cover everything in it.
+ *
+ * Shared by {@link buildNativeTree} and {@link nativeAXView}, so the two can
+ * never disagree about what a frame holds.
+ */
+function normalizeDocuments(
+  rawNodes: RawAXNode[],
+  enrichment: ReadonlyMap<number, NativeDomInfo>,
+  options: NativeBuildOptions,
+): { skeleton: NativeAXNode[]; documents: NativeDocument[] } {
+  // The ids of every node read so far that is inside an editor.
+  const inEditor = new Set<string>();
+  const read = (nodes: RawAXNode[]): NativeDocument => {
+    const prepared = prepareRawNodes(nodes, enrichment, options);
+    for (const raw of prepared.insideEditor) inEditor.add(nativeIdOf(raw));
+    return { prepared, normalized: normalizeNativeAX(prepared.nodes) };
+  };
+  const page = read(rawNodes);
+  const skeleton = [...page.normalized];
+  const documents = [page];
+  for (const frame of options.frames ?? []) {
+    const document = read(
+      options.redactInput === true && inEditor.has(frame.ownerId)
+        ? withEditableRoot(frame.rawNodes)
+        : frame.rawNodes,
+    );
+    if (graftNativeFrame(skeleton, frame.ownerId, document.normalized)) {
+      documents.push(document);
+    }
+  }
+  return { skeleton, documents };
+}
+
+/** A frame's payload with its root marked `editable`, so everything in the
+ *  frame counts as inside an editor. A copy: the input is never mutated. */
+function withEditableRoot(rawNodes: RawAXNode[]): RawAXNode[] {
+  return rawNodes.map((raw) =>
+    raw.parentId
+      ? raw
+      : {
+          ...raw,
+          properties: [
+            ...(raw.properties ?? []),
+            { name: "editable", value: { type: "token", value: "richtext" } },
+          ],
+        },
+  );
+}
+
 // ── Strict mode: rich-text editor content (`redactInput`) ──────────────────
 
 /**
@@ -200,19 +292,19 @@ const EDITABLE_CONTENT_ATTRIBUTES = new Set(["href", "src", "poster", "id"]);
  * indent-insensitive diffing.
  *
  * Vocabulary and names both come from core's shared `normalizeNativeAX`, after
- * the same name redactions as {@link buildNativeTree} — so this view and the
- * `ExtractionResult` one can never disagree about what is on a page.
+ * the same name redactions as {@link buildNativeTree}, with each frame under
+ * its `Iframe` row the same way — so this view and the `ExtractionResult` one
+ * can never disagree about what is on a page.
  */
 export function nativeAXView(
   rawNodes: RawAXNode[],
   enrichment: ReadonlyMap<number, NativeDomInfo> = new Map(),
-  options: NativeTreeOptions = {},
+  options: NativeBuildOptions = {},
 ): {
   tree: string;
   pairs: string[];
 } {
-  const { nodes: prepared } = prepareRawNodes(rawNodes, enrichment, options);
-  const nodes = normalizeNativeAX(prepared);
+  const { skeleton: nodes } = normalizeDocuments(rawNodes, enrichment, options);
   return {
     tree: serializeNativeAX(nodes),
     pairs: nodes.map((n) => (n.name ? `${n.role} "${n.name}"` : n.role)),
@@ -298,6 +390,10 @@ function axFacets(raw: RawAXNode): Pick<A11yInfo, "states" | "properties"> {
  * an editor anchors on the nearest id outside it (typically the host's own):
  * an editor may derive a heading's `id` from its typed text. Only strict mode
  * passes any.
+ *
+ * The walk enters every same-process frame's document (`contentDocument`),
+ * where a path stops at the frame's own `<html>`; such a locator starts with
+ * its `<iframe>`'s and {@link FRAME_LOCATOR_SEPARATOR}.
  */
 async function enrichFromDom(
   client: CDPSession,
@@ -310,20 +406,30 @@ async function enrichFromDom(
   const locators = createLocatorIndex();
 
   // `host`: the form control whose user-agent shadow root, where it draws its
-  // value, holds this node (`NativeDomInfo.fieldHost`).
+  // value, holds this node (`NativeDomInfo.fieldHost`). `frame`: the locator
+  // of the `<iframe>` whose document holds it, if any.
   const walk = (
     node: DomNode,
     inside: boolean,
     host: number | undefined,
+    frame: string | undefined,
   ): void => {
     locators.link(node, inside);
+    let locator: string | undefined;
     if (typeof node.backendNodeId === "number" && node.nodeName) {
       const ariaValueText = attributeOf(node, "aria-valuetext");
       const labels = labelsOf(node.backendNodeId) ?? [];
+      const path = buildCssPath(node, locators.adapter);
+      locator =
+        frame === undefined
+          ? path
+          : path
+            ? `${frame}${FRAME_LOCATOR_SEPARATOR}${path}`
+            : frame;
       out.set(node.backendNodeId, {
         tagName: node.nodeName.toLowerCase(),
         attributes: allowlistAttributes(node.attributes ?? []),
-        locator: buildCssPath(node, locators.adapter),
+        locator,
         ...(ariaValueText !== null ? { ariaValueText } : {}),
         ...(host !== undefined ? { fieldHost: host } : {}),
         ...(labels.length > 0 ? { labels } : {}),
@@ -333,8 +439,10 @@ async function enrichFromDom(
       inside ||
       (typeof node.backendNodeId === "number" &&
         editableRoots.has(node.backendNodeId));
-    for (const child of node.children ?? []) walk(child, below, host);
-    if (node.contentDocument) walk(node.contentDocument, below, undefined);
+    for (const child of node.children ?? []) walk(child, below, host, frame);
+    if (node.contentDocument) {
+      walk(node.contentDocument, below, undefined, locator || frame);
+    }
     for (const sub of node.shadowRoots ?? []) {
       walk(
         sub,
@@ -343,6 +451,7 @@ async function enrichFromDom(
           (opensFieldInternals(node.nodeName, sub.shadowRootType)
             ? node.backendNodeId
             : undefined),
+        frame,
       );
     }
     // A `::before` or `::after` Chromium lays out as a box has a node of its
@@ -357,27 +466,38 @@ async function enrichFromDom(
       });
     }
   };
-  walk(root, false, undefined);
+  walk(root, false, undefined, undefined);
   return out;
 }
 
-/** Both CDP reads a native tree is built from, over one session. */
+/**
+ * Both CDP reads a native tree is built from, over one session: the
+ * accessibility tree of the page and of each of its same-process frames
+ * ({@link readFrames}), then one DOM walk, which reaches those frames'
+ * documents too. The frames are read first so that strict mode knows their
+ * editable regions before the walk.
+ */
 async function readNative(
   client: CDPSession,
   options: NativeTreeOptions,
 ): Promise<{
   rawNodes: RawAXNode[];
+  frames: NativeFramePayload[];
   enrichment: Map<number, NativeDomInfo>;
 }> {
   await client.send("Accessibility.enable");
   const { nodes: rawNodes } = (await client.send(
     "Accessibility.getFullAXTree",
   )) as { nodes: RawAXNode[] };
-  const enrichment = await enrichFromDom(
-    client,
-    options.redactInput === true ? editableRootBackendIds(rawNodes) : new Set(),
-  );
-  return { rawNodes, enrichment };
+  const frames = await readFrames(client, rawNodes, options.frameOrigins);
+  const editableRoots = new Set<number>();
+  if (options.redactInput === true) {
+    for (const nodes of [rawNodes, ...frames.map((f) => f.rawNodes)]) {
+      for (const id of editableRootBackendIds(nodes)) editableRoots.add(id);
+    }
+  }
+  const enrichment = await enrichFromDom(client, editableRoots);
+  return { rawNodes, frames, enrichment };
 }
 
 /**
@@ -395,9 +515,12 @@ export async function nativeTree(
 ): Promise<ExtractionResult> {
   const client = await page.context().newCDPSession(page);
   try {
-    const { rawNodes, enrichment } = await readNative(client, options);
+    const { rawNodes, frames, enrichment } = await readNative(client, options);
     const chrome = page.context().browser()?.version();
-    return buildNativeTree(rawNodes, enrichment, chrome, options);
+    return buildNativeTree(rawNodes, enrichment, chrome, {
+      ...options,
+      frames,
+    });
   } finally {
     await client.detach().catch(() => {});
   }
@@ -413,8 +536,8 @@ export async function nativeAXViewOf(
 ): Promise<{ tree: string; pairs: string[] }> {
   const client = await page.context().newCDPSession(page);
   try {
-    const { rawNodes, enrichment } = await readNative(client, options);
-    return nativeAXView(rawNodes, enrichment, options);
+    const { rawNodes, frames, enrichment } = await readNative(client, options);
+    return nativeAXView(rawNodes, enrichment, { ...options, frames });
   } finally {
     await client.detach().catch(() => {});
   }
@@ -425,28 +548,39 @@ export async function nativeAXViewOf(
  * recorded `getFullAXTree` payload with no browser. `enrichment` maps a backend
  * DOM node id to its (already allowlist-filtered) tag + attributes; a
  * DOM-backed node missing from it has any value withheld, since there is
- * nothing to classify it by.
+ * nothing to classify it by. `options.frames` are the page's same-process
+ * frames ({@link NativeBuildOptions}), each under its `Iframe` row.
  */
 export function buildNativeTree(
   rawNodes: RawAXNode[],
   enrichment: Map<number, NativeDomInfo> = new Map(),
   chrome?: string,
-  options: NativeTreeOptions = {},
+  options: NativeBuildOptions = {},
 ): ExtractionResult {
   const redactInput = options.redactInput === true;
   // Core owns the vocabulary: which nodes survive, sibling order, role map,
   // name promotion, id derivation. We only decorate the survivors — after the
   // name-level redactions, so nothing core promotes can carry what they
   // withhold.
-  const {
-    nodes: prepared,
-    sensitivity,
-    insideEditor,
-  } = prepareRawNodes(rawNodes, enrichment, options);
-  const skeleton = normalizeNativeAX(prepared);
-  const rawById = new Map<string, RawAXNode>();
-  for (const raw of prepared) rawById.set(nativeIdOf(raw), raw);
-  const rawByNodeId = new Map(prepared.map((raw) => [raw.nodeId, raw]));
+  const { skeleton, documents } = normalizeDocuments(
+    rawNodes,
+    enrichment,
+    options,
+  );
+  // Each survivor's raw node, with the classification of the document it is
+  // in. Within one renderer process backend and AX node ids are unique, so
+  // one lookup spans every document read.
+  const sourceById = new Map<
+    string,
+    { raw: RawAXNode; prepared: NativeDocument["prepared"] }
+  >();
+  const rawByNodeId = new Map<string, RawAXNode>();
+  for (const { prepared } of documents) {
+    for (const raw of prepared.nodes) {
+      sourceById.set(nativeIdOf(raw), { raw, prepared });
+      rawByNodeId.set(raw.nodeId, raw);
+    }
+  }
 
   // A `<select>`'s value is also which of its options is `selected`: an
   // option's state would say what a withheld value is. Dropped for an option
@@ -463,15 +597,17 @@ export function buildNativeTree(
 
   const nodes = new Map<string, SemanticNode>();
   for (const nn of skeleton) {
-    const raw = rawById.get(nn.id);
+    const source = sourceById.get(nn.id);
+    const raw = source?.raw;
     const { states, properties } = raw
       ? axFacets(raw)
       : { states: {}, properties: {} };
     // One decision for both places the selection shows: the AX state and the
     // option's markup `selected` attribute on the `dom` facet.
     const withholdSelection =
-      !!raw &&
-      (sensitivity.regions.inside(raw) || (redactInput && inChoiceField(raw)));
+      !!source &&
+      (source.prepared.sensitivity.regions.inside(source.raw) ||
+        (redactInput && inChoiceField(source.raw)));
     if (withholdSelection) {
       for (const state of NATIVE_AX_CHOICE_STATES) delete states[state];
     }
@@ -484,12 +620,12 @@ export function buildNativeTree(
     // What a screen reader announces — never in strict mode, and `[redacted]`
     // for anything the sensitivity policy covers.
     const value =
-      raw && !redactInput
+      source && !redactInput
         ? announcedValue(
-            raw,
+            source.raw,
             nn.role,
             enriched,
-            sensitivity.withholdsValue(raw),
+            source.prepared.sensitivity.withholdsValue(source.raw),
           )
         : undefined;
 
@@ -512,7 +648,7 @@ export function buildNativeTree(
         ? {
             tagName: enriched.tagName,
             attributes: withoutSelection(
-              raw && insideEditor.has(raw)
+              source?.prepared.insideEditor.has(source.raw)
                 ? withoutEditableContent(enriched.attributes)
                 : enriched.attributes,
               withholdSelection,

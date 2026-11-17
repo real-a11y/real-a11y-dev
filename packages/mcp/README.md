@@ -111,6 +111,13 @@ That tree is **whole-document**, which is why no tool takes a `rootSelector`
 except the one exception below. There is no `producer` parameter: each surface
 has exactly one correct producer, so there was nothing left to choose.
 
+It includes the page's `<iframe>`s: each frame's document sits under its
+`Iframe` row, the audit checks the controls inside it, and a finding there is
+located from the frame's own `<iframe>`, then ` >>> `, then its path inside the
+frame. `heading-order` and `landmark-structure` judge the page's own document
+only. A frame Chromium runs in a process of its own (under site isolation, a
+cross-site or `sandbox`ed `<iframe>`) is not read yet; its row stays empty.
+
 **`get_tab_order` is the exception, and not a fallback.** Chromium's tree knows
 whether a node is *focusable*, but not the *sequence*: `tabindex` never reaches a
 native node, and ordering by it is DOM/layout work the AX tree doesn't expose.
@@ -195,7 +202,7 @@ To pin the version instead, add it to your project (`pnpm add -D
 | `REAL_A11Y_MCP_HEADFUL` | `1` launches a visible browser instead of headless. Ignored under `REAL_A11Y_MCP_CDP` (the attached browser keeps its own window state); `open_page` reports which mode it's actually in. |
 | `REAL_A11Y_MCP_ALLOW_FILE` | `1` permits auditing `file://` URLs. Off by default: an LLM-driven server that can open `file:///…/.env` and read the DOM back is a local-file exfiltration primitive. |
 | `REAL_A11Y_MCP_STORAGE_STATE` | Path to a Playwright storage-state file — audit pages behind a login as that saved session. Create it out-of-band (e.g. `real-a11y login`); it's never a tool parameter, so session tokens never enter the agent's context. The server refuses to start if the file is missing or malformed. |
-| `REAL_A11Y_MCP_ALLOWED_ORIGINS` | Comma-separated origins that auditing is restricted to when a storage state is loaded (origin pinning). **Strongly recommended** alongside `STORAGE_STATE`: without it, a redirect could audit an unintended site with your session. |
+| `REAL_A11Y_MCP_ALLOWED_ORIGINS` | Comma-separated origins that auditing is restricted to when a storage state is loaded (origin pinning). **Strongly recommended** alongside `STORAGE_STATE`: without it, a redirect could audit an unintended site with your session. The pin covers the page's iframes too: a frame from another origin isn't read. |
 | `REAL_A11Y_MCP_MAX_SESSIONS` | Cap on concurrently live named sessions (default 4) — each session is its own browser, so this keeps a `session` typo from accumulating Chromiums. |
 | `REAL_A11Y_MCP_SESSION_IDLE_TIMEOUT_MS` | Idle ms before all sessions close (default 900000 = 15 min; 0 disables; capped at 1 hour). The server stays up, the next call relaunches, and saved findings checkpoints survive — only `close_browser` discards those. |
 | `REAL_A11Y_REDACT_INPUT` | `1` is the strict mode: no field value and no rich-text editor content in any tool result. By default fields show what they hold (sensitive ones as `[redacted]`), so ordinary field contents and composer drafts reach the agent's context. Any value other than `1`/`true`/`0`/`false` refuses to start. |

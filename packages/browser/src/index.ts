@@ -14,7 +14,12 @@ export * from "./browser.js";
 export * from "./chrome.js";
 export { isPlaywrightMissing } from "./playwright-load.js";
 export { nativeTree, buildNativeTree } from "./native-tree.js";
-export type { NativeDomInfo, NativeTreeOptions } from "./native-tree.js";
+export type {
+  NativeBuildOptions,
+  NativeDomInfo,
+  NativeFramePayload,
+  NativeTreeOptions,
+} from "./native-tree.js";
 export { CdpActionBackend, backendNodeIdFrom } from "./cdp-action-backend.js";
 export {
   captureNativeCheckpoint,

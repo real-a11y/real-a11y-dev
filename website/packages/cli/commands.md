@@ -409,7 +409,9 @@ landed.
 Targeting, acting, and the diff all read the **same** tree — Chromium's own,
 over CDP. A node you aim at by one name therefore can't come back in the report
 under another. That tree is whole-document, which is why these commands take
-no [`--root`](#root-selector).
+no [`--root`](#root-selector). It includes the content of the page's
+`<iframe>`s, each under its `Iframe` row, except a frame Chromium runs in a
+process of its own (a cross-site or `sandbox`ed one, under site isolation).
 
 The text a step types is **never echoed** — not in progress output, not in
 [`--format json`](#f-format-fmt), where the step renders as `= ‹hidden›`. The
@@ -929,6 +931,10 @@ real-a11y audit https://app.example.com/dashboard --storage-state auth.json
 An extra origin allowed under [`--storage-state`](#storage-state-file). Origin
 pinning stops a redirect from routing extraction to an unintended,
 cookie-matching origin. Repeat for each additional origin; must parse as a URL.
+The pin covers the page's `<iframe>`s too: a frame whose document comes from an
+origin outside it isn't read, and its row stays empty. A `srcdoc`,
+`about:blank` or `data:` frame holds the page's own markup and is read. Allow
+the frame's origin to include it.
 
 ```sh
 real-a11y audit https://app.example.com --storage-state auth.json \
