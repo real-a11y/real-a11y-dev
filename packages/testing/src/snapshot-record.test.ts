@@ -2,7 +2,15 @@ import { mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import {
+  afterAll,
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vitest";
 
 import { boxedTreeSnapshot } from "./matchers.js";
 import { a11ySnapshotSerializer } from "./snapshot-box.js";
@@ -35,7 +43,7 @@ function mount(html: string): HTMLElement {
 }
 
 /** The files the recorder wrote, as written. */
-function rawRecords(): string[] {
+function rawRecords(under = dir): string[] {
   const found: string[] = [];
   const walk = (folder: string) => {
     for (const entry of readdirSync(folder, { withFileTypes: true })) {
@@ -44,15 +52,19 @@ function rawRecords(): string[] {
       else found.push(readFileSync(path, "utf8"));
     }
   };
-  walk(dir);
+  walk(under);
   return found;
 }
 
 /** What the recorder wrote, in the order the test took them. */
-function records(): SnapshotRecord[] {
-  return rawRecords()
+function records(under = dir): SnapshotRecord[] {
+  return rawRecords(under)
     .map((raw) => JSON.parse(raw) as SnapshotRecord)
-    .sort((a, b) => a.index - b.index);
+    .sort((a, b) => a.sequence - b.sequence);
+}
+
+function nodeOf(record: SnapshotRecord, role: string) {
+  return record.tree!.nodes.find(([, node]) => node.a11y.role === role)![1];
 }
 
 function roles(record: SnapshotRecord, side: "tree" | "before" | "after") {
@@ -66,7 +78,7 @@ describe("snapshot recorder", () => {
 
     const [record] = records();
     expect(record).toMatchObject({
-      version: 1,
+      version: 2,
       kind: "tree",
       index: 1,
       text: box.text,
@@ -148,6 +160,79 @@ describe("snapshot recorder", () => {
     expect(button.dom?.attributes.id).toBe("order-[REDACTED]");
   });
 
+  it("redacts no attribute or property the viewer reads as structure", () => {
+    const box = boxedTreeSnapshot(
+      mount(
+        `<h2>Title 2</h2><div role="dialog" tabindex="-1" aria-label="Step 1">x</div><a href="#a" tabindex="3">Link 4</a>`,
+      ),
+      { redact: [/\d+/g] },
+    );
+    a11ySnapshotSerializer.serialize(box);
+
+    const [record] = records();
+    expect(box.text).toContain("(level 2)");
+    expect(nodeOf(record!, "heading").a11y.properties.level).toBe("2");
+    expect(nodeOf(record!, "heading").a11y.name).toBe("Title [REDACTED]");
+    expect(nodeOf(record!, "dialog").dom?.attributes.tabindex).toBe("-1");
+    expect(nodeOf(record!, "link").dom?.attributes.tabindex).toBe("3");
+  });
+
+  it("files one test file's records apart per Vitest project", () => {
+    const file = "src/p.test.ts";
+    const folders = new Set([
+      recordFolder(file),
+      recordFolder(file, "jsdom"),
+      recordFolder(file, "happy-dom"),
+    ]);
+    expect(folders.size).toBe(3);
+  });
+
+  it("orders and dates records by the real clock, not a faked one", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2020-01-01T00:00:00Z"));
+    try {
+      const root = mount(`<button>Go</button>`);
+      a11ySnapshotSerializer.serialize(boxedTreeSnapshot(root));
+      a11ySnapshotSerializer.serialize(boxedTreeSnapshot(root));
+    } finally {
+      vi.useRealTimers();
+    }
+
+    const [first, second] = records();
+    expect(first!.recordedAt.startsWith("2020")).toBe(false);
+    expect(second!.sequence).toBe(first!.sequence + 1);
+  });
+
+  it("throws on a root that is neither an element nor a tree, as without it", () => {
+    expect(() => boxedTreeSnapshot(document as never)).toThrow(
+      /expected a DOM Element or an extracted a11y tree/,
+    );
+    expect(() => boxedTreeSnapshot(null as never)).toThrow(
+      /expected a DOM Element or an extracted a11y tree/,
+    );
+    expect(rawRecords()).toHaveLength(0);
+  });
+
+  it("records nothing when it can't tell which test is running", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    bindSnapshotRecorder({ getState: () => ({}) });
+    a11ySnapshotSerializer.serialize(
+      boxedTreeSnapshot(mount(`<button>Go</button>`)),
+    );
+
+    expect(rawRecords()).toHaveLength(0);
+    warn.mockRestore();
+  });
+
+  it("keeps no panel state in a record", () => {
+    a11ySnapshotSerializer.serialize(
+      boxedTreeSnapshot(mount(`<button>Go</button>`)),
+    );
+
+    const [record] = records();
+    expect(record!.tree!.nodes.every(([, node]) => !("ui" in node))).toBe(true);
+  });
+
   it("files two paths that slug alike in two folders", () => {
     expect(recordFolder("src/foo-bar.test.ts")).not.toBe(
       recordFolder("src/foo/bar.test.ts"),
@@ -158,6 +243,28 @@ describe("snapshot recorder", () => {
   });
 
   describe("field values", () => {
+    it("keeps nothing typed into an editor's lines and runs", () => {
+      const root = mount(
+        `<div role="textbox" contenteditable="true" aria-label="Note">FIRST-LINE<div>SECOND-LINE</div><b>BOLD-RUN</b></div>`,
+      );
+      const box = boxedTreeSnapshot(root);
+      a11ySnapshotSerializer.serialize(box);
+
+      const [record] = records();
+      const raw = JSON.stringify(record);
+      expect(box.text).toContain('textbox "Note"');
+      for (const typed of ["FIRST-LINE", "SECOND-LINE", "BOLD-RUN"]) {
+        expect(raw).not.toContain(typed);
+      }
+      expect(nodeOf(record!, "textbox").childIds).toEqual([]);
+      const ids = new Set(record!.tree!.nodes.map(([id]) => id));
+      expect(
+        record!.tree!.nodes.every(
+          ([, node]) => node.parentId === null || ids.has(node.parentId),
+        ),
+      ).toBe(true);
+    });
+
     it("keeps no editor's text, nor its ancestors' previews of it", () => {
       const root = mount(
         `<section><div role="textbox" contenteditable="true" aria-label="Note">EDITOR-SENTINEL</div></section>`,
@@ -202,13 +309,16 @@ describe("snapshot recorder", () => {
       expect(raw).toContain('"name":"Email"');
     });
 
-    it("keeps them when the snapshot printed them", () => {
+    it("keeps none even where the text printed them", () => {
       const box = boxedTreeSnapshot(mount(form), { values: true });
       a11ySnapshotSerializer.serialize(box);
 
-      const [raw] = rawRecords();
-      expect(box.text).toContain('"jane@x.com"');
-      expect(raw).toContain('"value":"jane@x.com"');
+      // The text holds what it printed; the tree beside it holds none.
+      const [record] = records();
+      const tree = JSON.stringify(record!.tree);
+      expect(record!.text).toContain('"jane@x.com"');
+      expect(tree).not.toContain("jane@x.com");
+      expect(tree).not.toMatch(/"(value|aria-valuenow|aria-valuetext)":/);
     });
 
     it("keeps none on either side of a diff that didn't print them", () => {
@@ -274,5 +384,41 @@ describe("snapshot recorder", () => {
     );
 
     expect(records()).toHaveLength(0);
+  });
+});
+
+describe("a retried test", () => {
+  // Hooks run again for each try, and the outer ones make a fresh directory:
+  // this one outlives the tries, as a real run's records directory does.
+  const shared = mkdtempSync(join(tmpdir(), "a11y-retry-"));
+  afterAll(() => rmSync(shared, { recursive: true, force: true }));
+  let tries = 0;
+
+  it("keeps only the records of the try that counted", { retry: 1 }, () => {
+    process.env[TREES_DIR_ENV] = shared;
+    tries++;
+    const root = mount(`<button>Try ${tries}</button>`);
+    a11ySnapshotSerializer.serialize(boxedTreeSnapshot(root));
+    if (tries === 1) {
+      a11ySnapshotSerializer.serialize(boxedTreeSnapshot(root));
+      throw new Error("the first try fails, after two snapshots");
+    }
+
+    const kept = records(shared);
+    expect(kept.map((r) => r.index)).toEqual([1]);
+    expect(kept[0]!.text).toContain("Try 2");
+  });
+});
+
+describe.concurrent("concurrent tests", () => {
+  it("record nothing: the runner can't place their snapshots", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    a11ySnapshotSerializer.serialize(
+      boxedTreeSnapshot(mount(`<button>Go</button>`)),
+    );
+
+    expect(rawRecords()).toHaveLength(0);
+    expect(warn).toHaveBeenCalledWith(expect.stringMatching(/concurrent/));
+    warn.mockRestore();
   });
 });

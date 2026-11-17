@@ -31,8 +31,6 @@ const SNAPSHOT_TREES = Symbol.for("@real-a11y-dev/a11y-snapshot.trees");
 interface SnapshotPrinting {
   /** Applied to what the page supplied in a record, as to the text. */
   redact?: RegExp[];
-  /** Whether the text printed field values; a record keeps them only then. */
-  values?: boolean;
 }
 
 /** The trees a box's text was printed from, as the snapshot viewer draws them. */

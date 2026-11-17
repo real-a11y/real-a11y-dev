@@ -9,44 +9,43 @@
  * The `.snap` text stays the assertion. This only ever writes beside it, and
  * never fails a test: a recorder that can't write says so once and stops.
  *
- * A record adds states and the rest of the tree, never a field value its
- * text didn't print: values are dropped unless the snapshot asked for
- * `values: true` (`withoutValue`), the extractor masks sensitive fields
- * itself (and withholds every value in strict mode), an editor's typed text
- * leaves the text previews of it and its ancestors, and the snapshot's own
- * `redact` patterns apply to what the page supplied (`redactedJson`).
+ * A record adds states and the rest of the tree, never what was typed into
+ * the page: no field keeps its value, even where the text printed it
+ * (`values: true`), as no view of the panel shows one; an editor keeps none
+ * of what is inside it, and the nodes above a field none of its text
+ * (`recorded-tree.ts`). The extractor masks sensitive fields itself, and
+ * withholds more in strict mode. The snapshot's own `redact` patterns apply
+ * to what the page supplied (`redactedJson`).
  *
  * Only a box made from a tree records: a snapshot of a plain string (say
  * `expect(serializeTree(el)).toMatchSnapshot()`) has no tree to write.
  */
 
-import type { ExtractionResult, SemanticNode } from "@real-a11y-dev/core";
-
+import { toRecordedTree, type RecordedTree } from "./recorded-tree.js";
 import type { A11ySnapshotBox, SnapshotTrees } from "./snapshot-box.js";
+
+export type { RecordedTree } from "./recorded-tree.js";
 
 /** The directory records go to; recording is off while it is unset. */
 export const TREES_DIR_ENV = "REAL_A11Y_TREES_DIR";
 
 /** Bumped when a record's shape changes; the viewer refuses others. */
-export const RECORD_VERSION = 1;
-
-/** An `ExtractionResult` as JSON can hold it: the node map as entries. */
-export interface RecordedTree {
-  nodes: [string, SemanticNode][];
-  rootId: string;
-  focusedId?: string;
-  source: ExtractionResult["source"];
-}
+export const RECORD_VERSION = 2;
 
 /** One boxed snapshot, as the viewer reads it. */
 export interface SnapshotRecord {
   version: typeof RECORD_VERSION;
+  /** The Vitest project that ran the file, when it has a name. */
+  project?: string;
   /** The test file, relative to the run's working directory, `/`-separated. */
   file: string;
   /** The full test name, `describe > it`. */
   test: string;
   /** Which of the test's boxed snapshots this is, from 1, in the order taken. */
   index: number;
+  /** Which of the test file's records this is, from 1: the order taken,
+   *  whatever a test does to the clock. */
+  sequence: number;
   kind: SnapshotTrees["kind"];
   /** The snapshot text, as the `.snap` holds it. */
   text: string;
@@ -61,16 +60,25 @@ export interface SnapshotRecord {
 interface TestState {
   currentTestName?: string;
   testPath?: string;
-  assertionCalls?: number;
 }
 
 interface ExpectLike {
   getState?(): TestState;
 }
 
+/** What Vitest's worker state says of the test running, where it has one. */
+interface VitestWorkerLike {
+  current?: {
+    concurrent?: boolean;
+    result?: { retryCount?: number; repeatCount?: number };
+  };
+  ctx?: { projectName?: string };
+}
+
 interface FsLike {
   mkdirSync(path: string, options: { recursive: true }): unknown;
   writeFileSync(path: string, data: string): void;
+  rmSync(path: string, options: { force: true }): void;
 }
 
 interface PathLike {
@@ -87,20 +95,44 @@ interface ProcessLike {
   getBuiltinModule?(id: string): unknown;
 }
 
+/** The test that took a snapshot, as the runner says. */
+interface Running {
+  test: string;
+  testPath: string;
+  project: string | undefined;
+  concurrent: boolean;
+  /** Which try of the test this is: a retry or a repeat starts its own. */
+  attempt: string;
+}
+
+/** What a test has written in its current try. */
+interface Taken {
+  attempt: string;
+  count: number;
+  written: string[];
+}
+
+// The real clock, taken before a test can fake it: a record's time is when
+// it was taken, not what `vi.setSystemTime` says.
+const RealDate = Date;
+
 let expectRef: ExpectLike | null = null;
 let gaveUp = false;
+let sequence = 0;
+const said = new Set<string>();
 // A box pretty-format prints twice (a failure message, say) records once.
 const recorded = new WeakSet<object>();
-// Per test file and name, how many boxed snapshots it has taken. Counted for
-// as long as this module lives, which a runner gives each test file anew (and
-// each rerun of it), so two tests that share a full name number on rather
-// than write over each other.
-const taken = new Map<string, number>();
+// Per test file and name, what it has written. Kept for as long as this
+// module lives, which a runner gives each test file anew (and each rerun of
+// it), so two tests that share a full name number on rather than write over
+// each other.
+const taken = new Map<string, Taken>();
 
 /**
  * Where the recorder reads which test is running. `registerA11yMatchers` binds
  * the `expect` it is given; a serializer registered some other way reads the
- * runner's global `expect`, where Jest (and Vitest with `globals`) put it.
+ * runner's global `expect`: Jest's, or Vitest's, which it keeps under a
+ * symbol with `globals` off too.
  */
 export function bindSnapshotRecorder(expect: ExpectLike): void {
   expectRef = expect;
@@ -127,21 +159,21 @@ export function recordSnapshot(
   const dir = proc?.env.REAL_A11Y_TREES_DIR;
   if (!proc || !dir) return;
   recorded.add(box);
-  try {
-    const { fs, path } = builtins(proc);
-    const { file, test, index } = takenBy(proc, path);
-
-    const behind = trees();
-    const record = toRecord(behind, { file, test, index, text: box.text });
-    const json = redactedJson(record, globalPatterns(behind.redact));
-
-    const target = path.join(
-      path.resolve(proc.cwd(), dir),
-      recordFolder(file),
-      `${slug(test)}-${hash(test)}-${index}.json`,
+  const running = runningTest();
+  if (!running) {
+    return sayOnce(
+      "can't tell which test took a boxed snapshot, so it isn't recorded: " +
+        "register the serializer with registerA11yMatchers(expect)",
     );
-    fs.mkdirSync(path.dirname(target), { recursive: true });
-    fs.writeFileSync(target, json);
+  }
+  if (running.concurrent) {
+    return sayOnce(
+      "snapshots of concurrent tests aren't recorded: the runner can't say " +
+        "which of the tests running together took one",
+    );
+  }
+  try {
+    write(proc, dir, running, { text: box.text, behind: trees() });
   } catch (error) {
     gaveUp = true;
     console.warn(
@@ -149,6 +181,41 @@ export function recordSnapshot(
         `write, so it stops for this run: ${(error as Error).message}`,
     );
   }
+}
+
+function write(
+  proc: ProcessLike,
+  dir: string,
+  running: Running,
+  { text, behind }: { text: string; behind: SnapshotTrees },
+): void {
+  const { fs, path } = builtins(proc);
+  const file = path
+    .relative(proc.cwd(), running.testPath)
+    .split(path.sep)
+    .join("/");
+  const slot = takeSlot(fs, `${file}\0${running.test}`, running.attempt);
+  const record = toRecord(behind, {
+    ...(running.project ? { project: running.project } : {}),
+    file,
+    test: running.test,
+    index: slot.count,
+    text,
+  });
+  const target = path.join(
+    path.resolve(proc.cwd(), dir),
+    recordFolder(file, running.project),
+    `${slug(running.test)}-${hash(running.test)}-${slot.count}.json`,
+  );
+  fs.mkdirSync(path.dirname(target), { recursive: true });
+  fs.writeFileSync(target, redactedJson(record, globalPatterns(behind.redact)));
+  slot.written.push(target);
+}
+
+function sayOnce(message: string): void {
+  if (said.has(message)) return;
+  said.add(message);
+  console.warn(`[real-a11y] ${message}.`);
 }
 
 /** `node:fs` and `node:path`, reached without an import a browser bundle
@@ -162,111 +229,81 @@ function builtins(proc: ProcessLike): { fs: FsLike; path: PathLike } {
   return { fs, path };
 }
 
-/** Which test took the snapshot, and which of its snapshots this is. */
-function takenBy(
-  proc: ProcessLike,
-  path: PathLike,
-): { file: string; test: string; index: number } {
+/**
+ * The test that is running, from the `expect` it asserts through. Vitest's
+ * worker state adds what `expect` doesn't say: the project, a concurrent
+ * test (whose snapshot the shared `expect` can't place), and which try this
+ * is. Jest says none of those, so a Jest retry keeps its failed try's
+ * records.
+ */
+function runningTest(): Running | null {
+  const scope = globalThis as unknown as Record<PropertyKey, unknown>;
   const expect =
-    expectRef ?? (globalThis as { expect?: ExpectLike }).expect ?? null;
-  const state = expect?.getState?.() ?? {};
-  const test = state.currentTestName ?? "(unknown test)";
-  const file = state.testPath
-    ? path.relative(proc.cwd(), state.testPath).split(path.sep).join("/")
-    : "(unknown file)";
-  const key = `${file}\0${test}`;
-  const index = (taken.get(key) ?? 0) + 1;
-  taken.set(key, index);
-  return { file, test, index };
+    expectRef ??
+    (scope["expect"] as ExpectLike | undefined) ??
+    (scope[Symbol.for("expect-global")] as ExpectLike | undefined);
+  const state = expect?.getState?.();
+  if (!state?.currentTestName || !state.testPath) return null;
+  return {
+    test: state.currentTestName,
+    testPath: state.testPath,
+    ...vitestTask(scope["__vitest_worker__"] as VitestWorkerLike | undefined),
+  };
+}
+
+/** What Vitest's worker state adds; nothing, under another runner. */
+function vitestTask(
+  worker: VitestWorkerLike | undefined,
+): Pick<Running, "project" | "concurrent" | "attempt"> {
+  const task = worker?.current;
+  const retry = task?.result?.retryCount ?? 0;
+  const repeat = task?.result?.repeatCount ?? 0;
+  return {
+    project: worker?.ctx?.projectName || undefined,
+    concurrent: task?.concurrent === true,
+    attempt: `${retry}/${repeat}`,
+  };
+}
+
+/**
+ * The test's next snapshot. A new try starts again from 1, as the runner's
+ * own snapshot count does, and the records the last try wrote go: a retried
+ * test shows the try that counted.
+ */
+function takeSlot(fs: FsLike, key: string, attempt: string): Taken {
+  let slot = taken.get(key);
+  if (!slot || slot.attempt !== attempt) {
+    for (const path of slot?.written ?? []) fs.rmSync(path, { force: true });
+    slot = { attempt, count: 0, written: [] };
+    taken.set(key, slot);
+  }
+  slot.count++;
+  return slot;
 }
 
 function toRecord(
   trees: SnapshotTrees,
-  meta: Pick<SnapshotRecord, "file" | "test" | "index" | "text">,
+  meta: Pick<SnapshotRecord, "project" | "file" | "test" | "index" | "text">,
 ): SnapshotRecord {
   const base = {
     version: RECORD_VERSION,
     ...meta,
+    sequence: ++sequence,
     kind: trees.kind,
-    recordedAt: new Date().toISOString(),
+    recordedAt: new RealDate().toISOString(),
   } as const;
-  const values = trees.values === true;
   if (trees.kind === "tree") {
-    return { ...base, tree: toJsonTree(trees.tree, values) };
+    return { ...base, tree: toRecordedTree(trees.tree).recorded };
   }
+  const before = toRecordedTree(trees.before);
+  const after = toRecordedTree(trees.after);
   return {
     ...base,
-    before: toJsonTree(trees.before, values),
-    after: toJsonTree(trees.after, values),
-    focusBefore: trees.focusBefore,
-    focusAfter: trees.focusAfter,
+    before: before.recorded,
+    after: after.recorded,
+    focusBefore: before.shownAs(trees.focusBefore),
+    focusAfter: after.shownAs(trees.focusAfter),
   };
-}
-
-/**
- * The attributes that hold what a field was given: the ones strict mode
- * withholds (`RedactInputOption` in core's `strict-mode.ts`).
- */
-const VALUE_ATTRIBUTES = ["value", "aria-valuenow", "aria-valuetext"];
-
-/**
- * `tree` as JSON can hold it. Without `values`, no node keeps what a field
- * holds, as the snapshot's text prints none: a record must not carry what its
- * text left out on purpose.
- */
-function toJsonTree(tree: ExtractionResult, values: boolean): RecordedTree {
-  const nodes = [...tree.nodes.entries()];
-  const above = values ? new Set<string>() : aboveValues(tree);
-  return {
-    nodes: values
-      ? nodes
-      : nodes.map(([id, node]) => [id, withoutValue(node, above.has(id))]),
-    rootId: tree.rootId,
-    focusedId: tree.focusedId,
-    source: tree.source,
-  };
-}
-
-/**
- * The nodes above a field that holds a value, whose `descendantText` takes in
- * what was typed into an editor below them. Their own `textContent` is only
- * their own text nodes', so it stays.
- */
-function aboveValues(tree: ExtractionResult): Set<string> {
-  const above = new Set<string>();
-  for (const node of tree.nodes.values()) {
-    if (node.a11y.value === undefined) continue;
-    let id = node.parentId;
-    while (id !== null && !above.has(id)) {
-      above.add(id);
-      id = tree.nodes.get(id)?.parentId ?? null;
-    }
-  }
-  return above;
-}
-
-/**
- * `node` without what a field holds. A field that holds a value loses both
- * text previews, which for an editor are what was typed; a node above one
- * (`aboveValue`) loses only `descendantText`.
- */
-function withoutValue(node: SemanticNode, aboveValue: boolean): SemanticNode {
-  const holder = node.a11y.value !== undefined;
-  const attributes = node.dom?.attributes;
-  const valueAttribute =
-    attributes !== undefined &&
-    VALUE_ATTRIBUTES.some((name) => name in attributes);
-  if (!holder && !aboveValue && !valueAttribute) return node;
-  const { value: _value, ...a11y } = node.a11y;
-  const kept = { ...node, a11y };
-  if (node.dom) {
-    const rest = { ...node.dom.attributes };
-    for (const name of VALUE_ATTRIBUTES) delete rest[name];
-    kept.dom = { ...node.dom, attributes: rest };
-    if (holder) kept.dom.textContent = null;
-    if (holder || aboveValue) kept.dom.descendantText = "";
-  }
-  return kept;
 }
 
 /** The fields of a node whose text a page supplied: what `redact` reaches. */
@@ -280,11 +317,42 @@ const CONTENT_KEYS = new Set([
 ]);
 
 /**
+ * The attributes and properties that hold structure, not the page's prose:
+ * the viewer reads them as numbers and states, so a pattern aimed at a name
+ * must not renumber the tab order or a heading's level. Every other one is
+ * redacted, as an unknown attribute may hold anything.
+ */
+const STRUCTURAL_KEYS = new Set([
+  "level",
+  "posinset",
+  "setsize",
+  "tabindex",
+  "role",
+  "type",
+  "size",
+  "multiple",
+  "method",
+  "aria-expanded",
+  "aria-hidden",
+  "aria-checked",
+  "aria-disabled",
+  "aria-required",
+  "aria-haspopup",
+  "aria-valuemin",
+  "aria-valuemax",
+  "controls",
+  "autoplay",
+  "muted",
+  "loop",
+]);
+
+/**
  * `record` as JSON, its `redact` patterns applied to what the page supplied:
- * names, descriptions, values, text, and every attribute and property value,
- * the page's own element ids and the references to them included. Never to a
- * node's id (`sn-<n>`), which the record mints and builds its tree from: a
- * pattern like `/\d+/` would turn them all into one id and collapse the rows.
+ * names, descriptions, text, and the attribute and property values that are
+ * not structure (`STRUCTURAL_KEYS`), the page's own element ids and the
+ * references to them included. Never to a node's id (`sn-<n>`), which the
+ * record mints and builds its tree from: a pattern like `/\d+/` would turn
+ * them all into one id and collapse the rows.
  *
  * An element id is redacted where it is declared and where it is referred to
  * alike, so a link between two rows survives unless the pattern makes two
@@ -305,7 +373,9 @@ function redactedJson(record: SnapshotRecord, redact: RegExp[]): string {
     record,
     function (this: unknown, key: string, value: unknown) {
       if (typeof value !== "string") return value;
-      const content = keyed.has(this as object) || CONTENT_KEYS.has(key);
+      const content = keyed.has(this as object)
+        ? !STRUCTURAL_KEYS.has(key)
+        : CONTENT_KEYS.has(key);
       return content ? redactText(value, redact) : value;
     },
   );
@@ -325,15 +395,17 @@ function redactText(input: string, patterns: RegExp[]): string {
 }
 
 /**
- * The folder a test file's records go in, under the records directory.
- * `file` is the test file relative to the run's working directory, with
- * either separator: the snapshot report clears a file's folder when the
- * runner runs it again. The hash keeps two paths that slug alike apart
- * (`src/foo-bar.test.ts` and `src/foo/bar.test.ts`).
+ * The folder a test file's records go in, under the records directory: one
+ * per test file and Vitest project, so two projects that run one file keep
+ * their records apart. `file` is the test file relative to the run's working
+ * directory, with either separator: the snapshot report clears a file's
+ * folder when the runner runs it again. The hash keeps two paths that slug
+ * alike apart (`src/foo-bar.test.ts` and `src/foo/bar.test.ts`).
  */
-export function recordFolder(file: string): string {
+export function recordFolder(file: string, project?: string): string {
   const path = file.split("\\").join("/");
-  return `${slug(path)}-${hash(path)}`;
+  const key = project ? `${project}:${path}` : path;
+  return `${slug(key)}-${hash(key)}`;
 }
 
 /** A file-name-safe stand-in for `text`, short enough for Windows paths. */

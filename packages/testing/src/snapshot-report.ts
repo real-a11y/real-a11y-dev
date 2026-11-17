@@ -2,9 +2,14 @@
  * The snapshot report (`reporter.ts` for Vitest, `reporter-jest.ts` for
  * Jest): the records a run wrote, read back, and the one HTML file that
  * draws them. Each runner's reporter only says when; this does the rest.
+ *
+ * It deletes and overwrites only what it wrote itself: a records folder it
+ * marked, and a page it generated. Pointed at a folder that holds anything
+ * else under those names, it leaves that alone and records nothing.
  */
 
 import {
+  existsSync,
   mkdirSync,
   readdirSync,
   readFileSync,
@@ -32,9 +37,18 @@ export interface A11ySnapshotReporterOptions {
 /** Where a report goes when its options don't say. */
 export const DEFAULT_OUTPUT_DIR = "a11y-snapshots";
 
-/** What the page reads (`window.__A11Y_SNAPSHOTS__` in the viewer). */
+/** The file that marks a records folder as the report's to delete. */
+export const RECORDS_MARKER = ".real-a11y-records";
+
+/** What a page the report generated says it is: `write()` overwrites only
+ *  a page that says so. */
+const GENERATOR = '<meta name="generator" content="real-a11y snapshot report">';
+
+/** What the page reads (`window.__A11Y_SNAPSHOTS__` in the viewer). The
+ *  records directory is the dev server's, for its empty state; a written
+ *  page leaves it out, as a shared page must not carry a local path. */
 export interface ReportData {
-  dir: string;
+  dir?: string;
   records: (SnapshotRecord & { id: string })[];
 }
 
@@ -48,6 +62,8 @@ export interface ViewerAssets {
 export class SnapshotReport {
   readonly outputDir: string;
   readonly recordsDir: string;
+  /** Why the report is off, once `start()` found it can't own its folder. */
+  private off: string | null = null;
 
   constructor(outputDir: string) {
     this.outputDir = outputDir;
@@ -55,34 +71,58 @@ export class SnapshotReport {
   }
 
   /**
-   * Start from nothing, so a test renamed or deleted since the last run
-   * leaves no record behind, and switch the recorder on. Call it before the
-   * runner starts its workers: they read the variable as they start.
+   * Switch the recorder on, and with `clear` (the default) start from
+   * nothing, so a test renamed or deleted since the last run leaves no record
+   * behind. Call it before the runner starts its workers: they read the
+   * variable as they start. Returns whether recording is on: a records
+   * folder the report didn't mark is left alone, and nothing records.
    */
-  start(): void {
+  start({ clear = true }: { clear?: boolean } = {}): boolean {
+    const marker = join(this.recordsDir, RECORDS_MARKER);
+    if (existsSync(this.recordsDir) && !existsSync(marker)) {
+      this.off =
+        `${this.recordsDir} holds files the snapshot report didn't write, ` +
+        "so it records nothing: set its outputDir to a folder of its own";
+      console.warn(` a11y snapshots  ${this.off}`);
+      return false;
+    }
+    if (clear) remove(this.recordsDir);
+    try {
+      mkdirSync(this.recordsDir, { recursive: true });
+      writeFileSync(marker, "");
+    } catch (error) {
+      this.off = `couldn't make ${this.recordsDir}: ${(error as Error).message}`;
+      console.warn(` a11y snapshots  ${this.off}`);
+      return false;
+    }
     process.env[TREES_DIR_ENV] = this.recordsDir;
-    remove(this.recordsDir);
+    return true;
   }
 
   /** Drop one test file's records, before a rerun writes them again. */
-  clearFile(testFile: string): void {
+  clearFile(testFile: string, project?: string): void {
+    if (this.off) return;
     remove(
-      join(this.recordsDir, recordFolder(relative(process.cwd(), testFile))),
+      join(
+        this.recordsDir,
+        recordFolder(relative(process.cwd(), testFile), project),
+      ),
     );
   }
 
   /** Write `index.html` from every record there is; returns its URL. */
-  write(viewer: ViewerAssets = viewerAssets()): {
+  write(viewer?: ViewerAssets): {
     url: string;
     count: number;
   } {
+    if (this.off) throw new Error(this.off);
     const records = readRecords(this.recordsDir);
     mkdirSync(this.outputDir, { recursive: true });
     const page = join(this.outputDir, "index.html");
-    writeFileSync(
-      page,
-      renderReport({ dir: this.recordsDir, records }, viewer),
-    );
+    if (existsSync(page) && !readFileSync(page, "utf8").includes(GENERATOR)) {
+      throw new Error(`${page} isn't a snapshot report, so it stays as it is`);
+    }
+    writeFileSync(page, renderReport({ records }, viewer ?? viewerAssets()));
     return { url: pathToFileURL(page).href, count: records.length };
   }
 
@@ -175,6 +215,7 @@ export function renderReport(data: ReportData, viewer: ViewerAssets): string {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+${GENERATOR}
 <title>A11y snapshots</title>
 <style>${css}</style>
 </head>

@@ -1,12 +1,12 @@
 import type { ExtractionResult, TreeViewMode } from "@real-a11y-dev/core";
 import {
   diffTreeRows,
-  semanticTreeRules,
   TreePanel,
   type TreeChangesProp,
 } from "@real-a11y-dev/semantic-navigator-ui";
 import { useEffect, useMemo, useState } from "preact/hooks";
 
+import { snapshotDiffRules } from "./marks.js";
 import {
   countLines,
   groupByFile,
@@ -18,7 +18,8 @@ import {
 } from "./records.js";
 
 interface Loaded {
-  dir: string;
+  /** The dev server's records directory; a written report leaves it out. */
+  dir?: string;
   records: SnapshotRecord[];
 }
 
@@ -37,6 +38,8 @@ interface Trees {
   before: ExtractionResult | null;
 }
 
+const NO_GROUPS: FileGroup[] = [];
+
 export function App() {
   const { loaded, error } = useRecords();
   const [selectedId, setSelectedId] = useState<string | null>(() =>
@@ -44,13 +47,16 @@ export function App() {
   );
   const [query, setQuery] = useState("");
 
-  const groups = useMemo(
-    () => filterGroups(groupByFile(loaded?.records ?? []), query),
-    [loaded, query],
+  const all = useMemo(
+    () => (loaded ? groupByFile(loaded.records) : NO_GROUPS),
+    [loaded],
   );
+  const groups = useMemo(() => filterGroups(all, query), [all, query]);
+  // The filter narrows the list, never what is open: typing into it doesn't
+  // swap the record on screen.
   const selected =
     loaded?.records.find((r) => r.id === selectedId) ??
-    groups[0]?.records[0] ??
+    all[0]?.records[0] ??
     null;
 
   const select = (id: string) => {
@@ -65,6 +71,7 @@ export function App() {
         groups={groups}
         selectedId={selected?.id ?? null}
         query={query}
+        filtered={all.length > 0 && groups.length === 0}
         onQuery={setQuery}
         onSelect={select}
       />
@@ -130,7 +137,7 @@ function filterGroups(groups: FileGroup[], query: string): FileGroup[] {
       ...g,
       records: g.records.filter(
         (r) =>
-          r.test.toLowerCase().includes(q) || g.file.toLowerCase().includes(q),
+          r.test.toLowerCase().includes(q) || g.label.toLowerCase().includes(q),
       ),
     }))
     .filter((g) => g.records.length > 0);
@@ -140,12 +147,15 @@ function RecordList({
   groups,
   selectedId,
   query,
+  filtered,
   onQuery,
   onSelect,
 }: {
   groups: FileGroup[];
   selectedId: string | null;
   query: string;
+  /** The filter hides every record there is. */
+  filtered: boolean;
   onQuery: (query: string) => void;
   onSelect: (id: string) => void;
 }) {
@@ -163,10 +173,15 @@ function RecordList({
         />
       </div>
       <div class="sv-nav-list">
+        {filtered ? (
+          <p class="sv-no-match" role="status">
+            No snapshots match “{query.trim()}”.
+          </p>
+        ) : null}
         {groups.map((group) => (
-          <section key={group.file} class="sv-file">
-            <h2 class="sv-file-name" title={group.file}>
-              {group.file}
+          <section key={group.label} class="sv-file">
+            <h2 class="sv-file-name" title={group.label}>
+              {group.label}
             </h2>
             <ul>
               {group.records.map((record) => (
@@ -263,18 +278,24 @@ function useTrees(record: SnapshotRecord): Trees | null {
 
 /**
  * What the after tree marks: what changed since the before capture, as the
- * view on screen shows rows. The DOM view's rows show classes and URLs the
- * A11Y view's don't, so its marks compare those too.
+ * view on screen shows rows, and what else the diff's text lists
+ * (`marks.ts`). The DOM view's rows show classes and URLs the A11Y view's
+ * don't, so its marks compare those too.
  */
 function useChangeMarks(
+  record: SnapshotRecord,
   trees: Trees | null,
-  shown: boolean,
-  viewMode: TreeViewMode,
+  /** The view on screen, or null while the marks are off. */
+  viewMode: TreeViewMode | null,
   onClear: () => void,
 ): TreeChangesProp | undefined {
   return useMemo(() => {
-    if (!trees?.before || !shown) return undefined;
-    const rules = semanticTreeRules(viewMode);
+    if (!trees?.before || !viewMode) return undefined;
+    const rules = snapshotDiffRules(
+      viewMode,
+      { tree: trees.before, focus: record.focusBefore },
+      { tree: trees.after, focus: record.focusAfter },
+    );
     return {
       marks: {
         changes: diffTreeRows(trees.before, trees.after, rules),
@@ -285,7 +306,7 @@ function useChangeMarks(
       since: "the capture before",
       totals: true,
     };
-  }, [trees, shown, viewMode, onClear]);
+  }, [record, trees, viewMode, onClear]);
 }
 
 function RecordView({ record }: { record: SnapshotRecord }) {
@@ -294,9 +315,9 @@ function RecordView({ record }: { record: SnapshotRecord }) {
   const [marksOn, setMarksOn] = useState(true);
   const trees = useTrees(record);
   const changes = useChangeMarks(
+    record,
     trees,
-    side === "after" && marksOn,
-    viewMode,
+    side === "after" && marksOn ? viewMode : null,
     useMemo(() => () => setMarksOn(false), []),
   );
 
@@ -352,7 +373,10 @@ function RecordHeader({
       </h2>
       <p class="sv-meta">
         <KindBadge kind={record.kind} />
-        <span>{record.file}</span>
+        <span>
+          {record.project ? `${record.project} · ` : ""}
+          {record.file}
+        </span>
         <span>recorded {new Date(record.recordedAt).toLocaleString()}</span>
       </p>
       {side ? (
@@ -397,7 +421,7 @@ function SnapshotText({ text }: { text: string }) {
   );
 }
 
-function Empty({ dir }: { dir: string }) {
+function Empty({ dir }: { dir?: string }) {
   return (
     <div class="sv-empty">
       <h2>No snapshots recorded</h2>
@@ -407,7 +431,7 @@ function Empty({ dir }: { dir: string }) {
         <code>registerA11yMatchers(expect)</code>. A snapshot of a plain string
         has no tree behind it.
       </p>
-      {window.__A11Y_SNAPSHOTS__ ? null : (
+      {dir === undefined ? null : (
         <>
           <p>Run your tests with the recorder on, pointed at this directory:</p>
           <pre>REAL_A11Y_TREES_DIR={dir} vitest run</pre>

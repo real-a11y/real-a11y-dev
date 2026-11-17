@@ -108,6 +108,17 @@ body,
   box-shadow: inset 3px 0 0 var(--sn-accent);
 }
 
+/* The muted grey falls under 4.5:1 on the selected row's tint. */
+.sv-record[aria-current="true"]
+  :is(.sv-record-path, .sv-counts, .sv-record-index) {
+  color: var(--sn-text);
+}
+
+.sv-no-match {
+  margin: 12px 6px;
+  color: var(--sn-text-muted);
+}
+
 .sv-record:focus-visible {
   outline: 2px solid var(--sn-border-focus);
   outline-offset: 1px;
@@ -222,6 +233,16 @@ body,
   min-height: 0;
   overflow: hidden;
   border-right: 1px solid var(--sn-border);
+}
+
+/*
+ * A record's page is gone, so nothing here can click, type or select: the
+ * panel's action buttons and the list views' Activate go, rather than sit
+ * there doing nothing. The list views' Move to stays.
+ */
+.sv-panel :is(.sn-action, .sn-action-pair),
+.sv-panel .sn-list-actions > .sn-list-action-btn:first-of-type {
+  display: none;
 }
 
 .sv-text {

@@ -42,8 +42,11 @@ Tests:
 4. `grep -r "VALUE-SENTINEL\|PW-SENTINEL\|4821-7730" a11y-snapshots/`
 5. In watch mode (`vitest`), edit the **tree** test's file so it reruns alone
 6. Jest: add `reporters: ["default", "@real-a11y-dev/testing/reporter/jest"]`
-   and run `jest`, then again with two test files and `--maxWorkers=2`
-7. Bundle the library entry for the browser:
+   and run `jest`, then again with two test files and `--maxWorkers=2`, then
+   `jest --watch` and edit one of the two files so it reruns alone
+7. With `{ outputDir: "." }` in a folder holding its own `records/` and
+   `index.html`, run the tests again
+8. Bundle the library entry for the browser:
    `npx esbuild node_modules/@real-a11y-dev/testing/dist/index.js --bundle --platform=browser --outfile=/dev/null`
    (and the same for `dist/matchers.js`)
 
@@ -59,16 +62,18 @@ Tests:
   field marked `changed` with `invalid`; a bar counts them. **Before** shows the
   tree without the alert. The TAB view lists the tab stops in order. The text
   pane shows the `.snap` text with `+` and `~` lines coloured
-- **4** — `VALUE-SENTINEL` appears **only** in the **values** record, as the
-  field's value; `PW-SENTINEL` appears nowhere, the password reading
-  `[redacted]` even there; `4821-7730` appears nowhere, the button reading
+- **4** — `VALUE-SENTINEL` appears **only** in the **values** record's
+  snapshot text (its `text`), never in a tree; `PW-SENTINEL` appears nowhere,
+  the password reading `[redacted]` even there; `4821-7730` appears nowhere, the button reading
   `Order [REDACTED]`
 - **5** — the page is written again; the rerun file's records are replaced and
   the other files' are still listed
 - **6** — Jest loads the reporter through `require`, prints the same line, and
   writes the same page; with two files on two workers, both files' records are
-  there
-- **7** — both bundles build. Neither may import `fs`, `path` or `url`: those
+  there; after the watch rerun, both are still listed
+- **7** — the run passes, warns that the folder holds files the report didn't
+  write, and leaves `records/` and `index.html` as they were
+- **8** — both bundles build. Neither may import `fs`, `path` or `url`: those
   belong to the reporters alone
 
 ## Why this exists
@@ -79,12 +84,12 @@ can do harm came up while building it:
 - **A record carrying what its text left out on purpose.** The first version
   wrote whole trees, so a field's typed value reached the JSON — and the page —
   though the snapshot's text, printed without `values: true`, held none. Step 4
-  is the guard: a sentinel in a plain field must reach a record only through
-  the opt-in, and a password never.
+  is the guard: a sentinel in a plain field must reach a record only as the
+  text the snapshot printed, and a password never.
 - **The reporter's Node code leaking into the library.** Building the reporter
   with tsup's `shims` alongside the library entries put `path` and `url` imports
   into a chunk every entry shares, so `@real-a11y-dev/testing` would have
-  stopped bundling for the browser. Only `size-limit` noticed. Step 7 checks the
+  stopped bundling for the browser. Only `size-limit` noticed. Step 8 checks the
   shipped files directly, since the workspace build is not what a user installs.
 
 Jest gets its own steps because it loads reporters through `require` and runs

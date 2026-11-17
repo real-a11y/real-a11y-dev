@@ -38,18 +38,24 @@ import {
 
 /** The part of Vitest's context the reporter reads. */
 interface VitestLike {
-  config: { root: string; env?: Record<string, string | undefined> };
+  config: {
+    root: string;
+    env?: Record<string, string | undefined>;
+    mergeReports?: unknown;
+  };
   logger?: { log(message: string): void };
 }
 
 /** The part of a Vitest test specification the reporter reads. */
 interface SpecificationLike {
   moduleId: string;
+  project?: { name?: string };
 }
 
 export default class A11ySnapshotReporter {
   private readonly options: A11ySnapshotReporterOptions;
   private report: SnapshotReport | null = null;
+  private merging = false;
   private log: (message: string) => void = (message) => console.log(message);
 
   constructor(options: A11ySnapshotReporterOptions = {}) {
@@ -62,17 +68,21 @@ export default class A11ySnapshotReporter {
     this.report = new SnapshotReport(
       resolve(vitest.config.root, this.options.outputDir ?? DEFAULT_OUTPUT_DIR),
     );
-    this.report.start();
+    // `--merge-reports` runs no test: it replays the shards' runs, so the
+    // page is made from the records there are, and none is cleared.
+    this.merging = Boolean(vitest.config.mergeReports);
+    const on = this.report.start({ clear: !this.merging });
     // Vitest also hands its workers `test.env`.
-    if (vitest.config.env) {
+    if (on && vitest.config.env) {
       vitest.config.env[TREES_DIR_ENV] = this.report.recordsDir;
     }
   }
 
   onTestRunStart(specifications: ReadonlyArray<SpecificationLike>): void {
+    if (this.merging) return;
     // A rerun replaces the records of the files it runs and keeps the rest.
-    for (const { moduleId } of specifications) {
-      this.report?.clearFile(moduleId);
+    for (const { moduleId, project } of specifications) {
+      this.report?.clearFile(moduleId, project?.name || undefined);
     }
   }
 

@@ -5,7 +5,7 @@
  */
 import type { ExtractionResult, SemanticNode } from "@real-a11y-dev/core";
 
-export const RECORD_VERSION = 1;
+export const RECORD_VERSION = 2;
 
 export interface RecordedTree {
   nodes: [string, SemanticNode][];
@@ -18,9 +18,13 @@ export interface SnapshotRecord {
   /** The record's path in the records directory: its identity here. */
   id: string;
   version: number;
+  /** The Vitest project that ran the file, when it has a name. */
+  project?: string;
   file: string;
   test: string;
   index: number;
+  /** The order the test file took its records in. */
+  sequence: number;
   kind: "tree" | "diff";
   text: string;
   recordedAt: string;
@@ -104,29 +108,37 @@ export function lineKind(
 }
 
 export interface FileGroup {
+  /** The test file, after its Vitest project's name when it has one. */
+  label: string;
   file: string;
   records: SnapshotRecord[];
 }
 
 /**
- * The records by test file, each file's in the order its tests took them.
- * Only records of this viewer's version: another one's can't be read.
+ * The records by test file and project, each file's in the order its tests
+ * took them. Only records of this viewer's version: another one's can't be
+ * read.
  */
 export function groupByFile(records: SnapshotRecord[]): FileGroup[] {
-  const byFile = new Map<string, SnapshotRecord[]>();
+  const byFile = new Map<string, FileGroup>();
   for (const record of records) {
     if (record.version !== RECORD_VERSION) continue;
-    const list = byFile.get(record.file) ?? [];
-    list.push(record);
-    byFile.set(record.file, list);
+    const label = record.project
+      ? `${record.project} · ${record.file}`
+      : record.file;
+    const group = byFile.get(label) ?? {
+      label,
+      file: record.file,
+      records: [],
+    };
+    group.records.push(record);
+    byFile.set(label, group);
   }
-  return [...byFile.entries()]
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([file, list]) => ({
-      file,
-      records: list.sort(
-        (a, b) => a.recordedAt.localeCompare(b.recordedAt) || a.index - b.index,
-      ),
+  return [...byFile.values()]
+    .sort((a, b) => a.label.localeCompare(b.label))
+    .map((group) => ({
+      ...group,
+      records: group.records.sort((a, b) => a.sequence - b.sequence),
     }));
 }
 

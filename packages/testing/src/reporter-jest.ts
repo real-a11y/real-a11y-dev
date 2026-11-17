@@ -10,8 +10,9 @@
  * ```
  *
  * Jest builds its reporters before it starts a worker, so switching the
- * recorder on here reaches every test file, in band or not. A rerun in watch
- * mode replaces only the records of the files it runs.
+ * recorder on here reaches every test file, in band or not. It builds them
+ * again for each run in watch mode, so only the first clears the records: a
+ * rerun replaces only the records of the files it runs.
  */
 
 import { resolve } from "node:path";
@@ -36,6 +37,10 @@ interface JestTestLike {
   path: string;
 }
 
+// The report folders this process has started: a watch run's reporter
+// carries on with the records the runs before it wrote.
+const started = new Set<string>();
+
 export default class A11ySnapshotJestReporter {
   private readonly report: SnapshotReport;
 
@@ -46,7 +51,8 @@ export default class A11ySnapshotJestReporter {
     this.report = new SnapshotReport(
       resolve(globalConfig.rootDir, options.outputDir ?? DEFAULT_OUTPUT_DIR),
     );
-    this.report.start();
+    this.report.start({ clear: !started.has(this.report.outputDir) });
+    started.add(this.report.outputDir);
   }
 
   onTestFileStart(test: JestTestLike): void {
