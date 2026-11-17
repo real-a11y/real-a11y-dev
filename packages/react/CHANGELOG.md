@@ -1,5 +1,203 @@
 # @real-a11y-dev/react
 
+## 0.1.0-beta.23
+
+### Minor Changes
+
+- 584bfe7: The panel marks what changed in the tree, as the Chrome extension does, so opening a menu shows the button that went expanded and the menu that came without hunting for them.
+
+  - Each update of the tree marks what it changed: a new row flashes green and a changed one amber, then keeps a coloured edge. The top row of something new says _new_, a changed row says _changed_ (with what changed in its tooltip) and has the changed part underlined or outlined, and a collapsed row says what changed under it (_2 new inside_). A new row with rows under it opens, so what the page added shows. A bar under the tree counts the changes, lists the rows removed, and goes from change to change, as Alt+N and Alt+Shift+N do in the tree. None of it is colour alone: a screen reader hears each mark at the end of the row's label.
+  - What a click or a key of the user's on the page (a screen reader's activation included), or an action sent through the tree, brought in the five seconds after it stays marked together, so the items a menu fetches stay marked with the button that opened it, and is said in a polite live region ("3 new, 1 changed in the tree"). Typing in a field ends that, so a list that filters as the user types isn't read out at every key, and a pick of the element picker, which the page never sees, starts none. What the page changes on its own is marked without being said, and an update that changes nothing the tree shows leaves the marks as they were.
+  - Only the page the panel was given is marked: when a toast or a menu mounted outside it makes the tree show the whole page, the overlay is marked new, and the rest of the page it brings isn't.
+  - A row is changed when what it shows changes: in the A11Y view its role, name, heading level, state and interaction badges, the rows it controls, or a leaf's text; in the DOM view its attributes, text and badges, or whether it is hidden. A class that toggles on hover marks nothing in the A11Y view.
+  - A modal that hides the rest of the page from the tree marks the dialog new and nothing removed, and once it closes the marks show what it changed on the page. A menu or a listbox opened the same way, as Radix's dropdown menu and select hide the rest of the page, is taken the same way.
+  - The checkpoint button (⎌) marks everything since it was pressed the same way, through every later update, until it is pressed again, and what a click after it brings is said with all it counts ("4 new, 2 changed since the checkpoint"), down as well as up, to "No changes since the checkpoint". Its `+`/`~` column and the list of removed rows under the tree are gone: the marks and the changes bar replace them.
+  - The changes bar shows in the TAB view and with a role filter on too, where the counts and the removed rows still hold; its arrows, which go to rows in the tree, only in the tree.
+  - `@real-a11y-dev/inspector`: `SemanticNavigatorConfig` gains `markChanges?: boolean` (default `true`). `false` marks nothing until the checkpoint is pressed.
+  - `@real-a11y-dev/inspector`: `refresh()` reads the tree again where the panel stands instead of remounting it, so the selection, the open rows and the checkpoint stay, and what the read finds changed is marked. `setRoot()` still starts the panel over.
+  - In a light-DOM mount (`mount: "light"`), the panel's own live regions no longer make the tree read the whole page as if they were a toast outside the root.
+  - `@real-a11y-dev/react`: `<SemanticNavigator>` gains the matching `markChanges` prop. Changing it remounts the navigator.
+  - `@real-a11y-dev/storybook-addon`: the panel's stylesheet now carries the marks' rules too. The addon doesn't mark changes yet, so nothing it shows changes.
+
+### Patch Changes
+
+- 3400a78: Record a field's invalid state as `a11y.states.invalid`, from `aria-invalid` and from the field's own validity. The DOM producer read neither, so a field marked `aria-invalid="true"`, or one failing its `pattern`, looked valid, and `a11yDiff` reported `(no changes)` when it became invalid. Chromium's own tree reports both, so the same page read differently in a jsdom test and in a Playwright run:
+
+  ```ts
+  const before = capture(main);
+  document.getElementById("zip")!.setAttribute("aria-invalid", "true");
+  a11yDiff(before, main).text;
+  // before: (no changes)
+  // after:  ~ textbox "Postal code": a11y.states.invalid (unset) → true
+  ```
+
+  **`aria-invalid`** reads as it does in Chromium 153's own tree, except for `grammar` and `spelling`. None of the values is trimmed, so `" false"` is not `"false"`:
+
+  - `false` in any case is `false`.
+  - An empty value or a lowercase `undefined` leaves the state unset.
+  - `grammar` and `spelling` in any case are kept as `"grammar"` and `"spelling"`, on every role, as WAI-ARIA 1.2 defines them. Chromium reads both as `true` on a textbox and drops them on other roles.
+  - Anything else is `true`, including `TRUE`, `yes`, `UNDEFINED` and `" false"`.
+
+  **A field's own validity** decides the state when `aria-invalid` doesn't. An `<input>`, `<select>`, `<textarea>` or `<button>` is `invalid: true` when it fails HTML constraint validation: a `pattern` mismatch, a bad email or URL, a number out of range, or an error set with `setCustomValidity()`. Two cases follow HTML-AAM where Chromium doesn't:
+
+  - **A required field that is only empty** becomes invalid only after the user has interacted with it or tried to submit its form, which is when `:user-invalid` matches. HTML-AAM says it must not start out invalid. jsdom never matches `:user-invalid`, so in jsdom an empty required field never becomes invalid. Chromium never marks an empty text field invalid, and marks an empty required `<select>`, checkbox or radio invalid from the start.
+  - **A disabled or readonly field**, a plain button, or anything else HTML leaves out of validation is never invalid, even with a custom error. Chromium marks those invalid when they have one.
+
+  `aria-invalid="false"` keeps a field that fails validation valid. A valid field gets no `invalid` state at all.
+
+  What this changes for you:
+
+  - **Tree diffs:** `a11yDiff`, `diffTrees` and `flow().expectChanges` now report a field turning invalid or valid as a change to `a11y.states.invalid`, whether `aria-invalid` changed or the value did. A committed diff snapshot that covers one now has an extra line, and needs re-recording.
+  - **Panels:** the tree in `inspector`, `react` and `storybook-addon` shows an `invalid` badge beside an invalid field's name, or `invalid=spelling` for that token, and marks the field changed when its state flips. The live tree also catches a value or custom error that script changed, the next time anything else on the page changes.
+  - **Snapshots:** an a11y snapshot prints roles and names, not states, so it does not change.
+  - **Still different from Chromium's tree:** besides the cases above, Chromium reports `invalid: false` on every valid form control, and reads a form-associated custom element's validity, which page script can't.
+  - **`cli` / `mcp`:** they re-release the bundled engine; their output is unchanged by this release. The tab order from `real-a11y tabs` and `get_tab_order` is the only output they build with the DOM producer, and it prints no states. Everything else they print reads Chromium's own tree, which already reported the state.
+
+- fae6fd6: Make DOM extraction linear on pages that use `aria-owns` at scale. An orphaned `listitem`, `option` or `treeitem` looks for an `aria-owns` owner that supplies its required context (WAI-ARIA 1.2 §5.2.7), and each lookup rescanned every `[aria-owns]` element in the id scope, several times per element, so extraction time grew with the square of the page. Each extraction now builds one id → owner index per id scope and every lookup reads it. Roles, names and the tree are unchanged, so saved snapshots do not churn. The first owner in document order still decides, and an owner in one shadow root still gives no context to an element in another. Affects the DOM producer only: the inspector, React and Storybook panels, `testing`, and the `cli` `tabs` and `mcp` tab-order paths.
+- 1404e08: The DOM producer no longer reports an authored `aria-selected` or `aria-checked` on a role that does not support it. `<button aria-selected="true">` and `<a href aria-checked="true">` used to come out `selected` or `checked`; Chromium exposes neither, so assistive technology never announced them and the native tree (CLI, MCP) already showed none. `selected` is now kept on `option`, `row`, `tab`, `treeitem`, `gridcell`, `columnheader` and `rowheader`, and `checked` on `checkbox`, `radio`, `switch`, `menuitemcheckbox`, `menuitemradio`, `option` and `treeitem`. Panel badges, `findByRole(..., { selected })` and `{ checked }`, and `serializeTreeDiff` state changes can differ on markup that used these attributes on other roles.
+
+  `@real-a11y-dev/cli` and `@real-a11y-dev/mcp` bundle the same engine but read Chromium's own tree, so their output does not change.
+
+- 06f845a: An element styled `visibility: collapse` is now hidden from the DOM-producer tree, as `visibility: hidden` already was. AccName 1.2 lists both as hidden, and Chromium drops them. Before, `<p style="visibility:collapse">x</p>` showed as `paragraph "x"` and a cell in a collapsed table row showed as a `cell`; they no longer appear, and their text no longer feeds a parent's name. Saved snapshots of pages that use `visibility: collapse` will churn.
+
+  `cli` and `mcp` bundle the same engine and read Chromium's own tree, which already hid these elements, so their tree output is unchanged; only the `tabs` walk, which runs in the page, shares the new check.
+
+- 238f323: Give a submit, reset or image input its default name in the DOM producer. HTML-AAM names `<input type="submit">` "Submit" and `<input type="reset">` "Reset" when they have no `value` attribute, ahead of `title`, and an `<input type="image">` with neither `alt` nor `title` "Submit". The DOM producer left all three nameless, so every DOM surface printed `button ""` and the `no-unlabeled-interactive` rule reported errors on forms that assistive technology announces correctly:
+
+  ```html
+  <input type="submit" />
+  <!-- button "Submit" (was "") -->
+  <input type="reset" />
+  <!-- button "Reset" (was "") -->
+  <input type="image" src="data:," />
+  <!-- button "Submit" (was "") -->
+  <input type="submit" title="Go" />
+  <!-- button "Submit" (was "Go") -->
+  ```
+
+  `value=""` is still a stated empty name, and `<input type="button">` has no default. Chromium's own tree (which `cli` and `mcp` read) already gave these names. The strings are fixed English. What this changes for you:
+
+  - **Names:** the DOM producer's name for such an input changes from empty (or from its `title`) to `Submit` or `Reset`. `getByRole("button", { name })` queries written against the old name need updating.
+  - **Snapshots:** a11y snapshots produced by the DOM producer for forms with these inputs churn, so a saved one needs re-recording.
+  - **Audit:** `toHaveNoUnlabeledInteractive` and `no-unlabeled-interactive` no longer fail on these inputs.
+  - **`cli` and `mcp`:** only `tabs` and `get_tab_order` use the DOM producer, so only the names they list change.
+
+- 2b32d6f: Extract a deeply nested page faster with the DOM producer. Each element's `descendantText` preview walked down to the bottom of its own subtree, so a chain of nested elements cost roughly the square of its depth (429 ms at 1,000 levels on one measured machine). A preview is now built from its children's, once per extraction, and the cost grows with the depth. Output is unchanged: the same roles, names, states and previews, so saved snapshots do not churn. `tabs` in the CLI and the injected page bundle that `mcp` uses carry the same change.
+- c3f091d: The DOM producer leaves text under `visibility: hidden` and `visibility: collapse` out of accessible names and descriptions, as AccName 1.2 §2A and Chromium do. A heading `visible <span style="visibility:hidden">hidden</span> more` was `heading "visible hidden more"` and is now `heading "visible more"`; the same goes for labels, wrapping labels, `aria-labelledby` and `aria-describedby` targets. A descendant that sets `visibility: visible` again still counts, and a hidden node that is itself the `aria-labelledby` or `aria-describedby` target keeps its whole subtree. This changes names and descriptions in DOM-produced trees (`inspector`, `react`, `storybook-addon`, `testing` with its default `tree: "dom"`) and in `cli` `tabs` and `mcp` `get_tab_order`, so saved snapshots of such nodes will churn. The native producer is unchanged.
+- d86fc3c: The in-page tree now reads a form control's value into the name around it, as Chromium does (AccName step 2C). `<label><input type="checkbox"> Flash the screen <input value="3"> times</label>` used to name the checkbox "Flash the screen times"; it is now "Flash the screen 3 times", like Chromium's own tree. A heading around a `<select>` reads its chosen option ("Sort by Date"), a button labelled by a text field reads what it holds, and a slider, spinbutton, progress bar or meter lends its value. A control never lends its own `aria-label` or an option nobody chose, and is never named after its own value. This reaches every surface built on the in-page walk: the inspector panel, `@real-a11y-dev/react`, the Storybook addon, `@real-a11y-dev/testing`'s DOM tree and snapshots, the CLI's `tabs` and the MCP server's `get_tab_order`. Snapshots of such markup change. A password, one-time code or payment field that holds anything makes the whole name built from it read `[redacted]` and drops a description built from it; strict mode (`redactInput`) does the same for any value a user entered, while a progress bar's or meter's value, the page's own state, stays. A live panel renames the checkbox or heading as you type.
+- 632cc57: Fix the DOM producer's heading level. `aria-level` on `h1`–`h6` now wins over the tag number (`<h2 aria-level="3">` is level 3, as WAI-ARIA 1.2 §8.4 allows), and `0` or a negative `aria-level` reads as level 1 (Core-AAM §3.6.3). A value that does not parse (`abc`, a blank string) or overflows 32 bits reads as level 1, and a level of 10 or more is ignored, all as in Chromium, so `(level NaN)` can no longer appear. Saved snapshots of pages that set `aria-level` on a heading may churn.
+- 249824e: Read the whole subtree of a hidden `aria-labelledby` or `aria-describedby` target. When the directly referenced node is hidden, AccName 1.2 §2B has user agents include every node in its subtree, hidden descendants too. The DOM producer dropped them, so the name came out short, or fell back to `aria-label` when all of the target's text sat in hidden children:
+
+  ```html
+  <span id="l" style="display:none"
+    >foo <span style="display:none">bar</span></span
+  >
+  <button aria-labelledby="l">x</button>
+  <!-- button "foo bar" (was "foo") -->
+
+  <button aria-labelledby="s" aria-label="foo">
+    <span id="s" style="display:none"
+      ><span style="display:none">label</span></span
+    >x
+  </button>
+  <!-- button "label" (was "foo", from aria-label) -->
+  ```
+
+  A hidden child of a visible target is still dropped, and Chromium's own tree (`cli` and `mcp` read it) already gave these names. What this changes for you:
+
+  - **Names and descriptions:** the DOM producer's name or description for a widget labelled or described by a hidden element changes from the truncated text to the full text. `getByRole("button", { name })` queries and assertions written against the old name need updating.
+  - **Snapshots:** a11y snapshots produced by the DOM producer for such widgets churn, so a saved one needs re-recording.
+  - **`cli` and `mcp`:** only `tabs` and `get_tab_order` use the DOM producer, so only the names they list change.
+
+- 427cf83: **Accessible names keep a non-breaking space (U+00A0).** Both tree producers folded it to an ASCII space, and dropped it at the start or end of a name, because they normalised with JavaScript's `\s` and `trim()`. AccName defines no collapse for text and trims only ASCII whitespace, and Chromium keeps U+00A0 (the WPT `comp_text_node` cases). So `<button>button&nbsp;label</button>` is now `button "button label"` with the U+00A0 intact, from the DOM producer (`inspector`, `react`, `storybook-addon`, `testing`, `cli tabs`, `mcp get_tab_order`) and the native producer (`cli tree`, `mcp`) alike. The DOM producer's descriptions keep it too. Tabs, line breaks and runs of ASCII spaces still fold to one space, and a blank `aria-label` is still skipped.
+
+  Name matching is unchanged: matchers and `findByRole` still fold U+00A0 to a space, so a name typed with a plain space still matches. A saved snapshot or baseline whose name carries a non-breaking space will change once, so regenerate it.
+
+- 1bc65bc: The in-page tree now reads a form control that `aria-labelledby` or `aria-describedby` points at by its own name, as Chromium does. `<button aria-labelledby="c">Toggle</button>` over `<label for="c">Checkbox Label Text</label><input type="checkbox" id="c">` used to be named "Toggle", the button's own text; it is now "Checkbox Label Text", like Chromium's own tree. A referenced field gives its value, else its `aria-label`, its labels, its `title` and its placeholder, and a submit button input its value; any referenced element gives its `title` when nothing else names it. The same rule reaches a field inside a name: an empty field now lends its own name, so `<h2>Save <input placeholder="Draft"> now</h2>` is "Save Draft now", not "Save now". An empty single `<select>`, or an empty `textbox`, `searchbox` or `combobox` that isn't an `<input>` or `<textarea>`, still lends nothing, as in Chromium. This reaches every surface built on the in-page walk: the inspector panel, `@real-a11y-dev/react`, the Storybook addon, `@real-a11y-dev/testing`'s DOM tree and snapshots, the CLI's `tabs` and the MCP server's `get_tab_order`. Snapshots of such markup change. A value still never reaches a name unchecked: a sensitive field that holds anything makes the whole name `[redacted]`, and so does any entered value in strict mode (`redactInput`), including one in the label of a control a reference names. A live panel renames such a button when the control's label, `title` or placeholder changes.
+- 3fe4d64: Name `option`, `optgroup`, `output`, `meter`, `progress` and `aria-placeholder` inputs as HTML-AAM does, in trees the DOM producer builds.
+
+  `<option label="Lab">Text</option>` is now `option "Lab"` and `<optgroup label="EU">` is `group "EU"`. A `<label>` (by `for` or by wrapping) now names an `<output>`, `<meter>` or `<progress>`; an unlabelled one is unchanged. `<input aria-placeholder="Ph">` is `textbox "Ph"`, after `title` and `placeholder`, so it is no longer reported as unlabeled, and `real-a11y tabs` / `get_tab_order` list it by that name. Native (CDP) trees already carried these names and are unchanged. Saved DOM-producer snapshots that contain these elements will churn.
+
+- 5ce2ed8: The outline a selected or hovered row draws on the page shows over an open popover or a modal `<dialog>`. It had the highest z-index there is, which nothing paints over except what is in the browser's top layer, so an element inside a menu shown as a popover was outlined under the menu, out of sight. The outline is now in the top layer itself, where the browser has one, and goes back on top of whatever the page shows there on each draw; it closes none of the page's popovers, brings no backdrop with it, and a page's `[popover]` rules no longer reach it. Its 2px border now sits inside the element's own rect on every page, where a page without a `box-sizing: border-box` rule drew it 4px wider and taller. The DOM observer behind the live trees, and behind `testing`'s `waitForMutations`, doesn't count the outline's own showing as a change to the page; for `testing`, which draws no outline, nothing else changes.
+- 6b0a711: Report which option of a native `<select>` is selected. The DOM producer gave `<option>` no `selected` state, so panels drew no selected badge, `findByRole(tree, "option", { selected: true })` matched no native option and diffs couldn't show a selection moving. Each option of a drop-down or `<select multiple>` now carries `selected: true` or `selected: false` from its selectedness, as HTML-AAM maps it and as Chromium's own tree reports it; an authored `aria-selected` still wins, as in Chromium. A select whose value is withheld (for example `autocomplete="cc-exp-month"`) shows no `selected` on its options. Live trees refresh the state when a script sets `option.selected`. Saved DOM-producer snapshots that include a `<select>` will churn: each option gains a `selected` state.
+- 0d5f6da: The Storybook panel marks what changed in the story's tree, as the inspector's and `<SemanticNavigator />`'s do, so opening a menu in a story shows the button that went expanded and the menu that came.
+
+  - Each update of the tree is compared with the one before: new and changed rows flash and keep a coloured edge, tags and underlines say what changed, a bar under the tree counts it and lists the rows removed, and Alt+N goes from change to change.
+  - What a click or a key of yours on the story, or an action run from the tree, brought in the five seconds after it is said to a screen reader ("4 new, 1 changed in the tree"). Typing in a field isn't read out at every key, and what the story changes on its own is marked without being said.
+  - A menu or toast the story mounts outside its root is marked new on its own; the rest of the preview page the panel then reads isn't.
+  - A new story, the other mode, a reloaded canvas, and the panel shown again after another addon tab start over, and a story's first render is never marked as a change.
+  - `parameters: { realA11y: { markChanges: false } }` turns the marks off, for every story in `.storybook/preview.ts` or for one.
+  - The channel carries what the marks need: `EVENTS.USER_INPUT` (what the user did on the story, while the panel is open), and `storyRows` and `storyRendered` on the `TREE_UPDATED` payload.
+
+  `inspector` and `react` re-release the shared panel code this moves (what counts as the user acting on the page, and which rows are the page's), which their marks run; their output is unchanged by this release.
+
+- 0bdaf44: Re-bundles the updated extractor, which gained a strict mode (`redactInput`) that the CLI, the MCP server and `@real-a11y-dev/testing` use to keep field values and rich-text editor content out of what they print. The panel never turns it on, so nothing it shows changes.
+- 3328d6c: Report an SVG `<a>` that carries only `xlink:href` as a `link`. SVG-AAM maps an `a` with a valid `href` or `xlink:href` to `link`, and Chromium does. The DOM producer checked only `href`, so such an element was `generic`, though its own focus logic already counted it as a tab stop:
+
+  ```html
+  <svg>
+    <a xlink:href="/"><text>y</text></a>
+  </svg>
+  <!-- before: generic "y"   after: link "y" -->
+  ```
+
+  An `<a>` with neither attribute is still `generic`, and an HTML `<a href>` is unchanged. What this changes for you:
+
+  - **Queries:** `findByRole("link")` now matches such an element in a DOM-produced tree, and the element offers `click` and `navigate`.
+  - **Tab order:** `cli tabs` and the MCP tab-order tool, which use the DOM producer, list the stop as `link "y"` instead of `generic "y"`.
+  - **Snapshots:** an a11y snapshot produced by the DOM producer for a page with such a link changes from `generic` to `link`, so a saved one needs re-recording. `cli` and `mcp` read Chromium's tree for everything else and already showed `link`.
+
+- 3a4c7c8: Out-of-range and `display: contents` tab stops no longer appear in the DOM producer's tab sequence.
+
+  A `tabindex` outside the signed 32-bit range (for example `tabindex="2147483648"`) is now ignored as if absent, and an element with `display: contents` is no longer reported focusable, matching the Tab order Chromium produces. This changes the output of `real-a11y tabs`, the MCP `get_tab_order` tool, `toHaveTabSequence` / `tabSequenceSnapshot`, and the TAB view. Saved tab-sequence snapshots of markup using either pattern will churn.
+
+- 7a137ee: Keep a table's `caption` node in the DOM producer's tree when its text is also the table's name. HTML-AAM maps `<caption>` to a `caption` node of its own, and Chromium (so the native producer) keeps it; the DOM producer used to drop it, so `<table><caption>Sales</caption>…` printed `table "Sales"` with no `caption` child. It now prints `table "Sales"` followed by `caption "Sales"`, and a non-interactive child of the caption, such as a heading, stays in the tree. A caption under a `role="none"` or `role="presentation"` table is still not exposed, per WAI-ARIA 1.2. The table's own name is unchanged. Saved DOM-producer snapshots of captioned tables will churn by one `caption` line. `cli` and `mcp` read Chromium's tree, so their output does not change; they release only because they bundle the same engine.
+- 43b29e6: Stop reporting an authored `role="region"` or `role="form"` with no accessible name as a landmark. The DOM producer kept the role on any element, so `region ""` and `form ""` appeared in trees where assistive technology exposes nothing; Core-AAM says an unnamed region or form is not exposed as a landmark and the element keeps its host-language role. The producer now skips the unnamed token and tries the next one, as Chromium's own tree does:
+
+  ```html
+  <div role="region">x</div>
+  <!-- generic -->
+  <div role="region group">x</div>
+  <!-- group -->
+  <div role="form navigation">x</div>
+  <!-- navigation -->
+  <nav role="form">x</nav>
+  <!-- navigation -->
+  <div role="form" aria-label="Search">x</div>
+  <!-- form "Search" -->
+  ```
+
+  A name from `aria-label`, a resolving `aria-labelledby` or `title` keeps the landmark. What this changes for you:
+
+  - **Queries:** `findByRole("region")` and `findByRole("form")` no longer match an unnamed element.
+  - **Panels:** the Landmarks filter in `inspector`, `react` and `storybook-addon` no longer lists it.
+  - **Snapshots:** an a11y snapshot or diff produced by the DOM producer changes for such an element (a `region` or `form` line becomes `generic`, `group` or `navigation`), so a saved one needs re-recording. `cli` and `mcp` ship the engine too, but they read Chromium's tree and already behaved this way: only their `tabs` output uses the DOM producer, and it does not list landmarks.
+  - **Required context:** an unnamed `role="region group"` parent now counts as the `group` it is, so a `role="listitem"` child inside it keeps its role.
+
+- Updated dependencies [3400a78]
+- Updated dependencies [fae6fd6]
+- Updated dependencies [1404e08]
+- Updated dependencies [06f845a]
+- Updated dependencies [238f323]
+- Updated dependencies [2b32d6f]
+- Updated dependencies [c3f091d]
+- Updated dependencies [d86fc3c]
+- Updated dependencies [632cc57]
+- Updated dependencies [249824e]
+- Updated dependencies [427cf83]
+- Updated dependencies [1bc65bc]
+- Updated dependencies [3fe4d64]
+- Updated dependencies [5ce2ed8]
+- Updated dependencies [584bfe7]
+- Updated dependencies [6b0a711]
+- Updated dependencies [0d5f6da]
+- Updated dependencies [0bdaf44]
+- Updated dependencies [3328d6c]
+- Updated dependencies [3a4c7c8]
+- Updated dependencies [7a137ee]
+- Updated dependencies [43b29e6]
+  - @real-a11y-dev/inspector@0.1.0-beta.23
+
 ## 0.1.0-beta.22
 
 ### Patch Changes

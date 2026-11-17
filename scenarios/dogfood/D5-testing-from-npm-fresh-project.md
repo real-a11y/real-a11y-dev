@@ -63,7 +63,7 @@ the monorepo; if a step is missing from the docs, that is the finding.
 - **3** — the accessible page passes every assertion, logo link and icon button included,
   and a subtree assertion reports only what is inside the subtree. On testing
   0.1.0-beta.19 both fail: an `<img alt>` never names its link there, fixed in testing
-  0.1.0-beta.20. Through 0.1.0-beta.22 a status region or modal elsewhere silently widens
+  0.1.0-beta.20. Through 0.1.0-beta.23 a status region or modal elsewhere silently widens
   the root, the known defect the beta.19 dogfood filed, not a new one
 - Snapshots are stable across runs
 - Every deliberate failure produces a message that names the offending element — someone

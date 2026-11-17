@@ -17,7 +17,7 @@
   also touches dogfood code.
 -->
 
-## Unreleased
+## 0.1.20
 
 ### Patch Changes
 
@@ -36,9 +36,9 @@
 - **The side panel tree no longer shows an extra `MenuListPopup` row under a
   drop-down `<select>`.** Chrome's internal popup node, which is not an ARIA
   role, sat between the combobox and its options; the options now sit directly
-  under the combobox, as the DOM producer prints them. The option picker still opens for
-  a real `<select>` and for no custom `role="combobox"`.
-  ([#662](https://github.com/real-a11y/real-a11y-dev/pull/662))
+  under the combobox, as the DOM producer prints them. The option picker still
+  opens for a real `<select>`, and a custom `role="combobox"` still gets a plain
+  click ([#662](https://github.com/real-a11y/real-a11y-dev/pull/662)).
 
 - **The side panel no longer shows a `level` badge on every list item.**
   Chrome computes a list item's nesting depth as a `level`, which the panel
@@ -57,16 +57,19 @@
   link around the checkbox. A label that holds no value, and an `aria-label`
   on the control, still name it
   ([#653](https://github.com/real-a11y/real-a11y-dev/pull/653)).
+
 - **The TAB view lists an SVG link that uses `xlink:href` as a link.** The
   extension re-bundles the updated extractor: an SVG `<a xlink:href="/">` is
   `link "y"` in the tab sequence, as in Chrome's tree, not `generic "y"`
   ([#657](https://github.com/real-a11y/real-a11y-dev/pull/657)).
+
 - **The TAB view no longer lists a stop Chrome never focuses.** The extension
   re-bundles the updated extractor: an element whose `tabindex` is outside the
   signed 32-bit range (`tabindex="2147483648"`) is ignored as if it had none,
   and an element with `display: contents` is not a stop, though its focusable
   children still are
   ([#652](https://github.com/real-a11y/real-a11y-dev/pull/652)).
+
 - **The TAB view names a stop labelled by a form control the way Chrome
   does.** The extension re-bundles the updated extractor, which reads a
   control that `aria-labelledby` points at by its own name: a button labelled
@@ -76,6 +79,7 @@
   field's value still never does: such a name reads `[redacted]`. The side
   panel's tree is Chrome's own and already showed these names
   ([#651](https://github.com/real-a11y/real-a11y-dev/pull/651)).
+
 - **The TAB view names a stop the way Chrome does when a form control sits
   in its label.** The extension re-bundles the updated extractor, which reads
   a control's value into the name around it: a checkbox labelled
@@ -84,6 +88,7 @@
   A password, one-time code or payment field's value never does: such a name
   reads `[redacted]`. The side panel's tree is Chrome's own and already showed
   these names ([#645](https://github.com/real-a11y/real-a11y-dev/pull/645)).
+
 - **The side panel no longer shows a sensitive field's value in that field's
   own name.** Chrome reads a field listed in its own `aria-labelledby` by
   value, so a self-labelled card field showed as `textbox "Card 4111…"` and a
@@ -91,38 +96,45 @@
   and a description that reaches the field's own value is dropped, as for any
   other name built from a sensitive field. A `<label>` around the field still
   names it ([#643](https://github.com/real-a11y/real-a11y-dev/pull/643)).
+
 - **The TAB view's engine drops `aria-selected` and `aria-checked` on roles
   that do not support them.** The extension re-bundles the updated extractor:
   an authored `aria-selected` on a `button`, or `aria-checked` on a `link`, no
   longer reads as a state in the content script's DOM walk, as Chromium does
   not expose one ([#646](https://github.com/real-a11y/real-a11y-dev/pull/646)).
   The A11Y tree is Chromium's own and is unchanged.
+
 - **The TAB view's engine treats `visibility: collapse` as hidden.** The
   extension re-bundles the updated extractor, so an element styled
   `visibility: collapse` no longer counts as exposed when the content script
   walks tab stops and frame skeletons, as `visibility: hidden` already did
   ([#644](https://github.com/real-a11y/real-a11y-dev/pull/644)). The A11Y tree
   is Chromium's own and is unchanged.
+
 - **The TAB view's engine reads a heading's `aria-level` correctly.** The
   extension re-bundles the updated extractor: `aria-level` on `h1`-`h6` now
   wins over the tag number, and `0`, negative or non-numeric values no longer
   produce a level of `0`, `-1` or `NaN`
   ([#642](https://github.com/real-a11y/real-a11y-dev/pull/642)). The A11Y tree
   is Chromium's own and is unchanged.
+
 - **The TAB view's engine keeps a table's `caption` node.** The extension
   re-bundles the updated extractor, which no longer drops a `caption` whose
   text is also the table's name. The side panel's tree is Chrome's own and
   already showed it, and the TAB view lists tab stops only, so nothing on
   screen changes. ([#640](https://github.com/real-a11y/real-a11y-dev/pull/640))
+
 - **Names keep a non-breaking space.** The extension re-bundles the updated
   extractor and native normalizer, so a name that carries a
   U+00A0 now shows it as Chromium reports it, instead of an ASCII space (and
   no longer drops one at either end). Tabs, line breaks and runs of ASCII
   spaces still fold to one space. ([#639](https://github.com/real-a11y/real-a11y-dev/pull/639))
+
 - **The TAB view re-bundles the updated extractor**, which gained a strict mode
   for the CLI, the MCP server and `@real-a11y-dev/testing`. The extension never
   turns it on, so nothing the side panel shows changes
   ([#638](https://github.com/real-a11y/real-a11y-dev/pull/638)).
+
 - **The TAB view's engine no longer slows down on pages that use `aria-owns`
   at scale.** The extension re-bundles the updated extractor, which now looks
   up an `aria-owns` owner in one index per extraction instead of rescanning the
@@ -142,20 +154,24 @@
   as WAI-ARIA 1.2 says a button's descendants are presentational. An `<img>` the
   page puts in a button is still listed.
   ([#632](https://github.com/real-a11y/real-a11y-dev/pull/632))
+
 - **The TAB view no longer treats an unnamed `role="region"` or `role="form"` as
   a landmark.** The extension re-bundles the updated role resolution: such an
   element takes its next role token or its own role, as Chrome's tree does.
   ([#630](https://github.com/real-a11y/real-a11y-dev/pull/630))
+
 - **The TAB view names an `aria-placeholder` input.** An `<input aria-placeholder="Email">`
   with no label, `title` or `placeholder` was listed as a `textbox` with no name;
   it now reads "Email", the name HTML-AAM gives and Chrome's tree shows.
   ([#629](https://github.com/real-a11y/real-a11y-dev/pull/629))
+
 - **The TAB view names a submit, reset or image input.** A `<input type="submit">`
   or `type="reset"` with no `value` was listed as `button` with no name, and an
   image input with no `alt` or `title` the same; they now read "Submit",
   "Reset" and "Submit", the names HTML-AAM gives and Chrome's tree shows. A
   submit input's `title` no longer names it.
   ([#627](https://github.com/real-a11y/real-a11y-dev/pull/627))
+
 - **A selected row's outline shows over an open menu or dialog.** Selecting
   or hovering a row whose element sits in something the page shows in the
   browser's top layer, a menu shown as a popover (a site's _For Business_
@@ -164,27 +180,33 @@
   whatever the page shows there; it closes none of the page's menus, and
   Chrome's tree doesn't list it. Its border sits inside the element's edges
   on every page. ([#628](https://github.com/real-a11y/real-a11y-dev/pull/628))
+
 - **The TAB view leaves `visibility: hidden` text out of names.** A control or
   heading named from content that includes `visibility: hidden` or `collapse`
   text no longer reads it, as in AccName 1.2 §2A and Chrome's tree; a descendant
   that sets `visibility: visible` again still counts.
   ([#616](https://github.com/real-a11y/real-a11y-dev/pull/616))
+
 - **A menu or listbox that hides the rest of the page is marked new, not the
   page removed.** Radix's dropdown menu and select take the rest of the page
   out of Chrome's tree, as a modal dialog does, and the marks now treat them
   as they treat one: the menu new and nothing removed, then, once it closes,
   what it changed on the page. ([#617](https://github.com/real-a11y/real-a11y-dev/pull/617))
+
 - **A dialog that closes by itself takes its marks with it.** An automatic read
   that finds nothing else changed left the closed dialog's rows marked; it now
   clears them. ([#617](https://github.com/real-a11y/real-a11y-dev/pull/617))
+
 - **Focus stays in the panel when the changes bar goes.** A read that finds
   nothing changed takes the bar away; with focus on one of its buttons, focus
   now moves to the tree rather than to nowhere.
   ([#617](https://github.com/real-a11y/real-a11y-dev/pull/617))
+
 - The changes bar's tooltip reads "Rows new, changed or removed since the read
   before". The code that picks which tree a read is compared with is now the
   same as the inspector's and the React panel's, which mark what changed too.
   ([#617](https://github.com/real-a11y/real-a11y-dev/pull/617))
+
 - **The TAB view reads the whole subtree of a hidden `aria-labelledby` target.**
   A control labelled by a hidden element was named from its visible-looking text
   only (`"foo"` for `foo <span hidden>bar</span>`); it now reads "foo bar", as
