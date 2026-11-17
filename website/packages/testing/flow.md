@@ -155,7 +155,7 @@ test("opening the country picker", () => {
 });
 ```
 
-`a11yDiff` returns a boxed value that renders through the **same snapshot serializer** as `boxedTreeSnapshot` — register it once (`registerA11yMatchers` from [`/matchers`](/packages/testing/matchers)) and `toMatchSnapshot()` / `toMatchInlineSnapshot()` print the change list verbatim. `before` must be a pre-captured tree (extracting it at assert time would diff the tree against itself); `after` can be a live `Element`, captured for you. A `focus:` line appears only when both sides carry focus context (both `capture()`d).
+`a11yDiff` returns a boxed value that renders through the **same snapshot serializer** as `boxedTreeSnapshot` — register it once (`registerA11yMatchers` from [`/matchers`](/packages/testing/matchers)) and `toMatchSnapshot()` / `toMatchInlineSnapshot()` print the change list verbatim. Without it, the snapshot holds the same change list as a quoted string. `before` must be a pre-captured tree (extracting it at assert time would diff the tree against itself); `after` can be a live `Element`, captured for you. A `focus:` line appears only when both sides carry focus context (both `capture()`d).
 
 The `~ listbox "Countries": childIds …` line says which container the two options joined. To leave such a line out when the `+`/`-` lines already explain it, pass `childIds: false`:
 

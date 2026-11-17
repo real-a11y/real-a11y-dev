@@ -269,14 +269,14 @@ expect(
 
 See [`redact`](/packages/testing/snapshots#using-redact) for the full pattern reference and the `g`-flag gotcha.
 
-`registerA11yMatchers` registers the serializer for you. To register it on its own (e.g. via a framework's `snapshotSerializers` config), it's exported as `a11ySnapshotSerializer`.
+`registerA11yMatchers` registers the serializer for you. To register it on its own (e.g. via a framework's `snapshotSerializers` config), it's exported as `a11ySnapshotSerializer`. Without it, a box still snapshots as its text, but as a quoted string, the way a `treeSnapshot` string does, rather than plain.
 
 ### `boxedTreeSnapshot` vs `treeSnapshot`
 
 Both render the **same tree** — under the hood they call the same serializer with the same options (`mode`, `redact`, `includeGeneric`, `values`). The only difference is what they hand back, and therefore how the framework treats it:
 
 - [`treeSnapshot()`](/packages/testing/snapshots#treesnapshot-root-options) returns a **plain string**. The value your test holds *is* the tree, so you can assert on it directly — `expect(s).toContain('button "Save"')`, `expect(s1).toBe(s2)` — log it, or write it to a file. It needs no setup.
-- `boxedTreeSnapshot()` returns an **opaque boxed value** that the registered serializer renders at snapshot time. It does nothing on its own, but it keeps `toMatchSnapshot()` / `toMatchInlineSnapshot()` fully native — and crucially, **inline snapshots stay readable**: the tree is rendered as-is instead of escaped into a quoted string literal.
+- `boxedTreeSnapshot()` returns an **opaque boxed value** that the registered serializer renders at snapshot time. Without the serializer it snapshots as the same quoted string `treeSnapshot` gives. With it, it keeps `toMatchSnapshot()` / `toMatchInlineSnapshot()` fully native — and crucially, **inline snapshots stay readable**: the tree is rendered as-is instead of escaped into a quoted string literal.
 
 | Reach for `treeSnapshot` when… | Reach for `boxedTreeSnapshot` when… |
 |---|---|
