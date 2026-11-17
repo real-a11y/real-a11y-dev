@@ -76,14 +76,14 @@ export class SnapshotReport {
    * behind. Call it before the runner starts its workers: they read the
    * variable as they start. Returns whether recording is on: a records
    * folder the report didn't mark is left alone, and nothing records.
+   * `writeAndSay()` says why, once, where the run ends.
    */
   start({ clear = true }: { clear?: boolean } = {}): boolean {
     const marker = join(this.recordsDir, RECORDS_MARKER);
     if (existsSync(this.recordsDir) && !existsSync(marker)) {
       this.off =
         `${this.recordsDir} holds files the snapshot report didn't write, ` +
-        "so it records nothing: set its outputDir to a folder of its own";
-      console.warn(` a11y snapshots  ${this.off}`);
+        "so it recorded nothing: set its outputDir to a folder of its own";
       return false;
     }
     if (clear) remove(this.recordsDir);
@@ -92,7 +92,6 @@ export class SnapshotReport {
       writeFileSync(marker, "");
     } catch (error) {
       this.off = `couldn't make ${this.recordsDir}: ${(error as Error).message}`;
-      console.warn(` a11y snapshots  ${this.off}`);
       return false;
     }
     process.env[TREES_DIR_ENV] = this.recordsDir;
@@ -128,6 +127,7 @@ export class SnapshotReport {
 
   /** `write()`, said in one line, or why it couldn't be. Never throws. */
   writeAndSay(): string {
+    if (this.off) return ` a11y snapshots  off: ${this.off}`;
     try {
       const { url, count } = this.write();
       return ` a11y snapshots  ${count} recorded → ${url}`;
