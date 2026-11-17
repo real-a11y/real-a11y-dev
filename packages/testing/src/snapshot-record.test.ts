@@ -410,6 +410,36 @@ describe("a retried test", () => {
   });
 });
 
+describe("two tests that share a name", () => {
+  const shared = mkdtempSync(join(tmpdir(), "a11y-same-name-"));
+  afterAll(() => rmSync(shared, { recursive: true, force: true }));
+  let tries = 0;
+
+  it("renders", () => {
+    process.env[TREES_DIR_ENV] = shared;
+    a11ySnapshotSerializer.serialize(
+      boxedTreeSnapshot(mount(`<button>First</button>`)),
+    );
+  });
+
+  it("renders", { retry: 1 }, () => {
+    process.env[TREES_DIR_ENV] = shared;
+    tries++;
+    a11ySnapshotSerializer.serialize(
+      boxedTreeSnapshot(mount(`<button>Second, try ${tries}</button>`)),
+    );
+    if (tries === 1) throw new Error("the first try fails");
+
+    // The retry replaced only its own failed try, not the other test's.
+    const kept = records(shared);
+    expect(kept.map((r) => [r.index, r.text.includes("First")])).toEqual([
+      [1, true],
+      [2, false],
+    ]);
+    expect(kept[1]!.text).toContain("Second, try 2");
+  });
+});
+
 describe.concurrent("concurrent tests", () => {
   it("record nothing: the runner can't place their snapshots", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});

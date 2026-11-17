@@ -46,12 +46,16 @@ export function snapshotDiffRules(
           childrenText(after.tree, now.childIds),
         );
       }
-      noteFieldChange(
-        changes,
-        "states.focused",
-        was.id === before.focus || undefined,
-        now.id === after.focus || undefined,
-      );
+      // As the text's `focus:` line: only when both sides say where focus
+      // was. A bare tree on one side says nothing, which isn't a move.
+      if (before.focus !== undefined && after.focus !== undefined) {
+        noteFieldChange(
+          changes,
+          "states.focused",
+          was.id === before.focus || undefined,
+          now.id === after.focus || undefined,
+        );
+      }
       return changes;
     },
   };

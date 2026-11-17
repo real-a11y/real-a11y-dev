@@ -69,6 +69,7 @@ interface ExpectLike {
 /** What Vitest's worker state says of the test running, where it has one. */
 interface VitestWorkerLike {
   current?: {
+    id?: string;
     concurrent?: boolean;
     result?: { retryCount?: number; repeatCount?: number };
   };
@@ -100,15 +101,19 @@ interface Running {
   test: string;
   testPath: string;
   project: string | undefined;
+  /** The runner's id for this one test, where it says: two tests that share
+   *  a name are two tasks. */
+  taskId: string | undefined;
   concurrent: boolean;
   /** Which try of the test this is: a retry or a repeat starts its own. */
   attempt: string;
 }
 
-/** What a test has written in its current try. */
-interface Taken {
+/** What one test has written in its current try. */
+interface Try {
   attempt: string;
-  count: number;
+  /** The index its first snapshot took: a new try numbers from there. */
+  first: number;
   written: string[];
 }
 
@@ -122,11 +127,14 @@ let sequence = 0;
 const said = new Set<string>();
 // A box pretty-format prints twice (a failure message, say) records once.
 const recorded = new WeakSet<object>();
-// Per test file and name, what it has written. Kept for as long as this
-// module lives, which a runner gives each test file anew (and each rerun of
-// it), so two tests that share a full name number on rather than write over
-// each other.
-const taken = new Map<string, Taken>();
+// Per test file and name, how many boxed snapshots it has taken. Counted for
+// as long as this module lives, which a runner gives each test file anew (and
+// each rerun of it), so two tests that share a full name number on rather
+// than write over each other.
+const taken = new Map<string, number>();
+// Per test (the runner's task, or the file and name where it names none),
+// its current try: what a retry deletes, and only of that test.
+const tries = new Map<string, Try>();
 
 /**
  * Where the recorder reads which test is running. `registerA11yMatchers` binds
@@ -194,18 +202,19 @@ function write(
     .relative(proc.cwd(), running.testPath)
     .split(path.sep)
     .join("/");
-  const slot = takeSlot(fs, `${file}\0${running.test}`, running.attempt);
+  const group = `${file}\0${running.test}`;
+  const slot = takeSlot(fs, group, running.taskId ?? group, running.attempt);
   const record = toRecord(behind, {
     ...(running.project ? { project: running.project } : {}),
     file,
     test: running.test,
-    index: slot.count,
+    index: slot.index,
     text,
   });
   const target = path.join(
     path.resolve(proc.cwd(), dir),
     recordFolder(file, running.project),
-    `${slug(running.test)}-${hash(running.test)}-${slot.count}.json`,
+    `${slug(running.test)}-${hash(running.test)}-${slot.index}.json`,
   );
   fs.mkdirSync(path.dirname(target), { recursive: true });
   fs.writeFileSync(target, redactedJson(record, globalPatterns(behind.redact)));
@@ -254,31 +263,45 @@ function runningTest(): Running | null {
 /** What Vitest's worker state adds; nothing, under another runner. */
 function vitestTask(
   worker: VitestWorkerLike | undefined,
-): Pick<Running, "project" | "concurrent" | "attempt"> {
+): Pick<Running, "project" | "taskId" | "concurrent" | "attempt"> {
   const task = worker?.current;
   const retry = task?.result?.retryCount ?? 0;
   const repeat = task?.result?.repeatCount ?? 0;
   return {
     project: worker?.ctx?.projectName || undefined,
+    taskId: task?.id,
     concurrent: task?.concurrent === true,
     attempt: `${retry}/${repeat}`,
   };
 }
 
 /**
- * The test's next snapshot. A new try starts again from 1, as the runner's
- * own snapshot count does, and the records the last try wrote go: a retried
- * test shows the try that counted.
+ * The next snapshot of the test `task`, numbered in its name's `group`. A
+ * new try deletes only the records this test's last try wrote, and numbers
+ * again from where that try started, as the runner's own snapshot count
+ * does: a retried test shows the try that counted, and another test that
+ * shares its name keeps its own. Tests run one at a time here (concurrent
+ * ones aren't recorded), so nothing else took a number in between.
  */
-function takeSlot(fs: FsLike, key: string, attempt: string): Taken {
-  let slot = taken.get(key);
-  if (!slot || slot.attempt !== attempt) {
-    for (const path of slot?.written ?? []) fs.rmSync(path, { force: true });
-    slot = { attempt, count: 0, written: [] };
-    taken.set(key, slot);
+function takeSlot(
+  fs: FsLike,
+  group: string,
+  task: string,
+  attempt: string,
+): { index: number; written: string[] } {
+  let mine = tries.get(task);
+  if (mine && mine.attempt !== attempt) {
+    for (const path of mine.written) fs.rmSync(path, { force: true });
+    taken.set(group, mine.first - 1);
+    mine = undefined;
   }
-  slot.count++;
-  return slot;
+  const index = (taken.get(group) ?? 0) + 1;
+  taken.set(group, index);
+  if (!mine) {
+    mine = { attempt, first: index, written: [] };
+    tries.set(task, mine);
+  }
+  return { index, written: mine.written };
 }
 
 function toRecord(
