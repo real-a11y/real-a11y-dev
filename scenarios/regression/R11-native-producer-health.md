@@ -6,7 +6,7 @@ area: MCP
 type: Automated
 priority: P1
 status: Active
-validFrom: "browser ≥ 0.1.0-beta.12 · cli ≥ 0.1.0-beta.2 (locators + focusedId). The native producer itself: browser ≥ 0.1.0-beta.11. Steps 6 / 6b as written (field values shown, sensitive ones redacted, --redact-input): cli ≥ 0.1.0-beta.7. Step 6c (a field with no node of its own): cli ≥ 0.1.0-beta.9. Step 6b's `tabs` check: cli ≥ 0.1.0-beta.13. Step 6d (a field in its own aria-labelledby): cli ≥ 0.1.0-beta.13. Step 9 (iframe content): cli ≥ 0.1.0-beta.14. Step 9b (a frame in another process): cli ≥ 0.1.0-beta.15"
+validFrom: "browser ≥ 0.1.0-beta.12 · cli ≥ 0.1.0-beta.2 (locators + focusedId). The native producer itself: browser ≥ 0.1.0-beta.11. Steps 6 / 6b as written (field values shown, sensitive ones redacted, --redact-input): cli ≥ 0.1.0-beta.7. Step 6c (a field with no node of its own): cli ≥ 0.1.0-beta.9. Step 6b's `tabs` check: cli ≥ 0.1.0-beta.13. Step 6d (a field in its own aria-labelledby): cli ≥ 0.1.0-beta.13. Steps 9 / 9b (iframe content, a frame in another process included): cli ≥ 0.1.0-beta.14"
 validUntil: ""
 expected: "native tree returns a document tree reaching UA-shadow media controls the in-page walk misses; every native FINDING carries a CSS locator identical to the DOM producer's for the same element (a shadow-root element stops its path at the boundary rather than faking a selector); the tree sets focusedId so [focused] renders; a field shows what it holds the way a screen reader announces it, while a sensitive field (password, one-time code, payment) only ever reads [redacted]; --redact-input withholds every value and all rich-text editor content."
 covers:
@@ -144,7 +144,7 @@ is native now — so these are plain invocations. An earlier version of this row
   own, and reads the same: its card field `[redacted]`, and `button "Pay now"`
   under its row. `click` names the frame's button and refuses: it is
   inside a frame Chromium runs in another process, which can't be acted on yet.
-  cli 0.1.0-beta.14 printed that frame's row with nothing under it, which is the
+  cli 0.1.0-beta.13 printed that frame's row with nothing under it, which is the
   old behaviour, not a fail.
 
 ## Why this exists

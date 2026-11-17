@@ -144,10 +144,10 @@ async function readRemoteFrames(
   const skipped = new Set<Frame>();
   const sessions: CDPSession[] = [];
   const out: NativeFramePayload[] = [];
-  const candidates = page
-    .frames()
-    .filter((f) => f !== main && depthOf(f) <= NATIVE_MAX_FRAME_DEPTH)
-    .sort((a, b) => depthOf(a) - depthOf(b));
+  const depths = new Map(page.frames().map((f) => [f, depthOf(f)]));
+  const candidates = [...depths.keys()]
+    .filter((f) => f !== main && depths.get(f)! <= NATIVE_MAX_FRAME_DEPTH)
+    .sort((a, b) => depths.get(a)! - depths.get(b)!);
   try {
     for (const frame of candidates) {
       if (budget.left <= 0) break;
@@ -182,7 +182,7 @@ async function readRemoteFrames(
         session,
         parent,
         state,
-        depthOf(frame),
+        depths.get(frame)!,
       ).catch(() => null);
       if (!read) {
         skipped.add(frame);
