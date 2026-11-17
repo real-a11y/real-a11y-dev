@@ -61,9 +61,10 @@ function sideOf(input: A11yCapture | ExtractionResult | Element): Side {
  * appears only when BOTH sides carry focus context (both `capture()`d, or an
  * `after` Element); a plain `ExtractionResult` on either side omits it.
  *
- * Requires the a11y snapshot serializer to be registered (via
- * `registerA11yMatchers` from `@real-a11y-dev/testing/matchers`, as for
- * `boxedTreeSnapshot`).
+ * With the a11y snapshot serializer registered (`registerA11yMatchers` from
+ * `@real-a11y-dev/testing/matchers`, as for `boxedTreeSnapshot`), a snapshot
+ * prints the change list as plain text. Without it, the snapshot holds the
+ * same text as a quoted string.
  */
 export function a11yDiff(
   before: A11yCapture | ExtractionResult,
