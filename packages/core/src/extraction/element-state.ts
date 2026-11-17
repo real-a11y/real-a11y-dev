@@ -177,3 +177,15 @@ export function isPickerOpen(select: Element): boolean {
     return false;
   }
 }
+
+/**
+ * Roles on which Chromium exposes a native checkbox's or radio's checkedness
+ * as `checked`. Its own role is one of them.
+ */
+export const CHECKEDNESS_ROLES = new Set([
+  "checkbox",
+  "radio",
+  "switch",
+  "menuitemcheckbox",
+  "menuitemradio",
+]);

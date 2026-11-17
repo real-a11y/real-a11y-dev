@@ -20,6 +20,7 @@ import {
   textRunHost,
   type RedactInputOption,
 } from "../extraction/dom-extractor.js";
+import type { DescendantTextMemo } from "../extraction/field-text.js";
 import {
   deepQuerySelectorAll,
   flatParent,
@@ -739,10 +740,12 @@ export class LiveTreeExtractor {
    */
   private updateAncestorDescendantText(dirtyRoot: Element): void {
     let el: Element | null = safeParentElement(dirtyRoot);
+    // One read of the DOM for the whole climb: each ancestor reuses its child's.
+    const memo: DescendantTextMemo = new WeakMap();
     while (el) {
       const id = getNodeId(el);
       const node = this.domNodes.get(id);
-      const text = node?.dom && getDescendantText(el);
+      const text = node?.dom && getDescendantText(el, memo);
       if (node?.dom && text !== node.dom.descendantText) {
         // A new node rather than a write to this one: see `detachFromParent`.
         this.domNodes.set(id, {

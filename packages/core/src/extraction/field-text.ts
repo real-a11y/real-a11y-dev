@@ -41,6 +41,12 @@ type CollapsedTextState = {
   text: string;
   /** Whitespace-collapse phase for the next character. */
   phase: "start" | "text" | "space";
+  /**
+   * Whitespace was met while `phase` was still "start" and so left out of
+   * `text`. Only a memoized subtree reads it: that whitespace still separates
+   * the subtree from what precedes it.
+   */
+  lead?: boolean;
 };
 
 /**
@@ -55,6 +61,7 @@ function appendCollapsedTextChunk(
   for (let i = 0; i < raw.length; i++) {
     const ch = raw[i]!;
     if (/\s/.test(ch)) {
+      if (state.phase === "start") state.lead = true;
       if (state.phase === "text") {
         // At cap, trailing whitespace is discarded by the final trim — keep
         // scanning without treating it as "more content".
@@ -105,6 +112,76 @@ function collectDescendantTextBounded(
 }
 
 /**
+ * What a subtree contributes to a collapsed preview, read once per extraction.
+ * A node's preview is built from its children's, so a chain of nested elements
+ * costs one step per level instead of a walk to the bottom for each of them.
+ */
+type SubtreeText = {
+  /** The subtree's text opens with whitespace that `text` leaves out. */
+  readonly lead: boolean;
+  /** Collapsed text from a fresh state, at most `DESCENDANT_TEXT_MAX` long. */
+  readonly text: string;
+  /** Non-whitespace text follows the cap. */
+  readonly more: boolean;
+};
+
+/**
+ * Subtree text read for one extraction. Hold one for as long as the DOM stays
+ * put and no longer: it never learns of a change.
+ */
+export type DescendantTextMemo = WeakMap<Node, SubtreeText>;
+
+/** Append a subtree's memoized text; true when the cap is reached with more to come. */
+function appendSubtreeText(
+  state: CollapsedTextState,
+  sub: SubtreeText,
+): boolean {
+  if (sub.lead) {
+    if (state.phase === "start") state.lead = true;
+    else if (
+      state.phase === "text" &&
+      state.text.length < DESCENDANT_TEXT_MAX
+    ) {
+      state.text += " ";
+      state.phase = "space";
+    }
+  }
+  return appendCollapsedTextChunk(state, sub.text) || sub.more;
+}
+
+function elementSubtreeText(
+  element: Element,
+  memo: DescendantTextMemo,
+): SubtreeText {
+  const state: CollapsedTextState = { text: "", phase: "start", lead: false };
+  const children = flatChildNodes(element);
+  let more = false;
+  for (let i = 0; i < children.length && !more; i++) {
+    more = appendSubtreeText(state, nodeSubtreeText(children[i]!, memo));
+  }
+  return { lead: state.lead === true, text: state.text, more };
+}
+
+function nodeSubtreeText(node: Node, memo: DescendantTextMemo): SubtreeText {
+  const type = safeNodeType(node);
+  if (type === Node.TEXT_NODE) {
+    const state: CollapsedTextState = { text: "", phase: "start", lead: false };
+    const more = appendCollapsedTextChunk(state, safeTextContent(node));
+    return { lead: state.lead === true, text: state.text, more };
+  }
+  if (type !== Node.ELEMENT_NODE) return EMPTY_SUBTREE_TEXT;
+  if (MEDIA_TAGS.has(safeTagName(node as Element))) return EMPTY_SUBTREE_TEXT;
+  let sub = memo.get(node);
+  if (!sub) {
+    sub = elementSubtreeText(node as Element, memo);
+    memo.set(node, sub);
+  }
+  return sub;
+}
+
+const EMPTY_SUBTREE_TEXT: SubtreeText = { lead: false, text: "", more: false };
+
+/**
  * Recursive text content with whitespace collapsed and a hard length cap.
  * Used as a panel preview for elements whose accessible name is empty per
  * spec but which carry meaningful descendant text (`<code>`, `<pre>`,
@@ -112,8 +189,24 @@ function collectDescendantTextBounded(
  *
  * Uses a bounded walk (O(min(subtree text, cap))) instead of materializing
  * the full subtree via `textContent`, which is O(subtree) per node.
+ *
+ * With a `memo`, each element's text is read once and its ancestors reuse it,
+ * so asking for every element of a deep chain stays linear in its depth.
  */
-export function getDescendantText(element: Element): string {
+export function getDescendantText(
+  element: Element,
+  memo?: DescendantTextMemo,
+): string {
+  if (memo) {
+    // Through the memo, so the element's own turn as a child is already read.
+    let sub = memo.get(element);
+    if (!sub) memo.set(element, (sub = elementSubtreeText(element, memo)));
+    const { text, more } = sub;
+    return finishCollapsedText(
+      { text, phase: text.endsWith(" ") ? "space" : "text" },
+      more,
+    );
+  }
   const state: CollapsedTextState = { text: "", phase: "start" };
   const children = flatChildNodes(element);
   let truncated = false;

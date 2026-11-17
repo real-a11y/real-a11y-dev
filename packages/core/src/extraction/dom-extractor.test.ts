@@ -3157,6 +3157,74 @@ describe("extractDomTree", () => {
     });
   });
 
+  describe("descendantText on a deep chain", () => {
+    function chain(depth: number): Element {
+      const root = document.createElement("div");
+      let cur: Element = root;
+      for (let i = 0; i < depth; i++) {
+        const d = document.createElement("div");
+        cur.appendChild(d);
+        cur = d;
+      }
+      const b = document.createElement("button");
+      b.textContent = "deep";
+      cur.appendChild(b);
+      return root;
+    }
+
+    function readsFor(depth: number): number {
+      const root = chain(depth);
+      let reads = 0;
+      for (const key of [
+        "safeNodeType",
+        "safeTagName",
+        "safeShadowRoot",
+        "safeChildNodes",
+        "safeTextContent",
+      ] as const) {
+        const orig = clobberSafe[key] as (n: never) => unknown;
+        vi.spyOn(clobberSafe, key).mockImplementation(((n: never) => {
+          reads++;
+          return orig(n);
+        }) as never);
+      }
+      extractDomTree(root);
+      vi.restoreAllMocks();
+      return reads;
+    }
+
+    it("reads work that grows linearly with depth, not quadratically", () => {
+      const shallow = readsFor(100);
+      const deep = readsFor(1000);
+      // 10x the depth: about 10x the reads. Quadratic would be about 100x.
+      expect(deep / shallow).toBeLessThan(15);
+    });
+
+    it("leaves the chain unchanged: the button is reached and each div previews its text", () => {
+      const root = chain(100);
+      const { nodes } = extractDomTree(root);
+      const all = [...nodes.values()];
+      expect(all.find((n) => n.a11y.role === "button")?.a11y.name).toBe("deep");
+      const divs = all.filter((n) => n.dom?.tagName === "div");
+      expect(divs.length).toBeGreaterThan(0);
+      for (const n of divs) expect(n.dom?.descendantText).toBe("deep");
+    });
+
+    it("agrees with the unmemoized preview on whitespace, media and the cap", () => {
+      const long = "word ".repeat(100);
+      const root = createPage(
+        `<div id="r"> <span> a </span><span>b</span> <p>  c\n d </p><video>no <b>x</b></video><div> </div>` +
+          `<section><div>${long}</div><i>${long}</i></section> tail </div>`,
+      );
+      const memo: Parameters<typeof getDescendantText>[1] = new WeakMap();
+      for (const el of root.querySelectorAll("*")) {
+        expect(getDescendantText(el, memo)).toBe(getDescendantText(el));
+      }
+      const r = root.querySelector("#r")!;
+      expect(getDescendantText(r, new WeakMap())).toBe(getDescendantText(r));
+    });
+  });
+
   // accname-1.2 §4.3.2 step 2F appends each descendant's contribution "with a
   // space". The extractor used to concatenate element children with no
   // separator at all, so a button whose label is split across two blocks came

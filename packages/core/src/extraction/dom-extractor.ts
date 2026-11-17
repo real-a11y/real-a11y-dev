@@ -22,6 +22,7 @@ import { isEditable, isEditingHost, isLiveLink } from "./editing.js";
 import {
   ARIA_STATE_ATTRIBUTES,
   ariaStateValue,
+  CHECKEDNESS_ROLES,
   explicitAriaDisabled,
   inheritsDisabled,
   isDisabledControl,
@@ -34,6 +35,7 @@ import {
   EMBEDDED_VALUE_ROLES,
   embeddedValue,
   getAnnouncedValue,
+  type DescendantTextMemo,
   getDescendantText,
   lendsValueOnly,
   MEDIA_TAGS,
@@ -1357,18 +1359,6 @@ function getDirectTextContent(
 }
 
 /**
- * Roles on which Chromium exposes a native checkbox's or radio's checkedness
- * as `checked`. Its own role is one of them.
- */
-const CHECKEDNESS_ROLES = new Set([
-  "checkbox",
-  "radio",
-  "switch",
-  "menuitemcheckbox",
-  "menuitemradio",
-]);
-
-/**
  * Roles under which a `<details>`' summary takes `expanded` from the details,
  * measured against Chromium 151 across every ARIA role. Its own role, which
  * the engine calls `generic`, is a disclosure too.
@@ -1612,6 +1602,8 @@ interface Extraction {
   /** Fresh per extraction: styles may change between two of them. */
   readonly styleCache: StyleCache;
   readonly redactInput: boolean;
+  /** Fresh per extraction, like `styleCache`: an ancestor's preview reuses its children's. */
+  readonly descendantText: DescendantTextMemo;
 }
 
 /**
@@ -1641,7 +1633,7 @@ function buildNode(
   element: Element,
   parentId: string | null,
   depth: number,
-  { styleCache, redactInput }: Extraction,
+  { styleCache, redactInput, descendantText }: Extraction,
 ): { id: string; node: SemanticNode } | null {
   try {
     const tag = safeTagName(element);
@@ -1692,7 +1684,7 @@ function buildNode(
       dom: {
         tagName: tag,
         attributes: getKeyAttributes(element, redactInput),
-        ...textPreviews(element, isMedia || redactInput),
+        ...textPreviews(element, isMedia || redactInput, descendantText),
         isHidden: isVisuallyHidden(element, style),
       },
       a11y: {
@@ -1756,12 +1748,13 @@ function buildNode(
 function textPreviews(
   element: Element,
   none: boolean,
+  memo: DescendantTextMemo,
 ): Pick<NonNullable<SemanticNode["dom"]>, "textContent" | "descendantText"> {
   return none
     ? { textContent: "", descendantText: "" }
     : {
         textContent: getDirectTextContent(element),
-        descendantText: getDescendantText(element),
+        descendantText: getDescendantText(element, memo),
       };
 }
 
@@ -1824,6 +1817,7 @@ export function extractDomTree(
   const rootId = withAriaOwnerIndex(() =>
     walk(startRoot, parentId, baseDepth, nodes, {
       styleCache: new WeakMap(),
+      descendantText: new WeakMap(),
       redactInput,
     }),
   );
