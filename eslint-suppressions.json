@@ -93,11 +93,6 @@
       "count": 2
     }
   },
-  "packages/cli/src/render/pretty.ts": {
-    "complexity": {
-      "count": 1
-    }
-  },
   "packages/cli/src/run.ts": {
     "complexity": {
       "count": 1
