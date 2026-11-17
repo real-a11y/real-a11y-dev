@@ -4,15 +4,15 @@
  * `Accessibility.getFullAXTree` with no `frameId` returns the top frame's
  * document only: every `Iframe` row came back empty, so an embedded form,
  * payment frame or widget was never printed, audited or snapshotted. The
- * producer now reads each frame of the page's own renderer process with
- * `{ frameId }` and grafts it under its row.
+ * producer now reads every frame and grafts it under its row.
  *
- * Which frames share that process depends on the browser. Playwright's
- * bundled headless shell runs every frame in it, even a cross-site one. A
- * site-isolated Chrome (the one `real-a11y install` fetches, or any Chrome
+ * Which frames share the page's renderer process depends on the browser.
+ * Playwright's bundled headless shell runs every frame in it, even a
+ * cross-site one, and reads them with `{ frameId }` over the page's session.
+ * A site-isolated Chrome (the one `real-a11y install` fetches, or any Chrome
  * reached over `--cdp`) runs a cross-site or sandboxed frame in a process of
- * its own, which this producer does not read yet: those rows stay empty. The
- * second block launches with `--site-per-process` to pin both halves.
+ * its own, read over a session of its own. The last block launches with
+ * `--site-per-process`, and reaches it over `--cdp` too, to cover both.
  *
  * Two local origins on `127.0.0.1` are the same site; `localhost` is another.
  *
@@ -20,7 +20,7 @@
  */
 
 import { createServer, type Server } from "node:http";
-import type { AddressInfo } from "node:net";
+import { createServer as createNetServer, type AddressInfo } from "node:net";
 
 import { collectFindings } from "@real-a11y-dev/audit";
 import { BrowserSession, nativeTree } from "@real-a11y-dev/browser";
@@ -87,7 +87,7 @@ beforeAll(async () => {
   <iframe title="same-origin" id="same" src="/child.html"></iframe>
   <iframe title="cross-origin" src="http://127.0.0.1:${otherPort}/child.html"></iframe>
   <iframe title="cross-site" src="http://localhost:${otherPort}/child.html"></iframe>
-  <iframe title="pay" src="http://127.0.0.1:${otherPort}/pay.html"></iframe>
+  <iframe title="pay" src="http://localhost:${otherPort}/pay.html"></iframe>
   <iframe title="nested" src="http://127.0.0.1:${otherPort}/nested.html"></iframe>
   <iframe title="sandboxed" sandbox src="/child.html"></iframe>
   <iframe title="blank"></iframe>
@@ -353,32 +353,154 @@ describe("native tree — a session pinned to the page's origin", () => {
   });
 });
 
+/** A port nothing listens on, for Chromium's remote debugging. */
+function freePort(): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const server = createNetServer();
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", () => {
+      const { port } = server.address() as AddressInfo;
+      server.close(() => resolve(port));
+    });
+  });
+}
+
+/** The node named `name` under `row`. */
+function under(
+  tree: ExtractionResult,
+  row: SemanticNode,
+  name: string,
+): SemanticNode {
+  const stack = [...row.childIds];
+  while (stack.length > 0) {
+    const node = tree.nodes.get(stack.pop()!)!;
+    if (node.a11y.name === name) return node;
+    stack.push(...node.childIds);
+  }
+  throw new Error(`no "${name}" under ${row.a11y.name}`);
+}
+
+/** An id that carries its out-of-process frame: `…@<frameId>.<documentId>`. */
+const REMOTE_ID = /^ax-(dom-)?\d+@[0-9A-F]+\.[0-9A-F]+$/i;
+
 describe("native tree — a site-isolated Chrome (--site-per-process)", () => {
   let browser: Browser;
+  let page: Page;
   let tree: ExtractionResult;
+  let cdpEndpoint: string;
 
   beforeAll(async () => {
-    browser = await chromium.launch({ args: ["--site-per-process"] });
-    tree = await nativeTree(await load(browser));
+    const port = await freePort();
+    cdpEndpoint = `http://127.0.0.1:${port}`;
+    browser = await chromium.launch({
+      args: ["--site-per-process", `--remote-debugging-port=${port}`],
+    });
+    page = await load(browser);
+    tree = await nativeTree(page);
   });
 
   afterAll(async () => {
     await browser.close();
   });
 
-  it("still reads every frame of the page's own site", () => {
-    for (const title of ["same-origin", "cross-origin"]) {
+  it("reads every frame, in the page's process or in one of its own", () => {
+    for (const title of [
+      "same-origin",
+      "cross-origin",
+      "cross-site",
+      "sandboxed",
+    ]) {
       expect(inside(tree, rowOf(tree, title)), title).toEqual(CHILD_CONTENT);
     }
+    expect(inside(tree, rowOf(tree, "nested"))).toEqual([
+      'paragraph "Level 1"',
+      'Iframe "inner"',
+      ...CHILD_CONTENT,
+    ]);
     expect(inside(tree, rowOf(tree, "srcdoc"))).toHaveLength(2);
-    expect(inside(tree, rowOf(tree, "pay"))).toHaveLength(3);
+    expect(nodesOf(tree).filter((n) => n.parentId === null)).toHaveLength(1);
   });
 
-  // Not read yet: a frame in another process has a session of its own. When
-  // the producer reads those, this flips.
-  it("leaves the rows of out-of-process frames (cross-site, sandboxed) empty", () => {
-    expect(rowOf(tree, "cross-site").childIds).toEqual([]);
-    expect(rowOf(tree, "sandboxed").childIds).toEqual([]);
-    expect(nodesOf(tree).filter((n) => n.parentId === null)).toHaveLength(1);
+  it("gives an out-of-process frame's nodes ids that carry the frame", () => {
+    for (const id of rowOf(tree, "cross-site").childIds) {
+      expect(id).toMatch(REMOTE_ID);
+    }
+    // A same-site frame shares the page's process, and its plain ids.
+    for (const id of rowOf(tree, "same-origin").childIds) {
+      expect(id).toMatch(/^ax-dom-\d+$/);
+    }
+  });
+
+  it("locates a node of an out-of-process frame from its <iframe>", () => {
+    const row = rowOf(tree, "cross-site");
+    expect(under(tree, row, "Child button").dom?.locator).toBe(
+      `${row.dom?.locator} >>> body > main > button`,
+    );
+  });
+
+  it("classifies an out-of-process payment frame's fields by its own markup", async () => {
+    const printed = serializeTree(tree, { values: true });
+    expect(printed).toContain('textbox "Card number" = "[redacted]"');
+    expect(printed).toContain('textbox "Password" = "[redacted]"');
+    expect(printed).toContain('textbox "Name on card" = "Ada Lovelace"');
+    const all = JSON.stringify(nodesOf(tree));
+    expect(all).not.toContain(CARD);
+    expect(all).not.toContain(PASSWORD);
+
+    const strict = await nativeTree(page, { redactInput: true });
+    expect(nodesOf(strict).filter((n) => n.a11y.value !== undefined)).toEqual(
+      [],
+    );
+  });
+
+  it("points focus inside an out-of-process frame at the focused node", async () => {
+    const frame = page.frames().find((f) => f.url().endsWith("/pay.html"))!;
+    await frame.getByLabel("Name on card").focus();
+    const focused = await nativeTree(page);
+    const node = focused.nodes.get(focused.focusedId!)!;
+    expect(node.a11y.name).toBe("Name on card");
+    expect(node.id).toMatch(REMOTE_ID);
+  });
+
+  it("reads the same over --cdp, agrees with nativeAX(), and refuses to act there", async () => {
+    const session = new BrowserSession({ cdpEndpoint });
+    try {
+      await session.open(url);
+      const native = await session.nativeTree();
+      const row = rowOf(native, "cross-site");
+      expect(inside(native, row)).toEqual(CHILD_CONTENT);
+
+      const { pairs } = await session.nativeAX();
+      const fromTree = nodesOf(native)
+        .filter((n) => n.id !== "ax-root")
+        .map((n) =>
+          n.a11y.name ? `${n.a11y.role} "${n.a11y.name}"` : n.a11y.role,
+        );
+      expect([...pairs].sort()).toEqual(fromTree.sort());
+
+      const result = await session.act({
+        nodeId: under(native, row, "Child button").id,
+        action: "click",
+      });
+      expect(result.success).toBe(false);
+      expect(result.error).toMatch(/another process/);
+    } finally {
+      await session.close();
+    }
+  });
+
+  it("keeps a pinned session's out-of-process frames to its origins", async () => {
+    const session = new BrowserSession({ cdpEndpoint });
+    try {
+      await session.open(url, { allowedOrigins: [new URL(url).origin] });
+      const pinned = await session.nativeTree();
+      // Sandboxed, so in a process of its own, but loaded from the page's origin.
+      expect(inside(pinned, rowOf(pinned, "sandboxed"))).toEqual(CHILD_CONTENT);
+      for (const title of ["cross-site", "pay", "cross-origin"]) {
+        expect(rowOf(pinned, title).childIds, title).toEqual([]);
+      }
+    } finally {
+      await session.close();
+    }
   });
 });

@@ -105,12 +105,12 @@ controls inside it. A finding there is located from the frame's own
 (`#checkout >>> body > form > button`) — no single selector crosses a frame.
 `heading-order` and `landmark-structure` judge the page's own document, so an
 embedded widget's `<h1>` or `<main>` is not counted as a second one of the
-page's. Not read yet: a frame Chromium runs in a process of its own — under
-site isolation, a cross-site or `sandbox`ed `<iframe>` — whose row stays
-empty. The [Chrome for Testing](/packages/cli/commands#install) that
-`real-a11y install` fetches and a Chrome you reach with `--cdp` are both
-site-isolated; Playwright's bundled headless Chromium runs every frame in the
-page's process.
+page's. That holds wherever Chromium runs the frame: under site isolation — the
+[Chrome for Testing](/packages/cli/commands#install) that `real-a11y install`
+fetches, or a Chrome you reach with `--cdp` — a cross-site or `sandbox`ed
+`<iframe>` runs in a process of its own and is read over a session of its own.
+One limit: `interact` and the action commands can't act inside such a frame
+yet.
 
 ## Audit what's behind a click
 

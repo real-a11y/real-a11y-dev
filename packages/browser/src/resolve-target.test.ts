@@ -127,6 +127,17 @@ describe("resolveTarget — misses and refusals", () => {
     expect(res.candidate).toMatchObject({ actionable: false, name: "Fixture" });
   });
 
+  it("a match inside an out-of-process frame is refused as in-remote-frame", () => {
+    const remote = tree();
+    const id = "ax-dom-12@F00D.BEEF";
+    remote.nodes.set(id, node(id, "button", "Pay"));
+    remote.nodes.get("ax-1")!.childIds.push(id);
+    const res = resolveTarget(remote, { role: "button", name: "Pay" });
+    expect(res.kind).toBe("in-remote-frame");
+    if (res.kind !== "in-remote-frame") return;
+    expect(res.candidate).toMatchObject({ role: "button", name: "Pay" });
+  });
+
   it("propagates disabled onto the resolved candidate", () => {
     const res = resolveTarget(tree(), { role: "button", name: "Cancel" });
     expect(res).toMatchObject({

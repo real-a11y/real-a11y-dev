@@ -27,10 +27,11 @@
  * cross back to Node. Errors are generic and never embed page text.
  */
 
-import type {
-  ActionRequest,
-  ActionResult,
-  ActionType,
+import {
+  splitNativeNodeId,
+  type ActionRequest,
+  type ActionResult,
+  type ActionType,
 } from "@real-a11y-dev/core";
 import type { CDPSession } from "playwright";
 
@@ -66,6 +67,16 @@ export class CdpActionBackend {
       return {
         success: false,
         error: `the native action backend does not support "${request.action}" yet (supported: ${[...SUPPORTED_ACTIONS].join(", ")})`,
+      };
+    }
+
+    // A node of an out-of-process frame resolves only in that frame's own
+    // session, which this backend doesn't hold. Said as such, not as a node
+    // with no element.
+    if (splitNativeNodeId(request.nodeId).frame) {
+      return {
+        success: false,
+        error: `node "${request.nodeId}" is inside a frame Chromium runs in another process (a cross-site or sandboxed <iframe>), which can't be acted on yet`,
       };
     }
 

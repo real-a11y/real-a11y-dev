@@ -11,50 +11,111 @@ import {
 } from "@real-a11y-dev/core";
 import type { CDPSession } from "playwright";
 
+import type { NativeDomInfo } from "./native-sensitivity.js";
+
 /**
  * One frame's `Accessibility.getFullAXTree` payload, and the row of the
  * `<iframe>` element that shows it: `ax-dom-<backendNodeId>` of the frame's
  * owner (`DOM.getFrameOwner`). The frame's nodes go under that row, one level
  * deeper — core's `graftNativeFrame`.
  *
- * Only frames in the page's own renderer process are read today: their
- * backend and AX node ids are unique within that process, so their nodes keep
- * plain ids and share the page's DOM walk. A frame Chromium runs in another
- * process (a cross-site or sandboxed `<iframe>` under site isolation) has a
- * session of its own and is not in the page's frame tree; its row stays
- * empty.
+ * A frame in the page's own renderer process shares the page's ids, which
+ * are unique within that process, and the page's DOM walk. A frame Chromium
+ * runs in another process (a cross-site or sandboxed `<iframe>` under site
+ * isolation) is read in a session of its own: backend ids restart in every
+ * process, so it carries that process's DOM walk (`enrichment`) and the
+ * suffix its rows' ids take (`suffix`, core's `nativeFrameSuffix`:
+ * `@<frameId>.<documentId>`), as does a same-process frame inside it.
+ * `ownerId` is the row's id as the tree has it, suffix included.
  */
 export interface NativeFramePayload {
   ownerId: string;
   rawNodes: RawAXNode[];
+  /** The DOM walk of the process this frame runs in; absent: the page's. */
+  enrichment?: ReadonlyMap<number, NativeDomInfo>;
+  /** The id suffix of that process's rows; absent or `""`: plain ids. */
+  suffix?: string;
 }
 
-/** The most frames one read follows, however they nest: a page of dozens of
- *  ad frames costs a full read of each. Rows past it stay empty. The
- *  extension's native read stops at the same count. */
-const MAX_FRAMES_PER_READ = 20;
+/** The most frames one read follows, however they nest and in however many
+ *  processes: a page of dozens of ad frames costs a full read of each. Rows
+ *  past it stay empty. The extension's native read stops at the same count. */
+export const MAX_FRAMES_PER_READ = 20;
+
+/** What is left of a read's {@link MAX_FRAMES_PER_READ}, shared by every
+ *  session the read goes through. */
+export interface FrameBudget {
+  left: number;
+}
+
+/** The backend ids of the `Iframe` rows in `nodes` that Chromium doesn't
+ *  ignore: the rows a frame can go under. */
+export function iframeRowIds(nodes: readonly RawAXNode[]): number[] {
+  const out: number[] = [];
+  for (const n of nodes) {
+    if (
+      n.ignored !== true &&
+      typeof n.backendDOMNodeId === "number" &&
+      isNativeIframeRole(n.role?.value ?? "")
+    ) {
+      out.push(n.backendDOMNodeId);
+    }
+  }
+  return out;
+}
+
+/** A frame as `Page.getFrameTree` reports it. */
+export interface CdpFrame {
+  id: string;
+  url?: string;
+  /** The origin its document runs as: `https://…`, or opaque. */
+  securityOrigin?: string;
+}
 
 interface FrameTreeNode {
-  frame: { id: string; url?: string };
+  frame: CdpFrame;
   childFrames?: FrameTreeNode[];
 }
 
+/** `value` as a URL, or `null` when it doesn't parse. */
+function parseUrl(value: string | undefined): URL | null {
+  try {
+    return new URL(value ?? "");
+  } catch {
+    return null;
+  }
+}
+
 /**
- * Whether a frame showing `url` may be read on a session pinned to
- * `pinned` (see `NativeTreeOptions.frameOrigins`): its document came from
- * one of those origins, or it has no origin of its own and holds its
- * parent's markup (`about:srcdoc`, `about:blank`, `data:`), the parent
- * having been read under the same pin. Anything else, an unparseable URL
- * included, is not read.
+ * Whether a frame may be read on a session pinned to `pinned` (see
+ * `NativeTreeOptions.frameOrigins`): its document came from one of those
+ * origins, or it has no origin of its own and holds its parent's markup
+ * (`about:srcdoc`, `about:blank`, `data:`), the parent having been read
+ * under the same pin. Anything else, an unparseable URL included, is not
+ * read.
+ *
+ * Where Chromium reports the origin the document runs as (`securityOrigin`,
+ * from `Page.getFrameTree`), a non-opaque one must be pinned too: a frame
+ * from another origin that navigates itself to `about:blank` keeps that
+ * origin, and what it shows there is its own, not its parent's markup. An
+ * opaque one (a sandboxed frame's) adds nothing to its URL.
  */
 export function frameFromPinnedOrigin(
-  url: string | undefined,
+  frame: string | Pick<CdpFrame, "url" | "securityOrigin"> | undefined,
   pinned: ReadonlySet<string>,
 ): boolean {
-  let parsed: URL;
-  try {
-    parsed = new URL(url ?? "");
-  } catch {
+  const { url, securityOrigin } =
+    typeof frame === "object"
+      ? frame
+      : { url: frame, securityOrigin: undefined };
+  const parsed = parseUrl(url);
+  if (!parsed) return false;
+  const runsAs = parseUrl(securityOrigin);
+  if (
+    runsAs &&
+    (runsAs.protocol === "http:" || runsAs.protocol === "https:") &&
+    !pinned.has(runsAs.origin)
+  ) {
     return false;
   }
   if (parsed.origin !== "null") return pinned.has(parsed.origin);
@@ -62,7 +123,7 @@ export function frameFromPinnedOrigin(
 }
 
 /**
- * Every frame of the page's own process whose row the tree keeps, owner
+ * Every frame of `client`'s process whose row the tree keeps, owner
  * before the frames inside it, depth first. A frame is read only when its
  * `<iframe>` has an `Iframe` row Chromium does not ignore, in the top
  * document or a frame read before it: a hidden ad frame has none, and would
@@ -78,7 +139,16 @@ export function frameFromPinnedOrigin(
 export async function readFrames(
   client: CDPSession,
   topNodes: readonly RawAXNode[],
-  frameOrigins?: readonly string[],
+  {
+    frameOrigins,
+    budget = { left: MAX_FRAMES_PER_READ },
+    startDepth = 0,
+  }: {
+    frameOrigins?: readonly string[];
+    budget?: FrameBudget;
+    /** How deep `client`'s own document is: 0 for the page's. */
+    startDepth?: number;
+  } = {},
 ): Promise<NativeFramePayload[]> {
   const pinned = frameOrigins ? new Set(frameOrigins) : null;
   const tree = (await client
@@ -86,26 +156,12 @@ export async function readFrames(
     .catch(() => undefined)) as { frameTree?: FrameTreeNode } | undefined;
   if (!tree?.frameTree) return [];
 
-  const rows = new Set<number>();
-  const addRows = (nodes: readonly RawAXNode[]): void => {
-    for (const n of nodes) {
-      if (
-        n.ignored !== true &&
-        typeof n.backendDOMNodeId === "number" &&
-        isNativeIframeRole(n.role?.value ?? "")
-      ) {
-        rows.add(n.backendDOMNodeId);
-      }
-    }
-  };
-  addRows(topNodes);
-
+  const rows = new Set<number>(iframeRowIds(topNodes));
   const out: NativeFramePayload[] = [];
-  let left = MAX_FRAMES_PER_READ;
   const walk = async (node: FrameTreeNode, depth: number): Promise<void> => {
     if (depth >= NATIVE_MAX_FRAME_DEPTH) return;
     const children = (node.childFrames ?? []).filter(
-      (child) => !pinned || frameFromPinnedOrigin(child.frame.url, pinned),
+      (child) => !pinned || frameFromPinnedOrigin(child.frame, pinned),
     );
     // One round trip for every sibling's owner; the reads stay in order.
     const owners = await Promise.all(
@@ -119,21 +175,21 @@ export async function readFrames(
       ),
     );
     for (const [i, child] of children.entries()) {
-      if (left <= 0) return;
+      if (budget.left <= 0) return;
       const ownerBackendId = owners[i]?.backendNodeId;
       if (typeof ownerBackendId !== "number" || !rows.has(ownerBackendId)) {
         continue;
       }
-      left--;
+      budget.left--;
       const read = (await client
         .send("Accessibility.getFullAXTree", { frameId: child.frame.id })
         .catch(() => undefined)) as { nodes?: RawAXNode[] } | undefined;
       if (!read?.nodes?.length) continue;
-      addRows(read.nodes);
+      for (const id of iframeRowIds(read.nodes)) rows.add(id);
       out.push({ ownerId: `ax-dom-${ownerBackendId}`, rawNodes: read.nodes });
       await walk(child, depth + 1);
     }
   };
-  await walk(tree.frameTree, 0);
+  await walk(tree.frameTree, startDepth);
   return out;
 }

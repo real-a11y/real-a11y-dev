@@ -161,7 +161,7 @@ test("home page a11y", async ({ page }) => {
 });
 ```
 
-Pass `{ tree: "native" }` to audit Chromium's own accessibility tree (read over CDP) instead of the in-page DOM walk — it reaches structure no in-page walk can, such as a `<video controls>`'s play/scrubber/mute controls in its closed user-agent shadow root. Native mode is read-only and whole-document (`tabSequenceSnapshot()` throws and `rootSelector` isn't supported), and it reads the page's iframes — each frame's document under its `Iframe` row — except a frame Chromium runs in a process of its own (under site isolation, a cross-site or `sandbox`ed one); see the [Playwright adapter docs](https://real-a11y.dev/packages/testing/playwright#auditing-the-native-tree). Add `redactInput: true`, with either tree, for the strict mode — no field value and no rich-text editor content in any snapshot or assertion message, the same as the CLI's `--redact-input`.
+Pass `{ tree: "native" }` to audit Chromium's own accessibility tree (read over CDP) instead of the in-page DOM walk — it reaches structure no in-page walk can, such as a `<video controls>`'s play/scrubber/mute controls in its closed user-agent shadow root. Native mode is read-only and whole-document (`tabSequenceSnapshot()` throws and `rootSelector` isn't supported), and it reads the page's iframes — each frame's document under its `Iframe` row, in whichever process Chromium runs it; see the [Playwright adapter docs](https://real-a11y.dev/packages/testing/playwright#auditing-the-native-tree). Add `redactInput: true`, with either tree, for the strict mode — no field value and no rich-text editor content in any snapshot or assertion message, the same as the CLI's `--redact-input`.
 
 ## Docs
 
