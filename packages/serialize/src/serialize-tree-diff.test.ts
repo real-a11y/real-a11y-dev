@@ -446,3 +446,117 @@ describe("serializeTreeDiff — end to end with real extraction", () => {
     expect(out).not.toContain("sn-");
   });
 });
+
+describe("serializeTreeDiff childIds: false", () => {
+  /** A container's change from one child list to another. */
+  function container(id: string, name: string, from: string[], to: string[]) {
+    return {
+      id,
+      before: mk("list", { id, name, childIds: from }),
+      after: mk("list", { id, name, childIds: to }),
+      changes: ["childIds"],
+    };
+  }
+
+  it("prints the childIds line by default", () => {
+    const diff: TreeDiff = {
+      added: [mk("listitem", { id: "sn-2", name: "Ship" })],
+      removed: [],
+      changed: [container("sn-l", "Todo", ["sn-1"], ["sn-1", "sn-2"])],
+    };
+    expect(serializeTreeDiff(diff)).toBe(
+      '+ listitem "Ship"\n~ list "Todo": childIds 1 child → 2 children',
+    );
+    expect(serializeTreeDiff(diff, { childIds: true })).toBe(
+      serializeTreeDiff(diff),
+    );
+  });
+
+  it("leaves out the line for an add, a remove and a swap", () => {
+    const add: TreeDiff = {
+      added: [mk("listitem", { id: "sn-2", name: "Ship" })],
+      removed: [],
+      changed: [container("sn-l", "Todo", ["sn-1"], ["sn-1", "sn-2"])],
+    };
+    const remove: TreeDiff = {
+      added: [],
+      removed: [mk("listitem", { id: "sn-1", name: "Old" })],
+      changed: [container("sn-l", "Todo", ["sn-1", "sn-2"], ["sn-2"])],
+    };
+    const swap: TreeDiff = {
+      added: [mk("status", { id: "sn-9", name: "Cancelled." })],
+      removed: [mk("button", { id: "sn-1", name: "Cancel" })],
+      changed: [
+        container("sn-r", "Status", ["sn-1", "sn-2"], ["sn-9", "sn-2"]),
+      ],
+    };
+    expect(serializeTreeDiff(add, { childIds: false })).toBe(
+      '+ listitem "Ship"',
+    );
+    expect(serializeTreeDiff(remove, { childIds: false })).toBe(
+      '- listitem "Old"',
+    );
+    expect(serializeTreeDiff(swap, { childIds: false })).toBe(
+      '+ status "Cancelled."\n- button "Cancel"',
+    );
+  });
+
+  it("keeps the line when no +/- line explains it", () => {
+    // A child moved between two lists: it is neither added nor removed.
+    const move: TreeDiff = {
+      added: [],
+      removed: [],
+      changed: [
+        container("sn-a", "Todo", ["sn-1"], []),
+        container("sn-b", "Done", [], ["sn-1"]),
+      ],
+    };
+    expect(serializeTreeDiff(move, { childIds: false })).toBe(
+      '~ list "Todo": childIds 1 child → 0 children\n' +
+        '~ list "Done": childIds 0 children → 1 child',
+    );
+  });
+
+  it("keeps the line for a reorder, alone or alongside an add", () => {
+    const reorder: TreeDiff = {
+      added: [],
+      removed: [],
+      changed: [container("sn-l", "L", ["sn-1", "sn-2"], ["sn-2", "sn-1"])],
+    };
+    const addAndReorder: TreeDiff = {
+      added: [mk("listitem", { id: "sn-3", name: "New" })],
+      removed: [],
+      changed: [
+        container("sn-l", "L", ["sn-1", "sn-2"], ["sn-2", "sn-1", "sn-3"]),
+      ],
+    };
+    expect(serializeTreeDiff(reorder, { childIds: false })).toBe(
+      '~ list "L": childIds reordered (2 children)',
+    );
+    expect(serializeTreeDiff(addAndReorder, { childIds: false })).toBe(
+      '+ listitem "New"\n~ list "L": childIds 2 children → 3 children (reordered)',
+    );
+  });
+
+  it("keeps the node's other changes", () => {
+    const diff: TreeDiff = {
+      added: [mk("listitem", { id: "sn-2", name: "Ship" })],
+      removed: [],
+      changed: [
+        {
+          id: "sn-l",
+          before: mk("list", { id: "sn-l", name: "Todo", childIds: ["sn-1"] }),
+          after: mk("list", {
+            id: "sn-l",
+            name: "Tasks",
+            childIds: ["sn-1", "sn-2"],
+          }),
+          changes: ["a11y.name", "childIds"],
+        },
+      ],
+    };
+    expect(serializeTreeDiff(diff, { childIds: false })).toBe(
+      '+ listitem "Ship"\n~ list "Tasks": a11y.name "Todo" → "Tasks"',
+    );
+  });
+});

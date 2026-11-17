@@ -108,7 +108,7 @@ await flow(container)
   });
 ```
 
-See the [Flow docs](https://real-a11y.dev/packages/testing/flow#asserting-what-an-interaction-changed) for both styles.
+See the [Flow docs](https://real-a11y.dev/packages/testing/flow#asserting-what-an-interaction-changed) for both styles. `a11yDiff(before, after, { childIds: false })` leaves out a container's `childIds` count line when its `+`/`-` lines already explain it; a move or reorder still prints it.
 
 ## Playwright adapter
 

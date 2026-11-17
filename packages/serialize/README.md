@@ -125,7 +125,11 @@ tab-order or menu reorder isn't a silent no-op). An empty diff renders
 Options: `redact` (as above); `values`, which adds `a11y.value` change lines
 (`~ textbox "Search": a11y.value (unset) → "hello"`) and values on added or
 removed nodes (off by default, when a change to a field's contents alone renders
-`(no changes)`); plus `focusBefore` / `focusAfter` — pass the
+`(no changes)`); `childIds: false`, which leaves out a container's `childIds`
+line when its `+`/`-` lines already explain it (the `listbox "Countries"` line
+above), but keeps it for a move or a reorder. The line is on by default because
+it is the only one that says which container a node joined or left. Plus
+`focusBefore` / `focusAfter` — pass the
 focused node at each capture point and the diff gains a trailing focus line,
 which is how a focus-management bug becomes visible:
 

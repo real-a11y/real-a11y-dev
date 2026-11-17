@@ -44,6 +44,39 @@ describe("a11yDiff", () => {
     expect(box.text).toContain("childIds 0 children → 1 child");
   });
 
+  it("leaves out the childIds lines an add explains with childIds: false", () => {
+    const root = mount(`
+      <main>
+        <ul aria-label="Todo"><li>a</li></ul>
+        <ul aria-label="Done"><li id="moving">b</li></ul>
+      </main>`);
+    const before = capture(root);
+    const [todo, done] = root.querySelectorAll("ul");
+    todo!.insertAdjacentHTML("beforeend", "<li>Ship</li>");
+    done!.insertAdjacentHTML("beforeend", "<li>Test</li>");
+
+    // By default, the count lines also say which list each item joined.
+    expect(a11yDiff(before, root).text).toBe(
+      [
+        '+ listitem "Ship"',
+        '+ listitem "Test"',
+        '~ list "Todo": childIds 1 child → 2 children',
+        '~ list "Done": childIds 1 child → 2 children',
+      ].join("\n"),
+    );
+    expect(a11yDiff(before, root, { childIds: false }).text).toBe(
+      '+ listitem "Ship"\n+ listitem "Test"',
+    );
+
+    // A move has no +/- line, so its count lines stay.
+    const moved = capture(root);
+    todo!.append(root.querySelector("#moving")!);
+    expect(a11yDiff(moved, root, { childIds: false }).text).toBe(
+      '~ list "Todo": childIds 2 children → 3 children\n' +
+        '~ list "Done": childIds 2 children → 1 child',
+    );
+  });
+
   it("(no changes) when the tree is untouched", () => {
     const root = mount(`<main><button>Go</button></main>`);
     const before = capture(root);
