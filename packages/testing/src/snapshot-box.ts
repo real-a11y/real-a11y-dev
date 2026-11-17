@@ -14,7 +14,40 @@
  * than as this object with its brand key, which nothing would flag.
  */
 
+import type { ExtractionResult } from "@real-a11y-dev/core";
+
+import { recordSnapshot } from "./snapshot-record.js";
+
 const SNAPSHOT_BRAND = "@real-a11y-dev/a11y-snapshot";
+
+/**
+ * Where a box keeps the trees behind its text, for the snapshot viewer
+ * (`snapshot-record.ts`). A non-enumerable symbol, so neither pretty-format nor
+ * a framework's equality ever sees it.
+ */
+const SNAPSHOT_TREES = Symbol.for("@real-a11y-dev/a11y-snapshot.trees");
+
+/** What a record takes from the snapshot's own options. */
+interface SnapshotPrinting {
+  /** Applied to what the page supplied in a record, as to the text. */
+  redact?: RegExp[];
+}
+
+/** The trees a box's text was printed from, as the snapshot viewer draws them. */
+export type SnapshotTrees =
+  | ({
+      kind: "tree";
+      tree: ExtractionResult;
+    } & SnapshotPrinting)
+  | ({
+      kind: "diff";
+      before: ExtractionResult;
+      after: ExtractionResult;
+      /** Node ids focused on each side; `undefined` when a side had no focus
+       *  context (a bare `ExtractionResult`). */
+      focusBefore?: string | null;
+      focusAfter?: string | null;
+    } & SnapshotPrinting);
 
 export interface A11ySnapshotBox {
   readonly [SNAPSHOT_BRAND]: true;
@@ -31,11 +64,32 @@ function boxText(this: A11ySnapshotBox): string {
   return this.text;
 }
 
-/** Wrap a pre-serialized string as a snapshot box. */
-export function boxSnapshot(text: string): A11ySnapshotBox {
-  return Object.defineProperty({ [SNAPSHOT_BRAND]: true, text }, "toJSON", {
-    value: boxText,
-  }) as A11ySnapshotBox;
+/**
+ * Wrap a pre-serialized string as a snapshot box. `trees`, when given, is
+ * called only if the snapshot report's recorder is on, so a run that doesn't
+ * record pays nothing for it. It records only through the serializer: a box
+ * snapshotted through its `toJSON` writes no record.
+ */
+export function boxSnapshot(
+  text: string,
+  trees?: () => SnapshotTrees,
+): A11ySnapshotBox {
+  const box = Object.defineProperty(
+    { [SNAPSHOT_BRAND]: true, text },
+    "toJSON",
+    { value: boxText },
+  ) as A11ySnapshotBox;
+  if (trees) Object.defineProperty(box, SNAPSHOT_TREES, { value: trees });
+  return box;
+}
+
+/** The trees behind `box`, if it was made with them. */
+export function snapshotTreesOf(
+  box: A11ySnapshotBox,
+): (() => SnapshotTrees) | undefined {
+  return (box as unknown as Record<symbol, (() => SnapshotTrees) | undefined>)[
+    SNAPSHOT_TREES
+  ];
 }
 
 /**
@@ -53,6 +107,8 @@ export const a11ySnapshotSerializer = {
     );
   },
   serialize(val: A11ySnapshotBox): string {
+    const trees = snapshotTreesOf(val);
+    if (trees) recordSnapshot(val, trees);
     return val.text;
   },
 };

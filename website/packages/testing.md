@@ -142,6 +142,7 @@ specifics for React, Testing Library and Playwright live in
 | Area | What it does | Page |
 |---|---|---|
 | **Snapshots** | Deterministic strings of the a11y tree, heading outline, and tab order — diff-friendly, safe to commit. | [Snapshots →](/packages/testing/snapshots) |
+| **Snapshot report** | `@real-a11y-dev/testing/reporter` (Vitest) and `…/reporter/jest` (Jest): reporters that draw every boxed snapshot of a run as a tree, states and changes marked, in one HTML page. | [Snapshot report →](/packages/testing/snapshots#the-snapshot-report) |
 | **Assertions** | `assert*` functions that throw descriptive errors on broken structure. | [Assertions →](/packages/testing/assertions) |
 | **Matchers** | The same checks as ergonomic `expect` matchers, plus the `boxedTreeSnapshot()` serializer. Vitest + Jest. | [Matchers →](/packages/testing/matchers) |
 | **Flow API** | Fluent interaction chains that assert about the tree after each step. | [Flow API →](/packages/testing/flow) |
@@ -155,6 +156,7 @@ New to the idea of snapshotting the accessibility tree? Start with the concept: 
 - **Assert a specific invariant** ("one `<h1>`", "no unlabeled buttons") → [Assertions](/packages/testing/assertions) or, for `expect` style, [Matchers](/packages/testing/matchers). `assertRules` runs an arbitrary subset of the rule set, and `formatFindings` renders findings for your own reporting.
 - **Test an interaction** (open a menu, submit a form, dismiss a modal) → [Flow API](/packages/testing/flow).
 - **Assert what an interaction _changed_** (options appeared, `aria-expanded` flipped, focus moved) → [`capture` + `a11yDiff` or `flow().expectChanges`](/packages/testing/flow#asserting-what-an-interaction-changed).
+- **See what a snapshot holds beyond its text** (states, tab stops, a diff marked on the tree) → the [snapshot report](/packages/testing/snapshots#the-snapshot-report).
 - **Audit a real, rendered page** (not jsdom) → [Playwright adapter](/packages/testing/playwright).
 
 ## The semantic tree

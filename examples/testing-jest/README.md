@@ -16,6 +16,10 @@ Jest-specific registration and typing path).
 - `toHaveValidLandmarks`, `toHaveNoUnlabeledInteractive`, `toHaveTabSequence`
 - The `boxedTreeSnapshot()` serializer feeding `toMatchSnapshot()` with semantic
   (role + name) output
+- **The snapshot report** (`@real-a11y-dev/testing/reporter/jest`, wired in
+  [`jest.config.cjs`](./jest.config.cjs)) — after every run,
+  `a11y-snapshots/index.html` draws each boxed snapshot as the Semantic
+  Navigator panel draws a tree
 
 Resolution note: this package is CommonJS (no `"type": "module"`), so it loads
 `@real-a11y-dev/testing` through the package's `require` export conditions —

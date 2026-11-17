@@ -44,7 +44,9 @@ Then, in a scratch project outside the repo:
 3. `require()` each as **CJS**
 4. Import each **subpath** export — `@real-a11y-dev/testing/playwright`,
    `/matchers`, `/matchers/vitest`, `/matchers/jest`, `/matchers/jest-globals`,
-   the UI's `styles`, and any others in the exports maps
+   `/reporter` and `/reporter/jest` (testing ≥ 0.1.0-beta.24; each needs the
+   `dist/viewer/viewer.js` and `viewer.css` the tarball ships beside it, so list
+   them with `tar -tzf` too), the UI's `styles`, and any others in the exports maps
 5. Resolve types for every entry (`tsc --noEmit` on a file importing each),
    **with `skipLibCheck: false`** — see below, the default hides the fault this
    step exists to find

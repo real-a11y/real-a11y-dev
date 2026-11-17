@@ -26,3 +26,8 @@ storybook-static/
 # but committed skills under .claude/skills/ are shared with the team.
 .claude/*
 !.claude/skills/
+
+# The a11y snapshot report (@real-a11y-dev/testing/reporter), and the
+# snapshot viewer dev server's default records directory: test-run output
+a11y-snapshots/
+.a11y-trees/

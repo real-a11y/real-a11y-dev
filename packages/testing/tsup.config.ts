@@ -1,6 +1,9 @@
 import { defineConfig } from "tsup";
 
-export default defineConfig({
+// The `./reporter` entry builds on its own, after this one
+// (`tsup.reporter.config.ts`): it reads files from Node, and nothing of that
+// may reach the library entries below, which bundlers take to the browser.
+export default defineConfig((options) => ({
   // ESM + CJS entries. The injected IIFE page-bundle now lives in
   // @real-a11y-dev/browser; the Playwright adapter resolves it from there.
   entry: [
@@ -49,6 +52,8 @@ export default defineConfig({
     ],
   },
   sourcemap: true,
-  clean: true,
+  // Not in watch mode (`pnpm dev`), which builds only these entries: a clean
+  // there deletes the reporters and their viewer on every rebuild.
+  clean: !options.watch,
   treeshake: true,
-});
+}));

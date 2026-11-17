@@ -55,8 +55,13 @@ const EXTENSION = "the extension";
 /**
  * Private packages that are applications or fixtures, not code a carrier
  * bundles. Named by directory; a new app under `packages/` belongs here.
+ *
+ * `snapshot-viewer` is an app too: no tsup config inlines it. `testing`
+ * holds it as a devDependency so pnpm builds it first, and its reporter build
+ * copies the app's output into `dist/viewer` as files. A change to it is
+ * released through `testing`, which its README and ARCHITECTURE.md say.
  */
-const APPS = new Set(["extension", "example-patterns"]);
+const APPS = new Set(["extension", "example-patterns", "snapshot-viewer"]);
 
 /** `null` for a file that does not exist, so a package without one reads cleanly. */
 async function readOptional(path) {

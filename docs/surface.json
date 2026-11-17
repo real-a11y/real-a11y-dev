@@ -203,6 +203,20 @@
           "subpath": "./matchers/jest-globals",
           "types": [],
           "values": []
+        },
+        {
+          "subpath": "./reporter",
+          "types": [
+            "default"
+          ],
+          "values": []
+        },
+        {
+          "subpath": "./reporter/jest",
+          "types": [
+            "default"
+          ],
+          "values": []
         }
       ],
       "name": "@real-a11y-dev/testing"
@@ -1772,6 +1786,13 @@
       "packages": [
         "mcp"
       ]
+    },
+    {
+      "name": "REAL_A11Y_TREES_DIR",
+      "packages": [
+        "snapshot-viewer",
+        "testing"
+      ]
     }
   ],
   "manifestVersion": 2,
@@ -2628,6 +2649,19 @@
     },
     {
       "bin": [],
+      "description": "Draws the trees behind a11y test snapshots with the Semantic Navigator panel; bundled into @real-a11y-dev/testing's snapshot report",
+      "dir": "snapshot-viewer",
+      "exports": [],
+      "name": "@real-a11y-dev/snapshot-viewer",
+      "private": true,
+      "version": "0.0.0",
+      "workspaceDeps": [
+        "@real-a11y-dev/core",
+        "@real-a11y-dev/semantic-navigator-ui"
+      ]
+    },
+    {
+      "bin": [],
       "description": "Inspect the accessibility tree, heading outline and tab order of every story in a live panel",
       "dir": "storybook-addon",
       "exports": [
@@ -2650,7 +2684,9 @@
         "./matchers/jest",
         "./matchers/jest-globals",
         "./matchers/vitest",
-        "./playwright"
+        "./playwright",
+        "./reporter",
+        "./reporter/jest"
       ],
       "name": "@real-a11y-dev/testing",
       "private": false,

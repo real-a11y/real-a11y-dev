@@ -17,8 +17,8 @@ An accessibility inspection toolchain. It builds a semantic tree of a page and
 gives you ways to read, diff, assert on and act through it — a matcher, a panel,
 a command, a server, a browser extension.
 
-Six of the sixteen packages are published — `cli`, `inspector`, `mcp`, `react`,
-`storybook-addon`, `testing` — and the other ten ship bundled inside them.
+Six of the seventeen packages are published — `cli`, `inspector`, `mcp`, `react`,
+`storybook-addon`, `testing` — and the other eleven ship bundled inside them.
 CONTRIBUTING's _Project structure_ carries the annotated map and the reasoning
 for each seam; each `package.json`'s `private` field is the authority.
 
