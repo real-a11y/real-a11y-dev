@@ -80,6 +80,13 @@ main
     strong "session expired"
     code "login"
     code "auth.json"
+  paragraph "The pin covers the page's s as well. A frame whose document comes from an origin you didn't allow is not read — its row stays empty — since it would carry the same cookies into your report. A , or frame holds the page's own markup and is read. Add the frame's origin with to include it."
+    code "<iframe>"
+    code "Iframe"
+    code "srcdoc"
+    code "about:blank"
+    code "data:"
+    code "--audit-origin"
   heading "In the MCP server" (level 3)
   paragraph "The same drives the MCP server: point it at the file with and pin the origin with — the env-var mirror of the CLI's and . See the for both."
     code "auth.json"
