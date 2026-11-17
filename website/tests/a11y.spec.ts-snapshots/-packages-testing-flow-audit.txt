@@ -176,7 +176,7 @@ main
     code "fireEvent"
   button "Copy Code"
   code "import { capture, a11yDiff } from "@real-a11y-dev/testing"; test("opening the country picker", () => { render(<CountrySelector />); const before = capture(document.body); fireEvent.click(screen.getByRole("combobox", { name: /country/i })); expect(a11yDiff(before, document.body)).toMatchInlineSnapshot(` + option "Spain" + option "France" ~ combobox "Country": a11y.states.expanded false → true ~ listbox "Countries": childIds 0 children → 2 children `); });"
-  paragraph "returns a boxed value that renders through the as — register it once ( from ) and / print the change list verbatim. must be a pre-captured tree (extracting it at assert time would diff the tree against itself); can be a live , captured for you. A line appears only when both sides carry focus context (both d)."
+  paragraph "returns a boxed value that renders through the as — register it once ( from ) and / print the change list verbatim. Without it, the snapshot holds the same change list as a quoted string. must be a pre-captured tree (extracting it at assert time would diff the tree against itself); can be a live , captured for you. A line appears only when both sides carry focus context (both d)."
     code "a11yDiff"
     strong "same snapshot serializer"
     code "boxedTreeSnapshot"

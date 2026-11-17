@@ -96,6 +96,20 @@ test("opening the country picker", () => {
 });
 ```
 
+`a11yDiff` (like `boxedTreeSnapshot`) returns a box that the snapshot serializer prints as plain text, as above. Register it once in a setup file:
+
+```ts
+// vitest.config.ts: test: { environment: "jsdom", setupFiles: ["./vitest.setup.ts"] }
+// vitest.setup.ts
+import { expect } from "vitest";
+import { registerA11yMatchers } from "@real-a11y-dev/testing/matchers";
+import "@real-a11y-dev/testing/matchers/vitest"; // types only: registers nothing
+
+registerA11yMatchers(expect);
+```
+
+Under Jest, call `registerA11yMatchers(expect)` the same way, with `@real-a11y-dev/testing/matchers/jest` for the types. Without the setup, the snapshot still holds the change list, as a quoted string.
+
 Or fluently, inside a `flow()`, with a structured matcher:
 
 ```ts

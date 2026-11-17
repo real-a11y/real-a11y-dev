@@ -462,8 +462,9 @@ export const a11yMatchers = {
 /**
  * Wrap a DOM root (or pre-extracted tree) so `expect(...).toMatchSnapshot()`
  * prints the deterministic a11y tree via the registered serializer, instead of
- * the framework's default DOM-element dump. (`a11yDiff` produces the same box
- * shape for a change list — one serializer renders both.)
+ * the framework's default DOM-element dump. Without the serializer registered,
+ * the snapshot holds the same text as a quoted string. (`a11yDiff` produces the
+ * same box shape for a change list — one serializer renders both.)
  */
 export function boxedTreeSnapshot(
   root: Element | Tree,
