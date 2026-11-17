@@ -121,6 +121,8 @@ pnpm --filter @real-a11y-dev/core test    # Test a specific package
 pnpm --filter @real-a11y-dev/core test:watch  # Watch mode
 ```
 
+The two testing examples (`examples/testing-vitest`, `examples/testing-jest`) run with the snapshot report on, so each run writes `a11y-snapshots/index.html` there: every boxed snapshot drawn as the panel's tree. Open it from disk after a local run. In CI, the `verify` job uploads both pages from one of its legs as the `a11y-snapshot-report` artifact, failing runs included. Find it under the run's **Artifacts**.
+
 ### The public-surface manifest
 
 `docs/surface.json` is a generated, committed description of what the packages

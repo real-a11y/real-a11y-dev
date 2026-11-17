@@ -185,6 +185,24 @@ jobs:
       - name: Test examples
         run: pnpm --filter @real-a11y-dev/example-testing test
 
+      # The snapshot report each testing example writes as its tests run
+      # (`@real-a11y-dev/testing/reporter` for Vitest, `/reporter/jest` for
+      # Jest, the Jest one inside `pnpm verify`): one self-contained page each,
+      # under the run's Artifacts. From the matrix's first leg only, whatever
+      # its values, so the name is unique. On a failing run it holds whichever
+      # pages the tests got to write: an example's own failure still writes its
+      # page, but a failure earlier in `pnpm verify` skips the Vitest example.
+      # A page holds no field value and no local path, by design.
+      - name: Upload the a11y snapshot reports
+        if: ${{ !cancelled() && strategy.job-index == 0 }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: a11y-snapshot-report
+          path: |
+            examples/testing-vitest/a11y-snapshots/index.html
+            examples/testing-jest/a11y-snapshots/index.html
+          retention-days: 7
+
       # Confirm the website and runnable examples still build end-to-end,
       # including the Storybook example (audit #5 — previously skipped).
       - name: Build examples and docs
