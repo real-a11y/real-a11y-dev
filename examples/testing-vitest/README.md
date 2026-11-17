@@ -12,6 +12,8 @@ Uses `@real-a11y-dev/testing` inside plain Vitest + jsdom to audit rendered Reac
 - `waitForMutations()` for content that updates over time (toasts, a progress log, a streaming response) — await the tree settling, or resolve at a bounded `timeout` for a stream that never settles, then assert
 - **Custom `expect` matchers** (`@real-a11y-dev/testing/matchers`) — `toHaveNoUnlabeledInteractive`, `toHaveValidHeadingOrder`, `toHaveLabeledDialogs`, `toHaveValidLandmarks`, `toHaveTabSequence`, registered once in [`src/setup.ts`](./src/setup.ts)
 - The `boxedTreeSnapshot()` serializer so `toMatchSnapshot()` produces semantic (role + name) output, not a DOM dump — including modal scoping (content behind an open dialog drops out of the tree)
+- `capture()` + `a11yDiff()` snapshotting what an interaction changed — rows added, changed and removed, and where focus went
+- **The snapshot report** (`@real-a11y-dev/testing/reporter`, wired in [`vitest.config.ts`](./vitest.config.ts)) — after every run, `a11y-snapshots/index.html` draws each boxed snapshot as the Semantic Navigator panel draws a tree, a diff's changes marked
 
 ## Run it
 
@@ -38,6 +40,7 @@ pnpm --filter @real-a11y-dev/example-testing test:watch
 - [`src/setup.ts`](./src/setup.ts) — registers the custom matchers + serializer (wired via `setupFiles`)
 - [`src/matchers-basic.test.ts`](./src/matchers-basic.test.ts) — **simple**: each matcher in isolation, pass / `.not` / failure
 - [`src/matchers-account-page.test.ts`](./src/matchers-account-page.test.ts) — **complex**: the matchers as one accessibility gate over a realistic screen, plus a `flow()`-driven modal that shows tree scoping
+- [`src/interaction-diff.test.ts`](./src/interaction-diff.test.ts) — `capture()` + `a11yDiff()` over a booking form: a status message, and an error summary that takes focus. Open `a11y-snapshots/index.html` after a run to see each diff marked on its tree
 - [`src/__snapshots__/`](./src/__snapshots__) — committed snapshots; edit them intentionally, never blindly
 
 ## See also

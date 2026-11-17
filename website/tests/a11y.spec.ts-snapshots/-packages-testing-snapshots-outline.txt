@@ -16,4 +16,10 @@ h1 Snapshots
     h3 Turning it off
     h3 Upgrading an existing suite
   h2 Determinism
+  h2 The snapshot report
+    h3 What it shows
+    h3 What it records
+    h3 Options
+    h3 In CI and watch mode
+    h3 REAL_A11Y_TREES_DIR
   h2 See also

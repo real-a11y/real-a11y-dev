@@ -260,7 +260,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^5.1.0
-        version: 5.1.0(@types/node@26.6.6)(@vitest/coverage-v8@5.1.0)(@vitest/ui@5.1.0)(jsdom@29.1.1)(vite@8.3.5(@types/node@26.6.6)(esbuild@0.27.7)(jiti@2.6.1)(yaml@2.9.1))
+        version: 5.1.0(@types/node@26.6.6)(@vitest/coverage-v8@5.1.0)(@vitest/ui@5.1.0)(jsdom@29.1.1)(vite@8.3.5(@types/node@26.6.6)(esbuild@0.28.2)(jiti@2.6.1)(yaml@2.9.1))
 
   packages/browser:
     dependencies:
@@ -291,7 +291,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^5.1.0
-        version: 5.1.0(@types/node@26.6.6)(@vitest/coverage-v8@5.1.0)(@vitest/ui@5.1.0)(jsdom@29.1.1)(vite@8.3.5(@types/node@26.6.6)(esbuild@0.28.2)(jiti@2.6.1)(yaml@2.9.1))
+        version: 5.1.0(@types/node@26.6.6)(@vitest/coverage-v8@5.1.0)(@vitest/ui@5.1.0)(jsdom@29.1.1)(vite@8.3.5(@types/node@26.6.6)(esbuild@0.27.7)(jiti@2.6.1)(yaml@2.9.1))
 
   packages/cli:
     dependencies:
@@ -608,6 +608,28 @@ importers:
         specifier: ^5.1.0
         version: 5.1.0(@types/node@26.6.6)(@vitest/coverage-v8@5.1.0)(@vitest/ui@5.1.0)(jsdom@29.1.1)(vite@8.3.5(@types/node@26.6.6)(esbuild@0.28.2)(jiti@2.6.1)(yaml@2.9.1))
 
+  packages/snapshot-viewer:
+    dependencies:
+      '@real-a11y-dev/core':
+        specifier: workspace:*
+        version: link:../core
+      '@real-a11y-dev/semantic-navigator-ui':
+        specifier: workspace:*
+        version: link:../ui
+      preact:
+        specifier: ^10.29.8
+        version: 10.29.8
+    devDependencies:
+      '@types/node':
+        specifier: ^26.6.3
+        version: 26.6.6
+      typescript:
+        specifier: ^5.6.0
+        version: 5.9.3
+      vite:
+        specifier: ^6.4.5
+        version: 6.4.5(@types/node@26.6.6)(jiti@2.6.1)(lightningcss@1.33.0)(yaml@2.9.1)
+
   packages/storybook-addon:
     devDependencies:
       '@real-a11y-dev/core':
@@ -674,6 +696,9 @@ importers:
       '@real-a11y-dev/serialize':
         specifier: workspace:*
         version: link:../serialize
+      '@real-a11y-dev/snapshot-viewer':
+        specifier: workspace:*
+        version: link:../snapshot-viewer
       '@real-a11y-dev/validate':
         specifier: workspace:*
         version: link:../validate

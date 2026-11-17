@@ -1,0 +1,319 @@
+/*
+ * The frame around the panel: the record list, a record's header and its
+ * snapshot text. Everything else is the `ui` package's: the colours and fonts
+ * (`themes.css`, through `sn-theme-auto` on `.sv`), and the badge, search
+ * box and toggle (`tree.css`). So the frame follows the panel's light or dark
+ * theme, and changes with it.
+ */
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+  margin: 0;
+}
+
+.sv {
+  /* The one colour `ui` has no token for: a removed line. */
+  --sv-removed-bg: hsl(0 86% 95%);
+  --sv-removed-edge: hsl(0 70% 45%);
+  --sv-removed-text: hsl(0 70% 30%);
+  display: grid;
+  grid-template-columns: minmax(240px, 320px) 1fr;
+  height: 100%;
+  background: var(--sn-bg);
+  color: var(--sn-text);
+  font: 14px/1.45 var(--sn-font);
+}
+
+@media (prefers-color-scheme: dark) {
+  .sv {
+    --sv-removed-bg: hsl(0 50% 17%);
+    --sv-removed-edge: hsl(0 70% 55%);
+    --sv-removed-text: hsl(0 85% 80%);
+    color-scheme: dark;
+  }
+}
+
+/* ---- Records list ---- */
+
+.sv-nav {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-right: 1px solid var(--sn-border);
+  background: var(--sn-bg-toolbar);
+}
+
+.sv-nav-head {
+  padding: 14px 14px 10px;
+  border-bottom: 1px solid var(--sn-border);
+}
+
+.sv-nav-head h1 {
+  margin: 0 0 10px;
+  font-size: 15px;
+}
+
+.sv-nav-head .sn-search {
+  width: 100%;
+}
+
+.sv-nav-list {
+  overflow: auto;
+  padding: 6px 8px 16px;
+}
+
+.sv-nav-list ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.sv-file-name {
+  margin: 12px 6px 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--sn-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sv-record {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  padding: 7px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.sv-record:hover {
+  background: var(--sn-bg-hover);
+}
+
+.sv-record[aria-current="true"] {
+  background: var(--sn-bg-selected);
+  box-shadow: inset 3px 0 0 var(--sn-accent);
+}
+
+.sv-record:focus-visible {
+  outline: 2px solid var(--sn-border-focus);
+  outline-offset: 1px;
+}
+
+.sv-record-top {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.sv-record-name {
+  font-weight: 500;
+}
+
+.sv-record-index,
+.sv-title-index {
+  color: var(--sn-text-muted);
+  font-weight: 400;
+}
+
+/* Under the name, past the kind badge. */
+.sv-record-path,
+.sv-counts {
+  padding-left: 44px;
+  color: var(--sn-text-muted);
+  font-size: 12px;
+}
+
+.sv-counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.sv-added {
+  color: var(--sn-diff-added-text);
+}
+
+.sv-changed {
+  color: var(--sn-diff-changed-text);
+}
+
+.sv-removed {
+  color: var(--sv-removed-text);
+}
+
+/* `ui`'s `.sn-badge`, one width for TREE and DIFF. */
+.sv-kind {
+  flex: none;
+  min-width: 38px;
+  justify-content: center;
+}
+
+.sv-kind-diff {
+  background: var(--sn-diff-changed-bg);
+  color: var(--sn-diff-changed-text);
+}
+
+/* ---- One record ---- */
+
+.sv-main,
+.sv-record-view {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.sv-record-view {
+  flex: 1;
+}
+
+.sv-header {
+  padding: 14px 18px 12px;
+  border-bottom: 1px solid var(--sn-border);
+}
+
+.sv-header h2 {
+  margin: 0;
+  font-size: 17px;
+}
+
+.sv-crumbs,
+.sv-meta {
+  margin: 0;
+  color: var(--sn-text-muted);
+  font-size: 12px;
+}
+
+.sv-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-top: 6px;
+}
+
+.sv-header .sn-toggle-group {
+  width: fit-content;
+  margin-top: 10px;
+}
+
+.sv-body {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+}
+
+.sv-panel {
+  min-height: 0;
+  overflow: hidden;
+  border-right: 1px solid var(--sn-border);
+}
+
+.sv-text {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--sn-bg-toolbar);
+}
+
+.sv-text h3 {
+  margin: 0;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--sn-border);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--sn-text-muted);
+}
+
+.sv-text pre {
+  flex: 1;
+  margin: 0;
+  padding: 10px 0;
+  overflow: auto;
+  font: 12.5px/1.6 var(--sn-font-mono);
+}
+
+/* A long change line wraps, hanging under its marker, rather than scrolling
+   out of view. */
+.sv-line {
+  display: block;
+  padding: 0 14px 0 26px;
+  border-left: 3px solid transparent;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  text-indent: -12px;
+}
+
+.sv-line-added {
+  color: var(--sn-diff-added-text);
+  background: var(--sn-diff-added-bg);
+  border-left-color: var(--sn-diff-added-edge);
+}
+
+.sv-line-changed {
+  color: var(--sn-diff-changed-text);
+  background: var(--sn-diff-changed-bg);
+  border-left-color: var(--sn-diff-changed-edge);
+}
+
+.sv-line-removed {
+  color: var(--sv-removed-text);
+  background: var(--sv-removed-bg);
+  border-left-color: var(--sv-removed-edge);
+}
+
+.sv-line-focus {
+  color: var(--sn-text-state);
+  font-style: italic;
+}
+
+.sv-empty {
+  margin: auto;
+  max-width: 520px;
+  padding: 24px;
+  color: var(--sn-text-muted);
+}
+
+.sv-empty pre {
+  padding: 10px 12px;
+  border-radius: 6px;
+  background: var(--sn-bg-toolbar);
+  color: var(--sn-text);
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+@media (max-width: 900px) {
+  .sv {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto 1fr;
+  }
+  .sv-nav {
+    max-height: 40vh;
+    border-right: 0;
+    border-bottom: 1px solid var(--sn-border);
+  }
+  .sv-body {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(320px, 1fr) auto;
+  }
+  .sv-panel {
+    border-right: 0;
+    border-bottom: 1px solid var(--sn-border);
+  }
+}

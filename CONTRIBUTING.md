@@ -41,7 +41,7 @@ pnpm test
 
 ### Project structure
 
-`packages/` holds sixteen packages (plus one shared Vitest setup file), and the
+`packages/` holds seventeen packages (plus one shared Vitest setup file), and the
 distinction worth carrying while you read them is which ones anybody can
 install. A package marked **private** below never reaches a registry — its code
 still ships, bundled *into* whichever published package carries it, so there is
@@ -72,6 +72,8 @@ packages/
 ├── session-registry/  # private — named sessions shared by the CLI daemon and the MCP server
 ├── validate/          # private — ARIA semantics validation, `aria-query`-backed
 ├── ui/                # private — @real-a11y-dev/semantic-navigator-ui — Preact tree components
+├── snapshot-viewer/   # private — draws test snapshots with the `ui` panel; its build is the
+│                      #   page `testing`'s snapshot report writes (`/reporter`, `/reporter/jest`)
 │
 │                      # Apps and fixtures — never on a registry either
 ├── extension/         # private — the Chrome extension (Side Panel + Content Script),
@@ -91,7 +93,9 @@ names one:
 - `cli → browser, snapshot, session-registry, audit, serialize → core`
 - `mcp →` the same five `→ core` — the CLI and the server share one engine, so a
   snapshot captured by either diffs against the other byte for byte
-- `testing → browser, audit, serialize, validate → core` (headless — no `ui` dep)
+- `testing → browser, audit, serialize, validate → core` (headless — no `ui` dep
+  in the library). Its snapshot report ships `snapshot-viewer`'s prebuilt page,
+  `snapshot-viewer → ui → core`, as files the reporter reads, never imports
 - `inspector → ui → core`
 - `react → inspector → ui → core`
 - `storybook-addon → ui → core` (it does not depend on `testing`)

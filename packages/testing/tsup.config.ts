@@ -1,5 +1,8 @@
 import { defineConfig } from "tsup";
 
+// The `./reporter` entry builds on its own, after this one
+// (`tsup.reporter.config.ts`): it reads files from Node, and nothing of that
+// may reach the library entries below, which bundlers take to the browser.
 export default defineConfig({
   // ESM + CJS entries. The injected IIFE page-bundle now lives in
   // @real-a11y-dev/browser; the Playwright adapter resolves it from there.

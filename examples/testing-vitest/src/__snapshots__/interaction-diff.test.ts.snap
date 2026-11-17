@@ -1,0 +1,41 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`booking form > announces a closed day in a status message 1`] = `
+~ status "We're closed that day. Pick another date.": a11y.name "" → "We're closed that day. Pick another date."
+~ status "We're closed that day. Pick another date.": dom.textContent "" → "We're closed that day. Pick another date."
+focus: (none) → textbox "Date"
+`;
+
+exports[`booking form > announces a refused pickup above the form and moves focus there 1`] = `
++ paragraph "We couldn't send your request"
++ paragraph "We don't serve this pickup postcode. Check it is correct."
++ alert
++ paragraph "We don't serve this postcode."
+~ textbox "Pickup postcode": a11y.description "5 digits. We use it to check we cover your area." → "5 digits. We use it to check we cover your area. We don't serve this postcode."
+~ textbox "Pickup postcode": a11y.states.invalid (unset) → true
+~ form "Booking": childIds 7 children → 8 children
+~ main: childIds 4 children → 5 children
+focus: combobox "Time" → alert
+`;
+
+exports[`booking form > exposes headings, labeled fields and the submit button 1`] = `
+main
+  heading "Book a move" (level 1)
+  list
+    term "Service"
+    definition "Local move"
+    term "Hours"
+    definition "Mon–Sat 8:00–18:00"
+  form "Booking"
+    textbox "Pickup address"
+    textbox "Pickup postcode"
+    paragraph "5 digits. We use it to check we cover your area."
+    textbox "Date"
+    status
+    combobox "Time"
+      option "09:00"
+      option "12:00"
+      option "15:00"
+    button "Request move"
+  link "Create an account"
+`;

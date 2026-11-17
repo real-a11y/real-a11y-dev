@@ -80,6 +80,22 @@
       },
       "import": "./dist/matchers-jest-globals.js",
       "require": "./dist/matchers-jest-globals.cjs"
+    },
+    "./reporter": {
+      "types": {
+        "import": "./dist/reporter.d.ts",
+        "require": "./dist/reporter.d.cts"
+      },
+      "import": "./dist/reporter.js",
+      "require": "./dist/reporter.cjs"
+    },
+    "./reporter/jest": {
+      "types": {
+        "import": "./dist/reporter-jest.d.ts",
+        "require": "./dist/reporter-jest.d.cts"
+      },
+      "import": "./dist/reporter-jest.js",
+      "require": "./dist/reporter-jest.cjs"
     }
   },
   "files": [
@@ -90,7 +106,7 @@
     "provenance": true
   },
   "scripts": {
-    "build": "tsup",
+    "build": "tsup && tsup --config tsup.reporter.config.ts",
     "dev": "tsup --watch",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
@@ -117,6 +133,7 @@
     "@real-a11y-dev/browser": "workspace:*",
     "@real-a11y-dev/core": "workspace:*",
     "@real-a11y-dev/serialize": "workspace:*",
+    "@real-a11y-dev/snapshot-viewer": "workspace:*",
     "@real-a11y-dev/validate": "workspace:*",
     "@types/node": "^26.6.3",
     "tsup": "^8.3.0",

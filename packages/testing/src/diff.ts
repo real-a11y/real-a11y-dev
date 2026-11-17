@@ -81,5 +81,14 @@ export function a11yDiff(
       focusBefore: b.focus,
       focusAfter: a.focus,
     }),
+    () => ({
+      kind: "diff",
+      before: b.tree,
+      after: a.tree,
+      focusBefore: b.focus === undefined ? undefined : (b.focus?.id ?? null),
+      focusAfter: a.focus === undefined ? undefined : (a.focus?.id ?? null),
+      redact: options.redact,
+      values: options.values,
+    }),
   );
 }

@@ -124,6 +124,28 @@ await flow(container)
 
 See the [Flow docs](https://real-a11y.dev/packages/testing/flow#asserting-what-an-interaction-changed) for both styles. `a11yDiff(before, after, { childIds: false })` leaves out a container's `childIds` count line when its `+`/`-` lines already explain it; a move or reorder still prints it.
 
+## See snapshots as a tree
+
+A snapshot's text leaves out states, descriptions and what each element takes. Add the snapshot reporter to Vitest or Jest, and after every run `a11y-snapshots/index.html` draws each `boxedTreeSnapshot()` and `a11yDiff()` snapshot the way the Semantic Navigator panel does, with a diff's changes marked on its tree:
+
+```ts
+// vitest.config.ts
+export default defineConfig({
+  test: {
+    reporters: ["default", "@real-a11y-dev/testing/reporter"],
+  },
+});
+```
+
+```js
+// jest.config.js
+module.exports = {
+  reporters: ["default", "@real-a11y-dev/testing/reporter/jest"],
+};
+```
+
+One self-contained page: open it from disk, or upload it from CI. See [The snapshot report](https://real-a11y.dev/packages/testing/snapshots#the-snapshot-report).
+
 ## Playwright adapter
 
 ```ts

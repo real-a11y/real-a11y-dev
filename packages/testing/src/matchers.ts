@@ -52,6 +52,7 @@ import {
   boxSnapshot,
   type A11ySnapshotBox,
 } from "./snapshot-box.js";
+import { bindSnapshotRecorder, isRecording } from "./snapshot-record.js";
 
 // A pre-extracted tree carries its producer provenance (`source`).
 type Tree = ExtractionResult;
@@ -470,7 +471,25 @@ export function boxedTreeSnapshot(
   root: Element | Tree,
   options?: SerializeOptions,
 ): A11ySnapshotBox {
-  return boxSnapshot(serializeTree(root, options));
+  if (!isRecording()) return boxSnapshot(serializeTree(root, options));
+  // Recording: read the page once, now, and print the text from that read,
+  // so the record is the tree the text describes even if the page changes
+  // before the box is snapshotted. The read `serializeTree` makes of a root.
+  const tree = isTree(root)
+    ? root
+    : extract(root, options?.mode ?? "a11y", {
+        redactInput: Boolean(options?.redactInput),
+      });
+  return boxSnapshot(serializeTree(tree, options), () => ({
+    kind: "tree",
+    tree,
+    redact: options?.redact,
+    values: options?.values,
+  }));
+}
+
+function isTree(root: Element | Tree): root is Tree {
+  return typeof (root as Partial<Tree>).rootId === "string";
 }
 
 // The pretty-format plugin lives in ./snapshot-box (shared with a11yDiff);
@@ -482,6 +501,7 @@ export { a11ySnapshotSerializer };
 interface ExpectApi {
   extend(matchers: Record<string, unknown>): void;
   addSnapshotSerializer?(serializer: unknown): void;
+  getState?(): { currentTestName?: string; testPath?: string };
 }
 
 /**
@@ -505,6 +525,9 @@ interface ExpectApi {
 export function registerA11yMatchers(expect: ExpectApi): void {
   expect.extend(a11yMatchers);
   expect.addSnapshotSerializer?.(a11ySnapshotSerializer);
+  // Where the snapshot viewer's recorder (off unless REAL_A11Y_TREES_DIR is
+  // set) reads which test took a snapshot.
+  bindSnapshotRecorder(expect);
 }
 
 // ─── type augmentation ───────────────────────────────────────────────────────

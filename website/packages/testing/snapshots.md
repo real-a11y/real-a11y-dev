@@ -275,9 +275,91 @@ Because the marker is on by default, a committed snapshot **captured after an in
 
 All three helpers return the **same string** for the same DOM — on every run, on every machine. No timestamps, no generated IDs, no ordering surprises. The `[focused]` marker is deterministic too: the same interaction leaves focus on the same element, so the same steps always produce the same string. That's the property that makes `toMatchSnapshot()` safe in CI without flakes. For genuinely variable content, use [`redact`](#using-redact); to drop the focus marker entirely, pass [`markFocus: false`](#focus-marker).
 
+## The snapshot report
+
+A snapshot's text is made to be committed and diffed, so it leaves most of the tree out: [no states, no description](#what-a-line-carries), nothing about what an element takes. The snapshot report shows the rest. Add its reporter to Vitest or Jest, and after every run `a11y-snapshots/index.html` draws each snapshot's tree the way the Semantic Navigator panel does.
+
+::: code-group
+
+```ts [Vitest]
+// vitest.config.ts
+import { defineConfig } from "vitest/config";
+
+export default defineConfig({
+  test: {
+    reporters: ["default", "@real-a11y-dev/testing/reporter"],
+  },
+});
+```
+
+```js [Jest]
+// jest.config.js
+module.exports = {
+  reporters: ["default", "@real-a11y-dev/testing/reporter/jest"],
+};
+```
+
+:::
+
+Keep `"default"` in the list: naming any reporter replaces the runner's own output. Then run your tests as usual. The run ends with a link to the page:
+
+```
+ a11y snapshots  6 recorded → file:///…/a11y-snapshots/index.html
+```
+
+The page is one self-contained file. It opens from disk, needs no server, and works offline. Add `a11y-snapshots/` to your `.gitignore`.
+
+### What it shows
+
+- **Every boxed snapshot of the run**, by test file and test: each [`boxedTreeSnapshot()`](/packages/testing/matchers#boxedtreesnapshot-root-options-—-snapshot-serializer) and each [`a11yDiff()`](/packages/testing/flow#asserting-what-an-interaction-changed).
+- **A tree snapshot as a tree** you can open and close, with each row's states and what it takes (`interactive`, `focusable`, `selected`, `invalid`, …), filters for headings, links, buttons, forms and landmarks, and the TAB view: the tab stops in order.
+- **A diff on the tree it describes.** The after tree opens with what changed marked: new rows, changed rows with the field that changed, and a count of rows removed. The before tree is one click away.
+- **The snapshot's text** beside it, as the `.snap` holds it, its `+` added, `-` removed and `~` changed lines coloured.
+
+Its `.snap` text is still what a test asserts. The report only shows a snapshot, and never fails a run.
+
+### What it records
+
+Only a boxed snapshot has a tree behind it. A snapshot of a plain string, such as `expect(treeSnapshot(el)).toMatchSnapshot()`, has none, so it doesn't appear. Snapshot `boxedTreeSnapshot(el)` instead to see it in the report. Each record is named after its test, which the recorder reads from the `expect` you pass to [`registerA11yMatchers(expect)`](/packages/testing/matchers). Vitest names a test `describe > test`, which the page splits into its describe path and its own name; Jest joins the two with a space, so the page shows the whole name.
+
+A record shows states, which the text leaves out, but no field value the text didn't print:
+
+- **A field's value is recorded only when the snapshot printed it**, with [`values: true`](#field-values). Otherwise the record drops it: no `a11y.value`, and no `value`, `aria-valuenow` or `aria-valuetext` attribute.
+- **Sensitive fields are masked** as the extractor reads the page, even with `values: true`, and [`redactInput: true`](#strict-mode) withholds every value and all editor content from the record as from the text.
+- **A snapshot's [`redact`](#using-redact) patterns** apply to everything in the record the page supplied: names, descriptions, values, text, and attribute values, the page's own element ids included. They leave alone what the record builds its tree from, its node ids and roles, so a pattern like `/\d+/` can't merge rows.
+
+States and descriptions are recorded as the panel shows them, so a selected option still says it is selected, and a description that quotes a field it points at (`aria-describedby` on a control holding a value) quotes it in the record too, as an `a11yDiff`'s text does. Use `redactInput: true` to keep those out.
+
+### Options
+
+Both reporters take the same options, as the runner's `[name, options]` pair:
+
+```ts
+reporters: [
+  "default",
+  ["@real-a11y-dev/testing/reporter", { outputDir: "reports/a11y" }],
+],
+```
+
+| Option | Type | Default | Description |
+|---|---|---|---|
+| `outputDir` | `string` | `"a11y-snapshots"` | Where `index.html` and the `records/` it is made from go, relative to Vitest's `root` or Jest's `rootDir`. |
+
+### In CI and watch mode
+
+- **CI:** upload `a11y-snapshots/index.html` as an artifact, and anyone on the pull request can open what the run recorded.
+- **Watch mode:** each rerun replaces the records of the files it ran and writes the page again. Reload it to see the new run.
+
+The reporters need Vitest 3 or later, or Jest 29 or later, and Node 20.16 or later.
+
+### `REAL_A11Y_TREES_DIR`
+
+Both reporters work by setting `REAL_A11Y_TREES_DIR` for the run. While it is set, each boxed snapshot writes the tree behind it to that directory as JSON, one file per snapshot (`<test file>/<test name>-<n>.json`), the before and after trees for a diff. You only need to set it yourself to keep those records without the reporter.
+
 ## See also
 
 - [Matchers](/packages/testing/matchers) — `boxedTreeSnapshot()` serializer so `expect(el).toMatchSnapshot()` renders the tree directly
+- [The snapshot report](#the-snapshot-report) — every boxed snapshot of a run, drawn as a tree with its states and changes
 - [Playwright adapter](/packages/testing/playwright) — the same snapshots against a real browser
 - [CI Diff Bot recipe](/guide/ci-diff-bot) — running [`@real-a11y-dev/cli`](/packages/cli)'s `snapshot` / `diff` in a PR workflow
 
