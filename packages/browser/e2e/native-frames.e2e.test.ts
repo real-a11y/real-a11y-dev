@@ -94,6 +94,7 @@ beforeAll(async () => {
   <iframe title="hidden" style="display:none" src="/child.html"></iframe>
   <div aria-hidden="true"><iframe title="aria-hidden" src="/child.html"></iframe></div>
   <iframe title="deep 1" src="/deep/1"></iframe>
+  <div contenteditable="true" aria-label="Composer"><p>Draft</p><iframe title="quote" srcdoc="<p>Quoted secret</p>"></iframe></div>
   <p>After frames</p>
 </main>`;
   });
@@ -242,6 +243,14 @@ describe("native tree — frames in the page's own process", () => {
       [],
     );
     expect(JSON.stringify(nodesOf(strict))).not.toContain("Ada Lovelace");
+  });
+
+  it("withholds a frame inside an editor in strict mode, as the editor's content", async () => {
+    expect(inside(tree, rowOf(tree, "quote"))).toEqual([
+      'paragraph "Quoted secret"',
+    ]);
+    const strict = await nativeTree(page, { redactInput: true });
+    expect(JSON.stringify(nodesOf(strict))).not.toContain("Quoted secret");
   });
 
   it("audits a frame's controls, but not its document as a second page", () => {

@@ -24,11 +24,11 @@ import editorPayload from "./__fixtures__/native-ax-editor.json";
 import framesPayload from "./__fixtures__/native-ax-frames.json";
 import payload from "./__fixtures__/native-ax-payload.json";
 import valuesPayload from "./__fixtures__/native-ax-values.json";
+import { readFrames } from "./native-frames.js";
 import {
   allowlistAttributes,
   buildNativeTree,
   nativeAXView,
-  readFrames,
   type NativeDomInfo,
   type NativeFramePayload,
 } from "./native-tree.js";
@@ -2513,6 +2513,41 @@ describe("buildNativeTree — same-process frames under their Iframe rows", () =
     expect(serializeTree(tree)).toBe(
       serializeTree(buildNativeTree(top, dom, framesPayload.chrome)),
     );
+  });
+
+  // A frame inside an editor (a `srcdoc` the user wrote into a
+  // contenteditable) is that editor's content as a whole: Chromium marks
+  // nothing in the frame's own document editable.
+  it("strict mode treats a frame inside an editor as the editor's content", () => {
+    const editableMain = top.map((raw) =>
+      raw.backendDOMNodeId === 10
+        ? {
+            ...raw,
+            properties: [
+              ...(raw.properties ?? []),
+              { name: "editable", value: { type: "token", value: "richtext" } },
+            ],
+          }
+        : raw,
+    ) as RawNodes;
+    const build = (redactInput: boolean) =>
+      buildNativeTree(editableMain, dom, framesPayload.chrome, {
+        redactInput,
+        frames,
+      });
+
+    expect(serializeTree(build(false))).toContain('heading "Pay"');
+    const strict = build(true);
+    const printed = JSON.stringify(nodesOf(strict));
+    for (const text of ["Pay", "Card number", "Name on card", "Inner help"]) {
+      expect(printed).not.toContain(`"${text}"`);
+    }
+    // Still the frame's structure, with nothing the user wrote in it.
+    expect(serializeTree(strict)).toContain('Iframe "Payment"');
+    expect(serializeTree(strict)).toContain('heading "[redacted]" (level 1)');
+    expect(
+      nativeAXView(editableMain, dom, { redactInput: true, frames }).tree,
+    ).not.toContain("Inner help");
   });
 
   it("audits a frame's controls, but not its document as a second page", () => {

@@ -326,8 +326,8 @@ function frameContent(tree: ExtractionResult): Set<string> {
 function headingOrderFindings(
   tree: ExtractionResult,
   findings: Finding[],
+  inFrame: ReadonlySet<string>,
 ): void {
-  const inFrame = frameContent(tree);
   const outline = getOutline(tree).filter((e) => !inFrame.has(e.id));
   const h1s = outline.filter((e) => e.level === 1);
   if (h1s.length === 0) {
@@ -366,8 +366,8 @@ function headingOrderFindings(
 function landmarkStructureFindings(
   tree: ExtractionResult,
   findings: Finding[],
+  inFrame: ReadonlySet<string>,
 ): void {
-  const inFrame = frameContent(tree);
   const landmarks = (role: string): SemanticNode[] =>
     findAllByRole(tree, role).filter((n) => !inFrame.has(n.id));
   const mains = landmarks("main");
@@ -528,11 +528,18 @@ export function collectFindings(
 
   if (want.has("image-alt")) imageAltFindings(tree, findings);
 
-  if (want.has("heading-order")) headingOrderFindings(tree, findings);
+  // The page's own document, for the rules that describe it.
+  const inFrame =
+    want.has("heading-order") || want.has("landmark-structure")
+      ? frameContent(tree)
+      : new Set<string>();
+
+  if (want.has("heading-order")) headingOrderFindings(tree, findings, inFrame);
 
   if (want.has("dialog-labeled")) dialogLabeledFindings(tree, findings);
 
-  if (want.has("landmark-structure")) landmarkStructureFindings(tree, findings);
+  if (want.has("landmark-structure"))
+    landmarkStructureFindings(tree, findings, inFrame);
 
   return findings;
 }
