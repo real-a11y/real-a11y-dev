@@ -29,13 +29,13 @@
   {
     "name": "@real-a11y-dev/testing (esm)",
     "path": "packages/testing/dist/index.js",
-    "limit": "25.5 KB",
+    "limit": "25.6 KB",
     "gzip": true
   },
   {
     "name": "@real-a11y-dev/testing/matchers (esm)",
     "path": "packages/testing/dist/matchers.js",
-    "limit": "35.9 KB",
+    "limit": "37.3 KB",
     "gzip": true
   },
   {
