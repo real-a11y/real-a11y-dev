@@ -339,6 +339,16 @@ export interface TreeDiffSerializeOptions {
    * `(no changes)`, exactly as before values were modelled.
    */
   values?: boolean;
+  /**
+   * Print a container's `childIds` line when its `+`/`-` lines already
+   * explain it. Default `true`. With `false`, the line is left out when every
+   * child the container gained or lost has its own `+`/`-` line and the
+   * children it kept stay in order. It still prints for a child that moved in
+   * from elsewhere (no `+`/`-` line), a reorder, and a change that also
+   * reorders the children it kept. The line is also the only one that says
+   * which container a node was added to or removed from.
+   */
+  childIds?: boolean;
 }
 
 /** `n children` / `1 child` — child-LIST changes render as counts, never ids. */
@@ -357,23 +367,42 @@ function childCount(n: number): string {
  * their own), so a reorder is reported as a fact, not a sequence.
  */
 function childIdsDetail(change: NodeChange): string {
+  const { before, after, gained, lost, reordered } = childListChange(change);
+  if (gained.length + lost.length === 0) {
+    // Same membership, so `childIds` was flagged for order alone.
+    return `childIds reordered (${childCount(after.length)})`;
+  }
+  const suffix = reordered ? " (reordered)" : "";
+  return `childIds ${childCount(before.length)} → ${childCount(after.length)}${suffix}`;
+}
+
+/** What a container's child list did, from {@link childListChange}. */
+interface ChildListChange {
+  before: string[];
+  after: string[];
+  /** Ids in `after` and not in `before`. */
+  gained: string[];
+  /** Ids in `before` and not in `after`. */
+  lost: string[];
+  /** Whether the children on BOTH sides changed relative order. */
+  reordered: boolean;
+}
+
+/** What a container's child list did between the two sides of a change. */
+function childListChange(change: NodeChange): ChildListChange {
   const before = change.before.childIds;
   const after = change.after.childIds;
   const beforeSet = new Set(before);
   const afterSet = new Set(after);
-  const removed = before.filter((id) => !afterSet.has(id)).length;
-  const added = after.filter((id) => !beforeSet.has(id)).length;
-
-  if (added === 0 && removed === 0) {
-    // Same membership, so `childIds` was flagged for order alone.
-    return `childIds reordered (${childCount(after.length)})`;
-  }
-  // Did the children present on BOTH sides also change relative order?
-  const survivorsBefore = before.filter((id) => afterSet.has(id));
-  const survivorsAfter = after.filter((id) => beforeSet.has(id));
-  const reordered = survivorsBefore.join(",") !== survivorsAfter.join(",");
-  const suffix = reordered ? " (reordered)" : "";
-  return `childIds ${childCount(before.length)} → ${childCount(after.length)}${suffix}`;
+  const kept = (ids: string[], other: Set<string>) =>
+    ids.filter((id) => other.has(id)).join(",");
+  return {
+    before,
+    after,
+    gained: after.filter((id) => !beforeSet.has(id)),
+    lost: before.filter((id) => !afterSet.has(id)),
+    reordered: kept(before, afterSet) !== kept(after, beforeSet),
+  };
 }
 
 /** Walk a dot-path (`a11y.states.expanded`) to its value; undefined if absent. */
@@ -395,6 +424,24 @@ function formatValue(value: unknown, redact?: RegExp[]): string {
     return JSON.stringify(redactText(value, redact));
   }
   return JSON.stringify(value);
+}
+
+/**
+ * True when a container's `childIds` change says nothing its `+`/`-` lines
+ * don't: it gained or lost a child, every child it gained is in `diff.added`
+ * and every child it lost in `diff.removed`, and the children it kept stay in
+ * order.
+ */
+function childIdsExplained(change: NodeChange, diff: TreeDiff): boolean {
+  const { gained, lost, reordered } = childListChange(change);
+  const listed = (ids: string[], nodes: SemanticNode[]) =>
+    ids.every((id) => nodes.some((n) => n.id === id));
+  return (
+    gained.length + lost.length > 0 &&
+    !reordered &&
+    listed(gained, diff.added) &&
+    listed(lost, diff.removed)
+  );
 }
 
 /** `<path> <before> → <after>` for one changed field of a node. */
@@ -451,9 +498,14 @@ export function serializeTreeDiff(
   diff: TreeDiff,
   options: TreeDiffSerializeOptions = {},
 ): string {
-  const { focusBefore, focusAfter, values = false } = options;
+  const { focusBefore, focusAfter, values = false, childIds = true } = options;
   const redact = ensureGlobalFlags(options.redact);
   const lines: string[] = [];
+  // A field left out: a value change unless asked for, or a child list its
+  // +/- lines already explain when `childIds` is off.
+  const omitted = (change: NodeChange, path: string): boolean =>
+    (path === "a11y.value" && !values) ||
+    (path === "childIds" && !childIds && childIdsExplained(change, diff));
 
   for (const node of diff.added) {
     lines.push(`+ ${nodeLabel(node, redact, values)}`);
@@ -465,7 +517,7 @@ export function serializeTreeDiff(
     // A changed node's label carries no value: its `a11y.value` line does.
     const label = nodeLabel(change.after, redact);
     for (const path of change.changes) {
-      if (path === "a11y.value" && !values) continue;
+      if (omitted(change, path)) continue;
       lines.push(`~ ${label}: ${changeDetail(change, path, redact)}`);
     }
   }

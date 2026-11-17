@@ -14,6 +14,12 @@ export interface A11yDiffOptions {
    * Default false, which leaves value changes out, as before.
    */
   values?: boolean;
+  /**
+   * Print a container's `childIds` line when its `+`/`-` lines already
+   * explain it. Default true. With `false`, an add, remove or swap prints only
+   * its `+`/`-` lines; a move or reorder still prints the `childIds` line.
+   */
+  childIds?: boolean;
 }
 
 /** A tree + its focus context, or `undefined` focus for a plain tree. */
@@ -70,6 +76,7 @@ export function a11yDiff(
     serializeTreeDiff(diffTrees(b.tree, a.tree), {
       redact: options.redact,
       values: options.values,
+      childIds: options.childIds,
       focusBefore: b.focus,
       focusAfter: a.focus,
     }),

@@ -157,6 +157,18 @@ test("opening the country picker", () => {
 
 `a11yDiff` returns a boxed value that renders through the **same snapshot serializer** as `boxedTreeSnapshot` — register it once (`registerA11yMatchers` from [`/matchers`](/packages/testing/matchers)) and `toMatchSnapshot()` / `toMatchInlineSnapshot()` print the change list verbatim. `before` must be a pre-captured tree (extracting it at assert time would diff the tree against itself); `after` can be a live `Element`, captured for you. A `focus:` line appears only when both sides carry focus context (both `capture()`d).
 
+The `~ listbox "Countries": childIds …` line says which container the two options joined. To leave such a line out when the `+`/`-` lines already explain it, pass `childIds: false`:
+
+```ts
+expect(a11yDiff(before, document.body, { childIds: false })).toMatchInlineSnapshot(`
+  + option "Spain"
+  + option "France"
+  ~ combobox "Country": a11y.states.expanded false → true
+`);
+```
+
+A move, where a node changes container without a `+`/`-` line, and a reorder still print their `childIds` lines.
+
 ### Style B — `flow().expectChanges` (fluent, structured)
 
 Inside a flow, `expectChanges` diffs everything since the chain's first action (or the previous `expectChanges`, which resets the window):
