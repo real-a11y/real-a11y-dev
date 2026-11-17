@@ -198,7 +198,10 @@ export function getDescendantText(
   memo?: DescendantTextMemo,
 ): string {
   if (memo) {
-    const { text, more } = elementSubtreeText(element, memo);
+    // Through the memo, so the element's own turn as a child is already read.
+    let sub = memo.get(element);
+    if (!sub) memo.set(element, (sub = elementSubtreeText(element, memo)));
+    const { text, more } = sub;
     return finishCollapsedText(
       { text, phase: text.endsWith(" ") ? "space" : "text" },
       more,
