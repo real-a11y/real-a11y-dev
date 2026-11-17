@@ -107,7 +107,7 @@ main
       code "rootSelector"
       strong "not supported"
       code ""body""
-    listitem "Unlike the DOM producer, which stops at an , a native tree puts each frame's document under its row, so snapshots and the methods cover an embedded form or payment frame. and judge the page's own document, not a frame's. Not read yet: a frame Chromium runs in a process of its own (under site isolation, a cross-site or ed ); attach to that frame directly, as with the DOM producer. Everything else — , , and every method — works identically. Both producers normalize to the tree model, so a snapshot's grammar is the same and the two trees are directly comparable. That includes : a native tree holds what each field announces (Chromium's own value for it), sensitive fields as , and prints them only with ."
+    listitem "Unlike the DOM producer, which stops at an , a native tree puts each frame's document under its row, so snapshots and the methods cover an embedded form or payment frame. and judge the page's own document, not a frame's. That includes a frame Chromium runs in a process of its own (under site isolation, a cross-site or ed ), read over a session of its own. Everything else — , , and every method — works identically. Both producers normalize to the tree model, so a snapshot's grammar is the same and the two trees are directly comparable. That includes : a native tree holds what each field announces (Chromium's own value for it), sensitive fields as , and prints them only with ."
       strong "iframes are read."
       code "<iframe>"
       code "Iframe"

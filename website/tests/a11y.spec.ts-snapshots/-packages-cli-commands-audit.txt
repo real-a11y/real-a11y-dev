@@ -572,7 +572,7 @@ main
   paragraph "The actions are real"
   paragraph "They submit forms, toggle state, and can . A step that loads a new document leaves the tree captured before it describing a page that no longer exists, so no diff is possible — the run still succeeds and reports where it landed."
     strong "navigate"
-  paragraph "Targeting, acting, and the diff all read the tree — Chromium's own, over CDP. A node you aim at by one name therefore can't come back in the report under another. That tree is whole-document, which is why these commands take no . It includes the content of the page's s, each under its row, except a frame Chromium runs in a process of its own (a cross-site or ed one, under site isolation)."
+  paragraph "Targeting, acting, and the diff all read the tree — Chromium's own, over CDP. A node you aim at by one name therefore can't come back in the report under another. That tree is whole-document, which is why these commands take no . It includes the content of the page's s, each under its row. A step can't act inside a frame Chromium runs in a process of its own (under site isolation, a cross-site or ed one) yet: it names the node and says so."
     strong "same"
     link "--root"
       code "--root"
