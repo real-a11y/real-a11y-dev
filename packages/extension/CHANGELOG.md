@@ -21,6 +21,11 @@
 
 ### Patch Changes
 
+- **The TAB view's engine extracts deeply nested pages faster.** The extension
+  re-bundles the updated extractor, whose text previews are now built once per
+  extraction instead of once per nesting level. Nothing on screen changes
+  (PR_LINK_PLACEHOLDER).
+
 - **The TAB view's engine reads a field's invalid state.** The extension
   re-bundles the updated extractor, which now records `invalid` from
   `aria-invalid` and from the field's own validity. The TAB view lists tab

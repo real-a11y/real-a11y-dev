@@ -1356,6 +1356,60 @@ describe("LiveTreeExtractor", () => {
     });
   });
 
+  describe("context from above a partial re-extraction", () => {
+    it("keeps a <header> inside <main> a sectionheader when only it is re-extracted", async () => {
+      document.body.innerHTML = `<main><header id="h"><p>Intro</p></header><p>Body</p></main>`;
+      const live = new LiveTreeExtractor(document.body, { mode: "dom" });
+      let lastChange: TreeChange | undefined;
+      const observer = new DomObserver(
+        document.body,
+        (change) => {
+          lastChange = change;
+        },
+        50,
+      );
+      observer.start();
+      document
+        .getElementById("h")!
+        .appendChild(document.createElement("span")).textContent = "More";
+      await vi.advanceTimersByTimeAsync(100);
+      const result = live.refresh(lastChange);
+      observer.stop();
+
+      const header = [...result.nodes.values()].find(
+        (n) => n.dom?.tagName === "header",
+      );
+      expect(header?.a11y.role).toBe("sectionheader");
+      expect(result.nodes).toEqual(extractDomTree(document.body).nodes);
+    });
+
+    it("refreshes every ancestor's descendantText after a deep change", async () => {
+      document.body.innerHTML = `<main><div id="a"><div id="b"><div id="c"><button>Old</button></div></div></div></main>`;
+      const live = new LiveTreeExtractor(document.body, { mode: "dom" });
+      let lastChange: TreeChange | undefined;
+      const observer = new DomObserver(
+        document.body,
+        (change) => {
+          lastChange = change;
+        },
+        50,
+      );
+      observer.start();
+      document.querySelector("button")!.textContent = "New";
+      await vi.advanceTimersByTimeAsync(100);
+      const result = live.refresh(lastChange);
+      observer.stop();
+
+      for (const id of ["a", "b", "c"]) {
+        const node = [...result.nodes.values()].find(
+          (n) => n.dom?.attributes["id"] === id,
+        );
+        expect(node?.dom?.descendantText).toBe("New");
+      }
+      expect(result.nodes).toEqual(extractDomTree(document.body).nodes);
+    });
+  });
+
   // A click on one checkbox or radio fires its events on that one alone, yet
   // can move other controls' checkedness, which no attribute reflects.
   describe("checkedness a change moves elsewhere", () => {
