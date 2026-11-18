@@ -1,26 +1,38 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import {
-  onInterrupt,
-  registerCleanup,
-  runCleanups,
-  takeInterruptHandler,
-} from "./cleanup.js";
+import { registerCleanup, runCleanups, STOP_GRACE_MS } from "./cleanup.js";
 
-describe("onInterrupt", () => {
-  afterEach(() => {
-    takeInterruptHandler();
+describe("interruptCommand", () => {
+  // What a stop leaves behind is module-wide: each case gets its own.
+  let cleanup: typeof import("./cleanup.js");
+
+  beforeEach(async () => {
+    vi.resetModules();
+    cleanup = await import("./cleanup.js");
   });
 
-  it("has no handler unless a command sets one", () => {
-    expect(takeInterruptHandler()).toBeNull();
+  it("leaves a signal alone unless a command asked for it", () => {
+    expect(cleanup.interruptCommand(1000)).toBe(false);
   });
 
-  it("hands the handler over once, so a second signal still gets out", () => {
-    const stop = (): void => {};
-    onInterrupt(stop);
-    expect(takeInterruptHandler()).toBe(stop);
-    expect(takeInterruptHandler()).toBeNull();
+  it("stops the command once", () => {
+    const stop = vi.fn();
+    cleanup.onInterrupt(stop);
+    expect(cleanup.interruptCommand(1000)).toBe(true);
+    expect(cleanup.interruptCommand(1001)).toBe(true);
+    expect(stop).toHaveBeenCalledTimes(1);
+  });
+
+  it("takes a signal during the stop as the same Ctrl-C", () => {
+    cleanup.onInterrupt(() => {});
+    cleanup.interruptCommand(1000);
+    expect(cleanup.interruptCommand(1000 + STOP_GRACE_MS - 1)).toBe(true);
+  });
+
+  it("lets a later signal out of a stop that hangs", () => {
+    cleanup.onInterrupt(() => {});
+    cleanup.interruptCommand(1000);
+    expect(cleanup.interruptCommand(1000 + STOP_GRACE_MS)).toBe(false);
   });
 });
 

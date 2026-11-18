@@ -2,11 +2,13 @@
  * The server behind `real-a11y show-report`: the snapshot viewer's build, the
  * records a test run wrote, and word of when they change.
  *
- * Records describe the app under test, so only this machine's browser may read
- * them. It listens on the loopback address alone, answers only to a loopback
- * `Host` (a page on another site can rebind its own name to 127.0.0.1, and
- * would otherwise count as same-origin here), grants no cross-origin reads, and
- * serves a fixed list of paths: nothing in a URL ever names a file.
+ * Records describe the app under test, so they stay on this machine, and away
+ * from the sites open in its browser. It listens on the loopback address alone,
+ * answers only to a loopback `Host` (a page on another site can rebind its own
+ * name to 127.0.0.1, and would otherwise count as same-origin here), grants no
+ * cross-origin reads, and serves a fixed list of paths: nothing in a URL ever
+ * names a file. The boundary is the machine and not the user: there is no login,
+ * so another account on a shared machine can read them too.
  */
 
 import { readdirSync, readFileSync, statSync } from "node:fs";
@@ -35,6 +37,7 @@ const PAGE = `<!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>A11y snapshots</title>
+<link rel="icon" href="data:,">
 <link rel="stylesheet" href="/viewer.css">
 </head>
 <body>
@@ -63,6 +66,9 @@ export interface ViewerAssets {
 
 export interface ReportServerOptions {
   recordsDir: string;
+  /** The folder you named, for the page to say how to fill it. Unset: the
+   *  reporter's default. */
+  outputDir?: string;
   viewer: ViewerAssets;
   /** Where to listen. Unset: `DEFAULT_PORT`, or any free port if that's taken. */
   port?: number;
@@ -112,43 +118,71 @@ export function hasRecords(dir: string): boolean {
   return recordFiles(dir).length > 0;
 }
 
+/** What changes when a file does; null once it is gone. */
+function stampOf(path: string): string | null {
+  try {
+    const { size, mtimeMs } = statSync(path);
+    return `${size}:${mtimeMs}`;
+  } catch {
+    return null;
+  }
+}
+
 /** What changes when any record does. */
 function fingerprint(dir: string): string {
-  const stamps = recordFiles(dir).map((path) => {
-    try {
-      const { size, mtimeMs } = statSync(path);
-      return `${path}:${size}:${mtimeMs}`;
-    } catch {
-      return "";
-    }
-  });
+  const stamps = recordFiles(dir).map((path) => `${path}:${stampOf(path)}`);
   return stamps.sort().join("\n");
 }
 
-function parseRecord(path: string): Record<string, unknown> | null {
+/**
+ * Whether a file is a record, of any release. A numeric `version` alone won't
+ * do: `vercel.json` and `angular.json` have one, and `show-report .` walks a
+ * whole project.
+ */
+function isRecord(value: unknown): value is Record<string, unknown> {
+  const record = value as Record<string, unknown> | null;
+  return (
+    typeof record?.version === "number" &&
+    typeof record.file === "string" &&
+    typeof record.test === "string"
+  );
+}
+
+/** A record as JSON, with its path under `dir` as its id. */
+function recordJson(dir: string, path: string): string | null {
   try {
-    const record = JSON.parse(readFileSync(path, "utf8")) as Record<
-      string,
-      unknown
-    > | null;
-    return typeof record?.version === "number" ? record : null;
+    const record: unknown = JSON.parse(readFileSync(path, "utf8"));
+    if (!isRecord(record)) return null;
+    const id = relative(dir, path).split("\\").join("/");
+    return JSON.stringify({ ...record, id });
   } catch {
     return null; // Half written: the next change brings the rest.
   }
 }
 
 /**
- * Every record under `dir`, with its path there as its id. Whatever its
- * version: the viewer knows which it can draw, and says so about the rest.
+ * Reads every record under `dir` as JSON, whatever its version: the viewer knows
+ * which it can draw, and says so about the rest. A file is read again only once
+ * it has changed, so a rerun of one test costs that test's records and not the
+ * whole suite's, on the one thread that answers everything else.
  */
-export function readRecords(dir: string): Record<string, unknown>[] {
-  const records: Record<string, unknown>[] = [];
-  for (const path of recordFiles(dir)) {
-    const record = parseRecord(path);
-    const id = relative(dir, path).split("\\").join("/");
-    if (record) records.push({ ...record, id });
-  }
-  return records;
+export function recordReader(dir: string): () => string[] {
+  type Read = { stamp: string; json: string | null };
+  let known = new Map<string, Read>();
+  return () => {
+    const current = new Map<string, Read>();
+    for (const path of recordFiles(dir)) {
+      const stamp = stampOf(path);
+      if (stamp === null) continue;
+      const read = known.get(path);
+      current.set(
+        path,
+        read?.stamp === stamp ? read : { stamp, json: recordJson(dir, path) },
+      );
+    }
+    known = current;
+    return [...current.values()].flatMap(({ json }) => json ?? []);
+  };
 }
 
 function send(
@@ -194,11 +228,15 @@ async function bind(server: Server, port: number | undefined): Promise<void> {
 /** Start serving. Resolves once the server is listening. */
 export async function startReportServer({
   recordsDir,
+  outputDir,
   viewer,
   port,
 }: ReportServerOptions): Promise<ReportServer> {
   const listening = new Set<ServerResponse>();
+  const readRecords = recordReader(recordsDir);
+  const about = `"dir":${JSON.stringify(recordsDir)},"outputDir":${JSON.stringify(outputDir ?? null)}`;
   let hosts: ReadonlySet<string> = new Set();
+  let seen = "";
 
   const events = (req: IncomingMessage, res: ServerResponse): void => {
     res.writeHead(200, {
@@ -209,6 +247,8 @@ export async function startReportServer({
       res.end();
       return;
     }
+    // The page reads the records once this opens: what came before isn't news.
+    if (listening.size === 0) seen = fingerprint(recordsDir);
     res.write(": connected\n\n");
     listening.add(res);
     req.on("close", () => listening.delete(res));
@@ -239,10 +279,7 @@ export async function startReportServer({
           res,
           200,
           "application/json; charset=utf-8",
-          JSON.stringify({
-            dir: recordsDir,
-            records: readRecords(recordsDir),
-          }),
+          `{${about},"records":[${readRecords().join(",")}]}`,
         );
         return;
       case "/__records/events":
@@ -257,7 +294,6 @@ export async function startReportServer({
   const bound = (server.address() as { port: number }).port;
   hosts = loopbackHosts(bound);
 
-  let seen = fingerprint(recordsDir);
   const poll = setInterval(() => {
     if (listening.size === 0) return;
     const now = fingerprint(recordsDir);

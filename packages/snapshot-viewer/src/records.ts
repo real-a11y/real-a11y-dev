@@ -130,7 +130,9 @@ export function keepUnchanged(
   const byId = new Map(previous.map((record) => [record.id, record]));
   return next.map((record) => {
     const old = byId.get(record.id);
-    return old?.recordedAt === record.recordedAt && old.text === record.text
+    return old !== undefined &&
+      old.recordedAt === record.recordedAt &&
+      old.text === record.text
       ? old
       : record;
   });
@@ -158,6 +160,25 @@ export function groupByFile(records: SnapshotRecord[]): FileGroup[] {
       ...group,
       records: group.records.sort((a, b) => a.sequence - b.sequence),
     }));
+}
+
+/**
+ * How to fill the folder a server reads. `outputDir` is what `show-report` says
+ * of it: null for the reporter's default, or the folder you named. The viewer's
+ * dev server says nothing, and reads a bare folder of records.
+ */
+export function fillHint(dir: string, outputDir?: string | null): string {
+  if (outputDir === undefined) return `REAL_A11Y_TREES_DIR=${dir} vitest run`;
+  const entry = (reporter: string): string =>
+    outputDir === null
+      ? JSON.stringify(reporter)
+      : `[${JSON.stringify(reporter)}, { outputDir: ${JSON.stringify(outputDir)} }]`;
+  return [
+    "// Vitest",
+    `reporters: ["default", ${entry("@real-a11y-dev/testing/reporter")}]`,
+    "// Jest",
+    `reporters: ["default", ${entry("@real-a11y-dev/testing/reporter/jest")}]`,
+  ].join("\n");
 }
 
 /** `describe > describe > it` as its describe path and its own name. */

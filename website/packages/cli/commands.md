@@ -1530,6 +1530,9 @@ feature makes the trust boundary explicit:
   through your browser by pointing its own domain at your machine.
 - It serves a fixed list of paths. Nothing in a URL names a file, and it follows no
   link out of the records folder.
+- It has no login. While it runs, anything on the machine that can connect to
+  `127.0.0.1` can read the records, including another user signed in to the same
+  machine or CI runner. On a shared machine, stop it when you're done.
 
 ### Daemon log
 

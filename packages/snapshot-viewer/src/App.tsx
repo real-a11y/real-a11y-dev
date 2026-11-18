@@ -4,13 +4,13 @@ import {
   TreePanel,
   type TreeChangesProp,
 } from "@real-a11y-dev/semantic-navigator-ui";
-import { useEffect, useMemo, useRef, useState } from "preact/hooks";
+import { useMemo, useState } from "preact/hooks";
 
 import { snapshotDiffRules } from "./marks.js";
 import {
   countLines,
+  fillHint,
   groupByFile,
-  keepUnchanged,
   lineKind,
   readableRecords,
   splitTestName,
@@ -18,21 +18,7 @@ import {
   type FileGroup,
   type SnapshotRecord,
 } from "./records.js";
-
-interface Loaded {
-  /** The records directory of the server showing them; a written report
-   *  leaves it out. */
-  dir?: string;
-  records: SnapshotRecord[];
-}
-
-declare global {
-  interface Window {
-    /** Set by the snapshot report (`@real-a11y-dev/testing/reporter`), which
-     *  writes the run's records into the page it makes. */
-    __A11Y_SNAPSHOTS__?: Loaded;
-  }
-}
+import { useOpenRecord, useRecords } from "./use-records.js";
 
 type Side = "after" | "before";
 
@@ -44,7 +30,7 @@ interface Trees {
 const NO_RECORDS: SnapshotRecord[] = [];
 
 export function App() {
-  const { loaded, error } = useRecords();
+  const { loaded, error, stopped } = useRecords();
   const [selectedId, setSelectedId] = useState<string | null>(() =>
     recordInHash(),
   );
@@ -55,20 +41,11 @@ export function App() {
     [loaded],
   );
   const all = useMemo(() => groupByFile(readable), [readable]);
-  const groups = useMemo(() => filterGroups(all, query), [all, query]);
+  const { selected, goneId, listed } = useOpenRecord(readable, all, selectedId);
   // The filter narrows the list, never what is open: typing into it doesn't
   // swap the record on screen.
-  // A rerun clears a test file's records before it writes them again: what is
-  // open stays open through that, with the view and the side you chose.
-  const open = useRef<SnapshotRecord | null>(null);
-  const byId = (id?: string | null) => readable.find((r) => r.id === id);
-  const selected =
-    byId(selectedId) ??
-    byId(open.current?.id) ??
-    open.current ??
-    all[0]?.records[0] ??
-    null;
-  open.current = selected;
+  const groups = useMemo(() => filterGroups(listed, query), [listed, query]);
+  const otherVersion = (loaded?.records.length ?? 0) - readable.length;
 
   const select = (id: string) => {
     setSelectedId(id);
@@ -81,8 +58,11 @@ export function App() {
       <RecordList
         groups={groups}
         selectedId={selected?.id ?? null}
+        goneId={goneId}
+        stopped={stopped}
+        leftOut={selected ? otherVersion : 0}
         query={query}
-        filtered={all.length > 0 && groups.length === 0}
+        filtered={listed.length > 0 && groups.length === 0}
         onQuery={setQuery}
         onSelect={select}
       />
@@ -95,63 +75,18 @@ export function App() {
           <RecordView
             key={selected.id}
             record={selected}
-            gone={!readable.includes(selected)}
+            gone={selected.id === goneId}
           />
         ) : (
           <Empty
             dir={loaded.dir}
-            otherVersion={loaded.records.length - readable.length}
+            outputDir={loaded.outputDir}
+            otherVersion={otherVersion}
           />
         )}
       </main>
     </div>
   );
-}
-
-/**
- * The records the page carries, when the snapshot report wrote them into it;
- * otherwise the server's (`real-a11y show-report`, or this package's dev
- * server), read again whenever it says they changed.
- */
-function useRecords() {
-  const [loaded, setLoaded] = useState<Loaded | null>(
-    () => window.__A11Y_SNAPSHOTS__ ?? null,
-  );
-  const [error, setError] = useState<string | null>(null);
-  useEffect(() => {
-    if (window.__A11Y_SNAPSHOTS__) return;
-    // A run changes records faster than they load: only the latest load counts.
-    let latest = 0;
-    const load = (): void => {
-      const mine = ++latest;
-      fetch("/__records")
-        .then((res) => res.json() as Promise<Loaded>)
-        .then(
-          (next) => {
-            if (mine !== latest) return;
-            setLoaded((previous) => ({
-              ...next,
-              records: keepUnchanged(previous?.records ?? [], next.records),
-            }));
-            setError(null);
-          },
-          (err: unknown) => {
-            if (mine === latest) setError(String(err));
-          },
-        );
-    };
-    load();
-    const changes = new EventSource("/__records/events");
-    changes.addEventListener("records", load);
-    // Connecting again means the server went away, and may have missed some.
-    let connected = false;
-    changes.onopen = () => {
-      if (connected) load();
-      connected = true;
-    };
-    return () => changes.close();
-  }, []);
-  return { loaded, error };
 }
 
 /** The record the URL names, if it names one readably: a hand-edited link
@@ -181,6 +116,9 @@ function filterGroups(groups: FileGroup[], query: string): FileGroup[] {
 function RecordList({
   groups,
   selectedId,
+  goneId,
+  stopped,
+  leftOut,
   query,
   filtered,
   onQuery,
@@ -188,6 +126,12 @@ function RecordList({
 }: {
   groups: FileGroup[];
   selectedId: string | null;
+  /** The record that is open but not in the latest records. */
+  goneId: string | null;
+  /** The server this page follows has gone away. */
+  stopped: boolean;
+  /** Records of another release, left out of the list. */
+  leftOut: number;
   query: string;
   /** The filter hides every record there is. */
   filtered: boolean;
@@ -206,6 +150,21 @@ function RecordList({
           value={query}
           onInput={(e) => onQuery(e.currentTarget.value)}
         />
+        <p class="sv-nav-note sv-nav-stopped" role="status">
+          {stopped ? (
+            <>
+              The report server has stopped, so this page no longer updates. Run{" "}
+              <code>real-a11y show-report</code> again to follow new runs.
+            </>
+          ) : null}
+        </p>
+        <p class="sv-nav-note" role="status">
+          {leftOut === 1
+            ? "1 record from another release of @real-a11y-dev/testing isn't shown."
+            : leftOut > 1
+              ? `${leftOut} records from another release of @real-a11y-dev/testing aren't shown.`
+              : null}
+        </p>
       </div>
       <div class="sv-nav-list">
         {filtered ? (
@@ -224,6 +183,7 @@ function RecordList({
                   <RecordButton
                     record={record}
                     current={record.id === selectedId}
+                    gone={record.id === goneId}
                     onSelect={() => onSelect(record.id)}
                   />
                 </li>
@@ -239,10 +199,12 @@ function RecordList({
 function RecordButton({
   record,
   current,
+  gone,
   onSelect,
 }: {
   record: SnapshotRecord;
   current: boolean;
+  gone: boolean;
   onSelect: () => void;
 }) {
   const { path, name } = splitTestName(record.test);
@@ -250,7 +212,7 @@ function RecordButton({
   return (
     <button
       type="button"
-      class="sv-record"
+      class={gone ? "sv-record sv-record-gone" : "sv-record"}
       aria-current={current ? "true" : undefined}
       onClick={onSelect}
     >
@@ -260,6 +222,9 @@ function RecordButton({
           {name}
           {record.index > 1 ? (
             <span class="sv-record-index"> #{record.index}</span>
+          ) : null}
+          {gone ? (
+            <span class="sn-sr-only"> (not in the latest records)</span>
           ) : null}
         </span>
       </span>
@@ -473,9 +438,11 @@ function SnapshotText({ text }: { text: string }) {
 
 function Empty({
   dir,
+  outputDir,
   otherVersion,
 }: {
   dir?: string;
+  outputDir?: string | null;
   /** Records there are, written in a shape this viewer can't read. */
   otherVersion: number;
 }) {
@@ -506,17 +473,12 @@ function Empty({
       {dir === undefined ? null : (
         <>
           <p>
-            Add the snapshot report to your test runner and run your tests. This
-            page updates by itself.
+            {outputDir === undefined
+              ? "Record a test run into this folder."
+              : "Add the snapshot report to your test runner and run your tests."}{" "}
+            This page updates by itself.
           </p>
-          <pre>
-            {[
-              "// Vitest",
-              'reporters: ["default", "@real-a11y-dev/testing/reporter"]',
-              "// Jest",
-              'reporters: ["default", "@real-a11y-dev/testing/reporter/jest"]',
-            ].join("\n")}
-          </pre>
+          <pre>{fillHint(dir, outputDir)}</pre>
           <p>
             Reading records from <code>{dir}</code>
           </p>

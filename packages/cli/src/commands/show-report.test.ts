@@ -6,7 +6,22 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { CliError } from "../exit.js";
 
-import { browserCommand, recordsDirFor } from "./show-report.js";
+import { browserCommand, outputDirFor, recordsDirFor } from "./show-report.js";
+
+describe("outputDirFor", () => {
+  it("names no folder when you named none", () => {
+    expect(outputDirFor(undefined)).toBeUndefined();
+  });
+
+  it("keeps the folder as you wrote it", () => {
+    expect(outputDirFor("reports/a11y")).toBe("reports/a11y");
+  });
+
+  it("names no folder for the current one, which the default lands under", () => {
+    expect(outputDirFor(".")).toBeUndefined();
+    expect(outputDirFor(process.cwd())).toBeUndefined();
+  });
+});
 
 describe("recordsDirFor", () => {
   let root: string;

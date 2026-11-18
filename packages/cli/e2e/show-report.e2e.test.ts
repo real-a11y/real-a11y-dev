@@ -1,6 +1,6 @@
 /**
  * End-to-end for `show-report` through the built bin: the server, the viewer
- * build the bin ships with, and how the command stops. No browser involved.
+ * build the bin ships with, how the command stops, and the page in a browser.
  */
 
 import { execFile, spawn, type ChildProcess } from "node:child_process";
@@ -15,7 +15,16 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { chromium, type Browser, type Page } from "playwright";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+} from "vitest";
 
 const BIN = resolve(
   dirname(fileURLToPath(import.meta.url)),
@@ -86,6 +95,55 @@ function writeRecord(name: string): void {
   );
 }
 
+const recordsFolder = (): string =>
+  join(cwd, "a11y-snapshots", "records", "src-a-test-ts");
+
+/** A record the page can draw, as the reporter writes one. */
+function writeSnapshot(test: string, sequence = 1): void {
+  const node = (
+    id: string,
+    parentId: string | null,
+    childIds: string[],
+    role: string,
+    name: string,
+  ) => ({
+    id,
+    parentId,
+    childIds,
+    depth: parentId ? 1 : 0,
+    a11y: {
+      role,
+      name,
+      description: "",
+      states: {},
+      properties: {},
+      isExposedToAT: true,
+    },
+  });
+  mkdirSync(recordsFolder(), { recursive: true });
+  writeFileSync(
+    join(recordsFolder(), `${test}.json`),
+    JSON.stringify({
+      version: 2,
+      file: "src/a.test.ts",
+      test,
+      index: 1,
+      sequence,
+      kind: "tree",
+      text: `main\n  button "${test}"`,
+      recordedAt: new Date().toISOString(),
+      tree: {
+        rootId: "a",
+        source: { producer: "dom" },
+        nodes: [
+          ["a", node("a", null, ["b"], "main", "")],
+          ["b", node("b", "a", [], "button", test)],
+        ],
+      },
+    }),
+  );
+}
+
 beforeEach(() => {
   cwd = mkdtempSync(join(tmpdir(), "real-a11y-show-report-e2e-"));
 });
@@ -142,7 +200,7 @@ describe("real-a11y show-report", () => {
     mkdirSync(join(cwd, "reports", "records", "src"), { recursive: true });
     writeFileSync(
       join(cwd, "reports", "records", "src", "a.json"),
-      JSON.stringify({ version: 2 }),
+      JSON.stringify({ version: 2, test: "a", file: "src/a.test.ts" }),
     );
     const { url } = await showReport(["reports"]);
     const data = (await (await fetch(`${url}__records`)).json()) as {
@@ -156,6 +214,18 @@ describe("real-a11y show-report", () => {
     "stops cleanly on Ctrl+C",
     async () => {
       const { child, stderr, exited } = await showReport();
+      child.kill("SIGINT");
+      expect(await exited).toBe(0);
+      expect(stderr()).not.toContain("interrupted");
+    },
+  );
+
+  // npx forwards the signal the terminal has already sent to the whole group.
+  it.skipIf(process.platform === "win32")(
+    "takes a second signal during the stop as the same Ctrl+C",
+    async () => {
+      const { child, stderr, exited } = await showReport();
+      child.kill("SIGINT");
       child.kill("SIGINT");
       expect(await exited).toBe(0);
       expect(stderr()).not.toContain("interrupted");
@@ -190,5 +260,150 @@ describe("real-a11y show-report", () => {
     const own = await runCli(["show-report", "--help"]);
     expect(own.code).toBe(0);
     expect(own.stdout).toContain("Usage: real-a11y show-report [dir] [flags]");
+  });
+
+  describe("in a browser", () => {
+    let browser: Browser;
+
+    beforeAll(async () => {
+      browser = await chromium.launch({
+        executablePath: process.env.REAL_A11Y_CHROME_PATH || undefined,
+      });
+    });
+
+    afterAll(async () => {
+      await browser.close();
+    });
+
+    const listed = (page: Page, test: string) =>
+      page.getByRole("button", { name: test, exact: false });
+    const focused = (page: Page) =>
+      page.evaluate(() => document.activeElement?.className ?? "");
+
+    /** Headless tabs all count as showing: this is what switching away does. */
+    const setHidden = (page: Page, hidden: boolean) =>
+      page.evaluate((value) => {
+        Object.defineProperty(document, "hidden", {
+          configurable: true,
+          get: () => value,
+        });
+        document.dispatchEvent(new Event("visibilitychange"));
+      }, hidden);
+
+    it("draws the records with nothing logged, and follows new ones", async () => {
+      writeSnapshot("first");
+      const { url } = await showReport();
+      const page = await browser.newPage();
+      const problems: string[] = [];
+      page.on("console", (message) => {
+        if (message.type() === "error") problems.push(message.text());
+      });
+      page.on("pageerror", (error) => problems.push(error.message));
+
+      await page.goto(url);
+      await listed(page, "first").waitFor();
+      writeSnapshot("second", 2);
+      await listed(page, "second").waitFor();
+
+      expect(problems).toEqual([]);
+      await page.close();
+    });
+
+    it("loads with another tool's JSON in the folder", async () => {
+      writeSnapshot("first");
+      writeFileSync(join(cwd, "vercel.json"), JSON.stringify({ version: 2 }));
+      const { url } = await showReport(["."]);
+      const page = await browser.newPage();
+      await page.goto(url);
+      await listed(page, "first").waitFor();
+      await page.close();
+    });
+
+    it("keeps keyboard focus on the open record through its rerun", async () => {
+      writeSnapshot("first");
+      writeSnapshot("second", 2);
+      const { url } = await showReport();
+      const page = await browser.newPage();
+      await page.goto(url);
+      await listed(page, "second").focus();
+      await page.keyboard.press("Enter");
+
+      rmSync(recordsFolder(), { recursive: true });
+      await page
+        .getByRole("status")
+        .filter({ hasText: "Not in the latest records" })
+        .waitFor();
+      expect(await focused(page)).toContain("sv-record");
+
+      writeSnapshot("first");
+      writeSnapshot("second", 2);
+      await page
+        .getByRole("status")
+        .filter({ hasText: "Not in the latest records" })
+        .waitFor({ state: "detached" });
+      expect(await focused(page)).toContain("sv-record");
+      await page.close();
+    });
+
+    it("holds no connection in a hidden tab, so a seventh tab loads", async () => {
+      writeSnapshot("first");
+      const { url } = await showReport();
+      // One context, as one browser profile: the limit is per origin in it.
+      const context = await browser.newContext();
+      const tabs: Page[] = [];
+      for (let i = 0; i < 6; i++) {
+        const tab = await context.newPage();
+        await tab.goto(url);
+        await listed(tab, "first").waitFor();
+        await setHidden(tab, true);
+        tabs.push(tab);
+      }
+
+      const seventh = await context.newPage();
+      await seventh.goto(url, { timeout: 10_000 });
+      await listed(seventh, "first").waitFor();
+
+      writeSnapshot("second", 2);
+      await setHidden(tabs[0], false);
+      await listed(tabs[0], "second").waitFor();
+      await context.close();
+    });
+
+    it("says when the server has stopped", async () => {
+      writeSnapshot("first");
+      const { url, child, exited } = await showReport();
+      const page = await browser.newPage();
+      await page.goto(url);
+      await listed(page, "first").waitFor();
+
+      child.kill();
+      await exited;
+      await page.getByRole("status").filter({ hasText: "stopped" }).waitFor();
+      await listed(page, "first").waitFor();
+      await page.close();
+    });
+
+    it("says how many records of another release it left out", async () => {
+      writeSnapshot("first");
+      writeFileSync(
+        join(recordsFolder(), "old.json"),
+        JSON.stringify({ version: 1, test: "old", file: "src/a.test.ts" }),
+      );
+      const { url } = await showReport();
+      const page = await browser.newPage();
+      await page.goto(url);
+      await listed(page, "first").waitFor();
+      await page.getByText("1 record from another release").waitFor();
+      await page.close();
+    });
+
+    it("names the folder you gave it in the empty state", async () => {
+      mkdirSync(join(cwd, "reports", "a11y"), { recursive: true });
+      const { url } = await showReport(["reports/a11y"]);
+      const page = await browser.newPage();
+      await page.goto(url);
+      await page.getByText('outputDir: "reports/a11y"').first().waitFor();
+      await page.close();
+    });
   });
 });

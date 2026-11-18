@@ -21,8 +21,9 @@ reporter in `reporters`), install the packed `cli` tarball too.
 
 1. Before any test has run: `npx real-a11y show-report`
 2. In a second terminal, run `npx vitest run`, and watch the page
-3. In the page, collapse a row of the selected record. Then start `npx vitest`
-   and edit a **different** test file so it reruns alone
+3. Start `npx vitest` and wait for its first run, which rewrites every record.
+   In the page, collapse a row of the selected record. Then edit a **different**
+   test file so it reruns alone
 4. Edit the selected record's test so its snapshot changes
 5. `curl -i -H "Host: evil.example:9324" http://127.0.0.1:9324/__records`, then
    `curl -i http://127.0.0.1:9324/records/`
@@ -49,7 +50,8 @@ reporter in `reporters`), install the packed `cli` tarball too.
   record in the body
 - **6** — one listener, on `127.0.0.1`, never `0.0.0.0` or `*`
 - **7** — the second one prints another port's URL and serves the same records
-- **8** — exit code `0`, and no `interrupted` error
+- **8** — exit code `0`, and no `interrupted` error. The open page says the
+  server has stopped, and still shows its records
 - **9** — each exits `2`: the URL's message names `audit` and `snapshot`, the
   folder's says it doesn't exist, the port's gives the valid range
 - **10** — the URL is printed, and no browser opens

@@ -18,6 +18,9 @@ import { hasRecords, startReportServer } from "../show-report/server.js";
 /** Where `@real-a11y-dev/testing/reporter` writes unless told otherwise. */
 const DEFAULT_DIR = "a11y-snapshots";
 
+/** How long the command stays once stopped, for a repeat of the signal. */
+const SIGNAL_LINGER_MS = 150;
+
 /**
  * The records folder a target names: the reporter's output folder, or a folder
  * of records itself (the reporter's, or one `REAL_A11Y_TREES_DIR` filled). With
@@ -46,6 +49,18 @@ export function recordsDirFor(target: string | undefined): string {
   }
   const records = join(dir, "records");
   return target === undefined || existsSync(records) ? records : dir;
+}
+
+/**
+ * The `outputDir` to fill the folder you named, as you wrote it. None for the
+ * current folder: the reporter's default lands under it, and it refuses to
+ * write into a folder that isn't its own.
+ */
+export function outputDirFor(target: string | undefined): string | undefined {
+  if (target === undefined || resolve(target) === process.cwd()) {
+    return undefined;
+  }
+  return target;
 }
 
 /**
@@ -108,6 +123,7 @@ export const showReportCommand: CommandFn = async (positionals, flags) => {
 
   const server = await startReportServer({
     recordsDir,
+    outputDir: outputDirFor(positionals[0]),
     viewer: readViewer(),
     port,
   });
@@ -127,5 +143,8 @@ export const showReportCommand: CommandFn = async (positionals, flags) => {
 
   await stopped;
   await server.close();
+  // A second copy of the Ctrl+C may be on its way (`npx` forwards the one the
+  // terminal sent). Landing while the process exits, it would end it as failed.
+  await new Promise((done) => setTimeout(done, SIGNAL_LINGER_MS));
   return EXIT.OK;
 };

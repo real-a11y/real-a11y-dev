@@ -17,7 +17,7 @@ import {
   DEFAULT_PORT,
   hasRecords,
   loopbackHosts,
-  readRecords,
+  recordReader,
   startReportServer,
   type ReportServer,
 } from "./server.js";
@@ -28,7 +28,14 @@ let root: string;
 let recordsDir: string;
 const open: ReportServer[] = [];
 
-function writeRecord(name: string, record: object = { version: 2 }): void {
+const RECORD = { version: 2, test: "a test", file: "src/a.test.ts" };
+
+const readRecords = (dir: string): Record<string, unknown>[] =>
+  recordReader(dir)().map(
+    (json) => JSON.parse(json) as Record<string, unknown>,
+  );
+
+function writeRecord(name: string, record: object = RECORD): void {
   const dir = join(recordsDir, "src-a-test-ts");
   mkdirSync(dir, { recursive: true });
   writeFileSync(join(dir, name), JSON.stringify(record));
@@ -101,15 +108,48 @@ afterEach(async () => {
 
 describe("readRecords", () => {
   it("gives each record its path in the folder as its id", () => {
-    writeRecord("one.json", { version: 2, test: "one" });
+    writeRecord("one.json");
     expect(readRecords(recordsDir)).toEqual([
-      { version: 2, test: "one", id: "src-a-test-ts/one.json" },
+      { ...RECORD, id: "src-a-test-ts/one.json" },
     ]);
   });
 
   it("keeps a record of another version, for the viewer to say so", () => {
-    writeRecord("old.json", { version: 1 });
+    writeRecord("old.json", { ...RECORD, version: 1 });
     expect(readRecords(recordsDir)).toHaveLength(1);
+  });
+
+  it("skips another tool's file that has a version too", () => {
+    writeRecord("vercel.json", { version: 2 });
+    writeRecord("angular.json", { version: 1, projects: {} });
+    expect(readRecords(recordsDir)).toEqual([]);
+  });
+
+  it("reads a file again only once it has changed", () => {
+    writeRecord("one.json");
+    writeRecord("two.json");
+    const read = recordReader(recordsDir);
+    const before = read();
+
+    writeRecord("two.json", { ...RECORD, test: "changed" });
+    const after = read();
+
+    expect(after[0]).toBe(before[0]);
+    expect(JSON.parse(after[1])).toMatchObject({ test: "changed" });
+  });
+
+  it("forgets a file that is gone, and reads a half-written one again", () => {
+    writeRecord("one.json");
+    const folder = join(recordsDir, "src-a-test-ts");
+    writeFileSync(join(folder, "two.json"), '{"versi');
+    const read = recordReader(recordsDir);
+    expect(read()).toHaveLength(1);
+
+    writeRecord("two.json");
+    expect(read()).toHaveLength(2);
+
+    rmSync(join(folder, "one.json"));
+    expect(read()).toHaveLength(1);
   });
 
   it("skips what isn't a record", () => {
@@ -124,10 +164,7 @@ describe("readRecords", () => {
   it("stays out of node_modules and .git", () => {
     for (const folder of ["node_modules/pkg", ".git/x"]) {
       mkdirSync(join(recordsDir, folder), { recursive: true });
-      writeFileSync(
-        join(recordsDir, folder, "a.json"),
-        JSON.stringify({ version: 2 }),
-      );
+      writeFileSync(join(recordsDir, folder, "a.json"), JSON.stringify(RECORD));
     }
     expect(readRecords(recordsDir)).toEqual([]);
   });
@@ -140,7 +177,7 @@ describe("readRecords", () => {
     "doesn't follow a link out of the folder",
     () => {
       const outside = join(root, "outside.json");
-      writeFileSync(outside, JSON.stringify({ version: 2, secret: true }));
+      writeFileSync(outside, JSON.stringify({ ...RECORD, secret: true }));
       writeRecord("real.json");
       symlinkSync(outside, join(recordsDir, "src-a-test-ts", "link.json"));
       expect(readRecords(recordsDir).map((r) => r.id)).toEqual([
@@ -176,7 +213,7 @@ describe("hasRecords", () => {
 
 describe("startReportServer", () => {
   it("serves the page, the viewer and the records", async () => {
-    writeRecord("one.json", { version: 2, test: "one" });
+    writeRecord("one.json");
     const { url } = await start();
 
     const page = await fetch(url);
@@ -184,6 +221,8 @@ describe("startReportServer", () => {
     const html = await page.text();
     expect(html).toContain('<script src="/viewer.js"></script>');
     expect(html).toContain('href="/viewer.css"');
+    // A browser asks for /favicon.ico otherwise, and logs the 404.
+    expect(html).toContain('<link rel="icon" href="data:,">');
 
     expect(await (await fetch(`${url}viewer.js`)).text()).toBe(viewer.js);
     expect(await (await fetch(`${url}viewer.css`)).text()).toBe(viewer.css);
@@ -194,6 +233,24 @@ describe("startReportServer", () => {
     };
     expect(data.dir).toBe(recordsDir);
     expect(data.records.map((r) => r.id)).toEqual(["src-a-test-ts/one.json"]);
+  });
+
+  it("tells the page which folder you named", async () => {
+    const named = await startReportServer({
+      recordsDir,
+      outputDir: 'reports\\"a11y"',
+      viewer,
+      port: 0,
+    });
+    open.push(named);
+    const { url } = await start();
+
+    const read = async (at: string) =>
+      (await (await fetch(`${at}__records`)).json()) as {
+        outputDir: string | null;
+      };
+    expect((await read(named.url)).outputDir).toBe('reports\\"a11y"');
+    expect((await read(url)).outputDir).toBeNull();
   });
 
   it("listens on the loopback address alone", async () => {
@@ -273,6 +330,26 @@ describe("startReportServer", () => {
     writeRecord("two.json");
     expect(await arrived).toContain("data: changed");
     stop();
+  });
+
+  it("doesn't announce what was written before the page connected", async () => {
+    const { url } = await start();
+    writeRecord("one.json");
+
+    const controller = new AbortController();
+    const res = await fetch(`${url}__records/events`, {
+      signal: controller.signal,
+    });
+    const text = res.body!.pipeThrough(new TextDecoderStream()).getReader();
+    let heard = "";
+    const listen = (async () => {
+      for (;;) heard += (await text.read()).value ?? "";
+    })().catch(() => {});
+    await new Promise((resolve) => setTimeout(resolve, 1200));
+    controller.abort();
+    await listen;
+
+    expect(heard).not.toContain("event: records");
   });
 
   it("says when a test run deletes the records and writes them again", async () => {

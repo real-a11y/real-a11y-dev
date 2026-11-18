@@ -1,27 +1,10 @@
-import { copyFileSync, existsSync, mkdirSync } from "node:fs";
-import { fileURLToPath } from "node:url";
-
 import { defineConfig } from "tsup";
+
+import { copyViewerBuild } from "../snapshot-viewer/copy-build.js";
 
 // `show-report` serves the PRIVATE `snapshot-viewer` package's build (a
 // devDependency, so pnpm builds it first). No code imports it: it ships as two
 // files in `dist/viewer`, which the command reads and serves.
-const viewerDist = fileURLToPath(
-  new URL("../snapshot-viewer/dist/", import.meta.url),
-);
-const viewerOut = fileURLToPath(new URL("./dist/viewer/", import.meta.url));
-
-function copyViewer(): void {
-  mkdirSync(viewerOut, { recursive: true });
-  for (const file of ["viewer.js", "viewer.css"]) {
-    if (!existsSync(viewerDist + file)) {
-      throw new Error(
-        `${viewerDist}${file} is missing: build @real-a11y-dev/snapshot-viewer first`,
-      );
-    }
-    copyFileSync(viewerDist + file, viewerOut + file);
-  }
-}
 
 export default defineConfig({
   // `index` is the bin (has a shebang). The CLI is a command, not a library,
@@ -66,5 +49,6 @@ export default defineConfig({
     "@real-a11y-dev/core",
   ],
   banner: { js: "" },
-  onSuccess: async () => copyViewer(),
+  onSuccess: async () =>
+    copyViewerBuild(new URL("./dist/viewer/", import.meta.url)),
 });
