@@ -93,6 +93,11 @@ function recordFiles(dir: string): string[] {
   return found;
 }
 
+/** Whether a test run has recorded anything here yet. */
+export function hasRecords(dir: string): boolean {
+  return recordFiles(dir).length > 0;
+}
+
 /** What changes when any record does. */
 function fingerprint(dir: string): string {
   const stamps = recordFiles(dir).map((path) => {

@@ -4,7 +4,7 @@ import {
   TreePanel,
   type TreeChangesProp,
 } from "@real-a11y-dev/semantic-navigator-ui";
-import { useEffect, useMemo, useState } from "preact/hooks";
+import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 
 import { snapshotDiffRules } from "./marks.js";
 import {
@@ -58,8 +58,16 @@ export function App() {
   const groups = useMemo(() => filterGroups(all, query), [all, query]);
   // The filter narrows the list, never what is open: typing into it doesn't
   // swap the record on screen.
+  // A rerun clears a test file's records before it writes them again: what is
+  // open stays open through that, with the view and the side you chose.
+  const open = useRef<SnapshotRecord | null>(null);
+  const wanted = selectedId ?? open.current?.id;
   const selected =
-    readable.find((r) => r.id === selectedId) ?? all[0]?.records[0] ?? null;
+    readable.find((r) => r.id === wanted) ??
+    open.current ??
+    all[0]?.records[0] ??
+    null;
+  open.current = selected;
 
   const select = (id: string) => {
     setSelectedId(id);
@@ -481,7 +489,14 @@ function Empty({
             Add the snapshot report to your test runner and run your tests. This
             page updates by itself.
           </p>
-          <pre>reporters: ["default", "@real-a11y-dev/testing/reporter"]</pre>
+          <pre>
+            {[
+              "// Vitest",
+              'reporters: ["default", "@real-a11y-dev/testing/reporter"]',
+              "// Jest",
+              'reporters: ["default", "@real-a11y-dev/testing/reporter/jest"]',
+            ].join("\n")}
+          </pre>
           <p>
             Reading records from <code>{dir}</code>
           </p>

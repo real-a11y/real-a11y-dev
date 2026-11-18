@@ -15,6 +15,7 @@ import { CliError } from "../exit.js";
 
 import {
   DEFAULT_PORT,
+  hasRecords,
   readRecords,
   startReportServer,
   type ReportServer,
@@ -135,6 +136,14 @@ describe("readRecords", () => {
       ]);
     },
   );
+});
+
+describe("hasRecords", () => {
+  it("says whether any record file is there", () => {
+    expect(hasRecords(recordsDir)).toBe(false);
+    writeRecord("one.json");
+    expect(hasRecords(recordsDir)).toBe(true);
+  });
 });
 
 describe("startReportServer", () => {
@@ -297,7 +306,8 @@ describe("startReportServer", () => {
     });
 
     it("takes any free port in place of the default", async () => {
-      await block(DEFAULT_PORT);
+      // Something else on this machine may hold it already, which is as good.
+      await block(DEFAULT_PORT).catch(() => {});
       const server = await startReportServer({ recordsDir, viewer });
       open.push(server);
       expect(new URL(server.url).port).not.toBe(String(DEFAULT_PORT));

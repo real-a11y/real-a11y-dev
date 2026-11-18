@@ -24,14 +24,12 @@ describe("recordsDirFor", () => {
   });
 
   it("reads the records inside an output folder", () => {
+    mkdirSync(join(root, "records"));
     expect(recordsDirFor(root)).toBe(join(root, "records"));
   });
 
-  it("takes the records folder itself", () => {
-    const records = join(root, "records");
-    mkdirSync(records);
-    writeFileSync(join(records, ".real-a11y-records"), "");
-    expect(recordsDirFor(records)).toBe(records);
+  it("takes a folder of records itself", () => {
+    expect(recordsDirFor(root)).toBe(root);
   });
 
   it("refuses a folder you named that isn't there", () => {

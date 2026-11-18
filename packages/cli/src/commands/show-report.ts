@@ -13,18 +13,16 @@ import { parsePort, type CommandFn } from "../args.js";
 import { onInterrupt } from "../cleanup.js";
 import { CliError, EXIT } from "../exit.js";
 import { progress } from "../output.js";
-import { readRecords, startReportServer } from "../show-report/server.js";
+import { hasRecords, startReportServer } from "../show-report/server.js";
 
 /** Where `@real-a11y-dev/testing/reporter` writes unless told otherwise. */
 const DEFAULT_DIR = "a11y-snapshots";
 
-/** The file the reporter marks its records folder with. */
-const RECORDS_MARKER = ".real-a11y-records";
-
 /**
- * The records folder a target names: the reporter's output folder, or the
- * records folder itself. With no target the default folder may not exist yet,
- * since the first test run makes it; one you named is expected to.
+ * The records folder a target names: the reporter's output folder, or a folder
+ * of records itself (the reporter's, or one `REAL_A11Y_TREES_DIR` filled). With
+ * no target the default folder may not exist yet, since the first test run
+ * makes it; one you named is expected to.
  */
 export function recordsDirFor(target: string | undefined): string {
   const dir = resolve(target ?? DEFAULT_DIR);
@@ -46,7 +44,8 @@ export function recordsDirFor(target: string | undefined): string {
     }
     if (!isDirectory) throw new CliError(`not a folder: ${dir}`);
   }
-  return existsSync(join(dir, RECORDS_MARKER)) ? dir : join(dir, "records");
+  const records = join(dir, "records");
+  return target === undefined || existsSync(records) ? records : dir;
 }
 
 /** The platform's own way to open a URL in the default browser. */
@@ -107,7 +106,7 @@ export const showReportCommand: CommandFn = async (positionals, flags) => {
 
   process.stdout.write(`${server.url}\n`);
   progress(`showing the snapshot report from ${recordsDir}`, { quiet });
-  if (readRecords(recordsDir).length === 0) {
+  if (!quiet && !hasRecords(recordsDir)) {
     progress(
       "no snapshots recorded yet: the page fills in as your tests run with @real-a11y-dev/testing/reporter",
       { quiet },
