@@ -21,6 +21,32 @@ describe("outputDirFor", () => {
     expect(outputDirFor(".")).toBeUndefined();
     expect(outputDirFor(process.cwd())).toBeUndefined();
   });
+
+  describe("for a folder named records", () => {
+    let root: string;
+
+    beforeEach(() => {
+      root = mkdtempSync(join(tmpdir(), "real-a11y-show-report-"));
+    });
+
+    afterEach(() => {
+      rmSync(root, { recursive: true, force: true });
+    });
+
+    it("names its parent, since the reporter adds records itself", () => {
+      mkdirSync(join(root, "records"));
+      expect(outputDirFor(join(root, "records"))).toBe(root);
+    });
+
+    it("names the current folder when that is the parent", () => {
+      expect(outputDirFor("records")).toBe(".");
+    });
+
+    it("keeps it when it is an output folder with records of its own", () => {
+      mkdirSync(join(root, "records", "records"), { recursive: true });
+      expect(outputDirFor(join(root, "records"))).toBe(join(root, "records"));
+    });
+  });
 });
 
 describe("recordsDirFor", () => {

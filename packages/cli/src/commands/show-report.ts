@@ -6,7 +6,7 @@
 
 import { spawn } from "node:child_process";
 import { existsSync, readFileSync, statSync } from "node:fs";
-import { join, resolve, win32 } from "node:path";
+import { basename, dirname, join, resolve, win32 } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { parsePort, type CommandFn } from "../args.js";
@@ -52,15 +52,17 @@ export function recordsDirFor(target: string | undefined): string {
 }
 
 /**
- * The `outputDir` to fill the folder you named, as you wrote it. None for the
- * current folder: the reporter's default lands under it, and it refuses to
- * write into a folder that isn't its own.
+ * The `outputDir` that fills the folder you named, as you wrote it. None for
+ * the current folder: the reporter's default lands under it. For a `records`
+ * folder read as it is, its parent: the reporter adds `records` itself.
  */
 export function outputDirFor(target: string | undefined): string | undefined {
-  if (target === undefined || resolve(target) === process.cwd()) {
-    return undefined;
-  }
-  return target;
+  if (target === undefined) return undefined;
+  const dir = resolve(target);
+  if (dir === process.cwd()) return undefined;
+  const isRecords =
+    basename(dir) === "records" && !existsSync(join(dir, "records"));
+  return isRecords ? dirname(target) : target;
 }
 
 /**
