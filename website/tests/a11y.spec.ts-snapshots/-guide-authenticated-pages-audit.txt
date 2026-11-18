@@ -80,7 +80,7 @@ main
     strong "session expired"
     code "login"
     code "auth.json"
-  paragraph "The pin covers the page's s as well. A frame whose document comes from an origin you didn't allow is not read — its row stays empty — since it would carry the same cookies into your report. A , or frame holds the page's own markup and is read. Add the frame's origin with to include it."
+  paragraph "The pin covers the page's s as well. A frame whose document comes from an origin you didn't allow is not read — its row stays empty — since it would carry the same cookies into your report, and a step can't act inside it. A , or frame holds the page's own markup and is read. Add the frame's origin with to include it."
     code "<iframe>"
     code "Iframe"
     code "srcdoc"

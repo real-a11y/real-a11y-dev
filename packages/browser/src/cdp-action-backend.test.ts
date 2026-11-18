@@ -66,17 +66,42 @@ describe("CdpActionBackend.dispatch", () => {
     expect(cdp.calls).toHaveLength(0);
   });
 
-  it("refuses a node of an out-of-process frame, saying so", async () => {
-    const { backend, cdp } = makeBackend(() => ({}));
+  it("never resolves a node of another process over this session", async () => {
+    const frame = { frameId: "F00D", documentId: "BEEF" };
+    const page = makeBackend(resolving("obj-1", { ok: true }));
+    const onFrame = new FakeCdp(resolving("obj-1", { ok: true }));
+    const frameBackend = new CdpActionBackend(
+      onFrame as unknown as CDPSession,
+      frame,
+    );
+
+    for (const [backend, nodeId] of [
+      [page.backend, "ax-dom-12@F00D.BEEF"], // a frame's node, the page's session
+      [frameBackend, "ax-dom-12"], // the page's node, a frame's session
+      [frameBackend, "ax-dom-12@F00D.CAFE"], // another document of that frame
+      [frameBackend, "ax-dom-12@D00D.BEEF"], // another frame
+    ] as const) {
+      const res = await backend.dispatch({ nodeId, action: "click" });
+      expect(res.success, nodeId).toBe(false);
+      expect(res.error, nodeId).toMatch(/another renderer process/);
+    }
+    expect(page.cdp.calls).toHaveLength(0);
+    expect(onFrame.calls).toHaveLength(0);
+  });
+
+  it("acts on a node of the out-of-process frame its session is on", async () => {
+    const cdp = new FakeCdp(resolving("obj-1", { ok: true }));
+    const backend = new CdpActionBackend(cdp as unknown as CDPSession, {
+      frameId: "F00D",
+      documentId: "BEEF",
+    });
     const res = await backend.dispatch({
       nodeId: "ax-dom-12@F00D.BEEF",
       action: "click",
     });
-    expect(res.success).toBe(false);
-    expect(res.error).toMatch(
-      /inside a frame Chromium runs in another process/,
-    );
-    expect(cdp.calls).toHaveLength(0);
+    expect(res).toEqual({ success: true });
+    const resolve = cdp.calls.find((c) => c.method === "DOM.resolveNode");
+    expect(resolve?.params).toEqual({ backendNodeId: 12 });
   });
 
   it("clicks by resolving the backendDOMNodeId to an object handle", async () => {

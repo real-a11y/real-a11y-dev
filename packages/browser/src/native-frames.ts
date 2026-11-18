@@ -70,6 +70,18 @@ export interface CdpFrame {
   url?: string;
   /** The origin its document runs as: `https://…`, or opaque. */
   securityOrigin?: string;
+  /** The document it shows; a navigation changes this, and not its `id`. */
+  loaderId?: string;
+}
+
+/** The frame `session` is attached to, as Chromium reports it now. */
+export async function sessionFrame(
+  session: Pick<CDPSession, "send">,
+): Promise<CdpFrame> {
+  const { frameTree } = (await session.send("Page.getFrameTree")) as {
+    frameTree: { frame: CdpFrame };
+  };
+  return frameTree.frame;
 }
 
 interface FrameTreeNode {

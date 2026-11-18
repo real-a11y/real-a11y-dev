@@ -63,8 +63,8 @@ is native now — so these are plain invocations. An earlier version of this row
    inside the page's `<main>`, then `real-a11y tree <url>`,
    `real-a11y audit <url> -f json` and `real-a11y tree <url> --redact-input`
    - **9b** — serve the payment frame from a second site instead (the page on
-     `127.0.0.1`, the frame from `localhost`) and give its button the text
-     `Pay now`, then, with `real-a11y install`'s Chrome, `real-a11y tree <url>`
+     `127.0.0.1`, the frame from `localhost`) and make its button
+     `<button onclick="this.textContent='Paid'">Pay now</button>`, then, with `real-a11y install`'s Chrome, `real-a11y tree <url>`
      and `real-a11y click <url> --role button --name "Pay now"`
 
 ## Expected
@@ -142,10 +142,12 @@ is native now — so these are plain invocations. An earlier version of this row
   Chrome.)
 - **9b** — under site isolation the cross-site frame runs in a process of its
   own, and reads the same: its card field `[redacted]`, and `button "Pay now"`
-  under its row. `click` names the frame's button and refuses: it is
-  inside a frame Chromium runs in another process, which can't be acted on yet.
-  cli 0.1.0-beta.13 printed that frame's row with nothing under it, which is the
-  old behaviour, not a fail.
+  under its row. `click` exits `0` and prints exactly one change,
+  `~ button "Paid": a11y.name "Pay now" → "Paid"`. Backend ids restart in every
+  process, so a click sent over the page's session would land on some other
+  element and print something else, or nothing. cli
+  0.1.0-beta.13 printed that frame's row with nothing under it, and `click` found
+  no such button, which is the old behaviour, not a fail.
 
 ## Why this exists
 

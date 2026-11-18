@@ -39,7 +39,8 @@ export interface TargetCandidate {
   nth: number;
   role: string;
   name: string;
-  /** Whether the node has a backing DOM element (`ax-dom-<n>`) to act on. */
+  /** Whether the node has a backing DOM element (`ax-dom-<n>`, in whichever
+   *  frame) to act on. */
   actionable: boolean;
   /** `a11y.states.disabled === true` — the page would ignore the action. */
   disabled: boolean;
@@ -53,11 +54,7 @@ export type ResolveTargetResult =
   /** More than one match and no `nth`. Candidates are complete — callers cap rendering. */
   | { kind: "ambiguous"; candidates: TargetCandidate[] }
   /** Matched a node with no backing DOM element (`ax-<n>`, e.g. a synthesized root). */
-  | { kind: "no-dom-node"; candidate: TargetCandidate }
-  /** Matched a node inside a frame Chromium runs in another process (its id
-   *  carries the frame: `ax-dom-<n>@<frameId>.<documentId>`). Acting there
-   *  isn't supported yet. */
-  | { kind: "in-remote-frame"; candidate: TargetCandidate };
+  | { kind: "no-dom-node"; candidate: TargetCandidate };
 
 /**
  * Resolve a role + name (+ nth) query against a native tree to an actionable
@@ -103,9 +100,6 @@ export function resolveTarget(
   const node = matches[index];
   const candidate = candidateOf(node, index + 1);
 
-  if (splitNativeNodeId(node.id).frame) {
-    return { kind: "in-remote-frame", candidate };
-  }
   if (!candidate.actionable) {
     return { kind: "no-dom-node", candidate };
   }
@@ -118,7 +112,7 @@ function candidateOf(node: SemanticNode, nth: number): TargetCandidate {
     nth,
     role: node.a11y.role,
     name: node.a11y.name,
-    actionable: backendNodeIdFrom(node.id) !== null,
+    actionable: backendNodeIdFrom(splitNativeNodeId(node.id).localId) !== null,
     disabled: node.a11y.states.disabled === true,
   };
 }

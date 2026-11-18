@@ -116,8 +116,8 @@ It includes the page's `<iframe>`s: each frame's document sits under its
 located from the frame's own `<iframe>`, then ` >>> `, then its path inside the
 frame. `heading-order` and `landmark-structure` judge the page's own document
 only. That holds for a frame Chromium runs in a process of its own (under site
-isolation, a cross-site or `sandbox`ed `<iframe>`) too, though the action tools
-can't act inside one yet.
+isolation, a cross-site or `sandbox`ed `<iframe>`) too, and the action tools act
+inside one the same way.
 
 **`get_tab_order` is the exception, and not a fallback.** Chromium's tree knows
 whether a node is *focusable*, but not the *sequence*: `tabindex` never reaches a
