@@ -112,7 +112,7 @@ main
     code "tabs"
     emphasis "order"
     link "command reference"
-  paragraph "An 's content is part of that tree, the way a screen reader reads it: each frame's document sits under its row, and checks the controls inside it. A finding there is located from the frame's own , then , then its path inside the frame () — no single selector crosses a frame. and judge the page's own document, so an embedded widget's or is not counted as a second one of the page's. That holds wherever Chromium runs the frame: under site isolation — the that fetches, or a Chrome you reach with — a cross-site or ed runs in a process of its own and is read over a session of its own. One limit: and the action commands can't act inside such a frame yet."
+  paragraph "An 's content is part of that tree, the way a screen reader reads it: each frame's document sits under its row, and checks the controls inside it. A finding there is located from the frame's own , then , then its path inside the frame () — no single selector crosses a frame. and judge the page's own document, so an embedded widget's or is not counted as a second one of the page's. That holds wherever Chromium runs the frame: under site isolation — the that fetches, or a Chrome you reach with — a cross-site or ed runs in a process of its own and is read over a session of its own. and the action commands act inside such a frame the same way."
     code "<iframe>"
     code "Iframe"
     code "audit"
