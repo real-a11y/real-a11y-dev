@@ -11,8 +11,8 @@ ship — [`install`](#install), [`audit`](#audit-url), [`inspect`](#inspect-url)
 [`list`](#list-category-url), [`interact`](#interact-url-step-step),
 [`click`](#click-url-role-role), [`type`](#type-url-role-role-text-value),
 [`focus`](#focus-url-role-role), [`session`](#session-subcommand),
-[`snapshot`](#snapshot-url), [`diff`](#diff-base-json-pr-json), and
-[`login`](#login-url-save-file). Run `real-a11y <command> --help` for a command's
+[`snapshot`](#snapshot-url), [`diff`](#diff-base-json-pr-json),
+[`show-report`](#show-report-dir), and [`login`](#login-url-save-file). Run `real-a11y <command> --help` for a command's
 own flags.
 
 <!-- surface:begin cli-unreleased -->

@@ -15,6 +15,7 @@ h1 Commands & flags
     h3 focus <url> --role <role>
     h3 snapshot [url...]
     h3 diff <base.json> <pr.json>
+    h3 show-report [dir]
     h3 login <url> --save <file>
     h3 session <subcommand>
   h2 Flags
@@ -65,10 +66,13 @@ h1 Commands & flags
     h3 --max-lines <n>
     h3 --max-pages <n>
     h3 --save <file>
+    h3 --port <n>
+    h3 --no-open
   h2 Security posture
     h3 Socket and process isolation
     h3 Authenticated state
     h3 Origin pinning and the file:// gate
     h3 Field values
     h3 Redaction
+    h3 The report server
     h3 Daemon log

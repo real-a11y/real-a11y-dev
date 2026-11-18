@@ -78,6 +78,7 @@ link "redact"
 button "Copy Code"
 generic
 table
+link "npx real-a11y show-report"
 link "Matchers"
 link "The snapshot report"
 link "Playwright adapter"
