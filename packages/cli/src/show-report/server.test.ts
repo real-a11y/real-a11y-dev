@@ -120,6 +120,17 @@ describe("readRecords", () => {
     expect(readRecords(recordsDir)).toEqual([]);
   });
 
+  it("stays out of node_modules and .git", () => {
+    for (const folder of ["node_modules/pkg", ".git/x"]) {
+      mkdirSync(join(recordsDir, folder), { recursive: true });
+      writeFileSync(
+        join(recordsDir, folder, "a.json"),
+        JSON.stringify({ version: 2 }),
+      );
+    }
+    expect(readRecords(recordsDir)).toEqual([]);
+  });
+
   it("reads nothing from a folder that doesn't exist yet", () => {
     expect(readRecords(join(root, "missing"))).toEqual([]);
   });

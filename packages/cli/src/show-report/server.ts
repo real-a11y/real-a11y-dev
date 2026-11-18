@@ -73,6 +73,10 @@ export interface ReportServer {
   close: () => Promise<void>;
 }
 
+/** Folders no test run records into, and too big to read twice a second:
+ *  `show-report .` starts at a project's root. */
+const NEVER_RECORDS = new Set(["node_modules", ".git"]);
+
 /** Every record file under `dir`. Links aren't followed out of the folder. */
 function recordFiles(dir: string): string[] {
   const found: string[] = [];
@@ -85,8 +89,11 @@ function recordFiles(dir: string): string[] {
     }
     for (const entry of entries) {
       const path = join(folder, entry.name);
-      if (entry.isDirectory()) walk(path);
-      else if (entry.isFile() && entry.name.endsWith(".json")) found.push(path);
+      if (entry.isDirectory()) {
+        if (!NEVER_RECORDS.has(entry.name)) walk(path);
+      } else if (entry.isFile() && entry.name.endsWith(".json")) {
+        found.push(path);
+      }
     }
   };
   walk(dir);

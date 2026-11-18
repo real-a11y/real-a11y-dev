@@ -61,9 +61,10 @@ export function App() {
   // A rerun clears a test file's records before it writes them again: what is
   // open stays open through that, with the view and the side you chose.
   const open = useRef<SnapshotRecord | null>(null);
-  const wanted = selectedId ?? open.current?.id;
+  const byId = (id?: string | null) => readable.find((r) => r.id === id);
   const selected =
-    readable.find((r) => r.id === wanted) ??
+    byId(selectedId) ??
+    byId(open.current?.id) ??
     open.current ??
     all[0]?.records[0] ??
     null;
