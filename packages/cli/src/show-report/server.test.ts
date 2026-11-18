@@ -16,6 +16,7 @@ import { CliError } from "../exit.js";
 import {
   DEFAULT_PORT,
   hasRecords,
+  loopbackHosts,
   readRecords,
   startReportServer,
   type ReportServer,
@@ -147,6 +148,22 @@ describe("readRecords", () => {
       ]);
     },
   );
+});
+
+describe("loopbackHosts", () => {
+  it("names the port", () => {
+    expect([...loopbackHosts(9324)]).toEqual([
+      "127.0.0.1:9324",
+      "localhost:9324",
+    ]);
+  });
+
+  it("takes the bare name on port 80, where a browser sends no port", () => {
+    expect(loopbackHosts(80).has("127.0.0.1")).toBe(true);
+    expect(loopbackHosts(80).has("localhost")).toBe(true);
+    expect(loopbackHosts(80).has("localhost:80")).toBe(true);
+    expect(loopbackHosts(9324).has("localhost")).toBe(false);
+  });
 });
 
 describe("hasRecords", () => {

@@ -92,7 +92,11 @@ export function App() {
         ) : !loaded ? (
           <p class="sv-empty">Loading…</p>
         ) : selected ? (
-          <RecordView key={selected.id} record={selected} />
+          <RecordView
+            key={selected.id}
+            record={selected}
+            gone={!readable.includes(selected)}
+          />
         ) : (
           <Empty
             dir={loaded.dir}
@@ -340,7 +344,14 @@ function useChangeMarks(
   }, [record, trees, viewMode, onClear]);
 }
 
-function RecordView({ record }: { record: SnapshotRecord }) {
+function RecordView({
+  record,
+  gone,
+}: {
+  record: SnapshotRecord;
+  /** It is still open, but the latest records no longer hold it. */
+  gone: boolean;
+}) {
   const [side, setSide] = useState<Side>("after");
   const [viewMode, setViewMode] = useState<TreeViewMode>("a11y");
   const [marksOn, setMarksOn] = useState(true);
@@ -361,6 +372,7 @@ function RecordView({ record }: { record: SnapshotRecord }) {
     <article class="sv-record-view" aria-labelledby="sv-title">
       <RecordHeader
         record={record}
+        gone={gone}
         side={trees.before ? side : null}
         onSide={(next) => {
           setSide(next);
@@ -386,10 +398,12 @@ function RecordView({ record }: { record: SnapshotRecord }) {
 
 function RecordHeader({
   record,
+  gone,
   side,
   onSide,
 }: {
   record: SnapshotRecord;
+  gone: boolean;
   /** Which tree of a diff shows; null for a record of one tree. */
   side: Side | null;
   onSide: (side: Side) => void;
@@ -409,6 +423,11 @@ function RecordHeader({
           {record.file}
         </span>
         <span>recorded {new Date(record.recordedAt).toLocaleString()}</span>
+      </p>
+      <p class="sv-gone" role="status">
+        {gone
+          ? "Not in the latest records: its test is rerunning, or no longer takes this snapshot."
+          : ""}
       </p>
       {side ? (
         // `ui`'s toggle, as the panel's DOM / A11Y / TAB.

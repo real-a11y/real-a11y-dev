@@ -77,6 +77,13 @@ export interface ReportServer {
  *  `show-report .` starts at a project's root. */
 const NEVER_RECORDS = new Set(["node_modules", ".git"]);
 
+/** The `Host` a page served on `port` sends. A browser leaves out port 80. */
+export function loopbackHosts(port: number): ReadonlySet<string> {
+  const names = [HOST, "localhost"];
+  const withPort = names.map((name) => `${name}:${port}`);
+  return new Set(port === 80 ? [...names, ...withPort] : withPort);
+}
+
 /** Every record file under `dir`. Links aren't followed out of the folder. */
 function recordFiles(dir: string): string[] {
   const found: string[] = [];
@@ -248,7 +255,7 @@ export async function startReportServer({
 
   await bind(server, port);
   const bound = (server.address() as { port: number }).port;
-  hosts = new Set([`${HOST}:${bound}`, `localhost:${bound}`]);
+  hosts = loopbackHosts(bound);
 
   let seen = fingerprint(recordsDir);
   const poll = setInterval(() => {
