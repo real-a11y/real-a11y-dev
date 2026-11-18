@@ -2339,6 +2339,8 @@ main
       code "127.0.0.1"
       code "localhost"
     listitem "It serves a fixed list of paths. Nothing in a URL names a file, and it follows no link out of the records folder."
+    listitem "It has no login. While it runs, anything on the machine that can connect to can read the records, including another user signed in to the same machine or CI runner. On a shared machine, stop it when you're done."
+      code "127.0.0.1"
   heading "Daemon log" (level 3)
   list
     listitem "Each session writes diagnostics to . It may contain URLs and command names; it is owned by the same user and is removed when the session is stopped."
