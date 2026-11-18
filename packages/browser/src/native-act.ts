@@ -23,7 +23,7 @@ import {
 import type { CDPSession, Frame, Page } from "playwright";
 
 import { CdpActionBackend } from "./cdp-action-backend.js";
-import { frameFromPinnedOrigin, type CdpFrame } from "./native-frames.js";
+import { frameFromPinnedOrigin, sessionFrame } from "./native-frames.js";
 import type { NativeTreeOptions } from "./native-sensitivity.js";
 
 /** What became of the frame a node was read from. */
@@ -52,21 +52,16 @@ async function checkFrame(
   ref: NativeFrameRef,
   pinned: ReadonlySet<string> | null,
 ): Promise<FrameCheck | null> {
-  const { frameTree } = (await session.send("Page.getFrameTree")) as {
-    frameTree: { frame: CdpFrame & { loaderId?: string } };
-  };
-  const shown = frameTree.frame;
+  const shown = await sessionFrame(session);
   if (shown.id !== ref.frameId) return null;
-  if (
-    pinned &&
-    !(
-      frameFromPinnedOrigin(shown, pinned) &&
-      framesAroundArePinned(frame, pinned)
-    )
-  ) {
-    return "not-allowed";
-  }
-  return shown.loaderId === ref.documentId ? "current" : "stale";
+  // The document first: a frame that redirected off a pinned origin is a target
+  // that changed, and a fresh read is what tells the caller where it went.
+  if (shown.loaderId !== ref.documentId) return "stale";
+  const allowed =
+    !pinned ||
+    (frameFromPinnedOrigin(shown, pinned) &&
+      framesAroundArePinned(frame, pinned));
+  return allowed ? "current" : "not-allowed";
 }
 
 /**

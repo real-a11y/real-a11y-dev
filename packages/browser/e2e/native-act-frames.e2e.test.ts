@@ -151,47 +151,32 @@ function below(tree: ExtractionResult, root: SemanticNode): SemanticNode[] {
   });
 }
 
-/** The node named `name` directly in the document under `row`, not in a frame
- *  nested inside it. */
+/** The nodes of the document under `row`, or of the page with no `row`, without
+ *  those of the frames nested in it. */
+function ownNodes(tree: ExtractionResult, row?: SemanticNode): SemanticNode[] {
+  const nodes = row ? below(tree, row) : nodesOf(tree);
+  const nested = new Set(
+    nodes
+      .filter((n) => n.a11y.role === "Iframe")
+      .flatMap((n) => below(tree, n).map((c) => c.id)),
+  );
+  return nodes.filter((n) => !nested.has(n.id));
+}
+
+/** The node named `name` in the document under `row`. */
 function inFrame(
   tree: ExtractionResult,
   row: SemanticNode,
   name: string,
 ): SemanticNode {
-  const nested = new Set(
-    below(tree, row)
-      .filter((n) => n.a11y.role === "Iframe")
-      .flatMap((n) => below(tree, n).map((c) => c.id)),
-  );
-  const node = below(tree, row).find(
-    (n) => n.a11y.name === name && !nested.has(n.id),
-  );
+  const node = ownNodes(tree, row).find((n) => n.a11y.name === name);
   if (!node) throw new Error(`no "${name}" under "${row.a11y.name}"`);
   return node;
 }
 
-/** The text of the heading reporting into the document under `row`. */
-function report(tree: ExtractionResult, row: SemanticNode): string {
-  const nested = new Set(
-    below(tree, row)
-      .filter((n) => n.a11y.role === "Iframe")
-      .flatMap((n) => below(tree, n).map((c) => c.id)),
-  );
-  const heading = below(tree, row).find(
-    (n) => n.a11y.role === "heading" && !nested.has(n.id),
-  );
-  return heading?.a11y.name ?? "";
-}
-
-/** The page's own heading. */
-function topReport(tree: ExtractionResult): string {
-  const frames = nodesOf(tree)
-    .filter((n) => n.a11y.role === "Iframe")
-    .flatMap((n) => below(tree, n).map((c) => c.id));
-  const inFrames = new Set(frames);
-  const heading = nodesOf(tree).find(
-    (n) => n.a11y.role === "heading" && !inFrames.has(n.id),
-  );
+/** What the heading of the document under `row`, or of the page, reports. */
+function report(tree: ExtractionResult, row?: SemanticNode): string {
+  const heading = ownNodes(tree, row).find((n) => n.a11y.role === "heading");
   return heading?.a11y.name ?? "";
 }
 
@@ -209,7 +194,7 @@ describe("session.act() in a frame in another process", () => {
       expect(report(after, rowOf(after, "widget"))).toBe(
         "clicked Widget button",
       );
-      expect(topReport(after)).toBe("top idle");
+      expect(report(after)).toBe("top idle");
     });
   });
 
@@ -270,7 +255,7 @@ describe("session.act() in a frame in another process", () => {
       const after = await session.nativeTree();
       expect(report(after, rowOf(after, title))).toBe("clicked Inner button");
       expect(report(after, rowOf(after, "widget"))).toBe("widget idle");
-      expect(topReport(after)).toBe("top idle");
+      expect(report(after)).toBe("top idle");
     });
   });
 

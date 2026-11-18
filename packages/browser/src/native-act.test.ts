@@ -184,6 +184,18 @@ describe("actOnNativeNode", () => {
       expect(remote.detached).toBe(1);
     });
 
+    it("calls a frame that redirected off the pin a changed target", async () => {
+      const remote = new FakeSession(shown("F1", "D2"));
+      const { page } = fakePage(() => [
+        { url: "https://pay.example/frame", session: remote },
+      ]);
+
+      const res = await actOnNativeNode(page, click("ax-dom-12@F1.D1"), pin);
+
+      expect(res.error).toMatch(/could not resolve node/);
+      expect(remote.acted).toBe(false);
+    });
+
     it("refuses a frame running as another origin on about:blank", async () => {
       const remote = new FakeSession({
         id: "F1",
