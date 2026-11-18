@@ -6,7 +6,7 @@
 
 import { spawn } from "node:child_process";
 import { existsSync, readFileSync, statSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { join, resolve, win32 } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { parsePort, type CommandFn } from "../args.js";
@@ -48,12 +48,21 @@ export function recordsDirFor(target: string | undefined): string {
   return target === undefined || existsSync(records) ? records : dir;
 }
 
-/** The platform's own way to open a URL in the default browser. */
+/**
+ * The platform's own way to open a URL in the default browser. Windows gets
+ * `cmd.exe` by its full path: given a bare name it looks in the current folder
+ * first, and this runs inside whatever project you are looking at, so a
+ * `cmd.exe` committed to that project would run in its place.
+ */
 export function browserCommand(
   url: string,
   platform: NodeJS.Platform = process.platform,
 ): [command: string, args: string[]] {
-  if (platform === "win32") return ["cmd", ["/c", "start", "", url]];
+  if (platform === "win32") {
+    const system = process.env.SystemRoot ?? "C:\\Windows";
+    const cmd = win32.join(system, "System32", "cmd.exe");
+    return [cmd, ["/c", "start", "", url]];
+  }
   if (platform === "darwin") return ["open", [url]];
   return ["xdg-open", [url]];
 }

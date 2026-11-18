@@ -1,6 +1,6 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { join, resolve, win32 } from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
@@ -64,9 +64,12 @@ describe("browserCommand", () => {
   });
 
   it("gives Windows' start an empty title, or it takes the URL for one", () => {
-    expect(browserCommand(url, "win32")).toEqual([
-      "cmd",
-      ["/c", "start", "", url],
-    ]);
+    expect(browserCommand(url, "win32")[1]).toEqual(["/c", "start", "", url]);
+  });
+
+  it("never lets Windows look for cmd.exe in the current folder", () => {
+    const [command] = browserCommand(url, "win32");
+    expect(win32.isAbsolute(command)).toBe(true);
+    expect(command).toMatch(/\\System32\\cmd\.exe$/);
   });
 });
