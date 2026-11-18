@@ -7,7 +7,7 @@
 
 import type { FingerprintedFinding } from "@real-a11y-dev/snapshot";
 
-import { palette } from "./color.js";
+import { palette, type Palette } from "./color.js";
 import { summarizeAll, type PageReport } from "./json.js";
 
 const MAX_LOCATORS = 8;
@@ -40,6 +40,35 @@ function groupFindings(findings: readonly FingerprintedFinding[]): Group[] {
     if (a.severity !== b.severity) return a.severity === "error" ? -1 : 1;
     return b.findings.length - a.findings.length;
   });
+}
+
+/** The last line: the fixed clean line, or the counts and the failed pages. */
+function summaryLine(pages: readonly PageReport[], c: Palette): string {
+  const total = summarizeAll(pages);
+  const failed = pages.filter((p) => p.error).length;
+  if (total.total === 0 && failed === 0) {
+    return "No accessibility issues found.";
+  }
+  // A failed page must never read as a clean bill of health — the summary
+  // is the last line people scan, so failures belong in it.
+  const bits: string[] = [];
+  if (total.total > 0) {
+    const noun = total.total === 1 ? "issue" : "issues";
+    bits.push(
+      `${total.total} ${noun} — ${total.errors} error(s), ${total.warnings} warning(s)`,
+    );
+  }
+  if (failed > 0) {
+    bits.push(
+      failed === pages.length
+        ? `${failed} page(s) failed to load — nothing was audited`
+        : `${failed} page(s) failed to load`,
+    );
+  }
+  const summary = bits.join(" · ");
+  return c.bold(
+    total.errors > 0 || failed > 0 ? c.red(summary) : c.yellow(summary),
+  );
 }
 
 export interface PrettyOptions {
@@ -85,34 +114,7 @@ export function renderPretty(
     }
   }
 
-  const total = summarizeAll(pages);
-  const failed = pages.filter((p) => p.error).length;
   if (lines.length) lines.push("");
-  if (total.total === 0 && failed === 0) {
-    lines.push("No accessibility issues found.");
-  } else {
-    // A failed page must never read as a clean bill of health — the summary
-    // is the last line people scan, so failures belong in it.
-    const bits: string[] = [];
-    if (total.total > 0) {
-      const noun = total.total === 1 ? "issue" : "issues";
-      bits.push(
-        `${total.total} ${noun} — ${total.errors} error(s), ${total.warnings} warning(s)`,
-      );
-    }
-    if (failed > 0) {
-      bits.push(
-        failed === pages.length
-          ? `${failed} page(s) failed to load — nothing was audited`
-          : `${failed} page(s) failed to load`,
-      );
-    }
-    const summary = bits.join(" · ");
-    lines.push(
-      c.bold(
-        total.errors > 0 || failed > 0 ? c.red(summary) : c.yellow(summary),
-      ),
-    );
-  }
+  lines.push(summaryLine(pages, c));
   return `${lines.join("\n")}\n`;
 }

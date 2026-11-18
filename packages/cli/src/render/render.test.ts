@@ -7,7 +7,7 @@ import { fingerprintFindings } from "@real-a11y-dev/snapshot";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { appendStepSummary, emitAnnotations } from "./annotations.js";
-import { colorEnabled } from "./color.js";
+import { colorEnabled, palette } from "./color.js";
 import { renderJson, summarize, type PageReport } from "./json.js";
 import { renderPretty } from "./pretty.js";
 
@@ -94,6 +94,77 @@ describe("renderPretty", () => {
     const out = renderPretty([page()], { color: true });
     expect(out).toContain("[error]");
     expect(out).toContain("[warning]");
+  });
+
+  describe("the summary line", () => {
+    const lastLine = (out: string): string | undefined =>
+      out.trimEnd().split("\n").at(-1);
+    const warningOnly = fingerprintFindings(
+      "https://example.com/",
+      findings.slice(2),
+    );
+
+    it("says 'issue' for exactly one finding", () => {
+      const out = renderPretty([page({ findings: warningOnly })], {
+        color: false,
+      });
+      expect(lastLine(out)).toBe("1 issue — 0 error(s), 1 warning(s)");
+    });
+
+    it("is bold red when there is an error", () => {
+      const c = palette(true);
+      expect(lastLine(renderPretty([page()], { color: true }))).toBe(
+        c.bold(c.red("3 issues — 2 error(s), 1 warning(s)")),
+      );
+    });
+
+    it("is bold yellow when there are only warnings", () => {
+      const c = palette(true);
+      const out = renderPretty([page({ findings: warningOnly })], {
+        color: true,
+      });
+      expect(lastLine(out)).toBe(
+        c.bold(c.yellow("1 issue — 0 error(s), 1 warning(s)")),
+      );
+    });
+
+    it("is bold red when a page failed, even with only warnings", () => {
+      const c = palette(true);
+      const out = renderPretty(
+        [
+          page({ findings: warningOnly }),
+          page({ name: "b", findings: [], error: "could not open b" }),
+        ],
+        { color: true },
+      );
+      expect(lastLine(out)).toBe(
+        c.bold(
+          c.red(
+            "1 issue — 0 error(s), 1 warning(s) · 1 page(s) failed to load",
+          ),
+        ),
+      );
+    });
+
+    it("follows a blank line after per-page output, and is plain when clean", () => {
+      const out = renderPretty(
+        [page({ findings: [] }), page({ name: "b", findings: [] })],
+        { color: true },
+      );
+      const c = palette(true);
+      expect(out).toBe(
+        [
+          c.bold("== https://example.com/"),
+          `  ${c.dim("no issues")}`,
+          "",
+          c.bold("== b"),
+          `  ${c.dim("no issues")}`,
+          "",
+          "No accessibility issues found.",
+          "",
+        ].join("\n"),
+      );
+    });
   });
 });
 
