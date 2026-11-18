@@ -144,7 +144,7 @@ module.exports = {
 };
 ```
 
-One self-contained page: open it from disk, or upload it from CI. See [The snapshot report](https://real-a11y.dev/packages/testing/snapshots#the-snapshot-report).
+One self-contained page: open it from disk, or upload it from CI. To follow a watch-mode run live, `npx real-a11y show-report` from `@real-a11y-dev/cli` serves the same view and redraws as the tests rerun. See [The snapshot report](https://real-a11y.dev/packages/testing/snapshots#the-snapshot-report).
 
 ## Playwright adapter
 

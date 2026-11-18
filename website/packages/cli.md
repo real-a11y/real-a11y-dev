@@ -381,6 +381,16 @@ so a CLI upgrade restarts a mismatched daemon. See
 [Security posture](/packages/cli/commands#security-posture) in the command
 reference.
 
+## See what your tests recorded
+
+`@real-a11y-dev/testing` can [record the tree behind each snapshot](/packages/testing/snapshots#the-snapshot-report).
+`show-report` opens those records in your browser, and the page redraws as the tests rerun:
+
+```sh
+npx vitest --watch          # in one terminal
+npx real-a11y show-report   # in another
+```
+
 ## Output you can trust
 
 `--format json` emits one stable envelope for every command, single- or

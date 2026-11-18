@@ -5,7 +5,7 @@ description: Every real-a11y command and flag — audit, inspect, snapshot, diff
 
 # Commands & flags
 
-Every invocation is `real-a11y <command> [url...] [flags]`. Fifteen commands
+Every invocation is `real-a11y <command> [url...] [flags]`. Sixteen commands
 ship — [`install`](#install), [`audit`](#audit-url), [`inspect`](#inspect-url),
 [`tree`](#tree-url), [`outline`](#outline-url), [`tabs`](#tabs-url),
 [`list`](#list-category-url), [`interact`](#interact-url-step-step),
@@ -16,6 +16,15 @@ ship — [`install`](#install), [`audit`](#audit-url), [`inspect`](#inspect-url)
 own flags.
 
 <!-- surface:begin cli-unreleased -->
+
+::: info Not in the published release yet
+Some of what this page documents is on `main` but not in `@real-a11y-dev/cli` 0.1.0-beta.13, so
+installing from npm today will not have it:
+
+- `show-report` — the whole command
+
+:::
+
 <!-- surface:end cli-unreleased -->
 
 Findings and reports go to **stdout**; progress, warnings, and errors go to
@@ -133,6 +142,7 @@ CDP, except [`tabs`](#tabs-url) — the one view that tree cannot produce (see
 | --- | --- |
 | [`snapshot [url...]`](#snapshot-url) | Audit a page set → one diffable JSON artifact (or `--md`). |
 | [`diff <base.json> <pr.json>`](#diff-base-json-pr-json) | Findings-aware diff of two artifacts — new / changed / fixed. Pure: no browser. |
+| [`show-report [dir]`](#show-report-dir) | Open your tests' snapshot report in the browser, and follow new runs as they happen. |
 
 <!-- surface:end cli-commands-artifact -->
 
@@ -596,6 +606,33 @@ real-a11y diff base.json pr.json --format md --explain --max-pages 5 --max-lines
 [`-o, --output`](#o-output-file) · [`-q, --quiet`](#q-quiet) ·
 [`--verbose`](#verbose) · [`-h, --help`](#h-help).
 
+### `show-report [dir]`
+
+Open the [snapshot report](/packages/testing/snapshots#the-snapshot-report) of
+your tests in the browser, and keep it current. The page redraws as tests write
+new snapshots, so it follows a watch-mode run in another terminal without a
+reload. The report's own `index.html` shows the run that wrote it; this shows
+whatever the tests recorded last.
+
+It runs no tests and launches no browser of its own. The snapshots come from
+`@real-a11y-dev/testing/reporter` (Vitest) or `/reporter/jest` (Jest), and
+`[dir]` is that reporter's output folder, `a11y-snapshots` by default. Before
+the first run the default folder needn't exist: the page fills in when the tests
+start recording. A folder you name has to exist.
+
+The page's URL goes to stdout, and the command runs until you press <kbd>Ctrl</kbd>+<kbd>C</kbd>,
+which exits `0`. The server is reachable from your own machine only: see
+[The report server](#the-report-server).
+
+```sh
+real-a11y show-report
+real-a11y show-report reports/a11y
+real-a11y show-report --port 8080 --no-open
+```
+
+**Flags:** [Config](#config) · [`--port`](#port-n) · [`--no-open`](#no-open) ·
+[`-q, --quiet`](#q-quiet) · [`--verbose`](#verbose) · [`-h, --help`](#h-help).
+
 ### `login <url> --save <file>`
 
 Open a visible browser, log in by hand — MFA, SSO, and passkeys all work,
@@ -703,7 +740,7 @@ there is nothing to choose.
 | --- | --- | --- | --- |
 | [`-f, --format`](#f-format-fmt) | enum, per command | first value | browser commands · `diff` |
 | [`-o, --output`](#o-output-file) | path | stdout | browser commands · `diff` |
-| [`-q, --quiet`](#q-quiet) | boolean | `false` | browser commands · `diff` · `install` |
+| [`-q, --quiet`](#q-quiet) | boolean | `false` | browser commands · `diff` · `install` · `show-report` |
 | [`--verbose`](#verbose) | boolean | `false` | all |
 | [`-h, --help`](#h-help) | boolean | — | all |
 
@@ -744,6 +781,8 @@ there is nothing to choose.
 | [`--ignore-view-line`](#ignore-view-line-regex) | regex (repeatable) | none | `diff` |
 | [`--max-lines`](#max-lines-n) | integer | full | `diff` |
 | [`--max-pages`](#max-pages-n) | integer | all | `diff` |
+| [`--port`](#port-n) | integer, `0` to `65535` | `9324` | `show-report` |
+| [`--no-open`](#no-open) | boolean | `false` | `show-report` |
 
 ## Browser & page
 
@@ -1370,6 +1409,22 @@ Session storage isn't captured — apps that keep auth there need
 real-a11y login https://app.example.com --save auth.json
 ```
 
+### `--port <n>`
+
+- **Type:** integer, `0` to `65535` · **Default:** `9324` ·
+  **Commands:** show-report
+
+The port the report's page is served on. `0` takes any free port. With no
+`--port`, a taken `9324` falls back to any free port; a port you ask for that is
+taken is an error.
+
+### `--no-open`
+
+- **Type:** boolean · **Default:** `false` · **Commands:** show-report
+
+Don't open the page in your default browser. The URL is printed either way, and
+the browser never opens when the `CI` environment variable is set.
+
 ## Security posture
 
 `real-a11y` is designed to be run in CI and on shared workstations. The daemon
@@ -1467,6 +1522,14 @@ feature makes the trust boundary explicit:
   contain tokens, PII, or signed URLs in query parameters **or in the fragment**
   (an OAuth implicit-flow redirect lands there). Redact them at the
   source so they never reach the daemon log or a committed artifact.
+
+### The report server
+
+- [`show-report`](#show-report-dir) listens on `127.0.0.1` only, and answers only
+  requests addressed to `127.0.0.1` or `localhost`, so another site can't reach it
+  through your browser by pointing its own domain at your machine.
+- It serves a fixed list of paths. Nothing in a URL names a file, and it follows no
+  link out of the records folder.
 
 ### Daemon log
 

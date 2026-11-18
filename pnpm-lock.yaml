@@ -317,6 +317,9 @@ importers:
       '@real-a11y-dev/snapshot':
         specifier: workspace:*
         version: link:../snapshot
+      '@real-a11y-dev/snapshot-viewer':
+        specifier: workspace:*
+        version: link:../snapshot-viewer
       '@types/node':
         specifier: ^26.6.3
         version: 26.6.6

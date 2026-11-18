@@ -74,6 +74,7 @@ packages/
 ├── ui/                # private — @real-a11y-dev/semantic-navigator-ui — Preact tree components
 ├── snapshot-viewer/   # private — draws test snapshots with the `ui` panel; its build is the
 │                      #   page `testing`'s snapshot report writes (`/reporter`, `/reporter/jest`)
+│                      #   and the one `cli`'s `show-report` serves
 │
 │                      # Apps and fixtures — never on a registry either
 ├── extension/         # private — the Chrome extension (Side Panel + Content Script),
@@ -90,7 +91,9 @@ package is **bundled** rather than installed — tsup's `noExternal` inlines the
 JS and `dts.resolve` inlines the declarations, which is why no published `.d.ts`
 names one:
 
-- `cli → browser, snapshot, session-registry, audit, serialize → core`
+- `cli → browser, snapshot, session-registry, audit, serialize → core`. Its
+  `show-report` ships `snapshot-viewer`'s prebuilt page as files it serves, never
+  imports
 - `mcp →` the same five `→ core` — the CLI and the server share one engine, so a
   snapshot captured by either diffs against the other byte for byte
 - `testing → browser, audit, serialize, validate → core` (headless — no `ui` dep

@@ -56,7 +56,7 @@ The `@real-a11y-dev/inspector`, `@real-a11y-dev/testing`, `@real-a11y-dev/react`
 - Do not "phone home," collect usage data, or check for updates.
 - Have no side effects at install time beyond what `pnpm` / `npm` / `yarn` does normally.
 
-`@real-a11y-dev/cli` and `@real-a11y-dev/mcp` build on those libraries but additionally drive a headless browser (Playwright) so they can audit a live page. That browser loads **only the URL you give them** — the page you asked to audit — and reads its accessibility tree locally. They send no page content, no results, and no telemetry to us or any third party. Installing the browser with `npx playwright install` downloads it from Microsoft's Playwright CDN, the same as any Playwright project — that is the only network activity, and it is under your control.
+`@real-a11y-dev/cli` and `@real-a11y-dev/mcp` build on those libraries but additionally drive a headless browser (Playwright) so they can audit a live page. That browser loads **only the URL you give them** — the page you asked to audit — and reads its accessibility tree locally. They send no page content, no results, and no telemetry to us or any third party. Installing the browser with `npx playwright install` downloads it from Microsoft's Playwright CDN, the same as any Playwright project — that is the only network activity, and it is under your control. The CLI's `show-report` command serves your recorded test snapshots to your own browser, from a local server only your machine can reach.
 
 ### Field values in what they print
 

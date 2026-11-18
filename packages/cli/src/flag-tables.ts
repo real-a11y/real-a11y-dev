@@ -140,6 +140,17 @@ export const LOGIN_FLAGS: Options = {
   help: { type: "boolean", short: "h" },
 };
 
+// show-report serves a folder of test records: no page, no browser session,
+// no report to format.
+export const SHOW_REPORT_FLAGS: Options = {
+  ...CONFIG_FLAGS,
+  port: { type: "string" },
+  "no-open": { type: "boolean" },
+  quiet: { type: "boolean", short: "q" },
+  verbose: { type: "boolean" },
+  help: { type: "boolean", short: "h" },
+};
+
 // session is a lifecycle command: list, stop, stop-all daemon sessions. It has
 // no page flags — it never launches a browser itself.
 export const SESSION_FLAGS: Options = {

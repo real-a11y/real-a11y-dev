@@ -1,6 +1,28 @@
 import { afterEach, describe, expect, it } from "vitest";
 
-import { registerCleanup, runCleanups } from "./cleanup.js";
+import {
+  onInterrupt,
+  registerCleanup,
+  runCleanups,
+  takeInterruptHandler,
+} from "./cleanup.js";
+
+describe("onInterrupt", () => {
+  afterEach(() => {
+    takeInterruptHandler();
+  });
+
+  it("has no handler unless a command sets one", () => {
+    expect(takeInterruptHandler()).toBeNull();
+  });
+
+  it("hands the handler over once, so a second signal still gets out", () => {
+    const stop = (): void => {};
+    onInterrupt(stop);
+    expect(takeInterruptHandler()).toBe(stop);
+    expect(takeInterruptHandler()).toBeNull();
+  });
+});
 
 describe("runCleanups", () => {
   // The registry is module-wide; drain it so a failed case can't leak into

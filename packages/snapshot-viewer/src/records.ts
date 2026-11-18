@@ -114,15 +114,33 @@ export interface FileGroup {
   records: SnapshotRecord[];
 }
 
+/** The records this viewer can draw: another version's shape isn't known. */
+export function readableRecords(records: SnapshotRecord[]): SnapshotRecord[] {
+  return records.filter((record) => record.version === RECORD_VERSION);
+}
+
 /**
- * The records by test file and project, each file's in the order its tests
- * took them. Only records of this viewer's version: another one's can't be
- * read.
+ * The records just loaded, each one that hasn't changed still the object it
+ * was: the panel on screen keeps the rows you opened when another test reruns.
  */
+export function keepUnchanged(
+  previous: SnapshotRecord[],
+  next: SnapshotRecord[],
+): SnapshotRecord[] {
+  const byId = new Map(previous.map((record) => [record.id, record]));
+  return next.map((record) => {
+    const old = byId.get(record.id);
+    return old?.recordedAt === record.recordedAt && old.text === record.text
+      ? old
+      : record;
+  });
+}
+
+/** The records by test file and project, each file's in the order its tests
+ *  took them. */
 export function groupByFile(records: SnapshotRecord[]): FileGroup[] {
   const byFile = new Map<string, FileGroup>();
   for (const record of records) {
-    if (record.version !== RECORD_VERSION) continue;
     const label = record.project
       ? `${record.project} · ${record.file}`
       : record.file;

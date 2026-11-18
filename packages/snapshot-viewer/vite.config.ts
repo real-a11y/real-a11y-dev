@@ -6,12 +6,14 @@
  * Two ways in. `vite build` makes `dist/viewer.js` and `dist/viewer.css`, a
  * classic script and a stylesheet that `@real-a11y-dev/testing/reporter`
  * inlines into one HTML file with the run's records: a classic script, since
- * a module script won't load from `file://`. `vite` (dev) serves the same app
- * against a records directory, and tells the page to reload them whenever it
- * changes, so a test run in watch mode shows up as it happens.
+ * a module script won't load from `file://`. `real-a11y show-report` serves
+ * that build against a records directory, and `vite` (dev) serves the app from
+ * source the same way: `GET /__records`, and `GET /__records/events` to say
+ * when they changed, so a test run in watch mode shows up as it happens.
  *
  * The panel and core are read from source, so nothing needs building first.
  */
+import type { ServerResponse } from "node:http";
 import { join, normalize, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -68,6 +70,14 @@ function records(dir: string): Plugin {
   return {
     name: "a11y-snapshot-records",
     configureServer(server) {
+      const listening = new Set<ServerResponse>();
+      // Ahead of `/__records`, which would answer this path too.
+      server.middlewares.use("/__records/events", (req, res) => {
+        res.writeHead(200, { "content-type": "text/event-stream" });
+        res.write(": connected\n\n");
+        listening.add(res);
+        req.on("close", () => listening.delete(res));
+      });
       server.middlewares.use("/__records", (_req, res) => {
         res.setHeader("content-type", "application/json");
         // The report's own reader: the same records, the same version check.
@@ -79,10 +89,12 @@ function records(dir: string): Plugin {
         if (!normalize(file).startsWith(dir)) return;
         // A run writes many records at once: announce them together.
         clearTimeout(pending);
-        pending = setTimeout(
-          () => server.ws.send({ type: "custom", event: "a11y-records" }),
-          250,
-        );
+        pending = setTimeout(() => {
+          // An event with no data never reaches the page's listener.
+          for (const res of listening) {
+            res.write("event: records\ndata: changed\n\n");
+          }
+        }, 250);
       });
     },
   };

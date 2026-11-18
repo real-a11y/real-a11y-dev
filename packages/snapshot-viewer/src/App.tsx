@@ -10,7 +10,9 @@ import { snapshotDiffRules } from "./marks.js";
 import {
   countLines,
   groupByFile,
+  keepUnchanged,
   lineKind,
+  readableRecords,
   splitTestName,
   toExtraction,
   type FileGroup,
@@ -18,7 +20,8 @@ import {
 } from "./records.js";
 
 interface Loaded {
-  /** The dev server's records directory; a written report leaves it out. */
+  /** The records directory of the server showing them; a written report
+   *  leaves it out. */
   dir?: string;
   records: SnapshotRecord[];
 }
@@ -38,7 +41,7 @@ interface Trees {
   before: ExtractionResult | null;
 }
 
-const NO_GROUPS: FileGroup[] = [];
+const NO_RECORDS: SnapshotRecord[] = [];
 
 export function App() {
   const { loaded, error } = useRecords();
@@ -47,17 +50,16 @@ export function App() {
   );
   const [query, setQuery] = useState("");
 
-  const all = useMemo(
-    () => (loaded ? groupByFile(loaded.records) : NO_GROUPS),
+  const readable = useMemo(
+    () => (loaded ? readableRecords(loaded.records) : NO_RECORDS),
     [loaded],
   );
+  const all = useMemo(() => groupByFile(readable), [readable]);
   const groups = useMemo(() => filterGroups(all, query), [all, query]);
   // The filter narrows the list, never what is open: typing into it doesn't
   // swap the record on screen.
   const selected =
-    loaded?.records.find((r) => r.id === selectedId) ??
-    all[0]?.records[0] ??
-    null;
+    readable.find((r) => r.id === selectedId) ?? all[0]?.records[0] ?? null;
 
   const select = (id: string) => {
     setSelectedId(id);
@@ -83,7 +85,10 @@ export function App() {
         ) : selected ? (
           <RecordView key={selected.id} record={selected} />
         ) : (
-          <Empty dir={loaded.dir} />
+          <Empty
+            dir={loaded.dir}
+            otherVersion={loaded.records.length - readable.length}
+          />
         )}
       </main>
     </div>
@@ -92,7 +97,8 @@ export function App() {
 
 /**
  * The records the page carries, when the snapshot report wrote them into it;
- * otherwise the dev server's, read again whenever it says they changed.
+ * otherwise the server's (`real-a11y show-report`, or this package's dev
+ * server), read again whenever it says they changed.
  */
 function useRecords() {
   const [loaded, setLoaded] = useState<Loaded | null>(
@@ -101,20 +107,36 @@ function useRecords() {
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
     if (window.__A11Y_SNAPSHOTS__) return;
+    // A run changes records faster than they load: only the latest load counts.
+    let latest = 0;
     const load = (): void => {
+      const mine = ++latest;
       fetch("/__records")
         .then((res) => res.json() as Promise<Loaded>)
         .then(
           (next) => {
-            setLoaded(next);
+            if (mine !== latest) return;
+            setLoaded((previous) => ({
+              ...next,
+              records: keepUnchanged(previous?.records ?? [], next.records),
+            }));
             setError(null);
           },
-          (err: unknown) => setError(String(err)),
+          (err: unknown) => {
+            if (mine === latest) setError(String(err));
+          },
         );
     };
     load();
-    import.meta.hot?.on("a11y-records", load);
-    return () => import.meta.hot?.off("a11y-records", load);
+    const changes = new EventSource("/__records/events");
+    changes.addEventListener("records", load);
+    // Connecting again means the server went away, and may have missed some.
+    let connected = false;
+    changes.onopen = () => {
+      if (connected) load();
+      connected = true;
+    };
+    return () => changes.close();
   }, []);
   return { loaded, error };
 }
@@ -421,7 +443,29 @@ function SnapshotText({ text }: { text: string }) {
   );
 }
 
-function Empty({ dir }: { dir?: string }) {
+function Empty({
+  dir,
+  otherVersion,
+}: {
+  dir?: string;
+  /** Records there are, written in a shape this viewer can't read. */
+  otherVersion: number;
+}) {
+  if (otherVersion > 0) {
+    return (
+      <div class="sv-empty">
+        <h2>These snapshots can't be drawn here</h2>
+        <p>
+          {otherVersion === 1
+            ? "One record was"
+            : `${otherVersion} records were`}{" "}
+          written by a different release of <code>@real-a11y-dev/testing</code>.
+          Update it and <code>@real-a11y-dev/cli</code> to the same release,
+          then run your tests again.
+        </p>
+      </div>
+    );
+  }
   return (
     <div class="sv-empty">
       <h2>No snapshots recorded</h2>
@@ -433,8 +477,14 @@ function Empty({ dir }: { dir?: string }) {
       </p>
       {dir === undefined ? null : (
         <>
-          <p>Run your tests with the recorder on, pointed at this directory:</p>
-          <pre>REAL_A11Y_TREES_DIR={dir} vitest run</pre>
+          <p>
+            Add the snapshot report to your test runner and run your tests. This
+            page updates by itself.
+          </p>
+          <pre>reporters: ["default", "@real-a11y-dev/testing/reporter"]</pre>
+          <p>
+            Reading records from <code>{dir}</code>
+          </p>
         </>
       )}
     </div>
