@@ -153,8 +153,8 @@ document, so an embedded widget's `<h1>` or `<main>` is not a second one of the
 page's. That holds wherever Chromium runs the frame: under site isolation (the
 Chrome for Testing `real-a11y install` fetches, or a Chrome reached with
 `--cdp`) a cross-site or `sandbox`ed `<iframe>` runs in a process of its own
-and is read over a session of its own. `interact` and the action commands
-can't act inside such a frame yet.
+and is read over a session of its own. `interact` and the action commands act
+inside such a frame the same way.
 
 There is **no `--producer` flag**: each command has exactly one correct producer,
 so there is nothing to choose. That tree is whole-document, so those commands

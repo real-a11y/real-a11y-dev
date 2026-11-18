@@ -109,8 +109,7 @@ page's. That holds wherever Chromium runs the frame: under site isolation — th
 [Chrome for Testing](/packages/cli/commands#install) that `real-a11y install`
 fetches, or a Chrome you reach with `--cdp` — a cross-site or `sandbox`ed
 `<iframe>` runs in a process of its own and is read over a session of its own.
-One limit: `interact` and the action commands can't act inside such a frame
-yet.
+`interact` and the action commands act inside such a frame the same way.
 
 ## Audit what's behind a click
 

@@ -462,7 +462,7 @@ describe("native tree — a site-isolated Chrome (--site-per-process)", () => {
     expect(node.id).toMatch(REMOTE_ID);
   });
 
-  it("reads the same over --cdp, agrees with nativeAX(), and refuses to act there", async () => {
+  it("reads the same over --cdp, agrees with nativeAX(), and acts there", async () => {
     const session = new BrowserSession({ cdpEndpoint });
     try {
       await session.open(url);
@@ -482,8 +482,7 @@ describe("native tree — a site-isolated Chrome (--site-per-process)", () => {
         nodeId: under(native, row, "Child button").id,
         action: "click",
       });
-      expect(result.success).toBe(false);
-      expect(result.error).toMatch(/another process/);
+      expect(result).toEqual({ success: true });
     } finally {
       await session.close();
     }

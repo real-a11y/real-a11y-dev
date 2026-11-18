@@ -142,10 +142,11 @@ is native now — so these are plain invocations. An earlier version of this row
   Chrome.)
 - **9b** — under site isolation the cross-site frame runs in a process of its
   own, and reads the same: its card field `[redacted]`, and `button "Pay now"`
-  under its row. `click` names the frame's button and refuses: it is
-  inside a frame Chromium runs in another process, which can't be acted on yet.
-  cli 0.1.0-beta.13 printed that frame's row with nothing under it, which is the
-  old behaviour, not a fail.
+  under its row. `click` reaches the frame's button and exits `0`, and a
+  button of the page is untouched: backend ids restart in every process, so a
+  click sent over the page's session would land on some other element. cli
+  0.1.0-beta.13 printed that frame's row with nothing under it, and `click` found
+  no such button, which is the old behaviour, not a fail.
 
 ## Why this exists
 

@@ -14,6 +14,12 @@
  * It acts only on nodes with a backing DOM element (`ax-dom-<n>`). A node with
  * none can't be resolved, so it's rejected rather than guessed at.
  *
+ * One backend speaks for one renderer process. A node of a frame Chromium runs
+ * in another process carries that frame in its id (`ax-dom-<n>@<frame>`), and
+ * `./native-act.ts` picks the session for it; a backend handed a node of any
+ * other process refuses it, because the same backend id names an unrelated
+ * element there.
+ *
  * The code that actually runs in the page lives in `./page-actions.ts` and is
  * sent as `String(fn)` — see that module for why those functions are written
  * self-contained, and for how they stay in step with core's `ActionDispatcher`.
@@ -28,10 +34,12 @@
  */
 
 import {
+  nativeFrameSuffix,
   splitNativeNodeId,
   type ActionRequest,
   type ActionResult,
   type ActionType,
+  type NativeFrameRef,
 } from "@real-a11y-dev/core";
 import type { CDPSession } from "playwright";
 
@@ -56,11 +64,16 @@ export function backendNodeIdFrom(nodeId: string): number | null {
 
 /**
  * Dispatch actions against nodes read from the native AX tree, over an
- * already-open CDP session. Nodes with no backing DOM element (`ax-<n>`) are
- * refused; sensitive field content never crosses back to Node.
+ * already-open CDP session: the page's, or with `frame` the session of that
+ * out-of-process frame. Nodes with no backing DOM element (`ax-<n>`) and nodes
+ * of any other process are refused; sensitive field content never crosses back
+ * to Node.
  */
 export class CdpActionBackend {
-  constructor(private readonly client: CDPSession) {}
+  constructor(
+    private readonly client: CDPSession,
+    private readonly frame: NativeFrameRef | null = null,
+  ) {}
 
   async dispatch(request: ActionRequest): Promise<ActionResult> {
     if (!SUPPORTED_ACTIONS.has(request.action)) {
@@ -70,17 +83,17 @@ export class CdpActionBackend {
       };
     }
 
-    // A node of an out-of-process frame resolves only in that frame's own
-    // session, which this backend doesn't hold. Said as such, not as a node
-    // with no element.
-    if (splitNativeNodeId(request.nodeId).frame) {
+    // Backend ids restart in every process: over the wrong session this id
+    // resolves to some other element, and the action lands on it.
+    const { localId, frame } = splitNativeNodeId(request.nodeId);
+    if (nativeFrameSuffix(frame) !== nativeFrameSuffix(this.frame)) {
       return {
         success: false,
-        error: `node "${request.nodeId}" is inside a frame Chromium runs in another process (a cross-site or sandboxed <iframe>), which can't be acted on yet`,
+        error: `node "${request.nodeId}" lives in another renderer process than this CDP session`,
       };
     }
 
-    const backendNodeId = backendNodeIdFrom(request.nodeId);
+    const backendNodeId = backendNodeIdFrom(localId);
     if (backendNodeId === null) {
       return {
         success: false,
