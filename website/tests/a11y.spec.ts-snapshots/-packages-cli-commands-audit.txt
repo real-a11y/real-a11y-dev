@@ -21,7 +21,7 @@ navigation "On this page"
       link "Security posture"
 main
   heading "Commands & flags" (level 1)
-  paragraph "Every invocation is . Sixteen commands ship — , , , , , , , , , , , , , , and . Run for a command's own flags."
+  paragraph "Every invocation is . Sixteen commands ship — , , , , , , , , , , , , , , , and . Run for a command's own flags."
     code "real-a11y <command> [url...] [flags]"
     link "install"
       code "install"
@@ -51,6 +51,8 @@ main
       code "snapshot"
     link "diff"
       code "diff"
+    link "show-report"
+      code "show-report"
     link "login"
       code "login"
     code "real-a11y <command> --help"

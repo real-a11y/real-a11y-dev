@@ -21,6 +21,7 @@ link "focus"
 link "session"
 link "snapshot"
 link "diff"
+link "show-report"
 link "login"
 table
 link "--fail-on"
