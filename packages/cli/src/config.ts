@@ -173,6 +173,23 @@ function validateFailOn(v: unknown, where: string): FailOn {
   return v;
 }
 
+/** A numeric `defaults` value: any finite number, except that
+ *  `sessionIdleTimeout` must be a positive integer of milliseconds. */
+function validateNumberDefault(key: string, v: unknown, where: string): number {
+  if (typeof v !== "number" || !Number.isFinite(v)) {
+    throw new CliError(`${where} must be a number`);
+  }
+  if (key !== "sessionIdleTimeout") return v;
+  if (!Number.isInteger(v) || v <= 0) {
+    throw new CliError(
+      `${where} must be a positive integer number of milliseconds`,
+    );
+  }
+  // Match the command-line `--session-idle-timeout` behaviour: values above
+  // the documented one-hour cap are clamped, not rejected.
+  return v > 3_600_000 ? 3_600_000 : v;
+}
+
 /** Structural validation of a `defaults` object (allowlist + coarse type). The
  * command parsers do the finer value validation via the virtual-flag merge. */
 function validateDefaults(raw: unknown): A11yDefaults {
@@ -197,21 +214,7 @@ function validateDefaults(raw: unknown): A11yDefaults {
         out[key] = v;
         break;
       case "number":
-        if (typeof v !== "number" || !Number.isFinite(v)) {
-          throw new CliError(`${where} must be a number`);
-        }
-        if (key === "sessionIdleTimeout" && (!Number.isInteger(v) || v <= 0)) {
-          throw new CliError(
-            `${where} must be a positive integer number of milliseconds`,
-          );
-        }
-        // Match the command-line `--session-idle-timeout` behaviour: values above
-        // the documented one-hour cap are clamped, not rejected.
-        if (key === "sessionIdleTimeout" && v > 3_600_000) {
-          out[key] = 3_600_000;
-        } else {
-          out[key] = v;
-        }
+        out[key] = validateNumberDefault(key, v, where);
         break;
       case "string[]":
         out[key] = asStringArray(v, where);
