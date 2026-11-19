@@ -211,6 +211,38 @@ describe("config defaults", () => {
     ).toThrow(/defaults.failOn must be/);
   });
 
+  it("accepts a finite number default and rejects anything else", () => {
+    expect(
+      loadConfig(writeConfig({ defaults: { settleMs: 250, maxLines: 20 } }))
+        .defaults,
+    ).toEqual({ settleMs: 250, maxLines: 20 });
+    expect(() =>
+      loadConfig(writeConfig({ defaults: { timeoutMs: "5000" } })),
+    ).toThrow(/^defaults\.timeoutMs must be a number$/);
+    // JSON has no NaN or Infinity, but a huge literal parses to Infinity.
+    expect(() =>
+      loadConfig(writeConfig('{"defaults":{"maxPages":1e999}}')),
+    ).toThrow(/^defaults\.maxPages must be a number$/);
+  });
+
+  it("takes sessionIdleTimeout as a positive integer, clamped to one hour", () => {
+    const idle = (value: unknown): unknown =>
+      loadConfig(writeConfig({ defaults: { sessionIdleTimeout: value } }))
+        .defaults.sessionIdleTimeout;
+    expect(idle(60_000)).toBe(60_000);
+    expect(idle(3_600_000)).toBe(3_600_000);
+    expect(idle(3_600_001)).toBe(3_600_000);
+    expect(idle(86_400_000)).toBe(3_600_000);
+    for (const bad of [0, -1, 1.5]) {
+      expect(() => idle(bad)).toThrow(
+        /^defaults\.sessionIdleTimeout must be a positive integer number of milliseconds$/,
+      );
+    }
+    expect(() => idle("60000")).toThrow(
+      /^defaults\.sessionIdleTimeout must be a number$/,
+    );
+  });
+
   it("top-level rules/failOn/device fold into defaults; defaults wins", () => {
     // both set → defaults wins
     const { defaults } = loadConfig(
