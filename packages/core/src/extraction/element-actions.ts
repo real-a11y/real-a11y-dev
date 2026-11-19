@@ -23,8 +23,8 @@ const CLICK_ROLES = new Set([
 ]);
 
 /** Actions for an `<input>`, by its type. */
-function inputActions(element: Element): ActionType[] {
-  const type = (element as HTMLInputElement).type || "text";
+function inputActions(inputType: string): ActionType[] {
+  const type = inputType || "text";
   if (type === "checkbox" || type === "radio") return ["click"];
   if (type === "file") return ["focus"];
   // Sliders aren't typeable — they listen for ArrowLeft/ArrowRight
@@ -48,20 +48,18 @@ function tagActions(element: Element, tag: string): ActionType[] | undefined {
   // no action to offer. (One that is itself an editing host gets focus/type
   // below.)
   if (tag === "a" && isLiveLink(element)) return ["click", "navigate"];
-  // Buttons (native + input type=button/submit/reset/image)
-  if (
-    tag === "button" ||
-    (tag === "input" &&
-      ["button", "submit", "reset", "image"].includes(
-        (element as HTMLInputElement).type,
-      ))
-  ) {
-    return (element as HTMLInputElement).type === "submit"
-      ? ["click", "submit"]
-      : ["click"];
+  // Buttons (native + input type=button/submit/reset/image) and the other
+  // inputs, differentiated by type.
+  if (tag === "button" || tag === "input") {
+    const type = (element as HTMLInputElement).type;
+    if (
+      tag === "button" ||
+      ["button", "submit", "reset", "image"].includes(type)
+    ) {
+      return type === "submit" ? ["click", "submit"] : ["click"];
+    }
+    return inputActions(type);
   }
-  // Input elements — differentiate by type
-  if (tag === "input") return inputActions(element);
   // Textarea — text entry
   if (tag === "textarea") return ["focus", "type"];
   // Select — option picker
@@ -111,7 +109,11 @@ function roleActions(element: Element, role: string | undefined): ActionType[] {
   return [];
 }
 
-/** Determine what actions an element supports. */
+/**
+ * Determine what actions an element supports.
+ *
+ * @internal
+ */
 export function getActions(element: Element): ActionType[] {
   const tag = safeTagName(element);
   // The role the tree shows, so the actions offered agree with it: a
