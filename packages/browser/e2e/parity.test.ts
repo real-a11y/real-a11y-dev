@@ -1,4 +1,5 @@
-// The parity metric's line normalizer, on its own: no browser needed.
+// The parity metric's line normalizer, on its own: no browser needed, so it
+// runs in the unit suite (vitest.config.ts), not the advisory e2e one.
 import { describe, expect, it } from "vitest";
 
 import { normalizePair } from "./parity.js";

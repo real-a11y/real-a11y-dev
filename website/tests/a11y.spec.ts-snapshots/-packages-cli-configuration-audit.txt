@@ -522,7 +522,8 @@ main
       code "ignoreViewLine: string[]"
     code "--ignore-view-line"
     code "diff"
-  paragraph "Drop view lines matching these regexes before diffing — for generated content that changes every build (a "last updated" timestamp, a build hash) and would otherwise read as drift on every page."
+  paragraph "Drop view lines matching these regexes before diffing — for generated content that changes every build (a "last updated" timestamp, a build hash) and would otherwise read as drift on every page. A tree or tab line that ends in a states block is also dropped when a pattern matches it without the block; a pattern that names the block matches only the lines that carry it."
+    code "{…}"
   button "Copy Code"
   code "{ "defaults": { "ignoreViewLine": ["^time \""] } }"
   heading "maxLines" (level 3)

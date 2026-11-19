@@ -266,7 +266,7 @@ Suppress findings a baseline file has accepted — adopt the gate on a codebase 
 
 **`ignoreViewLine: string[]`** — flag `--ignore-view-line` (repeatable) · default: none · applies to `diff`
 
-Drop view lines matching these regexes before diffing — for generated content that changes every build (a "last updated" timestamp, a build hash) and would otherwise read as drift on every page.
+Drop view lines matching these regexes before diffing — for generated content that changes every build (a "last updated" timestamp, a build hash) and would otherwise read as drift on every page. A tree or tab line that ends in a `{…}` states block is also dropped when a pattern matches it without the block; a pattern that names the block matches only the lines that carry it.
 
 ```json
 { "defaults": { "ignoreViewLine": ["^time \""] } }

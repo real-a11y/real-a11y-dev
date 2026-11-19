@@ -146,11 +146,26 @@ describe("diffArtifacts", () => {
     });
     expect(filtered.pages[0].views.tree).toEqual({ added: [], removed: [] });
     expect(filtered.pages[0].structural).toEqual([]);
-    // A pattern that names the block matches it too.
+    // A pattern that names the block matches only the side that carries it:
+    // the base line, which has none, still reads as removed.
     const byBlock = diffArtifacts(base, pr, {
       ignoreViewLine: [/\{disabled\}$/],
     });
-    expect(byBlock.pages[0].views.tree.added).toEqual([]);
+    expect(byBlock.pages[0].views.tree).toEqual({
+      added: [],
+      removed: ['status "Saving…"'],
+    });
+  });
+
+  it("tests an outline line as written: a heading ending in a brace word keeps it", () => {
+    const base = artifact([page("Home", [], { outline: "h2 Intro" })]);
+    const pr = artifact([
+      page("Home", [], { outline: "h2 Intro\nh2 Path param {id}" }),
+    ]);
+    const result = diffArtifacts(base, pr, {
+      ignoreViewLine: [/^h2 Path param$/],
+    });
+    expect(result.pages[0].views.outline.added).toEqual(["h2 Path param {id}"]);
   });
 
   it("an ignore pattern on the block also keeps a focus change on that line out", () => {

@@ -114,6 +114,39 @@ export function takeByRoleName(
   }
 }
 
+/** Lines of one side, grouped by the role and name a statement describes. */
+export interface RoleNameGroup {
+  role: string;
+  name: string;
+  keys: string[];
+  /** The group's lines, counted with multiplicity. */
+  n: number;
+}
+
+/** Group a multiset's lines by role and name, so lines that differ only in
+ * their level or `{…}` block make one statement with their counts summed,
+ * instead of several statements that read the same. */
+export function groupByRoleName(ms: Multiset): RoleNameGroup[] {
+  const groups = new Map<string, RoleNameGroup>();
+  for (const [key, n] of ms) {
+    const { role, name = "" } = parseRoleLine(key);
+    const id = `${role}\u0000${name}`;
+    const group = groups.get(id);
+    if (group) {
+      group.keys.push(key);
+      group.n += n;
+    } else {
+      groups.set(id, { role, name, keys: [key], n });
+    }
+  }
+  return [...groups.values()];
+}
+
+/** Take every line of a group from its multiset. */
+export function takeGroup(ms: Multiset, group: RoleNameGroup): void {
+  for (const key of group.keys) take(ms, key, ms.get(key) ?? 0);
+}
+
 // ── raw-text scans ───────────────────────────────────────────────────────────
 
 export function rawLines(text: string, ignore: Ignore): string[] {

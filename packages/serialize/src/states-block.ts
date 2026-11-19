@@ -19,19 +19,20 @@
  * diff's line parser, the DOM↔native parity harness) agree on one definition.
  */
 
-/** The trailing focus marker `serializeTree` and `serializeTabSequence` add. */
-const FOCUS_MARKER = " [focused]";
-
 /** One token: `key`, `key=word` or `key="JSON string"`. Kept permissive
  * (any case, digits, `.`, `_`, `-`) so a value the writer adds later, a
- * number or a mixed-case token, still reads as a block. */
-const TOKEN = String.raw`[A-Za-z][\w-]*(?:=(?:[\w.-]+|"(?:[^"\\]|\\.)*"))?`;
+ * number or a mixed-case token, still reads as a block. The JSON string is
+ * written unrolled (runs of plain characters between escapes), so the regex
+ * engine keeps one backtrack entry per escape rather than per character: the
+ * `(?:[^"\\]|\\.)*` form overflows V8's stack on a quoted run of about ten
+ * million characters. */
+const TOKEN = String.raw`[A-Za-z][\w-]*(?:=(?:[\w.-]+|"[^"\\]*(?:\\.[^"\\]*)*"))?`;
 
 /** A whole block at the end of a line: ` {token, token}`. */
 const BLOCK_RE = new RegExp(String.raw` \{(${TOKEN}(?:, ${TOKEN})*)\}$`);
 
 export interface SplitStatesBlock {
-  /** The line without its block. A trailing ` [focused]` marker is kept. */
+  /** The line without its block. */
   line: string;
   /**
    * The block's contents without the braces (`checked=false, required`), or
@@ -41,20 +42,20 @@ export interface SplitStatesBlock {
 }
 
 /**
- * Split the `{…}` states block off one serialized tree or tab line. The line
- * may end with the ` [focused]` marker; the marker stays on the returned line.
- * A line with no block comes back unchanged.
+ * Split the `{…}` states block off one serialized tree or tab line. Pass the
+ * line without its ` [focused]` marker: the block comes before the marker,
+ * and every reader strips the marker first. A line with no block comes back
+ * unchanged.
  *
  * Only a block that ends the line counts: a name that merely contains `{…}`
  * sits inside its quotes, before the end, so it is never mistaken for one.
+ * Outline lines (`h2 Name`) print heading text unquoted and never carry a
+ * block; don't pass them here, or a heading ending in ` {word}` reads as one.
  *
  * @internal Shared by the packages that read serialized trees; not public.
  */
 export function splitStatesBlock(line: string): SplitStatesBlock {
-  const focused = line.endsWith(FOCUS_MARKER);
-  const body = focused ? line.slice(0, -FOCUS_MARKER.length) : line;
-  const match = BLOCK_RE.exec(body);
+  const match = BLOCK_RE.exec(line);
   if (!match) return { line };
-  const rest = body.slice(0, match.index);
-  return { line: focused ? rest + FOCUS_MARKER : rest, block: match[1] };
+  return { line: line.slice(0, match.index), block: match[1] };
 }

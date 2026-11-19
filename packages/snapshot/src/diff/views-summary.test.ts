@@ -710,8 +710,6 @@ describe("summarizeViews", () => {
             'States changed: checkbox "A": checked=false; checked → checked=mixed (×2)',
           role: "checkbox",
           name: "A",
-          from: "checked=false; checked",
-          to: "checked=mixed",
           count: 2,
         },
       ]);
@@ -739,12 +737,31 @@ describe("summarizeViews", () => {
       expect(kinds(changes)).toEqual(["state-changed"]);
     });
 
-    it("same-name stops that only traded states did not move", () => {
+    it("same-name elements that only traded states did not move, and say which states changed", () => {
       const changes = summarize(
-        { tabs: 'checkbox "A" {checked=false}\ncheckbox "A" {checked}' },
-        { tabs: 'checkbox "A" {checked}\ncheckbox "A" {checked=false}' },
+        {
+          tree: 'list\n  checkbox "A" {checked=false}\n  checkbox "A" {checked}',
+          tabs: 'checkbox "A" {checked=false}\ncheckbox "A" {checked}',
+        },
+        {
+          tree: 'list\n  checkbox "A" {checked}\n  checkbox "A" {checked=false}',
+          tabs: 'checkbox "A" {checked}\ncheckbox "A" {checked=false}',
+        },
       );
-      expect(kinds(changes)).not.toContain("tab-order-reordered");
+      expect(messages(changes)).toEqual([
+        'States changed: checkbox "A": checked → checked=false',
+        'States changed: checkbox "A": checked=false → checked',
+      ]);
+    });
+
+    it("leaves a tree whose order changed to the other stages, not to state swaps", () => {
+      const changes = summarize(
+        { tree: 'link "A" {current=page}\nlink "B"' },
+        { tree: 'link "B"\nlink "A"' },
+      );
+      // Same lines would pair by multiset; here one block changed AND the
+      // order did, so the swap pass stays out and the pairing reports it.
+      expect(kinds(changes)).toEqual(["state-changed"]);
     });
 
     it("a stop that moved still reads as a reorder when its block came along", () => {
@@ -753,6 +770,76 @@ describe("summarizeViews", () => {
         { tabs: 'link "B"\nlink "A" {current=page}' },
       );
       expect(kinds(changes)).toEqual(["tab-order-reordered"]);
+    });
+
+    it("a heading level change that also changed its block reports both", () => {
+      const changes = summarize(
+        {
+          tree: 'heading "A" (level 2) {description="x"}',
+          outline: "h2 A",
+        },
+        {
+          tree: 'heading "A" (level 3) {description="y"}',
+          outline: "h3 A",
+        },
+      );
+      expect(messages(changes)).toEqual([
+        'Heading level changed: "A" h2 → h3',
+        'States changed: heading "A" (level 3): description="x" → description="y"',
+      ]);
+    });
+
+    it("a landmark renamed with a new block reports both", () => {
+      const changes = summarize(
+        { tree: 'navigation "Main" {description="x"}' },
+        { tree: 'navigation "Primary" {description="y"}' },
+      );
+      expect(kinds(changes).sort()).toEqual([
+        "landmark-renamed",
+        "state-changed",
+      ]);
+    });
+
+    it("lines that differ only in their block add up to one statement", () => {
+      const changes = summarize(
+        { tree: "main" },
+        {
+          tree: [
+            "main",
+            'navigation "Main" {description="x"}',
+            'navigation "Main"',
+            'checkbox "Select row" {checked}',
+            'checkbox "Select row" {checked=false}',
+            'checkbox "Select row" {checked=false}',
+          ].join("\n"),
+        },
+      );
+      expect(messages(changes)).toEqual([
+        'New landmark: navigation "Main" (×2)',
+        'Interactive element added: checkbox "Select row" (×3)',
+      ]);
+    });
+
+    it("names the element by role, name and level, and an unnamed non-control as (unnamed)", () => {
+      const changes = summarize(
+        { tree: 'treeitem "Docs" (level 2) {expanded=false}\nrow' },
+        { tree: 'treeitem "Docs" (level 2) {expanded}\nrow {selected}' },
+      );
+      expect(messages(changes)).toEqual([
+        "States changed: row (unnamed): (none) → selected",
+        'States changed: treeitem "Docs" (level 2): expanded=false → expanded',
+      ]);
+    });
+
+    it("removed repeated headings take all their tree lines, not one", () => {
+      const changes = summarize(
+        {
+          tree: 'heading "A" (level 2)\nheading "A" (level 2)\nheading "A" (level 2)',
+          outline: "h2 A\nh2 A\nh2 A",
+        },
+        { tree: "", outline: "" },
+      );
+      expect(kinds(changes)).not.toContain("other");
     });
 
     it("a heading level change consumes its tree line whatever its block", () => {

@@ -60,15 +60,15 @@ describe("splitStatesBlock", () => {
     });
   });
 
-  it("keeps the focus marker that follows the block", () => {
-    expect(
-      splitStatesBlock(
-        'button "Menu" {expanded=false, haspopup=menu} [focused]',
-      ),
-    ).toEqual({
-      line: 'button "Menu" [focused]',
-      block: "expanded=false, haspopup=menu",
-    });
+  it("expects the focus marker gone: a block before it is not at the end", () => {
+    const line = 'button "Menu" {expanded=false} [focused]';
+    expect(splitStatesBlock(line)).toEqual({ line });
+  });
+
+  it("reads a very long quoted value without overflowing the regex stack", () => {
+    const description = `description="${"y".repeat(12_000_000)}"`;
+    const { block } = splitStatesBlock(`button "x" {${description}}`);
+    expect(block?.length).toBe(description.length);
   });
 
   it("reads a JSON string holding a brace, a separator and an escaped quote as one token", () => {
@@ -80,11 +80,7 @@ describe("splitStatesBlock", () => {
   });
 
   it("never mistakes a name that contains braces for a block", () => {
-    for (const line of [
-      'button "Save {draft}"',
-      'button "a {checked}" [focused]',
-      'link "x {y}" = "{z}"',
-    ]) {
+    for (const line of ['button "Save {draft}"', 'link "x {y}" = "{z}"']) {
       expect(splitStatesBlock(line)).toEqual({ line });
     }
     // A block after such a name still splits off, and only the block does.

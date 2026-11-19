@@ -32,6 +32,7 @@ import {
   countInTree,
   findStop,
   focusChange,
+  groupByRoleName,
   landmarkDesc,
   type Multiset,
   nameDesc,
@@ -43,6 +44,7 @@ import {
   tabStops,
   take,
   takeByRoleName,
+  takeGroup,
   toMultiset,
   withCount,
 } from "./views-summary-lines.js";
@@ -54,6 +56,10 @@ import {
   rollupChange,
   type StageMultisets,
   stateChanges,
+  swappedStates,
+  tallyBlockChange,
+  flushStateTally,
+  type StateTally,
 } from "./views-summary-stages.js";
 
 export type ViewChangeKind =
@@ -256,11 +262,16 @@ export function summarizeViews(input: SummarizeViewsInput): ViewChange[] {
   // 1b: removed stops — position from the BASE side; the still-on-page
   // cross-check against the PR tree picks the variant (an element that stays
   // visible but leaves the tab order is the most dangerous structural change).
-  for (const [key, n] of [...tabsRemoved]) {
-    take(tabsRemoved, key, n);
-    const { role, name = "" } = parseRoleLine(key);
+  // Grouped by role and name, so stops that differ only in their block make
+  // one statement.
+  for (const group of groupByRoleName(tabsRemoved)) {
+    const { role, name, keys, n } = group;
+    takeGroup(tabsRemoved, group);
     takeByRoleName(treeRemoved, role, name, n);
-    const { position, of } = findStop(baseStops, key);
+    const { position, of } =
+      keys.length === 1
+        ? findStop(baseStops, keys[0])
+        : { of: baseStops.length };
     const still = countInTree(pr.tree, ignore, role, name);
     const variant =
       still === 0
@@ -286,11 +297,12 @@ export function summarizeViews(input: SummarizeViewsInput): ViewChange[] {
     });
   }
   // 1c: added stops — position from the PR side.
-  for (const [key, n] of [...tabsAdded]) {
-    take(tabsAdded, key, n);
-    const { role, name = "" } = parseRoleLine(key);
+  for (const group of groupByRoleName(tabsAdded)) {
+    const { role, name, keys, n } = group;
+    takeGroup(tabsAdded, group);
     takeByRoleName(treeAdded, role, name, n);
-    const { position, of } = findStop(prStops, key);
+    const { position, of } =
+      keys.length === 1 ? findStop(prStops, keys[0]) : { of: prStops.length };
     const pos =
       n === 1 && position !== undefined
         ? ` (now stop ${position} of ${of})`
@@ -312,6 +324,7 @@ export function summarizeViews(input: SummarizeViewsInput): ViewChange[] {
   // 2 — tree stage: landmarks, then interactive leftovers. Tree lines with
   // role `heading` are untouched here — the outline stage owns headings.
   // 2a: landmark renames — same role, exactly one removed + one added.
+  const landmarkStates: StateTally = new Map();
   {
     const byRole = new Map<string, { added: string[]; removed: string[] }>();
     const bucket = (role: string) => {
@@ -338,6 +351,8 @@ export function summarizeViews(input: SummarizeViewsInput): ViewChange[] {
       const newName = parseRoleLine(b.added[0]).name ?? "";
       take(treeRemoved, b.removed[0]);
       take(treeAdded, b.added[0]);
+      // A renamed landmark whose block changed too reports both.
+      tallyBlockChange(landmarkStates, b.removed[0], b.added[0]);
       changes.push({
         kind: "landmark-renamed",
         view: "tree",
@@ -355,10 +370,12 @@ export function summarizeViews(input: SummarizeViewsInput): ViewChange[] {
     kind: ViewChangeKind,
     describe: (role: string, name: string) => string,
   ) => {
-    for (const [key, n] of [...ms]) {
-      const { role, name = "" } = parseRoleLine(key);
+    // Grouped by role and name, so lines that differ only in their level or
+    // block make one statement.
+    for (const group of groupByRoleName(ms)) {
+      const { role, name, n } = group;
       if (!roles.has(role)) continue;
-      take(ms, key, n);
+      takeGroup(ms, group);
       changes.push({
         kind,
         view: "tree",
@@ -405,6 +422,8 @@ export function summarizeViews(input: SummarizeViewsInput): ViewChange[] {
   outlineRenames(m, changes);
   outlineLeftovers(m, changes);
   reorderChanges({ views, base, pr, ignore, baseStops, prStops }, changes);
+  swappedStates({ views, base, pr, ignore }, changes);
+  flushStateTally(landmarkStates, changes);
   rollupChange(m, changes);
 
   changes.sort(

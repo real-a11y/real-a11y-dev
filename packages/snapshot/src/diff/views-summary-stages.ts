@@ -6,6 +6,7 @@
  * the inline code did.
  */
 
+import { INTERACTIVE_ROLES } from "@real-a11y-dev/audit";
 import { splitStatesBlock } from "@real-a11y-dev/serialize";
 
 import type { ViewDiff } from "./views-diff.js";
@@ -13,6 +14,7 @@ import {
   controlDesc,
   headingDesc,
   type Ignore,
+  landmarkDesc,
   lcsLength,
   type Multiset,
   nameDesc,
@@ -20,6 +22,7 @@ import {
   parseOutlineLine,
   parseRoleLine,
   plural,
+  rawLines,
   REORDER_LCS_LIMIT,
   sameMultiset,
   statesDesc,
@@ -64,7 +67,16 @@ export interface ReorderInput {
  * differs is left for the later stages' add/remove statements.
  *
  * The tabs view goes first and consumes each paired stop's tree line too, so
- * the tree pass doesn't report the same element a second time.
+ * the tree pass doesn't report the same element a second time. No tool here
+ * writes tab stops with a block today: `real-a11y snapshot` and MCP
+ * checkpoints record no tab order, and artifacts that do carry one predate
+ * the block. The tabs pass is for a third-party artifact, or a snapshot that
+ * records tab order again; every artifact the tools write is paired by the
+ * tree pass alone.
+ *
+ * Elements that only traded states (two "Select row" checkboxes swapping
+ * which is checked) leave the multisets equal, so nothing pairs here:
+ * {@link swappedStates} reports them from the tree's line order.
  */
 export function stateChanges(m: StageMultisets, changes: ViewChange[]): void {
   pairStateChanges(
@@ -125,11 +137,10 @@ function pairStateChanges(
   for (const [identity, b] of groupByIdentity(removed, added)) {
     const n = sumCounts(removed, b.removed);
     if (n === 0 || sumCounts(added, b.added) !== n) continue;
-    const from = statesSide(removed, b.removed);
-    const to = statesSide(added, b.added);
+    const blocks = { from: b.removed.map(blockOf), to: b.added.map(blockOf) };
     consumeSide(removedSide, b.removed);
     consumeSide(addedSide, b.added);
-    changes.push(stateChange(view, identity, { from, to, n }));
+    changes.push(stateChange(view, identity, { ...blocks, n }));
   }
 }
 
@@ -160,23 +171,45 @@ function consumeSide(side: PairSide, keys: readonly string[]): void {
   }
 }
 
-function stateChange(
+/** A line's block contents, `""` when it has none. */
+const blockOf = (line: string) => splitStatesBlock(line).block ?? "";
+
+/** The element a state statement is about: role, name and level, with an
+ * unnamed element read as `(no accessible name)` only where that is a defect
+ * (an interactive role) and as `(unnamed)` everywhere else. */
+function stateSubject(identity: string): string {
+  const { role, name = "", level } = parseRoleLine(identity);
+  const desc = INTERACTIVE_ROLES.has(role)
+    ? controlDesc(role, name)
+    : landmarkDesc(role, name);
+  return level === undefined ? desc : `${desc} (level ${level})`;
+}
+
+/**
+ * A `state-changed` statement. `from` and `to` list each side's blocks. The
+ * message shows them all, `; `-joined, `(none)` for a line without one. The
+ * structured `from` / `to` fields carry a block's contents (`""` for none)
+ * only when one line changed into one line, so they have a single encoding;
+ * when several same-name lines paired, the message alone says how.
+ */
+export function stateChange(
   view: "tree" | "tabs",
   identity: string,
-  { from, to, n }: { from: string; to: string; n: number },
+  { from, to, n }: { from: string[]; to: string[]; n: number },
 ): ViewChange {
   const { role, name = "" } = parseRoleLine(identity);
+  const side = (blocks: string[]) => blocks.map(statesDesc).join("; ");
+  const single = from.length === 1 && to.length === 1;
   return {
     kind: "state-changed",
     view,
     message: withCount(
-      `States changed: ${controlDesc(role, name)}: ${statesDesc(from)} → ${statesDesc(to)}`,
+      `States changed: ${stateSubject(identity)}: ${side(from)} → ${side(to)}`,
       n,
     ),
     role,
     ...(name !== "" ? { name } : {}),
-    from,
-    to,
+    ...(single ? { from: from[0], to: to[0] } : {}),
     ...(n > 1 ? { count: n } : {}),
   };
 }
@@ -184,14 +217,64 @@ function stateChange(
 const sumCounts = (ms: Multiset, keys: readonly string[]) =>
   keys.reduce((sum, key) => sum + (ms.get(key) ?? 0), 0);
 
-/** One side's blocks: a single line's block contents (`""` for none), or
- * every line's, `; `-joined in the view diff's (codepoint) order, when several
- * changed. */
-function statesSide(ms: Multiset, keys: readonly string[]): string {
-  const blocks = keys
-    .filter((key) => (ms.get(key) ?? 0) > 0)
-    .map((key) => splitStatesBlock(key).block ?? "");
-  return blocks.length === 1 ? blocks[0] : blocks.map(statesDesc).join("; ");
+/** One line becoming another whose blocks differ, tallied by identity and
+ * blocks so identical changes coalesce into one `(×N)` statement. */
+export type StateTally = Map<
+  string,
+  { identity: string; from: string; to: string; n: number }
+>;
+
+/** Tally `before` → `after` when their blocks differ. */
+export function tallyBlockChange(
+  tally: StateTally,
+  before: string,
+  after: string,
+): void {
+  const from = blockOf(before);
+  const to = blockOf(after);
+  if (from === to) return;
+  const identity = splitStatesBlock(after).line;
+  const id = `${identity}\u0000${from}\u0000${to}`;
+  const entry = tally.get(id);
+  if (entry) entry.n++;
+  else tally.set(id, { identity, from, to, n: 1 });
+}
+
+/** Push the tallied changes as tree-view statements. */
+export function flushStateTally(
+  tally: StateTally,
+  changes: ViewChange[],
+): void {
+  for (const { identity, from, to, n } of tally.values()) {
+    changes.push(stateChange("tree", identity, { from: [from], to: [to], n }));
+  }
+}
+
+/**
+ * Elements that only traded states — two "Select row" checkboxes swapping
+ * which is checked — leave both sides with the same lines, so the multiset
+ * diff is empty and nothing pairs. When the tree reads the same line by line
+ * once blocks are set aside, each position whose block changed is one
+ * element whose states changed. Any other difference in order is a reorder,
+ * which this leaves alone.
+ */
+export function swappedStates(
+  input: Pick<ReorderInput, "views" | "base" | "pr" | "ignore">,
+  changes: ViewChange[],
+): void {
+  const { views, base, pr, ignore } = input;
+  if (views.tree.added.length > 0 || views.tree.removed.length > 0) return;
+  const before = rawLines(base.tree, ignore);
+  const after = rawLines(pr.tree, ignore);
+  if (before.length !== after.length) return;
+  const tally: StateTally = new Map();
+  for (let i = 0; i < before.length; i++) {
+    if (before[i] === after[i]) continue;
+    if (splitStatesBlock(before[i]).line !== splitStatesBlock(after[i]).line)
+      return;
+    tallyBlockChange(tally, before[i], after[i]);
+  }
+  flushStateTally(tally, changes);
 }
 
 const roleNameKey = (role: string, name: string) => `${role}\u0000${name}`;
@@ -238,18 +321,42 @@ function takeMirrored(
 
 /** Consume one tree line for a heading, whatever `{…}` states block it
  * carries: the outline has no block, and a heading line left behind for its
- * block would be counted again by the rollup. */
-function takeTreeHeading(ms: Multiset, name: string, level: number): number {
+ * block would be counted again by the rollup. Returns the line it took, so a
+ * caller pairing two headings can see whether their blocks changed too. */
+function takeTreeHeading(
+  ms: Multiset,
+  name: string,
+  level: number,
+): string | undefined {
   const bare =
     name === ""
       ? `heading (level ${level})`
       : `heading "${name}" (level ${level})`;
-  if (take(ms, bare)) return 1;
+  if (take(ms, bare)) return bare;
   for (const key of ms.keys()) {
-    if (splitStatesBlock(key).line === bare) return take(ms, key);
+    if (splitStatesBlock(key).line === bare) {
+      take(ms, key);
+      return key;
+    }
   }
-  return 0;
+  return undefined;
 }
+
+/** Take a removed and an added heading's tree lines, and tally a block
+ * change between them: a heading renamed or re-levelled whose description
+ * changed too says so, rather than leaving only the rename. */
+function takeHeadingPair(
+  m: StageMultisets,
+  tally: StateTally,
+  removed: { name: string; level: number },
+  added: { name: string; level: number },
+): void {
+  const before = takeTreeHeading(m.treeRemoved, removed.name, removed.level);
+  const after = takeTreeHeading(m.treeAdded, added.name, added.level);
+  if (before !== undefined && after !== undefined)
+    tallyBlockChange(tally, before, after);
+}
+
 interface OutlineEntry {
   key: string;
   level: number;
@@ -270,7 +377,8 @@ export function outlineLevelChanges(
   m: StageMultisets,
   changes: ViewChange[],
 ): void {
-  const { treeAdded, treeRemoved, outlineAdded, outlineRemoved } = m;
+  const { outlineAdded, outlineRemoved } = m;
+  const tally: StateTally = new Map();
   // 3a: level changes — group by exact name; pair k-th smallest removed level
   // with k-th smallest added level (count-aware; equal levels are impossible,
   // identical lines already cancelled in the multiset).
@@ -309,8 +417,7 @@ export function outlineLevelChanges(
       take(outlineRemoved, nameKey, n);
       take(outlineAdded, newKey, n);
       for (let i = 0; i < n; i++) {
-        takeTreeHeading(treeRemoved, name, a);
-        takeTreeHeading(treeAdded, name, to);
+        takeHeadingPair(m, tally, { name, level: a }, { name, level: to });
       }
       changes.push({
         kind: "heading-level-changed",
@@ -326,11 +433,13 @@ export function outlineLevelChanges(
       });
     }
   }
+  flushStateTally(tally, changes);
 }
 
 /** Outline stage 3b. */
 export function outlineRenames(m: StageMultisets, changes: ViewChange[]): void {
-  const { treeAdded, treeRemoved, outlineAdded, outlineRemoved } = m;
+  const { outlineAdded, outlineRemoved } = m;
+  const tally: StateTally = new Map();
   // 3b: renames — within one level, exactly one removed + one added leftover.
   const byLevel = new Map<
     number,
@@ -354,8 +463,12 @@ export function outlineRenames(m: StageMultisets, changes: ViewChange[]): void {
     if (oldName === newName) continue;
     take(outlineRemoved, b.removed[0].key);
     take(outlineAdded, b.added[0].key);
-    takeTreeHeading(treeRemoved, oldName, level);
-    takeTreeHeading(treeAdded, newName, level);
+    takeHeadingPair(
+      m,
+      tally,
+      { name: oldName, level },
+      { name: newName, level },
+    );
     changes.push({
       kind: "heading-renamed",
       view: "outline",
@@ -364,6 +477,7 @@ export function outlineRenames(m: StageMultisets, changes: ViewChange[]): void {
       to: newName,
     });
   }
+  flushStateTally(tally, changes);
 }
 
 /** Outline stage 3c. */
@@ -375,7 +489,8 @@ export function outlineLeftovers(
   // 3c: add/remove leftovers.
   for (const e of outlineEntries(outlineRemoved)) {
     take(outlineRemoved, e.key, e.count);
-    takeTreeHeading(treeRemoved, e.name, e.level);
+    for (let i = 0; i < e.count; i++)
+      takeTreeHeading(treeRemoved, e.name, e.level);
     changes.push({
       kind: "heading-removed",
       view: "outline",
@@ -390,7 +505,8 @@ export function outlineLeftovers(
   }
   for (const e of outlineEntries(outlineAdded)) {
     take(outlineAdded, e.key, e.count);
-    takeTreeHeading(treeAdded, e.name, e.level);
+    for (let i = 0; i < e.count; i++)
+      takeTreeHeading(treeAdded, e.name, e.level);
     changes.push({
       kind: "heading-added",
       view: "outline",
