@@ -49,6 +49,8 @@ button "Copy Code"
 generic
 button "Copy Code"
 generic
+button "Copy Code"
+generic
 link "redact"
 button "Copy Code"
 generic

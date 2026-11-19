@@ -239,6 +239,20 @@ expect(container).toMatchA11yContract(contract);
 expect(inIsolation).toMatchA11yContract(contract, { strict: true });
 ```
 
+**States.** A contract line may end with a `{…}` block, the states, description and announced properties tree text prints for a node, and the contract then asserts it:
+
+```ts
+expect(treeText).toMatchA11yContract(`
+  form "Sign up"
+    textbox "Email" {required}
+    checkbox "Subscribe" {checked}
+`);
+```
+
+In containment the received node must carry at least the block's entries, in any order, with quoted values compared typography-folded like names. Under `{ strict: true }` it must carry exactly those entries. A line without a block says nothing about states, in either mode, so a contract that never writes one matches whatever a node's states are. When a node matches on everything but its states, the failure names what is missing: `same role and name, missing checked: checkbox "Subscribe" {checked=false} (line 3)`.
+
+A block can only match received text that prints one. `treeSnapshot` doesn't print states yet, so neither does a DOM Element received here; until it does, a block matches only a serialized tree string that carries one.
+
 Because a serialized string is accepted, the same contract can be checked against a **committed snapshot artifact** — not only a live test render.
 
 ## `boxedTreeSnapshot(root, options?)` — snapshot serializer
