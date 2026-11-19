@@ -357,7 +357,7 @@ The report deletes only a `records/` folder it made, and overwrites only an `ind
 ### In CI and watch mode
 
 - **CI:** upload `a11y-snapshots/index.html` as an artifact, and anyone on the pull request can open what the run recorded. The page holds the records and nothing else: no path from the machine that ran it.
-- **Watch mode:** each rerun, in Vitest or Jest, replaces the records of the files it ran and writes the page again. Reload it to see the new run.
+- **Watch mode:** each rerun, in Vitest or Jest, replaces the records of the files it ran and writes the page again. Reload it to see the new run, or keep [`npx real-a11y show-report`](/packages/cli/commands#show-report-dir) open in another terminal, and the page redraws by itself.
 - **`vitest --merge-reports`** clears nothing and writes the page from the records in `outputDir`. Copy each shard's `records/` folder there first to see them all.
 
 The reporters need Vitest 3 or later, or Jest 29 or later, and Node 20.16 or later.

@@ -29,7 +29,7 @@ import type {
   Page,
 } from "playwright";
 
-import { CdpActionBackend } from "./cdp-action-backend.js";
+import { actOnNativeNode } from "./native-act.js";
 import {
   nativeAXViewOf,
   nativeTree as computeNativeTree,
@@ -552,20 +552,15 @@ export class BrowserSession implements A11ySession {
 
   /**
    * Dispatch a click / type / focus against a node from the native tree, over
-   * CDP (see {@link CdpActionBackend}). The write side of the native producer:
-   * pass an `ActionRequest` whose `nodeId` is a native id (`ax-dom-<n>`).
-   * Read-only nodes are refused and no field content is returned. Chromium only.
+   * CDP (see `CdpActionBackend`). The write side of the native producer: pass an
+   * `ActionRequest` whose `nodeId` is a native id (`ax-dom-<n>`, with its frame
+   * for a node of an out-of-process frame). Read-only nodes are refused and no
+   * field content is returned. Chromium only.
    */
   async act(request: ActionRequest): Promise<ActionResult> {
-    return this.run(async () => {
-      const page = this.requirePage();
-      const client = await page.context().newCDPSession(page);
-      try {
-        return await new CdpActionBackend(client).dispatch(request);
-      } finally {
-        await client.detach().catch(() => {});
-      }
-    });
+    return this.run(() =>
+      actOnNativeNode(this.requirePage(), request, this.withPin({})),
+    );
   }
 
   /**

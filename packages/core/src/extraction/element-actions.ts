@@ -5,9 +5,6 @@ import { isEditingHost, isLiveLink } from "./editing.js";
 import { MEDIA_TAGS } from "./field-text.js";
 import { getExplicitRole } from "./role-map.js";
 
-/** Input types that toggle on click (no text entry) */
-const TOGGLE_INPUT_TYPES = new Set(["checkbox", "radio"]);
-
 /** Roles whose widget is operated by a plain click. */
 const CLICK_ROLES = new Set([
   "button",
@@ -28,7 +25,7 @@ const CLICK_ROLES = new Set([
 /** Actions for an `<input>`, by its type. */
 function inputActions(element: Element): ActionType[] {
   const type = (element as HTMLInputElement).type || "text";
-  if (TOGGLE_INPUT_TYPES.has(type)) return ["click"];
+  if (type === "checkbox" || type === "radio") return ["click"];
   if (type === "file") return ["focus"];
   // Sliders aren't typeable — they listen for ArrowLeft/ArrowRight
   // (or use the .stepUp/.stepDown API). Pair the increment/decrement
@@ -38,8 +35,7 @@ function inputActions(element: Element): ActionType[] {
   // Number inputs accept typed values *and* arrow-key stepping —
   // expose both so the panel can either set a value or nudge it.
   if (type === "number") return ["focus", "type", "increment", "decrement"];
-  if (type !== "hidden") return ["focus", "type"];
-  return [];
+  return type === "hidden" ? [] : ["focus", "type"];
 }
 
 /**
@@ -85,9 +81,8 @@ function roleActions(element: Element, role: string | undefined): ActionType[] {
   // Any element reaches the `onclick` read, so it goes through the
   // prototype: a <form> can shadow `hasAttribute`.
   if (
-    role === "button" ||
-    safeGetAttribute(element, "onclick") !== null ||
-    (role !== undefined && CLICK_ROLES.has(role))
+    CLICK_ROLES.has(role as string) ||
+    safeGetAttribute(element, "onclick") !== null
   ) {
     return ["click"];
   }
@@ -95,15 +90,11 @@ function roleActions(element: Element, role: string | undefined): ActionType[] {
     // An ARIA combobox is either EDITABLE (a text field you type into, e.g.
     // Slack's search — the ARIA 1.2 editable-combobox pattern) or SELECT-ONLY
     // (a popup button with no text entry). A non-native combobox is editable
-    // exactly when it's a contenteditable host; a native <input role="combobox">
-    // is already handled by the tag === "input" branch. (aria-autocomplete
-    // describes autocomplete *behavior*, not editability — a non-editable div
-    // can't be typed into regardless, so it isn't the signal here.)
-    // An editable one is treated like a textbox so the panel opens its inline
-    // input. Deliberately NOT "click": click outranks type in
-    // getPrimaryAction, so a co-present click would re-hijack the primary
-    // action and re-break text entry. A select-only one dispatches click to
-    // open the popup natively.
+    // exactly when it's a contenteditable host. An editable one is treated like
+    // a textbox so the panel opens its inline input. Deliberately NOT "click":
+    // click outranks type in getPrimaryAction, so a co-present click would
+    // re-hijack the primary action and re-break text entry. A select-only one
+    // dispatches click to open the popup natively.
     return isEditingHost(element) ? ["focus", "type"] : ["click"];
   }
   if (role === "textbox" || role === "searchbox") return ["focus", "type"];
@@ -135,11 +126,7 @@ export function getActions(element: Element): ActionType[] {
   // otherwise read as inert and folded out of the a11y view — and so out of
   // every tab sequence built on it. It precedes the tabindex catch-all,
   // whose `click` would outrank `type` in getPrimaryAction.
-  if (actions.length === 0 && isEditingHost(element)) {
-    return ["focus", "type"];
-  }
-  if (safeGetAttribute(element, "tabindex") !== null && actions.length === 0) {
-    return ["click"];
-  }
-  return actions;
+  if (actions.length > 0) return actions;
+  if (isEditingHost(element)) return ["focus", "type"];
+  return safeGetAttribute(element, "tabindex") !== null ? ["click"] : actions;
 }

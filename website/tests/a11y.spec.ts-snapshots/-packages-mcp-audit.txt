@@ -216,12 +216,6 @@ main
       strong "Fidelity follows the engine."
     listitem "The assistant's environment must be able to launch Chromium or connect to one over CDP."
       strong "Requires a real browser."
-    listitem "Every 's content is read under its row, but the action tools can't act inside a frame Chromium runs in a process of its own (under site isolation, a cross-site or ed ) yet: they name the node and say so."
-      strong "Acting inside a frame in another process."
-      code "<iframe>"
-      code "Iframe"
-      code "sandbox"
-      code "<iframe>"
   heading "See also" (level 2)
   list
     listitem "— every tool, its parameters, and when to use it."

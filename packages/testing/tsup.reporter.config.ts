@@ -1,7 +1,6 @@
-import { copyFileSync, existsSync, mkdirSync } from "node:fs";
-import { fileURLToPath } from "node:url";
-
 import { defineConfig } from "tsup";
+
+import { copyViewerBuild } from "../snapshot-viewer/copy-build.js";
 
 // `@real-a11y-dev/testing/reporter` and `…/reporter/jest`, built after the library entries
 // (`tsup.config.ts`, which cleans `dist` first) and apart from them. It runs
@@ -13,22 +12,6 @@ import { defineConfig } from "tsup";
 // The viewer is the PRIVATE `snapshot-viewer` package's build (a
 // devDependency, so pnpm builds it first). It ships as two files in
 // `dist/viewer`, which the reporter reads and inlines into the page it writes.
-const viewerDist = fileURLToPath(
-  new URL("../snapshot-viewer/dist/", import.meta.url),
-);
-const viewerOut = fileURLToPath(new URL("./dist/viewer/", import.meta.url));
-
-function copyViewer(): void {
-  mkdirSync(viewerOut, { recursive: true });
-  for (const file of ["viewer.js", "viewer.css"]) {
-    if (!existsSync(viewerDist + file)) {
-      throw new Error(
-        `${viewerDist}${file} is missing: build @real-a11y-dev/snapshot-viewer first`,
-      );
-    }
-    copyFileSync(viewerDist + file, viewerOut + file);
-  }
-}
 
 export default defineConfig({
   entry: ["src/reporter.ts", "src/reporter-jest.ts"],
@@ -56,5 +39,6 @@ export default defineConfig({
   // The records' types name core's: inline them, as the library build does.
   dts: { resolve: ["@real-a11y-dev/core"] },
   sourcemap: true,
-  onSuccess: async () => copyViewer(),
+  onSuccess: async () =>
+    copyViewerBuild(new URL("./dist/viewer/", import.meta.url)),
 });

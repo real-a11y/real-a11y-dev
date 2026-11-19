@@ -360,6 +360,32 @@ Flags:
 ${SHARED_FLAG_HELP_NO_ROOT}
 `;
 
+export const HELP_SHOW_REPORT = `Usage: real-a11y show-report [dir] [flags]
+
+Open the snapshot report of your tests in the browser and keep it current: the
+page redraws as tests write new snapshots, so it follows a watch-mode run in
+another terminal. It runs no tests itself. Snapshots come from
+@real-a11y-dev/testing/reporter (Vitest) or /reporter/jest (Jest).
+
+[dir] is the reporter's output folder (default: a11y-snapshots). The server
+listens on 127.0.0.1 only, and runs until you press Ctrl+C. Prints the page's
+URL on stdout.
+
+Examples:
+  real-a11y show-report                       # ./a11y-snapshots
+  real-a11y show-report reports/a11y          # a custom outputDir
+  real-a11y show-report --port 8080 --no-open
+
+Flags:
+  --port <n>             Port to listen on; 0 for any free one
+                         (default: 9324, or any free one if that is taken)
+  --no-open              Don't open the browser (never opened when CI is set)
+  --config <file>        a11y.config.json whose "defaults" seed unset flags
+  --no-config            Ignore an auto-discovered config
+  -q, --quiet            Suppress progress (stdout still prints the URL)
+  --verbose              Extra diagnostics on stderr
+`;
+
 export const HELP_DIFF = `Usage: real-a11y diff <base.json> <pr.json> [flags]
 
 Classify the findings in two snapshot artifacts as new / changed / fixed —

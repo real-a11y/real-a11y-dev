@@ -109,8 +109,7 @@ page's. That holds wherever Chromium runs the frame: under site isolation — th
 [Chrome for Testing](/packages/cli/commands#install) that `real-a11y install`
 fetches, or a Chrome you reach with `--cdp` — a cross-site or `sandbox`ed
 `<iframe>` runs in a process of its own and is read over a session of its own.
-One limit: `interact` and the action commands can't act inside such a frame
-yet.
+`interact` and the action commands act inside such a frame the same way.
 
 ## Audit what's behind a click
 
@@ -380,6 +379,16 @@ with `0700`/`0600` permissions, a per-session pidfile, and a version handshake
 so a CLI upgrade restarts a mismatched daemon. See
 [Security posture](/packages/cli/commands#security-posture) in the command
 reference.
+
+## See what your tests recorded
+
+`@real-a11y-dev/testing` can [record the tree behind each snapshot](/packages/testing/snapshots#the-snapshot-report).
+`show-report` opens those records in your browser, and the page redraws as the tests rerun:
+
+```sh
+npx vitest --watch          # in one terminal
+npx real-a11y show-report   # in another
+```
 
 ## Output you can trust
 

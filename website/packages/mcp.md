@@ -251,10 +251,6 @@ different jobs.
   cases.
 - **Requires a real browser.** The assistant's environment must be able to launch
   Chromium or connect to one over CDP.
-- **Acting inside a frame in another process.** Every `<iframe>`'s content is
-  read under its `Iframe` row, but the action tools can't act inside a frame
-  Chromium runs in a process of its own (under site isolation, a cross-site or
-  `sandbox`ed `<iframe>`) yet: they name the node and say so.
 
 ## See also
 

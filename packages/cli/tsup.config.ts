@@ -1,5 +1,11 @@
 import { defineConfig } from "tsup";
 
+import { copyViewerBuild } from "../snapshot-viewer/copy-build.js";
+
+// `show-report` serves the PRIVATE `snapshot-viewer` package's build (a
+// devDependency, so pnpm builds it first). No code imports it: it ships as two
+// files in `dist/viewer`, which the command reads and serves.
+
 export default defineConfig({
   // `index` is the bin (has a shebang). The CLI is a command, not a library,
   // and there is no importable `.` entry here. The engine it drives
@@ -43,4 +49,6 @@ export default defineConfig({
     "@real-a11y-dev/core",
   ],
   banner: { js: "" },
+  onSuccess: async () =>
+    copyViewerBuild(new URL("./dist/viewer/", import.meta.url)),
 });

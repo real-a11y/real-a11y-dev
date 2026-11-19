@@ -454,8 +454,10 @@ main
     listitem "upload as an artifact, and anyone on the pull request can open what the run recorded. The page holds the records and nothing else: no path from the machine that ran it."
       strong "CI:"
       code "a11y-snapshots/index.html"
-    listitem "each rerun, in Vitest or Jest, replaces the records of the files it ran and writes the page again. Reload it to see the new run."
+    listitem "each rerun, in Vitest or Jest, replaces the records of the files it ran and writes the page again. Reload it to see the new run, or keep open in another terminal, and the page redraws by itself."
       strong "Watch mode:"
+      link "npx real-a11y show-report"
+        code "npx real-a11y show-report"
     listitem "clears nothing and writes the page from the records in . Copy each shard's folder there first to see them all."
       strong
         code "vitest --merge-reports"

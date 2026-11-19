@@ -127,15 +127,26 @@ describe("resolveTarget — misses and refusals", () => {
     expect(res.candidate).toMatchObject({ actionable: false, name: "Fixture" });
   });
 
-  it("a match inside an out-of-process frame is refused as in-remote-frame", () => {
+  it("resolves a match inside an out-of-process frame to its whole id", () => {
     const remote = tree();
     const id = "ax-dom-12@F00D.BEEF";
     remote.nodes.set(id, node(id, "button", "Pay"));
     remote.nodes.get("ax-1")!.childIds.push(id);
     const res = resolveTarget(remote, { role: "button", name: "Pay" });
-    expect(res.kind).toBe("in-remote-frame");
-    if (res.kind !== "in-remote-frame") return;
-    expect(res.candidate).toMatchObject({ role: "button", name: "Pay" });
+    expect(res).toMatchObject({
+      kind: "resolved",
+      nodeId: id,
+      candidate: { role: "button", name: "Pay", actionable: true },
+    });
+  });
+
+  it("refuses a node of an out-of-process frame with no DOM element", () => {
+    const remote = tree();
+    const id = "ax-77@F00D.BEEF";
+    remote.nodes.set(id, node(id, "button", "Synthesized"));
+    remote.nodes.get("ax-1")!.childIds.push(id);
+    const res = resolveTarget(remote, { role: "button", name: "Synthesized" });
+    expect(res.kind).toBe("no-dom-node");
   });
 
   it("propagates disabled onto the resolved candidate", () => {

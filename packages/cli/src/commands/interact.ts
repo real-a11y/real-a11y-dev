@@ -136,10 +136,6 @@ async function runStep(
       throw new CliError(
         `matched ${describeTarget(resolved.candidate)}, but it has no backing DOM element (a synthesized node) — it can't be acted on`,
       );
-    case "in-remote-frame":
-      throw new CliError(
-        `matched ${describeTarget(resolved.candidate)}, but it is inside a frame Chromium runs in another process (a cross-site or sandboxed <iframe>), which can't be acted on yet`,
-      );
     case "resolved":
       break;
   }

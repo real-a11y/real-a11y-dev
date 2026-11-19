@@ -53,7 +53,7 @@
   },
   "packages/cli/src/config.ts": {
     "complexity": {
-      "count": 2
+      "count": 1
     }
   },
   "packages/cli/src/daemon/client.ts": {
@@ -113,7 +113,7 @@
   },
   "packages/core/src/extraction/dom-extractor.ts": {
     "complexity": {
-      "count": 4
+      "count": 3
     },
     "max-depth": {
       "count": 1

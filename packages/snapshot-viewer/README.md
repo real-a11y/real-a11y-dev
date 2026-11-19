@@ -4,11 +4,12 @@ Draws the trees behind a11y test snapshots in the same panel the extension,
 the inspector and the Storybook addon use, with the states, actions and
 change marks that the `.snap` text leaves out.
 
-It reaches users through **`@real-a11y-dev/testing/reporter`**, the snapshot
-report. This package is never published: its `vite build` (one classic script
-and one stylesheet) ships in `testing`'s `dist/viewer`, and the reporter
-inlines it, with the run's records, into one HTML page. User docs:
-<https://real-a11y.dev/packages/testing/snapshots#the-snapshot-report>.
+It reaches users two ways, and this package is never published. Its `vite
+build` (one classic script and one stylesheet) ships in `testing`'s `dist/viewer`,
+where **`@real-a11y-dev/testing/reporter`** inlines it, with the run's records,
+into one HTML page. The same build ships in `cli`'s `dist/viewer`, where
+**`real-a11y show-report`** serves it next to the records as they change. User
+docs: <https://real-a11y.dev/packages/testing/snapshots#the-snapshot-report>.
 
 ## How it works
 
@@ -20,8 +21,9 @@ inlines it, with the run's records, into one HTML page. User docs:
 2. **Viewing.** The app lists every record by test file and draws the selected
    one with `TreePanel`. A diff opens on the after tree with what changed
    marked, and switches to the before tree. The snapshot text sits alongside.
-   In the report the records come inlined (`window.__A11Y_SNAPSHOTS__`); under
-   the dev server they come from `GET /__records`.
+   In the report the records come inlined (`window.__A11Y_SNAPSHOTS__`). Under
+   `show-report` and the dev server they come from `GET /__records`, and
+   `GET /__records/events` (server-sent events) says when to read them again.
 
 ## Develop it
 
