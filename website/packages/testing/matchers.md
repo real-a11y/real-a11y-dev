@@ -206,7 +206,7 @@ expect(container).toMatchA11yContract(`
 
 Matching is **containment with ancestor semantics**:
 
-- every contract node must appear with the same role (and name / `(level N)` / `[focused]` when the contract specifies them — an **omitted name matches any name**);
+- every contract node must appear with the same role (and name / `= "value"` / `(level N)` / `[focused]` when the contract specifies them — an **omitted name matches any name**);
 - each node must sit somewhere **under** its contract parent's match — intermediate wrappers in the implementation are fine, so `textbox "Email address"` matches even when the real markup nests it in a `group "Credentials"`;
 - contract nodes must appear in document order;
 - extra target nodes are always allowed.
@@ -227,7 +227,7 @@ a11y contract not satisfied: matched 5/7 nodes.
   ✖ button "Sign in": not found under form (matched line 7), after textbox "Password" (line 10).
 ```
 
-**Received** can be a DOM Element (extracted on the spot) **or an already-serialized tree string** (a committed `treeSnapshot` artifact). Names fold typographic punctuation like `toHaveTabSequence` does, so a contract typed with plain quotes matches curly-quote labels. A contract may carry `#` comments and a `---` frontmatter block (e.g. a source URL) — both are ignored for matching.
+**Received** can be a DOM Element (extracted on the spot) **or an already-serialized tree string** (a committed `treeSnapshot` artifact). A contract that writes a `= "value"` is checked against an Element's tree with [field values](/packages/testing/snapshots#field-values) on, which also lists a role-less editor as a `generic` line; a contract that writes none sees the tree without them. Names fold typographic punctuation like `toHaveTabSequence` does, so a contract typed with plain quotes matches curly-quote labels. A contract may carry `#` comments and a `---` frontmatter block (e.g. a source URL) — both are ignored for matching.
 
 **`{ strict: true }`** switches to exact tree equality — the contract behaves like a committed snapshot baseline (and, unlike containment, compares names byte-exact). Use it only where you truly render a component in isolation and nothing else should be present.
 
@@ -238,6 +238,22 @@ expect(container).toMatchA11yContract(contract);
 // strict: the tree must equal the contract exactly, nothing more
 expect(inIsolation).toMatchA11yContract(contract, { strict: true });
 ```
+
+**States.** A contract line may end with a `{…}` block, the states, description and announced properties tree text prints for a node, and the contract then asserts it:
+
+```ts
+expect(treeText).toMatchA11yContract(`
+  form "Sign up"
+    textbox "Email" {required}
+    checkbox "Subscribe" {checked}
+`);
+```
+
+In containment the received node must carry at least the block's entries, in any order, with quoted values compared typography-folded like names. Under `{ strict: true }` it must carry exactly those entries, and a strict failure shows each side's block as written. An empty block, `{}`, asserts that the node has no states, in either mode. A line without a block says nothing about states, in either mode, so a contract that never writes one matches whatever a node's states are. When a node matches on everything but its states, the failure names what is missing: `same role and name, missing checked: checkbox "Subscribe" {checked=false} (line 3)`.
+
+A quoted value is a JSON string, so a quote or a backslash inside it is escaped: `description="Say \"hi\""`. A template literal reads those escapes before the matcher sees the text: `\"` becomes a bare `"`, and the line no longer parses; `\\` becomes one backslash, and the value no longer matches. When a value holds either, write the contract with `String.raw` or keep it in a file.
+
+A block can only match received text that prints one. `treeSnapshot` doesn't print states yet, so neither does a DOM Element received here: a contract that writes a block against an Element throws, with or without `.not`, instead of passing on a check it can't make. Until the serializer prints states, a block matches only a serialized tree string that carries one.
 
 Because a serialized string is accepted, the same contract can be checked against a **committed snapshot artifact** — not only a live test render.
 

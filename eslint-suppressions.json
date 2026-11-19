@@ -432,7 +432,7 @@
       "count": 1
     }
   },
-  "packages/testing/src/contract.ts": {
+  "packages/testing/src/contract-parse.ts": {
     "complexity": {
       "count": 1
     }
