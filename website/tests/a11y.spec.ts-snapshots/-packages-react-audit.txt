@@ -2,21 +2,21 @@ navigation "On this page"
   heading "On this page" (level 2)
   list
     listitem
-      link "Install"
+      link "Install" {description="Install"}
     listitem
-      link "<SemanticNavigator />"
+      link "<SemanticNavigator />" {description="<SemanticNavigator />"}
     listitem
-      link "useSemanticTree(rootRef, options?)"
+      link "useSemanticTree(rootRef, options?)" {description="useSemanticTree(rootRef, options?)"}
     listitem
-      link "useActiveModal(rootRef)"
+      link "useActiveModal(rootRef)" {description="useActiveModal(rootRef)"}
     listitem
-      link "Patterns"
+      link "Patterns" {description="Patterns"}
     listitem
-      link "TypeScript"
+      link "TypeScript" {description="TypeScript"}
     listitem
-      link "See it running"
+      link "See it running" {description="See it running"}
     listitem
-      link "Panel features"
+      link "Panel features" {description="Panel features"}
 main
   heading "@real-a11y-dev/react" (level 1)
   blockquote

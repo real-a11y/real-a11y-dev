@@ -2,19 +2,19 @@ navigation "On this page"
   heading "On this page" (level 2)
   list
     listitem
-      link "treeSnapshot(root, options?)"
+      link "treeSnapshot(root, options?)" {description="treeSnapshot(root, options?)"}
     listitem
-      link "outlineSnapshot(root, options?)"
+      link "outlineSnapshot(root, options?)" {description="outlineSnapshot(root, options?)"}
     listitem
-      link "tabSequenceSnapshot(root, options?)"
+      link "tabSequenceSnapshot(root, options?)" {description="tabSequenceSnapshot(root, options?)"}
     listitem
-      link "Focus marker"
+      link "Focus marker" {description="Focus marker"}
     listitem
-      link "Determinism"
+      link "Determinism" {description="Determinism"}
     listitem
-      link "The snapshot report"
+      link "The snapshot report" {description="The snapshot report"}
     listitem
-      link "See also"
+      link "See also" {description="See also"}
 main
   heading "Snapshots" (level 1)
   paragraph "Deterministic string representations of the accessibility tree. Safe to commit — the same DOM always produces the same string."
@@ -338,8 +338,8 @@ main
   paragraph "A snapshot's text is made to be committed and diffed, so it leaves most of the tree out: , nothing about what an element takes. The snapshot report shows the rest. Add its reporter to Vitest or Jest, and after every run draws each snapshot's tree the way the Semantic Navigator panel does."
     link "no states, no description"
     code "a11y-snapshots/index.html"
-  radio "Vitest"
-  radio "Jest"
+  radio "Vitest" {checked}
+  radio "Jest" {checked=false}
   button "Copy Code"
   code "// vitest.config.ts import { defineConfig } from "vitest/config"; export default defineConfig({ test: { reporters: ["default", "@real-a11y-dev/testing/reporter"], }, });"
   paragraph "Keep in the list: naming any reporter replaces the runner's own output. Then run your tests as usual. The run ends with a link to the page:"

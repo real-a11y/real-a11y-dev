@@ -1,12 +1,12 @@
-link "Install"
-link "Quick start"
-link "createInspector(config)"
-link "Instance API"
-link "Shadow DOM explained"
-link "Interaction flags"
-link "Example: dev-tools overlay"
-link "See it running"
-link "Panel features"
+link "Install" {description="Install"}
+link "Quick start" {description="Quick start"}
+link "createInspector(config)" {description="createInspector(config)"}
+link "Instance API" {description="Instance API"}
+link "Shadow DOM explained" {description="Shadow DOM explained"}
+link "Interaction flags" {description="Interaction flags"}
+link "Example: dev-tools overlay" {description="Example: dev-tools overlay"}
+link "See it running" {description="See it running"}
+link "Panel features" {description="Panel features"}
 button "Copy Code"
 generic
 link "Keep it out of production"

@@ -2,23 +2,23 @@ navigation "On this page"
   heading "On this page" (level 2)
   list
     listitem
-      link "All commands at a glance"
+      link "All commands at a glance" {description="All commands at a glance"}
     listitem
-      link "Commands"
+      link "Commands" {description="Commands"}
     listitem
-      link "Flags"
+      link "Flags" {description="Flags"}
     listitem
-      link "Browser & page"
+      link "Browser & page" {description="Browser & page"}
     listitem
-      link "Output"
+      link "Output" {description="Output"}
     listitem
-      link "Config"
+      link "Config" {description="Config"}
     listitem
-      link "Gate"
+      link "Gate" {description="Gate"}
     listitem
-      link "Command-specific"
+      link "Command-specific" {description="Command-specific"}
     listitem
-      link "Security posture"
+      link "Security posture" {description="Security posture"}
 main
   heading "Commands & flags" (level 1)
   paragraph "Every invocation is . Sixteen commands ship — , , , , , , , , , , , , , , , and . Run for a command's own flags."

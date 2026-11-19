@@ -2,15 +2,15 @@ navigation "On this page"
   heading "On this page" (level 2)
   list
     listitem
-      link "The priority order"
+      link "The priority order" {description="The priority order"}
     listitem
-      link "Concrete examples"
+      link "Concrete examples" {description="Concrete examples"}
     listitem
-      link "What does not contribute"
+      link "What does not contribute" {description="What does not contribute"}
     listitem
-      link "Debugging an unexpected name"
+      link "Debugging an unexpected name" {description="Debugging an unexpected name"}
     listitem
-      link "Why this matters"
+      link "Why this matters" {description="Why this matters"}
 main
   heading "Accessible Names" (level 1)
   paragraph "The is the string a screen reader announces for an element. It's what your user actually hears — and it's almost never just the element's text content. This page explains how that name is computed, what contributes, and what wins when multiple sources compete."

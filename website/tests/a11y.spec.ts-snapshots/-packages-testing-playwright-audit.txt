@@ -2,29 +2,29 @@ navigation "On this page"
   heading "On this page" (level 2)
   list
     listitem
-      link "Install"
+      link "Install" {description="Install"}
     listitem
-      link "attach(page, options?)"
+      link "attach(page, options?)" {description="attach(page, options?)"}
     listitem
-      link "Narrowing the root"
+      link "Narrowing the root" {description="Narrowing the root"}
     listitem
-      link "Auditing the native tree"
+      link "Auditing the native tree" {description="Auditing the native tree"}
     listitem
-      link "Testing that assertions fail on broken pages"
+      link "Testing that assertions fail on broken pages" {description="Testing that assertions fail on broken pages"}
     listitem
-      link "Determinism"
+      link "Determinism" {description="Determinism"}
     listitem
-      link "Redacting variable content"
+      link "Redacting variable content" {description="Redacting variable content"}
     listitem
-      link "Field values"
+      link "Field values" {description="Field values"}
     listitem
-      link "How it works"
+      link "How it works" {description="How it works"}
     listitem
-      link "Error propagation"
+      link "Error propagation" {description="Error propagation"}
     listitem
-      link "SemanticNavigatorPageHandle type"
+      link "SemanticNavigatorPageHandle type" {description="SemanticNavigatorPageHandle type"}
     listitem
-      link "See also"
+      link "See also" {description="See also"}
 main
   heading "Playwright adapter" (level 1)
   paragraph "Run the same audit helpers against a real browser page. The adapter injects a self-contained IIFE bundle into the page and exposes every helper via ."

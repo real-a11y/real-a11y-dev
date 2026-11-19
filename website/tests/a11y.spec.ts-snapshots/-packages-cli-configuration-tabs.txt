@@ -1,8 +1,8 @@
-link "Top-level keys"
-link "defaults keys"
-link "Not settable"
-link "Legacy shorthands"
-link "See also"
+link "Top-level keys" {description="Top-level keys"}
+link "defaults keys" {description="defaults keys"}
+link "Not settable" {description="Not settable"}
+link "Legacy shorthands" {description="Legacy shorthands"}
+link "See also" {description="See also"}
 link "failOn"
 link "urls"
 link "redact"

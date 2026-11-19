@@ -2,19 +2,19 @@ navigation "On this page"
   heading "On this page" (level 2)
   list
     listitem
-      link "How it works"
+      link "How it works" {description="How it works"}
     listitem
-      link "1. Install the CLI"
+      link "1. Install the CLI" {description="1. Install the CLI"}
     listitem
-      link "2. List your pages"
+      link "2. List your pages" {description="2. List your pages"}
     listitem
-      link "3. Add the workflow"
+      link "3. Add the workflow" {description="3. Add the workflow"}
     listitem
-      link "Fail the PR on new findings"
+      link "Fail the PR on new findings" {description="Fail the PR on new findings"}
     listitem
-      link "What the comment looks like"
+      link "What the comment looks like" {description="What the comment looks like"}
     listitem
-      link "Other formats"
+      link "Other formats" {description="Other formats"}
 main
   heading "CI A11y Diff Bot" (level 1)
   paragraph "A GitHub Actions workflow that comments on each pull request with what changed in the accessibility of the pages you list: new and fixed findings, plus structural changes such as a heading level, a renamed button or a removed landmark."

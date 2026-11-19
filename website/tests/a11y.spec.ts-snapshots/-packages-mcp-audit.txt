@@ -2,21 +2,21 @@ navigation "On this page"
   heading "On this page" (level 2)
   list
     listitem
-      link "Connect it to your client"
+      link "Connect it to your client" {description="Connect it to your client"}
     listitem
-      link "Your first audit"
+      link "Your first audit" {description="Your first audit"}
     listitem
-      link "Auditing a page behind a login"
+      link "Auditing a page behind a login" {description="Auditing a page behind a login"}
     listitem
-      link "Configuration"
+      link "Configuration" {description="Configuration"}
     listitem
-      link "Scripting audits without an MCP client"
+      link "Scripting audits without an MCP client" {description="Scripting audits without an MCP client"}
     listitem
-      link "How it compares to Playwright MCP"
+      link "How it compares to Playwright MCP" {description="How it compares to Playwright MCP"}
     listitem
-      link "Limitations"
+      link "Limitations" {description="Limitations"}
     listitem
-      link "See also"
+      link "See also" {description="See also"}
 main
   heading "@real-a11y-dev/mcp" (level 1)
   paragraph "Beta — preview page"
@@ -42,9 +42,9 @@ main
   paragraph "The server speaks MCP over stdio — point your client at . No install step is needed: fetches it on first run, and Playwright, the browser driver, with it."
     code "npx -y @real-a11y-dev/mcp"
     code "npx"
-  radio "Claude Code"
-  radio "VS Code"
-  radio "Config file"
+  radio "Claude Code" {checked}
+  radio "VS Code" {checked=false}
+  radio "Config file" {checked=false}
   button "Copy Code"
   code "claude mcp add real-a11y -- npx -y @real-a11y-dev/mcp"
   paragraph "For clients configured by file, add the block above to:"

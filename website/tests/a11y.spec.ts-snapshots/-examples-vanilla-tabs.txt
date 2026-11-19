@@ -1,6 +1,6 @@
-link "What it shows"
-link "Run it locally"
-link "Key code"
+link "What it shows" {description="What it shows"}
+link "Run it locally" {description="Run it locally"}
+link "Key code" {description="Key code"}
 link "examples/vanilla/"
 button "Copy Code"
 generic

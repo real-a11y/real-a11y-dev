@@ -2,25 +2,25 @@ navigation "On this page"
   heading "On this page" (level 2)
   list
     listitem
-      link "Install"
+      link "Install" {description="Install"}
     listitem
-      link "Setup"
+      link "Setup" {description="Setup"}
     listitem
-      link "The panel"
+      link "The panel" {description="The panel"}
     listitem
-      link "How it works"
+      link "How it works" {description="How it works"}
     listitem
-      link "Using the panel effectively"
+      link "Using the panel effectively" {description="Using the panel effectively"}
     listitem
-      link "Story parameters"
+      link "Story parameters" {description="Story parameters"}
     listitem
-      link "Channel events"
+      link "Channel events" {description="Channel events"}
     listitem
-      link "Troubleshooting"
+      link "Troubleshooting" {description="Troubleshooting"}
     listitem
-      link "See it running"
+      link "See it running" {description="See it running"}
     listitem
-      link "Panel features"
+      link "Panel features" {description="Panel features"}
 main
   heading "@real-a11y-dev/storybook-addon" (level 1)
   blockquote

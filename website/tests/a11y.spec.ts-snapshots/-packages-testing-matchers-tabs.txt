@@ -1,13 +1,13 @@
-link "Setup"
-link "Assertion matchers"
-link "toBeValidA11yTree()"
-link "toHaveTabSequence(expected)"
-link "toMatchA11yContract(contract, options?)"
-link "boxedTreeSnapshot(root, options?) — snapshot serializer"
-link "Rules, contracts, and snapshots — which to reach for"
-link "Vitest vs Jest type augmentation"
-link "See it running"
-link "See also"
+link "Setup" {description="Setup"}
+link "Assertion matchers" {description="Assertion matchers"}
+link "toBeValidA11yTree()" {description="toBeValidA11yTree()"}
+link "toHaveTabSequence(expected)" {description="toHaveTabSequence(expected)"}
+link "toMatchA11yContract(contract, options?)" {description="toMatchA11yContract(contract, options?)"}
+link "boxedTreeSnapshot(root, options?) — snapshot serializer" {description="boxedTreeSnapshot(root, options?) — snapshot serializer"}
+link "Rules, contracts, and snapshots — which to reach for" {description="Rules, contracts, and snapshots — which to reach for"}
+link "Vitest vs Jest type augmentation" {description="Vitest vs Jest type augmentation"}
+link "See it running" {description="See it running"}
+link "See also" {description="See also"}
 link "assertions"
 link "snapshots"
 button "Copy Code"

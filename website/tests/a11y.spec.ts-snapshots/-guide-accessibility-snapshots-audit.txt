@@ -2,21 +2,21 @@ navigation "On this page"
   heading "On this page" (level 2)
   list
     listitem
-      link "Why this exists"
+      link "Why this exists" {description="Why this exists"}
     listitem
-      link "The problem with DOM snapshots"
+      link "The problem with DOM snapshots" {description="The problem with DOM snapshots"}
     listitem
-      link "Three views, one tree"
+      link "Three views, one tree" {description="Three views, one tree"}
     listitem
-      link "Deterministic by construction"
+      link "Deterministic by construction" {description="Deterministic by construction"}
     listitem
-      link "It models real AT behavior"
+      link "It models real AT behavior" {description="It models real AT behavior"}
     listitem
-      link "It catches what a screenshot can't"
+      link "It catches what a screenshot can't" {description="It catches what a screenshot can't"}
     listitem
-      link "The same tree, everywhere"
+      link "The same tree, everywhere" {description="The same tree, everywhere"}
     listitem
-      link "Start snapshotting"
+      link "Start snapshotting" {description="Start snapshotting"}
 main
   heading "Accessibility Snapshots" (level 1)
   paragraph "An is a deterministic, human-readable capture of what assistive technology perceives on a page — roles, accessible names, heading outline, and tab order — serialized to a string you can commit and diff in code review."

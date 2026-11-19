@@ -2,17 +2,17 @@ navigation "On this page"
   heading "On this page" (level 2)
   list
     listitem
-      link "Why flow() (vs Testing Library)?"
+      link "Why flow() (vs Testing Library)?" {description="Why flow() (vs Testing Library)?"}
     listitem
-      link "Available steps"
+      link "Available steps" {description="Available steps"}
     listitem
-      link "Asserting what an interaction changed"
+      link "Asserting what an interaction changed" {description="Asserting what an interaction changed"}
     listitem
-      link "flow(root, options?)"
+      link "flow(root, options?)" {description="flow(root, options?)"}
     listitem
-      link "Utilities"
+      link "Utilities" {description="Utilities"}
     listitem
-      link "See also"
+      link "See also" {description="See also"}
 main
   heading "Flow API" (level 1)
   paragraph "Fluent interaction chains that assert about the after each step. Each / / etc. dispatches a real DOM action, then re-extracts the tree so the next step sees the post-interaction state."

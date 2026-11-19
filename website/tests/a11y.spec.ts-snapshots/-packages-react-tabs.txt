@@ -1,11 +1,11 @@
-link "Install"
-link "<SemanticNavigator />"
-link "useSemanticTree(rootRef, options?)"
-link "useActiveModal(rootRef)"
-link "Patterns"
-link "TypeScript"
-link "See it running"
-link "Panel features"
+link "Install" {description="Install"}
+link "<SemanticNavigator />" {description="<SemanticNavigator />"}
+link "useSemanticTree(rootRef, options?)" {description="useSemanticTree(rootRef, options?)"}
+link "useActiveModal(rootRef)" {description="useActiveModal(rootRef)"}
+link "Patterns" {description="Patterns"}
+link "TypeScript" {description="TypeScript"}
+link "See it running" {description="See it running"}
+link "Panel features" {description="Panel features"}
 link "@real-a11y-dev/inspector"
 button "Copy Code"
 generic

@@ -1,10 +1,10 @@
-link "What you see"
-link "How the A11y view differs from the DOM view"
-link "Two producers"
-link "How roles are resolved"
-link "What to look for"
-link "Reading a well-structured tree"
-link "Quick sanity checks"
+link "What you see" {description="What you see"}
+link "How the A11y view differs from the DOM view" {description="How the A11y view differs from the DOM view"}
+link "Two producers" {description="Two producers"}
+link "How roles are resolved" {description="How roles are resolved"}
+link "What to look for" {description="What to look for"}
+link "Reading a well-structured tree" {description="Reading a well-structured tree"}
+link "Quick sanity checks" {description="Quick sanity checks"}
 link "Chrome extension"
 link "React component"
 link "Storybook addon"

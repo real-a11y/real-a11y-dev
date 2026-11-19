@@ -2,33 +2,33 @@ navigation "On this page"
   heading "On this page" (level 2)
   list
     listitem
-      link "My audit returned nothing"
+      link "My audit returned nothing" {description="My audit returned nothing"}
     listitem
-      link "Snapshot flaps between runs or between local and CI"
+      link "Snapshot flaps between runs or between local and CI" {description="Snapshot flaps between runs or between local and CI"}
     listitem
-      link "Heading outline has no h1"
+      link "Heading outline has no h1" {description="Heading outline has no h1"}
     listitem
-      link "Tab sequence is empty"
+      link "Tab sequence is empty" {description="Tab sequence is empty"}
     listitem
-      link "My snapshot contains the whole page, not the component I passed"
+      link "My snapshot contains the whole page, not the component I passed" {description="My snapshot contains the whole page, not the component I passed"}
     listitem
-      link "Content inside a web component is missing or stale"
+      link "Content inside a web component is missing or stale" {description="Content inside a web component is missing or stale"}
     listitem
-      link "React hydration mismatch when rendering the panel"
+      link "React hydration mismatch when rendering the panel" {description="React hydration mismatch when rendering the panel"}
     listitem
-      link "Tests pass in jsdom but fail in Playwright (or vice versa)"
+      link "Tests pass in jsdom but fail in Playwright (or vice versa)" {description="Tests pass in jsdom but fail in Playwright (or vice versa)"}
     listitem
-      link "A11yAssertionError with a message I don't understand"
+      link "A11yAssertionError with a message I don't understand" {description="A11yAssertionError with a message I don't understand"}
     listitem
-      link "The CLI or MCP says Playwright isn't installed"
+      link "The CLI or MCP says Playwright isn't installed" {description="The CLI or MCP says Playwright isn't installed"}
     listitem
-      link "Chrome fails to launch with a shared-library error"
+      link "Chrome fails to launch with a shared-library error" {description="Chrome fails to launch with a shared-library error"}
     listitem
-      link "An audit of a logged-in page comes back empty (or shows the login screen)"
+      link "An audit of a logged-in page comes back empty (or shows the login screen)" {description="An audit of a logged-in page comes back empty (or shows the login screen)"}
     listitem
-      link "The MCP server refuses to open a file:// URL"
+      link "The MCP server refuses to open a file:// URL" {description="The MCP server refuses to open a file:// URL"}
     listitem
-      link "Still stuck?"
+      link "Still stuck?" {description="Still stuck?"}
 main
   heading "Troubleshooting" (level 1)
   paragraph "The library is designed to fail loudly — exceptions include the offending element, its location in the tree, and a suggested fix. Most problems are caught there. This page covers the edge cases that look like bugs but usually aren't."

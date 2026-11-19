@@ -1,9 +1,9 @@
-link "The test"
-link "Chrome's tree"
-link "Using the panel"
-link "Privacy"
-link "Troubleshooting"
-link "Install"
+link "The test" {description="The test"}
+link "Chrome's tree" {description="Chrome's tree"}
+link "Using the panel" {description="Using the panel"}
+link "Privacy" {description="Privacy"}
+link "Troubleshooting" {description="Troubleshooting"}
+link "Install" {description="Install"}
 link "Add to Chrome"
 link "View on GitHub"
 button "Enlarge image: Screen curtain screenshot"

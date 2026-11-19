@@ -1,16 +1,16 @@
-link "Connect it to your client"
-link "Your first audit"
-link "Auditing a page behind a login"
-link "Configuration"
-link "Scripting audits without an MCP client"
-link "How it compares to Playwright MCP"
-link "Limitations"
-link "See also"
+link "Connect it to your client" {description="Connect it to your client"}
+link "Your first audit" {description="Your first audit"}
+link "Auditing a page behind a login" {description="Auditing a page behind a login"}
+link "Configuration" {description="Configuration"}
+link "Scripting audits without an MCP client" {description="Scripting audits without an MCP client"}
+link "How it compares to Playwright MCP" {description="How it compares to Playwright MCP"}
+link "Limitations" {description="Limitations"}
+link "See also" {description="See also"}
 link "Model Context Protocol"
 link "Chrome for Testing"
-radio "Claude Code"
-radio "VS Code"
-radio "Config file"
+radio "Claude Code" {checked}
+radio "VS Code" {checked=false}
+radio "Config file" {checked=false}
 button "Copy Code"
 generic
 button "Copy Code"

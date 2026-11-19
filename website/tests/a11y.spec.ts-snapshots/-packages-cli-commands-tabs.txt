@@ -1,12 +1,12 @@
-link "All commands at a glance"
-link "Commands"
-link "Flags"
-link "Browser & page"
-link "Output"
-link "Config"
-link "Gate"
-link "Command-specific"
-link "Security posture"
+link "All commands at a glance" {description="All commands at a glance"}
+link "Commands" {description="Commands"}
+link "Flags" {description="Flags"}
+link "Browser & page" {description="Browser & page"}
+link "Output" {description="Output"}
+link "Config" {description="Config"}
+link "Gate" {description="Gate"}
+link "Command-specific" {description="Command-specific"}
+link "Security posture" {description="Security posture"}
 link "install"
 link "audit"
 link "inspect"

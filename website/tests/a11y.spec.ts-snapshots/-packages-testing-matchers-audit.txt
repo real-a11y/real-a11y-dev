@@ -2,25 +2,25 @@ navigation "On this page"
   heading "On this page" (level 2)
   list
     listitem
-      link "Setup"
+      link "Setup" {description="Setup"}
     listitem
-      link "Assertion matchers"
+      link "Assertion matchers" {description="Assertion matchers"}
     listitem
-      link "toBeValidA11yTree()"
+      link "toBeValidA11yTree()" {description="toBeValidA11yTree()"}
     listitem
-      link "toHaveTabSequence(expected)"
+      link "toHaveTabSequence(expected)" {description="toHaveTabSequence(expected)"}
     listitem
-      link "toMatchA11yContract(contract, options?)"
+      link "toMatchA11yContract(contract, options?)" {description="toMatchA11yContract(contract, options?)"}
     listitem
-      link "boxedTreeSnapshot(root, options?) — snapshot serializer"
+      link "boxedTreeSnapshot(root, options?) — snapshot serializer" {description="boxedTreeSnapshot(root, options?) — snapshot serializer"}
     listitem
-      link "Rules, contracts, and snapshots — which to reach for"
+      link "Rules, contracts, and snapshots — which to reach for" {description="Rules, contracts, and snapshots — which to reach for"}
     listitem
-      link "Vitest vs Jest type augmentation"
+      link "Vitest vs Jest type augmentation" {description="Vitest vs Jest type augmentation"}
     listitem
-      link "See it running"
+      link "See it running" {description="See it running"}
     listitem
-      link "See also"
+      link "See also" {description="See also"}
 main
   heading "Matchers" (level 1)
   paragraph "An ergonomic layer over the and — the same checks, but read as native matchers with negation and clean failure messages. This is the jest-axe-style surface of the package."

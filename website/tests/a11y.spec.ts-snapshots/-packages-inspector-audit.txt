@@ -2,23 +2,23 @@ navigation "On this page"
   heading "On this page" (level 2)
   list
     listitem
-      link "Install"
+      link "Install" {description="Install"}
     listitem
-      link "Quick start"
+      link "Quick start" {description="Quick start"}
     listitem
-      link "createInspector(config)"
+      link "createInspector(config)" {description="createInspector(config)"}
     listitem
-      link "Instance API"
+      link "Instance API" {description="Instance API"}
     listitem
-      link "Shadow DOM explained"
+      link "Shadow DOM explained" {description="Shadow DOM explained"}
     listitem
-      link "Interaction flags"
+      link "Interaction flags" {description="Interaction flags"}
     listitem
-      link "Example: dev-tools overlay"
+      link "Example: dev-tools overlay" {description="Example: dev-tools overlay"}
     listitem
-      link "See it running"
+      link "See it running" {description="See it running"}
     listitem
-      link "Panel features"
+      link "Panel features" {description="Panel features"}
 main
   heading "@real-a11y-dev/inspector" (level 1)
   blockquote

@@ -1,16 +1,16 @@
-link "Prerequisites"
-link "Your first audit"
-link "Audit what's behind a click"
-link "Configure once"
-link "Track regressions across a PR"
-link "Adopt the gate on existing debt"
-link "In CI"
-link "Pages behind a login"
-link "Reuse a live session"
-link "See what your tests recorded"
-link "Output you can trust"
-link "Limitations"
-link "See also"
+link "Prerequisites" {description="Prerequisites"}
+link "Your first audit" {description="Your first audit"}
+link "Audit what's behind a click" {description="Audit what's behind a click"}
+link "Configure once" {description="Configure once"}
+link "Track regressions across a PR" {description="Track regressions across a PR"}
+link "Adopt the gate on existing debt" {description="Adopt the gate on existing debt"}
+link "In CI" {description="In CI"}
+link "Pages behind a login" {description="Pages behind a login"}
+link "Reuse a live session" {description="Reuse a live session"}
+link "See what your tests recorded" {description="See what your tests recorded"}
+link "Output you can trust" {description="Output you can trust"}
+link "Limitations" {description="Limitations"}
+link "See also" {description="See also"}
 link "extension"
 link "testing library"
 link "MCP server"

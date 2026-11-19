@@ -1,10 +1,10 @@
-link "treeSnapshot(root, options?)"
-link "outlineSnapshot(root, options?)"
-link "tabSequenceSnapshot(root, options?)"
-link "Focus marker"
-link "Determinism"
-link "The snapshot report"
-link "See also"
+link "treeSnapshot(root, options?)" {description="treeSnapshot(root, options?)"}
+link "outlineSnapshot(root, options?)" {description="outlineSnapshot(root, options?)"}
+link "tabSequenceSnapshot(root, options?)" {description="tabSequenceSnapshot(root, options?)"}
+link "Focus marker" {description="Focus marker"}
+link "Determinism" {description="Determinism"}
+link "The snapshot report" {description="The snapshot report"}
+link "See also" {description="See also"}
 link "@real-a11y-dev/testing"
 link "Matchers"
 link "matchers"
@@ -63,8 +63,8 @@ generic
 link "redact"
 link "markFocus: false"
 link "no states, no description"
-radio "Vitest"
-radio "Jest"
+radio "Vitest" {checked}
+radio "Jest" {checked=false}
 button "Copy Code"
 generic
 button "Copy Code"

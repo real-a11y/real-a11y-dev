@@ -2,17 +2,17 @@ navigation "On this page"
   heading "On this page" (level 2)
   list
     listitem
-      link "The test"
+      link "The test" {description="The test"}
     listitem
-      link "Chrome's tree"
+      link "Chrome's tree" {description="Chrome's tree"}
     listitem
-      link "Using the panel"
+      link "Using the panel" {description="Using the panel"}
     listitem
-      link "Privacy"
+      link "Privacy" {description="Privacy"}
     listitem
-      link "Troubleshooting"
+      link "Troubleshooting" {description="Troubleshooting"}
     listitem
-      link "Install"
+      link "Install" {description="Install"}
 main
   heading "Semantic Navigator" (level 1)
   paragraph "Navigate the web the way your users have to."

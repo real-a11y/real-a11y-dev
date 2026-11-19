@@ -2,15 +2,15 @@ navigation "On this page"
   heading "On this page" (level 2)
   list
     listitem
-      link "Top-level keys"
+      link "Top-level keys" {description="Top-level keys"}
     listitem
-      link "defaults keys"
+      link "defaults keys" {description="defaults keys"}
     listitem
-      link "Not settable"
+      link "Not settable" {description="Not settable"}
     listitem
-      link "Legacy shorthands"
+      link "Legacy shorthands" {description="Legacy shorthands"}
     listitem
-      link "See also"
+      link "See also" {description="See also"}
 main
   heading "a11y.config.json" (level 1)
     code "a11y.config.json"

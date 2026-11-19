@@ -1,8 +1,8 @@
-link "The priority order"
-link "Concrete examples"
-link "What does not contribute"
-link "Debugging an unexpected name"
-link "Why this matters"
+link "The priority order" {description="The priority order"}
+link "Concrete examples" {description="Concrete examples"}
+link "What does not contribute" {description="What does not contribute"}
+link "Debugging an unexpected name" {description="Debugging an unexpected name"}
+link "Why this matters" {description="Why this matters"}
 link "A control inside a label or heading"
 link "A control inside a label or heading"
 button "Copy Code"

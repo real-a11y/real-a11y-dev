@@ -2,31 +2,31 @@ navigation "On this page"
   heading "On this page" (level 2)
   list
     listitem
-      link "Prerequisites"
+      link "Prerequisites" {description="Prerequisites"}
     listitem
-      link "Your first audit"
+      link "Your first audit" {description="Your first audit"}
     listitem
-      link "Audit what's behind a click"
+      link "Audit what's behind a click" {description="Audit what's behind a click"}
     listitem
-      link "Configure once"
+      link "Configure once" {description="Configure once"}
     listitem
-      link "Track regressions across a PR"
+      link "Track regressions across a PR" {description="Track regressions across a PR"}
     listitem
-      link "Adopt the gate on existing debt"
+      link "Adopt the gate on existing debt" {description="Adopt the gate on existing debt"}
     listitem
-      link "In CI"
+      link "In CI" {description="In CI"}
     listitem
-      link "Pages behind a login"
+      link "Pages behind a login" {description="Pages behind a login"}
     listitem
-      link "Reuse a live session"
+      link "Reuse a live session" {description="Reuse a live session"}
     listitem
-      link "See what your tests recorded"
+      link "See what your tests recorded" {description="See what your tests recorded"}
     listitem
-      link "Output you can trust"
+      link "Output you can trust" {description="Output you can trust"}
     listitem
-      link "Limitations"
+      link "Limitations" {description="Limitations"}
     listitem
-      link "See also"
+      link "See also" {description="See also"}
 main
   heading "@real-a11y-dev/cli" (level 1)
   paragraph "Beta — preview page"

@@ -1,11 +1,11 @@
-link "Short version"
-link "Chrome extension — Semantic Navigator"
-link "npm packages"
-link "Website"
-link "Data we might receive anyway"
-link "Your rights"
-link "Changes to this policy"
-link "Contact"
+link "Short version" {description="Short version"}
+link "Chrome extension — Semantic Navigator" {description="Chrome extension — Semantic Navigator"}
+link "npm packages" {description="npm packages"}
+link "Website" {description="Website"}
+link "Data we might receive anyway" {description="Data we might receive anyway"}
+link "Your rights" {description="Your rights"}
+link "Changes to this policy" {description="Changes to this policy"}
+link "Contact" {description="Contact"}
 link "Details"
 table
 link "GitHub's privacy policy"

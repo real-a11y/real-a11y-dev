@@ -1,10 +1,10 @@
-link "How it works"
-link "1. Install the CLI"
-link "2. List your pages"
-link "3. Add the workflow"
-link "Fail the PR on new findings"
-link "What the comment looks like"
-link "Other formats"
+link "How it works" {description="How it works"}
+link "1. Install the CLI" {description="1. Install the CLI"}
+link "2. List your pages" {description="2. List your pages"}
+link "3. Add the workflow" {description="3. Add the workflow"}
+link "Fail the PR on new findings" {description="Fail the PR on new findings"}
+link "What the comment looks like" {description="What the comment looks like"}
+link "Other formats" {description="Other formats"}
 link "@real-a11y-dev/cli"
 button "Copy Code"
 generic

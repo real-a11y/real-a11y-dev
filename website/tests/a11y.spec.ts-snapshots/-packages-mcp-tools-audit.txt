@@ -2,21 +2,21 @@ navigation "On this page"
   heading "On this page" (level 2)
   list
     listitem
-      link "All tools at a glance"
+      link "All tools at a glance" {description="All tools at a glance"}
     listitem
-      link "Session"
+      link "Session" {description="Session"}
     listitem
-      link "Audit"
+      link "Audit" {description="Audit"}
     listitem
-      link "Views"
+      link "Views" {description="Views"}
     listitem
-      link "Findings checkpoints"
+      link "Findings checkpoints" {description="Findings checkpoints"}
     listitem
-      link "Tree checkpoints"
+      link "Tree checkpoints" {description="Tree checkpoints"}
     listitem
-      link "Act"
+      link "Act" {description="Act"}
     listitem
-      link "Environment"
+      link "Environment" {description="Environment"}
 main
   heading "MCP tools reference" (level 1)
   paragraph "The Real A11y MCP server exposes to an MCP client (Claude Code, Claude Desktop, Cursor, and any other MCP-capable assistant). Each tool drives a real Chromium page and reports what a screen reader would actually perceive — computed roles, accessible names, and the defects assistive tech announces as broken — not what the HTML source claims."

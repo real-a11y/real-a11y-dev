@@ -1,10 +1,10 @@
-link "Compatibility matrix"
-link "Companion libraries"
-link "@real-a11y-dev/storybook-addon — Storybook version"
-link "@real-a11y-dev/react — React version"
-link "@real-a11y-dev/testing/playwright — browser install"
-link "Single React instance"
-link "Clean install recipe"
+link "Compatibility matrix" {description="Compatibility matrix"}
+link "Companion libraries" {description="Companion libraries"}
+link "@real-a11y-dev/storybook-addon — Storybook version" {description="@real-a11y-dev/storybook-addon — Storybook version"}
+link "@real-a11y-dev/react — React version" {description="@real-a11y-dev/react — React version"}
+link "@real-a11y-dev/testing/playwright — browser install" {description="@real-a11y-dev/testing/playwright — browser install"}
+link "Single React instance" {description="Single React instance"}
+link "Clean install recipe" {description="Clean install recipe"}
 table
 button "Copy Code"
 generic

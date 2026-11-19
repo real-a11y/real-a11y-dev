@@ -1,13 +1,13 @@
-link "Install"
-link "Setup"
-link "The panel"
-link "How it works"
-link "Using the panel effectively"
-link "Story parameters"
-link "Channel events"
-link "Troubleshooting"
-link "See it running"
-link "Panel features"
+link "Install" {description="Install"}
+link "Setup" {description="Setup"}
+link "The panel" {description="The panel"}
+link "How it works" {description="How it works"}
+link "Using the panel effectively" {description="Using the panel effectively"}
+link "Story parameters" {description="Story parameters"}
+link "Channel events" {description="Channel events"}
+link "Troubleshooting" {description="Troubleshooting"}
+link "See it running" {description="See it running"}
+link "Panel features" {description="Panel features"}
 button "Copy Code"
 generic
 button "Copy Code"

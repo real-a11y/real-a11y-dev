@@ -1,11 +1,11 @@
-link "collectFindings(root, rules?)"
-link "listByRole(root, filter)"
-link "assertNoUnlabeledInteractive(root)"
-link "assertHeadingOrder(root)"
-link "assertDialogsLabeled(root)"
-link "assertLandmarkStructure(root)"
-link "A11yAssertionError"
-link "See also"
+link "collectFindings(root, rules?)" {description="collectFindings(root, rules?)"}
+link "listByRole(root, filter)" {description="listByRole(root, filter)"}
+link "assertNoUnlabeledInteractive(root)" {description="assertNoUnlabeledInteractive(root)"}
+link "assertHeadingOrder(root)" {description="assertHeadingOrder(root)"}
+link "assertDialogsLabeled(root)" {description="assertDialogsLabeled(root)"}
+link "assertLandmarkStructure(root)" {description="assertLandmarkStructure(root)"}
+link "A11yAssertionError" {description="A11yAssertionError"}
+link "See also" {description="See also"}
 link "@real-a11y-dev/testing"
 link "Matchers"
 button "Copy Code"

@@ -2,21 +2,21 @@ navigation "On this page"
   heading "On this page" (level 2)
   list
     listitem
-      link "collectFindings(root, rules?)"
+      link "collectFindings(root, rules?)" {description="collectFindings(root, rules?)"}
     listitem
-      link "listByRole(root, filter)"
+      link "listByRole(root, filter)" {description="listByRole(root, filter)"}
     listitem
-      link "assertNoUnlabeledInteractive(root)"
+      link "assertNoUnlabeledInteractive(root)" {description="assertNoUnlabeledInteractive(root)"}
     listitem
-      link "assertHeadingOrder(root)"
+      link "assertHeadingOrder(root)" {description="assertHeadingOrder(root)"}
     listitem
-      link "assertDialogsLabeled(root)"
+      link "assertDialogsLabeled(root)" {description="assertDialogsLabeled(root)"}
     listitem
-      link "assertLandmarkStructure(root)"
+      link "assertLandmarkStructure(root)" {description="assertLandmarkStructure(root)"}
     listitem
-      link "A11yAssertionError"
+      link "A11yAssertionError" {description="A11yAssertionError"}
     listitem
-      link "See also"
+      link "See also" {description="See also"}
 main
   heading "Assertions" (level 1)
   paragraph "These throw with a descriptive message on failure. Designed for use directly in / blocks without wrapping in ."

@@ -1,8 +1,8 @@
-link "Versus visual regression testing"
-link "Versus rule engines like axe"
-link "Versus Playwright ARIA snapshots"
-link "Alongside real screen-reader testing"
-link "Next"
+link "Versus visual regression testing" {description="Versus visual regression testing"}
+link "Versus rule engines like axe" {description="Versus rule engines like axe"}
+link "Versus Playwright ARIA snapshots" {description="Versus Playwright ARIA snapshots"}
+link "Alongside real screen-reader testing" {description="Alongside real screen-reader testing"}
+link "Next" {description="Next"}
 link "accessibility snapshot"
 link "jest-axe"
 table

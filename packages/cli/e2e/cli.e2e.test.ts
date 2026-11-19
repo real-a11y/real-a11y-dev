@@ -160,9 +160,11 @@ describe("real-a11y (built bin)", () => {
     const { code, stdout } = await runCli(["tabs", page, "-q"]);
     expect(code).toBe(0);
     expect(stdout.trimEnd()).toBe(
-      ['01. link "Docs"', '02. button "Publish"', '03. button "Unlock"'].join(
-        "\n",
-      ),
+      [
+        '01. link "Docs"',
+        '02. button "Publish" {disabled}',
+        '03. button "Unlock"',
+      ].join("\n"),
     );
   });
 
@@ -230,9 +232,9 @@ describe("real-a11y (built bin)", () => {
     expect(stdout.trimEnd()).toBe(
       [
         '01. button "Before"',
-        '02. generic "Shipping"',
-        '03. generic "Returns"',
-        '04. generic "Warranty"',
+        '02. generic "Shipping" {expanded=false}',
+        '03. generic "Returns" {expanded}',
+        '04. generic "Warranty" {expanded=false}',
         '05. link "All questions"',
       ].join("\n"),
     );
@@ -508,7 +510,7 @@ describe("the native producer is the only producer (built bin)", () => {
       .trimEnd()
       .split("\n")
       .map((line) => line.replace(/^\d+\. /, ""))
-      .filter((stop) => !/^\S+ "(S|O)"$/.test(stop));
+      .filter((stop) => !/^\S+ "(S|O)"(?: \{[^}]*\})?$/.test(stop));
     expect(stops).toEqual(['link "Open link"', 'link "Visible"']);
   });
 
