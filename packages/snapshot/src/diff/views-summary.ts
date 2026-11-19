@@ -32,6 +32,7 @@ import {
   countInTree,
   findStop,
   focusChange,
+  groupByRoleName,
   landmarkDesc,
   type Multiset,
   nameDesc,
@@ -43,6 +44,7 @@ import {
   tabStops,
   take,
   takeByRoleName,
+  takeGroup,
   toMultiset,
   withCount,
 } from "./views-summary-lines.js";
@@ -53,6 +55,11 @@ import {
   reorderChanges,
   rollupChange,
   type StageMultisets,
+  stateChanges,
+  swappedStates,
+  tallyBlockChange,
+  flushStateTally,
+  type StateTally,
 } from "./views-summary-stages.js";
 
 export type ViewChangeKind =
@@ -73,6 +80,7 @@ export type ViewChangeKind =
   | "tab-order-reordered"
   | "interactive-added"
   | "interactive-removed"
+  | "state-changed"
   | "other";
 
 export interface ViewChange {
@@ -85,9 +93,13 @@ export interface ViewChange {
   role?: string;
   /** Raw accessible name, unescaped (page content — escape before markdown). */
   name?: string;
-  /** Level ("h2") or old name, depending on kind. */
+  /** Level ("h2"), old name, or the old `{…}` states block's contents
+   * (`""` for none), depending on kind. A `state-changed` statement leaves
+   * both `from` and `to` out when several same-name lines changed together:
+   * its `message` lists each side's blocks then. */
   from?: string;
-  /** Level ("h3") or new name, depending on kind. */
+  /** Level ("h3"), new name, or the new states block's contents, depending
+   * on kind; see `from`. */
   to?: string;
   /** Tab stops: 1-based position, only when unambiguous. */
   position?: number;
@@ -139,6 +151,7 @@ export const VIEW_CHANGE_ORDER: readonly ViewChangeKind[] = [
   "focus-stop-renamed",
   "interactive-removed",
   "interactive-added",
+  "state-changed",
   "other",
 ];
 
@@ -193,6 +206,25 @@ export function summarizeViews(input: SummarizeViewsInput): ViewChange[] {
   }
   take(outlineRemoved, NO_HEADINGS);
 
+  // The stages consume these multisets in place.
+  const m: StageMultisets = {
+    treeAdded,
+    treeRemoved,
+    outlineAdded,
+    outlineRemoved,
+    tabsAdded,
+    tabsRemoved,
+  };
+
+  // 0b — state changes, before anything pairs lines by role and name: a line
+  // whose only difference is its `{…}` states block is one element whose
+  // states changed.
+  stateChanges(m, changes);
+
+  // A stop or landmark renamed whose block changed too reports a state change
+  // as well; tallied here, pushed once the stages that rename are done.
+  const renameStates: StateTally = new Map();
+
   // 1 — tabs stage (positions make these the richest statements; they consume
   // the matching tree lines so the tree stage never re-reports the element).
   // 1a: renames — same role, exactly one removed + one added, both named.
@@ -221,6 +253,7 @@ export function summarizeViews(input: SummarizeViewsInput): ViewChange[] {
       if (oldName === "" || newName === "") continue; // bare lines are indistinguishable
       take(tabsRemoved, b.removed[0]);
       take(tabsAdded, b.added[0]);
+      tallyBlockChange(renameStates, b.removed[0], b.added[0]);
       takeByRoleName(treeRemoved, role, oldName);
       takeByRoleName(treeAdded, role, newName);
       changes.push({
@@ -236,11 +269,16 @@ export function summarizeViews(input: SummarizeViewsInput): ViewChange[] {
   // 1b: removed stops — position from the BASE side; the still-on-page
   // cross-check against the PR tree picks the variant (an element that stays
   // visible but leaves the tab order is the most dangerous structural change).
-  for (const [key, n] of [...tabsRemoved]) {
-    take(tabsRemoved, key, n);
-    const { role, name = "" } = parseRoleLine(key);
+  // Grouped by role and name, so stops that differ only in their block make
+  // one statement.
+  for (const group of groupByRoleName(tabsRemoved)) {
+    const { role, name, keys, n } = group;
+    takeGroup(tabsRemoved, group);
     takeByRoleName(treeRemoved, role, name, n);
-    const { position, of } = findStop(baseStops, key);
+    const { position, of } =
+      keys.length === 1
+        ? findStop(baseStops, keys[0])
+        : { of: baseStops.length };
     const still = countInTree(pr.tree, ignore, role, name);
     const variant =
       still === 0
@@ -266,11 +304,12 @@ export function summarizeViews(input: SummarizeViewsInput): ViewChange[] {
     });
   }
   // 1c: added stops — position from the PR side.
-  for (const [key, n] of [...tabsAdded]) {
-    take(tabsAdded, key, n);
-    const { role, name = "" } = parseRoleLine(key);
+  for (const group of groupByRoleName(tabsAdded)) {
+    const { role, name, keys, n } = group;
+    takeGroup(tabsAdded, group);
     takeByRoleName(treeAdded, role, name, n);
-    const { position, of } = findStop(prStops, key);
+    const { position, of } =
+      keys.length === 1 ? findStop(prStops, keys[0]) : { of: prStops.length };
     const pos =
       n === 1 && position !== undefined
         ? ` (now stop ${position} of ${of})`
@@ -318,6 +357,8 @@ export function summarizeViews(input: SummarizeViewsInput): ViewChange[] {
       const newName = parseRoleLine(b.added[0]).name ?? "";
       take(treeRemoved, b.removed[0]);
       take(treeAdded, b.added[0]);
+      // A renamed landmark whose block changed too reports both.
+      tallyBlockChange(renameStates, b.removed[0], b.added[0]);
       changes.push({
         kind: "landmark-renamed",
         view: "tree",
@@ -335,10 +376,12 @@ export function summarizeViews(input: SummarizeViewsInput): ViewChange[] {
     kind: ViewChangeKind,
     describe: (role: string, name: string) => string,
   ) => {
-    for (const [key, n] of [...ms]) {
-      const { role, name = "" } = parseRoleLine(key);
+    // Grouped by role and name, so lines that differ only in their level or
+    // block make one statement.
+    for (const group of groupByRoleName(ms)) {
+      const { role, name, n } = group;
       if (!roles.has(role)) continue;
-      take(ms, key, n);
+      takeGroup(ms, group);
       changes.push({
         kind,
         view: "tree",
@@ -380,19 +423,13 @@ export function summarizeViews(input: SummarizeViewsInput): ViewChange[] {
     (role, name) => `Interactive element added: ${controlDesc(role, name)}`,
   );
 
-  const m: StageMultisets = {
-    treeAdded,
-    treeRemoved,
-    outlineAdded,
-    outlineRemoved,
-    tabsAdded,
-    tabsRemoved,
-  };
   // Order matters: each outline stage consumes lines the previous one left.
   outlineLevelChanges(m, changes);
   outlineRenames(m, changes);
   outlineLeftovers(m, changes);
   reorderChanges({ views, base, pr, ignore, baseStops, prStops }, changes);
+  swappedStates({ views, base, pr, ignore }, changes);
+  flushStateTally(renameStates, changes);
   rollupChange(m, changes);
 
   changes.sort(

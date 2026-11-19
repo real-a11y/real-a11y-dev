@@ -3,6 +3,8 @@
  * parsing and counting primitives the pipeline in views-summary.ts builds on.
  */
 
+import { splitStatesBlock } from "@real-a11y-dev/serialize";
+
 import { stripFocusMarker, stripTabIndex } from "./views-diff.js";
 import type { ViewChange } from "./views-summary.js";
 
@@ -26,13 +28,16 @@ export interface ParsedLine {
 }
 
 /**
- * Parse a tree or tabs view line: `ROLE [ "NAME" ] [ (level N) ]`. The level
- * suffix is stripped FIRST (end-anchored, so a literal "(level 2)" inside a
- * quoted name never matches); names are NOT quote-escaped, so the name is
- * everything between the first `"` and the LAST `"`.
+ * Parse a tree or tabs view line: `ROLE [ "NAME" ] [ (level N) ] [ {STATES} ]`.
+ * The suffixes are stripped from the end first — the `{…}` states block, then
+ * the level (end-anchored, so a literal "(level 2)" inside a quoted name never
+ * matches); names are NOT quote-escaped, so the name is everything between the
+ * first `"` and the LAST `"`. The block is set aside, not returned: a line's
+ * role and name are the same whatever its states, which is what lets
+ * {@link stateChanges} pair a line whose states changed.
  */
 export function parseRoleLine(line: string): ParsedLine {
-  let rest = stripFocusMarker(line);
+  let rest = splitStatesBlock(stripFocusMarker(line)).line;
   let level: number | undefined;
   const suffix = / \(level (\d+)\)$/.exec(rest);
   if (suffix) {
@@ -109,6 +114,39 @@ export function takeByRoleName(
   }
 }
 
+/** Lines of one side, grouped by the role and name a statement describes. */
+export interface RoleNameGroup {
+  role: string;
+  name: string;
+  keys: string[];
+  /** The group's lines, counted with multiplicity. */
+  n: number;
+}
+
+/** Group a multiset's lines by role and name, so lines that differ only in
+ * their level or `{…}` block make one statement with their counts summed,
+ * instead of several statements that read the same. */
+export function groupByRoleName(ms: Multiset): RoleNameGroup[] {
+  const groups = new Map<string, RoleNameGroup>();
+  for (const [key, n] of ms) {
+    const { role, name = "" } = parseRoleLine(key);
+    const id = `${role}\u0000${name}`;
+    const group = groups.get(id);
+    if (group) {
+      group.keys.push(key);
+      group.n += n;
+    } else {
+      groups.set(id, { role, name, keys: [key], n });
+    }
+  }
+  return [...groups.values()];
+}
+
+/** Take every line of a group from its multiset. */
+export function takeGroup(ms: Multiset, group: RoleNameGroup): void {
+  for (const key of group.keys) take(ms, key, ms.get(key) ?? 0);
+}
+
 // ── raw-text scans ───────────────────────────────────────────────────────────
 
 export function rawLines(text: string, ignore: Ignore): string[] {
@@ -138,10 +176,13 @@ export function focusedDescriptor(
   for (const raw of rawTree.split("\n")) {
     const line = raw.trim();
     if (line === "" || !line.endsWith(" [focused]")) continue;
-    // Test ignore on the stripped descriptor (matching counts()), so a line the
-    // user ignored doesn't report a focus change either.
-    const descriptor = stripFocusMarker(line);
-    if (!ignore?.(descriptor)) return descriptor;
+    // Test ignore on the marker-stripped line, block included (matching
+    // counts()), so a line the user ignored — by its block or not — doesn't
+    // report a focus change either. The `{…}` states block is then dropped from
+    // the descriptor: a focused button that only expanded is still the same
+    // element, and its state change is reported on its own.
+    const unmarked = stripFocusMarker(line);
+    if (!ignore?.(unmarked)) return splitStatesBlock(unmarked).line;
   }
   return null;
 }
@@ -268,6 +309,10 @@ export const headingDesc = (name: string) =>
 
 export const nameDesc = (name: string) =>
   name === "" ? "(unnamed)" : `"${name}"`;
+
+/** A states block's contents, or `(none)` for a line without one. */
+export const statesDesc = (states: string) =>
+  states === "" ? "(none)" : states;
 
 export const withCount = (message: string, n: number) =>
   n > 1 ? `${message} (×${n})` : message;

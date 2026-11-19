@@ -4,6 +4,8 @@
  * classified result out, no browser.
  */
 
+import { splitStatesBlock } from "@real-a11y-dev/serialize";
+
 import {
   measuredViews,
   SNAPSHOT_VIEWS,
@@ -191,15 +193,35 @@ export function noPagesMatched(
   return !pr.pages.some((p) => baseIds.has(p.id));
 }
 
+/** An outline line (`h2 Name`): heading text unquoted, never a block. */
+const OUTLINE_LINE = /^h\d+(?: |$)/;
+
+/**
+ * The `--ignore-view-line` test. A tree or tab line matches with or without
+ * its `{…}` states block, so a pattern written before the line carried states
+ * keeps matching once it does — the same reason the `[focused]` marker is
+ * stripped before the test. A pattern that names the block matches only the
+ * side that carries one. Outline lines are tested as they are: they print
+ * heading text unquoted and never carry a block, so a heading that merely
+ * ends in ` {word}` must not lose it. (No role starts with `h` and a digit,
+ * so the shape tells an outline line from a tree or tab line.)
+ */
+function ignorePredicate(patterns: readonly RegExp[]): Ignore {
+  if (patterns.length === 0) return undefined;
+  return (line) => {
+    const bare = OUTLINE_LINE.test(line) ? line : splitStatesBlock(line).line;
+    return patterns.some(
+      (re) => re.test(line) || (bare !== line && re.test(bare)),
+    );
+  };
+}
+
 export function diffArtifacts(
   base: SnapshotArtifact,
   pr: SnapshotArtifact,
   options: DiffOptions = {},
 ): DiffResult {
-  const patterns = options.ignoreViewLine ?? [];
-  const ignore: Ignore = patterns.length
-    ? (line) => patterns.some((re) => re.test(line))
-    : undefined;
+  const ignore = ignorePredicate(options.ignoreViewLine ?? []);
   // An axis is comparable only when BOTH sides measured it. Across a producer
   // migration the base is the side that still carries tab order — comparing it
   // against a PR that never measured one is exactly the false "N → 0" this

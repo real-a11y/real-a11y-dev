@@ -134,6 +134,52 @@ describe("diffArtifacts", () => {
     expect(filtered.pages[0].structural).toEqual([]);
   });
 
+  it("an ignore pattern written for a line without a states block still drops it with one", () => {
+    const base = artifact([
+      page("Home", [], { tree: 'main\n  status "Saving…"' }),
+    ]);
+    const pr = artifact([
+      page("Home", [], { tree: 'main\n  status "Saving…" {disabled}' }),
+    ]);
+    const filtered = diffArtifacts(base, pr, {
+      ignoreViewLine: [/^status "Saving…"$/],
+    });
+    expect(filtered.pages[0].views.tree).toEqual({ added: [], removed: [] });
+    expect(filtered.pages[0].structural).toEqual([]);
+    // A pattern that names the block matches only the side that carries it:
+    // the base line, which has none, still reads as removed.
+    const byBlock = diffArtifacts(base, pr, {
+      ignoreViewLine: [/\{disabled\}$/],
+    });
+    expect(byBlock.pages[0].views.tree).toEqual({
+      added: [],
+      removed: ['status "Saving…"'],
+    });
+  });
+
+  it("tests an outline line as written: a heading ending in a brace word keeps it", () => {
+    const base = artifact([page("Home", [], { outline: "h2 Intro" })]);
+    const pr = artifact([
+      page("Home", [], { outline: "h2 Intro\nh2 Path param {id}" }),
+    ]);
+    const result = diffArtifacts(base, pr, {
+      ignoreViewLine: [/^h2 Path param$/],
+    });
+    expect(result.pages[0].views.outline.added).toEqual(["h2 Path param {id}"]);
+  });
+
+  it("an ignore pattern on the block also keeps a focus change on that line out", () => {
+    const base = artifact([page("Home", [], { tree: "main" })]);
+    const pr = artifact([
+      page("Home", [], { tree: 'main\n  button "Save" {disabled} [focused]' }),
+    ]);
+    const result = diffArtifacts(base, pr, {
+      ignoreViewLine: [/\{disabled\}$/],
+    });
+    expect(result.pages[0].views.tree).toEqual({ added: [], removed: [] });
+    expect(result.pages[0].structural).toEqual([]);
+  });
+
   it("a pure tab reorder yields a statement despite empty view diffs", () => {
     const base = artifact([
       page("Home", [], { tabs: '01. link "A"\n02. link "B"' }),

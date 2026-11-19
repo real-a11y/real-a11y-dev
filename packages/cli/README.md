@@ -423,6 +423,11 @@ it at the source with a repeatable regex:
 real-a11y diff base.json pr.json --ignore-view-line '^time "'
 ```
 
+A tree or tab line that ends in a `{…}` states block is also dropped when the
+pattern matches it without the block, so a pattern written for `time "…"` keeps
+working once lines carry states. A pattern that names the block matches only the
+lines that carry it.
+
 ## See what your tests recorded
 
 `@real-a11y-dev/testing`'s [snapshot report](https://real-a11y.dev/packages/testing/snapshots#the-snapshot-report) records the tree behind each snapshot. `show-report` opens those records in your browser, and the page redraws as the tests rerun:

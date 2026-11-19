@@ -14,6 +14,13 @@ export type {
 
 export { extract } from "./extract.js";
 
+// The `{…}` states block's grammar, shared with every reader of serialized
+// lines (testing's contract parser, the snapshot diff, the parity harness) so
+// they agree with the writer on one definition. Internal: not re-exported by
+// any published package.
+export { splitStatesBlock } from "./states-block.js";
+export type { SplitStatesBlock } from "./states-block.js";
+
 // Typographic normalization for accessible-name COMPARISON — folds smart
 // quotes / dashes / NBSP so an authored name matches a rendered one. Exported
 // because `@real-a11y-dev/testing`'s name matchers consume it; the serialized

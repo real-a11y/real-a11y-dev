@@ -11,6 +11,11 @@
 //
 //     role "name" (level N) [focused]      — 2-space indent per depth
 //
+// A received tree may also carry a `{…}` states block before `[focused]`
+// (`checkbox "Subscribe" {checked}`). It is set aside and not compared: a
+// contract can't assert states yet, so a contract line holding one is
+// rejected rather than silently ignored.
+//
 // plus authoring affordances the serializer never emits: blank lines, `#`
 // comment lines, and an optional `---` frontmatter block (provenance — a source
 // URL, an author) that is ignored for matching.
@@ -32,7 +37,7 @@
 // Matching is ordered tree embedding by backtracking — linear-ish for
 // contract-sized trees, with a step guard against pathological ambiguity.
 
-import { foldTypography } from "@real-a11y-dev/serialize";
+import { foldTypography, splitStatesBlock } from "@real-a11y-dev/serialize";
 
 // ─── parsing ─────────────────────────────────────────────────────────────────
 
@@ -66,12 +71,22 @@ function parseNodeLine(
   content: string,
   line: number,
   depth: number,
+  rejectStates: boolean,
 ): ContractNode {
   let rest = content;
   let focused: boolean | undefined;
   if (rest.endsWith(FOCUSED_SUFFIX)) {
     focused = true;
     rest = rest.slice(0, -FOCUSED_SUFFIX.length);
+  }
+  const { line: withoutStates, block } = splitStatesBlock(rest);
+  if (block !== undefined) {
+    if (rejectStates) {
+      throw new Error(
+        `a11y contract line ${line}: '{${block}}' — a contract can't assert states or the description yet, so this block would never be checked. Remove it; the received tree's {…} blocks are not compared.`,
+      );
+    }
+    rest = withoutStates;
   }
   let level: number | undefined;
   const levelMatch = LEVEL_SUFFIX_RE.exec(rest);
@@ -112,6 +127,14 @@ export interface ParseOptions {
    * the nearest shallower ancestor.
    */
   strictIndent?: boolean;
+  /**
+   * Throw on a line holding a `{…}` states block instead of setting it aside.
+   * Right for a hand-authored contract: a contract can't assert states yet,
+   * and a block it silently ignored would read as an assertion that never
+   * runs. Leave OFF (default) for machine-emitted trees, whose blocks are
+   * dropped before matching.
+   */
+  rejectStates?: boolean;
 }
 
 /**
@@ -172,7 +195,12 @@ export function parseA11yTree(
     }
     const depth = Math.min(wanted, ancestors.length);
 
-    const node = parseNodeLine(entry.content, entry.line, depth);
+    const node = parseNodeLine(
+      entry.content,
+      entry.line,
+      depth,
+      options.rejectStates === true,
+    );
     ancestors.length = depth;
     if (depth === 0) roots.push(node);
     else ancestors[depth - 1]!.children.push(node);
@@ -465,8 +493,13 @@ export function verifyContract(
   options: VerifyContractOptions = {},
 ): VerifyContractResult {
   // The contract is authored by hand — an indent jump is a typo worth
-  // reporting. The target is machine-emitted, where jumps are legitimate.
-  const contract = parseA11yTree(contractText, { strictIndent: true });
+  // reporting, and a states block is an assertion we can't check yet. The
+  // target is machine-emitted, where jumps are legitimate and blocks are
+  // dropped.
+  const contract = parseA11yTree(contractText, {
+    strictIndent: true,
+    rejectStates: true,
+  });
   if (contract.roots.length === 0) {
     throw new Error("a11y contract: no nodes — the contract is empty");
   }

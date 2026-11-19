@@ -60,6 +60,32 @@ describe("parseA11yTree", () => {
     expect(roots[0]!.children[0]!.role).toBe("button");
   });
 
+  it("sets a {…} states block aside in a received tree", () => {
+    const { roots } = parseA11yTree(
+      [
+        'form "Sign up"',
+        '  checkbox "Subscribe" {checked}',
+        '  button "Menu" (level 2) {expanded=false, haspopup=menu} [focused]',
+      ].join("\n"),
+    );
+    const [checkbox, button] = roots[0]!.children;
+    expect(checkbox).toMatchObject({ role: "checkbox", name: "Subscribe" });
+    expect(button).toMatchObject({
+      role: "button",
+      name: "Menu",
+      level: 2,
+      focused: true,
+    });
+  });
+
+  it("rejects a {…} states block when rejectStates is set, naming the line and the block", () => {
+    expect(() =>
+      parseA11yTree('main\n  checkbox "Subscribe" {checked=false}', {
+        rejectStates: true,
+      }),
+    ).toThrow(/line 2: '\{checked=false\}' — a contract can't assert states/);
+  });
+
   it("round-trips serializeTree output, which starts at indent 0", () => {
     const el = mount(`<main><h1>Dash</h1><button>Save</button></main>`);
     const text = serializeTree(el);
@@ -243,6 +269,41 @@ describe("verifyContract — typography and strict", () => {
 
   it("throws on an empty contract", () => {
     expect(() => verifyContract("", "main")).toThrow(/empty/);
+  });
+});
+
+// ─── states blocks ───────────────────────────────────────────────────────────
+
+describe("verifyContract — states blocks", () => {
+  const RECEIVED = [
+    'form "Sign up"',
+    '  textbox "Email" {required, description="We never share it"}',
+    '  checkbox "Subscribe" {checked=false}',
+    '  button "Join"',
+  ].join("\n");
+
+  it("a received tree's blocks don't stop a contract without them from matching", () => {
+    expect(
+      verifyContract('form "Sign up"\n  checkbox "Subscribe"', RECEIVED).pass,
+    ).toBe(true);
+  });
+
+  it("strict: the blocks are not compared", () => {
+    const contract = [
+      'form "Sign up"',
+      '  textbox "Email"',
+      '  checkbox "Subscribe"',
+      '  button "Join"',
+    ].join("\n");
+    expect(verifyContract(contract, RECEIVED, { strict: true }).pass).toBe(
+      true,
+    );
+  });
+
+  it("a contract line holding a block throws instead of passing unchecked", () => {
+    expect(() =>
+      verifyContract('checkbox "Subscribe" {checked}', RECEIVED),
+    ).toThrow(/line 1: '\{checked\}'/);
   });
 });
 

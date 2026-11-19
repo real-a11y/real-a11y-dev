@@ -2170,8 +2170,10 @@ main
       strong "Type:"
       strong "Default:"
       strong "Commands:"
-  paragraph "Drop view lines matching the pattern before diffing — for generated content that differs on every build (a "last updated" timestamp, a build hash) and would otherwise read as drift on every page. Each value must be a valid ."
+  paragraph "Drop view lines matching the pattern before diffing — for generated content that differs on every build (a "last updated" timestamp, a build hash) and would otherwise read as drift on every page. Each value must be a valid . A tree or tab line that ends in a states block is also dropped when the pattern matches it without the block, so a pattern written for keeps working once lines carry states. A pattern that names the block matches only the lines that carry it."
     code "RegExp"
+    code "{…}"
+    code "time "[redacted]""
   button "Copy Code"
   code "real-a11y diff base.json pr.json --ignore-view-line '^time "[redacted]"
   heading "--max-lines <n>" (level 3)

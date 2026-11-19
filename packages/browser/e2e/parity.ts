@@ -11,10 +11,16 @@
  * native-normalizer bugs), which is the point of running it in CI.
  */
 
-/** One serialized line reduced to `role "name"` (or bare `role`). */
+import { splitStatesBlock } from "@real-a11y-dev/serialize";
+
+/** One serialized line reduced to `role "name"` (or bare `role`). The `{…}`
+ * states block is set aside first: the metric measures role and name only,
+ * so a state one producer carries and the other doesn't must not lower the
+ * overlap. */
 export function normalizePair(line: string): string {
-  const m = line.trim().match(/^(\S+)(?:\s+"(.*)")?(?:\s+\(.*\))?$/);
-  if (!m) return line.replace(/\s+/g, " ").trim();
+  const bare = splitStatesBlock(line.trim()).line;
+  const m = bare.match(/^(\S+)(?:\s+"(.*)")?(?:\s+\(.*\))?$/);
+  if (!m) return bare.replace(/\s+/g, " ").trim();
   const role = m[1].toLowerCase();
   const name = (m[2] ?? "").replace(/\s+/g, " ").trim();
   return name ? `${role} "${name}"` : role;

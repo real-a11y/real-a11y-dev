@@ -1374,6 +1374,10 @@ real-a11y snapshot https://example.com --only views -o views.json   # partial ar
 Drop view lines matching the pattern before diffing — for generated content that
 differs on every build (a "last updated" timestamp, a build hash) and would
 otherwise read as drift on every page. Each value must be a valid `RegExp`.
+A tree or tab line that ends in a `{…}` states block is also dropped when the
+pattern matches it without the block, so a pattern written for `time "…"` keeps
+working once lines carry states. A pattern that names the block matches only the
+lines that carry it.
 
 ```sh
 real-a11y diff base.json pr.json --ignore-view-line '^time "'
