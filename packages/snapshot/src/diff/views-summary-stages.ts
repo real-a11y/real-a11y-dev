@@ -24,7 +24,6 @@ import {
   sameMultiset,
   statesDesc,
   take,
-  takeMatching,
   total,
   withCount,
 } from "./views-summary-lines.js";
@@ -50,16 +49,19 @@ export interface ReorderInput {
 }
 
 /**
- * State stage 0b — see the pipeline in views-summary.ts. A removed and an
- * added line that are the same once their `{…}` states block is set aside are
- * one element whose states changed (a box checked, a disclosure collapsed, a
- * description reworded): not a removal plus an addition, and in the tabs view
+ * State stage 0b — see the pipeline in views-summary.ts. Removed and added
+ * lines that are the same once their `{…}` states block is set aside are
+ * elements whose states changed (a box checked, a disclosure collapsed, a
+ * description reworded): not removals plus additions, and in the tabs view
  * not a stop "renamed" to its own name. It is also how an old baseline reads
  * against text that prints the block: `(none) → checked`.
  *
- * Strictly 1:1, like the renames: a line pairs only when exactly one removed
- * and one added key share its identity, with equal counts. Anything else is
- * left for the later stages' add/remove statements.
+ * Lines pair when as many left as arrived under one identity, so no element
+ * of it can have appeared or disappeared. Usually that is one line each
+ * side; when several same-name elements changed in different ways, the
+ * statement lists each side's blocks (`checked=false; checked →
+ * checked=mixed (×2)`) rather than guess which became which. A count that
+ * differs is left for the later stages' add/remove statements.
  *
  * The tabs view goes first and consumes each paired stop's tree line too, so
  * the tree pass doesn't report the same element a second time.
@@ -88,11 +90,55 @@ interface StatePairing {
   mirror?: { removed: Multiset; added: Multiset };
 }
 
+interface IdentityLines {
+  removed: string[];
+  added: string[];
+}
+
+/** One side's lines, and the tree view's lines a tabs pass consumes with
+ * them. */
+interface PairSide {
+  ms: Multiset;
+  mirror?: { ms: Multiset; index: Map<string, string[]> };
+}
+
 function pairStateChanges(
   { view, removed, added, mirror }: StatePairing,
   changes: ViewChange[],
 ): void {
-  const byIdentity = new Map<string, { removed: string[]; added: string[] }>();
+  // The tree-line index is built once per pass: looking a stop's tree line up
+  // by scanning every tree line per stop is quadratic on a page whose stops
+  // all changed.
+  const removedSide: PairSide = { ms: removed };
+  const addedSide: PairSide = { ms: added };
+  if (mirror) {
+    removedSide.mirror = {
+      ms: mirror.removed,
+      index: indexByRoleName(mirror.removed),
+    };
+    addedSide.mirror = {
+      ms: mirror.added,
+      index: indexByRoleName(mirror.added),
+    };
+  }
+
+  for (const [identity, b] of groupByIdentity(removed, added)) {
+    const n = sumCounts(removed, b.removed);
+    if (n === 0 || sumCounts(added, b.added) !== n) continue;
+    const from = statesSide(removed, b.removed);
+    const to = statesSide(added, b.added);
+    consumeSide(removedSide, b.removed);
+    consumeSide(addedSide, b.added);
+    changes.push(stateChange(view, identity, { from, to, n }));
+  }
+}
+
+/** Removed and added lines grouped by the line without its states block. */
+function groupByIdentity(
+  removed: Multiset,
+  added: Multiset,
+): Map<string, IdentityLines> {
+  const byIdentity = new Map<string, IdentityLines>();
   const bucket = (key: string) => {
     const identity = splitStatesBlock(key).line;
     let b = byIdentity.get(identity);
@@ -101,35 +147,92 @@ function pairStateChanges(
   };
   for (const key of removed.keys()) bucket(key).removed.push(key);
   for (const key of added.keys()) bucket(key).added.push(key);
+  return byIdentity;
+}
 
-  for (const [identity, b] of byIdentity) {
-    if (b.removed.length !== 1 || b.added.length !== 1) continue;
-    const fromKey = b.removed[0];
-    const toKey = b.added[0];
-    const n = removed.get(fromKey) ?? 0;
-    if (n === 0 || added.get(toKey) !== n) continue;
-    take(removed, fromKey, n);
-    take(added, toKey, n);
-    const { role, name = "" } = parseRoleLine(identity);
-    const from = splitStatesBlock(fromKey).block ?? "";
-    const to = splitStatesBlock(toKey).block ?? "";
-    if (mirror) {
-      takeMatching(mirror.removed, { role, name, states: from }, n);
-      takeMatching(mirror.added, { role, name, states: to }, n);
-    }
-    changes.push({
-      kind: "state-changed",
-      view,
-      message: withCount(
-        `States changed: ${controlDesc(role, name)}: ${statesDesc(from)} → ${statesDesc(to)}`,
-        n,
-      ),
-      role,
-      ...(name !== "" ? { name } : {}),
-      from,
-      to,
-      ...(n > 1 ? { count: n } : {}),
-    });
+/** Take every line of `keys` from its side, and its tree lines with it. */
+function consumeSide(side: PairSide, keys: readonly string[]): void {
+  for (const key of keys) {
+    const count = side.ms.get(key) ?? 0;
+    take(side.ms, key, count);
+    if (side.mirror)
+      takeMirrored(side.mirror.ms, side.mirror.index, key, count);
+  }
+}
+
+function stateChange(
+  view: "tree" | "tabs",
+  identity: string,
+  { from, to, n }: { from: string; to: string; n: number },
+): ViewChange {
+  const { role, name = "" } = parseRoleLine(identity);
+  return {
+    kind: "state-changed",
+    view,
+    message: withCount(
+      `States changed: ${controlDesc(role, name)}: ${statesDesc(from)} → ${statesDesc(to)}`,
+      n,
+    ),
+    role,
+    ...(name !== "" ? { name } : {}),
+    from,
+    to,
+    ...(n > 1 ? { count: n } : {}),
+  };
+}
+
+const sumCounts = (ms: Multiset, keys: readonly string[]) =>
+  keys.reduce((sum, key) => sum + (ms.get(key) ?? 0), 0);
+
+/** One side's blocks: a single line's block contents (`""` for none), or
+ * every line's, `; `-joined in the view diff's (codepoint) order, when several
+ * changed. */
+function statesSide(ms: Multiset, keys: readonly string[]): string {
+  const blocks = keys
+    .filter((key) => (ms.get(key) ?? 0) > 0)
+    .map((key) => splitStatesBlock(key).block ?? "");
+  return blocks.length === 1 ? blocks[0] : blocks.map(statesDesc).join("; ");
+}
+
+const roleNameKey = (role: string, name: string) => `${role}\u0000${name}`;
+
+/** Tree lines by role and name, level suffix and states block ignored. */
+function indexByRoleName(ms: Multiset): Map<string, string[]> {
+  const index = new Map<string, string[]>();
+  for (const key of ms.keys()) {
+    const { role, name = "" } = parseRoleLine(key);
+    const k = roleNameKey(role, name);
+    const keys = index.get(k);
+    if (keys) keys.push(key);
+    else index.set(k, [key]);
+  }
+  return index;
+}
+
+/**
+ * Consume `n` of a paired stop's tree lines: those with the same role, name
+ * and block first, then any with the same role and name, as the other tab
+ * stages do. The fallback keeps a tree line whose block differs from its tab
+ * line's from being reported a second time by the tree pass.
+ */
+function takeMirrored(
+  ms: Multiset,
+  index: Map<string, string[]>,
+  tabKey: string,
+  n: number,
+): void {
+  const { role, name = "" } = parseRoleLine(tabKey);
+  const block = splitStatesBlock(tabKey).block ?? "";
+  const keys = index.get(roleNameKey(role, name)) ?? [];
+  let remaining = n;
+  for (const key of keys) {
+    if (remaining === 0) return;
+    if ((splitStatesBlock(key).block ?? "") === block)
+      remaining -= take(ms, key, remaining);
+  }
+  for (const key of keys) {
+    if (remaining === 0) return;
+    remaining -= take(ms, key, remaining);
   }
 }
 

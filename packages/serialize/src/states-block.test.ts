@@ -34,6 +34,21 @@ describe("splitStatesBlock", () => {
     });
   });
 
+  it("reads numbers, dots, underscores and either case as words", () => {
+    expect(
+      splitStatesBlock(
+        'slider "Volume" {valuenow=0.5, Orientation=Horizontal}',
+      ),
+    ).toEqual({
+      line: 'slider "Volume"',
+      block: "valuenow=0.5, Orientation=Horizontal",
+    });
+    expect(splitStatesBlock("button {aria-busy, x_y=a_b}")).toEqual({
+      line: "button",
+      block: "aria-busy, x_y=a_b",
+    });
+  });
+
   it("splits a multi-token block after the value and the level", () => {
     expect(
       splitStatesBlock(
@@ -82,7 +97,7 @@ describe("splitStatesBlock", () => {
   it("ignores text in braces that is not a well-formed block", () => {
     for (const line of [
       "button {}",
-      "button {Checked}",
+      "button {-checked}",
       "button {checked,expanded}",
       "button {description=unquoted text}",
       'button {description="unterminated}',

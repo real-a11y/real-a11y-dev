@@ -4,6 +4,8 @@
  * classified result out, no browser.
  */
 
+import { splitStatesBlock } from "@real-a11y-dev/serialize";
+
 import {
   measuredViews,
   SNAPSHOT_VIEWS,
@@ -191,15 +193,28 @@ export function noPagesMatched(
   return !pr.pages.some((p) => baseIds.has(p.id));
 }
 
+/**
+ * The `--ignore-view-line` test. A pattern matches a line with or without its
+ * `{…}` states block, so one written before the line carried states keeps
+ * matching once it does — the same reason the `[focused]` marker is stripped
+ * before the test.
+ */
+function ignorePredicate(patterns: readonly RegExp[]): Ignore {
+  if (patterns.length === 0) return undefined;
+  return (line) => {
+    const bare = splitStatesBlock(line).line;
+    return patterns.some(
+      (re) => re.test(line) || (bare !== line && re.test(bare)),
+    );
+  };
+}
+
 export function diffArtifacts(
   base: SnapshotArtifact,
   pr: SnapshotArtifact,
   options: DiffOptions = {},
 ): DiffResult {
-  const patterns = options.ignoreViewLine ?? [];
-  const ignore: Ignore = patterns.length
-    ? (line) => patterns.some((re) => re.test(line))
-    : undefined;
+  const ignore = ignorePredicate(options.ignoreViewLine ?? []);
   // An axis is comparable only when BOTH sides measured it. Across a producer
   // migration the base is the side that still carries tab order — comparing it
   // against a PR that never measured one is exactly the false "N → 0" this

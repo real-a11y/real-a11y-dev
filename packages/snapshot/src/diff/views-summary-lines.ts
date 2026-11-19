@@ -104,32 +104,13 @@ export function takeByRoleName(
   name: string,
   n = 1,
 ): void {
-  takeMatching(ms, { role, name }, n);
-}
-
-/** What {@link takeMatching} consumes: lines with this role and name and, when
- * `states` is given, exactly that `{…}` block (`""` for none). */
-export interface LineMatch {
-  role: string;
-  name: string;
-  states?: string;
-}
-
-/** Consume up to `n` lines matching `match`, tolerating any `(level N)`
- * suffix, as {@link takeByRoleName} does. */
-export function takeMatching(ms: Multiset, match: LineMatch, n = 1): void {
   let remaining = n;
   for (const key of [...ms.keys()]) {
     if (remaining === 0) break;
     const parsed = parseRoleLine(key);
-    if (parsed.role !== match.role || (parsed.name ?? "") !== match.name)
-      continue;
-    if (
-      match.states !== undefined &&
-      (splitStatesBlock(key).block ?? "") !== match.states
-    )
-      continue;
-    remaining -= take(ms, key, remaining);
+    if (parsed.role === role && (parsed.name ?? "") === name) {
+      remaining -= take(ms, key, remaining);
+    }
   }
 }
 
@@ -163,8 +144,10 @@ export function focusedDescriptor(
     const line = raw.trim();
     if (line === "" || !line.endsWith(" [focused]")) continue;
     // Test ignore on the stripped descriptor (matching counts()), so a line the
-    // user ignored doesn't report a focus change either.
-    const descriptor = stripFocusMarker(line);
+    // user ignored doesn't report a focus change either. The `{…}` states block
+    // is not part of what is focused: a focused button that only expanded is
+    // still the same element, and its state change is reported on its own.
+    const descriptor = splitStatesBlock(stripFocusMarker(line)).line;
     if (!ignore?.(descriptor)) return descriptor;
   }
   return null;

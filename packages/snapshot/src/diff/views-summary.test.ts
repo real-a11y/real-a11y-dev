@@ -691,6 +691,54 @@ describe("summarizeViews", () => {
       ]);
     });
 
+    it("same-name stops that changed differently are one statement, not lost focusability", () => {
+      const changes = summarize(
+        {
+          tree: 'checkbox "A" {checked}\ncheckbox "A" {checked=false}',
+          tabs: '01. checkbox "A" {checked}\n02. checkbox "A" {checked=false}',
+        },
+        {
+          tree: 'checkbox "A" {checked=mixed}\ncheckbox "A" {checked=mixed}',
+          tabs: '01. checkbox "A" {checked=mixed}\n02. checkbox "A" {checked=mixed}',
+        },
+      );
+      expect(changes).toEqual([
+        {
+          kind: "state-changed",
+          view: "tabs",
+          message:
+            'States changed: checkbox "A": checked=false; checked → checked=mixed (×2)',
+          role: "checkbox",
+          name: "A",
+          from: "checked=false; checked",
+          to: "checked=mixed",
+          count: 2,
+        },
+      ]);
+    });
+
+    it("consumes the stop's tree line even when its block differs from the tab line's", () => {
+      const changes = summarize(
+        {
+          tree: 'checkbox "A" {checked=false, description="x"}',
+          tabs: '01. checkbox "A" {checked=false}',
+        },
+        {
+          tree: 'checkbox "A" {checked, description="x"}',
+          tabs: '01. checkbox "A" {checked}',
+        },
+      );
+      expect(kinds(changes)).toEqual(["state-changed"]);
+    });
+
+    it("a focused element whose states changed did not move focus", () => {
+      const changes = summarize(
+        { tree: 'button "Menu" {expanded=false} [focused]' },
+        { tree: 'button "Menu" {expanded} [focused]' },
+      );
+      expect(kinds(changes)).toEqual(["state-changed"]);
+    });
+
     it("refuses an ambiguous pairing (2 removed, 1 added)", () => {
       const changes = summarize(
         { tree: 'checkbox "A" {checked}\ncheckbox "A" {checked=false}' },

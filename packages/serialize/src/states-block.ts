@@ -22,8 +22,10 @@
 /** The trailing focus marker `serializeTree` and `serializeTabSequence` add. */
 const FOCUS_MARKER = " [focused]";
 
-/** One token: `key`, `key=word` or `key="JSON string"`. */
-const TOKEN = String.raw`[a-z][a-z0-9]*(?:=(?:[a-z0-9-]+|"(?:[^"\\]|\\.)*"))?`;
+/** One token: `key`, `key=word` or `key="JSON string"`. Kept permissive
+ * (any case, digits, `.`, `_`, `-`) so a value the writer adds later, a
+ * number or a mixed-case token, still reads as a block. */
+const TOKEN = String.raw`[A-Za-z][\w-]*(?:=(?:[\w.-]+|"(?:[^"\\]|\\.)*"))?`;
 
 /** A whole block at the end of a line: ` {token, token}`. */
 const BLOCK_RE = new RegExp(String.raw` \{(${TOKEN}(?:, ${TOKEN})*)\}$`);

@@ -134,6 +134,25 @@ describe("diffArtifacts", () => {
     expect(filtered.pages[0].structural).toEqual([]);
   });
 
+  it("an ignore pattern written for a line without a states block still drops it with one", () => {
+    const base = artifact([
+      page("Home", [], { tree: 'main\n  status "Saving…"' }),
+    ]);
+    const pr = artifact([
+      page("Home", [], { tree: 'main\n  status "Saving…" {disabled}' }),
+    ]);
+    const filtered = diffArtifacts(base, pr, {
+      ignoreViewLine: [/^status "Saving…"$/],
+    });
+    expect(filtered.pages[0].views.tree).toEqual({ added: [], removed: [] });
+    expect(filtered.pages[0].structural).toEqual([]);
+    // A pattern that names the block matches it too.
+    const byBlock = diffArtifacts(base, pr, {
+      ignoreViewLine: [/\{disabled\}$/],
+    });
+    expect(byBlock.pages[0].views.tree.added).toEqual([]);
+  });
+
   it("a pure tab reorder yields a statement despite empty view diffs", () => {
     const base = artifact([
       page("Home", [], { tabs: '01. link "A"\n02. link "B"' }),
