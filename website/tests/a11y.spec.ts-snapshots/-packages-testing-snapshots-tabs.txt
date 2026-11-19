@@ -14,9 +14,13 @@ generic
 table
 link "Focus marker"
 link "Field values"
+link "What a line carries"
 link "Strict mode"
 button "Copy Code"
 generic
+table
+link "strict-mode"
+link "Playwright adapter's"
 link "serializeTreeDiff"
 button "Copy Code"
 generic
