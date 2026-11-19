@@ -4,7 +4,11 @@
 //
 // INTERNAL to this package, like contract.ts.
 
-import { splitStatesBlock, statesTokens } from "@real-a11y-dev/serialize";
+import {
+  splitStatesBlock,
+  statesTokens,
+  unprintableToken,
+} from "@real-a11y-dev/serialize";
 
 // ─── parsing ─────────────────────────────────────────────────────────────────
 
@@ -139,6 +143,25 @@ export interface ParseOptions {
    * the nearest shallower ancestor.
    */
   strictIndent?: boolean;
+  /**
+   * Reject a states token the tree text never prints (`checked=true`,
+   * `disabled=false`, a key it never carries), naming the form it prints
+   * instead: such a token could never match. Right for an authored contract;
+   * leave OFF for received text, which may come from another version.
+   */
+  authored?: boolean;
+}
+
+/** Throw on the first token in `node`'s block that tree text never prints. */
+function checkPrintable(node: ContractNode): void {
+  for (const token of node.states ?? []) {
+    const problem = unprintableToken(token);
+    if (problem) {
+      throw new Error(
+        `a11y contract line ${node.line}: ${problem} A token that never prints can never match.`,
+      );
+    }
+  }
 }
 
 /**
@@ -200,6 +223,7 @@ export function parseA11yTree(
     const depth = Math.min(wanted, ancestors.length);
 
     const node = parseNodeLine(entry.content, entry.line, depth);
+    if (options.authored) checkPrintable(node);
     ancestors.length = depth;
     if (depth === 0) roots.push(node);
     else ancestors[depth - 1]!.children.push(node);

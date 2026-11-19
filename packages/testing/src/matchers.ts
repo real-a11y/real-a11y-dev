@@ -409,17 +409,7 @@ function toMatchA11yContract(
 ): MatcherResult {
   let targetText: string;
   if (received instanceof Element) {
-    // `serializeTree` prints no `{…}` states block yet, so a block in the
-    // contract can't be checked against an element: a returned failure is
-    // exactly what `.not` inverts, and the negated form would pass while
-    // asserting nothing. Throw instead, as for any unanswerable call. Remove
-    // this once the serializer prints blocks.
     const writes = contractWrites(contractText);
-    if (writes.states) {
-      throw new TypeError(
-        "toMatchA11yContract: the contract asserts a {…} states block, but the tree of a DOM Element prints no states yet, so the block can't be checked. Pass a serialized tree string that prints states, or remove the block.",
-      );
-    }
     // A contract that writes `= "value"` needs a tree that prints values, or
     // every value reads as missing and `.not` passes on nothing. Only then:
     // values also bring a role-less editor in as a `generic` line, which

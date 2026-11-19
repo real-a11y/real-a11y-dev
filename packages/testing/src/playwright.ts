@@ -109,6 +109,13 @@ export interface TreeSnapshotOptions {
    * prints `"[redacted]"`. Mirrors the jsdom `treeSnapshot` option.
    */
   values?: boolean;
+  /**
+   * Print the states, description and announced properties a screen reader
+   * presents beyond role and name, as a `{…}` block:
+   * `checkbox "Subscribe" {checked=false}`. Default true. Pass `false` for
+   * the text without blocks. Mirrors the jsdom `treeSnapshot` option.
+   */
+  states?: boolean;
 }
 
 export interface SemanticNavigatorPageHandle {
@@ -298,7 +305,7 @@ export async function attach(
 
   return {
     treeSnapshot(opts: TreeSnapshotOptions = {}) {
-      const { mode, redact, includeGeneric, values } = opts;
+      const { mode, redact, includeGeneric, values, states } = opts;
       // `RegExp` doesn't survive `page.evaluate()` serialisation — it arrives
       // as an empty `{}`. Marshal each pattern to a plain `{ source, flags }`
       // pair and rebuild the `RegExp` inside the page.
@@ -313,6 +320,7 @@ export async function attach(
         redact?: { source: string; flags: string }[];
         includeGeneric?: boolean;
         values?: boolean;
+        states?: boolean;
         redactInput: boolean;
       };
 
@@ -349,6 +357,7 @@ export async function attach(
           if (a.includeGeneric !== undefined)
             options.includeGeneric = a.includeGeneric;
           if (a.values !== undefined) options.values = a.values;
+          if (a.states !== undefined) options.states = a.states;
           if (a.redactInput) options.redactInput = true;
           if (a.redact)
             options.redact = a.redact.map((r) => new RegExp(r.source, r.flags));
@@ -360,6 +369,7 @@ export async function attach(
           redact: redactParts,
           includeGeneric,
           values,
+          states,
           redactInput,
         } satisfies TreeArg,
       );
@@ -423,6 +433,7 @@ async function attachNative(
         redact: opts.redact,
         includeGeneric: opts.includeGeneric,
         values: opts.values,
+        states: opts.states,
       });
     },
     async outlineSnapshot() {

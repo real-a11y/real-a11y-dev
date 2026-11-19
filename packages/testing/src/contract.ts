@@ -160,28 +160,21 @@ const anyStates = (roots: ContractNode[]) =>
 
 /** What an authored contract writes on any of its lines. */
 export interface ContractWrites {
-  /** A `{…}` states block (`{}` included). */
-  states: boolean;
   /** A field value, `= "value"`. */
   values: boolean;
 }
 
 /**
- * Whether an authored contract writes a states block or a field value on any
- * line.
+ * Whether an authored contract writes a field value on any line.
  *
  * @internal For `toMatchA11yContract`, which serializes a DOM Element with
- * values only when the contract asserts one, and can't check a block against
- * an Element until the serializer prints blocks.
+ * values only when the contract asserts one.
  */
 export function contractWrites(contractText: string): ContractWrites {
   const nodes = flatten(
-    parseA11yTree(contractText, { strictIndent: true }).roots,
+    parseA11yTree(contractText, { strictIndent: true, authored: true }).roots,
   ).map((f) => f.node);
-  return {
-    states: nodes.some((n) => n.states !== undefined),
-    values: nodes.some((n) => n.value !== undefined),
-  };
+  return { values: nodes.some((n) => n.value !== undefined) };
 }
 
 // ─── containment matching ────────────────────────────────────────────────────
@@ -535,7 +528,10 @@ export function verifyContract(
 ): VerifyContractResult {
   // The contract is authored by hand — an indent jump is a typo worth
   // reporting. The target is machine-emitted, where jumps are legitimate.
-  const contract = parseA11yTree(contractText, { strictIndent: true });
+  const contract = parseA11yTree(contractText, {
+    strictIndent: true,
+    authored: true,
+  });
   if (contract.roots.length === 0) {
     throw new Error("a11y contract: no nodes — the contract is empty");
   }

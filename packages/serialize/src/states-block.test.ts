@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { splitStatesBlock, statesTokens } from "./states-block.js";
+import {
+  splitStatesBlock,
+  statesBlock,
+  statesTokens,
+  unprintableToken,
+} from "./states-block.js";
 
 describe("splitStatesBlock", () => {
   it("returns a line with no block unchanged", () => {
@@ -130,5 +135,177 @@ describe("statesTokens", () => {
       "expanded=false",
       "haspopup=menu",
     ]);
+  });
+});
+
+describe("statesBlock", () => {
+  const block = (
+    states: Record<string, string | boolean>,
+    properties: Record<string, string> = {},
+    description = "",
+    redact = (t: string) => t,
+  ) => statesBlock({ states, properties, description }, redact);
+
+  it("prints nothing for a node with nothing to print", () => {
+    expect(block({})).toBe("");
+  });
+
+  it("checked and pressed: true, false and mixed", () => {
+    expect(block({ checked: true })).toBe(" {checked}");
+    expect(block({ checked: false })).toBe(" {checked=false}");
+    expect(block({ checked: "mixed" })).toBe(" {checked=mixed}");
+    expect(block({ pressed: true })).toBe(" {pressed}");
+    expect(block({ pressed: false })).toBe(" {pressed=false}");
+    expect(block({ pressed: "mixed" })).toBe(" {pressed=mixed}");
+  });
+
+  it("expanded: true and false", () => {
+    expect(block({ expanded: true })).toBe(" {expanded}");
+    expect(block({ expanded: false })).toBe(" {expanded=false}");
+  });
+
+  it("selected, disabled, readonly, required: only when true", () => {
+    for (const key of ["selected", "disabled", "readonly", "required"]) {
+      expect(block({ [key]: true })).toBe(` {${key}}`);
+      expect(block({ [key]: false })).toBe("");
+    }
+  });
+
+  it("invalid: bare for any truthy value, nothing for false", () => {
+    for (const value of [true, "true", "grammar", "spelling"]) {
+      expect(block({ invalid: value })).toBe(" {invalid}");
+    }
+    for (const value of [false, "false"]) {
+      expect(block({ invalid: value })).toBe("");
+    }
+  });
+
+  it("current: bare for true, a token otherwise, never false", () => {
+    expect(block({ current: true })).toBe(" {current}");
+    expect(block({ current: "page" })).toBe(" {current=page}");
+    expect(block({ current: false })).toBe("");
+  });
+
+  it("haspopup from either key, never false", () => {
+    expect(block({}, { hasPopup: "menu" })).toBe(" {haspopup=menu}");
+    expect(block({}, { haspopup: "listbox" })).toBe(" {haspopup=listbox}");
+    expect(block({}, { hasPopup: "false" })).toBe("");
+  });
+
+  it("roledescription and description: JSON-quoted and redacted", () => {
+    expect(block({}, { roledescription: "slide" })).toBe(
+      ' {roledescription="slide"}',
+    );
+    expect(block({}, {}, 'Say "hi", {then} go')).toBe(
+      String.raw` {description="Say \"hi\", {then} go"}`,
+    );
+    expect(
+      block({}, {}, "Order 1234 ships", (t) => t.replace(/\d+/g, "[REDACTED]")),
+    ).toBe(' {description="Order [REDACTED] ships"}');
+  });
+
+  it("never prints what isn't on the allowlist, nor native's defaults", () => {
+    expect(
+      block(
+        {
+          focusable: true,
+          focused: true,
+          editable: "plaintext",
+          settable: true,
+          modal: false,
+          multiline: false,
+          busy: true,
+          invalid: "false",
+          selected: false,
+          required: false,
+        },
+        { level: "2", valuemin: "0", orientation: "horizontal" },
+      ),
+    ).toBe("");
+  });
+
+  it("prints in the fixed order, whatever order the states come in", () => {
+    expect(
+      block(
+        {
+          invalid: true,
+          required: true,
+          disabled: true,
+          current: "step",
+          selected: true,
+          expanded: false,
+          pressed: true,
+          checked: "mixed",
+        },
+        { roledescription: "r", hasPopup: "menu" },
+        "d",
+      ),
+    ).toBe(
+      ' {checked=mixed, pressed, expanded=false, selected, current=step, disabled, required, invalid, haspopup=menu, roledescription="r", description="d"}',
+    );
+  });
+
+  it("quotes a token that isn't a word, so the line still reads back", () => {
+    expect(block({ current: "Some Place" })).toBe(' {current="Some Place"}');
+  });
+
+  it("writes only what the reader splits back off, token for token", () => {
+    const written = block(
+      { checked: false, current: "Some Place", required: true },
+      { hasPopup: "menu" },
+      'A "quoted", {braced} hint',
+    );
+    const line = `checkbox "x"${written}`;
+    const { line: rest, block: read } = splitStatesBlock(line);
+    expect(rest).toBe('checkbox "x"');
+    expect(` {${statesTokens(read!).join(", ")}}`).toBe(written);
+  });
+});
+
+describe("unprintableToken", () => {
+  it("accepts every token the writer prints", () => {
+    const values: (string | boolean)[] = [
+      true,
+      false,
+      "mixed",
+      "page",
+      "Some Place",
+      "spelling",
+    ];
+    const keys = [
+      "checked",
+      "pressed",
+      "expanded",
+      "selected",
+      "current",
+      "disabled",
+      "readonly",
+      "required",
+      "invalid",
+    ];
+    for (const key of keys) {
+      for (const value of values) {
+        const written = statesBlock(
+          {
+            states: { [key]: value },
+            properties: { hasPopup: String(value), roledescription: "r" },
+            description: "d",
+          },
+          (t) => t,
+        );
+        const { block } = splitStatesBlock(`button${written}`);
+        for (const token of statesTokens(block!)) {
+          expect(unprintableToken(token), token).toBeUndefined();
+        }
+      }
+    }
+  });
+
+  it("names the printed form of a token that never prints", () => {
+    expect(unprintableToken("checked=true")).toMatch(/never prints/);
+    expect(unprintableToken("required=false")).toMatch(/never prints/);
+    expect(unprintableToken("haspopup=false")).toMatch(/never prints/);
+    expect(unprintableToken("roledescription=slide")).toMatch(/never prints/);
+    expect(unprintableToken("focusable")).toMatch(/is not a key/);
   });
 });
