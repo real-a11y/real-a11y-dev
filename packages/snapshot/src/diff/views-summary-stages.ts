@@ -6,8 +6,11 @@
  * the inline code did.
  */
 
+import { splitStatesBlock } from "@real-a11y-dev/serialize";
+
 import type { ViewDiff } from "./views-diff.js";
 import {
+  controlDesc,
   headingDesc,
   type Ignore,
   lcsLength,
@@ -19,7 +22,9 @@ import {
   plural,
   REORDER_LCS_LIMIT,
   sameMultiset,
+  statesDesc,
   take,
+  takeMatching,
   total,
   withCount,
 } from "./views-summary-lines.js";
@@ -42,6 +47,90 @@ export interface ReorderInput {
   ignore: Ignore;
   baseStops: readonly string[];
   prStops: readonly string[];
+}
+
+/**
+ * State stage 0b — see the pipeline in views-summary.ts. A removed and an
+ * added line that are the same once their `{…}` states block is set aside are
+ * one element whose states changed (a box checked, a disclosure collapsed, a
+ * description reworded): not a removal plus an addition, and in the tabs view
+ * not a stop "renamed" to its own name. It is also how an old baseline reads
+ * against text that prints the block: `(none) → checked`.
+ *
+ * Strictly 1:1, like the renames: a line pairs only when exactly one removed
+ * and one added key share its identity, with equal counts. Anything else is
+ * left for the later stages' add/remove statements.
+ *
+ * The tabs view goes first and consumes each paired stop's tree line too, so
+ * the tree pass doesn't report the same element a second time.
+ */
+export function stateChanges(m: StageMultisets, changes: ViewChange[]): void {
+  pairStateChanges(
+    {
+      view: "tabs",
+      removed: m.tabsRemoved,
+      added: m.tabsAdded,
+      mirror: { removed: m.treeRemoved, added: m.treeAdded },
+    },
+    changes,
+  );
+  pairStateChanges(
+    { view: "tree", removed: m.treeRemoved, added: m.treeAdded },
+    changes,
+  );
+}
+
+interface StatePairing {
+  view: "tree" | "tabs";
+  removed: Multiset;
+  added: Multiset;
+  /** The tree view's multisets, when pairing the tabs view. */
+  mirror?: { removed: Multiset; added: Multiset };
+}
+
+function pairStateChanges(
+  { view, removed, added, mirror }: StatePairing,
+  changes: ViewChange[],
+): void {
+  const byIdentity = new Map<string, { removed: string[]; added: string[] }>();
+  const bucket = (key: string) => {
+    const identity = splitStatesBlock(key).line;
+    let b = byIdentity.get(identity);
+    if (!b) byIdentity.set(identity, (b = { removed: [], added: [] }));
+    return b;
+  };
+  for (const key of removed.keys()) bucket(key).removed.push(key);
+  for (const key of added.keys()) bucket(key).added.push(key);
+
+  for (const [identity, b] of byIdentity) {
+    if (b.removed.length !== 1 || b.added.length !== 1) continue;
+    const fromKey = b.removed[0];
+    const toKey = b.added[0];
+    const n = removed.get(fromKey) ?? 0;
+    if (n === 0 || added.get(toKey) !== n) continue;
+    take(removed, fromKey, n);
+    take(added, toKey, n);
+    const { role, name = "" } = parseRoleLine(identity);
+    const from = splitStatesBlock(fromKey).block ?? "";
+    const to = splitStatesBlock(toKey).block ?? "";
+    if (mirror) {
+      takeMatching(mirror.removed, { role, name, states: from }, n);
+      takeMatching(mirror.added, { role, name, states: to }, n);
+    }
+    changes.push({
+      kind: "state-changed",
+      view,
+      message: withCount(
+        `States changed: ${controlDesc(role, name)}: ${statesDesc(from)} → ${statesDesc(to)}`,
+        n,
+      ),
+      role,
+      ...(name !== "" ? { name } : {}),
+      from,
+      to,
+      ...(n > 1 ? { count: n } : {}),
+    });
+  }
 }
 
 const takeTreeHeading = (ms: Multiset, name: string, level: number) =>

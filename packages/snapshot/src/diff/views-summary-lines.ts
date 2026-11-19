@@ -3,6 +3,8 @@
  * parsing and counting primitives the pipeline in views-summary.ts builds on.
  */
 
+import { splitStatesBlock } from "@real-a11y-dev/serialize";
+
 import { stripFocusMarker, stripTabIndex } from "./views-diff.js";
 import type { ViewChange } from "./views-summary.js";
 
@@ -26,13 +28,16 @@ export interface ParsedLine {
 }
 
 /**
- * Parse a tree or tabs view line: `ROLE [ "NAME" ] [ (level N) ]`. The level
- * suffix is stripped FIRST (end-anchored, so a literal "(level 2)" inside a
- * quoted name never matches); names are NOT quote-escaped, so the name is
- * everything between the first `"` and the LAST `"`.
+ * Parse a tree or tabs view line: `ROLE [ "NAME" ] [ (level N) ] [ {STATES} ]`.
+ * The suffixes are stripped from the end first — the `{…}` states block, then
+ * the level (end-anchored, so a literal "(level 2)" inside a quoted name never
+ * matches); names are NOT quote-escaped, so the name is everything between the
+ * first `"` and the LAST `"`. The block is set aside, not returned: a line's
+ * role and name are the same whatever its states, which is what lets
+ * {@link stateChanges} pair a line whose states changed.
  */
 export function parseRoleLine(line: string): ParsedLine {
-  let rest = stripFocusMarker(line);
+  let rest = splitStatesBlock(stripFocusMarker(line)).line;
   let level: number | undefined;
   const suffix = / \(level (\d+)\)$/.exec(rest);
   if (suffix) {
@@ -99,13 +104,32 @@ export function takeByRoleName(
   name: string,
   n = 1,
 ): void {
+  takeMatching(ms, { role, name }, n);
+}
+
+/** What {@link takeMatching} consumes: lines with this role and name and, when
+ * `states` is given, exactly that `{…}` block (`""` for none). */
+export interface LineMatch {
+  role: string;
+  name: string;
+  states?: string;
+}
+
+/** Consume up to `n` lines matching `match`, tolerating any `(level N)`
+ * suffix, as {@link takeByRoleName} does. */
+export function takeMatching(ms: Multiset, match: LineMatch, n = 1): void {
   let remaining = n;
   for (const key of [...ms.keys()]) {
     if (remaining === 0) break;
     const parsed = parseRoleLine(key);
-    if (parsed.role === role && (parsed.name ?? "") === name) {
-      remaining -= take(ms, key, remaining);
-    }
+    if (parsed.role !== match.role || (parsed.name ?? "") !== match.name)
+      continue;
+    if (
+      match.states !== undefined &&
+      (splitStatesBlock(key).block ?? "") !== match.states
+    )
+      continue;
+    remaining -= take(ms, key, remaining);
   }
 }
 
@@ -268,6 +292,10 @@ export const headingDesc = (name: string) =>
 
 export const nameDesc = (name: string) =>
   name === "" ? "(unnamed)" : `"${name}"`;
+
+/** A states block's contents, or `(none)` for a line without one. */
+export const statesDesc = (states: string) =>
+  states === "" ? "(none)" : states;
 
 export const withCount = (message: string, n: number) =>
   n > 1 ? `${message} (×${n})` : message;

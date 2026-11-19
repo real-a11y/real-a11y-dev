@@ -589,6 +589,119 @@ describe("summarizeViews", () => {
     });
   });
 
+  describe("states blocks ({…})", () => {
+    it("a tab stop whose states changed is ONE statement, its tree line consumed", () => {
+      const changes = summarize(
+        {
+          tree: 'form "Sign up"\n  checkbox "Subscribe" {checked=false}',
+          tabs: '01. checkbox "Subscribe" {checked=false}',
+        },
+        {
+          tree: 'form "Sign up"\n  checkbox "Subscribe" {checked}',
+          tabs: '01. checkbox "Subscribe" {checked}',
+        },
+      );
+      expect(changes).toEqual([
+        {
+          kind: "state-changed",
+          view: "tabs",
+          message:
+            'States changed: checkbox "Subscribe": checked=false → checked',
+          role: "checkbox",
+          name: "Subscribe",
+          from: "checked=false",
+          to: "checked",
+        },
+      ]);
+    });
+
+    it("pairs a tree-only element, and reads a missing block as (none)", () => {
+      const changes = summarize(
+        { tree: 'listbox "Country"\n  option "Spain"' },
+        { tree: 'listbox "Country"\n  option "Spain" {selected}' },
+      );
+      expect(changes).toEqual([
+        {
+          kind: "state-changed",
+          view: "tree",
+          message: 'States changed: option "Spain": (none) → selected',
+          role: "option",
+          name: "Spain",
+          from: "",
+          to: "selected",
+        },
+      ]);
+    });
+
+    it("an old baseline against text that prints blocks reads as state changes, not churn", () => {
+      const changes = summarize(
+        {
+          tree: 'checkbox "Subscribe"\nbutton "Menu"',
+          tabs: '01. checkbox "Subscribe"\n02. button "Menu"',
+        },
+        {
+          tree: 'checkbox "Subscribe" {checked}\nbutton "Menu" {expanded=false, haspopup=menu}',
+          tabs: '01. checkbox "Subscribe" {checked}\n02. button "Menu" {expanded=false, haspopup=menu}',
+        },
+      );
+      expect(kinds(changes)).toEqual(["state-changed", "state-changed"]);
+      expect(messages(changes)).toEqual([
+        'States changed: button "Menu": (none) → expanded=false, haspopup=menu',
+        'States changed: checkbox "Subscribe": (none) → checked',
+      ]);
+    });
+
+    it("finds the stop's tree line under a level suffix the tabs view lacks", () => {
+      const changes = summarize(
+        {
+          tree: 'tree "Files"\n  treeitem "Docs" (level 2) {expanded=false}',
+          tabs: '01. treeitem "Docs" {expanded=false}',
+        },
+        {
+          tree: 'tree "Files"\n  treeitem "Docs" (level 2) {expanded}',
+          tabs: '01. treeitem "Docs" {expanded}',
+        },
+      );
+      expect(kinds(changes)).toEqual(["state-changed"]);
+      expect(changes[0]).toMatchObject({ view: "tabs", to: "expanded" });
+    });
+
+    it("coalesces identical changes to one statement (×N)", () => {
+      const changes = summarize(
+        { tree: 'checkbox "A"\ncheckbox "A"' },
+        { tree: 'checkbox "A" {disabled}\ncheckbox "A" {disabled}' },
+      );
+      expect(changes).toEqual([
+        expect.objectContaining({
+          kind: "state-changed",
+          message: 'States changed: checkbox "A": (none) → disabled (×2)',
+          count: 2,
+        }),
+      ]);
+    });
+
+    it("a rename that also changed states is a rename, with the block kept out of the names", () => {
+      const changes = summarize(
+        { tabs: '01. checkbox "Subscribe" {checked=false}' },
+        { tabs: '01. checkbox "Newsletter" {checked}' },
+      );
+      expect(kinds(changes)).not.toContain("state-changed");
+      expect(messages(changes)).toEqual([
+        'Tab stop renamed: checkbox "Subscribe" → "Newsletter"',
+      ]);
+    });
+
+    it("refuses an ambiguous pairing (2 removed, 1 added)", () => {
+      const changes = summarize(
+        { tree: 'checkbox "A" {checked}\ncheckbox "A" {checked=false}' },
+        { tree: 'checkbox "A" {checked=mixed}' },
+      );
+      expect(kinds(changes)).not.toContain("state-changed");
+      expect(kinds(changes)).toContain("interactive-removed");
+      expect(kinds(changes)).toContain("interactive-added");
+    });
+  });
+
   describe("line grammar hazards", () => {
     it("parses names with embedded unescaped quotes", () => {
       const changes = summarize({}, { tabs: '01. link "say "hi""' });

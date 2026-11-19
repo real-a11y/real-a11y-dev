@@ -53,6 +53,7 @@ import {
   reorderChanges,
   rollupChange,
   type StageMultisets,
+  stateChanges,
 } from "./views-summary-stages.js";
 
 export type ViewChangeKind =
@@ -73,6 +74,7 @@ export type ViewChangeKind =
   | "tab-order-reordered"
   | "interactive-added"
   | "interactive-removed"
+  | "state-changed"
   | "other";
 
 export interface ViewChange {
@@ -85,9 +87,11 @@ export interface ViewChange {
   role?: string;
   /** Raw accessible name, unescaped (page content — escape before markdown). */
   name?: string;
-  /** Level ("h2") or old name, depending on kind. */
+  /** Level ("h2"), old name, or the old `{…}` states block's contents
+   * (`""` for none), depending on kind. */
   from?: string;
-  /** Level ("h3") or new name, depending on kind. */
+  /** Level ("h3"), new name, or the new states block's contents, depending
+   * on kind. */
   to?: string;
   /** Tab stops: 1-based position, only when unambiguous. */
   position?: number;
@@ -139,6 +143,7 @@ export const VIEW_CHANGE_ORDER: readonly ViewChangeKind[] = [
   "focus-stop-renamed",
   "interactive-removed",
   "interactive-added",
+  "state-changed",
   "other",
 ];
 
@@ -192,6 +197,21 @@ export function summarizeViews(input: SummarizeViewsInput): ViewChange[] {
     });
   }
   take(outlineRemoved, NO_HEADINGS);
+
+  // The stages consume these multisets in place.
+  const m: StageMultisets = {
+    treeAdded,
+    treeRemoved,
+    outlineAdded,
+    outlineRemoved,
+    tabsAdded,
+    tabsRemoved,
+  };
+
+  // 0b — state changes, before anything pairs lines by role and name: a line
+  // whose only difference is its `{…}` states block is one element whose
+  // states changed.
+  stateChanges(m, changes);
 
   // 1 — tabs stage (positions make these the richest statements; they consume
   // the matching tree lines so the tree stage never re-reports the element).
@@ -380,14 +400,6 @@ export function summarizeViews(input: SummarizeViewsInput): ViewChange[] {
     (role, name) => `Interactive element added: ${controlDesc(role, name)}`,
   );
 
-  const m: StageMultisets = {
-    treeAdded,
-    treeRemoved,
-    outlineAdded,
-    outlineRemoved,
-    tabsAdded,
-    tabsRemoved,
-  };
   // Order matters: each outline stage consumes lines the previous one left.
   outlineLevelChanges(m, changes);
   outlineRenames(m, changes);
