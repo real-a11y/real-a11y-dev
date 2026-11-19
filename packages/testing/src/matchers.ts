@@ -47,7 +47,7 @@ import {
 } from "@real-a11y-dev/validate";
 
 import {
-  contractWritesStates,
+  contractWrites,
   verifyContract,
   type VerifyContractOptions,
 } from "./contract.js";
@@ -414,12 +414,17 @@ function toMatchA11yContract(
     // exactly what `.not` inverts, and the negated form would pass while
     // asserting nothing. Throw instead, as for any unanswerable call. Remove
     // this once the serializer prints blocks.
-    if (contractWritesStates(contractText)) {
+    const writes = contractWrites(contractText);
+    if (writes.states) {
       throw new TypeError(
         "toMatchA11yContract: the contract asserts a {…} states block, but the tree of a DOM Element prints no states yet, so the block can't be checked. Pass a serialized tree string that prints states, or remove the block.",
       );
     }
-    targetText = serializeTree(received);
+    // A contract that writes `= "value"` needs a tree that prints values, or
+    // every value reads as missing and `.not` passes on nothing. Only then:
+    // values also bring a role-less editor in as a `generic` line, which
+    // would change the tree a strict contract without values compares.
+    targetText = serializeTree(received, { values: writes.values });
   } else if (typeof received === "string") {
     targetText = received;
   } else {

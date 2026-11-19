@@ -110,3 +110,32 @@ describe("toMatchA11yContract — states blocks against an element", () => {
     ).toMatchA11yContract('checkbox "Subscribe" {checked}');
   });
 });
+
+describe("toMatchA11yContract — field values against an element", () => {
+  const html = `<form aria-label="Sign up"><input type="text" aria-label="Email" value="a@b.c"></form>`;
+
+  it("checks a written value against the element's tree with values on", () => {
+    const el = mount(html);
+    expect(el).toMatchA11yContract('textbox "Email" = "a@b.c"');
+    expect(el).not.toMatchA11yContract('textbox "Email" = "x@y.z"');
+    expect(() =>
+      expect(el).not.toMatchA11yContract('textbox "Email" = "a@b.c"'),
+    ).toThrow();
+  });
+
+  it("checks it in strict mode too", () => {
+    const el = mount(html);
+    const contract = 'form "Sign up"\n  textbox "Email" = "a@b.c"';
+    expect(el).toMatchA11yContract(contract, { strict: true });
+    expect(el).not.toMatchA11yContract(contract.replace("a@b.c", "x@y.z"), {
+      strict: true,
+    });
+  });
+
+  it("leaves the tree without values when the contract writes none", () => {
+    const el = mount(html);
+    expect(el).toMatchA11yContract('form "Sign up"\n  textbox "Email"', {
+      strict: true,
+    });
+  });
+});

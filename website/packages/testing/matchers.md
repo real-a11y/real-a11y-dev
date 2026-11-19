@@ -227,7 +227,7 @@ a11y contract not satisfied: matched 5/7 nodes.
   ✖ button "Sign in": not found under form (matched line 7), after textbox "Password" (line 10).
 ```
 
-**Received** can be a DOM Element (extracted on the spot) **or an already-serialized tree string** (a committed `treeSnapshot` artifact). Names fold typographic punctuation like `toHaveTabSequence` does, so a contract typed with plain quotes matches curly-quote labels. A contract may carry `#` comments and a `---` frontmatter block (e.g. a source URL) — both are ignored for matching.
+**Received** can be a DOM Element (extracted on the spot) **or an already-serialized tree string** (a committed `treeSnapshot` artifact). A contract that writes a `= "value"` is checked against an Element's tree with [field values](/packages/testing/snapshots#field-values) on, which also lists a role-less editor as a `generic` line; a contract that writes none sees the tree without them. Names fold typographic punctuation like `toHaveTabSequence` does, so a contract typed with plain quotes matches curly-quote labels. A contract may carry `#` comments and a `---` frontmatter block (e.g. a source URL) — both are ignored for matching.
 
 **`{ strict: true }`** switches to exact tree equality — the contract behaves like a committed snapshot baseline (and, unlike containment, compares names byte-exact). Use it only where you truly render a component in isolation and nothing else should be present.
 

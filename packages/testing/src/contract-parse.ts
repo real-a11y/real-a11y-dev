@@ -43,6 +43,11 @@ const EMPTY_BLOCK = " {}";
 const LEVEL_SUFFIX_RE = / \(level (\d+)\)$/;
 /** ` = "value"`, a JSON string, between the name and the level. */
 const VALUE_SUFFIX_RE = / = ("[^"\\]*(?:\\.[^"\\]*)*")$/;
+/** A whole label before a value: a role, or a role and a quoted name. A name
+ *  prints unescaped, so `button "const s = "hello"` ends in what looks like a
+ *  value; when the text before that suffix isn't a whole label, the suffix is
+ *  part of the name. */
+const LABEL_RE = /^[a-z][a-z0-9-]*(?: ".*")?$/;
 
 /** A JSON string literal's text; as written, minus quotes, if it isn't valid
  *  JSON (an unknown escape). */
@@ -83,9 +88,9 @@ function parseNodeLine(
   }
   let value: string | undefined;
   const valueMatch = VALUE_SUFFIX_RE.exec(rest);
-  if (valueMatch) {
+  if (valueMatch && LABEL_RE.test(rest.slice(0, valueMatch.index))) {
     value = decodeJsonString(valueMatch[1]!);
-    rest = rest.slice(0, -valueMatch[0].length);
+    rest = rest.slice(0, valueMatch.index);
   }
   let role = rest;
   let name: string | undefined;

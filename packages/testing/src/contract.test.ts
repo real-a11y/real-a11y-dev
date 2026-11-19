@@ -453,6 +453,22 @@ describe("verifyContract — states blocks", () => {
     );
   });
 
+  it("keeps a name's own ' = \"…' in the name, as the serializer prints it unescaped", () => {
+    // The name `const s = "hello`, printed without and with a value.
+    const bare = 'button "const s = "hello"';
+    expect(verifyContract("button", bare).pass).toBe(true);
+    expect(verifyContract(bare, bare).pass).toBe(true);
+    const withValue = 'button "const s = "hello" = "v"';
+    expect(verifyContract(bare, withValue).pass).toBe(true);
+    expect(verifyContract(withValue, withValue).pass).toBe(true);
+    expect(verifyContract('button "const s" = "hello"', bare).pass).toBe(false);
+  });
+
+  it("reads a value on an unnamed line", () => {
+    expect(verifyContract('textbox = "a"', 'textbox = "a"').pass).toBe(true);
+    expect(verifyContract('textbox = "b"', 'textbox = "a"').pass).toBe(false);
+  });
+
   it("a parse error on a line with a block points at escapes", () => {
     expect(() =>
       verifyContract('textbox "Email" {description="Say "hi""}', RECEIVED),

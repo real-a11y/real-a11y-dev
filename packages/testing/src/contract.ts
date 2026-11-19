@@ -158,14 +158,30 @@ function strictLines(
 const anyStates = (roots: ContractNode[]) =>
   flatten(roots).some((f) => f.node.states !== undefined);
 
+/** What an authored contract writes on any of its lines. */
+export interface ContractWrites {
+  /** A `{…}` states block (`{}` included). */
+  states: boolean;
+  /** A field value, `= "value"`. */
+  values: boolean;
+}
+
 /**
- * Whether an authored contract writes a `{…}` states block on any line.
+ * Whether an authored contract writes a states block or a field value on any
+ * line.
  *
- * @internal For `toMatchA11yContract`, which can't check one against a DOM
- * Element until the serializer prints blocks.
+ * @internal For `toMatchA11yContract`, which serializes a DOM Element with
+ * values only when the contract asserts one, and can't check a block against
+ * an Element until the serializer prints blocks.
  */
-export function contractWritesStates(contractText: string): boolean {
-  return anyStates(parseA11yTree(contractText, { strictIndent: true }).roots);
+export function contractWrites(contractText: string): ContractWrites {
+  const nodes = flatten(
+    parseA11yTree(contractText, { strictIndent: true }).roots,
+  ).map((f) => f.node);
+  return {
+    states: nodes.some((n) => n.states !== undefined),
+    values: nodes.some((n) => n.value !== undefined),
+  };
 }
 
 // ─── containment matching ────────────────────────────────────────────────────
