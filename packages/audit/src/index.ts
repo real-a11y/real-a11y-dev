@@ -88,24 +88,42 @@ function isTitleOnlyFormControl(node: SemanticNode): boolean {
   if (tag === "input" && INPUT_TYPES_WITHOUT_LABEL.has(type)) return false;
 
   const el = getElementRefs().get(node.id);
-  if (el) {
-    if (el.getAttribute("aria-label")?.trim()) return false;
-    if (labelledByResolvesToText(el)) return false;
-    if (hasAssociatedLabelText(el)) return false;
-    // A label or a reference can name the field with no text of its own:
-    // `<label for="e"><img alt="Email"></label>` names its field "Email" from
-    // the image's alt. The computed name says so, as it does for a native tree.
-    if (namedBeyondTitle(node, dom)) return false;
-    return !!(
-      el.getAttribute("title")?.trim() ||
-      el.getAttribute("aria-describedby")?.trim()
-    );
-  }
+  return el
+    ? isTitleOnlyElement(node, dom, el)
+    : isTitleOnlyWithoutElement(node, dom);
+}
 
-  // Native trees have no live element, so labelledby IDs cannot be resolved.
-  // Chromium already did that work (see namedBeyondTitle). Description is how
-  // AX exposes aria-describedby (title becomes description only when some
-  // other source already supplied the name — those pass via the name check).
+/** {@link isTitleOnlyFormControl} for a node with a live element to read. */
+function isTitleOnlyElement(
+  node: SemanticNode,
+  dom: NonNullable<SemanticNode["dom"]>,
+  el: Element,
+): boolean {
+  if (el.getAttribute("aria-label")?.trim()) return false;
+  if (labelledByResolvesToText(el)) return false;
+  if (hasAssociatedLabelText(el)) return false;
+  // A label or a reference can name the field with no text of its own:
+  // `<label for="e"><img alt="Email"></label>` names its field "Email" from
+  // the image's alt. The computed name says so, as it does for a native tree.
+  if (namedBeyondTitle(node, dom)) return false;
+  return !!(
+    el.getAttribute("title")?.trim() ||
+    el.getAttribute("aria-describedby")?.trim()
+  );
+}
+
+/**
+ * {@link isTitleOnlyFormControl} for a node with no live element.
+ *
+ * Native trees have no live element, so labelledby IDs cannot be resolved.
+ * Chromium already did that work (see namedBeyondTitle). Description is how
+ * AX exposes aria-describedby (title becomes description only when some
+ * other source already supplied the name — those pass via the name check).
+ */
+function isTitleOnlyWithoutElement(
+  node: SemanticNode,
+  dom: NonNullable<SemanticNode["dom"]>,
+): boolean {
   if (dom.attributes["aria-label"]?.trim()) return false;
   if (namedBeyondTitle(node, dom)) return false;
   return !!(
