@@ -94,10 +94,12 @@ export interface ViewChange {
   /** Raw accessible name, unescaped (page content — escape before markdown). */
   name?: string;
   /** Level ("h2"), old name, or the old `{…}` states block's contents
-   * (`""` for none), depending on kind. */
+   * (`""` for none), depending on kind. A `state-changed` statement leaves
+   * both `from` and `to` out when several same-name lines changed together:
+   * its `message` lists each side's blocks then. */
   from?: string;
   /** Level ("h3"), new name, or the new states block's contents, depending
-   * on kind. */
+   * on kind; see `from`. */
   to?: string;
   /** Tab stops: 1-based position, only when unambiguous. */
   position?: number;
@@ -219,6 +221,10 @@ export function summarizeViews(input: SummarizeViewsInput): ViewChange[] {
   // states changed.
   stateChanges(m, changes);
 
+  // A stop or landmark renamed whose block changed too reports a state change
+  // as well; tallied here, pushed once the stages that rename are done.
+  const renameStates: StateTally = new Map();
+
   // 1 — tabs stage (positions make these the richest statements; they consume
   // the matching tree lines so the tree stage never re-reports the element).
   // 1a: renames — same role, exactly one removed + one added, both named.
@@ -247,6 +253,7 @@ export function summarizeViews(input: SummarizeViewsInput): ViewChange[] {
       if (oldName === "" || newName === "") continue; // bare lines are indistinguishable
       take(tabsRemoved, b.removed[0]);
       take(tabsAdded, b.added[0]);
+      tallyBlockChange(renameStates, b.removed[0], b.added[0]);
       takeByRoleName(treeRemoved, role, oldName);
       takeByRoleName(treeAdded, role, newName);
       changes.push({
@@ -324,7 +331,6 @@ export function summarizeViews(input: SummarizeViewsInput): ViewChange[] {
   // 2 — tree stage: landmarks, then interactive leftovers. Tree lines with
   // role `heading` are untouched here — the outline stage owns headings.
   // 2a: landmark renames — same role, exactly one removed + one added.
-  const landmarkStates: StateTally = new Map();
   {
     const byRole = new Map<string, { added: string[]; removed: string[] }>();
     const bucket = (role: string) => {
@@ -352,7 +358,7 @@ export function summarizeViews(input: SummarizeViewsInput): ViewChange[] {
       take(treeRemoved, b.removed[0]);
       take(treeAdded, b.added[0]);
       // A renamed landmark whose block changed too reports both.
-      tallyBlockChange(landmarkStates, b.removed[0], b.added[0]);
+      tallyBlockChange(renameStates, b.removed[0], b.added[0]);
       changes.push({
         kind: "landmark-renamed",
         view: "tree",
@@ -423,7 +429,7 @@ export function summarizeViews(input: SummarizeViewsInput): ViewChange[] {
   outlineLeftovers(m, changes);
   reorderChanges({ views, base, pr, ignore, baseStops, prStops }, changes);
   swappedStates({ views, base, pr, ignore }, changes);
-  flushStateTally(landmarkStates, changes);
+  flushStateTally(renameStates, changes);
   rollupChange(m, changes);
 
   changes.sort(

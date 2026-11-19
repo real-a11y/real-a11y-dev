@@ -680,14 +680,14 @@ describe("summarizeViews", () => {
       ]);
     });
 
-    it("a rename that also changed states is a rename, with the block kept out of the names", () => {
+    it("a rename that also changed states reports both, with the block kept out of the names", () => {
       const changes = summarize(
         { tabs: '01. checkbox "Subscribe" {checked=false}' },
         { tabs: '01. checkbox "Newsletter" {checked}' },
       );
-      expect(kinds(changes)).not.toContain("state-changed");
       expect(messages(changes)).toEqual([
         'Tab stop renamed: checkbox "Subscribe" → "Newsletter"',
+        'States changed: checkbox "Newsletter": checked=false → checked',
       ]);
     });
 
@@ -786,6 +786,23 @@ describe("summarizeViews", () => {
       expect(messages(changes)).toEqual([
         'Heading level changed: "A" h2 → h3',
         'States changed: heading "A" (level 3): description="x" → description="y"',
+      ]);
+    });
+
+    it("a tab stop renamed with a new block reports both", () => {
+      const changes = summarize(
+        {
+          tree: 'button "Save" {pressed=false}',
+          tabs: 'button "Save" {pressed=false}',
+        },
+        {
+          tree: 'button "Save draft" {pressed}',
+          tabs: 'button "Save draft" {pressed}',
+        },
+      );
+      expect(messages(changes)).toEqual([
+        'Tab stop renamed: button "Save" → "Save draft"',
+        'States changed: button "Save draft": pressed=false → pressed',
       ]);
     });
 

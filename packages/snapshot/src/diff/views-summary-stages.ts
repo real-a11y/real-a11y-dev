@@ -257,6 +257,11 @@ export function flushStateTally(
  * once blocks are set aside, each position whose block changed is one
  * element whose states changed. Any other difference in order is a reorder,
  * which this leaves alone.
+ *
+ * Like the reorder passes, it runs only when the tree's multiset diff is
+ * empty: a swap alongside any other tree change goes unreported (the other
+ * change still flags the page). Aligning the unchanged lines would find it,
+ * but would also re-report state changes the pairing stage already made.
  */
 export function swappedStates(
   input: Pick<ReorderInput, "views" | "base" | "pr" | "ignore">,
