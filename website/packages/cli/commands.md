@@ -233,6 +233,19 @@ real-a11y tree https://example.com
 real-a11y tree https://example.com/player   # reaches user-agent-shadow media controls
 ```
 
+A node's states, description and announced properties print in a `{…}` block
+after its name, the way a screen reader presents them beyond role and name:
+
+```
+checkbox "Subscribe" {checked=false}
+button "Menu" {expanded=false, haspopup=menu}
+textbox "Email" {required, invalid, description="We never share it"}
+```
+
+[What a line carries](/packages/testing/snapshots#what-a-line-carries) lists
+each key and when it prints. [`tabs`](#tabs-url) and a [`snapshot`](#snapshot-url)
+artifact's tree print the same blocks.
+
 A field prints what it holds, the way a screen reader announces it — a text
 field's text, a `<select>`'s chosen option, a slider's `aria-valuetext` (else
 its number), a file input's file names, a rich-text editor's content. A field
@@ -244,7 +257,7 @@ anything, never the text and never its length. An empty field prints no value:
 ```
 textbox "Email" = "jane@example.com"
 textbox "Password" = "[redacted]"
-combobox "Country" = "France"
+combobox "Country" = "France" {expanded=false}
 slider "Volume" = "3"
 ```
 

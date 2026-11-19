@@ -2202,7 +2202,7 @@
           "openWorldHint": false,
           "readOnlyHint": true
         },
-        "description": "Return the page's accessibility tree as a deterministic, indented role + accessible-name outline (what a screen reader would traverse) — read from Chromium's own accessibility tree over CDP, so it reaches user-agent-shadow media controls an in-page walk never sees. The element focused at capture time is marked `[focused]`. Each field shows what it holds, the way a screen reader announces it — `textbox \"Email\" = \"jane@x.com\"`; a password, one-time-code or payment field reads \"[redacted]\". Token-efficient and stable across runs. This is the vocabulary the act tools target in. Whole-document. Chromium only.",
+        "description": "Return the page's accessibility tree as a deterministic, indented role + accessible-name outline (what a screen reader would traverse) — read from Chromium's own accessibility tree over CDP, so it reaches user-agent-shadow media controls an in-page walk never sees. Each node's states, description and announced properties follow its name in a `{…}` block (`checkbox \"Subscribe\" {checked=false}`, `button \"Menu\" {expanded=false, haspopup=menu}`). The element focused at capture time is marked `[focused]`. Each field shows what it holds, the way a screen reader announces it — `textbox \"Email\" = \"jane@x.com\"`; a password, one-time-code or payment field reads \"[redacted]\". Token-efficient and stable across runs. This is the vocabulary the act tools target in. Whole-document. Chromium only.",
         "inputSchema": {
           "$schema": "http://json-schema.org/draft-07/schema#",
           "properties": {

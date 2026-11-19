@@ -136,7 +136,7 @@ function registerSemanticTree(ctx: InspectToolContext): void {
       title: "Get semantic tree",
       annotations: READ_ONLY,
       description:
-        "Return the page's accessibility tree as a deterministic, indented role + accessible-name outline (what a screen reader would traverse) — read from Chromium's own accessibility tree over CDP, so it reaches user-agent-shadow media controls an in-page walk never sees. The element focused at capture time is marked `[focused]`." +
+        'Return the page\'s accessibility tree as a deterministic, indented role + accessible-name outline (what a screen reader would traverse) — read from Chromium\'s own accessibility tree over CDP, so it reaches user-agent-shadow media controls an in-page walk never sees. Each node\'s states, description and announced properties follow its name in a `{…}` block (`checkbox "Subscribe" {checked=false}`, `button "Menu" {expanded=false, haspopup=menu}`). The element focused at capture time is marked `[focused]`.' +
         valuesNote +
         " Token-efficient and stable across runs. This is the vocabulary the act tools target in. Whole-document. Chromium only.",
       inputSchema: {

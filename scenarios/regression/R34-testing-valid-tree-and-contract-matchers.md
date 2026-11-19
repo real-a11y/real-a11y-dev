@@ -6,7 +6,7 @@ area: Testing
 type: Automated
 priority: P1
 status: Active
-validFrom: "testing ≥ 0.1.0-beta.15 for the row; the user-agent-supplied-state split ships in the FIRST release after 0.1.0-beta.15. Running steps 1–3 against 0.1.0-beta.15 or earlier reproduces the defect rather than failing the test — there a bare `select` reports six violations, and a correct authored combobox or slider reports a missing required attribute with no markup that clears it. That is the old behaviour, not a fail. `toBeValidA11yTree` is backed by `validate`, which is PRIVATE and bundled — there is no validate version to pin, so assert against `@real-a11y-dev/testing` only. The `<input list>` pair in steps 1 and 2 is testing ≥ 0.1.0-beta.18: on 0.1.0-beta.17 or earlier that input is a `textbox`, so step 1 passes for it without exercising the user-agent split, and step 2 reports the same two violations either way. Step 4's discarded role ships in the FIRST release after testing 0.1.0-beta.17: against 0.1.0-beta.17 or earlier a lone `role="listitem"` passes (its missing list was only an advisory warning) and `role="foo"` reports with a `foo` label rather than `generic` — again the old behaviour. `toMatchA11yContract` is backed by `verifyContract` in packages/testing/src/contract.ts, deliberately INTERNAL to this package until a second consumer appears. The shipped JSDoc claims it comes from `serialize`; that is stale, and it is what this row was first written from."
+validFrom: "testing ≥ 0.1.0-beta.15 for the row; the user-agent-supplied-state split ships in the FIRST release after 0.1.0-beta.15. Running steps 1–3 against 0.1.0-beta.15 or earlier reproduces the defect rather than failing the test — there a bare `select` reports six violations, and a correct authored combobox or slider reports a missing required attribute with no markup that clears it. That is the old behaviour, not a fail. `toBeValidA11yTree` is backed by `validate`, which is PRIVATE and bundled — there is no validate version to pin, so assert against `@real-a11y-dev/testing` only. The `<input list>` pair in steps 1 and 2 is testing ≥ 0.1.0-beta.18: on 0.1.0-beta.17 or earlier that input is a `textbox`, so step 1 passes for it without exercising the user-agent split, and step 2 reports the same two violations either way. Step 4's discarded role ships in the FIRST release after testing 0.1.0-beta.17: against 0.1.0-beta.17 or earlier a lone `role="listitem"` passes (its missing list was only an advisory warning) and `role="foo"` reports with a `foo` label rather than `generic` — again the old behaviour. `toMatchA11yContract` is backed by `verifyContract` in packages/testing/src/contract.ts, deliberately INTERNAL to this package until a second consumer appears. The shipped JSDoc claims it comes from `serialize`; that is stale, and it is what this row was first written from. Step 10 (a states block against an Element) ships in the FIRST release after testing 0.1.0-beta.23."
 validUntil: ""
 expected: "toBeValidA11yTree flags authored-ARIA mistakes and NOT native HTML; toMatchA11yContract matches by containment, is strict on demand, and never passes vacuously"
 twin: D5
@@ -41,6 +41,11 @@ notion: ""
    one addition
 8. Pass an already-serialized tree string as the received value
 9. An **empty** contract string, and the `.not` form of both matchers
+10. On a rendered checked checkbox, with the Element as the received value:
+    `toMatchA11yContract('checkbox "Subscribe" {checked}')`, then
+    `{checked=false}`, the `.not` form of the first, a `{ strict: true }`
+    contract writing `{}` on the checkbox, and a contract writing
+    `{checked=true}`
 
 ## Expected
 
@@ -64,6 +69,13 @@ notion: ""
 - **6** — all three fail, including the role change. Name-only comparison would
   miss "still reads *New ticket*, no longer operable"
 - **7** — strict rejects the addition containment allows
+- **10** — `{checked}` passes and `{checked=false}` fails naming
+  `missing checked=false`, so a state a test asserts is checked against the
+  live element. The `.not` form of a passing block fails. Strict with `{}`
+  fails, since the box has a state. `{checked=true}` **throws**, naming
+  `checked` as the form that prints: a token tree text never prints could
+  never match. Against testing 0.1.0-beta.23 or earlier every contract line
+  with a block throws `cannot parse`; that is the old behaviour, not a fail
 - **9** — an empty contract **throws**. A contract file truncated to zero bytes
   must never read as "satisfied"; `.not` must reject junk rather than inverting
   into a vacuous pass

@@ -42,13 +42,13 @@ An accessibility snapshot inverts both. It captures **only** what reaches the ac
 
 Real A11y snapshots the same tree three ways, so you pick the grain that fits the test:
 
-| Snapshot                                                                                              | Captures                                              | Catches                                                         |
-| ----------------------------------------------------------------------------------------------------- | ----------------------------------------------------- | --------------------------------------------------------------- |
-| **Tree** ([`treeSnapshot`](/packages/testing/snapshots#treesnapshot-root-options))                    | Full role + name structure (no states or description) | Missing labels, wrong roles, structural drift                   |
-| **Outline** ([`outlineSnapshot`](/packages/testing/snapshots#outlinesnapshot-root-options))           | Heading hierarchy only                                | Missing `<h1>`, skipped levels                                  |
-| **Tab order** ([`tabSequenceSnapshot`](/packages/testing/snapshots#tabsequencesnapshot-root-options)) | Focus sequence                                        | Focus traps, illogical tab order, positive-`tabindex` surprises |
+| Snapshot                                                                                              | Captures                                                 | Catches                                                         |
+| ----------------------------------------------------------------------------------------------------- | -------------------------------------------------------- | --------------------------------------------------------------- |
+| **Tree** ([`treeSnapshot`](/packages/testing/snapshots#treesnapshot-root-options))                    | Full role + name structure, with states and descriptions | Missing labels, wrong roles, lost states, structural drift      |
+| **Outline** ([`outlineSnapshot`](/packages/testing/snapshots#outlinesnapshot-root-options))           | Heading hierarchy only                                   | Missing `<h1>`, skipped levels                                  |
+| **Tab order** ([`tabSequenceSnapshot`](/packages/testing/snapshots#tabsequencesnapshot-root-options)) | Focus sequence                                           | Focus traps, illogical tab order, positive-`tabindex` surprises |
 
-**Role and name, not every state.** The tree text prints each node's role, name, opt-in field value, `(level N)` where the node has one and `[focused]` marker; the tab text prints the same minus the level. They do not print states such as `checked` or `expanded`, the description, or properties such as `aria-roledescription`: a checked and an unchecked checkbox with the same name look identical. Use [`serializeTreeDiff`](/packages/testing/flow) or assert on `node.a11y.states` to catch a state change.
+**Role, name and states.** The tree text prints each node's role, name, opt-in field value, `(level N)` where the node has one, a `{…}` block with the states, description and announced properties a screen reader presents, and the `[focused]` marker; the tab text prints the same minus the level. A checked and an unchecked checkbox read `checkbox "Subscribe" {checked}` and `checkbox "Subscribe" {checked=false}`, so a snapshot catches a lost state as well as a lost label. [What a line carries](/packages/testing/snapshots#what-a-line-carries) lists what the block prints, and `states: false` leaves it out.
 
 ## Deterministic by construction
 
