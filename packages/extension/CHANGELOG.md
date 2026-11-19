@@ -17,6 +17,16 @@
   also touches dogfood code.
 -->
 
+## Unreleased
+
+- **Copied and exported text carries each node's states.** The tree and the
+  TAB view's tab sequence, as Copy and export write them, print a `{…}` block
+  after a node's name with its states, description and announced properties:
+  `checkbox "Subscribe" {checked=false}`, `button "Menu" {expanded=false,
+  haspopup=menu}`. Before, a checked and an unchecked checkbox copied as the
+  same line. The side panel's own rows are unchanged
+  ([#686](https://github.com/real-a11y/real-a11y-dev/pull/686)).
+
 ## 0.1.20
 
 ### Patch Changes
