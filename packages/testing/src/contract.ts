@@ -238,32 +238,68 @@ function describeNode(
 }
 
 /**
- * Both trees as indented lines for strict equality. A block prints, its
- * tokens sorted so their order doesn't matter, only where the contract line
- * at that position writes one: a line without a block says nothing about
- * states, in strict mode as in containment.
+ * Both trees as indented lines for strict equality. When their shapes agree,
+ * line `i` of each prints a block, tokens sorted so order doesn't matter,
+ * only where contract line `i` writes one: a line without a block says
+ * nothing about states. When the shapes differ, the structure is what's
+ * wrong, and both print without blocks, which would otherwise be compared
+ * across lines that don't correspond.
  */
 function strictLines(
   contract: ContractNode[],
   target: ContractNode[],
 ): { want: string[]; got: string[] } {
   const want = flatten(contract).map((f) => f.node);
-  // Line `i` of either tree prints a block when contract line `i` has one.
-  const line = (node: ContractNode, i: number) =>
-    "  ".repeat(node.depth) +
-    describeNode(
-      node,
-      want[i]?.states ? [...(node.states ?? [])].sort() : null,
-    );
+  const got = flatten(target).map((f) => f.node);
+  const line = (node: ContractNode, states: string[] | null) =>
+    "  ".repeat(node.depth) + describeNode(node, states);
+  const sorted = (node: ContractNode) =>
+    node.states ? [...node.states].sort() : null;
+  const wantBare = want.map((node) => line(node, null));
+  const gotBare = got.map((node) => line(node, null));
+  if (wantBare.join("\n") !== gotBare.join("\n")) {
+    return { want: wantBare, got: gotBare };
+  }
   return {
-    want: want.map(line),
-    got: flatten(target).map((f, i) => line(f.node, i)),
+    want: want.map((node) => line(node, sorted(node))),
+    got: got.map((node, i) =>
+      line(node, want[i]!.states ? sorted(node) : null),
+    ),
   };
 }
 
 // ─── containment matching ────────────────────────────────────────────────────
 
-function nodeMatches(want: ContractNode, got: ContractNode): boolean {
+/**
+ * A state token as containment compares it: a quoted value decoded and its
+ * typography folded, as names are, so `description="We don't"` matches a
+ * curly apostrophe, and a curly double quote matches a typed `\"`.
+ */
+function stateKey(token: string): string {
+  const eq = token.indexOf("=");
+  if (eq === -1) return token;
+  let value = token.slice(eq + 1);
+  if (value.startsWith('"')) {
+    try {
+      value = JSON.parse(value) as string;
+    } catch {
+      // Not valid JSON (an unknown escape): compare it as written.
+    }
+  }
+  return `${token.slice(0, eq)}=${foldTypography(value)}`;
+}
+
+/** The contract's state tokens the received node doesn't carry. */
+function missingStates(want: ContractNode, got: ContractNode): string[] {
+  const have = new Set((got.states ?? []).map(stateKey));
+  return (want.states ?? []).filter((token) => !have.has(stateKey(token)));
+}
+
+function nodeMatches(
+  want: ContractNode,
+  got: ContractNode,
+  checkStates = true,
+): boolean {
   if (want.role !== got.role) return false;
   // Names compare with typography folded (a hand-typed straight quote matches a
   // rendered curly one) but case-sensitively — the contract's name is the exact
@@ -276,14 +312,8 @@ function nodeMatches(want: ContractNode, got: ContractNode): boolean {
   }
   if (want.level !== undefined && want.level !== got.level) return false;
   if (want.focused && !got.focused) return false;
-  // A states block asserts at least its tokens, folded like names, so a
-  // description typed with straight quotes matches a curly one.
-  if (want.states) {
-    const have = new Set((got.states ?? []).map(foldTypography));
-    if (!want.states.every((token) => have.has(foldTypography(token))))
-      return false;
-  }
-  return true;
+  // A states block asserts at least its tokens (see stateKey).
+  return !checkStates || missingStates(want, got).length === 0;
 }
 
 /** Backtracking-step guard — contract trees are small; this only trips on
@@ -395,6 +425,12 @@ function hintsFor(
   const claimed = new Set(outcome.bestAssigned);
   const candidates = target.filter((_, i) => !claimed.has(i));
 
+  // A block can't match a tree that prints none: say so, rather than leave
+  // the reader to diff states the received text doesn't carry.
+  if (c.node.states && !target.some((t) => t.node.states)) {
+    hints.push("the received tree prints no {…} states blocks");
+  }
+
   const exact = candidates.filter((t) => nodeMatches(c.node, t.node));
   for (const t of exact.slice(0, 3)) {
     hints.push(
@@ -405,7 +441,9 @@ function hintsFor(
     const sameRole = candidates.filter((t) => t.node.role === c.node.role);
     for (const t of sameRole.slice(0, 3)) {
       hints.push(
-        `same role, different name: ${describeNode(t.node)} (line ${t.node.line})`,
+        c.node.states && nodeMatches(c.node, t.node, false)
+          ? `same role and name, missing ${missingStates(c.node, t.node).join(", ")}: ${describeNode(t.node)} (line ${t.node.line})`
+          : `same role, different name: ${describeNode(t.node)} (line ${t.node.line})`,
       );
     }
     if (c.node.name !== undefined) {
@@ -479,8 +517,10 @@ export interface VerifyContractOptions {
   /**
    * Exact tree equality instead of containment (the contract behaves like a
    * committed snapshot baseline). Unlike containment, strict is byte-exact on
-   * names — no typography folding — because exactness is the whole point.
-   * Default false.
+   * names and state tokens — no typography folding — because exactness is the
+   * whole point. A `{…}` block, where the contract writes one, must hold
+   * exactly the received node's tokens, in any order; a line without one
+   * still says nothing about states. Default false.
    */
   strict?: boolean;
 }

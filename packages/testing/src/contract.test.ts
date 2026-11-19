@@ -317,6 +317,36 @@ describe("verifyContract — states blocks", () => {
     );
   });
 
+  it("says which tokens are missing, not that the name differs", () => {
+    const { message } = verifyContract(
+      'checkbox "Subscribe" {checked}',
+      RECEIVED,
+    );
+    expect(message).toContain(
+      'same role and name, missing checked: checkbox "Subscribe" {checked=false} (line 3)',
+    );
+    expect(message).not.toContain("different name");
+  });
+
+  it("explains a failure against a tree that prints no blocks at all", () => {
+    const { pass, message } = verifyContract(
+      'checkbox "Subscribe" {checked}',
+      'form "Sign up"\n  checkbox "Subscribe"',
+    );
+    expect(pass).toBe(false);
+    expect(message).toContain("the received tree prints no {…} states blocks");
+  });
+
+  it('decodes a quoted value, so a typed \\" matches a curly double quote', () => {
+    const received = 'textbox "Q" {description="Say “hi”"}';
+    expect(
+      verifyContract(
+        String.raw`textbox "Q" {description="Say \"hi\""}`,
+        received,
+      ).pass,
+    ).toBe(true);
+  });
+
   it("fails against a received node with no block at all", () => {
     expect(verifyContract('button "Join" {disabled}', RECEIVED).pass).toBe(
       false,
@@ -361,6 +391,39 @@ describe("verifyContract — states blocks", () => {
       const result = verifyContract(subset, RECEIVED, { strict: true });
       expect(result.pass).toBe(false);
       expect(result.message).toContain('  -   textbox "Email" {required}');
+    });
+
+    it("shows a received node with no block as a bare line, never as {}", () => {
+      const { message } = verifyContract(
+        contract('textbox "Email"', 'checkbox "Subscribe"').replace(
+          'button "Join"',
+          'button "Join" {disabled}',
+        ),
+        RECEIVED,
+        { strict: true },
+      );
+      expect(message).toContain('  -   button "Join" {disabled}');
+      expect(message).toMatch(/^ {2}\+ {3}button "Join"$/m);
+      expect(message).not.toContain("{}");
+    });
+
+    it("diffs structure without blocks when the shapes differ", () => {
+      const { pass, message } = verifyContract(
+        [
+          'form "Sign up"',
+          '  link "Terms"',
+          '  textbox "Email" {required}',
+          '  checkbox "Subscribe"',
+          '  button "Join"',
+        ].join("\n"),
+        RECEIVED,
+        { strict: true },
+      );
+      expect(pass).toBe(false);
+      // Only the extra link differs; no block shows up on lines that don't
+      // correspond.
+      expect(message).toContain('  -   link "Terms"');
+      expect(message).not.toMatch(/^ {2}[-+].*\{/m);
     });
 
     it("is byte-exact on tokens, as on names", () => {
