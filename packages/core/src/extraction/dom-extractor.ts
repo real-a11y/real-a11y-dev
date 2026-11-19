@@ -1,4 +1,4 @@
-import type { SemanticNode, ExtractionResult, ActionType } from "../types.js";
+import type { SemanticNode, ExtractionResult } from "../types.js";
 import { collapseAscii, trimAscii } from "../utils/ascii-whitespace.js";
 import { ElementRefMap, ELEMENT_REF_MAP_SHAPE } from "../utils/element-ref.js";
 import { getNodeId } from "../utils/id-generator.js";
@@ -17,7 +17,8 @@ import {
   safeOwnerDocument,
   safeTagName,
 } from "./clobber-safe.js";
-import { isEditable, isEditingHost, isLiveLink } from "./editing.js";
+import { isEditable, isEditingHost } from "./editing.js";
+import { getActions } from "./element-actions.js";
 import {
   EMBEDDED_VALUE_ROLES,
   embeddedValue,
@@ -145,159 +146,6 @@ const TEXT_INPUT_TYPES = new Set([
   "week",
   "color",
 ]);
-
-/** Input types that toggle on click (no text entry) */
-const TOGGLE_INPUT_TYPES = new Set(["checkbox", "radio"]);
-
-/** Determine what actions an element supports. */
-function getActions(element: Element): ActionType[] {
-  const tag = safeTagName(element);
-  const actions: ActionType[] = [];
-  // The role the tree shows, so the actions offered agree with it: a
-  // `role="foo button"` clicks, an option the browser discarded doesn't.
-  const role = getExplicitRole(element);
-
-  // Links — live ones. A link inside editable content is not: Chromium
-  // won't follow it, not even on a scripted click(), or focus it, so it has
-  // no action to offer. (One that is itself an editing host gets focus/type
-  // below.)
-  if (tag === "a" && isLiveLink(element)) {
-    actions.push("click", "navigate");
-  }
-  // Buttons (native + input type=button/submit/reset/image)
-  else if (
-    tag === "button" ||
-    (tag === "input" &&
-      ["button", "submit", "reset", "image"].includes(
-        (element as HTMLInputElement).type,
-      ))
-  ) {
-    actions.push("click");
-    if ((element as HTMLInputElement).type === "submit") {
-      actions.push("submit");
-    }
-  }
-  // Input elements — differentiate by type
-  else if (tag === "input") {
-    const type = (element as HTMLInputElement).type || "text";
-    if (TOGGLE_INPUT_TYPES.has(type)) {
-      actions.push("click");
-    } else if (type === "file") {
-      actions.push("focus");
-    } else if (type === "range") {
-      // Sliders aren't typeable — they listen for ArrowLeft/ArrowRight
-      // (or use the .stepUp/.stepDown API). Pair the increment/decrement
-      // actions so the panel can drive value changes under the Screen
-      // Curtain too.
-      actions.push("focus", "increment", "decrement");
-    } else if (type === "number") {
-      // Number inputs accept typed values *and* arrow-key stepping —
-      // expose both so the panel can either set a value or nudge it.
-      actions.push("focus", "type", "increment", "decrement");
-    } else if (type !== "hidden") {
-      actions.push("focus", "type");
-    }
-  }
-  // Textarea — text entry
-  else if (tag === "textarea") {
-    actions.push("focus", "type");
-  }
-  // Select — option picker
-  else if (tag === "select") {
-    actions.push("focus", "select");
-  }
-  // Details / Summary — toggle
-  else if (tag === "details" || tag === "summary") {
-    actions.push("toggle");
-  }
-  // Media with native controls — the element itself is a tab stop (the
-  // play/seek/volume UI lives in a closed UA shadow root we can't reach).
-  // Only "focus" is honest here: a synthetic click doesn't count as a user
-  // gesture for playback, so a CLICK badge would no-op.
-  else if (MEDIA_TAGS.has(tag) && element.hasAttribute("controls")) {
-    actions.push("focus");
-  }
-  // ARIA role-based actions. Any element reaches the `onclick` read, so it
-  // goes through the prototype: a <form> can shadow `hasAttribute`.
-  else if (role === "button" || safeGetAttribute(element, "onclick") !== null) {
-    actions.push("click");
-  } else if (role === "checkbox" || role === "switch") {
-    actions.push("click");
-  } else if (role === "radio") {
-    actions.push("click");
-  } else if (role === "combobox") {
-    // An ARIA combobox is either EDITABLE (a text field you type into, e.g.
-    // Slack's search — the ARIA 1.2 editable-combobox pattern) or SELECT-ONLY
-    // (a popup button with no text entry). A non-native combobox is editable
-    // exactly when it's a contenteditable host; a native <input role="combobox">
-    // is already handled by the tag === "input" branch above. (aria-autocomplete
-    // describes autocomplete *behavior*, not editability — a non-editable div
-    // can't be typed into regardless, so it isn't the signal here.)
-    if (isEditingHost(element)) {
-      // Treat like a textbox so the panel opens its inline input. Deliberately
-      // NOT "click": click outranks type in getPrimaryAction, so a co-present
-      // click would re-hijack the primary action and re-break text entry.
-      actions.push("focus", "type");
-    } else {
-      // Select-only combobox — dispatch click to open the popup natively.
-      actions.push("click");
-    }
-  } else if (role === "listbox") {
-    // Custom listbox widget — dispatch click to open/interact natively.
-    // We can't enumerate options from a custom control via GET_FIELD_STATE.
-    // Native <select> elements are handled above by the tag === "select" branch.
-    actions.push("click");
-  } else if (role === "option") {
-    // Listbox / combobox option — click to select it.
-    // The parent widget handles selection state; we just dispatch the click.
-    actions.push("click");
-  } else if (
-    role === "menuitem" ||
-    role === "menuitemcheckbox" ||
-    role === "menuitemradio"
-  ) {
-    actions.push("click");
-  } else if (role === "tab") {
-    actions.push("click");
-  } else if (role === "treeitem") {
-    actions.push("click");
-  } else if (role === "gridcell") {
-    actions.push("click");
-  } else if (role === "row") {
-    actions.push("click");
-  } else if (role === "textbox" || role === "searchbox") {
-    actions.push("focus", "type");
-  } else if (role === "slider") {
-    // ARIA slider: a custom widget (Radix `<span role="slider">`,
-    // Headless UI, etc.) that listens for ArrowLeft/ArrowRight on the
-    // element. "type" would set a `.value` property the widget never
-    // reads — drop it. The dispatcher's increment/decrement focus the
-    // element and dispatch real keydown events, which works equally
-    // well under the Screen Curtain.
-    actions.push("focus", "increment", "decrement");
-  } else if (role === "spinbutton") {
-    // Spinbuttons (date pickers, custom number steppers) accept both
-    // typed values and arrow-key stepping. Surface both.
-    actions.push("focus", "type", "increment", "decrement");
-  }
-
-  // An editing host is a text field whatever its role: Chromium focuses it
-  // and takes typing, and the dispatcher's `type` writes into it. The role
-  // branches above cover a textbox, a searchbox and an editable combobox;
-  // this catches the role-less `<div contenteditable>` composer, which
-  // otherwise read as inert and folded out of the a11y view — and so out of
-  // every tab sequence built on it. It precedes the tabindex catch-all,
-  // whose `click` would outrank `type` in getPrimaryAction.
-  if (actions.length === 0 && isEditingHost(element)) {
-    actions.push("focus", "type");
-  }
-
-  if (safeGetAttribute(element, "tabindex") !== null && actions.length === 0) {
-    actions.push("click");
-  }
-
-  return actions;
-}
 
 /** Check if an element is visually hidden (computed styles) */
 function isVisuallyHidden(
