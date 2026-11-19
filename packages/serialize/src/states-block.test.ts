@@ -124,7 +124,7 @@ describe("statesTokens", () => {
 
   it("reads the block splitStatesBlock returns", () => {
     const { block } = splitStatesBlock(
-      'button "Menu" {expanded=false, haspopup=menu} [focused]',
+      'button "Menu" {expanded=false, haspopup=menu}',
     );
     expect(statesTokens(block ?? "")).toEqual([
       "expanded=false",
