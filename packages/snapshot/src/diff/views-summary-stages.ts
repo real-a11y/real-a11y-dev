@@ -236,13 +236,20 @@ function takeMirrored(
   }
 }
 
-const takeTreeHeading = (ms: Multiset, name: string, level: number) =>
-  take(
-    ms,
+/** Consume one tree line for a heading, whatever `{…}` states block it
+ * carries: the outline has no block, and a heading line left behind for its
+ * block would be counted again by the rollup. */
+function takeTreeHeading(ms: Multiset, name: string, level: number): number {
+  const bare =
     name === ""
       ? `heading (level ${level})`
-      : `heading "${name}" (level ${level})`,
-  );
+      : `heading "${name}" (level ${level})`;
+  if (take(ms, bare)) return 1;
+  for (const key of ms.keys()) {
+    if (splitStatesBlock(key).line === bare) return take(ms, key);
+  }
+  return 0;
+}
 interface OutlineEntry {
   key: string;
   level: number;
@@ -414,8 +421,10 @@ export function reorderChanges(
     baseStops.length <= REORDER_LCS_LIMIT &&
     prStops.length <= REORDER_LCS_LIMIT
   ) {
-    const baseSeq = baseStops;
-    const prSeq = prStops;
+    // Compared without their `{…}` blocks: same-name stops that only traded
+    // states (two "A" checkboxes, one checked, swapping which) did not move.
+    const baseSeq = baseStops.map((stop) => splitStatesBlock(stop).line);
+    const prSeq = prStops.map((stop) => splitStatesBlock(stop).line);
     if (
       baseSeq.join("\n") !== prSeq.join("\n") &&
       sameMultiset(baseSeq, prSeq)

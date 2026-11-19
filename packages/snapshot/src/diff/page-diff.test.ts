@@ -153,6 +153,18 @@ describe("diffArtifacts", () => {
     expect(byBlock.pages[0].views.tree.added).toEqual([]);
   });
 
+  it("an ignore pattern on the block also keeps a focus change on that line out", () => {
+    const base = artifact([page("Home", [], { tree: "main" })]);
+    const pr = artifact([
+      page("Home", [], { tree: 'main\n  button "Save" {disabled} [focused]' }),
+    ]);
+    const result = diffArtifacts(base, pr, {
+      ignoreViewLine: [/\{disabled\}$/],
+    });
+    expect(result.pages[0].views.tree).toEqual({ added: [], removed: [] });
+    expect(result.pages[0].structural).toEqual([]);
+  });
+
   it("a pure tab reorder yields a statement despite empty view diffs", () => {
     const base = artifact([
       page("Home", [], { tabs: '01. link "A"\n02. link "B"' }),

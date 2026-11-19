@@ -143,12 +143,13 @@ export function focusedDescriptor(
   for (const raw of rawTree.split("\n")) {
     const line = raw.trim();
     if (line === "" || !line.endsWith(" [focused]")) continue;
-    // Test ignore on the stripped descriptor (matching counts()), so a line the
-    // user ignored doesn't report a focus change either. The `{…}` states block
-    // is not part of what is focused: a focused button that only expanded is
-    // still the same element, and its state change is reported on its own.
-    const descriptor = splitStatesBlock(stripFocusMarker(line)).line;
-    if (!ignore?.(descriptor)) return descriptor;
+    // Test ignore on the marker-stripped line, block included (matching
+    // counts()), so a line the user ignored — by its block or not — doesn't
+    // report a focus change either. The `{…}` states block is then dropped from
+    // the descriptor: a focused button that only expanded is still the same
+    // element, and its state change is reported on its own.
+    const unmarked = stripFocusMarker(line);
+    if (!ignore?.(unmarked)) return splitStatesBlock(unmarked).line;
   }
   return null;
 }

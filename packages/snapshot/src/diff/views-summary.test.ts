@@ -739,6 +739,36 @@ describe("summarizeViews", () => {
       expect(kinds(changes)).toEqual(["state-changed"]);
     });
 
+    it("same-name stops that only traded states did not move", () => {
+      const changes = summarize(
+        { tabs: 'checkbox "A" {checked=false}\ncheckbox "A" {checked}' },
+        { tabs: 'checkbox "A" {checked}\ncheckbox "A" {checked=false}' },
+      );
+      expect(kinds(changes)).not.toContain("tab-order-reordered");
+    });
+
+    it("a stop that moved still reads as a reorder when its block came along", () => {
+      const changes = summarize(
+        { tabs: 'link "A" {current=page}\nlink "B"' },
+        { tabs: 'link "B"\nlink "A" {current=page}' },
+      );
+      expect(kinds(changes)).toEqual(["tab-order-reordered"]);
+    });
+
+    it("a heading level change consumes its tree line whatever its block", () => {
+      const changes = summarize(
+        {
+          tree: 'heading "A" (level 2) {description="x"}',
+          outline: "h2 A",
+        },
+        {
+          tree: 'heading "A" (level 3) {description="x"}',
+          outline: "h3 A",
+        },
+      );
+      expect(kinds(changes)).toEqual(["heading-level-changed"]);
+    });
+
     it("refuses an ambiguous pairing (2 removed, 1 added)", () => {
       const changes = summarize(
         { tree: 'checkbox "A" {checked}\ncheckbox "A" {checked=false}' },
