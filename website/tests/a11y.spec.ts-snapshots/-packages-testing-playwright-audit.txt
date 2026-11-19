@@ -176,12 +176,14 @@ main
     link "g-flag gotcha"
       code "g"
   heading "States" (level 2)
-  paragraph "Both trees print each node's states, description and announced properties in a block, as in jsdom (see ): . and print the text without blocks, to keep comparing with a baseline committed before them."
+  paragraph "Both trees print each node's states, description and announced properties in a block, as in jsdom (see ): . and print the text without blocks, to keep comparing with a baseline committed before them. The second takes a , exported from ."
     code "{…}"
     link "What a line carries"
     code "checkbox "Subscribe" {checked=false}"
     code "treeSnapshot({ states: false })"
     code "tabSequenceSnapshot({ states: false })"
+    code "TabSequenceSnapshotOptions"
+    code "@real-a11y-dev/testing/playwright"
   heading "Field values" (level 2)
   paragraph "prints what each field holds, the way a screen reader announces it. It's off by default, as in jsdom (see ):"
     code "treeSnapshot({ values: true })"

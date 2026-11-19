@@ -171,6 +171,7 @@
             "AttachOptions",
             "PlaywrightPage",
             "SemanticNavigatorPageHandle",
+            "TabSequenceSnapshotOptions",
             "TreeSnapshotOptions"
           ],
           "values": [

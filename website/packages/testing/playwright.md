@@ -161,7 +161,7 @@ A `RegExp` can't be passed through `page.evaluate()` directly — Playwright ser
 
 ## States
 
-Both trees print each node's states, description and announced properties in a `{…}` block, as in jsdom (see [What a line carries](/packages/testing/snapshots#what-a-line-carries)): `checkbox "Subscribe" {checked=false}`. `treeSnapshot({ states: false })` and `tabSequenceSnapshot({ states: false })` print the text without blocks, to keep comparing with a baseline committed before them.
+Both trees print each node's states, description and announced properties in a `{…}` block, as in jsdom (see [What a line carries](/packages/testing/snapshots#what-a-line-carries)): `checkbox "Subscribe" {checked=false}`. `treeSnapshot({ states: false })` and `tabSequenceSnapshot({ states: false })` print the text without blocks, to keep comparing with a baseline committed before them. The second takes a `TabSequenceSnapshotOptions`, exported from `@real-a11y-dev/testing/playwright`.
 
 ## Field values
 
