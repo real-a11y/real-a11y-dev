@@ -6,7 +6,7 @@ area: MCP
 type: Automated
 priority: P0
 status: Active
-validFrom: "mcp ≥ 0.1.0-beta.1. Native list_elements locators from mcp ≥ 0.1.0-beta.2 / browser ≥ 0.1.0-beta.12. From the producer migration (#258): no `producer` param, `rootSelector` on `get_tab_order` + the tree checkpoints only. 20 tools from mcp ≥ 0.1.0-beta.3 (`list_sessions` added with named sessions); 19 before that. `get_tab_order` has no end date. Step 6b is from mcp ≥ 0.1.0-beta.2 / audit ≥ 0.1.0-beta.12; earlier releases print a bare `(none)`, which is the old behaviour, not a fail. Step 4b is from mcp ≥ 0.1.0-beta.9; earlier releases print no line for the block of text, which is the old behaviour, not a fail."
+validFrom: "mcp ≥ 0.1.0-beta.1. Native list_elements locators from mcp ≥ 0.1.0-beta.2 / browser ≥ 0.1.0-beta.12. From the producer migration (#258): no `producer` param, `rootSelector` on `get_tab_order` + the tree checkpoints only. 20 tools from mcp ≥ 0.1.0-beta.3 (`list_sessions` added with named sessions); 19 before that. `get_tab_order` has no end date. Step 6b is from mcp ≥ 0.1.0-beta.2 / audit ≥ 0.1.0-beta.12; earlier releases print a bare `(none)`, which is the old behaviour, not a fail. Step 4b is from mcp ≥ 0.1.0-beta.9; earlier releases print no line for the block of text, which is the old behaviour, not a fail. Step 4c (the states block) is from mcp ≥ 0.1.0-beta.14."
 validUntil: ""
 expected: "each returns non-empty, correctly-shaped text; audit reports the seeded violation; list_elements returns role + name + a CSS locator (native included — that was fixed, docs used to say native carried none), and an empty category explains itself (scanned count + the roles it looked for) rather than a bare (none)"
 twin: D4
@@ -32,6 +32,10 @@ Against a page seeding a known violation:
 4. `get_semantic_tree`
    - **(4b)** `get_semantic_tree`, then `get_semantic_tree { includeGeneric: true }`,
      on a page with a `<div>` of text beside a button
+   - **(4c)** `get_semantic_tree` on a page with two checkboxes labelled
+     "Subscribe", one checked, and a
+     `<button aria-expanded="false" aria-haspopup="menu">Menu</button>`; then
+     read `get_semantic_tree`'s description in `tools/list`
 5. `get_heading_outline`
 6. `list_elements { filter: "image" }`
    - **(6b)** `list_elements { filter: "image" }` on a page whose graphics are
@@ -57,6 +61,12 @@ Against a page seeding a known violation:
   `generic "<its text>"`, beside the button. Without it, generics are folded away
   as before. The text missing, or turning up as the name of the landmark around
   it, is a fail
+- **4c** — `checkbox "Subscribe" {checked}`, `checkbox "Subscribe"
+  {checked=false}` and `button "Menu" {expanded=false, haspopup=menu}`: the
+  two boxes never read the same. The description says each node's states
+  follow its name in a `{…}` block. On mcp 0.1.0-beta.13 or earlier no line
+  carries a block and both boxes print `checkbox "Subscribe"`, which is the
+  old behaviour, not a fail
 - **6** — role + accessible name + **a CSS locator**. Native used to carry none,
   and the docs said so; both were fixed together
 - **6b** — **not** a bare `(none)`. From mcp ≥ 0.1.0-beta.2 /
