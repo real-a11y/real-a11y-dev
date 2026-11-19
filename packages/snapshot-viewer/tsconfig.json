@@ -6,5 +6,5 @@
     "jsxImportSource": "preact",
     "types": ["vite/client", "node"]
   },
-  "include": ["src/**/*.ts", "src/**/*.tsx", "vite.config.ts"]
+  "include": ["src/**/*.ts", "src/**/*.tsx", "vite.config.ts", "copy-build.ts"]
 }

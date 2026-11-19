@@ -89,6 +89,7 @@ opt out.
 | `session <subcommand>` | List, stop, or stop-all daemon sessions used by `--session` |
 | `snapshot [url...]` | Audit a URL (or a config page set) → one diffable JSON artifact (or `--md`) |
 | `diff <base> <pr>` | Findings-aware diff of two snapshots — new / changed / fixed |
+| `show-report [dir]` | Open your tests' snapshot report in the browser; follows new runs live |
 | `login <url> --save <file>` | Save a login session for `--storage-state` audits |
 
 Every command takes `--format json` for a stable machine envelope
@@ -421,6 +422,17 @@ it at the source with a repeatable regex:
 ```sh
 real-a11y diff base.json pr.json --ignore-view-line '^time "'
 ```
+
+## See what your tests recorded
+
+`@real-a11y-dev/testing`'s [snapshot report](https://real-a11y.dev/packages/testing/snapshots#the-snapshot-report) records the tree behind each snapshot. `show-report` opens those records in your browser, and the page redraws as the tests rerun:
+
+```sh
+npx vitest --watch          # in one terminal
+npx real-a11y show-report   # in another
+```
+
+It reads `./a11y-snapshots` unless you name another folder, runs no tests itself, and serves the page on `127.0.0.1` only.
 
 ## Adopt the gate on existing debt
 

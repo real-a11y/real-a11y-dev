@@ -10,6 +10,7 @@ h1 @real-a11y-dev/cli
   h2 In CI
   h2 Pages behind a login
   h2 Reuse a live session
+  h2 See what your tests recorded
   h2 Output you can trust
   h2 Limitations
   h2 See also

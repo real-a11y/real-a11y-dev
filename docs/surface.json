@@ -1213,6 +1213,45 @@
       {
         "flags": [
           {
+            "name": "config",
+            "type": "string"
+          },
+          {
+            "name": "help",
+            "short": "h",
+            "type": "boolean"
+          },
+          {
+            "name": "no-config",
+            "type": "boolean"
+          },
+          {
+            "name": "no-open",
+            "type": "boolean"
+          },
+          {
+            "name": "port",
+            "type": "string"
+          },
+          {
+            "name": "quiet",
+            "short": "q",
+            "type": "boolean"
+          },
+          {
+            "name": "verbose",
+            "type": "boolean"
+          }
+        ],
+        "group": "artifact",
+        "name": "show-report",
+        "producers": [],
+        "summary": "Open your tests' snapshot report; follows new runs live",
+        "usage": "show-report [dir] [flags]"
+      },
+      {
+        "flags": [
+          {
             "name": "allow-file",
             "type": "boolean"
           },

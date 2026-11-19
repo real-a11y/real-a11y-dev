@@ -20,6 +20,8 @@ navigation "On this page"
     listitem
       link "Reuse a live session"
     listitem
+      link "See what your tests recorded"
+    listitem
       link "Output you can trust"
     listitem
       link "Limitations"
@@ -304,6 +306,13 @@ main
     code "0700"
     code "0600"
     link "Security posture"
+  heading "See what your tests recorded" (level 2)
+  paragraph "can . opens those records in your browser, and the page redraws as the tests rerun:"
+    code "@real-a11y-dev/testing"
+    link "record the tree behind each snapshot"
+    code "show-report"
+  button "Copy Code"
+  code "npx vitest --watch # in one terminal npx real-a11y show-report # in another"
   heading "Output you can trust" (level 2)
   paragraph "emits one stable envelope for every command, single- or multi-page, so scripts always read :"
     code "--format json"

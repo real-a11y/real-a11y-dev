@@ -317,6 +317,9 @@ importers:
       '@real-a11y-dev/snapshot':
         specifier: workspace:*
         version: link:../snapshot
+      '@real-a11y-dev/snapshot-viewer':
+        specifier: workspace:*
+        version: link:../snapshot-viewer
       '@types/node':
         specifier: ^26.6.3
         version: 26.6.6
@@ -629,6 +632,9 @@ importers:
       vite:
         specifier: ^6.4.5
         version: 6.4.5(@types/node@26.6.6)(jiti@2.6.1)(lightningcss@1.33.0)(yaml@2.9.1)
+      vitest:
+        specifier: ^5.1.0
+        version: 5.1.0(@types/node@26.6.6)(@vitest/coverage-v8@5.1.0)(@vitest/ui@5.1.0)(jsdom@29.1.1)(vite@6.4.5(@types/node@26.6.6)(jiti@2.6.1)(lightningcss@1.33.0)(yaml@2.9.1))
 
   packages/storybook-addon:
     devDependencies:

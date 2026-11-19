@@ -8,6 +8,7 @@ import {
   parseListCategory,
   parseOnly,
   parseOpenOptions,
+  parsePort,
   parseStepSettle,
   inputPolicy,
   DEFAULT_STEP_SETTLE_MS,
@@ -17,6 +18,29 @@ import {
   rootHelp,
 } from "./args.js";
 import { CliError } from "./exit.js";
+
+describe("parsePort", () => {
+  it("leaves an unset port unset", () => {
+    expect(parsePort(undefined)).toBeUndefined();
+  });
+
+  it("takes 0 to 65535", () => {
+    expect(parsePort("0")).toBe(0);
+    expect(parsePort("9324")).toBe(9324);
+    expect(parsePort("65535")).toBe(65535);
+  });
+
+  it.each(["65536", "-1", "80.5", "abc", "", " 80", "0x50", "1e3"])(
+    "refuses %j",
+    (value) => {
+      expect(() => parsePort(value)).toThrow(CliError);
+    },
+  );
+
+  it("refuses a flag given with no value", () => {
+    expect(() => parsePort(true)).toThrow(/--port expects/);
+  });
+});
 
 describe("parseRules", () => {
   it("accepts a valid csv subset", () => {

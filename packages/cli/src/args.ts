@@ -28,6 +28,7 @@ import {
   HELP_SESSION,
   HELP_SNAPSHOT,
   HELP_DIFF,
+  HELP_SHOW_REPORT,
 } from "./command-help.js";
 import { CliError, type FailOn } from "./exit.js";
 import {
@@ -42,6 +43,7 @@ import {
   SESSION_FLAGS,
   SNAPSHOT_FLAGS,
   DIFF_FLAGS,
+  SHOW_REPORT_FLAGS,
   LIST_CATEGORIES,
   type ListCategory,
 } from "./flag-tables.js";
@@ -249,6 +251,16 @@ export const COMMANDS: Record<string, CommandSpec> = {
     help: HELP_DIFF,
     load: async () => (await import("./commands/diff.js")).diffCommand,
   },
+  "show-report": {
+    summary: "Open your tests' snapshot report; follows new runs live",
+    group: "artifact",
+    // Draws the trees a test run already recorded: it builds none.
+    producers: [],
+    options: SHOW_REPORT_FLAGS,
+    help: HELP_SHOW_REPORT,
+    load: async () =>
+      (await import("./commands/show-report.js")).showReportCommand,
+  },
 };
 
 const USAGE: Record<string, string> = {
@@ -263,6 +275,7 @@ const USAGE: Record<string, string> = {
   session: "session <subcommand>",
   snapshot: "snapshot [url...]",
   diff: "diff <base> <pr>",
+  "show-report": "show-report [dir]",
 };
 
 export function rootHelp(): string {
@@ -315,6 +328,17 @@ export function parseFailOn(value: FlagValue, fallback: FailOn): FailOn {
   throw new CliError(
     `--fail-on expects error, warning, or never — got "${String(value)}"`,
   );
+}
+
+export function parsePort(value: FlagValue): number | undefined {
+  if (value === undefined) return undefined;
+  const port = typeof value === "string" && /^\d+$/.test(value) ? +value : NaN;
+  if (!(port <= 65535)) {
+    throw new CliError(
+      `--port expects a port number from 0 to 65535 — got "${String(value)}"`,
+    );
+  }
+  return port;
 }
 
 export function parseFormat<T extends string>(

@@ -7,7 +7,7 @@
  * `process.exit`). `process.exit` is reserved for the double-Ctrl-C path.
  */
 
-import { runCleanups } from "./cleanup.js";
+import { interruptCommand, runCleanups } from "./cleanup.js";
 import { EXIT } from "./exit.js";
 import { run } from "./run.js";
 
@@ -17,6 +17,7 @@ delete process.env.REAL_A11Y_MCP_ALLOW_FILE;
 
 let interrupted = false;
 const onSignal = (): void => {
+  if (interruptCommand()) return;
   if (interrupted) process.exit(EXIT.ERROR);
   interrupted = true;
   process.stderr.write("real-a11y: error: interrupted\n");
