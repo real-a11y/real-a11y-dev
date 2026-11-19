@@ -83,3 +83,30 @@ describe("toMatchA11yContract", () => {
     );
   });
 });
+
+describe("toMatchA11yContract — states blocks against an element", () => {
+  // The serializer prints no {…} block yet, so a block can't be checked
+  // against an element: both forms throw rather than let `.not` pass on
+  // nothing. Remove with the guard once the serializer prints blocks.
+  const html = `<form aria-label="Sign up"><input type="checkbox" checked aria-label="Subscribe"></form>`;
+
+  it("throws for a contract that writes a block", () => {
+    const el = mount(html);
+    expect(() =>
+      expect(el).toMatchA11yContract('checkbox "Subscribe" {checked}'),
+    ).toThrow(/prints no states yet/);
+  });
+
+  it("throws for the negated form too, instead of passing on nothing", () => {
+    const el = mount(html);
+    expect(() =>
+      expect(el).not.toMatchA11yContract('checkbox "Subscribe" {checked}'),
+    ).toThrow(/prints no states yet/);
+  });
+
+  it("still checks a block against a tree string that prints one", () => {
+    expect(
+      'form "Sign up"\n  checkbox "Subscribe" {checked}',
+    ).toMatchA11yContract('checkbox "Subscribe" {checked}');
+  });
+});

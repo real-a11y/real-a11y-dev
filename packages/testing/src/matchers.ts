@@ -46,7 +46,11 @@ import {
   type ValidatedNode,
 } from "@real-a11y-dev/validate";
 
-import { verifyContract, type VerifyContractOptions } from "./contract.js";
+import {
+  contractWritesStates,
+  verifyContract,
+  type VerifyContractOptions,
+} from "./contract.js";
 import {
   a11ySnapshotSerializer,
   boxSnapshot,
@@ -405,6 +409,16 @@ function toMatchA11yContract(
 ): MatcherResult {
   let targetText: string;
   if (received instanceof Element) {
+    // `serializeTree` prints no `{…}` states block yet, so a block in the
+    // contract can't be checked against an element: a returned failure is
+    // exactly what `.not` inverts, and the negated form would pass while
+    // asserting nothing. Throw instead, as for any unanswerable call. Remove
+    // this once the serializer prints blocks.
+    if (contractWritesStates(contractText)) {
+      throw new TypeError(
+        "toMatchA11yContract: the contract asserts a {…} states block, but the tree of a DOM Element prints no states yet, so the block can't be checked. Pass a serialized tree string that prints states, or remove the block.",
+      );
+    }
     targetText = serializeTree(received);
   } else if (typeof received === "string") {
     targetText = received;

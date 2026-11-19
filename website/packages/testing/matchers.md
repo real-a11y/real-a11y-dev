@@ -206,7 +206,7 @@ expect(container).toMatchA11yContract(`
 
 Matching is **containment with ancestor semantics**:
 
-- every contract node must appear with the same role (and name / `(level N)` / `[focused]` when the contract specifies them — an **omitted name matches any name**);
+- every contract node must appear with the same role (and name / `= "value"` / `(level N)` / `[focused]` when the contract specifies them — an **omitted name matches any name**);
 - each node must sit somewhere **under** its contract parent's match — intermediate wrappers in the implementation are fine, so `textbox "Email address"` matches even when the real markup nests it in a `group "Credentials"`;
 - contract nodes must appear in document order;
 - extra target nodes are always allowed.
@@ -249,9 +249,11 @@ expect(treeText).toMatchA11yContract(`
 `);
 ```
 
-In containment the received node must carry at least the block's entries, in any order, with quoted values compared typography-folded like names. Under `{ strict: true }` it must carry exactly those entries. A line without a block says nothing about states, in either mode, so a contract that never writes one matches whatever a node's states are. When a node matches on everything but its states, the failure names what is missing: `same role and name, missing checked: checkbox "Subscribe" {checked=false} (line 3)`.
+In containment the received node must carry at least the block's entries, in any order, with quoted values compared typography-folded like names. Under `{ strict: true }` it must carry exactly those entries, and a strict failure shows each side's block as written. An empty block, `{}`, asserts that the node has no states, in either mode. A line without a block says nothing about states, in either mode, so a contract that never writes one matches whatever a node's states are. When a node matches on everything but its states, the failure names what is missing: `same role and name, missing checked: checkbox "Subscribe" {checked=false} (line 3)`.
 
-A block can only match received text that prints one. `treeSnapshot` doesn't print states yet, so neither does a DOM Element received here; until it does, a block matches only a serialized tree string that carries one.
+A quoted value is a JSON string, so a quote or a backslash inside it is escaped: `description="Say \"hi\""`. A template literal reads those escapes before the matcher sees the text: `\"` becomes a bare `"`, and the line no longer parses; `\\` becomes one backslash, and the value no longer matches. When a value holds either, write the contract with `String.raw` or keep it in a file.
+
+A block can only match received text that prints one. `treeSnapshot` doesn't print states yet, so neither does a DOM Element received here: a contract that writes a block against an Element throws, with or without `.not`, instead of passing on a check it can't make. Until the serializer prints states, a block matches only a serialized tree string that carries one.
 
 Because a serialized string is accepted, the same contract can be checked against a **committed snapshot artifact** — not only a live test render.
 
