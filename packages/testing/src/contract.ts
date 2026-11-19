@@ -9,12 +9,11 @@
 //
 // A *contract* is a tree written in the same grammar `serializeTree` emits:
 //
-//     role "name" (level N) [focused]      — 2-space indent per depth
+//     role "name" (level N) {states} [focused]   — 2-space indent per depth
 //
-// A received tree may also carry a `{…}` states block before `[focused]`
-// (`checkbox "Subscribe" {checked}`). It is set aside and not compared: a
-// contract can't assert states yet, so a contract line holding one is
-// rejected rather than silently ignored.
+// The `{…}` states block (`checkbox "Subscribe" {checked}`) holds the states,
+// description and announced properties the serializer prints. A contract line
+// without one says nothing about states; a line with one asserts it.
 //
 // plus authoring affordances the serializer never emits: blank lines, `#`
 // comment lines, and an optional `---` frontmatter block (provenance — a source
@@ -24,7 +23,8 @@
 //
 //   * every contract node must appear in the target with the same role (and
 //     name / level / focused when the contract specifies them — an omitted name
-//     matches any name);
+//     matches any name), and with at least the tokens of its states block,
+//     when it has one;
 //   * each node must sit somewhere UNDER its contract parent's match (ancestor
 //     semantics — intermediate wrappers in the implementation are fine, the same
 //     way the serializer drops `generic` nodes);
@@ -32,12 +32,18 @@
 //   * extra target nodes are always allowed.
 //
 // `strict: true` switches to exact tree equality — the contract behaves like a
-// committed snapshot baseline.
+// committed snapshot baseline. A states block, where the contract writes one,
+// must then hold exactly the received node's tokens (in any order); a line
+// without one still says nothing about states.
 //
 // Matching is ordered tree embedding by backtracking — linear-ish for
 // contract-sized trees, with a step guard against pathological ambiguity.
 
-import { foldTypography, splitStatesBlock } from "@real-a11y-dev/serialize";
+import {
+  foldTypography,
+  splitStatesBlock,
+  statesTokens,
+} from "@real-a11y-dev/serialize";
 
 // ─── parsing ─────────────────────────────────────────────────────────────────
 
@@ -50,6 +56,12 @@ export interface ContractNode {
   level?: number;
   /** `true` = must hold focus; `undefined` = unconstrained. */
   focused?: boolean;
+  /**
+   * The tokens of the line's `{…}` states block (`["checked",
+   * 'description="x"']`); `undefined` when the line has none, which in a
+   * contract leaves states unconstrained.
+   */
+  states?: string[];
   /** Depth in the parsed tree (0 = root), rebased to the shallowest line. */
   depth: number;
   /** 1-based line number in the source text, for messages. */
@@ -71,7 +83,6 @@ function parseNodeLine(
   content: string,
   line: number,
   depth: number,
-  rejectStates: boolean,
 ): ContractNode {
   let rest = content;
   let focused: boolean | undefined;
@@ -80,14 +91,8 @@ function parseNodeLine(
     rest = rest.slice(0, -FOCUSED_SUFFIX.length);
   }
   const { line: withoutStates, block } = splitStatesBlock(rest);
-  if (block !== undefined) {
-    if (rejectStates) {
-      throw new Error(
-        `a11y contract line ${line}: '{${block}}' — a contract can't assert states or the description yet, so this block would never be checked. Remove it; the received tree's {…} blocks are not compared.`,
-      );
-    }
-    rest = withoutStates;
-  }
+  rest = withoutStates;
+  const states = block === undefined ? undefined : statesTokens(block);
   let level: number | undefined;
   const levelMatch = LEVEL_SUFFIX_RE.exec(rest);
   if (levelMatch) {
@@ -106,7 +111,7 @@ function parseNodeLine(
       !nameToken.endsWith('"')
     ) {
       throw new Error(
-        `a11y contract line ${line}: cannot parse '${content}' — expected \`role "name" (level N) [focused]\``,
+        `a11y contract line ${line}: cannot parse '${content}' — expected \`role "name" (level N) {states} [focused]\``,
       );
     }
     name = nameToken.slice(1, -1);
@@ -116,7 +121,7 @@ function parseNodeLine(
       `a11y contract line ${line}: '${role}' does not look like a role`,
     );
   }
-  return { role, name, level, focused, depth, line, children: [] };
+  return { role, name, level, focused, states, depth, line, children: [] };
 }
 
 export interface ParseOptions {
@@ -127,14 +132,6 @@ export interface ParseOptions {
    * the nearest shallower ancestor.
    */
   strictIndent?: boolean;
-  /**
-   * Throw on a line holding a `{…}` states block instead of setting it aside.
-   * Right for a hand-authored contract: a contract can't assert states yet,
-   * and a block it silently ignored would read as an assertion that never
-   * runs. Leave OFF (default) for machine-emitted trees, whose blocks are
-   * dropped before matching.
-   */
-  rejectStates?: boolean;
 }
 
 /**
@@ -195,12 +192,7 @@ export function parseA11yTree(
     }
     const depth = Math.min(wanted, ancestors.length);
 
-    const node = parseNodeLine(
-      entry.content,
-      entry.line,
-      depth,
-      options.rejectStates === true,
-    );
+    const node = parseNodeLine(entry.content, entry.line, depth);
     ancestors.length = depth;
     if (depth === 0) roots.push(node);
     else ancestors[depth - 1]!.children.push(node);
@@ -232,21 +224,41 @@ function flatten(roots: ContractNode[]): FlatNode[] {
   return flat;
 }
 
-function describeNode(node: ContractNode): string {
+/** A node as a line of the grammar. `states` is the block to print, the
+ *  node's own by default; `null` prints none. */
+function describeNode(
+  node: ContractNode,
+  states: string[] | null = node.states ?? null,
+): string {
   const name = node.name !== undefined ? ` "${node.name}"` : "";
   const level = node.level !== undefined ? ` (level ${node.level})` : "";
+  const block = states ? ` {${states.join(", ")}}` : "";
   const focused = node.focused ? " [focused]" : "";
-  return `${node.role}${name}${level}${focused}`;
+  return `${node.role}${name}${level}${block}${focused}`;
 }
 
-function canonicalLines(roots: ContractNode[]): string[] {
-  const out: string[] = [];
-  const visit = (node: ContractNode) => {
-    out.push(`${"  ".repeat(node.depth)}${describeNode(node)}`);
-    for (const child of node.children) visit(child);
+/**
+ * Both trees as indented lines for strict equality. A block prints, its
+ * tokens sorted so their order doesn't matter, only where the contract line
+ * at that position writes one: a line without a block says nothing about
+ * states, in strict mode as in containment.
+ */
+function strictLines(
+  contract: ContractNode[],
+  target: ContractNode[],
+): { want: string[]; got: string[] } {
+  const want = flatten(contract).map((f) => f.node);
+  // Line `i` of either tree prints a block when contract line `i` has one.
+  const line = (node: ContractNode, i: number) =>
+    "  ".repeat(node.depth) +
+    describeNode(
+      node,
+      want[i]?.states ? [...(node.states ?? [])].sort() : null,
+    );
+  return {
+    want: want.map(line),
+    got: flatten(target).map((f, i) => line(f.node, i)),
   };
-  for (const root of roots) visit(root);
-  return out;
 }
 
 // ─── containment matching ────────────────────────────────────────────────────
@@ -264,6 +276,13 @@ function nodeMatches(want: ContractNode, got: ContractNode): boolean {
   }
   if (want.level !== undefined && want.level !== got.level) return false;
   if (want.focused && !got.focused) return false;
+  // A states block asserts at least its tokens, folded like names, so a
+  // description typed with straight quotes matches a curly one.
+  if (want.states) {
+    const have = new Set((got.states ?? []).map(foldTypography));
+    if (!want.states.every((token) => have.has(foldTypography(token))))
+      return false;
+  }
   return true;
 }
 
@@ -493,21 +512,15 @@ export function verifyContract(
   options: VerifyContractOptions = {},
 ): VerifyContractResult {
   // The contract is authored by hand — an indent jump is a typo worth
-  // reporting, and a states block is an assertion we can't check yet. The
-  // target is machine-emitted, where jumps are legitimate and blocks are
-  // dropped.
-  const contract = parseA11yTree(contractText, {
-    strictIndent: true,
-    rejectStates: true,
-  });
+  // reporting. The target is machine-emitted, where jumps are legitimate.
+  const contract = parseA11yTree(contractText, { strictIndent: true });
   if (contract.roots.length === 0) {
     throw new Error("a11y contract: no nodes — the contract is empty");
   }
   const target = parseA11yTree(targetText);
 
   if (options.strict) {
-    const want = canonicalLines(contract.roots);
-    const got = canonicalLines(target.roots);
+    const { want, got } = strictLines(contract.roots, target.roots);
     const pass = want.join("\n") === got.join("\n");
     return {
       pass,

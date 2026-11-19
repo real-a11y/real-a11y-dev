@@ -31,6 +31,9 @@ const TOKEN = String.raw`[A-Za-z][\w-]*(?:=(?:[\w.-]+|"[^"\\]*(?:\\.[^"\\]*)*"))
 /** A whole block at the end of a line: ` {token, token}`. */
 const BLOCK_RE = new RegExp(String.raw` \{(${TOKEN}(?:, ${TOKEN})*)\}$`);
 
+/** Every token of a block's contents, in order. */
+const TOKENS_RE = new RegExp(TOKEN, "g");
+
 export interface SplitStatesBlock {
   /** The line without its block. */
   line: string;
@@ -58,4 +61,15 @@ export function splitStatesBlock(line: string): SplitStatesBlock {
   const match = BLOCK_RE.exec(line);
   if (!match) return { line };
   return { line: line.slice(0, match.index), block: match[1] };
+}
+
+/**
+ * The tokens of a block's contents, as {@link splitStatesBlock} returns them:
+ * `checked=false, description="a, b"` → `["checked=false",
+ * 'description="a, b"']`. A JSON string stays whole, whatever it holds.
+ *
+ * @internal Shared by the packages that read serialized trees; not public.
+ */
+export function statesTokens(block: string): string[] {
+  return block.match(TOKENS_RE) ?? [];
 }

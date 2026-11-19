@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { splitStatesBlock } from "./states-block.js";
+import { splitStatesBlock, statesTokens } from "./states-block.js";
 
 describe("splitStatesBlock", () => {
   it("returns a line with no block unchanged", () => {
@@ -101,5 +101,34 @@ describe("splitStatesBlock", () => {
     ]) {
       expect(splitStatesBlock(line)).toEqual({ line });
     }
+  });
+});
+
+describe("statesTokens", () => {
+  it("splits a block's contents into its tokens, in order", () => {
+    expect(statesTokens("checked=false, required, current=page")).toEqual([
+      "checked=false",
+      "required",
+      "current=page",
+    ]);
+  });
+
+  it("keeps a JSON string whole, whatever separators or braces it holds", () => {
+    const description = String.raw`description="a, b} \"c\""`;
+    expect(statesTokens(`required, ${description}, disabled`)).toEqual([
+      "required",
+      description,
+      "disabled",
+    ]);
+  });
+
+  it("reads the block splitStatesBlock returns", () => {
+    const { block } = splitStatesBlock(
+      'button "Menu" {expanded=false, haspopup=menu} [focused]',
+    );
+    expect(statesTokens(block ?? "")).toEqual([
+      "expanded=false",
+      "haspopup=menu",
+    ]);
   });
 });

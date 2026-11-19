@@ -60,7 +60,7 @@ describe("parseA11yTree", () => {
     expect(roots[0]!.children[0]!.role).toBe("button");
   });
 
-  it("sets a {…} states block aside in a received tree", () => {
+  it("reads a {…} states block into tokens, with the level and focus around it", () => {
     const { roots } = parseA11yTree(
       [
         'form "Sign up"',
@@ -69,21 +69,29 @@ describe("parseA11yTree", () => {
       ].join("\n"),
     );
     const [checkbox, button] = roots[0]!.children;
-    expect(checkbox).toMatchObject({ role: "checkbox", name: "Subscribe" });
+    expect(roots[0]!.states).toBeUndefined();
+    expect(checkbox).toMatchObject({
+      role: "checkbox",
+      name: "Subscribe",
+      states: ["checked"],
+    });
     expect(button).toMatchObject({
       role: "button",
       name: "Menu",
       level: 2,
       focused: true,
+      states: ["expanded=false", "haspopup=menu"],
     });
   });
 
-  it("rejects a {…} states block when rejectStates is set, naming the line and the block", () => {
-    expect(() =>
-      parseA11yTree('main\n  checkbox "Subscribe" {checked=false}', {
-        rejectStates: true,
-      }),
-    ).toThrow(/line 2: '\{checked=false\}' — a contract can't assert states/);
+  it("keeps a JSON string holding a separator as one token", () => {
+    const { roots } = parseA11yTree(
+      'textbox "Email" {required, description="Work, or personal"}',
+    );
+    expect(roots[0]!.states).toEqual([
+      "required",
+      'description="Work, or personal"',
+    ]);
   });
 
   it("round-trips serializeTree output, which starts at indent 0", () => {
@@ -277,33 +285,93 @@ describe("verifyContract — typography and strict", () => {
 describe("verifyContract — states blocks", () => {
   const RECEIVED = [
     'form "Sign up"',
-    '  textbox "Email" {required, description="We never share it"}',
+    '  textbox "Email" {required, description="We don’t share it"}',
     '  checkbox "Subscribe" {checked=false}',
     '  button "Join"',
   ].join("\n");
 
-  it("a received tree's blocks don't stop a contract without them from matching", () => {
+  it("a contract line without a block says nothing about states", () => {
     expect(
       verifyContract('form "Sign up"\n  checkbox "Subscribe"', RECEIVED).pass,
     ).toBe(true);
   });
 
-  it("strict: the blocks are not compared", () => {
-    const contract = [
-      'form "Sign up"',
-      '  textbox "Email"',
-      '  checkbox "Subscribe"',
-      '  button "Join"',
-    ].join("\n");
-    expect(verifyContract(contract, RECEIVED, { strict: true }).pass).toBe(
+  it("a block asserts at least its tokens, in any order", () => {
+    expect(
+      verifyContract('checkbox "Subscribe" {checked=false}', RECEIVED).pass,
+    ).toBe(true);
+    expect(verifyContract('textbox "Email" {required}', RECEIVED).pass).toBe(
       true,
     );
   });
 
-  it("a contract line holding a block throws instead of passing unchecked", () => {
-    expect(() =>
-      verifyContract('checkbox "Subscribe" {checked}', RECEIVED),
-    ).toThrow(/line 1: '\{checked\}'/);
+  it("fails when the received node lacks a token, naming the node with its block", () => {
+    const result = verifyContract(
+      'form "Sign up"\n  checkbox "Subscribe" {checked}',
+      RECEIVED,
+    );
+    expect(result.pass).toBe(false);
+    expect(result.message).toContain('checkbox "Subscribe" {checked}');
+    expect(result.message).toContain(
+      'checkbox "Subscribe" {checked=false} (line 3)',
+    );
+  });
+
+  it("fails against a received node with no block at all", () => {
+    expect(verifyContract('button "Join" {disabled}', RECEIVED).pass).toBe(
+      false,
+    );
+  });
+
+  it("folds typography in a token, as it does in names", () => {
+    expect(
+      verifyContract(
+        `textbox "Email" {description="We don't share it"}`,
+        RECEIVED,
+      ).pass,
+    ).toBe(true);
+  });
+
+  describe("strict", () => {
+    const contract = (email: string, checkbox: string) =>
+      ['form "Sign up"', `  ${email}`, `  ${checkbox}`, '  button "Join"'].join(
+        "\n",
+      );
+
+    it("a line without a block still says nothing about states", () => {
+      expect(
+        verifyContract(
+          contract('textbox "Email"', 'checkbox "Subscribe"'),
+          RECEIVED,
+          { strict: true },
+        ).pass,
+      ).toBe(true);
+    });
+
+    it("a block must hold exactly the received tokens, in any order", () => {
+      const exact = contract(
+        `textbox "Email" {description="We don’t share it", required}`,
+        'checkbox "Subscribe" {checked=false}',
+      );
+      expect(verifyContract(exact, RECEIVED, { strict: true }).pass).toBe(true);
+      const subset = contract(
+        'textbox "Email" {required}',
+        'checkbox "Subscribe"',
+      );
+      const result = verifyContract(subset, RECEIVED, { strict: true });
+      expect(result.pass).toBe(false);
+      expect(result.message).toContain('  -   textbox "Email" {required}');
+    });
+
+    it("is byte-exact on tokens, as on names", () => {
+      const folded = contract(
+        `textbox "Email" {description="We don't share it", required}`,
+        'checkbox "Subscribe"',
+      );
+      expect(verifyContract(folded, RECEIVED, { strict: true }).pass).toBe(
+        false,
+      );
+    });
   });
 });
 
