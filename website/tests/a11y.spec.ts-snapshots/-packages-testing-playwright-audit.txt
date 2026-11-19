@@ -16,6 +16,8 @@ navigation "On this page"
     listitem
       link "Redacting variable content" {description="Redacting variable content"}
     listitem
+      link "States" {description="States"}
+    listitem
       link "Field values" {description="Field values"}
     listitem
       link "How it works" {description="How it works"}
@@ -173,6 +175,13 @@ main
     code "RegExp"
     link "g-flag gotcha"
       code "g"
+  heading "States" (level 2)
+  paragraph "Both trees print each node's states, description and announced properties in a block, as in jsdom (see ): . and print the text without blocks, to keep comparing with a baseline committed before them."
+    code "{…}"
+    link "What a line carries"
+    code "checkbox "Subscribe" {checked=false}"
+    code "treeSnapshot({ states: false })"
+    code "tabSequenceSnapshot({ states: false })"
   heading "Field values" (level 2)
   paragraph "prints what each field holds, the way a screen reader announces it. It's off by default, as in jsdom (see ):"
     code "treeSnapshot({ values: true })"

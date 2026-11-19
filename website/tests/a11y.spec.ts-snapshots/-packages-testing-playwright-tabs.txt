@@ -5,6 +5,7 @@ link "Auditing the native tree" {description="Auditing the native tree"}
 link "Testing that assertions fail on broken pages" {description="Testing that assertions fail on broken pages"}
 link "Determinism" {description="Determinism"}
 link "Redacting variable content" {description="Redacting variable content"}
+link "States" {description="States"}
 link "Field values" {description="Field values"}
 link "How it works" {description="How it works"}
 link "Error propagation" {description="Error propagation"}
@@ -33,6 +34,7 @@ link "redact"
 button "Copy Code"
 generic
 link "g-flag gotcha"
+link "What a line carries"
 link "Field values"
 button "Copy Code"
 generic

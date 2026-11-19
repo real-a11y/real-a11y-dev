@@ -56,6 +56,8 @@ main
 
 Pass `{ values: true }` to also print what each field holds, the way a screen reader announces it: `textbox "Email" = "jane@x.com"`, or `= "[redacted]"` for a password or card field. It's off by default, so existing snapshots don't change. The same option works on `boxedTreeSnapshot`, `a11yDiff` and the Playwright adapter's `sn.treeSnapshot`.
 
+A line also carries the node's states, description and announced properties in a `{…}` block, on by default, so a checked and an unchecked checkbox read differently: `checkbox "Subscribe" {checked}` and `checkbox "Subscribe" {checked=false}`. Pass `{ states: false }` for the text without blocks, to keep comparing with a baseline committed before them; it works on `treeSnapshot`, `tabSequenceSnapshot`, `boxedTreeSnapshot` and the Playwright adapter's `sn.treeSnapshot` and `sn.tabSequenceSnapshot`. [What a line carries](https://real-a11y.dev/packages/testing/snapshots#what-a-line-carries) lists each key.
+
 `@testing-library/react` is **optional** — any `Element` works as an audit root — but it is the usual way to get a container:
 
 ```ts

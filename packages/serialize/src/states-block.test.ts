@@ -150,6 +150,10 @@ describe("statesBlock", () => {
     expect(block({})).toBe("");
   });
 
+  it("checked and pressed: nothing for a token they don't take", () => {
+    expect(block({ checked: "page" })).toBe("");
+  });
+
   it("checked and pressed: true, false and mixed", () => {
     expect(block({ checked: true })).toBe(" {checked}");
     expect(block({ checked: false })).toBe(" {checked=false}");
@@ -303,6 +307,8 @@ describe("unprintableToken", () => {
 
   it("names the printed form of a token that never prints", () => {
     expect(unprintableToken("checked=true")).toMatch(/never prints/);
+    expect(unprintableToken("checked=yes")).toMatch(/never prints/);
+    expect(unprintableToken("pressed=1")).toMatch(/never prints/);
     expect(unprintableToken("required=false")).toMatch(/never prints/);
     expect(unprintableToken("haspopup=false")).toMatch(/never prints/);
     expect(unprintableToken("roledescription=slide")).toMatch(/never prints/);

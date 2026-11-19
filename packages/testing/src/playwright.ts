@@ -118,13 +118,23 @@ export interface TreeSnapshotOptions {
   states?: boolean;
 }
 
+/** Options for the adapter's {@link SemanticNavigatorPageHandle.tabSequenceSnapshot}. */
+export interface TabSequenceSnapshotOptions {
+  /**
+   * Print each stop's `{…}` states block — `checkbox "Subscribe" {checked}`.
+   * Default true. Pass `false` for the text without blocks. Mirrors the jsdom
+   * `tabSequenceSnapshot` option.
+   */
+  states?: boolean;
+}
+
 export interface SemanticNavigatorPageHandle {
   /** Serialised A11y (or DOM) tree — deterministic, safe to snapshot. */
   treeSnapshot(options?: TreeSnapshotOptions): Promise<string>;
   /** Indented heading outline (h1..h6) in document order. */
   outlineSnapshot(): Promise<string>;
   /** Focusable elements in computed tab order, numbered. */
-  tabSequenceSnapshot(): Promise<string>;
+  tabSequenceSnapshot(options?: TabSequenceSnapshotOptions): Promise<string>;
   /** Throws if any interactive element has an empty accessible name. */
   assertNoUnlabeledInteractive(): Promise<void>;
   /** Throws if heading levels are skipped or there is not exactly one h1. */
@@ -377,8 +387,13 @@ export async function attach(
     outlineSnapshot() {
       return evalFn<string>("outlineSnapshot");
     },
-    tabSequenceSnapshot() {
-      return evalFn<string>("tabSequenceSnapshot");
+    tabSequenceSnapshot(opts: TabSequenceSnapshotOptions = {}) {
+      // Only `states` crosses: the in-page call needs no other option, and a
+      // plain object survives `page.evaluate()` serialisation as is.
+      return evalFn<string>(
+        "tabSequenceSnapshot",
+        opts.states === undefined ? [] : [{ states: opts.states }],
+      );
     },
     assertNoUnlabeledInteractive() {
       return evalFn<void>("assertNoUnlabeledInteractive");

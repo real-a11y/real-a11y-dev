@@ -96,13 +96,13 @@ function keyed(key: string, value: string): string {
     : `${key}=${JSON.stringify(value)}`;
 }
 
-/** checked, pressed: `key`, `key=false`, `key=mixed` (or another token). */
+/** checked, pressed: `key`, `key=false`, `key=mixed`; any other token is
+ *  not a state these take, and prints nothing. */
 function tristate(key: string, value: StateValue): string | undefined {
   const word = stateWord(value);
-  if (word === undefined) return undefined;
   if (word === true) return key;
   if (word === false) return `${key}=false`;
-  return keyed(key, word);
+  return word === "mixed" ? `${key}=mixed` : undefined;
 }
 
 /** expanded: `expanded` or `expanded=false`. */
@@ -204,7 +204,7 @@ function printable(key: string, value: string | undefined): boolean {
   switch (key) {
     case "checked":
     case "pressed":
-      return value !== "true";
+      return value === undefined || value === "false" || value === "mixed";
     case "expanded":
       return value === undefined || value === "false";
     case "current":
