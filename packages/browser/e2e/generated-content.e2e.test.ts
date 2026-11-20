@@ -205,6 +205,24 @@ const CASES: Case[] = [
     name: "Save nowx",
   },
   {
+    id: "wrapping-label-hidden-tail",
+    css: `.w3::after{content:"*"}`,
+    html: `<label class="w3">Email<input id="wrapping-label-hidden-tail"><span hidden> </span><!-- --></label>`,
+    name: "Email *",
+  },
+  {
+    id: "wrapping-label-text-last",
+    css: `.w4::after{content:"*"}`,
+    html: `<label class="w4"><input id="wrapping-label-text-last">Email</label>`,
+    name: "Email*",
+  },
+  {
+    id: "wrapping-label-leading-control",
+    css: `.w5::before{content:"*"}`,
+    html: `<label class="w5"><input id="wrapping-label-leading-control">Email</label>`,
+    name: "* Email",
+  },
+  {
     id: "display-none",
     css: `.n1::before{content:"x";display:none}`,
     html: `<button id="display-none" class="n1">Save</button>`,

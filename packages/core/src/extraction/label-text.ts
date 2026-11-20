@@ -85,25 +85,46 @@ export function wrappingLabelText(
       }
     }
   }
-  const { lead, trail } = edgeSpace(label, control, gen);
+  const { lead, trail } = edgeSpace(label, control, styleCache, gen);
   return gen.before + lead + parts.join(" ") + trail + gen.after;
 }
 
 /**
- * Whitespace at a label's edges separates its text from generated text: the
- * label's own control does not count as an edge.
+ * What separates a label's text from its generated text, as Chromium reads it:
+ * whitespace at an edge, or the label's own control sitting there. A comment,
+ * and a child the name skips as hidden, are not at the edge. Any other element
+ * at an edge adds none of its own.
  */
 function edgeSpace(
   label: Element,
   control: Element,
+  styleCache: StyleCache | null | undefined,
   gen: { before: string; after: string },
 ): { lead: string; trail: string } {
-  const kids = [...label.childNodes].filter((n) => n !== control);
-  const first = kids[0]?.textContent ?? "";
-  const last = kids[kids.length - 1]?.textContent ?? "";
+  const read = [...label.childNodes].filter((n) => {
+    const type = safeNodeType(n);
+    if (type === Node.TEXT_NODE) return true;
+    if (type !== Node.ELEMENT_NODE) return false;
+    if (n === control) return true;
+    const el = n as Element;
+    // An unreadable child (see wrappingLabelText) is not at the edge either.
+    try {
+      return (
+        !isAriaHiddenValue(safeGetAttribute(el, "aria-hidden")) &&
+        !isSubtreeHidden(el, getCachedComputedStyle(el, styleCache))
+      );
+    } catch {
+      return false;
+    }
+  });
+  const edge = (n: Node | undefined, re: RegExp) =>
+    n === control ||
+    (n !== undefined &&
+      safeNodeType(n) === Node.TEXT_NODE &&
+      re.test(n.textContent ?? ""));
   return {
-    lead: gen.before && /^\s/.test(first) ? " " : "",
-    trail: gen.after && /\s$/.test(last) ? " " : "",
+    lead: gen.before && edge(read[0], /^\s/) ? " " : "",
+    trail: gen.after && edge(read[read.length - 1], /\s$/) ? " " : "",
   };
 }
 
