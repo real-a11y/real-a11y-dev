@@ -661,16 +661,31 @@ describe("the states block (built bin)", () => {
         '<input aria-label="Card" autocomplete="cc-number"></div>' +
         '<ul role="listbox" id="Card-list" aria-label="Cards">' +
         option("Visa 1111", true) +
-        "</ul></main>",
+        "</ul>" +
+        // ARIA 1.1 with no relation: the wrapper holds its listbox as a child.
+        // Chromium relates the textbox inside to it (`controls`) on its own.
+        '<div role="combobox" aria-expanded="true" aria-label="Saved card wrapper">' +
+        '<input aria-label="Saved card" autocomplete="cc-number" value="4111" readonly>' +
+        '<ul role="listbox" aria-label="Saved cards">' +
+        option("Visa 4242", true) +
+        "</ul></div></main>",
     );
     const { code, stdout } = await runCli(["tree", page, "-q"]);
     expect(code).toBe(0);
     const lines = linesOf(stdout);
-    for (const label of ["01", "03", "2031", "2032", "03/31", "Visa 1111"]) {
+    for (const label of [
+      "01",
+      "03",
+      "2031",
+      "2032",
+      "03/31",
+      "Visa 1111",
+      "Visa 4242",
+    ]) {
       expect(lines).toContain(`option "${label}"`);
     }
     expect(stdout).not.toMatch(
-      /option "(01|03|2031|2032|03\/31|Visa 1111)" \{/,
+      /option "(01|03|2031|2032|03\/31|Visa 1111|Visa 4242)" \{/,
     );
     // An ordinary combobox's popup still says which option is selected.
     expect(lines).toContain('option "Red" {selected}');

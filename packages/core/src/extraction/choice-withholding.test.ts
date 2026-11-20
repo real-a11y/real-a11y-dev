@@ -95,8 +95,10 @@ describe("the choice a sensitive field holds", () => {
   });
 
   it("is withheld in a listbox an ARIA 1.1 wrapper holds, with no relation", () => {
-    // ARIA 1.1 lets a combobox own its listbox as a child; the native
-    // producers withhold this one too (the browser's inChoiceField).
+    // ARIA 1.1 lets a combobox own its listbox as a child. The native
+    // producers withhold this one too: Chromium gives the textbox inside such
+    // a wrapper a `controls` relation to the listbox of its own (measured,
+    // Chrome 153), pinned by the CLI e2e suite.
     expect(
       selectedOf(
         `<div role="combobox" aria-expanded="true">` +
