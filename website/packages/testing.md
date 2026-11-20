@@ -146,7 +146,7 @@ specifics for React, Testing Library and Playwright live in
 | **Assertions** | `assert*` functions that throw descriptive errors on broken structure. | [Assertions →](/packages/testing/assertions) |
 | **Matchers** | The same checks as ergonomic `expect` matchers, plus the `boxedTreeSnapshot()` serializer. Vitest + Jest. | [Matchers →](/packages/testing/matchers) |
 | **Flow API** | Fluent interaction chains that assert about the tree after each step. | [Flow API →](/packages/testing/flow) |
-| **Playwright adapter** | Run every helper against a real browser page via `attach(page)`. | [Playwright →](/packages/testing/playwright) |
+| **Playwright adapter** | Run every helper against a real browser page via `attach(page)`. Its `treeSnapshot()` and `tabSequenceSnapshot()` (options: `TabSequenceSnapshotOptions`) take `states` like jsdom's. | [Playwright →](/packages/testing/playwright) |
 
 New to the idea of snapshotting the accessibility tree? Start with the concept: [**Accessibility Snapshots**](/guide/accessibility-snapshots).
 

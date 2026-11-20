@@ -128,8 +128,12 @@ main
       row
         cell "Playwright adapter"
           strong "Playwright adapter"
-        cell "Run every helper against a real browser page via attach(page)."
+        cell "Run every helper against a real browser page via attach(page). Its treeSnapshot() and tabSequenceSnapshot() (options: TabSequenceSnapshotOptions) take states like jsdom's."
           code "attach(page)"
+          code "treeSnapshot()"
+          code "tabSequenceSnapshot()"
+          code "TabSequenceSnapshotOptions"
+          code "states"
         cell "Playwright →"
           link "Playwright →"
   paragraph "New to the idea of snapshotting the accessibility tree? Start with the concept: ."

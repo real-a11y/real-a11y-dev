@@ -2010,6 +2010,35 @@ describe("buildNativeTree — sensitive values in states, references and races",
       .filter((n) => n.a11y.role === "option")
       .map((n) => n.a11y.states.selected);
 
+  // Chromium leaves the AX `selected` state off a disabled option, while its
+  // markup `selected` attribute stays: a disabled `<select>`, or one inside
+  // `<fieldset disabled>`. The attribute alone must still be withheld.
+  const disabledAttrsOf = (
+    autocomplete: string | undefined,
+    options: { redactInput?: boolean } = {},
+  ) => {
+    const raw = select().map((n) =>
+      n.role?.value === "option"
+        ? { ...n, properties: [{ name: "disabled", value: { value: true } }] }
+        : n,
+    ) as RawNodes;
+    const enrich = enrichSelect(autocomplete);
+    enrich.set(23, domOf("option", { selected: "" }));
+    return nodesOf(buildNativeTree(raw, enrich, undefined, options))
+      .filter((n) => n.a11y.role === "option")
+      .map((n) => n.dom?.attributes.selected);
+  };
+
+  it("drops a disabled option's markup `selected`, which carries no AX state", () => {
+    expect(disabledAttrsOf("cc-exp-month")).toEqual([undefined, undefined]);
+    expect(disabledAttrsOf(undefined, { redactInput: true })).toEqual([
+      undefined,
+      undefined,
+    ]);
+    // An ordinary select in default mode keeps it.
+    expect(disabledAttrsOf(undefined)).toEqual([undefined, ""]);
+  });
+
   it("drops it inside a sensitive list box, which holds no AX value", () => {
     expect(listboxSelectedOf("cc-exp-year")).toEqual([undefined, undefined]);
     expect(listboxSelectedOf()).toEqual([false, true]);

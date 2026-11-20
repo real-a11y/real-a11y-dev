@@ -449,13 +449,24 @@ export function buildNativeTree(
     const { states, properties } = raw
       ? axFacets(raw)
       : { states: {}, properties: {} };
+    // The node's element, as the DOM walk of its own process recorded it.
+    const enriched =
+      source && nn.backendDOMNodeId !== null
+        ? source.document.enrichment.get(nn.backendDOMNodeId)
+        : undefined;
+
     // One decision for both places the selection shows: the AX state and the
-    // option's markup `selected` attribute on the `dom` facet.
-    // Only a node that carries a choice state has one to withhold, and the
-    // ancestry walk is only needed for one.
+    // option's markup `selected` attribute on the `dom` facet. Only a node
+    // that carries either has one to withhold, and the ancestry walk is only
+    // needed for one. Either alone counts: Chromium leaves the AX state off a
+    // disabled option (a disabled `<select>`, one in a disabled `<fieldset>`),
+    // while the markup attribute stays.
+    const carriesSelection =
+      NATIVE_AX_CHOICE_STATES.some((state) => state in states) ||
+      (enriched !== undefined && "selected" in enriched.attributes);
     const withholdSelection =
       !!source &&
-      NATIVE_AX_CHOICE_STATES.some((state) => state in states) &&
+      carriesSelection &&
       (source.document.prepared.sensitivity.regions.inside(source.raw) ||
         ((redactInput ||
           source.document.prepared.sensitivity.sensitiveFields.size > 0) &&
@@ -463,12 +474,6 @@ export function buildNativeTree(
     if (withholdSelection) {
       for (const state of NATIVE_AX_CHOICE_STATES) delete states[state];
     }
-
-    // The node's element, as the DOM walk of its own process recorded it.
-    const enriched =
-      source && nn.backendDOMNodeId !== null
-        ? source.document.enrichment.get(nn.backendDOMNodeId)
-        : undefined;
 
     // What a screen reader announces — never in strict mode, and `[redacted]`
     // for anything the sensitivity policy covers.
