@@ -1,3 +1,9 @@
+import {
+  safeGetAttribute,
+  safeParentElement,
+} from "../extraction/clobber-safe.js";
+import { isSensitiveChoiceHost } from "../extraction/sensitivity.js";
+
 /**
  * Attributes whose change creates or breaks accessibility references.
  * These are handled with a full re-extraction in the initial implementation
@@ -15,6 +21,38 @@ export const REFERENCE_ATTRS = new Set([
   // option or treeitem its role, and the owned element can be anywhere.
   "aria-owns",
 ]);
+
+/**
+ * True when a change to `attr` on `target` moves which choices a sensitive
+ * field withholds somewhere else: its popup listbox is not its descendant,
+ * so neither re-extracting `target` nor its subtree reaches the options there.
+ * That is a relation a sensitive field (or a combobox around one) gains or
+ * loses (`aria-controls`; `aria-owns` is a reference attribute already), or
+ * a field with such a relation, or inside a combobox with one, becoming or
+ * ceasing to be sensitive (`autocomplete`, `type`, `role`).
+ */
+export function movesSensitiveChoice(target: Element, attr: string): boolean {
+  if (attr === "aria-controls") return isSensitiveChoiceHost(target);
+  if (attr !== "autocomplete" && attr !== "type" && attr !== "role") {
+    return false;
+  }
+  if (hasPopupRelation(target)) return true;
+  // An ARIA 1.1 combobox around the field carries the relation for it. The
+  // climb reads parents through the prototype: a `<form>` met on the way can
+  // shadow `parentElement` with a control of its own.
+  for (let el = safeParentElement(target); el; el = safeParentElement(el)) {
+    const role = (safeGetAttribute(el, "role") ?? "").trim().split(/\s+/)[0];
+    if (role?.toLowerCase() === "combobox" && hasPopupRelation(el)) return true;
+  }
+  return false;
+}
+
+function hasPopupRelation(element: Element): boolean {
+  return (
+    safeGetAttribute(element, "aria-controls") !== null ||
+    safeGetAttribute(element, "aria-owns") !== null
+  );
+}
 
 /**
  * True when a change to `attr` costs a full re-extraction: a reference

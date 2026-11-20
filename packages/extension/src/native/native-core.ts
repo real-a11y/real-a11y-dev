@@ -46,6 +46,7 @@ import {
   cleanAXText,
   fieldRelationRoots,
   fieldStandIns,
+  sensitiveChoiceHosts,
   graftNativeFrame,
   isNativeIframeRole,
   NATIVE_MAX_FRAME_DEPTH,
@@ -249,10 +250,9 @@ export function nativeControls(
  */
 export function controlledRegion(
   raw: RawAXNode,
-  rawNodes: RawAXNode[],
+  index: NativeAXIndex<RawAXNode>,
   keptIds: ReadonlySet<string>,
 ): string[] {
-  const index = indexNativeAX(rawNodes);
   const stack = fieldRelationRoots(index, raw);
   if (stack.length === 0) return [];
   const byNodeId = index.byId;
@@ -1683,13 +1683,20 @@ async function readDocument(
     };
   });
   const withheldIds = [...sensitiveIds, ...held];
+  // What each withheld field controls or owns, and what an ARIA 1.1 combobox
+  // around one does: core's `sensitiveChoiceHosts`, the browser package's rule.
+  const index = indexNativeAX(rawNodes);
+  const hosts = sensitiveChoiceHosts(
+    index.byId,
+    withheldIds.flatMap((id) => {
+      const raw = rawById.get(id);
+      return raw ? [raw.nodeId] : [];
+    }),
+  );
   withholdInsideSensitive(
     enriched,
     withheldIds,
-    withheldIds.flatMap((id) => {
-      const raw = rawById.get(id);
-      return raw ? controlledRegion(raw, rawNodes, keptIds) : [];
-    }),
+    hosts.flatMap((host) => controlledRegion(host, index, keptIds)),
   );
 
   return enriched;

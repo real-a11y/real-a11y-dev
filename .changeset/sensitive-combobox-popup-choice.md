@@ -12,4 +12,4 @@ A sensitive field's popup no longer says which option is chosen. An ARIA combobo
 - **Chromium's tree** (`real-a11y tree`, `inspect`, `snapshot`, the MCP tree tools, the Playwright adapter's `tree: "native"`): Chromium leaves an owned listbox where it is under an `<input>`, so both relations are followed from the field.
 - **The in-page tree** (`treeSnapshot`, the matchers, `real-a11y tabs`, `get_tab_order`, and the inspector, React and Storybook panels): the same rule, which also closes an older gap where an authored `aria-selected` on a sensitive `<select>`'s option still printed.
 
-An ordinary combobox's popup keeps `{selected}`. Strict mode (`redactInput`) already withheld every choice field's selection and is unchanged.
+The relations count on the field or on an ARIA 1.1 combobox wrapped around it (`<div role="combobox" aria-controls="…"><input autocomplete="cc-number"></div>`). The live panels keep it withheld when a field gains its relation, or becomes sensitive, after the first read. An ordinary combobox's popup keeps `{selected}`. Strict mode (`redactInput`) already withheld every choice field's selection and is unchanged.

@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { fieldRelationRoots, fieldRelationTargets } from "./ax-node.js";
+import {
+  fieldRelationRoots,
+  fieldRelationTargets,
+  sensitiveChoiceHosts,
+} from "./ax-node.js";
 import { indexNativeAX, type RawAXNameNode } from "./value-regions.js";
 
 /** A combobox at backend 10 relating to backend 20, a wrapper around a list. */
@@ -67,5 +71,37 @@ describe("what a field controls or owns", () => {
       "2",
     ]);
     expect(fieldRelationTargets(index, raw[0]!)).toHaveLength(3);
+  });
+});
+
+describe("the nodes whose relations reach a sensitive field's popup", () => {
+  it("are the field and each combobox around it", () => {
+    // An ARIA 1.1 combobox: the wrapper carries the relation, the textbox
+    // inside it is the sensitive field.
+    const raw: RawAXNameNode[] = [
+      { nodeId: "1", childIds: ["2"], role: { value: "RootWebArea" } },
+      {
+        nodeId: "2",
+        parentId: "1",
+        childIds: ["3"],
+        role: { value: "combobox" },
+      },
+      {
+        nodeId: "3",
+        parentId: "2",
+        childIds: ["4"],
+        role: { value: "generic" },
+      },
+      { nodeId: "4", parentId: "3", role: { value: "textbox" } },
+    ];
+    const byId = indexNativeAX(raw).byId;
+    expect(sensitiveChoiceHosts(byId, ["4"]).map((n) => n.nodeId)).toEqual([
+      "4",
+      "2",
+    ]);
+    // A field outside any combobox is its own only host.
+    expect(sensitiveChoiceHosts(byId, ["2"]).map((n) => n.nodeId)).toEqual([
+      "2",
+    ]);
   });
 });

@@ -1871,7 +1871,9 @@ describe("withholdInsideSensitive", () => {
       { nodeId: "4", backendDOMNodeId: 40, role: { value: "option" } },
     ];
     const kept = new Set(["ax-dom-10", "ax-dom-30", "ax-dom-40"]);
-    expect(controlledRegion(raw[0]!, raw, kept)).toEqual(["ax-dom-30"]);
+    expect(controlledRegion(raw[0]!, indexNativeAX(raw), kept)).toEqual([
+      "ax-dom-30",
+    ]);
 
     const nodes = [
       n("ax-dom-10", [], {
@@ -1917,7 +1919,9 @@ describe("withholdInsideSensitive", () => {
       { nodeId: "4", backendDOMNodeId: 40, role: { value: "option" } },
     ];
     const kept = new Set(["ax-dom-10", "ax-dom-30", "ax-dom-40"]);
-    expect(controlledRegion(raw[0]!, raw, kept)).toEqual(["ax-dom-30"]);
+    expect(controlledRegion(raw[0]!, indexNativeAX(raw), kept)).toEqual([
+      "ax-dom-30",
+    ]);
   });
 
   it("marks every node below a sensitive one as withheld", () => {

@@ -7,7 +7,7 @@ import { realmSingleton } from "../utils/realm-singleton.js";
 
 import { safeGetAttribute, safeQuerySelectorAll } from "./clobber-safe.js";
 import { idScope } from "./flat-tree.js";
-import { isSensitiveField } from "./sensitivity.js";
+import { isSensitiveChoiceHost } from "./sensitivity.js";
 
 /**
  * id → first `aria-owns` owner (document order) for each id scope, built on
@@ -103,18 +103,13 @@ export function ariaOwner(element: Element): Element | null {
 }
 
 /**
- * The ids the sensitive fields in `scope` name in `aria-controls`. Only an
- * `<input>`, `<textarea>` or `<select>` can be one ({@link isSensitiveField}),
- * so only those are read.
+ * The ids that a sensitive field, or an ARIA 1.1 combobox around one
+ * ({@link isSensitiveChoiceHost}), names in `aria-controls` in `scope`.
  */
 function sensitiveControlTargets(scope: Document | ShadowRoot): Set<string> {
   const ids = new Set<string>();
-  const fields = safeQuerySelectorAll(
-    scope,
-    "input[aria-controls], textarea[aria-controls], select[aria-controls]",
-  );
-  for (const field of fields) {
-    if (!isSensitiveField(field)) continue;
+  for (const field of safeQuerySelectorAll(scope, "[aria-controls]")) {
+    if (!isSensitiveChoiceHost(field)) continue;
     const controls = safeGetAttribute(field, "aria-controls") ?? "";
     for (const id of controls.trim().split(/\s+/)) if (id) ids.add(id);
   }
@@ -122,9 +117,10 @@ function sensitiveControlTargets(scope: Document | ShadowRoot): Set<string> {
 }
 
 /**
- * True when a sensitive field names `element` in its `aria-controls`, in its
- * id scope: an ARIA combobox's popup listbox, which is not the field's
- * descendant, but whose selected option is the field's value.
+ * True when a sensitive field, or an ARIA 1.1 combobox around one, names
+ * `element` in its `aria-controls`, in its id scope: an ARIA combobox's popup
+ * listbox, which is not the field's descendant, but whose selected option is
+ * the field's value.
  *
  * @internal
  */

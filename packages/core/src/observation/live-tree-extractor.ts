@@ -33,6 +33,7 @@ import { warnOutsideProduction } from "../utils/warn.js";
 import {
   forcesFullExtraction,
   IMAGE_RENDERING_ATTRS,
+  movesSensitiveChoice,
   SCOPE_ATTRS,
 } from "./live-tree-attrs.js";
 import {
@@ -115,10 +116,14 @@ export class LiveTreeExtractor {
       redactInput: this.redactInput,
     });
     this.adoptResult(result);
-    // Strict mode's withheld choices, as this extraction read them.
-    if (this.redactInput) {
-      addMovedNativeStates(this.domNodes, true, this.choices, new Set());
-    }
+    // The withheld choices, as this extraction read them: a sensitive
+    // field's always, and in strict mode every choice field's.
+    addMovedNativeStates(
+      this.domNodes,
+      this.redactInput,
+      this.choices,
+      new Set(),
+    );
     return this.currentResult();
   }
 
@@ -211,7 +216,10 @@ export class LiveTreeExtractor {
         } else if (m.type === "attributes") {
           const target = m.target as Element;
           const attr = m.attributeName ?? "";
-          if (forcesFullExtraction(attr, this.redactInput)) {
+          if (
+            forcesFullExtraction(attr, this.redactInput) ||
+            movesSensitiveChoice(target, attr)
+          ) {
             needsFull = true;
             break;
           }

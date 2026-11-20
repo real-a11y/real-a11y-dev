@@ -70,6 +70,30 @@ describe("the choice a sensitive field holds", () => {
     ]);
   });
 
+  it("is withheld in the popup an ARIA 1.1 combobox around a sensitive field controls or owns", () => {
+    // The wrapper carries the relation; the field inside has none of its own.
+    for (const relation of ["aria-controls", "aria-owns"]) {
+      expect(
+        selectedOf(
+          `<div role="combobox" ${relation}="lb" aria-expanded="true">` +
+            `<input aria-label="Expiry month" autocomplete="cc-exp-month"></div>` +
+            `<ul role="listbox" id="lb" aria-label="Months">` +
+            `<li role="option" aria-selected="true">03</li></ul>`,
+        ),
+        relation,
+      ).toEqual([["03", undefined]]);
+    }
+    // …and an ordinary field in the same wrapper keeps the popup's choice.
+    expect(
+      selectedOf(
+        `<div role="combobox" aria-controls="lb" aria-expanded="true">` +
+          `<input aria-label="Color"></div>` +
+          `<ul role="listbox" id="lb" aria-label="Colors">` +
+          `<li role="option" aria-selected="true">Red</li></ul>`,
+      ),
+    ).toEqual([["Red", true]]);
+  });
+
   it("is kept in an ordinary combobox's popup", () => {
     expect(selectedOf(months('aria-controls="lb"'))).toEqual([
       ["01", false],

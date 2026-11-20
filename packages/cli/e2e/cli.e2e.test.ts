@@ -656,15 +656,22 @@ describe("the states block (built bin)", () => {
           true,
           option("Red", true) + option("Blue", false),
         ) +
-        "</main>",
+        // ARIA 1.1: the wrapper carries the relation for the field inside.
+        '<div role="combobox" aria-expanded="true" aria-controls="Card-list">' +
+        '<input aria-label="Card" autocomplete="cc-number"></div>' +
+        '<ul role="listbox" id="Card-list" aria-label="Cards">' +
+        option("Visa 1111", true) +
+        "</ul></main>",
     );
     const { code, stdout } = await runCli(["tree", page, "-q"]);
     expect(code).toBe(0);
     const lines = linesOf(stdout);
-    for (const label of ["01", "03", "2031", "2032", "03/31"]) {
+    for (const label of ["01", "03", "2031", "2032", "03/31", "Visa 1111"]) {
       expect(lines).toContain(`option "${label}"`);
     }
-    expect(stdout).not.toMatch(/option "(01|03|2031|2032|03\/31)" \{/);
+    expect(stdout).not.toMatch(
+      /option "(01|03|2031|2032|03\/31|Visa 1111)" \{/,
+    );
     // An ordinary combobox's popup still says which option is selected.
     expect(lines).toContain('option "Red" {selected}');
   });

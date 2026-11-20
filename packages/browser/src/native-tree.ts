@@ -68,6 +68,7 @@ import {
   fieldRelationTargets,
   indexNativeAX,
   nativeAncestry,
+  sensitiveChoiceHosts,
   cleanAXText,
   treeSource,
   withNativeIdSuffix,
@@ -446,8 +447,10 @@ export function buildNativeTree(
 
   // What a sensitive field controls or owns is not inside it, but the choice
   // made there is its value: an ARIA combobox's popup listbox, which Chromium
-  // leaves where it is. Core's `fieldRelationTargets` decides what that is,
-  // for both native transports. Read once per document, on first need.
+  // leaves where it is. The relations may sit on the field, or on an ARIA 1.1
+  // combobox wrapped around it. Core's `sensitiveChoiceHosts` and
+  // `fieldRelationTargets` decide what that is, for both native transports.
+  // Read once per document, on first need.
   const reachedBySensitive = new Map<NativeDocument, Set<string>>();
   const reachedFromSensitiveField = (document: NativeDocument): Set<string> => {
     let reached = reachedBySensitive.get(document);
@@ -455,10 +458,12 @@ export function buildNativeTree(
     reached = new Set();
     const byId = rawByNodeIdOf.get(document)!;
     const index = indexNativeAX([...byId.values()]);
-    for (const id of document.prepared.sensitivity.sensitiveFields) {
-      const field = byId.get(id);
-      if (!field) continue;
-      for (const node of fieldRelationTargets(index, field)) {
+    const hosts = sensitiveChoiceHosts(
+      byId,
+      document.prepared.sensitivity.sensitiveFields,
+    );
+    for (const host of hosts) {
+      for (const node of fieldRelationTargets(index, host)) {
         reached.add(node.nodeId);
       }
     }

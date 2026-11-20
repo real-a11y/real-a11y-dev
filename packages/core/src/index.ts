@@ -212,6 +212,7 @@ export {
   fieldRelationTargets,
   nativeAncestry,
   nativeAXProperty,
+  sensitiveChoiceHosts,
 } from "./native/ax-node.js";
 export { domLabels } from "./native/labels.js";
 export type { LabelDomNode, LabelsOf } from "./native/labels.js";

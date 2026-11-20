@@ -3,7 +3,11 @@
  * value away, and what stands in for it. One policy for every producer — the
  * DOM walk reads it off an element, the native producer off CDP's attributes.
  */
-import { safeGetAttribute, safeTagName } from "./clobber-safe.js";
+import {
+  safeGetAttribute,
+  safeQuerySelectorAll,
+  safeTagName,
+} from "./clobber-safe.js";
 
 /**
  * Autocomplete field names (WHATWG autofill tokens) that identify a control
@@ -81,6 +85,24 @@ export function isSensitiveField(element: Element): boolean {
         : safeGetAttribute(element, "type"),
     autocomplete: safeGetAttribute(element, "autocomplete"),
   });
+}
+
+/**
+ * True for an element whose popup holds a sensitive field's choice: the field
+ * itself ({@link isSensitiveField}), or an ARIA 1.1 combobox around one, a
+ * wrapper with an explicit `role="combobox"` that carries the `aria-controls`
+ * or `aria-owns` for the field inside it.
+ */
+export function isSensitiveChoiceHost(element: Element): boolean {
+  if (isSensitiveField(element)) return true;
+  const role = (safeGetAttribute(element, "role") ?? "")
+    .trim()
+    .split(/\s+/)[0]!
+    .toLowerCase();
+  if (role !== "combobox") return false;
+  return Array.from(
+    safeQuerySelectorAll(element, "input, textarea, select"),
+  ).some(isSensitiveField);
 }
 
 /** `<input>` types with no announced value: a state, a name, or nothing. */

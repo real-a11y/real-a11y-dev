@@ -7,11 +7,13 @@
  */
 import { ariaOwner, controlledBySensitiveField } from "./aria-owner.js";
 import { flatParentElement } from "./flat-tree.js";
-import { isSensitiveField } from "./sensitivity.js";
+import { isSensitiveChoiceHost } from "./sensitivity.js";
 
 /**
- * True when `element` sits inside a sensitive field ({@link isSensitiveField}),
- * or inside what one controls (`aria-controls`) or owns (`aria-owns`). Its
+ * True when `element` sits inside a sensitive field (`isSensitiveField`),
+ * or inside what one controls (`aria-controls`) or owns (`aria-owns`) — or
+ * what an ARIA 1.1 combobox around one does, the wrapper that carries those
+ * relations for the field inside it ({@link isSensitiveChoiceHost}). Its
  * `selected` state then says which choice the field holds, which is the value
  * the field's `[redacted]` withholds: an option of a payment `<select>`, and
  * one in the popup listbox an `<input role="combobox" autocomplete="cc-exp">`
@@ -34,7 +36,9 @@ export function inSensitiveChoice(element: Element): boolean {
         pending.push(owner);
       }
       if (el === element) continue;
-      if (isSensitiveField(el) || controlledBySensitiveField(el)) return true;
+      if (isSensitiveChoiceHost(el) || controlledBySensitiveField(el)) {
+        return true;
+      }
     }
   }
   return false;

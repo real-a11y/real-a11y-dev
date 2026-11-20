@@ -870,6 +870,41 @@ describe("LiveTreeExtractor", () => {
     expect(result.nodes).toEqual(extractDomTree(document.body).nodes);
   });
 
+  // Many comboboxes set aria-controls only while their popup is open. The
+  // options there were read before the relation existed, and the change is on
+  // the field, so re-extracting it alone would leave their choice showing.
+  it("withholds a popup's choice once a sensitive field starts controlling it", async () => {
+    document.body.innerHTML =
+      `<main><input id="m" role="combobox" aria-label="Month" autocomplete="cc-exp-month" aria-expanded="false">` +
+      `<ul role="listbox" id="lb" aria-label="Months"><li role="option" aria-selected="true">03</li></ul></main>`;
+    const live = new LiveTreeExtractor(document.body, { mode: "dom" });
+    const before = [...live.extract().nodes.values()].find(
+      (n) => n.a11y.role === "option",
+    );
+    expect(before?.a11y.states.selected).toBe(true);
+    let lastChange: TreeChange | undefined;
+    const observer = new DomObserver(
+      document.body,
+      (change) => {
+        lastChange = change;
+      },
+      50,
+    );
+    observer.start();
+    const field = document.getElementById("m")!;
+    field.setAttribute("aria-controls", "lb");
+    field.setAttribute("aria-expanded", "true");
+    await vi.advanceTimersByTimeAsync(100);
+    observer.stop();
+
+    const result = live.refresh(lastChange);
+    const after = [...result.nodes.values()].find(
+      (n) => n.a11y.role === "option",
+    );
+    expect(after?.a11y.states.selected).toBeUndefined();
+    expect(result.nodes).toEqual(extractDomTree(document.body).nodes);
+  });
+
   // A role-less inline wrapper's text is the paragraph's own (see `isTextRun`
   // in extraction/dom-extractor), so a change inside it, or one that gives it a
   // node of its own, renames the paragraph — which no other climb reaches.

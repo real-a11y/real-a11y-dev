@@ -2115,6 +2115,69 @@ describe("buildNativeTree — sensitive values in states, references and races",
     }
   });
 
+  it("drops it in the popup an ARIA 1.1 combobox around a sensitive field controls", () => {
+    // The wrapper carries the relation; the textbox inside it is the field.
+    const raw = [
+      { nodeId: "1", childIds: ["2", "6"], role: { value: "RootWebArea" } },
+      {
+        nodeId: "2",
+        parentId: "1",
+        childIds: ["3"],
+        role: { value: "combobox" },
+        backendDOMNodeId: 40,
+        properties: [
+          {
+            name: "controls",
+            value: {
+              type: "idrefList",
+              relatedNodes: [{ backendDOMNodeId: 41 }],
+            },
+          },
+        ],
+      },
+      {
+        nodeId: "3",
+        parentId: "2",
+        role: { value: "textbox" },
+        name: { value: "Expiry month" },
+        value: { value: "03" },
+        backendDOMNodeId: 42,
+      },
+      {
+        nodeId: "6",
+        parentId: "1",
+        childIds: ["7"],
+        role: { value: "listbox" },
+        name: { value: "Months" },
+        backendDOMNodeId: 41,
+      },
+      {
+        nodeId: "7",
+        parentId: "6",
+        role: { value: "option" },
+        name: { value: "03" },
+        properties: [{ name: "selected", value: { value: true } }],
+        backendDOMNodeId: 43,
+      },
+    ] as RawNodes;
+    const selected = (autocomplete?: string) =>
+      nodesOf(
+        buildNativeTree(
+          raw,
+          new Map<number, NativeDomInfo>([
+            [40, domOf("div", { role: "combobox" })],
+            [41, domOf("ul", { role: "listbox" })],
+            [42, domOf("input", autocomplete ? { autocomplete } : {})],
+            [43, domOf("li", { role: "option" })],
+          ]),
+        ),
+      )
+        .filter((n) => n.a11y.role === "option")
+        .map((n) => n.a11y.states.selected);
+    expect(selected("cc-exp-month")).toEqual([undefined]);
+    expect(selected()).toEqual([true]);
+  });
+
   it("drops it inside a sensitive list box, which holds no AX value", () => {
     expect(listboxSelectedOf("cc-exp-year")).toEqual([undefined, undefined]);
     expect(listboxSelectedOf()).toEqual([false, true]);

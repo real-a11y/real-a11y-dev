@@ -108,3 +108,25 @@ export function fieldRelationTargets<T extends RawAXNameNode>(
   }
   return out;
 }
+
+/**
+ * The nodes whose relations reach a sensitive field's popup: each field in
+ * `fieldIds`, and each combobox around one. That is the ARIA 1.1 pattern, a
+ * `role="combobox"` wrapper that carries `aria-controls` or `aria-owns` for
+ * the field inside it, whose own relations are empty. The DOM producer's
+ * counterpart is core's `isSensitiveChoiceHost`.
+ */
+export function sensitiveChoiceHosts<T extends RawAXNameNode>(
+  byId: ReadonlyMap<string, T>,
+  fieldIds: Iterable<string>,
+): T[] {
+  const hosts = new Set<T>();
+  for (const id of fieldIds) {
+    for (const node of nativeAncestry(byId.get(id), byId)) {
+      if (node.nodeId === id || node.role?.value === "combobox") {
+        hosts.add(node);
+      }
+    }
+  }
+  return [...hosts];
+}
