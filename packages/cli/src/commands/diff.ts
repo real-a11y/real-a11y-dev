@@ -163,23 +163,13 @@ export const diffCommand: CommandFn = async (positionals, flags) => {
   // following it would rename everything and match exactly as little. Host and
   // port no longer trip this either. What's left is genuinely two different sets
   // of routes — so the remedy is to check the addresses, not the labels.
-  const disjoint = noPagesMatched(base, pr);
-  if (disjoint) {
+  if (noPagesMatched(base, pr)) {
     process.stderr.write(
       "real-a11y: warning: no pages matched between the two snapshots — " +
         "pages join on the URL's path (host and port are ignored), so this means " +
         "the two runs captured different routes; check the `url` of each entry on " +
         "both sides, or set a matching `id` if one side deliberately moved\n",
     );
-  }
-
-  // These warnings are about tree lines, so a report that compares none
-  // (`--only findings`, or two artifacts with no page in common) has nothing
-  // for them to explain.
-  if (only !== "findings" && !disjoint) {
-    for (const warning of mixedPairWarnings(base, pr)) {
-      process.stderr.write(warning);
-    }
   }
 
   // --baseline: mark accepted findings on the PR side BEFORE diffing — the
@@ -200,6 +190,15 @@ export const diffCommand: CommandFn = async (positionals, flags) => {
   }
 
   const result = diffArtifacts(base, pr, { ignoreViewLine });
+
+  // The mixed-pair warnings explain tree lines, so they're for a report that
+  // compares some: not under `--only findings`, and not when no page pair was
+  // compared (no page in common, or every common page failed on one side).
+  if (only !== "findings" && result.pages.some((p) => p.status === "ok")) {
+    for (const warning of mixedPairWarnings(base, pr)) {
+      process.stderr.write(warning);
+    }
+  }
 
   const explain = flags.explain === true;
   const content =

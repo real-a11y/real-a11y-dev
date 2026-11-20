@@ -629,10 +629,10 @@ captured before the blocks existed, or one taken with
 [`--no-states`](#no-states) — every node with a state or description reads as a
 changed line, and a `generic` kept for its state shows up as a new line with
 its subtree nested under it. So `diff` warns on stderr that only the base (or
-the PR) snapshot carries them. Neither warning shows under
-[`--only findings`](#only-axis), or for two artifacts with no page in common:
-neither report compares a tree line. Re-capture the baseline, or capture both sides with
-`--no-states`.
+the PR) snapshot carries them. Neither warning shows when the report compares
+no tree line: under [`--only findings`](#only-axis), for two artifacts with no
+page in common, or when every common page failed to open on one side.
+Re-capture the baseline, or capture both sides with `--no-states`.
 
 ```sh
 real-a11y diff base.json pr.json
@@ -1314,7 +1314,8 @@ it — snapshot's artifact tree always collapses generics.
 
 Put field values into the artifact's tree view — `textbox "Email" =
 "jane@example.com"`, a sensitive field as `"[redacted]"` — and record
-`meta.values: true`. Off by default because an artifact is a **persisted**
+`meta.values: true` (a findings-only `--only findings` artifact keeps no tree,
+so it records no `meta.values`, nor `meta.states`). Off by default because an artifact is a **persisted**
 output: it is committed, uploaded as a CI artifact and posted into PR comments,
 so what users typed stays out of it unless you ask. The live views
 ([`tree`](#tree-url), [`tabs`](#tabs-url), [`list`](#list-category-url),

@@ -739,12 +739,14 @@ describe("the states block (built bin)", () => {
         ),
         "-q",
         "--no-states",
+        "--values",
         "-o",
         elsewhere,
       ]);
       const disjoint = await runCli(["diff", elsewhere, withBlocks]);
       expect(disjoint.stderr).toContain("no pages matched");
       expect(disjoint.stderr).not.toContain("states blocks");
+      expect(disjoint.stderr).not.toContain("carries field values");
 
       // A findings-only artifact keeps no tree, so it records neither blocks
       // nor values.
@@ -766,29 +768,47 @@ describe("the states block (built bin)", () => {
       expect(partialArtifact.meta.values).toBeUndefined();
     });
 
-    it("a run where no page opened records what it would print", async () => {
+    it("an outage on one side reads as neither blocks nor a mixed pair", async () => {
       // Nothing listens on port 9 here, so the page fails to open and no
-      // tree is captured; the marker still follows the run's choice.
-      const down = "http://127.0.0.1:9/";
-      type Meta = { meta: { states?: boolean }; pages: { status: string }[] };
-      const on = JSON.parse(
-        (await runCli(["snapshot", down, "-q", "--timeout", "5000"])).stdout,
+      // tree is written: the artifact records no blocks.
+      type Meta = {
+        meta: { states?: boolean };
+        pages: { status: string; tree: string }[];
+      };
+      const down = JSON.parse(
+        (await runCli(["snapshot", "http://127.0.0.1:9/", "-q"])).stdout,
       ) as Meta;
-      expect(on.pages[0]!.status).toBe("error");
-      expect(on.meta.states).toBe(true);
-      const off = JSON.parse(
-        (
-          await runCli([
-            "snapshot",
-            down,
-            "-q",
-            "--timeout",
-            "5000",
-            "--no-states",
-          ])
-        ).stdout,
-      ) as Meta;
-      expect(off.meta.states).toBeUndefined();
+      expect(down.pages[0]!.status).toBe("error");
+      expect(down.meta.states).toBeUndefined();
+
+      // A base whose page failed, against a healthy capture of the same page:
+      // the pair joins, but no tree line is compared, so neither warning.
+      const dir = mkdtempSync(join(tmpdir(), "real-a11y-states-outage-"));
+      const healthy = join(dir, "healthy.json");
+      await runCli(["snapshot", PAGE, "-q", "--values", "-o", healthy]);
+      const artifact = JSON.parse(readFileSync(healthy, "utf8")) as {
+        meta: Record<string, unknown>;
+        pages: Record<string, unknown>[];
+      };
+      const failed = join(dir, "failed.json");
+      writeFileSync(
+        failed,
+        JSON.stringify({
+          ...artifact,
+          meta: { ...artifact.meta, states: undefined, values: undefined },
+          pages: artifact.pages.map((page) => ({
+            ...page,
+            status: "error",
+            error: "could not open",
+            findings: [],
+            tree: "",
+            outline: "",
+          })),
+        }),
+      );
+      const { stderr } = await runCli(["diff", failed, healthy]);
+      expect(stderr).not.toContain("states blocks");
+      expect(stderr).not.toContain("carries field values");
     });
 
     it("a config's defaults.states: false opts out too", async () => {

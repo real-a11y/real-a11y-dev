@@ -342,7 +342,9 @@ Each tree line carries its node's `{…}` states block (`checkbox "Subscribe"
 none, so `diff` warns when only one side carries them: re-capture the
 baseline, or capture both sides with `--no-states`. The warning, like the
 field-values one, stays off a report that compares no tree lines
-(`--only findings`, or two artifacts with no page in common).
+(`--only findings`, two artifacts with no page in common, or a side whose
+pages all failed to open). A findings-only artifact keeps no tree, so it
+records neither `meta.states` nor `meta.values`.
 
 **Which views an artifact measured.** An artifact records its measured views in
 `meta.views`. Snapshots read the whole-document accessibility tree, which
