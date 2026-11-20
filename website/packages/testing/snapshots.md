@@ -43,7 +43,7 @@ A tree line is `role "name"`, plus `= "value"` with `values: true`, `(level N)` 
 ```
 checkbox "Subscribe" {checked}
 checkbox "Subscribe" {checked=false}
-button "Menu" {expanded=false, haspopup=menu} [focused]
+button "Menu" {expanded=false} [focused]
 textbox "Email" = "a@b.c" {required, invalid, description="We never share it"}
 link "Docs" {current=page}
 heading "Setup" (level 2)
@@ -63,7 +63,16 @@ The block holds the states, description and announced properties a screen reader
 
 Nothing else prints: not `focusable`, `editable`, `busy` or `modal`, and not `level`, which keeps its `(level N)`. A [strict-mode](#strict-mode) tree prints no description that would carry a field's value.
 
-**Which producer reads which key.** Both producers read the states above and the description. Only the native producer (Chromium's own tree, the [Playwright adapter's](/packages/testing/playwright) `tree: "native"`, the CLI and MCP) reads `haspopup` and `roledescription`, and only the DOM producer reads `current`, so a DOM snapshot and a native one of the same page can differ by those tokens.
+**Where the producers differ.** The two producers read most states alike: checked, pressed, expanded, selected and disabled on checkboxes, radios, switches, toggle buttons, selects, list boxes, menus, trees and tabs, and required and invalid on text fields. Where they differ, a DOM snapshot and a native one of the same page differ by those tokens:
+
+| Key or case | DOM producer (jsdom, `treeSnapshot`, `real-a11y tabs`) | Native producer (Chromium's own tree: the [Playwright adapter's](/packages/testing/playwright) `tree: "native"`, `real-a11y tree`, MCP) |
+|---|---|---|
+| `haspopup`, `roledescription` | not read | read |
+| `current` | read | not read |
+| A pristine required checkbox, radio or `<select>` | `required`; `invalid` only once the user has interacted (`:user-invalid`, as HTML-AAM says) | `invalid` from the start, and no `required` |
+| A description from a table caption, an SVG `<desc>` or ruby text | none | read |
+| `readonly` on the cells of a read-only grid | none | read |
+| `checked=false` on an ARIA checkbox with no `aria-checked` | none | read |
 
 **Opting out.** `treeSnapshot(root, { states: false })` prints no block, byte for byte the text the serializer printed before it had blocks: use it to keep comparing with a baseline committed then, or re-record your snapshots once (`vitest -u`, `jest -u`) to take the states in. To see what one interaction changed, [`serializeTreeDiff`](/packages/testing/flow) still prints each changed state, description and property as its own `~` line.
 
@@ -74,7 +83,7 @@ Pass `values: true` to print what each field holds, the way a screen reader anno
 ```
 form "Checkout"
   textbox "Email" = "jane@x.com"
-  combobox "Country" = "Spain"
+  combobox "Country" = "Spain" {expanded=false}
   textbox "Password" = "[redacted]"
   slider "Tip" = "15%"
 ```

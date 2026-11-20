@@ -90,7 +90,7 @@ function registerInspect(ctx: InspectToolContext): void {
       title: "Inspect page (single snapshot)",
       annotations: READ_ONLY,
       description:
-        "Return the audit findings AND the semantic tree and heading outline — all derived from ONE read of Chromium's accessibility tree, so they are guaranteed internally consistent. The element focused at capture time is marked `[focused]`." +
+        "Return the audit findings AND the semantic tree and heading outline — all derived from ONE read of Chromium's accessibility tree, so they are guaranteed internally consistent. Each tree node's states and description follow its name in a `{…}` block (`checkbox \"Subscribe\" {checked=false}`). The element focused at capture time is marked `[focused]`." +
         valuesNote +
         " Prefer this over separate audit_page + get_* calls on dynamic pages (SPAs, pages with consent dialogs) where separate calls could catch different states. That tree carries no tab order, so there is no tab-order section here — call get_tab_order for the keyboard sequence. Whole-document. Chromium only.",
       inputSchema: {
@@ -187,7 +187,7 @@ function registerTabOrder(ctx: InspectToolContext): void {
       title: "Get tab order",
       annotations: READ_ONLY,
       description:
-        "Return the focusable elements in the order a keyboard user encounters them when pressing Tab, numbered, with role + accessible name. The stop focused at capture time is marked `[focused]`." +
+        'Return the focusable elements in the order a keyboard user encounters them when pressing Tab, numbered, with role + accessible name, and each stop\'s states and description in a `{…}` block (`checkbox "Subscribe" {checked=false}`). The stop focused at capture time is marked `[focused]`.' +
         (redactInput
           ? " In this server's strict mode no stop shows a field value, and a name that would carry one, or a rich-text editor's text, reads \"[redacted]\"."
           : ' A field shows what it holds (`textbox "Email" = "jane@x.com"`; a sensitive field "[redacted]").') +

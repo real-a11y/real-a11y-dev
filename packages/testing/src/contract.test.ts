@@ -472,10 +472,10 @@ describe("verifyContract — states blocks", () => {
   it("rejects a token tree text never prints, naming the form it prints", () => {
     for (const [token, form] of [
       ["checked=true", "`checked`, `checked=false` or `checked=mixed`"],
-      ["disabled=false", "`disabled`, only when disabled"],
+      ["disabled=false", "`disabled`, only when set"],
       ["expanded=mixed", "`expanded` or `expanded=false`"],
       ["current=false", "`current` or `current=<token>`, never false"],
-      ["description", '`description="…"`'],
+      ["description", '`description="…"`, when not empty'],
     ]) {
       expect(() =>
         verifyContract(`checkbox "Subscribe" {${token}}`, RECEIVED),

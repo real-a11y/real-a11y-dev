@@ -579,6 +579,91 @@ describe("the native producer is the only producer (built bin)", () => {
  * The page fills its fields at runtime from split literals, so no sentinel is
  * in the data: URL (which stderr and the json envelope both echo).
  */
+// The states block from Chromium's own tree, in a suite that gates CI: the
+// browser package's real-Chromium cases run advisory.
+describe("the states block (built bin)", () => {
+  const linesOf = (stdout: string) => stdout.split("\n").map((l) => l.trim());
+
+  it("tree prints each control's states from Chromium's tree", async () => {
+    const page = dataUrl(
+      "<!doctype html><title>States</title><main>" +
+        '<input type="checkbox" checked aria-label="Subscribe">' +
+        '<input type="checkbox" aria-label="Subscribe">' +
+        '<button aria-expanded="false" aria-haspopup="menu">Menu</button>' +
+        '<button aria-describedby="h">Pay</button><p id="h" hidden>Charged today</p>' +
+        "</main>",
+    );
+    const { code, stdout } = await runCli(["tree", page, "-q"]);
+    expect(code).toBe(0);
+    const lines = linesOf(stdout);
+    for (const line of [
+      'checkbox "Subscribe" {checked}',
+      'checkbox "Subscribe" {checked=false}',
+      'button "Menu" {expanded=false, haspopup=menu}',
+      'button "Pay" {description="Charged today"}',
+    ]) {
+      expect(lines).toContain(line);
+    }
+  });
+
+  it("tree withholds a sensitive list box's selection, as a drop-down's", async () => {
+    const page = dataUrl(
+      "<!doctype html><title>Card</title><main>" +
+        '<select aria-label="Month" autocomplete="cc-exp-month"><option>01</option><option selected>03</option></select>' +
+        '<select aria-label="Year" autocomplete="cc-exp-year" size="3"><option>2027</option><option selected>2031</option><option>2032</option></select>' +
+        '<select aria-label="Size" size="3"><option>S</option><option selected>M</option><option>L</option></select>' +
+        "</main>",
+    );
+    const { code, stdout } = await runCli(["tree", page, "-q"]);
+    expect(code).toBe(0);
+    const lines = linesOf(stdout);
+    expect(lines).toContain('option "03"');
+    expect(lines).toContain('option "2031"');
+    expect(stdout).not.toMatch(/option "(03|2031)" \{/);
+    // An ordinary list box still says which option is selected.
+    expect(lines).toContain('option "M" {selected}');
+  });
+
+  it("a title that repeats a link's text describes it in neither producer", async () => {
+    const page = dataUrl(
+      "<!doctype html><title>Outline</title><main>" +
+        '<a href="#a" title="See also">See also</a>' +
+        '<a href="#b" title="More detail">Details</a>' +
+        "</main>",
+    );
+    const tree = await runCli(["tree", page, "-q"]);
+    const tabs = await runCli(["tabs", page, "-q"]);
+    expect(linesOf(tree.stdout)).toContain('link "See also"');
+    expect(tabs.stdout).toContain('01. link "See also"\n');
+    // A title that says something else still describes, in both.
+    expect(linesOf(tree.stdout)).toContain(
+      'link "Details" {description="More detail"}',
+    );
+    expect(tabs.stdout).toContain(
+      '02. link "Details" {description="More detail"}',
+    );
+  });
+
+  it("pins where the producers differ on a pristine required checkbox", async () => {
+    // Chromium reports a required checkbox invalid from the start and carries
+    // no `required` for it; the DOM producer reads `required` from the element
+    // and waits for :user-invalid, as HTML-AAM says. The docs list it.
+    const page = dataUrl(
+      "<!doctype html><title>Terms</title><main><form>" +
+        '<input type="checkbox" required aria-label="I agree">' +
+        "</form></main>",
+    );
+    const tree = await runCli(["tree", page, "-q"]);
+    const tabs = await runCli(["tabs", page, "-q"]);
+    expect(linesOf(tree.stdout)).toContain(
+      'checkbox "I agree" {checked=false, invalid}',
+    );
+    expect(tabs.stdout.trimEnd()).toBe(
+      '01. checkbox "I agree" {checked=false, required}',
+    );
+  });
+});
+
 describe("field values (built bin)", () => {
   const FORM_PAGE = dataUrl(`<main><h1>Sign up</h1>
     <label>Email <input id="email" type="email"></label>

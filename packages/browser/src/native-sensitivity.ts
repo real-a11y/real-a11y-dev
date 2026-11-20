@@ -113,6 +113,13 @@ export interface FieldSensitivity {
   regions: ValueRegions;
   /** A value on this node must read `[redacted]`. */
   withholdsValue(raw: RawAXNode): boolean;
+  /**
+   * Every field the policy classifies as sensitive, by raw id, before
+   * {@link regions} prunes the ones with nothing to lend a name. A list box
+   * holds no AX value, so it is pruned there, but which of its options is
+   * selected is its value all the same.
+   */
+  sensitiveFields: ReadonlySet<string>;
 }
 
 /** What the DOM walk recorded for `raw`'s backing element, if it saw one. */
@@ -179,6 +186,7 @@ function fieldSensitivity(
   standIns: readonly FieldStandIn[],
 ): FieldSensitivity {
   const fields = sensitiveFieldIds(rawNodes, enrichment);
+  const sensitiveFields: ReadonlySet<string> = new Set(fields);
   // Only a field that can give its value away withholds names around it: an
   // empty one has nothing to give (see givesValueAway, which counts an ignored
   // field, whose value Chromium never sends, as able to).
@@ -196,6 +204,7 @@ function fieldSensitivity(
   const regions = valueRegions(index, fields, standIns, labelsIn(enrichment));
   return {
     regions,
+    sensitiveFields,
     withholdsValue: (raw) =>
       regions.inside(raw) ||
       regions.containing.has(raw.nodeId) ||

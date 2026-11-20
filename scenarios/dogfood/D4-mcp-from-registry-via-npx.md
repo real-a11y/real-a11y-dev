@@ -69,9 +69,11 @@ to a directory holding a global Playwright, which hid a missing peer through mcp
   named one is a block of text the page shows, such as a `<div>` of text beside a link, and
   `tools/list` describes the parameter that way; earlier releases print no such line, the old
   behaviour, not a fail. From mcp ≥ 0.1.0-beta.14, a node with states or a description carries
-  a `{…}` block after its name (a theme switch reads `{checked}` or `{checked=false}`, a
-  described link `{description="…"}`), and `get_semantic_tree`'s description in `tools/list`
-  says so; earlier releases print no block, the old behaviour, not a fail
+  a `{…}` block after its name (the theme switch reads `switch "Switch to dark theme"
+  {checked=false}` or `{checked}`, the version menu `button "v…" {expanded=false,
+  haspopup=menu}`), and `get_semantic_tree`'s description in `tools/list` says so. The page
+  outline's links carry no description: their `title` only repeats their text. Earlier
+  releases print no block, the old behaviour, not a fail
 - **7** — the diff reports the real delta between two live pages
 - **9** — the agent picks a sensible sequence **from the tool descriptions alone**. If it
   flails, calls tools in the wrong order, or gives up, the descriptions are the finding — not

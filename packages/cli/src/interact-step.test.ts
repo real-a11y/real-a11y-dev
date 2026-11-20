@@ -4,6 +4,30 @@ import { CliError } from "./exit.js";
 import { describeStep, parseStep } from "./interact-step.js";
 
 describe("parseStep", () => {
+  it("accepts a tree line pasted with its states block and focus marker", () => {
+    expect(parseStep('click checkbox "Subscribe" {checked=false}')).toEqual({
+      verb: "click",
+      role: "checkbox",
+      name: "Subscribe",
+    });
+    expect(
+      parseStep(
+        'click button "Menu" {expanded=false, haspopup=menu} [focused] nth=2',
+      ),
+    ).toEqual({ verb: "click", role: "button", name: "Menu", nth: 2 });
+    expect(
+      parseStep(
+        'type textbox "Note" {description="Say \\"hi\\", {then}"} = hello',
+      ),
+    ).toEqual({ verb: "type", role: "textbox", name: "Note", text: "hello" });
+  });
+
+  it("still rejects braces that are not a states block", () => {
+    expect(() => parseStep('click button "Menu" {not a block}')).toThrow(
+      /unexpected trailing input/,
+    );
+  });
+
   it("reads a verb, role, and quoted name", () => {
     expect(parseStep('click button "Save"')).toEqual({
       verb: "click",

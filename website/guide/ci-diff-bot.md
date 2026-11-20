@@ -215,9 +215,9 @@ _tree_
    heading "Plans" (level 2)
 -  heading "Setup" (level 2)
 -  textbox "Email"
+-  checkbox "Newsletter" {checked}
 +  heading "Setup" (level 3)
 +  textbox
--  checkbox "Newsletter" {checked}
 +  checkbox "Newsletter" {checked=false}
    button "Subscribe"
 ```

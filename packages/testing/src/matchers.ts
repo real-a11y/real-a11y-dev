@@ -410,6 +410,15 @@ function toMatchA11yContract(
   let targetText: string;
   if (received instanceof Element) {
     const writes = contractWrites(contractText);
+    // The DOM producer doesn't read `haspopup` or `roledescription`, so such a
+    // token can't match an Element's tree: a failure is what `.not` inverts,
+    // and the negated form would pass on nothing. Throw instead.
+    const native = writes.nativeOnly[0];
+    if (native) {
+      throw new TypeError(
+        `toMatchA11yContract: contract line ${native.line} asserts \`${native.token}\`, which a DOM Element's tree never carries: the DOM producer doesn't read that key yet, only Chromium's native tree does. Check it against native tree text (the Playwright adapter's \`tree: "native"\`, \`real-a11y tree\`), or remove it.`,
+      );
+    }
     // A contract that writes `= "value"` needs a tree that prints values, or
     // every value reads as missing and `.not` passes on nothing. Only then:
     // values also bring a role-less editor in as a `generic` line, which

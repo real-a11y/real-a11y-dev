@@ -40,7 +40,7 @@
 // Matching is ordered tree embedding by backtracking — linear-ish for
 // contract-sized trees, with a step guard against pathological ambiguity.
 
-import { foldTypography } from "@real-a11y-dev/serialize";
+import { foldTypography, tokenProducers } from "@real-a11y-dev/serialize";
 
 import { parseA11yTree, type ContractNode } from "./contract-parse.js";
 
@@ -162,19 +162,31 @@ const anyStates = (roots: ContractNode[]) =>
 export interface ContractWrites {
   /** A field value, `= "value"`. */
   values: boolean;
+  /** Tokens only the native producer prints (`haspopup=menu`,
+   *  `roledescription="slide"`), with the line each is on. */
+  nativeOnly: { token: string; line: number }[];
 }
 
 /**
- * Whether an authored contract writes a field value on any line.
+ * Whether an authored contract writes a field value on any line, and which of
+ * its tokens only the native producer prints.
  *
  * @internal For `toMatchA11yContract`, which serializes a DOM Element with
- * values only when the contract asserts one.
+ * values only when the contract asserts one, and can't match a native-only
+ * token against an Element's tree.
  */
 export function contractWrites(contractText: string): ContractWrites {
   const nodes = flatten(
     parseA11yTree(contractText, { strictIndent: true, authored: true }).roots,
   ).map((f) => f.node);
-  return { values: nodes.some((n) => n.value !== undefined) };
+  return {
+    values: nodes.some((n) => n.value !== undefined),
+    nativeOnly: nodes.flatMap((n) =>
+      (n.states ?? [])
+        .filter((token) => tokenProducers(token) === "native")
+        .map((token) => ({ token, line: n.line })),
+    ),
+  };
 }
 
 // ─── containment matching ────────────────────────────────────────────────────

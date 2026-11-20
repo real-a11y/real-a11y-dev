@@ -108,12 +108,21 @@ Nothing else prints: not `focusable`, `editable`, `busy`, `modal`, a
 printed before it had them, e.g. to keep comparing with a baseline committed
 then.
 
-Which keys a node carries depends on the producer. Both read the states
-above, and the description. Only the native producer (Chromium's own tree)
-reads `haspopup` and `roledescription`, and only the DOM producer reads
-`current`. So a DOM tree and a native tree of the same page can differ by
-those tokens. The outline and `serializeTreeDiff`'s labels never print a
-block: a `~` line names each changed state on its own.
+Which keys a node carries depends on the producer, so a DOM tree and a native
+tree of the same page can differ by these tokens:
+
+- only the native producer (Chromium's own tree) reads `haspopup` and
+  `roledescription`, a description from a table caption, an SVG `<desc>` or
+  ruby text, `readonly` on a read-only grid's cells, and `checked=false` on an
+  ARIA checkbox with no `aria-checked`;
+- only the DOM producer reads `current`;
+- on a pristine required checkbox, radio or `<select>`, the DOM producer
+  prints `required` and `invalid` only after interaction (`:user-invalid`, as
+  HTML-AAM says), while Chromium reports `invalid` from the start and no
+  `required`.
+
+The outline and `serializeTreeDiff`'s labels never print a block: a `~` line
+names each changed state on its own.
 
 ## `serializeTreeDiff(diff, options?)`
 

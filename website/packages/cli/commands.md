@@ -243,8 +243,11 @@ textbox "Email" {required, invalid, description="We never share it"}
 ```
 
 [What a line carries](/packages/testing/snapshots#what-a-line-carries) lists
-each key and when it prints. [`tabs`](#tabs-url) and a [`snapshot`](#snapshot-url)
-artifact's tree print the same blocks.
+each key and when it prints. A [`snapshot`](#snapshot-url) artifact's tree
+prints the same blocks. [`tabs`](#tabs-url) prints blocks too, but it is the
+in-page walk, so a few keys differ from `tree`'s (`haspopup`,
+`roledescription`, `current`, a pristine required checkbox): see
+[where the producers differ](/packages/testing/snapshots#what-a-line-carries).
 
 A field prints what it holds, the way a screen reader announces it — a text
 field's text, a `<select>`'s chosen option, a slider's `aria-valuetext` (else
@@ -257,7 +260,7 @@ anything, never the text and never its length. An empty field prints no value:
 ```
 textbox "Email" = "jane@example.com"
 textbox "Password" = "[redacted]"
-combobox "Country" = "France" {expanded=false}
+combobox "Country" = "France" {expanded=false, haspopup=menu}
 slider "Volume" = "3"
 ```
 
@@ -401,6 +404,9 @@ A step is written the way the tree prints a node:
   target an **unlabeled** control (the one an audit just flagged).
 - **`nth=<n>`** — 1-based, document order. It's the spelling the ambiguity
   error prints, so the fix is copy-paste.
+- **A pasted tree line** — a `{…}` states block and a `[focused]` marker after
+  the name are read and ignored, so `click checkbox "Subscribe" {checked=false}`
+  works as pasted. A step targets a node by role and name, never by its states.
 - **`= <text>`** — `type` only. Everything after the first `=` is the value, so
   query strings and base64 need no escaping.
 

@@ -4,6 +4,7 @@ import {
   splitStatesBlock,
   statesBlock,
   statesTokens,
+  tokenProducers,
   unprintableToken,
 } from "./states-block.js";
 
@@ -267,51 +268,105 @@ describe("statesBlock", () => {
 });
 
 describe("unprintableToken", () => {
-  it("accepts every token the writer prints", () => {
-    const values: (string | boolean)[] = [
-      true,
-      false,
-      "mixed",
-      "page",
-      "Some Place",
-      "spelling",
-    ];
-    const keys = [
-      "checked",
-      "pressed",
-      "expanded",
-      "selected",
-      "current",
-      "disabled",
-      "readonly",
-      "required",
-      "invalid",
-    ];
-    for (const key of keys) {
-      for (const value of values) {
-        const written = statesBlock(
-          {
-            states: { [key]: value },
-            properties: { hasPopup: String(value), roledescription: "r" },
-            description: "d",
-          },
-          (t) => t,
-        );
-        const { block } = splitStatesBlock(`button${written}`);
-        for (const token of statesTokens(block!)) {
-          expect(unprintableToken(token), token).toBeUndefined();
-        }
+  // Every key, written from each of these values; and every token a contract
+  // could write with them. The validator must accept exactly what the writer
+  // printed, in both directions.
+  const KEYS = [
+    "checked",
+    "pressed",
+    "expanded",
+    "selected",
+    "current",
+    "disabled",
+    "readonly",
+    "required",
+    "invalid",
+    "haspopup",
+    "roledescription",
+    "description",
+  ];
+  const VALUES = [
+    "true",
+    "false",
+    "mixed",
+    "page",
+    "menu",
+    "Page",
+    "Some Place",
+    "",
+    "grammar",
+    "x",
+  ];
+  const facets = (key: string, value: string | boolean) =>
+    key === "description"
+      ? { states: {}, properties: {}, description: String(value) }
+      : key === "haspopup" || key === "roledescription"
+        ? {
+            states: {},
+            properties: {
+              [key === "haspopup" ? "hasPopup" : key]: String(value),
+            },
+            description: "",
+          }
+        : { states: { [key]: value }, properties: {}, description: "" };
+
+  it("accepts exactly the tokens the writer prints, key by key", () => {
+    for (const key of KEYS) {
+      const written = new Set<string>();
+      for (const value of [...VALUES, true, false]) {
+        const block = statesBlock(facets(key, value), (t) => t);
+        if (block)
+          written.add(statesTokens(splitStatesBlock(`x${block}`).block!)[0]!);
+      }
+      const candidates = new Set<string>([key, ...written]);
+      for (const v of VALUES) {
+        candidates.add(`${key}=${v}`);
+        candidates.add(`${key}=${JSON.stringify(v)}`);
+      }
+      for (const token of candidates) {
+        expect(
+          unprintableToken(token) === undefined,
+          `${token}: written ${written.has(token)}`,
+        ).toBe(written.has(token));
       }
     }
   });
 
+  it("rejects the gaps a key-shaped object lookup and raw values let through", () => {
+    for (const token of [
+      "constructor",
+      "toString",
+      'current="false"',
+      'current="true"',
+      'current="page"',
+      'haspopup="true"',
+      "haspopup",
+      'description=""',
+      'roledescription=""',
+      "description=bare",
+    ]) {
+      expect(unprintableToken(token), token).toBeDefined();
+    }
+  });
+
+  it("prints aria-haspopup=true as the menu it means", () => {
+    expect(statesBlock(facets("haspopup", "true"), (t) => t)).toBe(
+      " {haspopup=menu}",
+    );
+  });
+
   it("names the printed form of a token that never prints", () => {
-    expect(unprintableToken("checked=true")).toMatch(/never prints/);
-    expect(unprintableToken("checked=yes")).toMatch(/never prints/);
-    expect(unprintableToken("pressed=1")).toMatch(/never prints/);
-    expect(unprintableToken("required=false")).toMatch(/never prints/);
-    expect(unprintableToken("haspopup=false")).toMatch(/never prints/);
-    expect(unprintableToken("roledescription=slide")).toMatch(/never prints/);
-    expect(unprintableToken("focusable")).toMatch(/is not a key/);
+    expect(unprintableToken("checked=true")).toBe(
+      "`checked=true` never prints. Tree text prints `checked`, `checked=false` or `checked=mixed`.",
+    );
+    expect(unprintableToken("focusable")).toMatch(/^`focusable` is not a key/);
+  });
+
+  it("says which producer reads a key", () => {
+    expect(tokenProducers("checked=false")).toBe("both");
+    expect(tokenProducers("current=page")).toBe("dom");
+    expect(tokenProducers("haspopup=menu")).toBe("native");
+    expect(tokenProducers('roledescription="slide"')).toBe("native");
+    expect(tokenProducers("constructor")).toBeUndefined();
   });
 });

@@ -163,3 +163,30 @@ describe("toMatchA11yContract — field values against an element", () => {
     });
   });
 });
+
+describe("toMatchA11yContract — native-only keys against an element", () => {
+  const html = `<button aria-expanded="false" aria-haspopup="menu" aria-roledescription="slide">Menu</button>`;
+
+  it("throws for haspopup and roledescription, with or without .not", () => {
+    const el = mount(html);
+    for (const block of [
+      "{expanded=false, haspopup=menu}",
+      '{roledescription="slide"}',
+    ]) {
+      const contract = `button "Menu" ${block}`;
+      expect(() => expect(el).toMatchA11yContract(contract)).toThrow(
+        /a DOM Element's tree never carries/,
+      );
+      expect(() => expect(el).not.toMatchA11yContract(contract)).toThrow(
+        /a DOM Element's tree never carries/,
+      );
+    }
+  });
+
+  it("still checks them against native tree text", () => {
+    expect('button "Menu" {expanded=false, haspopup=menu}').toMatchA11yContract(
+      'button "Menu" {haspopup=menu}',
+    );
+    expect(mount(html)).toMatchA11yContract('button "Menu" {expanded=false}');
+  });
+});

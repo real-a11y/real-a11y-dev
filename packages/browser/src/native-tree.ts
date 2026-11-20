@@ -425,13 +425,19 @@ export function buildNativeTree(
 
   // A `<select>`'s value is also which of its options is `selected`: an
   // option's state would say what a withheld value is. Dropped for an option
-  // inside a sensitive field, and in strict mode for one inside any choice
+  // inside a sensitive field, including a sensitive list box that holds no AX
+  // value and so names nothing, and in strict mode for one inside any choice
   // field (a combobox or listbox).
-  const inChoiceField = (raw: RawAXNode, document: NativeDocument): boolean => {
+  const inChoiceField = (
+    raw: RawAXNode,
+    document: NativeDocument,
+    sensitiveOnly: boolean,
+  ): boolean => {
+    const { sensitiveFields } = document.prepared.sensitivity;
     for (const cur of nativeAncestry(raw, rawByNodeIdOf.get(document)!)) {
       const role = cur.role?.value;
-      if (cur !== raw && (role === "combobox" || role === "listbox"))
-        return true;
+      if (cur === raw || (role !== "combobox" && role !== "listbox")) continue;
+      if (!sensitiveOnly || sensitiveFields.has(cur.nodeId)) return true;
     }
     return false;
   };
@@ -448,7 +454,7 @@ export function buildNativeTree(
     const withholdSelection =
       !!source &&
       (source.document.prepared.sensitivity.regions.inside(source.raw) ||
-        (redactInput && inChoiceField(source.raw, source.document)));
+        inChoiceField(source.raw, source.document, !redactInput));
     if (withholdSelection) {
       for (const state of NATIVE_AX_CHOICE_STATES) delete states[state];
     }

@@ -559,6 +559,21 @@ describe("what a line carries (documented contract)", () => {
     expect(strict).not.toContain("4111");
   });
 
+  it("keeps a generic that carries a state, such as a details summary", () => {
+    document.body.innerHTML = `
+      <details><summary>Shipping</summary><p>2 days</p></details>
+      <details open><summary>Returns</summary><p>30 days</p></details>
+      <div title="Just a tip"><button>Go</button></div>`;
+    const tree = serializeTree(document.body);
+    expect(tree).toContain('generic "Shipping" {expanded=false}');
+    expect(tree).toContain('generic "Returns" {expanded}');
+    // A generic with only a description stays folded away.
+    expect(tree).not.toContain("Just a tip");
+    expect(serializeTree(document.body, { states: false })).not.toContain(
+      "generic",
+    );
+  });
+
   it("keeps the outline free of blocks", () => {
     document.body.innerHTML = `<h1 aria-describedby="d">Top</h1><p id="d" hidden>x</p>`;
     expect(serializeOutline(document.body)).toBe("h1 Top");

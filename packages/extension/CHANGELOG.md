@@ -27,6 +27,11 @@
   same line. The side panel's own rows are unchanged
   ([#686](https://github.com/real-a11y/real-a11y-dev/pull/686)).
 
+- **The TAB view's engine no longer gives an element a description that only
+  repeats its own text.** The extension re-bundles the updated extractor: a
+  link `<a title="Setup">Setup</a>` has no description, as in Chromium's own
+  tree ([#686](https://github.com/real-a11y/real-a11y-dev/pull/686)).
+
 ## 0.1.20
 
 ### Patch Changes

@@ -154,6 +154,8 @@ A step is written the way the tree prints a node:
                        "" to target an UNLABELED control
   nth=<n>              1-based, document order — the spelling the
                        ambiguity error prints, so the fix is copy-paste
+  {…} [focused]        as a pasted tree line carries them after the
+                       name; read and ignored
   = <text>             type only; everything after the first = is the value
 
 Examples:

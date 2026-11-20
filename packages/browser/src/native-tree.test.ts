@@ -1967,6 +1967,54 @@ describe("buildNativeTree — sensitive values in states, references and races",
     ]);
   });
 
+  // `<select size="3" autocomplete="cc-exp-year">`: Chromium reports a list
+  // box with no AX value, so nothing could lend a name from it, yet which
+  // option is selected is its value all the same.
+  const listbox = () =>
+    [
+      { nodeId: "1", childIds: ["2"], role: { value: "RootWebArea" } },
+      {
+        nodeId: "2",
+        parentId: "1",
+        childIds: ["4", "5"],
+        role: { value: "listbox" },
+        name: { value: "Expiry year" },
+        backendDOMNodeId: 20,
+      },
+      ...["2027", "2031"].map((label, i) => ({
+        nodeId: String(4 + i),
+        parentId: "2",
+        role: { value: "option" },
+        name: { value: label },
+        properties: [{ name: "selected", value: { value: label === "2031" } }],
+        backendDOMNodeId: 22 + i,
+      })),
+    ] as RawNodes;
+  const listboxSelectedOf = (autocomplete?: string) =>
+    nodesOf(
+      buildNativeTree(
+        listbox(),
+        new Map<number, NativeDomInfo>([
+          [
+            20,
+            domOf("select", {
+              size: "3",
+              ...(autocomplete ? { autocomplete } : {}),
+            }),
+          ],
+          [22, domOf("option")],
+          [23, domOf("option")],
+        ]),
+      ),
+    )
+      .filter((n) => n.a11y.role === "option")
+      .map((n) => n.a11y.states.selected);
+
+  it("drops it inside a sensitive list box, which holds no AX value", () => {
+    expect(listboxSelectedOf("cc-exp-year")).toEqual([undefined, undefined]);
+    expect(listboxSelectedOf()).toEqual([false, true]);
+  });
+
   it("drops the option's markup `selected` attribute too, not just its state", () => {
     // `<option selected>` reaches the dom facet through the attribute
     // allowlist; clearing only the AX state would still say which it is.

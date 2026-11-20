@@ -13,7 +13,7 @@ import {
 } from "@real-a11y-dev/core";
 
 import { extract } from "./extract.js";
-import { statesBlock } from "./states-block.js";
+import { carriesState, statesBlock } from "./states-block.js";
 
 /** A DOM root to extract from, or an already-extracted tree. */
 export type SerializeInput = Element | ExtractionResult;
@@ -244,7 +244,10 @@ export function serializeTree(
       node.a11y.role !== "generic" ||
       // A role-less editor is a `generic` holding what was typed: with values
       // on, it is a field worth a line, not a wrapper to fold away.
-      (values && node.a11y.value !== undefined),
+      (values && node.a11y.value !== undefined) ||
+      // Likewise a `generic` with a state, such as a `<details>` summary's
+      // `expanded`: with states on, the state is what a line is for.
+      (states && carriesState(node.a11y)),
   );
   const depths = printedDepths(tree, printed);
 
