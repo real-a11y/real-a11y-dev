@@ -720,6 +720,29 @@ describe("the states block (built bin)", () => {
       );
       const alike = await runCli(["diff", withBlocks, withBlocks]);
       expect(alike.stderr).not.toContain("states blocks");
+      // A findings-only report holds no tree line for the warning to explain.
+      const findingsOnly = await runCli([
+        "diff",
+        without,
+        withBlocks,
+        "--only",
+        "findings",
+      ]);
+      expect(findingsOnly.stderr).not.toContain("states blocks");
+
+      // Nor does a findings-only artifact, so it records no blocks.
+      const partial = await runCli([
+        "snapshot",
+        PAGE,
+        "-q",
+        "--only",
+        "findings",
+        "--format",
+        "json",
+      ]);
+      const partialArtifact = JSON.parse(partial.stdout) as Artifact;
+      expect(partialArtifact.pages[0]!.tree).toBe("");
+      expect(partialArtifact.meta.states).toBeUndefined();
     });
 
     it("a config's defaults.states: false opts out too", async () => {

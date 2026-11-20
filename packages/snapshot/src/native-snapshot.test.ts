@@ -67,6 +67,11 @@ describe("projectNativeTree", () => {
     node({ id: "b", parentId: "root", depth: 1, role: "button" }),
   ]);
 
+  it("says whether its tree carries {…} blocks, from the option it printed with", () => {
+    expect(projectNativeTree(ext).states).toBe(true);
+    expect(projectNativeTree(ext, { states: false }).states).toBe(false);
+  });
+
   it("serializes tree + outline and audits in Node, with an empty tab order", () => {
     const snap = projectNativeTree(ext);
     expect(snap.tree).toContain("main");

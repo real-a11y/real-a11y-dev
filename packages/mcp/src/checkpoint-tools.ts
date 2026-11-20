@@ -155,8 +155,9 @@ function registerSaveFindings(
           rules,
           ...(captureValues ? { values: true } : {}),
           // Remembered so diff_findings re-reads the same way and an export
-          // records it (`meta.states`).
-          ...(states ? { states: true } : {}),
+          // records it (`meta.states`). Read from the snapshot, which says
+          // how its tree was printed.
+          ...(snap.states === true ? { states: true } : {}),
         });
         const treeKb = (page.tree.length / 1024).toFixed(1);
         return text(
@@ -213,21 +214,34 @@ function registerDiffFindings(
         // always whole-document. Say so — silently widening turns everything
         // outside the old subtree into NEW findings, the class that gates CI.
         const scopeNote = scopeMismatch(base.page, head);
+        // Two different routes get no structural summary, so the notes below,
+        // which explain tree lines, would describe nothing in the output.
+        const otherPage = differentUrl(base.page, head);
         // A checkpoint captured (or imported) with values, diffed on a server
         // running with REAL_A11Y_REDACT_INPUT: this side can carry none, so
         // every filled field reads as a changed tree line. Say so rather than
         // let it pass for a regression — the same warning the CLI's `diff`
         // gives a one-sided pair. Findings carry no values and are unaffected.
         const valuesNote =
-          base.values === true && redactInput
+          base.values === true && redactInput && !otherPage
             ? `Note: checkpoint "${name}" carries field values, but this server runs with REAL_A11Y_REDACT_INPUT, so the current tree has none — every filled field reads as a changed tree line. Findings are unaffected.`
             : undefined;
-        const note = [scopeNote, valuesNote].filter(Boolean).join("\n\n");
+        // A checkpoint without `{…}` blocks (captured with states: false, or
+        // imported from an artifact from before them) is compared against a
+        // re-read without them, so no state change shows up. Say so: the
+        // summary otherwise looks like a full comparison.
+        const statesNote =
+          base.states !== true && !otherPage
+            ? `Note: checkpoint "${name}" carries no {…} states blocks (captured with states: false, or imported from an artifact from before them), so the current page was read without them too, and the structural summary compares no states: a checkbox that flipped or a disclosure that collapsed does not show. Re-capture it with checkpoint_findings for a diff that does.`
+            : undefined;
+        const note = [scopeNote, valuesNote, statesNote]
+          .filter(Boolean)
+          .join("\n\n");
         // Checkpoints survive navigation by design, so the agent may well have
         // moved to another page between saving and diffing.
         const body = renderDiff(diffCheckpointPages(base.page, head), {
           source: { kind: "live", checkpoint: name },
-          differentUrl: differentUrl(base.page, head),
+          differentUrl: otherPage,
         });
         return text(note ? `${note}\n\n${body}` : body, RULES_HINT);
       }),
@@ -260,12 +274,18 @@ function registerCheckpointDiffs(
         if (!h) return errText(`No checkpoint named "${head}".`);
         // Two stored checkpoints can disagree on scope just as easily — either
         // side may have been imported from a scoped, DOM-era artifact.
-        const note = [scopeMismatch(b.page, h.page), statesMismatch(b, h)]
+        // Two different routes get no structural summary, so the states note,
+        // which explains tree lines, would describe nothing in the output.
+        const otherPage = differentUrl(b.page, h.page);
+        const note = [
+          scopeMismatch(b.page, h.page),
+          otherPage ? undefined : statesMismatch(b, h),
+        ]
           .filter(Boolean)
           .join("\n\n");
         const rendered = renderDiff(diffLabeledCheckpoints(b.page, h.page), {
           source: { kind: "stored", base, head },
-          differentUrl: differentUrl(b.page, h.page),
+          differentUrl: otherPage,
         });
         return text(note ? `${note}\n\n${rendered}` : rendered, RULES_HINT);
       }),

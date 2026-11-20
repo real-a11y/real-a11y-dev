@@ -544,10 +544,13 @@ function defaultEntries(config: A11yConfig): DefaultEntry[] {
   for (const key of Object.keys(d)) {
     const val = d[key];
     if (val === undefined) continue;
-    // `annotate` and `states` are the positive forms of the negated flags
-    // `--no-annotate` and `--no-states`: only `false` seeds anything.
-    if (key === "annotate" || key === "states") {
-      if (val === false) out.push({ key, flag: KEY_TO_FLAG[key]!, val: true });
+    // A key that maps to a `no-` flag (`annotate` → `--no-annotate`, `states`
+    // → `--no-states`) is the positive form of a negated flag: only `false`
+    // seeds anything. Read from KEY_TO_FLAG, so the next negated key needs no
+    // second list here.
+    const negated = KEY_TO_FLAG[key];
+    if (negated?.startsWith("no-")) {
+      if (val === false) out.push({ key, flag: negated, val: true });
       continue;
     }
     out.push({ key, flag: KEY_TO_FLAG[key] ?? key, val });

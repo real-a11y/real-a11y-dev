@@ -2781,5 +2781,80 @@ describe("the states block: on by default, `states: false` opts out", () => {
     // Same page, read the same way: no line reads as a state change.
     expect(diff).not.toContain("States changed");
     expect(diff).not.toMatch(/^[-+~] .*checkbox "Subscribe"/m);
+    // …and it says no state was compared, so a flipped box isn't missed
+    // silently.
+    expect(diff).toContain('checkpoint "legacy" carries no {…} states blocks');
+  });
+
+  it("import keeps an artifact's blocks, so a live diff reads them too", async () => {
+    session.nativeTreeResponse = page();
+    const client = await connect(session);
+    await open(client);
+    await client.callTool({
+      name: "checkpoint_findings",
+      arguments: { name: "on" },
+    });
+    const artifact = textOf(
+      await client.callTool({
+        name: "export_checkpoint",
+        arguments: { name: "on" },
+      }),
+    );
+    expect(JSON.parse(artifact).meta.states).toBe(true);
+    await client.callTool({
+      name: "import_checkpoint",
+      arguments: { name: "back", artifact },
+    });
+    const again = JSON.parse(
+      textOf(
+        await client.callTool({
+          name: "export_checkpoint",
+          arguments: { name: "back" },
+        }),
+      ),
+    ) as { meta: { states?: boolean } };
+    expect(again.meta.states).toBe(true);
+    const diff = textOf(
+      await client.callTool({
+        name: "diff_findings",
+        arguments: { name: "back" },
+      }),
+    );
+    expect(diff).not.toContain("States changed");
+    expect(diff).not.toMatch(/^[-+~] .*checkbox "Subscribe"/m);
+    expect(diff).not.toContain("states blocks");
+  });
+
+  it("keeps the states notes off a diff of two different routes", async () => {
+    session.nativeTreeResponse = page();
+    const client = await connect(session);
+    await open(client);
+    await client.callTool({
+      name: "checkpoint_findings",
+      arguments: { name: "here", states: false },
+    });
+    await client.callTool({
+      name: "open_page",
+      arguments: { url: "https://example.com/elsewhere" },
+    });
+    await client.callTool({
+      name: "checkpoint_findings",
+      arguments: { name: "there" },
+    });
+    const stored = textOf(
+      await client.callTool({
+        name: "diff_checkpoints",
+        arguments: { base: "here", head: "there" },
+      }),
+    );
+    expect(stored).toContain("different page");
+    expect(stored).not.toContain("states blocks");
+    const live = textOf(
+      await client.callTool({
+        name: "diff_findings",
+        arguments: { name: "here" },
+      }),
+    );
+    expect(live).not.toContain("states blocks");
   });
 });

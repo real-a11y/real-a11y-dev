@@ -379,6 +379,13 @@ export interface CleanSnapshot {
   tree: string;
   outline: string;
   tabOrder: string;
+  /**
+   * Whether `tree` was printed with `{…}` states blocks. Set by
+   * `projectNativeTree`, from the option it serialized with, so the marker an
+   * artifact or checkpoint records (`meta.states`) is read from the snapshot
+   * rather than handed over a second time beside it. Absent: not recorded.
+   */
+  states?: boolean;
 }
 
 export function projectSnapshot(raw: unknown): CleanSnapshot {

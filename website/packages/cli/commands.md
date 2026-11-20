@@ -629,7 +629,8 @@ captured before the blocks existed, or one taken with
 [`--no-states`](#no-states) — every node with a state or description reads as a
 changed line, and a `generic` kept for its state shows up as a new line with
 its subtree nested under it. So `diff` warns on stderr that only the base (or
-the PR) snapshot carries them. Re-capture the baseline, or capture both sides with
+the PR) snapshot carries them. Neither warning shows under
+[`--only findings`](#only-axis), whose report holds no tree line. Re-capture the baseline, or capture both sides with
 `--no-states`.
 
 ```sh
