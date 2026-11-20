@@ -425,13 +425,19 @@ export function buildNativeTree(
 
   // A `<select>`'s value is also which of its options is `selected`: an
   // option's state would say what a withheld value is. Dropped for an option
-  // inside a sensitive field, and in strict mode for one inside any choice
+  // inside a sensitive field, including a sensitive list box that holds no AX
+  // value and so names nothing, and in strict mode for one inside any choice
   // field (a combobox or listbox).
-  const inChoiceField = (raw: RawAXNode, document: NativeDocument): boolean => {
+  const inChoiceField = (
+    raw: RawAXNode,
+    document: NativeDocument,
+    sensitiveOnly: boolean,
+  ): boolean => {
+    const { sensitiveFields } = document.prepared.sensitivity;
     for (const cur of nativeAncestry(raw, rawByNodeIdOf.get(document)!)) {
       const role = cur.role?.value;
-      if (cur !== raw && (role === "combobox" || role === "listbox"))
-        return true;
+      if (cur === raw || (role !== "combobox" && role !== "listbox")) continue;
+      if (!sensitiveOnly || sensitiveFields.has(cur.nodeId)) return true;
     }
     return false;
   };
@@ -443,21 +449,31 @@ export function buildNativeTree(
     const { states, properties } = raw
       ? axFacets(raw)
       : { states: {}, properties: {} };
-    // One decision for both places the selection shows: the AX state and the
-    // option's markup `selected` attribute on the `dom` facet.
-    const withholdSelection =
-      !!source &&
-      (source.document.prepared.sensitivity.regions.inside(source.raw) ||
-        (redactInput && inChoiceField(source.raw, source.document)));
-    if (withholdSelection) {
-      for (const state of NATIVE_AX_CHOICE_STATES) delete states[state];
-    }
-
     // The node's element, as the DOM walk of its own process recorded it.
     const enriched =
       source && nn.backendDOMNodeId !== null
         ? source.document.enrichment.get(nn.backendDOMNodeId)
         : undefined;
+
+    // One decision for both places the selection shows: the AX state and the
+    // option's markup `selected` attribute on the `dom` facet. Only a node
+    // that carries either has one to withhold, and the ancestry walk is only
+    // needed for one. Either alone counts: Chromium leaves the AX state off a
+    // disabled option (a disabled `<select>`, one in a disabled `<fieldset>`),
+    // while the markup attribute stays.
+    const carriesSelection =
+      NATIVE_AX_CHOICE_STATES.some((state) => state in states) ||
+      (enriched !== undefined && "selected" in enriched.attributes);
+    const withholdSelection =
+      !!source &&
+      carriesSelection &&
+      (source.document.prepared.sensitivity.regions.inside(source.raw) ||
+        ((redactInput ||
+          source.document.prepared.sensitivity.sensitiveFields.size > 0) &&
+          inChoiceField(source.raw, source.document, !redactInput)));
+    if (withholdSelection) {
+      for (const state of NATIVE_AX_CHOICE_STATES) delete states[state];
+    }
 
     // What a screen reader announces — never in strict mode, and `[redacted]`
     // for anything the sensitivity policy covers.

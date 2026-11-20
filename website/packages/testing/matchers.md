@@ -242,7 +242,7 @@ expect(inIsolation).toMatchA11yContract(contract, { strict: true });
 **States.** A contract line may end with a `{…}` block, the states, description and announced properties tree text prints for a node, and the contract then asserts it:
 
 ```ts
-expect(treeText).toMatchA11yContract(`
+expect(container).toMatchA11yContract(`
   form "Sign up"
     textbox "Email" {required}
     checkbox "Subscribe" {checked}
@@ -253,7 +253,7 @@ In containment the received node must carry at least the block's entries, in any
 
 A quoted value is a JSON string, so a quote or a backslash inside it is escaped: `description="Say \"hi\""`. A template literal reads those escapes before the matcher sees the text: `\"` becomes a bare `"`, and the line no longer parses; `\\` becomes one backslash, and the value no longer matches. When a value holds either, write the contract with `String.raw` or keep it in a file.
 
-A block can only match received text that prints one. `treeSnapshot` doesn't print states yet, so neither does a DOM Element received here: a contract that writes a block against an Element throws, with or without `.not`, instead of passing on a check it can't make. Until the serializer prints states, a block matches only a serialized tree string that carries one.
+A DOM Element is checked against the tree `treeSnapshot` prints, blocks included. A serialized tree string can match a block only if it prints one: a snapshot recorded with `states: false`, or before tree text carried states, has none, and the failure says the received tree prints no `{…}` states blocks. A token the tree text never prints, such as `checked=true` (a checked node prints `checked`) or `disabled=false` (an enabled node prints nothing), is an error naming the form that prints, since it could never match. [What a line carries](/packages/testing/snapshots#what-a-line-carries) lists each form.
 
 Because a serialized string is accepted, the same contract can be checked against a **committed snapshot artifact** — not only a live test render.
 

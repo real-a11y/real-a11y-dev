@@ -244,11 +244,13 @@ describe("the default name of submit, reset and image inputs", () => {
         `<main><input type="submit"><input type="reset"><input type="image" src="data:,"><input type="submit" title="Go"><input type="image" src="data:," title="Search"></main>`,
       ),
     );
+    // About names and roles: compare them without each line's states block.
     const domTree = await session.call<string>("treeSnapshot", "body", [
-      { markFocus: false },
+      { markFocus: false, states: false },
     ]);
     const nativeTree = serializeTree(await session.nativeTree(), {
       markFocus: false,
+      states: false,
     });
 
     for (const tree of [domTree, nativeTree]) {
@@ -305,11 +307,13 @@ describe("an input whose list names a <datalist>", () => {
         </script>`,
       ),
     );
+    // About names and roles: compare them without each line's states block.
     const domTree = await session.call<string>("treeSnapshot", "body", [
-      { markFocus: false },
+      { markFocus: false, states: false },
     ]);
     const nativeTree = serializeTree(await session.nativeTree(), {
       markFocus: false,
+      states: false,
     });
 
     for (const tree of [domTree, nativeTree]) {

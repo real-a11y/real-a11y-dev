@@ -207,12 +207,14 @@ Return the page's accessibility tree as a deterministic, indented role + accessi
 
 This is the vocabulary the [act tools](#act) target in, so a node you aim at by role + name here is the same node they dispatch against.
 
+A node's states, description and announced properties show in a `{…}` block after its name — `checkbox "Subscribe" {checked=false}`, `button "Menu" {expanded=false, haspopup=menu}` — so a checked and an unchecked box read differently. [What a line carries](/packages/testing/snapshots#what-a-line-carries) lists each key and when it shows.
+
 A field shows what it holds, the way a screen reader announces it — a text field's text, a `<select>`'s chosen option, a slider's `aria-valuetext` (else its number), a rich-text editor's content:
 
 ```
 textbox "Email" = "jane@example.com"
 textbox "Password" = "[redacted]"
-combobox "Country" = "France"
+combobox "Country" = "France" {expanded=false, haspopup=menu}
 ```
 
 A field whose markup marks it secret — `type="password"`, or an `autocomplete` of `current-password`, `new-password`, `one-time-code`, `cc-number`, `cc-csc`, `cc-exp`, `cc-exp-month` or `cc-exp-year` — reads `[redacted]` when it holds anything: never its text, never its length. [`inspect_page`](#inspect-page), [`list_elements`](#list-elements), [`get_tab_order`](#get-tab-order) and [`diff_tree`](#diff-tree) show values the same way; [findings checkpoints](#findings-checkpoints) leave them out unless asked.
@@ -241,11 +243,11 @@ An agent calls this to flag skipped levels or a missing/duplicate `h1`.
 
 *Read-only · the one in-page read · the one tool `rootSelector` scopes.*
 
-Return the focusable elements in the order a keyboard user reaches them with Tab — numbered, each with role + accessible name. The stop focused at capture time is marked `[focused]`. Surfaces focus traps, illogical order, and unreachable controls.
+Return the focusable elements in the order a keyboard user reaches them with Tab — numbered, each with role + accessible name and its states and description in a `{…}` block (`checkbox "Subscribe" {checked=false}`). This is the in-page walk, so a few keys differ from [`get_semantic_tree`](#get-semantic-tree)'s: see [where the producers differ](/packages/testing/snapshots#what-a-line-carries). The stop focused at capture time is marked `[focused]`. Surfaces focus traps, illogical order, and unreachable controls.
 
 The stops are the ones Chromium tabs to. An `<a>` without an `href` is not one, not even with `role="button"`, which is the keyboard bug worth catching. Nor is a control disabled directly or by its `<fieldset>`, or an element whose `tabindex` is not an integer, such as `""`. An `aria-disabled` control is a stop, because `aria-disabled` announces a state and leaves focus alone.
 
-So is the `<summary>` that toggles a `<details>`, such as an FAQ accordion's question, listed as `generic` and named by its text. Only the first `<summary>` child of a `<details>` is a stop. A second one, or a summary anywhere else, is plain text to Chromium.
+So is the `<summary>` that toggles a `<details>`, such as an FAQ accordion's question, listed as `generic`, named by its text and carrying `{expanded}` or `{expanded=false}`. Only the first `<summary>` child of a `<details>` is a stop. A second one, or a summary anywhere else, is plain text to Chromium.
 
 Nothing in the body of a closed `<details>` is a stop, not even a `<details>` nested in it. Chromium renders a closed disclosure as its summary alone, so Tab reaches the body only once it opens.
 

@@ -28,12 +28,12 @@ main
     definition "Mon–Sat 8:00–18:00"
   form "Booking"
     textbox "Pickup address"
-    textbox "Pickup postcode"
+    textbox "Pickup postcode" {description="5 digits. We use it to check we cover your area."}
     paragraph "5 digits. We use it to check we cover your area."
     textbox "Date"
     status
-    combobox "Time"
-      option "09:00"
+    combobox "Time" {expanded=false}
+      option "09:00" {selected}
       option "12:00"
       option "15:00"
     button "Request move"

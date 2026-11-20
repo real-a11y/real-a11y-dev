@@ -689,6 +689,8 @@ describe("summarizeViews", () => {
         'Tab stop renamed: checkbox "Subscribe" → "Newsletter"',
         'States changed: checkbox "Newsletter": checked=false → checked',
       ]);
+      // The state change is the tab stop's, so it is about the tab view.
+      expect(changes.map((c) => c.view)).toEqual(["tabs", "tabs"]);
     });
 
     it("same-name stops that changed differently are one statement, not lost focusability", () => {

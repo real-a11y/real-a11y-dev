@@ -98,7 +98,7 @@ The two libraries see different things. RTL sees what *sighted users using a mou
 | `.toggle()` | Dispatch a toggle action (`<details>`/`<summary>`; falls back to click for ARIA disclosures). |
 | `.select(value)` | Dispatch a select action with the given value (native `<select>`). |
 | `.type(text)` | Dispatch a type action with the given text (textbox, searchbox). |
-| `.expectTree(snapshot)` | Assert the current tree's serialization matches `snapshot` (see caveat below). |
+| `.expectTree(snapshot, options?)` | Assert the current tree's serialization matches `snapshot`. `options` are `treeSnapshot`'s (see caveat below). |
 | `.expectChanges(spec \| string \| fn)` | Assert **what the interaction(s) changed** in the tree since the diff window opened (see [Asserting what an interaction changed](#asserting-what-an-interaction-changed)). |
 | `.expectActiveModal(predicate)` | Assert the active dialog. Pass `null` to assert no dialog is open, or `(name) => boolean` to assert one is open and its accessible name satisfies the predicate. |
 | `.expect(fn)` | Run a custom assertion with the current tree as argument. |
@@ -125,7 +125,7 @@ The first `role="dialog"` or `role="alertdialog"` in document order is treated a
 
 ### `expectTree` — caveat
 
-`expectTree` re-serializes the tree with **default options** (no `redact`, `mode: "a11y"`, generic nodes flattened). A snapshot captured via `treeSnapshot(root, { redact: [...] })` or `{ mode: "dom" }` will not match. For redacted or DOM-mode comparisons, use `.expect((tree) => { … })` and call `serializeTree`/`treeSnapshot` yourself.
+`expectTree` re-serializes the tree with `treeSnapshot`'s **default options** unless you pass your own: no `redact`, `mode: "a11y"`, generic nodes flattened, and each node's [states block](/packages/testing/snapshots#what-a-line-carries) printed (`checkbox "Email me" {checked=false}`). A snapshot captured via `treeSnapshot(root, { redact: [...] })`, `{ mode: "dom" }` or `{ states: false }` matches only when you pass `expectTree` the same options. An expectation written before tree text carried states needs either its blocks added or `{ states: false }`.
 
 A mismatch names the **first differing line** (with a couple of lines of context). It does not dump both full trees.
 

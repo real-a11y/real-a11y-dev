@@ -212,20 +212,16 @@ function computeAccessibleDescription(
   // 2. aria-description — inline string (ARIA 1.3+)
   const inline = safeGetAttribute(element, "aria-description");
   if (inline) return inline;
-  // 3. title — HTML-AAM §4.2's last source, "if it was not used as the
-  //    accessible name": `<button aria-label="AL" title="Ti">` is "AL"
-  //    described by "Ti", as in Chromium.
-  const title = safeGetAttribute(element, "title");
-  const source: NameSource = {};
-  if (title)
+  // 3. title — see titleDescription.
+  return host.titleDescription(safeGetAttribute(element, "title"), (source) =>
     computeAccessibleName(
       element,
       newNameRun(redactInput),
       styleCache,
       false,
       source,
-    );
-  return title && !source.fromTitle ? collapseAscii(title) : "";
+    ),
+  );
 }
 
 /** Tags whose text content is used as an accessible name per accname-1.2. */

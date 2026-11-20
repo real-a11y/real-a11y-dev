@@ -62,7 +62,7 @@ trees produced outside a DOM runtime (a deserialized snapshot, a browser tree
 read over CDP) serialize the same way.
 
 `serializeTree` takes `{ mode, redact, includeGeneric, markFocus, values,
-redactInput }` options — see the [testing docs](https://real-a11y.dev/packages/testing/snapshots)
+states, redactInput }` options — see the [testing docs](https://real-a11y.dev/packages/testing/snapshots)
 for the `redact` pattern reference, the `[focused]` marker, and `values`, which
 prints each field's announced value (`textbox "Email" = "jane@x.com"`, a
 sensitive field as `"[redacted]"`). `values` is off by default, so output is
@@ -72,27 +72,57 @@ it throws unless the tree was extracted that way. The output is stable
 across runs (no ids or timestamps), which is what makes it safe to commit and
 diff.
 
-### What the text carries — and what it leaves out
+### What the text carries
 
 A `serializeTree` line is `role "name"`, then `= "value"` when `values` is on,
-`(level N)` when the node has a level, and `[focused]` when `markFocus` is on.
-`serializeTabSequence` prints role, name, the opt-in value and `[focused]` — no
-level. **Neither prints states, the description, or any other ARIA property**
-(`roledescription`, `haspopup`, `sort`, …). Two checkboxes that differ only in
-`checked` serialize to identical lines:
+`(level N)` when the node has a level, a `{…}` states block when the node has
+anything to print, and `[focused]` when `markFocus` is on.
+`serializeTabSequence` prints the same, without the level:
 
 ```
-checkbox "Subscribe"
-checkbox "Subscribe"
+checkbox "Subscribe" {checked}
+checkbox "Subscribe" {checked=false}
+button "Menu" {expanded=false, haspopup=menu} [focused]
+textbox "Email" = "a@b.c" {required, invalid, description="We never share it"}
+link "Docs" {current=page}
+heading "Setup" (level 2)
 ```
 
-So a committed tree snapshot does not change when a checkbox stops being
-checked, a disclosure loses `aria-expanded`, or a description disappears. To
-assert on those, read the node (`node.a11y.states`, `node.a11y.description`,
-`node.a11y.properties`), or use `serializeTreeDiff`, which prints every
-changed state, description and property as a `~` line. Where the `level` of a
-list item shows depends on the producer, so don't read the text as everything
-assistive technology announces.
+The block holds the states, description and announced properties a screen
+reader presents beyond role and name. Tokens are separated by `, `, in a fixed
+order, and print only when they carry information:
+
+| Key | Prints |
+| --- | --- |
+| `checked`, `pressed` | `key`, `key=false`, `key=mixed` |
+| `expanded` | `expanded`, `expanded=false` |
+| `selected`, `disabled`, `readonly`, `required` | `key`, only when true |
+| `invalid` | `invalid` for any invalid value (`grammar` and `spelling` too) |
+| `current` | `current` or `current=<token>` (`page`, `step`, …) |
+| `haspopup` | `haspopup=<token>` |
+| `roledescription`, `description` | `key="…"`, JSON-quoted and run through `redact` |
+
+Nothing else prints: not `focusable`, `editable`, `busy`, `modal`, a
+`level` (which keeps its own `(level N)`), or any other property. Pass
+`states: false` for text without blocks, byte for byte what the serializer
+printed before it had them, e.g. to keep comparing with a baseline committed
+then.
+
+Which keys a node carries depends on the producer, so a DOM tree and a native
+tree of the same page can differ by these tokens:
+
+- only the native producer (Chromium's own tree) reads `haspopup` and
+  `roledescription`, a description from a table caption, an SVG `<desc>` or
+  ruby text, `readonly` on a read-only grid's cells, and `checked=false` on an
+  ARIA checkbox with no `aria-checked`;
+- only the DOM producer reads `current`;
+- on a pristine required checkbox, radio or `<select>`, the DOM producer
+  prints `required` and `invalid` only after interaction (`:user-invalid`, as
+  HTML-AAM says), while Chromium reports `invalid` from the start and no
+  `required`.
+
+The outline and `serializeTreeDiff`'s labels never print a block: a `~` line
+names each changed state on its own.
 
 ## `serializeTreeDiff(diff, options?)`
 

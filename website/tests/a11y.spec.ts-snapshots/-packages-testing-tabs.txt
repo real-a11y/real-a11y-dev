@@ -4,12 +4,12 @@ link "What's in the box"
 link "Which do I reach for?"
 link "The semantic tree"
 link "See it running"
-radio "Vitest"
-radio "Jest"
+radio "Vitest" {checked}
+radio "Jest" {checked=false}
 button "Copy Code"
 generic
-radio "vitest.config.ts"
-radio "a11y.test.ts"
+radio "vitest.config.ts" {checked}
+radio "a11y.test.ts" {checked=false}
 button "Copy Code"
 generic
 button "Copy Code"

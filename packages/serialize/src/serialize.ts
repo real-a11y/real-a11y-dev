@@ -13,6 +13,7 @@ import {
 } from "@real-a11y-dev/core";
 
 import { extract } from "./extract.js";
+import { carriesState, statesBlock } from "./states-block.js";
 
 /** A DOM root to extract from, or an already-extracted tree. */
 export type SerializeInput = Element | ExtractionResult;
@@ -43,6 +44,17 @@ export interface SerializeOptions {
    * apply to values as they do to names.
    */
   values?: boolean;
+  /**
+   * Print the states, description and announced properties a screen reader
+   * presents beyond role and name, as a `{…}` block after `(level N)` and
+   * before `[focused]`: `checkbox "Subscribe" {checked=false}`,
+   * `button "Menu" {expanded=false, haspopup=menu}`. Default `true`. Tree and
+   * tab views only; the outline and the diff labels never print one.
+   *
+   * Pass `false` for output byte-identical to a serializer without states,
+   * e.g. to keep comparing against a baseline committed before them.
+   */
+  states?: boolean;
   /**
    * Strict mode (ADR-0001), the same option as the native producer's
    * `nativeTree({ redactInput })`: no field value and no rich-text editor
@@ -111,6 +123,17 @@ function nodeLabel(
   const level = node.a11y.properties?.level;
   const levelSuffix = level ? ` (level ${level})` : "";
   return `${node.a11y.role}${nameSuffix}${valueSuffix}${levelSuffix}`;
+}
+
+/** A node's ` {…}` states block, or nothing when `states` is off. The diff's
+ *  labels never call this, so a `~` line never shows a state twice. */
+function blockWriter(
+  states: boolean,
+  redact: RegExp[] | undefined,
+): (node: SemanticNode) => string {
+  if (!states) return () => "";
+  const redactor = (text: string) => redactText(text, redact);
+  return (node) => statesBlock(node.a11y, redactor);
 }
 
 /**
@@ -193,9 +216,9 @@ function printedDepths(
  * Serialize the full semantic tree (or a DOM root) as a deterministic indented
  * string of roles + accessible names.
  *
- * The format is stable across runs: roles, accessible names, and a `[focused]`
- * marker on the element focused at extraction time — no node ids, no
- * timestamps. Determinism is run-to-run (same steps → same focus → same
+ * The format is stable across runs: roles, accessible names, a `{…}` states
+ * block (see {@link SerializeOptions.states}), and a `[focused]` marker on the
+ * element focused at extraction time — no node ids, no timestamps. Determinism is run-to-run (same steps → same focus → same
  * output); pass `markFocus: false` to drop the marker. Suitable for snapshot
  * comparisons and shareable reports.
  */
@@ -208,9 +231,11 @@ export function serializeTree(
     includeGeneric = false,
     markFocus = true,
     values = false,
+    states = true,
   } = options;
   const redact = ensureGlobalFlags(options.redact);
   const tree = toTree(input, mode, "serializeTree", options.redactInput);
+  const block = blockWriter(states, redact);
   const focusedId = markFocus ? tree.focusedId : undefined;
 
   const printed = linearize(tree).filter(
@@ -219,7 +244,10 @@ export function serializeTree(
       node.a11y.role !== "generic" ||
       // A role-less editor is a `generic` holding what was typed: with values
       // on, it is a field worth a line, not a wrapper to fold away.
-      (values && node.a11y.value !== undefined),
+      (values && node.a11y.value !== undefined) ||
+      // Likewise a `generic` with a state, such as a `<details>` summary's
+      // `expanded`: with states on, the state is what a line is for.
+      (states && carriesState(node.a11y)),
   );
   const depths = printedDepths(tree, printed);
 
@@ -227,7 +255,9 @@ export function serializeTree(
   for (const node of printed) {
     const indent = "  ".repeat(depths.get(node.id) ?? 0);
     const focusSuffix = node.id === focusedId ? " [focused]" : "";
-    lines.push(`${indent}${nodeLabel(node, redact, values)}${focusSuffix}`);
+    lines.push(
+      `${indent}${nodeLabel(node, redact, values)}${block(node)}${focusSuffix}`,
+    );
   }
   return lines.join("\n");
 }
@@ -275,7 +305,7 @@ export function serializeTabSequence(
   input: SerializeInput,
   options: SerializeOptions = {},
 ): string {
-  const { markFocus = true, values = false } = options;
+  const { markFocus = true, values = false, states = true } = options;
   const redact = ensureGlobalFlags(options.redact);
   const tree = toTree(
     input,
@@ -283,6 +313,7 @@ export function serializeTabSequence(
     "serializeTabSequence",
     options.redactInput,
   );
+  const block = blockWriter(states, redact);
   const focusedId = markFocus ? tree.focusedId : undefined;
   const seq = getTabSequence(tree);
   if (seq.length === 0) return "(nothing focusable)";
@@ -292,7 +323,7 @@ export function serializeTabSequence(
       const name = redacted ? ` "${redacted}"` : "";
       const value = values ? valueText(n, redact) : "";
       const marker = n.id === focusedId ? " [focused]" : "";
-      return `${n.a11y.role}${name}${value}${marker}`;
+      return `${n.a11y.role}${name}${value}${block(n)}${marker}`;
     })
     .join("\n");
 }

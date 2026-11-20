@@ -197,7 +197,8 @@ real-a11y interact http://localhost:3000 \
 
 A step reads the way the tree prints a node — `<verb> <role> ["<name>"]
 [nth=<n>] [= <text>]` — so a line of `real-a11y tree` output is nearly a step
-already. Verbs are `click`, `type`, `focus`. Omit the name to match any; pass
+already: a pasted line's `{…}` states block and `[focused]` marker right after
+the name are read and ignored (drop a pasted ` = "value"` or `(level N)`). Verbs are `click`, `type`, `focus`. Omit the name to match any; pass
 `""` to target the **unlabeled** control an audit just flagged.
 
 The one-step cases have sugar:

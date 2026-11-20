@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { splitStatesBlock, statesTokens } from "./states-block.js";
+import {
+  splitStatesBlock,
+  statesBlock,
+  statesTokens,
+  tokenProducers,
+  unprintableToken,
+} from "./states-block.js";
 
 describe("splitStatesBlock", () => {
   it("returns a line with no block unchanged", () => {
@@ -130,5 +136,237 @@ describe("statesTokens", () => {
       "expanded=false",
       "haspopup=menu",
     ]);
+  });
+});
+
+describe("statesBlock", () => {
+  const block = (
+    states: Record<string, string | boolean>,
+    properties: Record<string, string> = {},
+    description = "",
+    redact = (t: string) => t,
+  ) => statesBlock({ states, properties, description }, redact);
+
+  it("prints nothing for a node with nothing to print", () => {
+    expect(block({})).toBe("");
+  });
+
+  it("checked and pressed: nothing for a token they don't take", () => {
+    expect(block({ checked: "page" })).toBe("");
+  });
+
+  it("checked and pressed: true, false and mixed", () => {
+    expect(block({ checked: true })).toBe(" {checked}");
+    expect(block({ checked: false })).toBe(" {checked=false}");
+    expect(block({ checked: "mixed" })).toBe(" {checked=mixed}");
+    expect(block({ pressed: true })).toBe(" {pressed}");
+    expect(block({ pressed: false })).toBe(" {pressed=false}");
+    expect(block({ pressed: "mixed" })).toBe(" {pressed=mixed}");
+  });
+
+  it("expanded: true and false", () => {
+    expect(block({ expanded: true })).toBe(" {expanded}");
+    expect(block({ expanded: false })).toBe(" {expanded=false}");
+  });
+
+  it("selected, disabled, readonly, required: only when true", () => {
+    for (const key of ["selected", "disabled", "readonly", "required"]) {
+      expect(block({ [key]: true })).toBe(` {${key}}`);
+      expect(block({ [key]: false })).toBe("");
+    }
+  });
+
+  it("invalid: bare for any truthy value, nothing for false", () => {
+    for (const value of [true, "true", "grammar", "spelling"]) {
+      expect(block({ invalid: value })).toBe(" {invalid}");
+    }
+    for (const value of [false, "false"]) {
+      expect(block({ invalid: value })).toBe("");
+    }
+  });
+
+  it("current: bare for true, a token otherwise, never false", () => {
+    expect(block({ current: true })).toBe(" {current}");
+    expect(block({ current: "page" })).toBe(" {current=page}");
+    expect(block({ current: false })).toBe("");
+  });
+
+  it("haspopup from either key, never false", () => {
+    expect(block({}, { hasPopup: "menu" })).toBe(" {haspopup=menu}");
+    expect(block({}, { haspopup: "listbox" })).toBe(" {haspopup=listbox}");
+    expect(block({}, { hasPopup: "false" })).toBe("");
+  });
+
+  it("roledescription and description: JSON-quoted and redacted", () => {
+    expect(block({}, { roledescription: "slide" })).toBe(
+      ' {roledescription="slide"}',
+    );
+    expect(block({}, {}, 'Say "hi", {then} go')).toBe(
+      String.raw` {description="Say \"hi\", {then} go"}`,
+    );
+    expect(
+      block({}, {}, "Order 1234 ships", (t) => t.replace(/\d+/g, "[REDACTED]")),
+    ).toBe(' {description="Order [REDACTED] ships"}');
+  });
+
+  it("never prints what isn't on the allowlist, nor native's defaults", () => {
+    expect(
+      block(
+        {
+          focusable: true,
+          focused: true,
+          editable: "plaintext",
+          settable: true,
+          modal: false,
+          multiline: false,
+          busy: true,
+          invalid: "false",
+          selected: false,
+          required: false,
+        },
+        { level: "2", valuemin: "0", orientation: "horizontal" },
+      ),
+    ).toBe("");
+  });
+
+  it("prints in the fixed order, whatever order the states come in", () => {
+    expect(
+      block(
+        {
+          invalid: true,
+          required: true,
+          disabled: true,
+          current: "step",
+          selected: true,
+          expanded: false,
+          pressed: true,
+          checked: "mixed",
+        },
+        { roledescription: "r", hasPopup: "menu" },
+        "d",
+      ),
+    ).toBe(
+      ' {checked=mixed, pressed, expanded=false, selected, current=step, disabled, required, invalid, haspopup=menu, roledescription="r", description="d"}',
+    );
+  });
+
+  it("quotes a token that isn't a word, so the line still reads back", () => {
+    expect(block({ current: "Some Place" })).toBe(' {current="Some Place"}');
+  });
+
+  it("writes only what the reader splits back off, token for token", () => {
+    const written = block(
+      { checked: false, current: "Some Place", required: true },
+      { hasPopup: "menu" },
+      'A "quoted", {braced} hint',
+    );
+    const line = `checkbox "x"${written}`;
+    const { line: rest, block: read } = splitStatesBlock(line);
+    expect(rest).toBe('checkbox "x"');
+    expect(` {${statesTokens(read!).join(", ")}}`).toBe(written);
+  });
+});
+
+describe("unprintableToken", () => {
+  // Every key, written from each of these values; and every token a contract
+  // could write with them. The validator must accept exactly what the writer
+  // printed, in both directions.
+  const KEYS = [
+    "checked",
+    "pressed",
+    "expanded",
+    "selected",
+    "current",
+    "disabled",
+    "readonly",
+    "required",
+    "invalid",
+    "haspopup",
+    "roledescription",
+    "description",
+  ];
+  const VALUES = [
+    "true",
+    "false",
+    "mixed",
+    "page",
+    "menu",
+    "Page",
+    "Some Place",
+    "",
+    "grammar",
+    "x",
+  ];
+  const facets = (key: string, value: string | boolean) =>
+    key === "description"
+      ? { states: {}, properties: {}, description: String(value) }
+      : key === "haspopup" || key === "roledescription"
+        ? {
+            states: {},
+            properties: {
+              [key === "haspopup" ? "hasPopup" : key]: String(value),
+            },
+            description: "",
+          }
+        : { states: { [key]: value }, properties: {}, description: "" };
+
+  it("accepts exactly the tokens the writer prints, key by key", () => {
+    for (const key of KEYS) {
+      const written = new Set<string>();
+      for (const value of [...VALUES, true, false]) {
+        const block = statesBlock(facets(key, value), (t) => t);
+        if (block)
+          written.add(statesTokens(splitStatesBlock(`x${block}`).block!)[0]!);
+      }
+      const candidates = new Set<string>([key, ...written]);
+      for (const v of VALUES) {
+        candidates.add(`${key}=${v}`);
+        candidates.add(`${key}=${JSON.stringify(v)}`);
+      }
+      for (const token of candidates) {
+        expect(
+          unprintableToken(token) === undefined,
+          `${token}: written ${written.has(token)}`,
+        ).toBe(written.has(token));
+      }
+    }
+  });
+
+  it("rejects the gaps a key-shaped object lookup and raw values let through", () => {
+    for (const token of [
+      "constructor",
+      "toString",
+      'current="false"',
+      'current="true"',
+      'current="page"',
+      'haspopup="true"',
+      "haspopup",
+      'description=""',
+      'roledescription=""',
+      "description=bare",
+    ]) {
+      expect(unprintableToken(token), token).toBeDefined();
+    }
+  });
+
+  it("prints aria-haspopup=true as the menu it means", () => {
+    expect(statesBlock(facets("haspopup", "true"), (t) => t)).toBe(
+      " {haspopup=menu}",
+    );
+  });
+
+  it("names the printed form of a token that never prints", () => {
+    expect(unprintableToken("checked=true")).toBe(
+      "`checked=true` never prints. Tree text prints `checked`, `checked=false` or `checked=mixed`.",
+    );
+    expect(unprintableToken("focusable")).toMatch(/^`focusable` is not a key/);
+  });
+
+  it("says which producer reads a key", () => {
+    expect(tokenProducers("checked=false")).toBe("both");
+    expect(tokenProducers("current=page")).toBe("dom");
+    expect(tokenProducers("haspopup=menu")).toBe("native");
+    expect(tokenProducers('roledescription="slide"')).toBe("native");
+    expect(tokenProducers("constructor")).toBeUndefined();
   });
 });

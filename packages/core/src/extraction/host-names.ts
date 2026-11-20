@@ -2,6 +2,8 @@
  * Name sources HTML-AAM defines for specific elements, read by the DOM
  * producer's name computation (`computeRawAccessibleName`).
  */
+import { collapseAscii, trimAscii } from "../utils/ascii-whitespace.js";
+
 import { safeGetAttribute } from "./clobber-safe.js";
 import { buttonInputName } from "./input-names.js";
 import { isSensitiveField } from "./sensitivity.js";
@@ -83,4 +85,35 @@ export function tooltipText(
   const fallback = buttonInputName(element, "afterTitle");
   if (fallback) return fallback;
   return tag === "input" || tag === "textarea" ? placeholderName(element) : "";
+}
+
+/** Where an element's name came from, as the name computation records it. */
+interface NameOrigin {
+  fromContent?: boolean;
+  fromTitle?: boolean;
+}
+
+/**
+ * The description a `title` gives, the last source in HTML-AAM §4.2: "if it
+ * was not used as the accessible name". `nameOf` computes the element's name
+ * and records where it came from: `<button aria-label="AL" title="Ti">` is
+ * "AL" described by "Ti", as in Chromium.
+ *
+ * Chromium also exposes no description that only repeats the element's own
+ * text: `<a title="See also">See also</a>` is link "See also", undescribed,
+ * and so is one whose title differs only by whitespace at its ends. A title
+ * that differs in case or inside (`See  also`), or one beside a name from
+ * `aria-label` or `alt`, still describes the element.
+ */
+export function titleDescription(
+  title: string | null,
+  nameOf: (origin: NameOrigin) => string,
+): string {
+  if (!title) return "";
+  const origin: NameOrigin = {};
+  const name = nameOf(origin);
+  if (origin.fromTitle) return "";
+  return origin.fromContent && trimAscii(title) === name
+    ? ""
+    : collapseAscii(title);
 }

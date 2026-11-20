@@ -6,6 +6,7 @@ import {
   serializeOutline,
   serializeTabSequence,
   numberTabStops,
+  splitStatesBlock,
 } from "./index.js";
 
 describe("serializeTree", () => {
@@ -439,25 +440,142 @@ describe("what a line carries (documented contract)", () => {
     <button aria-roledescription="slide" aria-describedby="d">x</button>
     <p id="d" hidden>Hint</p>`;
 
-  it("prints a checked and an unchecked checkbox identically", () => {
+  it("prints a checked and an unchecked checkbox differently", () => {
     document.body.innerHTML = html;
-    const lines = serializeTree(document.body).split("\n");
-    const boxes = lines.filter((l) => l.includes("checkbox"));
-    expect(boxes).toEqual(['checkbox "Subscribe"', 'checkbox "Subscribe"']);
-    // The states are on the nodes, just not in the text.
-    const states = [...extractA11yTree(document.body).nodes.values()]
-      .filter((n) => n.a11y.role === "checkbox")
-      .map((n) => n.a11y.states?.checked);
-    expect(states).toEqual([true, false]);
+    const boxes = serializeTree(document.body)
+      .split("\n")
+      .filter((l) => l.includes("checkbox"));
+    expect(boxes).toEqual([
+      'checkbox "Subscribe" {checked}',
+      'checkbox "Subscribe" {checked=false}',
+    ]);
   });
 
-  it("prints no state, description or role description in tree or tab lines", () => {
+  it("prints the description in tree and tab lines", () => {
     document.body.innerHTML = html;
-    const tree = serializeTree(document.body);
-    const tabs = serializeTabSequence(document.body);
-    for (const out of [tree, tabs]) {
+    expect(serializeTree(document.body)).toContain(
+      'button "x" {description="Hint"}',
+    );
+    expect(serializeTabSequence(document.body)).toContain(
+      'button "x" {description="Hint"}',
+    );
+  });
+
+  it("with states: false, prints no block at all, as before blocks existed", () => {
+    document.body.innerHTML = html;
+    for (const out of [
+      serializeTree(document.body, { states: false }),
+      serializeTabSequence(document.body, { states: false }),
+    ]) {
       expect(out).toContain('button "x"');
-      expect(out).not.toMatch(/Hint|slide|checked/);
+      expect(out).not.toMatch(/[{}]|Hint|checked/);
     }
+  });
+
+  it("states: false differs from the default only by each line's block", () => {
+    document.body.innerHTML = `
+      <h2 aria-describedby="h">Setup</h2><p id="h" hidden>Step one</p>
+      <input aria-label="Email" value="a@b.c" required aria-invalid="true">
+      <a href="#" aria-current="page">Docs</a>
+      <button aria-expanded="false" aria-pressed="mixed">Menu</button>`;
+    (document.querySelector("button") as HTMLElement).focus();
+    const options = { values: true };
+    const withStates = serializeTree(document.body, options).split("\n");
+    const without = serializeTree(document.body, {
+      ...options,
+      states: false,
+    }).split("\n");
+    const marker = " [focused]";
+    expect(
+      withStates.map((line) => {
+        const focused = line.endsWith(marker);
+        const bare = focused ? line.slice(0, -marker.length) : line;
+        return splitStatesBlock(bare).line + (focused ? marker : "");
+      }),
+    ).toEqual(without);
+  });
+
+  it("puts the block after the value and the level, before [focused]", () => {
+    document.body.innerHTML = `
+      <h2 aria-describedby="h">Setup</h2><p id="h" hidden>Step one</p>
+      <input aria-label="Email" value="a@b.c" required>`;
+    (document.querySelector("input") as HTMLElement).focus();
+    const tree = serializeTree(document.body, { values: true });
+    expect(tree).toContain(
+      'heading "Setup" (level 2) {description="Step one"}',
+    );
+    expect(tree).toContain('textbox "Email" = "a@b.c" {required} [focused]');
+    expect(serializeTabSequence(document.body, { values: true })).toBe(
+      'textbox "Email" = "a@b.c" {required} [focused]',
+    );
+  });
+
+  it("reads each DOM state as the print rules say", () => {
+    document.body.innerHTML = `
+      <button aria-pressed="true">Bold</button>
+      <button aria-expanded="true">Open</button>
+      <a href="#" aria-current="true">Here</a>
+      <button disabled>Off</button>
+      <input aria-label="R" readonly>
+      <input aria-label="S" aria-invalid="spelling">
+      <input aria-label="F" aria-invalid="false" aria-required="false">
+      <div role="listbox" aria-label="L">
+        <div role="option" aria-selected="true">A</div>
+        <div role="option" aria-selected="false">B</div>
+      </div>`;
+    const tree = serializeTree(document.body);
+    for (const line of [
+      'button "Bold" {pressed}',
+      'button "Open" {expanded}',
+      'link "Here" {current}',
+      'button "Off" {disabled}',
+      'textbox "R" {readonly}',
+      'textbox "S" {invalid}',
+      'option "A" {selected}',
+    ]) {
+      expect(tree).toContain(line);
+    }
+    expect(tree).toMatch(/^ *textbox "F"$/m);
+    expect(tree).toMatch(/^ *option "B"$/m);
+  });
+
+  it("redacts a description with the name's patterns", () => {
+    document.body.innerHTML = `
+      <button aria-describedby="d">Pay</button><p id="d" hidden>Order 1234</p>`;
+    expect(serializeTree(document.body, { redact: [/\d+/] })).toContain(
+      'button "Pay" {description="Order [REDACTED]"}',
+    );
+  });
+
+  it("prints no description that strict mode withheld at extraction", () => {
+    document.body.innerHTML = `
+      <input id="f" aria-label="Card" value="4111 1111">
+      <button aria-describedby="f">Pay</button>`;
+    expect(serializeTree(document.body)).toContain(
+      'button "Pay" {description="4111 1111"}',
+    );
+    const strict = serializeTree(document.body, { redactInput: true });
+    expect(strict).toMatch(/^ *button "Pay"$/m);
+    expect(strict).not.toContain("4111");
+  });
+
+  it("keeps a generic that carries a state, such as a details summary", () => {
+    document.body.innerHTML = `
+      <details><summary>Shipping</summary><p>2 days</p></details>
+      <details open><summary>Returns</summary><p>30 days</p></details>
+      <div title="Just a tip"><button>Go</button></div>`;
+    const tree = serializeTree(document.body);
+    expect(tree).toContain('generic "Shipping" {expanded=false}');
+    expect(tree).toContain('generic "Returns" {expanded}');
+    // A generic with only a description stays folded away.
+    expect(tree).not.toContain("Just a tip");
+    expect(serializeTree(document.body, { states: false })).not.toContain(
+      "generic",
+    );
+  });
+
+  it("keeps the outline free of blocks", () => {
+    document.body.innerHTML = `<h1 aria-describedby="d">Top</h1><p id="d" hidden>x</p>`;
+    expect(serializeOutline(document.body)).toBe("h1 Top");
   });
 });

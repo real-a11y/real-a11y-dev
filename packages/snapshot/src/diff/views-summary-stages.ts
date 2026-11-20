@@ -221,32 +221,41 @@ const sumCounts = (ms: Multiset, keys: readonly string[]) =>
  * blocks so identical changes coalesce into one `(×N)` statement. */
 export type StateTally = Map<
   string,
-  { identity: string; from: string; to: string; n: number }
+  {
+    view: "tree" | "tabs";
+    identity: string;
+    from: string;
+    to: string;
+    n: number;
+  }
 >;
 
-/** Tally `before` → `after` when their blocks differ. */
+/** Tally `before` → `after`, lines of `view`, when their blocks differ. */
 export function tallyBlockChange(
   tally: StateTally,
-  before: string,
-  after: string,
+  {
+    view,
+    before,
+    after,
+  }: { view: "tree" | "tabs"; before: string; after: string },
 ): void {
   const from = blockOf(before);
   const to = blockOf(after);
   if (from === to) return;
   const identity = splitStatesBlock(after).line;
-  const id = `${identity}\u0000${from}\u0000${to}`;
+  const id = `${view}\u0000${identity}\u0000${from}\u0000${to}`;
   const entry = tally.get(id);
   if (entry) entry.n++;
-  else tally.set(id, { identity, from, to, n: 1 });
+  else tally.set(id, { view, identity, from, to, n: 1 });
 }
 
-/** Push the tallied changes as tree-view statements. */
+/** Push the tallied changes, each as a statement about its own view. */
 export function flushStateTally(
   tally: StateTally,
   changes: ViewChange[],
 ): void {
-  for (const { identity, from, to, n } of tally.values()) {
-    changes.push(stateChange("tree", identity, { from: [from], to: [to], n }));
+  for (const { view, identity, from, to, n } of tally.values()) {
+    changes.push(stateChange(view, identity, { from: [from], to: [to], n }));
   }
 }
 
@@ -277,7 +286,11 @@ export function swappedStates(
     if (before[i] === after[i]) continue;
     if (splitStatesBlock(before[i]).line !== splitStatesBlock(after[i]).line)
       return;
-    tallyBlockChange(tally, before[i], after[i]);
+    tallyBlockChange(tally, {
+      view: "tree",
+      before: before[i],
+      after: after[i],
+    });
   }
   flushStateTally(tally, changes);
 }
@@ -359,7 +372,7 @@ function takeHeadingPair(
   const before = takeTreeHeading(m.treeRemoved, removed.name, removed.level);
   const after = takeTreeHeading(m.treeAdded, added.name, added.level);
   if (before !== undefined && after !== undefined)
-    tallyBlockChange(tally, before, after);
+    tallyBlockChange(tally, { view: "tree", before, after });
 }
 
 interface OutlineEntry {

@@ -109,6 +109,23 @@ export interface TreeSnapshotOptions {
    * prints `"[redacted]"`. Mirrors the jsdom `treeSnapshot` option.
    */
   values?: boolean;
+  /**
+   * Print the states, description and announced properties a screen reader
+   * presents beyond role and name, as a `{…}` block:
+   * `checkbox "Subscribe" {checked=false}`. Default true. Pass `false` for
+   * the text without blocks. Mirrors the jsdom `treeSnapshot` option.
+   */
+  states?: boolean;
+}
+
+/** Options for the adapter's {@link SemanticNavigatorPageHandle.tabSequenceSnapshot}. */
+export interface TabSequenceSnapshotOptions {
+  /**
+   * Print each stop's `{…}` states block — `checkbox "Subscribe" {checked}`.
+   * Default true. Pass `false` for the text without blocks. Mirrors the jsdom
+   * `tabSequenceSnapshot` option.
+   */
+  states?: boolean;
 }
 
 export interface SemanticNavigatorPageHandle {
@@ -117,7 +134,7 @@ export interface SemanticNavigatorPageHandle {
   /** Indented heading outline (h1..h6) in document order. */
   outlineSnapshot(): Promise<string>;
   /** Focusable elements in computed tab order, numbered. */
-  tabSequenceSnapshot(): Promise<string>;
+  tabSequenceSnapshot(options?: TabSequenceSnapshotOptions): Promise<string>;
   /** Throws if any interactive element has an empty accessible name. */
   assertNoUnlabeledInteractive(): Promise<void>;
   /** Throws if heading levels are skipped or there is not exactly one h1. */
@@ -298,7 +315,7 @@ export async function attach(
 
   return {
     treeSnapshot(opts: TreeSnapshotOptions = {}) {
-      const { mode, redact, includeGeneric, values } = opts;
+      const { mode, redact, includeGeneric, values, states } = opts;
       // `RegExp` doesn't survive `page.evaluate()` serialisation — it arrives
       // as an empty `{}`. Marshal each pattern to a plain `{ source, flags }`
       // pair and rebuild the `RegExp` inside the page.
@@ -313,6 +330,7 @@ export async function attach(
         redact?: { source: string; flags: string }[];
         includeGeneric?: boolean;
         values?: boolean;
+        states?: boolean;
         redactInput: boolean;
       };
 
@@ -349,6 +367,7 @@ export async function attach(
           if (a.includeGeneric !== undefined)
             options.includeGeneric = a.includeGeneric;
           if (a.values !== undefined) options.values = a.values;
+          if (a.states !== undefined) options.states = a.states;
           if (a.redactInput) options.redactInput = true;
           if (a.redact)
             options.redact = a.redact.map((r) => new RegExp(r.source, r.flags));
@@ -360,6 +379,7 @@ export async function attach(
           redact: redactParts,
           includeGeneric,
           values,
+          states,
           redactInput,
         } satisfies TreeArg,
       );
@@ -367,8 +387,13 @@ export async function attach(
     outlineSnapshot() {
       return evalFn<string>("outlineSnapshot");
     },
-    tabSequenceSnapshot() {
-      return evalFn<string>("tabSequenceSnapshot");
+    tabSequenceSnapshot(opts: TabSequenceSnapshotOptions = {}) {
+      // Only `states` crosses: the in-page call needs no other option, and a
+      // plain object survives `page.evaluate()` serialisation as is.
+      return evalFn<string>(
+        "tabSequenceSnapshot",
+        opts.states === undefined ? [] : [{ states: opts.states }],
+      );
     },
     assertNoUnlabeledInteractive() {
       return evalFn<void>("assertNoUnlabeledInteractive");
@@ -423,6 +448,7 @@ async function attachNative(
         redact: opts.redact,
         includeGeneric: opts.includeGeneric,
         values: opts.values,
+        states: opts.states,
       });
     },
     async outlineSnapshot() {

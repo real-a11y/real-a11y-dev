@@ -159,6 +159,10 @@ test("home page structure", async ({ page }) => {
 
 A `RegExp` can't be passed through `page.evaluate()` directly — Playwright serializes evaluate arguments and a `RegExp` arrives as an empty `{}`. The adapter handles this for you: it marshals each pattern to `{ source, flags }`, ferries that across the boundary, and rebuilds the `RegExp` inside the page — so patterns behave exactly as they do in jsdom. Keep the [`g`-flag gotcha](/packages/testing/snapshots#using-redact) in mind when a name can contain more than one match.
 
+## States
+
+Both trees print each node's states, description and announced properties in a `{…}` block, as in jsdom (see [What a line carries](/packages/testing/snapshots#what-a-line-carries)): `checkbox "Subscribe" {checked=false}`. `treeSnapshot({ states: false })` and `tabSequenceSnapshot({ states: false })` print the text without blocks, to keep comparing with a baseline committed before them. The second takes a `TabSequenceSnapshotOptions`, exported from `@real-a11y-dev/testing/playwright`.
+
 ## Field values
 
 `treeSnapshot({ values: true })` prints what each field holds, the way a screen reader announces it. It's off by default, as in jsdom (see [Field values](/packages/testing/snapshots#field-values)):

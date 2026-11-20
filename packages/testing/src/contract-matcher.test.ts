@@ -85,29 +85,53 @@ describe("toMatchA11yContract", () => {
 });
 
 describe("toMatchA11yContract — states blocks against an element", () => {
-  // The serializer prints no {…} block yet, so a block can't be checked
-  // against an element: both forms throw rather than let `.not` pass on
-  // nothing. Remove with the guard once the serializer prints blocks.
-  const html = `<form aria-label="Sign up"><input type="checkbox" checked aria-label="Subscribe"></form>`;
+  const html = `<form aria-label="Sign up">
+    <input type="checkbox" checked aria-label="Subscribe">
+    <input type="email" required aria-label="Email" aria-describedby="h">
+    <p id="h" hidden>We never share it</p>
+  </form>`;
 
-  it("throws for a contract that writes a block", () => {
+  it("checks a block against the element's tree", () => {
     const el = mount(html);
-    expect(() =>
-      expect(el).toMatchA11yContract('checkbox "Subscribe" {checked}'),
-    ).toThrow(/prints no states yet/);
+    expect(el).toMatchA11yContract('checkbox "Subscribe" {checked}');
+    expect(el).toMatchA11yContract(
+      'textbox "Email" {description="We never share it", required}',
+    );
+    expect(el).not.toMatchA11yContract('checkbox "Subscribe" {checked=false}');
   });
 
-  it("throws for the negated form too, instead of passing on nothing", () => {
+  it("fails the negated form on a block that matches", () => {
     const el = mount(html);
     expect(() =>
       expect(el).not.toMatchA11yContract('checkbox "Subscribe" {checked}'),
-    ).toThrow(/prints no states yet/);
+    ).toThrow();
   });
 
-  it("still checks a block against a tree string that prints one", () => {
-    expect(
-      'form "Sign up"\n  checkbox "Subscribe" {checked}',
-    ).toMatchA11yContract('checkbox "Subscribe" {checked}');
+  it("names the missing state when the element's state differs", () => {
+    const el = mount(html);
+    expect(() =>
+      expect(el).toMatchA11yContract('checkbox "Subscribe" {checked=false}'),
+    ).toThrow(/same role and name, missing checked=false/);
+  });
+
+  it("checks a block in strict mode, and {} for a node with none", () => {
+    const el = mount(html);
+    expect(el).toMatchA11yContract(
+      [
+        'form "Sign up"',
+        '  checkbox "Subscribe" {checked}',
+        '  textbox "Email" {required, description="We never share it"}',
+      ].join("\n"),
+      { strict: true },
+    );
+    expect(el).not.toMatchA11yContract(
+      [
+        'form "Sign up" {}',
+        '  checkbox "Subscribe" {}',
+        '  textbox "Email"',
+      ].join("\n"),
+      { strict: true },
+    );
   });
 });
 
@@ -137,5 +161,50 @@ describe("toMatchA11yContract — field values against an element", () => {
     expect(el).toMatchA11yContract('form "Sign up"\n  textbox "Email"', {
       strict: true,
     });
+  });
+});
+
+describe("toMatchA11yContract — native-only keys against an element", () => {
+  const html = `<button aria-expanded="false" aria-haspopup="menu" aria-roledescription="slide">Menu</button>`;
+
+  it("throws for haspopup and roledescription, with or without .not", () => {
+    const el = mount(html);
+    for (const block of [
+      "{expanded=false, haspopup=menu}",
+      '{roledescription="slide"}',
+    ]) {
+      const contract = `button "Menu" ${block}`;
+      expect(() => expect(el).toMatchA11yContract(contract)).toThrow(
+        /a DOM Element's tree never carries/,
+      );
+      expect(() => expect(el).not.toMatchA11yContract(contract)).toThrow(
+        /a DOM Element's tree never carries/,
+      );
+    }
+  });
+
+  it("still checks them against native tree text", () => {
+    expect('button "Menu" {expanded=false, haspopup=menu}').toMatchA11yContract(
+      'button "Menu" {haspopup=menu}',
+    );
+    expect(mount(html)).toMatchA11yContract('button "Menu" {expanded=false}');
+  });
+});
+
+describe("toMatchA11yContract — strict contracts and stateful generics", () => {
+  const html = `<details><summary>Shipping</summary><p>2 days</p></details>`;
+
+  it("a strict contract without blocks compares the tree it always did", () => {
+    // A closed <details> shows its summary only, folded away without states.
+    expect(mount(html)).toMatchA11yContract('group "Shipping"', {
+      strict: true,
+    });
+  });
+
+  it("a strict contract with blocks sees the summary's state", () => {
+    expect(mount(html)).toMatchA11yContract(
+      'group "Shipping"\n  generic "Shipping" {expanded=false}',
+      { strict: true },
+    );
   });
 });

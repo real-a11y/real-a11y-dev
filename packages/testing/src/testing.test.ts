@@ -302,6 +302,18 @@ describe("flow", () => {
   button "Go"`);
     });
 
+    it("prints states by default, and takes treeSnapshot's options", async () => {
+      const root = mount(
+        `<main><input type="checkbox" aria-label="Email me"></main>`,
+      );
+      await flow(root).expectTree(
+        `main\n  checkbox "Email me" {checked=false}`,
+      );
+      await flow(root).expectTree(`main\n  checkbox "Email me"`, {
+        states: false,
+      });
+    });
+
     it("throws with a diff when the serialized tree differs", async () => {
       const root = mount(`<main><h1>Hi</h1></main>`);
       await expect(

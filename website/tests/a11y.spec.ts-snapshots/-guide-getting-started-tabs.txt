@@ -14,9 +14,9 @@ link "@real-a11y-dev/cli"
 link "@real-a11y-dev/mcp"
 link "Chrome extension"
 link "Keep it out of production"
-radio "npm"
-radio "pnpm"
-radio "yarn"
+radio "npm" {checked}
+radio "pnpm" {checked=false}
+radio "yarn" {checked=false}
 button "Copy Code"
 generic
 button "Copy Code"
@@ -46,9 +46,9 @@ generic
 link "CSF Next"
 table
 link ".size-limit.json"
-radio "Vite / React"
-radio "webpack / Next.js"
-radio "vanilla / any bundler"
+radio "Vite / React" {checked}
+radio "webpack / Next.js" {checked=false}
+radio "vanilla / any bundler" {checked=false}
 button "Copy Code"
 generic
 button "Copy Code"

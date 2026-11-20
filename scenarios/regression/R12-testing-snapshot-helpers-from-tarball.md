@@ -1,14 +1,14 @@
 ---
 id: R12
 suite: regression
-scenario: "Testing pkg — snapshot helpers from the installed tarball (treeSnapshot / outlineSnapshot / tabSequenceSnapshot + redact + markFocus + values)"
+scenario: "Testing pkg — snapshot helpers from the installed tarball (treeSnapshot / outlineSnapshot / tabSequenceSnapshot + redact + markFocus + values + states)"
 area: Testing
 type: Automated
 priority: P0
 status: Active
-validFrom: "testing ≥ 0.1.0-beta.11 (installed from the packed tarball, not a workspace link). Step 10 (values): testing ≥ 0.1.0-beta.17. Step 10b (a sensitive textarea's text): testing ≥ 0.1.0-beta.18. Step 10b's `[redacted]` input name: testing ≥ 0.1.0-beta.23"
+validFrom: "testing ≥ 0.1.0-beta.11 (installed from the packed tarball, not a workspace link). Step 10 (values): testing ≥ 0.1.0-beta.17. Step 10b (a sensitive textarea's text): testing ≥ 0.1.0-beta.18. Step 10b's `[redacted]` input name: testing ≥ 0.1.0-beta.23. Step 11 (the states block) ships in the FIRST release after testing 0.1.0-beta.23: against 0.1.0-beta.23 or earlier no line prints a block and `states` is ignored, which is the old behaviour, not a fail"
 validUntil: ""
-expected: "all three produce stable deterministic strings; redact masks EVERY occurrence; [focused] appears only when something is focused; values are absent unless asked, and a sensitive field's value never prints — a password's, or a sensitive textarea's markup text"
+expected: "all three produce stable deterministic strings; redact masks EVERY occurrence; [focused] appears only when something is focused; values are absent unless asked, and a sensitive field's value never prints — a password's, or a sensitive textarea's markup text; states print in a {…} block by default and states: false prints none"
 twin: D5
 covers:
   - packages.@real-a11y-dev/testing
@@ -38,6 +38,11 @@ Packaging faults only show from the tarball.
       `<textarea id="otp" autocomplete="one-time-code">OTP-SENTINEL</textarea>`,
       the code written as the textarea's markup text, and repeat both calls, then
       `tabSequenceSnapshot(root)`
+11. On a fixture with two checkboxes labelled "Subscribe", one checked, a
+    `<button aria-expanded="false">Menu</button>` and a required text field
+    described by a hidden `<p>` holding `secret-123`: `treeSnapshot(root)`,
+    `tabSequenceSnapshot(root)`, `treeSnapshot(root, { redact: [/secret-\w+/g] })`,
+    then `treeSnapshot(root, { states: false })`
 
 ## Expected
 
@@ -66,6 +71,14 @@ Packaging faults only show from the tarball.
   a bare `textbox`, which is the old behaviour, not a fail. testing
   0.1.0-beta.17 and earlier printed `textbox "OTP-SENTINEL"` in the default
   snapshot and the tab sequence alike
+
+- **11** — the boxes read `checkbox "Subscribe" {checked}` and
+  `checkbox "Subscribe" {checked=false}`, the button `button "Menu"
+  {expanded=false}` and the field `textbox "…" {required,
+  description="secret-123"}`, in both the tree and the tab sequence. With
+  `redact` the description reads `"[REDACTED]"`, and `secret-123` appears
+  nowhere. With `states: false` no `{` appears anywhere: the text a release
+  without blocks printed, so a baseline committed before them still compares
 
 ## Why this exists
 

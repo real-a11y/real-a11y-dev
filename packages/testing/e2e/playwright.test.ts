@@ -67,6 +67,25 @@ test.describe("good fixture", () => {
     expect(seq).toContain("Documentation");
   });
 
+  test("prints each stop's states block, and none with states: false", async ({
+    page,
+  }) => {
+    await page.setContent(
+      `<button aria-expanded="false">Menu</button><input type="checkbox" checked aria-label="Subscribe">`,
+    );
+    const sn = await attach(page);
+    const expected = [
+      'button "Menu" {expanded=false}',
+      'checkbox "Subscribe" {checked}',
+    ];
+    expect(await sn.tabSequenceSnapshot()).toBe(expected.join("\n"));
+    expect(await sn.treeSnapshot()).toContain(expected[1]);
+    expect(await sn.tabSequenceSnapshot({ states: false })).toBe(
+      'button "Menu"\ncheckbox "Subscribe"',
+    );
+    expect(await sn.treeSnapshot({ states: false })).not.toContain("{");
+  });
+
   test("assertHeadingOrder passes for correct structure", async ({ page }) => {
     const sn = await attach(page);
     await expect(sn.assertHeadingOrder()).resolves.toBeUndefined();

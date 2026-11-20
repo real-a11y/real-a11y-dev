@@ -33,6 +33,11 @@ export interface NativeSnapshotOptions {
    * artifact, a checkpoint) only when the caller opted in.
    */
   values?: boolean;
+  /**
+   * Print each node's `{…}` states block in the tree view —
+   * `checkbox "Subscribe" {checked=false}`. Default true.
+   */
+  states?: boolean;
 }
 
 /**
@@ -59,6 +64,7 @@ export function projectNativeTree(
     tree: serializeTree(tree, {
       includeGeneric,
       values: options.values === true,
+      states: options.states !== false,
     }),
     outline: serializeOutline(tree),
     tabOrder: "",

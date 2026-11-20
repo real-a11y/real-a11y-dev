@@ -187,7 +187,7 @@ Only findings the PR introduces can fail it. Findings already on `main`, fixed f
 
 ## What the comment looks like
 
-For a PR that drops an input's label and turns an `h2` into an `h3`, `diff` writes this (shortened):
+For a PR that drops an input's label, turns an `h2` into an `h3`, and stops pre-checking a newsletter box, `diff` writes this (shortened):
 
 ````md
 ### Accessibility diff
@@ -204,23 +204,26 @@ For a PR that drops an input's label and turns an `h2` into an `h3`, `diff` writ
 - Heading level changed: "Setup" h2 → h3
 - Interactive element removed: textbox "Email"
 - Interactive element added: textbox (no accessible name)
+- States changed: checkbox "Newsletter": checked → checked=false
 
 _tree_
 
 ```diff
-@@ -1,6 +1,6 @@
+@@ -1,7 +1,7 @@
  main
    heading "Shop" (level 1)
    heading "Plans" (level 2)
 -  heading "Setup" (level 2)
 -  textbox "Email"
+-  checkbox "Newsletter" {checked}
 +  heading "Setup" (level 3)
 +  textbox
++  checkbox "Newsletter" {checked=false}
    button "Subscribe"
 ```
 ````
 
-**Findings** come from the six audit rules and can fail the build. **Structure** covers changes that break no rule, and never fails it. When nothing changed, both lines say so.
+**Findings** come from the six audit rules and can fail the build. **Structure** covers changes that break no rule, and never fails it. When nothing changed, both lines say so. A line whose only change is its `{…}` states block (a box checked or unchecked, a disclosure collapsed, a description changed) reads as one `States changed:` statement.
 
 Tab order isn't compared: `snapshot` reads Chromium's accessibility tree, which has no tab order, so every diff notes that the tabs view wasn't compared. For keyboard order, use [`real-a11y tabs`](/packages/cli/commands#tabs-url).
 

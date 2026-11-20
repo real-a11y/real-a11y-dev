@@ -160,9 +160,11 @@ describe("real-a11y (built bin)", () => {
     const { code, stdout } = await runCli(["tabs", page, "-q"]);
     expect(code).toBe(0);
     expect(stdout.trimEnd()).toBe(
-      ['01. link "Docs"', '02. button "Publish"', '03. button "Unlock"'].join(
-        "\n",
-      ),
+      [
+        '01. link "Docs"',
+        '02. button "Publish" {disabled}',
+        '03. button "Unlock"',
+      ].join("\n"),
     );
   });
 
@@ -230,9 +232,9 @@ describe("real-a11y (built bin)", () => {
     expect(stdout.trimEnd()).toBe(
       [
         '01. button "Before"',
-        '02. generic "Shipping"',
-        '03. generic "Returns"',
-        '04. generic "Warranty"',
+        '02. generic "Shipping" {expanded=false}',
+        '03. generic "Returns" {expanded}',
+        '04. generic "Warranty" {expanded=false}',
         '05. link "All questions"',
       ].join("\n"),
     );
@@ -508,7 +510,7 @@ describe("the native producer is the only producer (built bin)", () => {
       .trimEnd()
       .split("\n")
       .map((line) => line.replace(/^\d+\. /, ""))
-      .filter((stop) => !/^\S+ "(S|O)"$/.test(stop));
+      .filter((stop) => !/^\S+ "(S|O)"(?: \{[^}]*\})?$/.test(stop));
     expect(stops).toEqual(['link "Open link"', 'link "Visible"']);
   });
 
@@ -565,6 +567,95 @@ describe("the native producer is the only producer (built bin)", () => {
     ]);
     expect(code).toBe(2);
     expect(stderr).toMatch(/Unknown option/);
+  });
+});
+
+// The states block from Chromium's own tree, in a suite that gates CI: the
+// browser package's real-Chromium cases run advisory.
+describe("the states block (built bin)", () => {
+  const linesOf = (stdout: string) => stdout.split("\n").map((l) => l.trim());
+
+  it("tree prints each control's states from Chromium's tree", async () => {
+    const page = dataUrl(
+      "<!doctype html><title>States</title><main>" +
+        '<input type="checkbox" checked aria-label="Subscribe">' +
+        '<input type="checkbox" aria-label="Subscribe">' +
+        '<button aria-expanded="false" aria-haspopup="menu">Menu</button>' +
+        '<button aria-describedby="h">Pay</button><p id="h" hidden>Charged today</p>' +
+        "</main>",
+    );
+    const { code, stdout } = await runCli(["tree", page, "-q"]);
+    expect(code).toBe(0);
+    const lines = linesOf(stdout);
+    for (const line of [
+      'checkbox "Subscribe" {checked}',
+      'checkbox "Subscribe" {checked=false}',
+      'button "Menu" {expanded=false, haspopup=menu}',
+      'button "Pay" {description="Charged today"}',
+    ]) {
+      expect(lines).toContain(line);
+    }
+  });
+
+  it("tree withholds a sensitive list box's selection, as a drop-down's", async () => {
+    const page = dataUrl(
+      "<!doctype html><title>Card</title><main>" +
+        '<select aria-label="Month" autocomplete="cc-exp-month"><option>01</option><option selected>03</option></select>' +
+        '<select aria-label="Year" autocomplete="cc-exp-year" size="3"><option>2027</option><option selected>2031</option><option>2032</option></select>' +
+        '<select aria-label="Size" size="3"><option>S</option><option selected>M</option><option>L</option></select>' +
+        "</main>",
+    );
+    const { code, stdout } = await runCli(["tree", page, "-q"]);
+    expect(code).toBe(0);
+    const lines = linesOf(stdout);
+    expect(lines).toContain('option "03"');
+    expect(lines).toContain('option "2031"');
+    expect(stdout).not.toMatch(/option "(03|2031)" \{/);
+    // An ordinary list box still says which option is selected.
+    expect(lines).toContain('option "M" {selected}');
+  });
+
+  it("a title that repeats a link's text describes it in neither producer", async () => {
+    const page = dataUrl(
+      "<!doctype html><title>Outline</title><main>" +
+        '<a href="#a" title="See also">See also</a>' +
+        '<a href="#c" title="Trailing ">Trailing</a>' +
+        '<a href="#b" title="More detail">Details</a>' +
+        "</main>",
+    );
+    const tree = await runCli(["tree", page, "-q"]);
+    const tabs = await runCli(["tabs", page, "-q"]);
+    expect(linesOf(tree.stdout)).toContain('link "See also"');
+    expect(tabs.stdout).toContain('01. link "See also"\n');
+    // Whitespace at a title's ends doesn't make it say something else.
+    expect(linesOf(tree.stdout)).toContain('link "Trailing"');
+    expect(tabs.stdout).toContain('02. link "Trailing"\n');
+    // A title that says something else still describes, in both.
+    expect(linesOf(tree.stdout)).toContain(
+      'link "Details" {description="More detail"}',
+    );
+    expect(tabs.stdout).toContain(
+      '03. link "Details" {description="More detail"}',
+    );
+  });
+
+  it("pins where the producers differ on a pristine required checkbox", async () => {
+    // Chromium reports a required checkbox invalid from the start and carries
+    // no `required` for it; the DOM producer reads `required` from the element
+    // and waits for :user-invalid, as HTML-AAM says. The docs list it.
+    const page = dataUrl(
+      "<!doctype html><title>Terms</title><main><form>" +
+        '<input type="checkbox" required aria-label="I agree">' +
+        "</form></main>",
+    );
+    const tree = await runCli(["tree", page, "-q"]);
+    const tabs = await runCli(["tabs", page, "-q"]);
+    expect(linesOf(tree.stdout)).toContain(
+      'checkbox "I agree" {checked=false, invalid}',
+    );
+    expect(tabs.stdout.trimEnd()).toBe(
+      '01. checkbox "I agree" {checked=false, required}',
+    );
   });
 });
 

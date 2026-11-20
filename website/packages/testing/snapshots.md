@@ -33,18 +33,48 @@ test("login form structure", () => {
 | `includeGeneric` | `boolean` | `false` | Include generic container nodes (`role="generic"`). |
 | `markFocus` | `boolean` | `true` | Mark the element focused at extraction time with a trailing `[focused]`. See [Focus marker](#focus-marker). |
 | `values` | `boolean` | `false` | Print each field's announced value: `textbox "Email" = "jane@x.com"`. See [Field values](#field-values). |
+| `states` | `boolean` | `true` | Print each node's states, description and announced properties as a `{…}` block: `checkbox "Subscribe" {checked=false}`. See [What a line carries](#what-a-line-carries). |
 | `redactInput` | `boolean` | `false` | Strict mode: no field value and no rich-text editor content, names included. See [Strict mode](#strict-mode). |
 
 ### What a line carries
 
-A tree line is `role "name"`, plus `= "value"` with `values: true`, `(level N)` where the node has a level, and `[focused]` with `markFocus`. A tab-order line carries the same except the level. **No line prints states, the description, or other ARIA properties**, so a checked and an unchecked checkbox with the same name serialize identically:
+A tree line is `role "name"`, plus `= "value"` with `values: true`, `(level N)` where the node has a level, a `{…}` states block where the node has anything to print, and `[focused]` with `markFocus`. A tab-order line carries the same except the level:
 
 ```
-checkbox "Subscribe"
-checkbox "Subscribe"
+checkbox "Subscribe" {checked}
+checkbox "Subscribe" {checked=false}
+button "Menu" {expanded=false} [focused]
+textbox "Email" = "a@b.c" {required, invalid, description="We never share it"}
+link "Docs" {current=page}
+heading "Setup" (level 2)
 ```
 
-A tree snapshot therefore will not fail when a checkbox is unchecked, an `aria-expanded` is dropped, or a description changes. Assert on `node.a11y.states` and `node.a11y.description` for those, or snapshot a change with [`serializeTreeDiff`](/packages/testing/flow), which prints each changed state, description and property as a `~` line.
+The block holds the states, description and announced properties a screen reader presents beyond role and name, so a snapshot fails when a checkbox is unchecked, an `aria-expanded` flips, or a description changes. Tokens come in a fixed order and print only when they carry information:
+
+| Key | Prints |
+|---|---|
+| `checked`, `pressed` | `key`, `key=false`, `key=mixed`: a screen reader says "not checked", so false prints |
+| `expanded` | `expanded`, `expanded=false` ("collapsed") |
+| `selected`, `disabled`, `readonly`, `required` | `key`, only when true: false is what absent means |
+| `invalid` | `invalid` for any invalid value, `grammar` and `spelling` included |
+| `current` | `current`, or `current=page` (`step`, `location`, …) |
+| `haspopup` | `haspopup=menu` (`listbox`, `dialog`, …) |
+| `roledescription`, `description` | `roledescription="slide"`, `description="…"`: JSON-quoted, and `redact` applies |
+
+Nothing else prints: not `focusable`, `editable`, `busy` or `modal`, and not `level`, which keeps its `(level N)`. A [strict-mode](#strict-mode) tree prints no description that would carry a field's value.
+
+**Where the producers differ.** The two producers read most states alike: checked, pressed, expanded, selected and disabled on checkboxes, radios, switches, toggle buttons, selects, list boxes, menus, trees and tabs, and required and invalid on text fields. Where they differ, a DOM snapshot and a native one of the same page differ by those tokens:
+
+| Key or case | DOM producer (jsdom, `treeSnapshot`, `real-a11y tabs`) | Native producer (Chromium's own tree: the [Playwright adapter's](/packages/testing/playwright) `tree: "native"`, `real-a11y tree`, MCP) |
+|---|---|---|
+| `haspopup`, `roledescription` | not read | read |
+| `current` | read | not read |
+| A pristine required checkbox, radio or `<select>` | `required`; `invalid` only once the user has interacted (`:user-invalid`, as HTML-AAM says) | `invalid` from the start, and no `required` |
+| A description from a table caption, an SVG `<desc>` or ruby text | none | read |
+| `readonly` on the cells of a read-only grid | none | read |
+| `checked=false` on an ARIA checkbox with no `aria-checked` | none | read |
+
+**Opting out.** `treeSnapshot(root, { states: false })` prints no block, byte for byte the text the serializer printed before it had blocks: use it to keep comparing with a baseline committed then, or re-record your snapshots once (`vitest -u`, `jest -u`) to take the states in. To see what one interaction changed, [`serializeTreeDiff`](/packages/testing/flow) still prints each changed state, description and property as its own `~` line.
 
 ### Field values
 
@@ -53,12 +83,12 @@ Pass `values: true` to print what each field holds, the way a screen reader anno
 ```
 form "Checkout"
   textbox "Email" = "jane@x.com"
-  combobox "Country" = "Spain"
+  combobox "Country" = "Spain" {expanded=false}
   textbox "Password" = "[redacted]"
   slider "Tip" = "15%"
 ```
 
-- **What the value is.** A text field's or editor's text, a `<select>`'s selected option **label** (`"Spain"`, not its `value="es"`), and a range widget's `aria-valuetext` (else `aria-valuenow`). Checkboxes and radios carry none; their `checked` state is on the node (`node.a11y.states`), but the tree text does not print it (see [What a line carries](#what-a-line-carries)). Whitespace collapses, and a value is capped at 240 characters.
+- **What the value is.** A text field's or editor's text, a `<select>`'s selected option **label** (`"Spain"`, not its `value="es"`), and a range widget's `aria-valuetext` (else `aria-valuenow`). Checkboxes and radios carry none; their `checked` state prints in the states block (see [What a line carries](#what-a-line-carries)). Whitespace collapses, and a value is capped at 240 characters.
 - **Sensitive fields never print.** A `type="password"` field, or one whose `autocomplete` names a credential or payment field (`current-password`, `new-password`, `one-time-code`, `cc-number`, `cc-csc`, `cc-exp*`), prints `"[redacted]"` when it holds anything.
 - **Off by default.** A committed snapshot only changes when you ask for values. `redact` patterns apply to values as they do to names.
 

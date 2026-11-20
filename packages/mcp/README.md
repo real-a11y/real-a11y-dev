@@ -43,7 +43,7 @@ over CDP — whole-document, and reaching structure no in-page walk can — exce
 
 | Tool | Purpose |
 | --- | --- |
-| `get_semantic_tree` | Deterministic role + accessible-name outline of the page. |
+| `get_semantic_tree` | Deterministic role + accessible-name outline of the page, each node's states in a `{…}` block (`checkbox "Subscribe" {checked=false}`). |
 | `get_heading_outline` | Heading structure (h1..h6) in document order. |
 | `get_tab_order` | Focusable elements in keyboard Tab order. The one in-page read, and the one tool `rootSelector` scopes. |
 | `list_elements` | Every element of one category (`link`/`button`/`form`/`landmark`/`image`/`heading`) as role + name + locator. |

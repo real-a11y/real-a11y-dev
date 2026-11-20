@@ -14,9 +14,14 @@ generic
 table
 link "Focus marker"
 link "Field values"
+link "What a line carries"
 link "Strict mode"
 button "Copy Code"
 generic
+table
+link "strict-mode"
+table
+link "Playwright adapter's"
 link "serializeTreeDiff"
 button "Copy Code"
 generic
@@ -63,8 +68,8 @@ generic
 link "redact"
 link "markFocus: false"
 link "no states, no description"
-radio "Vitest"
-radio "Jest"
+radio "Vitest" {checked}
+radio "Jest" {checked=false}
 button "Copy Code"
 generic
 button "Copy Code"

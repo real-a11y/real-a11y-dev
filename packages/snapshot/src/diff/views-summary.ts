@@ -253,7 +253,11 @@ export function summarizeViews(input: SummarizeViewsInput): ViewChange[] {
       if (oldName === "" || newName === "") continue; // bare lines are indistinguishable
       take(tabsRemoved, b.removed[0]);
       take(tabsAdded, b.added[0]);
-      tallyBlockChange(renameStates, b.removed[0], b.added[0]);
+      tallyBlockChange(renameStates, {
+        view: "tabs",
+        before: b.removed[0],
+        after: b.added[0],
+      });
       takeByRoleName(treeRemoved, role, oldName);
       takeByRoleName(treeAdded, role, newName);
       changes.push({
@@ -358,7 +362,11 @@ export function summarizeViews(input: SummarizeViewsInput): ViewChange[] {
       take(treeRemoved, b.removed[0]);
       take(treeAdded, b.added[0]);
       // A renamed landmark whose block changed too reports both.
-      tallyBlockChange(renameStates, b.removed[0], b.added[0]);
+      tallyBlockChange(renameStates, {
+        view: "tree",
+        before: b.removed[0],
+        after: b.added[0],
+      });
       changes.push({
         kind: "landmark-renamed",
         view: "tree",

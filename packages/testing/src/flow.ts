@@ -9,6 +9,7 @@ import {
   extract,
   serializeTree,
   serializeTreeDiff,
+  type SerializeOptions,
 } from "@real-a11y-dev/serialize";
 
 import { capture, type A11yCapture } from "./capture.js";
@@ -184,10 +185,14 @@ export class FlowChain implements PromiseLike<void> {
     return this.action("type", { value: text });
   }
 
-  /** Assert the tree serialization equals the expected snapshot. */
-  expectTree(expected: string): this {
+  /**
+   * Assert the tree serialization equals the expected snapshot. `options` are
+   * `treeSnapshot`'s, so an expectation written with `{ states: false }`,
+   * `redact` or `{ mode: "dom" }` compares like for like.
+   */
+  expectTree(expected: string, options?: SerializeOptions): this {
     this.addStep(async () => {
-      const actual = serializeTree(this.root);
+      const actual = serializeTree(this.root, options);
       if (actual.trim() !== expected.trim()) {
         throw mismatchError(
           "flow.expectTree: tree does not match expected snapshot.",

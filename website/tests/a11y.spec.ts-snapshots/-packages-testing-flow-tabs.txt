@@ -17,6 +17,7 @@ table
 link "Asserting what an interaction changed"
 button "Copy Code"
 generic
+link "states block"
 button "Copy Code"
 generic
 link "/matchers"

@@ -241,6 +241,12 @@ export interface SnapshotOptions {
    */
   values?: boolean;
   /**
+   * Print each node's `{…}` states block in `tree` and `tabOrder` — the
+   * states, description and announced properties a screen reader presents:
+   * `checkbox "Subscribe" {checked=false}`. Default true.
+   */
+  states?: boolean;
+  /**
    * Strict mode (ADR-0001), as `nativeTree({ redactInput })`: the one
    * extraction carries no field value and no rich-text editor content, so no
    * view does — a name that would carry one reads `"[redacted]"` whole.
@@ -474,7 +480,7 @@ export class BrowserSession implements A11ySession {
       const page = this.requirePage();
       await this.ensureInjected(page);
       return page.evaluate(
-        ({ selector, rules, includeGeneric, values, redactInput }) => {
+        ({ selector, rules, includeGeneric, values, states, redactInput }) => {
           const ra = (globalThis as Record<string, unknown>).__realA11y__ as
             Record<string, (...a: unknown[]) => unknown> | undefined;
           if (!ra || typeof ra.extractA11yTree !== "function") {
@@ -508,9 +514,9 @@ export class BrowserSession implements A11ySession {
               tree,
               rules && rules.length ? rules : undefined,
             ),
-            tree: ra.treeSnapshot(tree, { includeGeneric, values }),
+            tree: ra.treeSnapshot(tree, { includeGeneric, values, states }),
             outline: ra.outlineSnapshot(tree),
-            tabOrder: ra.tabSequenceSnapshot(tree, { values }),
+            tabOrder: ra.tabSequenceSnapshot(tree, { values, states }),
           };
         },
         {
@@ -518,6 +524,7 @@ export class BrowserSession implements A11ySession {
           rules: options.rules ?? null,
           includeGeneric: options.includeGeneric ?? false,
           values: options.values ?? false,
+          states: options.states ?? true,
           redactInput: options.redactInput ?? false,
         },
       ) as Promise<PageSnapshot>;

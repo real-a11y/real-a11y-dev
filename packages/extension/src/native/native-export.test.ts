@@ -122,7 +122,7 @@ describe("nativeToExtractionResult", () => {
         'RootWebArea "Test page"',
         "  main",
         '    heading "Welcome" (level 1)',
-        '    button "Submit"',
+        '    button "Submit" {checked, description="Submits the form"}',
       ].join("\n"),
     );
     expect(serializeOutline(tree)).toBe("h1 Welcome");
@@ -142,7 +142,9 @@ describe("nativeToExtractionResult", () => {
     nodes.set("button", { ...nodes.get("button")!, states: { focused: true } });
     const tree = nativeToExtractionResult(nodes, "root");
     expect(tree.focusedId).toBe("button");
-    expect(serializeTree(tree)).toContain('button "Submit" [focused]');
+    expect(serializeTree(tree)).toContain(
+      'button "Submit" {description="Submits the form"} [focused]',
+    );
   });
 
   it("omits focusedId when no node reports focused", () => {

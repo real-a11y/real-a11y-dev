@@ -8085,6 +8085,46 @@ describe("title as the accessible description (HTML-AAM §4.2)", () => {
     expect([button.a11y.name, button.a11y.description]).toEqual(["Save", "Ti"]);
   });
 
+  it("leaves out a title that only repeats the element's own text, as Chromium does", () => {
+    for (const [html, tag] of [
+      [`<a href="#a" title="See also">See also</a>`, "a"],
+      [`<button title="Save">Save</button>`, "button"],
+      [`<h2 title="Setup">Setup</h2>`, "h2"],
+    ] as const) {
+      const node = nodeOf(html, tag);
+      expect([node.a11y.name, node.a11y.description], html).toEqual([
+        node.a11y.name,
+        "",
+      ]);
+    }
+    // Whitespace at the title's ends doesn't count, as in Chromium.
+    for (const title of ["Trailing ", " Trailing", "\n  Trailing\n"]) {
+      expect(
+        nodeOf(`<a href="#a" title="${title}">Trailing</a>`, "a").a11y
+          .description,
+        JSON.stringify(title),
+      ).toBe("");
+    }
+    // A title that differs in case or inside still describes.
+    expect(
+      nodeOf(`<a href="#a" title="see also">See also</a>`, "a").a11y
+        .description,
+    ).toBe("see also");
+    expect(
+      nodeOf(`<a href="#a" title="See  also">See also</a>`, "a").a11y
+        .description,
+    ).toBe("See also");
+    // So does one equal to a name that came from aria-label or alt.
+    expect(
+      nodeOf(`<button aria-label="Save" title="Save">x</button>`, "button").a11y
+        .description,
+    ).toBe("Save");
+    expect(
+      nodeOf(`<img alt="Logo" title="Logo" src="data:,">`, "img").a11y
+        .description,
+    ).toBe("Logo");
+  });
+
   it("leaves a title that is the name out of the description", () => {
     const link = nodeOf(`<a href="/" title="Tooltip"></a>`, "a");
     expect([link.a11y.name, link.a11y.description]).toEqual(["Tooltip", ""]);

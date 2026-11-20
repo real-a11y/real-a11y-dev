@@ -8,9 +8,9 @@ link "Limitations"
 link "See also"
 link "Model Context Protocol"
 link "Chrome for Testing"
-radio "Claude Code"
-radio "VS Code"
-radio "Config file"
+radio "Claude Code" {checked}
+radio "VS Code" {checked=false}
+radio "Config file" {checked=false}
 button "Copy Code"
 generic
 button "Copy Code"

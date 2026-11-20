@@ -101,6 +101,12 @@ button "Copy Code"
 generic
 button "Copy Code"
 generic
+link "What a line carries"
+link "snapshot"
+link "tabs"
+link "where the producers differ"
+button "Copy Code"
+generic
 link "tabs"
 link "list"
 link "inspect"

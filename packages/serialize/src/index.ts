@@ -18,8 +18,14 @@ export { extract } from "./extract.js";
 // lines (testing's contract parser, the snapshot diff, the parity harness) so
 // they agree with the writer on one definition. Internal: not re-exported by
 // any published package.
-export { splitStatesBlock, statesTokens } from "./states-block.js";
-export type { SplitStatesBlock } from "./states-block.js";
+export {
+  leadingStatesBlock,
+  splitStatesBlock,
+  statesTokens,
+  tokenProducers,
+  unprintableToken,
+} from "./states-block.js";
+export type { KeyProducers, SplitStatesBlock } from "./states-block.js";
 
 // Typographic normalization for accessible-name COMPARISON — folds smart
 // quotes / dashes / NBSP so an authored name matches a rendered one. Exported

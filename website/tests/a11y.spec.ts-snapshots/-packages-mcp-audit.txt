@@ -42,9 +42,9 @@ main
   paragraph "The server speaks MCP over stdio — point your client at . No install step is needed: fetches it on first run, and Playwright, the browser driver, with it."
     code "npx -y @real-a11y-dev/mcp"
     code "npx"
-  radio "Claude Code"
-  radio "VS Code"
-  radio "Config file"
+  radio "Claude Code" {checked}
+  radio "VS Code" {checked=false}
+  radio "Config file" {checked=false}
   button "Copy Code"
   code "claude mcp add real-a11y -- npx -y @real-a11y-dev/mcp"
   paragraph "For clients configured by file, add the block above to:"

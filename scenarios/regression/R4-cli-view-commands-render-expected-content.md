@@ -6,7 +6,7 @@ area: CLI
 type: Automated
 priority: P0
 status: Active
-validFrom: "cli ≥ 0.1.0-beta.1. Step 8 has no end date — `tabs` was expected to be removed by the native migration and was not (#258 kept it on DOM). Step 4b is from cli ≥ 0.1.0-beta.2; on an earlier release an empty category prints a bare `(none)`, which is the old behaviour, not a fail."
+validFrom: "cli ≥ 0.1.0-beta.1. Step 8 has no end date — `tabs` was expected to be removed by the native migration and was not (#258 kept it on DOM). Step 4b is from cli ≥ 0.1.0-beta.2; on an earlier release an empty category prints a bare `(none)`, which is the old behaviour, not a fail. Step 1b (the states block) is from cli ≥ 0.1.0-beta.14."
 validUntil: ""
 expected: "tree shows role+name lines; outline shows h1/h2; list filters by category, and an empty category explains itself (scanned count + the roles it looked for) rather than printing a bare (none). Assert against `real-a11y --help`'s own command list, not a hardcoded set."
 twin: D2
@@ -28,6 +28,10 @@ real-a11y --help          # enumerate the view commands from here
 ```
 
 1. `real-a11y tree <url>`
+   - **(1b)** `real-a11y tree <url>` and `real-a11y tabs <url>` on a page with
+     two checkboxes labelled "Subscribe", one checked, and a
+     `<button aria-describedby="h">Pay</button>` described by a hidden
+     `<p id="h">Charged today</p>`
 2. `real-a11y tree <url> --include-generic`
 3. `real-a11y outline <url>`
 4. `real-a11y list image <url>` — then `link`, `button`, `form`, `landmark`,
@@ -44,6 +48,12 @@ real-a11y --help          # enumerate the view commands from here
 ## Expected
 
 - **1** — indented `role "name"` lines; the focused node marked `[focused]`
+- **1b** — both commands print `checkbox "Subscribe" {checked}`,
+  `checkbox "Subscribe" {checked=false}` and
+  `button "Pay" {description="Charged today"}`: a node's states and description
+  follow its name in a `{…}` block. On cli 0.1.0-beta.13 or earlier no line
+  carries a block and both boxes print `checkbox "Subscribe"`, which is the old
+  behaviour, not a fail
 - **2** — `generic` containers appear; without the flag they don't
 - **3** — `h1`/`h2`… in document order
 - **4** — only that category, each with role + accessible name + locator

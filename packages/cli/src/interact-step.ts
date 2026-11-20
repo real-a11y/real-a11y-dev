@@ -6,8 +6,14 @@
  *
  *   click  button "Save"
  *   click  button "Save" nth=2
+ *   click  checkbox "Subscribe" {checked=false}
  *   focus  textbox "Email"
  *   type   textbox "Email" = someone@example.com
+ *
+ * A `{…}` states block and a `[focused]` marker right after the name, as the
+ * tree prints them, are read and ignored: a step targets a node by role and
+ * name. A pasted ` = "value"` or `(level N)` is not: `=` introduces the text
+ * to type.
  *
  * The name is optional (omit to match any name, `""` to match only unlabeled
  * controls) and `nth=` is 1-based in document order — the same spelling the
@@ -16,6 +22,8 @@
  * This module is pure string → data. It never touches a browser, so every
  * malformed-input message is unit-testable without launching one.
  */
+
+import { leadingStatesBlock } from "@real-a11y-dev/serialize";
 
 import { CliError } from "./exit.js";
 
@@ -134,6 +142,11 @@ export function parseStep(raw: string): InteractStep {
     name = quoted.value;
     rest = rest.slice(quoted.end).trimStart();
   }
+
+  // ── a pasted line's {…} block and [focused] marker, both ignored ───────
+  rest = leadingStatesBlock(rest).rest.trimStart();
+  if (rest.startsWith("[focused]"))
+    rest = rest.slice("[focused]".length).trimStart();
 
   // ── optional nth= ───────────────────────────────────────────────────────
   let nth: number | undefined;

@@ -26,8 +26,8 @@ main
   heading "Install" (level 2)
   paragraph "This package brings — it audits a DOM you already have. So install it next to a runner and a DOM implementation:"
     strong "no test runner and no DOM of its own"
-  radio "Vitest"
-  radio "Jest"
+  radio "Vitest" {checked}
+  radio "Jest" {checked=false}
   button "Copy Code"
   code "npm install -D @real-a11y-dev/testing vitest jsdom"
   paragraph "Nothing else is required. appears throughout these docs because it is the common way to get a container, but it is — any works as an audit root, including one you built by hand."
@@ -36,8 +36,8 @@ main
     code "Element"
   heading "Your first passing test" (level 2)
   paragraph "Two files, no framework. Copy both and it runs."
-  radio "vitest.config.ts"
-  radio "a11y.test.ts"
+  radio "vitest.config.ts" {checked}
+  radio "a11y.test.ts" {checked=false}
   button "Copy Code"
   code "import { defineConfig } from "vitest/config"; export default defineConfig({ test: { // Required. Without it the helpers get no `document` and every test fails // with `document is not defined`. environment: "jsdom", }, });"
   button "Copy Code"
@@ -128,8 +128,12 @@ main
       row
         cell "Playwright adapter"
           strong "Playwright adapter"
-        cell "Run every helper against a real browser page via attach(page)."
+        cell "Run every helper against a real browser page via attach(page). Its treeSnapshot() and tabSequenceSnapshot() (options: TabSequenceSnapshotOptions) take states like jsdom's."
           code "attach(page)"
+          code "treeSnapshot()"
+          code "tabSequenceSnapshot()"
+          code "TabSequenceSnapshotOptions"
+          code "states"
         cell "Playwright →"
           link "Playwright →"
   paragraph "New to the idea of snapshotting the accessibility tree? Start with the concept: ."

@@ -469,6 +469,57 @@ describe("verifyContract — states blocks", () => {
     expect(verifyContract('textbox = "b"', 'textbox = "a"').pass).toBe(false);
   });
 
+  it("rejects a token tree text never prints, naming the form it prints", () => {
+    for (const [token, form] of [
+      ["checked=true", "`checked`, `checked=false` or `checked=mixed`"],
+      ["disabled=false", "`disabled`, only when set"],
+      ["expanded=mixed", "`expanded` or `expanded=false`"],
+      ["current=false", "`current` or `current=<token>`, never false"],
+      ["description", '`description="…"`, when not empty'],
+    ]) {
+      expect(() =>
+        verifyContract(`checkbox "Subscribe" {${token}}`, RECEIVED),
+      ).toThrow(
+        `a11y contract line 1: \`${token}\` never prints. Tree text prints ${form}.`,
+      );
+    }
+    expect(() =>
+      verifyContract('checkbox "Subscribe" {Checked}', RECEIVED),
+    ).toThrow(
+      /`Checked` is not a key tree text prints\. It prints checked, pressed,/,
+    );
+  });
+
+  it("accepts every form the writer prints", () => {
+    const tokens = [
+      "checked",
+      "checked=false",
+      "checked=mixed",
+      "pressed=false",
+      "expanded",
+      "expanded=false",
+      "selected",
+      "current",
+      "current=page",
+      'current="Some Place"',
+      "disabled",
+      "readonly",
+      "required",
+      "invalid",
+      "haspopup=menu",
+      'roledescription="slide"',
+      'description="x"',
+    ];
+    const line = `button "x" {${tokens.join(", ")}}`;
+    expect(verifyContract(line, line).pass).toBe(true);
+  });
+
+  it("never rejects received text, which may come from another version", () => {
+    expect(
+      verifyContract('button "x"', 'button "x" {futurekey=1, Checked}').pass,
+    ).toBe(true);
+  });
+
   it("a parse error on a line with a block points at escapes", () => {
     expect(() =>
       verifyContract('textbox "Email" {description="Say "hi""}', RECEIVED),
