@@ -2728,6 +2728,12 @@ describe("the states block: on by default, `states: false` opts out", () => {
     expect(off.meta.states).toBeUndefined();
     expect(off.pages[0]!.tree).not.toContain("{");
 
+    const listed = textOf(
+      await client.callTool({ name: "list_checkpoints", arguments: {} }),
+    );
+    expect(listed).toMatch(/ off: .*\(no \{…\} states blocks\)/);
+    expect(listed).not.toMatch(/ on: .*states blocks/);
+
     // Two checkpoints captured differently say why their trees differ.
     const mixed = textOf(
       await client.callTool({

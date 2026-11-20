@@ -260,7 +260,7 @@ Put field values into every snapshot artifact's tree view (sensitive fields stil
 
 **`states: boolean`** — flag `--no-states` (as `states: false`) · default `true` · applies to `tree`, `tabs`, `inspect`, `snapshot`
 
-Each node's `{…}` states block in tree and tab text, on by default. Only `states: false` is meaningful — it seeds `--no-states`, which prints the text from before the blocks existed and leaves `meta.states` out of a snapshot artifact; `states: true` is the built-in and seeds nothing. Set it the same way for the base and the PR run — [`diff`](/packages/cli/commands#diff-base-json-pr-json) warns when only one side carries blocks. See [`--no-states`](/packages/cli/commands#no-states).
+Each node's `{…}` states block in tree and tab text, on by default. Only `states: false` is meaningful — it seeds `--no-states`, which prints the text from before the blocks existed and leaves `meta.states` out of a snapshot artifact; `states: true` is the built-in and seeds nothing. Set it the same way for the base and the PR run — [`diff`](/packages/cli/commands#diff-base-json-pr-json) warns when only one side carries blocks. There is no flag that turns the blocks back on for one run under this default; run with [`--no-config`](/packages/cli/commands#no-config), or another config, instead. See [`--no-states`](/packages/cli/commands#no-states).
 
 ### `baseline`
 

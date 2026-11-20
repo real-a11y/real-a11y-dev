@@ -156,7 +156,7 @@ export function statesMismatch(
   if ((base.states === true) === (head.states === true)) return undefined;
   const which = base.states === true ? "base" : "head";
   return (
-    `NOTE: only the ${which} checkpoint's tree carries {…} states blocks, so every node with a state or description reads as a changed tree line. ` +
+    `NOTE: only the ${which} checkpoint's tree carries {…} states blocks, so every node with a state or description reads as a changed tree line, and a generic kept for its state as a new line nesting its subtree. ` +
     `Findings are unaffected. Capture both the same way (checkpoint_findings' states) for a like-for-like structural diff.`
   );
 }

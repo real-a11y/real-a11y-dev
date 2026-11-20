@@ -71,7 +71,7 @@ findings), not a view.
 - **3** — every view returns **real content**, not an empty shell. Views exit `0`.
   `inspect` may exit `1` when the page has errors — it is a gate. With
   `--no-states`, the theme switch and version menu print without their `{…}`
-  blocks and nothing else changes
+  blocks: the text the previous release printed
 - **4** — the mobile tree differs where the layout does (e.g. desktop nav vs a
   mobile-navigation control), even if the finding list does not
 - **6** — exit `2`, reported as a navigation error, not a clean pass, and the

@@ -562,12 +562,12 @@ every filled field changed. The opt-in covers each field's own value; a *name*
 Chromium builds from what a field or editor holds — a heading typed into a
 rich-text editor, a button wrapped around a filled input — is part of the
 page's names and stays (a sensitive field's value never reaches one).
+[`--redact-input`](#redact-input) withholds those too.
 
 The tree view prints each node's `{…}` states block, as [`tree`](#tree-url)
 does, and records `meta.states: true`. [`--no-states`](#no-states) leaves the
 blocks out and the marker with them, which is how an artifact captured before
 the blocks existed reads too.
-[`--redact-input`](#redact-input) withholds those too.
 
 ```sh
 real-a11y snapshot https://example.com -o base.json
@@ -627,8 +627,9 @@ The same goes for `{…}` states blocks. An artifact records whether its tree
 carries them (`meta.states`), and when only one side does — a baseline
 captured before the blocks existed, or one taken with
 [`--no-states`](#no-states) — every node with a state or description reads as a
-changed line, so `diff` warns on stderr that only the base (or the PR) snapshot
-carries them. Re-capture the baseline, or capture both sides with
+changed line, and a `generic` kept for its state shows up as a new line with
+its subtree nested under it. So `diff` warns on stderr that only the base (or
+the PR) snapshot carries them. Re-capture the baseline, or capture both sides with
 `--no-states`.
 
 ```sh
@@ -1329,10 +1330,11 @@ and `diff` warns when it sees that.
   **Commands:** tree, tabs, inspect, snapshot
 
 Leave out each node's `{…}` states block, printing `checkbox "Subscribe"`
-where the default prints `checkbox "Subscribe" {checked=false}`. The text is
-otherwise unchanged, byte for byte: what these commands printed before the
-block existed. Use it to keep comparing against tree text captured then, or to
-keep output to role and name.
+where the default prints `checkbox "Subscribe" {checked=false}`. The result is
+byte for byte what these commands printed before the block existed, so a
+`generic` the tree keeps only for its state, such as a `<details>` summary, is
+folded away again with its subtree one level up. Use it to keep comparing
+against tree text captured then, or to keep output to role and name.
 
 On [`snapshot`](#snapshot-url) it also leaves out `meta.states`, so a
 [`diff`](#diff-base-json-pr-json) can tell an artifact without blocks from one

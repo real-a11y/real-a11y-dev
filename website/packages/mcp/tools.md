@@ -376,7 +376,7 @@ Same different-page rule as [`diff_findings`](#diff-findings) — two checkpoint
 
 _Read-only._
 
-List the stored checkpoint labels with their finding counts and approximate tree sizes.
+List the stored checkpoint labels with their finding counts and approximate tree sizes. A checkpoint captured with field values says `(with field values)`, and one whose tree carries no `{…}` states blocks (captured with `states: false`, or imported from an artifact from before them) says `(no {…} states blocks)`, so you can tell before [`diff_checkpoints`](#diff-checkpoints) whether two trees compare like for like.
 
 Parameters:
 

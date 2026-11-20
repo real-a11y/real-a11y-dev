@@ -289,7 +289,7 @@ function registerCheckpointDiffs(
           .entries()
           .map(
             ([name, cp]) =>
-              `  ${name}: ${cp.page.findings.length} finding(s), tree ${(cp.page.tree.length / 1024).toFixed(1)} KB${cp.values ? " (with field values)" : ""}`,
+              `  ${name}: ${cp.page.findings.length} finding(s), tree ${(cp.page.tree.length / 1024).toFixed(1)} KB${cp.values ? " (with field values)" : ""}${cp.states ? "" : " (no {…} states blocks)"}`,
           );
         return text(`${checkpoints.size} checkpoint(s):\n${lines.join("\n")}`);
       }),

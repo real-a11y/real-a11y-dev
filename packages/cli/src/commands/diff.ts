@@ -149,14 +149,16 @@ export const diffCommand: CommandFn = async (positionals, flags) => {
   // The `{…}` states block is on by default, so this mostly fires once: a
   // baseline captured before the block existed (or with --no-states) against
   // a capture with it, where every node with a state or a description reads
-  // as a changed tree line. Findings are unaffected.
+  // as a changed tree line, and a generic kept for its state (a <details>
+  // summary) is a new line nesting its subtree. Findings are unaffected.
   if (carriesStates(base) !== carriesStates(pr)) {
     const which = carriesStates(base) ? "base" : "PR";
     process.stderr.write(
       `real-a11y: warning: only the ${which} snapshot carries {…} states ` +
         "blocks (one captured before they existed, or with --no-states, has " +
         "none), so every node with a state or description reads as a changed " +
-        "tree line; capture both sides the same way for a like-for-like diff\n",
+        "tree line, and a generic kept for its state as a new line nesting its " +
+        "subtree; capture both sides the same way for a like-for-like diff\n",
     );
   }
 
