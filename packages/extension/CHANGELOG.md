@@ -24,7 +24,7 @@
   class="x">label</button>` with `.x::before { content: "before " }` is named
   `before label`, and an uppercase heading's name is uppercase, as in Chromium's
   own tree
-  ([#PR](https://github.com/real-a11y/real-a11y-dev/pull/PR)).
+  ([#690](https://github.com/real-a11y/real-a11y-dev/pull/690)).
 
 - **Copied and exported text carries each node's states.** The tree and the
   TAB view's tab sequence, as Copy and export write them, print a `{…}` block
