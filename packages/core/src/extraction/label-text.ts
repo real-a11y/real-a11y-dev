@@ -85,7 +85,26 @@ export function wrappingLabelText(
       }
     }
   }
-  return gen.before + parts.join(" ") + gen.after;
+  const { lead, trail } = edgeSpace(label, control, gen);
+  return gen.before + lead + parts.join(" ") + trail + gen.after;
+}
+
+/**
+ * Whitespace at a label's edges separates its text from generated text: the
+ * label's own control does not count as an edge.
+ */
+function edgeSpace(
+  label: Element,
+  control: Element,
+  gen: { before: string; after: string },
+): { lead: string; trail: string } {
+  const kids = [...label.childNodes].filter((n) => n !== control);
+  const first = kids[0]?.textContent ?? "";
+  const last = kids[kids.length - 1]?.textContent ?? "";
+  return {
+    lead: gen.before && /^\s/.test(first) ? " " : "",
+    trail: gen.after && /\s$/.test(last) ? " " : "",
+  };
 }
 
 /**

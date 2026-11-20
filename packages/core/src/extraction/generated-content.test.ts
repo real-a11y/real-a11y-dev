@@ -28,6 +28,8 @@ describe("parseContentText", () => {
     expect(parseContentText('"a\\"b"')).toBe('a"b');
     expect(parseContentText('"\\2605 x"')).toBe("★x");
     expect(parseContentText('"a/b"')).toBe("a/b");
+    expect(parseContentText('"Save\\a now"')).toBe("Save\nnow");
+    expect(parseContentText('"a\\\nb"')).toBe("ab");
   });
 });
 
@@ -38,6 +40,11 @@ describe("applyTextTransform", () => {
     expect(applyTextTransform("call us now", "capitalize")).toBe("Call Us Now");
     expect(applyTextTransform("don't stop", "capitalize")).toBe("Don't Stop");
     expect(applyTextTransform("Call us", "none")).toBe("Call us");
+    expect(applyTextTransform("'hello' world", "capitalize")).toBe(
+      "'Hello' World",
+    );
+    expect(applyTextTransform("izin", "uppercase", "tr")).toBe("İZİN");
+    expect(applyTextTransform("izin", "uppercase", "not a tag!")).toBe("IZIN");
   });
 });
 

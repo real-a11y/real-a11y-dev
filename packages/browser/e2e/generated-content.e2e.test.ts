@@ -183,6 +183,28 @@ const CASES: Case[] = [
     name: "EMAIL *",
   },
   {
+    id: "wrapping-label-tight",
+    css: `.w2::after{content:"*"}`,
+    html: `<label class="w2">Email <input id="wrapping-label-tight"></label>`,
+    name: "Email *",
+  },
+  {
+    id: "quoted-capitalize",
+    html: `<h2 id="quoted-capitalize" style="text-transform:capitalize">'hello' world</h2>`,
+    name: "'Hello' World",
+  },
+  {
+    id: "turkish",
+    html: `<h2 id="turkish" lang="tr" style="text-transform:uppercase">izin</h2>`,
+    name: "İZİN",
+  },
+  {
+    id: "escaped-newline",
+    css: `.e1::before{content:"Save\\a now"}`,
+    html: `<button id="escaped-newline" class="e1">x</button>`,
+    name: "Save nowx",
+  },
+  {
     id: "display-none",
     css: `.n1::before{content:"x";display:none}`,
     html: `<button id="display-none" class="n1">Save</button>`,

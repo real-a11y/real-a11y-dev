@@ -44,9 +44,14 @@ function readString(value: string, i: number): [string, number] {
       continue;
     }
     if (i + 1 >= value.length) break;
+    // A backslash before a raw newline is a line continuation: it adds
+    // nothing. (A `\a` escape is a real line feed, and is kept.)
+    if (value[i + 1] === "\n") {
+      i += 2;
+      continue;
+    }
     const [ch, len] = readEscape(value, i + 1);
-    // An escaped newline is a line continuation: it adds nothing.
-    if (ch !== "\n") out += ch;
+    out += ch;
     i += 1 + len;
   }
   return [out, i + 1];
@@ -96,16 +101,35 @@ export function parseContentText(value: string): string {
   return current;
 }
 
-/** Apply a computed `text-transform` (`uppercase`, `lowercase`, `capitalize`). */
-export function applyTextTransform(text: string, transform: string): string {
+/** The effective content language of an element, or undefined. */
+function langOf(element: Element): string | undefined {
+  return element.closest("[lang]")?.getAttribute("lang") || undefined;
+}
+
+/**
+ * Apply a computed `text-transform` (`uppercase`, `lowercase`, `capitalize`),
+ * with the language's own casing rules (`lang="tr"` uppercases `i` to `İ`).
+ */
+export function applyTextTransform(
+  text: string,
+  transform: string,
+  lang?: string,
+): string {
   if (!text || !transform || transform === "none") return text;
-  if (transform.includes("uppercase")) return text.toUpperCase();
-  if (transform.includes("lowercase")) return text.toLowerCase();
-  if (transform.includes("capitalize")) {
-    return text.replace(
-      /(^|[^\p{L}\p{N}_'’])(\p{L})/gu,
-      (_m, pre: string, letter: string) => pre + letter.toUpperCase(),
-    );
+  try {
+    if (transform.includes("uppercase")) return text.toLocaleUpperCase(lang);
+    if (transform.includes("lowercase")) return text.toLocaleLowerCase(lang);
+    if (transform.includes("capitalize")) {
+      // A letter that starts a word. An apostrophe between two letters is part
+      // of the word (`don't`); one after a quote or space is not.
+      return text.replace(
+        /(?<![\p{L}\p{N}_])(?<!\p{L}['\u2019])(\p{L})/gu,
+        (letter: string) => letter.toLocaleUpperCase(lang),
+      );
+    }
+  } catch {
+    // A language tag the engine rejects: fall back to its default casing.
+    return applyTextTransform(text, transform);
   }
   return text;
 }
@@ -130,6 +154,7 @@ const perExtraction = new WeakMap<object, WeakMap<Element, Sides>>();
 function readSide(
   element: Element,
   pseudo: "::before" | "::after",
+  lang: string | undefined,
 ): PseudoText {
   const style = window.getComputedStyle(element as HTMLElement, pseudo);
   const content = style.content;
@@ -139,6 +164,7 @@ function readSide(
   const text = applyTextTransform(
     parseContentText(content),
     style.textTransform,
+    lang,
   );
   if (!text) return NONE;
   return { text, boxed: displayNeedsSpace(style.display) };
@@ -168,9 +194,10 @@ export function generatedText(
   if (hit) return hit;
   let sides = none;
   try {
+    const lang = langOf(element);
     sides = {
-      before: readSide(element, "::before"),
-      after: readSide(element, "::after"),
+      before: readSide(element, "::before", lang),
+      after: readSide(element, "::after", lang),
     };
   } catch {
     // An element whose pseudo-elements cannot be read lends none.
@@ -214,7 +241,9 @@ export function readGeneratedText(
       transform: (text) =>
         text === REDACTED_VALUE
           ? text
-          : applyTextTransform(text, transform ?? ""),
+          : !transform || transform === "none"
+            ? text
+            : applyTextTransform(text, transform, langOf(element)),
     };
   } catch {
     return UNCHANGED;
