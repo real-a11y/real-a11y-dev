@@ -80,6 +80,7 @@ Flags:
   --rules <ids>          Comma-separated subset of: ${ALL_RULES.join(", ")}
   --fail-on <level>      error | warning | never          (default: error)
   --include-generic      Include generic container nodes in the tree
+  --no-states            Leave out each node's {…} states block
 ${SHARED_FLAG_HELP_NO_ROOT}
 `;
 
@@ -94,8 +95,13 @@ textbox "Email" = "jane@x.com". A password, one-time code or payment field
 reads "[redacted]"; --redact-input withholds every value and all rich-text
 editor content.
 
+A node's states, description and announced properties follow it in a {…}
+block: checkbox "Subscribe" {checked=false}. --no-states leaves the blocks
+out, for text like a tree printed before they existed.
+
 Flags:
   --include-generic      Include generic container nodes
+  --no-states            Leave out each node's {…} states block
 ${SHARED_FLAG_HELP_NO_ROOT}
 `;
 
@@ -125,7 +131,11 @@ appears here; a
 contenteditable="false" island such as a mention chip is one, and keeps its
 name.
 
+Each stop's states and description follow it in a {…} block, as in tree;
+--no-states leaves them out.
+
 Flags:
+  --no-states            Leave out each stop's {…} states block
 ${SHARED_FLAG_HELP_ROOT}
 `;
 
@@ -353,6 +363,9 @@ Flags:
   --rules <ids>          Comma-separated subset (overrides config)
   --values               Include field values in the tree view (off by
                          default: an artifact is committed and posted)
+  --no-states            Leave out the tree view's {…} states blocks; the
+                         artifact records the choice (meta.states), and diff
+                         warns on a pair captured differently
   --baseline <file>      Suppress findings this baseline accepts (kept in the
                          report, out of the --fail-on count and sarif)
   --update-baseline      Rewrite the baseline from the current findings, then

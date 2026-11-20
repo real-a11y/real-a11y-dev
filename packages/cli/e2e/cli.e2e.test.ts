@@ -657,6 +657,176 @@ describe("the states block (built bin)", () => {
       '01. checkbox "I agree" {checked=false, required}',
     );
   });
+
+  describe("--no-states", () => {
+    const PAGE = dataUrl(
+      "<!doctype html><title>Opt out</title><main>" +
+        '<input type="checkbox" checked aria-label="Subscribe">' +
+        '<button aria-expanded="false">Menu</button>' +
+        "</main>",
+    );
+    const stripBlocks = (text: string) => text.replace(/ \{[^}]*\}/g, "");
+
+    it("leaves the blocks out of tree, tabs and inspect, and nothing else", async () => {
+      for (const command of ["tree", "tabs"]) {
+        const on = await runCli([command, PAGE, "-q"]);
+        const off = await runCli([command, PAGE, "-q", "--no-states"]);
+        expect(off.code, command).toBe(0);
+        expect(on.stdout, command).toContain('"Subscribe" {checked}');
+        expect(off.stdout, command).not.toContain("{");
+        // The default's text with its blocks taken out, byte for byte.
+        expect(off.stdout, command).toBe(stripBlocks(on.stdout));
+      }
+      const json = await runCli([
+        "tree",
+        PAGE,
+        "-q",
+        "--no-states",
+        "--format",
+        "json",
+      ]);
+      expect(json.stdout).toContain('checkbox \\"Subscribe\\"');
+      expect(json.stdout).not.toContain("{checked");
+      const inspect = await runCli(["inspect", PAGE, "-q", "--no-states"]);
+      expect(inspect.stdout).toContain('checkbox "Subscribe"');
+      expect(inspect.stdout).not.toContain("{checked");
+      expect((await runCli(["inspect", PAGE, "-q"])).stdout).toContain(
+        'checkbox "Subscribe" {checked}',
+      );
+    });
+
+    it("snapshot records the choice, and diff says why a mixed pair churns", async () => {
+      const dir = mkdtempSync(join(tmpdir(), "real-a11y-states-"));
+      const withBlocks = join(dir, "with.json");
+      const without = join(dir, "without.json");
+      expect(
+        (await runCli(["snapshot", PAGE, "-q", "-o", withBlocks])).code,
+      ).toBe(0);
+      expect(
+        (await runCli(["snapshot", PAGE, "-q", "--no-states", "-o", without]))
+          .code,
+      ).toBe(0);
+      type Artifact = { meta: { states?: boolean }; pages: { tree: string }[] };
+      const on = JSON.parse(readFileSync(withBlocks, "utf8")) as Artifact;
+      const off = JSON.parse(readFileSync(without, "utf8")) as Artifact;
+      expect(on.meta.states).toBe(true);
+      expect(on.pages[0]!.tree).toContain('checkbox "Subscribe" {checked}');
+      expect(off.meta.states).toBeUndefined();
+      expect(off.pages[0]!.tree).toBe(stripBlocks(on.pages[0]!.tree));
+
+      const mixed = await runCli(["diff", without, withBlocks]);
+      expect(mixed.stderr).toContain(
+        "only the PR snapshot carries {…} states blocks",
+      );
+      const alike = await runCli(["diff", withBlocks, withBlocks]);
+      expect(alike.stderr).not.toContain("states blocks");
+      // A findings-only report holds no tree line for the warning to explain.
+      const findingsOnly = await runCli([
+        "diff",
+        without,
+        withBlocks,
+        "--only",
+        "findings",
+      ]);
+      expect(findingsOnly.stderr).not.toContain("states blocks");
+
+      // Nor does a pair with no page in common, which compares no tree line.
+      const elsewhere = join(dir, "elsewhere.json");
+      await runCli([
+        "snapshot",
+        dataUrl(
+          "<!doctype html><title>Other</title><main><h1>Other</h1></main>",
+        ),
+        "-q",
+        "--no-states",
+        "--values",
+        "-o",
+        elsewhere,
+      ]);
+      const disjoint = await runCli(["diff", elsewhere, withBlocks]);
+      expect(disjoint.stderr).toContain("no pages matched");
+      expect(disjoint.stderr).not.toContain("states blocks");
+      expect(disjoint.stderr).not.toContain("carries field values");
+
+      // A findings-only artifact keeps no tree, so it records neither blocks
+      // nor values.
+      const partial = await runCli([
+        "snapshot",
+        PAGE,
+        "-q",
+        "--values",
+        "--only",
+        "findings",
+        "--format",
+        "json",
+      ]);
+      const partialArtifact = JSON.parse(partial.stdout) as Artifact & {
+        meta: { values?: boolean };
+      };
+      expect(partialArtifact.pages[0]!.tree).toBe("");
+      expect(partialArtifact.meta.states).toBeUndefined();
+      expect(partialArtifact.meta.values).toBeUndefined();
+    });
+
+    it("an outage on one side reads as neither blocks nor a mixed pair", async () => {
+      // Nothing listens on port 9 here, so the page fails to open and no
+      // tree is written: the artifact records no blocks.
+      type Meta = {
+        meta: { states?: boolean };
+        pages: { status: string; tree: string }[];
+      };
+      const down = JSON.parse(
+        (await runCli(["snapshot", "http://127.0.0.1:9/", "-q"])).stdout,
+      ) as Meta;
+      expect(down.pages[0]!.status).toBe("error");
+      expect(down.meta.states).toBeUndefined();
+
+      // A base whose page failed, against a healthy capture of the same page:
+      // the pair joins, but no tree line is compared, so neither warning.
+      const dir = mkdtempSync(join(tmpdir(), "real-a11y-states-outage-"));
+      const healthy = join(dir, "healthy.json");
+      await runCli(["snapshot", PAGE, "-q", "--values", "-o", healthy]);
+      const artifact = JSON.parse(readFileSync(healthy, "utf8")) as {
+        meta: Record<string, unknown>;
+        pages: Record<string, unknown>[];
+      };
+      const failed = join(dir, "failed.json");
+      writeFileSync(
+        failed,
+        JSON.stringify({
+          ...artifact,
+          meta: { ...artifact.meta, states: undefined, values: undefined },
+          pages: artifact.pages.map((page) => ({
+            ...page,
+            status: "error",
+            error: "could not open",
+            findings: [],
+            tree: "",
+            outline: "",
+          })),
+        }),
+      );
+      const { stderr } = await runCli(["diff", failed, healthy]);
+      expect(stderr).not.toContain("states blocks");
+      expect(stderr).not.toContain("carries field values");
+    });
+
+    it("a config's defaults.states: false opts out too", async () => {
+      const dir = mkdtempSync(join(tmpdir(), "real-a11y-states-config-"));
+      const config = join(dir, "a11y.config.json");
+      writeFileSync(config, JSON.stringify({ defaults: { states: false } }));
+      const { code, stdout } = await runCli([
+        "tree",
+        PAGE,
+        "-q",
+        "--config",
+        config,
+      ]);
+      expect(code).toBe(0);
+      expect(linesOf(stdout)).toContain('checkbox "Subscribe"');
+      expect(stdout).not.toContain("{");
+    });
+  });
 });
 
 /**

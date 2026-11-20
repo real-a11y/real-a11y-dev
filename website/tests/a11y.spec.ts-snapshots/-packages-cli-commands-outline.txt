@@ -57,6 +57,7 @@ h1 Commands & flags
     h3 --force
     h3 --include-generic
     h3 --values
+    h3 --no-states
     h3 --md
     h3 --baseline <file>
     h3 --update-baseline

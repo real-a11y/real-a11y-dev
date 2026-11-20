@@ -6,7 +6,7 @@ area: MCP
 type: Automated
 priority: P0
 status: Active
-validFrom: "mcp ≥ 0.1.0-beta.1 via npx on the `beta` tag. Tool list: 20 from mcp 0.1.0-beta.2 (act tools); 19 from the producer migration (#258) — `compare_producers` removed, `get_tab_order` kept; **20** from mcp ≥ 0.1.0-beta.3, which adds `list_sessions`. Assert names. Step 5's named `generic` lines from mcp ≥ 0.1.0-beta.9. Step 3 with no Playwright installed beforehand from mcp ≥ 0.1.0-beta.10; earlier releases fail it, the known defect. Step 5's states block from mcp ≥ 0.1.0-beta.14."
+validFrom: "mcp ≥ 0.1.0-beta.1 via npx on the `beta` tag. Tool list: 20 from mcp 0.1.0-beta.2 (act tools); 19 from the producer migration (#258) — `compare_producers` removed, `get_tab_order` kept; **20** from mcp ≥ 0.1.0-beta.3, which adds `list_sessions`. Assert names. Step 5's named `generic` lines from mcp ≥ 0.1.0-beta.9. Step 3 with no Playwright installed beforehand from mcp ≥ 0.1.0-beta.10; earlier releases fail it, the known defect. Step 5's states block and its `states: false` from mcp ≥ 0.1.0-beta.14."
 validUntil: ""
 expected: "npx starts the published server; tools/list matches the documented set EXACTLY (assert the names, not the count); perception + audit tools return real data for the live site"
 twin:
@@ -47,7 +47,8 @@ to a directory holding a global Playwright, which hid a missing peer through mcp
 3. `open_page https://real-a11y.dev`
 4. `audit_page`, `inspect_page`
 5. `get_semantic_tree` — there is one producer now (Chromium's own); a call passing `producer`
-   is rejected by the schema. Then `get_semantic_tree { includeGeneric: true }`
+   is rejected by the schema. Then `get_semantic_tree { includeGeneric: true }`, and
+   `get_semantic_tree { states: false }`
 6. `get_heading_outline`, `list_elements`, `get_tab_order` — the last is the only read that
    still takes `rootSelector`
 7. `checkpoint_findings` → navigate to another page → `diff_findings`
@@ -72,8 +73,9 @@ to a directory holding a global Playwright, which hid a missing peer through mcp
   a `{…}` block after its name (the theme switch reads `switch "Switch to dark theme"
   {checked=false}` or `{checked}`, the version menu `button "v…" {expanded=false,
   haspopup=menu}`), and `get_semantic_tree`'s description in `tools/list` says so. The page
-  outline's links carry no description: their `title` only repeats their text. Earlier
-  releases print no block, the old behaviour, not a fail
+  outline's links carry no description: their `title` only repeats their text. With
+  `states: false` no line carries a block. Earlier releases print no block, the old
+  behaviour, not a fail
 - **7** — the diff reports the real delta between two live pages
 - **9** — the agent picks a sensible sequence **from the tool descriptions alone**. If it
   flails, calls tools in the wrong order, or gives up, the descriptions are the finding — not

@@ -17,8 +17,10 @@ import {
   diffArtifacts,
   noPagesMatched,
   assertFullArtifact,
+  carriesStates,
   carriesValues,
   parseSnapshotArtifact,
+  type SnapshotArtifact,
 } from "@real-a11y-dev/snapshot";
 
 import {
@@ -85,6 +87,44 @@ function readArtifact(path: string, label: string) {
   return parseSnapshotArtifact(json, `${label} snapshot (${abs})`);
 }
 
+/**
+ * Why a pair captured two different ways churns, one stderr line per way:
+ * field values (`snapshot --values`) and `{…}` states blocks (`--no-states`,
+ * or a baseline from before the blocks existed). Either one makes a whole
+ * class of tree lines read as changed while the page didn't. Findings are
+ * unaffected by both.
+ */
+function mixedPairWarnings(
+  base: SnapshotArtifact,
+  pr: SnapshotArtifact,
+): string[] {
+  const warnings: string[] = [];
+  // Field values are an opt-in per capture. Without this, a wall of `= "…"`
+  // churn reads as a regression.
+  if (carriesValues(base) !== carriesValues(pr)) {
+    const which = carriesValues(base) ? "base" : "PR";
+    warnings.push(
+      `real-a11y: warning: only the ${which} snapshot carries field values ` +
+        "(captured with --values), so every filled field reads as a changed " +
+        "tree line; capture both sides the same way for a like-for-like diff\n",
+    );
+  }
+  // The states block is on by default, so this mostly fires once: a baseline
+  // captured before it existed against a capture with it. A generic kept for
+  // its state (a <details> summary) is then a new line nesting its subtree.
+  if (carriesStates(base) !== carriesStates(pr)) {
+    const which = carriesStates(base) ? "base" : "PR";
+    warnings.push(
+      `real-a11y: warning: only the ${which} snapshot carries {…} states ` +
+        "blocks (one captured before they existed, or with --no-states, has " +
+        "none), so every node with a state or description reads as a changed " +
+        "tree line, and a generic kept for its state as a new line nesting its " +
+        "subtree; capture both sides the same way for a like-for-like diff\n",
+    );
+  }
+  return warnings;
+}
+
 export const diffCommand: CommandFn = async (positionals, flags) => {
   if (positionals.length !== 2) {
     throw new CliError(
@@ -132,19 +172,6 @@ export const diffCommand: CommandFn = async (positionals, flags) => {
     );
   }
 
-  // Field values are an opt-in per capture (`snapshot --values`). Diffing a
-  // capture with them against one without reads every filled field as a
-  // changed line — say why, rather than leave a wall of `= "…"` churn to be
-  // mistaken for a regression. Findings are unaffected: they carry no values.
-  if (carriesValues(base) !== carriesValues(pr)) {
-    const which = carriesValues(base) ? "base" : "PR";
-    process.stderr.write(
-      `real-a11y: warning: only the ${which} snapshot carries field values ` +
-        "(captured with --values), so every filled field reads as a changed " +
-        "tree line; capture both sides the same way for a like-for-like diff\n",
-    );
-  }
-
   // --baseline: mark accepted findings on the PR side BEFORE diffing — the
   // suppressed flag rides the finding object into the entries, so a NEW
   // finding the baseline accepts is reported (truth) but never gates (policy).
@@ -163,6 +190,15 @@ export const diffCommand: CommandFn = async (positionals, flags) => {
   }
 
   const result = diffArtifacts(base, pr, { ignoreViewLine });
+
+  // The mixed-pair warnings explain tree lines, so they're for a report that
+  // compares some: not under `--only findings`, and not when no page pair was
+  // compared (no page in common, or every common page failed on one side).
+  if (only !== "findings" && result.pages.some((p) => p.status === "ok")) {
+    for (const warning of mixedPairWarnings(base, pr)) {
+      process.stderr.write(warning);
+    }
+  }
 
   const explain = flags.explain === true;
   const content =

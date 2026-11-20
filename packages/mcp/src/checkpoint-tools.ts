@@ -19,6 +19,7 @@ import {
   assertFullArtifact,
   buildArtifact,
   buildSnapshotPage,
+  carriesStates,
   carriesValues,
   parseSnapshotArtifact,
   projectNativeTree,
@@ -36,6 +37,7 @@ import {
   diffLabeledCheckpoints,
   renderDiff,
   scopeMismatch,
+  statesMismatch,
 } from "./checkpoints.js";
 import type { SessionRecord } from "./sessions.js";
 import {
@@ -43,6 +45,7 @@ import {
   MAX_OUTPUT_CHARS,
   READ_ONLY,
   RULES_HINT,
+  statesParam,
   text,
 } from "./tool-output.js";
 
@@ -112,7 +115,7 @@ function registerSaveFindings(
     {
       title: "Save a11y checkpoint",
       description:
-        "Snapshot the CURRENT page's accessibility findings and store them under `name`. Later call diff_findings to see which findings are new / changed / fixed — the same identity semantics (fingerprints) the CI a11y-diff uses. Checkpoints survive navigation AND the session idle timeout (the browser may close and relaunch between saving and diffing; checkpoints remain), so you can checkpoint one deploy and diff another: save 'prod', open the preview URL, then diff_findings('prod'). They are held in memory and do NOT survive close_browser — call export_checkpoint first if you need one to outlive the session. The stored tree view leaves field values out unless you pass values: true. Whole-document. Chromium only.",
+        "Snapshot the CURRENT page's accessibility findings and store them under `name`. Later call diff_findings to see which findings are new / changed / fixed — the same identity semantics (fingerprints) the CI a11y-diff uses. Checkpoints survive navigation AND the session idle timeout (the browser may close and relaunch between saving and diffing; checkpoints remain), so you can checkpoint one deploy and diff another: save 'prod', open the preview URL, then diff_findings('prod'). They are held in memory and do NOT survive close_browser — call export_checkpoint first if you need one to outlive the session. The stored tree view leaves field values out unless you pass values: true, and carries each node's `{…}` states block unless you pass states: false; diff_findings re-reads the page the same way. Whole-document. Chromium only.",
       inputSchema: {
         name: checkpointName,
         rules: z
@@ -120,6 +123,7 @@ function registerSaveFindings(
           .optional()
           .describe("Subset of rules for the findings. Omit to run all."),
         values: checkpointValues,
+        states: statesParam,
         session: sessionParam,
       },
       annotations: {
@@ -129,7 +133,7 @@ function registerSaveFindings(
         openWorldHint: false,
       },
     },
-    async ({ name, rules, values, session }) =>
+    async ({ name, rules, values, states, session }) =>
       withSession(session, async (rec) => {
         // Native, like `real-a11y snapshot`. These two write the SAME artifact
         // shape through the same assembler so a checkpoint captured by one can be
@@ -140,6 +144,7 @@ function registerSaveFindings(
         const snap = projectNativeTree(await readTree(rec), {
           rules,
           values: captureValues,
+          states,
         });
         const page = buildSnapshotPage(name, pageUrl(rec), snap, {
           root: "body",
@@ -149,6 +154,10 @@ function registerSaveFindings(
           page,
           rules,
           ...(captureValues ? { values: true } : {}),
+          // Remembered so diff_findings re-reads the same way and an export
+          // records it (`meta.states`). Read from the snapshot, which says
+          // how its tree was printed.
+          ...(snap.states === true ? { states: true } : {}),
         });
         const treeKb = (page.tree.length / 1024).toFixed(1);
         return text(
@@ -191,6 +200,11 @@ function registerDiffFindings(
           // …and with values iff the base has them, or every filled field
           // would read as a changed tree line.
           values: base.values === true && !redactInput,
+          // …and with `{…}` blocks iff the base has them: an artifact
+          // captured before they existed (or with states: false) then
+          // compares like for like, instead of reading every stateful line
+          // as a state change.
+          states: base.states === true,
         });
         const head = buildSnapshotPage(name, pageUrl(rec), snap, {
           root: "body",
@@ -200,21 +214,34 @@ function registerDiffFindings(
         // always whole-document. Say so — silently widening turns everything
         // outside the old subtree into NEW findings, the class that gates CI.
         const scopeNote = scopeMismatch(base.page, head);
+        // Two different routes get no structural summary, so the notes below,
+        // which explain tree lines, would describe nothing in the output.
+        const otherPage = differentUrl(base.page, head);
         // A checkpoint captured (or imported) with values, diffed on a server
         // running with REAL_A11Y_REDACT_INPUT: this side can carry none, so
         // every filled field reads as a changed tree line. Say so rather than
         // let it pass for a regression — the same warning the CLI's `diff`
         // gives a one-sided pair. Findings carry no values and are unaffected.
         const valuesNote =
-          base.values === true && redactInput
+          base.values === true && redactInput && !otherPage
             ? `Note: checkpoint "${name}" carries field values, but this server runs with REAL_A11Y_REDACT_INPUT, so the current tree has none — every filled field reads as a changed tree line. Findings are unaffected.`
             : undefined;
-        const note = [scopeNote, valuesNote].filter(Boolean).join("\n\n");
+        // A checkpoint without `{…}` blocks (captured with states: false, or
+        // imported from an artifact from before them) is compared against a
+        // re-read without them, so no state change shows up. Say so: the
+        // summary otherwise looks like a full comparison.
+        const statesNote =
+          base.states !== true && !otherPage
+            ? `Note: checkpoint "${name}" carries no {…} states blocks (captured with states: false, or imported from an artifact from before them), so the current page was read without them too, and the structural summary compares no states: a checkbox that flipped or a disclosure that collapsed does not show. A checkpoint captured with states on compares them.`
+            : undefined;
+        const note = [scopeNote, valuesNote, statesNote]
+          .filter(Boolean)
+          .join("\n\n");
         // Checkpoints survive navigation by design, so the agent may well have
         // moved to another page between saving and diffing.
         const body = renderDiff(diffCheckpointPages(base.page, head), {
           source: { kind: "live", checkpoint: name },
-          differentUrl: differentUrl(base.page, head),
+          differentUrl: otherPage,
         });
         return text(note ? `${note}\n\n${body}` : body, RULES_HINT);
       }),
@@ -247,10 +274,18 @@ function registerCheckpointDiffs(
         if (!h) return errText(`No checkpoint named "${head}".`);
         // Two stored checkpoints can disagree on scope just as easily — either
         // side may have been imported from a scoped, DOM-era artifact.
-        const note = scopeMismatch(b.page, h.page);
+        // Two different routes get no structural summary, so the states note,
+        // which explains tree lines, would describe nothing in the output.
+        const otherPage = differentUrl(b.page, h.page);
+        const note = [
+          scopeMismatch(b.page, h.page),
+          otherPage ? undefined : statesMismatch(b, h),
+        ]
+          .filter(Boolean)
+          .join("\n\n");
         const rendered = renderDiff(diffLabeledCheckpoints(b.page, h.page), {
           source: { kind: "stored", base, head },
-          differentUrl: differentUrl(b.page, h.page),
+          differentUrl: otherPage,
         });
         return text(note ? `${note}\n\n${rendered}` : rendered, RULES_HINT);
       }),
@@ -274,7 +309,7 @@ function registerCheckpointDiffs(
           .entries()
           .map(
             ([name, cp]) =>
-              `  ${name}: ${cp.page.findings.length} finding(s), tree ${(cp.page.tree.length / 1024).toFixed(1)} KB${cp.values ? " (with field values)" : ""}`,
+              `  ${name}: ${cp.page.findings.length} finding(s), tree ${(cp.page.tree.length / 1024).toFixed(1)} KB${cp.values ? " (with field values)" : ""}${cp.states ? "" : " (no {…} states blocks)"}`,
           );
         return text(`${checkpoints.size} checkpoint(s):\n${lines.join("\n")}`);
       }),
@@ -329,6 +364,7 @@ function registerExportCheckpoint(
           views: viewsOfPage(cp.page),
           ...(cp.rules ? { rules: cp.rules } : {}),
           ...(cp.values ? { values: true } : {}),
+          ...(cp.states ? { states: true } : {}),
         });
         const json = serializeArtifact(artifact);
         // Never truncate a JSON artifact into invalid JSON — the outer bounded()
@@ -409,6 +445,9 @@ function registerImportCheckpoint(
             // Carried over so a diff re-snapshots the same way, and a
             // re-export keeps asking before it writes them out again.
             ...(carriesValues(parsed) ? { values: true } : {}),
+            // Likewise whether its tree carries `{…}` blocks, so a live diff
+            // against an artifact from before they existed compares without.
+            ...(carriesStates(parsed) ? { states: true } : {}),
           });
           const extra =
             parsed.pages.length > 1

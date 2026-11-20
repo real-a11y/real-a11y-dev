@@ -304,6 +304,34 @@ describe("mergeDefaults (virtual flags)", () => {
     expect(on["no-annotate"]).toBeUndefined(); // the default — no negation
   });
 
+  it("maps states:false to the negated --no-states flag", () => {
+    const off: Record<string, unknown> = {};
+    mergeDefaults(off, config({ states: false }), ALL);
+    expect(off["no-states"]).toBe(true);
+    const on: Record<string, unknown> = {};
+    mergeDefaults(on, config({ states: true }), ALL);
+    expect(on["no-states"]).toBeUndefined(); // the default — no negation
+  });
+
+  it("seeds --no-states only into a command that takes it", () => {
+    const outline: Record<string, unknown> = {};
+    mergeDefaults(
+      outline,
+      config({ states: false }),
+      new Set(Object.keys(COMMANDS.outline!.options)),
+    );
+    expect(outline["no-states"]).toBeUndefined();
+    for (const name of ["tree", "tabs", "inspect", "snapshot"]) {
+      const flags: Record<string, unknown> = {};
+      mergeDefaults(
+        flags,
+        config({ states: false }),
+        new Set(Object.keys(COMMANDS[name]!.options)),
+      );
+      expect(flags["no-states"], name).toBe(true);
+    }
+  });
+
   it("resolves path-valued defaults relative to the config dir", () => {
     const values: Record<string, unknown> = {};
     mergeDefaults(

@@ -118,6 +118,18 @@ export interface SnapshotArtifact {
      * why, not left to guess. Read it through {@link carriesValues}.
      */
     values?: boolean | null;
+    /**
+     * `true` when the tree view carries each node's `{…}` states block —
+     * `checkbox "Subscribe" {checked=false}` — as every capture does unless
+     * the run opted out (`real-a11y snapshot --no-states`, MCP
+     * `checkpoint_findings` with `states: false`). Absent means none: an
+     * artifact captured before the block existed has none either.
+     *
+     * Recorded because a diff between an artifact with blocks and one without
+     * reads every stateful line as a state change — a reader should be told
+     * why, not left to guess. Read it through {@link carriesStates}.
+     */
+    states?: boolean | null;
   };
   pages: SnapshotPage[];
 }
@@ -133,6 +145,8 @@ export interface ArtifactMeta {
   views?: readonly SnapshotView[];
   /** The views carry field values. Recorded only when true. */
   values?: boolean;
+  /** The tree view carries `{…}` states blocks. Recorded only when true. */
+  states?: boolean;
 }
 
 /**
@@ -208,6 +222,9 @@ export function buildArtifact(
       // Only when true, so an artifact without values is byte-identical to
       // one written before values existed.
       ...(meta.values === true ? { values: true } : {}),
+      // Likewise: an artifact without blocks is byte-identical to one written
+      // before they existed, which is also what it reads as.
+      ...(meta.states === true ? { states: true } : {}),
     },
     pages,
   };
@@ -221,6 +238,18 @@ export function carriesValues(
   artifact: Pick<SnapshotArtifact, "meta">,
 ): boolean {
   return artifact.meta?.values === true;
+}
+
+/**
+ * Whether an artifact's tree view carries `{…}` states blocks (see
+ * `meta.states`). Reads defensively: a legacy or hand-made artifact without
+ * the field has none, which is true of every artifact captured before the
+ * block existed.
+ */
+export function carriesStates(
+  artifact: Pick<SnapshotArtifact, "meta">,
+): boolean {
+  return artifact.meta?.states === true;
 }
 
 /**

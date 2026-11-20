@@ -706,6 +706,10 @@
             "type": "boolean"
           },
           {
+            "name": "no-states",
+            "type": "boolean"
+          },
+          {
             "name": "output",
             "short": "o",
             "type": "string"
@@ -1312,6 +1316,10 @@
             "type": "boolean"
           },
           {
+            "name": "no-states",
+            "type": "boolean"
+          },
+          {
             "name": "only",
             "type": "string"
           },
@@ -1432,6 +1440,10 @@
             "type": "boolean"
           },
           {
+            "name": "no-states",
+            "type": "boolean"
+          },
+          {
             "name": "output",
             "short": "o",
             "type": "string"
@@ -1537,6 +1549,10 @@
           },
           {
             "name": "no-config",
+            "type": "boolean"
+          },
+          {
+            "name": "no-states",
             "type": "boolean"
           },
           {
@@ -1881,7 +1897,7 @@
           "openWorldHint": false,
           "readOnlyHint": false
         },
-        "description": "Snapshot the CURRENT page's accessibility findings and store them under `name`. Later call diff_findings to see which findings are new / changed / fixed — the same identity semantics (fingerprints) the CI a11y-diff uses. Checkpoints survive navigation AND the session idle timeout (the browser may close and relaunch between saving and diffing; checkpoints remain), so you can checkpoint one deploy and diff another: save 'prod', open the preview URL, then diff_findings('prod'). They are held in memory and do NOT survive close_browser — call export_checkpoint first if you need one to outlive the session. The stored tree view leaves field values out unless you pass values: true. Whole-document. Chromium only.",
+        "description": "Snapshot the CURRENT page's accessibility findings and store them under `name`. Later call diff_findings to see which findings are new / changed / fixed — the same identity semantics (fingerprints) the CI a11y-diff uses. Checkpoints survive navigation AND the session idle timeout (the browser may close and relaunch between saving and diffing; checkpoints remain), so you can checkpoint one deploy and diff another: save 'prod', open the preview URL, then diff_findings('prod'). They are held in memory and do NOT survive close_browser — call export_checkpoint first if you need one to outlive the session. The stored tree view leaves field values out unless you pass values: true, and carries each node's `{…}` states block unless you pass states: false; diff_findings re-reads the page the same way. Whole-document. Chromium only.",
         "inputSchema": {
           "$schema": "http://json-schema.org/draft-07/schema#",
           "properties": {
@@ -1910,6 +1926,11 @@
               "default": "default",
               "description": "Named browser session to use (1-32 characters from A-Z, a-z, 0-9, _ and -). Separate names are independent live pages with their own checkpoints; calls within one session run one at a time, different sessions run in parallel. Omit for the default session.",
               "type": "string"
+            },
+            "states": {
+              "default": true,
+              "description": "Print each node's states, description and announced properties in a `{…}` block after its name (`checkbox \"Subscribe\" {checked=false}`). Default true. Pass false for lines without blocks, e.g. to compare with tree text captured before they existed.",
+              "type": "boolean"
             },
             "values": {
               "default": false,
@@ -2216,6 +2237,11 @@
               "default": "default",
               "description": "Named browser session to use (1-32 characters from A-Z, a-z, 0-9, _ and -). Separate names are independent live pages with their own checkpoints; calls within one session run one at a time, different sessions run in parallel. Omit for the default session.",
               "type": "string"
+            },
+            "states": {
+              "default": true,
+              "description": "Print each node's states, description and announced properties in a `{…}` block after its name (`checkbox \"Subscribe\" {checked=false}`). Default true. Pass false for lines without blocks, e.g. to compare with tree text captured before they existed.",
+              "type": "boolean"
             }
           },
           "type": "object"
@@ -2242,6 +2268,11 @@
               "default": "default",
               "description": "Named browser session to use (1-32 characters from A-Z, a-z, 0-9, _ and -). Separate names are independent live pages with their own checkpoints; calls within one session run one at a time, different sessions run in parallel. Omit for the default session.",
               "type": "string"
+            },
+            "states": {
+              "default": true,
+              "description": "Print each node's states, description and announced properties in a `{…}` block after its name (`checkbox \"Subscribe\" {checked=false}`). Default true. Pass false for lines without blocks, e.g. to compare with tree text captured before they existed.",
+              "type": "boolean"
             }
           },
           "type": "object"
@@ -2319,6 +2350,11 @@
               "default": "default",
               "description": "Named browser session to use (1-32 characters from A-Z, a-z, 0-9, _ and -). Separate names are independent live pages with their own checkpoints; calls within one session run one at a time, different sessions run in parallel. Omit for the default session.",
               "type": "string"
+            },
+            "states": {
+              "default": true,
+              "description": "Print each node's states, description and announced properties in a `{…}` block after its name (`checkbox \"Subscribe\" {checked=false}`). Default true. Pass false for lines without blocks, e.g. to compare with tree text captured before they existed.",
+              "type": "boolean"
             }
           },
           "type": "object"

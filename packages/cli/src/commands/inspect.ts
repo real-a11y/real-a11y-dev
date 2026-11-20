@@ -15,6 +15,7 @@ import { fingerprintFindings, redactUrl } from "@real-a11y-dev/snapshot";
 
 import {
   inputPolicy,
+  printsStates,
   parseFailOn,
   parseFormat,
   parseOpenOptions,
@@ -67,6 +68,7 @@ export async function runInspectOnSession(
     ...(rules ? { rules } : {}),
     includeGeneric: flags["include-generic"] === true,
     values: liveValues,
+    states: printsStates(flags),
     redactInput,
   });
   const page: PageReport = {

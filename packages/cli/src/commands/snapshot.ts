@@ -34,6 +34,7 @@ import {
 
 import {
   inputPolicy,
+  printsStates,
   parseFailOn,
   parseFormat,
   parseOnly,
@@ -200,6 +201,11 @@ export async function runSnapshotOnSession(
   // `defaults.values`) — and never under strict mode (ADR-0001).
   const { redactInput } = inputPolicy(flags);
   const values = flags.values === true && !redactInput;
+  // Whether the captured trees carry `{…}` blocks, read back from each
+  // projected snapshot rather than from the flag, so `meta.states` describes
+  // the trees written: a run where no page opened wrote none, and records
+  // none. `diff` reads it to tell a pair captured differently.
+  let treesCarryStates = false;
 
   const snapshotPages: SnapshotPage[] = [];
   let isFirstSnapshotTarget = true;
@@ -237,8 +243,10 @@ export async function runSnapshotOnSession(
       const snap = await nativeSnapshot(session, {
         ...(rules ? { rules } : {}),
         values,
+        states: printsStates(flags),
         redactInput,
       });
+      if (snap.states === true) treesCarryStates = true;
       snapshotPages.push(
         buildSnapshotPage(target.name, target.url, snap, {
           root,
@@ -347,6 +355,7 @@ export async function runSnapshotOnSession(
     ...(rules ? { rules } : {}),
     ...(openOptions.device ? { device: openOptions.device } : {}),
     ...(values ? { values } : {}),
+    ...(treesCarryStates ? { states: true } : {}),
   });
   // json + --only: a partial artifact — the filtered axis is stripped from
   // the pages and `meta.only` marks it so `diff` can refuse it outright.
@@ -366,7 +375,12 @@ export async function runSnapshotOnSession(
             views: MEASURED_VIEWS,
             ...(rules ? { rules } : {}),
             ...(openOptions.device ? { device: openOptions.device } : {}),
-            ...(values ? { values } : {}),
+            // A findings-only artifact keeps no tree, so it carries neither
+            // values nor blocks.
+            ...(values && only !== "findings" ? { values } : {}),
+            ...(treesCarryStates && only !== "findings"
+              ? { states: true }
+              : {}),
             only,
           },
         )

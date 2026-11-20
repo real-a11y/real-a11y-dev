@@ -21,6 +21,7 @@ export {
   assertFullArtifact,
   assertDistinctPageIds,
   buildArtifact,
+  carriesStates,
   carriesValues,
   measuredViews,
   serializeArtifact,

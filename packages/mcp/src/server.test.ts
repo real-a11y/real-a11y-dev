@@ -116,15 +116,27 @@ class FakeSession implements A11ySession {
  *   and two trees are "different documents" iff their bases do not overlap.
  */
 function nativeTree(
-  children: { role: string; name?: string; level?: string; value?: string }[],
+  children: {
+    role: string;
+    name?: string;
+    level?: string;
+    value?: string;
+    states?: Record<string, unknown>;
+  }[],
   idBase?: number,
 ): FakeSession["nativeTreeResponse"] {
-  const a11y = (role: string, name = "", level?: string, value?: string) => ({
+  const a11y = (
+    role: string,
+    name = "",
+    level?: string,
+    value?: string,
+    states: Record<string, unknown> = {},
+  ) => ({
     role,
     name,
     description: "",
     ...(value !== undefined ? { value } : {}),
-    states: {},
+    states,
     properties: level ? { level } : {},
     isExposedToAT: true,
   });
@@ -150,7 +162,7 @@ function nativeTree(
         parentId: rootId,
         childIds: [],
         depth: 1,
-        a11y: a11y(c.role, c.name, c.level, c.value),
+        a11y: a11y(c.role, c.name, c.level, c.value, c.states),
       },
     ]),
   ];
@@ -2396,7 +2408,9 @@ describe("field values (ADR-0001)", () => {
     const client = await connect(session);
     await client.callTool({ name: "get_tab_order", arguments: {} });
     const call = session.calls.find((c) => c.fn === "tabSequenceSnapshot");
-    expect(call?.args).toEqual([{ values: true, redactInput: false }]);
+    expect(call?.args).toEqual([
+      { values: true, redactInput: false, states: true },
+    ]);
   });
 
   it("diff_tree reports a typed value as (unset) → the value", async () => {
@@ -2444,7 +2458,7 @@ describe("field values (ADR-0001)", () => {
       await client.callTool({ name: "get_tab_order", arguments: {} });
       expect(
         session.calls.find((c) => c.fn === "tabSequenceSnapshot")?.args,
-      ).toEqual([{ values: false, redactInput: true }]);
+      ).toEqual([{ values: false, redactInput: true, states: true }]);
     });
 
     it("says so in the tool descriptions", async () => {
@@ -2618,5 +2632,229 @@ describe("field values (ADR-0001)", () => {
       );
       expect(exported).not.toContain("jane@x.com");
     });
+  });
+});
+
+describe("the states block: on by default, `states: false` opts out", () => {
+  let session: FakeSession;
+  beforeEach(() => {
+    session = new FakeSession();
+  });
+
+  const page = () =>
+    nativeTree(
+      [
+        { role: "checkbox", name: "Subscribe", states: { checked: true } },
+        { role: "button", name: "Menu", states: { expanded: false } },
+      ],
+      100,
+    );
+  const open = async (client: Awaited<ReturnType<typeof connect>>) =>
+    client.callTool({
+      name: "open_page",
+      arguments: { url: "https://example.com/" },
+    });
+
+  it("get_semantic_tree and inspect_page print blocks unless states: false", async () => {
+    session.nativeTreeResponse = page();
+    const client = await connect(session);
+    for (const name of ["get_semantic_tree", "inspect_page"]) {
+      const on = textOf(await client.callTool({ name, arguments: {} }));
+      expect(on, name).toContain('checkbox "Subscribe" {checked}');
+      expect(on, name).toContain('button "Menu" {expanded=false}');
+      const off = textOf(
+        await client.callTool({ name, arguments: { states: false } }),
+      );
+      expect(off, name).toContain('checkbox "Subscribe"\n');
+      expect(off, name).not.toContain("{checked");
+      expect(off, name).not.toContain("{expanded");
+    }
+  });
+
+  it("get_tab_order asks the in-page walk for blocks, or for none", async () => {
+    const client = await connect(session);
+    await client.callTool({ name: "get_tab_order", arguments: {} });
+    await client.callTool({
+      name: "get_tab_order",
+      arguments: { states: false },
+    });
+    const calls = session.calls.filter((c) => c.fn === "tabSequenceSnapshot");
+    expect(calls.map((c) => (c.args[0] as { states: boolean }).states)).toEqual(
+      [true, false],
+    );
+  });
+
+  it("describes the parameter on every tool that prints tree or tab text", async () => {
+    const client = await connect(session);
+    const tools = (await client.listTools()).tools;
+    for (const name of [
+      "get_semantic_tree",
+      "inspect_page",
+      "get_tab_order",
+      "checkpoint_findings",
+    ]) {
+      const schema = tools.find((t) => t.name === name)?.inputSchema as {
+        properties: Record<string, { default?: unknown; description?: string }>;
+      };
+      expect(schema.properties.states?.default, name).toBe(true);
+      expect(schema.properties.states?.description, name).toContain("{…}");
+    }
+  });
+
+  it("a checkpoint records its blocks, and the export says so in meta.states", async () => {
+    session.nativeTreeResponse = page();
+    const client = await connect(session);
+    await open(client);
+    await client.callTool({
+      name: "checkpoint_findings",
+      arguments: { name: "on" },
+    });
+    await client.callTool({
+      name: "checkpoint_findings",
+      arguments: { name: "off", states: false },
+    });
+    const exported = (name: string) =>
+      client.callTool({ name: "export_checkpoint", arguments: { name } }).then(
+        (r) =>
+          JSON.parse(textOf(r)) as {
+            meta: { states?: boolean };
+            pages: { tree: string }[];
+          },
+      );
+    const on = await exported("on");
+    expect(on.meta.states).toBe(true);
+    expect(on.pages[0]!.tree).toContain('checkbox "Subscribe" {checked}');
+    const off = await exported("off");
+    expect(off.meta.states).toBeUndefined();
+    expect(off.pages[0]!.tree).not.toContain("{");
+
+    const listed = textOf(
+      await client.callTool({ name: "list_checkpoints", arguments: {} }),
+    );
+    expect(listed).toMatch(/ off: .*\(no \{…\} states blocks\)/);
+    expect(listed).not.toMatch(/ on: .*states blocks/);
+
+    // Two checkpoints captured differently say why their trees differ.
+    const mixed = textOf(
+      await client.callTool({
+        name: "diff_checkpoints",
+        arguments: { base: "off", head: "on" },
+      }),
+    );
+    expect(mixed).toContain("only the head checkpoint's tree carries {…}");
+    const alike = textOf(
+      await client.callTool({
+        name: "diff_checkpoints",
+        arguments: { base: "on", head: "on" },
+      }),
+    );
+    expect(alike).not.toContain("states blocks");
+  });
+
+  it("diff_findings against an artifact from before blocks compares without them", async () => {
+    session.nativeTreeResponse = page();
+    const client = await connect(session);
+    await open(client);
+    await client.callTool({
+      name: "checkpoint_findings",
+      arguments: { name: "old", states: false },
+    });
+    // Round-trip through an artifact with no meta.states, as one captured
+    // before blocks existed reads.
+    const artifact = textOf(
+      await client.callTool({
+        name: "export_checkpoint",
+        arguments: { name: "old" },
+      }),
+    );
+    expect(JSON.parse(artifact).meta.states).toBeUndefined();
+    await client.callTool({
+      name: "import_checkpoint",
+      arguments: { name: "legacy", artifact },
+    });
+    const diff = textOf(
+      await client.callTool({
+        name: "diff_findings",
+        arguments: { name: "legacy" },
+      }),
+    );
+    // Same page, read the same way: no line reads as a state change.
+    expect(diff).not.toContain("States changed");
+    expect(diff).not.toMatch(/^[-+~] .*checkbox "Subscribe"/m);
+    // …and it says no state was compared, so a flipped box isn't missed
+    // silently.
+    expect(diff).toContain('checkpoint "legacy" carries no {…} states blocks');
+  });
+
+  it("import keeps an artifact's blocks, so a live diff reads them too", async () => {
+    session.nativeTreeResponse = page();
+    const client = await connect(session);
+    await open(client);
+    await client.callTool({
+      name: "checkpoint_findings",
+      arguments: { name: "on" },
+    });
+    const artifact = textOf(
+      await client.callTool({
+        name: "export_checkpoint",
+        arguments: { name: "on" },
+      }),
+    );
+    expect(JSON.parse(artifact).meta.states).toBe(true);
+    await client.callTool({
+      name: "import_checkpoint",
+      arguments: { name: "back", artifact },
+    });
+    const again = JSON.parse(
+      textOf(
+        await client.callTool({
+          name: "export_checkpoint",
+          arguments: { name: "back" },
+        }),
+      ),
+    ) as { meta: { states?: boolean } };
+    expect(again.meta.states).toBe(true);
+    const diff = textOf(
+      await client.callTool({
+        name: "diff_findings",
+        arguments: { name: "back" },
+      }),
+    );
+    expect(diff).not.toContain("States changed");
+    expect(diff).not.toMatch(/^[-+~] .*checkbox "Subscribe"/m);
+    expect(diff).not.toContain("states blocks");
+  });
+
+  it("keeps the states notes off a diff of two different routes", async () => {
+    session.nativeTreeResponse = page();
+    const client = await connect(session);
+    await open(client);
+    await client.callTool({
+      name: "checkpoint_findings",
+      arguments: { name: "here", states: false },
+    });
+    await client.callTool({
+      name: "open_page",
+      arguments: { url: "https://example.com/elsewhere" },
+    });
+    await client.callTool({
+      name: "checkpoint_findings",
+      arguments: { name: "there" },
+    });
+    const stored = textOf(
+      await client.callTool({
+        name: "diff_checkpoints",
+        arguments: { base: "here", head: "there" },
+      }),
+    );
+    expect(stored).toContain("different page");
+    expect(stored).not.toContain("states blocks");
+    const live = textOf(
+      await client.callTool({
+        name: "diff_findings",
+        arguments: { name: "here" },
+      }),
+    );
+    expect(live).not.toContain("states blocks");
   });
 });

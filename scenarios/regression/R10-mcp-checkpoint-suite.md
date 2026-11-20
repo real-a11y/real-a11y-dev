@@ -6,7 +6,7 @@ area: MCP
 type: Automated
 priority: P1
 status: Active
-validFrom: "mcp ≥ 0.1.0-beta.1. The MCP tree checkpoint is Node-side and native from mcp ≥ 0.1.0-beta.6 (it was in-page, and DOM-producer, on ≤ 0.1.0-beta.5); see R26 for the CLI side, which moved first. Step 9's Expected carries both shapes. Step 7's a/b split is from mcp ≥ 0.1.0-beta.2 — before that, a diff across any two pages printed the structural summary regardless, so on an earlier release expect 7a to dump a large advisory section and treat that as the old behaviour, not a fail. The operation-naming headers in (3)/(6) are also mcp ≥ 0.1.0-beta.2; earlier releases print `Checkpoint diff …` for both. From mcp ≥ 0.1.0-beta.2 a page also carries an identity separate from its checkpoint LABEL, which changes what 7a's FINDINGS do (see its Expected) and stops import from rewriting what it stores (5)."
+validFrom: "mcp ≥ 0.1.0-beta.1. The MCP tree checkpoint is Node-side and native from mcp ≥ 0.1.0-beta.6 (it was in-page, and DOM-producer, on ≤ 0.1.0-beta.5); see R26 for the CLI side, which moved first. Step 9's Expected carries both shapes. Step 7's a/b split is from mcp ≥ 0.1.0-beta.2 — before that, a diff across any two pages printed the structural summary regardless, so on an earlier release expect 7a to dump a large advisory section and treat that as the old behaviour, not a fail. The operation-naming headers in (3)/(6) are also mcp ≥ 0.1.0-beta.2; earlier releases print `Checkpoint diff …` for both. From mcp ≥ 0.1.0-beta.2 a page also carries an identity separate from its checkpoint LABEL, which changes what 7a's FINDINGS do (see its Expected) and stops import from rewriting what it stores (5). Step 5b (`states` and `meta.states`) is from mcp ≥ 0.1.0-beta.14."
 validUntil: ""
 expected: "checkpoint → change page → diff reports exactly the introduced delta; export→import round-trips losslessly and unmodified; each diff's header names which operation ran and what it read; a diff across two different routes reports them as separate pages and suppresses the structural summary, while a diff across two deploys of one route compares them normally"
 covers:
@@ -33,6 +33,10 @@ differently.
 3. `diff_findings`
 4. `list_checkpoints`
 5. `export_checkpoint`, then `import_checkpoint` into a fresh session
+   - **(5b)** On a page with a checked checkbox, `checkpoint_findings` twice:
+     `"on"` with the default and `"off"` with `states: false`. Export both,
+     `diff_checkpoints { base: "off", head: "on" }`, then import `"off"`'s
+     artifact as `"legacy"` and `diff_findings { name: "legacy" }`
 6. `diff_checkpoints` between two stored checkpoints
 7. Against the earlier checkpoint, `diff_findings` from somewhere else — two cases
    that must behave _differently_:
@@ -67,6 +71,11 @@ differently.
   `diff_findings` a live page against it. That cross-tool diff has never worked
   before this release; the imported page kept the store label as its identity while
   the live one derived its own
+- **5b** — `"on"` exports with `meta.states: true` and `checkbox "…" {checked}`
+  in its tree; `"off"` exports with no `meta.states` and no block. The
+  checkpoint diff carries a `NOTE` that only the head's tree carries `{…}`
+  blocks. `diff_findings` against `"legacy"` re-reads the page without blocks,
+  so the checkbox line does not read as changed
 - **7** — both still run; findings checkpoints are pure data and survive navigation
   **by design**. What differs is the rest of the output:
   - **7a** — a `NOTE: different page` naming both addresses, and **no** "Structural

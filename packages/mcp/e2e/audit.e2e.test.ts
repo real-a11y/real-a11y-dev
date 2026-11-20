@@ -130,6 +130,44 @@ describe("MCP end-to-end against a real browser", () => {
     expect(withGeneric).toContain('generic "Loose block"');
   });
 
+  it("prints {…} blocks by default, and none with states: false", async () => {
+    const html =
+      "<!doctype html><title>States</title><main>" +
+      '<input type="checkbox" checked aria-label="Subscribe">' +
+      '<button aria-expanded="false">Menu</button>' +
+      "</main>";
+    await client.callTool({
+      name: "open_page",
+      arguments: { url: dataUrl(html) },
+    });
+    for (const name of ["get_semantic_tree", "get_tab_order"]) {
+      const on = textOf(await client.callTool({ name, arguments: {} }));
+      expect(on, name).toContain('checkbox "Subscribe" {checked}');
+      expect(on, name).toContain('button "Menu" {expanded=false}');
+      const off = textOf(
+        await client.callTool({ name, arguments: { states: false } }),
+      );
+      expect(off, name).toContain('checkbox "Subscribe"');
+      expect(off, name).not.toContain("{checked");
+      expect(off, name).not.toContain("{expanded");
+    }
+    await client.callTool({
+      name: "checkpoint_findings",
+      arguments: { name: "no-blocks", states: false },
+    });
+    const artifact = JSON.parse(
+      textOf(
+        await client.callTool({
+          name: "export_checkpoint",
+          arguments: { name: "no-blocks" },
+        }),
+      ),
+    ) as { meta: { states?: boolean }; pages: { tree: string }[] };
+    expect(artifact.meta.states).toBeUndefined();
+    expect(artifact.pages[0]!.tree).toContain('checkbox "Subscribe"');
+    expect(artifact.pages[0]!.tree).not.toContain("{checked");
+  });
+
   it("extracts under a Trusted Types CSP that blocks addScriptTag", async () => {
     // `require-trusted-types-for 'script'` blocks `<script>.text` assignment
     // (the old addScriptTag path). Injection via page.evaluate must still work.

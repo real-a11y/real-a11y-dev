@@ -329,6 +329,7 @@ export async function nativeSnapshot(
         rules: options.rules as NativeSnapshotOptions["rules"],
         includeGeneric: options.includeGeneric,
         values: options.values,
+        states: options.states,
       },
     );
   } catch (err) {

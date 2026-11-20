@@ -49,6 +49,9 @@ generic
 link "diff"
 link "redactInput"
 link "--values"
+link "diff"
+link "--no-config"
+link "--no-states"
 link "Adopt the gate on existing debt"
 button "Copy Code"
 generic

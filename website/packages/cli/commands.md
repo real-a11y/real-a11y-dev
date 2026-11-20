@@ -22,6 +22,10 @@ Some of what this page documents is on `main` but not in `@real-a11y-dev/cli` 0.
 installing from npm today will not have it:
 
 - `show-report` — the whole command
+- `inspect --no-states`
+- `snapshot --no-states`
+- `tabs --no-states`
+- `tree --no-states`
 
 :::
 
@@ -221,7 +225,7 @@ real-a11y inspect http://localhost:3000
 **Flags:** [Browser & page](#browser-page) · [Output](#output) ·
 [Config](#config) · [`--rules`](#rules-ids) · [`--fail-on`](#fail-on-level)
 (default `error`) · [`--no-annotate`](#no-annotate) ·
-[`--include-generic`](#include-generic).
+[`--include-generic`](#include-generic) · [`--no-states`](#no-states).
 
 ### `tree <url>`
 
@@ -244,7 +248,8 @@ textbox "Email" {required, invalid, description="We never share it"}
 
 [What a line carries](/packages/testing/snapshots#what-a-line-carries) lists
 each key and when it prints. A [`snapshot`](#snapshot-url) artifact's tree
-prints the same blocks. [`tabs`](#tabs-url) prints blocks too, but it is the
+prints the same blocks. [`--no-states`](#no-states) leaves them out, here and in
+`tabs`, `inspect` and `snapshot`. [`tabs`](#tabs-url) prints blocks too, but it is the
 in-page walk, so a few keys differ from `tree`'s (`haspopup`,
 `roledescription`, `current`, a pristine required checkbox): see
 [where the producers differ](/packages/testing/snapshots#what-a-line-carries).
@@ -296,7 +301,8 @@ mention chip is, and keeps its name.
 
 **Flags:** [Browser & page](#browser-page) (including
 [`--redact-input`](#redact-input)) · [Output](#output) (`pretty | json`)
-· [Config](#config) · [`--include-generic`](#include-generic) · no `--root`.
+· [Config](#config) · [`--include-generic`](#include-generic) ·
+[`--no-states`](#no-states) · no `--root`.
 
 ### `outline <url>`
 
@@ -358,7 +364,7 @@ sits in a `contenteditable="false"` island such as a mention chip:
 ```
 
 **Flags:** [Browser & page](#browser-page) · [Output](#output) (`pretty | json`)
-· [Config](#config) · [`--root`](#root-selector).
+· [Config](#config) · [`--root`](#root-selector) · [`--no-states`](#no-states).
 
 ### `list <category> <url>`
 
@@ -558,6 +564,11 @@ rich-text editor, a button wrapped around a filled input — is part of the
 page's names and stays (a sensitive field's value never reaches one).
 [`--redact-input`](#redact-input) withholds those too.
 
+The tree view prints each node's `{…}` states block, as [`tree`](#tree-url)
+does, and records `meta.states: true`. [`--no-states`](#no-states) leaves the
+blocks out and the marker with them, which is how an artifact captured before
+the blocks existed reads too.
+
 ```sh
 real-a11y snapshot https://example.com -o base.json
 real-a11y snapshot --config a11y.config.json --md -o report.md
@@ -568,7 +579,8 @@ real-a11y snapshot --config a11y.config.json --baseline .a11y-baseline.json --fa
 
 **Flags:** [Browser & page](#browser-page) · [Config](#config) ·
 [`--rules`](#rules-ids) · [`--fail-on`](#fail-on-level) (default `never`) ·
-[`--values`](#values) · [`--include-generic`](#include-generic) ·
+[`--values`](#values) · [`--no-states`](#no-states) ·
+[`--include-generic`](#include-generic) ·
 [`-f, --format`](#f-format-fmt) (`json | md | sarif | junit | jsonl`) ·
 [`--md`](#md) · [`--only`](#only-axis) (`findings | views`, md-report-only) ·
 [`--baseline`](#baseline-file) ·
@@ -610,6 +622,17 @@ follows whatever [`snapshot --values`](#values) captured. When just one side
 does, every filled field reads as a changed line, so `diff` warns on stderr that
 only the base (or the PR) snapshot carries field values. Findings are
 unaffected: they never hold a value.
+
+The same goes for `{…}` states blocks. An artifact records whether its tree
+carries them (`meta.states`), and when only one side does — a baseline
+captured before the blocks existed, or one taken with
+[`--no-states`](#no-states) — every node with a state or description reads as a
+changed line, and a `generic` kept for its state shows up as a new line with
+its subtree nested under it. So `diff` warns on stderr that only the base (or
+the PR) snapshot carries them. Neither warning shows when the report compares
+no tree line: under [`--only findings`](#only-axis), for two artifacts with no
+page in common, or when every common page failed to open on one side.
+Re-capture the baseline, or capture both sides with `--no-states`.
 
 ```sh
 real-a11y diff base.json pr.json
@@ -795,6 +818,7 @@ there is nothing to choose.
 | [`--save`](#save-file) | path | — | `login` (**required**) |
 | [`--md`](#md) | boolean | `false` | `snapshot` |
 | [`--values`](#values) | boolean | `false` | `snapshot` |
+| [`--no-states`](#no-states) | boolean | `false` | `tree`, `tabs`, `inspect`, `snapshot` |
 | [`--only`](#only-axis) | `findings \| views` | both | `snapshot`, `diff` |
 | [`--baseline`](#baseline-file) | path | none | `snapshot`, `diff` |
 | [`--update-baseline`](#update-baseline) | boolean | `false` | `snapshot` |
@@ -1290,7 +1314,8 @@ it — snapshot's artifact tree always collapses generics.
 
 Put field values into the artifact's tree view — `textbox "Email" =
 "jane@example.com"`, a sensitive field as `"[redacted]"` — and record
-`meta.values: true`. Off by default because an artifact is a **persisted**
+`meta.values: true` (a findings-only `--only findings` artifact keeps no tree,
+so it records no `meta.values`, nor `meta.states`). Off by default because an artifact is a **persisted**
 output: it is committed, uploaded as a CI artifact and posted into PR comments,
 so what users typed stays out of it unless you ask. The live views
 ([`tree`](#tree-url), [`tabs`](#tabs-url), [`list`](#list-category-url),
@@ -1300,6 +1325,23 @@ show values; [`--redact-input`](#redact-input) overrides both.
 Capture both sides of a [`diff`](#diff-base-json-pr-json) the same way: an
 artifact with values against one without reads every filled field as changed,
 and `diff` warns when it sees that.
+
+### `--no-states`
+
+- **Type:** boolean · **Default:** `false` (blocks print) · **Config:**
+  [`defaults.states`](/packages/cli/configuration#states) (as `states: false`) ·
+  **Commands:** tree, tabs, inspect, snapshot
+
+Leave out each node's `{…}` states block, printing `checkbox "Subscribe"`
+where the default prints `checkbox "Subscribe" {checked=false}`. The result is
+byte for byte what these commands printed before the block existed, so a
+`generic` the tree keeps only for its state, such as a `<details>` summary, is
+folded away again with its subtree one level up. Use it to keep comparing
+against tree text captured then, or to keep output to role and name.
+
+On [`snapshot`](#snapshot-url) it also leaves out `meta.states`, so a
+[`diff`](#diff-base-json-pr-json) can tell an artifact without blocks from one
+with them, and warns when the two sides differ.
 
 ### `--md`
 

@@ -59,14 +59,18 @@ export function projectNativeTree(
   // producer's guard (browser.ts) and keeps the two producers in parity: a
   // native audit must never silently pass a page the DOM audit would flag.
   const rules = options.rules?.length ? options.rules : undefined;
-  return projectSnapshot({
-    findings: collectFindings(tree, rules),
-    tree: serializeTree(tree, {
-      includeGeneric,
-      values: options.values === true,
-      states: options.states !== false,
+  const states = options.states !== false;
+  return {
+    ...projectSnapshot({
+      findings: collectFindings(tree, rules),
+      tree: serializeTree(tree, {
+        includeGeneric,
+        values: options.values === true,
+        states,
+      }),
+      outline: serializeOutline(tree),
+      tabOrder: "",
     }),
-    outline: serializeOutline(tree),
-    tabOrder: "",
-  });
+    states,
+  };
 }

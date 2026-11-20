@@ -6,6 +6,7 @@ import {
   ARTIFACT_SCHEMA_VERSION,
   assertFullArtifact,
   buildArtifact,
+  carriesStates,
   carriesValues,
   measuredViews,
   parseSnapshotArtifact,
@@ -496,5 +497,30 @@ describe("meta.values — the views carry field values (opt-in)", () => {
 
   it("reads a hand-made artifact with no meta as carrying none", () => {
     expect(carriesValues({ meta: undefined as never })).toBe(false);
+  });
+});
+
+describe("meta.states — the tree view carries {…} blocks", () => {
+  const meta = { toolName: "@real-a11y-dev/cli", toolVersion: "0.0.1" };
+
+  it("is absent unless recorded, so a capture without blocks reads as a legacy one", () => {
+    const artifact = buildArtifact([page()], meta);
+    expect("states" in artifact.meta).toBe(false);
+    expect(carriesStates(artifact)).toBe(false);
+    expect(serializeArtifact(artifact)).not.toContain('"states"');
+  });
+
+  it("records blocks and survives the round-trip", () => {
+    const withStates = buildArtifact(
+      [page({ tree: 'checkbox "Subscribe" {checked=false}' })],
+      { ...meta, states: true },
+    );
+    expect(withStates.meta.states).toBe(true);
+    const parsed = parseSnapshotArtifact(serializeArtifact(withStates));
+    expect(carriesStates(parsed)).toBe(true);
+  });
+
+  it("reads a hand-made artifact with no meta as carrying none", () => {
+    expect(carriesStates({ meta: undefined as never })).toBe(false);
   });
 });

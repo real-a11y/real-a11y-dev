@@ -67,6 +67,7 @@ export const AUDIT_FLAGS: Options = {
 export const INSPECT_FLAGS: Options = {
   ...AUDIT_FLAGS,
   "include-generic": { type: "boolean" },
+  "no-states": { type: "boolean" },
 };
 
 export const VIEW_FLAGS: Options = {
@@ -76,17 +77,26 @@ export const VIEW_FLAGS: Options = {
   "include-generic": { type: "boolean" },
 };
 
+// `tree` prints the `{…}` states block, so it takes `--no-states` — and so
+// do `tabs`, `inspect` and `snapshot`, the other commands whose text carries
+// one. `outline` and `list` print no block and don't take it, which also keeps
+// a config `defaults.states` from reaching them.
+export const TREE_FLAGS: Options = {
+  ...VIEW_FLAGS,
+  "no-states": { type: "boolean" },
+};
+
 // `tabs` is the DOM holdout, so it — alone — still takes `--root`. Tab order is
 // the one view the native tree cannot produce (it knows per-node `focusable`,
 // but not the SEQUENCE — `tabindex` never reaches a native node), so `tabs`
 // still runs the in-page walk, and a walk is the only thing a selector scopes.
 //
-// Otherwise identical to VIEW_FLAGS. `--include-generic` is inert here (a
+// Otherwise identical to TREE_FLAGS. `--include-generic` is inert here (a
 // generic container is never a tab stop) but `outline`, `list`, and `snapshot`
 // accept-and-ignore it too — dropping it from this one command would make the
 // surface arbitrary, and is not a change this PR set out to make.
 export const TABS_FLAGS: Options = {
-  ...VIEW_FLAGS,
+  ...TREE_FLAGS,
   root: { type: "string" },
 };
 
@@ -167,6 +177,10 @@ export const SNAPSHOT_FLAGS: Options = {
   // Field values in the artifact's views. Opt-in: an artifact is committed and
   // posted, so what users typed stays out unless a run asks for it.
   values: { type: "boolean" },
+  // The tree view's `{…}` states blocks, on by default: an artifact records
+  // which way it was captured (`meta.states`), so `diff` can warn on a pair
+  // captured differently.
+  "no-states": { type: "boolean" },
   rules: { type: "string" },
   md: { type: "boolean" },
   format: { type: "string", short: "f" },

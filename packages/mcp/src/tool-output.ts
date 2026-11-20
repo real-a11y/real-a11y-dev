@@ -23,6 +23,18 @@ export const rootSelector = z
   .describe("CSS selector for the extraction root. Defaults to 'body'.");
 
 /**
+ * The `{…}` states block on each tree or tab line, on by default — the
+ * `states: false` that library callers have, for every tool that prints that
+ * text. Off gives the text from before the block existed, byte for byte.
+ */
+export const statesParam = z
+  .boolean()
+  .default(true)
+  .describe(
+    'Print each node\'s states, description and announced properties in a `{…}` block after its name (`checkbox "Subscribe" {checked=false}`). Default true. Pass false for lines without blocks, e.g. to compare with tree text captured before they existed.',
+  );
+
+/**
  * Cap oversized tool output so a huge page can't blow the agent's context.
  *
  * The hint carries as much weight as the cap. Every truncation used to end
