@@ -2,17 +2,17 @@ navigation "On this page"
   heading "On this page" (level 2)
   list
     listitem
-      link "Why flow() (vs Testing Library)?" {description="Why flow() (vs Testing Library)?"}
+      link "Why flow() (vs Testing Library)?"
     listitem
-      link "Available steps" {description="Available steps"}
+      link "Available steps"
     listitem
-      link "Asserting what an interaction changed" {description="Asserting what an interaction changed"}
+      link "Asserting what an interaction changed"
     listitem
-      link "flow(root, options?)" {description="flow(root, options?)"}
+      link "flow(root, options?)"
     listitem
-      link "Utilities" {description="Utilities"}
+      link "Utilities"
     listitem
-      link "See also" {description="See also"}
+      link "See also"
 main
   heading "Flow API" (level 1)
   paragraph "Fluent interaction chains that assert about the after each step. Each / / etc. dispatches a real DOM action, then re-extracts the tree so the next step sees the post-interaction state."
@@ -121,10 +121,12 @@ main
           code ".type(text)"
         cell "Dispatch a type action with the given text (textbox, searchbox)."
       row
-        cell ".expectTree(snapshot)"
-          code ".expectTree(snapshot)"
-        cell "Assert the current tree's serialization matches snapshot (see caveat below)."
+        cell ".expectTree(snapshot, options?)"
+          code ".expectTree(snapshot, options?)"
+        cell "Assert the current tree's serialization matches snapshot. options are treeSnapshot's (see caveat below)."
           code "snapshot"
+          code "options"
+          code "treeSnapshot"
       row
         cell ".expectChanges(spec | string | fn)"
           code ".expectChanges(spec | string | fn)"
@@ -152,16 +154,19 @@ main
     code "role="alertdialog""
   heading "expectTree — caveat" (level 3)
     code "expectTree"
-  paragraph "re-serializes the tree with (no , , generic nodes flattened). A snapshot captured via or will not match. For redacted or DOM-mode comparisons, use and call / yourself."
+  paragraph "re-serializes the tree with 's unless you pass your own: no , , generic nodes flattened, and each node's printed (). A snapshot captured via , or matches only when you pass the same options. An expectation written before tree text carried states needs either its blocks added or ."
     code "expectTree"
+    code "treeSnapshot"
     strong "default options"
     code "redact"
     code "mode: "a11y""
+    link "states block"
+    code "checkbox "Email me" {checked=false}"
     code "treeSnapshot(root, { redact: [...] })"
     code "{ mode: "dom" }"
-    code ".expect((tree) => { … })"
-    code "serializeTree"
-    code "treeSnapshot"
+    code "{ states: false }"
+    code "expectTree"
+    code "{ states: false }"
   paragraph "A mismatch names the (with a couple of lines of context). It does not dump both full trees."
     strong "first differing line"
   heading "Asserting what an interaction changed" (level 2)

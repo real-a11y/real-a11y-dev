@@ -1,10 +1,10 @@
-link "Install" {description="Install"}
-link "Register the addon" {description="Register the addon"}
-link "React 19 — pin the JSX runtime" {description="React 19 — pin the JSX runtime"}
-link "When you don't need this" {description="When you don't need this"}
-link "Clear the cache after adding the addon" {description="Clear the cache after adding the addon"}
-link "CI" {description="CI"}
-link "Known constraints" {description="Known constraints"}
+link "Install"
+link "Register the addon"
+link "React 19 — pin the JSX runtime"
+link "When you don't need this"
+link "Clear the cache after adding the addon"
+link "CI"
+link "Known constraints"
 button "Copy Code"
 generic
 link "the package page"

@@ -2,19 +2,19 @@ navigation "On this page"
   heading "On this page" (level 2)
   list
     listitem
-      link "What you see" {description="What you see"}
+      link "What you see"
     listitem
-      link "How the A11y view differs from the DOM view" {description="How the A11y view differs from the DOM view"}
+      link "How the A11y view differs from the DOM view"
     listitem
-      link "Two producers" {description="Two producers"}
+      link "Two producers"
     listitem
-      link "How roles are resolved" {description="How roles are resolved"}
+      link "How roles are resolved"
     listitem
-      link "What to look for" {description="What to look for"}
+      link "What to look for"
     listitem
-      link "Reading a well-structured tree" {description="Reading a well-structured tree"}
+      link "Reading a well-structured tree"
     listitem
-      link "Quick sanity checks" {description="Quick sanity checks"}
+      link "Quick sanity checks"
 main
   heading "Reading the A11y View" (level 1)
   blockquote

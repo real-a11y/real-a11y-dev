@@ -2,19 +2,19 @@ navigation "On this page"
   heading "On this page" (level 2)
   list
     listitem
-      link "Install" {description="Install"}
+      link "Install"
     listitem
-      link "Register the addon" {description="Register the addon"}
+      link "Register the addon"
     listitem
-      link "React 19 — pin the JSX runtime" {description="React 19 — pin the JSX runtime"}
+      link "React 19 — pin the JSX runtime"
     listitem
-      link "When you don't need this" {description="When you don't need this"}
+      link "When you don't need this"
     listitem
-      link "Clear the cache after adding the addon" {description="Clear the cache after adding the addon"}
+      link "Clear the cache after adding the addon"
     listitem
-      link "CI" {description="CI"}
+      link "CI"
     listitem
-      link "Known constraints" {description="Known constraints"}
+      link "Known constraints"
 main
   heading "Storybook + React 19" (level 1)
   paragraph "supports Storybook 9.x, 10.x and 11.x with React 18 or React 19; its own suite runs on React 19. If you hit at story render time, the Vite pipeline needs one small nudge — explained below."

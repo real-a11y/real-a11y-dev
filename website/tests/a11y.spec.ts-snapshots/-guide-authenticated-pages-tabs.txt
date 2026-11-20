@@ -1,7 +1,7 @@
-link "Saved session (recommended)" {description="Saved session (recommended)"}
-link "Attach to your logged-in browser (--cdp)" {description="Attach to your logged-in browser (--cdp)"}
-link "Security" {description="Security"}
-link "See also" {description="See also"}
+link "Saved session (recommended)"
+link "Attach to your logged-in browser (--cdp)"
+link "Security"
+link "See also"
 link "CLI"
 link "MCP server"
 table

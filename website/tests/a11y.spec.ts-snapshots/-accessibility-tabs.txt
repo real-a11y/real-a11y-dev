@@ -1,10 +1,10 @@
-link "Standards we target" {description="Standards we target"}
-link "Known gaps" {description="Known gaps"}
-link "How we test" {description="How we test"}
-link "Reporting a problem" {description="Reporting a problem"}
-link "Our commitment" {description="Our commitment"}
-link "Scope" {description="Scope"}
-link "Feedback" {description="Feedback"}
+link "Standards we target"
+link "Known gaps"
+link "How we test"
+link "Reporting a problem"
+link "Our commitment"
+link "Scope"
+link "Feedback"
 link "github.com/real-a11y/real-a11y-dev/issues/new?labels=a11y"
 link "Edit this page on GitHub"
 link "Next page Getting Started"

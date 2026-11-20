@@ -2,21 +2,21 @@ navigation "On this page"
   heading "On this page" (level 2)
   list
     listitem
-      link "All tools at a glance" {description="All tools at a glance"}
+      link "All tools at a glance"
     listitem
-      link "Session" {description="Session"}
+      link "Session"
     listitem
-      link "Audit" {description="Audit"}
+      link "Audit"
     listitem
-      link "Views" {description="Views"}
+      link "Views"
     listitem
-      link "Findings checkpoints" {description="Findings checkpoints"}
+      link "Findings checkpoints"
     listitem
-      link "Tree checkpoints" {description="Tree checkpoints"}
+      link "Tree checkpoints"
     listitem
-      link "Act" {description="Act"}
+      link "Act"
     listitem
-      link "Environment" {description="Environment"}
+      link "Environment"
 main
   heading "MCP tools reference" (level 1)
   paragraph "The Real A11y MCP server exposes to an MCP client (Claude Code, Claude Desktop, Cursor, and any other MCP-capable assistant). Each tool drives a real Chromium page and reports what a screen reader would actually perceive — computed roles, accessible names, and the defects assistive tech announces as broken — not what the HTML source claims."
@@ -447,7 +447,7 @@ main
     code "<select>"
     code "aria-valuetext"
   button "Copy Code"
-  code "textbox "Email" = "jane@example.com" textbox "Password" = "[redacted]" combobox "Country" = "France" {expanded=false}"
+  code "textbox "Email" = "jane@example.com" textbox "Password" = "[redacted]" combobox "Country" = "France" {expanded=false, haspopup=menu}"
   paragraph "A field whose markup marks it secret — , or an of , , , , , , or — reads when it holds anything: never its text, never its length. , , and show values the same way; leave them out unless asked."
     code "type="password""
     code "autocomplete"
@@ -516,7 +516,12 @@ main
   paragraph
     emphasis "Read-only · the one in-page read · the one tool scopes."
       code "rootSelector"
-  paragraph "Return the focusable elements in the order a keyboard user reaches them with Tab — numbered, each with role + accessible name. The stop focused at capture time is marked . Surfaces focus traps, illogical order, and unreachable controls."
+  paragraph "Return the focusable elements in the order a keyboard user reaches them with Tab — numbered, each with role + accessible name and its states and description in a block (). This is the in-page walk, so a few keys differ from 's: see . The stop focused at capture time is marked . Surfaces focus traps, illogical order, and unreachable controls."
+    code "{…}"
+    code "checkbox "Subscribe" {checked=false}"
+    link "get_semantic_tree"
+      code "get_semantic_tree"
+    link "where the producers differ"
     code "[focused]"
   paragraph "The stops are the ones Chromium tabs to. An without an is not one, not even with , which is the keyboard bug worth catching. Nor is a control disabled directly or by its , or an element whose is not an integer, such as . An control is a stop, because announces a state and leaves focus alone."
     code "<a>"
@@ -527,10 +532,12 @@ main
     code """"
     code "aria-disabled"
     code "aria-disabled"
-  paragraph "So is the that toggles a , such as an FAQ accordion's question, listed as and named by its text. Only the first child of a is a stop. A second one, or a summary anywhere else, is plain text to Chromium."
+  paragraph "So is the that toggles a , such as an FAQ accordion's question, listed as , named by its text and carrying or . Only the first child of a is a stop. A second one, or a summary anywhere else, is plain text to Chromium."
     code "<summary>"
     code "<details>"
     code "generic"
+    code "{expanded}"
+    code "{expanded=false}"
     code "<summary>"
     code "<details>"
   paragraph "Nothing in the body of a closed is a stop, not even a nested in it. Chromium renders a closed disclosure as its summary alone, so Tab reaches the body only once it opens."

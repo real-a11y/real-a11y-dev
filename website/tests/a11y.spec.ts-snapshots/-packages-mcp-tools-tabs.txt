@@ -1,11 +1,11 @@
-link "All tools at a glance" {description="All tools at a glance"}
-link "Session" {description="Session"}
-link "Audit" {description="Audit"}
-link "Views" {description="Views"}
-link "Findings checkpoints" {description="Findings checkpoints"}
-link "Tree checkpoints" {description="Tree checkpoints"}
-link "Act" {description="Act"}
-link "Environment" {description="Environment"}
+link "All tools at a glance"
+link "Session"
+link "Audit"
+link "Views"
+link "Findings checkpoints"
+link "Tree checkpoints"
+link "Act"
+link "Environment"
 link "open_page"
 link "audit_page"
 link "inspect_page"
@@ -81,6 +81,8 @@ link "findings checkpoints"
 link "REAL_A11Y_REDACT_INPUT=1"
 link "get_tab_order"
 link "named session"
+link "get_semantic_tree"
+link "where the producers differ"
 link "get_semantic_tree"
 link "audit_page"
 button "Copy Code"

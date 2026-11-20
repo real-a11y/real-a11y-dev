@@ -1,7 +1,7 @@
-link "What you see" {description="What you see"}
-link "When to use it" {description="When to use it"}
-link "What to look for" {description="What to look for"}
-link "How it relates to the other views" {description="How it relates to the other views"}
+link "What you see"
+link "When to use it"
+link "What to look for"
+link "How it relates to the other views"
 link "inspector"
 link "React component"
 link "Storybook addon"

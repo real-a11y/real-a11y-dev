@@ -1,8 +1,8 @@
-link "What you see" {description="What you see"}
-link "How heading levels work" {description="How heading levels work"}
-link "What to check" {description="What to check"}
-link "Common patterns and what they look like" {description="Common patterns and what they look like"}
-link "The relationship to the other views" {description="The relationship to the other views"}
+link "What you see"
+link "How heading levels work"
+link "What to check"
+link "Common patterns and what they look like"
+link "The relationship to the other views"
 link "outlineSnapshot()"
 link "real-a11y outline"
 link "get_heading_outline"

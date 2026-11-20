@@ -2,17 +2,17 @@ navigation "On this page"
   heading "On this page" (level 2)
   list
     listitem
-      link "Install" {description="Install"}
+      link "Install"
     listitem
-      link "Mount <SemanticNavigator /> in a client component" {description="Mount <SemanticNavigator /> in a client component"}
+      link "Mount <SemanticNavigator /> in a client component"
     listitem
-      link "Gate it out of production" {description="Gate it out of production"}
+      link "Gate it out of production"
     listitem
-      link "Unit tests — Vitest + next-intl + Testing Library" {description="Unit tests — Vitest + next-intl + Testing Library"}
+      link "Unit tests — Vitest + next-intl + Testing Library"
     listitem
-      link "E2E — Playwright against next dev" {description="E2E — Playwright against next dev"}
+      link "E2E — Playwright against next dev"
     listitem
-      link "Known constraints" {description="Known constraints"}
+      link "Known constraints"
 main
   heading "Next.js (App Router + React 19)" (level 1)
   paragraph "Everything on this page assumes Next.js 15 with the App Router and React 19. For legacy Pages Router or React 18, the patterns still work — they're just less load-bearing."

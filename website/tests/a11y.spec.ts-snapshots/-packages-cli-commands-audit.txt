@@ -2,23 +2,23 @@ navigation "On this page"
   heading "On this page" (level 2)
   list
     listitem
-      link "All commands at a glance" {description="All commands at a glance"}
+      link "All commands at a glance"
     listitem
-      link "Commands" {description="Commands"}
+      link "Commands"
     listitem
-      link "Flags" {description="Flags"}
+      link "Flags"
     listitem
-      link "Browser & page" {description="Browser & page"}
+      link "Browser & page"
     listitem
-      link "Output" {description="Output"}
+      link "Output"
     listitem
-      link "Config" {description="Config"}
+      link "Config"
     listitem
-      link "Gate" {description="Gate"}
+      link "Gate"
     listitem
-      link "Command-specific" {description="Command-specific"}
+      link "Command-specific"
     listitem
-      link "Security posture" {description="Security posture"}
+      link "Security posture"
 main
   heading "Commands & flags" (level 1)
   paragraph "Every invocation is . Sixteen commands ship — , , , , , , , , , , , , , , , and . Run for a command's own flags."
@@ -398,12 +398,17 @@ main
     code "{…}"
   button "Copy Code"
   code "checkbox "Subscribe" {checked=false} button "Menu" {expanded=false, haspopup=menu} textbox "Email" {required, invalid, description="We never share it"}"
-  paragraph "lists each key and when it prints. and a artifact's tree print the same blocks."
+  paragraph "lists each key and when it prints. A artifact's tree prints the same blocks. prints blocks too, but it is the in-page walk, so a few keys differ from 's (, , , a pristine required checkbox): see ."
     link "What a line carries"
-    link "tabs"
-      code "tabs"
     link "snapshot"
       code "snapshot"
+    link "tabs"
+      code "tabs"
+    code "tree"
+    code "haspopup"
+    code "roledescription"
+    code "current"
+    link "where the producers differ"
   paragraph "A field prints what it holds, the way a screen reader announces it — a text field's text, a 's chosen option, a slider's (else its number), a file input's file names, a rich-text editor's content. A field that holds a secret — , or an of , , , , , , or — prints when it holds anything, never the text and never its length. An empty field prints no value:"
     code "<select>"
     code "aria-valuetext"
@@ -419,7 +424,7 @@ main
     code "cc-exp-year"
     code "[redacted]"
   button "Copy Code"
-  code "textbox "Email" = "jane@example.com" textbox "Password" = "[redacted]" combobox "Country" = "France" {expanded=false} slider "Volume" = "3""
+  code "textbox "Email" = "jane@example.com" textbox "Password" = "[redacted]" combobox "Country" = "France" {expanded=false, haspopup=menu} slider "Volume" = "3""
   paragraph "The same values appear in , , and the diff, and in . A committed artifact leaves them out unless you pass ."
     link "tabs"
       code "tabs"
@@ -582,6 +587,11 @@ main
     listitem "— 1-based, document order. It's the spelling the ambiguity error prints, so the fix is copy-paste."
       strong
         code "nth=<n>"
+    listitem "— a states block and a marker after the name are read and ignored, so works as pasted. A step targets a node by role and name, never by its states."
+      strong "A pasted tree line"
+      code "{…}"
+      code "[focused]"
+      code "click checkbox "Subscribe" {checked=false}"
     listitem "— only. Everything after the first is the value, so query strings and base64 need no escaping."
       strong
         code "= <text>"

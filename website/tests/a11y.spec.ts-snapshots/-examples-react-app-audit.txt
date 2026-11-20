@@ -2,11 +2,11 @@ navigation "On this page"
   heading "On this page" (level 2)
   list
     listitem
-      link "What it shows" {description="What it shows"}
+      link "What it shows"
     listitem
-      link "Run it locally" {description="Run it locally"}
+      link "Run it locally"
     listitem
-      link "Key code" {description="Key code"}
+      link "Key code"
 main
   heading "Example: React App" (level 1)
   paragraph "A Vite + React 19 application demonstrating hooks and the component."

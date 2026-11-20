@@ -2,15 +2,15 @@ navigation "On this page"
   heading "On this page" (level 2)
   list
     listitem
-      link "Versus visual regression testing" {description="Versus visual regression testing"}
+      link "Versus visual regression testing"
     listitem
-      link "Versus rule engines like axe" {description="Versus rule engines like axe"}
+      link "Versus rule engines like axe"
     listitem
-      link "Versus Playwright ARIA snapshots" {description="Versus Playwright ARIA snapshots"}
+      link "Versus Playwright ARIA snapshots"
     listitem
-      link "Alongside real screen-reader testing" {description="Alongside real screen-reader testing"}
+      link "Alongside real screen-reader testing"
     listitem
-      link "Next" {description="Next"}
+      link "Next"
 main
   heading "How Accessibility Snapshots Compare" (level 1)
   paragraph "An doesn't replace your other accessibility and regression tools — it sits beside them and covers a blind spot each of them has. This page walks through the four it's most often confused with, and where the lines fall."

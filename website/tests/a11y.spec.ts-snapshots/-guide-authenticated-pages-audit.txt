@@ -2,13 +2,13 @@ navigation "On this page"
   heading "On this page" (level 2)
   list
     listitem
-      link "Saved session (recommended)" {description="Saved session (recommended)"}
+      link "Saved session (recommended)"
     listitem
-      link "Attach to your logged-in browser (--cdp)" {description="Attach to your logged-in browser (--cdp)"}
+      link "Attach to your logged-in browser (--cdp)"
     listitem
-      link "Security" {description="Security"}
+      link "Security"
     listitem
-      link "See also" {description="See also"}
+      link "See also"
 main
   heading "Auditing authenticated pages" (level 1)
   paragraph "Most real accessibility problems live a login — the dashboard, the settings screen, the checkout. Both the and the can audit those pages, and the guiding rule is the same for both: Your password is never typed by an agent, never passed as a flag, never stored in shell history."

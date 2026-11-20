@@ -1,16 +1,16 @@
-link "Install" {description="Install"}
-link "attach(page, options?)" {description="attach(page, options?)"}
-link "Narrowing the root" {description="Narrowing the root"}
-link "Auditing the native tree" {description="Auditing the native tree"}
-link "Testing that assertions fail on broken pages" {description="Testing that assertions fail on broken pages"}
-link "Determinism" {description="Determinism"}
-link "Redacting variable content" {description="Redacting variable content"}
-link "States" {description="States"}
-link "Field values" {description="Field values"}
-link "How it works" {description="How it works"}
-link "Error propagation" {description="Error propagation"}
-link "SemanticNavigatorPageHandle type" {description="SemanticNavigatorPageHandle type"}
-link "See also" {description="See also"}
+link "Install"
+link "attach(page, options?)"
+link "Narrowing the root"
+link "Auditing the native tree"
+link "Testing that assertions fail on broken pages"
+link "Determinism"
+link "Redacting variable content"
+link "States"
+link "Field values"
+link "How it works"
+link "Error propagation"
+link "SemanticNavigatorPageHandle type"
+link "See also"
 link "@real-a11y-dev/testing"
 button "Copy Code"
 generic

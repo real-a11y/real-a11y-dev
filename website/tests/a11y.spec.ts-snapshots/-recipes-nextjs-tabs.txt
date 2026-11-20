@@ -1,9 +1,9 @@
-link "Install" {description="Install"}
-link "Mount <SemanticNavigator /> in a client component" {description="Mount <SemanticNavigator /> in a client component"}
-link "Gate it out of production" {description="Gate it out of production"}
-link "Unit tests — Vitest + next-intl + Testing Library" {description="Unit tests — Vitest + next-intl + Testing Library"}
-link "E2E — Playwright against next dev" {description="E2E — Playwright against next dev"}
-link "Known constraints" {description="Known constraints"}
+link "Install"
+link "Mount <SemanticNavigator /> in a client component"
+link "Gate it out of production"
+link "Unit tests — Vitest + next-intl + Testing Library"
+link "E2E — Playwright against next dev"
+link "Known constraints"
 button "Copy Code"
 generic
 link "Keep it out of production"

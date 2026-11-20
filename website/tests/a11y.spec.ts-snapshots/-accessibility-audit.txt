@@ -2,19 +2,19 @@ navigation "On this page"
   heading "On this page" (level 2)
   list
     listitem
-      link "Standards we target" {description="Standards we target"}
+      link "Standards we target"
     listitem
-      link "Known gaps" {description="Known gaps"}
+      link "Known gaps"
     listitem
-      link "How we test" {description="How we test"}
+      link "How we test"
     listitem
-      link "Reporting a problem" {description="Reporting a problem"}
+      link "Reporting a problem"
     listitem
-      link "Our commitment" {description="Our commitment"}
+      link "Our commitment"
     listitem
-      link "Scope" {description="Scope"}
+      link "Scope"
     listitem
-      link "Feedback" {description="Feedback"}
+      link "Feedback"
 main
   heading "Accessibility Statement" (level 1)
   paragraph

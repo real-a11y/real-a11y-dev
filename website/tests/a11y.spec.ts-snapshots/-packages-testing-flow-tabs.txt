@@ -1,9 +1,9 @@
-link "Why flow() (vs Testing Library)?" {description="Why flow() (vs Testing Library)?"}
-link "Available steps" {description="Available steps"}
-link "Asserting what an interaction changed" {description="Asserting what an interaction changed"}
-link "flow(root, options?)" {description="flow(root, options?)"}
-link "Utilities" {description="Utilities"}
-link "See also" {description="See also"}
+link "Why flow() (vs Testing Library)?"
+link "Available steps"
+link "Asserting what an interaction changed"
+link "flow(root, options?)"
+link "Utilities"
+link "See also"
 link "@real-a11y-dev/testing"
 button "Copy Code"
 generic
@@ -17,6 +17,7 @@ table
 link "Asserting what an interaction changed"
 button "Copy Code"
 generic
+link "states block"
 button "Copy Code"
 generic
 link "/matchers"

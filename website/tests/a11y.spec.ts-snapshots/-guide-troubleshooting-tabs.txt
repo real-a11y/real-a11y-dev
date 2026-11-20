@@ -1,17 +1,17 @@
-link "My audit returned nothing" {description="My audit returned nothing"}
-link "Snapshot flaps between runs or between local and CI" {description="Snapshot flaps between runs or between local and CI"}
-link "Heading outline has no h1" {description="Heading outline has no h1"}
-link "Tab sequence is empty" {description="Tab sequence is empty"}
-link "My snapshot contains the whole page, not the component I passed" {description="My snapshot contains the whole page, not the component I passed"}
-link "Content inside a web component is missing or stale" {description="Content inside a web component is missing or stale"}
-link "React hydration mismatch when rendering the panel" {description="React hydration mismatch when rendering the panel"}
-link "Tests pass in jsdom but fail in Playwright (or vice versa)" {description="Tests pass in jsdom but fail in Playwright (or vice versa)"}
-link "A11yAssertionError with a message I don't understand" {description="A11yAssertionError with a message I don't understand"}
-link "The CLI or MCP says Playwright isn't installed" {description="The CLI or MCP says Playwright isn't installed"}
-link "Chrome fails to launch with a shared-library error" {description="Chrome fails to launch with a shared-library error"}
-link "An audit of a logged-in page comes back empty (or shows the login screen)" {description="An audit of a logged-in page comes back empty (or shows the login screen)"}
-link "The MCP server refuses to open a file:// URL" {description="The MCP server refuses to open a file:// URL"}
-link "Still stuck?" {description="Still stuck?"}
+link "My audit returned nothing"
+link "Snapshot flaps between runs or between local and CI"
+link "Heading outline has no h1"
+link "Tab sequence is empty"
+link "My snapshot contains the whole page, not the component I passed"
+link "Content inside a web component is missing or stale"
+link "React hydration mismatch when rendering the panel"
+link "Tests pass in jsdom but fail in Playwright (or vice versa)"
+link "A11yAssertionError with a message I don't understand"
+link "The CLI or MCP says Playwright isn't installed"
+link "Chrome fails to launch with a shared-library error"
+link "An audit of a logged-in page comes back empty (or shows the login screen)"
+link "The MCP server refuses to open a file:// URL"
+link "Still stuck?"
 button "Copy Code"
 generic
 link "inspector"

@@ -1,12 +1,12 @@
-link "What it shows" {description="What it shows"}
-link "Run it locally" {description="Run it locally"}
-link "Setup" {description="Setup"}
-link "Good fixture — assertions pass" {description="Good fixture — assertions pass"}
-link "Bad fixture — assertions throw" {description="Bad fixture — assertions throw"}
-link "Narrowing the audit root" {description="Narrowing the audit root"}
-link "Snapshot test" {description="Snapshot test"}
-link "How the adapter works" {description="How the adapter works"}
-link "See also" {description="See also"}
+link "What it shows"
+link "Run it locally"
+link "Setup"
+link "Good fixture — assertions pass"
+link "Bad fixture — assertions throw"
+link "Narrowing the audit root"
+link "Snapshot test"
+link "How the adapter works"
+link "See also"
 link "packages/testing/e2e/"
 button "Copy Code"
 generic

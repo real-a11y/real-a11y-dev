@@ -2,21 +2,21 @@ navigation "On this page"
   heading "On this page" (level 2)
   list
     listitem
-      link "Short version" {description="Short version"}
+      link "Short version"
     listitem
-      link "Chrome extension — Semantic Navigator" {description="Chrome extension — Semantic Navigator"}
+      link "Chrome extension — Semantic Navigator"
     listitem
-      link "npm packages" {description="npm packages"}
+      link "npm packages"
     listitem
-      link "Website" {description="Website"}
+      link "Website"
     listitem
-      link "Data we might receive anyway" {description="Data we might receive anyway"}
+      link "Data we might receive anyway"
     listitem
-      link "Your rights" {description="Your rights"}
+      link "Your rights"
     listitem
-      link "Changes to this policy" {description="Changes to this policy"}
+      link "Changes to this policy"
     listitem
-      link "Contact" {description="Contact"}
+      link "Contact"
 main
   heading "Privacy Policy" (level 1)
   paragraph

@@ -2,17 +2,17 @@ navigation "On this page"
   heading "On this page" (level 2)
   list
     listitem
-      link "Pick your entry point" {description="Pick your entry point"}
+      link "Pick your entry point"
     listitem
-      link "Quick install" {description="Quick install"}
+      link "Quick install"
     listitem
-      link "Your first tree in 30 seconds" {description="Your first tree in 30 seconds"}
+      link "Your first tree in 30 seconds"
     listitem
-      link "Requirements" {description="Requirements"}
+      link "Requirements"
     listitem
-      link "Keep it out of production" {description="Keep it out of production"}
+      link "Keep it out of production"
     listitem
-      link "Next steps" {description="Next steps"}
+      link "Next steps"
 main
   heading "Getting Started" (level 1)
   paragraph "Real A11y is a suite of packages built around a single extraction engine. The engine itself is internal — it ships inside each package rather than being installed on its own — so what you pick is the surface that fits your workflow. Each is independently installable; use just the ones you need."

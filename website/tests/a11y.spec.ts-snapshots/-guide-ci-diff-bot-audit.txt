@@ -2,19 +2,19 @@ navigation "On this page"
   heading "On this page" (level 2)
   list
     listitem
-      link "How it works" {description="How it works"}
+      link "How it works"
     listitem
-      link "1. Install the CLI" {description="1. Install the CLI"}
+      link "1. Install the CLI"
     listitem
-      link "2. List your pages" {description="2. List your pages"}
+      link "2. List your pages"
     listitem
-      link "3. Add the workflow" {description="3. Add the workflow"}
+      link "3. Add the workflow"
     listitem
-      link "Fail the PR on new findings" {description="Fail the PR on new findings"}
+      link "Fail the PR on new findings"
     listitem
-      link "What the comment looks like" {description="What the comment looks like"}
+      link "What the comment looks like"
     listitem
-      link "Other formats" {description="Other formats"}
+      link "Other formats"
 main
   heading "CI A11y Diff Bot" (level 1)
   paragraph "A GitHub Actions workflow that comments on each pull request with what changed in the accessibility of the pages you list: new and fixed findings, plus structural changes such as a heading level, a renamed button or a removed landmark."
@@ -123,7 +123,7 @@ main
     code "h3"
     code "diff"
   button "Copy Code"
-  code "### Accessibility diff **Findings** (gate CI): 1 new · 0 changed · 0 fixed **Structure** (advisory): changed on 1 page — new or reordered headings, landmarks, or tab stops #### Home - ❌ **new** `no-unlabeled-interactive`: Unlabeled interactive element: textbox <input> **Structure (advisory — never blocks merge):** - Heading level changed: "Setup" h2 → h3 - Interactive element removed: textbox "Email" - Interactive element added: textbox (no accessible name) - States changed: checkbox "Newsletter": checked → checked=false _tree_ ```diff @@ -1,7 +1,7 @@ main heading "Shop" (level 1) heading "Plans" (level 2) - heading "Setup" (level 2) - textbox "Email" + heading "Setup" (level 3) + textbox - checkbox "Newsletter" {checked} + checkbox "Newsletter" {checked=false} button "Subscribe" ```"
+  code "### Accessibility diff **Findings** (gate CI): 1 new · 0 changed · 0 fixed **Structure** (advisory): changed on 1 page — new or reordered headings, landmarks, or tab stops #### Home - ❌ **new** `no-unlabeled-interactive`: Unlabeled interactive element: textbox <input> **Structure (advisory — never blocks merge):** - Heading level changed: "Setup" h2 → h3 - Interactive element removed: textbox "Email" - Interactive element added: textbox (no accessible name) - States changed: checkbox "Newsletter": checked → checked=false _tree_ ```diff @@ -1,7 +1,7 @@ main heading "Shop" (level 1) heading "Plans" (level 2) - heading "Setup" (level 2) - textbox "Email" - checkbox "Newsletter" {checked} + heading "Setup" (level 3) + textbox + checkbox "Newsletter" {checked=false} button "Subscribe" ```"
   paragraph "come from the six audit rules and can fail the build. covers changes that break no rule, and never fails it. When nothing changed, both lines say so. A line whose only change is its states block (a box checked or unchecked, a disclosure collapsed, a description changed) reads as one statement."
     strong "Findings"
     strong "Structure"

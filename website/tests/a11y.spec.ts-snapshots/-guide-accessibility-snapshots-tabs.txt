@@ -1,11 +1,11 @@
-link "Why this exists" {description="Why this exists"}
-link "The problem with DOM snapshots" {description="The problem with DOM snapshots"}
-link "Three views, one tree" {description="Three views, one tree"}
-link "Deterministic by construction" {description="Deterministic by construction"}
-link "It models real AT behavior" {description="It models real AT behavior"}
-link "It catches what a screenshot can't" {description="It catches what a screenshot can't"}
-link "The same tree, everywhere" {description="The same tree, everywhere"}
-link "Start snapshotting" {description="Start snapshotting"}
+link "Why this exists"
+link "The problem with DOM snapshots"
+link "Three views, one tree"
+link "Deterministic by construction"
+link "It models real AT behavior"
+link "It catches what a screenshot can't"
+link "The same tree, everywhere"
+link "Start snapshotting"
 button "Copy Code"
 generic
 link "axe"

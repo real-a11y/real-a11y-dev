@@ -2,15 +2,15 @@ navigation "On this page"
   heading "On this page" (level 2)
   list
     listitem
-      link "What you see" {description="What you see"}
+      link "What you see"
     listitem
-      link "How tab order works" {description="How tab order works"}
+      link "How tab order works"
     listitem
-      link "What to check" {description="What to check"}
+      link "What to check"
     listitem
-      link "Common patterns and what they look like" {description="Common patterns and what they look like"}
+      link "Common patterns and what they look like"
     listitem
-      link "The relationship to the A11y view" {description="The relationship to the A11y view"}
+      link "The relationship to the A11y view"
 main
   heading "Reading the TAB View" (level 1)
   blockquote

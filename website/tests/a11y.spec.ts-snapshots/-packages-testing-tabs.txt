@@ -1,9 +1,9 @@
-link "Install" {description="Install"}
-link "Your first passing test" {description="Your first passing test"}
-link "What's in the box" {description="What's in the box"}
-link "Which do I reach for?" {description="Which do I reach for?"}
-link "The semantic tree" {description="The semantic tree"}
-link "See it running" {description="See it running"}
+link "Install"
+link "Your first passing test"
+link "What's in the box"
+link "Which do I reach for?"
+link "The semantic tree"
+link "See it running"
 radio "Vitest" {checked}
 radio "Jest" {checked=false}
 button "Copy Code"

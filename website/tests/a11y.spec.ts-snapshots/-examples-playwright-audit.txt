@@ -2,23 +2,23 @@ navigation "On this page"
   heading "On this page" (level 2)
   list
     listitem
-      link "What it shows" {description="What it shows"}
+      link "What it shows"
     listitem
-      link "Run it locally" {description="Run it locally"}
+      link "Run it locally"
     listitem
-      link "Setup" {description="Setup"}
+      link "Setup"
     listitem
-      link "Good fixture — assertions pass" {description="Good fixture — assertions pass"}
+      link "Good fixture — assertions pass"
     listitem
-      link "Bad fixture — assertions throw" {description="Bad fixture — assertions throw"}
+      link "Bad fixture — assertions throw"
     listitem
-      link "Narrowing the audit root" {description="Narrowing the audit root"}
+      link "Narrowing the audit root"
     listitem
-      link "Snapshot test" {description="Snapshot test"}
+      link "Snapshot test"
     listitem
-      link "How the adapter works" {description="How the adapter works"}
+      link "How the adapter works"
     listitem
-      link "See also" {description="See also"}
+      link "See also"
 main
   heading "Example: Playwright E2E" (level 1)
   paragraph "Demonstrates — the adapter — against real fixture pages in a Playwright test suite."

@@ -1,9 +1,9 @@
-link "Pick your entry point" {description="Pick your entry point"}
-link "Quick install" {description="Quick install"}
-link "Your first tree in 30 seconds" {description="Your first tree in 30 seconds"}
-link "Requirements" {description="Requirements"}
-link "Keep it out of production" {description="Keep it out of production"}
-link "Next steps" {description="Next steps"}
+link "Pick your entry point"
+link "Quick install"
+link "Your first tree in 30 seconds"
+link "Requirements"
+link "Keep it out of production"
+link "Next steps"
 table
 link "@real-a11y-dev/inspector"
 link "@real-a11y-dev/testing"

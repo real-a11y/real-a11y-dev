@@ -2,17 +2,17 @@ navigation "On this page"
   heading "On this page" (level 2)
   list
     listitem
-      link "Install" {description="Install"}
+      link "Install"
     listitem
-      link "Your first passing test" {description="Your first passing test"}
+      link "Your first passing test"
     listitem
-      link "What's in the box" {description="What's in the box"}
+      link "What's in the box"
     listitem
-      link "Which do I reach for?" {description="Which do I reach for?"}
+      link "Which do I reach for?"
     listitem
-      link "The semantic tree" {description="The semantic tree"}
+      link "The semantic tree"
     listitem
-      link "See it running" {description="See it running"}
+      link "See it running"
 main
   heading "@real-a11y-dev/testing" (level 1)
   blockquote

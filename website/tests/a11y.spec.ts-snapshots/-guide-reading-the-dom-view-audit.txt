@@ -2,13 +2,13 @@ navigation "On this page"
   heading "On this page" (level 2)
   list
     listitem
-      link "What you see" {description="What you see"}
+      link "What you see"
     listitem
-      link "When to use it" {description="When to use it"}
+      link "When to use it"
     listitem
-      link "What to look for" {description="What to look for"}
+      link "What to look for"
     listitem
-      link "How it relates to the other views" {description="How it relates to the other views"}
+      link "How it relates to the other views"
 main
   heading "Reading the DOM View" (level 1)
   blockquote

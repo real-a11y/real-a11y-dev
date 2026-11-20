@@ -2,19 +2,19 @@ navigation "On this page"
   heading "On this page" (level 2)
   list
     listitem
-      link "treeSnapshot(root, options?)" {description="treeSnapshot(root, options?)"}
+      link "treeSnapshot(root, options?)"
     listitem
-      link "outlineSnapshot(root, options?)" {description="outlineSnapshot(root, options?)"}
+      link "outlineSnapshot(root, options?)"
     listitem
-      link "tabSequenceSnapshot(root, options?)" {description="tabSequenceSnapshot(root, options?)"}
+      link "tabSequenceSnapshot(root, options?)"
     listitem
-      link "Focus marker" {description="Focus marker"}
+      link "Focus marker"
     listitem
-      link "Determinism" {description="Determinism"}
+      link "Determinism"
     listitem
-      link "The snapshot report" {description="The snapshot report"}
+      link "The snapshot report"
     listitem
-      link "See also" {description="See also"}
+      link "See also"
 main
   heading "Snapshots" (level 1)
   paragraph "Deterministic string representations of the accessibility tree. Safe to commit — the same DOM always produces the same string."
@@ -125,7 +125,7 @@ main
     code "[focused]"
     code "markFocus"
   button "Copy Code"
-  code "checkbox "Subscribe" {checked} checkbox "Subscribe" {checked=false} button "Menu" {expanded=false, haspopup=menu} [focused] textbox "Email" = "a@b.c" {required, invalid, description="We never share it"} link "Docs" {current=page} heading "Setup" (level 2)"
+  code "checkbox "Subscribe" {checked} checkbox "Subscribe" {checked=false} button "Menu" {expanded=false} [focused] textbox "Email" = "a@b.c" {required, invalid, description="We never share it"} link "Docs" {current=page} heading "Setup" (level 2)"
   paragraph "The block holds the states, description and announced properties a screen reader presents beyond role and name, so a snapshot fails when a checkbox is unchecked, an flips, or a description changes. Tokens come in a fixed order and print only when they carry information:"
     code "aria-expanded"
   table
@@ -194,13 +194,57 @@ main
     code "level"
     code "(level N)"
     link "strict-mode"
-  paragraph "Both producers read the states above and the description. Only the native producer (Chromium's own tree, the , the CLI and MCP) reads and , and only the DOM producer reads , so a DOM snapshot and a native one of the same page can differ by those tokens."
-    strong "Which producer reads which key."
-    link "Playwright adapter's"
-    code "tree: "native""
-    code "haspopup"
-    code "roledescription"
-    code "current"
+  paragraph "The two producers read most states alike: checked, pressed, expanded, selected and disabled on checkboxes, radios, switches, toggle buttons, selects, list boxes, menus, trees and tabs, and required and invalid on text fields. Where they differ, a DOM snapshot and a native one of the same page differ by those tokens:"
+    strong "Where the producers differ."
+  table
+    rowgroup
+      row
+        columnheader "Key or case"
+        columnheader "DOM producer (jsdom, treeSnapshot, real-a11y tabs)"
+          code "treeSnapshot"
+          code "real-a11y tabs"
+        columnheader "Native producer (Chromium's own tree: the Playwright adapter's tree: "native", real-a11y tree, MCP)"
+          link "Playwright adapter's"
+          code "tree: "native""
+          code "real-a11y tree"
+    rowgroup
+      row
+        cell "haspopup, roledescription"
+          code "haspopup"
+          code "roledescription"
+        cell "not read"
+        cell "read"
+      row
+        cell "current"
+          code "current"
+        cell "read"
+        cell "not read"
+      row
+        cell "A pristine required checkbox, radio or <select>"
+          code "<select>"
+        cell "required; invalid only once the user has interacted (:user-invalid, as HTML-AAM says)"
+          code "required"
+          code "invalid"
+          code ":user-invalid"
+        cell "invalid from the start, and no required"
+          code "invalid"
+          code "required"
+      row
+        cell "A description from a table caption, an SVG <desc> or ruby text"
+          code "<desc>"
+        cell "none"
+        cell "read"
+      row
+        cell "readonly on the cells of a read-only grid"
+          code "readonly"
+        cell "none"
+        cell "read"
+      row
+        cell "checked=false on an ARIA checkbox with no aria-checked"
+          code "checked=false"
+          code "aria-checked"
+        cell "none"
+        cell "read"
   paragraph "prints no block, byte for byte the text the serializer printed before it had blocks: use it to keep comparing with a baseline committed then, or re-record your snapshots once (, ) to take the states in. To see what one interaction changed, still prints each changed state, description and property as its own line."
     strong "Opting out."
     code "treeSnapshot(root, { states: false })"
@@ -213,7 +257,7 @@ main
   paragraph "Pass to print what each field holds, the way a screen reader announces it:"
     code "values: true"
   button "Copy Code"
-  code "form "Checkout" textbox "Email" = "jane@x.com" combobox "Country" = "Spain" textbox "Password" = "[redacted]" slider "Tip" = "15%""
+  code "form "Checkout" textbox "Email" = "jane@x.com" combobox "Country" = "Spain" {expanded=false} textbox "Password" = "[redacted]" slider "Tip" = "15%""
   list
     listitem "A text field's or editor's text, a 's selected option (, not its ), and a range widget's (else ). Checkboxes and radios carry none; their state prints in the states block (see ). Whitespace collapses, and a value is capped at 240 characters."
       strong "What the value is."
