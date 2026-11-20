@@ -324,7 +324,7 @@ Parameters:
 
 - **`name`** — string — required — the checkpoint to diff against.
 
-The re-snapshot carries the same rule subset the checkpoint was captured with, so rules the base never ran can't surface as spurious NEW — and captures field values only if the checkpoint did, so a filled field never reads as structural drift. Likewise `{…}` states blocks: an artifact captured before they existed (no `meta.states`), imported with [`import_checkpoint`](#import-checkpoint), is compared against a re-read without them, so its stateful lines don't all read as changed. No state is compared then, so a note above the header says so: re-capture the checkpoint for a diff that shows a flipped checkbox or a collapsed disclosure.
+The re-snapshot carries the same rule subset the checkpoint was captured with, so rules the base never ran can't surface as spurious NEW — and captures field values only if the checkpoint did, so a filled field never reads as structural drift. Likewise `{…}` states blocks: an artifact captured before they existed (no `meta.states`), imported with [`import_checkpoint`](#import-checkpoint), is compared against a re-read without them, so its stateful lines don't all read as changed. No state is compared then, so a note above the header says so: a checkpoint captured with `states` on shows a flipped checkbox or a collapsed disclosure. A diff against a different page gets no structural summary, and so neither this note nor the field-values one.
 
 The header names the operation and the checkpoint it read, so an output can be traced back to its input when several are stored:
 

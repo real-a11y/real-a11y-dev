@@ -340,7 +340,9 @@ Each tree line carries its node's `{…}` states block (`checkbox "Subscribe"
 (config `defaults.states: false`) leaves both out, and also takes the blocks off
 `tree`, `tabs` and `inspect`. A baseline captured before the blocks existed has
 none, so `diff` warns when only one side carries them: re-capture the
-baseline, or capture both sides with `--no-states`.
+baseline, or capture both sides with `--no-states`. The warning, like the
+field-values one, stays off a report that compares no tree lines
+(`--only findings`, or two artifacts with no page in common).
 
 **Which views an artifact measured.** An artifact records its measured views in
 `meta.views`. Snapshots read the whole-document accessibility tree, which

@@ -163,7 +163,8 @@ export const diffCommand: CommandFn = async (positionals, flags) => {
   // following it would rename everything and match exactly as little. Host and
   // port no longer trip this either. What's left is genuinely two different sets
   // of routes — so the remedy is to check the addresses, not the labels.
-  if (noPagesMatched(base, pr)) {
+  const disjoint = noPagesMatched(base, pr);
+  if (disjoint) {
     process.stderr.write(
       "real-a11y: warning: no pages matched between the two snapshots — " +
         "pages join on the URL's path (host and port are ignored), so this means " +
@@ -172,9 +173,10 @@ export const diffCommand: CommandFn = async (positionals, flags) => {
     );
   }
 
-  // These warnings are about tree lines, so a report that holds none
-  // (`--only findings`) has nothing for them to explain.
-  if (only !== "findings") {
+  // These warnings are about tree lines, so a report that compares none
+  // (`--only findings`, or two artifacts with no page in common) has nothing
+  // for them to explain.
+  if (only !== "findings" && !disjoint) {
     for (const warning of mixedPairWarnings(base, pr)) {
       process.stderr.write(warning);
     }

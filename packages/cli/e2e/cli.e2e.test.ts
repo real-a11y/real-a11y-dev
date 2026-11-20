@@ -730,19 +730,65 @@ describe("the states block (built bin)", () => {
       ]);
       expect(findingsOnly.stderr).not.toContain("states blocks");
 
-      // Nor does a findings-only artifact, so it records no blocks.
+      // Nor does a pair with no page in common, which compares no tree line.
+      const elsewhere = join(dir, "elsewhere.json");
+      await runCli([
+        "snapshot",
+        dataUrl(
+          "<!doctype html><title>Other</title><main><h1>Other</h1></main>",
+        ),
+        "-q",
+        "--no-states",
+        "-o",
+        elsewhere,
+      ]);
+      const disjoint = await runCli(["diff", elsewhere, withBlocks]);
+      expect(disjoint.stderr).toContain("no pages matched");
+      expect(disjoint.stderr).not.toContain("states blocks");
+
+      // A findings-only artifact keeps no tree, so it records neither blocks
+      // nor values.
       const partial = await runCli([
         "snapshot",
         PAGE,
         "-q",
+        "--values",
         "--only",
         "findings",
         "--format",
         "json",
       ]);
-      const partialArtifact = JSON.parse(partial.stdout) as Artifact;
+      const partialArtifact = JSON.parse(partial.stdout) as Artifact & {
+        meta: { values?: boolean };
+      };
       expect(partialArtifact.pages[0]!.tree).toBe("");
       expect(partialArtifact.meta.states).toBeUndefined();
+      expect(partialArtifact.meta.values).toBeUndefined();
+    });
+
+    it("a run where no page opened records what it would print", async () => {
+      // Nothing listens on port 9 here, so the page fails to open and no
+      // tree is captured; the marker still follows the run's choice.
+      const down = "http://127.0.0.1:9/";
+      type Meta = { meta: { states?: boolean }; pages: { status: string }[] };
+      const on = JSON.parse(
+        (await runCli(["snapshot", down, "-q", "--timeout", "5000"])).stdout,
+      ) as Meta;
+      expect(on.pages[0]!.status).toBe("error");
+      expect(on.meta.states).toBe(true);
+      const off = JSON.parse(
+        (
+          await runCli([
+            "snapshot",
+            down,
+            "-q",
+            "--timeout",
+            "5000",
+            "--no-states",
+          ])
+        ).stdout,
+      ) as Meta;
+      expect(off.meta.states).toBeUndefined();
     });
 
     it("a config's defaults.states: false opts out too", async () => {

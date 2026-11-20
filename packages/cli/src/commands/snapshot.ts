@@ -204,7 +204,10 @@ export async function runSnapshotOnSession(
   // Whether the captured trees carry `{…}` blocks, read back from each
   // projected snapshot rather than from the flag, so `meta.states` describes
   // the trees written. `diff` reads it to tell a pair captured differently.
-  let treesCarryStates = false;
+  // A run where no page opened captured no tree to read it from, so it says
+  // what this run prints instead: an outage on one side then doesn't also
+  // read as a pair captured differently.
+  let treesCarryStates: boolean | undefined;
 
   const snapshotPages: SnapshotPage[] = [];
   let isFirstSnapshotTarget = true;
@@ -245,7 +248,7 @@ export async function runSnapshotOnSession(
         states: printsStates(flags),
         redactInput,
       });
-      if (snap.states === true) treesCarryStates = true;
+      treesCarryStates = treesCarryStates === true || snap.states === true;
       snapshotPages.push(
         buildSnapshotPage(target.name, target.url, snap, {
           root,
@@ -283,6 +286,7 @@ export async function runSnapshotOnSession(
   // WRITES a file was the permissive one: it would blend two colliding pages
   // into a single baseline bucket and report nothing.
   assertDistinctPageIds(snapshotPages);
+  const recordsStates = treesCarryStates ?? printsStates(flags);
 
   const baselinePages = snapshotPages.map((p) => ({
     id: p.id,
@@ -354,7 +358,7 @@ export async function runSnapshotOnSession(
     ...(rules ? { rules } : {}),
     ...(openOptions.device ? { device: openOptions.device } : {}),
     ...(values ? { values } : {}),
-    ...(treesCarryStates ? { states: true } : {}),
+    ...(recordsStates ? { states: true } : {}),
   });
   // json + --only: a partial artifact — the filtered axis is stripped from
   // the pages and `meta.only` marks it so `diff` can refuse it outright.
@@ -374,11 +378,10 @@ export async function runSnapshotOnSession(
             views: MEASURED_VIEWS,
             ...(rules ? { rules } : {}),
             ...(openOptions.device ? { device: openOptions.device } : {}),
-            ...(values ? { values } : {}),
-            // A findings-only artifact keeps no tree, so it has no blocks.
-            ...(treesCarryStates && only !== "findings"
-              ? { states: true }
-              : {}),
+            // A findings-only artifact keeps no tree, so it carries neither
+            // values nor blocks.
+            ...(values && only !== "findings" ? { values } : {}),
+            ...(recordsStates && only !== "findings" ? { states: true } : {}),
             only,
           },
         )

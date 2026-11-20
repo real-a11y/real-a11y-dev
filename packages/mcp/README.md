@@ -111,8 +111,10 @@ Each node's states, description and announced properties follow its name in a
 `{…}` block (`checkbox "Subscribe" {checked=false}`) in `get_semantic_tree`,
 `inspect_page`, `get_tab_order` and a findings checkpoint's tree. Each of those
 tools takes `states: false` for lines without blocks; a checkpoint remembers
-which, `diff_findings` re-reads the page the same way, and an exported artifact
-records it in `meta.states`.
+which, `diff_findings` re-reads the page the same way (and notes when that
+means no state is compared), and an exported artifact records it in
+`meta.states`. `diff_checkpoints` notes a pair where only one side carries
+blocks.
 
 That tree is **whole-document**, which is why no tool takes a `rootSelector`
 except the one exception below. There is no `producer` parameter: each surface

@@ -232,7 +232,7 @@ function registerDiffFindings(
         // summary otherwise looks like a full comparison.
         const statesNote =
           base.states !== true && !otherPage
-            ? `Note: checkpoint "${name}" carries no {…} states blocks (captured with states: false, or imported from an artifact from before them), so the current page was read without them too, and the structural summary compares no states: a checkbox that flipped or a disclosure that collapsed does not show. Re-capture it with checkpoint_findings for a diff that does.`
+            ? `Note: checkpoint "${name}" carries no {…} states blocks (captured with states: false, or imported from an artifact from before them), so the current page was read without them too, and the structural summary compares no states: a checkbox that flipped or a disclosure that collapsed does not show. A checkpoint captured with states on compares them.`
             : undefined;
         const note = [scopeNote, valuesNote, statesNote]
           .filter(Boolean)
