@@ -216,6 +216,7 @@ link "--explain"
 link "--only findings | views"
 link "snapshot --values"
 link "--no-states"
+link "--only findings"
 button "Copy Code"
 generic
 link "Config"

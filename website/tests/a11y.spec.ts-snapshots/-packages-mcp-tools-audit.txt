@@ -698,7 +698,7 @@ main
     listitem "— string — required — the checkpoint to diff against."
       strong
         code "name"
-  paragraph "The re-snapshot carries the same rule subset the checkpoint was captured with, so rules the base never ran can't surface as spurious NEW — and captures field values only if the checkpoint did, so a filled field never reads as structural drift. Likewise states blocks: an artifact captured before they existed (no ), imported with , is compared against a re-read without them, so its stateful lines don't all read as changed."
+  paragraph "The re-snapshot carries the same rule subset the checkpoint was captured with, so rules the base never ran can't surface as spurious NEW — and captures field values only if the checkpoint did, so a filled field never reads as structural drift. Likewise states blocks: an artifact captured before they existed (no ), imported with , is compared against a re-read without them, so its stateful lines don't all read as changed. No state is compared then, so a note above the header says so: re-capture the checkpoint for a diff that shows a flipped checkbox or a collapsed disclosure."
     code "{…}"
     code "meta.states"
     link "import_checkpoint"
@@ -733,7 +733,7 @@ main
   paragraph "Its header says no browser was read, so a stored-vs-stored comparison is never mistaken for a live one:"
   button "Copy Code"
   code "Saved checkpoints: "prod" → "preview" (no re-snapshot): 0 new, 2 fixed, 0 changed, 9 unchanged."
-  paragraph "When only one of the two carries states blocks (one captured with , or imported from an artifact captured before they existed), a note above the header says so: every node with a state or description then reads as a changed tree line. Findings are unaffected."
+  paragraph "When only one of the two carries states blocks (one captured with , or imported from an artifact captured before they existed), a note above the header says so: every node with a state or description then reads as a changed tree line. Findings are unaffected. Two different pages get no structural summary, and so no note."
     code "{…}"
     code "states: false"
   paragraph "Same different-page rule as — two checkpoints of unrelated routes diff their findings and skip the structural summary."
