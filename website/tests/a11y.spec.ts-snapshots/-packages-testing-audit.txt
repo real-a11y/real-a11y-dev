@@ -82,6 +82,11 @@ main
     strong "real browser page"
     link "Playwright adapter"
     link "Peer dependencies"
+  paragraph "Under jsdom, CSS generated content (, ) contributes nothing to a name, because jsdom does not implement pseudo-element styles; in a real browser it does, as explains. A name that depends on it differs between the two."
+    code "::before"
+    code "::after"
+    code "content"
+    link "accessible names"
   heading "What's in the box" (level 2)
   table
     rowgroup
