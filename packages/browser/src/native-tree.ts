@@ -451,10 +451,15 @@ export function buildNativeTree(
       : { states: {}, properties: {} };
     // One decision for both places the selection shows: the AX state and the
     // option's markup `selected` attribute on the `dom` facet.
+    // Only a node that carries a choice state has one to withhold, and the
+    // ancestry walk is only needed for one.
     const withholdSelection =
       !!source &&
+      NATIVE_AX_CHOICE_STATES.some((state) => state in states) &&
       (source.document.prepared.sensitivity.regions.inside(source.raw) ||
-        inChoiceField(source.raw, source.document, !redactInput));
+        ((redactInput ||
+          source.document.prepared.sensitivity.sensitiveFields.size > 0) &&
+          inChoiceField(source.raw, source.document, !redactInput)));
     if (withholdSelection) {
       for (const state of NATIVE_AX_CHOICE_STATES) delete states[state];
     }

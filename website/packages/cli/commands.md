@@ -404,9 +404,11 @@ A step is written the way the tree prints a node:
   target an **unlabeled** control (the one an audit just flagged).
 - **`nth=<n>`** — 1-based, document order. It's the spelling the ambiguity
   error prints, so the fix is copy-paste.
-- **A pasted tree line** — a `{…}` states block and a `[focused]` marker after
-  the name are read and ignored, so `click checkbox "Subscribe" {checked=false}`
+- **A pasted tree line** — a `{…}` states block and a `[focused]` marker right
+  after the name are read and ignored, so `click checkbox "Subscribe" {checked=false}`
   works as pasted. A step targets a node by role and name, never by its states.
+  Drop a pasted ` = "value"` or `(level N)` first: `=` introduces the text to
+  type, and a level is not part of a step.
 - **`= <text>`** — `type` only. Everything after the first `=` is the value, so
   query strings and base64 need no escaping.
 

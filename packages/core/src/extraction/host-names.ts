@@ -2,7 +2,7 @@
  * Name sources HTML-AAM defines for specific elements, read by the DOM
  * producer's name computation (`computeRawAccessibleName`).
  */
-import { collapseAscii } from "../utils/ascii-whitespace.js";
+import { collapseAscii, trimAscii } from "../utils/ascii-whitespace.js";
 
 import { safeGetAttribute } from "./clobber-safe.js";
 import { buttonInputName } from "./input-names.js";
@@ -100,9 +100,10 @@ interface NameOrigin {
  * "AL" described by "Ti", as in Chromium.
  *
  * Chromium also exposes no description that only repeats the element's own
- * text: `<a title="See also">See also</a>` is link "See also", undescribed.
- * Exact match only; a title that differs in case or spacing, or one beside a
- * name from `aria-label` or `alt`, still describes the element.
+ * text: `<a title="See also">See also</a>` is link "See also", undescribed,
+ * and so is one whose title differs only by whitespace at its ends. A title
+ * that differs in case or inside (`See  also`), or one beside a name from
+ * `aria-label` or `alt`, still describes the element.
  */
 export function titleDescription(
   title: string | null,
@@ -112,5 +113,7 @@ export function titleDescription(
   const origin: NameOrigin = {};
   const name = nameOf(origin);
   if (origin.fromTitle) return "";
-  return origin.fromContent && title === name ? "" : collapseAscii(title);
+  return origin.fromContent && trimAscii(title) === name
+    ? ""
+    : collapseAscii(title);
 }

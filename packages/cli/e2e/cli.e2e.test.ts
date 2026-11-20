@@ -570,15 +570,6 @@ describe("the native producer is the only producer (built bin)", () => {
   });
 });
 
-/**
- * Field values (ADR-0001): the live views print what each field holds, the way
- * a screen reader announces it; a sensitive field reads "[redacted]" and never
- * its bullets; `--redact-input` withholds every value; `snapshot` artifacts
- * carry values only with `--values`.
- *
- * The page fills its fields at runtime from split literals, so no sentinel is
- * in the data: URL (which stderr and the json envelope both echo).
- */
 // The states block from Chromium's own tree, in a suite that gates CI: the
 // browser package's real-Chromium cases run advisory.
 describe("the states block (built bin)", () => {
@@ -628,6 +619,7 @@ describe("the states block (built bin)", () => {
     const page = dataUrl(
       "<!doctype html><title>Outline</title><main>" +
         '<a href="#a" title="See also">See also</a>' +
+        '<a href="#c" title="Trailing ">Trailing</a>' +
         '<a href="#b" title="More detail">Details</a>' +
         "</main>",
     );
@@ -635,12 +627,15 @@ describe("the states block (built bin)", () => {
     const tabs = await runCli(["tabs", page, "-q"]);
     expect(linesOf(tree.stdout)).toContain('link "See also"');
     expect(tabs.stdout).toContain('01. link "See also"\n');
+    // Whitespace at a title's ends doesn't make it say something else.
+    expect(linesOf(tree.stdout)).toContain('link "Trailing"');
+    expect(tabs.stdout).toContain('02. link "Trailing"\n');
     // A title that says something else still describes, in both.
     expect(linesOf(tree.stdout)).toContain(
       'link "Details" {description="More detail"}',
     );
     expect(tabs.stdout).toContain(
-      '02. link "Details" {description="More detail"}',
+      '03. link "Details" {description="More detail"}',
     );
   });
 
@@ -664,6 +659,15 @@ describe("the states block (built bin)", () => {
   });
 });
 
+/**
+ * Field values (ADR-0001): the live views print what each field holds, the way
+ * a screen reader announces it; a sensitive field reads "[redacted]" and never
+ * its bullets; `--redact-input` withholds every value; `snapshot` artifacts
+ * carry values only with `--values`.
+ *
+ * The page fills its fields at runtime from split literals, so no sentinel is
+ * in the data: URL (which stderr and the json envelope both echo).
+ */
 describe("field values (built bin)", () => {
   const FORM_PAGE = dataUrl(`<main><h1>Sign up</h1>
     <label>Email <input id="email" type="email"></label>

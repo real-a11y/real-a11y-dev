@@ -587,11 +587,14 @@ main
     listitem "— 1-based, document order. It's the spelling the ambiguity error prints, so the fix is copy-paste."
       strong
         code "nth=<n>"
-    listitem "— a states block and a marker after the name are read and ignored, so works as pasted. A step targets a node by role and name, never by its states."
+    listitem "— a states block and a marker right after the name are read and ignored, so works as pasted. A step targets a node by role and name, never by its states. Drop a pasted or first: introduces the text to type, and a level is not part of a step."
       strong "A pasted tree line"
       code "{…}"
       code "[focused]"
       code "click checkbox "Subscribe" {checked=false}"
+      code "= "value""
+      code "(level N)"
+      code "="
     listitem "— only. Everything after the first is the value, so query strings and base64 need no escaping."
       strong
         code "= <text>"

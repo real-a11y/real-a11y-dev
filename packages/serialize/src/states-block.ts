@@ -216,7 +216,8 @@ const POPUP: Kind = {
   },
   accepts: (raw) =>
     raw !== undefined && raw !== "true" && raw !== "false" && isKeyedValue(raw),
-  forms: (key) => `\`${key}=<token>\`, never false`,
+  forms: (key) =>
+    `\`${key}=<token>\`, never false (\`aria-haspopup="true"\` prints as \`${key}=menu\`)`,
 };
 
 /** roledescription, description: `key="…"`, JSON-quoted and redacted, when

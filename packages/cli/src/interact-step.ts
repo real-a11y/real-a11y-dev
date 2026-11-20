@@ -10,8 +10,10 @@
  *   focus  textbox "Email"
  *   type   textbox "Email" = someone@example.com
  *
- * A `{…}` states block and a `[focused]` marker after the name, as the tree
- * prints them, are read and ignored: a step targets a node by role and name.
+ * A `{…}` states block and a `[focused]` marker right after the name, as the
+ * tree prints them, are read and ignored: a step targets a node by role and
+ * name. A pasted ` = "value"` or `(level N)` is not: `=` introduces the text
+ * to type.
  *
  * The name is optional (omit to match any name, `""` to match only unlabeled
  * controls) and `nth=` is 1-based in document order — the same spelling the

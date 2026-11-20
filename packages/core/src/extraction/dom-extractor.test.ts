@@ -8097,7 +8097,15 @@ describe("title as the accessible description (HTML-AAM §4.2)", () => {
         "",
       ]);
     }
-    // A title that differs, even only in case or spacing, still describes.
+    // Whitespace at the title's ends doesn't count, as in Chromium.
+    for (const title of ["Trailing ", " Trailing", "\n  Trailing\n"]) {
+      expect(
+        nodeOf(`<a href="#a" title="${title}">Trailing</a>`, "a").a11y
+          .description,
+        JSON.stringify(title),
+      ).toBe("");
+    }
+    // A title that differs in case or inside still describes.
     expect(
       nodeOf(`<a href="#a" title="see also">See also</a>`, "a").a11y
         .description,

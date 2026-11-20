@@ -423,7 +423,13 @@ function toMatchA11yContract(
     // every value reads as missing and `.not` passes on nothing. Only then:
     // values also bring a role-less editor in as a `generic` line, which
     // would change the tree a strict contract without values compares.
-    targetText = serializeTree(received, { values: writes.values });
+    // Likewise states: a contract that writes no block compares the tree it
+    // always did, without the `generic` lines a state brings in (a
+    // `<details>` summary's `expanded`), which a strict contract would miss.
+    targetText = serializeTree(received, {
+      values: writes.values,
+      states: writes.states,
+    });
   } else if (typeof received === "string") {
     targetText = received;
   } else {

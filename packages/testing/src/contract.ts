@@ -162,6 +162,8 @@ const anyStates = (roots: ContractNode[]) =>
 export interface ContractWrites {
   /** A field value, `= "value"`. */
   values: boolean;
+  /** A `{…}` states block, `{}` included. */
+  states: boolean;
   /** Tokens only the native producer prints (`haspopup=menu`,
    *  `roledescription="slide"`), with the line each is on. */
   nativeOnly: { token: string; line: number }[];
@@ -181,6 +183,7 @@ export function contractWrites(contractText: string): ContractWrites {
   ).map((f) => f.node);
   return {
     values: nodes.some((n) => n.value !== undefined),
+    states: nodes.some((n) => n.states !== undefined),
     nativeOnly: nodes.flatMap((n) =>
       (n.states ?? [])
         .filter((token) => tokenProducers(token) === "native")

@@ -190,3 +190,21 @@ describe("toMatchA11yContract — native-only keys against an element", () => {
     expect(mount(html)).toMatchA11yContract('button "Menu" {expanded=false}');
   });
 });
+
+describe("toMatchA11yContract — strict contracts and stateful generics", () => {
+  const html = `<details><summary>Shipping</summary><p>2 days</p></details>`;
+
+  it("a strict contract without blocks compares the tree it always did", () => {
+    // A closed <details> shows its summary only, folded away without states.
+    expect(mount(html)).toMatchA11yContract('group "Shipping"', {
+      strict: true,
+    });
+  });
+
+  it("a strict contract with blocks sees the summary's state", () => {
+    expect(mount(html)).toMatchA11yContract(
+      'group "Shipping"\n  generic "Shipping" {expanded=false}',
+      { strict: true },
+    );
+  });
+});
