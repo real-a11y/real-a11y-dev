@@ -905,6 +905,91 @@ describe("LiveTreeExtractor", () => {
     expect(result.nodes).toEqual(extractDomTree(document.body).nodes);
   });
 
+  describe("a sensitive field inserted after the popup was read", () => {
+    const listbox =
+      `<ul role="listbox" id="lb" aria-label="Months">` +
+      `<li role="option" aria-selected="true">03</li></ul>`;
+
+    /** The option's `selected` after `insert` runs on a page read as `html`. */
+    const refreshAfter = async (html: string, insert: () => void) => {
+      document.body.innerHTML = `<main>${html}${listbox}</main>`;
+      const live = new LiveTreeExtractor(document.body, { mode: "dom" });
+      const before = [...live.extract().nodes.values()].find(
+        (n) => n.a11y.role === "option",
+      );
+      expect(before?.a11y.states.selected).toBe(true);
+      let lastChange: TreeChange | undefined;
+      const observer = new DomObserver(
+        document.body,
+        (change) => {
+          lastChange = change;
+        },
+        50,
+      );
+      observer.start();
+      insert();
+      await vi.advanceTimersByTimeAsync(100);
+      observer.stop();
+      const result = live.refresh(lastChange);
+      expect(result.nodes).toEqual(extractDomTree(document.body).nodes);
+      return [...result.nodes.values()].find((n) => n.a11y.role === "option")
+        ?.a11y.states.selected;
+    };
+    // Into a slot beside the popup, so the subtree a refresh re-reads never
+    // holds the listbox: only the trigger under test can reach it.
+    const slot = `<div id="slot"></div>`;
+    const prepend = (html: string) => () =>
+      document.getElementById("slot")!.insertAdjacentHTML("afterbegin", html);
+
+    it("withholds the choice once a sensitive combobox controlling it arrives", async () => {
+      expect(
+        await refreshAfter(
+          slot,
+          prepend(
+            `<div><input role="combobox" aria-label="Month" autocomplete="cc-exp-month" aria-controls="lb"></div>`,
+          ),
+        ),
+      ).toBeUndefined();
+    });
+
+    it("withholds the choice once an ARIA 1.1 wrapper around one arrives", async () => {
+      expect(
+        await refreshAfter(
+          slot,
+          prepend(
+            `<div role="combobox" aria-owns="lb"><input aria-label="Month" autocomplete="cc-exp-month"></div>`,
+          ),
+        ),
+      ).toBeUndefined();
+    });
+
+    it("withholds the choice once a sensitive field enters a wrapper that owns it", async () => {
+      expect(
+        await refreshAfter(
+          `<div role="combobox" aria-owns="lb" id="w"><span></span></div>`,
+          () =>
+            document
+              .getElementById("w")!
+              .firstElementChild!.insertAdjacentHTML(
+                "afterbegin",
+                `<input aria-label="Month" autocomplete="cc-exp-month">`,
+              ),
+        ),
+      ).toBeUndefined();
+    });
+
+    it("keeps the choice when an ordinary combobox arrives", async () => {
+      expect(
+        await refreshAfter(
+          slot,
+          prepend(
+            `<input role="combobox" aria-label="Color" aria-controls="lb">`,
+          ),
+        ),
+      ).toBe(true);
+    });
+  });
+
   // A role-less inline wrapper's text is the paragraph's own (see `isTextRun`
   // in extraction/dom-extractor), so a change inside it, or one that gives it a
   // node of its own, renames the paragraph — which no other climb reaches.

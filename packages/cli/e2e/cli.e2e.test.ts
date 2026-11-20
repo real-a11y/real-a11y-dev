@@ -676,6 +676,31 @@ describe("the states block (built bin)", () => {
     expect(lines).toContain('option "Red" {selected}');
   });
 
+  it("tree withholds a sensitive popup's choice from a name built around it", async () => {
+    // A label around the field and its listbox lends the chosen option, as a
+    // field's value: Chromium names the combobox "Expiry month 03".
+    const labelled = (label: string, attrs: string, selected: boolean) =>
+      `<label>${label} <input role="combobox" aria-expanded="true" aria-controls="${label}-list" ${attrs}>` +
+      `<ul role="listbox" id="${label}-list"><li role="option" aria-selected="${selected}">03</li></ul></label>`;
+    const page = dataUrl(
+      "<!doctype html><title>Card</title><main>" +
+        labelled("Month", 'autocomplete="cc-exp-month"', true) +
+        // Nothing chosen lends nothing; an ordinary field's popup is the page's.
+        labelled("Year", 'autocomplete="cc-exp-year"', false) +
+        labelled("Color", "", true) +
+        "</main>",
+    );
+    const { code, stdout } = await runCli(["tree", page, "-q"]);
+    expect(code).toBe(0);
+    const lines = linesOf(stdout);
+    expect(lines).toContain(
+      'combobox "[redacted]" {expanded, haspopup=listbox}',
+    );
+    expect(lines).toContain('combobox "Year" {expanded, haspopup=listbox}');
+    expect(lines).toContain('combobox "Color 03" {expanded, haspopup=listbox}');
+    expect(stdout).not.toContain("Month 03");
+  });
+
   it("a title that repeats a link's text describes it in neither producer", async () => {
     const page = dataUrl(
       "<!doctype html><title>Outline</title><main>" +

@@ -1,8 +1,13 @@
 import {
   safeGetAttribute,
+  safeMatches,
   safeParentElement,
+  safeQuerySelectorAll,
 } from "../extraction/clobber-safe.js";
-import { isSensitiveChoiceHost } from "../extraction/sensitivity.js";
+import {
+  isSensitiveChoiceHost,
+  isSensitiveField,
+} from "../extraction/sensitivity.js";
 
 /**
  * Attributes whose change creates or breaks accessibility references.
@@ -36,11 +41,45 @@ export function movesSensitiveChoice(target: Element, attr: string): boolean {
   if (attr !== "autocomplete" && attr !== "type" && attr !== "role") {
     return false;
   }
-  if (hasPopupRelation(target)) return true;
-  // An ARIA 1.1 combobox around the field carries the relation for it. The
-  // climb reads parents through the prototype: a `<form>` met on the way can
-  // shadow `parentElement` with a control of its own.
-  for (let el = safeParentElement(target); el; el = safeParentElement(el)) {
+  return (
+    hasPopupRelation(target) ||
+    comboboxWithPopupAtOrAbove(safeParentElement(target))
+  );
+}
+
+/**
+ * True when adding or removing `subtree` under `parent` moves which choices a
+ * sensitive field withholds somewhere else: the subtree holds a sensitive
+ * field (or a combobox around one) that controls or owns a popup, or a
+ * sensitive field going into or out of a combobox that does. The popup is
+ * not in the subtree, so splicing the subtree alone leaves its choice as it
+ * was read.
+ */
+export function bringsSensitivePopup(
+  subtree: Element,
+  parent: Element | null,
+): boolean {
+  const all = (selectors: string): Element[] => [
+    ...(safeMatches(subtree, selectors) ? [subtree] : []),
+    ...Array.from(safeQuerySelectorAll(subtree, selectors)),
+  ];
+  if (all("[aria-controls], [aria-owns]").some(isSensitiveChoiceHost)) {
+    return true;
+  }
+  return (
+    all("input, textarea, select").some(isSensitiveField) &&
+    comboboxWithPopupAtOrAbove(parent)
+  );
+}
+
+/**
+ * Whether `start` or an element above it is an ARIA 1.1 combobox with a popup
+ * relation: the wrapper that carries `aria-controls` or `aria-owns` for the
+ * field inside it. The climb reads parents through the prototype: a `<form>`
+ * met on the way can shadow `parentElement` with a control of its own.
+ */
+function comboboxWithPopupAtOrAbove(start: Element | null): boolean {
+  for (let el = start; el; el = safeParentElement(el)) {
     const role = (safeGetAttribute(el, "role") ?? "").trim().split(/\s+/)[0];
     if (role?.toLowerCase() === "combobox" && hasPopupRelation(el)) return true;
   }

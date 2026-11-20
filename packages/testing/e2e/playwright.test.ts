@@ -122,6 +122,26 @@ test.describe("good fixture", () => {
     expect(tree).toContain('option "Red" {selected}');
   });
 
+  test("withholds a sensitive popup's choice from a name built around it", async ({
+    page,
+  }) => {
+    // A label around the field and its listbox lends the chosen option.
+    const labelled = (label: string, attrs: string) =>
+      `<label>${label} <input role="combobox" aria-expanded="true" aria-controls="${label}-list" ${attrs}>` +
+      `<ul role="listbox" id="${label}-list"><li role="option" aria-selected="true">03</li></ul></label>`;
+    await page.setContent(
+      "<main>" +
+        labelled("Month", 'autocomplete="cc-exp-month"') +
+        labelled("Color", "") +
+        "</main>",
+    );
+    const sn = await attach(page);
+    const tree = await sn.treeSnapshot();
+    expect(tree).toContain('combobox "[redacted]"');
+    expect(tree).not.toContain("Month 03");
+    expect(tree).toContain('combobox "Color 03"');
+  });
+
   test("assertHeadingOrder passes for correct structure", async ({ page }) => {
     const sn = await attach(page);
     await expect(sn.assertHeadingOrder()).resolves.toBeUndefined();

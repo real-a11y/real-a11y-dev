@@ -33,6 +33,7 @@ import { warnOutsideProduction } from "../utils/warn.js";
 import {
   forcesFullExtraction,
   IMAGE_RENDERING_ATTRS,
+  bringsSensitivePopup,
   movesSensitiveChoice,
   SCOPE_ATTRS,
 } from "./live-tree-attrs.js";
@@ -586,6 +587,11 @@ export class LiveTreeExtractor {
       if (safeMatches(el, "img[usemap]") || el.querySelector("img[usemap]")) {
         return true;
       }
+
+      // A sensitive field's popup is not its descendant, so a field (or a
+      // combobox around one) arriving or leaving with a relation moves which
+      // choices are withheld outside this subtree.
+      if (bringsSensitivePopup(el, target)) return true;
 
       // The id a referrer points at (or a reference attribute) may live on a
       // descendant of the added/removed node, not just the node itself, so

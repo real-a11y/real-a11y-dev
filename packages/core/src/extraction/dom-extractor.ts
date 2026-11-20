@@ -27,7 +27,6 @@ import {
   getDescendantText,
   lendsValueOnly,
   MEDIA_TAGS,
-  PAGE_STATE_VALUE_ROLES,
 } from "./field-text.js";
 import { flatChildNodes, flatChildren, idScope } from "./flat-tree.js";
 import { isFocusable } from "./focusability.js";
@@ -61,13 +60,14 @@ import {
   isSubtreeHidden,
   type StyleCache,
 } from "./role-map.js";
-import { isSensitiveField, REDACTED_VALUE } from "./sensitivity.js";
+import { REDACTED_VALUE } from "./sensitivity.js";
 import { warnSkippedElement } from "./skipped-element.js";
 import { isVisuallyHidden } from "./sr-only.js";
 import {
   nameText,
   newNameRun,
   withhold,
+  withholdsLentValue,
   withholdStates,
   type NameRun,
   type RedactInputOption,
@@ -302,10 +302,10 @@ interface ControlRead extends NameWalk {
  * `<button aria-labelledby>` over `<label for="e">Email</label><input id="e">`
  * is "Email". Not one that lends only its value ({@link lendsValueOnly}).
  *
- * A sensitive field's value, and in strict mode any value, is withheld: the
- * whole name reads `[redacted]` (see {@link NameRun.withheld}), as the native
- * producer reads a name built around such a field. A name is markup, which
- * neither withholds.
+ * A sensitive field's value, the choice in its popup, and in strict mode any
+ * value, is withheld ({@link withholdsLentValue}): the whole name reads
+ * `[redacted]` (see {@link NameRun.withheld}), as the native producer reads a
+ * name built around such a field. A name is markup, which neither withholds.
  */
 function embeddedControlText(
   element: Element,
@@ -327,8 +327,7 @@ function embeddedControlText(
       ? ""
       : computeAccessibleName(element, run, at.styleCache, at.inReference);
   }
-  const entered = !PAGE_STATE_VALUE_ROLES.has(role);
-  return (run.redactInput && entered) || isSensitiveField(element)
+  return withholdsLentValue(element, role, run.redactInput)
     ? withhold(run)
     : text;
 }

@@ -168,4 +168,65 @@ describe("the choice a sensitive field holds", () => {
       nodes.filter((n) => n.a11y.role === "option").map((n) => n.a11y.name),
     ).toEqual(["01", "03"]);
   });
+
+  describe("in a name built around the popup", () => {
+    /** Each node's role and name, for the roles given, in document order. */
+    const namesOf = (
+      html: string,
+      roles: string[],
+    ): Array<[string, string]> => {
+      document.body.innerHTML = html;
+      return [...extractDomTree(document.body).nodes.values()]
+        .filter((n) => roles.includes(n.a11y.role))
+        .map((n) => [n.a11y.role, n.a11y.name]);
+    };
+
+    const labelled = (attrs: string, selected: string) =>
+      `<label>Expiry month <input role="combobox" aria-expanded="true" ${attrs}>` +
+      `<ul role="listbox" id="lb"><li role="option" aria-selected="${selected}">03</li></ul></label>`;
+
+    it("is withheld from a label around the field and its popup", () => {
+      expect(
+        namesOf(
+          labelled('autocomplete="cc-exp-month" aria-controls="lb"', "true"),
+          ["combobox"],
+        ),
+      ).toEqual([["combobox", "[redacted]"]]);
+    });
+
+    it("is withheld from a name that references the popup", () => {
+      expect(
+        namesOf(
+          `<span id="lab">Card</span>` +
+            `<ul role="listbox" id="lb"><li role="option" aria-selected="true">Visa 1111</li></ul>` +
+            `<input role="combobox" autocomplete="cc-number" aria-controls="lb" aria-labelledby="lab lb">`,
+          ["combobox"],
+        ),
+      ).toEqual([["combobox", "[redacted]"]]);
+    });
+
+    it("is withheld from a cell around an ARIA 1.1 wrapper's popup", () => {
+      expect(
+        namesOf(
+          `<div role="combobox" aria-controls="lb" aria-expanded="true" aria-label="Wrapper">` +
+            `<input aria-label="Card" autocomplete="cc-number"></div>` +
+            `<table><tr><td><ul role="listbox" id="lb" aria-label="Cards">` +
+            `<li role="option" aria-selected="true">Visa 1111</li></ul></td></tr></table>`,
+          ["cell"],
+        ),
+      ).toEqual([["cell", "[redacted]"]]);
+    });
+
+    it("is kept when nothing is chosen, or the field is ordinary", () => {
+      expect(
+        namesOf(
+          labelled('autocomplete="cc-exp-month" aria-controls="lb"', "false"),
+          ["combobox"],
+        ),
+      ).toEqual([["combobox", "Expiry month"]]);
+      expect(
+        namesOf(labelled('aria-controls="lb"', "true"), ["combobox"]),
+      ).toEqual([["combobox", "Expiry month 03"]]);
+    });
+  });
 });

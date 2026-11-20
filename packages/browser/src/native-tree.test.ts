@@ -2178,6 +2178,56 @@ describe("buildNativeTree — sensitive values in states, references and races",
     expect(selected()).toEqual([true]);
   });
 
+  it("withholds the popup's choice from a name or description read from it", () => {
+    // `aria-labelledby="lab lb"` / `aria-describedby="hint lb"`: Chromium reads
+    // the listbox as an embedded control, so both carry the option chosen
+    // there. The field's own value stays its own concern.
+    const read = (autocomplete?: string, chosen = true) => {
+      const raw = popup("controls");
+      const field = raw[1]!;
+      field.name = { value: chosen ? "Expiry month 03" : "Expiry month" };
+      field.description = { value: chosen ? "Pick 03" : "Pick" };
+      field.properties!.push(
+        ...(["labelledby", "describedby"] as const).map((name, i) => ({
+          name,
+          value: {
+            type: "idrefList",
+            relatedNodes: [
+              { backendDOMNodeId: 28 + i },
+              { backendDOMNodeId: 31 },
+            ],
+          },
+        })),
+      );
+      if (!chosen)
+        raw[4]!.properties = [{ name: "selected", value: { value: false } }];
+      const node = nodesOf(
+        buildNativeTree(
+          raw,
+          new Map<number, NativeDomInfo>([
+            [28, domOf("span")],
+            [29, domOf("span")],
+            [
+              30,
+              domOf("input", {
+                role: "combobox",
+                ...(autocomplete ? { autocomplete } : {}),
+              }),
+            ],
+            [31, domOf("ul", { role: "listbox" })],
+            [32, domOf("li", { role: "option" })],
+            [33, domOf("li", { role: "option" })],
+          ]),
+        ),
+      ).find((n) => n.a11y.role === "combobox")!;
+      return [node.a11y.name, node.a11y.description];
+    };
+    expect(read("cc-exp-month")).toEqual(["[redacted]", ""]);
+    // Nothing chosen lends nothing, and an ordinary field's popup is the page's.
+    expect(read("cc-exp-month", false)).toEqual(["Expiry month", "Pick"]);
+    expect(read()).toEqual(["Expiry month 03", "Pick 03"]);
+  });
+
   it("drops it inside a sensitive list box, which holds no AX value", () => {
     expect(listboxSelectedOf("cc-exp-year")).toEqual([undefined, undefined]);
     expect(listboxSelectedOf()).toEqual([false, true]);

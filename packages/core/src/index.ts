@@ -207,13 +207,13 @@ export type {
   RawAXNameNode,
   ValueRegions,
 } from "./native/value-regions.js";
+export { nativeAncestry, nativeAXProperty } from "./native/ax-node.js";
 export {
   fieldRelationRoots,
   fieldRelationTargets,
-  nativeAncestry,
-  nativeAXProperty,
   sensitiveChoiceHosts,
-} from "./native/ax-node.js";
+  sensitivePopupRoots,
+} from "./native/sensitive-popup.js";
 export { domLabels } from "./native/labels.js";
 export type { LabelDomNode, LabelsOf } from "./native/labels.js";
 

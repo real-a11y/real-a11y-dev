@@ -56,6 +56,48 @@ describe("withholdSensitiveFieldNames", () => {
     }),
   ];
 
+  it("withholds a name read from a sensitive combobox's popup choice", () => {
+    // <label>Expiry month <input role="combobox" autocomplete="cc-exp-month"
+    // aria-controls="lb"> <ul role="listbox" id="lb">…</ul></label>: the
+    // label lends the listbox's chosen option, though the field is empty.
+    const popup = (chosen: boolean) => [
+      raw("1", "LabelText", { childIds: ["2", "3"] }),
+      raw("2", "combobox", {
+        parentId: "1",
+        name: { value: chosen ? "Expiry month 03" : "Expiry month" },
+        named: "relatedElement",
+        properties: [
+          {
+            name: "labelledby",
+            value: {
+              type: "idrefList",
+              relatedNodes: [{ backendDOMNodeId: 1 }],
+            },
+          },
+          {
+            name: "controls",
+            value: {
+              type: "idrefList",
+              relatedNodes: [{ backendDOMNodeId: 3 }],
+            },
+          },
+        ],
+      }),
+      raw("3", "listbox", { parentId: "1", childIds: ["4"] }),
+      raw("4", "option", {
+        parentId: "3",
+        name: { value: "03" },
+        named: "contents",
+        properties: [{ name: "selected", value: { value: chosen } }],
+      }),
+    ];
+    const name = (nodes: RawAXNameNode[]) =>
+      withholdSensitiveFieldNames(nodes, ["2"])[1]!.name?.value;
+    expect(name(popup(true))).toBe(REDACTED_VALUE);
+    // A popup with nothing chosen lends nothing.
+    expect(name(popup(false))).toBe("Expiry month");
+  });
+
   it("withholds a name built from a sensitive field's contents", () => {
     const out = withholdSensitiveFieldNames(cell(), ["2"]);
     expect(out[0].name?.value).toBe(REDACTED_VALUE);

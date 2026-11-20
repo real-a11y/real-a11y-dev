@@ -12,13 +12,17 @@ import type { SemanticNode } from "../types.js";
 import { trimAscii } from "../utils/ascii-whitespace.js";
 
 import { ariaOwner } from "./aria-owner.js";
-import { inSensitiveChoice } from "./choice-withholding.js";
+import {
+  inSensitiveChoice,
+  lendsSensitiveChoice,
+} from "./choice-withholding.js";
 import {
   safeOwnerDocument,
   safeParentElement,
   safeTagName,
 } from "./clobber-safe.js";
 import { isEditable } from "./editing.js";
+import { PAGE_STATE_VALUE_ROLES } from "./field-text.js";
 import { flatParentElement } from "./flat-tree.js";
 import { getImplicitRole } from "./role-map.js";
 import { holdsEnteredValue } from "./sensitivity.js";
@@ -231,6 +235,24 @@ export function withholdsState(
   if (state !== "selected") return false;
   if (redactInput && role === "option" && inChoiceField(element)) return true;
   return inSensitiveChoice(element);
+}
+
+/**
+ * True when the value or choice `element` (in `role`) lends a name built
+ * around it is withheld. Always: a sensitive field's, and the choice in one's
+ * popup ({@link lendsSensitiveChoice}). In strict mode also: anything a user
+ * entered, which a page-state value such as a slider's is not. The whole name
+ * then reads `[redacted]` ({@link withhold}).
+ */
+export function withholdsLentValue(
+  element: Element,
+  role: string,
+  redactInput: boolean,
+): boolean {
+  return (
+    (redactInput && !PAGE_STATE_VALUE_ROLES.has(role)) ||
+    lendsSensitiveChoice(element)
+  );
 }
 
 /** `states` without what {@link withholdsState} keeps off `element`'s node. */

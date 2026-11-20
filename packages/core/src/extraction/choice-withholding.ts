@@ -43,3 +43,21 @@ export function inSensitiveChoice(element: Element): boolean {
   }
   return false;
 }
+
+/**
+ * True when what `element` lends a name or description it is embedded in
+ * (AccName 2C) gives a sensitive field's value or choice away: a sensitive
+ * field, or an ARIA 1.1 combobox around one ({@link isSensitiveChoiceHost}),
+ * whose value is its owned listbox's chosen option; or a listbox that holds
+ * one's choice, because a sensitive field controls it, owns it, or holds it
+ * ({@link inSensitiveChoice}). `<label>Expiry month <input
+ * autocomplete="cc-exp-month" aria-controls="lb"> <ul id="lb">…</ul></label>`
+ * would otherwise name the field "Expiry month 03".
+ */
+export function lendsSensitiveChoice(element: Element): boolean {
+  return (
+    isSensitiveChoiceHost(element) ||
+    controlledBySensitiveField(element) ||
+    inSensitiveChoice(element)
+  );
+}

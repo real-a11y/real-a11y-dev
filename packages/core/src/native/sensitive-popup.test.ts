@@ -4,7 +4,8 @@ import {
   fieldRelationRoots,
   fieldRelationTargets,
   sensitiveChoiceHosts,
-} from "./ax-node.js";
+  sensitivePopupRoots,
+} from "./sensitive-popup.js";
 import { indexNativeAX, type RawAXNameNode } from "./value-regions.js";
 
 /** A combobox at backend 10 relating to backend 20, a wrapper around a list. */
@@ -103,5 +104,62 @@ describe("the nodes whose relations reach a sensitive field's popup", () => {
     expect(sensitiveChoiceHosts(byId, ["2"]).map((n) => n.nodeId)).toEqual([
       "2",
     ]);
+  });
+});
+
+describe("the choice containers in a sensitive field's popup", () => {
+  /** A field at backend 10 controlling a wrapper (20) around `role` (30). */
+  const popup = (role: string, selected: boolean): RawAXNameNode[] => [
+    {
+      nodeId: "1",
+      backendDOMNodeId: 10,
+      role: { value: "combobox" },
+      properties: [
+        {
+          name: "controls",
+          value: {
+            type: "idrefList",
+            relatedNodes: [{ backendDOMNodeId: 20 }],
+          },
+        },
+      ],
+    },
+    {
+      nodeId: "2",
+      backendDOMNodeId: 20,
+      role: { value: "generic" },
+      childIds: ["3"],
+    },
+    {
+      nodeId: "3",
+      backendDOMNodeId: 30,
+      role: { value: role },
+      childIds: ["4"],
+    },
+    {
+      nodeId: "4",
+      backendDOMNodeId: 40,
+      role: { value: "option" },
+      properties: [{ name: "selected", value: { value: selected } }],
+    },
+  ];
+  const rootsOf = (raw: RawAXNameNode[], fields = ["1"]) => [
+    ...sensitivePopupRoots(indexNativeAX(raw), fields),
+  ];
+
+  it("are the containers a choice is made in, under what the field controls", () => {
+    for (const role of ["listbox", "grid", "treegrid", "tree", "menu"]) {
+      expect(rootsOf(popup(role, true)), role).toEqual(["3"]);
+    }
+    // A dialog holds anything; a wrapper is no container.
+    expect(rootsOf(popup("dialog", true))).toEqual([]);
+  });
+
+  it("hold a choice, or lend none", () => {
+    expect(rootsOf(popup("listbox", false))).toEqual([]);
+  });
+
+  it("are only a sensitive field's", () => {
+    expect(rootsOf(popup("listbox", true), [])).toEqual([]);
   });
 });
