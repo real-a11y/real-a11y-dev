@@ -1,9 +1,4 @@
 {
-  "packages/audit/src/index.ts": {
-    "complexity": {
-      "count": 1
-    }
-  },
   "packages/browser/src/browser.ts": {
     "complexity": {
       "count": 1
