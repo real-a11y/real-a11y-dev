@@ -251,7 +251,7 @@ export function withholdsLentValue(
 ): boolean {
   return (
     (redactInput && !PAGE_STATE_VALUE_ROLES.has(role)) ||
-    lendsSensitiveChoice(element)
+    lendsSensitiveChoice(element, role)
   );
 }
 

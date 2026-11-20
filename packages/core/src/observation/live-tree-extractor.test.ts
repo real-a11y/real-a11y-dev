@@ -978,6 +978,68 @@ describe("LiveTreeExtractor", () => {
       ).toBeUndefined();
     });
 
+    it("withholds the choice once a field in a wrapper holding the listbox turns sensitive", async () => {
+      // No relation: the wrapper holds its listbox as a child, beside the
+      // field. The wrapper is the field's value owner, so it is re-read, with
+      // the listbox, whenever the field is: no full read is needed.
+      document.body.innerHTML =
+        `<main><div role="combobox" aria-expanded="true">` +
+        `<input id="m" aria-label="Month" autocomplete="off">${listbox}</div></main>`;
+      const live = new LiveTreeExtractor(document.body, { mode: "dom" });
+      live.extract();
+      let lastChange: TreeChange | undefined;
+      const observer = new DomObserver(
+        document.body,
+        (change) => {
+          lastChange = change;
+        },
+        50,
+      );
+      observer.start();
+      document
+        .getElementById("m")!
+        .setAttribute("autocomplete", "cc-exp-month");
+      await vi.advanceTimersByTimeAsync(100);
+      observer.stop();
+      const result = live.refresh(lastChange);
+      expect(result.nodes).toEqual(extractDomTree(document.body).nodes);
+      const option = [...result.nodes.values()].find(
+        (n) => n.a11y.role === "option",
+      );
+      expect(option?.a11y.states.selected).toBeUndefined();
+    });
+
+    it("withholds the choice once an element around a sensitive field becomes a combobox", async () => {
+      document.body.innerHTML =
+        // A level down, so the parent re-read for a role change (its name
+        // host) holds the wrapper but not the listbox.
+        `<main><div><div id="w" aria-controls="lb">` +
+        `<input aria-label="Month" autocomplete="cc-exp-month"></div></div>${listbox}</main>`;
+      const live = new LiveTreeExtractor(document.body, { mode: "dom" });
+      expect(
+        [...live.extract().nodes.values()].find((n) => n.a11y.role === "option")
+          ?.a11y.states.selected,
+      ).toBe(true);
+      let lastChange: TreeChange | undefined;
+      const observer = new DomObserver(
+        document.body,
+        (change) => {
+          lastChange = change;
+        },
+        50,
+      );
+      observer.start();
+      document.getElementById("w")!.setAttribute("role", "combobox");
+      await vi.advanceTimersByTimeAsync(100);
+      observer.stop();
+      const result = live.refresh(lastChange);
+      expect(result.nodes).toEqual(extractDomTree(document.body).nodes);
+      const option = [...result.nodes.values()].find(
+        (n) => n.a11y.role === "option",
+      );
+      expect(option?.a11y.states.selected).toBeUndefined();
+    });
+
     it("keeps the choice when an ordinary combobox arrives", async () => {
       expect(
         await refreshAfter(

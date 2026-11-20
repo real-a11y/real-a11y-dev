@@ -10,6 +10,8 @@
  * @internal
  */
 
+import { POPUP_CHOICE_ROLES } from "../extraction/sensitivity.js";
+
 import { nativeAncestry, nativeAXProperty } from "./ax-node.js";
 import type { NativeAXIndex, RawAXNameNode } from "./value-regions.js";
 
@@ -93,19 +95,6 @@ export function sensitiveChoiceHosts<T extends RawAXNameNode>(
   return [...hosts];
 }
 
-/**
- * The roles a popup's choice is made in: those `aria-haspopup` names, less a
- * dialog, which holds anything. Only these become name regions, so a panel a
- * sensitive field controls keeps its other fields' names as theirs.
- */
-const CHOICE_CONTAINER_ROLES: ReadonlySet<string> = new Set([
-  "listbox",
-  "grid",
-  "treegrid",
-  "tree",
-  "menu",
-]);
-
 /** Some node at or under `root` is `selected`. */
 function holdsChoice<T extends RawAXNameNode>(
   root: T,
@@ -127,9 +116,9 @@ function holdsChoice<T extends RawAXNameNode>(
 }
 
 /**
- * Raw ids of the choice containers a sensitive field's popup holds, where a
- * choice is made: those at or under what each of {@link sensitiveChoiceHosts}
- * controls or owns. That choice is the field's value, and Chromium lends it
+ * Raw ids of the choice containers (`POPUP_CHOICE_ROLES`) a sensitive field's
+ * popup holds, where a choice is made: those at or under what each of
+ * {@link sensitiveChoiceHosts} controls or owns. That choice is the field's value, and Chromium lends it
  * to a name built around the popup (AccName's embedded control):
  * `<label>Expiry month <input autocomplete="cc-exp-month" aria-controls="lb">
  * <ul role="listbox" id="lb">…</ul></label>` is `combobox "Expiry month 03"`.
@@ -144,7 +133,7 @@ export function sensitivePopupRoots<T extends RawAXNameNode>(
   for (const host of sensitiveChoiceHosts(index.byId, fieldIds)) {
     for (const node of fieldRelationTargets(index, host)) {
       if (
-        CHOICE_CONTAINER_ROLES.has(node.role?.value ?? "") &&
+        POPUP_CHOICE_ROLES.has(node.role?.value ?? "") &&
         holdsChoice(node, index.byId)
       ) {
         roots.add(node.nodeId);

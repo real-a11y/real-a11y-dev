@@ -148,11 +148,13 @@ describe("the choice containers in a sensitive field's popup", () => {
   ];
 
   it("are the containers a choice is made in, under what the field controls", () => {
-    for (const role of ["listbox", "grid", "treegrid", "tree", "menu"]) {
+    for (const role of ["listbox", "grid", "treegrid", "tree"]) {
       expect(rootsOf(popup(role, true)), role).toEqual(["3"]);
     }
-    // A dialog holds anything; a wrapper is no container.
-    expect(rootsOf(popup("dialog", true))).toEqual([]);
+    // A dialog holds anything, and a menu's choice is `checked`.
+    for (const role of ["dialog", "menu"]) {
+      expect(rootsOf(popup(role, true)), role).toEqual([]);
+    }
   });
 
   it("hold a choice, or lend none", () => {

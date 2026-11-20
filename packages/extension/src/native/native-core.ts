@@ -216,8 +216,11 @@ function axFacets(
  * only consumer of the relation is this panel's jump chips — the CLI and MCP
  * render no chips. If one starts to, this moves to core with `axFacets`.
  *
- * Why only `controls`: `owns` is already structure — Chromium reparents an
- * owned node under its owner in the tree it sends. `describedby` is already
+ * Why only `controls`: `owns` is mostly structure — Chromium reparents an
+ * owned node under its owner in the tree it sends, though not under an
+ * `<input>`, which keeps its owned listbox a sibling. The sensitivity rule
+ * follows `owns` too for that reason (core's `fieldRelationRoots`); a chip
+ * for it is not parity with the shared panel. `describedby` is already
  * the node's `description`, resolved to text. `flowto` and `details` have no
  * chip in the shared panel to match, so they'd be a new feature rather than parity;
  * they're left for a ticket of their own.
@@ -781,16 +784,17 @@ export function withheldFields(
  * this catches a part the in-page walk could not place. A nested sensitive
  * field's own `[redacted]` stays: it says "entered", never what.
  *
- * What the sensitive field controls (`aria-controls`) is not inside it, but
- * it says which option is chosen: an ARIA combobox's listbox is not its
- * descendant, and the option it marks selected is the field's value. So
+ * What the sensitive field controls or owns (`aria-controls`, `aria-owns`),
+ * or what a combobox around it does (the ARIA 1.1 wrapper; core's
+ * `sensitiveChoiceHosts`), is not inside it, but it says which option is
+ * chosen: an ARIA combobox's listbox is not its descendant, and the option it
+ * marks selected is the field's value. So
  * everything there loses its choice states, and nothing else: a controlled
  * panel can hold fields of its own (a shipping address beside the card
  * number), each classified on its own, whose values are theirs to show. A
  * listbox has no AX value of its own to give the choice away (Chromium 141,
- * measured). Its `controls` names the targets the tree kept; `controlled`
- * adds the kept nodes standing in for one it dropped
- * ({@link controlledRegion}).
+ * measured). `controlled` holds the kept nodes those relations reach,
+ * standing in for a target the tree dropped ({@link controlledRegion}).
  *
  * Nor does a node inside one say which of it is chosen: the states in core's
  * `NATIVE_AX_CHOICE_STATES` (an option's `selected`) go from every node

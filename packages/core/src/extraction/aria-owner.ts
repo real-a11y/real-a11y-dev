@@ -7,7 +7,6 @@ import { realmSingleton } from "../utils/realm-singleton.js";
 
 import { safeGetAttribute, safeQuerySelectorAll } from "./clobber-safe.js";
 import { idScope } from "./flat-tree.js";
-import { isSensitiveChoiceHost } from "./sensitivity.js";
 
 /**
  * id → first `aria-owns` owner (document order) for each id scope, built on
@@ -103,37 +102,12 @@ export function ariaOwner(element: Element): Element | null {
 }
 
 /**
- * The ids that a sensitive field, or an ARIA 1.1 combobox around one
- * ({@link isSensitiveChoiceHost}), names in `aria-controls` in `scope`.
- */
-function sensitiveControlTargets(scope: Document | ShadowRoot): Set<string> {
-  const ids = new Set<string>();
-  for (const field of safeQuerySelectorAll(scope, "[aria-controls]")) {
-    if (!isSensitiveChoiceHost(field)) continue;
-    const controls = safeGetAttribute(field, "aria-controls") ?? "";
-    for (const id of controls.trim().split(/\s+/)) if (id) ids.add(id);
-  }
-  return ids;
-}
-
-/**
- * True when a sensitive field, or an ARIA 1.1 combobox around one, names
- * `element` in its `aria-controls`, in its id scope: an ARIA combobox's popup
- * listbox, which is not the field's descendant, but whose selected option is
- * the field's value.
+ * The extraction's cache of the ids a sensitive field names in
+ * `aria-controls`, by id scope, or `null` outside an extraction. Filled by
+ * `controlledBySensitiveField` in choice-withholding.
  *
  * @internal
  */
-export function controlledBySensitiveField(element: Element): boolean {
-  const id = safeGetAttribute(element, "id");
-  if (!id) return false;
-  const scope = idScope(element);
-  const index = activeOwnerIndex().sensitiveControls;
-  if (!index) return sensitiveControlTargets(scope).has(id);
-  let ids = index.get(scope);
-  if (!ids) {
-    ids = sensitiveControlTargets(scope);
-    index.set(scope, ids);
-  }
-  return ids.has(id);
+export function sensitiveControlsIndex(): SensitiveControlsIndex | null {
+  return activeOwnerIndex().sensitiveControls;
 }

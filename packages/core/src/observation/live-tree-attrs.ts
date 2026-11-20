@@ -1,13 +1,15 @@
+import { isSensitiveChoiceHost } from "../extraction/choice-withholding.js";
 import {
   safeGetAttribute,
   safeMatches,
-  safeParentElement,
-  safeQuerySelectorAll,
+  safeTagName,
 } from "../extraction/clobber-safe.js";
 import {
-  isSensitiveChoiceHost,
-  isSensitiveField,
-} from "../extraction/sensitivity.js";
+  deepQuerySelectorAll,
+  flatParentElement,
+} from "../extraction/flat-tree.js";
+import { getExplicitRole } from "../extraction/role-map.js";
+import { isSensitiveField } from "../extraction/sensitivity.js";
 
 /**
  * Attributes whose change creates or breaks accessibility references.
@@ -27,33 +29,48 @@ export const REFERENCE_ATTRS = new Set([
   "aria-owns",
 ]);
 
+/** The elements {@link isSensitiveField} can be true of. */
+const FIELD_TAGS: ReadonlySet<string> = new Set([
+  "input",
+  "textarea",
+  "select",
+]);
+
 /**
  * True when a change to `attr` on `target` moves which choices a sensitive
  * field withholds somewhere else: its popup listbox is not its descendant,
  * so neither re-extracting `target` nor its subtree reaches the options there.
  * That is a relation a sensitive field (or a combobox around one) gains or
- * loses (`aria-controls`; `aria-owns` is a reference attribute already), or
- * a field with such a relation, or inside a combobox with one, becoming or
- * ceasing to be sensitive (`autocomplete`, `type`, `role`).
+ * loses (`aria-controls`; `aria-owns` is a reference attribute already); a
+ * field becoming or ceasing to be sensitive (`autocomplete`, `type`) that
+ * has such a relation or sits in a combobox with one; or an element around a
+ * sensitive field, with a relation, becoming or ceasing to be a combobox
+ * (`role`). What the element holds is re-read with it.
  */
 export function movesSensitiveChoice(target: Element, attr: string): boolean {
-  if (attr === "aria-controls") return isSensitiveChoiceHost(target);
-  if (attr !== "autocomplete" && attr !== "type" && attr !== "role") {
-    return false;
+  switch (attr) {
+    case "aria-controls":
+      return isSensitiveChoiceHost(target);
+    case "autocomplete":
+    case "type":
+      return (
+        FIELD_TAGS.has(safeTagName(target)) &&
+        (hasPopupRelation(target) ||
+          comboboxAtOrAbove(flatParentElement(target)))
+      );
+    case "role":
+      return hasPopupRelation(target) && holdsSensitiveField(target);
+    default:
+      return false;
   }
-  return (
-    hasPopupRelation(target) ||
-    comboboxWithPopupAtOrAbove(safeParentElement(target))
-  );
 }
 
 /**
  * True when adding or removing `subtree` under `parent` moves which choices a
  * sensitive field withholds somewhere else: the subtree holds a sensitive
  * field (or a combobox around one) that controls or owns a popup, or a
- * sensitive field going into or out of a combobox that does. The popup is
- * not in the subtree, so splicing the subtree alone leaves its choice as it
- * was read.
+ * sensitive field going into or out of a combobox that does. The popup is not in the subtree, so splicing the subtree alone
+ * leaves its choice as it was read. Shadow roots in the subtree count.
  */
 export function bringsSensitivePopup(
   subtree: Element,
@@ -61,27 +78,40 @@ export function bringsSensitivePopup(
 ): boolean {
   const all = (selectors: string): Element[] => [
     ...(safeMatches(subtree, selectors) ? [subtree] : []),
-    ...Array.from(safeQuerySelectorAll(subtree, selectors)),
+    ...deepQuerySelectorAll(subtree, selectors),
   ];
   if (all("[aria-controls], [aria-owns]").some(isSensitiveChoiceHost)) {
     return true;
   }
   return (
     all("input, textarea, select").some(isSensitiveField) &&
-    comboboxWithPopupAtOrAbove(parent)
+    comboboxAtOrAbove(parent)
+  );
+}
+
+/** `element` or what it holds, shadow roots included, is a sensitive field. */
+function holdsSensitiveField(element: Element): boolean {
+  return (
+    isSensitiveField(element) ||
+    deepQuerySelectorAll(element, "input, textarea, select").some(
+      isSensitiveField,
+    )
   );
 }
 
 /**
- * Whether `start` or an element above it is an ARIA 1.1 combobox with a popup
- * relation: the wrapper that carries `aria-controls` or `aria-owns` for the
- * field inside it. The climb reads parents through the prototype: a `<form>`
- * met on the way can shadow `parentElement` with a control of its own.
+ * Whether `start` or an element above it in the flat tree is a combobox, as
+ * the tree reads the role, that names a popup in `aria-controls` or
+ * `aria-owns`: the ARIA 1.1 wrapper around a field. One that holds its
+ * listbox as a child needs no full read: the wrapper is the value owner of
+ * the field inside it (`fieldValueOwner`), so it is re-read, listbox and all,
+ * with the field. The climb reads parents through the prototype, so a
+ * `<form>` met on the way can't shadow `parentElement` with a control of its
+ * own.
  */
-function comboboxWithPopupAtOrAbove(start: Element | null): boolean {
-  for (let el = start; el; el = safeParentElement(el)) {
-    const role = (safeGetAttribute(el, "role") ?? "").trim().split(/\s+/)[0];
-    if (role?.toLowerCase() === "combobox" && hasPopupRelation(el)) return true;
+function comboboxAtOrAbove(start: Element | null): boolean {
+  for (let el = start; el; el = flatParentElement(el)) {
+    if (getExplicitRole(el) === "combobox" && hasPopupRelation(el)) return true;
   }
   return false;
 }

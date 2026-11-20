@@ -94,6 +94,45 @@ describe("the choice a sensitive field holds", () => {
     ).toEqual([["Red", true]]);
   });
 
+  it("is withheld in a listbox an ARIA 1.1 wrapper holds, with no relation", () => {
+    // ARIA 1.1 lets a combobox own its listbox as a child; the native
+    // producers withhold this one too (the browser's inChoiceField).
+    expect(
+      selectedOf(
+        `<div role="combobox" aria-expanded="true">` +
+          `<input aria-label="Expiry month" autocomplete="cc-exp-month">` +
+          `<ul role="listbox" aria-label="Months">` +
+          `<li role="option" aria-selected="true">03</li></ul></div>`,
+      ),
+    ).toEqual([["03", undefined]]);
+  });
+
+  it("is withheld for a wrapper whose sensitive field sits in its shadow root", () => {
+    document.body.innerHTML =
+      `<x-combo role="combobox" aria-controls="lb" aria-expanded="true"></x-combo>` +
+      `<ul role="listbox" id="lb" aria-label="Cards">` +
+      `<li role="option" aria-selected="true">Visa 1111</li></ul>`;
+    document
+      .querySelector("x-combo")!
+      .attachShadow({ mode: "open" }).innerHTML =
+      `<input aria-label="Card" autocomplete="cc-number">`;
+    const states = [...extractDomTree(document.body).nodes.values()]
+      .filter((n) => n.a11y.role === "option")
+      .map((n) => n.a11y.states["selected"]);
+    expect(states).toEqual([undefined]);
+  });
+
+  it("reads a wrapper's role as the tree does, past an unknown token", () => {
+    expect(
+      selectedOf(
+        `<div role="x-combo combobox" aria-controls="lb" aria-expanded="true">` +
+          `<input aria-label="Year" autocomplete="cc-exp-year"></div>` +
+          `<ul role="listbox" id="lb" aria-label="Years">` +
+          `<li role="option" aria-selected="true">2029</li></ul>`,
+      ),
+    ).toEqual([["2029", undefined]]);
+  });
+
   it("is kept in an ordinary combobox's popup", () => {
     expect(selectedOf(months('aria-controls="lb"'))).toEqual([
       ["01", false],
@@ -215,6 +254,19 @@ describe("the choice a sensitive field holds", () => {
           ["cell"],
         ),
       ).toEqual([["cell", "[redacted]"]]);
+    });
+
+    it("is the popup's alone: a field in a panel the sensitive field controls lends its own", () => {
+      // As in the native producers, only a choice container lends the
+      // sensitive choice; the country here is the page's to show.
+      expect(
+        namesOf(
+          `<input aria-label="Card" autocomplete="cc-number" aria-controls="p">` +
+            `<div id="p"><label><input type="checkbox"> Ship to ` +
+            `<select aria-label="Country"><option selected>Spain</option></select></label></div>`,
+          ["checkbox"],
+        ),
+      ).toEqual([["checkbox", "Ship to Spain"]]);
     });
 
     it("is kept when nothing is chosen, or the field is ordinary", () => {
