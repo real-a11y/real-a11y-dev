@@ -6,7 +6,7 @@ area: MCP
 type: Automated
 priority: P0
 status: Active
-validFrom: "mcp ≥ 0.1.0-beta.1. Native list_elements locators from mcp ≥ 0.1.0-beta.2 / browser ≥ 0.1.0-beta.12. From the producer migration (#258): no `producer` param, `rootSelector` on `get_tab_order` + the tree checkpoints only. 20 tools from mcp ≥ 0.1.0-beta.3 (`list_sessions` added with named sessions); 19 before that. `get_tab_order` has no end date. Step 6b is from mcp ≥ 0.1.0-beta.2 / audit ≥ 0.1.0-beta.12; earlier releases print a bare `(none)`, which is the old behaviour, not a fail. Step 4b is from mcp ≥ 0.1.0-beta.9; earlier releases print no line for the block of text, which is the old behaviour, not a fail. Step 4c (the states block) is from mcp ≥ 0.1.0-beta.14."
+validFrom: "mcp ≥ 0.1.0-beta.1. Native list_elements locators from mcp ≥ 0.1.0-beta.2 / browser ≥ 0.1.0-beta.12. From the producer migration (#258): no `producer` param, `rootSelector` on `get_tab_order` + the tree checkpoints only. 20 tools from mcp ≥ 0.1.0-beta.3 (`list_sessions` added with named sessions); 19 before that. `get_tab_order` has no end date. Step 6b is from mcp ≥ 0.1.0-beta.2 / audit ≥ 0.1.0-beta.12; earlier releases print a bare `(none)`, which is the old behaviour, not a fail. Step 4b is from mcp ≥ 0.1.0-beta.9; earlier releases print no line for the block of text, which is the old behaviour, not a fail. Step 4c (the states block) and step 4d (`states: false`) are from mcp ≥ 0.1.0-beta.14."
 validUntil: ""
 expected: "each returns non-empty, correctly-shaped text; audit reports the seeded violation; list_elements returns role + name + a CSS locator (native included — that was fixed, docs used to say native carried none), and an empty category explains itself (scanned count + the roles it looked for) rather than a bare (none)"
 twin: D4
@@ -36,6 +36,8 @@ Against a page seeding a known violation:
      "Subscribe", one checked, and a
      `<button aria-expanded="false" aria-haspopup="menu">Menu</button>`; then
      read `get_semantic_tree`'s description in `tools/list`
+   - **(4d)** on the same page, `get_semantic_tree { states: false }`,
+     `inspect_page { states: false }` and `get_tab_order { states: false }`
 5. `get_heading_outline`
 6. `list_elements { filter: "image" }`
    - **(6b)** `list_elements { filter: "image" }` on a page whose graphics are
@@ -67,6 +69,10 @@ Against a page seeding a known violation:
   follow its name in a `{…}` block. On mcp 0.1.0-beta.13 or earlier no line
   carries a block and both boxes print `checkbox "Subscribe"`, which is the
   old behaviour, not a fail
+- **4d** — no line carries a block: both boxes print `checkbox "Subscribe"`,
+  and nothing else differs from 4c. `tools/list` shows `states` (default
+  `true`) on all three tools. On mcp 0.1.0-beta.13 or earlier the parameter is
+  ignored and blocks never print, which is the old behaviour, not a fail
 - **6** — role + accessible name + **a CSS locator**. Native used to carry none,
   and the docs said so; both were fixed together
 - **6b** — **not** a bare `(none)`. From mcp ≥ 0.1.0-beta.2 /

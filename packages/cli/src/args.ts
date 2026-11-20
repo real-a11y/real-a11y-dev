@@ -35,6 +35,7 @@ import {
   AUDIT_FLAGS,
   INSPECT_FLAGS,
   VIEW_FLAGS,
+  TREE_FLAGS,
   TABS_FLAGS,
   INTERACT_FLAGS,
   ACT_FLAGS,
@@ -147,7 +148,7 @@ export const COMMANDS: Record<string, CommandSpec> = {
     summary: "Semantic tree (role + accessible name)",
     group: "view",
     producers: ["native"],
-    options: VIEW_FLAGS,
+    options: TREE_FLAGS,
     help: HELP_TREE,
     load: async () => (await import("./commands/views.js")).treeCommand,
   },
@@ -475,6 +476,15 @@ export function inputPolicy(flags: FlagValues): {
 } {
   const redactInput = flags["redact-input"] === true;
   return { redactInput, liveValues: !redactInput };
+}
+
+/**
+ * Whether tree and tab text print each node's `{…}` states block — on unless
+ * the run passed `--no-states` (config `defaults.states: false`), which gives
+ * the text from before the block existed, byte for byte.
+ */
+export function printsStates(flags: FlagValues): boolean {
+  return flags["no-states"] !== true;
 }
 
 const WAIT_STATES = [

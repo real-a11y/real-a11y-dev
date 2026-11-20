@@ -15,6 +15,7 @@ import { redactUrl, sanitizeText } from "@real-a11y-dev/snapshot";
 
 import {
   inputPolicy,
+  printsStates,
   parseFormat,
   parseListCategory,
   parseOpenOptions,
@@ -83,6 +84,7 @@ export async function runTreeOnSession(
   const snapshot = await nativeSnapshot(session, {
     includeGeneric: flags["include-generic"] === true,
     values: liveValues,
+    states: printsStates(flags),
     redactInput,
   });
   return writeView("tree", target, flags, redactUrl(finalUrl), snapshot.tree);
@@ -127,6 +129,7 @@ export async function runTabsOnSession(
   const { redactInput, liveValues } = inputPolicy(flags);
   const text = await snapshotPage(session, rootOf(flags), {
     values: liveValues,
+    states: printsStates(flags),
     redactInput,
   }).then((s) => s.tabOrder);
   return writeView("tabs", target, flags, redactUrl(finalUrl), text);

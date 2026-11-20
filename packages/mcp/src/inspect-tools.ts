@@ -24,6 +24,7 @@ import {
   RULES_HINT,
   SCOPE_HINT,
   SLICE_HINT,
+  statesParam,
   text,
 } from "./tool-output.js";
 
@@ -104,15 +105,17 @@ function registerInspect(ctx: InspectToolContext): void {
           .describe(
             "Include generic container nodes in the tree, among them a block of text, named from its own text.",
           ),
+        states: statesParam,
         session: sessionParam,
       },
     },
-    async ({ rules, includeGeneric, session }) =>
+    async ({ rules, includeGeneric, states, session }) =>
       withSession(session, async (rec) => {
         const snap = projectNativeTree(await readTree(rec), {
           rules,
           includeGeneric,
           values: liveValues,
+          states,
         });
         return text(renderSnapshot(snap), `${RULES_HINT} ${SLICE_HINT}`);
       }),
@@ -146,14 +149,16 @@ function registerSemanticTree(ctx: InspectToolContext): void {
           .describe(
             "Include generic container nodes (role=generic), among them a block of text, named from its own text.",
           ),
+        states: statesParam,
         session: sessionParam,
       },
     },
-    async ({ includeGeneric, session }) =>
+    async ({ includeGeneric, states, session }) =>
       withSession(session, async (rec) => {
         const snap = projectNativeTree(await readTree(rec), {
           includeGeneric,
           values: liveValues,
+          states,
         });
         return text(snap.tree || "(empty tree)", SLICE_HINT);
       }),
@@ -192,14 +197,14 @@ function registerTabOrder(ctx: InspectToolContext): void {
           ? " In this server's strict mode no stop shows a field value, and a name that would carry one, or a rich-text editor's text, reads \"[redacted]\"."
           : ' A field shows what it holds (`textbox "Email" = "jane@x.com"`; a sensitive field "[redacted]").') +
         " Built from the in-page DOM walk — Chromium's accessibility tree knows whether a node is focusable but not the SEQUENCE (tabindex never reaches it), so this is the only source for tab order, and the one tool `rootSelector` still scopes.",
-      inputSchema: { rootSelector, session: sessionParam },
+      inputSchema: { rootSelector, states: statesParam, session: sessionParam },
     },
-    async ({ rootSelector, session }) =>
+    async ({ rootSelector, states, session }) =>
       withSession(session, async (rec) => {
         const seq = await rec.session.call<string>(
           "tabSequenceSnapshot",
           rootSelector,
-          [{ values: liveValues, redactInput }],
+          [{ values: liveValues, redactInput, states }],
         );
         // Number at render — the page bundle produces the canonical unnumbered
         // form; the ordinals help an agent reference "stop 7" and are never stored.

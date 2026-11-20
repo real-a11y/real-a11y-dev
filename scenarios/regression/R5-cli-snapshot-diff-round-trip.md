@@ -6,13 +6,14 @@ area: CLI
 type: Automated
 priority: P0
 status: Active
-validFrom: "cli ≥ 0.1.0-beta.1. Note: native-producer artifacts re-fingerprint from browser 0.1.0-beta.12 (findings gained locators) — re-baseline once, don't file it"
+validFrom: "cli ≥ 0.1.0-beta.1. Note: native-producer artifacts re-fingerprint from browser 0.1.0-beta.12 (findings gained locators) — re-baseline once, don't file it. Step 12 (`meta.states`, `--no-states` and diff's warning) is from cli ≥ 0.1.0-beta.14"
 validUntil: ""
 expected: "snapshot writes a schema-valid artifact; diff of identical artifacts → exit 0 + no changes; a tab-stop change is reported as NOT COMPARED, never as removals — the artifact carries no tabs view since #258"
 twin: D3
 covers:
   - cli.commands.snapshot
   - cli.commands.diff
+  - cli.commands.snapshot.flags.--no-states
 notion: "https://app.notion.com/p/3aa1c354b0b581488056fb7ec111c33d"
 ---
 
@@ -35,6 +36,10 @@ notion: "https://app.notion.com/p/3aa1c354b0b581488056fb7ec111c33d"
 9. `real-a11y diff base.json pr.json --fail-on never`
 10. Fix the violation, re-snapshot, diff again
 11. `real-a11y snapshot <url> --root main`
+12. On a page with a checked checkbox: `real-a11y snapshot <url> -o with.json`,
+    then `real-a11y snapshot <url> --no-states -o without.json`; read both
+    artifacts' `meta.states` and the checkbox's tree line, then
+    `real-a11y diff without.json with.json`
 
 ## Expected
 
@@ -64,6 +69,13 @@ notion: "https://app.notion.com/p/3aa1c354b0b581488056fb7ec111c33d"
   _whole-document_ — `snapshot` reads Chromium's own tree, which has no subtree to
   narrow to. `urls[].rootSelector` no longer scopes it either; a config that sets
   one warns on stderr, names the routes, and keeps running
+- **12** — `with.json` records `meta.states: true` and prints
+  `checkbox "…" {checked}`; `without.json` has no `meta.states` and prints the
+  line without its block. The diff warns on stderr that only the PR snapshot
+  carries `{…}` states blocks, and the structural section shows the checkbox
+  line as changed; findings are unaffected. The same warning is what a baseline
+  captured on cli 0.1.0-beta.13 or earlier gets on its first diff against a newer
+  capture
 
 ## Why this exists
 

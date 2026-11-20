@@ -17,6 +17,7 @@ import {
   diffArtifacts,
   noPagesMatched,
   assertFullArtifact,
+  carriesStates,
   carriesValues,
   parseSnapshotArtifact,
 } from "@real-a11y-dev/snapshot";
@@ -141,6 +142,20 @@ export const diffCommand: CommandFn = async (positionals, flags) => {
     process.stderr.write(
       `real-a11y: warning: only the ${which} snapshot carries field values ` +
         "(captured with --values), so every filled field reads as a changed " +
+        "tree line; capture both sides the same way for a like-for-like diff\n",
+    );
+  }
+
+  // The `{…}` states block is on by default, so this mostly fires once: a
+  // baseline captured before the block existed (or with --no-states) against
+  // a capture with it, where every node with a state or a description reads
+  // as a changed tree line. Findings are unaffected.
+  if (carriesStates(base) !== carriesStates(pr)) {
+    const which = carriesStates(base) ? "base" : "PR";
+    process.stderr.write(
+      `real-a11y: warning: only the ${which} snapshot carries {…} states ` +
+        "blocks (one captured before they existed, or with --no-states, has " +
+        "none), so every node with a state or description reads as a changed " +
         "tree line; capture both sides the same way for a like-for-like diff\n",
     );
   }

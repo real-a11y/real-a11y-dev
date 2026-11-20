@@ -188,6 +188,7 @@ Parameters:
 
 - **`rules`** — array of the five rule ids above — optional — subset for the findings section. Omit to run all.
 - **`includeGeneric`** — boolean — optional (default `false`) — include generic container nodes (`role=generic`) in the tree, among them a `<div>` of text, named from its own text.
+- **`states`** — boolean — optional (default `true`) — print each node's `{…}` states block. Pass `false` for lines without blocks, byte for byte the text from before they existed, e.g. to compare with tree text captured then.
 
 An agent calls this for a consistent whole-page picture in a single round-trip:
 
@@ -224,6 +225,7 @@ A server started with [`REAL_A11Y_REDACT_INPUT=1`](#real-a11y-redact-input) show
 Parameters:
 
 - **`includeGeneric`** — boolean — optional (default `false`) — include generic container nodes (`role=generic`), among them a `<div>` of text, named from its own text: `generic "A window splitter is a moveable separator."`.
+- **`states`** — boolean — optional (default `true`) — print each node's `{…}` states block. Pass `false` for lines without blocks, byte for byte the text from before they existed, e.g. to compare with tree text captured then.
 
 An agent calls this to reason about page structure or diff it against another rendering.
 
@@ -256,6 +258,7 @@ An image map's `<area href>` is a stop while the image using its map is rendered
 Parameters:
 
 - **`rootSelector`** — string — optional (default `"body"`) — CSS selector for the walk.
+- **`states`** — boolean — optional (default `true`) — print each stop's `{…}` states block. Pass `false` for stops without blocks.
 
 **Built from the in-page DOM walk — the only source there is, not a fallback.** Chromium's accessibility tree knows whether a node is *focusable*, but not the *sequence*: `tabindex` never reaches a native node, and ordering by it is DOM/layout work the AX tree doesn't expose. Because this one runs in the page, a selector means something here — which is why it keeps `rootSelector`.
 
@@ -305,6 +308,7 @@ Parameters:
 - **`name`** — string — required — the checkpoint label (the store key).
 - **`rules`** — array of the five rule ids — optional — subset for the findings. Omit to run all.
 - **`values`** — boolean — optional (default `false`) — capture each field's value in the checkpoint's tree view, as the live views show it (a sensitive field still `[redacted]`). Off by default because a checkpoint becomes an artifact that can be exported, committed and posted — the same opt-in as the CLI's `snapshot --values`. It covers each field's own value; a name Chromium builds from what a field or editor holds (a heading typed into an editor) stays, except for sensitive fields — [`REAL_A11Y_REDACT_INPUT=1`](#real-a11y-redact-input) withholds those too. A checkpoint captured with values is exported only when [`export_checkpoint`](#export-checkpoint) is asked for them too. Ignored under [`REAL_A11Y_REDACT_INPUT=1`](#real-a11y-redact-input).
+- **`states`** — boolean — optional (default `true`) — print each node's `{…}` states block in the checkpoint's tree view, as [`get_semantic_tree`](#get-semantic-tree) does. The checkpoint remembers which: [`diff_findings`](#diff-findings) re-reads the page the same way, and an export records it in `meta.states`, as the CLI's `snapshot` does (`--no-states` there).
 
 Whole-document, and built from the same producer `real-a11y snapshot` uses — which is what lets a checkpoint captured here be diffed by the CLI, and vice versa. The exported artifact records which views it measured (`meta.views`) and omits the tabs view rather than storing an empty one.
 
@@ -320,7 +324,7 @@ Parameters:
 
 - **`name`** — string — required — the checkpoint to diff against.
 
-The re-snapshot carries the same rule subset the checkpoint was captured with, so rules the base never ran can't surface as spurious NEW — and captures field values only if the checkpoint did, so a filled field never reads as structural drift.
+The re-snapshot carries the same rule subset the checkpoint was captured with, so rules the base never ran can't surface as spurious NEW — and captures field values only if the checkpoint did, so a filled field never reads as structural drift. Likewise `{…}` states blocks: an artifact captured before they existed (no `meta.states`), imported with [`import_checkpoint`](#import-checkpoint), is compared against a re-read without them, so its stateful lines don't all read as changed.
 
 The header names the operation and the checkpoint it read, so an output can be traced back to its input when several are stored:
 
@@ -364,6 +368,8 @@ Its header says no browser was read, so a stored-vs-stored comparison is never m
 Saved checkpoints: "prod" → "preview" (no re-snapshot): 0 new, 2 fixed, 0 changed, 9 unchanged.
 ```
 
+When only one of the two carries `{…}` states blocks (one captured with `states: false`, or imported from an artifact captured before they existed), a note above the header says so: every node with a state or description then reads as a changed tree line. Findings are unaffected.
+
 Same different-page rule as [`diff_findings`](#diff-findings) — two checkpoints of unrelated routes diff their findings and skip the structural summary.
 
 ### `list_checkpoints`
@@ -386,7 +392,7 @@ Return a stored checkpoint as a Real A11y snapshot artifact — the same `a11y-s
 
 The artifact has to come back as **one valid JSON string**, so it is never truncated — a checkpoint over the 40,000-character cap fails instead. Checkpoints are whole-document, so there is no scope to narrow (a `rules` subset shrinks the findings, never the tree); the error reports both sizes so you can tell which. To *compare* an oversized checkpoint, diff it in-session with [`diff_findings`](#diff-findings) / [`diff_checkpoints`](#diff-checkpoints), which need no export. To *keep* one, capture the page with the CLI instead — `real-a11y snapshot <url> --output a11y-snapshot.json` writes the identical artifact to a file, uncapped.
 
-An artifact carries field values only when the checkpoint was captured with them **and** you ask here too: exporting a checkpoint that holds values without `values: true` is refused, so values captured for an in-session diff can't slip into a file on a default. The exported artifact records `meta.values: true`, and importing it back keeps that.
+An artifact carries field values only when the checkpoint was captured with them **and** you ask here too: exporting a checkpoint that holds values without `values: true` is refused, so values captured for an in-session diff can't slip into a file on a default. The exported artifact records `meta.values: true`, and importing it back keeps that. A checkpoint whose tree carries `{…}` states blocks exports with `meta.states: true`; one captured with `states: false` exports without it.
 
 Parameters:
 

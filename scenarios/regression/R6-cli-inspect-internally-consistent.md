@@ -6,11 +6,12 @@ area: CLI
 type: Automated
 priority: P1
 status: Active
-validFrom: "cli ≥ 0.1.0-beta.1. Tab order LEFT the output at the native-only migration (#258) — an accepted loss, already landed, not a regression to file. Steps below assume the post-#258 output."
+validFrom: "cli ≥ 0.1.0-beta.1. Tab order LEFT the output at the native-only migration (#258) — an accepted loss, already landed, not a regression to file. Steps below assume the post-#258 output. Step 3b (`--no-states`) is from cli ≥ 0.1.0-beta.14."
 validUntil: ""
 expected: "one output containing findings + tree + outline, all describing the same instant — the point is that the views cannot disagree, so check them against each other, not just for presence"
 covers:
   - cli.commands.inspect
+  - cli.commands.inspect.flags.--no-states
 notion: "https://app.notion.com/p/3aa1c354b0b581cf81d6e0e6490009ed"
 ---
 
@@ -26,6 +27,8 @@ widget), so a multi-extraction implementation would visibly disagree with itself
    - every heading in the **outline** appears in the tree with the same level
    - there is **no tab-order section** to cross-read — see Expected 1
 3. `real-a11y inspect <url> --include-generic`
+   - **(3b)** `real-a11y inspect <url> --no-states` on a page with a checked
+     checkbox
 4. `real-a11y inspect <url> --format json`
 5. `real-a11y inspect <url> --producer native`
 6. `real-a11y inspect <url1> <url2>`
@@ -39,6 +42,8 @@ widget), so a multi-extraction implementation would visibly disagree with itself
   last
 - **2** — no section contradicts another. This is the point of the command: they
   all describe the same instant
+- **3b** — the tree section prints the checkbox without its `{checked}` block;
+  findings and outline are as without the flag
 - **4** — one parseable document
 - **5** — exit `2`. The flag does not exist — #258 deleted the producer axis
   outright — so this is the strict parser's generic unknown-option error, not a

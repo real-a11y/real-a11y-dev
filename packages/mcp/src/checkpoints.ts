@@ -44,6 +44,14 @@ export interface Checkpoint {
    * refuse to write values into an artifact nobody asked to carry them.
    */
   values?: boolean;
+  /**
+   * The page's tree view carries `{…}` states blocks: a capture made with
+   * `states` on (the default), or an imported artifact whose `meta.states`
+   * says so. Remembered so `diff_findings` re-snapshots the same way — an
+   * artifact captured before blocks existed then compares without them — and
+   * so an export records it.
+   */
+  states?: boolean;
 }
 
 /**
@@ -132,6 +140,24 @@ export function scopeMismatch(
     `NOTE: scope changed — the base was captured at \`${from}\`, this side at \`${to}\`. ` +
     `Findings from outside \`${from}\` will appear as NEW even though nothing changed. ` +
     `Re-capture the base at the same scope for a like-for-like diff.`
+  );
+}
+
+/**
+ * A note when exactly one of two stored checkpoints carries `{…}` states
+ * blocks — one captured with `states: false`, or imported from an artifact
+ * captured before blocks existed. Every node with a state or a description
+ * then reads as a changed tree line; findings are unaffected.
+ */
+export function statesMismatch(
+  base: Pick<Checkpoint, "states">,
+  head: Pick<Checkpoint, "states">,
+): string | undefined {
+  if ((base.states === true) === (head.states === true)) return undefined;
+  const which = base.states === true ? "base" : "head";
+  return (
+    `NOTE: only the ${which} checkpoint's tree carries {…} states blocks, so every node with a state or description reads as a changed tree line. ` +
+    `Findings are unaffected. Capture both the same way (checkpoint_findings' states) for a like-for-like structural diff.`
   );
 }
 

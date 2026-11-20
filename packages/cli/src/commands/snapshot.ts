@@ -34,6 +34,7 @@ import {
 
 import {
   inputPolicy,
+  printsStates,
   parseFailOn,
   parseFormat,
   parseOnly,
@@ -200,6 +201,9 @@ export async function runSnapshotOnSession(
   // `defaults.values`) — and never under strict mode (ADR-0001).
   const { redactInput } = inputPolicy(flags);
   const values = flags.values === true && !redactInput;
+  // The tree view's `{…}` blocks, on unless the run opted out. Recorded in
+  // `meta.states`, so `diff` can tell a pair captured differently.
+  const states = printsStates(flags);
 
   const snapshotPages: SnapshotPage[] = [];
   let isFirstSnapshotTarget = true;
@@ -237,6 +241,7 @@ export async function runSnapshotOnSession(
       const snap = await nativeSnapshot(session, {
         ...(rules ? { rules } : {}),
         values,
+        states,
         redactInput,
       });
       snapshotPages.push(
@@ -347,6 +352,7 @@ export async function runSnapshotOnSession(
     ...(rules ? { rules } : {}),
     ...(openOptions.device ? { device: openOptions.device } : {}),
     ...(values ? { values } : {}),
+    ...(states ? { states } : {}),
   });
   // json + --only: a partial artifact — the filtered axis is stripped from
   // the pages and `meta.only` marks it so `diff` can refuse it outright.
@@ -367,6 +373,7 @@ export async function runSnapshotOnSession(
             ...(rules ? { rules } : {}),
             ...(openOptions.device ? { device: openOptions.device } : {}),
             ...(values ? { values } : {}),
+            ...(states ? { states } : {}),
             only,
           },
         )

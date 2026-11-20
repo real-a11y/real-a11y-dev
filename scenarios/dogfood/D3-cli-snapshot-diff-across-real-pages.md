@@ -6,7 +6,7 @@ area: CLI
 type: Automated
 priority: P0
 status: Active
-validFrom: "cli ≥ 0.1.0-beta.1. Snapshots are native-only since #258 (there is no --producer flag); native findings gained locators at browser 0.1.0-beta.12, so artifacts captured before that re-fingerprint once — re-baseline and move on"
+validFrom: "cli ≥ 0.1.0-beta.1. Snapshots are native-only since #258 (there is no --producer flag); native findings gained locators at browser 0.1.0-beta.12, so artifacts captured before that re-fingerprint once — re-baseline and move on. Step 10 (the states-block upgrade) is from cli ≥ 0.1.0-beta.14, against a base.json captured with cli 0.1.0-beta.13 or earlier"
 validUntil: ""
 expected: "artifacts capture real pages; identical→no changes; two different pages→ meaningful, readable structural diff"
 twin: R5
@@ -29,6 +29,9 @@ The CI-diff-bot story, run for real against two live pages.
 7. Re-snapshot the **same** page a few minutes later; diff against `base.json`
 8. Snapshot a multi-page set from a config; diff the artifacts
 9. `real-a11y diff base.json other.json --fail-on never`
+10. The upgrade a real user makes: keep a `base.json` captured with the previous
+    CLI release, upgrade, re-snapshot the same page, and diff the two. Then
+    re-snapshot with `--no-states` and diff that against the old `base.json`
 
 ## Expected
 
@@ -41,6 +44,11 @@ The CI-diff-bot story, run for real against two live pages.
   here — a rotating banner, a timestamp, an ad slot, a hydration race — is exactly what makes
   a real diff bot get muted
 - **9** — reports, exits `0`
+- **10** — the first diff warns on stderr that only the PR snapshot carries
+  `{…}` states blocks, and the theme switch and version menu read as changed;
+  that warning is what tells a user to re-baseline rather than file it. The
+  `--no-states` capture diffs against the old base with no warning and none of
+  those lines
 
 ## Why this exists
 

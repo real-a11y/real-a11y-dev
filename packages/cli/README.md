@@ -335,6 +335,13 @@ and posted into PR comments. `snapshot --values` (config `defaults.values`)
 puts them in and records `meta.values: true`; capture both sides the same way,
 or `diff` warns that every filled field reads as changed.
 
+Each tree line carries its node's `{…}` states block (`checkbox "Subscribe"
+{checked=false}`), and the artifact records `meta.states: true`. `--no-states`
+(config `defaults.states: false`) leaves both out, and also takes the blocks off
+`tree`, `tabs` and `inspect`. A baseline captured before the blocks existed has
+none, so `diff` warns when only one side carries them: re-capture the
+baseline, or capture both sides with `--no-states`.
+
 **Which views an artifact measured.** An artifact records its measured views in
 `meta.views`. Snapshots read the whole-document accessibility tree, which
 carries no tab order, so they measure `tree` and `outline` and omit the `tabs`

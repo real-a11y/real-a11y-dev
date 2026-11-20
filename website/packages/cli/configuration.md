@@ -256,6 +256,12 @@ The strict mode, as project policy: no field value and no rich-text editor conte
 
 Put field values into every snapshot artifact's tree view (sensitive fields still read `[redacted]`). Off by default, because an artifact is committed and posted into PR comments. Set it on both the base and the PR run — [`diff`](/packages/cli/commands#diff-base-json-pr-json) warns when only one side carries values. Ignored under [`redactInput`](#redactinput). See [`--values`](/packages/cli/commands#values).
 
+### `states`
+
+**`states: boolean`** — flag `--no-states` (as `states: false`) · default `true` · applies to `tree`, `tabs`, `inspect`, `snapshot`
+
+Each node's `{…}` states block in tree and tab text, on by default. Only `states: false` is meaningful — it seeds `--no-states`, which prints the text from before the blocks existed and leaves `meta.states` out of a snapshot artifact; `states: true` is the built-in and seeds nothing. Set it the same way for the base and the PR run — [`diff`](/packages/cli/commands#diff-base-json-pr-json) warns when only one side carries blocks. See [`--no-states`](/packages/cli/commands#no-states).
+
 ### `baseline`
 
 **`baseline: string`** — flag `--baseline` · default: unset · **path (resolves from the config dir)** · applies to `snapshot`, `diff`

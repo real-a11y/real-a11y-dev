@@ -263,6 +263,13 @@ real-a11y diff base.json pr.json --explain \
 The full diff prints to stdout regardless; the caps only shape the file you post.
 See the [command reference](/packages/cli/commands) for every `diff` flag.
 
+Each tree line carries its node's `{…}` states block (`checkbox "Subscribe"
+{checked=false}`), so a toggled checkbox shows up here as a changed line. A
+baseline captured before the blocks existed has none: `diff` warns that only
+one side carries them, and every stateful line reads as changed until you
+re-capture the baseline. To keep the old text instead, capture both sides with
+[`--no-states`](/packages/cli/commands#no-states).
+
 ## Adopt the gate on existing debt
 
 Most real codebases have accessibility findings *today* — which usually means

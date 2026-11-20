@@ -657,6 +657,87 @@ describe("the states block (built bin)", () => {
       '01. checkbox "I agree" {checked=false, required}',
     );
   });
+
+  describe("--no-states", () => {
+    const PAGE = dataUrl(
+      "<!doctype html><title>Opt out</title><main>" +
+        '<input type="checkbox" checked aria-label="Subscribe">' +
+        '<button aria-expanded="false">Menu</button>' +
+        "</main>",
+    );
+    const stripBlocks = (text: string) => text.replace(/ \{[^}]*\}/g, "");
+
+    it("leaves the blocks out of tree, tabs and inspect, and nothing else", async () => {
+      for (const command of ["tree", "tabs"]) {
+        const on = await runCli([command, PAGE, "-q"]);
+        const off = await runCli([command, PAGE, "-q", "--no-states"]);
+        expect(off.code, command).toBe(0);
+        expect(on.stdout, command).toContain('"Subscribe" {checked}');
+        expect(off.stdout, command).not.toContain("{");
+        // The default's text with its blocks taken out, byte for byte.
+        expect(off.stdout, command).toBe(stripBlocks(on.stdout));
+      }
+      const json = await runCli([
+        "tree",
+        PAGE,
+        "-q",
+        "--no-states",
+        "--format",
+        "json",
+      ]);
+      expect(json.stdout).toContain('checkbox \\"Subscribe\\"');
+      expect(json.stdout).not.toContain("{checked");
+      const inspect = await runCli(["inspect", PAGE, "-q", "--no-states"]);
+      expect(inspect.stdout).toContain('checkbox "Subscribe"');
+      expect(inspect.stdout).not.toContain("{checked");
+      expect((await runCli(["inspect", PAGE, "-q"])).stdout).toContain(
+        'checkbox "Subscribe" {checked}',
+      );
+    });
+
+    it("snapshot records the choice, and diff says why a mixed pair churns", async () => {
+      const dir = mkdtempSync(join(tmpdir(), "real-a11y-states-"));
+      const withBlocks = join(dir, "with.json");
+      const without = join(dir, "without.json");
+      expect(
+        (await runCli(["snapshot", PAGE, "-q", "-o", withBlocks])).code,
+      ).toBe(0);
+      expect(
+        (await runCli(["snapshot", PAGE, "-q", "--no-states", "-o", without]))
+          .code,
+      ).toBe(0);
+      type Artifact = { meta: { states?: boolean }; pages: { tree: string }[] };
+      const on = JSON.parse(readFileSync(withBlocks, "utf8")) as Artifact;
+      const off = JSON.parse(readFileSync(without, "utf8")) as Artifact;
+      expect(on.meta.states).toBe(true);
+      expect(on.pages[0]!.tree).toContain('checkbox "Subscribe" {checked}');
+      expect(off.meta.states).toBeUndefined();
+      expect(off.pages[0]!.tree).toBe(stripBlocks(on.pages[0]!.tree));
+
+      const mixed = await runCli(["diff", without, withBlocks]);
+      expect(mixed.stderr).toContain(
+        "only the PR snapshot carries {…} states blocks",
+      );
+      const alike = await runCli(["diff", withBlocks, withBlocks]);
+      expect(alike.stderr).not.toContain("states blocks");
+    });
+
+    it("a config's defaults.states: false opts out too", async () => {
+      const dir = mkdtempSync(join(tmpdir(), "real-a11y-states-config-"));
+      const config = join(dir, "a11y.config.json");
+      writeFileSync(config, JSON.stringify({ defaults: { states: false } }));
+      const { code, stdout } = await runCli([
+        "tree",
+        PAGE,
+        "-q",
+        "--config",
+        config,
+      ]);
+      expect(code).toBe(0);
+      expect(linesOf(stdout)).toContain('checkbox "Subscribe"');
+      expect(stdout).not.toContain("{");
+    });
+  });
 });
 
 /**
