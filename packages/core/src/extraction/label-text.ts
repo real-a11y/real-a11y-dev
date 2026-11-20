@@ -10,6 +10,7 @@
  */
 import { isAriaHiddenValue } from "./aria-tokens.js";
 import { safeGetAttribute, safeNodeType, safeTagName } from "./clobber-safe.js";
+import { readGeneratedText } from "./generated-content.js";
 import { isOpaqueNameChild, isTextVisible } from "./name-spacing.js";
 import {
   getCachedComputedStyle,
@@ -57,10 +58,11 @@ export function wrappingLabelText(
 ): string {
   const parts: string[] = [];
   const labelShows = isTextVisible(getCachedComputedStyle(label, styleCache));
+  const gen = readGeneratedText(label, labelShows, styleCache);
   for (const child of label.childNodes) {
     const type = safeNodeType(child);
     if (type === Node.TEXT_NODE) {
-      const text = readText(child).trim();
+      const text = gen.transform(readText(child)).trim();
       if (text) parts.push(text);
     } else if (type === Node.ELEMENT_NODE) {
       const childEl = child as Element;
@@ -83,7 +85,7 @@ export function wrappingLabelText(
       }
     }
   }
-  return parts.join(" ");
+  return gen.before + parts.join(" ") + gen.after;
 }
 
 /**

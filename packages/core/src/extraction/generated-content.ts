@@ -6,7 +6,7 @@
  * text, without a space, as Chromium does; a pseudo-element laid out as a box
  * is spaced like any box (see `displayNeedsSpace`).
  */
-import { displayNeedsSpace } from "./name-spacing.js";
+import { displayNeedsSpace, isTextVisible } from "./name-spacing.js";
 import { getCachedComputedStyle, type StyleCache } from "./role-map.js";
 import { REDACTED_VALUE } from "./sensitivity.js";
 
@@ -134,6 +134,8 @@ function readSide(
   const style = window.getComputedStyle(element as HTMLElement, pseudo);
   const content = style.content;
   if (!content || content === "none" || content === "normal") return NONE;
+  // No box is drawn, or its text is not shown: nothing is read.
+  if (style.display === "none" || !isTextVisible(style)) return NONE;
   const text = applyTextTransform(
     parseContentText(content),
     style.textTransform,

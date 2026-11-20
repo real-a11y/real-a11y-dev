@@ -176,6 +176,24 @@ const CASES: Case[] = [
     html: `<button id="counter" class="k1">label</button>`,
     name: "51 label",
   },
+  {
+    id: "wrapping-label",
+    css: `.w1::after{content:" *"}`,
+    html: `<label class="w1" style="text-transform:uppercase">Email <input id="wrapping-label"></label>`,
+    name: "EMAIL *",
+  },
+  {
+    id: "display-none",
+    css: `.n1::before{content:"x";display:none}`,
+    html: `<button id="display-none" class="n1">Save</button>`,
+    name: "Save",
+  },
+  {
+    id: "visibility-hidden",
+    css: `.n2::before{content:"x";visibility:hidden}`,
+    html: `<button id="visibility-hidden" class="n2">Save</button>`,
+    name: "Save",
+  },
   // Accepted divergences from Chromium (see the ticket's Decision 2).
   {
     id: "quotes",
