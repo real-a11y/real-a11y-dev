@@ -44,6 +44,7 @@
 
 import {
   cleanAXText,
+  fieldRelationRoots,
   fieldStandIns,
   graftNativeFrame,
   isNativeIframeRole,
@@ -235,40 +236,28 @@ export function nativeControls(
 }
 
 /**
- * The kept nodes that stand for what `raw` controls, for withholding: each
- * `aria-controls` target the tree kept, and for one the normalizer dropped
- * (an unnamed wrapper around a listbox), its nearest kept descendants. The
- * jump chips' `nativeControls` keeps only targets that have a row; this
- * follows a dropped one down, because what sits inside it is controlled all
- * the same.
+ * The kept nodes that stand for what `raw` controls or owns, for withholding:
+ * each target the tree kept, and for one the normalizer dropped (an unnamed
+ * wrapper around a listbox), its nearest kept descendants. The jump chips'
+ * `nativeControls` keeps only targets that have a row; this follows a dropped
+ * one down, because what sits inside it is controlled all the same. Which
+ * relations count is core's `fieldRelationRoots`, the rule the browser
+ * package withholds by too: `aria-controls`, and `aria-owns`, which Chromium
+ * leaves unreparented under an `<input>`.
  *
  * Exported for its tests.
  */
 export function controlledRegion(
   raw: RawAXNode,
-  rawNodes: readonly RawAXNode[],
+  rawNodes: RawAXNode[],
   keptIds: ReadonlySet<string>,
 ): string[] {
-  const prop = raw.properties?.find((p) => p.name === "controls");
-  const targets = prop?.value?.relatedNodes ?? [];
-  if (targets.length === 0) return [];
-  const byBackendId = new Map<number, RawAXNode>();
-  const byNodeId = new Map<string, RawAXNode>();
-  for (const node of rawNodes) {
-    byNodeId.set(node.nodeId, node);
-    if (typeof node.backendDOMNodeId === "number") {
-      byBackendId.set(node.backendDOMNodeId, node);
-    }
-  }
+  const index = indexNativeAX(rawNodes);
+  const stack = fieldRelationRoots(index, raw);
+  if (stack.length === 0) return [];
+  const byNodeId = index.byId;
   const out: string[] = [];
   const seen = new Set<RawAXNode>();
-  const stack = targets.flatMap((t) => {
-    const node =
-      typeof t.backendDOMNodeId === "number"
-        ? byBackendId.get(t.backendDOMNodeId)
-        : undefined;
-    return node ? [node] : [];
-  });
   while (stack.length > 0) {
     const node = stack.pop()!;
     if (seen.has(node)) continue;

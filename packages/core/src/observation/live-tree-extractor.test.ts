@@ -835,6 +835,41 @@ describe("LiveTreeExtractor", () => {
     );
   });
 
+  // A sensitive combobox's popup listbox is not its descendant, but the option
+  // it marks selected is the field's value. An aria-selected flip there is a
+  // mutation the refresh re-extracts, and the rule holds there too.
+  it("keeps a sensitive combobox's popup choice off its options after a change", async () => {
+    document.body.innerHTML =
+      `<main><input role="combobox" aria-label="Month" autocomplete="cc-exp-month" aria-controls="lb" aria-expanded="true">` +
+      `<ul role="listbox" id="lb" aria-label="Months"><li role="option" id="a" aria-selected="true">01</li>` +
+      `<li role="option" id="b" aria-selected="false">03</li></ul></main>`;
+    const live = new LiveTreeExtractor(document.body, { mode: "dom" });
+    live.extract();
+    let lastChange: TreeChange | undefined;
+    const observer = new DomObserver(
+      document.body,
+      (change) => {
+        lastChange = change;
+      },
+      50,
+    );
+    observer.start();
+    document.getElementById("a")!.setAttribute("aria-selected", "false");
+    document.getElementById("b")!.setAttribute("aria-selected", "true");
+    await vi.advanceTimersByTimeAsync(100);
+    observer.stop();
+
+    const result = live.refresh(lastChange);
+    const options = [...result.nodes.values()].filter(
+      (n) => n.a11y.role === "option",
+    );
+    expect(options.map((n) => n.a11y.states.selected)).toEqual([
+      undefined,
+      undefined,
+    ]);
+    expect(result.nodes).toEqual(extractDomTree(document.body).nodes);
+  });
+
   // A role-less inline wrapper's text is the paragraph's own (see `isTextRun`
   // in extraction/dom-extractor), so a change inside it, or one that gives it a
   // node of its own, renames the paragraph — which no other climb reaches.

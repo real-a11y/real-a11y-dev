@@ -615,6 +615,60 @@ describe("the states block (built bin)", () => {
     expect(lines).toContain('option "M" {selected}');
   });
 
+  it("tree withholds the choice in a sensitive combobox's popup", async () => {
+    // An ARIA combobox's popup listbox is not the field's descendant:
+    // aria-controls reaches it, and so does aria-owns, which Chromium leaves
+    // unreparented under an <input>. A closed popup that stays rendered keeps
+    // its options in the tree, so it counts too.
+    const option = (label: string, selected: boolean) =>
+      `<li role="option" aria-selected="${selected}">${label}</li>`;
+    const combobox = (
+      label: string,
+      attrs: string,
+      expanded: boolean,
+      options: string,
+    ) =>
+      `<input role="combobox" aria-label="${label}" aria-expanded="${expanded}" ${attrs}>` +
+      `<ul role="listbox" id="${label}-list" aria-label="${label} options">${options}</ul>`;
+    const page = dataUrl(
+      "<!doctype html><title>Card</title><main>" +
+        combobox(
+          "Month",
+          'autocomplete="cc-exp-month" aria-controls="Month-list"',
+          true,
+          option("01", false) + option("03", true),
+        ) +
+        combobox(
+          "Year",
+          'autocomplete="cc-exp-year" aria-owns="Year-list"',
+          true,
+          option("2031", true) + option("2032", false),
+        ) +
+        combobox(
+          "Expiry",
+          'autocomplete="cc-exp" aria-controls="Expiry-list"',
+          false,
+          option("03/31", true),
+        ) +
+        combobox(
+          "Color",
+          'aria-controls="Color-list"',
+          true,
+          option("Red", true) + option("Blue", false),
+        ) +
+        "</main>",
+    );
+    const { code, stdout } = await runCli(["tree", page, "-q"]);
+    expect(code).toBe(0);
+    const lines = linesOf(stdout);
+    for (const label of ["01", "03", "2031", "2032", "03/31"]) {
+      expect(lines).toContain(`option "${label}"`);
+    }
+    expect(stdout).not.toMatch(/option "(01|03|2031|2032|03\/31)" \{/);
+    // An ordinary combobox's popup still says which option is selected.
+    expect(lines).toContain('option "Red" {selected}');
+  });
+
   it("a title that repeats a link's text describes it in neither producer", async () => {
     const page = dataUrl(
       "<!doctype html><title>Outline</title><main>" +

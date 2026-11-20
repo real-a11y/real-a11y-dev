@@ -1,0 +1,147 @@
+import { afterEach, describe, expect, it } from "vitest";
+
+import { extractDomTree } from "./dom-extractor.js";
+
+/**
+ * A sensitive field's choice is its value, and a popup's selected option says
+ * what it is. These pin the DOM producer's half of the rule; the native
+ * producers' halves are in the browser package's native-tree tests and the
+ * extension's native-core tests.
+ */
+describe("the choice a sensitive field holds", () => {
+  afterEach(() => {
+    document.body.innerHTML = "";
+  });
+
+  /** Each option's name and its `selected` state, in document order. */
+  const selectedOf = (
+    html: string,
+    options: { redactInput?: boolean } = {},
+  ): Array<[string, unknown]> => {
+    document.body.innerHTML = html;
+    return [...extractDomTree(document.body, options).nodes.values()]
+      .filter((n) => n.a11y.role === "option")
+      .map((n) => [n.a11y.name, n.a11y.states["selected"]]);
+  };
+
+  const months = (attrs: string) =>
+    `<label for="m">Expiry month</label>` +
+    `<input id="m" role="combobox" aria-expanded="true" ${attrs}>` +
+    `<ul role="listbox" id="lb" aria-label="Months">` +
+    `<li role="option" aria-selected="false">01</li>` +
+    `<li role="option" aria-selected="true">03</li></ul>`;
+
+  it("is withheld in the popup a sensitive combobox controls", () => {
+    expect(
+      selectedOf(months('autocomplete="cc-exp-month" aria-controls="lb"')),
+    ).toEqual([
+      ["01", undefined],
+      ["03", undefined],
+    ]);
+  });
+
+  it("is withheld in the popup a sensitive combobox owns", () => {
+    expect(
+      selectedOf(months('autocomplete="cc-exp-month" aria-owns="lb"')),
+    ).toEqual([
+      ["01", undefined],
+      ["03", undefined],
+    ]);
+  });
+
+  it("is withheld below a controlled wrapper, not only on its direct children", () => {
+    expect(
+      selectedOf(
+        `<input role="combobox" aria-label="Card" autocomplete="cc-number" aria-controls="pop">` +
+          `<div id="pop"><div><ul role="listbox" aria-label="Cards">` +
+          `<li role="option" aria-selected="true">Visa ending 1111</li></ul></div></div>`,
+      ),
+    ).toEqual([["Visa ending 1111", undefined]]);
+  });
+
+  it("is withheld when one of several aria-controls ids names the popup", () => {
+    expect(
+      selectedOf(
+        months('autocomplete="cc-exp-month" aria-controls="other  lb"'),
+      ),
+    ).toEqual([
+      ["01", undefined],
+      ["03", undefined],
+    ]);
+  });
+
+  it("is kept in an ordinary combobox's popup", () => {
+    expect(selectedOf(months('aria-controls="lb"'))).toEqual([
+      ["01", false],
+      ["03", true],
+    ]);
+  });
+
+  it("is kept when only an ordinary field controls the popup", () => {
+    // A sensitive field elsewhere on the page names nothing here.
+    expect(
+      selectedOf(
+        `<input type="password" aria-label="PIN" aria-controls="elsewhere">` +
+          months('aria-controls="lb"'),
+      ),
+    ).toEqual([
+      ["01", false],
+      ["03", true],
+    ]);
+  });
+
+  it("is withheld on a sensitive select's option even with an authored aria-selected", () => {
+    // aria-selected wins over selectedness, as in Chromium, so the select's
+    // own rule never saw it; the shared one does.
+    expect(
+      selectedOf(
+        `<select autocomplete="cc-exp-month" aria-label="Month">` +
+          `<option aria-selected="true">11</option><option selected>12</option></select>`,
+      ),
+    ).toEqual([
+      ["11", undefined],
+      ["12", undefined],
+    ]);
+  });
+
+  it("is withheld inside a shadow root, where the combobox and its popup share an id scope", () => {
+    document.body.innerHTML = `<div id="host"></div>`;
+    const root = document.getElementById("host")!.attachShadow({
+      mode: "open",
+    });
+    root.innerHTML = months('autocomplete="cc-exp-month" aria-controls="lb"');
+    const states = [...extractDomTree(document.body).nodes.values()]
+      .filter((n) => n.a11y.role === "option")
+      .map((n) => n.a11y.states["selected"]);
+    expect(states).toEqual([undefined, undefined]);
+  });
+
+  it("follows aria-controls only within its id scope", () => {
+    // The combobox sits in a shadow root and names an id only the light DOM
+    // has: an IDREF doesn't cross the boundary, in Chromium or here.
+    document.body.innerHTML =
+      `<div id="host"></div><ul role="listbox" id="lb" aria-label="Months">` +
+      `<li role="option" aria-selected="true">03</li></ul>`;
+    const root = document.getElementById("host")!.attachShadow({
+      mode: "open",
+    });
+    root.innerHTML = `<input role="combobox" aria-label="Month" autocomplete="cc-exp-month" aria-controls="lb">`;
+    const states = [...extractDomTree(document.body).nodes.values()]
+      .filter((n) => n.a11y.role === "option")
+      .map((n) => n.a11y.states["selected"]);
+    expect(states).toEqual([true]);
+  });
+
+  it("leaves the field's own value and the popup's names as they were", () => {
+    document.body.innerHTML = months(
+      'autocomplete="cc-exp-month" aria-controls="lb" value="03"',
+    );
+    const nodes = [...extractDomTree(document.body).nodes.values()];
+    expect(nodes.find((n) => n.a11y.role === "combobox")?.a11y.value).toBe(
+      "[redacted]",
+    );
+    expect(
+      nodes.filter((n) => n.a11y.role === "option").map((n) => n.a11y.name),
+    ).toEqual(["01", "03"]);
+  });
+});

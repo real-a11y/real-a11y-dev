@@ -12,6 +12,7 @@ import type { SemanticNode } from "../types.js";
 import { trimAscii } from "../utils/ascii-whitespace.js";
 
 import { ariaOwner } from "./aria-owner.js";
+import { inSensitiveChoice } from "./choice-withholding.js";
 import {
   safeOwnerDocument,
   safeParentElement,
@@ -213,18 +214,23 @@ export function withheldAttributes(element: Element): ReadonlySet<string> {
 const EDITOR_CONTENT_ATTRIBUTES = ["href", "src", "poster", "id"];
 
 /**
- * True when strict mode keeps `state` off the node of `element`: an option's
- * `selected`, inside a choice field, since it says what the field's withheld
- * value is. The native producer drops the same option states. One rule for
- * {@link withholdStates} and the live extractor's check for states that
- * moved, which would otherwise see the missing state as a change.
+ * True when `state` is kept off the node of `element`, since it says what a
+ * withheld value is. Always: a `selected` inside a sensitive field, or inside
+ * what one controls or owns ({@link inSensitiveChoice}). In strict mode also:
+ * an option's `selected` inside any choice field. The native producers drop
+ * the same states. One rule for {@link withholdStates} and the live
+ * extractor's check for states that moved, which would otherwise see the
+ * missing state as a change.
  */
 export function withholdsState(
   element: Element,
   role: string,
   state: string,
+  redactInput: boolean,
 ): boolean {
-  return state === "selected" && role === "option" && inChoiceField(element);
+  if (state !== "selected") return false;
+  if (redactInput && role === "option" && inChoiceField(element)) return true;
+  return inSensitiveChoice(element);
 }
 
 /** `states` without what {@link withholdsState} keeps off `element`'s node. */
@@ -232,8 +238,12 @@ export function withholdStates(
   element: Element,
   role: string,
   states: SemanticNode["a11y"]["states"],
+  redactInput: boolean,
 ): SemanticNode["a11y"]["states"] {
-  if ("selected" in states && withholdsState(element, role, "selected")) {
+  if (
+    "selected" in states &&
+    withholdsState(element, role, "selected", redactInput)
+  ) {
     const { selected: _withheld, ...rest } = states;
     return rest;
   }

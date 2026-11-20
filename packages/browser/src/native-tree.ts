@@ -65,6 +65,8 @@ import {
   graftNativeFrame,
   isNativeIframeRole,
   NATIVE_AX_CHOICE_STATES,
+  fieldRelationTargets,
+  indexNativeAX,
   nativeAncestry,
   cleanAXText,
   treeSource,
@@ -442,6 +444,28 @@ export function buildNativeTree(
     return false;
   };
 
+  // What a sensitive field controls or owns is not inside it, but the choice
+  // made there is its value: an ARIA combobox's popup listbox, which Chromium
+  // leaves where it is. Core's `fieldRelationTargets` decides what that is,
+  // for both native transports. Read once per document, on first need.
+  const reachedBySensitive = new Map<NativeDocument, Set<string>>();
+  const reachedFromSensitiveField = (document: NativeDocument): Set<string> => {
+    let reached = reachedBySensitive.get(document);
+    if (reached) return reached;
+    reached = new Set();
+    const byId = rawByNodeIdOf.get(document)!;
+    const index = indexNativeAX([...byId.values()]);
+    for (const id of document.prepared.sensitivity.sensitiveFields) {
+      const field = byId.get(id);
+      if (!field) continue;
+      for (const node of fieldRelationTargets(index, field)) {
+        reached.add(node.nodeId);
+      }
+    }
+    reachedBySensitive.set(document, reached);
+    return reached;
+  };
+
   const nodes = new Map<string, SemanticNode>();
   for (const nn of skeleton) {
     const source = sourceById.get(nn.id);
@@ -464,13 +488,16 @@ export function buildNativeTree(
     const carriesSelection =
       NATIVE_AX_CHOICE_STATES.some((state) => state in states) ||
       (enriched !== undefined && "selected" in enriched.attributes);
+    const sensitivity = source?.document.prepared.sensitivity;
     const withholdSelection =
       !!source &&
+      !!sensitivity &&
       carriesSelection &&
-      (source.document.prepared.sensitivity.regions.inside(source.raw) ||
-        ((redactInput ||
-          source.document.prepared.sensitivity.sensitiveFields.size > 0) &&
-          inChoiceField(source.raw, source.document, !redactInput)));
+      (sensitivity.regions.inside(source.raw) ||
+        ((redactInput || sensitivity.sensitiveFields.size > 0) &&
+          inChoiceField(source.raw, source.document, !redactInput)) ||
+        (sensitivity.sensitiveFields.size > 0 &&
+          reachedFromSensitiveField(source.document).has(source.raw.nodeId)));
     if (withholdSelection) {
       for (const state of NATIVE_AX_CHOICE_STATES) delete states[state];
     }

@@ -1890,6 +1890,36 @@ describe("withholdInsideSensitive", () => {
     expect(nodes[2]!.states).toStrictEqual({});
   });
 
+  it("follows aria-owns too, which Chromium leaves unreparented under an input", () => {
+    // `<input role="combobox" aria-owns="lb">`: the listbox stays the input's
+    // sibling, so only the `owns` relation reaches it.
+    const raw = [
+      {
+        nodeId: "1",
+        backendDOMNodeId: 10,
+        role: { value: "combobox" },
+        properties: [
+          {
+            name: "owns",
+            value: {
+              type: "idrefList",
+              relatedNodes: [{ backendDOMNodeId: 30 }],
+            },
+          },
+        ],
+      },
+      {
+        nodeId: "3",
+        backendDOMNodeId: 30,
+        role: { value: "listbox" },
+        childIds: ["4"],
+      },
+      { nodeId: "4", backendDOMNodeId: 40, role: { value: "option" } },
+    ];
+    const kept = new Set(["ax-dom-10", "ax-dom-30", "ax-dom-40"]);
+    expect(controlledRegion(raw[0]!, raw, kept)).toEqual(["ax-dom-30"]);
+  });
+
   it("marks every node below a sensitive one as withheld", () => {
     const nodes = [
       n("wrap", ["field"], { valueWithheld: true }),

@@ -1,11 +1,13 @@
 /**
- * The `aria-owns` owner of an element, indexed once per extraction. Held apart
- * from `role-map.ts` so that file stays within its length budget.
+ * The `aria-owns` owner of an element, and whether a sensitive field names it
+ * in `aria-controls`, each indexed once per extraction. Held apart from
+ * `role-map.ts` so that file stays within its length budget.
  */
 import { realmSingleton } from "../utils/realm-singleton.js";
 
 import { safeGetAttribute, safeQuerySelectorAll } from "./clobber-safe.js";
 import { idScope } from "./flat-tree.js";
+import { isSensitiveField } from "./sensitivity.js";
 
 /**
  * id → first `aria-owns` owner (document order) for each id scope, built on
@@ -16,19 +18,28 @@ import { idScope } from "./flat-tree.js";
 type AriaOwnerIndex = WeakMap<Document | ShadowRoot, Map<string, Element>>;
 
 /**
+ * The ids a sensitive field names in `aria-controls`, for each id scope, built
+ * on first use with the same lifetime as {@link AriaOwnerIndex}.
+ */
+type SensitiveControlsIndex = WeakMap<Document | ShadowRoot, Set<string>>;
+
+/**
  * The index of the extraction in progress, if any. It is held in the realm
  * registry rather than module scope (see `realmSingleton`), and it is only
  * ever set for the duration of one synchronous `extractDomTree` call.
  */
 interface ActiveOwnerIndex {
   current: AriaOwnerIndex | null;
+  sensitiveControls: SensitiveControlsIndex | null;
 }
 
+// `@2`: the store gained `sensitiveControls`. A copy of core that still holds
+// the `@1` shape keeps a store of its own rather than share one it can't read.
 const activeOwnerIndex = (): ActiveOwnerIndex =>
   realmSingleton<ActiveOwnerIndex>(
     "role-map.aria-owner-index",
-    "aria-owner-index@1",
-    () => ({ current: null }),
+    "aria-owner-index@2",
+    () => ({ current: null, sensitiveControls: null }),
   );
 
 /**
@@ -41,11 +52,14 @@ const activeOwnerIndex = (): ActiveOwnerIndex =>
 export function withAriaOwnerIndex<T>(fn: () => T): T {
   const holder = activeOwnerIndex();
   const previous = holder.current;
+  const previousControls = holder.sensitiveControls;
   holder.current = new WeakMap();
+  holder.sensitiveControls = new WeakMap();
   try {
     return fn();
   } finally {
     holder.current = previous;
+    holder.sensitiveControls = previousControls;
   }
 }
 
@@ -86,4 +100,44 @@ export function ariaOwner(element: Element): Element | null {
     index.set(scope, owners);
   }
   return owners.get(id) ?? null;
+}
+
+/**
+ * The ids the sensitive fields in `scope` name in `aria-controls`. Only an
+ * `<input>`, `<textarea>` or `<select>` can be one ({@link isSensitiveField}),
+ * so only those are read.
+ */
+function sensitiveControlTargets(scope: Document | ShadowRoot): Set<string> {
+  const ids = new Set<string>();
+  const fields = safeQuerySelectorAll(
+    scope,
+    "input[aria-controls], textarea[aria-controls], select[aria-controls]",
+  );
+  for (const field of fields) {
+    if (!isSensitiveField(field)) continue;
+    const controls = safeGetAttribute(field, "aria-controls") ?? "";
+    for (const id of controls.trim().split(/\s+/)) if (id) ids.add(id);
+  }
+  return ids;
+}
+
+/**
+ * True when a sensitive field names `element` in its `aria-controls`, in its
+ * id scope: an ARIA combobox's popup listbox, which is not the field's
+ * descendant, but whose selected option is the field's value.
+ *
+ * @internal
+ */
+export function controlledBySensitiveField(element: Element): boolean {
+  const id = safeGetAttribute(element, "id");
+  if (!id) return false;
+  const scope = idScope(element);
+  const index = activeOwnerIndex().sensitiveControls;
+  if (!index) return sensitiveControlTargets(scope).has(id);
+  let ids = index.get(scope);
+  if (!ids) {
+    ids = sensitiveControlTargets(scope);
+    index.set(scope, ids);
+  }
+  return ids.has(id);
 }

@@ -1054,7 +1054,7 @@ function buildNode(
           redactInput,
         ),
         ...(value !== undefined ? { value } : {}),
-        states: redactInput ? withholdStates(element, role, states) : states,
+        states: withholdStates(element, role, states, redactInput),
         properties: {
           ...(headingLevel !== null ? { level: String(headingLevel) } : {}),
           // The walk doesn't descend into media children, so the one

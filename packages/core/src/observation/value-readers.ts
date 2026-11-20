@@ -169,10 +169,9 @@ export function addMovedNativeStates(
     if (tag === "textarea" || tag === "button") continue;
     const native = nativeStates(el, tag, node.a11y.role);
     for (const [state, value] of Object.entries(native)) {
-      const moved =
-        redactInput && withholdsState(el, node.a11y.role, state)
-          ? movedSince(el, value, seen)
-          : value !== node.a11y.states[state];
+      const moved = withholdsState(el, node.a11y.role, state, redactInput)
+        ? movedSince(el, value, seen)
+        : value !== node.a11y.states[state];
       if (moved) {
         dirty.add(el);
         break;
