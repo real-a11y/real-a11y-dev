@@ -24,6 +24,8 @@ import type { NativeAXIndex, RawAXNameNode } from "./value-regions.js";
  */
 const FIELD_RELATIONS: ReadonlySet<string> = new Set(["controls", "owns"]);
 
+const NO_TARGETS: ReadonlySet<number> = new Set();
+
 /**
  * What `field` controls or owns, by Chromium's resolution: the raw nodes its
  * `controls` and `owns` relations name. An ARIA combobox's popup listbox is
@@ -109,6 +111,23 @@ function choiceContainerOf<T extends RawAXNameNode>(
 }
 
 /**
+ * The choice container `host`'s `aria-activedescendant` sits in, as Chromium
+ * resolves it, or the active node itself outside one.
+ */
+function activeContainers<T extends RawAXNameNode>(
+  index: NativeAXIndex<T>,
+  host: T,
+): T[] {
+  const active = nativeAXProperty(host, "activedescendant");
+  return (active?.relatedNodes ?? []).flatMap((related) => {
+    const id = related.backendDOMNodeId;
+    const target =
+      typeof id === "number" ? index.byBackendId.get(id) : undefined;
+    return target ? [choiceContainerOf(target, index.byId) ?? target] : [];
+  });
+}
+
+/**
  * Where a sensitive field's choice is made, in Chromium's tree: the roots of
  * the regions whose choice states, and the names read from them, say what the
  * field holds. For each field in `fieldIds` and each combobox around one
@@ -120,7 +139,9 @@ function choiceContainerOf<T extends RawAXNameNode>(
  * - a combobox around one, whole: the ARIA 1.1 wrapper holds its listbox, and
  *   Chromium relates the field inside to it on its own only for some shapes
  *   (the field its direct child, the listbox right after it);
- * - the field itself when it is a choice container (a multi-row `<select>`).
+ * - the field itself when it is a choice container (a multi-row `<select>`);
+ * - the nodes for `choiceTargets`, backend ids where the DOM says a relation
+ *   Chromium dropped leads (core's `domChoiceTargets`).
  *
  * The one rule every native consumer derives from, so they can't drift:
  * selection ({@link sensitiveChoiceReach}) in the browser package and the
@@ -132,18 +153,17 @@ function choiceContainerOf<T extends RawAXNameNode>(
 export function sensitiveChoiceRoots<T extends RawAXNameNode>(
   index: NativeAXIndex<T>,
   fieldIds: Iterable<string>,
+  choiceTargets: ReadonlySet<number> = NO_TARGETS,
 ): T[] {
   const fields = new Set(fieldIds);
   const roots = new Set<T>();
+  for (const id of choiceTargets) {
+    const node = index.byBackendId.get(id);
+    if (node) roots.add(node);
+  }
   for (const host of sensitiveChoiceHosts(index.byId, fields)) {
     for (const root of fieldRelationRoots(index, host)) roots.add(root);
-    const active = nativeAXProperty(host, "activedescendant");
-    for (const related of active?.relatedNodes ?? []) {
-      const id = related.backendDOMNodeId;
-      const target =
-        typeof id === "number" ? index.byBackendId.get(id) : undefined;
-      if (target) roots.add(choiceContainerOf(target, index.byId) ?? target);
-    }
+    for (const root of activeContainers(index, host)) roots.add(root);
     if (
       !fields.has(host.nodeId) ||
       POPUP_CHOICE_ROLES.has(host.role?.value ?? "")
@@ -163,8 +183,9 @@ export function sensitiveChoiceRoots<T extends RawAXNameNode>(
 export function sensitiveChoiceReach<T extends RawAXNameNode>(
   index: NativeAXIndex<T>,
   fieldIds: Iterable<string>,
+  choiceTargets: ReadonlySet<number> = NO_TARGETS,
 ): Set<string> {
-  const roots = sensitiveChoiceRoots(index, fieldIds);
+  const roots = sensitiveChoiceRoots(index, fieldIds, choiceTargets);
   return new Set(subtreeOf(roots, index.byId).map((node) => node.nodeId));
 }
 
@@ -194,9 +215,10 @@ function holdsChoice<T extends RawAXNameNode>(
 export function sensitivePopupRoots<T extends RawAXNameNode>(
   index: NativeAXIndex<T>,
   fieldIds: Iterable<string>,
+  choiceTargets: ReadonlySet<number> = NO_TARGETS,
 ): Set<string> {
   const roots = new Set<string>();
-  for (const id of sensitiveChoiceReach(index, fieldIds)) {
+  for (const id of sensitiveChoiceReach(index, fieldIds, choiceTargets)) {
     const node = index.byId.get(id);
     if (
       node &&

@@ -89,6 +89,14 @@ export interface NativeDomInfo {
    */
   labels?: readonly number[];
   /**
+   * Set where a sensitive field's choice is made by a relation Chromium's tree
+   * drops (core's `domChoiceTargets`): in what such a field, or a combobox
+   * around one, names in `aria-controls` or `aria-owns`, when that is an
+   * element Chromium leaves out, as a `role="presentation"` wrapper around
+   * the listbox. Its `controls` then has no target at all.
+   */
+  choiceTarget?: true;
+  /**
    * A pseudo-element (`::before`, `::after`, `::marker`): content the page's
    * CSS generates, with no element of its own. The walk records it so its
    * node in the tree counts as seen, and gives it no `dom` facet.
@@ -128,6 +136,8 @@ export interface FieldSensitivity {
    * `sensitiveChoiceReach`). A choice state there says what the field holds.
    */
   choiceReach: ReadonlySet<string>;
+  /** Backend ids the DOM walk marked `choiceTarget`. */
+  choiceTargets: ReadonlySet<number>;
 }
 
 /** What the DOM walk recorded for `raw`'s backing element, if it saw one. */
@@ -210,10 +220,14 @@ function fieldSensitivity(
     }
   }
   const regions = valueRegions(index, fields, standIns, labelsIn(enrichment));
+  const choiceTargets = new Set<number>();
+  for (const [id, info] of enrichment)
+    if (info.choiceTarget) choiceTargets.add(id);
   return {
     regions,
     sensitiveFields,
-    choiceReach: sensitiveChoiceReach(index, sensitiveFields),
+    choiceReach: sensitiveChoiceReach(index, sensitiveFields, choiceTargets),
+    choiceTargets,
     withholdsValue: (raw) =>
       regions.inside(raw) ||
       regions.containing.has(raw.nodeId) ||
@@ -258,7 +272,10 @@ export function prepareRawNodes(
     withholdRegionNames(rawNodes, sensitivity.regions),
     index,
     [...sensitivity.sensitiveFields],
-    labelsIn(enrichment),
+    {
+      labelsOf: labelsIn(enrichment),
+      choiceTargets: sensitivity.choiceTargets,
+    },
   );
   // Last: it blanks text runs only, which no step above keeps by identity.
   if (options.redactInput !== true) {

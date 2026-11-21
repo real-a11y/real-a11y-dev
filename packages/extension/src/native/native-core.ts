@@ -55,13 +55,11 @@ import {
   withNativeIdSuffix,
   type NativeFrameRef,
   holdsUnclassifiedValue,
-  domLabels,
   indexNativeAX,
   isNativePasswordMask,
   NATIVE_AX_CHOICE_STATES,
   nativeAXStateValue,
   normalizeNativeAX,
-  opensFieldInternals,
   REDACTED_VALUE,
   serializeNativeAX,
   valueRegions,
@@ -70,7 +68,6 @@ import {
   type A11yInfo,
   type FieldHostOf,
   type FieldStandIn,
-  type LabelsOf,
   type NativeAXNode,
   type RawAXNameNode,
   type NativeAXIndex,
@@ -79,7 +76,7 @@ import {
 import { DETAIL_PROPS, STATE_PROPS } from "./ax-prop-sets.js";
 
 import { isConnectionLost } from "./connection-lost.js";
-import { fieldsWithin, isSensitiveMarkup } from "./dom-fields.js";
+import { fieldsWithin, fieldWalks, type FieldInternals } from "./dom-fields.js";
 import {
   pageClick,
   pageFocus,
@@ -923,136 +920,6 @@ function hidesUnreadNode(
   return false;
 }
 
-/** What a walk of a session's documents found, by backend id: every DOM node
- *  it saw, for each in a form control's own internals that control, every
- *  field whose markup says it is sensitive, every node one sits in, and each
- *  form control's labels. */
-interface FieldInternals {
-  seen: ReadonlySet<number>;
-  hosts: ReadonlyMap<number, number>;
-  sensitive: ReadonlySet<number>;
-  /**
-   * Every node a sensitive field sits inside as Chromium lays the page out:
-   * through shadow roots, open or closed, and what a `<slot>` shows, but
-   * never out of a frame's document. A field below a hidden wrapper has no
-   * node in Chromium's tree at all, so only the document places it.
-   */
-  holdsSensitive: ReadonlySet<number>;
-  /**
-   * Each form control's `<label>`s (core's `domLabels`). Chromium's tree has
-   * no trace of them for a hidden control, yet an `aria-labelledby` pointing
-   * at one still reads them, and a sensitive field's value in one with them
-   * (core's `valueRegions`).
-   */
-  labels: LabelsOf;
-}
-
-/**
- * Walk the documents `transport` reads for the DOM nodes in a form control's
- * own internals: the user-agent shadow root of an `<input>`, `<textarea>` or
- * `<select>` (core's `opensFieldInternals`), where it draws what it holds.
- * Core's `withholdFieldInternalText` keeps their text out of the tree, since
- * nothing in the AX tree tells such a node from a `<div>`, and when the tree
- * has no node of the control's own, `fieldStandIns` finds what stands in for
- * it. The same walk finds every sensitive field by its markup, and every
- * element one sits in (`holdsSensitive`), which the in-page read can't see
- * past a shadow root. One walk serves the session's top document and every
- * frame it reads in the same renderer, which `DOM.getDocument` lists under
- * its `<iframe>`. A node one of them added since is one the walk never saw:
- * its text fails closed, and so does a row of its own; a field added since
- * inside a node the walk saw counts from the next read. `undefined` when the
- * DOM agent can't list them: text fails closed throughout, and a field with
- * no row of its own is left to the in-page read's light-DOM look.
- */
-async function fieldInternals(
-  transport: CdpTransport,
-): Promise<FieldInternals | undefined> {
-  let root: CdpDomNode | undefined;
-  try {
-    await transport.send("DOM.enable");
-    root = (
-      await transport.send<{ root?: CdpDomNode }>("DOM.getDocument", {
-        depth: -1,
-        pierce: true,
-      })
-    ).root;
-  } catch {
-    return undefined;
-  }
-  if (!root) return undefined;
-  const seen = new Set<number>();
-  const hosts = new Map<number, number>();
-  const sensitive = new Set<number>();
-  // What each node sits in as Chromium lays it out: its parent, a shadow
-  // root's host, and the `<slot>` that shows it. A frame's document sits in
-  // nothing here: its fields are its own.
-  const parentOf = new Map<number, number>();
-  const slotOf = new Map<number, number>();
-  // Each node, and the control whose internals hold it.
-  const stack: Array<[CdpDomNode, number | undefined]> = [[root, undefined]];
-  while (stack.length > 0) {
-    const [node, host] = stack.pop()!;
-    const id = node.backendNodeId;
-    seen.add(id);
-    if (isSensitiveMarkup(node)) sensitive.add(id);
-    if (host !== undefined) hosts.set(id, host);
-    // eslint-disable-next-line no-restricted-properties -- a field of CDP's plain object, not the element's: nothing on the page shadows it
-    const slot = node.assignedSlot;
-    if (slot) slotOf.set(id, slot.backendNodeId);
-    for (const child of node.children ?? []) {
-      if (child.nodeType === 1) parentOf.set(child.backendNodeId, id);
-      stack.push([child, host]);
-    }
-    if (node.contentDocument) stack.push([node.contentDocument, undefined]);
-    for (const sub of node.shadowRoots ?? []) {
-      parentOf.set(sub.backendNodeId, id);
-      stack.push([
-        sub,
-        host ??
-          (opensFieldInternals(node.localName, sub.shadowRootType)
-            ? node.backendNodeId
-            : undefined),
-      ]);
-    }
-    // A `::before` or `::after` Chromium lays out as a box has a node of its
-    // own in the tree, seen here like any other.
-    for (const pseudo of node.pseudoElements ?? []) stack.push([pseudo, host]);
-  }
-  // Up from each sensitive field, through everything it sits in, climbing
-  // from each node once.
-  const holdsSensitive = new Set<number>();
-  const up: number[] = [];
-  const climb = (id: number) => {
-    const parent = parentOf.get(id);
-    if (parent !== undefined) up.push(parent);
-    const slot = slotOf.get(id);
-    if (slot !== undefined) up.push(slot);
-  };
-  for (const id of sensitive) climb(id);
-  while (up.length > 0) {
-    const id = up.pop()!;
-    if (holdsSensitive.has(id)) continue;
-    holdsSensitive.add(id);
-    climb(id);
-  }
-  return { seen, hosts, sensitive, holdsSensitive, labels: domLabels(root) };
-}
-
-/** {@link fieldInternals}, walked once per session for the whole of a read. */
-function fieldWalks(): (
-  transport: CdpTransport,
-) => Promise<FieldInternals | undefined> {
-  const walks = new Map<CdpTransport, Promise<FieldInternals | undefined>>();
-  return (transport) => {
-    let walk = walks.get(transport);
-    if (walk === undefined) {
-      walk = fieldInternals(transport);
-      walks.set(transport, walk);
-    }
-    return walk;
-  };
-}
-
 /**
  * The raw ids of every field whose value must stay out of other nodes'
  * names: the fields the in-page read found sensitive or could not read
@@ -1658,7 +1525,7 @@ async function readDocument(
       read,
     ),
     withheldStandIns,
-    internals?.labels,
+    { labelsOf: internals?.labels, choiceTargets: internals?.choiceTargets },
   );
   const nodes =
     rawNodes === full.nodes ? firstPass : normalizeNativeAX(rawNodes);
@@ -1694,6 +1561,7 @@ async function readDocument(
       const raw = rawById.get(id);
       return raw ? [raw.nodeId] : [];
     }),
+    internals?.choiceTargets,
   );
   withholdInsideSensitive(
     enriched,

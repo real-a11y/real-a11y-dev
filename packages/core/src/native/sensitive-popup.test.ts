@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { withholdSensitiveFieldNames } from "./sensitive-names.js";
 import {
   fieldRelationRoots,
   sensitiveChoiceHosts,
@@ -257,6 +258,67 @@ describe("where a sensitive field's choice is made, beyond its relations", () =>
     // Nothing chosen lends nothing.
     raw[2] = option("3", "2", false);
     expect([...sensitivePopupRoots(indexNativeAX(raw), ["2"])]).toEqual([]);
+  });
+
+  /**
+   * A sensitive combobox (backend 20) whose `aria-controls` names a
+   * `role="presentation"` wrapper (backend 40) Chromium leaves out: the field
+   * carries no relation, and the wrapper has no node. A button is labelled by
+   * the listbox inside it.
+   */
+  const dropped = (): RawAXNameNode[] => [
+    { nodeId: "1", childIds: ["2", "5", "9"], role: { value: "RootWebArea" } },
+    {
+      nodeId: "2",
+      parentId: "1",
+      backendDOMNodeId: 20,
+      role: { value: "combobox" },
+    },
+    {
+      nodeId: "5",
+      parentId: "1",
+      backendDOMNodeId: 50,
+      childIds: ["6"],
+      role: { value: "listbox" },
+    },
+    { ...option("6", "5"), name: { value: "Visa 1111" } },
+    {
+      nodeId: "9",
+      parentId: "1",
+      backendDOMNodeId: 90,
+      role: { value: "button" },
+      name: { value: "Visa 1111" },
+      properties: [
+        {
+          name: "labelledby",
+          value: {
+            type: "idrefList",
+            relatedNodes: [{ backendDOMNodeId: 50 }],
+          },
+        },
+      ],
+    },
+  ];
+
+  it("is what the DOM says a relation Chromium dropped leads to", () => {
+    const index = indexNativeAX(dropped());
+    expect([...sensitiveChoiceReach(index, ["2"])]).toEqual([]);
+    // The DOM walk's answer: the wrapper's subtree, which has no node.
+    const targets = new Set([40, 50, 60]);
+    expect([...sensitiveChoiceReach(index, ["2"], targets)].sort()).toEqual([
+      "5",
+      "6",
+    ]);
+    expect([...sensitivePopupRoots(index, ["2"], targets)]).toEqual(["5"]);
+  });
+
+  it("withholds a name that reads the popup there", () => {
+    const named = (choiceTargets?: Set<number>) =>
+      withholdSensitiveFieldNames(dropped(), ["2"], [], { choiceTargets }).find(
+        (n) => n.nodeId === "9",
+      )?.name?.value;
+    expect(named()).toBe("Visa 1111");
+    expect(named(new Set([40, 50, 60]))).toBe("[redacted]");
   });
 
   it("is nothing for a page with no sensitive field", () => {

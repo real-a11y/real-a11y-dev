@@ -719,6 +719,94 @@ describe("the states block (built bin)", () => {
     expect(stdout).not.toContain("Month 03");
   });
 
+  it("withholds a sensitive field's choice wherever its popup sits, in both producers", async () => {
+    const chosen = (label: string) =>
+      `<li role="option" aria-selected="true">${label}</li>`;
+    const listbox = (id: string, options: string) =>
+      `<ul role="listbox" id="${id}">${options}</ul>`;
+    const wrapper = (inside: string) =>
+      `<div role="combobox" aria-expanded="true">${inside}</div>`;
+    const card = (n: number, attrs = "") =>
+      `<input aria-label="Card ${n}" autocomplete="cc-number" ${attrs}>`;
+    const page = dataUrl(
+      "<!doctype html><title>Card</title><main>" +
+        // ARIA 1.1 wrappers with no relation, in the shapes Chromium relates
+        // nothing for: the field a level down, a button between, a label
+        // around it, a search field, the listbox first, a second listbox.
+        wrapper(`<div>${card(1)}</div>` + listbox("lb1", chosen("Visa 1001"))) +
+        wrapper(
+          card(2) +
+            `<button aria-label="Open">v</button>` +
+            listbox("lb2", chosen("Visa 1002")),
+        ) +
+        wrapper(
+          `<label>Card 3 <input autocomplete="cc-number"></label>` +
+            listbox("lb3", chosen("Visa 1003")),
+        ) +
+        wrapper(
+          card(4, 'type="search"') + listbox("lb4", chosen("Visa 1004")),
+        ) +
+        wrapper(listbox("lb5", chosen("Visa 1005")) + card(5)) +
+        wrapper(
+          card(6) +
+            listbox("lb6", chosen("Visa 1006")) +
+            listbox("lb7", chosen("Visa 1007")),
+        ) +
+        // aria-controls naming a wrapper Chromium leaves out: it reports the
+        // relation with no target, so only the DOM walk finds the listbox.
+        `<input role="combobox" aria-label="Card 8" autocomplete="cc-number" aria-controls="p8" aria-expanded="true">` +
+        `<div id="p8" role="presentation">${listbox("lb8", chosen("Visa 1008"))}</div>` +
+        // Reached only by aria-activedescendant.
+        `<input role="combobox" aria-label="Month" autocomplete="cc-exp-month" aria-activedescendant="o9" aria-expanded="true">` +
+        listbox(
+          "lb9",
+          '<li role="option" aria-selected="false">01</li>' +
+            '<li role="option" id="o9" aria-selected="true">09</li>',
+        ) +
+        // A multi-row select, its own popup.
+        '<h2>Expires <select id="y" size="3" autocomplete="cc-exp-year">' +
+        "<option>2027</option><option selected>2031</option></select></h2>" +
+        '<button aria-labelledby="y"></button><button aria-describedby="y">Pay</button>' +
+        // Descriptions the chosen option, or another, carries from anywhere.
+        `<input role="combobox" aria-label="Year" autocomplete="cc-exp-year" aria-controls="lbd" aria-expanded="true">` +
+        listbox(
+          "lbd",
+          '<li role="option" aria-selected="true" aria-describedby="dsel">2033</li>' +
+            '<li role="option" aria-selected="false" aria-description="selected">2034</li>' +
+            '<li role="option" aria-selected="false" title="current choice">2035</li>',
+        ) +
+        '<span id="dsel" hidden>selected</span>' +
+        // An ordinary wrapper keeps its choice.
+        wrapper('<input aria-label="Color">' + listbox("lbc", chosen("Red"))) +
+        "<section>" +
+        [1, 2, 3, 4, 5, 6, 7, 8, 9]
+          .map((n) => `<button aria-labelledby="lb${n}"></button>`)
+          .join("") +
+        "</section></main>",
+    );
+    const tree = await runCli(["tree", page, "-q"]);
+    expect(tree.code).toBe(0);
+    const lines = linesOf(tree.stdout);
+    for (let n = 1; n <= 8; n++)
+      expect(lines).toContain(`option "Visa 100${n}"`);
+    expect(lines).toContain('option "09"');
+    expect(tree.stdout).not.toMatch(
+      /option "(Visa 100\d|0[19]|20(2[78]|3[1-5]))" \{/,
+    );
+    expect(lines).toContain('option "Red" {selected}');
+    expect(lines).toContain('heading "[redacted]" (level 2)');
+    expect(lines).toContain('button "Pay"');
+    expect(lines.filter((l) => l === 'button "[redacted]"')).toHaveLength(10);
+    expect(tree.stdout).not.toContain("description=");
+    expect(tree.stdout).not.toMatch(/button "(Visa|2031)/);
+
+    const tabs = await runCli(["tabs", page, "-q"]);
+    expect(tabs.code).toBe(0);
+    expect(tabs.stdout.match(/button "\[redacted\]"/g)).toHaveLength(10);
+    expect(tabs.stdout).toMatch(/\d\d\. button "Pay"\n/);
+    expect(tabs.stdout).not.toContain("description=");
+  });
+
   it("a title that repeats a link's text describes it in neither producer", async () => {
     const page = dataUrl(
       "<!doctype html><title>Outline</title><main>" +

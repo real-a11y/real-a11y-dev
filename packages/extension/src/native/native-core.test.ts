@@ -1432,6 +1432,121 @@ describe("readNativeTree", () => {
     expect(await read(false)).toEqual([true, false]);
   });
 
+  it("withholds the chosen option in a popup only the document places, past a wrapper Chromium leaves out", async () => {
+    // `aria-controls` names a role="presentation" wrapper: Chromium reports
+    // the relation with no target and gives the wrapper no node, so only
+    // the walk of the document (core's domChoiceTargets) finds the listbox.
+    const raw = [
+      {
+        nodeId: "1",
+        backendDOMNodeId: 5,
+        role: { value: "RootWebArea" },
+        childIds: ["2", "5"],
+      },
+      {
+        nodeId: "2",
+        parentId: "1",
+        backendDOMNodeId: 10,
+        role: { value: "combobox" },
+        name: { value: "Card" },
+        value: { type: "string", value: "4111" },
+      },
+      {
+        nodeId: "5",
+        parentId: "1",
+        backendDOMNodeId: 50,
+        role: { value: "listbox" },
+        childIds: ["6"],
+      },
+      {
+        nodeId: "6",
+        parentId: "5",
+        backendDOMNodeId: 60,
+        role: { value: "option" },
+        name: { value: "Visa 1111" },
+        properties: [
+          {
+            name: "selected",
+            value: { type: "booleanOrUndefined", value: true },
+          },
+        ],
+      },
+    ];
+    const dom = (autocomplete: string): CdpDomNode => ({
+      nodeType: 9,
+      backendNodeId: 1,
+      children: [
+        {
+          nodeType: 1,
+          backendNodeId: 3,
+          localName: "html",
+          children: [
+            {
+              nodeType: 1,
+              backendNodeId: 4,
+              localName: "body",
+              children: [
+                {
+                  nodeType: 1,
+                  backendNodeId: 10,
+                  localName: "input",
+                  attributes: [
+                    "autocomplete",
+                    autocomplete,
+                    "aria-controls",
+                    "p",
+                  ],
+                },
+                {
+                  nodeType: 1,
+                  backendNodeId: 40,
+                  localName: "div",
+                  attributes: ["id", "p", "role", "presentation"],
+                  children: [
+                    {
+                      nodeType: 1,
+                      backendNodeId: 50,
+                      localName: "ul",
+                      children: [
+                        { nodeType: 1, backendNodeId: 60, localName: "li" },
+                      ],
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    });
+    const read = async (autocomplete: string) => {
+      const sensitive = autocomplete === "cc-number";
+      const t = new FakeTransport((method, params) => {
+        if (method === "Accessibility.getFullAXTree") return { nodes: raw };
+        if (method === "DOM.getDocument") return { root: dom(autocomplete) };
+        if (method === "DOM.resolveNode") {
+          const id = (params as { backendNodeId: number }).backendNodeId;
+          return { object: { objectId: `obj-${id}` } };
+        }
+        if (method === "Runtime.callFunctionOn") {
+          const { objectId } = params as { objectId: string };
+          return {
+            result: {
+              value:
+                sensitive && objectId === "obj-10"
+                  ? { classified: true, sensitive: true, redacted: true }
+                  : { classified: true },
+            },
+          };
+        }
+        return {};
+      });
+      return findNative((await readNativeTree(t)).nodes, "option")?.states;
+    };
+    expect(await read("cc-number")).not.toHaveProperty("selected");
+    expect(await read("off")).toHaveProperty("selected", true);
+  });
+
   it("treats a field it could not read as sensitive, down to its options", async () => {
     // The in-page read fails (no objectId), so the select is unclassified:
     // it may be a card field, and its chosen option must not say so.

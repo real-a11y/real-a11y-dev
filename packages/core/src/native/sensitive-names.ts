@@ -25,6 +25,18 @@ import {
 } from "./value-regions.js";
 
 /**
+ * What a transport's walk of the document knows that Chromium's tree doesn't
+ * say: each form control's `<label>`s (`domLabels`), and where a relation
+ * Chromium dropped leads from a sensitive field (`domChoiceTargets`).
+ *
+ * @internal
+ */
+export interface DomReads {
+  labelsOf?: LabelsOf;
+  choiceTargets?: ReadonlySet<number>;
+}
+
+/**
  * The {@link ValueRegions} of the choice made in sensitive fields' popups
  * (`sensitivePopupRoots`), for names only. A reference counts as reading the
  * choice as it does for a field, but for one: a node inside a popup, not the
@@ -42,10 +54,10 @@ import {
 export function popupChoiceRegions<T extends RawAXNameNode>(
   index: NativeAXIndex<T>,
   fieldIds: readonly string[],
-  labelsOf?: LabelsOf,
+  dom: DomReads = {},
 ): ValueRegions {
-  const roots = sensitivePopupRoots(index, fieldIds);
-  const regions = valueRegions(index, roots, [], labelsOf);
+  const roots = sensitivePopupRoots(index, fieldIds, dom.choiceTargets);
+  const regions = valueRegions(index, roots, [], dom.labelsOf);
   // A part of `raw` in its own popup that holds no popup of its own: neither
   // another popup, nor in one, nor around one, whose choice it would read.
   const ownPart = (target: T, raw: RawAXNameNode, own: string): boolean =>
@@ -102,9 +114,9 @@ export function withholdPopupChoiceNames<T extends RawAXNameNode>(
   rawNodes: T[],
   index: NativeAXIndex<T>,
   fieldIds: readonly string[],
-  labelsOf?: LabelsOf,
+  dom: DomReads = {},
 ): T[] {
-  const regions = popupChoiceRegions(index, fieldIds, labelsOf);
+  const regions = popupChoiceRegions(index, fieldIds, dom);
   if (regions.roots.size === 0) return rawNodes;
   return withholdRegionNames(rawNodes, regions).map((raw) => {
     if (!raw.description || !regions.inside(raw)) return raw;
@@ -120,8 +132,8 @@ export function withholdPopupChoiceNames<T extends RawAXNameNode>(
  * it; then the choice made in such a field's popup does
  * ({@link withholdPopupChoiceNames}), in a pass of its own. `standIns` stand in for
  * such fields that have no node of their own in the tree (`fieldStandIns`),
- * and already give their value away. `labelsOf` is the transport's walk of
- * the document's labels (`valueRegions`).
+ * and already give their value away. `dom` is what the transport's walk of
+ * the document adds ({@link DomReads}).
  *
  * @internal
  */
@@ -129,7 +141,7 @@ export function withholdSensitiveFieldNames<T extends RawAXNameNode>(
   rawNodes: T[],
   fieldIds: readonly string[],
   standIns: readonly FieldStandIn[] = [],
-  labelsOf?: LabelsOf,
+  dom: DomReads = {},
 ): T[] {
   const index = indexNativeAX(rawNodes);
   const roots = new Set<string>();
@@ -142,7 +154,7 @@ export function withholdSensitiveFieldNames<T extends RawAXNameNode>(
   }
   const named = withholdRegionNames(
     rawNodes,
-    valueRegions(index, roots, standIns, labelsOf),
+    valueRegions(index, roots, standIns, dom.labelsOf),
   );
-  return withholdPopupChoiceNames(named, index, fieldIds, labelsOf);
+  return withholdPopupChoiceNames(named, index, fieldIds, dom);
 }

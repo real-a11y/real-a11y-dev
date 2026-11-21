@@ -1296,9 +1296,10 @@ const FIELD_VALUE_GATES = [
   // DOM producer (`core/src/extraction/choice-withholding.ts`, which
   // `withholdsState` and `withholdsLentValue` ask), the rule both native
   // transports share (`core/src/native/sensitive-popup.ts`,
-  // `sensitive-names.ts`), and the live refresh's triggers for it
-  // (`core/src/observation/live-tree-attrs.ts`).
-  "inSensitiveChoice|lendsSensitiveChoice|isSensitiveChoiceHost|holdsSensitiveField|pageMayHoldSensitiveField|controlledBySensitiveField|indexSensitiveRelations|choiceContainerOf|searchAbove|readsSensitivePopup|withholdPopupDescription|holdsChoice|isChosen|withholdsLentValue|POPUP_CHOICE_ROLES|sensitivePopupRoots|fieldRelationRoots|sensitiveChoiceRoots|sensitiveChoiceReach|sensitiveChoiceHosts|popupChoiceRegions|withholdPopupChoiceNames|FIELD_RELATIONS|movesSensitiveChoice|bringsSensitivePopup|hasPopupRelation",
+  // `sensitive-names.ts`), with what the transports' document walks add where
+  // Chromium drops a relation (`dom-choice-targets.ts`), and the live
+  // refresh's triggers for it (`core/src/observation/live-tree-attrs.ts`).
+  "inSensitiveChoice|lendsSensitiveChoice|isSensitiveChoiceHost|holdsSensitiveField|pageMayHoldSensitiveField|controlledBySensitiveField|indexSensitiveRelations|choiceContainerOf|searchAbove|readsSensitivePopup|withholdPopupDescription|holdsChoice|isChosen|withholdsLentValue|POPUP_CHOICE_ROLES|sensitivePopupRoots|fieldRelationRoots|sensitiveChoiceRoots|sensitiveChoiceReach|sensitiveChoiceHosts|popupChoiceRegions|withholdPopupChoiceNames|FIELD_RELATIONS|movesSensitiveChoice|bringsSensitivePopup|hasPopupRelation|domChoiceTargets|choiceTarget|activeContainers",
   // The extension's native path, which reads a live value and redacts it in
   // the page (`extension/src/native/native-core.ts`) for the roles in its
   // `VALUE_BEARING_ROLES`.
