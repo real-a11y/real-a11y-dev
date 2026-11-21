@@ -27,12 +27,14 @@ import {
  * The {@link ValueRegions} of the choice made in sensitive fields' popups
  * (`sensitivePopupRoots`), for names only. A reference counts as reading the
  * choice as it does for a field, but for one: a node inside a popup, not the
- * popup itself, named or described from its own descendants, as an option
- * labelled by its own span is, reads its own text, not which option is
- * chosen. Its name stays. Any other reference still counts, even to one
- * option, or from the popup to a caption inside it: the page may point it at
- * the chosen one, or show the choice there (a date grid captioned with the
- * chosen month).
+ * popup itself, NAMED from its own descendants, as an option labelled by its
+ * own span is, reads its own text, not which option is chosen. Its name
+ * stays. Any other reference still counts, even to one option, or from the
+ * popup to a caption inside it: the page may point it at the chosen one, or
+ * show the choice there (a date grid captioned with the chosen month). So
+ * does every description: one only the chosen option carries (a hidden
+ * "selected" span inside it) would say which it is, and dropped from every
+ * option alike, a description says nothing.
  *
  * @internal
  */
@@ -58,6 +60,13 @@ export function popupChoiceRegions<T extends RawAXNameNode>(
   return {
     ...regions,
     references: (raw, property) => {
+      // Checked first: most nodes reference nothing, and need no climb.
+      if (
+        property !== "labelledby" ||
+        nativeAXProperty(raw, property) === undefined
+      ) {
+        return regions.references(raw, property);
+      }
       const own = popupOf(raw);
       if (own === undefined || own === raw.nodeId) {
         return regions.references(raw, property);

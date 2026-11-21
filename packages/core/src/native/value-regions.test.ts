@@ -129,14 +129,18 @@ describe("withholdSensitiveFieldNames", () => {
           childIds: [String(6 + i)],
           name: { value: ["January", "March"][i] },
           named: "relatedElement",
+          // The chosen one is described by a hidden span inside it, too.
+          ...(id === "5" ? { description: { value: "selected" } } : {}),
           properties: [
             idref("labelledby", 6 + i),
+            ...(id === "5" ? [idref("describedby", 10)] : []),
             { name: "selected", value: { value: id === "5" } },
           ],
         }),
       ),
       raw("6", "StaticText", { parentId: "4", name: { value: "January" } }),
       raw("7", "StaticText", { parentId: "5", name: { value: "March" } }),
+      raw("10", "StaticText", { parentId: "5", name: { value: "selected" } }),
       raw("9", "button", {
         parentId: "1",
         name: { value: "March" },
@@ -150,6 +154,7 @@ describe("withholdSensitiveFieldNames", () => {
     expect([nameOf("4"), nameOf("5")]).toEqual(["January", "March"]);
     expect(nameOf("9")).toBe(REDACTED_VALUE);
     expect(nameOf("3")).toBe(REDACTED_VALUE);
+    expect(out.find((n) => n.nodeId === "5")?.description).toBeUndefined();
   });
 
   it("withholds a name built from a sensitive field's contents", () => {
