@@ -10,6 +10,7 @@
  */
 import { isAriaHiddenValue } from "./aria-tokens.js";
 import { safeGetAttribute, safeNodeType, safeTagName } from "./clobber-safe.js";
+import { readGeneratedText } from "./generated-content.js";
 import { isOpaqueNameChild, isTextVisible } from "./name-spacing.js";
 import {
   getCachedComputedStyle,
@@ -57,10 +58,11 @@ export function wrappingLabelText(
 ): string {
   const parts: string[] = [];
   const labelShows = isTextVisible(getCachedComputedStyle(label, styleCache));
+  const gen = readGeneratedText(label, labelShows, styleCache);
   for (const child of label.childNodes) {
     const type = safeNodeType(child);
     if (type === Node.TEXT_NODE) {
-      const text = readText(child).trim();
+      const text = gen.transform(readText(child)).trim();
       if (text) parts.push(text);
     } else if (type === Node.ELEMENT_NODE) {
       const childEl = child as Element;
@@ -83,7 +85,47 @@ export function wrappingLabelText(
       }
     }
   }
-  return parts.join(" ");
+  const { lead, trail } = edgeSpace(label, control, styleCache, gen);
+  return gen.before + lead + parts.join(" ") + trail + gen.after;
+}
+
+/**
+ * What separates a label's text from its generated text, as Chromium reads it:
+ * whitespace at an edge, or the label's own control sitting there. A comment,
+ * and a child the name skips as hidden, are not at the edge. Any other element
+ * at an edge adds none of its own.
+ */
+function edgeSpace(
+  label: Element,
+  control: Element,
+  styleCache: StyleCache | null | undefined,
+  gen: { before: string; after: string },
+): { lead: string; trail: string } {
+  const read = [...label.childNodes].filter((n) => {
+    const type = safeNodeType(n);
+    if (type === Node.TEXT_NODE) return true;
+    if (type !== Node.ELEMENT_NODE) return false;
+    if (n === control) return true;
+    const el = n as Element;
+    // An unreadable child (see wrappingLabelText) is not at the edge either.
+    try {
+      return (
+        !isAriaHiddenValue(safeGetAttribute(el, "aria-hidden")) &&
+        !isSubtreeHidden(el, getCachedComputedStyle(el, styleCache))
+      );
+    } catch {
+      return false;
+    }
+  });
+  const edge = (n: Node | undefined, re: RegExp) =>
+    n === control ||
+    (n !== undefined &&
+      safeNodeType(n) === Node.TEXT_NODE &&
+      re.test(n.textContent ?? ""));
+  return {
+    lead: gen.before && edge(read[0], /^\s/) ? " " : "",
+    trail: gen.after && edge(read[read.length - 1], /\s$/) ? " " : "",
+  };
 }
 
 /**

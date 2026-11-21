@@ -1,4 +1,5 @@
 import type { SemanticNode, ExtractionResult } from "../types.js";
+
 import { collapseAscii, trimAscii } from "../utils/ascii-whitespace.js";
 import { ElementRefMap, ELEMENT_REF_MAP_SHAPE } from "../utils/element-ref.js";
 import { getNodeId } from "../utils/id-generator.js";
@@ -30,6 +31,7 @@ import {
 } from "./field-text.js";
 import { flatChildNodes, flatChildren, idScope } from "./flat-tree.js";
 import { isFocusable } from "./focusability.js";
+import { readGeneratedText } from "./generated-content.js";
 import * as host from "./host-names.js";
 import { getKeyAttributes } from "./key-attributes.js";
 import { associatedLabels, wrappingLabelText } from "./label-text.js";
@@ -61,7 +63,7 @@ import {
 } from "./role-map.js";
 import { isSensitiveField, REDACTED_VALUE } from "./sensitivity.js";
 import { warnSkippedElement } from "./skipped-element.js";
-import { isSrOnly } from "./sr-only.js";
+import { isVisuallyHidden } from "./sr-only.js";
 import {
   nameText,
   newNameRun,
@@ -71,7 +73,6 @@ import {
   type RedactInputOption,
 } from "./strict-mode.js";
 import { getOwnText, readsTextRuns } from "./text-runs.js";
-import { isOwnVisibilityHidden } from "./visibility.js";
 
 // The text-run reads live in text-runs.ts; this stays importable from here,
 // where the live extractor already finds it.
@@ -145,29 +146,6 @@ const TEXT_INPUT_TYPES = new Set([
   "week",
   "color",
 ]);
-
-/** Check if an element is visually hidden (computed styles) */
-function isVisuallyHidden(
-  element: Element,
-  style?: CSSStyleDeclaration | null,
-): boolean {
-  const computed =
-    style !== undefined ? style : getCachedComputedStyle(element);
-
-  if (isSubtreeHidden(element, computed)) return true;
-  // An area is drawn by its image, whose visibility isSubtreeHidden read.
-  if (element.localName === "area") return false;
-
-  // NOTE: opacity:0 is intentionally NOT checked here. Custom form controls
-  // routinely use it to hide the native widget behind a custom visual while
-  // keeping it interactive, and AT still reads opacity-0 elements.
-  if (isOwnVisibilityHidden(element, computed)) return true;
-
-  // sr-only pattern: visually hidden but intentionally accessible to AT
-  if (isSrOnly(element, computed)) return true;
-
-  return false;
-}
 
 /**
  * Compute the accessible description for an element.
@@ -501,11 +479,13 @@ function getAccessibleTextContent(
 ): string {
   const textVisible = rootTextVisible(walk, element, styleCache);
   const read: ControlRead = { ...walk, styleCache };
-  let text = "";
+  // accname 2F: generated content, and the rendered `text-transform`.
+  const gen = readGeneratedText(element, textVisible !== false, styleCache);
+  let text = gen.before;
   for (const child of flatChildNodes(element)) {
     const type = safeNodeType(child);
     if (type === Node.TEXT_NODE) {
-      if (textVisible !== false) text += nameText(child, run);
+      if (textVisible !== false) text += gen.transform(nameText(child, run));
     } else if (type === Node.ELEMENT_NODE) {
       const childEl = child as Element;
       // A child that cannot be read costs its own text, not the host's name.
@@ -622,7 +602,7 @@ function getAccessibleTextContent(
       }
     }
   }
-  return text;
+  return text + gen.after;
 }
 
 /** Compute the accessible name for an element (simplified) */

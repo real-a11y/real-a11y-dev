@@ -137,6 +137,11 @@ above — see the [Playwright adapter](/packages/testing/playwright). Peer-versi
 specifics for React, Testing Library and Playwright live in
 [Peer dependencies](/recipes/peer-dependencies).
 
+Under jsdom, CSS generated content (`::before`, `::after` `content`) contributes
+nothing to a name, because jsdom does not implement pseudo-element styles; in a
+real browser it does, as [accessible names](/guide/accessible-names#what-does-not-contribute)
+explains. A name that depends on it differs between the two.
+
 ## What's in the box
 
 | Area | What it does | Page |
