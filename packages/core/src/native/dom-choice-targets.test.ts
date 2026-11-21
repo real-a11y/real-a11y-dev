@@ -126,18 +126,20 @@ describe("where the DOM says a sensitive field's choice is made", () => {
     expect(targets.has(outside.option.backendNodeId!)).toBe(false);
   });
 
-  it("resolves a repeated id to its first element, as the page does", () => {
+  it("is every element that carries a repeated id", () => {
+    // A responsive page renders the form twice, a hidden copy first: Chromium
+    // relates the field to the first, but the visible popup is the second.
     const first = wrappedListbox("p");
     const later = wrappedListbox("p");
     const targets = domChoiceTargets(
       doc(
-        el("input", { autocomplete: "cc-number", "aria-controls": "p" }),
         first.wrapper,
+        el("input", { autocomplete: "cc-number", "aria-controls": "p" }),
         later.wrapper,
       ),
     );
     expect(targets.has(first.option.backendNodeId!)).toBe(true);
-    expect(targets.has(later.option.backendNodeId!)).toBe(false);
+    expect(targets.has(later.option.backendNodeId!)).toBe(true);
   });
 
   it("counts no field an author shadow host leaves unslotted", () => {

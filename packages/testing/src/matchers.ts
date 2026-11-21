@@ -33,6 +33,7 @@ import {
   isDatalistCombobox,
   resolveRoleToken,
   selectRoleFromAttributes,
+  withholdsState,
 } from "@real-a11y-dev/core";
 import {
   extract,
@@ -265,19 +266,25 @@ function discardedRoleOf(n: SemanticNode): string | undefined {
   return resolved ?? authored;
 }
 
+/** The roles the validator requires `aria-selected` on. */
+const SELECTION_ROLES: ReadonlySet<string> = new Set(["option", "treeitem"]);
+
 /**
- * The `aria-selected` the author wrote on `element`, which the tree withholds
- * where it would say what a sensitive field holds (its popup's options): the
- * validator asks what is authored, not what the tree shows. Read through the
- * prototype: a page's element may shadow `getAttribute`.
+ * `aria-selected` where the tree withholds `selected`: in a sensitive field's
+ * popup (core's `withholdsState`), whatever the author wrote is not the tree's
+ * to report. Asking whether it is there would also say which option is chosen,
+ * by elimination, when only the chosen one carries it, and the finding lands
+ * in CI logs. So it counts as supplied, as a user agent's own would.
  */
-function withheldAuthoredAttrs(
+function withheldSuppliedAttrs(
   element: Element | undefined,
-): Record<string, string> {
-  const selected = element
-    ? Element.prototype.getAttribute.call(element, "aria-selected")
-    : null;
-  return selected === null ? {} : { "aria-selected": selected };
+  role: string,
+): readonly string[] {
+  return element &&
+    SELECTION_ROLES.has(role) &&
+    withholdsState(element, role, "selected", false)
+    ? ["aria-selected"]
+    : [];
 }
 
 /** `focusable` for the validator, omitted when the producer recorded no
@@ -302,8 +309,7 @@ function toValidatedNode(
   // the author wrote. Fill from the recorded attributes, without letting them
   // override a computed state.
   const element = getElementRefs().get(n.id);
-  const written = { ...domAttrs, ...withheldAuthoredAttrs(element) };
-  for (const [k, v] of Object.entries(written)) {
+  for (const [k, v] of Object.entries(domAttrs)) {
     if (k.startsWith("aria-") && attrs[k] === undefined) attrs[k] = v;
   }
 
@@ -327,7 +333,10 @@ function toValidatedNode(
       !authored ||
       (resolveRoleToken(authored) ?? authored) ===
         implicitRoleFor(tag, type, domAttrs),
-    uaSuppliedAttrs: uaSuppliedAttrs(tag, type, element),
+    uaSuppliedAttrs: [
+      ...uaSuppliedAttrs(tag, type, element),
+      ...withheldSuppliedAttrs(element, n.a11y.role),
+    ],
     // Left out when the producer recorded no interaction facet, so the
     // validator's fail-open default applies.
     ...focusableOf(n),

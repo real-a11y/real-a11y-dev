@@ -17,6 +17,26 @@ import { idScope } from "./flat-tree.js";
 type AriaOwnerIndex = WeakMap<Document | ShadowRoot, Map<string, Element>>;
 
 /**
+ * What a sensitive field, or a combobox around one, reaches by relation: the
+ * ids it names in `aria-controls`, by tree scope, so that every element
+ * carrying one counts (a page that repeats an id, a hidden copy of a form
+ * first, withholds both); and the elements its `aria-activedescendant`
+ * reaches, the choice container the active one sits in.
+ *
+ * @internal
+ */
+export interface RelationReach {
+  readonly elements: {
+    add(element: Element): unknown;
+    has(element: Element): boolean;
+  };
+  readonly ids: {
+    get(scope: Document | ShadowRoot): Set<string> | undefined;
+    set(scope: Document | ShadowRoot, ids: Set<string>): unknown;
+  };
+}
+
+/**
  * What choice-withholding learns about a page once per extraction, with the
  * same lifetime as {@link AriaOwnerIndex}.
  *
@@ -27,12 +47,8 @@ export interface ChoiceCache {
   readonly sensitivePages: WeakMap<Document, boolean>;
   /** The documents whose sensitive fields' relations are in `reached`. */
   readonly indexedPages: WeakSet<Document>;
-  /**
-   * What a sensitive field, or a combobox around one, names in
-   * `aria-controls`, and the choice container its `aria-activedescendant`
-   * sits in.
-   */
-  readonly reached: WeakSet<Element>;
+  /** What sensitive fields reach by relation ({@link RelationReach}). */
+  readonly reach: RelationReach;
   /** Whether each element asked about is a sensitive choice host. */
   readonly hosts: WeakMap<Element, boolean>;
 }
@@ -72,7 +88,7 @@ export function withAriaOwnerIndex<T>(fn: () => T): T {
   holder.choices = {
     sensitivePages: new WeakMap(),
     indexedPages: new WeakSet(),
-    reached: new WeakSet(),
+    reach: { elements: new WeakSet(), ids: new WeakMap() },
     hosts: new WeakMap(),
   };
   try {

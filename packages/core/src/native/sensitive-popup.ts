@@ -164,10 +164,11 @@ export function sensitiveChoiceRoots<T extends RawAXNameNode>(
   for (const host of sensitiveChoiceHosts(index.byId, fields)) {
     for (const root of fieldRelationRoots(index, host)) roots.add(root);
     for (const root of activeContainers(index, host)) roots.add(root);
-    if (
-      !fields.has(host.nodeId) ||
-      POPUP_CHOICE_ROLES.has(host.role?.value ?? "")
-    ) {
+    // A combobox that holds anything is taken whole even when it is the
+    // field: a transport may read an ARIA 1.1 wrapper itself as sensitive.
+    const role = host.role?.value ?? "";
+    const wrapper = role === "combobox" && (host.childIds?.length ?? 0) > 0;
+    if (!fields.has(host.nodeId) || wrapper || POPUP_CHOICE_ROLES.has(role)) {
       roots.add(host);
     }
   }

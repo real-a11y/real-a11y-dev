@@ -4,7 +4,7 @@
  * through core's `sensitiveChoiceReach` (states) and `sensitivePopupRoots`
  * (names), which follow the same relations from the same hosts.
  */
-import { ariaOwner, choiceCache } from "./aria-owner.js";
+import { ariaOwner, choiceCache, type RelationReach } from "./aria-owner.js";
 import {
   safeGetAttribute,
   safeGetElementById,
@@ -136,58 +136,69 @@ function choiceContainerOf(element: Element): Element | null {
 const RELATIONS = "[aria-controls], [aria-activedescendant]";
 
 /**
- * Add to `reached` what each of `candidates` that is a sensitive field, or a
- * combobox around one, reaches by relation, each id resolved in its own tree
- * scope: what it names in `aria-controls`, and the choice container its
+ * Add to `reach` what each of `candidates` that is a sensitive field, or a
+ * combobox around one, reaches by relation, each id read in its own tree
+ * scope: the ids it names in `aria-controls`, and the choice container its
  * `aria-activedescendant` sits in. The active option is always in the field's
  * popup, so a popup reached only that way is still its own. (`aria-owns`
  * needs no index: the owner climb in {@link searchAbove} meets it.)
  */
 function indexSensitiveRelations(
   candidates: Iterable<Element>,
-  reached: { add(element: Element): unknown },
+  reach: RelationReach,
 ): void {
   for (const host of candidates) {
     if (!isSensitiveChoiceHost(host)) continue;
     const scope = idScope(host);
     const controls = safeGetAttribute(host, "aria-controls") ?? "";
     for (const id of controls.trim().split(/\s+/)) {
-      const target = id ? safeGetElementById(scope, id) : null;
-      if (target) reached.add(target);
+      if (!id) continue;
+      const ids = reach.ids.get(scope) ?? new Set<string>();
+      reach.ids.set(scope, ids.add(id));
     }
     const activeId = (
       safeGetAttribute(host, "aria-activedescendant") ?? ""
     ).trim();
     const active = activeId ? safeGetElementById(scope, activeId) : null;
-    if (active) reached.add(choiceContainerOf(active) ?? active);
+    if (active) reach.elements.add(choiceContainerOf(active) ?? active);
   }
+}
+
+/** `reach` takes in `element`: by its id in its scope, or as itself. */
+function reaches(reach: RelationReach, element: Element): boolean {
+  if (reach.elements.has(element)) return true;
+  const id = safeGetAttribute(element, "id");
+  return id !== null && reach.ids.get(idScope(element))?.has(id) === true;
 }
 
 /**
  * True when a sensitive field, or a combobox around one, reaches `element` by
  * relation ({@link indexSensitiveRelations}): an ARIA combobox's popup
  * listbox, which is not the field's descendant, but whose selected option is
- * the field's value. Indexed once per page per extraction, every shadow root
- * with it: the container an `aria-activedescendant` reaches can sit in
- * another tree scope than its field (a listbox host around the shadow root
- * that holds its own input and options). Outside an extraction, or off any
- * page, `element`'s own scope is read.
+ * the field's value. Every element carrying a named id counts, not only the
+ * first the page resolves: a page that renders a form twice, a hidden copy
+ * first, would otherwise show the visible popup's choice. Indexed once per
+ * page per extraction, every shadow root with it: the container an
+ * `aria-activedescendant` reaches can sit in another tree scope than its
+ * field (a listbox host around the shadow root that holds its own input and
+ * options). Outside an extraction, or off any page, `element`'s own scope is
+ * read.
  */
 export function controlledBySensitiveField(element: Element): boolean {
   const cache = choiceCache();
   const doc = cache && scannedDocument(element);
   if (!cache || !doc?.documentElement) {
-    const reached = new Set<Element>();
+    const reach: RelationReach = { elements: new Set(), ids: new Map() };
     const scope = idScope(element);
-    indexSensitiveRelations(safeQuerySelectorAll(scope, RELATIONS), reached);
-    return reached.has(element);
+    indexSensitiveRelations(safeQuerySelectorAll(scope, RELATIONS), reach);
+    return reaches(reach, element);
   }
   if (!cache.indexedPages.has(doc)) {
     cache.indexedPages.add(doc);
     const candidates = deepQuerySelectorAll(doc.documentElement, RELATIONS);
-    indexSensitiveRelations(candidates, cache.reached);
+    indexSensitiveRelations(candidates, cache.reach);
   }
-  return cache.reached.has(element);
+  return reaches(cache.reach, element);
 }
 
 /**

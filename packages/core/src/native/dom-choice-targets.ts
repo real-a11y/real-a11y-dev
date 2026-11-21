@@ -87,7 +87,8 @@ interface DocumentWalk {
   fields: Set<number>;
 }
 
-type IdScope = Map<string, DomChoiceNode>;
+/** Every element with each id, in document order: a page may repeat one. */
+type IdScope = Map<string, DomChoiceNode[]>;
 
 /** One step of the walk: a node, its id scope, the element it sits in. */
 type Step = [DomChoiceNode, IdScope, number?];
@@ -103,7 +104,7 @@ function meet(walk: DocumentWalk, [node, scope, parent]: Step): void {
   const holder = typeof slot === "number" ? slot : parent;
   if (holder !== undefined) walk.above.set(id, holder);
   const own = attributeOf(node, "id");
-  if (own && !scope.has(own)) scope.set(own, node);
+  if (own) scope.set(own, [...(scope.get(own) ?? []), node]);
   if (isSensitiveMarkup(node)) walk.fields.add(id);
 }
 
@@ -134,8 +135,7 @@ function walkDocument(root: DomChoiceNode): DocumentWalk {
     const host = (node.shadowRoots ?? []).some(
       (shadow) => shadow.shadowRootType !== "user-agent",
     );
-    // Reversed, so the stack visits them, and meets each id, in document
-    // order: the first element with an id is the one the page resolves.
+    // Reversed, so the stack visits them in document order.
     for (const child of [...(node.children ?? [])].reverse()) {
       pending.push([child, scope, host ? undefined : holder]);
     }
@@ -158,8 +158,8 @@ function aroundFields({ fields, above }: DocumentWalk): Set<number> {
 /**
  * Backend ids of every DOM node in what a sensitive field, or a combobox
  * around one (the ARIA 1.1 wrapper), names in `aria-controls` or
- * `aria-owns`, each id resolved in the element's own tree scope as the page
- * resolves it. "Around" is the flat tree's: a parent, a shadow root's host,
+ * `aria-owns`, each id read in the element's own tree scope: every element
+ * carrying it. "Around" is the flat tree's: a parent, a shadow root's host,
  * the `<slot>` that shows the node. A frame's document is a scope of its own
  * and holds its own fields.
  *
@@ -176,8 +176,10 @@ export function domChoiceTargets(root: DomChoiceNode): Set<number> {
     }
     for (const name of ["aria-controls", "aria-owns"]) {
       for (const ref of idrefs(node, name)) {
-        const target = scope.get(ref);
-        if (target) subtreeIds(target, targets);
+        // Every element with the id, not only the first Chromium resolves:
+        // a page that renders a form twice, a hidden copy first, would
+        // otherwise show the visible popup's choice.
+        for (const target of scope.get(ref) ?? []) subtreeIds(target, targets);
       }
     }
   }

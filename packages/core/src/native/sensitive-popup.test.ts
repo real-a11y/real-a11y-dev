@@ -210,6 +210,8 @@ describe("where a sensitive field's choice is made, beyond its relations", () =>
       "6",
     ]);
     expect([...sensitivePopupRoots(index, ["4"])]).toEqual(["5"]);
+    // The same when a transport reads the wrapper itself as the field.
+    expect([...sensitivePopupRoots(index, ["2"])]).toEqual(["5"]);
   });
 
   it("is the choice container the field's aria-activedescendant sits in", () => {

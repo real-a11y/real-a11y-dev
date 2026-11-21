@@ -425,6 +425,21 @@ describe("the choice a sensitive field holds", () => {
       }
     });
 
+    it("is withheld in every popup that carries the id a sensitive field names", () => {
+      // A responsive page renders the form twice, a hidden copy first; the
+      // page resolves the id to the hidden one, but the visible popup holds
+      // the same choice.
+      const copy =
+        `<input role="combobox" aria-label="Month" autocomplete="cc-exp-month" aria-controls="lb">` +
+        `<ul role="listbox" id="lb" aria-label="Months"><li role="option" aria-selected="true">07</li></ul>`;
+      expect(
+        selectedOf(`<div aria-hidden="true">${copy}</div><div>${copy}</div>`),
+      ).toEqual([
+        ["07", undefined],
+        ["07", undefined],
+      ]);
+    });
+
     it("is withheld on an option a sensitive field controls itself", () => {
       // Only that option: what it points at is all that is reached.
       expect(

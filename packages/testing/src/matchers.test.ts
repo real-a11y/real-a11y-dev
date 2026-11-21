@@ -100,16 +100,19 @@ describe("toBeValidA11yTree", () => {
     expect(root).toBeValidA11yTree();
   });
 
-  it("reads the aria-selected a sensitive popup's author wrote, which the tree withholds", () => {
-    const popup = (first: string) =>
+  it("asks nothing of the aria-selected a sensitive popup's options carry, which the tree withholds", () => {
+    const popup = (first: string, autocomplete = "cc-exp-month") =>
       mount(
-        `<input role="combobox" aria-label="Month" aria-expanded="true" aria-controls="lb" autocomplete="cc-exp-month">` +
+        `<input role="combobox" aria-label="Month" aria-expanded="true" aria-controls="lb" autocomplete="${autocomplete}">` +
           `<ul role="listbox" id="lb" aria-label="Months">` +
           `<li role="option" ${first}>01</li><li role="option" aria-selected="true">03</li></ul>`,
       );
     expect(popup('aria-selected="false"')).toBeValidA11yTree();
-    // One the author never wrote is still missing.
-    expect(popup("")).not.toBeValidA11yTree();
+    // Written on the chosen option only: asking which option lacks it would
+    // say which one is chosen.
+    expect(popup("")).toBeValidA11yTree();
+    // An ordinary popup's option still needs it.
+    expect(popup("", "off")).not.toBeValidA11yTree();
   });
 
   it("accepts DPUB-ARIA and Graphics-ARIA roles", () => {
