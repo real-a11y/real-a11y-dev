@@ -264,4 +264,33 @@ describe("where the DOM says a sensitive field's choice is made", () => {
       expect(targets.has(node.backendNodeId!)).toBe(true);
     }
   });
+
+  it("stops at a container around the field itself, unless it is the only one", () => {
+    // A data grid around the field keeps its own rows; the editor's list
+    // box is the popup.
+    const option = el("li", { id: "o3", role: "option" });
+    const listbox = el("ul", { role: "listbox" }, [option]);
+    const field = el("input", {
+      autocomplete: "cc-exp",
+      "aria-activedescendant": "o3",
+    });
+    const row = el("div", { role: "row", "aria-selected": "true" });
+    const grid = el("div", { role: "grid" }, [
+      row,
+      el("div", { role: "row" }, [field, listbox]),
+    ]);
+    const targets = domChoiceTargets(doc(grid));
+    expect(targets.has(option.backendNodeId!)).toBe(true);
+    expect(targets.has(listbox.backendNodeId!)).toBe(true);
+    expect(targets.has(row.backendNodeId!)).toBe(false);
+    // A field inside its own list box: that list box is its popup.
+    const own = el("li", { id: "o4", role: "option" });
+    const chosen = el("li", { role: "option", "aria-selected": "true" });
+    const inside = el("input", {
+      autocomplete: "cc-exp",
+      "aria-activedescendant": "o4",
+    });
+    const list = el("ul", { role: "listbox" }, [chosen, inside, own]);
+    expect(domChoiceTargets(doc(list)).has(chosen.backendNodeId!)).toBe(true);
+  });
 });

@@ -915,6 +915,29 @@ describe("a sensitive popup's choice marked by another state", () => {
     ]);
   });
 
+  it("is kept on a data grid's own rows around a sensitive editor, and withheld in the editor's list box", () => {
+    // A popup doesn't hold its own field: the grid around the editor is the
+    // page's. A field inside its own list box still has it as its popup.
+    const grid =
+      `<div role="grid" aria-label="Cards"><div role="row" aria-selected="true"><div role="gridcell">Visa</div></div>` +
+      `<div role="row"><div role="gridcell">` +
+      `<input role="combobox" aria-label="Month" ${SENSITIVE} aria-expanded="true" aria-controls="lb" aria-activedescendant="o3">` +
+      `<ul role="listbox" id="lb" aria-label="Months"><li role="option" id="o3" aria-selected="true">03</li></ul>` +
+      `</div></div></div>`;
+    expect(
+      statesOf(grid, ["row", "option"]).map(([r, , st]) => [r, st]),
+    ).toEqual([
+      ["row", { selected: true }],
+      ["row", {}],
+      ["option", {}],
+    ]);
+    const own =
+      `<ul role="listbox" aria-label="Months"><li role="option" aria-selected="true">03</li>` +
+      `<li><input role="combobox" aria-label="Month" ${SENSITIVE} aria-activedescendant="o4"></li>` +
+      `<li role="option" id="o4">04</li></ul>`;
+    expect(statesOf(own, ["option"]).map(([, , st]) => st)).toEqual([{}, {}]);
+  });
+
   it("is kept in an ordinary field's popup, and on a checkbox's own state", () => {
     expect(
       statesOf(page("", menu), ["menuitemradio", "menuitemcheckbox"]),

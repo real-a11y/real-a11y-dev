@@ -222,17 +222,25 @@ export function isSensitiveChoiceHost(element: Element): boolean {
 }
 
 /**
- * Every choice container (`POPUP_CHOICE_ROLES`) at or above `element`, on
- * every path {@link searchAbove} climbs. Not only the nearest: a radio group
- * or menu nested in a grid would otherwise bound the popup, and the grid's
- * chosen row outside it would show.
+ * The choice containers (`POPUP_CHOICE_ROLES`) `active` sits in that make up
+ * `host`'s popup, on every path {@link searchAbove} climbs. Not only the
+ * nearest: a radio group or menu nested in a grid would otherwise bound the
+ * popup, and the grid's chosen row outside it would show. But none around
+ * `host` itself, since a popup doesn't hold its own field: a data grid a
+ * sensitive editor sits in, with the editor's list box in a cell, keeps its
+ * own rows' choice. One is still taken when it is the only container: a
+ * field inside its own list box.
  */
-function choiceContainersOf(element: Element): Set<Element> {
+function choiceContainersOf(active: Element, host: Element): Set<Element> {
   const found = new Set<Element>();
-  searchAbove(element, (el) => {
-    if (POPUP_CHOICE_ROLES.has(getImplicitRole(el))) found.add(el);
+  let around: Element | undefined;
+  searchAbove(active, (el) => {
+    if (!POPUP_CHOICE_ROLES.has(getImplicitRole(el))) return false;
+    if (isWithin(host, el)) around ??= el;
+    else found.add(el);
     return false;
   });
+  if (found.size === 0 && around) found.add(around);
   return found;
 }
 
@@ -265,7 +273,7 @@ function indexSensitiveRelations(
     ).trim();
     const searched = idSearchRoot(host);
     for (const active of activeId ? elementsWithId(searched, activeId) : []) {
-      const containers = choiceContainersOf(active);
+      const containers = choiceContainersOf(active, host);
       for (const reached of containers.size > 0 ? containers : [active]) {
         reach.elements.add(reached);
       }

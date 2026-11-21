@@ -103,17 +103,25 @@ function subtreeOf<T extends RawAXNameNode>(
 }
 
 /**
- * Every choice container (`POPUP_CHOICE_ROLES`) at or above `node`. Not only
- * the nearest: a radio group or menu nested in a grid would otherwise bound
- * the popup, and the grid's chosen row outside it would show.
+ * The choice containers (`POPUP_CHOICE_ROLES`) at or above `node` that make
+ * up `host`'s popup. Not only the nearest: a radio group or menu nested in a
+ * grid would otherwise bound the popup, and the grid's chosen row outside it
+ * would show. But none around `host` itself, since a popup doesn't hold its
+ * own field: a data grid a sensitive editor sits in keeps its own rows'
+ * choice. The nearest is still taken when it is the only one: a field inside
+ * its own list box.
  */
 function choiceContainersOf<T extends RawAXNameNode>(
   node: T,
+  host: T,
   byId: ReadonlyMap<string, T>,
 ): T[] {
-  return [...nativeAncestry(node, byId)].filter((cur) =>
+  const containers = [...nativeAncestry(node, byId)].filter((cur) =>
     POPUP_CHOICE_ROLES.has(cur.role?.value ?? ""),
   );
+  const aroundHost = new Set(nativeAncestry(host, byId));
+  const popup = containers.filter((cur) => !aroundHost.has(cur));
+  return popup.length > 0 ? popup : containers.slice(0, 1);
 }
 
 /**
@@ -130,7 +138,7 @@ function activeContainers<T extends RawAXNameNode>(
     const target =
       typeof id === "number" ? index.byBackendId.get(id) : undefined;
     if (!target) return [];
-    const containers = choiceContainersOf(target, index.byId);
+    const containers = choiceContainersOf(target, host, index.byId);
     return containers.length > 0 ? containers : [target];
   });
 }

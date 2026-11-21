@@ -477,4 +477,101 @@ describe("the popup an active descendant reaches", () => {
       ["3", "4", "5", "6"],
     );
   });
+
+  it("stops at a container around the field itself, a data grid it sits in", () => {
+    // A grid holding a chosen row and, in another row, the field and the
+    // list box its active descendant sits in.
+    const raw: RawAXNameNode[] = [
+      { nodeId: "1", childIds: ["3"], role: { value: "RootWebArea" } },
+      {
+        nodeId: "3",
+        parentId: "1",
+        backendDOMNodeId: 30,
+        role: { value: "grid" },
+        childIds: ["4", "5"],
+      },
+      {
+        nodeId: "4",
+        parentId: "3",
+        backendDOMNodeId: 40,
+        role: { value: "row" },
+        properties: [{ name: "selected", value: { value: true } }],
+      },
+      {
+        nodeId: "5",
+        parentId: "3",
+        backendDOMNodeId: 50,
+        role: { value: "row" },
+        childIds: ["2", "7"],
+      },
+      {
+        nodeId: "2",
+        parentId: "5",
+        backendDOMNodeId: 20,
+        role: { value: "combobox" },
+        properties: [
+          {
+            name: "activedescendant",
+            value: { type: "idref", relatedNodes: [{ backendDOMNodeId: 80 }] },
+          },
+        ],
+      },
+      {
+        nodeId: "7",
+        parentId: "5",
+        backendDOMNodeId: 70,
+        role: { value: "listbox" },
+        childIds: ["8"],
+      },
+      {
+        nodeId: "8",
+        parentId: "7",
+        backendDOMNodeId: 80,
+        role: { value: "option" },
+      },
+    ];
+    expect([...sensitiveChoiceReach(indexNativeAX(raw), ["2"])].sort()).toEqual(
+      ["7", "8"],
+    );
+  });
+
+  it("takes a list box around the field when it is the only container", () => {
+    // A field inside its own list box: that list box is its popup.
+    const raw: RawAXNameNode[] = [
+      { nodeId: "1", childIds: ["3"], role: { value: "RootWebArea" } },
+      {
+        nodeId: "3",
+        parentId: "1",
+        backendDOMNodeId: 30,
+        role: { value: "listbox" },
+        childIds: ["4", "2", "5"],
+      },
+      {
+        nodeId: "4",
+        parentId: "3",
+        backendDOMNodeId: 40,
+        role: { value: "option" },
+        properties: [{ name: "selected", value: { value: true } }],
+      },
+      {
+        nodeId: "2",
+        parentId: "3",
+        backendDOMNodeId: 20,
+        role: { value: "combobox" },
+        properties: [
+          {
+            name: "activedescendant",
+            value: { type: "idref", relatedNodes: [{ backendDOMNodeId: 50 }] },
+          },
+        ],
+      },
+      {
+        nodeId: "5",
+        parentId: "3",
+        backendDOMNodeId: 50,
+        role: { value: "option" },
+      },
+    ];
+    expect(sensitiveChoiceReach(indexNativeAX(raw), ["2"]).has("4")).toBe(true);
+  });
 });

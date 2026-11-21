@@ -254,34 +254,46 @@ function addHostTargets(
   }
   for (const ref of idrefs(host, "aria-activedescendant")) {
     for (const active of scope.get(ref) ?? []) {
-      subtreeIds(choiceContainerIn(walk, active) ?? active, targets);
+      subtreeIds(choiceContainerIn(walk, active, host) ?? active, targets);
     }
   }
 }
 
 /**
- * The outermost choice container at or above `node` in `walk`, by markup: a
- * `<select>`, or an element any of whose `role` tokens resolves to one
- * (`POPUP_CHOICE_ROLES`; `region listbox` reads as a listbox once the unnamed
- * region is skipped). Its subtree holds every one nearer: a radio group or
- * menu nested in a grid would otherwise bound the popup, and the grid's
- * chosen row outside it would show. The side that withholds more.
+ * The outermost choice container at or above `node` in `walk` that is part of
+ * `host`'s popup, by markup: a `<select>`, or an element any of whose `role`
+ * tokens resolves to one (`POPUP_CHOICE_ROLES`; `region listbox` reads as a
+ * listbox once the unnamed region is skipped). Its subtree holds every one
+ * nearer: a radio group or menu nested in a grid would otherwise bound the
+ * popup, and the grid's chosen row outside it would show. The climb stops at
+ * one around `host` itself, since a popup doesn't hold its own field (a data
+ * grid a sensitive editor sits in keeps its own rows' choice), and takes it
+ * only when it is the first met: a field inside its own list box.
  */
 function choiceContainerIn(
   walk: DocumentWalk,
   node: DomChoiceNode,
+  host: DomChoiceNode,
 ): DomChoiceNode | undefined {
+  const aroundHost = new Set<number>();
+  for (let at = host.backendNodeId; at !== undefined; at = walk.above.get(at)) {
+    aroundHost.add(at);
+  }
   let outermost: DomChoiceNode | undefined;
   for (let at = node.backendNodeId; at !== undefined; at = walk.above.get(at)) {
     const met = walk.elements.get(at)?.node;
-    if (!met) continue;
-    const tag = (met.localName ?? met.nodeName ?? "").toLowerCase();
-    if (
-      tag === "select" ||
-      rolesOf(met).some((role) => POPUP_CHOICE_ROLES.has(role))
-    ) {
-      outermost = met;
-    }
+    if (!met || !isChoiceContainer(met)) continue;
+    if (aroundHost.has(at)) return outermost ?? met;
+    outermost = met;
   }
   return outermost;
+}
+
+/** `node` is a `<select>`, or any of its `role` tokens is a choice container. */
+function isChoiceContainer(node: DomChoiceNode): boolean {
+  const tag = (node.localName ?? node.nodeName ?? "").toLowerCase();
+  return (
+    tag === "select" ||
+    rolesOf(node).some((role) => POPUP_CHOICE_ROLES.has(role))
+  );
 }
