@@ -116,6 +116,19 @@ const INTERACTIVE = new Set([
  */
 const NATIVE_STRUCTURAL_NESTING = new Set(["combobox>option"]);
 
+/** `child` sits in `ancestor` as the element's own structure: a
+ *  `NATIVE_STRUCTURAL_NESTING` pair whose two roles both came from the element. */
+function isNativeStructuralNesting(
+  ancestor: ValidatedNode,
+  child: ValidatedNode,
+): boolean {
+  return (
+    child.implicitRole === true &&
+    ancestor.implicitRole === true &&
+    NATIVE_STRUCTURAL_NESTING.has(`${ancestor.role}>${child.role}`)
+  );
+}
+
 /** Per-node spec issues — drives the red/green dot and the inspector list. */
 export function validateNode(
   n: ValidatedNode,
@@ -196,9 +209,7 @@ export function validateNode(
     const ok =
       parent &&
       (meta.requiredContextRole.includes(parent.role) ||
-        (n.implicitRole === true &&
-          parent.implicitRole === true &&
-          NATIVE_STRUCTURAL_NESTING.has(`${parent.role}>${n.role}`)));
+        isNativeStructuralNesting(parent, n));
     if (!ok) {
       issues.push({
         severity: "warn",
@@ -252,6 +263,39 @@ function descendants(nodes: NodeMap, id: string): ValidatedNode[] {
 }
 
 /**
+ * The nearest interactive ancestor `node` is wrongly nested in, or undefined.
+ *
+ * `<select><option>` is combobox > option — the nesting IS how a select is
+ * built, so flagging it told people to break correct markup. The exemption is
+ * deliberately a named pair list rather than "both roles are native":
+ * blanket-exempting native nesting would also swallow `<button><a href>`,
+ * which is a real bug (and invalid HTML), so no correct document would ever
+ * reach it.
+ *
+ * An exempt pair must not END the walk, only skip this rung. The `option` in
+ * `<div role="button"><select><option>` is legitimately nested in its select —
+ * and illegitimately nested in the button above it, which nothing would ever
+ * test if we stopped there. Every entry added to the pair list widens what an
+ * early stop could swallow.
+ */
+function nestingInteractiveAncestor(
+  nodes: NodeMap,
+  node: ValidatedNode,
+): ValidatedNode | undefined {
+  let ancestor = node.parentId ? nodes.get(node.parentId) : undefined;
+  while (ancestor) {
+    if (
+      INTERACTIVE.has(ancestor.role) &&
+      !isNativeStructuralNesting(ancestor, node)
+    ) {
+      return ancestor;
+    }
+    ancestor = ancestor.parentId ? nodes.get(ancestor.parentId) : undefined;
+  }
+  return undefined;
+}
+
+/**
  * Tree-level relationship issues keyed by node id — the checks `validateNode`
  * can't do because they need the whole tree, not one node.
  */
@@ -265,37 +309,14 @@ export function validateTree(nodes: NodeMap): Map<string, NodeIssue[]> {
 
   for (const node of nodes.values()) {
     // 1. Interactive nested inside interactive (link inside button, …).
-    if (INTERACTIVE.has(node.role)) {
-      let ancestor = node.parentId ? nodes.get(node.parentId) : null;
-      while (ancestor) {
-        if (INTERACTIVE.has(ancestor.role)) {
-          // `<select><option>` is combobox > option — the nesting IS how a
-          // select is built, so flagging it told people to break correct
-          // markup. The exemption is deliberately a named pair list rather
-          // than "both roles are native": blanket-exempting native nesting
-          // would also swallow `<button><a href>`, which is a real bug (and
-          // invalid HTML), so no correct document would ever reach it.
-          const nativeStructure =
-            node.implicitRole &&
-            ancestor.implicitRole &&
-            NATIVE_STRUCTURAL_NESTING.has(`${ancestor.role}>${node.role}`);
-          // An exempt pair must not END the walk, only skip this rung. The
-          // `option` in `<div role="button"><select><option>` is legitimately
-          // nested in its select — and illegitimately nested in the button
-          // above it, which nothing would ever test if we stopped here. Every
-          // entry added to the pair list widens what a `break` could swallow.
-          if (nativeStructure) {
-            ancestor = ancestor.parentId ? nodes.get(ancestor.parentId) : null;
-            continue;
-          }
-          add(node.id, {
-            severity: "error",
-            message: `interactive "${node.role}" is nested inside "${ancestor.role}" — nested controls aren't operable by assistive tech`,
-          });
-          break;
-        }
-        ancestor = ancestor.parentId ? nodes.get(ancestor.parentId) : null;
-      }
+    const nestedIn = INTERACTIVE.has(node.role)
+      ? nestingInteractiveAncestor(nodes, node)
+      : undefined;
+    if (nestedIn) {
+      add(node.id, {
+        severity: "error",
+        message: `interactive "${node.role}" is nested inside "${nestedIn.role}" — nested controls aren't operable by assistive tech`,
+      });
     }
 
     // 2. A role whose children are presentational (button, link, tab…) must not
