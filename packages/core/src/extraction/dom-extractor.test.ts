@@ -4070,7 +4070,6 @@ describe("name from content covers the whole ARIA 1.2 role set", () => {
     ["gridcell", `<span>42</span>`, "42"],
     ["columnheader", `<span>Name</span>`, "Name"],
     ["rowheader", `<span>Row 1</span>`, "Row 1"],
-    ["row", `<span>Totals</span>`, "Totals"],
     ["tooltip", `<span>Saves the file</span>`, "Saves the file"],
   ])("names a role=%s from wrapped content", (role, inner, expected) => {
     expect(nameOf(`<div id="target" role="${role}">${inner}</div>`)).toBe(
@@ -4078,10 +4077,35 @@ describe("name from content covers the whole ARIA 1.2 role set", () => {
     );
   });
 
-  // Naming from content is the opposite direction to NAME_BARRIER_ROLES, and
-  // most of these roles are in both sets. Adding them here must not start
-  // leaking their text into a container's name.
-  it("does not let a named-from-content cell leak into its row's name", () => {
+  // A row is named from its content only in a grid or treegrid, as Chromium
+  // does: an orphan row, or one in a role="table", reads "" whatever it holds.
+  it("names a row from its direct text inside a grid", () => {
+    expect(
+      nameOf(
+        `<div role="grid"><div id="target" role="row"><span>Totals</span></div></div>`,
+      ),
+    ).toBe("Totals");
+  });
+
+  it("leaves an orphan row and a role=table row unnamed", () => {
+    expect(
+      nameOf(`<div id="target" role="row"><span>Totals</span></div>`),
+    ).toBe("");
+    expect(
+      nameOf(
+        `<div role="table"><div id="target" role="row"><span>Totals</span></div></div>`,
+      ),
+    ).toBe("");
+  });
+
+  // Cells are no longer barriers, so a grid row reads its cells; the same cells
+  // in a data table or role=table leave the row unnamed.
+  it("names a grid row from its cells, and a table row from nothing", () => {
+    expect(
+      nameOf(
+        `<div role="grid"><div id="target" role="row"><div role="gridcell">A</div><div role="gridcell">B</div></div></div>`,
+      ),
+    ).toBe("A B");
     expect(
       nameOf(
         `<div id="target" role="row"><div role="cell">A</div><div role="cell">B</div></div>`,
@@ -4089,37 +4113,189 @@ describe("name from content covers the whole ARIA 1.2 role set", () => {
     ).toBe("");
   });
 
-  it("does not let a tooltip leak into the name of the widget hosting it", () => {
+  it("names a row through a rowgroup in a treegrid", () => {
+    expect(
+      nameOf(
+        `<div role="treegrid"><div role="rowgroup"><div id="target" role="row" aria-level="1"><div role="gridcell">A</div><div role="gridcell">B</div></div></div></div>`,
+      ),
+    ).toBe("A B");
+  });
+
+  it("names a visible tooltip into the widget hosting it, and a hidden one not", () => {
     expect(
       nameOf(
         `<button id="target">Save<span role="tooltip">Saves the file</span></button>`,
       ),
+    ).toBe("SaveSaves the file");
+    expect(
+      nameOf(
+        `<button id="target">Save<span role="tooltip" hidden>Tip</span></button>`,
+      ),
     ).toBe("Save");
   });
 
-  // The barrier is what keeps a real grid's rows quiet: ARIA requires a row's
-  // children to be cells, and a gridcell contributes nothing upward, so the
-  // checkbox inside it never reaches the row's name however deeply it nests.
-  it("keeps a row silent when its widget sits in a gridcell, as ARIA requires", () => {
+  it("reaches a widget in a grid cell through the row", () => {
     expect(
       nameOf(
-        `<div id="target" role="row"><div role="gridcell"><div role="checkbox"><span>Accept</span></div></div></div>`,
+        `<div role="grid"><div id="target" role="row"><div role="gridcell"><div role="checkbox"><span>Accept</span></div></div></div></div>`,
       ),
-    ).toBe("");
+    ).toBe("Accept");
   });
 
-  // A widget as a row's DIRECT child is malformed grid markup, and there the
-  // named-widget recursion of accname §2F.iii applies: the checkbox
-  // contributes its computed name, which is what Chrome exposes. Not new
-  // behaviour — `<div role="cell"><div role="checkbox">…` took this same path
-  // before — but `row` reaches it now, so pin it rather than leave it to be
-  // rediscovered as a surprise.
-  it("takes a directly-nested widget's computed name into a row's name", () => {
+  it("keeps a widget's name out of an orphan row, even as its direct child", () => {
     expect(
       nameOf(
         `<div id="target" role="row"><div role="checkbox"><span>Accept</span></div></div>`,
       ),
+    ).toBe("");
+  });
+
+  it("takes a directly-nested widget's computed name into a grid row's name", () => {
+    expect(
+      nameOf(
+        `<div role="grid"><div id="target" role="row"><div role="checkbox"><span>Accept</span></div></div></div>`,
+      ),
     ).toBe("Accept");
+  });
+});
+
+describe("name from content reads through lists, cells and tooltips", () => {
+  const nameOf = (html: string, id = "target"): string => {
+    const root = createPage(html);
+    // Attached, so a label's `for` and an `aria-labelledby` id resolve.
+    document.body.appendChild(root);
+    const node = [...extractDomTree(root).nodes.values()].find(
+      (n) => n.dom?.attributes["id"] === id,
+    )!;
+    return node.a11y.name;
+  };
+
+  afterEach(() => {
+    document.body.innerHTML = "";
+  });
+
+  it.each([
+    [
+      `<button id="target"><ul><li>One</li><li>Two</li></ul></button>`,
+      "One Two",
+    ],
+    [`<a id="target" href="/"><ul><li>x</li></ul></a>`, "x"],
+    [`<h2 id="target">Items <ul><li>a</li></ul></h2>`, "Items a"],
+    [`<button id="target"><dl><dt>T</dt><dd>D</dd></dl></button>`, "T D"],
+    [
+      `<button id="target">Open <ul><li aria-label="LI">Inner</li></ul></button>`,
+      "Open LI",
+    ],
+    [
+      `<table><tr><th>H</th></tr><tr><td id="target"><ul><li>a</li><li>b</li></ul></td></tr></table>`,
+      "a b",
+    ],
+  ])("reads %s as %j", (html, expected) => {
+    expect(nameOf(html)).toBe(expected);
+  });
+
+  it("names a textbox from a label holding a list", () => {
+    expect(
+      nameOf(
+        `<input id="target"><label for="target"><ul><li>Lbl</li></ul></label>`,
+      ),
+    ).toBe("Lbl");
+  });
+
+  it("names a button from an aria-labelledby target holding a list", () => {
+    expect(
+      nameOf(
+        `<button id="target" aria-labelledby="l">b</button><div id="l"><ul><li>L1</li><li>L2</li></ul></div>`,
+      ),
+    ).toBe("L1 L2");
+  });
+
+  it("stops at a menu nested in a list item", () => {
+    expect(
+      nameOf(
+        `<button id="target"><ul><li>A<ul role="menu"><li role="menuitem">M</li></ul></li></ul></button>`,
+      ),
+    ).toBe("A");
+  });
+
+  it("keeps an item widget nested in an item widget out of the name", () => {
+    // Chromium says "Reports Q1" for a treeitem directly inside a treeitem; we
+    // keep "Reports" deliberately (see NAME_BARRIER_ROLES).
+    expect(
+      nameOf(
+        `<ul role="tree"><li id="target" role="treeitem">Reports<ul role="group"><li role="treeitem">Q1</li></ul></li></ul>`,
+      ),
+    ).toBe("Reports");
+    // With a plain <ul> between them the inner item has no tree context, so it
+    // is a listitem here and reads through, as in Chromium.
+    expect(
+      nameOf(
+        `<ul role="tree"><li id="target" role="treeitem">Reports<ul><li role="treeitem">Q1</li></ul></li></ul>`,
+      ),
+    ).toBe("Reports Q1");
+    expect(
+      nameOf(
+        `<ul role="menubar"><li id="target" role="menuitem">File<ul role="menu"><li role="menuitem">New</li></ul></li></ul>`,
+      ),
+    ).toBe("File");
+  });
+
+  it("names a <tr> in a grid table from its cells and a data-table row from nothing", () => {
+    const grid = createPage(
+      `<table role="grid"><tr id="r"><th>H</th><td>C</td></tr></table>`,
+    );
+    const data = createPage(
+      `<table><tr id="r"><th>H</th><td>C</td></tr></table>`,
+    );
+    const rowName = (root: Element) =>
+      [...extractDomTree(root).nodes.values()].find(
+        (n) => n.dom?.attributes["id"] === "r",
+      )!.a11y.name;
+    expect(rowName(grid)).toBe("H C");
+    expect(rowName(data)).toBe("");
+  });
+
+  it("names a row a grid owns through aria-owns, directly or by a rowgroup", () => {
+    expect(
+      nameOf(
+        `<div role="grid" aria-owns="r"></div><div id="r" role="row" tabindex="0"><div role="gridcell">A</div></div>`,
+        "r",
+      ),
+    ).toBe("A");
+    expect(
+      nameOf(
+        `<div role="grid" aria-owns="g"></div><div id="g" role="rowgroup"><div id="r2" role="row"><div role="gridcell">A</div></div></div>`,
+        "r2",
+      ),
+    ).toBe("A");
+  });
+
+  it("survives a cycle of aria-owns while looking for the grid", () => {
+    expect(
+      nameOf(
+        `<div id="a" role="row" aria-owns="b"><span>x</span></div><div id="b" role="rowgroup" aria-owns="a"></div>`,
+        "a",
+      ),
+    ).toBe("");
+  });
+
+  it("lets a focusable table with role=none bound its rows inside a grid", () => {
+    const root = createPage(
+      `<div role="grid"><div role="row"><div role="gridcell"><table role="none" tabindex="0"><tr id="inner"><th>H</th><td>A</td></tr></table></div></div></div>`,
+    );
+    document.body.appendChild(root);
+    const row = [...extractDomTree(root).nodes.values()].find(
+      (n) => n.dom?.attributes["id"] === "inner",
+    )!;
+    expect(row.a11y.name).toBe("");
+  });
+
+  it("keeps a table a barrier", () => {
+    expect(
+      nameOf(
+        `<a id="target" href="/"><table><tr><th>H</th></tr><tr><td>Cell</td></tr></table></a>`,
+      ),
+    ).toBe("");
   });
 });
 
