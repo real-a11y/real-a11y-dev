@@ -1445,6 +1445,9 @@ describe("LiveTreeExtractor", () => {
       observer.start();
       root.querySelector("div")!.textContent = "New";
       await vi.advanceTimersByTimeAsync(100);
+      // Without a delivered change, refresh() re-extracts everything and the
+      // assertions below would pass for the wrong reason.
+      expect(lastChange).toBeDefined();
       const result = live.refresh(lastChange);
       observer.stop();
       expect(result.nodes).toEqual(extractA11yTree(root).nodes);
