@@ -21,32 +21,47 @@ navigation "On this page"
       link "See also"
 main
   heading "Example: Playwright E2E" (level 1)
-  paragraph "Demonstrates — the adapter — against real fixture pages in a Playwright test suite."
+  paragraph
+    text "Demonstrates"
     code "@real-a11y-dev/testing/playwright"
+    text "— the"
     code "attach()"
+    text "adapter — against real fixture pages in a Playwright test suite."
   paragraph
     strong "Source:"
     link "packages/testing/e2e/"
       code "packages/testing/e2e/"
   heading "What it shows" (level 2)
   list
-    listitem "injecting the audit engine into a real browser page"
+    listitem
       code "attach(page)"
-    listitem "producing a stable string for snapshot tests"
+      text "injecting the audit engine into a real browser page"
+    listitem
       code "treeSnapshot()"
-    listitem "verifying heading structure"
+      text "producing a stable string for snapshot tests"
+    listitem
       code "outlineSnapshot()"
-    listitem "verifying tab order"
+      text "verifying heading structure"
+    listitem
       code "tabSequenceSnapshot()"
-    listitem "All four assertions (, , , ) passing on a well-structured page"
+      text "verifying tab order"
+    listitem
+      text "All four assertions ("
       code "assertHeadingOrder"
+      text ","
       code "assertNoUnlabeledInteractive"
+      text ","
       code "assertLandmarkStructure"
+      text ","
       code "assertDialogsLabeled"
-    listitem "The same assertions on a broken page — error messages surfaced in the test runner"
+      text ") passing on a well-structured page"
+    listitem
+      text "The same assertions"
       strong "throwing"
-    listitem "narrowing the audit to a specific subtree"
+      text "on a broken page — error messages surfaced in the test runner"
+    listitem
       code "rootSelector"
+      text "narrowing the audit to a specific subtree"
   heading "Run it locally" (level 2)
   button "Copy Code"
   code "git clone https://github.com/real-a11y/real-a11y-dev.git cd real-a11y-dev pnpm install # Install the Playwright browser (first time only) pnpm --filter @real-a11y-dev/testing exec playwright install chromium # Run the e2e tests pnpm --filter @real-a11y-dev/testing test:e2e"
@@ -58,35 +73,57 @@ main
   code "test("assertHeadingOrder passes for correct structure", async ({ page }) => { await page.goto(fixtureUrl("fixture.html")); const sn = await attach(page); await expect(sn.assertHeadingOrder()).resolves.toBeUndefined(); await expect(sn.assertLandmarkStructure()).resolves.toBeUndefined(); await expect(sn.assertNoUnlabeledInteractive()).resolves.toBeUndefined(); });"
   paragraph "The good fixture has:"
   list
-    listitem "One with two sections (no skipped levels)"
+    listitem
+      text "One"
       code "<h1>"
+      text "with two"
       code "<h2>"
-    listitem "Labeled , , landmarks"
+      text "sections (no skipped levels)"
+    listitem
+      text "Labeled"
       code "<header>"
+      text ","
       code "<main>"
+      text ","
       code "<footer>"
-    listitem "A form with proper elements on every input"
+      text "landmarks"
+    listitem
+      text "A form with proper"
       code "<label>"
-    listitem "A with"
+      text "elements on every input"
+    listitem
+      text "A"
       code "<dialog>"
+      text "with"
       code "aria-labelledby"
   heading "Bad fixture — assertions throw" (level 2)
   button "Copy Code"
   code "test("assertHeadingOrder throws on missing h1", async ({ page }) => { await page.goto(fixtureUrl("fixture-bad.html")); const sn = await attach(page); await expect(sn.assertHeadingOrder()).rejects.toThrow(); await expect(sn.assertNoUnlabeledInteractive()).rejects.toThrow(); await expect(sn.assertLandmarkStructure()).rejects.toThrow(); await expect(sn.assertDialogsLabeled()).rejects.toThrow(); });"
   paragraph "The bad fixture has:"
   list
-    listitem "No (starts at , then jumps to )"
+    listitem
+      text "No"
       code "<h1>"
+      text "(starts at"
       code "<h2>"
+      text ", then jumps to"
       code "<h4>"
-    listitem "No landmark"
+      text ")"
+    listitem
+      text "No"
       code "<main>"
-    listitem "An unlabeled and unlabeled"
+      text "landmark"
+    listitem
+      text "An unlabeled"
       code "<button>"
+      text "and unlabeled"
       code "<input>"
-    listitem "An open with no or"
+    listitem
+      text "An open"
       code "<dialog>"
+      text "with no"
       code "aria-label"
+      text "or"
       code "aria-labelledby"
   heading "Narrowing the audit root" (level 2)
   button "Copy Code"
@@ -94,32 +131,43 @@ main
   heading "Snapshot test" (level 2)
   button "Copy Code"
   code "test("treeSnapshot is stable across multiple calls", async ({ page }) => { await page.goto(fixtureUrl("fixture.html")); const sn = await attach(page); const snap1 = await sn.treeSnapshot(); const snap2 = await sn.treeSnapshot(); expect(snap1).toBe(snap2); // deterministic — same DOM, same string });"
-  paragraph "Commit output with to catch unintended accessibility regressions in CI:"
+  paragraph
+    text "Commit"
     code "treeSnapshot()"
+    text "output with"
     code "toMatchSnapshot()"
+    text "to catch unintended accessibility regressions in CI:"
   button "Copy Code"
   code "test("page a11y tree matches snapshot", async ({ page }) => { await page.goto("/dashboard"); const sn = await attach(page, { rootSelector: "main" }); expect(await sn.treeSnapshot()).toMatchSnapshot(); // Playwright stores snapshot in: e2e/snapshots/test-name-chromium.txt });"
   heading "How the adapter works" (level 2)
   button "Copy Code"
   code "Test (Node) Browser page ────────── ──────────── attach(page) → readBundle() (cached) → page.addScriptTag(bundle) ──▶ window.__realA11y__ = { treeSnapshot, … } → returns handle sn.assertHeadingOrder() → page.evaluate( ──▶ __realA11y__.assertHeadingOrder(root) __realA11y__.fn(root) ) ◀── throws A11yAssertionError (message preserved)"
-  paragraph "The bundle (30 KB) is read from disk once and cached in the Node process — subsequent calls add no I/O overhead."
+  paragraph
+    text "The bundle (30 KB) is read from disk once and cached in the Node process — subsequent"
     code "attach()"
+    text "calls add no I/O overhead."
   heading "See also" (level 2)
   list
-    listitem "— / run findings-aware CI audits over a whole page set defined in , no test harness required."
+    listitem
       strong
         link "@real-a11y-dev/cli"
           code "@real-a11y-dev/cli"
+      text "—"
       code "real-a11y snapshot"
+      text "/"
       code "real-a11y diff"
+      text "run findings-aware CI audits over a whole page set defined in"
       code "a11y.config.json"
-    listitem "— the same audit engine exposed to AI agents for agent-driven accessibility checks."
+      text ", no test harness required."
+    listitem
       strong
         link "@real-a11y-dev/mcp"
           code "@real-a11y-dev/mcp"
+      text "— the same audit engine exposed to AI agents for agent-driven accessibility checks."
 contentinfo
   link "Edit this page on GitHub"
-  paragraph "Last updated:"
+  paragraph
+    text "Last updated:"
     time "[redacted]"
   navigation "Pager"
     link "Next page Getting Started"

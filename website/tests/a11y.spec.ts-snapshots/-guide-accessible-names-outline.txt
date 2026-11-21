@@ -1,6 +1,7 @@
   h2 On this page
 h1 Accessible Names
   h2 The priority order
+    h3 Text beside a link: text rows
   h2 Concrete examples
     h3 Button with only text
     h3 Button with an icon and hidden text

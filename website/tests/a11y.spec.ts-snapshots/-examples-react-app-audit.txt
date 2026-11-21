@@ -9,31 +9,42 @@ navigation "On this page"
       link "Key code"
 main
   heading "Example: React App" (level 1)
-  paragraph "A Vite + React 19 application demonstrating hooks and the component."
+  paragraph
+    text "A Vite + React 19 application demonstrating"
     code "@real-a11y-dev/react"
+    text "hooks and the"
     code "<SemanticNavigator />"
+    text "component."
   paragraph
     strong "Source:"
     link "examples/react-app/"
       code "examples/react-app/"
   heading "What it shows" (level 2)
   list
-    listitem "mounted as a floating portal panel over the app ( + )"
+    listitem
       code "<SemanticNavigator />"
+      text "mounted as a floating portal panel over the app ("
       code "floating"
+      text "+"
       code "enablePicker"
-    listitem "powering a live "issues" badge (unlabeled buttons, missing headings)"
+      text ")"
+    listitem
       code "useSemanticTree()"
-    listitem "announcing when a dialog is open via an region"
+      text "powering a live "issues" badge (unlabeled buttons, missing headings)"
+    listitem
       code "useActiveModal()"
+      text "announcing when a dialog is open via an"
       code "aria-live"
+      text "region"
     listitem "Runtime mode switching (A11y / DOM) via props"
     listitem "Shadow DOM isolation — host app CSS does not affect the panel"
   heading "Run it locally" (level 2)
   button "Copy Code"
   code "git clone https://github.com/real-a11y/real-a11y-dev.git cd real-a11y-dev pnpm install pnpm --filter @real-a11y-dev/example-react dev"
-  paragraph "Opens at ."
+  paragraph
+    text "Opens at"
     code "http://localhost:5175"
+    text "."
   heading "Key code" (level 2)
   heading "Floating panel" (level 3)
   button "Copy Code"
@@ -48,7 +59,8 @@ main
   code "// examples/react-app/src/ModalAnnouncer.tsx import { useActiveModal } from "@real-a11y-dev/react"; export function ModalAnnouncer({ rootRef }) { const modal = useActiveModal(rootRef); return ( <div aria-live="polite" aria-atomic="true" className="sr-only"> {modal ? `Dialog open: ${modal.a11y.name || "unnamed dialog"}` : ""} </div> ); }"
 contentinfo
   link "Edit this page on GitHub"
-  paragraph "Last updated:"
+  paragraph
+    text "Last updated:"
     time "[redacted]"
   navigation "Pager"
     link "Next page Getting Started"

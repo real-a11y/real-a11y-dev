@@ -19,67 +19,99 @@ main
   heading "Install" (level 2)
   button "Copy Code"
   code "npm install -D @real-a11y-dev/react @real-a11y-dev/testing @real-a11y-dev/inspector"
-  paragraph "is a dev dependency — you'll gate the panel so it never ships to production. See ."
+  paragraph
     code "@real-a11y-dev/react"
+    text "is a dev dependency — you'll gate the panel so it never ships to production. See"
     link "Keep it out of production"
+    text "."
   separator
   heading "Mount <SemanticNavigator /> in a client component" (level 2)
     code "<SemanticNavigator />"
-  paragraph "Any component that renders the inspector must be a . The inspector uses refs, DOM APIs, and (in floating mode) a portal to — none of that is available during server rendering."
+  paragraph
+    text "Any component that renders the inspector must be a"
     strong "Client Component"
+    text ". The inspector uses refs, DOM APIs, and (in floating mode) a portal to"
     code "document.body"
+    text "— none of that is available during server rendering."
   button "Copy Code"
   code "// app/components/A11yPanel.tsx "use client"; import { useRef, type ReactNode } from "react"; import { SemanticNavigator } from "@real-a11y-dev/react"; export function A11yPanel({ children }: { children: ReactNode }) { const rootRef = useRef<HTMLDivElement>(null); return ( <div ref={rootRef} style={{ display: "contents" }}> {children} <SemanticNavigator root={rootRef} floating highlightOnHover /> </div> ); }"
   paragraph "Wrap your pages with it in the root layout, so the panel observes what they render:"
   button "Copy Code"
   code "// app/layout.tsx import type { ReactNode } from "react"; import { A11yPanel } from "./components/A11yPanel"; export default function RootLayout({ children }: { children: ReactNode }) { return ( <html lang="en"> <body> <A11yPanel>{children}</A11yPanel> </body> </html> ); }"
-  paragraph "is the element the panel observes: here, the that holds your pages. It has to be attached to an element that holds them. A ref that never reaches an element, or one on an empty , leaves the panel blank, and nothing is logged."
+  paragraph
     code "root"
+    text "is the element the panel observes: here, the"
     code "<div>"
+    text "that holds your pages. It has to be attached to an element that holds them. A ref that never reaches an element, or one on an empty"
     code "<div>"
-  paragraph "The wrapper is , so it takes no part in layout: a flex or grid layout on still lays out your pages' top-level elements as if they were its own children. A selector that names them as 's children, such as , no longer matches. Having no box of its own, the wrapper is the one row in the panel that hover can't highlight."
+    text ", leaves the panel blank, and nothing is logged."
+  paragraph
+    text "The wrapper is"
     code "display: contents"
+    text ", so it takes no part in layout: a flex or grid layout on"
     code "<body>"
+    text "still lays out your pages' top-level elements as if they were its own children. A selector that names them as"
     code "<body>"
+    text "'s children, such as"
     code "body > main"
-  paragraph "The mode portals into . The library already guards against SSR — the portal only activates after the first client commit — so you can render this component from a Server Component without a crash."
+    text ", no longer matches. Having no box of its own, the wrapper is the one row in the panel that hover can't highlight."
+  paragraph
+    text "The"
     code "floating"
+    text "mode portals into"
     code "document.body"
+    text ". The library already guards against SSR — the portal only activates after the first client commit — so you can render this component from a Server Component without a crash."
   heading "Gate it out of production" (level 2)
   paragraph "Two options — pick the one that matches your toolchain."
   heading "Option 1 — static gate (fully tree-shaken)" (level 3)
   button "Copy Code"
   code "// app/components/A11yPanel.tsx "use client"; import { useRef, type ReactNode } from "react"; import dynamic from "next/dynamic"; const SemanticNavigator = dynamic( () => import("@real-a11y-dev/react").then((m) => m.SemanticNavigator), { ssr: false }, ); export function A11yPanel({ children }: { children: ReactNode }) { const rootRef = useRef<HTMLDivElement>(null); // The wrapper renders in every build, so your pages sit in the same DOM in // development and production. In a production build the condition is // statically false: the panel never renders, and its chunk is never // requested. return ( <div ref={rootRef} style={{ display: "contents" }}> {children} {process.env.NODE_ENV === "development" && ( <SemanticNavigator root={rootRef} floating /> )} </div> ); }"
-  paragraph "Note: has to live in the App Router. Putting it in a Server Component throws a build-time error."
+  paragraph
+    text "Note:"
     code "dynamic(..., { ssr: false })"
+    text "has to live"
     strong "inside a Client Component"
+    text "in the App Router. Putting it in a Server Component throws a build-time error."
   heading "Option 2 — environment flag" (level 3)
-  paragraph "For staging deployments where you want to toggle the panel with an env var, use the component from Option 1 with this condition in place of its check:"
+  paragraph
+    text "For staging deployments where you want to toggle the panel with an env var, use the component from Option 1 with this condition in place of its"
     code "NODE_ENV"
+    text "check:"
   button "Copy Code"
   code "{process.env.NEXT_PUBLIC_A11Y === "1" && ( <SemanticNavigator root={rootRef} floating /> )}"
   paragraph "This ships the panel chunk in the production bundle as a separate chunk — it just doesn't run. Cheaper DX, more bytes."
   separator
   heading "Unit tests — Vitest + next-intl + Testing Library" (level 2)
-  paragraph "The App Router's navigation helpers (, , etc.) read from the request-scoped intl context, which doesn't exist in a unit-test renderer. Mock them in :"
+  paragraph
+    text "The App Router's"
     code "next-intl"
+    text "navigation helpers ("
     code "Link"
+    text ","
     code "usePathname"
+    text ", etc.) read from the request-scoped intl context, which doesn't exist in a unit-test renderer. Mock them in"
     code "vitest.setup.tsx"
+    text ":"
   button "Copy Code"
   code "// vitest.setup.tsx import "@testing-library/jest-dom/vitest"; import { afterEach, vi } from "vitest"; import { cleanup } from "@testing-library/react"; import type { AnchorHTMLAttributes, ReactNode } from "react"; afterEach(cleanup); vi.mock("@/i18n/navigation", () => ({ Link: ({ children, href, locale, ...rest }: AnchorHTMLAttributes<HTMLAnchorElement> & { href: string; locale?: string; children: ReactNode; }) => ( <a href={locale ? `/${locale}${href}` : href} {...rest}> {children} </a> ), usePathname: () => "/", useRouter: () => ({ push: vi.fn(), replace: vi.fn(), back: vi.fn(), forward: vi.fn(), refresh: vi.fn(), prefetch: vi.fn(), }), }));"
-  paragraph "Wire it into :"
+  paragraph
+    text "Wire it into"
     code "vitest.config.ts"
+    text ":"
   button "Copy Code"
   code "// vitest.config.ts import { defineConfig } from "vitest/config"; import react from "@vitejs/plugin-react"; import { fileURLToPath } from "node:url"; export default defineConfig({ plugins: [react()], resolve: { alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) }, }, test: { environment: "jsdom", globals: true, setupFiles: ["./vitest.setup.tsx"], server: { // jest-dom ESM import needs this on Node strict resolution deps: { inline: ["@testing-library/jest-dom"] }, }, }, });"
-  paragraph "Note the file is — the mock itself renders JSX."
+  paragraph
+    text "Note the file is"
     code ".tsx"
+    text "— the mock itself renders JSX."
   heading "Test a component that uses Link" (level 3)
     code "Link"
   button "Copy Code"
   code "// src/__tests__/Breadcrumb.test.tsx import { render, screen } from "@testing-library/react"; import { describe, it, expect } from "vitest"; import { assertNoUnlabeledInteractive } from "@real-a11y-dev/testing"; import { Breadcrumb } from "@/components/Breadcrumb"; it("renders locale-scoped links and passes the audit", () => { const { container } = render( <Breadcrumb locale="en" items={[{ label: "Home", href: "/" }, { label: "Services", href: "/services" }]} />, ); expect(screen.getByRole("link", { name: /services/i })) .toHaveAttribute("href", "/en/services"); expect(() => assertNoUnlabeledInteractive(container)).not.toThrow(); });"
-  paragraph "Only the are mocked. Your own components render for real."
+  paragraph
+    text "Only the"
     emphasis "Next internals"
+    text "are mocked. Your own components render for real."
   separator
   heading "E2E — Playwright against next dev" (level 2)
     code "next dev"
@@ -87,43 +119,72 @@ main
   code "// playwright.config.ts import { defineConfig, devices } from "@playwright/test"; const PORT = 3100; export default defineConfig({ testDir: "./e2e", testMatch: "**/*.spec.ts", use: { baseURL: `http://localhost:${PORT}` }, projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }], webServer: { command: `next dev -p ${PORT}`, url: `http://localhost:${PORT}`, reuseExistingServer: !process.env.CI, timeout: 120_000, }, });"
   button "Copy Code"
   code "// e2e/home.spec.ts import { test, expect } from "@playwright/test"; import { attach } from "@real-a11y-dev/testing/playwright"; test("home page structural audits", async ({ page }) => { await page.goto("/en"); const sn = await attach(page); await sn.assertHeadingOrder(); await sn.assertNoUnlabeledInteractive(); await sn.assertLandmarkStructure(); expect(await sn.treeSnapshot()).toMatchSnapshot("home-audit.txt"); });"
-  paragraph "The same handle exposes and — commit all three as fixtures and let PRs diff against them."
+  paragraph
+    text "The same"
     code "attach(page)"
+    text "handle exposes"
     code "outlineSnapshot"
+    text "and"
     code "tabSequenceSnapshot"
-  paragraph "For CI auditing, reach for the CLI instead of raw text snapshots: writes one findings-aware JSON artifact from your , and classifies findings as new / changed / fixed — robust to the DOM churn (re-indentation, renumbered locators) that defeats a line diff. See the recipe and the reference."
+    text "— commit all three as fixtures and let PRs diff against them."
+  paragraph
+    text "For"
     strong "cross-page"
+    text "CI auditing, reach for the CLI instead of raw text snapshots:"
     code "npx real-a11y snapshot"
+    text "writes one findings-aware JSON artifact from your"
     code "a11y.config.json"
+    text ", and"
     code "npx real-a11y diff base.json pr.json"
+    text "classifies findings as new / changed / fixed — robust to the DOM churn (re-indentation, renumbered locators) that defeats a line diff. See the"
     link "CI A11y Diff Bot"
+    text "recipe and the"
     link "CLI package"
+    text "reference."
   separator
   heading "Known constraints" (level 2)
   list
-    listitem "The component uses + . Wrap it in a Client Component ()."
-      strong "Server Components can't render ."
+    listitem
+      strong
+        text "Server Components can't render"
         code "<SemanticNavigator />"
+        text "."
+      text "The component uses"
       code "useRef"
+      text "+"
       code "useEffect"
+      text ". Wrap it in a Client Component ("
       code ""use client""
-    listitem "In Next 15 this is a build-time error, not a runtime one."
-      strong "must live inside a Client Component."
+      text ")."
+    listitem
+      strong
         code "next/dynamic({ ssr: false })"
-    listitem "for React 19. Older versions declare as a peer and fail to install."
-      strong "must be ≥ 16.1"
+        text "must live inside a Client Component."
+      text "In Next 15 this is a build-time error, not a runtime one."
+    listitem
+      strong
         code "@testing-library/react"
+        text "must be ≥ 16.1"
+      text "for React 19. Older versions declare"
       code "react: ^18"
-    listitem "Next 15 declares as an optional peer — install ≥ that version to avoid ."
-      strong "version must match Next's peer range."
+      text "as a peer and fail to install."
+    listitem
+      strong
         code "@playwright/test"
+        text "version must match Next's peer range."
+      text "Next 15 declares"
       code "@playwright/test@^1.51.1"
+      text "as an optional peer — install ≥ that version to avoid"
       code "ERESOLVE"
-  paragraph "See the recipe for the full matrix."
+      text "."
+  paragraph
+    text "See the"
     link "Peer Dependencies"
+    text "recipe for the full matrix."
 contentinfo
   link "Edit this page on GitHub"
-  paragraph "Last updated:"
+  paragraph
+    text "Last updated:"
     time "[redacted]"
   navigation "Pager"
     link "Previous page Configuration"
