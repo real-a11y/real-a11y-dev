@@ -134,7 +134,14 @@ export function needsSpaceAround(
   // author's `display: inline` on one still reads "Note S Body", not
   // "Note SBody" — so neither is decided by `display`.
   if (tag === "br" || tag === "summary") return true;
-  const display = style?.display;
+  return displayNeedsSpace(style?.display);
+}
+
+/**
+ * The box rule of {@link needsSpaceAround}, from a computed `display` alone:
+ * also what spaces a generated `::before` / `::after` box, which has no tag.
+ */
+export function displayNeedsSpace(display: string | undefined): boolean {
   // No computed style to read (no `window.getComputedStyle`): keep the
   // unspaced concatenation rather than guessing.
   if (!display) return false;

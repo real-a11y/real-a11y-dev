@@ -26,6 +26,7 @@ generic
 link "which is a different type surface"
 link "Playwright adapter"
 link "Peer dependencies"
+link "accessible names"
 table
 link "Snapshots →"
 link "Snapshot report →"

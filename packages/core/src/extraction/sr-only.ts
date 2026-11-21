@@ -1,7 +1,8 @@
 /** The sr-only / visually-hidden CSS idiom. Kept out of dom-extractor.ts. */
 import { safeGetAttribute, safeTagName } from "./clobber-safe.js";
 import { insetCollapsesBox } from "./inset-clip.js";
-import { getCachedComputedStyle } from "./role-map.js";
+import { getCachedComputedStyle, isSubtreeHidden } from "./role-map.js";
+import { isOwnVisibilityHidden } from "./visibility.js";
 
 /** Tags that are natively interactive — never treated as visually hidden */
 const INTERACTIVE_TAGS = new Set([
@@ -49,6 +50,29 @@ export function isSrOnly(
   // insetCollapsesBox) — inset(50%) and inset(100%), but inset(0 100%) too.
   const clipPath = computed.clipPath;
   if (clipPath && insetCollapsesBox(clipPath)) return true;
+
+  return false;
+}
+
+/** Check if an element is visually hidden (computed styles) */
+export function isVisuallyHidden(
+  element: Element,
+  style?: CSSStyleDeclaration | null,
+): boolean {
+  const computed =
+    style !== undefined ? style : getCachedComputedStyle(element);
+
+  if (isSubtreeHidden(element, computed)) return true;
+  // An area is drawn by its image, whose visibility isSubtreeHidden read.
+  if (element.localName === "area") return false;
+
+  // NOTE: opacity:0 is intentionally NOT checked here. Custom form controls
+  // routinely use it to hide the native widget behind a custom visual while
+  // keeping it interactive, and AT still reads opacity-0 elements.
+  if (isOwnVisibilityHidden(element, computed)) return true;
+
+  // sr-only pattern: visually hidden but intentionally accessible to AT
+  if (isSrOnly(element, computed)) return true;
 
   return false;
 }
