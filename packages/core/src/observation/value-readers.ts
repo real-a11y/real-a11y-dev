@@ -49,7 +49,11 @@ export function closesName(el: Element): boolean {
   return isNameBarrierElement(el) && !lendsValue(el);
 }
 
-/** True while a climb for a name host has not reached the page's body. */
+/**
+ * True while a climb for a name host has not reached the page's body.
+ *
+ * @internal
+ */
 export function withinBody(el: Element): boolean {
   const doc = el.ownerDocument;
   return el !== doc?.body && el !== doc?.documentElement;
