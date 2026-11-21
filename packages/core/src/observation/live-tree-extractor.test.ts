@@ -1131,6 +1131,46 @@ describe("LiveTreeExtractor", () => {
       expect(read(nodes, "button")).toEqual([["March", undefined]]);
     });
 
+    it("reads the whole popup, and what references it, once a choice is marked by another state", async () => {
+      // A menu's radio item checked, an option pressed or marked current.
+      const marked: Array<[string, string, string]> = [
+        ["menuitemradio", "aria-checked", "true"],
+        ["option", "aria-pressed", "true"],
+        ["option", "aria-current", "true"],
+      ];
+      for (const [role, attr, value] of marked) {
+        const container = role === "option" ? "listbox" : "menu";
+        const nodes = await refreshed(
+          `<main>${field}<div role="${container}" id="lb" aria-label="Months">` +
+            `<div role="${role}" id="o3" aria-checked="false">03</div>` +
+            `<div role="${role}" aria-checked="false"><span id="cap">March</span></div></div></main>${outside}`,
+          () => byId("o3").setAttribute(attr, value),
+        );
+        expect(read(nodes, "button"), attr).toEqual([
+          ["[redacted]", undefined],
+        ]);
+        expect(
+          nodes
+            .filter((n) => n.a11y.role === role)
+            .map((n) => Object.keys(n.a11y.states)),
+          attr,
+        ).toEqual([[], []]);
+      }
+    });
+
+    it("reads it once a checked item arrives", async () => {
+      const nodes = await refreshed(
+        `<main>${field}<div role="menu" id="lb" aria-label="Months">` +
+          `<div role="menuitemradio" aria-checked="false"><span id="cap">March</span></div></div></main>${outside}`,
+        () =>
+          byId("lb").insertAdjacentHTML(
+            "beforeend",
+            `<div role="menuitemradio" aria-checked="true">04</div>`,
+          ),
+      );
+      expect(read(nodes, "button")).toEqual([["[redacted]", undefined]]);
+    });
+
     it("reads it once a chosen option arrives", async () => {
       const nodes = await refreshed(
         `<main>${field}<ul role="listbox" id="lb" aria-label="Months">` +

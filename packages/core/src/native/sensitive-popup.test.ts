@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import { withholdSensitiveFieldNames } from "./sensitive-names.js";
 import {
+  carriesChoiceState,
+  dropChoiceStates,
   fieldRelationRoots,
   sensitiveChoiceHosts,
   sensitiveChoiceReach,
@@ -148,17 +150,59 @@ describe("the choice containers in a sensitive field's popup", () => {
   ];
 
   it("are the containers a choice is made in, under what the field controls", () => {
-    for (const role of ["listbox", "grid", "treegrid", "tree"]) {
+    for (const role of [
+      "listbox",
+      "grid",
+      "treegrid",
+      "tree",
+      "menu",
+      "radiogroup",
+    ]) {
       expect(rootsOf(popup(role, true)), role).toEqual(["3"]);
     }
-    // A dialog holds anything, and a menu's choice is `checked`.
-    for (const role of ["dialog", "menu"]) {
-      expect(rootsOf(popup(role, true)), role).toEqual([]);
-    }
+    // A dialog holds anything.
+    expect(rootsOf(popup("dialog", true))).toEqual([]);
   });
 
   it("hold a choice, or lend none", () => {
     expect(rootsOf(popup("listbox", false))).toEqual([]);
+  });
+
+  it("hold a choice marked by any choice state, a choice item's checked among them", () => {
+    /** `popup("menu")` with its item in `role` carrying `state` = `value`. */
+    const marked = (role: string, state: string, value: unknown) => {
+      const raw = popup("menu", false);
+      raw[3] = {
+        ...raw[3]!,
+        role: { value: role },
+        properties: [{ name: state, value: { value } }],
+      };
+      return raw;
+    };
+    for (const [role, state, value] of [
+      ["menuitemradio", "checked", "true"],
+      ["menuitemcheckbox", "checked", "mixed"],
+      ["option", "checked", "true"],
+      ["radio", "checked", "true"],
+      ["treeitem", "checked", "true"],
+      ["button", "pressed", "true"],
+      ["option", "pressed", "mixed"],
+    ] as const) {
+      expect(rootsOf(marked(role, state, value)), `${role} ${state}`).toEqual([
+        "3",
+      ]);
+    }
+    // A checkbox is its own control; an unchecked item marks nothing.
+    for (const [role, state, value] of [
+      ["checkbox", "checked", "true"],
+      ["switch", "checked", "true"],
+      ["menuitemradio", "checked", "false"],
+      ["button", "pressed", "false"],
+    ] as const) {
+      expect(rootsOf(marked(role, state, value)), `${role} ${state}`).toEqual(
+        [],
+      );
+    }
   });
 
   it("are only a sensitive field's", () => {
@@ -335,5 +379,38 @@ describe("where a sensitive field's choice is made, beyond its relations", () =>
       option("3", "2"),
     ];
     expect(sensitiveChoiceReach(indexNativeAX(raw), []).size).toBe(0);
+  });
+});
+
+describe("the states a sensitive popup's choice is withheld from", () => {
+  it("are the choice states: selected anywhere, a choice item's checked, pressed", () => {
+    const states = {
+      selected: true,
+      checked: true,
+      pressed: "mixed",
+      expanded: true,
+      disabled: true,
+    };
+    for (const role of [
+      "option",
+      "treeitem",
+      "menuitemradio",
+      "menuitemcheckbox",
+      "radio",
+    ]) {
+      const kept: Record<string, unknown> = { ...states };
+      expect(carriesChoiceState(kept, role), role).toBe(true);
+      dropChoiceStates(kept, role);
+      expect(kept, role).toEqual({ expanded: true, disabled: true });
+    }
+  });
+
+  it("keep a checkbox's or switch's own checked", () => {
+    for (const role of ["checkbox", "switch"]) {
+      const kept: Record<string, unknown> = { checked: true, pressed: true };
+      dropChoiceStates(kept, role);
+      expect(kept, role).toEqual({ checked: true });
+      expect(carriesChoiceState({ checked: true }, role), role).toBe(false);
+    }
   });
 });

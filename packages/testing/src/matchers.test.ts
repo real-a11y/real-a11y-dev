@@ -115,6 +115,22 @@ describe("toBeValidA11yTree", () => {
     expect(popup("", "off")).not.toBeValidA11yTree();
   });
 
+  it("asks nothing of the aria-checked a sensitive menu's radio items carry, which the tree withholds", () => {
+    const popup = (first: string, autocomplete = "cc-exp") =>
+      mount(
+        `<input role="combobox" aria-label="Expiry" aria-haspopup="menu" aria-expanded="true" aria-controls="m" autocomplete="${autocomplete}">` +
+          `<div role="menu" id="m" aria-label="Dates">` +
+          `<div role="menuitemradio" tabindex="-1" ${first}>01/30</div>` +
+          `<div role="menuitemradio" tabindex="-1" aria-checked="true">03/31</div></div>`,
+      );
+    expect(popup('aria-checked="false"')).toBeValidA11yTree();
+    // Written on the chosen item only: asking which item lacks it would say
+    // which one is chosen.
+    expect(popup("")).toBeValidA11yTree();
+    // An ordinary popup's item still needs it.
+    expect(popup("", "off")).not.toBeValidA11yTree();
+  });
+
   it("accepts DPUB-ARIA and Graphics-ARIA roles", () => {
     expect(
       mount(

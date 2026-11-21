@@ -40,6 +40,14 @@ export const REFERENCE_ATTRS = new Set([
   "aria-owns",
 ]);
 
+/** The attributes that make or clear a choice (core's `isChosen`). */
+const CHOICE_ATTRS: ReadonlySet<string> = new Set([
+  "aria-selected",
+  "aria-checked",
+  "aria-pressed",
+  "aria-current",
+]);
+
 /**
  * True when a change to `attr` on `target` moves which choices a sensitive
  * field withholds somewhere else: its popup listbox is not its descendant,
@@ -54,15 +62,17 @@ export const REFERENCE_ATTRS = new Set([
  * popup, or a sensitive field's own role changing, or a name (`aria-label`,
  * `title`) coming or going on an element whose role list names a combobox
  * behind a token that needs one; or a
- * choice made or cleared in a sensitive field's popup (`aria-selected`),
- * which decides what every reference into the popup reads, the other
- * options' own names and descriptions among them.
+ * choice made or cleared in a sensitive field's popup (`aria-selected`,
+ * `aria-checked`, `aria-pressed`, `aria-current`: core's `isChosen`), which
+ * decides what every reference into the popup reads, the other options' own
+ * names and descriptions among them.
  */
 export function movesSensitiveChoice(
   target: Element,
   attr: string,
   oldValue?: string | null,
 ): boolean {
+  if (CHOICE_ATTRS.has(attr)) return inSensitiveChoice(target);
   switch (attr) {
     case "aria-controls":
     case "aria-activedescendant":
@@ -79,8 +89,6 @@ export function movesSensitiveChoice(
         isSensitiveField(target) ||
         (mayBeCombobox(target, oldValue) && wrapsSensitiveField(target))
       );
-    case "aria-selected":
-      return inSensitiveChoice(target);
     // A name can decide the role: an unnamed `region` token is skipped, so
     // `role="region combobox"` turns into a combobox when its name goes.
     case "aria-label":
@@ -128,7 +136,7 @@ export function bringsSensitivePopup(
   parent: Element | null,
 ): boolean {
   // One walk, shadow roots included, for all three questions.
-  const selectors = `[aria-controls], [aria-owns], [aria-activedescendant], [aria-selected], option, ${FIELD_SELECTOR}`;
+  const selectors = `[aria-controls], [aria-owns], [aria-activedescendant], [aria-selected], [aria-checked], [aria-pressed], [aria-current], option, ${FIELD_SELECTOR}`;
   const found = [
     ...(safeMatches(subtree, selectors) ? [subtree] : []),
     ...deepQuerySelectorAll(subtree, selectors),

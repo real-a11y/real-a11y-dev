@@ -2043,7 +2043,7 @@ describe("withholdInsideSensitive", () => {
     expect(byId.get("jan")?.states).toStrictEqual({ focusable: true });
     expect(byId.get("nov")?.states).toStrictEqual({ focusable: true });
     // A checkbox is its own control, classified on its own: its state isn't
-    // the field's value (see `NATIVE_AX_CHOICE_STATES`).
+    // the field's value (see core's `dropChoiceStates`).
     expect(byId.get("box")?.states).toStrictEqual({ checked: true });
     // The field's own states, and anything outside it, stay.
     expect(byId.get("month")?.states).toStrictEqual({
@@ -2051,6 +2051,32 @@ describe("withholdInsideSensitive", () => {
       expanded: false,
     });
     expect(byId.get("other")?.states).toStrictEqual({ selected: true });
+  });
+
+  it("withholds a menu popup's checked and a pressed item in what a sensitive combobox controls", () => {
+    const nodes = [
+      n("exp", [], {
+        role: "combobox",
+        value: "[redacted]",
+        redacted: true,
+        controls: ["menu"],
+      }),
+      n("menu", ["a", "b", "save", "day", "box"], { role: "menu" }),
+      n("a", [], { role: "menuitemradio", states: { checked: false } }),
+      n("b", [], { role: "menuitemradio", states: { checked: true } }),
+      n("save", [], { role: "menuitemcheckbox", states: { checked: true } }),
+      n("day", [], { role: "button", states: { pressed: true } }),
+      n("box", [], { role: "checkbox", states: { checked: true } }),
+      n("other", [], { role: "menuitemradio", states: { checked: true } }),
+    ];
+    withholdInsideSensitive(nodes, ["exp"]);
+    const byId = new Map(nodes.map((x) => [x.id, x]));
+    for (const id of ["a", "b", "save", "day"]) {
+      expect(byId.get(id)?.states, id).toStrictEqual({});
+    }
+    // A checkbox is its own control; a menu outside keeps its choice.
+    expect(byId.get("box")?.states).toStrictEqual({ checked: true });
+    expect(byId.get("other")?.states).toStrictEqual({ checked: true });
   });
 
   it("treats the listbox a sensitive combobox controls as inside it", () => {

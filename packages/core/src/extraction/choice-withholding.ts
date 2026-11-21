@@ -11,6 +11,7 @@ import {
   type ChoiceCache,
   type RelationReach,
 } from "./aria-owner.js";
+import { ariaCurrent, ariaTristate } from "./aria-tokens.js";
 import {
   safeGetAttribute,
   safeGetElementById,
@@ -20,6 +21,7 @@ import {
   safeQuerySelectorAll,
   safeRootNode,
 } from "./clobber-safe.js";
+import { nativeChecked } from "./element-state.js";
 import {
   deepQuerySelectorAll,
   flatChildNodes,
@@ -29,6 +31,7 @@ import {
 } from "./flat-tree.js";
 import { getExplicitRole, getImplicitRole } from "./role-map.js";
 import {
+  CHOICE_ITEM_ROLES,
   FIELD_SELECTOR,
   isSensitiveField,
   POPUP_CHOICE_ROLES,
@@ -364,12 +367,40 @@ export function lendsSensitiveChoice(element: Element, role: string): boolean {
   );
 }
 
-/** `el` is chosen: `aria-selected="true"`, or without it a selected option. */
+/**
+ * `el` is chosen, by a choice state the tree withholds (`isChoiceState`):
+ * `aria-selected="true"`, or without it a selected option; a choice item
+ * checked (`aria-checked`, or a radio's own checkedness); pressed; or marked
+ * current. The attributes are read first, so an element with none of them
+ * costs no role.
+ */
 export function isChosen(el: Element): boolean {
   const selected = safeGetAttribute(el, "aria-selected");
-  return selected !== null
-    ? selected.trim().toLowerCase() === "true"
-    : (el as HTMLOptionElement).selected === true;
+  if (
+    selected !== null
+      ? selected.trim().toLowerCase() === "true"
+      : (el as HTMLOptionElement).selected === true
+  ) {
+    return true;
+  }
+  if (marksChoice(ariaTristate(safeGetAttribute(el, "aria-pressed")))) {
+    return true;
+  }
+  const current = ariaCurrent(safeGetAttribute(el, "aria-current"));
+  if (current !== null && current !== false) return true;
+  const ownChecked = nativeChecked(el);
+  const checked = safeGetAttribute(el, "aria-checked");
+  if (ownChecked === null && checked === null) return false;
+  const role = getImplicitRole(el);
+  return (
+    CHOICE_ITEM_ROLES.has(role) &&
+    marksChoice(ownChecked ?? ariaTristate(checked, role))
+  );
+}
+
+/** A tristate read marks a choice: set, or `mixed`. */
+function marksChoice(value: boolean | "mixed" | null): boolean {
+  return value === true || value === "mixed";
 }
 
 /** What `element` names in `aria-owns`, in its id scope. */

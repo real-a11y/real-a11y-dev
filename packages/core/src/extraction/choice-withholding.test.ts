@@ -778,3 +778,182 @@ describe("the choice a sensitive field holds", () => {
     });
   });
 });
+
+/**
+ * A page can mark the chosen item with another state than `selected`: an
+ * option's `aria-checked`, a menu's radio item, a radio in a dialog popup, a
+ * date picker's pressed day, an option marked current. Each says what the
+ * sensitive field holds as well as `selected` would.
+ */
+describe("a sensitive popup's choice marked by another state", () => {
+  afterEach(() => {
+    document.body.innerHTML = "";
+  });
+
+  /** Each node in `roles`: role, name and states, in document order. */
+  const statesOf = (
+    html: string,
+    roles: string[],
+    options: { redactInput?: boolean } = {},
+  ): Array<[string, string, Record<string, unknown>]> => {
+    document.body.innerHTML = html;
+    return [...extractDomTree(document.body, options).nodes.values()]
+      .filter((n) => roles.includes(n.a11y.role))
+      .map((n) => [n.a11y.role, n.a11y.name, n.a11y.states]);
+  };
+
+  /** A combobox with `field` attributes controlling `popup` (id `p`). */
+  const page = (field: string, popup: string) =>
+    `<input role="combobox" aria-label="Field" aria-expanded="true" aria-controls="p" ${field}>${popup}`;
+  const SENSITIVE = 'autocomplete="cc-exp-month"';
+
+  const menu =
+    `<div role="menu" id="p" aria-label="Menu">` +
+    `<div role="menuitemradio" aria-checked="false">01/30</div>` +
+    `<div role="menuitemradio" aria-checked="true">03/31</div>` +
+    `<div role="menuitemcheckbox" aria-checked="true">Save</div></div>`;
+
+  it("is withheld from a menu's radio and check items", () => {
+    expect(
+      statesOf(page(SENSITIVE, menu), ["menuitemradio", "menuitemcheckbox"]),
+    ).toEqual([
+      ["menuitemradio", "01/30", {}],
+      ["menuitemradio", "03/31", {}],
+      ["menuitemcheckbox", "Save", {}],
+    ]);
+  });
+
+  it("is withheld from an option or tree item marked with aria-checked", () => {
+    const items = (role: string) =>
+      `<div role="${role === "option" ? "listbox" : "tree"}" id="p" aria-label="Months">` +
+      `<div role="${role}" aria-checked="false">01</div>` +
+      `<div role="${role}" aria-checked="true">03</div></div>`;
+    for (const role of ["option", "treeitem"]) {
+      const read = statesOf(page(SENSITIVE, items(role)), [role]);
+      expect(
+        read.map(([, , states]) => "checked" in states),
+        role,
+      ).toEqual([false, false]);
+    }
+  });
+
+  it("is withheld from a pressed or current item, wherever it sits in the popup", () => {
+    const picker =
+      `<div role="grid" id="p" aria-label="Days"><div role="row">` +
+      `<div role="gridcell"><button aria-pressed="false">1</button></div>` +
+      `<div role="gridcell"><button aria-pressed="true">2</button></div>` +
+      `<div role="gridcell" aria-current="date">3</div></div></div>`;
+    expect(
+      statesOf(page(SENSITIVE, picker), ["button", "gridcell"]).map(
+        ([role, name, states]) => [role, name, states],
+      ),
+    ).toEqual([
+      ["gridcell", "1", {}],
+      ["button", "1", {}],
+      ["gridcell", "2", {}],
+      ["button", "2", {}],
+      ["gridcell", "3", {}],
+    ]);
+    const list =
+      `<ul role="listbox" id="p" aria-label="Months">` +
+      `<li role="option" aria-pressed="true">03</li>` +
+      `<li role="option" aria-current="true">04</li></ul>`;
+    expect(statesOf(page(SENSITIVE, list), ["option"])).toEqual([
+      ["option", "03", {}],
+      ["option", "04", {}],
+    ]);
+  });
+
+  it("is withheld from a radio in a dialog popup, an ARIA or a native one", () => {
+    const dialog =
+      `<div role="dialog" id="p" aria-label="Pick">` +
+      `<div role="radiogroup" aria-label="Months">` +
+      `<div role="radio" aria-checked="true" tabindex="0">03</div>` +
+      `<label><input type="radio" name="m" checked> 04</label></div>` +
+      `<label><input type="checkbox" checked> Remember</label></div>`;
+    expect(statesOf(page(SENSITIVE, dialog), ["radio", "checkbox"])).toEqual([
+      ["radio", "03", {}],
+      ["radio", "04", {}],
+      // A checkbox is its own control: it keeps its state.
+      ["checkbox", "Remember", { checked: true }],
+    ]);
+  });
+
+  it("is withheld from the menu a sensitive field's aria-activedescendant sits in", () => {
+    // The active item is not the chosen one; the menu is the popup.
+    const html =
+      `<input role="combobox" aria-label="Field" ${SENSITIVE} aria-expanded="true" aria-activedescendant="i1">` +
+      `<div role="menu" aria-label="Menu">` +
+      `<div role="menuitemradio" id="i1" aria-checked="false">01</div>` +
+      `<div role="menuitemradio" aria-checked="true">03</div></div>`;
+    expect(statesOf(html, ["menuitemradio"])).toEqual([
+      ["menuitemradio", "01", {}],
+      ["menuitemradio", "03", {}],
+    ]);
+  });
+
+  it("is kept in an ordinary field's popup, and on a checkbox's own state", () => {
+    expect(
+      statesOf(page("", menu), ["menuitemradio", "menuitemcheckbox"]),
+    ).toEqual([
+      ["menuitemradio", "01/30", { checked: false }],
+      ["menuitemradio", "03/31", { checked: true }],
+      ["menuitemcheckbox", "Save", { checked: true }],
+    ]);
+    const list =
+      `<ul role="listbox" id="p" aria-label="Colors">` +
+      `<li role="option" aria-checked="true" aria-current="true" aria-pressed="true">Blue</li></ul>`;
+    expect(statesOf(page("", list), ["option"])).toEqual([
+      ["option", "Blue", { checked: true, current: true, pressed: true }],
+    ]);
+  });
+
+  it("is withheld from an option in any choice field in strict mode", () => {
+    const list =
+      `<ul role="listbox" id="p" aria-label="Colors">` +
+      `<li role="option" aria-checked="true">Blue</li></ul>`;
+    expect(statesOf(page("", list), ["option"], { redactInput: true })).toEqual(
+      [["option", "Blue", {}]],
+    );
+  });
+
+  it("is withheld from the markup the dom facet records", () => {
+    document.body.innerHTML = page(SENSITIVE, menu);
+    const attrs = [...extractDomTree(document.body).nodes.values()]
+      .filter((n) => n.a11y.role === "menuitemradio")
+      .map((n) => n.dom?.attributes["aria-checked"]);
+    expect(attrs).toEqual([undefined, undefined]);
+    document.body.innerHTML = page("", menu);
+    expect(
+      [...extractDomTree(document.body).nodes.values()]
+        .filter((n) => n.a11y.role === "menuitemradio")
+        .map((n) => n.dom?.attributes["aria-checked"]),
+    ).toEqual(["false", "true"]);
+  });
+
+  it("is withheld from a name or description that reads the chosen item", () => {
+    const html = (field: string) =>
+      page(
+        field,
+        `<div role="menu" id="p" aria-label="Menu">` +
+          `<div role="menuitemradio" aria-checked="false">01/30</div>` +
+          `<div role="menuitemradio" id="pick" aria-checked="true" aria-description="current choice">03/31</div></div>`,
+      ) + `<button aria-labelledby="pick">x</button>`;
+    const read = (field: string) => {
+      document.body.innerHTML = html(field);
+      return [...extractDomTree(document.body).nodes.values()]
+        .filter((n) => ["button", "menuitemradio"].includes(n.a11y.role))
+        .map((n) => [n.a11y.role, n.a11y.name, n.a11y.description]);
+    };
+    expect(read(SENSITIVE)).toEqual([
+      ["menuitemradio", "01/30", ""],
+      ["menuitemradio", "03/31", ""],
+      ["button", "[redacted]", ""],
+    ]);
+    expect(read("")).toEqual([
+      ["menuitemradio", "01/30", ""],
+      ["menuitemradio", "03/31", "current choice"],
+      ["button", "03/31", ""],
+    ]);
+  });
+});

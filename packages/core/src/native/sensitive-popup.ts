@@ -10,7 +10,10 @@
  * @internal
  */
 
-import { POPUP_CHOICE_ROLES } from "../extraction/sensitivity.js";
+import {
+  isChoiceState,
+  POPUP_CHOICE_ROLES,
+} from "../extraction/sensitivity.js";
 
 import { nativeAncestry, nativeAXProperty } from "./ax-node.js";
 import type { NativeAXIndex, RawAXNameNode } from "./value-regions.js";
@@ -190,13 +193,61 @@ export function sensitiveChoiceReach<T extends RawAXNameNode>(
   return new Set(subtreeOf(roots, index.byId).map((node) => node.nodeId));
 }
 
-/** Some node at or under `root` is `selected`. */
+/**
+ * Drop from `states`, a node in `role`, the states that say which choice is
+ * made (core's `isChoiceState`): what every native transport does to every
+ * node where a sensitive field's choice is made (the browser producer's
+ * region pass, the extension's `withholdInsideSensitive`), so the transports
+ * can't disagree. Chromium marks a `<select>`'s chosen `option` `selected`,
+ * so under a redacted `<select autocomplete="cc-exp-month">` the option rows
+ * would name the month anyway; a menu popup marks its chosen item `checked`.
+ *
+ * A checkbox keeps `checked`: it is its own control, classified for
+ * sensitivity on its own, so a checked box inside a sensitive wrapper isn't
+ * that field's value, and dropping it would only make the panel's feedback
+ * misread what a click does.
+ *
+ * @internal Shared with the native transports.
+ */
+export function dropChoiceStates(
+  states: Record<string, unknown>,
+  role: string,
+): void {
+  for (const state of Object.keys(states)) {
+    if (isChoiceState(state, role)) delete states[state];
+  }
+}
+
+/**
+ * `states`, a node in `role`, carries a state {@link dropChoiceStates}
+ * drops: only such a node has a choice to withhold.
+ *
+ * @internal Shared with the native transports.
+ */
+export function carriesChoiceState(
+  states: Record<string, unknown>,
+  role: string,
+): boolean {
+  return Object.keys(states).some((state) => isChoiceState(state, role));
+}
+
+/** The raw AX states that mark a choice made: set, or `mixed`. */
+const CHOICE_AX_STATES = ["selected", "checked", "pressed"];
+
+/**
+ * Some node at or under `root` is chosen: a choice state
+ * ({@link dropChoiceStates}) set on it, `true` or `mixed`.
+ */
 function holdsChoice<T extends RawAXNameNode>(
   root: T,
   byId: ReadonlyMap<string, T>,
 ): boolean {
-  return subtreeOf([root], byId).some(
-    (node) => nativeAXProperty(node, "selected")?.value === true,
+  return subtreeOf([root], byId).some((node) =>
+    CHOICE_AX_STATES.some((state) => {
+      if (!isChoiceState(state, node.role?.value ?? "")) return false;
+      const value = nativeAXProperty(node, state)?.value;
+      return value === true || value === "true" || value === "mixed";
+    }),
   );
 }
 

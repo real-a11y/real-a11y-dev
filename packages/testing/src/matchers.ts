@@ -267,24 +267,35 @@ function discardedRoleOf(n: SemanticNode): string | undefined {
   return resolved ?? authored;
 }
 
-/** The roles the validator requires `aria-selected` on. */
-const SELECTION_ROLES: ReadonlySet<string> = new Set(["option", "treeitem"]);
+/**
+ * The state the validator requires on each role whose choice the tree can
+ * withhold, and the attribute that supplies it.
+ */
+const REQUIRED_CHOICE_STATES: ReadonlyMap<string, [string, string]> = new Map([
+  ["option", ["selected", "aria-selected"]],
+  ["treeitem", ["selected", "aria-selected"]],
+  ["radio", ["checked", "aria-checked"]],
+  ["menuitemradio", ["checked", "aria-checked"]],
+  ["menuitemcheckbox", ["checked", "aria-checked"]],
+]);
 
 /**
- * `aria-selected` where the tree withholds `selected`: in a sensitive field's
- * popup (core's `withholdsState`), whatever the author wrote is not the tree's
- * to report. Asking whether it is there would also say which option is chosen,
- * by elimination, when only the chosen one carries it, and the finding lands
- * in CI logs. So it counts as supplied, as a user agent's own would.
+ * The required choice attribute (`aria-selected`, `aria-checked`) where the
+ * tree withholds its state: in a sensitive field's popup (core's
+ * `withholdsState`), whatever the author wrote is not the tree's to report.
+ * Asking whether it is there would also say which item is chosen, by
+ * elimination, when only the chosen one carries it, and the finding lands in
+ * CI logs. So it counts as supplied, as a user agent's own would.
  */
 function withheldSuppliedAttrs(
   element: Element | undefined,
   role: string,
 ): readonly string[] {
+  const required = REQUIRED_CHOICE_STATES.get(role);
   return element &&
-    SELECTION_ROLES.has(role) &&
-    withholdsState(element, role, "selected", false)
-    ? ["aria-selected"]
+    required &&
+    withholdsState(element, role, required[0], false)
+    ? [required[1]]
     : [];
 }
 

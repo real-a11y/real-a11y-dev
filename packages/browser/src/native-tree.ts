@@ -59,12 +59,14 @@
  */
 
 import {
+  carriesChoiceState,
+  dropChoiceStates,
+  isChoiceState,
   normalizeNativeAX,
   nativeAXStateValue,
   serializeNativeAX,
   graftNativeFrame,
   isNativeIframeRole,
-  NATIVE_AX_CHOICE_STATES,
   nativeAncestry,
   cleanAXText,
   treeSource,
@@ -293,16 +295,21 @@ function withoutEditableContent(
   );
 }
 
-/** `attributes` without the markup `selected` flag when the option's selection
- *  is withheld — an `<option selected>` would otherwise say what a sensitive
- *  `<select>` holds even with its AX state dropped. */
-function withoutSelection(
+/** `attributes` without the markup that says which choice is made when the
+ *  node's choice states are withheld: an `<option selected>` would otherwise
+ *  say what a sensitive `<select>` holds even with its AX state dropped, and
+ *  a radio's `checked` which of a popup's radios is chosen. A checkbox keeps
+ *  its own (core's `isChoiceState`). */
+function withoutChoiceMarkup(
   attributes: Record<string, string>,
   withhold: boolean,
+  role: string,
 ): Record<string, string> {
-  if (!withhold || !("selected" in attributes)) return attributes;
-  const { selected: _dropped, ...rest } = attributes;
-  return rest;
+  if (!withhold) return attributes;
+  const { selected: _selected, ...rest } = attributes;
+  if (!isChoiceState("checked", role)) return rest;
+  const { checked: _checked, ...kept } = rest;
+  return kept;
 }
 
 /** Split an AX node's `properties` into `states` (bool/stateful) and
@@ -455,15 +462,18 @@ export function buildNativeTree(
         ? source.document.enrichment.get(nn.backendDOMNodeId)
         : undefined;
 
-    // One decision for both places the selection shows: the AX state and the
-    // option's markup `selected` attribute on the `dom` facet. Only a node
-    // that carries either has one to withhold, and the ancestry walk is only
-    // needed for one. Either alone counts: Chromium leaves the AX state off a
-    // disabled option (a disabled `<select>`, one in a disabled `<fieldset>`),
-    // while the markup attribute stays.
+    // One decision for both places a choice shows: the AX states (core's
+    // `isChoiceState`) and the markup `selected` / `checked` on the `dom`
+    // facet. Only a node that carries either has one to withhold, and the
+    // ancestry walk is only needed for one. Either alone counts: Chromium
+    // leaves the AX state off a disabled option (a disabled `<select>`, one
+    // in a disabled `<fieldset>`), while the markup attribute stays.
     const carriesSelection =
-      NATIVE_AX_CHOICE_STATES.some((state) => state in states) ||
-      (enriched !== undefined && "selected" in enriched.attributes);
+      carriesChoiceState(states, nn.role) ||
+      (enriched !== undefined &&
+        ("selected" in enriched.attributes ||
+          ("checked" in enriched.attributes &&
+            isChoiceState("checked", nn.role))));
     const sensitivity = source?.document.prepared.sensitivity;
     const withholdSelection =
       !!source &&
@@ -473,9 +483,7 @@ export function buildNativeTree(
         ((redactInput || sensitivity.sensitiveFields.size > 0) &&
           inChoiceField(source.raw, source.document, !redactInput)) ||
         sensitivity.choiceReach.has(source.raw.nodeId));
-    if (withholdSelection) {
-      for (const state of NATIVE_AX_CHOICE_STATES) delete states[state];
-    }
+    if (withholdSelection) dropChoiceStates(states, nn.role);
 
     // What a screen reader announces — never in strict mode, and `[redacted]`
     // for anything the sensitivity policy covers.
@@ -507,11 +515,12 @@ export function buildNativeTree(
       enriched && enriched.pseudo !== true
         ? {
             tagName: enriched.tagName,
-            attributes: withoutSelection(
+            attributes: withoutChoiceMarkup(
               source?.document.prepared.insideEditor.has(source.raw)
                 ? withoutEditableContent(enriched.attributes)
                 : enriched.attributes,
               withholdSelection,
+              nn.role,
             ),
             textContent: null,
             descendantText: "",

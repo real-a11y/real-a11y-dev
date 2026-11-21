@@ -47,6 +47,7 @@ export {
 // The field-value sensitivity policy (ADR-0001), one for every producer.
 export {
   holdsEnteredValue,
+  isChoiceState,
   isSensitiveField,
   isSensitiveFieldAttributes,
   REDACTED_VALUE,
@@ -163,7 +164,6 @@ export {
   NATIVE_AX_NAME_FROM_CONTENT_ROLES,
   NATIVE_AX_TEXT_OWNING_ROLES,
   mapNativeAXRole,
-  NATIVE_AX_CHOICE_STATES,
   nativeAXStateValue,
 } from "./native/ax-vocabulary.js";
 export { normalizeNativeAX, serializeNativeAX } from "./native/ax-normalize.js";
@@ -216,6 +216,8 @@ export type {
 } from "./native/value-regions.js";
 export { nativeAncestry, nativeAXProperty } from "./native/ax-node.js";
 export {
+  carriesChoiceState,
+  dropChoiceStates,
   fieldRelationRoots,
   sensitiveChoiceReach,
   sensitiveChoiceRoots,

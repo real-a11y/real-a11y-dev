@@ -57,7 +57,7 @@ import {
   holdsUnclassifiedValue,
   indexNativeAX,
   isNativePasswordMask,
-  NATIVE_AX_CHOICE_STATES,
+  dropChoiceStates,
   nativeAXStateValue,
   normalizeNativeAX,
   REDACTED_VALUE,
@@ -791,10 +791,10 @@ export function withheldFields(
  * measured). `controlled` holds the kept nodes those relations reach,
  * standing in for a target the tree dropped ({@link controlledRegion}).
  *
- * Nor does a node inside one say which of it is chosen: the states in core's
- * `NATIVE_AX_CHOICE_STATES` (an option's `selected`) go from every node
- * inside, as the browser producer drops them, so the two native transports
- * agree. That fails closed: a node counts as sensitive when it merely holds
+ * Nor does a node inside one say which of it is chosen: the states core's
+ * `dropChoiceStates` drops (an option's `selected`, a menu item's `checked`,
+ * a `pressed`) go from every node inside, as the browser producer drops
+ * them, so the two native transports agree. That fails closed: a node counts as sensitive when it merely holds
  * a sensitive control (a rich-text editor around a card input), and then no
  * option anywhere inside it shows whether it is chosen.
  *
@@ -838,7 +838,7 @@ export function withholdInsideSensitive(
         delete node.rawValue;
       }
       node.valueWithheld = true;
-      for (const state of NATIVE_AX_CHOICE_STATES) delete node.states[state];
+      dropChoiceStates(node.states, node.role);
     },
   );
   // A node also inside the field has lost its value above; one reached only
@@ -848,7 +848,7 @@ export function withholdInsideSensitive(
     [...fields.flatMap((field) => field.controls ?? []), ...controlled],
     (node) => {
       node.valueWithheld ??= true;
-      for (const state of NATIVE_AX_CHOICE_STATES) delete node.states[state];
+      dropChoiceStates(node.states, node.role);
     },
   );
 }
