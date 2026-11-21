@@ -13,7 +13,8 @@ import {
   holdsUnclassifiedValue,
   indexNativeAX,
   isNativePasswordMask,
-  popupChoiceRegions,
+  sensitiveChoiceReach,
+  withholdPopupChoiceNames,
   valueRegions,
   withholdFieldInternals,
   withholdRegionNames,
@@ -121,6 +122,12 @@ export interface FieldSensitivity {
    * selected is its value all the same.
    */
   sensitiveFields: ReadonlySet<string>;
+  /**
+   * Raw ids of the nodes where a sensitive field's choice is made: its popup,
+   * a combobox around it, a multi-row one itself (core's
+   * `sensitiveChoiceReach`). A choice state there says what the field holds.
+   */
+  choiceReach: ReadonlySet<string>;
 }
 
 /** What the DOM walk recorded for `raw`'s backing element, if it saw one. */
@@ -206,6 +213,7 @@ function fieldSensitivity(
   return {
     regions,
     sensitiveFields,
+    choiceReach: sensitiveChoiceReach(index, sensitiveFields),
     withholdsValue: (raw) =>
       regions.inside(raw) ||
       regions.containing.has(raw.nodeId) ||
@@ -221,7 +229,7 @@ function fieldSensitivity(
  * them — the only point at which a name still says which node it came from.
  * Sensitive fields always ({@link withholdRegionNames} over
  * {@link fieldSensitivity}), and the choice made in one's popup (core's
- * `popupChoiceRegions`: names only, so a field in a panel the field controls
+ * `withholdPopupChoiceNames`: names only, so a field in a panel the field controls
  * keeps its own value); in strict mode, every field value and all editor
  * content too ({@link withholdRegionNames} over {@link strictValueRoots}, then
  * {@link redactEditableContent}). And always, the text a form control draws
@@ -246,13 +254,11 @@ export function prepareRawNodes(
   // Read before any text is blanked: a stand-in counts by what it holds.
   const standIns = fieldStandIns(index, hostOf);
   const sensitivity = fieldSensitivity(rawNodes, index, enrichment, standIns);
-  const named = withholdRegionNames(
+  const named = withholdPopupChoiceNames(
     withholdRegionNames(rawNodes, sensitivity.regions),
-    popupChoiceRegions(
-      index,
-      [...sensitivity.sensitiveFields],
-      labelsIn(enrichment),
-    ),
+    index,
+    [...sensitivity.sensitiveFields],
+    labelsIn(enrichment),
   );
   // Last: it blanks text runs only, which no step above keeps by identity.
   if (options.redactInput !== true) {

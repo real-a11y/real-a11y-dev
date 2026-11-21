@@ -44,9 +44,8 @@
 
 import {
   cleanAXText,
-  fieldRelationRoots,
   fieldStandIns,
-  sensitiveChoiceHosts,
+  sensitiveChoiceRoots,
   graftNativeFrame,
   isNativeIframeRole,
   NATIVE_MAX_FRAME_DEPTH,
@@ -240,24 +239,23 @@ export function nativeControls(
 }
 
 /**
- * The kept nodes that stand for what `raw` controls or owns, for withholding:
- * each target the tree kept, and for one the normalizer dropped (an unnamed
- * wrapper around a listbox), its nearest kept descendants. The jump chips'
- * `nativeControls` keeps only targets that have a row; this follows a dropped
- * one down, because what sits inside it is controlled all the same. Which
- * relations count is core's `fieldRelationRoots`, the rule the browser
- * package withholds by too: `aria-controls`, and `aria-owns`, which Chromium
- * leaves unreparented under an `<input>`.
+ * The kept nodes that stand for `roots`, for withholding: each root the tree
+ * kept, and for one the normalizer dropped (an unnamed wrapper around a
+ * listbox), its nearest kept descendants. The jump chips' `nativeControls`
+ * keeps only targets that have a row; this follows a dropped one down,
+ * because what sits inside it is reached all the same. Which roots count is
+ * core's `sensitiveChoiceRoots`, the rule the browser package withholds by
+ * too: what a sensitive field, or a combobox around one, controls, owns or
+ * holds.
  *
  * Exported for its tests.
  */
 export function controlledRegion(
-  raw: RawAXNode,
+  roots: readonly RawAXNode[],
   index: NativeAXIndex<RawAXNode>,
   keptIds: ReadonlySet<string>,
 ): string[] {
-  const stack = fieldRelationRoots(index, raw);
-  if (stack.length === 0) return [];
+  const stack = [...roots];
   const byNodeId = index.byId;
   const out: string[] = [];
   const seen = new Set<RawAXNode>();
@@ -1687,11 +1685,11 @@ async function readDocument(
     };
   });
   const withheldIds = [...sensitiveIds, ...held];
-  // What each withheld field controls or owns, and what an ARIA 1.1 combobox
-  // around one does: core's `sensitiveChoiceHosts`, the browser package's rule.
+  // Where each withheld field's choice is made: core's `sensitiveChoiceRoots`,
+  // the browser package's rule.
   const index = indexNativeAX(rawNodes);
-  const hosts = sensitiveChoiceHosts(
-    index.byId,
+  const roots = sensitiveChoiceRoots(
+    index,
     withheldIds.flatMap((id) => {
       const raw = rawById.get(id);
       return raw ? [raw.nodeId] : [];
@@ -1700,7 +1698,7 @@ async function readDocument(
   withholdInsideSensitive(
     enriched,
     withheldIds,
-    hosts.flatMap((host) => controlledRegion(host, index, keptIds)),
+    controlledRegion(roots, index, keptIds),
   );
 
   return enriched;

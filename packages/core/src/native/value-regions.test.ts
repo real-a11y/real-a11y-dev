@@ -130,8 +130,9 @@ describe("withholdSensitiveFieldNames", () => {
           childIds: id === "5" ? ["7", "10"] : [String(6 + i)],
           name: { value: ["January", "March"][i] },
           named: "relatedElement",
-          // The chosen one is described by a hidden span inside it, too.
-          ...(id === "5" ? { description: { value: "selected" } } : {}),
+          // The chosen one is described by a hidden span inside it, too; the
+          // other by `aria-description`, which references nothing.
+          description: { value: id === "5" ? "selected" : "January hint" },
           properties: [
             idref("labelledby", 6 + i),
             ...(id === "5" ? [idref("describedby", 10)] : []),
@@ -156,6 +157,7 @@ describe("withholdSensitiveFieldNames", () => {
     expect(nameOf("9")).toBe(REDACTED_VALUE);
     expect(nameOf("3")).toBe(REDACTED_VALUE);
     expect(out.find((n) => n.nodeId === "5")?.description).toBeUndefined();
+    expect(out.find((n) => n.nodeId === "4")?.description).toBeUndefined();
   });
 
   it("withholds an option's name read from another sensitive popup inside it", () => {

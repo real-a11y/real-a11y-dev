@@ -29,10 +29,8 @@ const FIELD_RELATIONS: ReadonlySet<string> = new Set(["controls", "owns"]);
  * `controls` and `owns` relations name. An ARIA combobox's popup listbox is
  * not the field's descendant, yet the option it marks selected is the field's
  * value. The one rule both native transports reach a sensitive field's popup
- * by, so the two can't drift: the browser package's `withholdSelection`
- * withholds everything under these ({@link fieldRelationTargets}), and the
- * extension's `controlledRegion` follows them down to the nodes its tree kept.
- * The DOM producer's counterpart is `inSensitiveChoice`.
+ * by, so the two can't drift ({@link sensitiveChoiceRoots}). The DOM
+ * producer's counterpart is `controlledBySensitiveField`.
  *
  * @internal
  */
@@ -52,31 +50,6 @@ export function fieldRelationRoots<T extends RawAXNameNode>(
     }
   }
   return roots;
-}
-
-/**
- * Every raw node at or under {@link fieldRelationRoots}.
- *
- * @internal
- */
-export function fieldRelationTargets<T extends RawAXNameNode>(
-  index: NativeAXIndex<T>,
-  field: T,
-): T[] {
-  const stack = fieldRelationRoots(index, field);
-  const out: T[] = [];
-  const seen = new Set<T>();
-  while (stack.length > 0) {
-    const node = stack.pop()!;
-    if (seen.has(node)) continue;
-    seen.add(node);
-    out.push(node);
-    for (const childId of node.childIds ?? []) {
-      const child = index.byId.get(childId);
-      if (child) stack.push(child);
-    }
-  }
-  return out;
 }
 
 /**
@@ -103,35 +76,118 @@ export function sensitiveChoiceHosts<T extends RawAXNameNode>(
   return [...hosts];
 }
 
-/** Some node at or under `root` is `selected`. */
-function holdsChoice<T extends RawAXNameNode>(
-  root: T,
+/** Every raw node at or under `roots`, each once. */
+function subtreeOf<T extends RawAXNameNode>(
+  roots: readonly T[],
   byId: ReadonlyMap<string, T>,
-): boolean {
-  const stack = [root];
+): T[] {
+  const stack = [...roots];
+  const out: T[] = [];
   const seen = new Set<T>();
   while (stack.length > 0) {
     const node = stack.pop()!;
     if (seen.has(node)) continue;
     seen.add(node);
-    if (nativeAXProperty(node, "selected")?.value === true) return true;
+    out.push(node);
     for (const childId of node.childIds ?? []) {
       const child = byId.get(childId);
       if (child) stack.push(child);
     }
   }
-  return false;
+  return out;
+}
+
+/** The nearest choice container (`POPUP_CHOICE_ROLES`) at or above `node`. */
+function choiceContainerOf<T extends RawAXNameNode>(
+  node: T,
+  byId: ReadonlyMap<string, T>,
+): T | undefined {
+  for (const cur of nativeAncestry(node, byId)) {
+    if (POPUP_CHOICE_ROLES.has(cur.role?.value ?? "")) return cur;
+  }
+  return undefined;
 }
 
 /**
- * Raw ids of the choice containers (`POPUP_CHOICE_ROLES`) a sensitive field's
- * popup holds, where a choice is made: those at or under what each of
- * {@link sensitiveChoiceHosts} controls or owns. That choice is the field's value, and Chromium lends it
- * to a name built around the popup (AccName's embedded control):
- * `<label>Expiry month <input autocomplete="cc-exp-month" aria-controls="lb">
- * <ul role="listbox" id="lb">…</ul></label>` is `combobox "Expiry month 03"`.
- * A container with nothing selected lends nothing, as an empty field doesn't
- * ({@link givesValueAway}). Name-region roots, in both native transports.
+ * Where a sensitive field's choice is made, in Chromium's tree: the roots of
+ * the regions whose choice states, and the names read from them, say what the
+ * field holds. For each field in `fieldIds` and each combobox around one
+ * ({@link sensitiveChoiceHosts}):
+ *
+ * - what it controls or owns ({@link fieldRelationRoots});
+ * - the choice container its `aria-activedescendant` sits in (the active
+ *   option is always in the field's popup), or that node itself;
+ * - a combobox around one, whole: the ARIA 1.1 wrapper holds its listbox, and
+ *   Chromium relates the field inside to it on its own only for some shapes
+ *   (the field its direct child, the listbox right after it);
+ * - the field itself when it is a choice container (a multi-row `<select>`).
+ *
+ * The one rule every native consumer derives from, so they can't drift:
+ * selection ({@link sensitiveChoiceReach}) in the browser package and the
+ * extension, names ({@link sensitivePopupRoots}) in both. The DOM producer's
+ * counterpart is `inSensitiveChoice`.
+ *
+ * @internal
+ */
+export function sensitiveChoiceRoots<T extends RawAXNameNode>(
+  index: NativeAXIndex<T>,
+  fieldIds: Iterable<string>,
+): T[] {
+  const fields = new Set(fieldIds);
+  const roots = new Set<T>();
+  for (const host of sensitiveChoiceHosts(index.byId, fields)) {
+    for (const root of fieldRelationRoots(index, host)) roots.add(root);
+    const active = nativeAXProperty(host, "activedescendant");
+    for (const related of active?.relatedNodes ?? []) {
+      const id = related.backendDOMNodeId;
+      const target =
+        typeof id === "number" ? index.byBackendId.get(id) : undefined;
+      if (target) roots.add(choiceContainerOf(target, index.byId) ?? target);
+    }
+    if (
+      !fields.has(host.nodeId) ||
+      POPUP_CHOICE_ROLES.has(host.role?.value ?? "")
+    ) {
+      roots.add(host);
+    }
+  }
+  return [...roots];
+}
+
+/**
+ * Raw ids of every node at or under {@link sensitiveChoiceRoots}: where a
+ * node's choice state says what a sensitive field holds.
+ *
+ * @internal
+ */
+export function sensitiveChoiceReach<T extends RawAXNameNode>(
+  index: NativeAXIndex<T>,
+  fieldIds: Iterable<string>,
+): Set<string> {
+  const roots = sensitiveChoiceRoots(index, fieldIds);
+  return new Set(subtreeOf(roots, index.byId).map((node) => node.nodeId));
+}
+
+/** Some node at or under `root` is `selected`. */
+function holdsChoice<T extends RawAXNameNode>(
+  root: T,
+  byId: ReadonlyMap<string, T>,
+): boolean {
+  return subtreeOf([root], byId).some(
+    (node) => nativeAXProperty(node, "selected")?.value === true,
+  );
+}
+
+/**
+ * Raw ids of the choice containers (`POPUP_CHOICE_ROLES`) where a sensitive
+ * field's choice is made, with something chosen: those in
+ * {@link sensitiveChoiceReach}. That choice is the field's value, and
+ * Chromium lends it to a name built around the popup (AccName's embedded
+ * control): `<label>Expiry month <input autocomplete="cc-exp-month"
+ * aria-controls="lb"> <ul role="listbox" id="lb">…</ul></label>` is
+ * `combobox "Expiry month 03"`. A container with nothing selected lends
+ * nothing, as an empty field doesn't (`givesValueAway`). Name-region roots,
+ * in both native transports.
  *
  * @internal
  */
@@ -140,14 +196,14 @@ export function sensitivePopupRoots<T extends RawAXNameNode>(
   fieldIds: Iterable<string>,
 ): Set<string> {
   const roots = new Set<string>();
-  for (const host of sensitiveChoiceHosts(index.byId, fieldIds)) {
-    for (const node of fieldRelationTargets(index, host)) {
-      if (
-        POPUP_CHOICE_ROLES.has(node.role?.value ?? "") &&
-        holdsChoice(node, index.byId)
-      ) {
-        roots.add(node.nodeId);
-      }
+  for (const id of sensitiveChoiceReach(index, fieldIds)) {
+    const node = index.byId.get(id);
+    if (
+      node &&
+      POPUP_CHOICE_ROLES.has(node.role?.value ?? "") &&
+      holdsChoice(node, index.byId)
+    ) {
+      roots.add(id);
     }
   }
   return roots;

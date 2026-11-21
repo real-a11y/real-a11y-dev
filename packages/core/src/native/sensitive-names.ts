@@ -9,12 +9,13 @@
  * @internal
  */
 
-import { nativeAncestry, nativeAXProperty } from "./ax-node.js";
+import { nativeAXProperty } from "./ax-node.js";
 import type { LabelsOf } from "./labels.js";
 import { sensitivePopupRoots } from "./sensitive-popup.js";
 import {
   givesValueAway,
   indexNativeAX,
+  isWithin,
   valueRegions,
   withholdRegionNames,
   type FieldStandIn,
@@ -45,23 +46,11 @@ export function popupChoiceRegions<T extends RawAXNameNode>(
 ): ValueRegions {
   const roots = sensitivePopupRoots(index, fieldIds);
   const regions = valueRegions(index, roots, [], labelsOf);
-  const isWithin = (node: T, ancestor: RawAXNameNode): boolean => {
-    for (const cur of nativeAncestry(node, index.byId)) {
-      if (cur.nodeId === ancestor.nodeId) return true;
-    }
-    return false;
-  };
-  const popupOf = (node: RawAXNameNode): string | undefined => {
-    for (const cur of nativeAncestry(node as T, index.byId)) {
-      if (roots.has(cur.nodeId)) return cur.nodeId;
-    }
-    return undefined;
-  };
   // A part of `raw` in its own popup that holds no popup of its own: neither
   // another popup, nor in one, nor around one, whose choice it would read.
   const ownPart = (target: T, raw: RawAXNameNode, own: string): boolean =>
-    isWithin(target, raw) &&
-    popupOf(target) === own &&
+    isWithin(index.byId, target.nodeId, raw.nodeId) &&
+    regions.rootOf(target) === own &&
     !roots.has(target.nodeId) &&
     !regions.containing.has(target.nodeId);
   return {
@@ -74,8 +63,8 @@ export function popupChoiceRegions<T extends RawAXNameNode>(
       ) {
         return regions.references(raw, property);
       }
-      const own = popupOf(raw);
-      if (own === undefined || own === raw.nodeId) {
+      const own = regions.rootOf(raw);
+      if (own === null || own === raw.nodeId) {
         return regions.references(raw, property);
       }
       const relatedNodes = (
@@ -101,11 +90,35 @@ export function popupChoiceRegions<T extends RawAXNameNode>(
 }
 
 /**
+ * Every name and description that would say which choice a sensitive field's
+ * popup holds, withheld ({@link popupChoiceRegions}); and every description
+ * inside such a popup dropped, whatever it is built from (`aria-describedby`,
+ * `aria-description`, `title`). One only the chosen option carries would say
+ * which it is; dropped from every node alike, a description says nothing.
+ *
+ * @internal
+ */
+export function withholdPopupChoiceNames<T extends RawAXNameNode>(
+  rawNodes: T[],
+  index: NativeAXIndex<T>,
+  fieldIds: readonly string[],
+  labelsOf?: LabelsOf,
+): T[] {
+  const regions = popupChoiceRegions(index, fieldIds, labelsOf);
+  if (regions.roots.size === 0) return rawNodes;
+  return withholdRegionNames(rawNodes, regions).map((raw) => {
+    if (!raw.description || !regions.inside(raw)) return raw;
+    const { description: _dropped, ...rest } = raw;
+    return rest as T;
+  });
+}
+
+/**
  * {@link withholdRegionNames} for a producer's sensitive fields: `fieldIds` are
  * the raw ids of the fields it classified as sensitive (or could not
  * classify). Only a field that {@link givesValueAway} withholds names around
  * it; then the choice made in such a field's popup does
- * ({@link popupChoiceRegions}), in a pass of its own. `standIns` stand in for
+ * ({@link withholdPopupChoiceNames}), in a pass of its own. `standIns` stand in for
  * such fields that have no node of their own in the tree (`fieldStandIns`),
  * and already give their value away. `labelsOf` is the transport's walk of
  * the document's labels (`valueRegions`).
@@ -131,8 +144,5 @@ export function withholdSensitiveFieldNames<T extends RawAXNameNode>(
     rawNodes,
     valueRegions(index, roots, standIns, labelsOf),
   );
-  return withholdRegionNames(
-    named,
-    popupChoiceRegions(index, fieldIds, labelsOf),
-  );
+  return withholdPopupChoiceNames(named, index, fieldIds, labelsOf);
 }

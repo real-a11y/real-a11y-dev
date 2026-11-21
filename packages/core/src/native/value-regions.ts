@@ -177,7 +177,7 @@ function typedIn(raw: RawAXNameNode): boolean {
 }
 
 /** `id` is `ancestor` or sits beneath it. */
-function isWithin<T extends RawAXNameNode>(
+export function isWithin<T extends RawAXNameNode>(
   byId: ReadonlyMap<string, T>,
   id: string,
   ancestor: string,
@@ -242,6 +242,8 @@ export function indexNativeAX<T extends RawAXNameNode>(
  */
 export interface ValueRegions {
   roots: ReadonlySet<string>;
+  /** The nearest root at or above `raw`, memoized, or `null`. */
+  rootOf(raw: RawAXNameNode): string | null;
   /** Raw ids of the strict AX ancestors of a root. */
   containing: ReadonlySet<string>;
   /**
@@ -349,7 +351,7 @@ export function valueRegions<T extends RawAXNameNode>(
   };
 
   const inside = (raw: RawAXNameNode): boolean => rootOf(raw) !== null;
-  const regions = { roots, containing, inside };
+  const regions = { roots, containing, inside, rootOf };
   const places = { roots, rootOf, rootsUnder };
   const lent = labelLending(index, places, standInsOf, labelsOf);
 

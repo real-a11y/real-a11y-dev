@@ -200,7 +200,7 @@ export {
   withholdRegionNames,
 } from "./native/value-regions.js";
 export {
-  popupChoiceRegions,
+  withholdPopupChoiceNames,
   withholdSensitiveFieldNames,
 } from "./native/sensitive-names.js";
 export type {
@@ -213,8 +213,8 @@ export type {
 export { nativeAncestry, nativeAXProperty } from "./native/ax-node.js";
 export {
   fieldRelationRoots,
-  fieldRelationTargets,
-  sensitiveChoiceHosts,
+  sensitiveChoiceReach,
+  sensitiveChoiceRoots,
   sensitivePopupRoots,
 } from "./native/sensitive-popup.js";
 export { domLabels } from "./native/labels.js";

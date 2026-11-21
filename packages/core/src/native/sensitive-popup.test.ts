@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import {
   fieldRelationRoots,
-  fieldRelationTargets,
   sensitiveChoiceHosts,
+  sensitiveChoiceReach,
   sensitivePopupRoots,
 } from "./sensitive-popup.js";
 import { indexNativeAX, type RawAXNameNode } from "./value-regions.js";
@@ -39,12 +39,11 @@ describe("what a field controls or owns", () => {
         fieldRelationRoots(index, raw[0]!).map((n) => n.nodeId),
         relation,
       ).toEqual(["2"]);
-      expect(
-        fieldRelationTargets(index, raw[0]!)
-          .map((n) => n.nodeId)
-          .sort(),
-        relation,
-      ).toEqual(["2", "3", "4"]);
+      expect([...sensitiveChoiceReach(index, ["1"])].sort(), relation).toEqual([
+        "2",
+        "3",
+        "4",
+      ]);
     }
   });
 
@@ -52,7 +51,7 @@ describe("what a field controls or owns", () => {
     for (const relation of ["labelledby", "describedby", "flowto", "details"]) {
       const raw = nodes(relation);
       expect(
-        fieldRelationTargets(indexNativeAX(raw), raw[0]!),
+        [...sensitiveChoiceReach(indexNativeAX(raw), ["1"])],
         relation,
       ).toEqual([]);
     }
@@ -71,7 +70,7 @@ describe("what a field controls or owns", () => {
     expect(fieldRelationRoots(index, raw[0]!).map((n) => n.nodeId)).toEqual([
       "2",
     ]);
-    expect(fieldRelationTargets(index, raw[0]!)).toHaveLength(3);
+    expect(sensitiveChoiceReach(index, ["1"]).size).toBe(3);
   });
 });
 
@@ -163,5 +162,114 @@ describe("the choice containers in a sensitive field's popup", () => {
 
   it("are only a sensitive field's", () => {
     expect(rootsOf(popup("listbox", true), [])).toEqual([]);
+  });
+});
+
+describe("where a sensitive field's choice is made, beyond its relations", () => {
+  const option = (nodeId: string, parentId: string, selected = true) => ({
+    nodeId,
+    parentId,
+    backendDOMNodeId: Number(nodeId) * 10,
+    role: { value: "option" },
+    properties: [{ name: "selected", value: { value: selected } }],
+  });
+
+  it("is everything a combobox around the field holds, with no relation", () => {
+    // The field is not the wrapper's direct child, so Chromium relates it to
+    // nothing; the listbox sits beside it in the wrapper.
+    const raw: RawAXNameNode[] = [
+      { nodeId: "1", childIds: ["2"], role: { value: "RootWebArea" } },
+      {
+        nodeId: "2",
+        parentId: "1",
+        childIds: ["3", "5"],
+        role: { value: "combobox" },
+      },
+      {
+        nodeId: "3",
+        parentId: "2",
+        childIds: ["4"],
+        role: { value: "generic" },
+      },
+      { nodeId: "4", parentId: "3", role: { value: "textbox" } },
+      {
+        nodeId: "5",
+        parentId: "2",
+        childIds: ["6"],
+        role: { value: "listbox" },
+      },
+      option("6", "5"),
+    ];
+    const index = indexNativeAX(raw);
+    expect([...sensitiveChoiceReach(index, ["4"])].sort()).toEqual([
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+    ]);
+    expect([...sensitivePopupRoots(index, ["4"])]).toEqual(["5"]);
+  });
+
+  it("is the choice container the field's aria-activedescendant sits in", () => {
+    const raw: RawAXNameNode[] = [
+      { nodeId: "1", childIds: ["2", "11"], role: { value: "RootWebArea" } },
+      {
+        nodeId: "2",
+        parentId: "1",
+        role: { value: "combobox" },
+        properties: [
+          {
+            name: "activedescendant",
+            value: { type: "idref", relatedNodes: [{ backendDOMNodeId: 120 }] },
+          },
+        ],
+      },
+      {
+        nodeId: "11",
+        parentId: "1",
+        childIds: ["12"],
+        role: { value: "listbox" },
+      },
+      option("12", "11"),
+    ];
+    const index = indexNativeAX(raw);
+    expect([...sensitiveChoiceReach(index, ["2"])].sort()).toEqual([
+      "11",
+      "12",
+    ]);
+    expect([...sensitivePopupRoots(index, ["2"])]).toEqual(["11"]);
+  });
+
+  it("is the field itself when it is a choice container, a multi-row <select>", () => {
+    const raw: RawAXNameNode[] = [
+      { nodeId: "1", childIds: ["2"], role: { value: "RootWebArea" } },
+      {
+        nodeId: "2",
+        parentId: "1",
+        childIds: ["3"],
+        role: { value: "listbox" },
+      },
+      option("3", "2"),
+    ];
+    const index = indexNativeAX(raw);
+    expect([...sensitivePopupRoots(index, ["2"])]).toEqual(["2"]);
+    // Nothing chosen lends nothing.
+    raw[2] = option("3", "2", false);
+    expect([...sensitivePopupRoots(indexNativeAX(raw), ["2"])]).toEqual([]);
+  });
+
+  it("is nothing for a page with no sensitive field", () => {
+    const raw: RawAXNameNode[] = [
+      { nodeId: "1", childIds: ["2"], role: { value: "RootWebArea" } },
+      {
+        nodeId: "2",
+        parentId: "1",
+        childIds: ["3"],
+        role: { value: "listbox" },
+      },
+      option("3", "2"),
+    ];
+    expect(sensitiveChoiceReach(indexNativeAX(raw), []).size).toBe(0);
   });
 });
