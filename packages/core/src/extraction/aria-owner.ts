@@ -1,7 +1,7 @@
 /**
- * The `aria-owns` owner of an element, and whether a sensitive field names it
- * in `aria-controls`, each indexed once per extraction. Held apart from
- * `role-map.ts` so that file stays within its length budget.
+ * The `aria-owns` owner of an element, and what a sensitive field's relations
+ * reach, each indexed once per extraction. Held apart from `role-map.ts` so
+ * that file stays within its length budget.
  */
 import { realmSingleton } from "../utils/realm-singleton.js";
 
@@ -17,31 +17,44 @@ import { idScope } from "./flat-tree.js";
 type AriaOwnerIndex = WeakMap<Document | ShadowRoot, Map<string, Element>>;
 
 /**
- * The ids a sensitive field names in `aria-controls`, for each id scope, built
- * on first use with the same lifetime as {@link AriaOwnerIndex}.
+ * What choice-withholding learns about a page once per extraction, with the
+ * same lifetime as {@link AriaOwnerIndex}.
+ *
+ * @internal
  */
-type SensitiveControlsIndex = WeakMap<Document | ShadowRoot, Set<string>>;
+export interface ChoiceCache {
+  /** Each document asked about: whether it holds any sensitive field. */
+  readonly sensitivePages: WeakMap<Document, boolean>;
+  /** The id scopes whose sensitive fields' relations are in `reached`. */
+  readonly indexedScopes: WeakSet<Document | ShadowRoot>;
+  /**
+   * What a sensitive field, or a combobox around one, names in
+   * `aria-controls`, and the choice container its `aria-activedescendant`
+   * sits in.
+   */
+  readonly reached: WeakSet<Element>;
+  /** Whether each element asked about is a sensitive choice host. */
+  readonly hosts: WeakMap<Element, boolean>;
+}
 
 /**
  * The index of the extraction in progress, if any. It is held in the realm
  * registry rather than module scope (see `realmSingleton`), and it is only
- * ever set for the duration of one synchronous `extractDomTree` call.
+ * ever set for the duration of one synchronous `withAriaOwnerIndex` call.
  */
 interface ActiveOwnerIndex {
   current: AriaOwnerIndex | null;
-  sensitiveControls: SensitiveControlsIndex | null;
-  /** Whether each element asked about is a sensitive choice host. */
-  choiceHosts: WeakMap<Element, boolean> | null;
+  choices: ChoiceCache | null;
 }
 
-// `@3`: the store gained `sensitiveControls` (`@2`), then `choiceHosts`. A copy
-// of core that holds an older shape keeps a store of its own rather than share
-// one it can't read.
+// `@4`: the store gained `sensitiveControls` (`@2`) and `choiceHosts` (`@3`),
+// which became one `choices` cache. A copy of core that holds an older shape
+// keeps a store of its own rather than share one it can't read.
 const activeOwnerIndex = (): ActiveOwnerIndex =>
   realmSingleton<ActiveOwnerIndex>(
     "role-map.aria-owner-index",
-    "aria-owner-index@3",
-    () => ({ current: null, sensitiveControls: null, choiceHosts: null }),
+    "aria-owner-index@4",
+    () => ({ current: null, choices: null }),
   );
 
 /**
@@ -54,17 +67,19 @@ const activeOwnerIndex = (): ActiveOwnerIndex =>
 export function withAriaOwnerIndex<T>(fn: () => T): T {
   const holder = activeOwnerIndex();
   const previous = holder.current;
-  const previousControls = holder.sensitiveControls;
-  const previousHosts = holder.choiceHosts;
+  const previousChoices = holder.choices;
   holder.current = new WeakMap();
-  holder.sensitiveControls = new WeakMap();
-  holder.choiceHosts = new WeakMap();
+  holder.choices = {
+    sensitivePages: new WeakMap(),
+    indexedScopes: new WeakSet(),
+    reached: new WeakSet(),
+    hosts: new WeakMap(),
+  };
   try {
     return fn();
   } finally {
     holder.current = previous;
-    holder.sensitiveControls = previousControls;
-    holder.choiceHosts = previousHosts;
+    holder.choices = previousChoices;
   }
 }
 
@@ -108,23 +123,10 @@ export function ariaOwner(element: Element): Element | null {
 }
 
 /**
- * The extraction's cache of the ids a sensitive field names in
- * `aria-controls`, by id scope, or `null` outside an extraction. Filled by
- * `controlledBySensitiveField` in choice-withholding.
+ * The extraction's {@link ChoiceCache}, or `null` outside an extraction.
  *
  * @internal
  */
-export function sensitiveControlsIndex(): SensitiveControlsIndex | null {
-  return activeOwnerIndex().sensitiveControls;
-}
-
-/**
- * The extraction's cache of `isSensitiveChoiceHost` by element, or `null`
- * outside an extraction: a combobox wrapper's verdict walks its whole subtree,
- * and every node with a choice state below it asks again.
- *
- * @internal
- */
-export function choiceHostsIndex(): WeakMap<Element, boolean> | null {
-  return activeOwnerIndex().choiceHosts;
+export function choiceCache(): ChoiceCache | null {
+  return activeOwnerIndex().choices;
 }

@@ -265,6 +265,21 @@ function discardedRoleOf(n: SemanticNode): string | undefined {
   return resolved ?? authored;
 }
 
+/**
+ * The `aria-selected` the author wrote on `element`, which the tree withholds
+ * where it would say what a sensitive field holds (its popup's options): the
+ * validator asks what is authored, not what the tree shows. Read through the
+ * prototype: a page's element may shadow `getAttribute`.
+ */
+function withheldAuthoredAttrs(
+  element: Element | undefined,
+): Record<string, string> {
+  const selected = element
+    ? Element.prototype.getAttribute.call(element, "aria-selected")
+    : null;
+  return selected === null ? {} : { "aria-selected": selected };
+}
+
 /** `focusable` for the validator, omitted when the producer recorded no
  *  interaction facet so its fail-open default applies. */
 function focusableOf(n: SemanticNode): { focusable?: boolean } {
@@ -286,7 +301,9 @@ function toValidatedNode(
   // appear — an authored combobox or slider was unsatisfiable no matter what
   // the author wrote. Fill from the recorded attributes, without letting them
   // override a computed state.
-  for (const [k, v] of Object.entries(domAttrs)) {
+  const element = getElementRefs().get(n.id);
+  const written = { ...domAttrs, ...withheldAuthoredAttrs(element) };
+  for (const [k, v] of Object.entries(written)) {
     if (k.startsWith("aria-") && attrs[k] === undefined) attrs[k] = v;
   }
 
@@ -310,7 +327,7 @@ function toValidatedNode(
       !authored ||
       (resolveRoleToken(authored) ?? authored) ===
         implicitRoleFor(tag, type, domAttrs),
-    uaSuppliedAttrs: uaSuppliedAttrs(tag, type, getElementRefs().get(n.id)),
+    uaSuppliedAttrs: uaSuppliedAttrs(tag, type, element),
     // Left out when the producer recorded no interaction facet, so the
     // validator's fail-open default applies.
     ...focusableOf(n),

@@ -348,4 +348,158 @@ describe("the choice a sensitive field holds", () => {
       ).toEqual([["combobox", "Expiry month 03"]]);
     });
   });
+
+  describe("where the tree places it", () => {
+    /** Each node's role, name and description, for the roles given. */
+    const readOf = (
+      roles: string[],
+      root: Element = document.body,
+    ): Array<[string, string, string | undefined]> =>
+      [...extractDomTree(root).nodes.values()]
+        .filter((n) => roles.includes(n.a11y.role))
+        .map((n) => [
+          n.a11y.role,
+          n.a11y.name,
+          n.a11y.description || undefined,
+        ]);
+
+    it("is withheld for a wrapper whose sensitive field is slotted into it", () => {
+      // The field is the host's light child; the slot renders it inside the
+      // combobox, as Chromium's flat tree reads it.
+      for (const [autocomplete, selected] of [
+        ["cc-exp-month", undefined],
+        ["off", true],
+      ] as const) {
+        document.body.innerHTML = `<x-field><input aria-label="Month" autocomplete="${autocomplete}"></x-field>`;
+        document.body.firstElementChild!.attachShadow({
+          mode: "open",
+        }).innerHTML =
+          `<div role="combobox" aria-controls="lb" aria-expanded="true"><slot></slot></div>` +
+          `<ul role="listbox" id="lb" aria-label="Months"><li role="option" aria-selected="true">03</li></ul>`;
+        expect(
+          [...extractDomTree(document.body).nodes.values()]
+            .filter((n) => n.a11y.role === "option")
+            .map((n) => n.a11y.states["selected"]),
+          autocomplete,
+        ).toEqual([selected]);
+      }
+    });
+
+    it("is withheld in the popup a sensitive field's aria-activedescendant sits in", () => {
+      const page = (attrs: string) =>
+        `<input role="combobox" aria-label="Month" aria-expanded="true" aria-activedescendant="o3" ${attrs}>` +
+        `<ul role="listbox" id="lb" aria-label="Months">` +
+        `<li role="option" aria-selected="false">01</li>` +
+        `<li role="option" id="o3" aria-selected="true">03</li></ul>` +
+        `<button aria-labelledby="lb"></button>`;
+      expect(selectedOf(page('autocomplete="cc-exp-month"'))).toEqual([
+        ["01", undefined],
+        ["03", undefined],
+      ]);
+      expect(readOf(["button"])).toEqual([["button", "[redacted]", undefined]]);
+      expect(selectedOf(page(""))).toEqual([
+        ["01", false],
+        ["03", true],
+      ]);
+      // AccName reads a listbox referenced directly as an embedded control.
+      expect(readOf(["button"])).toEqual([["button", "03", undefined]]);
+    });
+
+    it("is withheld on an option a sensitive field controls itself", () => {
+      // Only that option: what it points at is all that is reached.
+      expect(
+        selectedOf(
+          `<input role="combobox" aria-label="Month" autocomplete="cc-exp-month" aria-controls="o3">` +
+            `<ul role="listbox" aria-label="Months">` +
+            `<li role="option" aria-selected="false">01</li>` +
+            `<li role="option" id="o3" aria-selected="true">03</li></ul>`,
+        ),
+      ).toEqual([
+        ["01", false],
+        ["03", undefined],
+      ]);
+    });
+
+    it("is withheld from a name or description that reads a sensitive drop-down's option", () => {
+      // Its role is combobox, not a choice container: the option is inside
+      // the field, whose value its text is.
+      const page = (autocomplete: string) =>
+        `<select aria-label="Year" autocomplete="${autocomplete}">` +
+        `<option>2027</option><option id="o" selected>2031</option></select>` +
+        `<button aria-labelledby="o"></button><button aria-describedby="o">Pay</button>`;
+      document.body.innerHTML = page("cc-exp-year");
+      expect(readOf(["button"])).toEqual([
+        ["button", "[redacted]", undefined],
+        ["button", "Pay", undefined],
+      ]);
+      document.body.innerHTML = page("off");
+      expect(readOf(["button"])).toEqual([
+        ["button", "2031", undefined],
+        ["button", "Pay", "2031"],
+      ]);
+    });
+
+    it("is withheld from a name that reads an option the popup owns", () => {
+      const page = (autocomplete: string) =>
+        `<input role="combobox" aria-label="Month" autocomplete="${autocomplete}" aria-controls="lb" aria-expanded="true">` +
+        `<div role="listbox" id="lb" aria-label="Months" aria-owns="o1 o3"></div>` +
+        `<div><div role="option" id="o1" aria-selected="false">01</div>` +
+        `<div role="option" id="o3" aria-selected="true">03</div></div>` +
+        `<button aria-labelledby="o3"></button>`;
+      document.body.innerHTML = page("cc-exp-month");
+      expect(readOf(["button"])).toEqual([["button", "[redacted]", undefined]]);
+      document.body.innerHTML = page("off");
+      expect(readOf(["button"])).toEqual([["button", "03", undefined]]);
+    });
+
+    it("drops every description in a sensitive popup with a choice, whatever it is built from", () => {
+      // A span after the list, aria-description and title each say which
+      // option is the chosen one as well as a span inside it would.
+      const page = (autocomplete: string, selected: string) =>
+        `<input role="combobox" aria-label="Month" autocomplete="${autocomplete}" aria-controls="lb" aria-expanded="true">` +
+        `<ul role="listbox" id="lb" aria-label="Months" aria-describedby="hint">` +
+        `<li role="option" aria-selected="false">01</li>` +
+        `<li role="option" aria-selected="${selected}" aria-describedby="d">02</li>` +
+        `<li role="option" aria-selected="false" aria-description="selected">03</li>` +
+        `<li role="option" aria-selected="false" title="current choice">04</li></ul>` +
+        `<span id="d" hidden>selected</span><span id="hint" hidden>Pick one</span>`;
+      document.body.innerHTML = page("cc-exp-month", "true");
+      expect(readOf(["listbox", "option"]).map(([, , d]) => d)).toEqual([
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+      ]);
+      // Nothing chosen gives nothing away, and an ordinary field's popup
+      // keeps them.
+      for (const [autocomplete, selected] of [
+        ["cc-exp-month", "false"],
+        ["off", "true"],
+      ]) {
+        document.body.innerHTML = page(autocomplete!, selected!);
+        expect(readOf(["listbox", "option"]).map(([, , d]) => d)).toEqual([
+          "Pick one",
+          undefined,
+          "selected",
+          "selected",
+          "current choice",
+        ]);
+      }
+    });
+
+    it("is withheld in a subtree that is not in a document", () => {
+      // The page-wide shortcut has no page to ask, so the climbs decide. (An
+      // id reference can't resolve there, so the wrapper holds the listbox.)
+      const root = document.createElement("div");
+      root.innerHTML =
+        `<div role="combobox" aria-expanded="true"><input aria-label="Month" autocomplete="cc-exp-month">` +
+        `<ul role="listbox" aria-label="Months"><li role="option" aria-selected="true">03</li></ul></div>`;
+      expect(
+        [...extractDomTree(root).nodes.values()]
+          .filter((n) => n.a11y.role === "option")
+          .map((n) => n.a11y.states["selected"]),
+      ).toEqual([undefined]);
+    });
+  });
 });

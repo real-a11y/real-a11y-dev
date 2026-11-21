@@ -1,4 +1,5 @@
 import { buildA11yTree } from "../extraction/a11y-extractor.js";
+import { withAriaOwnerIndex } from "../extraction/aria-owner.js";
 import {
   safeContains,
   safeGetAttribute,
@@ -162,7 +163,9 @@ export class LiveTreeExtractor {
     // `extract()` rebuilds every piece of state the splice may have left half
     // updated.
     try {
-      return this.splice(change);
+      // One set of per-extraction indexes for the batch's decisions, which
+      // can ask about the same sensitive fields once per mutation.
+      return withAriaOwnerIndex(() => this.splice(change));
     } catch (error) {
       // Once per extractor: a page that trips this does so on every refresh
       // near that form, and the gate cannot tell production apart in a browser.

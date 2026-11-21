@@ -10,7 +10,10 @@ import { withAriaOwnerIndex } from "./aria-owner.js";
 import { getAriaStates } from "./aria-states.js";
 import { isAriaHiddenValue } from "./aria-tokens.js";
 import { AUTHOR_NAMED_ROLES } from "./author-named-roles.js";
-import { readsSensitivePopup } from "./choice-withholding.js";
+import {
+  readsSensitivePopup,
+  withholdPopupDescription,
+} from "./choice-withholding.js";
 import {
   safeGetAttribute,
   safeGetElementById,
@@ -161,12 +164,8 @@ function computeAccessibleDescription(
         // irreversible</span>` as "Warning irreversible".
         const run = newNameRun(redactInput);
         const text = referenceText(target, run, styleCache);
-        if (
-          run.withheld ||
-          readsSensitivePopup(element, target, "describedby")
-        ) {
-          withheld = true;
-        }
+        withheld ||=
+          run.withheld || readsSensitivePopup(element, target, "describedby");
         return text;
       })
       .filter((t): t is string => !!t);
@@ -1040,10 +1039,9 @@ function buildNode(
       a11y: {
         role,
         name: accessibleName(element, styleCache, redactInput),
-        description: computeAccessibleDescription(
+        description: withholdPopupDescription(
           element,
-          styleCache,
-          redactInput,
+          computeAccessibleDescription(element, styleCache, redactInput),
         ),
         ...(value !== undefined ? { value } : {}),
         states: withholdStates(element, role, states, redactInput),

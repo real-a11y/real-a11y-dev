@@ -16,7 +16,7 @@ import {
   resetIdCounter,
 } from "../index.js";
 import { clobber, shadow } from "../test-support/clobber.js";
-import type { ExtractionResult, TreeChange } from "../types.js";
+import type { ExtractionResult, SemanticNode, TreeChange } from "../types.js";
 
 describe("LiveTreeExtractor", () => {
   beforeEach(() => {
@@ -1054,6 +1054,169 @@ describe("LiveTreeExtractor", () => {
           ),
         ),
       ).toBe(true);
+    });
+  });
+
+  describe("a sensitive popup's choice after a live change", () => {
+    /**
+     * The live tree after `change` runs on a page read as `html`, which must
+     * be the tree a full read gives.
+     */
+    const refreshed = async (html: string, change: () => void) => {
+      document.body.innerHTML = html;
+      const live = new LiveTreeExtractor(document.body, { mode: "dom" });
+      live.extract();
+      let lastChange: TreeChange | undefined;
+      const observer = new DomObserver(
+        document.body,
+        (c) => {
+          lastChange = c;
+        },
+        50,
+      );
+      observer.start();
+      change();
+      await vi.advanceTimersByTimeAsync(100);
+      observer.stop();
+      // Observed, so the refresh below is the live path, not a full read.
+      expect(lastChange).toBeDefined();
+      const result = live.refresh(lastChange);
+      expect(result.nodes).toEqual(extractDomTree(document.body).nodes);
+      return [...result.nodes.values()];
+    };
+    const byId = (id: string) => document.getElementById(id)!;
+    const read = (nodes: SemanticNode[], role: string) =>
+      nodes
+        .filter((n) => n.a11y.role === role)
+        .map((n) => [n.a11y.name, n.a11y.description || undefined]);
+    const field = `<input role="combobox" aria-label="Month" autocomplete="cc-exp-month" aria-controls="lb" aria-expanded="true">`;
+    /** Three options each described by a span of their own, and a caption. */
+    const popup = (chosen: string) =>
+      `<ul role="listbox" id="lb" aria-label="Months">` +
+      ["1", "2", "3"]
+        .map(
+          (n) =>
+            `<li role="option" id="o${n}" aria-selected="${n === chosen}" aria-describedby="d${n}">0${n}` +
+            `<span id="d${n}" hidden>month ${n}</span></li>`,
+        )
+        .join("") +
+      `<li role="option" aria-selected="false"><span id="cap">March</span></li></ul>`;
+    const outside = `<section><button aria-labelledby="cap"></button></section>`;
+
+    it("reads the whole popup, and what references it, once a choice is made", async () => {
+      const nodes = await refreshed(
+        `<main>${field}${popup("")}</main>${outside}`,
+        () => byId("o3").setAttribute("aria-selected", "true"),
+      );
+      expect(read(nodes, "option")).toEqual([
+        ["01", undefined],
+        ["02", undefined],
+        ["03", undefined],
+        ["March", undefined],
+      ]);
+      expect(read(nodes, "button")).toEqual([["[redacted]", undefined]]);
+    });
+
+    it("gives every description back once the choice clears", async () => {
+      const nodes = await refreshed(
+        `<main>${field}${popup("3")}</main>${outside}`,
+        () => byId("o3").setAttribute("aria-selected", "false"),
+      );
+      expect(read(nodes, "option")).toEqual([
+        ["01", "month 1"],
+        ["02", "month 2"],
+        ["03", "month 3"],
+        ["March", undefined],
+      ]);
+      expect(read(nodes, "button")).toEqual([["March", undefined]]);
+    });
+
+    it("reads it once a chosen option arrives", async () => {
+      const nodes = await refreshed(
+        `<main>${field}<ul role="listbox" id="lb" aria-label="Months">` +
+          `<li role="option" aria-selected="false"><span id="cap">March</span></li></ul></main>${outside}` +
+          `<section><button aria-labelledby="lb"></button></section>`,
+        () =>
+          byId("lb").insertAdjacentHTML(
+            "beforeend",
+            `<li role="option" aria-selected="true">04</li>`,
+          ),
+      );
+      expect(read(nodes, "button")).toEqual([
+        ["[redacted]", undefined],
+        ["[redacted]", undefined],
+      ]);
+    });
+
+    it("reads it once an element around a sensitive field becomes a combobox, with no relation", async () => {
+      // The listbox is the wrapper's child: its popup, with no relation. A
+      // level down, so the parent re-read for a role change holds the wrapper
+      // but not the buttons.
+      const nodes = await refreshed(
+        `<main><div><div id="w"><input aria-label="Month" autocomplete="cc-exp-month">` +
+          `<ul role="listbox" id="lb"><li role="option" id="o3" aria-selected="true">03</li></ul></div></div></main>` +
+          `<section><button aria-labelledby="lb"></button><button aria-labelledby="o3"></button></section>`,
+        () => byId("w").setAttribute("role", "combobox"),
+      );
+      expect(read(nodes, "button")).toEqual([
+        ["[redacted]", undefined],
+        ["[redacted]", undefined],
+      ]);
+    });
+
+    it("reads it once a text field in a combobox becomes a password field", async () => {
+      const nodes = await refreshed(
+        `<main><div role="combobox" aria-expanded="true">` +
+          `<input id="m" type="text" aria-label="PIN">` +
+          `<ul role="listbox" id="lb"><li role="option" aria-selected="true">1234</li></ul></div>` +
+          `<section><button aria-labelledby="lb"></button></section></main>`,
+        () => byId("m").setAttribute("type", "password"),
+      );
+      expect(read(nodes, "button")).toEqual([["[redacted]", undefined]]);
+    });
+
+    it("reads it once a sensitive field points aria-activedescendant into it", async () => {
+      // Nothing re-read for the field holds the listbox or the button.
+      const nodes = await refreshed(
+        `<main><div><div><input id="m" role="combobox" aria-label="Month" autocomplete="cc-exp-month" aria-expanded="true"></div></div></main>` +
+          `<aside><ul role="listbox" id="lb" aria-label="Months">` +
+          `<li role="option" id="o3" aria-selected="true">03</li></ul></aside>` +
+          `<section><button aria-labelledby="lb"></button></section>`,
+        () => byId("m").setAttribute("aria-activedescendant", "o3"),
+      );
+      expect(
+        nodes
+          .filter((n) => n.a11y.role === "option")
+          .map((n) => n.a11y.states.selected),
+      ).toEqual([undefined]);
+      expect(read(nodes, "button")).toEqual([["[redacted]", undefined]]);
+    });
+
+    it("reads it once an element a sensitive field is slotted into becomes a combobox", () => {
+      // The field is the host's light child, rendered in the wrapper by the
+      // slot; the button beside the wrapper is not re-read with it. The DOM
+      // observer doesn't watch inside shadow roots, so the record is handed
+      // over as one that does would.
+      document.body.innerHTML = `<main><x-field id="x"><input aria-label="Month" autocomplete="cc-exp-month"></x-field></main>`;
+      const root = byId("x").attachShadow({ mode: "open" });
+      root.innerHTML =
+        `<div><div><div id="w"><slot></slot>` +
+        `<ul role="listbox" id="lb"><li role="option" aria-selected="true">03</li></ul></div></div></div>` +
+        `<section><button aria-labelledby="lb"></button></section>`;
+      const live = new LiveTreeExtractor(document.body, { mode: "dom" });
+      live.extract();
+      const wrapper = root.getElementById("w")!;
+      wrapper.setAttribute("role", "combobox");
+      const record = {
+        type: "attributes",
+        target: wrapper,
+        attributeName: "role",
+      } as unknown as MutationRecord;
+      const result = live.refresh({ mutations: [record] });
+      expect(result.nodes).toEqual(extractDomTree(document.body).nodes);
+      expect(read([...result.nodes.values()], "button")).toEqual([
+        ["[redacted]", undefined],
+      ]);
     });
   });
 

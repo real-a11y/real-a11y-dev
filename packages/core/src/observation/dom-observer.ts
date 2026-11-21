@@ -51,6 +51,9 @@ const EXTRA_OBSERVED_ATTRIBUTES = [
   "scope", // <th scope> selects the columnheader/rowheader role (role-map)
   "list", // <input list> naming a <datalist> makes it a combobox (role-map)
   "autocomplete", // names credential/payment fields, whose value gets redacted
+  // Points a sensitive field into its popup, whose choice it then withholds
+  // (choice-withholding); not a global attribute, so not spread below.
+  "aria-activedescendant",
   // Inputs to a field's announced value (ADR-0001) that nothing else watches:
   // a range widget's spoken text, an <option>'s label (its <select>'s value),
   // and a <progress>/<meter>'s value, which is reflected as this attribute.

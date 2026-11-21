@@ -1,7 +1,14 @@
-import { isSensitiveChoiceHost } from "../extraction/choice-withholding.js";
+import {
+  holdsSensitiveField,
+  inSensitiveChoice,
+  isChosen,
+  isSensitiveChoiceHost,
+  pageMayHoldSensitiveField,
+} from "../extraction/choice-withholding.js";
 import {
   safeGetAttribute,
   safeMatches,
+  safeShadowRoot,
   safeTagName,
 } from "../extraction/clobber-safe.js";
 import {
@@ -9,7 +16,11 @@ import {
   flatParentElement,
 } from "../extraction/flat-tree.js";
 import { getExplicitRole } from "../extraction/role-map.js";
-import { isSensitiveField } from "../extraction/sensitivity.js";
+import {
+  FIELD_SELECTOR,
+  FIELD_TAGS,
+  isSensitiveField,
+} from "../extraction/sensitivity.js";
 
 /**
  * Attributes whose change creates or breaks accessibility references.
@@ -29,27 +40,24 @@ export const REFERENCE_ATTRS = new Set([
   "aria-owns",
 ]);
 
-/** The elements {@link isSensitiveField} can be true of. */
-const FIELD_TAGS: ReadonlySet<string> = new Set([
-  "input",
-  "textarea",
-  "select",
-]);
-
 /**
  * True when a change to `attr` on `target` moves which choices a sensitive
  * field withholds somewhere else: its popup listbox is not its descendant,
  * so neither re-extracting `target` nor its subtree reaches the options there.
  * That is a relation a sensitive field (or a combobox around one) gains or
- * loses (`aria-controls`; `aria-owns` is a reference attribute already); a
- * field becoming or ceasing to be sensitive (`autocomplete`, `type`) that
- * has such a relation or sits in a combobox; or an element around a
- * sensitive field, with a relation, becoming or ceasing to be a combobox
- * (`role`). What the element holds is re-read with it.
+ * loses (`aria-controls`, `aria-activedescendant`; `aria-owns` is a reference
+ * attribute already); a field becoming or ceasing to be sensitive
+ * (`autocomplete`, `type`) that has such a relation or sits in a combobox; an
+ * element around a sensitive field becoming or ceasing to be a combobox
+ * (`role`), relation or not, since a listbox it holds is its popup; or a
+ * choice made or cleared in a sensitive field's popup (`aria-selected`),
+ * which decides what every reference into the popup reads, the other
+ * options' own names and descriptions among them.
  */
 export function movesSensitiveChoice(target: Element, attr: string): boolean {
   switch (attr) {
     case "aria-controls":
+    case "aria-activedescendant":
       return isSensitiveChoiceHost(target);
     case "autocomplete":
     case "type":
@@ -59,7 +67,12 @@ export function movesSensitiveChoice(target: Element, attr: string): boolean {
           comboboxAtOrAbove(flatParentElement(target)))
       );
     case "role":
-      return hasPopupRelation(target) && holdsSensitiveField(target);
+      return (
+        pageMayHoldSensitiveField(target) &&
+        (isSensitiveField(target) || holdsSensitiveField(target))
+      );
+    case "aria-selected":
+      return inSensitiveChoice(target);
     default:
       return false;
   }
@@ -68,16 +81,18 @@ export function movesSensitiveChoice(target: Element, attr: string): boolean {
 /**
  * True when adding or removing `subtree` under `parent` moves which choices a
  * sensitive field withholds somewhere else: the subtree holds a sensitive
- * field (or a combobox around one) that controls or owns a popup, or a
- * sensitive field going into or out of a combobox. The popup is not in the subtree, so splicing the subtree alone
- * leaves its choice as it was read. Shadow roots in the subtree count.
+ * field (or a combobox around one) with a relation to a popup, or a sensitive
+ * field going into or out of a combobox, slotted ones included; or it brings
+ * a choice into, or takes one out of, a sensitive field's popup. The popup is
+ * not in the subtree, or what references it is not, so splicing the subtree
+ * alone leaves its choice as it was read. Shadow roots in the subtree count.
  */
 export function bringsSensitivePopup(
   subtree: Element,
   parent: Element | null,
 ): boolean {
-  // One walk, shadow roots included, for both questions.
-  const selectors = "[aria-controls], [aria-owns], input, textarea, select";
+  // One walk, shadow roots included, for all three questions.
+  const selectors = `[aria-controls], [aria-owns], [aria-activedescendant], [aria-selected], option, ${FIELD_SELECTOR}`;
   const found = [
     ...(safeMatches(subtree, selectors) ? [subtree] : []),
     ...deepQuerySelectorAll(subtree, selectors),
@@ -85,16 +100,19 @@ export function bringsSensitivePopup(
   if (found.some((el) => hasPopupRelation(el) && isSensitiveChoiceHost(el))) {
     return true;
   }
-  return found.some(isSensitiveField) && comboboxAtOrAbove(parent);
-}
-
-/** `element` or what it holds, shadow roots included, is a sensitive field. */
-function holdsSensitiveField(element: Element): boolean {
+  // A slotted field's flat parent is its slot, in the host's shadow tree; one
+  // that left a shadow host may have left a combobox in there.
+  if (
+    found.some(isSensitiveField) &&
+    (comboboxAtOrAbove(flatParentElement(subtree) ?? parent) ||
+      (parent !== null && safeShadowRoot(parent) !== null))
+  ) {
+    return true;
+  }
   return (
-    isSensitiveField(element) ||
-    deepQuerySelectorAll(element, "input, textarea, select").some(
-      isSensitiveField,
-    )
+    parent !== null &&
+    found.some(isChosen) &&
+    (isSensitiveChoiceHost(parent) || inSensitiveChoice(parent))
   );
 }
 
@@ -117,7 +135,8 @@ function comboboxAtOrAbove(start: Element | null): boolean {
 function hasPopupRelation(element: Element): boolean {
   return (
     safeGetAttribute(element, "aria-controls") !== null ||
-    safeGetAttribute(element, "aria-owns") !== null
+    safeGetAttribute(element, "aria-owns") !== null ||
+    safeGetAttribute(element, "aria-activedescendant") !== null
   );
 }
 

@@ -1262,6 +1262,176 @@ describe("readNativeTree", () => {
     );
   });
 
+  it("withholds the chosen option in the popup an ARIA 1.1 combobox around a sensitive field controls", async () => {
+    // The wrapper carries `controls`; the sensitive textbox inside it has no
+    // relation of its own. Two rules reach the listbox: core's
+    // sensitiveChoiceRoots (a combobox around a field), and the wrapper
+    // being withheld itself, for the field it holds (withholdAboveWithheld).
+    const raw = [
+      {
+        nodeId: "1",
+        backendDOMNodeId: 5,
+        role: { value: "RootWebArea" },
+        childIds: ["2", "5"],
+      },
+      {
+        nodeId: "2",
+        parentId: "1",
+        backendDOMNodeId: 10,
+        role: { value: "combobox" },
+        name: { value: "Expiry month" },
+        childIds: ["3"],
+        properties: [
+          {
+            name: "controls",
+            value: {
+              type: "idrefList",
+              relatedNodes: [{ backendDOMNodeId: 50 }],
+            },
+          },
+        ],
+      },
+      {
+        nodeId: "3",
+        parentId: "2",
+        backendDOMNodeId: 15,
+        role: { value: "generic" },
+        name: { value: "" },
+        childIds: ["4"],
+      },
+      {
+        nodeId: "4",
+        parentId: "3",
+        backendDOMNodeId: 20,
+        role: { value: "textbox" },
+        name: { value: "Month" },
+      },
+      {
+        nodeId: "5",
+        parentId: "1",
+        backendDOMNodeId: 50,
+        role: { value: "listbox" },
+        name: { value: "Months" },
+        childIds: ["6"],
+      },
+      {
+        nodeId: "6",
+        parentId: "5",
+        backendDOMNodeId: 60,
+        role: { value: "option" },
+        name: { value: "03" },
+        properties: [
+          {
+            name: "selected",
+            value: { type: "booleanOrUndefined", value: true },
+          },
+        ],
+      },
+    ];
+    const read = async (sensitive: boolean) => {
+      const t = new FakeTransport((method, params) => {
+        if (method === "Accessibility.getFullAXTree") return { nodes: raw };
+        if (method === "DOM.resolveNode") {
+          const id = (params as { backendNodeId: number }).backendNodeId;
+          return { object: { objectId: `obj-${id}` } };
+        }
+        if (method === "Runtime.callFunctionOn") {
+          const { objectId } = params as { objectId: string };
+          return {
+            result: {
+              value:
+                sensitive && objectId === "obj-20"
+                  ? { classified: true, sensitive: true, redacted: true }
+                  : { classified: true },
+            },
+          };
+        }
+        return {};
+      });
+      return findNative((await readNativeTree(t)).nodes, "option")?.states;
+    };
+    expect(await read(true)).not.toHaveProperty("selected");
+    expect(await read(false)).toHaveProperty("selected", true);
+  });
+
+  it("withholds the chosen option in the popup a sensitive field's aria-activedescendant sits in", async () => {
+    // No controls or owns: only core's sensitiveChoiceRoots follows the
+    // active option up to its listbox.
+    const raw = [
+      {
+        nodeId: "1",
+        backendDOMNodeId: 5,
+        role: { value: "RootWebArea" },
+        childIds: ["2", "5"],
+      },
+      {
+        nodeId: "2",
+        parentId: "1",
+        backendDOMNodeId: 10,
+        role: { value: "combobox" },
+        name: { value: "Expiry month" },
+        value: { type: "string", value: "03" },
+        properties: [
+          {
+            name: "activedescendant",
+            value: {
+              type: "idref",
+              relatedNodes: [{ backendDOMNodeId: 70 }],
+            },
+          },
+        ],
+      },
+      {
+        nodeId: "5",
+        parentId: "1",
+        backendDOMNodeId: 50,
+        role: { value: "listbox" },
+        name: { value: "Months" },
+        childIds: ["6", "7"],
+      },
+      ...["6", "7"].map((nodeId) => ({
+        nodeId,
+        parentId: "5",
+        backendDOMNodeId: Number(nodeId) * 10,
+        role: { value: "option" },
+        name: { value: `0${nodeId}` },
+        properties: [
+          {
+            name: "selected",
+            value: { type: "booleanOrUndefined", value: nodeId === "6" },
+          },
+        ],
+      })),
+    ];
+    const read = async (sensitive: boolean) => {
+      const t = new FakeTransport((method, params) => {
+        if (method === "Accessibility.getFullAXTree") return { nodes: raw };
+        if (method === "DOM.resolveNode") {
+          const id = (params as { backendNodeId: number }).backendNodeId;
+          return { object: { objectId: `obj-${id}` } };
+        }
+        if (method === "Runtime.callFunctionOn") {
+          const { objectId } = params as { objectId: string };
+          return {
+            result: {
+              value:
+                sensitive && objectId === "obj-10"
+                  ? { classified: true, sensitive: true, redacted: true }
+                  : { classified: true },
+            },
+          };
+        }
+        return {};
+      });
+      return (await readNativeTree(t)).nodes
+        .filter((n) => n.role === "option")
+        .map((n) => n.states["selected"]);
+    };
+    // The chosen option is not the active one: the whole listbox is reached.
+    expect(await read(true)).toEqual([undefined, undefined]);
+    expect(await read(false)).toEqual([true, false]);
+  });
+
   it("treats a field it could not read as sensitive, down to its options", async () => {
     // The in-page read fails (no objectId), so the select is unclassified:
     // it may be a card field, and its chosen option must not say so.

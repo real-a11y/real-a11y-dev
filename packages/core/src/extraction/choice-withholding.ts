@@ -1,23 +1,107 @@
 /**
  * Where a node's choice state says what a sensitive field holds, in the DOM
- * producer. The native producers apply the same rule to Chromium's tree:
- * `withholdSelection` in the browser package's native-tree.ts, and
- * `withholdInsideSensitive` in the extension. Both follow `aria-controls` and
- * `aria-owns` from a sensitive field through core's `fieldRelationTargets`.
+ * producer. The native producers apply the same rule to Chromium's tree
+ * through core's `sensitiveChoiceReach` (states) and `sensitivePopupRoots`
+ * (names), which follow the same relations from the same hosts.
  */
+import { ariaOwner, choiceCache } from "./aria-owner.js";
 import {
-  ariaOwner,
-  choiceHostsIndex,
-  sensitiveControlsIndex,
-} from "./aria-owner.js";
-import { safeGetAttribute, safeQuerySelectorAll } from "./clobber-safe.js";
+  safeGetAttribute,
+  safeGetElementById,
+  safeQuerySelectorAll,
+  safeRootNode,
+} from "./clobber-safe.js";
 import {
   deepQuerySelectorAll,
+  flatChildren,
   flatParentElement,
   idScope,
 } from "./flat-tree.js";
 import { getExplicitRole, getImplicitRole } from "./role-map.js";
-import { isSensitiveField, POPUP_CHOICE_ROLES } from "./sensitivity.js";
+import {
+  FIELD_SELECTOR,
+  isSensitiveField,
+  POPUP_CHOICE_ROLES,
+} from "./sensitivity.js";
+
+/** What a step of {@link searchAbove} makes of an element. */
+type Step = "found" | "stop" | "climb";
+
+/**
+ * The first element at or above `element` that `step` finds, in the tree roles
+ * are computed in: flat-tree parents, and the `aria-owns` owner of each
+ * element met on the way, as strict mode's `inChoiceField` climbs. Chromium
+ * parents an owned element on its owner; both paths are read, so a page that
+ * moves a node with `aria-owns` withholds at least what either place would.
+ * A `"stop"` ends the climb along that path only.
+ */
+function searchAbove(
+  element: Element,
+  step: (el: Element) => Step,
+): Element | null {
+  const seen = new Set<Element>([element]);
+  const pending: Element[] = [element];
+  for (let start = pending.pop(); start; start = pending.pop()) {
+    for (let el: Element | null = start; el; el = flatParentElement(el)) {
+      const verdict = step(el);
+      if (verdict === "found") return el;
+      if (verdict === "stop") break;
+      const owner = ariaOwner(el);
+      if (owner && !seen.has(owner)) {
+        seen.add(owner);
+        pending.push(owner);
+      }
+    }
+  }
+  return null;
+}
+
+/** The document `element` is connected to, through shadow roots, if any. */
+function connectedDocument(element: Element): Document | null {
+  let root = safeRootNode(element);
+  while (root.nodeType === 11 /* DOCUMENT_FRAGMENT_NODE */) {
+    const host = (root as ShadowRoot).host;
+    if (!host) return null;
+    root = safeRootNode(host);
+  }
+  return root.nodeType === 9 /* DOCUMENT_NODE */ ? (root as Document) : null;
+}
+
+/**
+ * False only when the page `element` is in holds no sensitive field at all,
+ * open shadow roots included, so no choice in it can be one's. Asked once per
+ * page per extraction, it spares every node with a choice state, and every
+ * reference target, the climbs below on the pages most often read. Outside an
+ * extraction, or for a subtree not in a document, it answers true and the
+ * climbs decide.
+ */
+export function pageMayHoldSensitiveField(element: Element): boolean {
+  const cache = choiceCache();
+  const doc = cache && connectedDocument(element);
+  if (!cache || !doc?.documentElement) return true;
+  let holds = cache.sensitivePages.get(doc);
+  if (holds === undefined) {
+    holds = deepQuerySelectorAll(doc.documentElement, FIELD_SELECTOR).some(
+      isSensitiveField,
+    );
+    cache.sensitivePages.set(doc, holds);
+  }
+  return holds;
+}
+
+/**
+ * `element` holds a sensitive field in the flat tree, as Chromium reads it: a
+ * field in its shadow root, or one slotted into it from outside, counts; a
+ * light child of a shadow host that no slot renders does not.
+ */
+export function holdsSensitiveField(element: Element): boolean {
+  const pending = flatChildren(element);
+  for (let el = pending.pop(); el; el = pending.pop()) {
+    if (isSensitiveField(el)) return true;
+    pending.push(...flatChildren(el));
+  }
+  return false;
+}
 
 /**
  * True for an element whose popup holds a sensitive field's choice: the field
@@ -25,123 +109,157 @@ import { isSensitiveField, POPUP_CHOICE_ROLES } from "./sensitivity.js";
  * pattern. Such a wrapper carries `aria-controls` or `aria-owns` for the
  * field inside it, or holds its listbox as a child; either way the choice
  * made there is the field's value. The field may sit in the wrapper's shadow
- * root, and the role is read as the tree reads it, so `role="x-combo
- * combobox"` is a combobox. The native producers' counterpart is core's
- * `sensitiveChoiceHosts`. Cached per extraction (`choiceHostsIndex`): every
- * node with a choice state below a wrapper asks about it.
+ * root or be slotted into it ({@link holdsSensitiveField}), and the role is
+ * read as the tree reads it, so `role="x-combo combobox"` is a combobox. The
+ * native producers' counterpart is core's `sensitiveChoiceHosts`. Cached per
+ * extraction: every node with a choice state below a wrapper asks about it.
  */
 export function isSensitiveChoiceHost(element: Element): boolean {
   if (isSensitiveField(element)) return true;
   if (getExplicitRole(element) !== "combobox") return false;
-  const cache = choiceHostsIndex();
-  const known = cache?.get(element);
+  const hosts = choiceCache()?.hosts;
+  const known = hosts?.get(element);
   if (known !== undefined) return known;
-  const host = deepQuerySelectorAll(element, "input, textarea, select").some(
-    isSensitiveField,
-  );
-  cache?.set(element, host);
+  const host = holdsSensitiveField(element);
+  hosts?.set(element, host);
   return host;
 }
 
-/**
- * The ids that a sensitive field, or a combobox around one
- * ({@link isSensitiveChoiceHost}), names in `aria-controls` in `scope`.
- */
-function sensitiveControlTargets(scope: Document | ShadowRoot): Set<string> {
-  const ids = new Set<string>();
-  for (const field of safeQuerySelectorAll(scope, "[aria-controls]")) {
-    if (!isSensitiveChoiceHost(field)) continue;
-    const controls = safeGetAttribute(field, "aria-controls") ?? "";
-    for (const id of controls.trim().split(/\s+/)) if (id) ids.add(id);
-  }
-  return ids;
+/** The nearest choice container (`POPUP_CHOICE_ROLES`) at or above `element`. */
+function choiceContainerOf(element: Element): Element | null {
+  return searchAbove(element, (el) =>
+    POPUP_CHOICE_ROLES.has(getImplicitRole(el)) ? "found" : "climb",
+  );
 }
 
 /**
- * True when a sensitive field, or a combobox around one, names `element` in
- * its `aria-controls`, in its id scope: an ARIA combobox's popup listbox,
- * which is not the field's descendant, but whose selected option is the
- * field's value. Cached per extraction (`sensitiveControlsIndex`).
+ * Add to `reached` what each sensitive field in `scope`, or combobox around
+ * one, reaches by relation: what it names in `aria-controls`, and the choice
+ * container its `aria-activedescendant` sits in. The active option is always
+ * in the field's popup, so a popup reached only that way is still its own.
+ * (`aria-owns` needs no index: the owner climb in {@link searchAbove} meets
+ * it.)
+ */
+function indexSensitiveRelations(
+  scope: Document | ShadowRoot,
+  reached: { add(element: Element): unknown },
+): void {
+  const relations = "[aria-controls], [aria-activedescendant]";
+  for (const host of safeQuerySelectorAll(scope, relations)) {
+    if (!isSensitiveChoiceHost(host)) continue;
+    const controls = safeGetAttribute(host, "aria-controls") ?? "";
+    for (const id of controls.trim().split(/\s+/)) {
+      const target = id ? safeGetElementById(scope, id) : null;
+      if (target) reached.add(target);
+    }
+    const activeId = (
+      safeGetAttribute(host, "aria-activedescendant") ?? ""
+    ).trim();
+    const active = activeId ? safeGetElementById(scope, activeId) : null;
+    if (active) reached.add(choiceContainerOf(active) ?? active);
+  }
+}
+
+/**
+ * True when a sensitive field, or a combobox around one, reaches `element` by
+ * relation in its id scope ({@link indexSensitiveRelations}): an ARIA
+ * combobox's popup listbox, which is not the field's descendant, but whose
+ * selected option is the field's value. Indexed once per scope per
+ * extraction.
  */
 export function controlledBySensitiveField(element: Element): boolean {
-  const id = safeGetAttribute(element, "id");
-  if (!id) return false;
   const scope = idScope(element);
-  const index = sensitiveControlsIndex();
-  if (!index) return sensitiveControlTargets(scope).has(id);
-  let ids = index.get(scope);
-  if (!ids) {
-    ids = sensitiveControlTargets(scope);
-    index.set(scope, ids);
+  const cache = choiceCache();
+  if (!cache) {
+    const reached = new Set<Element>();
+    indexSensitiveRelations(scope, reached);
+    return reached.has(element);
   }
-  return ids.has(id);
+  if (!cache.indexedScopes.has(scope)) {
+    cache.indexedScopes.add(scope);
+    indexSensitiveRelations(scope, cache.reached);
+  }
+  return cache.reached.has(element);
 }
 
 /**
  * True when `element` sits inside a sensitive field (`isSensitiveField`),
- * or inside what one controls (`aria-controls`) or owns (`aria-owns`) — or
- * what an ARIA 1.1 combobox around one does, the wrapper that carries those
- * relations for the field inside it ({@link isSensitiveChoiceHost}). Its
+ * or inside what one controls (`aria-controls`), owns (`aria-owns`) or points
+ * its `aria-activedescendant` into — or what an ARIA 1.1 combobox around one
+ * does, the wrapper that carries those relations for the field inside it
+ * ({@link isSensitiveChoiceHost}) — or is such a target itself. Its
  * `selected` state then says which choice the field holds, which is the value
  * the field's `[redacted]` withholds: an option of a payment `<select>`, and
  * one in the popup listbox an `<input role="combobox" autocomplete="cc-exp">`
  * controls, which is not the field's descendant.
  *
- * The climb reads the tree roles are computed in: flat-tree parents, then the
- * `aria-owns` owners met on the way, as strict mode's `inChoiceField` does.
- * Not only an option: Chromium carries `selected` on tabs, rows and grid
- * cells too, and the native producers withhold it on every node in such a
- * region, so this does as well.
+ * The climb reads the tree roles are computed in ({@link searchAbove}). Not
+ * only an option: Chromium carries `selected` on tabs, rows and grid cells
+ * too, and the native producers withhold it on every node in such a region,
+ * so this does as well.
  */
 export function inSensitiveChoice(element: Element): boolean {
-  const seen = new Set<Element>([element]);
-  const pending: Element[] = [element];
-  for (let start = pending.pop(); start; start = pending.pop()) {
-    for (let el: Element | null = start; el; el = flatParentElement(el)) {
-      const owner = ariaOwner(el);
-      if (owner && !seen.has(owner)) {
-        seen.add(owner);
-        pending.push(owner);
-      }
-      if (el === element) continue;
-      if (isSensitiveChoiceHost(el) || controlledBySensitiveField(el)) {
-        return true;
-      }
-    }
-  }
-  return false;
+  if (!pageMayHoldSensitiveField(element)) return false;
+  return (
+    searchAbove(element, (el) =>
+      controlledBySensitiveField(el) ||
+      (el !== element && isSensitiveChoiceHost(el))
+        ? "found"
+        : "climb",
+    ) !== null
+  );
 }
 
 /**
  * True when what `element`, in `role`, lends a name or description it is
  * embedded in (AccName 2C) gives a sensitive field's value or choice away: a
  * sensitive field, or a combobox around one ({@link isSensitiveChoiceHost});
- * or a listbox that holds one's choice, because a sensitive field controls
- * it, owns it, or holds it ({@link inSensitiveChoice}). `<label>Expiry month
- * <input autocomplete="cc-exp-month" aria-controls="lb"> <ul
+ * or a listbox that holds one's choice ({@link inSensitiveChoice}). `<label>
+ * Expiry month <input autocomplete="cc-exp-month" aria-controls="lb"> <ul
  * id="lb">…</ul></label>` would otherwise name the field "Expiry month 03".
  * Only a choice container (`POPUP_CHOICE_ROLES`), as in the native
  * producers: an ordinary field in a panel a sensitive field controls still
  * lends its own value.
  */
 export function lendsSensitiveChoice(element: Element, role: string): boolean {
-  if (isSensitiveChoiceHost(element)) return true;
+  if (isSensitiveField(element)) return true;
+  if (!pageMayHoldSensitiveField(element)) return false;
   return (
-    POPUP_CHOICE_ROLES.has(role) &&
-    (controlledBySensitiveField(element) || inSensitiveChoice(element))
+    isSensitiveChoiceHost(element) ||
+    (POPUP_CHOICE_ROLES.has(role) && inSensitiveChoice(element))
   );
 }
 
-/** Some node in `container` is chosen: `aria-selected`, or a selected option. */
+/** `el` is chosen: `aria-selected="true"`, or without it a selected option. */
+export function isChosen(el: Element): boolean {
+  const selected = safeGetAttribute(el, "aria-selected");
+  return selected !== null
+    ? selected.trim().toLowerCase() === "true"
+    : (el as HTMLOptionElement).selected === true;
+}
+
+/** What `element` names in `aria-owns`, in its id scope. */
+function ownedBy(element: Element): Element[] {
+  const scope = idScope(element);
+  const owns = (safeGetAttribute(element, "aria-owns") ?? "").trim();
+  return owns
+    .split(/\s+/)
+    .map((id) => (id ? safeGetElementById(scope, id) : null))
+    .filter((el): el is Element => el !== null);
+}
+
+/**
+ * Some node in `container` is chosen ({@link isChosen}), in the tree Chromium
+ * reads: the flat tree, with what the container owns (`aria-owns`), so an
+ * option slotted into it or owned by it counts.
+ */
 function holdsChoice(container: Element): boolean {
-  return Array.from(
-    safeQuerySelectorAll(container, "[aria-selected], option"),
-  ).some((el) => {
-    const selected = safeGetAttribute(el, "aria-selected");
-    return selected !== null
-      ? selected.trim().toLowerCase() === "true"
-      : (el as HTMLOptionElement).selected === true;
-  });
+  const pending = [...flatChildren(container), ...ownedBy(container)];
+  for (let el = pending.pop(); el; el = pending.pop()) {
+    if (isChosen(el)) return true;
+    pending.push(...flatChildren(el));
+  }
+  return false;
 }
 
 /** `element` is a sensitive field's popup with a choice made in it. */
@@ -154,14 +272,32 @@ function isSensitivePopup(element: Element): boolean {
   );
 }
 
-/** The nearest choice container at or above `element`, if a sensitive popup. */
+/**
+ * The nearest choice container at or above `element` on each path of
+ * {@link searchAbove}, if one is a sensitive field's popup with a choice made
+ * in it. An owned option counts in the popup that owns it.
+ */
 function sensitivePopupAt(element: Element): Element | null {
-  for (let el: Element | null = element; el; el = flatParentElement(el)) {
-    if (POPUP_CHOICE_ROLES.has(getImplicitRole(el))) {
-      return isSensitivePopup(el) ? el : null;
-    }
-  }
-  return null;
+  if (!pageMayHoldSensitiveField(element)) return null;
+  return searchAbove(element, (el) => {
+    if (!POPUP_CHOICE_ROLES.has(getImplicitRole(el))) return "climb";
+    return isSensitivePopup(el) ? "found" : "stop";
+  });
+}
+
+/**
+ * `description`, or none when `element` is, or sits in, a sensitive field's
+ * popup with a choice made in it: whatever it is built from, one only the
+ * chosen option carries (a hidden "selected" span, wherever it is, an
+ * `aria-description`, a `title`) says which it is. Asked only of a
+ * description there is, so a node without one costs no climb. The native
+ * producers' counterpart is core's `withholdPopupChoiceNames`.
+ */
+export function withholdPopupDescription(
+  element: Element,
+  description: string,
+): string {
+  return description && sensitivePopupAt(element) ? "" : description;
 }
 
 /** `node` is `ancestor` or sits below it in the flat tree. */
@@ -174,24 +310,29 @@ function isWithin(node: Element, ancestor: Element): boolean {
 
 /**
  * True when `referrer`'s reference to `target` (`aria-labelledby` or
- * `aria-describedby`) reads the choice made in a sensitive field's popup: the
- * target is such a popup or sits in one. Its name then reads `[redacted]`,
- * its description is dropped. A reference from outside counts even to one
+ * `aria-describedby`) reads what a sensitive field holds: the target sits in
+ * one (a drop-down `<select>`'s option, whose text is the value), or is, or
+ * sits in, a sensitive field's popup with a choice made in it
+ * ({@link sensitivePopupAt}). Its name then reads `[redacted]`, its
+ * description is dropped. A reference from outside counts even to one
  * option: the page may point it at the chosen one (a combobox labelled by its
  * selected option). One is exempt: a node inside the popup, not the popup
  * itself, NAMED from a plain part of itself, as an option labelled by its own
- * span is, reads its own text. A description never is: one only the chosen
- * option carries (a hidden "selected" span) would say which it is. A second
- * sensitive popup inside the exempt part still withholds its own choice as
- * the part is read: it lends it as an embedded control
- * ({@link lendsSensitiveChoice}). The native producers' counterpart is core's
- * `popupChoiceRegions`.
+ * span is, reads its own text. A description never is ({@link
+ * withholdPopupDescription}). A second sensitive popup inside the exempt part still
+ * withholds its own choice as the part is read: it lends it as an embedded
+ * control ({@link lendsSensitiveChoice}). The native producers' counterpart
+ * is core's `popupChoiceRegions`, beside the field regions.
  */
 export function readsSensitivePopup(
   referrer: Element,
   target: Element,
   property: "labelledby" | "describedby",
 ): boolean {
+  if (!pageMayHoldSensitiveField(target)) return false;
+  const inField = (el: Element): Step =>
+    el !== target && isSensitiveField(el) ? "found" : "climb";
+  if (searchAbove(target, inField)) return true;
   const popup = sensitivePopupAt(target);
   if (!popup) return false;
   const ownPart =
