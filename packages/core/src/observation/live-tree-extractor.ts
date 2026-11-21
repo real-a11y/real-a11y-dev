@@ -121,13 +121,22 @@ export class LiveTreeExtractor {
     this.adoptResult(result);
     // The withheld choices, as this extraction read them: a sensitive
     // field's always, and in strict mode every choice field's.
-    addMovedNativeStates(
+    this.movedNativeStates(new Set());
+    return this.currentResult();
+  }
+
+  /**
+   * Add to `dirty` the controls whose native state moved since they were
+   * read (`addMovedNativeStates`): true when a withheld choice moved in a
+   * sensitive field's popup, which only a full read covers.
+   */
+  private movedNativeStates(dirty: Set<Element>): boolean {
+    return addMovedNativeStates(
       this.domNodes,
       this.redactInput,
       this.choices,
-      new Set(),
+      dirty,
     );
-    return this.currentResult();
   }
 
   /**
@@ -289,12 +298,9 @@ export class LiveTreeExtractor {
     // names its value reaches (AccName 2C). Typing already dirties the field
     // through its `input` event; this covers the edits that fire none.
     if (!needsFull) {
-      addMovedNativeStates(
-        this.domNodes,
-        this.redactInput,
-        this.choices,
-        dirty,
-      );
+      // A choice made in a sensitive popup with no mutation (a radio
+      // clicked) moves what the whole popup reads: a full read.
+      if (this.movedNativeStates(dirty)) return this.extract();
       addValueReaders(dirty, (el) => this.nameRelevantAncestor(el));
       this.addMovedInvokers(dirty);
     }

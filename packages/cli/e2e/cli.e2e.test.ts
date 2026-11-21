@@ -820,13 +820,20 @@ describe("the states block (built bin)", () => {
         `<div role="menu" id="m" aria-label="Dates">` +
         item("menuitemradio", "01/30", 'aria-checked="false"') +
         item("menuitemradio", "03/31", 'aria-checked="true"', "mpick") +
-        item("menuitemcheckbox", "Save", 'aria-checked="true"') +
+        // A menu that picks several: its check items are its choices too.
+        item("menuitemcheckbox", "08/36", 'aria-checked="true"') +
         "</div>" +
         // A listbox whose page marks the choice with aria-checked.
         field("List", "l") +
         `<div role="listbox" id="l" aria-label="Months">` +
         item("option", "04/32", 'aria-checked="true"', "lpick") +
-        item("option", "05/33", 'aria-current="true"') +
+        "</div>" +
+        // A listbox whose only mark is aria-current, which Chromium's tree
+        // never reports: only the document says this popup holds a choice.
+        field("Current", "cl") +
+        `<div role="listbox" id="cl" aria-label="Current months">` +
+        item("option", "05/33", 'aria-current="true"', "cpick") +
+        item("option", "09/37", "") +
         "</div>" +
         // A date picker's pressed day.
         field("Grid", "g", 'aria-haspopup="grid"') +
@@ -845,8 +852,10 @@ describe("the states block (built bin)", () => {
         item("menuitemradio", "06/34", 'aria-checked="false"', "a1") +
         item("menuitemradio", "07/35", 'aria-checked="true"') +
         "</div>" +
-        // Names that read the chosen item.
+        // Names that read the chosen item; Chromium's tree says nothing of
+        // the current one.
         '<button aria-labelledby="mpick"></button><button aria-labelledby="lpick"></button>' +
+        '<button aria-labelledby="cpick"></button>' +
         // An ordinary field's menu keeps its choice.
         `<input role="combobox" aria-label="Color" aria-expanded="true" aria-controls="c">` +
         `<div role="menu" id="c" aria-label="Colors">${item("menuitemradio", "Red", 'aria-checked="true"')}</div>` +
@@ -855,9 +864,7 @@ describe("the states block (built bin)", () => {
     const leaked = (out: string) =>
       out
         .split("\n")
-        .filter((line) =>
-          /"(0[1-7]\/3[0-5]|Save|Day [78]|204[12])".*\{/.test(line),
-        );
+        .filter((line) => /"(0[1-9]\/3[0-7]|Day [78]|204[12])".*\{/.test(line));
 
     const tree = await runCli(["tree", page, "-q"]);
     expect(tree.code).toBe(0);
@@ -868,7 +875,8 @@ describe("the states block (built bin)", () => {
     expect(lines).toContain('radio "2041"');
     expect(lines).toContain('menuitemradio "07/35"');
     expect(leaked(tree.stdout)).toEqual([]);
-    expect(lines.filter((l) => l === 'button "[redacted]"')).toHaveLength(2);
+    expect(lines.filter((l) => l === 'button "[redacted]"')).toHaveLength(3);
+    expect(tree.stdout).not.toMatch(/button "0[1-7]\//);
     // A checkbox is its own control; an ordinary menu keeps its choice.
     expect(lines).toContain('checkbox "Remember" {checked}');
     expect(lines).toContain('menuitemradio "Red" {checked}');
@@ -879,6 +887,7 @@ describe("the states block (built bin)", () => {
     expect(tabs.stdout).toMatch(/\d\d\. option "05\/33"\n/);
     expect(tabs.stdout).toMatch(/\d\d\. radio "2041"\n/);
     expect(leaked(tabs.stdout)).toEqual([]);
+    expect(tabs.stdout.match(/button "\[redacted\]"/g)).toHaveLength(3);
     expect(tabs.stdout).toMatch(/\d\d\. checkbox "Remember" \{checked\}/);
     expect(tabs.stdout).toMatch(/\d\d\. menuitemradio "Red" \{checked\}/);
   });

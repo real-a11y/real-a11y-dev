@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { domChoiceTargets, type DomChoiceNode } from "./dom-choice-targets.js";
+import {
+  domChoiceReads,
+  domChoiceTargets,
+  type DomChoiceNode,
+} from "./dom-choice-targets.js";
 
 let nextId = 1;
 
@@ -220,5 +224,28 @@ describe("where the DOM says a sensitive field's choice is made", () => {
     expect(
       domChoiceTargets(doc(frame, wrapper)).has(option.backendNodeId!),
     ).toBe(false);
+  });
+
+  it("marks what the markup marks chosen where Chromium's tree doesn't say", () => {
+    // Chromium reports no `current`, and no `pressed` on an option.
+    const current = el("li", { role: "option", "aria-current": "date" });
+    const pressed = el("li", { role: "option", "aria-pressed": "mixed" });
+    const plain = el("li", {
+      role: "option",
+      "aria-current": "false",
+      "aria-pressed": "false",
+    });
+    const field = el("input", { autocomplete: "cc-exp", "aria-controls": "p" });
+    const list = el("ul", { id: "p", role: "listbox" }, [
+      current,
+      pressed,
+      plain,
+    ]);
+    expect([...domChoiceReads(doc(field, list)).chosen].sort()).toEqual(
+      [current, pressed].map((n) => n.backendNodeId).sort(),
+    );
+    // A page with no sensitive field has no choice to withhold.
+    const ordinary = el("input", { "aria-controls": "p" });
+    expect(domChoiceReads(doc(ordinary, list)).chosen.size).toBe(0);
   });
 });

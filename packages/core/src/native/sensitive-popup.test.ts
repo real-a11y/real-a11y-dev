@@ -192,6 +192,18 @@ describe("the choice containers in a sensitive field's popup", () => {
         "3",
       ]);
     }
+    // An item the DOM marks chosen where the tree doesn't say: an option
+    // marked current, its backend id in `chosen`.
+    const unmarked = marked("option", "focusable", true);
+    expect(rootsOf(unmarked)).toEqual([]);
+    expect([
+      ...sensitivePopupRoots(
+        indexNativeAX(unmarked),
+        ["1"],
+        undefined,
+        new Set([40]),
+      ),
+    ]).toEqual(["3"]);
     // A checkbox is its own control; an unchecked item marks nothing.
     for (const [role, state, value] of [
       ["checkbox", "checked", "true"],

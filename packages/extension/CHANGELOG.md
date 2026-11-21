@@ -26,7 +26,10 @@
   `aria-checked`, a radio in a dialog popup, and a pressed day button in a date
   picker. They no longer print a choice state, in Chrome's tree or the TAB view;
   a checkbox there keeps its own. A menu or radio group now counts as a popup a
-  choice is made in, so a name that reads the chosen item reads `[redacted]`
+  choice is made in, so a name that reads the chosen item reads `[redacted]`,
+  and so does one that reads an option marked `aria-current`, which Chrome's
+  tree doesn't report. The feedback after picking such an item, from either
+  view, names only that a choice was made
   ([#698](https://github.com/real-a11y/real-a11y-dev/pull/698)).
 
 - **A sensitive combobox's popup no longer says which option is chosen.**

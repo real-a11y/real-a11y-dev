@@ -1552,6 +1552,141 @@ describe("readNativeTree", () => {
     expect(await read("cc-number")).not.toHaveProperty("selected");
   });
 
+  it("withholds a name that reads the chosen option when only the document marks it chosen", async () => {
+    // `aria-current` on the option: Chromium's tree carries no `current`, so
+    // only the walk of the document (core's domChoiceReads) says the popup
+    // holds a choice, and the button labelled by that option reads it.
+    const raw = [
+      {
+        nodeId: "1",
+        backendDOMNodeId: 5,
+        role: { value: "RootWebArea" },
+        childIds: ["2", "5", "7"],
+      },
+      {
+        nodeId: "2",
+        parentId: "1",
+        backendDOMNodeId: 10,
+        role: { value: "combobox" },
+        name: { value: "Expiry" },
+        value: { type: "string", value: "05/33" },
+        properties: [
+          {
+            name: "controls",
+            value: {
+              type: "idrefList",
+              relatedNodes: [{ backendDOMNodeId: 50 }],
+            },
+          },
+        ],
+      },
+      {
+        nodeId: "5",
+        parentId: "1",
+        backendDOMNodeId: 50,
+        role: { value: "listbox" },
+        childIds: ["6"],
+      },
+      {
+        nodeId: "6",
+        parentId: "5",
+        backendDOMNodeId: 60,
+        role: { value: "option" },
+        name: { value: "05/33" },
+      },
+      {
+        nodeId: "7",
+        parentId: "1",
+        backendDOMNodeId: 70,
+        role: { value: "button" },
+        name: {
+          value: "05/33",
+          sources: [{ type: "relatedElement", attribute: "aria-labelledby" }],
+        },
+        properties: [
+          {
+            name: "labelledby",
+            value: {
+              type: "nodeList",
+              relatedNodes: [{ backendDOMNodeId: 60 }],
+            },
+          },
+        ],
+      },
+    ];
+    const dom = (current: string): CdpDomNode => ({
+      nodeType: 9,
+      backendNodeId: 1,
+      children: [
+        {
+          nodeType: 1,
+          backendNodeId: 3,
+          localName: "html",
+          children: [
+            {
+              nodeType: 1,
+              backendNodeId: 4,
+              localName: "body",
+              children: [
+                {
+                  nodeType: 1,
+                  backendNodeId: 10,
+                  localName: "input",
+                  attributes: ["autocomplete", "cc-exp", "aria-controls", "l"],
+                },
+                {
+                  nodeType: 1,
+                  backendNodeId: 50,
+                  localName: "div",
+                  attributes: ["id", "l", "role", "listbox"],
+                  children: [
+                    {
+                      nodeType: 1,
+                      backendNodeId: 60,
+                      localName: "div",
+                      attributes: ["role", "option", "aria-current", current],
+                    },
+                  ],
+                },
+                {
+                  nodeType: 1,
+                  backendNodeId: 70,
+                  localName: "button",
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    });
+    const read = async (current: string) => {
+      const t = new FakeTransport((method, params) => {
+        if (method === "Accessibility.getFullAXTree") return { nodes: raw };
+        if (method === "DOM.getDocument") return { root: dom(current) };
+        if (method === "DOM.resolveNode") {
+          const id = (params as { backendNodeId: number }).backendNodeId;
+          return { object: { objectId: `obj-${id}` } };
+        }
+        if (method === "Runtime.callFunctionOn") {
+          const { objectId } = params as { objectId: string };
+          return {
+            result: {
+              value:
+                objectId === "obj-10"
+                  ? { classified: true, sensitive: true, redacted: true }
+                  : { classified: true },
+            },
+          };
+        }
+        return {};
+      });
+      return findNative((await readNativeTree(t)).nodes, "button")?.name;
+    };
+    expect(await read("true")).toBe("[redacted]");
+    // Nothing chosen: the popup lends nothing.
+    expect(await read("false")).toBe("05/33");
+  });
+
   it("treats a field it could not read as sensitive, down to its options", async () => {
     // The in-page read fails (no objectId), so the select is unclassified:
     // it may be a card field, and its chosen option must not say so.
@@ -2051,6 +2186,28 @@ describe("withholdInsideSensitive", () => {
       expanded: false,
     });
     expect(byId.get("other")?.states).toStrictEqual({ selected: true });
+  });
+
+  it("keeps a toggle's own state inside a field read fail-closed, but not an option's choice", () => {
+    // A rich-text editor around a card input reads as sensitive: inside it,
+    // an option's choice goes, a toggle keeps what it says of itself.
+    const nodes = [
+      n("editor", ["bold", "opt", "radio"], { role: "textbox" }),
+      n("bold", [], { role: "button", states: { pressed: true } }),
+      n("opt", [], {
+        role: "option",
+        states: { checked: true, pressed: true, selected: true },
+      }),
+      n("radio", [], {
+        role: "radio",
+        states: { checked: true, selected: true },
+      }),
+    ];
+    withholdInsideSensitive(nodes, ["editor"]);
+    const byId = new Map(nodes.map((x) => [x.id, x]));
+    expect(byId.get("bold")?.states).toStrictEqual({ pressed: true });
+    expect(byId.get("opt")?.states).toStrictEqual({});
+    expect(byId.get("radio")?.states).toStrictEqual({ checked: true });
   });
 
   it("withholds a menu popup's checked and a pressed item in what a sensitive combobox controls", () => {

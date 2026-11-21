@@ -1158,6 +1158,34 @@ describe("LiveTreeExtractor", () => {
       }
     });
 
+    it("reads the whole popup once a radio in it is checked, which no mutation says", async () => {
+      // A click checks a native radio and fires `change`; its `checked`
+      // property moves with no attribute. The popup then holds a choice, so
+      // no radio keeps its description and the name that reads one is
+      // withheld.
+      const nodes = await refreshed(
+        `<main><input role="combobox" aria-label="Year" autocomplete="cc-exp-year" aria-controls="d" aria-expanded="true">` +
+          `<div role="dialog" id="d" aria-label="Pick"><div role="radiogroup" aria-label="Years">` +
+          `<label><input type="radio" name="y" id="r1" aria-description="one"> 2041</label>` +
+          `<label><input type="radio" name="y" id="r2" aria-description="two"> 2042</label>` +
+          `<p id="cap">Pick a year</p></div></div></main>` +
+          `<section><button aria-labelledby="r2"></button><button aria-labelledby="cap"></button></section>`,
+        () => {
+          const radio = byId("r1") as HTMLInputElement;
+          radio.checked = true;
+          radio.dispatchEvent(new Event("change", { bubbles: true }));
+        },
+      );
+      expect(read(nodes, "radio")).toEqual([
+        ["2041", undefined],
+        ["2042", undefined],
+      ]);
+      expect(read(nodes, "button")).toEqual([
+        ["[redacted]", undefined],
+        ["[redacted]", undefined],
+      ]);
+    });
+
     it("reads it once a checked item arrives", async () => {
       const nodes = await refreshed(
         `<main>${field}<div role="menu" id="lb" aria-label="Months">` +

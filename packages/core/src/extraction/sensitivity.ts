@@ -111,9 +111,11 @@ export const POPUP_CHOICE_ROLES: ReadonlySet<string> = new Set([
 /**
  * The roles whose `checked` marks which item of a set is chosen: an option or
  * tree item that marks its choice with `aria-checked`, a menu's radio and
- * check items, and a radio. Not a checkbox or a switch: each is a control of
- * its own, classified for sensitivity on its own, so one in a panel a
- * sensitive field controls keeps its state.
+ * check items, and a radio. A menu's check item is one of its choices, in a
+ * menu that picks several, as an option in a multi-select list box is. Not a
+ * checkbox or a switch: each is a control of its own, classified for
+ * sensitivity on its own, so one in a panel a sensitive field controls keeps
+ * its state.
  */
 export const CHOICE_ITEM_ROLES: ReadonlySet<string> = new Set([
   "option",

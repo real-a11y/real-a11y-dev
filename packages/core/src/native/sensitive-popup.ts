@@ -196,7 +196,7 @@ export function sensitiveChoiceReach<T extends RawAXNameNode>(
 /**
  * Drop from `states`, a node in `role`, the states that say which choice is
  * made (core's `isChoiceState`): what every native transport does to every
- * node where a sensitive field's choice is made (the browser producer's
+ * node `where` a sensitive field's choice is made (the browser producer's
  * region pass, the extension's `withholdInsideSensitive`), so the transports
  * can't disagree. Chromium marks a `<select>`'s chosen `option` `selected`,
  * so under a redacted `<select autocomplete="cc-exp-month">` the option rows
@@ -205,14 +205,22 @@ export function sensitiveChoiceReach<T extends RawAXNameNode>(
  * A checkbox keeps `checked`: it is its own control, classified for
  * sensitivity on its own, so a checked box inside a sensitive wrapper isn't
  * that field's value, and dropping it would only make the panel's feedback
- * misread what a click does.
+ * misread what a click does. Inside a sensitive field but not where its
+ * choice is made (`where` is `"field"`: a region read fail-closed, as an
+ * editor around a card input), only an option's choice states go, and any
+ * node's `selected`: a toggle there is a control of its own too.
  *
  * @internal Shared with the native transports.
  */
 export function dropChoiceStates(
   states: Record<string, unknown>,
   role: string,
+  where: "choice" | "field" = "choice",
 ): void {
+  if (where === "field" && role !== "option") {
+    delete states["selected"];
+    return;
+  }
   for (const state of Object.keys(states)) {
     if (isChoiceState(state, role)) delete states[state];
   }
@@ -236,18 +244,25 @@ const CHOICE_AX_STATES = ["selected", "checked", "pressed"];
 
 /**
  * Some node at or under `root` is chosen: a choice state
- * ({@link dropChoiceStates}) set on it, `true` or `mixed`.
+ * ({@link dropChoiceStates}) set on it, `true` or `mixed`; or one the DOM
+ * says its markup marks chosen, by backend id in `chosen` (core's
+ * `domChoiceReads`): Chromium reports no `current`, and no `pressed` on an
+ * option.
  */
 function holdsChoice<T extends RawAXNameNode>(
   root: T,
   byId: ReadonlyMap<string, T>,
+  chosen: ReadonlySet<number>,
 ): boolean {
-  return subtreeOf([root], byId).some((node) =>
-    CHOICE_AX_STATES.some((state) => {
-      if (!isChoiceState(state, node.role?.value ?? "")) return false;
-      const value = nativeAXProperty(node, state)?.value;
-      return value === true || value === "true" || value === "mixed";
-    }),
+  return subtreeOf([root], byId).some(
+    (node) =>
+      (typeof node.backendDOMNodeId === "number" &&
+        chosen.has(node.backendDOMNodeId)) ||
+      CHOICE_AX_STATES.some((state) => {
+        if (!isChoiceState(state, node.role?.value ?? "")) return false;
+        const value = nativeAXProperty(node, state)?.value;
+        return value === true || value === "true" || value === "mixed";
+      }),
   );
 }
 
@@ -258,9 +273,10 @@ function holdsChoice<T extends RawAXNameNode>(
  * Chromium lends it to a name built around the popup (AccName's embedded
  * control): `<label>Expiry month <input autocomplete="cc-exp-month"
  * aria-controls="lb"> <ul role="listbox" id="lb">…</ul></label>` is
- * `combobox "Expiry month 03"`. A container with nothing selected lends
- * nothing, as an empty field doesn't (`givesValueAway`). Name-region roots,
- * in both native transports.
+ * `combobox "Expiry month 03"`. A container with nothing chosen lends
+ * nothing, as an empty field doesn't (`givesValueAway`). `chosen` are the
+ * backend ids the DOM says are chosen where the tree doesn't
+ * ({@link holdsChoice}). Name-region roots, in both native transports.
  *
  * @internal
  */
@@ -268,6 +284,7 @@ export function sensitivePopupRoots<T extends RawAXNameNode>(
   index: NativeAXIndex<T>,
   fieldIds: Iterable<string>,
   choiceTargets: ReadonlySet<number> = NO_TARGETS,
+  chosen: ReadonlySet<number> = NO_TARGETS,
 ): Set<string> {
   const roots = new Set<string>();
   for (const id of sensitiveChoiceReach(index, fieldIds, choiceTargets)) {
@@ -275,7 +292,7 @@ export function sensitivePopupRoots<T extends RawAXNameNode>(
     if (
       node &&
       POPUP_CHOICE_ROLES.has(node.role?.value ?? "") &&
-      holdsChoice(node, index.byId)
+      holdsChoice(node, index.byId, chosen)
     ) {
       roots.add(id);
     }

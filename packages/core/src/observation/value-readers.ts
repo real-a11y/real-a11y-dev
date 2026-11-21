@@ -11,6 +11,7 @@
  * control reads its `<label>` too, so a label's change adds what it labels.
  */
 import { ariaOwner, withAriaOwnerIndex } from "../extraction/aria-owner.js";
+import { inSensitiveChoice } from "../extraction/choice-withholding.js";
 import {
   safeGetAttribute,
   safeGetElementById,
@@ -159,14 +160,21 @@ function addReaders(
  * made by script, which renames the name around its `<select>` (`[redacted]`
  * once it holds a choice). Call it after a full extraction too, with a set to
  * discard, so `seen` starts from what that extraction read.
+ *
+ * True when a withheld choice moved in a sensitive field's popup
+ * (`inSensitiveChoice`): a radio there checked by a click, which fires no
+ * mutation. Whether the popup holds a choice decides what every reference
+ * into it reads and whether any node in it keeps a description, so the
+ * caller reads the whole tree again rather than this control alone.
  */
 export function addMovedNativeStates(
   domNodes: ReadonlyMap<string, SemanticNode>,
   redactInput: boolean,
   seen: WeakMap<Element, unknown>,
   dirty: Set<Element>,
-): void {
+): boolean {
   const refs = getElementRefs();
+  let choiceMoved = false;
   // One `aria-owns` and controls index for every withholding check below.
   withAriaOwnerIndex(() => {
     for (const [id, node] of domNodes) {
@@ -179,22 +187,40 @@ export function addMovedNativeStates(
         continue;
       }
       if (tag === "textarea" || tag === "button") continue;
-      const native = nativeStates(el, tag, node.a11y.role);
-      for (const [state, value] of Object.entries(native)) {
-        const shown = node.a11y.states[state];
-        // A state the node shows as read was not withheld, and has not
-        // moved: the common case, decided without the withholding climb.
-        if (state in node.a11y.states && value === shown) continue;
-        const moved = withholdsState(el, node.a11y.role, state, redactInput)
-          ? movedSince(el, value, seen)
-          : value !== shown;
-        if (moved) {
-          dirty.add(el);
-          break;
-        }
-      }
+      const moved = nativeStateMoved(el, node, redactInput, seen);
+      if (moved) dirty.add(el);
+      if (moved === "withheld" && inSensitiveChoice(el)) choiceMoved = true;
     }
   });
+  return choiceMoved;
+}
+
+/**
+ * Whether a native state of `el` moved since `node` was read: `"shown"` for
+ * one its node shows, `"withheld"` for one it withholds ({@link movedSince}),
+ * or `false`. Only the first state that moved is read.
+ */
+function nativeStateMoved(
+  el: Element,
+  node: SemanticNode,
+  redactInput: boolean,
+  seen: WeakMap<Element, unknown>,
+): "shown" | "withheld" | false {
+  const tag = node.dom?.tagName ?? "";
+  for (const [state, value] of Object.entries(
+    nativeStates(el, tag, node.a11y.role),
+  )) {
+    const shown = node.a11y.states[state];
+    // A state the node shows as read was not withheld, and has not
+    // moved: the common case, decided without the withholding climb.
+    if (state in node.a11y.states && value === shown) continue;
+    if (withholdsState(el, node.a11y.role, state, redactInput)) {
+      if (movedSince(el, value, seen)) return "withheld";
+    } else if (value !== shown) {
+      return "shown";
+    }
+  }
+  return false;
 }
 
 /** The controls whose native state or validity can move unobserved. */

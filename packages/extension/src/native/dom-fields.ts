@@ -7,7 +7,7 @@
  */
 
 import {
-  domChoiceTargets,
+  domChoiceReads,
   domLabels,
   isSensitiveFieldAttributes,
   opensFieldInternals,
@@ -103,7 +103,7 @@ export interface FieldInternals {
    * at one still reads them, and a sensitive field's value in one with them
    * (core's `valueRegions`).
    */
-  labels: LabelsOf;
+  labelsOf: LabelsOf;
   /**
    * Where a sensitive field's choice is made by a relation Chromium's tree
    * drops (core's `domChoiceTargets`): what such a field, or a combobox
@@ -111,6 +111,12 @@ export interface FieldInternals {
    * that element out, as a `role="presentation"` wrapper around the listbox.
    */
   choiceTargets: ReadonlySet<number>;
+  /**
+   * What marks itself chosen where Chromium's tree doesn't say (core's
+   * `domChoiceReads`): `aria-current`, or `aria-pressed` on a role with no
+   * pressed state.
+   */
+  chosen: ReadonlySet<number>;
 }
 
 /** The documents `transport` reads, whole, or `undefined` when the DOM agent
@@ -219,13 +225,15 @@ async function fieldInternals(
     for (const pseudo of node.pseudoElements ?? []) stack.push([pseudo, host]);
   }
   const holdsSensitive = elementsHolding(sensitive, parentOf, slotOf);
+  const reads = domChoiceReads(root);
   return {
     seen,
     hosts,
     sensitive,
     holdsSensitive,
-    labels: domLabels(root),
-    choiceTargets: domChoiceTargets(root),
+    labelsOf: domLabels(root),
+    choiceTargets: reads.targets,
+    chosen: reads.chosen,
   };
 }
 

@@ -296,18 +296,20 @@ function withoutEditableContent(
 }
 
 /** `attributes` without the markup that says which choice is made when the
- *  node's choice states are withheld: an `<option selected>` would otherwise
- *  say what a sensitive `<select>` holds even with its AX state dropped, and
- *  a radio's `checked` which of a popup's radios is chosen. A checkbox keeps
- *  its own (core's `isChoiceState`). */
+ *  node's choice states are `withheld` (core's `dropChoiceStates`): an
+ *  `<option selected>` would otherwise say what a sensitive `<select>` holds
+ *  even with its AX state dropped, and, where a choice is made, a radio's
+ *  `checked` which of a popup's radios is chosen. A checkbox keeps its own
+ *  (core's `isChoiceState`). */
 function withoutChoiceMarkup(
   attributes: Record<string, string>,
-  withhold: boolean,
+  withheld: "choice" | "field" | "none",
   role: string,
 ): Record<string, string> {
-  if (!withhold) return attributes;
+  if (withheld === "none") return attributes;
   const { selected: _selected, ...rest } = attributes;
-  if (!isChoiceState("checked", role)) return rest;
+  const all = withheld === "choice" || role === "option";
+  if (!all || !isChoiceState("checked", role)) return rest;
   const { checked: _checked, ...kept } = rest;
   return kept;
 }
@@ -449,6 +451,38 @@ export function buildNativeTree(
     return false;
   };
 
+  // One decision for both places a choice shows: the AX states (core's
+  // `isChoiceState`) and the markup `selected` / `checked` on the `dom`
+  // facet. Only a node that carries either has one to withhold, and the
+  // ancestry walk is only needed for one. Either alone counts: Chromium
+  // leaves the AX state off a disabled option (a disabled `<select>`, one in
+  // a disabled `<fieldset>`), while the markup attribute stays. Where a
+  // sensitive field's choice is made (`choiceReach`) every choice state goes;
+  // elsewhere inside a sensitive field (a region read fail-closed, as an
+  // editor around a card input), and in strict mode inside any choice field,
+  // only what core's `dropChoiceStates` drops in a `"field"`, as the DOM
+  // producer's `withholdsState` decides.
+  const choiceWithheld = (
+    source: { raw: RawAXNode; document: NativeDocument },
+    role: string,
+    states: A11yInfo["states"],
+    enriched: NativeDomInfo | undefined,
+  ): "choice" | "field" | "none" => {
+    const attributes = enriched?.attributes ?? {};
+    const carries =
+      carriesChoiceState(states, role) ||
+      "selected" in attributes ||
+      ("checked" in attributes && isChoiceState("checked", role));
+    if (!carries) return "none";
+    const { sensitivity } = source.document.prepared;
+    if (sensitivity.choiceReach.has(source.raw.nodeId)) return "choice";
+    const inField =
+      sensitivity.regions.inside(source.raw) ||
+      ((redactInput || sensitivity.sensitiveFields.size > 0) &&
+        inChoiceField(source.raw, source.document, !redactInput));
+    return inField ? "field" : "none";
+  };
+
   const nodes = new Map<string, SemanticNode>();
   for (const nn of skeleton) {
     const source = sourceById.get(nn.id);
@@ -462,28 +496,10 @@ export function buildNativeTree(
         ? source.document.enrichment.get(nn.backendDOMNodeId)
         : undefined;
 
-    // One decision for both places a choice shows: the AX states (core's
-    // `isChoiceState`) and the markup `selected` / `checked` on the `dom`
-    // facet. Only a node that carries either has one to withhold, and the
-    // ancestry walk is only needed for one. Either alone counts: Chromium
-    // leaves the AX state off a disabled option (a disabled `<select>`, one
-    // in a disabled `<fieldset>`), while the markup attribute stays.
-    const carriesSelection =
-      carriesChoiceState(states, nn.role) ||
-      (enriched !== undefined &&
-        ("selected" in enriched.attributes ||
-          ("checked" in enriched.attributes &&
-            isChoiceState("checked", nn.role))));
-    const sensitivity = source?.document.prepared.sensitivity;
-    const withholdSelection =
-      !!source &&
-      !!sensitivity &&
-      carriesSelection &&
-      (sensitivity.regions.inside(source.raw) ||
-        ((redactInput || sensitivity.sensitiveFields.size > 0) &&
-          inChoiceField(source.raw, source.document, !redactInput)) ||
-        sensitivity.choiceReach.has(source.raw.nodeId));
-    if (withholdSelection) dropChoiceStates(states, nn.role);
+    const withheld = source
+      ? choiceWithheld(source, nn.role, states, enriched)
+      : "none";
+    if (withheld !== "none") dropChoiceStates(states, nn.role, withheld);
 
     // What a screen reader announces — never in strict mode, and `[redacted]`
     // for anything the sensitivity policy covers.
@@ -519,7 +535,7 @@ export function buildNativeTree(
               source?.document.prepared.insideEditor.has(source.raw)
                 ? withoutEditableContent(enriched.attributes)
                 : enriched.attributes,
-              withholdSelection,
+              withheld,
               nn.role,
             ),
             textContent: null,

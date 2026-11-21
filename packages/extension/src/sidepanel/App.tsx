@@ -1274,7 +1274,7 @@ export function App() {
       if (!isStepper) {
         // Worded by the same `describeAction` as the native tree's.
         const feedback = describeAction(
-          { role, name, checked: node.a11y.states.checked },
+          { role, name, states: node.a11y.states },
           primaryAction,
         );
         if (feedback) announce(feedback, 2000);

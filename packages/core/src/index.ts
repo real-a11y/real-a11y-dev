@@ -205,7 +205,10 @@ export {
   withholdSensitiveFieldNames,
 } from "./native/sensitive-names.js";
 export type { DomReads } from "./native/sensitive-names.js";
-export { domChoiceTargets } from "./native/dom-choice-targets.js";
+export {
+  domChoiceReads,
+  domChoiceTargets,
+} from "./native/dom-choice-targets.js";
 export type { DomChoiceNode } from "./native/dom-choice-targets.js";
 export type {
   FieldHostOf,

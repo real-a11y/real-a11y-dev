@@ -791,10 +791,10 @@ export function withheldFields(
  * measured). `controlled` holds the kept nodes those relations reach,
  * standing in for a target the tree dropped ({@link controlledRegion}).
  *
- * Nor does a node inside one say which of it is chosen: the states core's
- * `dropChoiceStates` drops (an option's `selected`, a menu item's `checked`,
- * a `pressed`) go from every node inside, as the browser producer drops
- * them, so the two native transports agree. That fails closed: a node counts as sensitive when it merely holds
+ * Nor does a node inside one say which of it is chosen: core's
+ * `dropChoiceStates` drops an option's choice inside the field, and in what
+ * it controls a menu item's `checked` and a `pressed` too, as the browser
+ * producer drops them, so the two native transports agree. That fails closed: a node counts as sensitive when it merely holds
  * a sensitive control (a rich-text editor around a card input), and then no
  * option anywhere inside it shows whether it is chosen.
  *
@@ -838,7 +838,7 @@ export function withholdInsideSensitive(
         delete node.rawValue;
       }
       node.valueWithheld = true;
-      dropChoiceStates(node.states, node.role);
+      dropChoiceStates(node.states, node.role, "field");
     },
   );
   // A node also inside the field has lost its value above; one reached only
@@ -1527,7 +1527,7 @@ async function readDocument(
       read,
     ),
     withheldStandIns,
-    { labelsOf: internals?.labels, choiceTargets: internals?.choiceTargets },
+    internals,
   );
   const nodes =
     rawNodes === full.nodes ? firstPass : normalizeNativeAX(rawNodes);

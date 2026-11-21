@@ -13,6 +13,7 @@
  * @internal
  */
 
+import { ariaCurrent, ariaTristate } from "../extraction/aria-tokens.js";
 import { resolveRoleToken } from "../extraction/role-map.js";
 import {
   isSensitiveFieldAttributes,
@@ -99,6 +100,8 @@ interface DocumentWalk {
   above: Map<number, number>;
   /** The elements whose markup makes them sensitive fields. */
   fields: Set<number>;
+  /** The elements whose markup marks them chosen ({@link marksChosen}). */
+  chosen: Set<number>;
 }
 
 /** Every element with each id, in document order: a page may repeat one. */
@@ -120,6 +123,20 @@ function meet(walk: DocumentWalk, [node, scope, parent]: Step): void {
   const own = attributeOf(node, "id");
   if (own) scope.set(own, [...(scope.get(own) ?? []), node]);
   if (isSensitiveMarkup(node)) walk.fields.add(id);
+  if (marksChosen(node)) walk.chosen.add(id);
+}
+
+/**
+ * The element's markup marks it chosen in a way Chromium's tree may not say:
+ * `aria-current`, which it never reports, or `aria-pressed`, which it drops
+ * on a role with no pressed state, as an option. `selected` and a choice
+ * item's `checked` reach the tree as states of their own.
+ */
+function marksChosen(node: DomChoiceNode): boolean {
+  const pressed = ariaTristate(attributeOf(node, "aria-pressed"));
+  if (pressed === true || pressed === "mixed") return true;
+  const current = ariaCurrent(attributeOf(node, "aria-current"));
+  return current !== null && current !== false;
 }
 
 /**
@@ -133,6 +150,7 @@ function walkDocument(root: DomChoiceNode): DocumentWalk {
     elements: new Map(),
     above: new Map(),
     fields: new Set(),
+    chosen: new Set(),
   };
   const pending: Step[] = [[root, new Map()]];
   for (let step = pending.pop(); step; step = pending.pop()) {
@@ -170,26 +188,49 @@ function aroundFields({ fields, above }: DocumentWalk): Set<number> {
 }
 
 /**
- * Backend ids of every DOM node in what a sensitive field, or a combobox
- * around one (the ARIA 1.1 wrapper), names in `aria-controls` or
- * `aria-owns`, each id read in the element's own tree scope: every element
- * carrying it. "Around" is the flat tree's: a parent, a shadow root's host,
- * the `<slot>` that shows the node. A frame's document is a scope of its own
- * and holds its own fields.
+ * What one walk of the document says that Chromium's tree may not: where a
+ * sensitive field's choice is made ({@link domChoiceTargets}), and which
+ * elements mark themselves chosen ({@link marksChosen}), each by backend id.
+ * Both empty on a page with no sensitive field.
  *
  * @internal
  */
-export function domChoiceTargets(root: DomChoiceNode): Set<number> {
+export interface DomChoiceReads {
+  targets: Set<number>;
+  chosen: Set<number>;
+}
+
+/**
+ * {@link DomChoiceReads} for the document under `root`: the targets are every
+ * DOM node in what a sensitive field, or a combobox around one (the ARIA 1.1
+ * wrapper), names in `aria-controls` or `aria-owns`, each id read in the
+ * element's own tree scope: every element carrying it. "Around" is the flat
+ * tree's: a parent, a shadow root's host, the `<slot>` that shows the node. A
+ * frame's document is a scope of its own and holds its own fields.
+ *
+ * @internal
+ */
+export function domChoiceReads(root: DomChoiceNode): DomChoiceReads {
   const walk = walkDocument(root);
   const targets = new Set<number>();
-  if (walk.fields.size === 0) return targets;
+  if (walk.fields.size === 0) return { targets, chosen: new Set() };
   const around = aroundFields(walk);
   for (const [id, { node, scope }] of walk.elements) {
     if (walk.fields.has(id) || (around.has(id) && isCombobox(node))) {
       addHostTargets(walk, node, scope, targets);
     }
   }
-  return targets;
+  return { targets, chosen: walk.chosen };
+}
+
+/**
+ * The targets of {@link domChoiceReads}: where a sensitive field's choice is
+ * made by a relation Chromium's tree may drop.
+ *
+ * @internal
+ */
+export function domChoiceTargets(root: DomChoiceNode): Set<number> {
+  return domChoiceReads(root).targets;
 }
 
 /**

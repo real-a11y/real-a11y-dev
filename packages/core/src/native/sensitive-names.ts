@@ -26,14 +26,17 @@ import {
 
 /**
  * What a transport's walk of the document knows that Chromium's tree doesn't
- * say: each form control's `<label>`s (`domLabels`), and where a relation
- * Chromium dropped leads from a sensitive field (`domChoiceTargets`).
+ * say: each form control's `<label>`s (`domLabels`), where a relation
+ * Chromium dropped leads from a sensitive field, and which elements mark
+ * themselves chosen (`domChoiceReads`).
  *
  * @internal
  */
 export interface DomReads {
   labelsOf?: LabelsOf;
   choiceTargets?: ReadonlySet<number>;
+  /** What the DOM marks chosen where the tree doesn't (`domChoiceReads`). */
+  chosen?: ReadonlySet<number>;
 }
 
 /**
@@ -56,7 +59,12 @@ export function popupChoiceRegions<T extends RawAXNameNode>(
   fieldIds: readonly string[],
   dom: DomReads = {},
 ): ValueRegions {
-  const roots = sensitivePopupRoots(index, fieldIds, dom.choiceTargets);
+  const roots = sensitivePopupRoots(
+    index,
+    fieldIds,
+    dom.choiceTargets,
+    dom.chosen,
+  );
   const regions = valueRegions(index, roots, [], dom.labelsOf);
   // A part of `raw` in its own popup that holds no popup of its own: neither
   // another popup, nor in one, nor around one, whose choice it would read.
