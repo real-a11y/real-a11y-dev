@@ -487,6 +487,20 @@ describe("the choice a sensitive field holds", () => {
       expect(readOf(["button"])).toEqual([["button", "03", undefined]]);
     });
 
+    it("is withheld from a name that reads an option a group in the popup owns", () => {
+      // Two levels of aria-owns: the listbox holds a group, which owns the
+      // chosen option from elsewhere.
+      const page = (autocomplete: string) =>
+        `<input role="combobox" aria-label="Month" autocomplete="${autocomplete}" aria-controls="lb" aria-expanded="true">` +
+        `<div role="listbox" id="lb" aria-label="Months"><div role="group" aria-label="Spring" aria-owns="o3"></div></div>` +
+        `<div><div role="option" id="o3" aria-selected="true">03</div></div>` +
+        `<button aria-labelledby="o3"></button>`;
+      document.body.innerHTML = page("cc-exp-month");
+      expect(readOf(["button"])).toEqual([["button", "[redacted]", undefined]]);
+      document.body.innerHTML = page("off");
+      expect(readOf(["button"])).toEqual([["button", "03", undefined]]);
+    });
+
     it("keeps a name that reads an option a sensitive input owns, while nothing is chosen", () => {
       // Chromium leaves what an <input> owns where it is: the listbox is its
       // popup, not its value, so with no choice made it lends nothing.

@@ -145,13 +145,16 @@ function comboboxAtOrAbove(start: Element | null): boolean {
   return false;
 }
 
-/** `role`'s first token the tree recognizes is combobox, as a role reads. */
+/**
+ * `role` may have made the element a combobox: any token resolves to one. A
+ * token before it can be skipped (an unnamed `region`), so the first one the
+ * tree recognizes is not enough to rule it out.
+ */
 function namesCombobox(role: string | null): boolean {
-  for (const token of (role ?? "").trim().split(/\s+/)) {
-    const resolved = token ? resolveRoleToken(token) : undefined;
-    if (resolved !== undefined) return resolved === "combobox";
-  }
-  return false;
+  return (role ?? "")
+    .trim()
+    .split(/\s+/)
+    .some((token) => token !== "" && resolveRoleToken(token) === "combobox");
 }
 
 function hasPopupRelation(element: Element): boolean {

@@ -33,6 +33,7 @@ import {
   isDatalistCombobox,
   resolveRoleToken,
   selectRoleFromAttributes,
+  withAriaOwnerIndex,
   withholdsState,
 } from "@real-a11y-dev/core";
 import {
@@ -385,11 +386,17 @@ function toBeValidA11yTree(received: unknown): MatcherResult {
   // view still holds the nodes it folded away.
   const dom = extract(received, "dom");
   const a11y = buildA11yTree(dom.nodes, dom.rootId, dom.focusedId);
-  const nodes = toValidatedNodes(a11y);
+  // One set of per-extraction indexes for the conversion, which asks of
+  // each option whether the tree withheld its state (withheldSuppliedAttrs):
+  // a page with no sensitive field then answers once.
+  const { nodes, folded } = withAriaOwnerIndex(() => ({
+    nodes: toValidatedNodes(a11y),
+    folded: foldedDiscards(dom, a11y),
+  }));
   const label = (n: ValidatedNode) =>
     n.name ? `${n.role} "${n.name}"` : n.role;
   const errors: string[] = [];
-  for (const node of [...nodes.values(), ...foldedDiscards(dom, a11y)]) {
+  for (const node of [...nodes.values(), ...folded]) {
     for (const issue of validateNode(node, nodes)) {
       if (issue.severity === "error")
         errors.push(`${label(node)} — ${issue.message}`);

@@ -269,14 +269,18 @@ function ownedBy(element: Element): Element[] {
 
 /**
  * Some node in `container` is chosen ({@link isChosen}), in the tree Chromium
- * reads: the flat tree, with what the container owns (`aria-owns`), so an
- * option slotted into it or owned by it counts.
+ * reads: the flat tree, with what the container, or anything in it, owns
+ * (`aria-owns`), so an option slotted into it or owned by it counts.
  */
 function holdsChoice(container: Element): boolean {
+  const seen = new Set<Element>([container]);
   const pending = [...flatChildren(container), ...ownedBy(container)];
   for (let el = pending.pop(); el; el = pending.pop()) {
+    if (seen.has(el)) continue;
+    seen.add(el);
     if (isChosen(el)) return true;
-    pending.push(...flatChildren(el));
+    // What a group in the popup owns is the popup's too, at any depth.
+    pending.push(...flatChildren(el), ...ownedBy(el));
   }
   return false;
 }

@@ -56,6 +56,7 @@ export {
 // @internal — strict mode's test for what a user typed in, for a reader of
 // the live page outside core: audit's finding locators.
 export { insideEditor, withholdsState } from "./extraction/strict-mode.js";
+export { withAriaOwnerIndex } from "./extraction/aria-owner.js";
 // @internal — which rows of a read are of the page a panel was given, for the
 // change marks; not a stability promise.
 export { rootRowScope, type RowScope } from "./extraction/row-scope.js";
