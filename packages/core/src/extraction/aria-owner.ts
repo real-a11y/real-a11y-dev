@@ -44,12 +44,19 @@ export interface RelationReach {
  */
 export interface ChoiceCache {
   /**
-   * Each page scope asked about (a document, a closed shadow root, a detached
-   * subtree's top): whether it holds any sensitive field.
+   * Each page scope seen (a document, a closed shadow root, a detached
+   * subtree's top): its fields read, and its relations indexed into `reach`
+   * when it holds a sensitive one.
    */
-  readonly sensitiveScopes: WeakMap<Node, boolean>;
-  /** The page scopes whose sensitive fields' relations are in `reach`. */
-  readonly indexedScopes: WeakSet<Node>;
+  readonly scopesSeen: WeakSet<Node>;
+  /** Some scope seen in this extraction holds a sensitive field. */
+  sensitiveSeen: boolean;
+  /**
+   * The closed shadow root of each host whose root a scope seen is: page
+   * script can't reach one through its host, but a read that starts inside
+   * it can.
+   */
+  readonly closedRoots: WeakMap<Element, ShadowRoot>;
   /** What sensitive fields reach by relation ({@link RelationReach}). */
   readonly reach: RelationReach;
   /** Whether each element asked about is a sensitive choice host. */
@@ -89,8 +96,9 @@ export function withAriaOwnerIndex<T>(fn: () => T): T {
   const previousChoices = holder.choices;
   holder.current = new WeakMap();
   holder.choices = {
-    sensitiveScopes: new WeakMap(),
-    indexedScopes: new WeakSet(),
+    scopesSeen: new WeakSet(),
+    sensitiveSeen: false,
+    closedRoots: new WeakMap(),
     reach: { elements: new WeakSet(), ids: new WeakMap() },
     hosts: new WeakMap(),
   };

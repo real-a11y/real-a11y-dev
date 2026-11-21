@@ -82,18 +82,6 @@ function isCombobox(node: DomChoiceNode): boolean {
   return rolesOf(node).includes("combobox");
 }
 
-/**
- * A choice container by its markup: a `<select>`, or a `role` whose first
- * recognized token is one (`POPUP_CHOICE_ROLES`).
- */
-function isChoiceContainer(node: DomChoiceNode): boolean {
-  const tag = (node.localName ?? node.nodeName ?? "").toLowerCase();
-  const role = rolesOf(node)[0];
-  return (
-    tag === "select" || (role !== undefined && POPUP_CHOICE_ROLES.has(role))
-  );
-}
-
 /** Backend ids of `node` and everything under it, shadow roots included. */
 function subtreeIds(node: DomChoiceNode, into: Set<number>): void {
   const pending = [node];
@@ -230,16 +218,26 @@ function addHostTargets(
   }
 }
 
-/** The nearest choice container at or above `node` in `walk`, by markup. */
+/**
+ * The choice container at or above `node` in `walk`, by markup: the nearest
+ * `<select>` or element whose `role` resolves to one (`POPUP_CHOICE_ROLES`).
+ * A choice role behind another token (`region listbox`, which the tree reads
+ * as a listbox once the unnamed region is skipped) makes a candidate, and
+ * the outermost candidate stands when no definite container is above it: the
+ * side that withholds more.
+ */
 function choiceContainerIn(
   walk: DocumentWalk,
   node: DomChoiceNode,
 ): DomChoiceNode | undefined {
-  let at = node.backendNodeId;
-  while (at !== undefined) {
+  let candidate: DomChoiceNode | undefined;
+  for (let at = node.backendNodeId; at !== undefined; at = walk.above.get(at)) {
     const met = walk.elements.get(at)?.node;
-    if (met && isChoiceContainer(met)) return met;
-    at = walk.above.get(at);
+    if (!met) continue;
+    const tag = (met.localName ?? met.nodeName ?? "").toLowerCase();
+    const roles = rolesOf(met);
+    if (tag === "select" || POPUP_CHOICE_ROLES.has(roles[0] ?? "")) return met;
+    if (roles.some((role) => POPUP_CHOICE_ROLES.has(role))) candidate = met;
   }
-  return undefined;
+  return candidate;
 }

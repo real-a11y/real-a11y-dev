@@ -4,10 +4,16 @@
  * through core's `sensitiveChoiceReach` (states) and `sensitivePopupRoots`
  * (names), which follow the same relations from the same hosts.
  */
-import { ariaOwner, choiceCache, type RelationReach } from "./aria-owner.js";
+import {
+  ariaOwner,
+  choiceCache,
+  type ChoiceCache,
+  type RelationReach,
+} from "./aria-owner.js";
 import {
   safeGetAttribute,
   safeGetElementById,
+  safeDocumentElement,
   safeMatches,
   safeQuerySelectorAll,
   safeRootNode,
@@ -77,7 +83,7 @@ function pageScopes(element: Element): PageScope[] {
 function deepQuery(scope: PageScope, selector: string): Element[] {
   const tops =
     scope.nodeType === 9 /* DOCUMENT_NODE */
-      ? [(scope as Document).documentElement].filter((el) => el !== null)
+      ? [safeDocumentElement(scope as Document)].filter((el) => el !== null)
       : scope.nodeType === 11
         ? Array.from((scope as DocumentFragment).children)
         : [scope as Element];
@@ -88,24 +94,50 @@ function deepQuery(scope: PageScope, selector: string): Element[] {
 }
 
 /**
- * False only when the page `element` is in holds no sensitive field at all,
- * open shadow roots included ({@link pageScopes}), so no choice in it can be
- * one's. Asked once per scope per extraction, it spares every node with a
+ * Read each page scope of `element` ({@link pageScopes}) the extraction has
+ * not seen yet: whether it holds a sensitive field, and if so the relations
+ * of its hosts, into the extraction's cache.
+ */
+function seePage(cache: ChoiceCache, element: Element): void {
+  for (const scope of pageScopes(element)) {
+    if (cache.scopesSeen.has(scope)) continue;
+    cache.scopesSeen.add(scope);
+    const host = (scope as ShadowRoot).host;
+    if (scope.nodeType === 11 && host) {
+      cache.closedRoots.set(host, scope as ShadowRoot);
+    }
+    if (!deepQuery(scope, FIELD_SELECTOR).some(isSensitiveField)) continue;
+    cache.sensitiveSeen = true;
+    indexSensitiveRelations(deepQuery(scope, RELATIONS), cache.reach);
+  }
+}
+
+/**
+ * False only when no page scope the extraction has seen, `element`'s among
+ * them, holds a sensitive field, so no choice in it can be one's. Read once
+ * per scope per extraction ({@link seePage}), it spares every node with a
  * choice state, and every reference target, the climbs below on the pages
- * most often read. Outside an extraction it answers true and the climbs
- * decide.
+ * most often read. Any scope seen counts, not only `element`'s: a read that
+ * starts inside a closed shadow root meets that root's host, outside it, on
+ * the way up, and the host's own page can't see in. Outside an extraction it
+ * answers true and the climbs decide.
  */
 export function pageMayHoldSensitiveField(element: Element): boolean {
   const cache = choiceCache();
   if (!cache) return true;
-  return pageScopes(element).some((scope) => {
-    let holds = cache.sensitiveScopes.get(scope);
-    if (holds === undefined) {
-      holds = deepQuery(scope, FIELD_SELECTOR).some(isSensitiveField);
-      cache.sensitiveScopes.set(scope, holds);
-    }
-    return holds;
-  });
+  seePage(cache, element);
+  return cache.sensitiveSeen;
+}
+
+/**
+ * `element`'s children in the flat tree, and in the closed shadow root it
+ * hosts when this read started inside that root ({@link seePage}), which its
+ * `shadowRoot` hides.
+ */
+function childrenOf(element: Element): Element[] {
+  const closed = choiceCache()?.closedRoots.get(element);
+  const children = flatChildren(element);
+  return closed ? [...Array.from(closed.children), ...children] : children;
 }
 
 /**
@@ -114,10 +146,10 @@ export function pageMayHoldSensitiveField(element: Element): boolean {
  * light child of a shadow host that no slot renders does not.
  */
 export function holdsSensitiveField(element: Element): boolean {
-  const pending = flatChildren(element);
+  const pending = childrenOf(element);
   for (let el = pending.pop(); el; el = pending.pop()) {
     if (isSensitiveField(el)) return true;
-    pending.push(...flatChildren(el));
+    pending.push(...childrenOf(el));
   }
   return false;
 }
@@ -178,7 +210,8 @@ function indexSensitiveRelations(
     const activeId = (
       safeGetAttribute(host, "aria-activedescendant") ?? ""
     ).trim();
-    for (const active of activeId ? elementsWithId(scope, activeId) : []) {
+    const searched = idSearchRoot(host);
+    for (const active of activeId ? elementsWithId(searched, activeId) : []) {
       reach.elements.add(choiceContainerOf(active) ?? active);
     }
   }
@@ -189,10 +222,24 @@ function indexSensitiveRelations(
  * resolves: a page that renders a form twice, a hidden copy first, would
  * otherwise leave the visible copy's popup out.
  */
-function elementsWithId(scope: Document | ShadowRoot, id: string): Element[] {
-  return Array.from(safeQuerySelectorAll(scope, "[id]")).filter(
+function elementsWithId(
+  scope: Document | ShadowRoot | Element,
+  id: string,
+): Element[] {
+  const top = scope.nodeType === 1 ? [scope as Element] : [];
+  return [...top, ...safeQuerySelectorAll(scope, "[id]")].filter(
     (el) => safeGetAttribute(el, "id") === id,
   );
+}
+
+/**
+ * Where `host`'s IDREFs are searched for every element carrying one: its id
+ * scope, or for a subtree in no document its top, which the owner document
+ * its ids resolve against does not hold.
+ */
+function idSearchRoot(host: Element): Document | ShadowRoot | Element {
+  const root = safeRootNode(host);
+  return root.nodeType === 1 ? (root as Element) : idScope(host);
 }
 
 /** `reach` takes in `element`: by its id in its scope, or as itself. */
@@ -209,11 +256,11 @@ function reaches(reach: RelationReach, element: Element): boolean {
  * the field's value. Every element carrying a named id counts, not only the
  * first the page resolves: a page that renders a form twice, a hidden copy
  * first, would otherwise show the visible popup's choice. Indexed once per
- * page scope per extraction ({@link pageScopes}), every open shadow root with
- * it: the container an `aria-activedescendant` reaches can sit in another
- * tree scope than its field (a listbox host around the shadow root that holds
- * its own input and options). Outside an extraction, `element`'s own scope is
- * read.
+ * page scope per extraction, every open shadow root with it, and answered
+ * from every scope seen ({@link seePage}): the container an
+ * `aria-activedescendant` reaches can sit in another tree scope than its
+ * field (a listbox host around the closed shadow root that holds its own
+ * input and options). Outside an extraction, `element`'s own scope is read.
  */
 export function controlledBySensitiveField(element: Element): boolean {
   const cache = choiceCache();
@@ -223,11 +270,7 @@ export function controlledBySensitiveField(element: Element): boolean {
     indexSensitiveRelations(safeQuerySelectorAll(scope, RELATIONS), reach);
     return reaches(reach, element);
   }
-  for (const scope of pageScopes(element)) {
-    if (cache.indexedScopes.has(scope)) continue;
-    cache.indexedScopes.add(scope);
-    indexSensitiveRelations(deepQuery(scope, RELATIONS), cache.reach);
-  }
+  seePage(cache, element);
   return reaches(cache.reach, element);
 }
 
@@ -304,13 +347,13 @@ function ownedBy(element: Element): Element[] {
  */
 function holdsChoice(container: Element): boolean {
   const seen = new Set<Element>([container]);
-  const pending = [...flatChildren(container), ...ownedBy(container)];
+  const pending = [...childrenOf(container), ...ownedBy(container)];
   for (let el = pending.pop(); el; el = pending.pop()) {
     if (seen.has(el)) continue;
     seen.add(el);
     if (isChosen(el)) return true;
     // What a group in the popup owns is the popup's too, at any depth.
-    pending.push(...flatChildren(el), ...ownedBy(el));
+    pending.push(...childrenOf(el), ...ownedBy(el));
   }
   return false;
 }

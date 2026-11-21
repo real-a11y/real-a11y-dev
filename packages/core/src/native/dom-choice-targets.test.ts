@@ -168,6 +168,20 @@ describe("where the DOM says a sensitive field's choice is made", () => {
     }
   });
 
+  it("takes a choice role behind another token as the container", () => {
+    // `region listbox`: the tree skips the unnamed region and reads a listbox.
+    const other = el("li", { role: "option", "aria-selected": "true" });
+    const option = el("li", { id: "o3", role: "option" });
+    const listbox = el("ul", { role: "region listbox" }, [other, option]);
+    const field = el("input", {
+      role: "combobox",
+      autocomplete: "cc-exp-month",
+      "aria-activedescendant": "o3",
+    });
+    const targets = domChoiceTargets(doc(field, listbox));
+    expect(targets.has(other.backendNodeId!)).toBe(true);
+  });
+
   it("counts no field an author shadow host leaves unslotted", () => {
     // Not rendered, so in no combobox; a user-agent root (a <details>'s)
     // slots its children without saying so, and they still count.

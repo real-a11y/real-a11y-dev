@@ -469,6 +469,58 @@ describe("the choice a sensitive field holds", () => {
       ).toEqual([undefined]);
     });
 
+    it("is withheld on a page whose named element shadows documentElement", () => {
+      // A document's named elements shadow its own properties: in a browser
+      // `<img name="documentElement">` does. jsdom implements no such
+      // shadowing, so an own property stands in for it.
+      const img = document.createElement("img");
+      Object.defineProperty(document, "documentElement", {
+        value: img,
+        configurable: true,
+      });
+      try {
+        expect(
+          selectedOf(months('autocomplete="cc-exp-month" aria-controls="lb"')),
+        ).toEqual([
+          ["01", undefined],
+          ["03", undefined],
+        ]);
+      } finally {
+        delete (document as unknown as Record<string, unknown>)[
+          "documentElement"
+        ];
+      }
+    });
+
+    it("withholds names and descriptions too, in a closed root whose host is the popup", () => {
+      document.body.innerHTML = `<x-lb role="listbox" aria-label="Months"></x-lb>`;
+      const root = document.body.firstElementChild!.attachShadow({
+        mode: "closed",
+      });
+      root.innerHTML =
+        `<div id="start"><input role="combobox" aria-label="Month" autocomplete="cc-exp-month" aria-activedescendant="o3">` +
+        `<div role="option" id="o3" aria-selected="true" aria-description="chosen">03</div>` +
+        `<button aria-labelledby="o3"></button></div>`;
+      expect(
+        readOf(["option", "button"], root.getElementById("start")!),
+      ).toEqual([
+        ["option", "03", undefined],
+        ["button", "[redacted]", undefined],
+      ]);
+    });
+
+    it("is withheld in a subtree that is not in a document, reached by aria-activedescendant", () => {
+      const root = document.createElement("div");
+      root.innerHTML =
+        `<input role="combobox" aria-label="Month" autocomplete="cc-exp-month" aria-activedescendant="o3">` +
+        `<ul role="listbox" aria-label="Months"><li role="option" id="o3" aria-selected="true">03</li></ul>`;
+      expect(
+        [...extractDomTree(root).nodes.values()]
+          .filter((n) => n.a11y.role === "option")
+          .map((n) => n.a11y.states["selected"]),
+      ).toEqual([undefined]);
+    });
+
     it("is withheld on an option a sensitive field controls itself", () => {
       // Only that option: what it points at is all that is reached.
       expect(
