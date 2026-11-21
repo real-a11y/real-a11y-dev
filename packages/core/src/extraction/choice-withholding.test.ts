@@ -522,6 +522,23 @@ describe("the choice a sensitive field holds", () => {
       }
     });
 
+    it("is withheld in a read that starts inside a closed shadow root", () => {
+      // The page's query for sensitive fields can't enter a closed root, so
+      // it must not decide for a read that starts in one.
+      document.body.innerHTML = `<x-card></x-card>`;
+      const root = document.body.firstElementChild!.attachShadow({
+        mode: "closed",
+      });
+      root.innerHTML =
+        `<div id="start"><input role="combobox" aria-label="Month" autocomplete="cc-exp-month" aria-controls="lb">` +
+        `<ul role="listbox" id="lb" aria-label="Months"><li role="option" aria-selected="true">03</li></ul></div>`;
+      expect(
+        [...extractDomTree(root.getElementById("start")!).nodes.values()]
+          .filter((n) => n.a11y.role === "option")
+          .map((n) => n.a11y.states["selected"]),
+      ).toEqual([undefined]);
+    });
+
     it("reads an ordinary list nested in a sensitive popup as the popup's", () => {
       // The grid holds the choice; the list inside it holds none. As in the
       // native producers, what is in it is the grid's: no description, and a

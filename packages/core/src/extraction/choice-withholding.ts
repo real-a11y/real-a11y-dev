@@ -50,13 +50,18 @@ function searchAbove(
   return null;
 }
 
-/** The document `element` is connected to, through shadow roots, if any. */
-function connectedDocument(element: Element): Document | null {
+/**
+ * The document `element` is connected to, through open shadow roots, whose
+ * whole a deep query from it reaches `element` with; `null` off any page, or
+ * inside a closed shadow root, which no query from the document enters (a
+ * read can start in one when the caller holds an element there).
+ */
+function scannedDocument(element: Element): Document | null {
   let root = safeRootNode(element);
   while (root.nodeType === 11 /* DOCUMENT_FRAGMENT_NODE */) {
-    const host = (root as ShadowRoot).host;
-    if (!host) return null;
-    root = safeRootNode(host);
+    const shadow = root as ShadowRoot;
+    if (!shadow.host || shadow.mode === "closed") return null;
+    root = safeRootNode(shadow.host);
   }
   return root.nodeType === 9 /* DOCUMENT_NODE */ ? (root as Document) : null;
 }
@@ -66,12 +71,13 @@ function connectedDocument(element: Element): Document | null {
  * open shadow roots included, so no choice in it can be one's. Asked once per
  * page per extraction, it spares every node with a choice state, and every
  * reference target, the climbs below on the pages most often read. Outside an
- * extraction, or for a subtree not in a document, it answers true and the
- * climbs decide.
+ * extraction, for a subtree not in a document, or inside a closed shadow root
+ * the page's query can't enter ({@link scannedDocument}), it answers true and
+ * the climbs decide.
  */
 export function pageMayHoldSensitiveField(element: Element): boolean {
   const cache = choiceCache();
-  const doc = cache && connectedDocument(element);
+  const doc = cache && scannedDocument(element);
   if (!cache || !doc?.documentElement) return true;
   let holds = cache.sensitivePages.get(doc);
   if (holds === undefined) {
@@ -169,7 +175,7 @@ function indexSensitiveRelations(
  */
 export function controlledBySensitiveField(element: Element): boolean {
   const cache = choiceCache();
-  const doc = cache && connectedDocument(element);
+  const doc = cache && scannedDocument(element);
   if (!cache || !doc?.documentElement) {
     const reached = new Set<Element>();
     const scope = idScope(element);
