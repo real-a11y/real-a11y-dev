@@ -1,3 +1,4 @@
+import { ariaOwner } from "./aria-owner.js";
 import { AUTHOR_NAMED_ROLES } from "./author-named-roles.js";
 import { safeTagName } from "./clobber-safe.js";
 import { isEditingHost } from "./editing.js";
@@ -105,19 +106,21 @@ function isRow(element: Element, explicitRole: string | undefined): boolean {
  * Chromium names from their cells. The nearest table-like ancestor decides, so
  * a data table nested in a grid cell is not one. Row groups and wrappers are
  * walked through; a row in a `role="table"`, a data `<table>` or no table at
- * all reads empty.
+ * all reads empty. Each step goes to the element's `aria-owns` owner when it
+ * has one, else its parent, and each role is the one the element is exposed
+ * with, so a focusable `<table role="none">` still bounds its rows.
  */
 function isGridRow(row: Element): boolean {
+  const seen = new Set<Element>([row]);
   for (
-    let ancestor = flatParentElement(row);
-    ancestor;
-    ancestor = flatParentElement(ancestor)
+    let ancestor = ariaOwner(row) ?? flatParentElement(row);
+    ancestor && !seen.has(ancestor);
+    ancestor = ariaOwner(ancestor) ?? flatParentElement(ancestor)
   ) {
-    const role = getExplicitRole(ancestor);
+    seen.add(ancestor);
+    const role = getImplicitRole(ancestor);
     if (role === "grid" || role === "treegrid") return true;
-    if (role === "table" || (!role && safeTagName(ancestor) === "table")) {
-      return false;
-    }
+    if (role === "table") return false;
   }
   return false;
 }

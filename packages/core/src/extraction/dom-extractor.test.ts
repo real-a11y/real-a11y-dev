@@ -4255,6 +4255,41 @@ describe("name from content reads through lists, cells and tooltips", () => {
     expect(rowName(data)).toBe("");
   });
 
+  it("names a row a grid owns through aria-owns, directly or by a rowgroup", () => {
+    expect(
+      nameOf(
+        `<div role="grid" aria-owns="r"></div><div id="r" role="row" tabindex="0"><div role="gridcell">A</div></div>`,
+        "r",
+      ),
+    ).toBe("A");
+    expect(
+      nameOf(
+        `<div role="grid" aria-owns="g"></div><div id="g" role="rowgroup"><div id="r2" role="row"><div role="gridcell">A</div></div></div>`,
+        "r2",
+      ),
+    ).toBe("A");
+  });
+
+  it("survives a cycle of aria-owns while looking for the grid", () => {
+    expect(
+      nameOf(
+        `<div id="a" role="row" aria-owns="b"><span>x</span></div><div id="b" role="rowgroup" aria-owns="a"></div>`,
+        "a",
+      ),
+    ).toBe("");
+  });
+
+  it("lets a focusable table with role=none bound its rows inside a grid", () => {
+    const root = createPage(
+      `<div role="grid"><div role="row"><div role="gridcell"><table role="none" tabindex="0"><tr id="inner"><th>H</th><td>A</td></tr></table></div></div></div>`,
+    );
+    document.body.appendChild(root);
+    const row = [...extractDomTree(root).nodes.values()].find(
+      (n) => n.dom?.attributes["id"] === "inner",
+    )!;
+    expect(row.a11y.name).toBe("");
+  });
+
   it("keeps a table a barrier", () => {
     expect(
       nameOf(
