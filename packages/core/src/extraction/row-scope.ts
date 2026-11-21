@@ -10,6 +10,8 @@
  * didn't add, and takes it away again when the overlay goes.
  */
 
+import { textRunHostId } from "../text-run.js";
+
 import { getElementRefs } from "./dom-extractor.js";
 import { isOverlaySignal } from "./overlay-scope.js";
 
@@ -75,8 +77,12 @@ export function rootRowScope(root: Element): RowScope {
   const seen = new WeakMap<Element, boolean>();
   return {
     has(id) {
-      const el = getElementRefs().get(id);
+      // A `text` row has no element: it is where the element it is text of
+      // is, the root's own text included.
+      const hostId = textRunHostId(id);
+      const el = getElementRefs().get(hostId ?? id);
       if (!el) return true;
+      if (hostId !== null && el === root) return true;
       isConnectedOf ??= nodeGetter<boolean>("isConnected");
       if (!isConnectedOf.call(el)) return seen.get(el) ?? true;
       const on = scopeOf(root, el);

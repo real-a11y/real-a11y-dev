@@ -154,6 +154,42 @@ describe("semanticTreeRules", () => {
     }
   });
 
+  it("places a text row where the element it is text of is", () => {
+    // A `text` row has no element of its own. One outside the root is the
+    // rest of the page, which a widened read brings and takes away; one
+    // inside it is the page's, as the paragraph around it is.
+    host.innerHTML = `
+      <header><p>Read <a href="/g">the guide</a> first</p></header>
+      <main><p>Then <a href="/s">save</a> it</p></main>
+    `;
+    const main = host.querySelector("main")!;
+    const scope = rootRowScope(main);
+    const rules = semanticTreeRules("a11y", scope);
+    const before = extractA11yTree(main);
+    const toast = document.createElement("div");
+    toast.setAttribute("role", "status");
+    toast.textContent = "Saved";
+    document.body.appendChild(toast);
+    try {
+      const wide = extractA11yTree(document.body);
+      const rows = [...wide.nodes.values()].filter(
+        (n) => n.a11y.role === "text",
+      );
+      expect(rows.map((n) => [n.a11y.name, scope.has(n.id)])).toEqual([
+        ["Read", false],
+        ["first", false],
+        ["Then", true],
+        ["it", true],
+      ]);
+      const opened = diffTreeRows(before, wide, rules);
+      expect(
+        [...opened.added].map((id) => wide.nodes.get(id)!.a11y.role),
+      ).toEqual(["status"]);
+    } finally {
+      toast.remove();
+    }
+  });
+
   it("leaves a shadow tree outside the root out of a widened read, and counts one inside", () => {
     host.innerHTML = `
       <header><div id="card"></div></header>

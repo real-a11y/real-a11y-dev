@@ -1,4 +1,4 @@
-import { TEXT_RUN_ROLE } from "../text-run.js";
+import { TEXT_RUN_ROLE, textRunId } from "../text-run.js";
 import type { ExtractionResult, SemanticNode, TreeSource } from "../types.js";
 import { collapseAscii } from "../utils/ascii-whitespace.js";
 import { getNodeId } from "../utils/id-generator.js";
@@ -103,8 +103,7 @@ function textRunNode(
   depth: number,
 ): SemanticNode {
   return {
-    // The text node's own id: the row keeps it for as long as the node lives.
-    id: getNodeId(first),
+    id: textRunId(parentId, getNodeId(first)),
     parentId,
     childIds: [],
     depth,
