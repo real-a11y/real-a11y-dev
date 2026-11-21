@@ -26,11 +26,13 @@ import {
 /**
  * The {@link ValueRegions} of the choice made in sensitive fields' popups
  * (`sensitivePopupRoots`), for names only. A reference counts as reading the
- * choice as it does for a field, but for one: a node inside a popup named or
- * described from another part of the same popup, as an option labelled by its
- * own span is, reads that part, not which option is chosen. Its name stays.
- * A reference from outside still counts, even to one option: the page may
- * point it at the chosen one.
+ * choice as it does for a field, but for one: a node inside a popup, not the
+ * popup itself, named or described from its own descendants, as an option
+ * labelled by its own span is, reads its own text, not which option is
+ * chosen. Its name stays. Any other reference still counts, even to one
+ * option, or from the popup to a caption inside it: the page may point it at
+ * the chosen one, or show the choice there (a date grid captioned with the
+ * chosen month).
  *
  * @internal
  */
@@ -41,6 +43,12 @@ export function popupChoiceRegions<T extends RawAXNameNode>(
 ): ValueRegions {
   const roots = sensitivePopupRoots(index, fieldIds);
   const regions = valueRegions(index, roots, [], labelsOf);
+  const isWithin = (node: T, ancestor: RawAXNameNode): boolean => {
+    for (const cur of nativeAncestry(node, index.byId)) {
+      if (cur.nodeId === ancestor.nodeId) return true;
+    }
+    return false;
+  };
   const popupOf = (node: RawAXNameNode): string | undefined => {
     for (const cur of nativeAncestry(node as T, index.byId)) {
       if (roots.has(cur.nodeId)) return cur.nodeId;
@@ -51,14 +59,16 @@ export function popupChoiceRegions<T extends RawAXNameNode>(
     ...regions,
     references: (raw, property) => {
       const own = popupOf(raw);
-      if (own === undefined) return regions.references(raw, property);
+      if (own === undefined || own === raw.nodeId) {
+        return regions.references(raw, property);
+      }
       const relatedNodes = (
         nativeAXProperty(raw, property)?.relatedNodes ?? []
       ).filter((related) => {
         const id = related.backendDOMNodeId;
         const target =
           typeof id === "number" ? index.byBackendId.get(id) : undefined;
-        return target === undefined || popupOf(target) !== own;
+        return target === undefined || !isWithin(target, raw);
       });
       if (relatedNodes.length === 0) return false;
       return regions.references(

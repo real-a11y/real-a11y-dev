@@ -76,17 +76,16 @@ export function bringsSensitivePopup(
   subtree: Element,
   parent: Element | null,
 ): boolean {
-  const all = (selectors: string): Element[] => [
+  // One walk, shadow roots included, for both questions.
+  const selectors = "[aria-controls], [aria-owns], input, textarea, select";
+  const found = [
     ...(safeMatches(subtree, selectors) ? [subtree] : []),
     ...deepQuerySelectorAll(subtree, selectors),
   ];
-  if (all("[aria-controls], [aria-owns]").some(isSensitiveChoiceHost)) {
+  if (found.some((el) => hasPopupRelation(el) && isSensitiveChoiceHost(el))) {
     return true;
   }
-  return (
-    all("input, textarea, select").some(isSensitiveField) &&
-    comboboxAtOrAbove(parent)
-  );
+  return found.some(isSensitiveField) && comboboxAtOrAbove(parent);
 }
 
 /** `element` or what it holds, shadow roots included, is a sensitive field. */

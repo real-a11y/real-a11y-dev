@@ -5,7 +5,11 @@
  * `withholdInsideSensitive` in the extension. Both follow `aria-controls` and
  * `aria-owns` from a sensitive field through core's `fieldRelationTargets`.
  */
-import { ariaOwner, sensitiveControlsIndex } from "./aria-owner.js";
+import {
+  ariaOwner,
+  choiceHostsIndex,
+  sensitiveControlsIndex,
+} from "./aria-owner.js";
 import { safeGetAttribute, safeQuerySelectorAll } from "./clobber-safe.js";
 import {
   deepQuerySelectorAll,
@@ -23,14 +27,20 @@ import { isSensitiveField, POPUP_CHOICE_ROLES } from "./sensitivity.js";
  * made there is the field's value. The field may sit in the wrapper's shadow
  * root, and the role is read as the tree reads it, so `role="x-combo
  * combobox"` is a combobox. The native producers' counterpart is core's
- * `sensitiveChoiceHosts`.
+ * `sensitiveChoiceHosts`. Cached per extraction (`choiceHostsIndex`): every
+ * node with a choice state below a wrapper asks about it.
  */
 export function isSensitiveChoiceHost(element: Element): boolean {
   if (isSensitiveField(element)) return true;
   if (getExplicitRole(element) !== "combobox") return false;
-  return deepQuerySelectorAll(element, "input, textarea, select").some(
+  const cache = choiceHostsIndex();
+  const known = cache?.get(element);
+  if (known !== undefined) return known;
+  const host = deepQuerySelectorAll(element, "input, textarea, select").some(
     isSensitiveField,
   );
+  cache?.set(element, host);
+  return host;
 }
 
 /**

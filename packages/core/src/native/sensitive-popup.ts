@@ -54,7 +54,9 @@ export function fieldRelationRoots<T extends RawAXNameNode>(
   return roots;
 }
 
-/** Every raw node at or under {@link fieldRelationRoots}. *
+/**
+ * Every raw node at or under {@link fieldRelationRoots}.
+ *
  * @internal
  */
 export function fieldRelationTargets<T extends RawAXNameNode>(

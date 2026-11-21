@@ -114,7 +114,15 @@ describe("withholdSensitiveFieldNames", () => {
         named: "attribute",
         properties: [idref("controls", 3)],
       }),
-      raw("3", "listbox", { parentId: "1", childIds: ["4", "5"] }),
+      // Captioned from inside itself, as a date grid shows the chosen month.
+      raw("3", "listbox", {
+        parentId: "1",
+        childIds: ["8", "4", "5"],
+        name: { value: "March" },
+        named: "relatedElement",
+        properties: [idref("labelledby", 8)],
+      }),
+      raw("8", "StaticText", { parentId: "3", name: { value: "March" } }),
       ...(["4", "5"] as const).map((id, i) =>
         raw(id, "option", {
           parentId: "3",
@@ -141,6 +149,7 @@ describe("withholdSensitiveFieldNames", () => {
       out.find((n) => n.nodeId === id)?.name?.value;
     expect([nameOf("4"), nameOf("5")]).toEqual(["January", "March"]);
     expect(nameOf("9")).toBe(REDACTED_VALUE);
+    expect(nameOf("3")).toBe(REDACTED_VALUE);
   });
 
   it("withholds a name built from a sensitive field's contents", () => {

@@ -30,15 +30,18 @@ type SensitiveControlsIndex = WeakMap<Document | ShadowRoot, Set<string>>;
 interface ActiveOwnerIndex {
   current: AriaOwnerIndex | null;
   sensitiveControls: SensitiveControlsIndex | null;
+  /** Whether each element asked about is a sensitive choice host. */
+  choiceHosts: WeakMap<Element, boolean> | null;
 }
 
-// `@2`: the store gained `sensitiveControls`. A copy of core that still holds
-// the `@1` shape keeps a store of its own rather than share one it can't read.
+// `@3`: the store gained `sensitiveControls` (`@2`), then `choiceHosts`. A copy
+// of core that holds an older shape keeps a store of its own rather than share
+// one it can't read.
 const activeOwnerIndex = (): ActiveOwnerIndex =>
   realmSingleton<ActiveOwnerIndex>(
     "role-map.aria-owner-index",
-    "aria-owner-index@2",
-    () => ({ current: null, sensitiveControls: null }),
+    "aria-owner-index@3",
+    () => ({ current: null, sensitiveControls: null, choiceHosts: null }),
   );
 
 /**
@@ -52,13 +55,16 @@ export function withAriaOwnerIndex<T>(fn: () => T): T {
   const holder = activeOwnerIndex();
   const previous = holder.current;
   const previousControls = holder.sensitiveControls;
+  const previousHosts = holder.choiceHosts;
   holder.current = new WeakMap();
   holder.sensitiveControls = new WeakMap();
+  holder.choiceHosts = new WeakMap();
   try {
     return fn();
   } finally {
     holder.current = previous;
     holder.sensitiveControls = previousControls;
+    holder.choiceHosts = previousHosts;
   }
 }
 
@@ -110,4 +116,15 @@ export function ariaOwner(element: Element): Element | null {
  */
 export function sensitiveControlsIndex(): SensitiveControlsIndex | null {
   return activeOwnerIndex().sensitiveControls;
+}
+
+/**
+ * The extraction's cache of `isSensitiveChoiceHost` by element, or `null`
+ * outside an extraction: a combobox wrapper's verdict walks its whole subtree,
+ * and every node with a choice state below it asks again.
+ *
+ * @internal
+ */
+export function choiceHostsIndex(): WeakMap<Element, boolean> | null {
+  return activeOwnerIndex().choiceHosts;
 }
