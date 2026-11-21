@@ -19,6 +19,16 @@
 
 ## Unreleased
 
+- **A sensitive combobox's popup no longer says which item is chosen by
+  `checked`, `pressed` or `current`.** Chrome's tree dropped only `selected`
+  there, so a payment combobox whose popup is a menu printed
+  `menuitemradio "03/31" {checked}`, and so did an option marked with
+  `aria-checked`, a radio in a dialog popup, and a pressed day button in a date
+  picker. They no longer print a choice state, in Chrome's tree or the TAB view;
+  a checkbox there keeps its own. A menu or radio group now counts as a popup a
+  choice is made in, so a name that reads the chosen item reads `[redacted]`
+  ([#698](https://github.com/real-a11y/real-a11y-dev/pull/698)).
+
 - **A sensitive combobox's popup no longer says which option is chosen.**
   Chrome's tree already dropped `selected` in the listbox a payment or
   credential combobox names in `aria-controls`; it now does the same for one it
