@@ -22,7 +22,6 @@ import { hasAXText, nativeAncestry, nativeAXProperty } from "./ax-node.js";
 import type { RawNativeAXNode } from "./ax-normalize.js";
 import { NATIVE_AX_NAME_SOURCE_ROLES } from "./ax-vocabulary.js";
 import { labelLending, type LabelsOf } from "./labels.js";
-import { sensitivePopupRoots } from "./sensitive-popup.js";
 
 /** One step of Chromium's accessible-name computation, as `getFullAXTree`
  *  reports it on `name.sources`, in accname order. */
@@ -472,36 +471,6 @@ export function givesValueAway<T extends RawAXNameNode>(
   byId: ReadonlyMap<string, T>,
 ): boolean {
   return field.ignored === true || holdsContent(field, byId, false);
-}
-
-/**
- * {@link withholdRegionNames} for a producer's sensitive fields: `fieldIds` are
- * the raw ids of the fields it classified as sensitive (or could not
- * classify). Only a field that {@link givesValueAway} withholds names, and
- * the choice made in such a field's popup ({@link sensitivePopupRoots}).
- * `standIns` stand in for such fields that have no node of their own in the
- * tree ({@link fieldStandIns}), and already give their value away. `labelsOf`
- * is the transport's walk of the document's labels ({@link valueRegions}).
- */
-export function withholdSensitiveFieldNames<T extends RawAXNameNode>(
-  rawNodes: T[],
-  fieldIds: readonly string[],
-  standIns: readonly FieldStandIn[] = [],
-  labelsOf?: LabelsOf,
-): T[] {
-  const index = indexNativeAX(rawNodes);
-  const roots = sensitivePopupRoots(index, fieldIds);
-  for (const id of fieldIds) {
-    const field = index.byId.get(id);
-    if (field && givesValueAway(field, index.byId)) roots.add(id);
-  }
-  for (const { nodeIds } of standIns) {
-    for (const id of nodeIds) if (index.byId.has(id)) roots.add(id);
-  }
-  return withholdRegionNames(
-    rawNodes,
-    valueRegions(index, roots, standIns, labelsOf),
-  );
 }
 
 /** The elements that draw what they hold in their own user-agent shadow root. */

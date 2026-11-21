@@ -33,6 +33,8 @@ const FIELD_RELATIONS: ReadonlySet<string> = new Set(["controls", "owns"]);
  * withholds everything under these ({@link fieldRelationTargets}), and the
  * extension's `controlledRegion` follows them down to the nodes its tree kept.
  * The DOM producer's counterpart is `inSensitiveChoice`.
+ *
+ * @internal
  */
 export function fieldRelationRoots<T extends RawAXNameNode>(
   index: NativeAXIndex<T>,
@@ -52,7 +54,9 @@ export function fieldRelationRoots<T extends RawAXNameNode>(
   return roots;
 }
 
-/** Every raw node at or under {@link fieldRelationRoots}. */
+/** Every raw node at or under {@link fieldRelationRoots}. *
+ * @internal
+ */
 export function fieldRelationTargets<T extends RawAXNameNode>(
   index: NativeAXIndex<T>,
   field: T,
@@ -79,6 +83,8 @@ export function fieldRelationTargets<T extends RawAXNameNode>(
  * `role="combobox"` wrapper that carries `aria-controls` or `aria-owns` for
  * the field inside it, whose own relations are empty. The DOM producer's
  * counterpart is core's `isSensitiveChoiceHost`.
+ *
+ * @internal
  */
 export function sensitiveChoiceHosts<T extends RawAXNameNode>(
   byId: ReadonlyMap<string, T>,
@@ -124,6 +130,8 @@ function holdsChoice<T extends RawAXNameNode>(
  * <ul role="listbox" id="lb">…</ul></label>` is `combobox "Expiry month 03"`.
  * A container with nothing selected lends nothing, as an empty field doesn't
  * ({@link givesValueAway}). Name-region roots, in both native transports.
+ *
+ * @internal
  */
 export function sensitivePopupRoots<T extends RawAXNameNode>(
   index: NativeAXIndex<T>,

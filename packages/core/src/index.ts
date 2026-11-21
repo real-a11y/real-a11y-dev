@@ -198,8 +198,11 @@ export {
   withholdFieldInternalText,
   withholdFieldInternals,
   withholdRegionNames,
-  withholdSensitiveFieldNames,
 } from "./native/value-regions.js";
+export {
+  popupChoiceRegions,
+  withholdSensitiveFieldNames,
+} from "./native/sensitive-names.js";
 export type {
   FieldHostOf,
   FieldStandIn,

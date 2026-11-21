@@ -2228,6 +2228,67 @@ describe("buildNativeTree — sensitive values in states, references and races",
     expect(read()).toEqual(["Expiry month 03", "Pick 03"]);
   });
 
+  it("keeps a popup option's name from its own parts, and withholds one read from outside", () => {
+    // Each option is labelled by a span inside it (React Aria's pattern), and
+    // a button outside is labelled by the chosen option.
+    const raw = popup("controls");
+    for (const [i, option] of raw.slice(3, 5).entries()) {
+      option.childIds = [String(40 + i)];
+      option.properties!.push({
+        name: "labelledby",
+        value: {
+          type: "idrefList",
+          relatedNodes: [{ backendDOMNodeId: 40 + i }],
+        },
+      });
+      raw.push({
+        nodeId: String(40 + i),
+        parentId: option.nodeId,
+        role: { value: "StaticText" },
+        name: { value: String(option.name!.value) },
+        backendDOMNodeId: 40 + i,
+      });
+    }
+    raw[0]!.childIds!.push("50");
+    raw.push({
+      nodeId: "50",
+      parentId: "1",
+      role: { value: "button" },
+      name: { value: "03" },
+      backendDOMNodeId: 50,
+      properties: [
+        {
+          name: "labelledby",
+          value: {
+            type: "idrefList",
+            relatedNodes: [{ backendDOMNodeId: 33 }],
+          },
+        },
+      ],
+    });
+    const tree = buildNativeTree(
+      raw,
+      new Map<number, NativeDomInfo>([
+        [
+          30,
+          domOf("input", { role: "combobox", autocomplete: "cc-exp-month" }),
+        ],
+        [31, domOf("ul", { role: "listbox" })],
+        [32, domOf("li", { role: "option" })],
+        [33, domOf("li", { role: "option" })],
+        [40, domOf("span")],
+        [41, domOf("span")],
+        [50, domOf("button")],
+      ]),
+    );
+    const names = (role: string) =>
+      nodesOf(tree)
+        .filter((n) => n.a11y.role === role)
+        .map((n) => n.a11y.name);
+    expect(names("option")).toEqual(["01", "03"]);
+    expect(names("button")).toEqual(["[redacted]"]);
+  });
+
   it("drops it inside a sensitive list box, which holds no AX value", () => {
     expect(listboxSelectedOf("cc-exp-year")).toEqual([undefined, undefined]);
     expect(listboxSelectedOf()).toEqual([false, true]);

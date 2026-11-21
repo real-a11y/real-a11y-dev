@@ -13,7 +13,7 @@ import {
   holdsUnclassifiedValue,
   indexNativeAX,
   isNativePasswordMask,
-  sensitivePopupRoots,
+  popupChoiceRegions,
   valueRegions,
   withholdFieldInternals,
   withholdRegionNames,
@@ -220,8 +220,8 @@ function fieldSensitivity(
  * Every name-level redaction, applied to the raw nodes before core normalizes
  * them — the only point at which a name still says which node it came from.
  * Sensitive fields always ({@link withholdRegionNames} over
- * {@link fieldSensitivity}), and the choice made in one's popup (over core's
- * `sensitivePopupRoots`: names only, so a field in a panel the field controls
+ * {@link fieldSensitivity}), and the choice made in one's popup (core's
+ * `popupChoiceRegions`: names only, so a field in a panel the field controls
  * keeps its own value); in strict mode, every field value and all editor
  * content too ({@link withholdRegionNames} over {@link strictValueRoots}, then
  * {@link redactEditableContent}). And always, the text a form control draws
@@ -246,10 +246,13 @@ export function prepareRawNodes(
   // Read before any text is blanked: a stand-in counts by what it holds.
   const standIns = fieldStandIns(index, hostOf);
   const sensitivity = fieldSensitivity(rawNodes, index, enrichment, standIns);
-  const popups = sensitivePopupRoots(index, sensitivity.sensitiveFields);
   const named = withholdRegionNames(
     withholdRegionNames(rawNodes, sensitivity.regions),
-    valueRegions(index, popups, [], labelsIn(enrichment)),
+    popupChoiceRegions(
+      index,
+      [...sensitivity.sensitiveFields],
+      labelsIn(enrichment),
+    ),
   );
   // Last: it blanks text runs only, which no step above keeps by identity.
   if (options.redactInput !== true) {

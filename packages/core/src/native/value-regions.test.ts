@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { REDACTED_VALUE } from "../extraction/sensitivity.js";
 
 import { normalizeNativeAX, serializeNativeAX } from "./ax-normalize.js";
+import { withholdSensitiveFieldNames } from "./sensitive-names.js";
 import {
   fieldStandIns,
   ignoreFieldInternalImages,
@@ -11,7 +12,6 @@ import {
   withholdFieldInternals,
   withholdFieldInternalText,
   withholdRegionNames,
-  withholdSensitiveFieldNames,
   type FieldHostOf,
   type RawAXNameNode,
 } from "./value-regions.js";
@@ -96,6 +96,51 @@ describe("withholdSensitiveFieldNames", () => {
     expect(name(popup(true))).toBe(REDACTED_VALUE);
     // A popup with nothing chosen lends nothing.
     expect(name(popup(false))).toBe("Expiry month");
+  });
+
+  it("keeps an option's name from its own parts, and withholds one read from outside", () => {
+    // React Aria's pattern: each option is labelled by a span inside it. That
+    // names the option from its own text, not from which one is chosen. A
+    // button outside labelled by an option may be pointed at the chosen one.
+    const idref = (name: string, id: number) => ({
+      name,
+      value: { type: "idrefList", relatedNodes: [{ backendDOMNodeId: id }] },
+    });
+    const nodes = [
+      raw("1", "RootWebArea", { childIds: ["2", "3", "9"] }),
+      raw("2", "combobox", {
+        parentId: "1",
+        name: { value: "Expiry month" },
+        named: "attribute",
+        properties: [idref("controls", 3)],
+      }),
+      raw("3", "listbox", { parentId: "1", childIds: ["4", "5"] }),
+      ...(["4", "5"] as const).map((id, i) =>
+        raw(id, "option", {
+          parentId: "3",
+          childIds: [String(6 + i)],
+          name: { value: ["January", "March"][i] },
+          named: "relatedElement",
+          properties: [
+            idref("labelledby", 6 + i),
+            { name: "selected", value: { value: id === "5" } },
+          ],
+        }),
+      ),
+      raw("6", "StaticText", { parentId: "4", name: { value: "January" } }),
+      raw("7", "StaticText", { parentId: "5", name: { value: "March" } }),
+      raw("9", "button", {
+        parentId: "1",
+        name: { value: "March" },
+        named: "relatedElement",
+        properties: [idref("labelledby", 5)],
+      }),
+    ];
+    const out = withholdSensitiveFieldNames(nodes, ["2"]);
+    const nameOf = (id: string) =>
+      out.find((n) => n.nodeId === id)?.name?.value;
+    expect([nameOf("4"), nameOf("5")]).toEqual(["January", "March"]);
+    expect(nameOf("9")).toBe(REDACTED_VALUE);
   });
 
   it("withholds a name built from a sensitive field's contents", () => {

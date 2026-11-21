@@ -980,11 +980,12 @@ describe("LiveTreeExtractor", () => {
 
     it("withholds the choice once a field in a wrapper holding the listbox turns sensitive", async () => {
       // No relation: the wrapper holds its listbox as a child, beside the
-      // field. The wrapper is the field's value owner, so it is re-read, with
-      // the listbox, whenever the field is: no full read is needed.
+      // field. The wrapper is re-read with the field, as its value owner, but
+      // the button outside it, named after the listbox's choice, is not.
       document.body.innerHTML =
         `<main><div role="combobox" aria-expanded="true">` +
-        `<input id="m" aria-label="Month" autocomplete="off">${listbox}</div></main>`;
+        `<input id="m" aria-label="Month" autocomplete="off">${listbox}</div>` +
+        `<section><button aria-labelledby="lb"></button></section></main>`;
       const live = new LiveTreeExtractor(document.body, { mode: "dom" });
       live.extract();
       let lastChange: TreeChange | undefined;
@@ -1007,6 +1008,10 @@ describe("LiveTreeExtractor", () => {
         (n) => n.a11y.role === "option",
       );
       expect(option?.a11y.states.selected).toBeUndefined();
+      expect(
+        [...result.nodes.values()].find((n) => n.a11y.role === "button")?.a11y
+          .name,
+      ).toBe("[redacted]");
     });
 
     it("withholds the choice once an element around a sensitive field becomes a combobox", async () => {

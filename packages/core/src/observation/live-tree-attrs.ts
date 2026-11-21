@@ -43,7 +43,7 @@ const FIELD_TAGS: ReadonlySet<string> = new Set([
  * That is a relation a sensitive field (or a combobox around one) gains or
  * loses (`aria-controls`; `aria-owns` is a reference attribute already); a
  * field becoming or ceasing to be sensitive (`autocomplete`, `type`) that
- * has such a relation or sits in a combobox with one; or an element around a
+ * has such a relation or sits in a combobox; or an element around a
  * sensitive field, with a relation, becoming or ceasing to be a combobox
  * (`role`). What the element holds is re-read with it.
  */
@@ -69,7 +69,7 @@ export function movesSensitiveChoice(target: Element, attr: string): boolean {
  * True when adding or removing `subtree` under `parent` moves which choices a
  * sensitive field withholds somewhere else: the subtree holds a sensitive
  * field (or a combobox around one) that controls or owns a popup, or a
- * sensitive field going into or out of a combobox that does. The popup is not in the subtree, so splicing the subtree alone
+ * sensitive field going into or out of a combobox. The popup is not in the subtree, so splicing the subtree alone
  * leaves its choice as it was read. Shadow roots in the subtree count.
  */
 export function bringsSensitivePopup(
@@ -101,17 +101,16 @@ function holdsSensitiveField(element: Element): boolean {
 
 /**
  * Whether `start` or an element above it in the flat tree is a combobox, as
- * the tree reads the role, that names a popup in `aria-controls` or
- * `aria-owns`: the ARIA 1.1 wrapper around a field. One that holds its
- * listbox as a child needs no full read: the wrapper is the value owner of
- * the field inside it (`fieldValueOwner`), so it is re-read, listbox and all,
- * with the field. The climb reads parents through the prototype, so a
- * `<form>` met on the way can't shadow `parentElement` with a control of its
- * own.
+ * the tree reads the role: the ARIA 1.1 wrapper around a field, which names
+ * its listbox in `aria-controls` / `aria-owns` or holds it as a child. Held,
+ * the listbox is re-read with the wrapper, the field's value owner, but a
+ * name elsewhere that references it is not: only a full read reaches that.
+ * The climb reads parents through the prototype, so a `<form>` met on the way
+ * can't shadow `parentElement` with a control of its own.
  */
 function comboboxAtOrAbove(start: Element | null): boolean {
   for (let el = start; el; el = flatParentElement(el)) {
-    if (getExplicitRole(el) === "combobox" && hasPopupRelation(el)) return true;
+    if (getExplicitRole(el) === "combobox") return true;
   }
   return false;
 }
