@@ -645,16 +645,6 @@ export class LiveTreeExtractor {
   }
 
   /**
-   * The climb stops before the root, but a root that is itself a host (an
-   * inspector scoped to a grid row) is named by what changed inside it.
-   */
-  private rootHost(reached: Element | null): Element | null {
-    return reached && reached === this.root && isNameFromContentHost(reached)
-      ? reached
-      : null;
-  }
-
-  /**
    * The outermost name-from-content host whose accessible name is computed from
    * `el`'s content. Nested hosts (`<a><h3>text</h3></a>`) both derive their name
    * from the inner text, so re-extracting only the innermost would leave the
@@ -672,7 +662,6 @@ export class LiveTreeExtractor {
     let outermostHost: Element | null = null;
     while (
       node &&
-      node !== this.root &&
       node !== this.root.ownerDocument?.body &&
       node !== this.root.ownerDocument?.documentElement
     ) {
@@ -696,9 +685,12 @@ export class LiveTreeExtractor {
       // re-extracted; when no host encloses it, the fall back to `el` keeps the
       // dirty region exactly as narrow as before.
       if (!owner && node !== el && closesName(node)) break;
+      // The root itself may be the host (an inspector scoped to a grid row),
+      // but nothing above it is in scope.
+      if (node === this.root) break;
       node = safeParentElement(node);
     }
-    return this.rootHost(node) ?? outermostHost ?? el;
+    return outermostHost ?? el;
   }
 
   private expandDependencies(dirty: Set<Element>): void {
