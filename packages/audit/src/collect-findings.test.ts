@@ -38,6 +38,11 @@ describe("collectFindings — no-unlabeled-interactive", () => {
     expect(collectFindings(root, ["no-unlabeled-interactive"])).toEqual([]);
   });
 
+  it("passes a button whose label is laid out as a list", () => {
+    const root = mount(`<button><ul><li>One</li></ul></button>`);
+    expect(collectFindings(root, ["no-unlabeled-interactive"])).toEqual([]);
+  });
+
   it("reports every offender, not just the first", () => {
     const root = mount(`<button></button><a href="#"></a>`);
     const findings = collectFindings(root, ["no-unlabeled-interactive"]);

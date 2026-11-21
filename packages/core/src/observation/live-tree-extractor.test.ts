@@ -1362,7 +1362,7 @@ describe("LiveTreeExtractor", () => {
     // computed name. The post-mutation role would stop the ancestor climb at
     // the span, so the enclosing button must still be re-extracted.
     const span = document.querySelector("span")!;
-    span.setAttribute("role", "list");
+    span.setAttribute("role", "group");
 
     await vi.advanceTimersByTimeAsync(100);
 
@@ -1378,6 +1378,74 @@ describe("LiveTreeExtractor", () => {
     expect(button?.a11y.name).not.toBe("Save");
 
     observer.stop();
+  });
+
+  describe("a name read through a list, a tooltip or a grid row", () => {
+    // Each case mutates once, refreshes, and demands what a full extraction
+    // gives, then checks the name that should have followed the change.
+    const refreshAfter = async (html: string, mutate: () => void) => {
+      document.body.innerHTML = html;
+      const live = new LiveTreeExtractor(document.body, { mode: "a11y" });
+      live.extract();
+      let lastChange: TreeChange | undefined;
+      const observer = new DomObserver(
+        document.body,
+        (change) => {
+          lastChange = change;
+        },
+        50,
+      );
+      observer.start();
+      mutate();
+      await vi.advanceTimersByTimeAsync(100);
+      const result = live.refresh(lastChange);
+      observer.stop();
+      expect(result.nodes).toEqual(extractA11yTree(document.body).nodes);
+      return result;
+    };
+    const nameOfRole = (
+      result: ReturnType<LiveTreeExtractor["refresh"]>,
+      role: string,
+    ) =>
+      [...result.nodes.values()].find((n) => n.a11y.role === role)?.a11y.name;
+
+    it("follows a list item's text inside a button", async () => {
+      const result = await refreshAfter(
+        `<main><button><ul><li>One</li></ul></button></main>`,
+        () => {
+          document.querySelector("li")!.textContent = "Two";
+        },
+      );
+      expect(nameOfRole(result, "button")).toBe("Two");
+    });
+
+    it("follows a tooltip gaining text inside a button", async () => {
+      const result = await refreshAfter(
+        `<main><button>Save<span role="tooltip"></span></button></main>`,
+        () => {
+          document.querySelector('[role="tooltip"]')!.textContent = "Tip";
+        },
+      );
+      expect(nameOfRole(result, "button")).toBe("SaveTip");
+    });
+
+    it("names a row when its table gains role=grid, and drops it when it loses it", async () => {
+      const result = await refreshAfter(
+        `<main><table><tbody><tr><td>A</td><td>B</td></tr></tbody></table></main>`,
+        () => {
+          document.querySelector("table")!.setAttribute("role", "grid");
+        },
+      );
+      expect(nameOfRole(result, "row")).toBe("A B");
+
+      const removed = await refreshAfter(
+        `<main><table role="grid"><tbody><tr><td>A</td><td>B</td></tr></tbody></table></main>`,
+        () => {
+          document.querySelector("table")!.removeAttribute("role");
+        },
+      );
+      expect(nameOfRole(removed, "row")).toBe("");
+    });
   });
 
   it("updates a name host when a name-barrier child stops rendering a box", async () => {
