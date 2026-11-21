@@ -16,7 +16,7 @@ import {
   flatParentElement,
   idScope,
 } from "./flat-tree.js";
-import { getExplicitRole } from "./role-map.js";
+import { getExplicitRole, getImplicitRole } from "./role-map.js";
 import { isSensitiveField, POPUP_CHOICE_ROLES } from "./sensitivity.js";
 
 /**
@@ -130,4 +130,75 @@ export function lendsSensitiveChoice(element: Element, role: string): boolean {
     POPUP_CHOICE_ROLES.has(role) &&
     (controlledBySensitiveField(element) || inSensitiveChoice(element))
   );
+}
+
+/** Some node in `container` is chosen: `aria-selected`, or a selected option. */
+function holdsChoice(container: Element): boolean {
+  return Array.from(
+    safeQuerySelectorAll(container, "[aria-selected], option"),
+  ).some((el) => {
+    const selected = safeGetAttribute(el, "aria-selected");
+    return selected !== null
+      ? selected.trim().toLowerCase() === "true"
+      : (el as HTMLOptionElement).selected === true;
+  });
+}
+
+/** `element` is a sensitive field's popup with a choice made in it. */
+function isSensitivePopup(element: Element): boolean {
+  const role = getImplicitRole(element);
+  return (
+    POPUP_CHOICE_ROLES.has(role) &&
+    lendsSensitiveChoice(element, role) &&
+    holdsChoice(element)
+  );
+}
+
+/** The nearest choice container at or above `element`, if a sensitive popup. */
+function sensitivePopupAt(element: Element): Element | null {
+  for (let el: Element | null = element; el; el = flatParentElement(el)) {
+    if (POPUP_CHOICE_ROLES.has(getImplicitRole(el))) {
+      return isSensitivePopup(el) ? el : null;
+    }
+  }
+  return null;
+}
+
+/** `node` is `ancestor` or sits below it in the flat tree. */
+function isWithin(node: Element, ancestor: Element): boolean {
+  for (let el: Element | null = node; el; el = flatParentElement(el)) {
+    if (el === ancestor) return true;
+  }
+  return false;
+}
+
+/**
+ * True when `referrer`'s reference to `target` (`aria-labelledby` or
+ * `aria-describedby`) reads the choice made in a sensitive field's popup: the
+ * target is such a popup or sits in one. Its name then reads `[redacted]`,
+ * its description is dropped. A reference from outside counts even to one
+ * option: the page may point it at the chosen one (a combobox labelled by its
+ * selected option). One is exempt: a node inside the popup, not the popup
+ * itself, NAMED from a plain part of itself, as an option labelled by its own
+ * span is, reads its own text. A description never is: one only the chosen
+ * option carries (a hidden "selected" span) would say which it is. A second
+ * sensitive popup inside the exempt part still withholds its own choice as
+ * the part is read: it lends it as an embedded control
+ * ({@link lendsSensitiveChoice}). The native producers' counterpart is core's
+ * `popupChoiceRegions`.
+ */
+export function readsSensitivePopup(
+  referrer: Element,
+  target: Element,
+  property: "labelledby" | "describedby",
+): boolean {
+  const popup = sensitivePopupAt(target);
+  if (!popup) return false;
+  const ownPart =
+    property === "labelledby" &&
+    referrer !== popup &&
+    target !== popup &&
+    isWithin(target, referrer) &&
+    sensitivePopupAt(referrer) === popup;
+  return !ownPart;
 }

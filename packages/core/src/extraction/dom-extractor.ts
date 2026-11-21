@@ -10,6 +10,7 @@ import { withAriaOwnerIndex } from "./aria-owner.js";
 import { getAriaStates } from "./aria-states.js";
 import { isAriaHiddenValue } from "./aria-tokens.js";
 import { AUTHOR_NAMED_ROLES } from "./author-named-roles.js";
+import { readsSensitivePopup } from "./choice-withholding.js";
 import {
   safeGetAttribute,
   safeGetElementById,
@@ -27,6 +28,7 @@ import {
   getDescendantText,
   lendsValueOnly,
   MEDIA_TAGS,
+  TEXT_INPUT_TYPES,
 } from "./field-text.js";
 import { flatChildNodes, flatChildren, idScope } from "./flat-tree.js";
 import { isFocusable } from "./focusability.js";
@@ -130,23 +132,6 @@ const SKIP_TAGS = new Set([
  * closed shadow root no light-DOM extractor can reach.
  */
 
-/** Input types that accept text entry */
-const TEXT_INPUT_TYPES = new Set([
-  "text",
-  "email",
-  "password",
-  "tel",
-  "url",
-  "search",
-  "number",
-  "date",
-  "time",
-  "datetime-local",
-  "month",
-  "week",
-  "color",
-]);
-
 /**
  * Compute the accessible description for an element.
  * Resolves aria-describedby IDs to text and falls back to aria-description.
@@ -176,7 +161,12 @@ function computeAccessibleDescription(
         // irreversible</span>` as "Warning irreversible".
         const run = newNameRun(redactInput);
         const text = referenceText(target, run, styleCache);
-        if (run.withheld) withheld = true;
+        if (
+          run.withheld ||
+          readsSensitivePopup(element, target, "describedby")
+        ) {
+          withheld = true;
+        }
         return text;
       })
       .filter((t): t is string => !!t);
@@ -413,7 +403,10 @@ function labelledByText(
     .split(/\s+/)
     .map((id) => {
       const target = safeGetElementById(doc, id);
-      return target ? referenceText(target, run, styleCache) : "";
+      if (!target) return "";
+      if (readsSensitivePopup(element, target, "labelledby"))
+        return withhold(run);
+      return referenceText(target, run, styleCache);
     })
     .filter(Boolean)
     .join(" ");

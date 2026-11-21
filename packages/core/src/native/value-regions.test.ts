@@ -126,7 +126,8 @@ describe("withholdSensitiveFieldNames", () => {
       ...(["4", "5"] as const).map((id, i) =>
         raw(id, "option", {
           parentId: "3",
-          childIds: [String(6 + i)],
+          // As Chromium sends it, the hidden span is an ignored child.
+          childIds: id === "5" ? ["7", "10"] : [String(6 + i)],
           name: { value: ["January", "March"][i] },
           named: "relatedElement",
           // The chosen one is described by a hidden span inside it, too.
@@ -140,7 +141,7 @@ describe("withholdSensitiveFieldNames", () => {
       ),
       raw("6", "StaticText", { parentId: "4", name: { value: "January" } }),
       raw("7", "StaticText", { parentId: "5", name: { value: "March" } }),
-      raw("10", "StaticText", { parentId: "5", name: { value: "selected" } }),
+      raw("10", "none", { parentId: "5", ignored: true }),
       raw("9", "button", {
         parentId: "1",
         name: { value: "March" },

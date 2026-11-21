@@ -271,6 +271,71 @@ describe("the choice a sensitive field holds", () => {
       ).toEqual([["checkbox", "Ship to Spain"]]);
     });
 
+    /** Each option's name and description, in document order. */
+    const optionsOf = (html: string): Array<[string, string | undefined]> => {
+      document.body.innerHTML = html;
+      return [...extractDomTree(document.body).nodes.values()]
+        .filter((n) => n.a11y.role === "option")
+        .map((n) => [n.a11y.name, n.a11y.description || undefined]);
+    };
+    const field = (attrs: string) =>
+      `<span id="lab">Expiry</span>` +
+      `<input role="combobox" aria-expanded="true" aria-controls="lb" ${attrs}>`;
+
+    it("is withheld from a description the chosen option takes from inside the popup", () => {
+      // A hidden "selected" span only the chosen option carries.
+      const popup =
+        `<ul role="listbox" id="lb" aria-label="Months">` +
+        `<li role="option" aria-selected="false">01</li>` +
+        `<li role="option" aria-selected="true" aria-describedby="d3">03` +
+        `<span id="d3" hidden>selected</span></li></ul>`;
+      expect(
+        optionsOf(
+          field('autocomplete="cc-exp-month" aria-label="Month"') + popup,
+        ),
+      ).toEqual([
+        ["01", undefined],
+        ["03", undefined],
+      ]);
+      expect(optionsOf(field('aria-label="Color"') + popup)).toEqual([
+        ["01", undefined],
+        ["03", "selected"],
+      ]);
+    });
+
+    it("is withheld from a name read from the chosen option outside the popup", () => {
+      const popup =
+        `<ul role="listbox" id="lb" aria-label="Months">` +
+        `<li role="option" id="o3" aria-selected="true">03</li></ul>`;
+      expect(
+        namesOf(
+          field('autocomplete="cc-exp-month" aria-labelledby="lab o3"') + popup,
+          ["combobox"],
+        ),
+      ).toEqual([["combobox", "[redacted]"]]);
+      expect(
+        namesOf(field('aria-labelledby="lab o3"') + popup, ["combobox"]),
+      ).toEqual([["combobox", "Expiry 03"]]);
+    });
+
+    it("keeps an option's name from its own span, but not from a popup inside it", () => {
+      // React Aria labels each option by a span inside it. The last span
+      // holds a second sensitive field's popup (the field is outside), whose
+      // choice it would read.
+      expect(
+        optionsOf(
+          field('autocomplete="cc-exp-month" aria-label="Month"') +
+            `<ul role="listbox" id="lb" aria-label="Months">` +
+            `<li role="option" aria-selected="false" aria-labelledby="s1"><span id="s1">January</span></li>` +
+            `<li role="option" aria-selected="true" aria-labelledby="s3"><span id="s3">March</span></li>` +
+            `<li role="option" aria-selected="false" aria-labelledby="s9"><span id="s9">` +
+            `<span role="listbox" id="lb2" aria-label="Cards">` +
+            `<span role="option" aria-selected="true">Visa 1111</span></span></span></li></ul>` +
+            `<input role="combobox" aria-label="Card" autocomplete="cc-number" aria-controls="lb2">`,
+        ).map(([name]) => name),
+      ).toEqual(["January", "March", "[redacted]", "Visa 1111"]);
+    });
+
     it("is kept when nothing is chosen, or the field is ordinary", () => {
       expect(
         namesOf(

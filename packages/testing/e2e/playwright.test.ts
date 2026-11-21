@@ -100,7 +100,10 @@ test.describe("good fixture", () => {
         combobox(
           "Month",
           'autocomplete="cc-exp-month" aria-controls="Month-list"',
-          '<li role="option" aria-selected="false">01</li><li role="option" aria-selected="true">03</li>',
+          // A hidden "selected" description only the chosen option carries.
+          '<li role="option" aria-selected="false">01</li>' +
+            '<li role="option" aria-selected="true" aria-describedby="month-sel">03' +
+            '<span id="month-sel" hidden>selected</span></li>',
         ) +
         combobox(
           "Year",

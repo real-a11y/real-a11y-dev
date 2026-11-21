@@ -636,7 +636,10 @@ describe("the states block (built bin)", () => {
           "Month",
           'autocomplete="cc-exp-month" aria-controls="Month-list"',
           true,
-          option("01", false) + option("03", true),
+          // A hidden "selected" description only the chosen option carries.
+          option("01", false) +
+            '<li role="option" aria-selected="true" aria-describedby="month-sel">03' +
+            '<span id="month-sel" hidden>selected</span></li>',
         ) +
         combobox(
           "Year",
