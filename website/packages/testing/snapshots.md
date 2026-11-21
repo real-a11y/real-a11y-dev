@@ -89,7 +89,7 @@ form "Checkout"
 ```
 
 - **What the value is.** A text field's or editor's text, a `<select>`'s selected option **label** (`"Spain"`, not its `value="es"`), and a range widget's `aria-valuetext` (else `aria-valuenow`). Checkboxes and radios carry none; their `checked` state prints in the states block (see [What a line carries](#what-a-line-carries)). Whitespace collapses, and a value is capped at 240 characters.
-- **Sensitive fields never print.** A `type="password"` field, or one whose `autocomplete` names a credential or payment field (`current-password`, `new-password`, `one-time-code`, `cc-number`, `cc-csc`, `cc-exp*`), prints `"[redacted]"` when it holds anything.
+- **Sensitive fields never print.** A `type="password"` field, or one whose `autocomplete` names a credential or payment field (`current-password`, `new-password`, `one-time-code`, `cc-number`, `cc-csc`, `cc-exp*`), prints `"[redacted]"` when it holds anything. Nor does any line say which choice it holds: an option inside a sensitive field, or in its popup (a listbox it controls with `aria-controls`, owns with `aria-owns` or points `aria-activedescendant` into, or one a combobox around it holds), carries no `selected`, and nothing in such a popup carries a description.
 - **Off by default.** A committed snapshot only changes when you ask for values. `redact` patterns apply to values as they do to names.
 
 The value lives on the node as `a11y.value`, so a custom assertion can read it directly.

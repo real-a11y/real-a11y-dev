@@ -97,7 +97,9 @@ A field shows what it holds, the way a screen reader announces it —
 `inspect_page`, `list_elements`, `get_tab_order` and `diff_tree`, so an agent
 can confirm what `type_text` landed. A field whose markup marks it secret
 (`type="password"`, a credential or payment `autocomplete`) reads `[redacted]`:
-never its text, never its length. Findings checkpoints leave values out unless
+never its text, never its length, and no option in it or in its popup (a listbox
+it controls, owns or points `aria-activedescendant` into, or one a combobox
+around it holds) says which is selected. Findings checkpoints leave values out unless
 `checkpoint_findings` and `export_checkpoint` are both passed `values: true`.
 Start the server with `REAL_A11Y_REDACT_INPUT=1` to keep every field value and
 all rich-text editor content out of every read built on this tree — inside a

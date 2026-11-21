@@ -33,6 +33,8 @@ import {
   isDatalistCombobox,
   resolveRoleToken,
   selectRoleFromAttributes,
+  withAriaOwnerIndex,
+  withholdsState,
 } from "@real-a11y-dev/core";
 import {
   extract,
@@ -265,6 +267,27 @@ function discardedRoleOf(n: SemanticNode): string | undefined {
   return resolved ?? authored;
 }
 
+/** The roles the validator requires `aria-selected` on. */
+const SELECTION_ROLES: ReadonlySet<string> = new Set(["option", "treeitem"]);
+
+/**
+ * `aria-selected` where the tree withholds `selected`: in a sensitive field's
+ * popup (core's `withholdsState`), whatever the author wrote is not the tree's
+ * to report. Asking whether it is there would also say which option is chosen,
+ * by elimination, when only the chosen one carries it, and the finding lands
+ * in CI logs. So it counts as supplied, as a user agent's own would.
+ */
+function withheldSuppliedAttrs(
+  element: Element | undefined,
+  role: string,
+): readonly string[] {
+  return element &&
+    SELECTION_ROLES.has(role) &&
+    withholdsState(element, role, "selected", false)
+    ? ["aria-selected"]
+    : [];
+}
+
 /** `focusable` for the validator, omitted when the producer recorded no
  *  interaction facet so its fail-open default applies. */
 function focusableOf(n: SemanticNode): { focusable?: boolean } {
@@ -286,6 +309,7 @@ function toValidatedNode(
   // appear — an authored combobox or slider was unsatisfiable no matter what
   // the author wrote. Fill from the recorded attributes, without letting them
   // override a computed state.
+  const element = getElementRefs().get(n.id);
   for (const [k, v] of Object.entries(domAttrs)) {
     if (k.startsWith("aria-") && attrs[k] === undefined) attrs[k] = v;
   }
@@ -310,7 +334,10 @@ function toValidatedNode(
       !authored ||
       (resolveRoleToken(authored) ?? authored) ===
         implicitRoleFor(tag, type, domAttrs),
-    uaSuppliedAttrs: uaSuppliedAttrs(tag, type, getElementRefs().get(n.id)),
+    uaSuppliedAttrs: [
+      ...uaSuppliedAttrs(tag, type, element),
+      ...withheldSuppliedAttrs(element, n.a11y.role),
+    ],
     // Left out when the producer recorded no interaction facet, so the
     // validator's fail-open default applies.
     ...focusableOf(n),
@@ -359,11 +386,17 @@ function toBeValidA11yTree(received: unknown): MatcherResult {
   // view still holds the nodes it folded away.
   const dom = extract(received, "dom");
   const a11y = buildA11yTree(dom.nodes, dom.rootId, dom.focusedId);
-  const nodes = toValidatedNodes(a11y);
+  // One set of per-extraction indexes for the conversion, which asks of
+  // each option whether the tree withheld its state (withheldSuppliedAttrs):
+  // a page with no sensitive field then answers once.
+  const { nodes, folded } = withAriaOwnerIndex(() => ({
+    nodes: toValidatedNodes(a11y),
+    folded: foldedDiscards(dom, a11y),
+  }));
   const label = (n: ValidatedNode) =>
     n.name ? `${n.role} "${n.name}"` : n.role;
   const errors: string[] = [];
-  for (const node of [...nodes.values(), ...foldedDiscards(dom, a11y)]) {
+  for (const node of [...nodes.values(), ...folded]) {
     for (const issue of validateNode(node, nodes)) {
       if (issue.severity === "error")
         errors.push(`${label(node)} — ${issue.message}`);

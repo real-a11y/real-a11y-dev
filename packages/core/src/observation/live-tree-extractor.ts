@@ -1,4 +1,5 @@
 import { buildA11yTree } from "../extraction/a11y-extractor.js";
+import { withAriaOwnerIndex } from "../extraction/aria-owner.js";
 import {
   safeContains,
   safeGetAttribute,
@@ -33,6 +34,8 @@ import { warnOutsideProduction } from "../utils/warn.js";
 import {
   forcesFullExtraction,
   IMAGE_RENDERING_ATTRS,
+  bringsSensitivePopup,
+  movesSensitiveChoice,
   SCOPE_ATTRS,
 } from "./live-tree-attrs.js";
 import {
@@ -115,10 +118,14 @@ export class LiveTreeExtractor {
       redactInput: this.redactInput,
     });
     this.adoptResult(result);
-    // Strict mode's withheld choices, as this extraction read them.
-    if (this.redactInput) {
-      addMovedNativeStates(this.domNodes, true, this.choices, new Set());
-    }
+    // The withheld choices, as this extraction read them: a sensitive
+    // field's always, and in strict mode every choice field's.
+    addMovedNativeStates(
+      this.domNodes,
+      this.redactInput,
+      this.choices,
+      new Set(),
+    );
     return this.currentResult();
   }
 
@@ -156,7 +163,9 @@ export class LiveTreeExtractor {
     // `extract()` rebuilds every piece of state the splice may have left half
     // updated.
     try {
-      return this.splice(change);
+      // One set of per-extraction indexes for the batch's decisions, which
+      // can ask about the same sensitive fields once per mutation.
+      return withAriaOwnerIndex(() => this.splice(change));
     } catch (error) {
       // Once per extractor: a page that trips this does so on every refresh
       // near that form, and the gate cannot tell production apart in a browser.
@@ -211,7 +220,10 @@ export class LiveTreeExtractor {
         } else if (m.type === "attributes") {
           const target = m.target as Element;
           const attr = m.attributeName ?? "";
-          if (forcesFullExtraction(attr, this.redactInput)) {
+          if (
+            forcesFullExtraction(attr, this.redactInput) ||
+            movesSensitiveChoice(target, attr, m.oldValue)
+          ) {
             needsFull = true;
             break;
           }
@@ -578,6 +590,11 @@ export class LiveTreeExtractor {
       if (safeMatches(el, "img[usemap]") || el.querySelector("img[usemap]")) {
         return true;
       }
+
+      // A sensitive field's popup is not its descendant, so a field (or a
+      // combobox around one) arriving or leaving with a relation moves which
+      // choices are withheld outside this subtree.
+      if (bringsSensitivePopup(el, target)) return true;
 
       // The id a referrer points at (or a reference attribute) may live on a
       // descendant of the added/removed node, not just the node itself, so

@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { REDACTED_VALUE } from "../extraction/sensitivity.js";
 
 import { normalizeNativeAX, serializeNativeAX } from "./ax-normalize.js";
+import { withholdSensitiveFieldNames } from "./sensitive-names.js";
 import {
   fieldStandIns,
   ignoreFieldInternalImages,
@@ -11,7 +12,6 @@ import {
   withholdFieldInternals,
   withholdFieldInternalText,
   withholdRegionNames,
-  withholdSensitiveFieldNames,
   type FieldHostOf,
   type RawAXNameNode,
 } from "./value-regions.js";
@@ -55,6 +55,148 @@ describe("withholdSensitiveFieldNames", () => {
       value: { value: "4111111111111111" },
     }),
   ];
+
+  it("withholds a name read from a sensitive combobox's popup choice", () => {
+    // <label>Expiry month <input role="combobox" autocomplete="cc-exp-month"
+    // aria-controls="lb"> <ul role="listbox" id="lb">…</ul></label>: the
+    // label lends the listbox's chosen option, though the field is empty.
+    const popup = (chosen: boolean) => [
+      raw("1", "LabelText", { childIds: ["2", "3"] }),
+      raw("2", "combobox", {
+        parentId: "1",
+        name: { value: chosen ? "Expiry month 03" : "Expiry month" },
+        named: "relatedElement",
+        properties: [
+          {
+            name: "labelledby",
+            value: {
+              type: "idrefList",
+              relatedNodes: [{ backendDOMNodeId: 1 }],
+            },
+          },
+          {
+            name: "controls",
+            value: {
+              type: "idrefList",
+              relatedNodes: [{ backendDOMNodeId: 3 }],
+            },
+          },
+        ],
+      }),
+      raw("3", "listbox", { parentId: "1", childIds: ["4"] }),
+      raw("4", "option", {
+        parentId: "3",
+        name: { value: "03" },
+        named: "contents",
+        properties: [{ name: "selected", value: { value: chosen } }],
+      }),
+    ];
+    const name = (nodes: RawAXNameNode[]) =>
+      withholdSensitiveFieldNames(nodes, ["2"])[1]!.name?.value;
+    expect(name(popup(true))).toBe(REDACTED_VALUE);
+    // A popup with nothing chosen lends nothing.
+    expect(name(popup(false))).toBe("Expiry month");
+  });
+
+  it("keeps an option's name from its own parts, and withholds one read from outside", () => {
+    // React Aria's pattern: each option is labelled by a span inside it. That
+    // names the option from its own text, not from which one is chosen. A
+    // button outside labelled by an option may be pointed at the chosen one.
+    const idref = (name: string, id: number) => ({
+      name,
+      value: { type: "idrefList", relatedNodes: [{ backendDOMNodeId: id }] },
+    });
+    const nodes = [
+      raw("1", "RootWebArea", { childIds: ["2", "3", "9"] }),
+      raw("2", "combobox", {
+        parentId: "1",
+        name: { value: "Expiry month" },
+        named: "attribute",
+        properties: [idref("controls", 3)],
+      }),
+      // Captioned from inside itself, as a date grid shows the chosen month.
+      raw("3", "listbox", {
+        parentId: "1",
+        childIds: ["8", "4", "5"],
+        name: { value: "March" },
+        named: "relatedElement",
+        properties: [idref("labelledby", 8)],
+      }),
+      raw("8", "StaticText", { parentId: "3", name: { value: "March" } }),
+      ...(["4", "5"] as const).map((id, i) =>
+        raw(id, "option", {
+          parentId: "3",
+          // As Chromium sends it, the hidden span is an ignored child.
+          childIds: id === "5" ? ["7", "10"] : [String(6 + i)],
+          name: { value: ["January", "March"][i] },
+          named: "relatedElement",
+          // The chosen one is described by a hidden span inside it, too; the
+          // other by `aria-description`, which references nothing.
+          description: { value: id === "5" ? "selected" : "January hint" },
+          properties: [
+            idref("labelledby", 6 + i),
+            ...(id === "5" ? [idref("describedby", 10)] : []),
+            { name: "selected", value: { value: id === "5" } },
+          ],
+        }),
+      ),
+      raw("6", "StaticText", { parentId: "4", name: { value: "January" } }),
+      raw("7", "StaticText", { parentId: "5", name: { value: "March" } }),
+      raw("10", "none", { parentId: "5", ignored: true }),
+      raw("9", "button", {
+        parentId: "1",
+        name: { value: "March" },
+        named: "relatedElement",
+        properties: [idref("labelledby", 5)],
+      }),
+    ];
+    const out = withholdSensitiveFieldNames(nodes, ["2"]);
+    const nameOf = (id: string) =>
+      out.find((n) => n.nodeId === id)?.name?.value;
+    expect([nameOf("4"), nameOf("5")]).toEqual(["January", "March"]);
+    expect(nameOf("9")).toBe(REDACTED_VALUE);
+    expect(nameOf("3")).toBe(REDACTED_VALUE);
+    expect(out.find((n) => n.nodeId === "5")?.description).toBeUndefined();
+    expect(out.find((n) => n.nodeId === "4")?.description).toBeUndefined();
+  });
+
+  it("withholds an option's name read from another sensitive popup inside it", () => {
+    // The outer option is labelled by its own span, but that span holds a
+    // second sensitive field's popup, whose choice the label would read.
+    const idref = (name: string, id: number) => ({
+      name,
+      value: { type: "idrefList", relatedNodes: [{ backendDOMNodeId: id }] },
+    });
+    const nodes = [
+      raw("1", "RootWebArea", { childIds: ["2", "3", "20"] }),
+      raw("2", "combobox", {
+        parentId: "1",
+        properties: [idref("controls", 3)],
+      }),
+      raw("3", "listbox", { parentId: "1", childIds: ["4"] }),
+      raw("4", "option", {
+        parentId: "3",
+        childIds: ["5"],
+        name: { value: "Visa 1111" },
+        named: "relatedElement",
+        properties: [idref("labelledby", 5)],
+      }),
+      raw("5", "generic", { parentId: "4", childIds: ["21"] }),
+      raw("21", "listbox", { parentId: "5", childIds: ["22"] }),
+      raw("22", "option", {
+        parentId: "21",
+        name: { value: "Visa 1111" },
+        named: "contents",
+        properties: [{ name: "selected", value: { value: true } }],
+      }),
+      raw("20", "combobox", {
+        parentId: "1",
+        properties: [idref("controls", 21)],
+      }),
+    ];
+    const out = withholdSensitiveFieldNames(nodes, ["2", "20"]);
+    expect(out.find((n) => n.nodeId === "4")?.name?.value).toBe(REDACTED_VALUE);
+  });
 
   it("withholds a name built from a sensitive field's contents", () => {
     const out = withholdSensitiveFieldNames(cell(), ["2"]);
@@ -258,7 +400,7 @@ describe("withholdSensitiveFieldNames", () => {
       nodes,
       [],
       [{ ...standIn, host: undefined }],
-      () => [],
+      { labelsOf: () => [] },
     );
     expect(unnamed[3].name?.value).toBe("4111111111111111");
     // With no walk to say what labels the input, a reference to it fails
@@ -647,13 +789,15 @@ describe("a control that lends a value through its labels", () => {
     const nodes = page({ role: { value: "none" }, ignored: true });
     delete nodes[3]!.name;
     delete nodes[3]!.properties;
-    const labelled = withholdSensitiveFieldNames(nodes, ["3"], [], (id) =>
-      id === 4 ? [1] : [],
-    );
+    const labelled = withholdSensitiveFieldNames(nodes, ["3"], [], {
+      labelsOf: (id) => (id === 4 ? [1] : []),
+    });
     expect(labelled[4].name?.value).toBe(REDACTED_VALUE);
     expect(labelled[5].description).toBeUndefined();
     // The walk found no label for it: nothing to lend.
-    const unlabelled = withholdSensitiveFieldNames(nodes, ["3"], [], () => []);
+    const unlabelled = withholdSensitiveFieldNames(nodes, ["3"], [], {
+      labelsOf: () => [],
+    });
     expect(unlabelled[4].name?.value).toBe("Code 482913");
     // Nothing says: a reference to it fails closed, a walk that saw every
     // other element (the page added the checkbox since) included.
@@ -662,7 +806,7 @@ describe("a control that lends a value through its labels", () => {
       () => undefined,
       (id: number) => (id === 4 ? undefined : []),
     ]) {
-      const out = withholdSensitiveFieldNames(nodes, ["3"], [], labelsOf);
+      const out = withholdSensitiveFieldNames(nodes, ["3"], [], { labelsOf });
       expect(out[4].name?.value).toBe(REDACTED_VALUE);
       expect(out[5].description).toBeUndefined();
     }
@@ -680,9 +824,9 @@ describe("a control that lends a value through its labels", () => {
     ];
     delete nodes[3]!.name;
     delete nodes[3]!.properties;
-    const out = withholdSensitiveFieldNames(nodes, ["3"], [], (id) =>
-      id === 4 ? [1] : [],
-    );
+    const out = withholdSensitiveFieldNames(nodes, ["3"], [], {
+      labelsOf: (id) => (id === 4 ? [1] : []),
+    });
     expect(out[6].name?.value).toBe("Row");
     // A reference to it still reads its label.
     expect(out[4].name?.value).toBe(REDACTED_VALUE);
@@ -712,9 +856,9 @@ describe("a control that lends a value through its labels", () => {
     ];
     delete nodes[3]!.name;
     delete nodes[3]!.properties;
-    const out = withholdSensitiveFieldNames(nodes, ["3"], [], (id) =>
-      id === 4 ? [1] : [],
-    );
+    const out = withholdSensitiveFieldNames(nodes, ["3"], [], {
+      labelsOf: (id) => (id === 4 ? [1] : []),
+    });
     expect(out[7].name?.value).toBe("Pick");
     expect(out[7].description?.value).toBe("Pick");
   });
@@ -742,9 +886,9 @@ describe("a control that lends a value through its labels", () => {
     ];
     delete nodes[3]!.name;
     delete nodes[3]!.properties;
-    const out = withholdSensitiveFieldNames(nodes, ["3"], [], (id) =>
-      id === 4 ? [1] : [],
-    );
+    const out = withholdSensitiveFieldNames(nodes, ["3"], [], {
+      labelsOf: (id) => (id === 4 ? [1] : []),
+    });
     expect(out[7].name?.value).toBe(REDACTED_VALUE);
   });
 

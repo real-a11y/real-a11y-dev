@@ -13,11 +13,16 @@ import { trimAscii } from "../utils/ascii-whitespace.js";
 
 import { ariaOwner } from "./aria-owner.js";
 import {
+  inSensitiveChoice,
+  lendsSensitiveChoice,
+} from "./choice-withholding.js";
+import {
   safeOwnerDocument,
   safeParentElement,
   safeTagName,
 } from "./clobber-safe.js";
 import { isEditable } from "./editing.js";
+import { PAGE_STATE_VALUE_ROLES } from "./field-text.js";
 import { flatParentElement } from "./flat-tree.js";
 import { getImplicitRole } from "./role-map.js";
 import { holdsEnteredValue } from "./sensitivity.js";
@@ -213,18 +218,41 @@ export function withheldAttributes(element: Element): ReadonlySet<string> {
 const EDITOR_CONTENT_ATTRIBUTES = ["href", "src", "poster", "id"];
 
 /**
- * True when strict mode keeps `state` off the node of `element`: an option's
- * `selected`, inside a choice field, since it says what the field's withheld
- * value is. The native producer drops the same option states. One rule for
- * {@link withholdStates} and the live extractor's check for states that
- * moved, which would otherwise see the missing state as a change.
+ * True when `state` is kept off the node of `element`, since it says what a
+ * withheld value is. Always: a `selected` inside a sensitive field, or inside
+ * what one controls or owns ({@link inSensitiveChoice}). In strict mode also:
+ * an option's `selected` inside any choice field. The native producers drop
+ * the same states. One rule for {@link withholdStates} and the live
+ * extractor's check for states that moved, which would otherwise see the
+ * missing state as a change.
  */
 export function withholdsState(
   element: Element,
   role: string,
   state: string,
+  redactInput: boolean,
 ): boolean {
-  return state === "selected" && role === "option" && inChoiceField(element);
+  if (state !== "selected") return false;
+  if (redactInput && role === "option" && inChoiceField(element)) return true;
+  return inSensitiveChoice(element);
+}
+
+/**
+ * True when the value or choice `element` (in `role`) lends a name built
+ * around it is withheld. Always: a sensitive field's, and the choice in one's
+ * popup ({@link lendsSensitiveChoice}). In strict mode also: anything a user
+ * entered, which a page-state value such as a slider's is not. The whole name
+ * then reads `[redacted]` ({@link withhold}).
+ */
+export function withholdsLentValue(
+  element: Element,
+  role: string,
+  redactInput: boolean,
+): boolean {
+  return (
+    (redactInput && !PAGE_STATE_VALUE_ROLES.has(role)) ||
+    lendsSensitiveChoice(element, role)
+  );
 }
 
 /** `states` without what {@link withholdsState} keeps off `element`'s node. */
@@ -232,8 +260,12 @@ export function withholdStates(
   element: Element,
   role: string,
   states: SemanticNode["a11y"]["states"],
+  redactInput: boolean,
 ): SemanticNode["a11y"]["states"] {
-  if ("selected" in states && withholdsState(element, role, "selected")) {
+  if (
+    "selected" in states &&
+    withholdsState(element, role, "selected", redactInput)
+  ) {
     const { selected: _withheld, ...rest } = states;
     return rest;
   }

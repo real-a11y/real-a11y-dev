@@ -2039,6 +2039,256 @@ describe("buildNativeTree — sensitive values in states, references and races",
     expect(disabledAttrsOf(undefined)).toEqual([undefined, ""]);
   });
 
+  // An ARIA combobox's popup listbox is not the field's descendant. Chromium
+  // reaches it by the `controls` relation (aria-controls), and by `owns`,
+  // which it leaves unreparented under an `<input>`: the listbox stays a
+  // sibling, so no ancestor walk from the option meets the field.
+  const popup = (relation: "controls" | "owns") =>
+    [
+      { nodeId: "1", childIds: ["2", "3"], role: { value: "RootWebArea" } },
+      {
+        nodeId: "2",
+        parentId: "1",
+        role: { value: "combobox" },
+        name: { value: "Expiry month" },
+        value: { value: "03" },
+        backendDOMNodeId: 30,
+        properties: [
+          {
+            name: relation,
+            value: {
+              type: "idrefList",
+              relatedNodes: [{ backendDOMNodeId: 31 }],
+            },
+          },
+        ],
+      },
+      {
+        nodeId: "3",
+        parentId: "1",
+        childIds: ["4", "5"],
+        role: { value: "listbox" },
+        name: { value: "Months" },
+        backendDOMNodeId: 31,
+      },
+      ...["01", "03"].map((label, i) => ({
+        nodeId: String(4 + i),
+        parentId: "3",
+        role: { value: "option" },
+        name: { value: label },
+        properties: [{ name: "selected", value: { value: label === "03" } }],
+        backendDOMNodeId: 32 + i,
+      })),
+    ] as RawNodes;
+  const popupSelectedOf = (
+    relation: "controls" | "owns",
+    autocomplete?: string,
+  ) =>
+    nodesOf(
+      buildNativeTree(
+        popup(relation),
+        new Map<number, NativeDomInfo>([
+          [
+            30,
+            domOf("input", {
+              role: "combobox",
+              ...(autocomplete ? { autocomplete } : {}),
+            }),
+          ],
+          [31, domOf("ul", { role: "listbox" })],
+          [32, domOf("li", { role: "option" })],
+          [33, domOf("li", { role: "option" })],
+        ]),
+      ),
+    )
+      .filter((n) => n.a11y.role === "option")
+      .map((n) => n.a11y.states.selected);
+
+  it("drops it in the popup a sensitive combobox controls or owns", () => {
+    for (const relation of ["controls", "owns"] as const) {
+      expect(popupSelectedOf(relation, "cc-exp-month"), relation).toEqual([
+        undefined,
+        undefined,
+      ]);
+      // An ordinary combobox's popup still says which option is selected.
+      expect(popupSelectedOf(relation), relation).toEqual([false, true]);
+    }
+  });
+
+  it("drops it in the popup an ARIA 1.1 combobox around a sensitive field controls", () => {
+    // The wrapper carries the relation; the textbox inside it is the field.
+    const raw = [
+      { nodeId: "1", childIds: ["2", "6"], role: { value: "RootWebArea" } },
+      {
+        nodeId: "2",
+        parentId: "1",
+        childIds: ["3"],
+        role: { value: "combobox" },
+        backendDOMNodeId: 40,
+        properties: [
+          {
+            name: "controls",
+            value: {
+              type: "idrefList",
+              relatedNodes: [{ backendDOMNodeId: 41 }],
+            },
+          },
+        ],
+      },
+      {
+        nodeId: "3",
+        parentId: "2",
+        role: { value: "textbox" },
+        name: { value: "Expiry month" },
+        value: { value: "03" },
+        backendDOMNodeId: 42,
+      },
+      {
+        nodeId: "6",
+        parentId: "1",
+        childIds: ["7"],
+        role: { value: "listbox" },
+        name: { value: "Months" },
+        backendDOMNodeId: 41,
+      },
+      {
+        nodeId: "7",
+        parentId: "6",
+        role: { value: "option" },
+        name: { value: "03" },
+        properties: [{ name: "selected", value: { value: true } }],
+        backendDOMNodeId: 43,
+      },
+    ] as RawNodes;
+    const selected = (autocomplete?: string) =>
+      nodesOf(
+        buildNativeTree(
+          raw,
+          new Map<number, NativeDomInfo>([
+            [40, domOf("div", { role: "combobox" })],
+            [41, domOf("ul", { role: "listbox" })],
+            [42, domOf("input", autocomplete ? { autocomplete } : {})],
+            [43, domOf("li", { role: "option" })],
+          ]),
+        ),
+      )
+        .filter((n) => n.a11y.role === "option")
+        .map((n) => n.a11y.states.selected);
+    expect(selected("cc-exp-month")).toEqual([undefined]);
+    expect(selected()).toEqual([true]);
+  });
+
+  it("withholds the popup's choice from a name or description read from it", () => {
+    // `aria-labelledby="lab lb"` / `aria-describedby="hint lb"`: Chromium reads
+    // the listbox as an embedded control, so both carry the option chosen
+    // there. The field's own value stays its own concern.
+    const read = (autocomplete?: string, chosen = true) => {
+      const raw = popup("controls");
+      const field = raw[1]!;
+      field.name = { value: chosen ? "Expiry month 03" : "Expiry month" };
+      field.description = { value: chosen ? "Pick 03" : "Pick" };
+      field.properties!.push(
+        ...(["labelledby", "describedby"] as const).map((name, i) => ({
+          name,
+          value: {
+            type: "idrefList",
+            relatedNodes: [
+              { backendDOMNodeId: 28 + i },
+              { backendDOMNodeId: 31 },
+            ],
+          },
+        })),
+      );
+      if (!chosen)
+        raw[4]!.properties = [{ name: "selected", value: { value: false } }];
+      const node = nodesOf(
+        buildNativeTree(
+          raw,
+          new Map<number, NativeDomInfo>([
+            [28, domOf("span")],
+            [29, domOf("span")],
+            [
+              30,
+              domOf("input", {
+                role: "combobox",
+                ...(autocomplete ? { autocomplete } : {}),
+              }),
+            ],
+            [31, domOf("ul", { role: "listbox" })],
+            [32, domOf("li", { role: "option" })],
+            [33, domOf("li", { role: "option" })],
+          ]),
+        ),
+      ).find((n) => n.a11y.role === "combobox")!;
+      return [node.a11y.name, node.a11y.description];
+    };
+    expect(read("cc-exp-month")).toEqual(["[redacted]", ""]);
+    // Nothing chosen lends nothing, and an ordinary field's popup is the page's.
+    expect(read("cc-exp-month", false)).toEqual(["Expiry month", "Pick"]);
+    expect(read()).toEqual(["Expiry month 03", "Pick 03"]);
+  });
+
+  it("keeps a popup option's name from its own parts, and withholds one read from outside", () => {
+    // Each option is labelled by a span inside it (React Aria's pattern), and
+    // a button outside is labelled by the chosen option.
+    const raw = popup("controls");
+    for (const [i, option] of raw.slice(3, 5).entries()) {
+      option.childIds = [String(40 + i)];
+      option.properties!.push({
+        name: "labelledby",
+        value: {
+          type: "idrefList",
+          relatedNodes: [{ backendDOMNodeId: 40 + i }],
+        },
+      });
+      raw.push({
+        nodeId: String(40 + i),
+        parentId: option.nodeId,
+        role: { value: "StaticText" },
+        name: { value: String(option.name!.value) },
+        backendDOMNodeId: 40 + i,
+      });
+    }
+    raw[0]!.childIds!.push("50");
+    raw.push({
+      nodeId: "50",
+      parentId: "1",
+      role: { value: "button" },
+      name: { value: "03" },
+      backendDOMNodeId: 50,
+      properties: [
+        {
+          name: "labelledby",
+          value: {
+            type: "idrefList",
+            relatedNodes: [{ backendDOMNodeId: 33 }],
+          },
+        },
+      ],
+    });
+    const tree = buildNativeTree(
+      raw,
+      new Map<number, NativeDomInfo>([
+        [
+          30,
+          domOf("input", { role: "combobox", autocomplete: "cc-exp-month" }),
+        ],
+        [31, domOf("ul", { role: "listbox" })],
+        [32, domOf("li", { role: "option" })],
+        [33, domOf("li", { role: "option" })],
+        [40, domOf("span")],
+        [41, domOf("span")],
+        [50, domOf("button")],
+      ]),
+    );
+    const names = (role: string) =>
+      nodesOf(tree)
+        .filter((n) => n.a11y.role === role)
+        .map((n) => n.a11y.name);
+    expect(names("option")).toEqual(["01", "03"]);
+    expect(names("button")).toEqual(["[redacted]"]);
+  });
+
   it("drops it inside a sensitive list box, which holds no AX value", () => {
     expect(listboxSelectedOf("cc-exp-year")).toEqual([undefined, undefined]);
     expect(listboxSelectedOf()).toEqual([false, true]);

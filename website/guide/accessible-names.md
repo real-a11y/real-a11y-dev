@@ -130,7 +130,7 @@ A control that holds no value lends its own name instead: its `aria-label`, its 
 
 The same holds for `aria-labelledby` and `aria-describedby` pointing at a control: `<button aria-labelledby="q">` over `<input id="q" value="cats">` is `"cats"`, and over the same field empty, with `<label for="q">Search</label>`, `"Search"`. A checkbox, radio, button input, `<output>` or `<progress>` gives its own name the same way, from its labels.
 
-A value that is a secret never reaches a name. If a password, one-time code or payment card field holds anything, the whole name built from it reads `"[redacted]"`, and a description built from it is dropped, in both trees. The strict mode (`redactInput`) does the same for any value a user entered. A progress bar's or meter's value is the page's own state, so it stays.
+A value that is a secret never reaches a name. If a password, one-time code or payment card field holds anything, the whole name built from it reads `"[redacted]"`, and a description built from it is dropped, in both trees. The same goes for the option chosen in such a field's popup (the listbox it controls with `aria-controls`, owns with `aria-owns` or points `aria-activedescendant` into, one a combobox around it holds, or a multi-row `<select>` itself): a `<label>` around both, or an `aria-labelledby` naming the listbox or the chosen option, would read that option into the name, and a description inside the popup could say which option it is, so none is kept there. The strict mode (`redactInput`) does the same for any value a user entered. A progress bar's or meter's value is the page's own state, so it stays.
 
 ### Form control with `for` / `id`
 

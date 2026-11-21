@@ -30,6 +30,16 @@ export const SENSITIVE_AUTOCOMPLETE_TOKENS: ReadonlySet<string> = new Set([
 /** Substituted for a sensitive field's value, wherever a value is shown. */
 export const REDACTED_VALUE = "[redacted]";
 
+/** The elements {@link isSensitiveField} can be true of. */
+export const FIELD_TAGS: ReadonlySet<string> = new Set([
+  "input",
+  "textarea",
+  "select",
+]);
+
+/** {@link FIELD_TAGS} as a selector. */
+export const FIELD_SELECTOR = [...FIELD_TAGS].join(", ");
+
 /**
  * The sensitivity policy over a field's markup alone — its tag name plus its
  * `type` and `autocomplete` attributes — for callers with no live `Element`.
@@ -41,9 +51,7 @@ export function isSensitiveFieldAttributes(
   attributes: { type?: string | null; autocomplete?: string | null },
 ): boolean {
   const tag = tagName.toLowerCase();
-  if (tag !== "input" && tag !== "textarea" && tag !== "select") {
-    return false;
-  }
+  if (!FIELD_TAGS.has(tag)) return false;
   if (
     tag === "input" &&
     (attributes.type ?? "").trim().toLowerCase() === "password"
@@ -82,6 +90,20 @@ export function isSensitiveField(element: Element): boolean {
     autocomplete: safeGetAttribute(element, "autocomplete"),
   });
 }
+
+/**
+ * The roles a popup's choice is made in, which lend that choice to a name
+ * built around them (AccName's embedded control): those `aria-haspopup` names
+ * but a dialog, which holds anything, and a menu, whose choice is `checked`.
+ * One set for the DOM producer (`lendsSensitiveChoice`) and the native ones
+ * (`sensitivePopupRoots`).
+ */
+export const POPUP_CHOICE_ROLES: ReadonlySet<string> = new Set([
+  "listbox",
+  "grid",
+  "treegrid",
+  "tree",
+]);
 
 /** `<input>` types with no announced value: a state, a name, or nothing. */
 export const VALUELESS_INPUT_TYPES: ReadonlySet<string> = new Set([
