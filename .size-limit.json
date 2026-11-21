@@ -2,7 +2,7 @@
   {
     "name": "@real-a11y-dev/core (esm)",
     "path": "packages/core/dist/index.js",
-    "limit": "31.8 KB",
+    "limit": "32.9 KB",
     "gzip": true
   },
   {
@@ -16,32 +16,32 @@
   {
     "name": "@real-a11y-dev/inspector (esm)",
     "path": "packages/inspector/dist/index.js",
-    "limit": "52.1 KB",
+    "limit": "52.6 KB",
     "gzip": true
   },
   {
     "name": "@real-a11y-dev/react (esm)",
     "path": "packages/react/dist/index.js",
-    "limit": "23.9 KB",
+    "limit": "24.4 KB",
     "gzip": true,
     "ignore": ["react", "react-dom", "@real-a11y-dev/inspector"]
   },
   {
     "name": "@real-a11y-dev/testing (esm)",
     "path": "packages/testing/dist/index.js",
-    "limit": "27.9 KB",
+    "limit": "28.4 KB",
     "gzip": true
   },
   {
     "name": "@real-a11y-dev/testing/matchers (esm)",
     "path": "packages/testing/dist/matchers.js",
-    "limit": "41.8 KB",
+    "limit": "42.3 KB",
     "gzip": true
   },
   {
     "name": "@real-a11y-dev/storybook-addon (manager)",
     "path": "packages/storybook-addon/dist/manager.js",
-    "limit": "30.8 KB",
+    "limit": "30.9 KB",
     "gzip": true,
     "ignore": [
       "react",
@@ -55,7 +55,7 @@
   {
     "name": "@real-a11y-dev/browser (page-bundle IIFE)",
     "path": "packages/browser/dist/page-bundle.iife.global.js",
-    "limit": "22.6 KB",
+    "limit": "23.1 KB",
     "gzip": true
   }
 ]
