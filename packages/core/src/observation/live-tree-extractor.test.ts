@@ -1217,6 +1217,26 @@ describe("LiveTreeExtractor", () => {
       expect(full).not.toHaveBeenCalled();
     });
 
+    it("reads the whole popup once the item a sensitive field's active descendant names arrives", async () => {
+      // The radio group the active item lands in sits in a grid: the grid is
+      // the field's popup only from now, and its chosen row must go.
+      const nodes = await refreshed(
+        `<main><input role="combobox" aria-label="Year" autocomplete="cc-exp-year" aria-expanded="true" aria-activedescendant="r1">` +
+          `<div role="grid" aria-label="Pick"><div role="row" aria-selected="true"><div role="gridcell">2041</div></div>` +
+          `<div role="row"><div role="gridcell"><div role="radiogroup" id="g" aria-label="Mode"></div></div></div></div></main>`,
+        () =>
+          byId("g").insertAdjacentHTML(
+            "beforeend",
+            `<div role="radio" id="r1" aria-checked="false">Exact</div>`,
+          ),
+      );
+      expect(
+        nodes
+          .filter((n) => n.a11y.role === "row")
+          .map((n) => n.a11y.states["selected"]),
+      ).toEqual([undefined, undefined]);
+    });
+
     it("reads it once a checked item arrives", async () => {
       const nodes = await refreshed(
         `<main>${field}<div role="menu" id="lb" aria-label="Months">` +
