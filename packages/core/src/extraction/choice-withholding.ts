@@ -16,6 +16,7 @@ import {
   safeGetElementById,
   safeDocumentElement,
   safeMatches,
+  safeNodeType,
   safeQuerySelectorAll,
   safeRootNode,
 } from "./clobber-safe.js";
@@ -101,6 +102,11 @@ function deepQuery(scope: PageScope, selector: string): Element[] {
  * of its hosts, into the extraction's cache.
  */
 function seePage(cache: ChoiceCache, element: Element): void {
+  const root = cache.readRoot;
+  if (root) {
+    cache.readRoot = null;
+    seePage(cache, root);
+  }
   for (const scope of pageScopes(element)) {
     if (cache.scopesSeen.has(scope)) continue;
     cache.scopesSeen.add(scope);
@@ -126,16 +132,19 @@ function seePage(cache: ChoiceCache, element: Element): void {
 
 /**
  * Run `read`, an extraction of `root`, with one set of per-extraction indexes
- * (`withAriaOwnerIndex`), `root`'s page scopes seen first ({@link seePage}).
- * A read that starts inside a closed shadow root then knows that root before
- * anything in it asks: a node slotted in from the document has only the
- * document for its own page.
+ * (`withAriaOwnerIndex`), `root`'s page scopes seen before any other's the
+ * first time something asks ({@link seePage}), and not before: a read that
+ * asks nothing (a live refresh of one field) scans no page. A read that
+ * starts inside a closed shadow root then knows that root before anything in
+ * it asks: a node slotted in from the document has only the document for its
+ * own page.
  *
  * @internal
  */
 export function withReadIndexes<T>(root: Element, read: () => T): T {
   return withAriaOwnerIndex(() => {
-    pageMayHoldSensitiveField(root);
+    const cache = choiceCache();
+    if (cache) cache.readRoot = root;
     return read();
   });
 }
@@ -167,7 +176,9 @@ function childrenOf(element: Element): Element[] {
   // The root's children with each slot replaced by what it renders, as the
   // flat tree reads an open root: an assigned node, else the fallback.
   return closed
-    ? flatChildNodes(closed).filter((n): n is Element => n.nodeType === 1)
+    ? flatChildNodes(closed).filter(
+        (n): n is Element => safeNodeType(n) === 1 /* ELEMENT_NODE */,
+      )
     : flatChildren(element);
 }
 

@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, it } from "vitest";
 
+import { shadow } from "../test-support/clobber.js";
+
+import { choiceCache, withAriaOwnerIndex } from "./aria-owner.js";
+import { holdsSensitiveField } from "./choice-withholding.js";
 import { extractDomTree } from "./dom-extractor.js";
 
 /**
@@ -575,6 +579,26 @@ describe("the choice a sensitive field holds", () => {
           .filter((n) => n.a11y.role === "option")
           .map((n) => n.a11y.states["selected"]),
       ).toEqual([true]);
+    });
+
+    it("finds a field in a closed root's form whose control shadows nodeType", () => {
+      // `<input name="nodeType">` makes the form's own read the input. A
+      // unit check: jsdom's selector engine itself throws on such a form,
+      // which a browser's native one does not, so a whole read can't run.
+      const root = closedHost(
+        "x-combo",
+        'role="combobox"',
+        "",
+        `<form><input name="nodeType" aria-label="Kind"><input aria-label="Month" autocomplete="cc-exp-month"></form>`,
+      );
+      const host = document.body.firstElementChild!;
+      shadow(root.querySelector("form")!, "nodeType");
+      expect(
+        withAriaOwnerIndex(() => {
+          choiceCache()!.closedRoots.set(host, root);
+          return holdsSensitiveField(host);
+        }),
+      ).toBe(true);
     });
 
     it("is withheld in a subtree that is not in a document, reached by aria-activedescendant", () => {

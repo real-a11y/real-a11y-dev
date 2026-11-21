@@ -53,6 +53,8 @@ export interface ChoiceCache {
   sensitiveSeen: boolean;
   /** Scopes seen whose relations wait for a sensitive field to be seen. */
   readonly unindexed: Node[];
+  /** Where the read starts, until its page scopes are seen (lazily). */
+  readRoot: Element | null;
   /**
    * The closed shadow root of each host whose root a scope seen is: page
    * script can't reach one through its host, but a read that starts inside
@@ -101,6 +103,7 @@ export function withAriaOwnerIndex<T>(fn: () => T): T {
     scopesSeen: new WeakSet(),
     sensitiveSeen: false,
     unindexed: [],
+    readRoot: null,
     closedRoots: new WeakMap(),
     reach: { elements: new WeakSet(), ids: new WeakMap() },
     hosts: new WeakMap(),
