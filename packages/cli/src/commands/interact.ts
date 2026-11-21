@@ -24,6 +24,7 @@ import type { BrowserSession } from "@real-a11y-dev/browser";
 import {
   captureNativeCheckpoint,
   diffNativeCheckpoint,
+  type ResolveTargetResult,
   type TargetCandidate,
 } from "@real-a11y-dev/browser";
 import { redactUrl } from "@real-a11y-dev/snapshot";
@@ -61,6 +62,10 @@ type Session = Awaited<ReturnType<typeof createSession>>;
 const MAX_CANDIDATES = 10;
 
 const describeTarget = (c: TargetCandidate): string => `${c.role} "${c.name}"`;
+
+/** A step's role and name as its messages print them. */
+const stepLabel = (step: InteractStep): string =>
+  `${step.role}${step.name === undefined ? "" : ` "${step.name}"`}`;
 
 /** Read the repeatable `--step` flag into validated steps. */
 export function stepsFromFlags(flags: FlagValues): InteractStep[] {
@@ -101,8 +106,44 @@ async function runStep(
     ...(step.nth === undefined ? {} : { nth: step.nth }),
   });
 
-  const label = `${step.role}${step.name === undefined ? "" : ` "${step.name}"`}`;
+  const label = stepLabel(step);
+  const nodeId = actionableTarget(resolved, step);
 
+  const result = await session.act({
+    nodeId,
+    action: step.verb,
+    ...(step.text === undefined ? {} : { payload: { value: step.text } }),
+  });
+
+  if (!result.success) {
+    // The backend's "re-read the tree and retry" remedy presumes a caller
+    // holding node ids; here resolution happened microseconds ago, so a miss
+    // means the page mutated mid-step.
+    if (
+      result.error !== undefined &&
+      /could not resolve node/.test(result.error)
+    ) {
+      throw new CliError(
+        `the target changed or disappeared mid-step — the page mutated while acting on ${label}`,
+        "re-run; if it's a race with an animation, add --settle <ms>",
+      );
+    }
+    throw new CliError(
+      `could not ${step.verb} ${label}: ${result.error ?? "the action failed"}`,
+    );
+  }
+}
+
+/**
+ * Turn a target resolution into the node id to act on, or throw the refusal that
+ * explains why there isn't one: no match, `nth` past the end, an ambiguous
+ * match, a node with no DOM element, or a disabled control.
+ */
+export function actionableTarget(
+  resolved: ResolveTargetResult,
+  step: InteractStep,
+): string {
+  const label = stepLabel(step);
   switch (resolved.kind) {
     case "not-found":
       throw new CliError(
@@ -150,29 +191,7 @@ async function runStep(
     );
   }
 
-  const result = await session.act({
-    nodeId: resolved.nodeId,
-    action: step.verb,
-    ...(step.text === undefined ? {} : { payload: { value: step.text } }),
-  });
-
-  if (!result.success) {
-    // The backend's "re-read the tree and retry" remedy presumes a caller
-    // holding node ids; here resolution happened microseconds ago, so a miss
-    // means the page mutated mid-step.
-    if (
-      result.error !== undefined &&
-      /could not resolve node/.test(result.error)
-    ) {
-      throw new CliError(
-        `the target changed or disappeared mid-step — the page mutated while acting on ${label}`,
-        "re-run; if it's a race with an animation, add --settle <ms>",
-      );
-    }
-    throw new CliError(
-      `could not ${step.verb} ${label}: ${result.error ?? "the action failed"}`,
-    );
-  }
+  return resolved.nodeId;
 }
 
 interface InteractOutcome {
