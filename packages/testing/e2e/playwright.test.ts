@@ -86,6 +86,65 @@ test.describe("good fixture", () => {
     expect(await sn.treeSnapshot({ states: false })).not.toContain("{");
   });
 
+  test("withholds the choice in a sensitive combobox's popup", async ({
+    page,
+  }) => {
+    // The DOM producer's half of the rule, in real Chromium: the popup a
+    // sensitive combobox controls or owns says nothing about which option is
+    // chosen, while an ordinary combobox's popup still does.
+    const combobox = (label: string, attrs: string, options: string) =>
+      `<input role="combobox" aria-label="${label}" aria-expanded="true" ${attrs}>` +
+      `<ul role="listbox" id="${label}-list" aria-label="${label} options">${options}</ul>`;
+    await page.setContent(
+      "<main>" +
+        combobox(
+          "Month",
+          'autocomplete="cc-exp-month" aria-controls="Month-list"',
+          // A hidden "selected" description only the chosen option carries.
+          '<li role="option" aria-selected="false">01</li>' +
+            '<li role="option" aria-selected="true" aria-describedby="month-sel">03' +
+            '<span id="month-sel" hidden>selected</span></li>',
+        ) +
+        combobox(
+          "Year",
+          'autocomplete="cc-exp-year" aria-owns="Year-list"',
+          '<li role="option" aria-selected="true">2031</li>',
+        ) +
+        combobox(
+          "Color",
+          'aria-controls="Color-list"',
+          '<li role="option" aria-selected="true">Red</li>',
+        ) +
+        "</main>",
+    );
+    const sn = await attach(page);
+    const tree = await sn.treeSnapshot();
+    expect(tree).toContain('option "03"');
+    expect(tree).toContain('option "2031"');
+    expect(tree).not.toMatch(/option "(01|03|2031)" \{/);
+    expect(tree).toContain('option "Red" {selected}');
+  });
+
+  test("withholds a sensitive popup's choice from a name built around it", async ({
+    page,
+  }) => {
+    // A label around the field and its listbox lends the chosen option.
+    const labelled = (label: string, attrs: string) =>
+      `<label>${label} <input role="combobox" aria-expanded="true" aria-controls="${label}-list" ${attrs}>` +
+      `<ul role="listbox" id="${label}-list"><li role="option" aria-selected="true">03</li></ul></label>`;
+    await page.setContent(
+      "<main>" +
+        labelled("Month", 'autocomplete="cc-exp-month"') +
+        labelled("Color", "") +
+        "</main>",
+    );
+    const sn = await attach(page);
+    const tree = await sn.treeSnapshot();
+    expect(tree).toContain('combobox "[redacted]"');
+    expect(tree).not.toContain("Month 03");
+    expect(tree).toContain('combobox "Color 03"');
+  });
+
   test("assertHeadingOrder passes for correct structure", async ({ page }) => {
     const sn = await attach(page);
     await expect(sn.assertHeadingOrder()).resolves.toBeUndefined();

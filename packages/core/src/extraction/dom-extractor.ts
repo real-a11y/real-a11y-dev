@@ -6,10 +6,14 @@ import { getNodeId } from "../utils/id-generator.js";
 import { realmSingleton } from "../utils/realm-singleton.js";
 import { treeSource } from "../utils/tree-source.js";
 
-import { withAriaOwnerIndex } from "./aria-owner.js";
 import { getAriaStates } from "./aria-states.js";
 import { isAriaHiddenValue } from "./aria-tokens.js";
 import { AUTHOR_NAMED_ROLES } from "./author-named-roles.js";
+import {
+  readsSensitivePopup,
+  withholdPopupDescription,
+  withReadIndexes,
+} from "./choice-withholding.js";
 import {
   safeGetAttribute,
   safeGetElementById,
@@ -27,7 +31,7 @@ import {
   getDescendantText,
   lendsValueOnly,
   MEDIA_TAGS,
-  PAGE_STATE_VALUE_ROLES,
+  TEXT_INPUT_TYPES,
 } from "./field-text.js";
 import { flatChildNodes, flatChildren, idScope } from "./flat-tree.js";
 import { isFocusable } from "./focusability.js";
@@ -61,13 +65,14 @@ import {
   isSubtreeHidden,
   type StyleCache,
 } from "./role-map.js";
-import { isSensitiveField, REDACTED_VALUE } from "./sensitivity.js";
+import { REDACTED_VALUE } from "./sensitivity.js";
 import { warnSkippedElement } from "./skipped-element.js";
 import { isVisuallyHidden } from "./sr-only.js";
 import {
   nameText,
   newNameRun,
   withhold,
+  withholdsLentValue,
   withholdStates,
   type NameRun,
   type RedactInputOption,
@@ -130,23 +135,6 @@ const SKIP_TAGS = new Set([
  * closed shadow root no light-DOM extractor can reach.
  */
 
-/** Input types that accept text entry */
-const TEXT_INPUT_TYPES = new Set([
-  "text",
-  "email",
-  "password",
-  "tel",
-  "url",
-  "search",
-  "number",
-  "date",
-  "time",
-  "datetime-local",
-  "month",
-  "week",
-  "color",
-]);
-
 /**
  * Compute the accessible description for an element.
  * Resolves aria-describedby IDs to text and falls back to aria-description.
@@ -176,7 +164,8 @@ function computeAccessibleDescription(
         // irreversible</span>` as "Warning irreversible".
         const run = newNameRun(redactInput);
         const text = referenceText(target, run, styleCache);
-        if (run.withheld) withheld = true;
+        withheld ||=
+          run.withheld || readsSensitivePopup(element, target, "describedby");
         return text;
       })
       .filter((t): t is string => !!t);
@@ -302,10 +291,10 @@ interface ControlRead extends NameWalk {
  * `<button aria-labelledby>` over `<label for="e">Email</label><input id="e">`
  * is "Email". Not one that lends only its value ({@link lendsValueOnly}).
  *
- * A sensitive field's value, and in strict mode any value, is withheld: the
- * whole name reads `[redacted]` (see {@link NameRun.withheld}), as the native
- * producer reads a name built around such a field. A name is markup, which
- * neither withholds.
+ * A sensitive field's value, the choice in its popup, and in strict mode any
+ * value, is withheld ({@link withholdsLentValue}): the whole name reads
+ * `[redacted]` (see {@link NameRun.withheld}), as the native producer reads a
+ * name built around such a field. A name is markup, which neither withholds.
  */
 function embeddedControlText(
   element: Element,
@@ -327,8 +316,7 @@ function embeddedControlText(
       ? ""
       : computeAccessibleName(element, run, at.styleCache, at.inReference);
   }
-  const entered = !PAGE_STATE_VALUE_ROLES.has(role);
-  return (run.redactInput && entered) || isSensitiveField(element)
+  return withholdsLentValue(element, role, run.redactInput)
     ? withhold(run)
     : text;
 }
@@ -414,7 +402,10 @@ function labelledByText(
     .split(/\s+/)
     .map((id) => {
       const target = safeGetElementById(doc, id);
-      return target ? referenceText(target, run, styleCache) : "";
+      if (!target) return "";
+      if (readsSensitivePopup(element, target, "labelledby"))
+        return withhold(run);
+      return referenceText(target, run, styleCache);
     })
     .filter(Boolean)
     .join(" ");
@@ -1048,13 +1039,12 @@ function buildNode(
       a11y: {
         role,
         name: accessibleName(element, styleCache, redactInput),
-        description: computeAccessibleDescription(
+        description: withholdPopupDescription(
           element,
-          styleCache,
-          redactInput,
+          computeAccessibleDescription(element, styleCache, redactInput),
         ),
         ...(value !== undefined ? { value } : {}),
-        states: redactInput ? withholdStates(element, role, states) : states,
+        states: withholdStates(element, role, states, redactInput),
         properties: {
           ...(headingLevel !== null ? { level: String(headingLevel) } : {}),
           // The walk doesn't descend into media children, so the one
@@ -1171,8 +1161,8 @@ export function extractDomTree(
   // mutation-triggered run; never reuse across extractDomTree calls.
   // Any truthy value: a privacy switch that a `"1"` left off would fail open.
   const redactInput = Boolean(options.redactInput);
-  // One `aria-owns` index for the whole walk (see aria-owner.ts).
-  const rootId = withAriaOwnerIndex(() =>
+  // One set of indexes for the whole walk (aria-owner.ts, choice-withholding).
+  const rootId = withReadIndexes(startRoot, () =>
     walk(startRoot, parentId, baseDepth, nodes, {
       styleCache: new WeakMap(),
       descendantText: new WeakMap(),

@@ -177,7 +177,7 @@ function typedIn(raw: RawAXNameNode): boolean {
 }
 
 /** `id` is `ancestor` or sits beneath it. */
-function isWithin<T extends RawAXNameNode>(
+export function isWithin<T extends RawAXNameNode>(
   byId: ReadonlyMap<string, T>,
   id: string,
   ancestor: string,
@@ -242,6 +242,8 @@ export function indexNativeAX<T extends RawAXNameNode>(
  */
 export interface ValueRegions {
   roots: ReadonlySet<string>;
+  /** The nearest root at or above `raw`, memoized, or `null`. */
+  rootOf(raw: RawAXNameNode): string | null;
   /** Raw ids of the strict AX ancestors of a root. */
   containing: ReadonlySet<string>;
   /**
@@ -349,7 +351,7 @@ export function valueRegions<T extends RawAXNameNode>(
   };
 
   const inside = (raw: RawAXNameNode): boolean => rootOf(raw) !== null;
-  const regions = { roots, containing, inside };
+  const regions = { roots, containing, inside, rootOf };
   const places = { roots, rootOf, rootsUnder };
   const lent = labelLending(index, places, standInsOf, labelsOf);
 
@@ -471,35 +473,6 @@ export function givesValueAway<T extends RawAXNameNode>(
   byId: ReadonlyMap<string, T>,
 ): boolean {
   return field.ignored === true || holdsContent(field, byId, false);
-}
-
-/**
- * {@link withholdRegionNames} for a producer's sensitive fields: `fieldIds` are
- * the raw ids of the fields it classified as sensitive (or could not
- * classify). Only a field that {@link givesValueAway} withholds names.
- * `standIns` stand in for such fields that have no node of their own in the
- * tree ({@link fieldStandIns}), and already give their value away. `labelsOf`
- * is the transport's walk of the document's labels ({@link valueRegions}).
- */
-export function withholdSensitiveFieldNames<T extends RawAXNameNode>(
-  rawNodes: T[],
-  fieldIds: Iterable<string>,
-  standIns: readonly FieldStandIn[] = [],
-  labelsOf?: LabelsOf,
-): T[] {
-  const index = indexNativeAX(rawNodes);
-  const roots = new Set<string>();
-  for (const id of fieldIds) {
-    const field = index.byId.get(id);
-    if (field && givesValueAway(field, index.byId)) roots.add(id);
-  }
-  for (const { nodeIds } of standIns) {
-    for (const id of nodeIds) if (index.byId.has(id)) roots.add(id);
-  }
-  return withholdRegionNames(
-    rawNodes,
-    valueRegions(index, roots, standIns, labelsOf),
-  );
 }
 
 /** The elements that draw what they hold in their own user-agent shadow root. */

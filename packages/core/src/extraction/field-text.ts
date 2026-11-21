@@ -744,3 +744,20 @@ export function finishAnnouncedValue(
     ? collapsed.slice(0, VALUE_MAX - 1) + "…"
     : collapsed;
 }
+
+/** Input types that accept text entry */
+export const TEXT_INPUT_TYPES: ReadonlySet<string> = new Set([
+  "text",
+  "email",
+  "password",
+  "tel",
+  "url",
+  "search",
+  "number",
+  "date",
+  "time",
+  "datetime-local",
+  "month",
+  "week",
+  "color",
+]);

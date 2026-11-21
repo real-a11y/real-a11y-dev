@@ -19,6 +19,21 @@
 
 ## Unreleased
 
+- **A sensitive combobox's popup no longer says which option is chosen.**
+  Chrome's tree already dropped `selected` in the listbox a payment or
+  credential combobox names in `aria-controls`; it now does the same for one it
+  owns (`aria-owns`) or points `aria-activedescendant` into, for everything an
+  ARIA 1.1 `role="combobox"` wrapper around such a field holds or relates to,
+  and for a listbox behind a `role="presentation"` wrapper, a relation Chrome
+  drops, which the read finds in the document instead. A name built around the
+  popup no longer carries the choice either: `<label>Expiry month <input
+  role="combobox" autocomplete="cc-exp-month" aria-controls="lb"> <ul
+  role="listbox" id="lb">…</ul></label>` read `Expiry month 03`, in Chrome's
+  tree and the TAB view, and now reads `[redacted]`. Nothing in such a popup
+  keeps a description, and a multi-row `<select>` for a card's expiry lends
+  its choice to no name
+  ([#693](https://github.com/real-a11y/real-a11y-dev/pull/693)).
+
 - **Internal: the native tree's in-page marker actions moved to their own
   module.** No behaviour change ([#697](https://github.com/real-a11y/real-a11y-dev/pull/697)).
 

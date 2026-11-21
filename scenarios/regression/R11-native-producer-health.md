@@ -6,9 +6,9 @@ area: MCP
 type: Automated
 priority: P1
 status: Active
-validFrom: "browser ≥ 0.1.0-beta.12 · cli ≥ 0.1.0-beta.2 (locators + focusedId). The native producer itself: browser ≥ 0.1.0-beta.11. Steps 6 / 6b as written (field values shown, sensitive ones redacted, --redact-input): cli ≥ 0.1.0-beta.7. Step 6c (a field with no node of its own): cli ≥ 0.1.0-beta.9. Step 6b's `tabs` check: cli ≥ 0.1.0-beta.13. Step 6d (a field in its own aria-labelledby): cli ≥ 0.1.0-beta.13. Steps 9 / 9b (iframe content, a frame in another process included): cli ≥ 0.1.0-beta.14"
+validFrom: "browser ≥ 0.1.0-beta.12 · cli ≥ 0.1.0-beta.2 (locators + focusedId). The native producer itself: browser ≥ 0.1.0-beta.11. Steps 6 / 6b as written (field values shown, sensitive ones redacted, --redact-input): cli ≥ 0.1.0-beta.7. Step 6c (a field with no node of its own): cli ≥ 0.1.0-beta.9. Step 6b's `tabs` check: cli ≥ 0.1.0-beta.13. Step 6d (a field in its own aria-labelledby): cli ≥ 0.1.0-beta.13. Steps 9 / 9b (iframe content, a frame in another process included): cli ≥ 0.1.0-beta.14. Step 6e (a sensitive combobox's popup) ships in the FIRST release after cli 0.1.0-beta.13: against it no line prints a states block, so no option shows `{selected}` either way, and the combobox reads `"Expiry month 03"`, which is the old behaviour, not a fail"
 validUntil: ""
-expected: "native tree returns a document tree reaching UA-shadow media controls the in-page walk misses; every native FINDING carries a CSS locator identical to the DOM producer's for the same element (a shadow-root element stops its path at the boundary rather than faking a selector); the tree sets focusedId so [focused] renders; a field shows what it holds the way a screen reader announces it, while a sensitive field (password, one-time code, payment) only ever reads [redacted]; --redact-input withholds every value and all rich-text editor content."
+expected: "native tree returns a document tree reaching UA-shadow media controls the in-page walk misses; every native FINDING carries a CSS locator identical to the DOM producer's for the same element (a shadow-root element stops its path at the boundary rather than faking a selector); the tree sets focusedId so [focused] renders; a field shows what it holds the way a screen reader announces it, while a sensitive field (password, one-time code, payment) only ever reads [redacted]; --redact-input withholds every value and all rich-text editor content; no option in the popup a sensitive combobox controls says it is selected, and no name built around that popup carries the choice."
 covers:
   - packages.@real-a11y-dev/browser
   - cli.commands.tree.flags.--redact-input
@@ -56,6 +56,11 @@ is native now — so these are plain invocations. An earlier version of this row
      type="month" aria-labelledby="exp-l" autocomplete="cc-exp"
      value="2030-04"></label>`, then `real-a11y tree <url>` and
      `real-a11y tree <url> --redact-input`
+   - **6e** — add `<label>Expiry month <input role="combobox"
+     aria-expanded="true" aria-controls="lb" autocomplete="cc-exp-month">
+     <ul role="listbox" id="lb"><li role="option" aria-selected="false">01</li>
+     <li role="option" aria-selected="true">03</li></ul></label>`, and the same
+     with `Color`, `id="lb2"` and no `autocomplete`, then `real-a11y tree <url>`
 7. `real-a11y audit <url> --root main`
 8. `pnpm --filter @real-a11y-dev/browser test:e2e`
 9. Add `<iframe title="Payment" srcdoc="<main><h1>Pay</h1><label>Card <input
@@ -123,6 +128,12 @@ is native now — so these are plain invocations. An earlier version of this row
   month's name and `2030` appear **nowhere**. cli 0.1.0-beta.12 printed
   `textbox "Card <card sentinel>"` and the month's parts in its name, which is
   the old behaviour, not a fail
+- **6e** — the sensitive combobox's popup prints `option "01"` and
+  `option "03"` with no `{selected}` on either, and the combobox reads
+  `combobox "[redacted]" {expanded, haspopup=listbox}`: Chromium names it
+  `"Expiry month 03"`, reading the listbox's chosen option in through the
+  label. The ordinary one prints `option "03" {selected}` and
+  `combobox "Color 03"`. `"Expiry month 03"` appears **nowhere**
 - **4** — locators on every entry. Native `list_elements` used to carry none, and
   three docs stated that as intended; both were fixed together
 - **7** — refused: the read is whole-document, so it cannot be combined with a root
@@ -187,6 +198,14 @@ its own value. Chromium does name it so when the field is in its own
 `aria-labelledby`, and reads a date input's parts through an `aria-labelledby`
 around it; a `<label>`, an `aria-label`, or an `aria-labelledby` around a text
 field leaves the value out.
+
+Step 6e is a sensitive field's popup. An ARIA combobox's listbox is not its
+descendant, so a rule keyed on the field and what sits inside it never reached
+it: the field read `[redacted]` while its popup's `option "03" {selected}`, once
+tree text printed a states block, said what it held, and a label around both
+named the field after it. The relation is Chromium's own (`controls`, or
+`owns`, which it leaves unreparented under an `<input>`), so the check needs
+Chromium, not a stub.
 
 Step 9 guards frames. The native read once asked Chromium for the top frame's
 document only, so every `Iframe` row came back empty: an embedded payment form

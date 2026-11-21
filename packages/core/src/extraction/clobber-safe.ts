@@ -228,6 +228,12 @@ const ownerDocumentGetter = /* @__PURE__ */ capture(() =>
     ? Object.getOwnPropertyDescriptor(nodeProto, "ownerDocument")?.get
     : undefined,
 );
+const documentElementGetter = /* @__PURE__ */ capture(() =>
+  typeof Document !== "undefined"
+    ? Object.getOwnPropertyDescriptor(Document.prototype, "documentElement")
+        ?.get
+    : undefined,
+);
 const getAttributeMethod = /* @__PURE__ */ capture(
   () => elementProto?.getAttribute,
 );
@@ -330,6 +336,17 @@ export function safeOwnerDocument(element: Element): Document {
   return ownerDocumentGetter
     ? (ownerDocumentGetter.call(element) as Document)
     : element.ownerDocument;
+}
+
+/**
+ * Clobber-immune `document.documentElement`: a document's named elements
+ * shadow its own properties, so `<img name="documentElement">` makes a plain
+ * read return the image.
+ */
+export function safeDocumentElement(doc: Document): Element | null {
+  return documentElementGetter
+    ? (documentElementGetter.call(doc) as Element | null)
+    : doc.documentElement;
 }
 
 /** Clobber-immune `scope.querySelector(selectors)`, on an element, document or shadow root. */

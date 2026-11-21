@@ -464,13 +464,15 @@ export function buildNativeTree(
     const carriesSelection =
       NATIVE_AX_CHOICE_STATES.some((state) => state in states) ||
       (enriched !== undefined && "selected" in enriched.attributes);
+    const sensitivity = source?.document.prepared.sensitivity;
     const withholdSelection =
       !!source &&
+      !!sensitivity &&
       carriesSelection &&
-      (source.document.prepared.sensitivity.regions.inside(source.raw) ||
-        ((redactInput ||
-          source.document.prepared.sensitivity.sensitiveFields.size > 0) &&
-          inChoiceField(source.raw, source.document, !redactInput)));
+      (sensitivity.regions.inside(source.raw) ||
+        ((redactInput || sensitivity.sensitiveFields.size > 0) &&
+          inChoiceField(source.raw, source.document, !redactInput)) ||
+        sensitivity.choiceReach.has(source.raw.nodeId));
     if (withholdSelection) {
       for (const state of NATIVE_AX_CHOICE_STATES) delete states[state];
     }

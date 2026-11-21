@@ -13,6 +13,8 @@ import {
   holdsUnclassifiedValue,
   indexNativeAX,
   isNativePasswordMask,
+  sensitiveChoiceReach,
+  withholdPopupChoiceNames,
   valueRegions,
   withholdFieldInternals,
   withholdRegionNames,
@@ -87,6 +89,14 @@ export interface NativeDomInfo {
    */
   labels?: readonly number[];
   /**
+   * Set where a sensitive field's choice is made by a relation Chromium's tree
+   * drops (core's `domChoiceTargets`): in what such a field, or a combobox
+   * around one, names in `aria-controls` or `aria-owns`, when that is an
+   * element Chromium leaves out, as a `role="presentation"` wrapper around
+   * the listbox. Its `controls` then has no target at all.
+   */
+  choiceTarget?: true;
+  /**
    * A pseudo-element (`::before`, `::after`, `::marker`): content the page's
    * CSS generates, with no element of its own. The walk records it so its
    * node in the tree counts as seen, and gives it no `dom` facet.
@@ -120,6 +130,14 @@ export interface FieldSensitivity {
    * selected is its value all the same.
    */
   sensitiveFields: ReadonlySet<string>;
+  /**
+   * Raw ids of the nodes where a sensitive field's choice is made: its popup,
+   * a combobox around it, a multi-row one itself (core's
+   * `sensitiveChoiceReach`). A choice state there says what the field holds.
+   */
+  choiceReach: ReadonlySet<string>;
+  /** Backend ids the DOM walk marked `choiceTarget`. */
+  choiceTargets: ReadonlySet<number>;
 }
 
 /** What the DOM walk recorded for `raw`'s backing element, if it saw one. */
@@ -202,9 +220,14 @@ function fieldSensitivity(
     }
   }
   const regions = valueRegions(index, fields, standIns, labelsIn(enrichment));
+  const choiceTargets = new Set<number>();
+  for (const [id, info] of enrichment)
+    if (info.choiceTarget) choiceTargets.add(id);
   return {
     regions,
     sensitiveFields,
+    choiceReach: sensitiveChoiceReach(index, sensitiveFields, choiceTargets),
+    choiceTargets,
     withholdsValue: (raw) =>
       regions.inside(raw) ||
       regions.containing.has(raw.nodeId) ||
@@ -219,7 +242,9 @@ function fieldSensitivity(
  * Every name-level redaction, applied to the raw nodes before core normalizes
  * them — the only point at which a name still says which node it came from.
  * Sensitive fields always ({@link withholdRegionNames} over
- * {@link fieldSensitivity}); in strict mode, every field value and all editor
+ * {@link fieldSensitivity}), and the choice made in one's popup (core's
+ * `withholdPopupChoiceNames`: names only, so a field in a panel the field controls
+ * keeps its own value); in strict mode, every field value and all editor
  * content too ({@link withholdRegionNames} over {@link strictValueRoots}, then
  * {@link redactEditableContent}). And always, the text a form control draws
  * inside itself, which the DOM walk marks (`fieldHost`; core's
@@ -243,7 +268,15 @@ export function prepareRawNodes(
   // Read before any text is blanked: a stand-in counts by what it holds.
   const standIns = fieldStandIns(index, hostOf);
   const sensitivity = fieldSensitivity(rawNodes, index, enrichment, standIns);
-  const named = withholdRegionNames(rawNodes, sensitivity.regions);
+  const named = withholdPopupChoiceNames(
+    withholdRegionNames(rawNodes, sensitivity.regions),
+    index,
+    [...sensitivity.sensitiveFields],
+    {
+      labelsOf: labelsIn(enrichment),
+      choiceTargets: sensitivity.choiceTargets,
+    },
+  );
   // Last: it blanks text runs only, which no step above keeps by identity.
   if (options.redactInput !== true) {
     return {

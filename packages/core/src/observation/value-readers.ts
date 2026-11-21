@@ -157,28 +157,34 @@ export function addMovedNativeStates(
   dirty: Set<Element>,
 ): void {
   const refs = getElementRefs();
-  for (const [id, node] of domNodes) {
-    const tag = node.dom?.tagName;
-    if (!tag || !STATE_READ_TAGS.has(tag)) continue;
-    const el = refs.get(id);
-    if (!el) continue;
-    if (validityMoved(el, tag, node)) {
-      dirty.add(el);
-      continue;
-    }
-    if (tag === "textarea" || tag === "button") continue;
-    const native = nativeStates(el, tag, node.a11y.role);
-    for (const [state, value] of Object.entries(native)) {
-      const moved =
-        redactInput && withholdsState(el, node.a11y.role, state)
-          ? movedSince(el, value, seen)
-          : value !== node.a11y.states[state];
-      if (moved) {
+  // One `aria-owns` and controls index for every withholding check below.
+  withAriaOwnerIndex(() => {
+    for (const [id, node] of domNodes) {
+      const tag = node.dom?.tagName;
+      if (!tag || !STATE_READ_TAGS.has(tag)) continue;
+      const el = refs.get(id);
+      if (!el) continue;
+      if (validityMoved(el, tag, node)) {
         dirty.add(el);
-        break;
+        continue;
+      }
+      if (tag === "textarea" || tag === "button") continue;
+      const native = nativeStates(el, tag, node.a11y.role);
+      for (const [state, value] of Object.entries(native)) {
+        const shown = node.a11y.states[state];
+        // A state the node shows as read was not withheld, and has not
+        // moved: the common case, decided without the withholding climb.
+        if (state in node.a11y.states && value === shown) continue;
+        const moved = withholdsState(el, node.a11y.role, state, redactInput)
+          ? movedSince(el, value, seen)
+          : value !== shown;
+        if (moved) {
+          dirty.add(el);
+          break;
+        }
       }
     }
-  }
+  });
 }
 
 /** The controls whose native state or validity can move unobserved. */

@@ -45,6 +45,7 @@
 import {
   cleanAXText,
   fieldStandIns,
+  sensitiveChoiceRoots,
   graftNativeFrame,
   isNativeIframeRole,
   NATIVE_MAX_FRAME_DEPTH,
@@ -54,13 +55,11 @@ import {
   withNativeIdSuffix,
   type NativeFrameRef,
   holdsUnclassifiedValue,
-  domLabels,
   indexNativeAX,
   isNativePasswordMask,
   NATIVE_AX_CHOICE_STATES,
   nativeAXStateValue,
   normalizeNativeAX,
-  opensFieldInternals,
   REDACTED_VALUE,
   serializeNativeAX,
   valueRegions,
@@ -69,7 +68,6 @@ import {
   type A11yInfo,
   type FieldHostOf,
   type FieldStandIn,
-  type LabelsOf,
   type NativeAXNode,
   type RawAXNameNode,
   type NativeAXIndex,
@@ -78,7 +76,7 @@ import {
 import { DETAIL_PROPS, STATE_PROPS } from "./ax-prop-sets.js";
 
 import { isConnectionLost } from "./connection-lost.js";
-import { fieldsWithin, isSensitiveMarkup } from "./dom-fields.js";
+import { fieldsWithin, fieldWalks, type FieldInternals } from "./dom-fields.js";
 import {
   pageClick,
   pageFocus,
@@ -214,8 +212,11 @@ function axFacets(
  * only consumer of the relation is this panel's jump chips — the CLI and MCP
  * render no chips. If one starts to, this moves to core with `axFacets`.
  *
- * Why only `controls`: `owns` is already structure — Chromium reparents an
- * owned node under its owner in the tree it sends. `describedby` is already
+ * Why only `controls`: `owns` is mostly structure — Chromium reparents an
+ * owned node under its owner in the tree it sends, though not under an
+ * `<input>`, which keeps its owned listbox a sibling. The sensitivity rule
+ * follows `owns` too for that reason (core's `fieldRelationRoots`); a chip
+ * for it is not parity with the shared panel. `describedby` is already
  * the node's `description`, resolved to text. `flowto` and `details` have no
  * chip in the shared panel to match, so they'd be a new feature rather than parity;
  * they're left for a ticket of their own.
@@ -235,40 +236,26 @@ export function nativeControls(
 }
 
 /**
- * The kept nodes that stand for what `raw` controls, for withholding: each
- * `aria-controls` target the tree kept, and for one the normalizer dropped
- * (an unnamed wrapper around a listbox), its nearest kept descendants. The
- * jump chips' `nativeControls` keeps only targets that have a row; this
- * follows a dropped one down, because what sits inside it is controlled all
- * the same.
+ * The kept nodes that stand for `roots`, for withholding: each root the tree
+ * kept, and for one the normalizer dropped (an unnamed wrapper around a
+ * listbox), its nearest kept descendants. The jump chips' `nativeControls`
+ * keeps only targets that have a row; this follows a dropped one down,
+ * because what sits inside it is reached all the same. Which roots count is
+ * core's `sensitiveChoiceRoots`, the rule the browser package withholds by
+ * too: what a sensitive field, or a combobox around one, controls, owns or
+ * holds.
  *
  * Exported for its tests.
  */
 export function controlledRegion(
-  raw: RawAXNode,
-  rawNodes: readonly RawAXNode[],
+  roots: readonly RawAXNode[],
+  index: NativeAXIndex<RawAXNode>,
   keptIds: ReadonlySet<string>,
 ): string[] {
-  const prop = raw.properties?.find((p) => p.name === "controls");
-  const targets = prop?.value?.relatedNodes ?? [];
-  if (targets.length === 0) return [];
-  const byBackendId = new Map<number, RawAXNode>();
-  const byNodeId = new Map<string, RawAXNode>();
-  for (const node of rawNodes) {
-    byNodeId.set(node.nodeId, node);
-    if (typeof node.backendDOMNodeId === "number") {
-      byBackendId.set(node.backendDOMNodeId, node);
-    }
-  }
+  const stack = [...roots];
+  const byNodeId = index.byId;
   const out: string[] = [];
   const seen = new Set<RawAXNode>();
-  const stack = targets.flatMap((t) => {
-    const node =
-      typeof t.backendDOMNodeId === "number"
-        ? byBackendId.get(t.backendDOMNodeId)
-        : undefined;
-    return node ? [node] : [];
-  });
   while (stack.length > 0) {
     const node = stack.pop()!;
     if (seen.has(node)) continue;
@@ -792,16 +779,17 @@ export function withheldFields(
  * this catches a part the in-page walk could not place. A nested sensitive
  * field's own `[redacted]` stays: it says "entered", never what.
  *
- * What the sensitive field controls (`aria-controls`) is not inside it, but
- * it says which option is chosen: an ARIA combobox's listbox is not its
- * descendant, and the option it marks selected is the field's value. So
+ * What the sensitive field controls or owns (`aria-controls`, `aria-owns`),
+ * or what a combobox around it does (the ARIA 1.1 wrapper; core's
+ * `sensitiveChoiceHosts`), is not inside it, but it says which option is
+ * chosen: an ARIA combobox's listbox is not its descendant, and the option it
+ * marks selected is the field's value. So
  * everything there loses its choice states, and nothing else: a controlled
  * panel can hold fields of its own (a shipping address beside the card
  * number), each classified on its own, whose values are theirs to show. A
  * listbox has no AX value of its own to give the choice away (Chromium 141,
- * measured). Its `controls` names the targets the tree kept; `controlled`
- * adds the kept nodes standing in for one it dropped
- * ({@link controlledRegion}).
+ * measured). `controlled` holds the kept nodes those relations reach,
+ * standing in for a target the tree dropped ({@link controlledRegion}).
  *
  * Nor does a node inside one say which of it is chosen: the states in core's
  * `NATIVE_AX_CHOICE_STATES` (an option's `selected`) go from every node
@@ -817,7 +805,9 @@ export function withholdInsideSensitive(
   sensitiveIds: readonly string[],
   controlled: readonly string[] = [],
 ): void {
-  if (sensitiveIds.length === 0) return;
+  // A popup only the document places can be all there is: its field may
+  // have no row of its own (core's `domChoiceTargets`).
+  if (sensitiveIds.length === 0 && controlled.length === 0) return;
   const byId = new Map(nodes.map((n) => [n.id, n]));
   // Hands each node at or below `from` to `visit`, once.
   const walk = (
@@ -930,136 +920,6 @@ function hidesUnreadNode(
     }
   }
   return false;
-}
-
-/** What a walk of a session's documents found, by backend id: every DOM node
- *  it saw, for each in a form control's own internals that control, every
- *  field whose markup says it is sensitive, every node one sits in, and each
- *  form control's labels. */
-interface FieldInternals {
-  seen: ReadonlySet<number>;
-  hosts: ReadonlyMap<number, number>;
-  sensitive: ReadonlySet<number>;
-  /**
-   * Every node a sensitive field sits inside as Chromium lays the page out:
-   * through shadow roots, open or closed, and what a `<slot>` shows, but
-   * never out of a frame's document. A field below a hidden wrapper has no
-   * node in Chromium's tree at all, so only the document places it.
-   */
-  holdsSensitive: ReadonlySet<number>;
-  /**
-   * Each form control's `<label>`s (core's `domLabels`). Chromium's tree has
-   * no trace of them for a hidden control, yet an `aria-labelledby` pointing
-   * at one still reads them, and a sensitive field's value in one with them
-   * (core's `valueRegions`).
-   */
-  labels: LabelsOf;
-}
-
-/**
- * Walk the documents `transport` reads for the DOM nodes in a form control's
- * own internals: the user-agent shadow root of an `<input>`, `<textarea>` or
- * `<select>` (core's `opensFieldInternals`), where it draws what it holds.
- * Core's `withholdFieldInternalText` keeps their text out of the tree, since
- * nothing in the AX tree tells such a node from a `<div>`, and when the tree
- * has no node of the control's own, `fieldStandIns` finds what stands in for
- * it. The same walk finds every sensitive field by its markup, and every
- * element one sits in (`holdsSensitive`), which the in-page read can't see
- * past a shadow root. One walk serves the session's top document and every
- * frame it reads in the same renderer, which `DOM.getDocument` lists under
- * its `<iframe>`. A node one of them added since is one the walk never saw:
- * its text fails closed, and so does a row of its own; a field added since
- * inside a node the walk saw counts from the next read. `undefined` when the
- * DOM agent can't list them: text fails closed throughout, and a field with
- * no row of its own is left to the in-page read's light-DOM look.
- */
-async function fieldInternals(
-  transport: CdpTransport,
-): Promise<FieldInternals | undefined> {
-  let root: CdpDomNode | undefined;
-  try {
-    await transport.send("DOM.enable");
-    root = (
-      await transport.send<{ root?: CdpDomNode }>("DOM.getDocument", {
-        depth: -1,
-        pierce: true,
-      })
-    ).root;
-  } catch {
-    return undefined;
-  }
-  if (!root) return undefined;
-  const seen = new Set<number>();
-  const hosts = new Map<number, number>();
-  const sensitive = new Set<number>();
-  // What each node sits in as Chromium lays it out: its parent, a shadow
-  // root's host, and the `<slot>` that shows it. A frame's document sits in
-  // nothing here: its fields are its own.
-  const parentOf = new Map<number, number>();
-  const slotOf = new Map<number, number>();
-  // Each node, and the control whose internals hold it.
-  const stack: Array<[CdpDomNode, number | undefined]> = [[root, undefined]];
-  while (stack.length > 0) {
-    const [node, host] = stack.pop()!;
-    const id = node.backendNodeId;
-    seen.add(id);
-    if (isSensitiveMarkup(node)) sensitive.add(id);
-    if (host !== undefined) hosts.set(id, host);
-    // eslint-disable-next-line no-restricted-properties -- a field of CDP's plain object, not the element's: nothing on the page shadows it
-    const slot = node.assignedSlot;
-    if (slot) slotOf.set(id, slot.backendNodeId);
-    for (const child of node.children ?? []) {
-      if (child.nodeType === 1) parentOf.set(child.backendNodeId, id);
-      stack.push([child, host]);
-    }
-    if (node.contentDocument) stack.push([node.contentDocument, undefined]);
-    for (const sub of node.shadowRoots ?? []) {
-      parentOf.set(sub.backendNodeId, id);
-      stack.push([
-        sub,
-        host ??
-          (opensFieldInternals(node.localName, sub.shadowRootType)
-            ? node.backendNodeId
-            : undefined),
-      ]);
-    }
-    // A `::before` or `::after` Chromium lays out as a box has a node of its
-    // own in the tree, seen here like any other.
-    for (const pseudo of node.pseudoElements ?? []) stack.push([pseudo, host]);
-  }
-  // Up from each sensitive field, through everything it sits in, climbing
-  // from each node once.
-  const holdsSensitive = new Set<number>();
-  const up: number[] = [];
-  const climb = (id: number) => {
-    const parent = parentOf.get(id);
-    if (parent !== undefined) up.push(parent);
-    const slot = slotOf.get(id);
-    if (slot !== undefined) up.push(slot);
-  };
-  for (const id of sensitive) climb(id);
-  while (up.length > 0) {
-    const id = up.pop()!;
-    if (holdsSensitive.has(id)) continue;
-    holdsSensitive.add(id);
-    climb(id);
-  }
-  return { seen, hosts, sensitive, holdsSensitive, labels: domLabels(root) };
-}
-
-/** {@link fieldInternals}, walked once per session for the whole of a read. */
-function fieldWalks(): (
-  transport: CdpTransport,
-) => Promise<FieldInternals | undefined> {
-  const walks = new Map<CdpTransport, Promise<FieldInternals | undefined>>();
-  return (transport) => {
-    let walk = walks.get(transport);
-    if (walk === undefined) {
-      walk = fieldInternals(transport);
-      walks.set(transport, walk);
-    }
-    return walk;
-  };
 }
 
 /**
@@ -1667,7 +1527,7 @@ async function readDocument(
       read,
     ),
     withheldStandIns,
-    internals?.labels,
+    { labelsOf: internals?.labels, choiceTargets: internals?.choiceTargets },
   );
   const nodes =
     rawNodes === full.nodes ? firstPass : normalizeNativeAX(rawNodes);
@@ -1694,13 +1554,22 @@ async function readDocument(
     };
   });
   const withheldIds = [...sensitiveIds, ...held];
+  // Where each withheld field's choice is made: core's `sensitiveChoiceRoots`,
+  // the browser package's rule, from every field withheld, a hidden one read
+  // for a name among them, and the rows above one.
+  const index = indexNativeAX(rawNodes);
+  const roots = sensitiveChoiceRoots(
+    index,
+    [...withheldIds, ...withheld].flatMap((id) => {
+      const raw = rawById.get(id);
+      return raw ? [raw.nodeId] : [];
+    }),
+    internals?.choiceTargets,
+  );
   withholdInsideSensitive(
     enriched,
     withheldIds,
-    withheldIds.flatMap((id) => {
-      const raw = rawById.get(id);
-      return raw ? controlledRegion(raw, rawNodes, keptIds) : [];
-    }),
+    controlledRegion(roots, index, keptIds),
   );
 
   return enriched;

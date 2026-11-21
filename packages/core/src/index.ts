@@ -55,7 +55,8 @@ export {
 } from "./extraction/sensitivity.js";
 // @internal — strict mode's test for what a user typed in, for a reader of
 // the live page outside core: audit's finding locators.
-export { insideEditor } from "./extraction/strict-mode.js";
+export { insideEditor, withholdsState } from "./extraction/strict-mode.js";
+export { withAriaOwnerIndex } from "./extraction/aria-owner.js";
 // @internal — which rows of a read are of the page a panel was given, for the
 // change marks; not a stability promise.
 export { rootRowScope, type RowScope } from "./extraction/row-scope.js";
@@ -198,8 +199,14 @@ export {
   withholdFieldInternalText,
   withholdFieldInternals,
   withholdRegionNames,
-  withholdSensitiveFieldNames,
 } from "./native/value-regions.js";
+export {
+  withholdPopupChoiceNames,
+  withholdSensitiveFieldNames,
+} from "./native/sensitive-names.js";
+export type { DomReads } from "./native/sensitive-names.js";
+export { domChoiceTargets } from "./native/dom-choice-targets.js";
+export type { DomChoiceNode } from "./native/dom-choice-targets.js";
 export type {
   FieldHostOf,
   FieldStandIn,
@@ -208,6 +215,12 @@ export type {
   ValueRegions,
 } from "./native/value-regions.js";
 export { nativeAncestry, nativeAXProperty } from "./native/ax-node.js";
+export {
+  fieldRelationRoots,
+  sensitiveChoiceReach,
+  sensitiveChoiceRoots,
+  sensitivePopupRoots,
+} from "./native/sensitive-popup.js";
 export { domLabels } from "./native/labels.js";
 export type { LabelDomNode, LabelsOf } from "./native/labels.js";
 
