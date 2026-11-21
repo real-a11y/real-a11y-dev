@@ -14,7 +14,10 @@
  */
 
 import { resolveRoleToken } from "../extraction/role-map.js";
-import { isSensitiveFieldAttributes } from "../extraction/sensitivity.js";
+import {
+  isSensitiveFieldAttributes,
+  POPUP_CHOICE_ROLES,
+} from "../extraction/sensitivity.js";
 
 /**
  * A node of CDP's `DOM.getDocument`, as much as {@link domChoiceTargets}
@@ -59,13 +62,36 @@ function isSensitiveMarkup(node: DomChoiceNode): boolean {
   });
 }
 
-/** Its `role` resolves to combobox, read as the tree reads a role list. */
+/** The roles its `role` list names, as the tree resolves each token. */
+function rolesOf(node: DomChoiceNode): string[] {
+  return (attributeOf(node, "role") ?? "")
+    .trim()
+    .split(/\s+/)
+    .flatMap((token) => {
+      const role = token ? resolveRoleToken(token) : undefined;
+      return role === undefined ? [] : [role];
+    });
+}
+
+/**
+ * Its `role` may make it a combobox: any token resolves to one. The tree can
+ * skip a token before it (an unnamed `region`), so counting any is the side
+ * that withholds more.
+ */
 function isCombobox(node: DomChoiceNode): boolean {
-  for (const token of (attributeOf(node, "role") ?? "").trim().split(/\s+/)) {
-    const role = token ? resolveRoleToken(token) : undefined;
-    if (role !== undefined) return role === "combobox";
-  }
-  return false;
+  return rolesOf(node).includes("combobox");
+}
+
+/**
+ * A choice container by its markup: a `<select>`, or a `role` whose first
+ * recognized token is one (`POPUP_CHOICE_ROLES`).
+ */
+function isChoiceContainer(node: DomChoiceNode): boolean {
+  const tag = (node.localName ?? node.nodeName ?? "").toLowerCase();
+  const role = rolesOf(node)[0];
+  return (
+    tag === "select" || (role !== undefined && POPUP_CHOICE_ROLES.has(role))
+  );
 }
 
 /** Backend ids of `node` and everything under it, shadow roots included. */
@@ -171,17 +197,49 @@ export function domChoiceTargets(root: DomChoiceNode): Set<number> {
   if (walk.fields.size === 0) return targets;
   const around = aroundFields(walk);
   for (const [id, { node, scope }] of walk.elements) {
-    if (!walk.fields.has(id) && !(around.has(id) && isCombobox(node))) {
-      continue;
-    }
-    for (const name of ["aria-controls", "aria-owns"]) {
-      for (const ref of idrefs(node, name)) {
-        // Every element with the id, not only the first Chromium resolves:
-        // a page that renders a form twice, a hidden copy first, would
-        // otherwise show the visible popup's choice.
-        for (const target of scope.get(ref) ?? []) subtreeIds(target, targets);
-      }
+    if (walk.fields.has(id) || (around.has(id) && isCombobox(node))) {
+      addHostTargets(walk, node, scope, targets);
     }
   }
   return targets;
+}
+
+/**
+ * Add to `targets` what `host`, a sensitive field or a combobox around one,
+ * reaches: the subtree of every element carrying an id it names in
+ * `aria-controls` or `aria-owns`, and of the choice container around every
+ * element carrying its `aria-activedescendant`. Every element with the id,
+ * not only the first Chromium resolves: a page that renders a form twice, a
+ * hidden copy first, would otherwise show the visible popup's choice.
+ */
+function addHostTargets(
+  walk: DocumentWalk,
+  host: DomChoiceNode,
+  scope: IdScope,
+  targets: Set<number>,
+): void {
+  for (const name of ["aria-controls", "aria-owns"]) {
+    for (const ref of idrefs(host, name)) {
+      for (const target of scope.get(ref) ?? []) subtreeIds(target, targets);
+    }
+  }
+  for (const ref of idrefs(host, "aria-activedescendant")) {
+    for (const active of scope.get(ref) ?? []) {
+      subtreeIds(choiceContainerIn(walk, active) ?? active, targets);
+    }
+  }
+}
+
+/** The nearest choice container at or above `node` in `walk`, by markup. */
+function choiceContainerIn(
+  walk: DocumentWalk,
+  node: DomChoiceNode,
+): DomChoiceNode | undefined {
+  let at = node.backendNodeId;
+  while (at !== undefined) {
+    const met = walk.elements.get(at)?.node;
+    if (met && isChoiceContainer(met)) return met;
+    at = walk.above.get(at);
+  }
+  return undefined;
 }

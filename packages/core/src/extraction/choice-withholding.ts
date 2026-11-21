@@ -8,6 +8,7 @@ import { ariaOwner, choiceCache, type RelationReach } from "./aria-owner.js";
 import {
   safeGetAttribute,
   safeGetElementById,
+  safeMatches,
   safeQuerySelectorAll,
   safeRootNode,
 } from "./clobber-safe.js";
@@ -50,43 +51,61 @@ function searchAbove(
   return null;
 }
 
+/** A root a deep query reads from: a document, a shadow root, a subtree's top. */
+type PageScope = Document | DocumentFragment | Element;
+
 /**
- * The document `element` is connected to, through open shadow roots, whose
- * whole a deep query from it reaches `element` with; `null` off any page, or
- * inside a closed shadow root, which no query from the document enters (a
- * read can start in one when the caller holds an element there).
+ * The roots a deep query must read from to see the whole of `element`'s page:
+ * its document, and each closed shadow root on the way up, which no query
+ * from above enters (a read can start inside one when the caller holds an
+ * element there). A subtree in no document reads from its top.
  */
-function scannedDocument(element: Element): Document | null {
+function pageScopes(element: Element): PageScope[] {
+  const scopes: PageScope[] = [];
   let root = safeRootNode(element);
   while (root.nodeType === 11 /* DOCUMENT_FRAGMENT_NODE */) {
     const shadow = root as ShadowRoot;
-    if (!shadow.host || shadow.mode === "closed") return null;
+    if (!shadow.host || shadow.mode === "closed") scopes.push(shadow);
+    if (!shadow.host) return scopes;
     root = safeRootNode(shadow.host);
   }
-  return root.nodeType === 9 /* DOCUMENT_NODE */ ? (root as Document) : null;
+  scopes.push(root as Document | Element);
+  return scopes;
+}
+
+/** What `selector` matches at or under `scope`, open shadow roots included. */
+function deepQuery(scope: PageScope, selector: string): Element[] {
+  const tops =
+    scope.nodeType === 9 /* DOCUMENT_NODE */
+      ? [(scope as Document).documentElement].filter((el) => el !== null)
+      : scope.nodeType === 11
+        ? Array.from((scope as DocumentFragment).children)
+        : [scope as Element];
+  return tops.flatMap((top) => [
+    ...(safeMatches(top, selector) ? [top] : []),
+    ...deepQuerySelectorAll(top, selector),
+  ]);
 }
 
 /**
  * False only when the page `element` is in holds no sensitive field at all,
- * open shadow roots included, so no choice in it can be one's. Asked once per
- * page per extraction, it spares every node with a choice state, and every
- * reference target, the climbs below on the pages most often read. Outside an
- * extraction, for a subtree not in a document, or inside a closed shadow root
- * the page's query can't enter ({@link scannedDocument}), it answers true and
- * the climbs decide.
+ * open shadow roots included ({@link pageScopes}), so no choice in it can be
+ * one's. Asked once per scope per extraction, it spares every node with a
+ * choice state, and every reference target, the climbs below on the pages
+ * most often read. Outside an extraction it answers true and the climbs
+ * decide.
  */
 export function pageMayHoldSensitiveField(element: Element): boolean {
   const cache = choiceCache();
-  const doc = cache && scannedDocument(element);
-  if (!cache || !doc?.documentElement) return true;
-  let holds = cache.sensitivePages.get(doc);
-  if (holds === undefined) {
-    holds = deepQuerySelectorAll(doc.documentElement, FIELD_SELECTOR).some(
-      isSensitiveField,
-    );
-    cache.sensitivePages.set(doc, holds);
-  }
-  return holds;
+  if (!cache) return true;
+  return pageScopes(element).some((scope) => {
+    let holds = cache.sensitiveScopes.get(scope);
+    if (holds === undefined) {
+      holds = deepQuery(scope, FIELD_SELECTOR).some(isSensitiveField);
+      cache.sensitiveScopes.set(scope, holds);
+    }
+    return holds;
+  });
 }
 
 /**
@@ -159,9 +178,21 @@ function indexSensitiveRelations(
     const activeId = (
       safeGetAttribute(host, "aria-activedescendant") ?? ""
     ).trim();
-    const active = activeId ? safeGetElementById(scope, activeId) : null;
-    if (active) reach.elements.add(choiceContainerOf(active) ?? active);
+    for (const active of activeId ? elementsWithId(scope, activeId) : []) {
+      reach.elements.add(choiceContainerOf(active) ?? active);
+    }
   }
+}
+
+/**
+ * Every element in `scope` whose id is `id`, not only the first the page
+ * resolves: a page that renders a form twice, a hidden copy first, would
+ * otherwise leave the visible copy's popup out.
+ */
+function elementsWithId(scope: Document | ShadowRoot, id: string): Element[] {
+  return Array.from(safeQuerySelectorAll(scope, "[id]")).filter(
+    (el) => safeGetAttribute(el, "id") === id,
+  );
 }
 
 /** `reach` takes in `element`: by its id in its scope, or as itself. */
@@ -178,25 +209,24 @@ function reaches(reach: RelationReach, element: Element): boolean {
  * the field's value. Every element carrying a named id counts, not only the
  * first the page resolves: a page that renders a form twice, a hidden copy
  * first, would otherwise show the visible popup's choice. Indexed once per
- * page per extraction, every shadow root with it: the container an
- * `aria-activedescendant` reaches can sit in another tree scope than its
- * field (a listbox host around the shadow root that holds its own input and
- * options). Outside an extraction, or off any page, `element`'s own scope is
+ * page scope per extraction ({@link pageScopes}), every open shadow root with
+ * it: the container an `aria-activedescendant` reaches can sit in another
+ * tree scope than its field (a listbox host around the shadow root that holds
+ * its own input and options). Outside an extraction, `element`'s own scope is
  * read.
  */
 export function controlledBySensitiveField(element: Element): boolean {
   const cache = choiceCache();
-  const doc = cache && scannedDocument(element);
-  if (!cache || !doc?.documentElement) {
+  if (!cache) {
     const reach: RelationReach = { elements: new Set(), ids: new Map() };
     const scope = idScope(element);
     indexSensitiveRelations(safeQuerySelectorAll(scope, RELATIONS), reach);
     return reaches(reach, element);
   }
-  if (!cache.indexedPages.has(doc)) {
-    cache.indexedPages.add(doc);
-    const candidates = deepQuerySelectorAll(doc.documentElement, RELATIONS);
-    indexSensitiveRelations(candidates, cache.reach);
+  for (const scope of pageScopes(element)) {
+    if (cache.indexedScopes.has(scope)) continue;
+    cache.indexedScopes.add(scope);
+    indexSensitiveRelations(deepQuery(scope, RELATIONS), cache.reach);
   }
   return reaches(cache.reach, element);
 }

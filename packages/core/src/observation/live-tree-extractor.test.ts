@@ -1177,6 +1177,22 @@ describe("LiveTreeExtractor", () => {
       }
     });
 
+    it("reads it once a name goes from a region combobox around a sensitive field", async () => {
+      // The unnamed region token is skipped, so the element becomes a
+      // combobox without a role change.
+      for (const name of ["aria-label", "title"]) {
+        const nodes = await refreshed(
+          `<main><div><div id="w" role="region combobox" ${name}="Card"><input aria-label="Month" autocomplete="cc-exp-month">` +
+            `<ul role="listbox" id="lb"><li role="option" aria-selected="true">03</li></ul></div></div></main>` +
+            `<section><button aria-labelledby="lb"></button></section>`,
+          () => byId("w").removeAttribute(name),
+        );
+        expect(read(nodes, "button"), name).toEqual([
+          ["[redacted]", undefined],
+        ]);
+      }
+    });
+
     it("keeps the splice when a role changes around a sensitive field with no combobox in it", async () => {
       document.body.innerHTML =
         // A level down, so the parent re-read for a role change is not the

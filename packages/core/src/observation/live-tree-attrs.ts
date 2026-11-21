@@ -51,7 +51,9 @@ export const REFERENCE_ATTRS = new Set([
  * element around a sensitive field becoming or ceasing to be a combobox
  * (`role`, read now and from `oldValue`, which an observer that recorded none
  * leaves `undefined`), relation or not, since a listbox it holds is its
- * popup, or a sensitive field's own role changing; or a
+ * popup, or a sensitive field's own role changing, or a name (`aria-label`,
+ * `title`) coming or going on an element whose role list names a combobox
+ * behind a token that needs one; or a
  * choice made or cleared in a sensitive field's popup (`aria-selected`),
  * which decides what every reference into the popup reads, the other
  * options' own names and descriptions among them.
@@ -75,17 +77,41 @@ export function movesSensitiveChoice(
     case "role":
       return (
         isSensitiveField(target) ||
-        ((getExplicitRole(target) === "combobox" ||
-          oldValue === undefined ||
-          namesCombobox(oldValue)) &&
-          pageMayHoldSensitiveField(target) &&
-          holdsSensitiveField(target))
+        (mayBeCombobox(target, oldValue) && wrapsSensitiveField(target))
       );
     case "aria-selected":
       return inSensitiveChoice(target);
+    // A name can decide the role: an unnamed `region` token is skipped, so
+    // `role="region combobox"` turns into a combobox when its name goes.
+    case "aria-label":
+    case "title":
+      return (
+        namesCombobox(safeGetAttribute(target, "role")) &&
+        wrapsSensitiveField(target)
+      );
     default:
       return false;
   }
+}
+
+/**
+ * `target`, whose `role` changed from `oldValue`, is or was a combobox. An
+ * observer that recorded no old value leaves it `undefined`: it may have been.
+ */
+function mayBeCombobox(
+  target: Element,
+  oldValue: string | null | undefined,
+): boolean {
+  return (
+    getExplicitRole(target) === "combobox" ||
+    oldValue === undefined ||
+    namesCombobox(oldValue)
+  );
+}
+
+/** `target` holds a sensitive field, on a page that holds any. */
+function wrapsSensitiveField(target: Element): boolean {
+  return pageMayHoldSensitiveField(target) && holdsSensitiveField(target);
 }
 
 /**

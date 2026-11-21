@@ -77,9 +77,9 @@ describe("where the DOM says a sensitive field's choice is made", () => {
         role,
       ).toBe(true);
     }
-    // A group around one is not a combobox, and a combobox's role is its
-    // first recognized token.
-    for (const role of ["group", "listbox combobox"]) {
+    // A group around one is not a combobox. (A combobox token anywhere in
+    // the list counts: the tree can skip the tokens before it.)
+    for (const role of ["group"]) {
       const { wrapper } = wrappedListbox("p");
       const around = el("div", { role, "aria-controls": "p" }, [
         el("input", { type: "password" }),
@@ -140,6 +140,32 @@ describe("where the DOM says a sensitive field's choice is made", () => {
     );
     expect(targets.has(first.option.backendNodeId!)).toBe(true);
     expect(targets.has(later.option.backendNodeId!)).toBe(true);
+  });
+
+  it("is the choice container around every element that carries the active id", () => {
+    // Two copies of a form, the hidden one first; Chromium resolves the
+    // field's aria-activedescendant to the first.
+    const copy = () => {
+      const option = el("li", {
+        id: "o3",
+        role: "option",
+        "aria-selected": "true",
+      });
+      const listbox = el("ul", { role: "listbox" }, [option]);
+      const field = el("input", {
+        role: "combobox",
+        autocomplete: "cc-exp-month",
+        "aria-activedescendant": "o3",
+      });
+      return { field, listbox, option, form: el("div", {}, [field, listbox]) };
+    };
+    const hidden = copy();
+    const shown = copy();
+    const targets = domChoiceTargets(doc(hidden.form, shown.form));
+    for (const { listbox, option } of [hidden, shown]) {
+      expect(targets.has(listbox.backendNodeId!)).toBe(true);
+      expect(targets.has(option.backendNodeId!)).toBe(true);
+    }
   });
 
   it("counts no field an author shadow host leaves unslotted", () => {

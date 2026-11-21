@@ -440,6 +440,35 @@ describe("the choice a sensitive field holds", () => {
       ]);
     });
 
+    it("is withheld in every popup that carries the active id a sensitive field names", () => {
+      const copy =
+        `<input role="combobox" aria-label="Month" autocomplete="cc-exp-month" aria-activedescendant="o3">` +
+        `<ul role="listbox" aria-label="Months"><li role="option" id="o3" aria-selected="true">03</li></ul>`;
+      expect(
+        selectedOf(`<div aria-hidden="true">${copy}</div><div>${copy}</div>`),
+      ).toEqual([
+        ["03", undefined],
+        ["03", undefined],
+      ]);
+    });
+
+    it("finds a popup in a closed shadow root a read starts in, by its host", () => {
+      // The listbox is the host; the closed root holds the field and the
+      // option the field's aria-activedescendant names.
+      document.body.innerHTML = `<x-lb role="listbox" aria-label="Months"></x-lb>`;
+      const root = document.body.firstElementChild!.attachShadow({
+        mode: "closed",
+      });
+      root.innerHTML =
+        `<div id="start"><input role="combobox" aria-label="Month" autocomplete="cc-exp-month" aria-activedescendant="o3">` +
+        `<div role="option" id="o3" aria-selected="true">03</div></div>`;
+      expect(
+        [...extractDomTree(root.getElementById("start")!).nodes.values()]
+          .filter((n) => n.a11y.role === "option")
+          .map((n) => n.a11y.states["selected"]),
+      ).toEqual([undefined]);
+    });
+
     it("is withheld on an option a sensitive field controls itself", () => {
       // Only that option: what it points at is all that is reached.
       expect(
