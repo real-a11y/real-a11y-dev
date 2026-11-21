@@ -509,6 +509,74 @@ describe("the choice a sensitive field holds", () => {
       ]);
     });
 
+    /** A host with a closed root holding `shadow`, its light children `light`. */
+    const closedHost = (
+      tag: string,
+      attrs: string,
+      light: string,
+      shadow: string,
+    ) => {
+      document.body.innerHTML = `<${tag} ${attrs}>${light}</${tag}>`;
+      const root = document.body.firstElementChild!.attachShadow({
+        mode: "closed",
+      });
+      root.innerHTML = shadow;
+      return root;
+    };
+
+    it("is withheld in a closed root whose combobox wraps a field slotted in from outside", () => {
+      for (const [autocomplete, chosen] of [
+        ["cc-exp-month", ["option", "03", undefined]],
+        ["off", ["option", "03", "chosen"]],
+      ] as const) {
+        const root = closedHost(
+          "x-combo",
+          "",
+          `<input aria-label="Month" autocomplete="${autocomplete}">`,
+          `<div id="start"><div role="combobox" aria-controls="lb"><slot></slot></div>` +
+            `<ul role="listbox" id="lb" aria-label="Months"><li role="option" id="o3" aria-selected="true" aria-description="chosen">03</li></ul></div>`,
+        );
+        expect(
+          readOf(["option"], root.getElementById("start")!),
+          autocomplete,
+        ).toEqual([chosen]);
+      }
+    });
+
+    it("is withheld in a listbox slotted into a closed-root combobox that holds the field", () => {
+      // The listbox is the document's, so its own page never shows the
+      // closed root: the read's start does.
+      const root = closedHost(
+        "x-combo",
+        'role="combobox"',
+        `<ul role="listbox" aria-label="Months"><li role="option" aria-selected="true">03</li></ul>`,
+        `<div id="start"><input aria-label="Month" autocomplete="cc-exp-month"><slot></slot></div>`,
+      );
+      expect(
+        [...extractDomTree(root.getElementById("start")!).nodes.values()]
+          .filter((n) => n.a11y.role === "option")
+          .map((n) => n.a11y.states["selected"]),
+      ).toEqual([undefined]);
+    });
+
+    it("reads a closed root's slot as rendered: an assigned node, not the fallback", () => {
+      // The host is the combobox, and its listbox sits in its closed root.
+      // The sensitive input is only the slot's fallback; the ordinary one
+      // assigned to it is what renders, so the choice is the page's.
+      const root = closedHost(
+        "x-combo",
+        'role="combobox" aria-expanded="true"',
+        `<input aria-label="Color">`,
+        `<slot><input aria-label="Month" autocomplete="cc-exp-month"></slot>` +
+          `<ul role="listbox" id="start" aria-label="Colors"><li role="option" aria-selected="true">Red</li></ul>`,
+      );
+      expect(
+        [...extractDomTree(root.getElementById("start")!).nodes.values()]
+          .filter((n) => n.a11y.role === "option")
+          .map((n) => n.a11y.states["selected"]),
+      ).toEqual([true]);
+    });
+
     it("is withheld in a subtree that is not in a document, reached by aria-activedescendant", () => {
       const root = document.createElement("div");
       root.innerHTML =

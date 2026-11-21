@@ -7,6 +7,7 @@
 import {
   ariaOwner,
   choiceCache,
+  withAriaOwnerIndex,
   type ChoiceCache,
   type RelationReach,
 } from "./aria-owner.js";
@@ -20,6 +21,7 @@ import {
 } from "./clobber-safe.js";
 import {
   deepQuerySelectorAll,
+  flatChildNodes,
   flatChildren,
   flatParentElement,
   idScope,
@@ -102,14 +104,40 @@ function seePage(cache: ChoiceCache, element: Element): void {
   for (const scope of pageScopes(element)) {
     if (cache.scopesSeen.has(scope)) continue;
     cache.scopesSeen.add(scope);
+    cache.unindexed.push(scope);
     const host = (scope as ShadowRoot).host;
     if (scope.nodeType === 11 && host) {
       cache.closedRoots.set(host, scope as ShadowRoot);
     }
-    if (!deepQuery(scope, FIELD_SELECTOR).some(isSensitiveField)) continue;
-    cache.sensitiveSeen = true;
-    indexSensitiveRelations(deepQuery(scope, RELATIONS), cache.reach);
+    if (deepQuery(scope, FIELD_SELECTOR).some(isSensitiveField)) {
+      cache.sensitiveSeen = true;
+    }
   }
+  // Every scope's relations once any holds a sensitive field: a combobox in
+  // one can wrap a field another slots into it.
+  if (!cache.sensitiveSeen) return;
+  for (const scope of cache.unindexed.splice(0)) {
+    indexSensitiveRelations(
+      deepQuery(scope as PageScope, RELATIONS),
+      cache.reach,
+    );
+  }
+}
+
+/**
+ * Run `read`, an extraction of `root`, with one set of per-extraction indexes
+ * (`withAriaOwnerIndex`), `root`'s page scopes seen first ({@link seePage}).
+ * A read that starts inside a closed shadow root then knows that root before
+ * anything in it asks: a node slotted in from the document has only the
+ * document for its own page.
+ *
+ * @internal
+ */
+export function withReadIndexes<T>(root: Element, read: () => T): T {
+  return withAriaOwnerIndex(() => {
+    pageMayHoldSensitiveField(root);
+    return read();
+  });
 }
 
 /**
@@ -130,14 +158,17 @@ export function pageMayHoldSensitiveField(element: Element): boolean {
 }
 
 /**
- * `element`'s children in the flat tree, and in the closed shadow root it
+ * `element`'s children in the flat tree, through the closed shadow root it
  * hosts when this read started inside that root ({@link seePage}), which its
  * `shadowRoot` hides.
  */
 function childrenOf(element: Element): Element[] {
   const closed = choiceCache()?.closedRoots.get(element);
-  const children = flatChildren(element);
-  return closed ? [...Array.from(closed.children), ...children] : children;
+  // The root's children with each slot replaced by what it renders, as the
+  // flat tree reads an open root: an assigned node, else the fallback.
+  return closed
+    ? flatChildNodes(closed).filter((n): n is Element => n.nodeType === 1)
+    : flatChildren(element);
 }
 
 /**

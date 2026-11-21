@@ -51,6 +51,8 @@ export interface ChoiceCache {
   readonly scopesSeen: WeakSet<Node>;
   /** Some scope seen in this extraction holds a sensitive field. */
   sensitiveSeen: boolean;
+  /** Scopes seen whose relations wait for a sensitive field to be seen. */
+  readonly unindexed: Node[];
   /**
    * The closed shadow root of each host whose root a scope seen is: page
    * script can't reach one through its host, but a read that starts inside
@@ -98,6 +100,7 @@ export function withAriaOwnerIndex<T>(fn: () => T): T {
   holder.choices = {
     scopesSeen: new WeakSet(),
     sensitiveSeen: false,
+    unindexed: [],
     closedRoots: new WeakMap(),
     reach: { elements: new WeakSet(), ids: new WeakMap() },
     hosts: new WeakMap(),

@@ -6,13 +6,13 @@ import { getNodeId } from "../utils/id-generator.js";
 import { realmSingleton } from "../utils/realm-singleton.js";
 import { treeSource } from "../utils/tree-source.js";
 
-import { withAriaOwnerIndex } from "./aria-owner.js";
 import { getAriaStates } from "./aria-states.js";
 import { isAriaHiddenValue } from "./aria-tokens.js";
 import { AUTHOR_NAMED_ROLES } from "./author-named-roles.js";
 import {
   readsSensitivePopup,
   withholdPopupDescription,
+  withReadIndexes,
 } from "./choice-withholding.js";
 import {
   safeGetAttribute,
@@ -1161,8 +1161,8 @@ export function extractDomTree(
   // mutation-triggered run; never reuse across extractDomTree calls.
   // Any truthy value: a privacy switch that a `"1"` left off would fail open.
   const redactInput = Boolean(options.redactInput);
-  // One `aria-owns` index for the whole walk (see aria-owner.ts).
-  const rootId = withAriaOwnerIndex(() =>
+  // One set of indexes for the whole walk (aria-owner.ts, choice-withholding).
+  const rootId = withReadIndexes(startRoot, () =>
     walk(startRoot, parentId, baseDepth, nodes, {
       styleCache: new WeakMap(),
       descendantText: new WeakMap(),
