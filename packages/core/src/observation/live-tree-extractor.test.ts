@@ -1463,6 +1463,66 @@ describe("LiveTreeExtractor", () => {
     });
   });
 
+  // Beside a link, a paragraph's own text is `text` rows (`splitTextRuns` in
+  // extraction/a11y-extractor). They come from the projection, which every
+  // refresh rebuilds from the patched DOM map, so they follow the page.
+  describe("text rows beside a kept child", () => {
+    const rows = (result: ExtractionResult) =>
+      [...result.nodes.values()]
+        .filter((n) => n.a11y.role === "text")
+        .map((n) => n.a11y.name);
+
+    const refreshAfter = async (mutate: () => void) => {
+      const live = new LiveTreeExtractor(document.body, { mode: "a11y" });
+      expect(rows(live.extract())).toEqual(["Read the", "now."]);
+      let lastChange: TreeChange | undefined;
+      const observer = new DomObserver(
+        document.body,
+        (change) => {
+          lastChange = change;
+        },
+        50,
+      );
+      observer.start();
+      mutate();
+      await vi.advanceTimersByTimeAsync(100);
+      observer.stop();
+      return live.refresh(lastChange);
+    };
+
+    beforeEach(() => {
+      document.body.innerHTML = `<main><p>Read <b>the</b> <a href="/g">guide</a> now.</p></main>`;
+    });
+
+    it("follow an edit to the paragraph's text", async () => {
+      const result = await refreshAfter(() => {
+        document.querySelector("p")!.lastChild!.nodeValue = " today.";
+      });
+      expect(result.nodes).toEqual(extractA11yTree(document.body).nodes);
+      expect(rows(result)).toEqual(["Read the", "today."]);
+    });
+
+    it("follow an edit inside an inline wrapper", async () => {
+      const result = await refreshAfter(() => {
+        document.querySelector("b")!.firstChild!.nodeValue = "our";
+      });
+      expect(result.nodes).toEqual(extractA11yTree(document.body).nodes);
+      expect(rows(result)).toEqual(["Read our", "now."]);
+    });
+
+    it("fold back into the name once the link is gone", async () => {
+      const result = await refreshAfter(() => {
+        document.querySelector("a")!.remove();
+      });
+      expect(result.nodes).toEqual(extractA11yTree(document.body).nodes);
+      expect(rows(result)).toEqual([]);
+      expect(
+        [...result.nodes.values()].find((n) => n.a11y.role === "paragraph")
+          ?.a11y.name,
+      ).toBe("Read the now.");
+    });
+  });
+
   it("updates a name host when a descendant gains a name-barrier role", async () => {
     document.body.innerHTML = `<main><button><span>Save</span></button></main>`;
 

@@ -43,31 +43,86 @@ export function getOwnText(
   readText: (node: Node) => string,
 ): string {
   let text = "";
+  walkOwnText(element, styleCache, (part) => {
+    if (typeof part === "string") text += part;
+    else if (safeNodeType(part) === Node.TEXT_NODE) text += readText(part);
+  });
+  return text;
+}
+
+/**
+ * The parts of an element's own text, in document order, as {@link getOwnText}
+ * reads them: each text node, a `" "` for a `<br>`, and each child element
+ * that owns its text (a link, a `<code>`, a hidden span), which lends none.
+ * A child that is only a {@link isTextRun} is walked through, so the element
+ * children reported are the ones at any depth of runs that have a node of
+ * their own. This is what tells where each such child sits in the sentence.
+ */
+export function walkOwnText(
+  element: Element,
+  styleCache: StyleCache | null | undefined,
+  visit: (part: Node | " ") => void,
+): void {
   for (const child of flatChildNodes(element)) {
     const type = safeNodeType(child);
     if (type === Node.TEXT_NODE) {
-      text += readText(child);
+      visit(child);
     } else if (type === Node.ELEMENT_NODE) {
       const childEl = child as Element;
-      // A child that cannot be read costs its own text, not the host's name —
-      // as in getAccessibleTextContent.
-      try {
-        const style = getCachedComputedStyle(childEl, styleCache);
-        // A hidden child adds nothing, not even a hidden `<br>`'s space:
-        // Chromium hangs no `LineBreak` for it, so `A<br hidden>B` is "AB".
-        if (isHiddenFromAT(childEl, style)) continue;
-        if (safeTagName(childEl) === "br") {
-          text += " ";
-        } else if (isTextRun(childEl, style)) {
-          text += getOwnText(childEl, styleCache, readText);
-        }
-      } catch (error) {
-        warnSkippedElement(childEl, error);
-      }
+      const kind = ownTextKind(childEl, styleCache);
+      if (kind === "run") walkOwnText(childEl, styleCache, visit);
+      else visit(kind === "break" ? " " : childEl);
     }
   }
-  return text;
 }
+
+/**
+ * What a child element is to its parent's own text: a `"run"` of it, a line
+ * `"break"` in it, or a node of its `"own"`, which lends none.
+ */
+function ownTextKind(
+  child: Element,
+  styleCache: StyleCache | null | undefined,
+): "own" | "break" | "run" {
+  // A child that cannot be read costs its own text, not the host's name — as
+  // in getAccessibleTextContent. It is still a child of its own.
+  try {
+    const style = getCachedComputedStyle(child, styleCache);
+    // A hidden child adds nothing, not even a hidden `<br>`'s space:
+    // Chromium hangs no `LineBreak` for it, so `A<br hidden>B` is "AB".
+    if (isHiddenFromAT(child, style)) return "own";
+    if (safeTagName(child) === "br") return "break";
+    if (isTextRun(child, style)) return "run";
+  } catch (error) {
+    warnSkippedElement(child, error);
+  }
+  return "own";
+}
+
+/**
+ * Roles whose own text prints as ordered `text` rows once the element also
+ * holds a child with a node of its own (`splitTextRuns` in a11y-extractor.ts):
+ * the prose roles, whose text is their content. The native producer's
+ * `NATIVE_AX_OWN_TEXT_ROLES` in this package's own role names — a
+ * `<figcaption>` is a `generic` here, so it has no entry.
+ */
+export const TEXT_RUN_HOST_ROLES: ReadonlySet<string> = new Set([
+  "paragraph",
+  "blockquote",
+  "listitem",
+  "term",
+  "definition",
+  "caption",
+  "code",
+  "strong",
+  "emphasis",
+  "mark",
+  "deletion",
+  "insertion",
+  "subscript",
+  "superscript",
+  "time",
+]);
 
 /**
  * Tags that extract as `generic` but that Chromium still gives a node of its

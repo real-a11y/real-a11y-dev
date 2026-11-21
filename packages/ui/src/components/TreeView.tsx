@@ -19,6 +19,7 @@ import {
   FocusManager,
   DomObserver,
   LiveTreeExtractor,
+  TEXT_RUN_ROLE,
   createPicker,
   getElementRefs,
   rootRowScope,
@@ -330,16 +331,29 @@ export function TreeView({
 
   // ── Callbacks wired to DOM side-effects ────────────────────────────────────
 
+  // The row whose element stands for `nodeId` on the page. A `text` row has
+  // no element of its own: it is a run of its parent's text, so the parent's
+  // element is what to show for it.
+  const elementRowId = useCallback(
+    (nodeId: string): string => {
+      const node = treeData?.nodes.get(nodeId);
+      return node?.a11y.role === TEXT_RUN_ROLE && node.parentId
+        ? node.parentId
+        : nodeId;
+    },
+    [treeData],
+  );
+
   const handleSelect = useCallback(
     (nodeId: string, _node: SemanticNode) => {
       if (highlightOnHover || scrollHostOnSelect) {
-        focusManagerRef.current?.highlightElement(nodeId, {
+        focusManagerRef.current?.highlightElement(elementRowId(nodeId), {
           scroll: scrollHostOnSelect,
           overlay: highlightOnHover,
         });
       }
     },
-    [highlightOnHover, scrollHostOnSelect],
+    [highlightOnHover, scrollHostOnSelect, elementRowId],
   );
 
   const handleActivate = useCallback(
@@ -373,7 +387,7 @@ export function TreeView({
     (nodeId: string | null) => {
       if (!highlightOnHover) return;
       if (nodeId) {
-        focusManagerRef.current?.highlightElement(nodeId, {
+        focusManagerRef.current?.highlightElement(elementRowId(nodeId), {
           scroll: false,
           overlay: true,
         });
@@ -381,7 +395,7 @@ export function TreeView({
         focusManagerRef.current?.clearHighlight();
       }
     },
-    [highlightOnHover],
+    [highlightOnHover, elementRowId],
   );
 
   // ── Loading state ──────────────────────────────────────────────────────────

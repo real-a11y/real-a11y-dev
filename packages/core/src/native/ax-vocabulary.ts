@@ -21,7 +21,7 @@
  */
 
 /** Bump on any table/rule change that alters normalized output. */
-export const NATIVE_AX_VOCABULARY_VERSION = 12;
+export const NATIVE_AX_VOCABULARY_VERSION = 13;
 
 /**
  * Chromium AX roles that are structural noise relative to this engine's
@@ -139,12 +139,14 @@ export const NATIVE_AX_NAME_SOURCE_ROLES: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * Prose roles whose text IS their content, so they take a name from their own
- * `StaticText` children even when they also have kept children — a paragraph
- * that mixes sentences with a `link` or `code` (see `directText` in the
- * normalizer). Chromium leaves these unnamed because ARIA prohibits naming
- * them (paragraph, code, strong…) or never computes one from content
- * (listitem, blockquote…), not because anything is missing.
+ * Prose roles whose text IS their content, so their own `StaticText`
+ * children are kept even when they also have kept children — a paragraph that
+ * mixes sentences with a `link` or `code`. Beside kept children each run is a
+ * `text` row where it reads (`visitTextRuns` in the normalizer); with none,
+ * the text is the node's name (`directText`). Chromium leaves these unnamed
+ * because ARIA prohibits naming them (paragraph, code, strong…) or never
+ * computes one from content (listitem, blockquote…), not because anything is
+ * missing.
  *
  * Deliberately NOT here: every role named by its author only — dialog,
  * alertdialog, img, the landmarks, form, and widgets. Chromium's empty name

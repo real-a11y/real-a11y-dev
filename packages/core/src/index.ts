@@ -62,6 +62,8 @@ export { withAriaOwnerIndex } from "./extraction/aria-owner.js";
 // change marks; not a stability promise.
 export { rootRowScope, type RowScope } from "./extraction/row-scope.js";
 export { buildA11yTree, extractA11yTree } from "./extraction/a11y-extractor.js";
+// The role of a row holding a run of its parent's own text, in both producers.
+export { TEXT_RUN_ROLE } from "./text-run.js";
 // For a producer outside core (the native one) to stamp a tree as core does.
 export { treeSource } from "./utils/tree-source.js";
 // For a walk up the page's own DOM outside core, such as the extension's focus

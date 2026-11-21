@@ -36,6 +36,34 @@ If #1 resolves to a non-empty string, #2–#6 are ignored — even if #2 looks "
 
 That text includes what sits in a plain inline wrapper, which Chromium gives no node of its own: a `<span>`, a `<b>`, a custom or unknown element. `<p>Drop in <b>the panel</b> now.</p>` is `paragraph "Drop in the panel now."`, and a highlighted code block is named with its code. Text in an element that has a node of its own stays out, because that node shows it: a link, a `<code>` or `<strong>`, a `<label>`, and a wrapper with an `id`, a `title`, an `aria-` attribute or a `tabindex`. A `<br>` reads as a space.
 
+### Text beside a link: `text` rows
+
+When a paragraph mixes its text with such an element, the tree keeps the reading order. The paragraph has no name, and each run of its text is a `text` row where it sits:
+
+```html
+<p>
+  You accept our <a href="/terms">terms</a> and have read our
+  <a href="/privacy">privacy policy</a>.
+</p>
+```
+
+```
+paragraph
+  text "You accept our"
+  link "terms"
+  text "and have read our"
+  link "privacy policy"
+  text "."
+```
+
+This is the order a browser's accessibility tree has, and the order a screen reader reads. The same goes for a list item, a block quote, a `<dd>` or `<dt>`, a table caption, and the phrasing elements with a role (`<code>`, `<strong>`, `<em>`, `<mark>`, `<del>`, `<ins>`, `<sub>`, `<sup>`, `<time>`).
+
+- `text` is not an ARIA role. A row has no element of its own, takes no action, and holds no children.
+- Each run is trimmed, and a run of only white space prints no row.
+- A plain inline wrapper is part of the run around it: `<p>A <b>bold</b> <a href="/x">link</a></p>` is `text "A bold"` then `link "link"`.
+- A paragraph with only text, or with only plain wrappers, keeps its text as its name. So does one its author named with `aria-label`, `aria-labelledby` or `title`.
+- A heading, link, button or cell is not affected: its name is already its whole content.
+
 ---
 
 ## Concrete examples

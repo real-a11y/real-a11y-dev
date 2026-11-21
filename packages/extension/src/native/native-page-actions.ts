@@ -136,7 +136,10 @@ export function pageFocus(this: Element): Marker {
  * overlay, so the row counts as revealed either way.
  */
 export function pageReveal(this: Element, nonce: string): Marker {
-  const el = this;
+  // A `text` row is backed by a text node, which takes no outline and no
+  // focus: the element it is text of stands for it.
+  // eslint-disable-next-line no-restricted-properties -- read on a text node, which is never a <form>
+  const el = (this as Node)?.nodeType === 3 ? this.parentElement : this;
   if (!el || !el.tagName) return { ok: false, reason: "not-element" };
   // Through the prototypes, not `el.dispatchEvent`/`el.focus`: a `<form>`
   // holding `<input name="dispatchEvent">` shadows the method with the input,
@@ -175,7 +178,9 @@ export function pageReveal(this: Element, nonce: string): Marker {
  * page can't forge one. The event name is repeated in `content.ts`.
  */
 export function pagePreview(this: Element, nonce: string): Marker {
-  const el = this;
+  // As in pageReveal: a text node's element is the one it is text of.
+  // eslint-disable-next-line no-restricted-properties -- read on a text node, which is never a <form>
+  const el = (this as Node)?.nodeType === 3 ? this.parentElement : this;
   if (!el || !el.tagName) return { ok: false, reason: "not-element" };
   EventTarget.prototype.dispatchEvent.call(
     el,
