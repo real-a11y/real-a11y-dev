@@ -168,12 +168,16 @@ export function displayNeedsSpace(display: string | undefined): boolean {
  * its parent's name. Without this filter the inspector showed the
  * polluted concatenation (surfaced on PR #80's APG Tree View example).
  *
- * The set covers:
- *   - Containers / structural groups: group, list, menu, tree, listbox,
- *     tablist, toolbar, treegrid, grid, table, rowgroup, combobox.
- *   - Row / item widgets that carry their own name: treeitem, menuitem*,
- *     option, tab, listitem, row, cell, gridcell, columnheader,
- *     rowheader.
+ * The set mirrors where Chromium stops, and the DOM producer reads into the
+ * rest as AccName 1.2 §2F asks (no role stops the recursion in the spec):
+ *   - Containers / structural groups: group, menu, menubar, tree, listbox,
+ *     tablist, toolbar, treegrid, grid, table, rowgroup, row, combobox.
+ *   - Item widgets that carry their own name: treeitem, menuitem*, option,
+ *     tab. A DELIBERATE DEVIATION (decision recorded with PR #84): Chromium
+ *     reads a nested item into its parent's name when no group or menu sits
+ *     between them (`<li role="treeitem">Reports<ul><li role="treeitem">Q1`
+ *     is "Reports Q1" there), which is malformed markup. We keep "Reports",
+ *     because a nested row is its own announceable item.
  *   - Embedded form controls: slider, spinbutton, textbox, searchbox.
  *     Their text never reaches a name, but their *value* does (accname
  *     §2C): `<label>Delete <input value="3"> files</label>` names "Delete 3
@@ -182,9 +186,12 @@ export function displayNeedsSpace(display: string | undefined): boolean {
  *     combobox, a listbox and the display ranges below too, as Chromium
  *     does.
  *   - Display widgets / live regions: dialog, alertdialog, tabpanel,
- *     alert, status, log, tooltip, progressbar, meter. A tooltip or
- *     dialog nested inside a widget is its own surface, not part of the
- *     host's label.
+ *     alert, status, log, progressbar, meter. A dialog nested inside a
+ *     widget is its own surface, not part of the host's label.
+ *
+ * Read INTO, as Chromium does: list, listitem, cell, gridcell, columnheader,
+ * rowheader and a visible tooltip (a hidden one is simply not rendered). So
+ * `<button><ul><li>One</li><li>Two</li></ul></button>` is "One Two".
  *
  * Intentionally NOT included (walked into so their text contributes):
  *   - generic, presentation, none — transparent.
@@ -202,7 +209,6 @@ export function displayNeedsSpace(display: string | undefined): boolean {
 export const NAME_BARRIER_ROLES = new Set<string>([
   // Containers / structural groups
   "group",
-  "list",
   "menu",
   "menubar",
   "tree",
@@ -214,19 +220,14 @@ export const NAME_BARRIER_ROLES = new Set<string>([
   "table",
   "rowgroup",
   "combobox",
-  // Row / item widgets with their own name
+  // Item widgets with their own name, and the row that holds cells
   "treeitem",
   "menuitem",
   "menuitemcheckbox",
   "menuitemradio",
   "option",
   "tab",
-  "listitem",
   "row",
-  "cell",
-  "gridcell",
-  "columnheader",
-  "rowheader",
   // Embedded form controls (see §2C note in the docstring)
   "slider",
   "spinbutton",
@@ -239,7 +240,6 @@ export const NAME_BARRIER_ROLES = new Set<string>([
   "alert",
   "status",
   "log",
-  "tooltip",
   "progressbar",
   "meter",
 ]);

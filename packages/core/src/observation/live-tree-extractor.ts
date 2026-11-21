@@ -43,6 +43,7 @@ import {
   addMovedNativeStates,
   addValueReaders,
   closesName,
+  withinBody,
 } from "./value-readers.js";
 
 export interface LiveTreeExtractorOptions extends RedactInputOption {
@@ -660,18 +661,14 @@ export class LiveTreeExtractor {
   private nameRelevantAncestor(el: Element): Element {
     let node: Element | null = el;
     let outermostHost: Element | null = null;
-    while (
-      node &&
-      node !== this.root &&
-      node !== this.root.ownerDocument?.body &&
-      node !== this.root.ownerDocument?.documentElement
-    ) {
-      const owner = htmlAamNameOwner(node);
+    const scope = this.effectiveRoot ?? this.root;
+    while (node && withinBody(node)) {
+      const owner = node === scope ? null : htmlAamNameOwner(node);
       if (owner) outermostHost = owner;
       else if (isNameFromContentHost(node)) outermostHost = node;
       // A role-less inline wrapper's text is the paragraph's around it, so the
       // paragraph is a host for it too, one level out.
-      const runHost = textRunHost(node);
+      const runHost = node === scope ? null : textRunHost(node);
       if (runHost) outermostHost = runHost;
       // A name-source child is often itself a barrier (`caption`). Don't stop
       // there when its owner still needs the re-extract.
@@ -686,6 +683,9 @@ export class LiveTreeExtractor {
       // re-extracted; when no host encloses it, the fall back to `el` keeps the
       // dirty region exactly as narrow as before.
       if (!owner && node !== el && closesName(node)) break;
+      // The root itself may be the host (an inspector scoped to a grid row),
+      // but nothing above it is in scope.
+      if (node === scope) break;
       node = safeParentElement(node);
     }
     return outermostHost ?? el;

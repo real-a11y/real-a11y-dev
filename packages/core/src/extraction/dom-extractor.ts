@@ -8,7 +8,6 @@ import { treeSource } from "../utils/tree-source.js";
 
 import { getAriaStates } from "./aria-states.js";
 import { isAriaHiddenValue } from "./aria-tokens.js";
-import { AUTHOR_NAMED_ROLES } from "./author-named-roles.js";
 import {
   readsSensitivePopup,
   withholdPopupDescription,
@@ -41,7 +40,7 @@ import { getKeyAttributes } from "./key-attributes.js";
 import { associatedLabels, wrappingLabelText } from "./label-text.js";
 import { hasCaptionsTrack } from "./media-tracks.js";
 export { isTextVisible } from "./name-spacing.js";
-import { isNameFromContentHost } from "./name-hosts.js";
+import { isNameFromContentHost, skipsOwnTextFallback } from "./name-hosts.js";
 import {
   childTextWalk,
   hiddenChildText,
@@ -836,7 +835,7 @@ function computeRawAccessibleName(
   //    leaves an editing host of any role unnamed by its content (see
   //    isNameFromContentHost, which gates step 8 the same way).
   const role = getImplicitRole(element);
-  if (AUTHOR_NAMED_ROLES.has(role) || isEditingHost(element)) return "";
+  if (skipsOwnTextFallback(element, role)) return "";
   // In strict mode, text a user typed is this element's own text alone: the
   // native producer blanks such text runs, so a typed paragraph reads unnamed
   // there, and here. Read through a run of its own, so the element's name

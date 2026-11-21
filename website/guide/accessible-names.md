@@ -132,6 +132,12 @@ The same holds for `aria-labelledby` and `aria-describedby` pointing at a contro
 
 A value that is a secret never reaches a name. If a password, one-time code or payment card field holds anything, the whole name built from it reads `"[redacted]"`, and a description built from it is dropped, in both trees. The same goes for the option chosen in such a field's popup (the listbox it controls with `aria-controls`, owns with `aria-owns` or points `aria-activedescendant` into, one a combobox around it holds, or a multi-row `<select>` itself): a `<label>` around both, or an `aria-labelledby` naming the listbox or the chosen option, would read that option into the name, and a description inside the popup could say which option it is, so none is kept there. The strict mode (`redactInput`) does the same for any value a user entered. A progress bar's or meter's value is the page's own state, so it stays.
 
+A name built from content reads through lists, list items, cells, grid cells, column and row headers and a visible tooltip, and stops at containers, as Chromium does. `<button><ul><li>One</li><li>Two</li></ul></button>` is `"One Two"`, and `<button>Save<span role="tooltip">Saves the file</span></button>` is `"SaveSaves the file"`. A `hidden` or `display: none` tooltip adds nothing. These stop the walk: `group`, `menu`, `menubar`, `tree`, `listbox`, `tablist`, `toolbar`, `grid`, `treegrid`, a data `table`, `rowgroup`, `row`, `combobox`, `dialog`, `alertdialog`, `tabpanel`, the live regions (`alert`, `status`, `log`) and `progressbar`. A link around a `<table>` with a header row therefore has no name.
+
+A row is named from its cells only in a `grid` or `treegrid`: `<table role="grid"><tr><th>H</th><td>C</td></tr></table>` has the row `"H C"`. A row in a data table, in a `role="table"` or with no table around it is unnamed, whatever it holds.
+
+One deliberate difference: an item widget (`treeitem`, `menuitem`, `menuitemcheckbox`, `menuitemradio`, `option`, `tab`) inside another stays out of its parent's name. Chromium reads `"Reports Q1"` for a `treeitem` directly inside a `treeitem` with no `group` between; both producers here read `"Reports"`, because a nested item is its own row. A table with no header row is a layout table to Chromium, which reads through it; the DOM producer still stops at it.
+
 ### Form control with `for` / `id`
 
 ```html
