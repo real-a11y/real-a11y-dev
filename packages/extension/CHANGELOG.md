@@ -20,7 +20,7 @@
 ## Unreleased
 
 - **Internal: the native tree's in-page marker actions moved to their own
-  module.** No behaviour change (PR_LINK).
+  module.** No behaviour change ([#697](https://github.com/real-a11y/real-a11y-dev/pull/697)).
 
 - **The TAB view's names include CSS generated content and `text-transform`.**
   The extension re-bundles the updated extractor: a tab stop `<button
