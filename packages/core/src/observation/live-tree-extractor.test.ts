@@ -975,6 +975,28 @@ describe("LiveTreeExtractor", () => {
       expect(nameOfRole(result, "button")).toBe("SaveTip");
     });
 
+    it("follows a cell's text when the inspector is scoped to the grid row", async () => {
+      document.body.innerHTML = `<main><div role="grid"><div role="row" id="r"><div role="gridcell">Old</div></div></div></main>`;
+      const root = document.getElementById("r")!;
+      const live = new LiveTreeExtractor(root, { mode: "a11y" });
+      live.extract();
+      let lastChange: TreeChange | undefined;
+      const observer = new DomObserver(
+        root,
+        (change) => {
+          lastChange = change;
+        },
+        50,
+      );
+      observer.start();
+      root.querySelector("div")!.textContent = "New";
+      await vi.advanceTimersByTimeAsync(100);
+      const result = live.refresh(lastChange);
+      observer.stop();
+      expect(result.nodes).toEqual(extractA11yTree(root).nodes);
+      expect(nameOfRole(result, "row")).toBe("New");
+    });
+
     it("names a row when its table gains role=grid, and drops it when it loses it", async () => {
       const result = await refreshAfter(
         `<main><table><tbody><tr><td>A</td><td>B</td></tr></tbody></table></main>`,
