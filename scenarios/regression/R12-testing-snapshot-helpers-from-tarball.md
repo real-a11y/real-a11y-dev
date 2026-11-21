@@ -6,9 +6,9 @@ area: Testing
 type: Automated
 priority: P0
 status: Active
-validFrom: "testing ≥ 0.1.0-beta.11 (installed from the packed tarball, not a workspace link). Step 10 (values): testing ≥ 0.1.0-beta.17. Step 10b (a sensitive textarea's text): testing ≥ 0.1.0-beta.18. Step 10b's `[redacted]` input name: testing ≥ 0.1.0-beta.23. Step 11 (the states block) ships in the FIRST release after testing 0.1.0-beta.23: against 0.1.0-beta.23 or earlier no line prints a block and `states` is ignored, which is the old behaviour, not a fail. Step 11b (a sensitive combobox's popup) ships in the same release; against 0.1.0-beta.23 the combobox reads `"Expiry month 03"`, the old behaviour, not a fail"
+validFrom: "testing ≥ 0.1.0-beta.11 (installed from the packed tarball, not a workspace link). Step 10 (values): testing ≥ 0.1.0-beta.17. Step 10b (a sensitive textarea's text): testing ≥ 0.1.0-beta.18. Step 10b's `[redacted]` input name: testing ≥ 0.1.0-beta.23. Step 11 (the states block) ships in the FIRST release after testing 0.1.0-beta.23: against 0.1.0-beta.23 or earlier no line prints a block and `states` is ignored, which is the old behaviour, not a fail. Step 11b (a sensitive combobox's popup) ships in the same release; against 0.1.0-beta.23 the combobox reads `"Expiry month 03"`, the old behaviour, not a fail. Step 11c (a sensitive combobox's menu) ships in the same release too"
 validUntil: ""
-expected: "all three produce stable deterministic strings; redact masks EVERY occurrence; [focused] appears only when something is focused; values are absent unless asked, and a sensitive field's value never prints — a password's, or a sensitive textarea's markup text; states print in a {…} block by default and states: false prints none; a sensitive combobox's popup says neither in a state nor in a name which option is chosen"
+expected: "all three produce stable deterministic strings; redact masks EVERY occurrence; [focused] appears only when something is focused; values are absent unless asked, and a sensitive field's value never prints — a password's, or a sensitive textarea's markup text; states print in a {…} block by default and states: false prints none; a sensitive combobox's popup says neither in a state nor in a name which option is chosen, whether the page marks it selected or checked"
 twin: D5
 covers:
   - packages.@real-a11y-dev/testing
@@ -47,6 +47,13 @@ Packaging faults only show from the tarball.
       aria-expanded="true" aria-controls="lb" autocomplete="cc-exp-month">
       <ul role="listbox" id="lb"><li role="option" aria-selected="true">03</li>
       </ul></label>` and the same with `Color`, `id="lb2"` and no
+      `autocomplete`: `treeSnapshot(root)`
+    - **11c** — on `<input role="combobox" aria-label="Expiry"
+      aria-expanded="true" aria-controls="m" autocomplete="cc-exp"><div
+      role="menu" id="m" aria-label="Dates"><div role="menuitemradio"
+      aria-checked="true">03/31</div></div><button
+      aria-labelledby="pick"></button>` with `id="pick"` on the item, and the
+      same with `aria-label="Color"`, `id="m2"`, `id="pick2"` and no
       `autocomplete`: `treeSnapshot(root)`
 
 ## Expected
@@ -88,6 +95,10 @@ Packaging faults only show from the tarball.
   `{selected}`, and the combobox is named `"[redacted]"`; `Expiry month 03`
   appears nowhere. The ordinary one prints `option "03" {selected}` and is
   named `"Color 03"`
+- **11c** — the sensitive combobox's item prints `menuitemradio "03/31"` with
+  no `{checked}`, and the button that names itself after it reads
+  `button "[redacted]"`. The ordinary one prints
+  `menuitemradio "03/31" {checked}`, and its button `button "03/31"`
 
 ## Why this exists
 

@@ -6,9 +6,9 @@ area: MCP
 type: Automated
 priority: P1
 status: Active
-validFrom: "browser ≥ 0.1.0-beta.12 · cli ≥ 0.1.0-beta.2 (locators + focusedId). The native producer itself: browser ≥ 0.1.0-beta.11. Steps 6 / 6b as written (field values shown, sensitive ones redacted, --redact-input): cli ≥ 0.1.0-beta.7. Step 6c (a field with no node of its own): cli ≥ 0.1.0-beta.9. Step 6b's `tabs` check: cli ≥ 0.1.0-beta.13. Step 6d (a field in its own aria-labelledby): cli ≥ 0.1.0-beta.13. Steps 9 / 9b (iframe content, a frame in another process included): cli ≥ 0.1.0-beta.14. Step 6e (a sensitive combobox's popup) ships in the FIRST release after cli 0.1.0-beta.13: against it no line prints a states block, so no option shows `{selected}` either way, and the combobox reads `"Expiry month 03"`, which is the old behaviour, not a fail"
+validFrom: "browser ≥ 0.1.0-beta.12 · cli ≥ 0.1.0-beta.2 (locators + focusedId). The native producer itself: browser ≥ 0.1.0-beta.11. Steps 6 / 6b as written (field values shown, sensitive ones redacted, --redact-input): cli ≥ 0.1.0-beta.7. Step 6c (a field with no node of its own): cli ≥ 0.1.0-beta.9. Step 6b's `tabs` check: cli ≥ 0.1.0-beta.13. Step 6d (a field in its own aria-labelledby): cli ≥ 0.1.0-beta.13. Steps 9 / 9b (iframe content, a frame in another process included): cli ≥ 0.1.0-beta.14. Step 6e (a sensitive combobox's popup) ships in the FIRST release after cli 0.1.0-beta.13: against it no line prints a states block, so no option shows `{selected}` either way, and the combobox reads `"Expiry month 03"`, which is the old behaviour, not a fail. Step 6f (a sensitive combobox's menu) ships in the same release: against 0.1.0-beta.13 no line prints a states block, so no item shows `{checked}` either way, which is the old behaviour, not a fail"
 validUntil: ""
-expected: "native tree returns a document tree reaching UA-shadow media controls the in-page walk misses; every native FINDING carries a CSS locator identical to the DOM producer's for the same element (a shadow-root element stops its path at the boundary rather than faking a selector); the tree sets focusedId so [focused] renders; a field shows what it holds the way a screen reader announces it, while a sensitive field (password, one-time code, payment) only ever reads [redacted]; --redact-input withholds every value and all rich-text editor content; no option in the popup a sensitive combobox controls says it is selected, and no name built around that popup carries the choice."
+expected: "native tree returns a document tree reaching UA-shadow media controls the in-page walk misses; every native FINDING carries a CSS locator identical to the DOM producer's for the same element (a shadow-root element stops its path at the boundary rather than faking a selector); the tree sets focusedId so [focused] renders; a field shows what it holds the way a screen reader announces it, while a sensitive field (password, one-time code, payment) only ever reads [redacted]; --redact-input withholds every value and all rich-text editor content; no option in the popup a sensitive combobox controls says it is selected, no menu item there says it is checked, and no name built around that popup carries the choice."
 covers:
   - packages.@real-a11y-dev/browser
   - cli.commands.tree.flags.--redact-input
@@ -61,6 +61,13 @@ is native now — so these are plain invocations. An earlier version of this row
      <ul role="listbox" id="lb"><li role="option" aria-selected="false">01</li>
      <li role="option" aria-selected="true">03</li></ul></label>`, and the same
      with `Color`, `id="lb2"` and no `autocomplete`, then `real-a11y tree <url>`
+   - **6f** — add `<input role="combobox" aria-label="Expiry"
+     aria-haspopup="menu" aria-expanded="true" aria-controls="m"
+     autocomplete="cc-exp"><div role="menu" id="m" aria-label="Dates"><div
+     role="menuitemradio" aria-checked="false">01/30</div><div
+     role="menuitemradio" aria-checked="true">03/31</div></div>`, and the same
+     with `aria-label="Color"`, `id="m2"` and no `autocomplete`, then
+     `real-a11y tree <url>`
 7. `real-a11y audit <url> --root main`
 8. `pnpm --filter @real-a11y-dev/browser test:e2e`
 9. Add `<iframe title="Payment" srcdoc="<main><h1>Pay</h1><label>Card <input
@@ -134,6 +141,9 @@ is native now — so these are plain invocations. An earlier version of this row
   `"Expiry month 03"`, reading the listbox's chosen option in through the
   label. The ordinary one prints `option "03" {selected}` and
   `combobox "Color 03"`. `"Expiry month 03"` appears **nowhere**
+- **6f** — the sensitive combobox's menu prints `menuitemradio "01/30"` and
+  `menuitemradio "03/31"` with no block on either. The ordinary one prints
+  `menuitemradio "01/30" {checked=false}` and `menuitemradio "03/31" {checked}`
 - **4** — locators on every entry. Native `list_elements` used to carry none, and
   three docs stated that as intended; both were fixed together
 - **7** — refused: the read is whole-document, so it cannot be combined with a root
@@ -205,7 +215,9 @@ it: the field read `[redacted]` while its popup's `option "03" {selected}`, once
 tree text printed a states block, said what it held, and a label around both
 named the field after it. The relation is Chromium's own (`controls`, or
 `owns`, which it leaves unreparented under an `<input>`), so the check needs
-Chromium, not a stub.
+Chromium, not a stub. Step 6f is the same popup marked another way: a menu
+says its choice with `checked`, and so can an option, a radio or a pressed
+day button, all of which the states block prints too.
 
 Step 9 guards frames. The native read once asked Chromium for the top frame's
 document only, so every `Iframe` row came back empty: an embedded payment form
