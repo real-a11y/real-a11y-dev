@@ -37,7 +37,7 @@
   `paragraph "You accept our and have read our ."`. Each run of text is now a
   `text` row between the links, where Chrome's own tree has it. The same goes
   for a list item, a block quote and the other prose elements; a paragraph with
-  only text is unchanged. ([#PRNUM])
+  only text is unchanged. ([#699](https://github.com/real-a11y/real-a11y-dev/pull/699))
 
 - **A sensitive combobox's popup no longer says which option is chosen.**
   Chrome's tree already dropped `selected` in the listbox a payment or
