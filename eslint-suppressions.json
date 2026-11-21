@@ -503,9 +503,6 @@
   "packages/validate/src/validate.ts": {
     "complexity": {
       "count": 1
-    },
-    "max-depth": {
-      "count": 1
     }
   },
   "scripts/check-examples-dev.mjs": {
