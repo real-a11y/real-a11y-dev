@@ -57,6 +57,13 @@ export function popupChoiceRegions<T extends RawAXNameNode>(
     }
     return undefined;
   };
+  // A part of `raw` in its own popup that holds no popup of its own: neither
+  // another popup, nor in one, nor around one, whose choice it would read.
+  const ownPart = (target: T, raw: RawAXNameNode, own: string): boolean =>
+    isWithin(target, raw) &&
+    popupOf(target) === own &&
+    !roots.has(target.nodeId) &&
+    !regions.containing.has(target.nodeId);
   return {
     ...regions,
     references: (raw, property) => {
@@ -77,7 +84,7 @@ export function popupChoiceRegions<T extends RawAXNameNode>(
         const id = related.backendDOMNodeId;
         const target =
           typeof id === "number" ? index.byBackendId.get(id) : undefined;
-        return target === undefined || !isWithin(target, raw);
+        return target === undefined || !ownPart(target, raw, own);
       });
       if (relatedNodes.length === 0) return false;
       return regions.references(

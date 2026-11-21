@@ -157,6 +157,44 @@ describe("withholdSensitiveFieldNames", () => {
     expect(out.find((n) => n.nodeId === "5")?.description).toBeUndefined();
   });
 
+  it("withholds an option's name read from another sensitive popup inside it", () => {
+    // The outer option is labelled by its own span, but that span holds a
+    // second sensitive field's popup, whose choice the label would read.
+    const idref = (name: string, id: number) => ({
+      name,
+      value: { type: "idrefList", relatedNodes: [{ backendDOMNodeId: id }] },
+    });
+    const nodes = [
+      raw("1", "RootWebArea", { childIds: ["2", "3", "20"] }),
+      raw("2", "combobox", {
+        parentId: "1",
+        properties: [idref("controls", 3)],
+      }),
+      raw("3", "listbox", { parentId: "1", childIds: ["4"] }),
+      raw("4", "option", {
+        parentId: "3",
+        childIds: ["5"],
+        name: { value: "Visa 1111" },
+        named: "relatedElement",
+        properties: [idref("labelledby", 5)],
+      }),
+      raw("5", "generic", { parentId: "4", childIds: ["21"] }),
+      raw("21", "listbox", { parentId: "5", childIds: ["22"] }),
+      raw("22", "option", {
+        parentId: "21",
+        name: { value: "Visa 1111" },
+        named: "contents",
+        properties: [{ name: "selected", value: { value: true } }],
+      }),
+      raw("20", "combobox", {
+        parentId: "1",
+        properties: [idref("controls", 21)],
+      }),
+    ];
+    const out = withholdSensitiveFieldNames(nodes, ["2", "20"]);
+    expect(out.find((n) => n.nodeId === "4")?.name?.value).toBe(REDACTED_VALUE);
+  });
+
   it("withholds a name built from a sensitive field's contents", () => {
     const out = withholdSensitiveFieldNames(cell(), ["2"]);
     expect(out[0].name?.value).toBe(REDACTED_VALUE);
