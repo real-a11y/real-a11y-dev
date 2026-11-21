@@ -857,10 +857,13 @@ describe("a sensitive popup's choice marked by another state", () => {
     const list =
       `<ul role="listbox" id="p" aria-label="Months">` +
       `<li role="option" aria-pressed="true">03</li>` +
-      `<li role="option" aria-current="true">04</li></ul>`;
+      `<li role="option" aria-current="true">04</li>` +
+      // Every choice state an item carries goes, not only the first.
+      `<li role="option" aria-selected="true" aria-checked="true" aria-pressed="true" aria-current="true" aria-disabled="true">05</li></ul>`;
     expect(statesOf(page(SENSITIVE, list), ["option"])).toEqual([
       ["option", "03", {}],
       ["option", "04", {}],
+      ["option", "05", { disabled: true }],
     ]);
   });
 
