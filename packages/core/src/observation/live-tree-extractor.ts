@@ -43,6 +43,7 @@ import {
   addMovedNativeStates,
   addValueReaders,
   closesName,
+  withinBody,
 } from "./value-readers.js";
 
 export interface LiveTreeExtractorOptions extends RedactInputOption {
@@ -660,17 +661,13 @@ export class LiveTreeExtractor {
   private nameRelevantAncestor(el: Element): Element {
     let node: Element | null = el;
     let outermostHost: Element | null = null;
-    while (
-      node &&
-      node !== this.root.ownerDocument?.body &&
-      node !== this.root.ownerDocument?.documentElement
-    ) {
-      const owner = htmlAamNameOwner(node);
+    while (node && withinBody(node)) {
+      const owner = node === this.root ? null : htmlAamNameOwner(node);
       if (owner) outermostHost = owner;
       else if (isNameFromContentHost(node)) outermostHost = node;
       // A role-less inline wrapper's text is the paragraph's around it, so the
       // paragraph is a host for it too, one level out.
-      const runHost = textRunHost(node);
+      const runHost = node === this.root ? null : textRunHost(node);
       if (runHost) outermostHost = runHost;
       // A name-source child is often itself a barrier (`caption`). Don't stop
       // there when its owner still needs the re-extract.

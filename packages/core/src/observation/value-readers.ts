@@ -49,6 +49,12 @@ export function closesName(el: Element): boolean {
   return isNameBarrierElement(el) && !lendsValue(el);
 }
 
+/** True while a climb for a name host has not reached the page's body. */
+export function withinBody(el: Element): boolean {
+  const doc = el.ownerDocument;
+  return el !== doc?.body && el !== doc?.documentElement;
+}
+
 /** The `aria-owns` owner of `el` or of an element around it, if any. */
 function ownedBy(el: Element): Element | null {
   for (let up: Element | null = el; up; up = safeParentElement(up)) {
