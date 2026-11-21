@@ -405,6 +405,26 @@ describe("the choice a sensitive field holds", () => {
       expect(readOf(["button"])).toEqual([["button", "03", undefined]]);
     });
 
+    it("finds the popup aria-activedescendant reaches in another tree scope, whatever asks first", () => {
+      // The listbox is the host; its shadow root holds the field and the
+      // options. The option's description is read before anything asks
+      // about the shadow root's field.
+      for (const [autocomplete, description] of [
+        ["cc-exp-month", undefined],
+        ["off", "chosen"],
+      ]) {
+        document.body.innerHTML = `<x-list id="xl" role="listbox" aria-label="Months"></x-list>`;
+        document
+          .getElementById("xl")!
+          .attachShadow({ mode: "open" }).innerHTML =
+          `<input role="combobox" aria-label="Month" autocomplete="${autocomplete}" aria-activedescendant="o3">` +
+          `<div role="option" id="o3" aria-selected="true" aria-description="chosen">03</div>`;
+        expect(readOf(["option"]), autocomplete).toEqual([
+          ["option", "03", description],
+        ]);
+      }
+    });
+
     it("is withheld on an option a sensitive field controls itself", () => {
       // Only that option: what it points at is all that is reached.
       expect(
@@ -452,6 +472,20 @@ describe("the choice a sensitive field holds", () => {
       expect(readOf(["button"])).toEqual([["button", "03", undefined]]);
     });
 
+    it("keeps a name that reads an option a sensitive input owns, while nothing is chosen", () => {
+      // Chromium leaves what an <input> owns where it is: the listbox is its
+      // popup, not its value, so with no choice made it lends nothing.
+      const page = (selected: string) =>
+        `<input role="combobox" aria-label="Month" autocomplete="cc-exp-month" aria-owns="lb" aria-expanded="true">` +
+        `<ul role="listbox" id="lb" aria-label="Months">` +
+        `<li role="option" id="o1" aria-selected="${selected}">01</li></ul>` +
+        `<button aria-labelledby="o1"></button>`;
+      document.body.innerHTML = page("false");
+      expect(readOf(["button"])).toEqual([["button", "01", undefined]]);
+      document.body.innerHTML = page("true");
+      expect(readOf(["button"])).toEqual([["button", "[redacted]", undefined]]);
+    });
+
     it("drops every description in a sensitive popup with a choice, whatever it is built from", () => {
       // A span after the list, aria-description and title each say which
       // option is the chosen one as well as a span inside it would.
@@ -486,6 +520,28 @@ describe("the choice a sensitive field holds", () => {
           "current choice",
         ]);
       }
+    });
+
+    it("reads an ordinary list nested in a sensitive popup as the popup's", () => {
+      // The grid holds the choice; the list inside it holds none. As in the
+      // native producers, what is in it is the grid's: no description, and a
+      // reference into it reads the grid's choice.
+      const page = (autocomplete: string) =>
+        `<input role="combobox" aria-label="Date" autocomplete="${autocomplete}" aria-controls="g" aria-expanded="true">` +
+        `<div role="grid" id="g" aria-label="Dates"><div role="row" aria-selected="true">` +
+        `<div role="gridcell"><ul role="listbox" aria-label="Slots">` +
+        `<li role="option" id="s1" aria-selected="false" aria-description="morning">9:00</li>` +
+        `</ul></div></div></div><button aria-labelledby="s1"></button>`;
+      document.body.innerHTML = page("cc-exp");
+      expect(readOf(["option", "button"])).toEqual([
+        ["option", "9:00", undefined],
+        ["button", "[redacted]", undefined],
+      ]);
+      document.body.innerHTML = page("off");
+      expect(readOf(["option", "button"])).toEqual([
+        ["option", "9:00", "morning"],
+        ["button", "9:00", undefined],
+      ]);
     });
 
     it("is withheld in a subtree that is not in a document", () => {

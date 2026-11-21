@@ -1545,6 +1545,11 @@ describe("readNativeTree", () => {
     };
     expect(await read("cc-number")).not.toHaveProperty("selected");
     expect(await read("off")).toHaveProperty("selected", true);
+    // The field with no row at all (hidden from the tree): only the
+    // document says there is one, and where its popup is.
+    raw.splice(1, 1);
+    raw[0]!.childIds = ["5"];
+    expect(await read("cc-number")).not.toHaveProperty("selected");
   });
 
   it("treats a field it could not read as sensitive, down to its options", async () => {

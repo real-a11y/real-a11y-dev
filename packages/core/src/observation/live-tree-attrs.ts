@@ -15,7 +15,7 @@ import {
   deepQuerySelectorAll,
   flatParentElement,
 } from "../extraction/flat-tree.js";
-import { getExplicitRole } from "../extraction/role-map.js";
+import { getExplicitRole, resolveRoleToken } from "../extraction/role-map.js";
 import {
   FIELD_SELECTOR,
   FIELD_TAGS,
@@ -49,12 +49,18 @@ export const REFERENCE_ATTRS = new Set([
  * attribute already); a field becoming or ceasing to be sensitive
  * (`autocomplete`, `type`) that has such a relation or sits in a combobox; an
  * element around a sensitive field becoming or ceasing to be a combobox
- * (`role`), relation or not, since a listbox it holds is its popup; or a
+ * (`role`, read now and from `oldValue`, which an observer that recorded none
+ * leaves `undefined`), relation or not, since a listbox it holds is its
+ * popup, or a sensitive field's own role changing; or a
  * choice made or cleared in a sensitive field's popup (`aria-selected`),
  * which decides what every reference into the popup reads, the other
  * options' own names and descriptions among them.
  */
-export function movesSensitiveChoice(target: Element, attr: string): boolean {
+export function movesSensitiveChoice(
+  target: Element,
+  attr: string,
+  oldValue?: string | null,
+): boolean {
   switch (attr) {
     case "aria-controls":
     case "aria-activedescendant":
@@ -68,8 +74,12 @@ export function movesSensitiveChoice(target: Element, attr: string): boolean {
       );
     case "role":
       return (
-        pageMayHoldSensitiveField(target) &&
-        (isSensitiveField(target) || holdsSensitiveField(target))
+        isSensitiveField(target) ||
+        ((getExplicitRole(target) === "combobox" ||
+          oldValue === undefined ||
+          namesCombobox(oldValue)) &&
+          pageMayHoldSensitiveField(target) &&
+          holdsSensitiveField(target))
       );
     case "aria-selected":
       return inSensitiveChoice(target);
@@ -109,10 +119,13 @@ export function bringsSensitivePopup(
   ) {
     return true;
   }
+  // A choice arriving where it lands, or where `aria-owns` pulls it in.
+  const chosen = found.filter(isChosen);
   return (
-    parent !== null &&
-    found.some(isChosen) &&
-    (isSensitiveChoiceHost(parent) || inSensitiveChoice(parent))
+    chosen.length > 0 &&
+    ((parent !== null &&
+      (isSensitiveChoiceHost(parent) || inSensitiveChoice(parent))) ||
+      chosen.some(inSensitiveChoice))
   );
 }
 
@@ -128,6 +141,15 @@ export function bringsSensitivePopup(
 function comboboxAtOrAbove(start: Element | null): boolean {
   for (let el = start; el; el = flatParentElement(el)) {
     if (getExplicitRole(el) === "combobox") return true;
+  }
+  return false;
+}
+
+/** `role`'s first token the tree recognizes is combobox, as a role reads. */
+function namesCombobox(role: string | null): boolean {
+  for (const token of (role ?? "").trim().split(/\s+/)) {
+    const resolved = token ? resolveRoleToken(token) : undefined;
+    if (resolved !== undefined) return resolved === "combobox";
   }
   return false;
 }

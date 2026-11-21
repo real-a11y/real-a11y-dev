@@ -24,28 +24,22 @@ import {
   POPUP_CHOICE_ROLES,
 } from "./sensitivity.js";
 
-/** What a step of {@link searchAbove} makes of an element. */
-type Step = "found" | "stop" | "climb";
-
 /**
- * The first element at or above `element` that `step` finds, in the tree roles
- * are computed in: flat-tree parents, and the `aria-owns` owner of each
+ * The first element at or above `element` that `found` accepts, in the tree
+ * roles are computed in: flat-tree parents, and the `aria-owns` owner of each
  * element met on the way, as strict mode's `inChoiceField` climbs. Chromium
  * parents an owned element on its owner; both paths are read, so a page that
  * moves a node with `aria-owns` withholds at least what either place would.
- * A `"stop"` ends the climb along that path only.
  */
 function searchAbove(
   element: Element,
-  step: (el: Element) => Step,
+  found: (el: Element) => boolean,
 ): Element | null {
   const seen = new Set<Element>([element]);
   const pending: Element[] = [element];
   for (let start = pending.pop(); start; start = pending.pop()) {
     for (let el: Element | null = start; el; el = flatParentElement(el)) {
-      const verdict = step(el);
-      if (verdict === "found") return el;
-      if (verdict === "stop") break;
+      if (found(el)) return el;
       const owner = ariaOwner(el);
       if (owner && !seen.has(owner)) {
         seen.add(owner);
@@ -128,25 +122,28 @@ export function isSensitiveChoiceHost(element: Element): boolean {
 /** The nearest choice container (`POPUP_CHOICE_ROLES`) at or above `element`. */
 function choiceContainerOf(element: Element): Element | null {
   return searchAbove(element, (el) =>
-    POPUP_CHOICE_ROLES.has(getImplicitRole(el)) ? "found" : "climb",
+    POPUP_CHOICE_ROLES.has(getImplicitRole(el)),
   );
 }
 
+/** Where a field reaches a popup by relation that needs an index. */
+const RELATIONS = "[aria-controls], [aria-activedescendant]";
+
 /**
- * Add to `reached` what each sensitive field in `scope`, or combobox around
- * one, reaches by relation: what it names in `aria-controls`, and the choice
- * container its `aria-activedescendant` sits in. The active option is always
- * in the field's popup, so a popup reached only that way is still its own.
- * (`aria-owns` needs no index: the owner climb in {@link searchAbove} meets
- * it.)
+ * Add to `reached` what each of `candidates` that is a sensitive field, or a
+ * combobox around one, reaches by relation, each id resolved in its own tree
+ * scope: what it names in `aria-controls`, and the choice container its
+ * `aria-activedescendant` sits in. The active option is always in the field's
+ * popup, so a popup reached only that way is still its own. (`aria-owns`
+ * needs no index: the owner climb in {@link searchAbove} meets it.)
  */
 function indexSensitiveRelations(
-  scope: Document | ShadowRoot,
+  candidates: Iterable<Element>,
   reached: { add(element: Element): unknown },
 ): void {
-  const relations = "[aria-controls], [aria-activedescendant]";
-  for (const host of safeQuerySelectorAll(scope, relations)) {
+  for (const host of candidates) {
     if (!isSensitiveChoiceHost(host)) continue;
+    const scope = idScope(host);
     const controls = safeGetAttribute(host, "aria-controls") ?? "";
     for (const id of controls.trim().split(/\s+/)) {
       const target = id ? safeGetElementById(scope, id) : null;
@@ -162,22 +159,27 @@ function indexSensitiveRelations(
 
 /**
  * True when a sensitive field, or a combobox around one, reaches `element` by
- * relation in its id scope ({@link indexSensitiveRelations}): an ARIA
- * combobox's popup listbox, which is not the field's descendant, but whose
- * selected option is the field's value. Indexed once per scope per
- * extraction.
+ * relation ({@link indexSensitiveRelations}): an ARIA combobox's popup
+ * listbox, which is not the field's descendant, but whose selected option is
+ * the field's value. Indexed once per page per extraction, every shadow root
+ * with it: the container an `aria-activedescendant` reaches can sit in
+ * another tree scope than its field (a listbox host around the shadow root
+ * that holds its own input and options). Outside an extraction, or off any
+ * page, `element`'s own scope is read.
  */
 export function controlledBySensitiveField(element: Element): boolean {
-  const scope = idScope(element);
   const cache = choiceCache();
-  if (!cache) {
+  const doc = cache && connectedDocument(element);
+  if (!cache || !doc?.documentElement) {
     const reached = new Set<Element>();
-    indexSensitiveRelations(scope, reached);
+    const scope = idScope(element);
+    indexSensitiveRelations(safeQuerySelectorAll(scope, RELATIONS), reached);
     return reached.has(element);
   }
-  if (!cache.indexedScopes.has(scope)) {
-    cache.indexedScopes.add(scope);
-    indexSensitiveRelations(scope, cache.reached);
+  if (!cache.indexedPages.has(doc)) {
+    cache.indexedPages.add(doc);
+    const candidates = deepQuerySelectorAll(doc.documentElement, RELATIONS);
+    indexSensitiveRelations(candidates, cache.reached);
   }
   return cache.reached.has(element);
 }
@@ -201,11 +203,11 @@ export function controlledBySensitiveField(element: Element): boolean {
 export function inSensitiveChoice(element: Element): boolean {
   if (!pageMayHoldSensitiveField(element)) return false;
   return (
-    searchAbove(element, (el) =>
-      controlledBySensitiveField(el) ||
-      (el !== element && isSensitiveChoiceHost(el))
-        ? "found"
-        : "climb",
+    searchAbove(
+      element,
+      (el) =>
+        controlledBySensitiveField(el) ||
+        (el !== element && isSensitiveChoiceHost(el)),
     ) !== null
   );
 }
@@ -273,16 +275,14 @@ function isSensitivePopup(element: Element): boolean {
 }
 
 /**
- * The nearest choice container at or above `element` on each path of
- * {@link searchAbove}, if one is a sensitive field's popup with a choice made
- * in it. An owned option counts in the popup that owns it.
+ * The nearest sensitive field's popup with a choice made in it at or above
+ * `element` ({@link searchAbove}): an owned option counts in the popup that
+ * owns it, and an ordinary choice container on the way (a listbox nested in a
+ * sensitive grid) is climbed past, as the native producers' regions read it.
  */
 function sensitivePopupAt(element: Element): Element | null {
   if (!pageMayHoldSensitiveField(element)) return null;
-  return searchAbove(element, (el) => {
-    if (!POPUP_CHOICE_ROLES.has(getImplicitRole(el))) return "climb";
-    return isSensitivePopup(el) ? "found" : "stop";
-  });
+  return searchAbove(element, isSensitivePopup);
 }
 
 /**
@@ -298,6 +298,19 @@ export function withholdPopupDescription(
   description: string,
 ): string {
   return description && sensitivePopupAt(element) ? "" : description;
+}
+
+/**
+ * `element` sits inside a sensitive field in the flat tree: a `<select>`'s
+ * option, whose text is the field's value. Containment only, not `aria-owns`:
+ * Chromium leaves what an `<input>` owns where it is, so a listbox it owns is
+ * its popup ({@link sensitivePopupAt}), not its value.
+ */
+function insideSensitiveField(element: Element): boolean {
+  for (let el = flatParentElement(element); el; el = flatParentElement(el)) {
+    if (isSensitiveField(el)) return true;
+  }
+  return false;
 }
 
 /** `node` is `ancestor` or sits below it in the flat tree. */
@@ -330,9 +343,7 @@ export function readsSensitivePopup(
   property: "labelledby" | "describedby",
 ): boolean {
   if (!pageMayHoldSensitiveField(target)) return false;
-  const inField = (el: Element): Step =>
-    el !== target && isSensitiveField(el) ? "found" : "climb";
-  if (searchAbove(target, inField)) return true;
+  if (insideSensitiveField(target)) return true;
   const popup = sensitivePopupAt(target);
   if (!popup) return false;
   const ownPart =

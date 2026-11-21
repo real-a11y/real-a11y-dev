@@ -805,7 +805,9 @@ export function withholdInsideSensitive(
   sensitiveIds: readonly string[],
   controlled: readonly string[] = [],
 ): void {
-  if (sensitiveIds.length === 0) return;
+  // A popup only the document places can be all there is: its field may
+  // have no row of its own (core's `domChoiceTargets`).
+  if (sensitiveIds.length === 0 && controlled.length === 0) return;
   const byId = new Map(nodes.map((n) => [n.id, n]));
   // Hands each node at or below `from` to `visit`, once.
   const walk = (
@@ -1553,11 +1555,12 @@ async function readDocument(
   });
   const withheldIds = [...sensitiveIds, ...held];
   // Where each withheld field's choice is made: core's `sensitiveChoiceRoots`,
-  // the browser package's rule.
+  // the browser package's rule, from every field withheld, a hidden one read
+  // for a name among them, and the rows above one.
   const index = indexNativeAX(rawNodes);
   const roots = sensitiveChoiceRoots(
     index,
-    withheldIds.flatMap((id) => {
+    [...withheldIds, ...withheld].flatMap((id) => {
       const raw = rawById.get(id);
       return raw ? [raw.nodeId] : [];
     }),

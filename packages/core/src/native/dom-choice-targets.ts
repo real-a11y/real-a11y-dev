@@ -32,6 +32,8 @@ export interface DomChoiceNode {
   shadowRoots?: DomChoiceNode[];
   contentDocument?: DomChoiceNode;
   assignedSlot?: { backendNodeId?: number };
+  /** On a shadow root: `open`, `closed` or `user-agent`. */
+  shadowRootType?: string;
 }
 
 const ELEMENT_NODE = 1;
@@ -123,13 +125,20 @@ function walkDocument(root: DomChoiceNode): DocumentWalk {
     const [node, scope, parent] = step;
     const id = node.backendNodeId;
     const holder = node.nodeType === ELEMENT_NODE ? id : parent;
-    for (const child of node.children ?? []) {
-      pending.push([child, scope, holder]);
-    }
+    if (node.contentDocument) pending.push([node.contentDocument, new Map()]);
     for (const shadow of node.shadowRoots ?? []) {
       pending.push([shadow, new Map(), holder]);
     }
-    if (node.contentDocument) pending.push([node.contentDocument, new Map()]);
+    // A light child of an author shadow host is rendered only through a
+    // slot (`meet` links that); unslotted, it sits in nothing.
+    const host = (node.shadowRoots ?? []).some(
+      (shadow) => shadow.shadowRootType !== "user-agent",
+    );
+    // Reversed, so the stack visits them, and meets each id, in document
+    // order: the first element with an id is the one the page resolves.
+    for (const child of [...(node.children ?? [])].reverse()) {
+      pending.push([child, scope, host ? undefined : holder]);
+    }
   }
   return walk;
 }

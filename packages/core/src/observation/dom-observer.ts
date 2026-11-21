@@ -353,6 +353,8 @@ export class DomObserver {
       subtree: true,
       attributes: true,
       attributeFilter: OBSERVED_ATTRIBUTES,
+      // What a `role` was: the live refresh asks whether it named a combobox.
+      attributeOldValue: true,
       characterData: true, // catches text node updates (streaming content)
       characterDataOldValue: false,
     });
@@ -627,6 +629,8 @@ export class DomObserver {
       subtree: true,
       attributes: true,
       attributeFilter: OBSERVED_ATTRIBUTES,
+      // What a `role` was: the live refresh asks whether it named a combobox.
+      attributeOldValue: true,
       characterData: true,
       characterDataOldValue: false,
     });

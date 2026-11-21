@@ -126,6 +126,48 @@ describe("where the DOM says a sensitive field's choice is made", () => {
     expect(targets.has(outside.option.backendNodeId!)).toBe(false);
   });
 
+  it("resolves a repeated id to its first element, as the page does", () => {
+    const first = wrappedListbox("p");
+    const later = wrappedListbox("p");
+    const targets = domChoiceTargets(
+      doc(
+        el("input", { autocomplete: "cc-number", "aria-controls": "p" }),
+        first.wrapper,
+        later.wrapper,
+      ),
+    );
+    expect(targets.has(first.option.backendNodeId!)).toBe(true);
+    expect(targets.has(later.option.backendNodeId!)).toBe(false);
+  });
+
+  it("counts no field an author shadow host leaves unslotted", () => {
+    // Not rendered, so in no combobox; a user-agent root (a <details>'s)
+    // slots its children without saying so, and they still count.
+    for (const [type, counts] of [
+      ["open", false],
+      ["user-agent", true],
+    ] as const) {
+      const { wrapper, option } = wrappedListbox("p");
+      const shadow: DomChoiceNode = {
+        backendNodeId: nextId++,
+        nodeType: 11,
+        nodeName: "#document-fragment",
+        shadowRootType: type,
+        children: [],
+      };
+      const combobox = el(
+        "div",
+        { role: "combobox", "aria-controls": "p" },
+        [el("input", { autocomplete: "cc-number" })],
+        { shadowRoots: [shadow] },
+      );
+      expect(
+        domChoiceTargets(doc(combobox, wrapper)).has(option.backendNodeId!),
+        type,
+      ).toBe(counts);
+    }
+  });
+
   it("keeps a frame's fields to its own document", () => {
     const { wrapper, option } = wrappedListbox("p");
     const frame = el("iframe", {}, [], {

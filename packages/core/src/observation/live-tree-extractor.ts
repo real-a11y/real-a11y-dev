@@ -222,7 +222,7 @@ export class LiveTreeExtractor {
           const attr = m.attributeName ?? "";
           if (
             forcesFullExtraction(attr, this.redactInput) ||
-            movesSensitiveChoice(target, attr)
+            movesSensitiveChoice(target, attr, m.oldValue)
           ) {
             needsFull = true;
             break;

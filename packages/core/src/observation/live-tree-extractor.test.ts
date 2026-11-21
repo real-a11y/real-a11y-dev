@@ -1164,6 +1164,56 @@ describe("LiveTreeExtractor", () => {
       ]);
     });
 
+    it("reads it once an element around a sensitive field stops being a combobox", async () => {
+      const nodes = await refreshed(
+        `<main><div><div id="w" role="combobox"><input aria-label="Month" autocomplete="cc-exp-month">` +
+          `<ul role="listbox" id="lb"><li role="option" aria-selected="true">03</li></ul></div></div></main>` +
+          `<section><button aria-labelledby="lb"></button></section>`,
+        () => byId("w").removeAttribute("role"),
+      );
+      expect(read(nodes, "button")).toEqual([["03", undefined]]);
+    });
+
+    it("keeps the splice when a role changes around a sensitive field with no combobox in it", async () => {
+      document.body.innerHTML =
+        // A level down, so the parent re-read for a role change is not the
+        // root, which would cost a full read of its own.
+        `<main><section><div><form id="f"><input aria-label="Card" autocomplete="cc-number"></form></div></section>` +
+        `<ul role="listbox" aria-label="Colors"><li role="option" aria-selected="true">Red</li></ul></main>`;
+      const live = new LiveTreeExtractor(document.body, { mode: "dom" });
+      live.extract();
+      let lastChange: TreeChange | undefined;
+      const observer = new DomObserver(
+        document.body,
+        (c) => {
+          lastChange = c;
+        },
+        50,
+      );
+      observer.start();
+      byId("f").setAttribute("role", "search");
+      await vi.advanceTimersByTimeAsync(100);
+      observer.stop();
+      const full = vi.spyOn(live, "extract");
+      const result = live.refresh(lastChange);
+      expect(full).not.toHaveBeenCalled();
+      expect(result.nodes).toEqual(extractDomTree(document.body).nodes);
+    });
+
+    it("reads it once a chosen option arrives elsewhere and the popup owns it", async () => {
+      const nodes = await refreshed(
+        `<main>${field}<div role="listbox" id="lb" aria-label="Months" aria-owns="o1 o3"></div>` +
+          `<div id="elsewhere"><div role="option" id="o1" aria-selected="false">01</div></div></main>` +
+          `<section><button aria-labelledby="lb"></button></section>`,
+        () =>
+          byId("elsewhere").insertAdjacentHTML(
+            "beforeend",
+            `<div role="option" id="o3" aria-selected="true">03</div>`,
+          ),
+      );
+      expect(read(nodes, "button")).toEqual([["[redacted]", undefined]]);
+    });
+
     it("reads it once a text field in a combobox becomes a password field", async () => {
       const nodes = await refreshed(
         `<main><div role="combobox" aria-expanded="true">` +

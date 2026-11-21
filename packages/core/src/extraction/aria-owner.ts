@@ -25,8 +25,8 @@ type AriaOwnerIndex = WeakMap<Document | ShadowRoot, Map<string, Element>>;
 export interface ChoiceCache {
   /** Each document asked about: whether it holds any sensitive field. */
   readonly sensitivePages: WeakMap<Document, boolean>;
-  /** The id scopes whose sensitive fields' relations are in `reached`. */
-  readonly indexedScopes: WeakSet<Document | ShadowRoot>;
+  /** The documents whose sensitive fields' relations are in `reached`. */
+  readonly indexedPages: WeakSet<Document>;
   /**
    * What a sensitive field, or a combobox around one, names in
    * `aria-controls`, and the choice container its `aria-activedescendant`
@@ -71,7 +71,7 @@ export function withAriaOwnerIndex<T>(fn: () => T): T {
   holder.current = new WeakMap();
   holder.choices = {
     sensitivePages: new WeakMap(),
-    indexedScopes: new WeakSet(),
+    indexedPages: new WeakSet(),
     reached: new WeakSet(),
     hosts: new WeakMap(),
   };
