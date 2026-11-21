@@ -261,8 +261,9 @@ that holds a secret — `type="password"`, or an `autocomplete` of
 `current-password`, `new-password`, `one-time-code`, `cc-number`, `cc-csc`,
 `cc-exp`, `cc-exp-month` or `cc-exp-year` — prints `[redacted]` when it holds
 anything, never the text and never its length, and no option says which choice
-it holds: not inside the field, and not in the popup listbox it controls
-(`aria-controls`) or owns (`aria-owns`). An empty field prints no value:
+it holds: not inside the field, and not in its popup, a listbox it controls
+(`aria-controls`), owns (`aria-owns`) or points `aria-activedescendant` into,
+or one a combobox around it holds. An empty field prints no value:
 
 ```
 textbox "Email" = "jane@example.com"

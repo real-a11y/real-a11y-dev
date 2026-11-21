@@ -244,8 +244,9 @@ live view (`tree`, `tabs`, `list`, `inspect`, the `interact` diff, and their
 
 Only a field whose markup marks it secret — `type="password"`, or a credential
 or payment `autocomplete` token — is withheld, and it reads `[redacted]`: never
-its text, never its length, and no option in it or in the popup listbox it
-controls or owns says which is selected. A `snapshot` artifact is committed and posted, so
+its text, never its length, and no option in it or in its popup (a listbox it
+controls, owns or points `aria-activedescendant` into, or one a combobox around
+it holds) says which is selected. A `snapshot` artifact is committed and posted, so
 it leaves values out unless you pass `--values`. `--redact-input` (config
 `defaults.redactInput`) is the strict mode: no field value and no rich-text
 editor content in any output — inside an editor, a name computed from the typed
