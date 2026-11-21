@@ -1186,6 +1186,37 @@ describe("LiveTreeExtractor", () => {
       ]);
     });
 
+    it("reads no more than it needs while nothing in a sensitive radio popup moves", async () => {
+      // Each radio withholds a `checked` and an unset `pressed`: kept apart,
+      // neither reads as moved, so an unrelated change splices.
+      document.body.innerHTML =
+        `<main><input role="combobox" aria-label="Year" autocomplete="cc-exp-year" aria-controls="d" aria-expanded="true">` +
+        `<div role="dialog" id="d" aria-label="Pick"><div role="radiogroup" aria-label="Years">` +
+        `<label><input type="radio" name="y" checked> 2041</label>` +
+        `<label><input type="radio" name="y"> 2042</label></div></div>` +
+        `<p id="note">one</p></main>`;
+      const live = new LiveTreeExtractor(document.body, { mode: "dom" });
+      live.extract();
+      const full = vi.spyOn(live, "extract");
+      for (const text of ["two", "three"]) {
+        let lastChange: TreeChange | undefined;
+        const observer = new DomObserver(
+          document.body,
+          (c) => {
+            lastChange = c;
+          },
+          50,
+        );
+        observer.start();
+        byId("note").textContent = text;
+        await vi.advanceTimersByTimeAsync(100);
+        observer.stop();
+        expect(lastChange).toBeDefined();
+        live.refresh(lastChange);
+      }
+      expect(full).not.toHaveBeenCalled();
+    });
+
     it("reads it once a checked item arrives", async () => {
       const nodes = await refreshed(
         `<main>${field}<div role="menu" id="lb" aria-label="Months">` +

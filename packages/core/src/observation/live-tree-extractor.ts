@@ -41,6 +41,7 @@ import {
 import {
   addLabelledControls,
   addMovedNativeStates,
+  type WithheldStates,
   addValueReaders,
   closesName,
   withinBody,
@@ -71,7 +72,7 @@ export class LiveTreeExtractor {
   /** Strict mode, for every extraction, full or partial: see {@link RedactInputOption}. */
   private readonly redactInput: boolean;
   /** Withheld native states, by control (see `addMovedNativeStates`). */
-  private readonly choices = new WeakMap<Element, unknown>();
+  private readonly choices: WithheldStates = new WeakMap();
   private domNodes = new Map<string, SemanticNode>();
   private a11yNodes = new Map<string, SemanticNode>();
   private rootId = "";

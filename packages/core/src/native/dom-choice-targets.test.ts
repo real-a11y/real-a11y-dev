@@ -248,4 +248,20 @@ describe("where the DOM says a sensitive field's choice is made", () => {
     const ordinary = el("input", { "aria-controls": "p" });
     expect(domChoiceReads(doc(ordinary, list)).chosen.size).toBe(0);
   });
+
+  it("is the outermost choice container around the active element", () => {
+    // A radio group nested in a grid: the grid's chosen row sits outside it.
+    const radio = el("div", { id: "r1", role: "radio" });
+    const group = el("div", { role: "radiogroup" }, [radio]);
+    const row = el("div", { role: "row", "aria-selected": "true" });
+    const grid = el("div", { role: "grid" }, [row, group]);
+    const field = el("input", {
+      autocomplete: "cc-exp",
+      "aria-activedescendant": "r1",
+    });
+    const targets = domChoiceTargets(doc(field, grid));
+    for (const node of [grid, row, group, radio]) {
+      expect(targets.has(node.backendNodeId!)).toBe(true);
+    }
+  });
 });

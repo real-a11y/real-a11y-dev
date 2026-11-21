@@ -895,6 +895,26 @@ describe("a sensitive popup's choice marked by another state", () => {
     ]);
   });
 
+  it("is withheld in the whole grid around a radio group aria-activedescendant points into", () => {
+    // The nearest container is the radio group; the grid around it is the
+    // popup, and its chosen row sits outside the group.
+    const html =
+      `<input role="combobox" aria-label="Field" ${SENSITIVE} aria-expanded="true" aria-activedescendant="r1">` +
+      `<div role="grid" aria-label="Pick"><div role="row" aria-selected="true"><div role="gridcell">03</div></div>` +
+      `<div role="row"><div role="gridcell"><div role="radiogroup" aria-label="Mode">` +
+      `<div role="radio" id="r1" aria-checked="false">Exact</div></div></div></div></div>`;
+    expect(
+      statesOf(html, ["row", "radio"]).map(([role, , states]) => [
+        role,
+        states,
+      ]),
+    ).toEqual([
+      ["row", {}],
+      ["row", {}],
+      ["radio", {}],
+    ]);
+  });
+
   it("is kept in an ordinary field's popup, and on a checkbox's own state", () => {
     expect(
       statesOf(page("", menu), ["menuitemradio", "menuitemcheckbox"]),

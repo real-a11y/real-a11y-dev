@@ -260,25 +260,28 @@ function addHostTargets(
 }
 
 /**
- * The choice container at or above `node` in `walk`, by markup: the nearest
- * `<select>` or element whose `role` resolves to one (`POPUP_CHOICE_ROLES`).
- * A choice role behind another token (`region listbox`, which the tree reads
- * as a listbox once the unnamed region is skipped) makes a candidate, and
- * the outermost candidate stands when no definite container is above it: the
- * side that withholds more.
+ * The outermost choice container at or above `node` in `walk`, by markup: a
+ * `<select>`, or an element any of whose `role` tokens resolves to one
+ * (`POPUP_CHOICE_ROLES`; `region listbox` reads as a listbox once the unnamed
+ * region is skipped). Its subtree holds every one nearer: a radio group or
+ * menu nested in a grid would otherwise bound the popup, and the grid's
+ * chosen row outside it would show. The side that withholds more.
  */
 function choiceContainerIn(
   walk: DocumentWalk,
   node: DomChoiceNode,
 ): DomChoiceNode | undefined {
-  let candidate: DomChoiceNode | undefined;
+  let outermost: DomChoiceNode | undefined;
   for (let at = node.backendNodeId; at !== undefined; at = walk.above.get(at)) {
     const met = walk.elements.get(at)?.node;
     if (!met) continue;
     const tag = (met.localName ?? met.nodeName ?? "").toLowerCase();
-    const roles = rolesOf(met);
-    if (tag === "select" || POPUP_CHOICE_ROLES.has(roles[0] ?? "")) return met;
-    if (roles.some((role) => POPUP_CHOICE_ROLES.has(role))) candidate = met;
+    if (
+      tag === "select" ||
+      rolesOf(met).some((role) => POPUP_CHOICE_ROLES.has(role))
+    ) {
+      outermost = met;
+    }
   }
-  return candidate;
+  return outermost;
 }

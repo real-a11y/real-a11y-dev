@@ -221,11 +221,19 @@ export function isSensitiveChoiceHost(element: Element): boolean {
   return host;
 }
 
-/** The nearest choice container (`POPUP_CHOICE_ROLES`) at or above `element`. */
-function choiceContainerOf(element: Element): Element | null {
-  return searchAbove(element, (el) =>
-    POPUP_CHOICE_ROLES.has(getImplicitRole(el)),
-  );
+/**
+ * Every choice container (`POPUP_CHOICE_ROLES`) at or above `element`, on
+ * every path {@link searchAbove} climbs. Not only the nearest: a radio group
+ * or menu nested in a grid would otherwise bound the popup, and the grid's
+ * chosen row outside it would show.
+ */
+function choiceContainersOf(element: Element): Set<Element> {
+  const found = new Set<Element>();
+  searchAbove(element, (el) => {
+    if (POPUP_CHOICE_ROLES.has(getImplicitRole(el))) found.add(el);
+    return false;
+  });
+  return found;
 }
 
 /** Where a field reaches a popup by relation that needs an index. */
@@ -234,7 +242,7 @@ const RELATIONS = "[aria-controls], [aria-activedescendant]";
 /**
  * Add to `reach` what each of `candidates` that is a sensitive field, or a
  * combobox around one, reaches by relation, each id read in its own tree
- * scope: the ids it names in `aria-controls`, and the choice container its
+ * scope: the ids it names in `aria-controls`, and every choice container its
  * `aria-activedescendant` sits in. The active option is always in the field's
  * popup, so a popup reached only that way is still its own. (`aria-owns`
  * needs no index: the owner climb in {@link searchAbove} meets it.)
@@ -257,7 +265,10 @@ function indexSensitiveRelations(
     ).trim();
     const searched = idSearchRoot(host);
     for (const active of activeId ? elementsWithId(searched, activeId) : []) {
-      reach.elements.add(choiceContainerOf(active) ?? active);
+      const containers = choiceContainersOf(active);
+      for (const reached of containers.size > 0 ? containers : [active]) {
+        reach.elements.add(reached);
+      }
     }
   }
 }

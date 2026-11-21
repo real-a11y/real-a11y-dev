@@ -140,6 +140,9 @@ function addReaders(
   }
 }
 
+/** The withheld native states last read, by control and state. */
+export type WithheldStates = WeakMap<Element, Map<string, unknown>>;
+
 /**
  * Add every recorded checkbox, radio, `<select>` and `<option>` whose native
  * state no longer matches its node. Those states move without an attribute,
@@ -170,7 +173,7 @@ function addReaders(
 export function addMovedNativeStates(
   domNodes: ReadonlyMap<string, SemanticNode>,
   redactInput: boolean,
-  seen: WeakMap<Element, unknown>,
+  seen: WithheldStates,
   dirty: Set<Element>,
 ): boolean {
   const refs = getElementRefs();
@@ -204,9 +207,10 @@ function nativeStateMoved(
   el: Element,
   node: SemanticNode,
   redactInput: boolean,
-  seen: WeakMap<Element, unknown>,
+  seen: WithheldStates,
 ): "shown" | "withheld" | false {
   const tag = node.dom?.tagName ?? "";
+  let moved: "shown" | "withheld" | false = false;
   for (const [state, value] of Object.entries(
     nativeStates(el, tag, node.a11y.role),
   )) {
@@ -214,13 +218,15 @@ function nativeStateMoved(
     // A state the node shows as read was not withheld, and has not
     // moved: the common case, decided without the withholding climb.
     if (state in node.a11y.states && value === shown) continue;
+    // Every withheld state is recorded, even past one that moved, so the
+    // next refresh compares each with what this one saw.
     if (withholdsState(el, node.a11y.role, state, redactInput)) {
-      if (movedSince(el, value, seen)) return "withheld";
+      if (movedSince(el, state, value, seen)) moved = "withheld";
     } else if (value !== shown) {
       return "shown";
     }
   }
-  return false;
+  return moved;
 }
 
 /** The controls whose native state or validity can move unobserved. */
@@ -242,14 +248,25 @@ function validityMoved(el: Element, tag: string, node: SemanticNode): boolean {
   return fails !== null && (fails || undefined) !== node.a11y.states["invalid"];
 }
 
-/** Record `value` for `el`, and say whether it differs from the last one. */
+/**
+ * Record `value` for `el`'s `state`, and say whether it differs from the last
+ * one. Each state is kept apart: a radio in a sensitive popup withholds both
+ * its `checked` and an unset `pressed`, and one record for both would read as
+ * moved on every refresh.
+ */
 function movedSince(
   el: Element,
+  state: string,
   value: unknown,
-  seen: WeakMap<Element, unknown>,
+  seen: WithheldStates,
 ): boolean {
-  const known = seen.has(el);
-  const before = seen.get(el);
-  seen.set(el, value);
+  let states = seen.get(el);
+  if (!states) {
+    states = new Map();
+    seen.set(el, states);
+  }
+  const known = states.has(state);
+  const before = states.get(state);
+  states.set(state, value);
   return known && before !== value;
 }

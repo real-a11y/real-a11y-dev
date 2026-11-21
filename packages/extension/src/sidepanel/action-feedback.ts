@@ -19,18 +19,26 @@ export interface FeedbackTarget {
   valueWithheld?: boolean;
 }
 
+/** The roles ARIA requires a `checked` state of: a TAB row in one with none
+ *  had it withheld. An option or tree item often carries no state at all. */
+const CHECKED_ROLES: ReadonlySet<string> = new Set([
+  "radio",
+  "menuitemradio",
+  "menuitemcheckbox",
+]);
+
 /**
  * The item the action landed on is one whose choice the tree withholds (a
  * choice item, core's `isChoiceState`, in a sensitive field's popup,
  * ADR-0001): naming the item a user picked says what the field holds. A
- * native row says so (`valueWithheld`); a TAB row by carrying no choice
- * state at all, which ARIA requires of each such role.
+ * native row says so (`valueWithheld`); a TAB row by carrying no `checked`
+ * where ARIA requires one ({@link CHECKED_ROLES}).
  */
 function choiceWithheld({ role, states, valueWithheld }: FeedbackTarget) {
   if (!isChoiceState("checked", role)) return false;
   if (valueWithheld !== undefined) return valueWithheld;
   return (
-    states !== undefined && !("checked" in states) && !("selected" in states)
+    CHECKED_ROLES.has(role) && states !== undefined && !("checked" in states)
   );
 }
 

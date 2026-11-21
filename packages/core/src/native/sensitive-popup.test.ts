@@ -426,3 +426,55 @@ describe("the states a sensitive popup's choice is withheld from", () => {
     }
   });
 });
+
+describe("the popup an active descendant reaches", () => {
+  it("is every choice container above it, not only the nearest", () => {
+    // A field whose active descendant is a radio in a group nested in a
+    // grid: the grid, and its chosen row outside the group, are the popup.
+    const raw: RawAXNameNode[] = [
+      { nodeId: "1", childIds: ["2", "3"], role: { value: "RootWebArea" } },
+      {
+        nodeId: "2",
+        parentId: "1",
+        backendDOMNodeId: 20,
+        role: { value: "combobox" },
+        properties: [
+          {
+            name: "activedescendant",
+            value: { type: "idref", relatedNodes: [{ backendDOMNodeId: 60 }] },
+          },
+        ],
+      },
+      {
+        nodeId: "3",
+        parentId: "1",
+        backendDOMNodeId: 30,
+        role: { value: "grid" },
+        childIds: ["4", "5"],
+      },
+      {
+        nodeId: "4",
+        parentId: "3",
+        backendDOMNodeId: 40,
+        role: { value: "row" },
+        properties: [{ name: "selected", value: { value: true } }],
+      },
+      {
+        nodeId: "5",
+        parentId: "3",
+        backendDOMNodeId: 50,
+        role: { value: "radiogroup" },
+        childIds: ["6"],
+      },
+      {
+        nodeId: "6",
+        parentId: "5",
+        backendDOMNodeId: 60,
+        role: { value: "radio" },
+      },
+    ];
+    expect([...sensitiveChoiceReach(indexNativeAX(raw), ["2"])].sort()).toEqual(
+      ["3", "4", "5", "6"],
+    );
+  });
+});

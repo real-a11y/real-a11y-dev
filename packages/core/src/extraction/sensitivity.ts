@@ -134,6 +134,8 @@ export const CHOICE_ITEM_ROLES: ReadonlySet<string> = new Set([
  * picker's pressed day button, an option marked `aria-current`). One rule for
  * the DOM producer (`withholdsState`) and the native ones
  * (`dropChoiceStates`).
+ *
+ * @internal Shared with the native transports and the extension's panel.
  */
 export function isChoiceState(state: string, role: string): boolean {
   if (state === "checked") return CHOICE_ITEM_ROLES.has(role);

@@ -49,13 +49,22 @@ describe("describeAction", () => {
   });
 
   it("names no item whose choice the tree withholds", () => {
-    // A TAB row: a choice item with no choice state had it withheld, in a
-    // sensitive field's popup; one that carries its state names itself.
-    for (const role of ["radio", "menuitemradio", "option", "treeitem"]) {
+    // A TAB row: a radio or menu item with no `checked`, which ARIA
+    // requires of it, had it withheld in a sensitive field's popup; one that
+    // carries its state names itself.
+    for (const role of ["radio", "menuitemradio", "menuitemcheckbox"]) {
       expect(
         describeAction({ role, name: "03/31", states: {} }, "click"),
         role,
       ).toBe("Selected an option in this field");
+    }
+    // An option or tree item often carries no state at all: an ordinary
+    // tree branch names itself.
+    for (const role of ["treeitem", "option"]) {
+      expect(
+        describeAction({ role, name: "Docs", states: {} }, "click"),
+        role,
+      ).toBe("Click: Docs");
     }
     expect(
       describeAction(

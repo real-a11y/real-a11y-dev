@@ -102,20 +102,23 @@ function subtreeOf<T extends RawAXNameNode>(
   return out;
 }
 
-/** The nearest choice container (`POPUP_CHOICE_ROLES`) at or above `node`. */
-function choiceContainerOf<T extends RawAXNameNode>(
+/**
+ * Every choice container (`POPUP_CHOICE_ROLES`) at or above `node`. Not only
+ * the nearest: a radio group or menu nested in a grid would otherwise bound
+ * the popup, and the grid's chosen row outside it would show.
+ */
+function choiceContainersOf<T extends RawAXNameNode>(
   node: T,
   byId: ReadonlyMap<string, T>,
-): T | undefined {
-  for (const cur of nativeAncestry(node, byId)) {
-    if (POPUP_CHOICE_ROLES.has(cur.role?.value ?? "")) return cur;
-  }
-  return undefined;
+): T[] {
+  return [...nativeAncestry(node, byId)].filter((cur) =>
+    POPUP_CHOICE_ROLES.has(cur.role?.value ?? ""),
+  );
 }
 
 /**
- * The choice container `host`'s `aria-activedescendant` sits in, as Chromium
- * resolves it, or the active node itself outside one.
+ * The choice containers `host`'s `aria-activedescendant` sits in, as Chromium
+ * resolves it, or the active node itself outside any.
  */
 function activeContainers<T extends RawAXNameNode>(
   index: NativeAXIndex<T>,
@@ -126,7 +129,9 @@ function activeContainers<T extends RawAXNameNode>(
     const id = related.backendDOMNodeId;
     const target =
       typeof id === "number" ? index.byBackendId.get(id) : undefined;
-    return target ? [choiceContainerOf(target, index.byId) ?? target] : [];
+    if (!target) return [];
+    const containers = choiceContainersOf(target, index.byId);
+    return containers.length > 0 ? containers : [target];
   });
 }
 
@@ -137,7 +142,7 @@ function activeContainers<T extends RawAXNameNode>(
  * ({@link sensitiveChoiceHosts}):
  *
  * - what it controls or owns ({@link fieldRelationRoots});
- * - the choice container its `aria-activedescendant` sits in (the active
+ * - every choice container its `aria-activedescendant` sits in (the active
  *   option is always in the field's popup), or that node itself;
  * - a combobox around one, whole: the ARIA 1.1 wrapper holds its listbox, and
  *   Chromium relates the field inside to it on its own only for some shapes
