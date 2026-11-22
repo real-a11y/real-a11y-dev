@@ -36,8 +36,9 @@ In real Chromium (Playwright), open a page with this `<main>`, then take
 1. Read the paragraphs
 2. Read the list item and the code block
 3. Take the tree with `{ includeGeneric: true }` and read the `<div>`
-4. Compare with the native tree: `serializeTree(await session.nativeTree())`
-   from the same page, or `real-a11y tree` against it
+4. Compare with the native tree: `treeSnapshot()` through
+   `attach(page, { tree: "native" })` on the same page, or `real-a11y tree`
+   against it
 
 ## Expected
 
