@@ -26,7 +26,7 @@ The block follows the name, the value and `(level N)`, and comes before `[focuse
 
 Every committed tree or tab snapshot holding a node with a state or a description changes once.
 
-- **Snapshots** (`treeSnapshot`, `tabSequenceSnapshot`, `boxedTreeSnapshot`): re-record them (`vitest -u`, `jest -u`) to take the states in. To keep comparing with a baseline committed before this release, pass `states: false`.
+- **Snapshots** (`treeSnapshot`, `tabSequenceSnapshot`, `boxedTreeSnapshot`): re-record them (`vitest -u`, `jest -u`) to take the states in. To keep comparing with a baseline committed before this release, pass `states: false`, which undoes the block alone: a snapshot this release's other changes reach, such as a paragraph's `text` rows, still needs re-recording.
 - **New lines for stateful generics:** a `generic` that carries a state, such as a `<details>` summary, now prints as a line of its own, so its subtree sits one level deeper in snapshots and `expectTree` expectations. `{ states: false }` keeps it folded away. `toMatchA11yContract` only shows it to a contract that writes a block, so a strict contract without one compares as before.
 - **`flow().expectTree()`:** a hand-written expectation compares against text with blocks now. Add the blocks, or pass `{ states: false }` as its second argument.
 - **Contracts:** a line that writes an unprintable token now throws, and so does a `haspopup` or `roledescription` token checked against a DOM Element. Write the printed form, such as `{checked}` for `{checked=true}`, or drop the token: a line without a block says nothing about states.

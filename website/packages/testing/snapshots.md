@@ -358,7 +358,7 @@ Which tests record:
 - **A retried test keeps the try that counted** under Vitest. Jest doesn't say which try is running, so there a retried test keeps its failed tries' records too.
 - **Two Vitest projects that run one file** each keep their records, and the page names the project beside the file.
 
-A record shows every state, where the text prints a short list, but nothing typed into the page:
+A record carries the tree's states, as the text does, but nothing typed into the page:
 
 - **No field value**, even where the snapshot printed one with [`values: true`](#field-values): the text beside the tree shows it, and the tree holds none. No `a11y.value`, and no `value`, `aria-valuenow` or `aria-valuetext` attribute.
 - **Nothing inside an editor.** A rich-text editor's lines and runs are left out of the record, and the nodes above a field keep their own text but not a preview of the field's.
@@ -382,7 +382,7 @@ reporters: [
 |---|---|---|---|
 | `outputDir` | `string` | `"a11y-snapshots"` | Where `index.html` and the `records/` it is made from go, relative to Vitest's `root` or Jest's `rootDir`. |
 
-The report deletes only a `records/` folder it made, and overwrites only an `index.html` it wrote. Pointed at a folder that already holds others by those names, it leaves them alone, records nothing, and says why.
+The report deletes only a `records/` folder it made, and overwrites only an `index.html` it wrote. Pointed at a folder whose `records/` it didn't make, it leaves that folder alone, records nothing, and says why. An `index.html` it didn't write stays as it is, and the run says so.
 
 ### In CI and watch mode
 

@@ -54,9 +54,9 @@
   What this changes for you:
 
   - **Nothing, unless you add the reporter.** It changes no `.snap` text, which is still what a test asserts. The report never fails a run.
-  - **A record carries nothing typed into the page.** It shows every state, where the text prints a short list, but no field value, even where the snapshot printed one with `values: true` (the text beside the tree still shows it), and nothing inside a rich-text editor. Sensitive fields stay masked, `redactInput: true` withholds every value as it does from the text, and a snapshot's `redact` patterns apply to everything in a record the page supplied (names, descriptions, text and attribute values), never to its node ids, roles, `tabindex`, heading levels or states.
+  - **A record carries nothing typed into the page.** It carries the tree's states, as the text does, but no field value, even where the snapshot printed one with `values: true` (the text beside the tree still shows it), and nothing inside a rich-text editor. Sensitive fields stay masked, `redactInput: true` withholds every value as it does from the text, and a snapshot's `redact` patterns apply to everything in a record the page supplied (names, descriptions, text and attribute values), never to its node ids, roles, `tabindex`, heading levels or states.
   - **Only boxed snapshots appear.** A snapshot of a plain string, such as `expect(treeSnapshot(el)).toMatchSnapshot()`, has no tree behind it; snapshot `boxedTreeSnapshot(el)` instead. A record is named after its test, which the reporter reads from the `expect` given to `registerA11yMatchers(expect)`, or the runner's own. Concurrent tests aren't recorded: their shared `expect` can't say which of them took a snapshot.
-  - **The report deletes only what it wrote.** Pointed at an `outputDir` that already holds a `records/` folder or an `index.html` of its own, it leaves them alone and records nothing.
+  - **The report deletes only what it wrote.** Pointed at an `outputDir` whose `records/` folder it didn't make, it leaves that folder alone and records nothing. An `index.html` it didn't write stays as it is, and the run says so.
   - **`REAL_A11Y_TREES_DIR`** is the switch the reporter sets for its run: while it is set, each boxed snapshot also writes the tree behind it to that directory as JSON. Set it yourself only to keep those records without the reporter.
 
 - 23f6e95: Tree and tab text print each node's states, description and announced properties in a `{…}` block, on by default. A checked and an unchecked checkbox no longer read the same:
@@ -81,7 +81,7 @@
 
   Every committed tree or tab snapshot holding a node with a state or a description changes once.
 
-  - **Snapshots** (`treeSnapshot`, `tabSequenceSnapshot`, `boxedTreeSnapshot`): re-record them (`vitest -u`, `jest -u`) to take the states in. To keep comparing with a baseline committed before this release, pass `states: false`.
+  - **Snapshots** (`treeSnapshot`, `tabSequenceSnapshot`, `boxedTreeSnapshot`): re-record them (`vitest -u`, `jest -u`) to take the states in. To keep comparing with a baseline committed before this release, pass `states: false`, which undoes the block alone: a snapshot this release's other changes reach, such as a paragraph's `text` rows, still needs re-recording.
   - **New lines for stateful generics:** a `generic` that carries a state, such as a `<details>` summary, now prints as a line of its own, so its subtree sits one level deeper in snapshots and `expectTree` expectations. `{ states: false }` keeps it folded away. `toMatchA11yContract` only shows it to a contract that writes a block, so a strict contract without one compares as before.
   - **`flow().expectTree()`:** a hand-written expectation compares against text with blocks now. Add the blocks, or pass `{ states: false }` as its second argument.
   - **Contracts:** a line that writes an unprintable token now throws, and so does a `haspopup` or `roledescription` token checked against a DOM Element. Write the printed form, such as `{checked}` for `{checked=true}`, or drop the token: a line without a block says nothing about states.
