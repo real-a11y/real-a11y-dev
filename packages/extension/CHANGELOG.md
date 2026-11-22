@@ -26,7 +26,7 @@
   doesn't find it by its text, and the feedback after activating it names
   nothing either. The popup's other controls keep their names. The content
   script also no longer reads the choice for typing into a field or stepping a
-  slider, which no feedback line names an item after (PR_LINK).
+  slider, which no feedback line names an item after ([#704](https://github.com/real-a11y/real-a11y-dev/pull/704)).
 
 - **The TAB view's feedback after picking an item in a sensitive popup names
   no item.** Activating an option or tree item in a payment or credential
