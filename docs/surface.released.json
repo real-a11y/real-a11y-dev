@@ -171,6 +171,7 @@
             "AttachOptions",
             "PlaywrightPage",
             "SemanticNavigatorPageHandle",
+            "TabSequenceSnapshotOptions",
             "TreeSnapshotOptions"
           ],
           "values": [
@@ -202,6 +203,20 @@
         {
           "subpath": "./matchers/jest-globals",
           "types": [],
+          "values": []
+        },
+        {
+          "subpath": "./reporter",
+          "types": [
+            "default"
+          ],
+          "values": []
+        },
+        {
+          "subpath": "./reporter/jest",
+          "types": [
+            "default"
+          ],
           "values": []
         }
       ],
@@ -688,6 +703,10 @@
           },
           {
             "name": "no-config",
+            "type": "boolean"
+          },
+          {
+            "name": "no-states",
             "type": "boolean"
           },
           {
@@ -1199,6 +1218,45 @@
       {
         "flags": [
           {
+            "name": "config",
+            "type": "string"
+          },
+          {
+            "name": "help",
+            "short": "h",
+            "type": "boolean"
+          },
+          {
+            "name": "no-config",
+            "type": "boolean"
+          },
+          {
+            "name": "no-open",
+            "type": "boolean"
+          },
+          {
+            "name": "port",
+            "type": "string"
+          },
+          {
+            "name": "quiet",
+            "short": "q",
+            "type": "boolean"
+          },
+          {
+            "name": "verbose",
+            "type": "boolean"
+          }
+        ],
+        "group": "artifact",
+        "name": "show-report",
+        "producers": [],
+        "summary": "Open your tests' snapshot report; follows new runs live",
+        "usage": "show-report [dir] [flags]"
+      },
+      {
+        "flags": [
+          {
             "name": "allow-file",
             "type": "boolean"
           },
@@ -1255,6 +1313,10 @@
           },
           {
             "name": "no-config",
+            "type": "boolean"
+          },
+          {
+            "name": "no-states",
             "type": "boolean"
           },
           {
@@ -1378,6 +1440,10 @@
             "type": "boolean"
           },
           {
+            "name": "no-states",
+            "type": "boolean"
+          },
+          {
             "name": "output",
             "short": "o",
             "type": "string"
@@ -1483,6 +1549,10 @@
           },
           {
             "name": "no-config",
+            "type": "boolean"
+          },
+          {
+            "name": "no-states",
             "type": "boolean"
           },
           {
@@ -1772,6 +1842,13 @@
       "packages": [
         "mcp"
       ]
+    },
+    {
+      "name": "REAL_A11Y_TREES_DIR",
+      "packages": [
+        "snapshot-viewer",
+        "testing"
+      ]
     }
   ],
   "manifestVersion": 2,
@@ -1820,7 +1897,7 @@
           "openWorldHint": false,
           "readOnlyHint": false
         },
-        "description": "Snapshot the CURRENT page's accessibility findings and store them under `name`. Later call diff_findings to see which findings are new / changed / fixed — the same identity semantics (fingerprints) the CI a11y-diff uses. Checkpoints survive navigation AND the session idle timeout (the browser may close and relaunch between saving and diffing; checkpoints remain), so you can checkpoint one deploy and diff another: save 'prod', open the preview URL, then diff_findings('prod'). They are held in memory and do NOT survive close_browser — call export_checkpoint first if you need one to outlive the session. The stored tree view leaves field values out unless you pass values: true. Whole-document. Chromium only.",
+        "description": "Snapshot the CURRENT page's accessibility findings and store them under `name`. Later call diff_findings to see which findings are new / changed / fixed — the same identity semantics (fingerprints) the CI a11y-diff uses. Checkpoints survive navigation AND the session idle timeout (the browser may close and relaunch between saving and diffing; checkpoints remain), so you can checkpoint one deploy and diff another: save 'prod', open the preview URL, then diff_findings('prod'). They are held in memory and do NOT survive close_browser — call export_checkpoint first if you need one to outlive the session. The stored tree view leaves field values out unless you pass values: true, and carries each node's `{…}` states block unless you pass states: false; diff_findings re-reads the page the same way. Whole-document. Chromium only.",
         "inputSchema": {
           "$schema": "http://json-schema.org/draft-07/schema#",
           "properties": {
@@ -1849,6 +1926,11 @@
               "default": "default",
               "description": "Named browser session to use (1-32 characters from A-Z, a-z, 0-9, _ and -). Separate names are independent live pages with their own checkpoints; calls within one session run one at a time, different sessions run in parallel. Omit for the default session.",
               "type": "string"
+            },
+            "states": {
+              "default": true,
+              "description": "Print each node's states, description and announced properties in a `{…}` block after its name (`checkbox \"Subscribe\" {checked=false}`). Default true. Pass false for lines without blocks, e.g. to compare with tree text captured before they existed.",
+              "type": "boolean"
             },
             "values": {
               "default": false,
@@ -2142,7 +2224,7 @@
           "openWorldHint": false,
           "readOnlyHint": true
         },
-        "description": "Return the page's accessibility tree as a deterministic, indented role + accessible-name outline (what a screen reader would traverse) — read from Chromium's own accessibility tree over CDP, so it reaches user-agent-shadow media controls an in-page walk never sees. The element focused at capture time is marked `[focused]`. Each field shows what it holds, the way a screen reader announces it — `textbox \"Email\" = \"jane@x.com\"`; a password, one-time-code or payment field reads \"[redacted]\". Token-efficient and stable across runs. This is the vocabulary the act tools target in. Whole-document. Chromium only.",
+        "description": "Return the page's accessibility tree as a deterministic, indented role + accessible-name outline (what a screen reader would traverse) — read from Chromium's own accessibility tree over CDP, so it reaches user-agent-shadow media controls an in-page walk never sees. Each node's states, description and announced properties follow its name in a `{…}` block (`checkbox \"Subscribe\" {checked=false}`, `button \"Menu\" {expanded=false, haspopup=menu}`). The element focused at capture time is marked `[focused]`. Each field shows what it holds, the way a screen reader announces it — `textbox \"Email\" = \"jane@x.com\"`; a password, one-time-code or payment field reads \"[redacted]\". Token-efficient and stable across runs. This is the vocabulary the act tools target in. Whole-document. Chromium only.",
         "inputSchema": {
           "$schema": "http://json-schema.org/draft-07/schema#",
           "properties": {
@@ -2155,6 +2237,11 @@
               "default": "default",
               "description": "Named browser session to use (1-32 characters from A-Z, a-z, 0-9, _ and -). Separate names are independent live pages with their own checkpoints; calls within one session run one at a time, different sessions run in parallel. Omit for the default session.",
               "type": "string"
+            },
+            "states": {
+              "default": true,
+              "description": "Print each node's states, description and announced properties in a `{…}` block after its name (`checkbox \"Subscribe\" {checked=false}`). Default true. Pass false for lines without blocks, e.g. to compare with tree text captured before they existed.",
+              "type": "boolean"
             }
           },
           "type": "object"
@@ -2168,7 +2255,7 @@
           "openWorldHint": false,
           "readOnlyHint": true
         },
-        "description": "Return the focusable elements in the order a keyboard user encounters them when pressing Tab, numbered, with role + accessible name. The stop focused at capture time is marked `[focused]`. A field shows what it holds (`textbox \"Email\" = \"jane@x.com\"`; a sensitive field \"[redacted]\"). Built from the in-page DOM walk — Chromium's accessibility tree knows whether a node is focusable but not the SEQUENCE (tabindex never reaches it), so this is the only source for tab order, and the one tool `rootSelector` still scopes.",
+        "description": "Return the focusable elements in the order a keyboard user encounters them when pressing Tab, numbered, with role + accessible name, and each stop's states and description in a `{…}` block (`checkbox \"Subscribe\" {checked=false}`). The stop focused at capture time is marked `[focused]`. A field shows what it holds (`textbox \"Email\" = \"jane@x.com\"`; a sensitive field \"[redacted]\"). Built from the in-page DOM walk — Chromium's accessibility tree knows whether a node is focusable but not the SEQUENCE (tabindex never reaches it), so this is the only source for tab order, and the one tool `rootSelector` still scopes.",
         "inputSchema": {
           "$schema": "http://json-schema.org/draft-07/schema#",
           "properties": {
@@ -2181,6 +2268,11 @@
               "default": "default",
               "description": "Named browser session to use (1-32 characters from A-Z, a-z, 0-9, _ and -). Separate names are independent live pages with their own checkpoints; calls within one session run one at a time, different sessions run in parallel. Omit for the default session.",
               "type": "string"
+            },
+            "states": {
+              "default": true,
+              "description": "Print each node's states, description and announced properties in a `{…}` block after its name (`checkbox \"Subscribe\" {checked=false}`). Default true. Pass false for lines without blocks, e.g. to compare with tree text captured before they existed.",
+              "type": "boolean"
             }
           },
           "type": "object"
@@ -2230,7 +2322,7 @@
           "openWorldHint": false,
           "readOnlyHint": true
         },
-        "description": "Return the audit findings AND the semantic tree and heading outline — all derived from ONE read of Chromium's accessibility tree, so they are guaranteed internally consistent. The element focused at capture time is marked `[focused]`. Each field shows what it holds, the way a screen reader announces it — `textbox \"Email\" = \"jane@x.com\"`; a password, one-time-code or payment field reads \"[redacted]\". Prefer this over separate audit_page + get_* calls on dynamic pages (SPAs, pages with consent dialogs) where separate calls could catch different states. That tree carries no tab order, so there is no tab-order section here — call get_tab_order for the keyboard sequence. Whole-document. Chromium only.",
+        "description": "Return the audit findings AND the semantic tree and heading outline — all derived from ONE read of Chromium's accessibility tree, so they are guaranteed internally consistent. Each tree node's states and description follow its name in a `{…}` block (`checkbox \"Subscribe\" {checked=false}`). The element focused at capture time is marked `[focused]`. Each field shows what it holds, the way a screen reader announces it — `textbox \"Email\" = \"jane@x.com\"`; a password, one-time-code or payment field reads \"[redacted]\". Prefer this over separate audit_page + get_* calls on dynamic pages (SPAs, pages with consent dialogs) where separate calls could catch different states. That tree carries no tab order, so there is no tab-order section here — call get_tab_order for the keyboard sequence. Whole-document. Chromium only.",
         "inputSchema": {
           "$schema": "http://json-schema.org/draft-07/schema#",
           "properties": {
@@ -2258,6 +2350,11 @@
               "default": "default",
               "description": "Named browser session to use (1-32 characters from A-Z, a-z, 0-9, _ and -). Separate names are independent live pages with their own checkpoints; calls within one session run one at a time, different sessions run in parallel. Omit for the default session.",
               "type": "string"
+            },
+            "states": {
+              "default": true,
+              "description": "Print each node's states, description and announced properties in a `{…}` block after its name (`checkbox \"Subscribe\" {checked=false}`). Default true. Pass false for lines without blocks, e.g. to compare with tree text captured before they existed.",
+              "type": "boolean"
             }
           },
           "type": "object"
@@ -2501,7 +2598,7 @@
       "exports": [],
       "name": "@real-a11y-dev/cli",
       "private": false,
-      "version": "0.1.0-beta.13",
+      "version": "0.1.0-beta.14",
       "workspaceDeps": []
     },
     {
@@ -2535,7 +2632,7 @@
       "exports": [],
       "name": "@real-a11y-dev/semantic-navigator-extension",
       "private": true,
-      "version": "0.1.20",
+      "version": "0.1.21",
       "workspaceDeps": [
         "@real-a11y-dev/core",
         "@real-a11y-dev/semantic-navigator-ui",
@@ -2551,7 +2648,7 @@
       ],
       "name": "@real-a11y-dev/inspector",
       "private": false,
-      "version": "0.1.0-beta.23",
+      "version": "0.1.0-beta.24",
       "workspaceDeps": []
     },
     {
@@ -2565,7 +2662,7 @@
       ],
       "name": "@real-a11y-dev/mcp",
       "private": false,
-      "version": "0.1.0-beta.13",
+      "version": "0.1.0-beta.14",
       "workspaceDeps": []
     },
     {
@@ -2577,7 +2674,7 @@
       ],
       "name": "@real-a11y-dev/react",
       "private": false,
-      "version": "0.1.0-beta.23",
+      "version": "0.1.0-beta.24",
       "workspaceDeps": [
         "@real-a11y-dev/inspector"
       ]
@@ -2628,6 +2725,19 @@
     },
     {
       "bin": [],
+      "description": "Draws the trees behind a11y test snapshots with the Semantic Navigator panel; bundled into @real-a11y-dev/testing's snapshot report",
+      "dir": "snapshot-viewer",
+      "exports": [],
+      "name": "@real-a11y-dev/snapshot-viewer",
+      "private": true,
+      "version": "0.0.0",
+      "workspaceDeps": [
+        "@real-a11y-dev/core",
+        "@real-a11y-dev/semantic-navigator-ui"
+      ]
+    },
+    {
+      "bin": [],
       "description": "Inspect the accessibility tree, heading outline and tab order of every story in a live panel",
       "dir": "storybook-addon",
       "exports": [
@@ -2637,7 +2747,7 @@
       ],
       "name": "@real-a11y-dev/storybook-addon",
       "private": false,
-      "version": "0.1.0-beta.23",
+      "version": "0.1.0-beta.24",
       "workspaceDeps": []
     },
     {
@@ -2650,11 +2760,13 @@
         "./matchers/jest",
         "./matchers/jest-globals",
         "./matchers/vitest",
-        "./playwright"
+        "./playwright",
+        "./reporter",
+        "./reporter/jest"
       ],
       "name": "@real-a11y-dev/testing",
       "private": false,
-      "version": "0.1.0-beta.23",
+      "version": "0.1.0-beta.24",
       "workspaceDeps": []
     },
     {

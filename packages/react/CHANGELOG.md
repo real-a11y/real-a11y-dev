@@ -1,5 +1,119 @@
 # @real-a11y-dev/react
 
+## 0.1.0-beta.24
+
+### Minor Changes
+
+- 898d2db: A paragraph that mixes text with links now keeps its reading order. The tree used to fold the paragraph's own text into its name and list the links after it, so `<p>You accept our <a href="/terms">terms</a> and have read our <a href="/privacy">privacy policy</a>.</p>` printed `paragraph "You accept our and have read our ."`: no sentence, and no way to tell where a link sits. Each run of text is now a `text` row between the children, in the order a browser's accessibility tree has them:
+
+  ```
+  paragraph
+    text "You accept our"
+    link "terms"
+    text "and have read our"
+    link "privacy policy"
+    text "."
+  ```
+
+  This applies to the prose roles whose text is their content (`paragraph`, `listitem`, `blockquote`, `term`, `definition`, `caption`, `code`, `strong`, `emphasis`, `mark`, `deletion`, `insertion`, `subscript`, `superscript`, `time`), in both producers: the in-page tree (`treeSnapshot`, the matchers, the inspector, React and Storybook panels) and Chromium's tree (`real-a11y tree`, `inspect`, `snapshot`, the MCP tree tools, the Playwright adapter's `tree: "native"`).
+
+  `text` is not an ARIA role. A row has no element of its own, takes no action, and holds no children. Each run is trimmed, and a run of only white space prints no row. A role-less inline wrapper (`<b>`, `<span>`) stays part of the run around it.
+
+  ## Breaking change
+
+  Snapshots of an element that mixes its own text with a link, a `<code>`, a `<strong>` or another child with a role need re-recording: the element loses its name and gains `text` rows. A test that read such an element's `a11y.name` now finds `""`, and its text on the `text` children.
+
+  What does not change: an element with only text (`paragraph "Sent"`, `<p>Pure <b>bold</b> text.</p>`), one its author named with `aria-label`, `aria-labelledby` or `title`, and every role named from its content (a heading, link, button or cell keeps its whole content as its name).
+
+### Patch Changes
+
+- 23f6e95: The in-page tree no longer gives an element a description that only repeats its own text. `<a href="#setup" title="Setup">Setup</a>` read as link "Setup" described by "Setup"; Chromium exposes no such description, so a screen reader hears none, and the native tree already printed none. It now reads as link "Setup" with no description, in `treeSnapshot`, `tabSequenceSnapshot`, `real-a11y tabs`, the MCP `get_tab_order` tool and the inspector, React and Storybook panels. A `title` that differs from the text, even only in case or spacing, still describes the element, and so does one beside a name from `aria-label` or `alt`, as in Chromium.
+
+  `inspector`, `react` and `storybook-addon` bundle the extractor, so they ship the change too; their panels show the description.
+
+- 64eacb6: Read CSS generated content and `text-transform` into the names the DOM producer computes from content. A button that reads "before label after" on screen was named `label`, and an uppercase heading kept its source casing, so a jsdom or in-page name differed from the one Chromium exposes to assistive technology. accname 1.2 step 2F says `::before` content is prepended and `::after` content appended without a space:
+
+  ```html
+  <style>
+    .x::before {
+      content: "before ";
+    }
+    .alt::before {
+      content: "★" / "Favourite ";
+    }
+  </style>
+  <button class="x">label</button>
+  <button class="alt">item</button>
+  <h2 style="text-transform: uppercase">Call us</h2>
+  ```
+
+  ```
+  before: button "label"           button "item"             heading "Call us"
+  after:  button "before label"     button "Favourite item"   heading "CALL US"
+  ```
+
+  - **Generated content** counts for the host, its descendants, `aria-labelledby` targets and label elements. Strings and `attr()` count; `counter()`, `url()` and quote marks add nothing, and in the alternative-text form `X / Y` only `Y` counts. Inline generated text joins with no space; a pseudo-element laid out as a box (`inline-block`, `block`) is spaced like any box, as in Chromium.
+  - **`text-transform`** `uppercase`, `lowercase` and `capitalize` apply to the text they transform.
+  - **Under jsdom** generated content still contributes nothing, because jsdom does not implement pseudo-element styles; `text-transform` applies there too.
+  - **Snapshots:** a saved snapshot, diff or baseline recorded from a page that uses either will churn, and needs re-recording.
+  - **`cli` / `mcp`:** only the tab order from `real-a11y tabs` and `get_tab_order` is built with the DOM producer. Everything else they print reads Chromium's own tree, which already included both.
+
+- 80c6714: Read lists, list items, cells, grid cells, column and row headers and visible tooltips into the name of the button, link or heading that holds them, and name a grid row from its cells. The DOM producer stopped at every one of those roles, so `<button><ul><li>One</li><li>Two</li></ul></button>` was `button ""` where Chromium says `"One Two"`, and `no-unlabeled-interactive` reported it as unlabeled. A row is named from its content only in a `grid` or `treegrid`, as in Chromium, so an orphan `role="row"` or a row in a `role="table"` that held direct text no longer takes it as a name:
+
+  ```html
+  <button>
+    <ul>
+      <li>One</li>
+      <li>Two</li>
+    </ul>
+  </button>
+  <!-- before: button ""      after: button "One Two" -->
+  <button>Save<span role="tooltip">Saves the file</span></button>
+  <!-- before: button "Save"  after: button "SaveSaves the file" -->
+  <table role="grid">
+    <tr>
+      <th>H</th>
+      <td>C</td>
+    </tr>
+  </table>
+  <!-- before: row ""         after: row "H C" -->
+  ```
+
+  Saved a11y snapshots and diffs of such markup change and need re-recording. Item widgets nested in item widgets, and tables, stay barriers. `cli` and `mcp` change only in the tab order (`real-a11y tabs`, `get_tab_order`), the one output they build with the DOM producer; everything else they print reads Chromium's own tree, which already had these names.
+
+- 55f3445: A sensitive field's popup no longer says which option is chosen. An ARIA combobox for a payment or credential field (`<input role="combobox" autocomplete="cc-exp-month">`) withholds its value as `[redacted]`, but the listbox it opens is not its descendant, so the option there kept `selected`, and since tree text prints a `{…}` states block by default, `option "03" {selected}` said what the field held. Now no option carries `selected` inside a sensitive field, or anywhere in what one controls (`aria-controls`) or owns (`aria-owns`), in either producer:
+
+  - **Chromium's tree** (`real-a11y tree`, `inspect`, `snapshot`, the MCP tree tools, the Playwright adapter's `tree: "native"`): Chromium leaves an owned listbox where it is under an `<input>`, so both relations are followed from the field.
+  - **The in-page tree** (`treeSnapshot`, the matchers, `real-a11y tabs`, `get_tab_order`, and the inspector, React and Storybook panels): the same rule, which also closes an older gap where an authored `aria-selected` on a sensitive `<select>`'s option still printed.
+
+  The relations count on the field or on an ARIA 1.1 combobox wrapped around it (`<div role="combobox" aria-controls="…"><input autocomplete="cc-number"></div>`), the field in its shadow root or slotted into it included, and everything such a wrapper holds counts as its popup too, whether or not Chromium relates the field to it. So does the listbox a sensitive field points `aria-activedescendant` into, and one behind a wrapper Chromium leaves out of its tree (`aria-controls` naming a `role="presentation"` element, which Chromium reports with no target): the native producers find that one in the document they already read. The live panels keep it withheld when a field gains its relation, becomes sensitive, or arrives after the first read, and when a choice is made, cleared or added in such a popup. An ordinary combobox's popup keeps `{selected}`.
+
+  The chosen option no longer reaches a name either. A name built around the popup reads it in, as a field's value: `<label>Expiry month <input role="combobox" autocomplete="cc-exp-month" aria-controls="lb"> <ul role="listbox" id="lb">…</ul></label>` printed `combobox "Expiry month 03"` in both trees, and so did a name or description that names the listbox by `aria-labelledby` / `aria-describedby`, or a cell around it. Such a name now reads `"[redacted]"` and such a description is dropped, as for a sensitive field's own value; so does one that reads the chosen option itself, a drop-down `<select>`'s included, or a multi-row `<select size="3" autocomplete="cc-exp-year">`. No node in such a popup keeps a description, wherever it comes from (`aria-describedby`, `aria-description`, `title`): one only the chosen option carries would say which it is. A popup with nothing chosen lends nothing, so its names and descriptions are kept. Strict mode (`redactInput`) withholds the selection inside every choice field, as before, and now also in what a sensitive one controls or owns; an ordinary combobox's popup outside it still shows its selection there.
+
+  `toBeValidA11yTree` no longer fails a sensitive popup with "missing required aria-selected": where the tree withholds an option's `selected`, the attribute counts as supplied, so a failure can't say which option is chosen by naming every other one.
+
+- 905de3b: A sensitive field's popup no longer says which item is chosen by a state other than `selected`. A page can mark the chosen item with `aria-checked` (a menu's `menuitemradio`, an option or tree item, a radio in a dialog popup), `aria-pressed` (a date picker's day button) or `aria-current`, and since tree text prints a `{…}` states block by default, `menuitemradio "03/31" {checked}` said what the field's `[redacted]` value holds. Now, wherever a sensitive field's choice is made (inside it, or in what it controls, owns or points `aria-activedescendant` into, or what a combobox around it holds), no node prints `selected`, `pressed` or `current`, and no option, tree item, menu item or radio prints `checked`, in either producer:
+
+  - **Chromium's tree** (`real-a11y tree`, `inspect`, `snapshot`, the MCP tree tools, the Playwright adapter's `tree: "native"`).
+  - **The in-page tree** (`treeSnapshot`, the matchers, `real-a11y tabs`, `get_tab_order`, and the inspector, React and Storybook panels), including the `aria-checked` its nodes record, and the live panels when such a choice is made, cleared or added.
+
+  A checkbox or switch in such a popup keeps its own `checked`: it is a control of its own. So does a toggle inside a field Chromium's tree reads as sensitive only because it holds one (a rich-text editor around a card input): there only an option's choice states, and any node's `selected`, are withheld, as before. A menu or radio group now counts as a popup a choice is made in, so a name that references the chosen item (`aria-labelledby`) reads `"[redacted]"`, and no node in such a popup keeps a description. Chromium's tree carries no `current`, and no `pressed` on an option, so the native producers read those marks from the document they already walk. Chromium's tree also withholds a name built around a popup whose choice is marked this way (a `<label>` around the field and its listbox), though Chromium reads only a `selected` choice into such a name; the in-page tree keeps it. An ordinary combobox's popup keeps all of these states. Strict mode (`redactInput`) withholds an option's choice states in every choice field.
+
+  `toBeValidA11yTree` counts `aria-checked` as supplied where the tree withholds it, as it does `aria-selected`, so a valid sensitive menu passes and a failure can't say which item is chosen.
+
+- d099139: The tab order no longer says which item a sensitive field's popup has chosen. Under a roving `tabindex` a popup's one tab stop is its chosen item, so although its `selected` was withheld, `real-a11y tabs` printed `option "03"` for a payment combobox's list box, and `button "31"` for a date grid's pressed day. Now a tab stop that is one of the items such a popup's choice is made among (a choice item, anything inside one of its list boxes, grids, trees, menus or radio groups, or anything there whose `pressed`, `selected` or `current` is withheld, as a toolbar's pressed button or a selected tab) reads `"[redacted]"`, with no description or value, in every surface that reads the tab order: `real-a11y tabs`, the MCP `get_tab_order` tool, `tabSequenceSnapshot` and the Playwright adapter's, `toHaveTabSequence`, `getTabSequence`, and the inspector, React and Storybook TAB views, whose search no longer finds it by its text. The popup's other controls (a dialog's `Cancel`) and the popup itself keep their names, and the tree still names every item, the chosen one beside the others. Strict mode (`redactInput`) does the same for an option in any list box.
+
+  The DOM producer marks such a node with a new optional `a11y.choiceWithheld: true`, which is what `getTabSequence` reads, so the tab order withholds the same stops wherever a tree is read, a panel's included. It appears on those nodes in JSON output.
+
+- Updated dependencies [23f6e95]
+- Updated dependencies [64eacb6]
+- Updated dependencies [80c6714]
+- Updated dependencies [898d2db]
+- Updated dependencies [55f3445]
+- Updated dependencies [905de3b]
+- Updated dependencies [d099139]
+  - @real-a11y-dev/inspector@0.1.0-beta.24
+
 ## 0.1.0-beta.23
 
 ### Minor Changes

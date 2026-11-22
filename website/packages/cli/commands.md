@@ -16,19 +16,6 @@ ship — [`install`](#install), [`audit`](#audit-url), [`inspect`](#inspect-url)
 own flags.
 
 <!-- surface:begin cli-unreleased -->
-
-::: info Not in the published release yet
-Some of what this page documents is on `main` but not in `@real-a11y-dev/cli` 0.1.0-beta.13, so
-installing from npm today will not have it:
-
-- `show-report` — the whole command
-- `inspect --no-states`
-- `snapshot --no-states`
-- `tabs --no-states`
-- `tree --no-states`
-
-:::
-
 <!-- surface:end cli-unreleased -->
 
 Findings and reports go to **stdout**; progress, warnings, and errors go to

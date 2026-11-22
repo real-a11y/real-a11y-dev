@@ -1,5 +1,201 @@
 # @real-a11y-dev/testing
 
+## 0.1.0-beta.24
+
+### Minor Changes
+
+- 898d2db: A paragraph that mixes text with links now keeps its reading order. The tree used to fold the paragraph's own text into its name and list the links after it, so `<p>You accept our <a href="/terms">terms</a> and have read our <a href="/privacy">privacy policy</a>.</p>` printed `paragraph "You accept our and have read our ."`: no sentence, and no way to tell where a link sits. Each run of text is now a `text` row between the children, in the order a browser's accessibility tree has them:
+
+  ```
+  paragraph
+    text "You accept our"
+    link "terms"
+    text "and have read our"
+    link "privacy policy"
+    text "."
+  ```
+
+  This applies to the prose roles whose text is their content (`paragraph`, `listitem`, `blockquote`, `term`, `definition`, `caption`, `code`, `strong`, `emphasis`, `mark`, `deletion`, `insertion`, `subscript`, `superscript`, `time`), in both producers: the in-page tree (`treeSnapshot`, the matchers, the inspector, React and Storybook panels) and Chromium's tree (`real-a11y tree`, `inspect`, `snapshot`, the MCP tree tools, the Playwright adapter's `tree: "native"`).
+
+  `text` is not an ARIA role. A row has no element of its own, takes no action, and holds no children. Each run is trimmed, and a run of only white space prints no row. A role-less inline wrapper (`<b>`, `<span>`) stays part of the run around it.
+
+  ## Breaking change
+
+  Snapshots of an element that mixes its own text with a link, a `<code>`, a `<strong>` or another child with a role need re-recording: the element loses its name and gains `text` rows. A test that read such an element's `a11y.name` now finds `""`, and its text on the `text` children.
+
+  What does not change: an element with only text (`paragraph "Sent"`, `<p>Pure <b>bold</b> text.</p>`), one its author named with `aria-label`, `aria-labelledby` or `title`, and every role named from its content (a heading, link, button or cell keeps its whole content as its name).
+
+- 332fe26: Add the **snapshot report**: `@real-a11y-dev/testing/reporter` for Vitest and `@real-a11y-dev/testing/reporter/jest` for Jest, reporters that draw every boxed snapshot of a run the way the Semantic Navigator panel draws a tree, in one HTML page.
+
+  A snapshot's text leaves most of the tree out, by design: no states, no description, nothing about what an element takes. The report shows the rest. Add the reporter, and after every run `a11y-snapshots/index.html` lists each `boxedTreeSnapshot()` and `a11yDiff()` snapshot by test file and test:
+
+  ```ts
+  // vitest.config.ts
+  export default defineConfig({
+    test: {
+      reporters: ["default", "@real-a11y-dev/testing/reporter"],
+    },
+  });
+  ```
+
+  ```js
+  // jest.config.js
+  module.exports = {
+    reporters: ["default", "@real-a11y-dev/testing/reporter/jest"],
+  };
+  ```
+
+  - **A tree snapshot** is a tree you can open and close, with each row's states and what it takes, the panel's filters, and the TAB view.
+  - **A diff** opens on its after tree with what changed marked: new rows, changed rows with the field that changed, and a count of rows removed. The before tree is one click away.
+  - **The snapshot's text** sits beside it, its `+`, `-` and `~` lines coloured.
+
+  The page is one self-contained file that opens from disk, so it also works as a CI artifact. A rerun in watch mode replaces only the records of the files it ran. `outputDir` moves it (default `"a11y-snapshots"`, relative to Vitest's `root` or Jest's `rootDir`). The reporters need Vitest 3 or later, or Jest 29 or later, and Node 20.16 or later.
+
+  What this changes for you:
+
+  - **Nothing, unless you add the reporter.** The `.snap` text is unchanged, and still what a test asserts. The report never fails a run.
+  - **A record carries nothing typed into the page.** It shows states, which the text leaves out, but no field value, even where the snapshot printed one with `values: true` (the text beside the tree still shows it), and nothing inside a rich-text editor. Sensitive fields stay masked, `redactInput: true` withholds every value as it does from the text, and a snapshot's `redact` patterns apply to everything in a record the page supplied (names, descriptions, text and attribute values), never to its node ids, roles, `tabindex`, heading levels or states.
+  - **Only boxed snapshots appear.** A snapshot of a plain string, such as `expect(treeSnapshot(el)).toMatchSnapshot()`, has no tree behind it; snapshot `boxedTreeSnapshot(el)` instead. A record is named after its test, which the reporter reads from the `expect` given to `registerA11yMatchers(expect)`, or the runner's own. Concurrent tests aren't recorded: their shared `expect` can't say which of them took a snapshot.
+  - **The report deletes only what it wrote.** Pointed at an `outputDir` that already holds a `records/` folder or an `index.html` of its own, it leaves them alone and records nothing.
+  - **`REAL_A11Y_TREES_DIR`** is the switch the reporter sets for its run: while it is set, each boxed snapshot also writes the tree behind it to that directory as JSON. Set it yourself only to keep those records without the reporter.
+
+- 23f6e95: Tree and tab text print each node's states, description and announced properties in a `{…}` block, on by default. A checked and an unchecked checkbox no longer read the same:
+
+  ```
+  checkbox "Subscribe" {checked}
+  checkbox "Subscribe" {checked=false}
+  button "Menu" {expanded=false, haspopup=menu} [focused]
+  textbox "Email" = "a@b.c" {required, invalid, description="We never share it"}
+  link "Docs" {current=page}
+  ```
+
+  The block follows the name, the value and `(level N)`, and comes before `[focused]`. It prints an allowlist, in a fixed order, and only values that carry information: `checked` and `pressed` (set, `false` or `mixed`), `expanded` (set or `false`), `selected`, `disabled`, `readonly`, `required` and `invalid` only when set, `current` and `haspopup` as tokens, and `roledescription` and `description` JSON-quoted and run through `redact`. Nothing else prints (`focusable`, `editable`, `busy`, `modal`, …). The outline and the `~` lines of a tree diff are unchanged. See [What a line carries](https://real-a11y.dev/packages/testing/snapshots#what-a-line-carries).
+
+  - **`@real-a11y-dev/testing`:** `treeSnapshot` and `tabSequenceSnapshot` take `states` (default `true`), and so do the Playwright adapter's `treeSnapshot()` and `tabSequenceSnapshot()` (its options type is the new `TabSequenceSnapshotOptions`). `flow().expectTree(expected, options)` takes `treeSnapshot`'s options. `states: false` prints the text without blocks, byte for byte.
+  - **A `generic` that carries a state prints** in the tree view, so a `<details>` summary reads `generic "Shipping" {expanded=false}` where the DOM tree folded it away. `aria-haspopup="true"` prints as `haspopup=menu`, the popup ARIA says it means.
+  - **`toMatchA11yContract`:** a contract line's `{…}` block is now checked against a DOM Element's tree, where it threw before. A token the tree text never prints (`checked=true`, `disabled=false`, `current="false"`, a key such as `Checked` or `focusable`) is an error that names the form that prints, since it could never match. Against a DOM Element, `haspopup` and `roledescription` throw too: the DOM producer doesn't read them, so they could only fail, and pass under `.not`.
+  - **`@real-a11y-dev/cli` and `@real-a11y-dev/mcp`:** every tree and tab view carries the block: `real-a11y tree`, `tabs` and `inspect`, a `snapshot` artifact's tree, and the MCP `get_semantic_tree`, `get_tab_order` and `inspect_page` tools and findings checkpoints. In a structural diff summary, a state change to a renamed tab stop is reported under the tab view, where it was reported under the tree view. `real-a11y interact --step` takes a tree line pasted with its block and `[focused]` marker, which it ignores: a step targets role and name.
+  - **A sensitive list box's selection stays withheld.** In Chromium's tree, a `<select size="3" autocomplete="cc-exp-year">` holds no value of its own, so its options kept `selected` and would have printed which one was chosen. They no longer carry it, as a sensitive drop-down's options already didn't. Nor does a disabled sensitive select's option keep its markup `selected` attribute on the `dom` facet of `nativeTree()`'s result, where Chromium leaves the state off a disabled option; in strict mode (`redactInput`), no select's option does.
+
+  ### Breaking change
+
+  Every committed tree or tab snapshot holding a node with a state or a description changes once.
+
+  - **Snapshots** (`treeSnapshot`, `tabSequenceSnapshot`, `boxedTreeSnapshot`): re-record them (`vitest -u`, `jest -u`) to take the states in. To keep comparing with a baseline committed before this release, pass `states: false`.
+  - **New lines for stateful generics:** a `generic` that carries a state, such as a `<details>` summary, now prints as a line of its own, so its subtree sits one level deeper in snapshots and `expectTree` expectations. `{ states: false }` keeps it folded away. `toMatchA11yContract` only shows it to a contract that writes a block, so a strict contract without one compares as before.
+  - **`flow().expectTree()`:** a hand-written expectation compares against text with blocks now. Add the blocks, or pass `{ states: false }` as its second argument.
+  - **Contracts:** a line that writes an unprintable token now throws, and so does a `haspopup` or `roledescription` token checked against a DOM Element. Write the printed form, such as `{checked}` for `{checked=true}`, or drop the token: a line without a block says nothing about states.
+  - **CLI and MCP baselines:** `real-a11y diff` against a `snapshot` artifact captured before this release, and `diff_checkpoints` against an older exported checkpoint, report each stateful line once, as `States changed: checkbox "Subscribe": (none) → checked`, and say why (a warning on stderr, a note in `diff_checkpoints`). Capture the baseline again with this release, or capture the new side with `--no-states` (`states: false` in MCP). `diff_findings` against an imported older artifact already compares without blocks.
+
+### Patch Changes
+
+- b633149: Add `real-a11y show-report`, which opens the snapshot report of your tests in the browser and keeps it current. The page redraws as tests write new snapshots, so it follows a watch-mode run in another terminal without a reload:
+
+  ```sh
+  npx vitest --watch          # in one terminal
+  npx real-a11y show-report   # in another
+  ```
+
+  It reads the records `@real-a11y-dev/testing/reporter` writes (`./a11y-snapshots`, or the folder you name), runs no tests itself, and serves the page on `127.0.0.1` only. `--port` picks the port and `--no-open` leaves the browser closed.
+
+  `@real-a11y-dev/testing` re-releases the bundled snapshot viewer. The page the reporters write behaves as before.
+
+- 0248468: `toMatchA11yContract` checks a `{…}` states block written on a contract line, for tree text that prints one (`checkbox "Subscribe" {checked}`).
+
+  - **Containment** (the default): the received node must carry at least the block's tokens, in any order. A quoted value is compared decoded, with typography folded as in names. `checkbox "Subscribe" {checked}` fails against an unchecked box, and the failure names the missing tokens.
+  - **`{ strict: true }`:** a block must hold exactly the received node's tokens, in any order, byte for byte. The failure shows each side's block as written.
+  - **`{}`** asserts that the node has no states, in both modes.
+  - **A line without a block** says nothing about states, in both modes, so existing contracts match as before.
+  - **Against a DOM Element**, whose tree prints no states yet, a contract that writes a block throws, with or without `.not`, rather than pass on a check it can't make.
+  - **Field values:** a line's `= "value"` is read as the value, not as part of the name, so `textbox "Email"` matches a received `textbox "Email" = "a@b.c"`, where it failed before; a contract that writes `= "value"` asserts it, and against a DOM Element is checked against the tree with values on. A name the serializer prints with ` = "` inside it stays the name.
+
+- 23f6e95: The in-page tree no longer gives an element a description that only repeats its own text. `<a href="#setup" title="Setup">Setup</a>` read as link "Setup" described by "Setup"; Chromium exposes no such description, so a screen reader hears none, and the native tree already printed none. It now reads as link "Setup" with no description, in `treeSnapshot`, `tabSequenceSnapshot`, `real-a11y tabs`, the MCP `get_tab_order` tool and the inspector, React and Storybook panels. A `title` that differs from the text, even only in case or spacing, still describes the element, and so does one beside a name from `aria-label` or `alt`, as in Chromium.
+
+  `inspector`, `react` and `storybook-addon` bundle the extractor, so they ship the change too; their panels show the description.
+
+- 64eacb6: Read CSS generated content and `text-transform` into the names the DOM producer computes from content. A button that reads "before label after" on screen was named `label`, and an uppercase heading kept its source casing, so a jsdom or in-page name differed from the one Chromium exposes to assistive technology. accname 1.2 step 2F says `::before` content is prepended and `::after` content appended without a space:
+
+  ```html
+  <style>
+    .x::before {
+      content: "before ";
+    }
+    .alt::before {
+      content: "★" / "Favourite ";
+    }
+  </style>
+  <button class="x">label</button>
+  <button class="alt">item</button>
+  <h2 style="text-transform: uppercase">Call us</h2>
+  ```
+
+  ```
+  before: button "label"           button "item"             heading "Call us"
+  after:  button "before label"     button "Favourite item"   heading "CALL US"
+  ```
+
+  - **Generated content** counts for the host, its descendants, `aria-labelledby` targets and label elements. Strings and `attr()` count; `counter()`, `url()` and quote marks add nothing, and in the alternative-text form `X / Y` only `Y` counts. Inline generated text joins with no space; a pseudo-element laid out as a box (`inline-block`, `block`) is spaced like any box, as in Chromium.
+  - **`text-transform`** `uppercase`, `lowercase` and `capitalize` apply to the text they transform.
+  - **Under jsdom** generated content still contributes nothing, because jsdom does not implement pseudo-element styles; `text-transform` applies there too.
+  - **Snapshots:** a saved snapshot, diff or baseline recorded from a page that uses either will churn, and needs re-recording.
+  - **`cli` / `mcp`:** only the tab order from `real-a11y tabs` and `get_tab_order` is built with the DOM producer. Everything else they print reads Chromium's own tree, which already included both.
+
+- 80c6714: Read lists, list items, cells, grid cells, column and row headers and visible tooltips into the name of the button, link or heading that holds them, and name a grid row from its cells. The DOM producer stopped at every one of those roles, so `<button><ul><li>One</li><li>Two</li></ul></button>` was `button ""` where Chromium says `"One Two"`, and `no-unlabeled-interactive` reported it as unlabeled. A row is named from its content only in a `grid` or `treegrid`, as in Chromium, so an orphan `role="row"` or a row in a `role="table"` that held direct text no longer takes it as a name:
+
+  ```html
+  <button>
+    <ul>
+      <li>One</li>
+      <li>Two</li>
+    </ul>
+  </button>
+  <!-- before: button ""      after: button "One Two" -->
+  <button>Save<span role="tooltip">Saves the file</span></button>
+  <!-- before: button "Save"  after: button "SaveSaves the file" -->
+  <table role="grid">
+    <tr>
+      <th>H</th>
+      <td>C</td>
+    </tr>
+  </table>
+  <!-- before: row ""         after: row "H C" -->
+  ```
+
+  Saved a11y snapshots and diffs of such markup change and need re-recording. Item widgets nested in item widgets, and tables, stay barriers. `cli` and `mcp` change only in the tab order (`real-a11y tabs`, `get_tab_order`), the one output they build with the DOM producer; everything else they print reads Chromium's own tree, which already had these names.
+
+- 398887c: The native tree now reads the content of the page's iframes. It read only the top frame's document, so every `Iframe` row in `tree`, `audit`, `inspect`, `outline`, `snapshot`, the MCP tools and the testing package's native mode was empty: an embedded form, payment frame or widget was never printed or audited, and nothing said so. Each frame Chromium runs in the page's own process now sits under its `Iframe` row, one level deeper, as a screen reader reads it, and `audit` checks the controls inside it. Its fields follow the same value policy as the page's: a card number or password inside a payment frame reads `[redacted]`, and `--redact-input` / `redactInput` withholds every value. A finding inside a frame is located from the frame's own `<iframe>`, then `>>>`, then its path inside the frame (`#checkout >>> body > form > button`), so it never takes the fingerprint of one of the page's findings. `heading-order` and `landmark-structure` (and `assertHeadingOrder()` / `assertLandmarkStructure()`) judge the page's own document only, so an embedded widget's `<h1>` or `<main>` is not reported as a second one of the page's. On a session pinned to origins (`--storage-state` with its target and `--audit-origin`, `REAL_A11Y_MCP_ALLOWED_ORIGINS`), a frame whose document comes from any other origin is not read either, and its row stays empty: the pin checks the page's own URL, and the frame would carry the same cookies into the output. A `srcdoc`, `about:blank` or `data:` frame holds the page's own markup and is read. Saved native snapshots and baselines of pages with iframes will churn: re-record them.
+- 0cec72e: The native tree now reads iframes Chromium runs in a process of their own. Under site isolation — the Chrome for Testing `real-a11y install` fetches, and any Chrome reached over `--cdp` — a cross-site or `sandbox`ed `<iframe>` runs in its own renderer process, so its row in `tree`, `audit`, `inspect`, `outline`, `snapshot`, the MCP tools and the testing package's native mode still came back empty after iframes were first read. Each such frame is now read over a session of its own and sits under its `Iframe` row like any other: its fields follow the same value policy (a card number in a cross-site payment frame reads `[redacted]`, and `--redact-input` / `redactInput` withholds every value), its nodes are located from the frame's own `<iframe>` (`… >>> body > form > button`), and a session pinned to origins still reads only frames from them. Node ids in such a frame carry the frame (`ax-dom-8@<frameId>.<documentId>`), since element ids restart in every process. Saved native snapshots and baselines of pages with cross-site or sandboxed iframes will churn: re-record them.
+- 55f3445: A sensitive field's popup no longer says which option is chosen. An ARIA combobox for a payment or credential field (`<input role="combobox" autocomplete="cc-exp-month">`) withholds its value as `[redacted]`, but the listbox it opens is not its descendant, so the option there kept `selected`, and since tree text prints a `{…}` states block by default, `option "03" {selected}` said what the field held. Now no option carries `selected` inside a sensitive field, or anywhere in what one controls (`aria-controls`) or owns (`aria-owns`), in either producer:
+
+  - **Chromium's tree** (`real-a11y tree`, `inspect`, `snapshot`, the MCP tree tools, the Playwright adapter's `tree: "native"`): Chromium leaves an owned listbox where it is under an `<input>`, so both relations are followed from the field.
+  - **The in-page tree** (`treeSnapshot`, the matchers, `real-a11y tabs`, `get_tab_order`, and the inspector, React and Storybook panels): the same rule, which also closes an older gap where an authored `aria-selected` on a sensitive `<select>`'s option still printed.
+
+  The relations count on the field or on an ARIA 1.1 combobox wrapped around it (`<div role="combobox" aria-controls="…"><input autocomplete="cc-number"></div>`), the field in its shadow root or slotted into it included, and everything such a wrapper holds counts as its popup too, whether or not Chromium relates the field to it. So does the listbox a sensitive field points `aria-activedescendant` into, and one behind a wrapper Chromium leaves out of its tree (`aria-controls` naming a `role="presentation"` element, which Chromium reports with no target): the native producers find that one in the document they already read. The live panels keep it withheld when a field gains its relation, becomes sensitive, or arrives after the first read, and when a choice is made, cleared or added in such a popup. An ordinary combobox's popup keeps `{selected}`.
+
+  The chosen option no longer reaches a name either. A name built around the popup reads it in, as a field's value: `<label>Expiry month <input role="combobox" autocomplete="cc-exp-month" aria-controls="lb"> <ul role="listbox" id="lb">…</ul></label>` printed `combobox "Expiry month 03"` in both trees, and so did a name or description that names the listbox by `aria-labelledby` / `aria-describedby`, or a cell around it. Such a name now reads `"[redacted]"` and such a description is dropped, as for a sensitive field's own value; so does one that reads the chosen option itself, a drop-down `<select>`'s included, or a multi-row `<select size="3" autocomplete="cc-exp-year">`. No node in such a popup keeps a description, wherever it comes from (`aria-describedby`, `aria-description`, `title`): one only the chosen option carries would say which it is. A popup with nothing chosen lends nothing, so its names and descriptions are kept. Strict mode (`redactInput`) withholds the selection inside every choice field, as before, and now also in what a sensitive one controls or owns; an ordinary combobox's popup outside it still shows its selection there.
+
+  `toBeValidA11yTree` no longer fails a sensitive popup with "missing required aria-selected": where the tree withholds an option's `selected`, the attribute counts as supplied, so a failure can't say which option is chosen by naming every other one.
+
+- 905de3b: A sensitive field's popup no longer says which item is chosen by a state other than `selected`. A page can mark the chosen item with `aria-checked` (a menu's `menuitemradio`, an option or tree item, a radio in a dialog popup), `aria-pressed` (a date picker's day button) or `aria-current`, and since tree text prints a `{…}` states block by default, `menuitemradio "03/31" {checked}` said what the field's `[redacted]` value holds. Now, wherever a sensitive field's choice is made (inside it, or in what it controls, owns or points `aria-activedescendant` into, or what a combobox around it holds), no node prints `selected`, `pressed` or `current`, and no option, tree item, menu item or radio prints `checked`, in either producer:
+
+  - **Chromium's tree** (`real-a11y tree`, `inspect`, `snapshot`, the MCP tree tools, the Playwright adapter's `tree: "native"`).
+  - **The in-page tree** (`treeSnapshot`, the matchers, `real-a11y tabs`, `get_tab_order`, and the inspector, React and Storybook panels), including the `aria-checked` its nodes record, and the live panels when such a choice is made, cleared or added.
+
+  A checkbox or switch in such a popup keeps its own `checked`: it is a control of its own. So does a toggle inside a field Chromium's tree reads as sensitive only because it holds one (a rich-text editor around a card input): there only an option's choice states, and any node's `selected`, are withheld, as before. A menu or radio group now counts as a popup a choice is made in, so a name that references the chosen item (`aria-labelledby`) reads `"[redacted]"`, and no node in such a popup keeps a description. Chromium's tree carries no `current`, and no `pressed` on an option, so the native producers read those marks from the document they already walk. Chromium's tree also withholds a name built around a popup whose choice is marked this way (a `<label>` around the field and its listbox), though Chromium reads only a `selected` choice into such a name; the in-page tree keeps it. An ordinary combobox's popup keeps all of these states. Strict mode (`redactInput`) withholds an option's choice states in every choice field.
+
+  `toBeValidA11yTree` counts `aria-checked` as supplied where the tree withholds it, as it does `aria-selected`, so a valid sensitive menu passes and a failure can't say which item is chosen.
+
+- d099139: The tab order no longer says which item a sensitive field's popup has chosen. Under a roving `tabindex` a popup's one tab stop is its chosen item, so although its `selected` was withheld, `real-a11y tabs` printed `option "03"` for a payment combobox's list box, and `button "31"` for a date grid's pressed day. Now a tab stop that is one of the items such a popup's choice is made among (a choice item, anything inside one of its list boxes, grids, trees, menus or radio groups, or anything there whose `pressed`, `selected` or `current` is withheld, as a toolbar's pressed button or a selected tab) reads `"[redacted]"`, with no description or value, in every surface that reads the tab order: `real-a11y tabs`, the MCP `get_tab_order` tool, `tabSequenceSnapshot` and the Playwright adapter's, `toHaveTabSequence`, `getTabSequence`, and the inspector, React and Storybook TAB views, whose search no longer finds it by its text. The popup's other controls (a dialog's `Cancel`) and the popup itself keep their names, and the tree still names every item, the chosen one beside the others. Strict mode (`redactInput`) does the same for an option in any list box.
+
+  The DOM producer marks such a node with a new optional `a11y.choiceWithheld: true`, which is what `getTabSequence` reads, so the tab order withholds the same stops wherever a tree is read, a panel's included. It appears on those nodes in JSON output.
+
+- 5957ead: Read a `{…}` states block on a tree or tab line, ahead of a release that prints one: `checkbox "Subscribe" {checked=false}`. Nothing prints a block yet; this makes sure every reader already understands it when something does.
+
+  - **`toMatchA11yContract`:** reads a block on a received tree line instead of failing with `cannot parse`; a contract line without a block matches it as before.
+  - **`real-a11y diff` and MCP `diff_findings` / `diff_checkpoints`:** in the structural summary, a line whose only change is its block reads as one statement, `States changed: checkbox "Subscribe": checked=false → checked`, where it read as `Interactive element removed: checkbox (no accessible name)` plus the same element added. A baseline without blocks against one with them reads `(none) → checked`.
+  - **`--ignore-view-line`** (and `ignoreViewLine`): a pattern also matches a tree or tab line without its block, so one written before lines carried states keeps working.
+  - **Two changes to today's structural summary**, with or without blocks: added or removed interactive elements, landmarks and tab stops that share a role and name make one `(×N)` statement, where lines differing only in their `(level N)` made separate statements that read the same; and removing or adding a heading several times no longer also counts the extra copies under "Other content changed".
+
 ## 0.1.0-beta.23
 
 ### Minor Changes

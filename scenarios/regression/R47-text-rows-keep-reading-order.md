@@ -6,7 +6,7 @@ area: Testing
 type: Automated
 priority: P1
 status: Active
-validFrom: "the FIRST release after testing 0.1.0-beta.23 (likewise inspector, react, storybook-addon) and after cli / mcp 0.1.0-beta.13. On those versions or earlier every changed line of steps 1 and 2 reproduces the old behaviour — the element carries its own text as a name and lists the children after it. That is the old behaviour, not a fail. Both rules live in `core` (`packages/core/src/extraction/a11y-extractor.ts` and `packages/core/src/native/ax-normalize.ts`), which is PRIVATE and bundled, so assert against the published packages only."
+validFrom: "testing ≥ 0.1.0-beta.24 (likewise inspector, react, storybook-addon) and cli / mcp ≥ 0.1.0-beta.14. On testing 0.1.0-beta.23 or cli / mcp 0.1.0-beta.13 or earlier every changed line of steps 1 and 2 reproduces the old behaviour — the element carries its own text as a name and lists the children after it. That is the old behaviour, not a fail. Both rules live in `core` (`packages/core/src/extraction/a11y-extractor.ts` and `packages/core/src/native/ax-normalize.ts`), which is PRIVATE and bundled, so assert against the published packages only."
 validUntil: ""
 expected: "a paragraph or list item that holds a link, a code, a strong or a nested list prints no name and one `text` row per run of its own text, between the children in source order; an element with only text or only role-less wrappers, one its author named, and a role named from its content are unchanged; the DOM and native trees agree"
 covers:
